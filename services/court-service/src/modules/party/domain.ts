@@ -55,7 +55,12 @@ export function assertPartyRoleAllowed(role: string, allowed: ReadonlySet<string
  * masking entirely and leak full cleartext PII to every COURT_READ_ROLES
  * caller, including registrar/court_clerk who are NOT privileged here.)
  */
-export const PII_PRIVILEGED_ROLES: string[] = ["judge", "court_admin", "super_admin"];
+export const PII_PRIVILEGED_ROLES = Object.freeze([
+  "judge", "court_admin", "super_admin",
+]) as string[];
+// Frozen (not just typed) so an accidental push()/mutation from either
+// consuming routes.ts throws immediately at runtime instead of silently
+// widening PII access on BOTH endpoints that share this constant.
 
 /** The shape every case_parties row is presented as on the wire. */
 export interface PresentedParty {

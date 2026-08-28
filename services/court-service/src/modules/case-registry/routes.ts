@@ -9,8 +9,15 @@ import * as repo from "./repo.js";
 
 /** Roles permitted to register/mutate cases. */
 const COURT_WRITE_ROLES = ["registrar", "court_admin", "super_admin"];
-/** Roles permitted to read the registry (write roles + read-only court staff). */
-const COURT_READ_ROLES = ["registrar", "court_admin", "super_admin", "judge", "court_clerk"];
+/**
+ * Roles permitted to read the registry (write roles + read-only court staff).
+ * Exported so tests can assert this stays in lockstep with party/routes.ts's
+ * PARTY_READ_ROLES: this list gates who can read a case at all, that one
+ * gates who can read a case's parties, and today they must agree, or
+ * GET /cases/:id and GET /cases/:id/parties would grant two different role
+ * sets access to overlapping data for the same case.
+ */
+export const COURT_READ_ROLES = ["registrar", "court_admin", "super_admin", "judge", "court_clerk"];
 
 export async function caseRegistryRoutes(app: FastifyInstance): Promise<void> {
   // Register a new case (write path → command bus, 202 Accepted).

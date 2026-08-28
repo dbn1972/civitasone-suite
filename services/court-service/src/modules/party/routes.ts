@@ -8,7 +8,9 @@ import * as commands from "./commands.js";
 import * as repo from "./repo.js";
 
 const PARTY_WRITE_ROLES = ["registrar", "court_admin", "super_admin"];
-const PARTY_READ_ROLES  = ["registrar", "court_admin", "super_admin", "court_clerk", "judge"];
+// Exported so tests can assert this stays in sync with case-registry/routes.ts
+// COURT_READ_ROLES -- see the comment there for why they must agree.
+export const PARTY_READ_ROLES  = ["registrar", "court_admin", "super_admin", "court_clerk", "judge"];
 
 // PII_PRIVILEGED_ROLES now lives in ./domain.js — case-registry/routes.ts (which
 // embeds a case's parties in GET /cases/:id) shares the SAME constant and the

@@ -124,5 +124,7 @@ export async function getCasePartiesByCaseId(tenantId: string, caseId: string): 
   // case's parties in a different sequence.
   return scopedRead((tx) => tx.select().from(caseParties)
     .where(and(eq(caseParties.tenantId, tenantId), eq(caseParties.caseId, caseId)))
-    .orderBy(asc(caseParties.createdAt)));
+    // id tiebreaker: see the identical comment in party/repo.ts's
+    // listPartiesByCase -- same table, same tie-break requirement.
+    .orderBy(asc(caseParties.createdAt), asc(caseParties.id)));
 }

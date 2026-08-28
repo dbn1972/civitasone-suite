@@ -518,6 +518,9 @@ describe("Case Registry Routes", () => {
       expect(registrarBody.parties[0].email).not.toBe("ramesh@example.com");
       // Raw encrypted-column field names must never reach the wire.
       expect(registrarBody.parties[0].nameEnc).toBeUndefined();
+      expect(registrarBody.parties[0].addressEnc).toBeUndefined();
+      expect(registrarBody.parties[0].phoneEnc).toBeUndefined();
+      expect(registrarBody.parties[0].emailEnc).toBeUndefined();
 
       (getCasePartiesByCaseId as ReturnType<typeof vi.fn>).mockResolvedValueOnce([partyRow]);
       const adminRes = await app.inject({ method: "GET", url: `/v1/court/cases/${CASE_ID}`, headers: { authorization: `Bearer ${ADMIN_TOKEN()}` } });
@@ -2145,3 +2148,19 @@ describe("Public Lookup Routes", () => {
     });
   });
 });
+
+describe("Role invariants", () => {
+  // case-registry's COURT_READ_ROLES gates GET /cases/:id (which embeds a
+  // case's parties); party's PARTY_READ_ROLES gates GET /cases/:id/parties
+  // (the same parties, fetched directly). If these two independently-
+  // maintained lists ever drift apart, a role could read a case's parties
+  // through one endpoint and get 403'd on the other -- the same class of
+  // two-sibling-endpoints-disagree bug PR #794 fixed for PII masking,
+  // reproduced on the read gate instead of the reveal gate.
+  it("case-read and party-read role sets agree", async () => {
+    const { COURT_READ_ROLES } = await import("../src/modules/case-registry/routes.js");
+    const { PARTY_READ_ROLES } = await import("../src/modules/party/routes.js");
+    expect([...COURT_READ_ROLES].sort()).toEqual([...PARTY_READ_ROLES].sort());
+  });
+});
+
