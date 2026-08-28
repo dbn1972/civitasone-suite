@@ -1,8 +1,10 @@
 import type { RequestContext } from "@civitasone/types";
 import { queue } from "../../shared/infra.js";
 import { COMMANDS } from "../../topics.js";
+import { HttpError } from "../../shared/context.js";
 import { deterministicId, COURT_NAMESPACE } from "../court-registry/domain.js";
-import { deriveCopyId } from "./domain.js";
+import * as repo from "./repo.js";
+import { deriveCopyId, assertTransition, assertReceiptMatchesFee, parseReceiptMinor } from "./domain.js";
 import {
   requestCopyBody, type RequestCopyBody,
   transitionCopyBody, type TransitionCopyBody,
@@ -37,11 +39,63 @@ export async function requestCopy(
   return { accepted: true, copyId };
 }
 
-/** Transition a certified copy (§30). messageId is idempotent per (copy + expectedVersion). */
+/**
+ * Transition a certified copy (§30). messageId is idempotent per (copy + expectedVersion).
+ *
+ * §30 honest-response guarantee: a synchronous pre-check against the copy's
+ * CURRENT row runs here, BEFORE publishing, so the common failure cases — an
+ * illegal transition (e.g. `fee_paid` on an already-terminal copy), a stale
+ * `expectedVersion`, or a `receiptMinor` that doesn't match the server-computed
+ * fee — get an immediate, honest 4xx instead of a `202 {accepted:true}` that
+ * silently dead-letters in the consumer. This mirrors consumer.ts's own checks
+ * EXACTLY (same functions, same order, same "already at target ⇒ no-op"
+ * idempotency shortcut) so a legitimate idempotent retry still succeeds here
+ * rather than being newly rejected. The consumer's checks remain the
+ * authoritative backstop for the rare race window between this read and its
+ * own transactional read.
+ */
 export async function transitionCopy(
   ctx: RequestContext, copyId: string, input: TransitionCopyBody,
 ): Promise<TransitionCopyResult> {
   const body = transitionCopyBody.parse(input);
+
+  const current = await repo.getCopy(ctx.tenantId, copyId);
+  if (!current) {
+    throw new HttpError(404, "COPY_NOT_FOUND", `certified copy ${copyId} not found`);
+  }
+
+  // Already at target: redelivery/idempotent-retry-safe no-op, same as the
+  // consumer — skip the version/transition/fee checks below entirely.
+  if (current.status !== body.target) {
+    if (current.version !== body.expectedVersion) {
+      throw new HttpError(
+        409,
+        "VERSION_CONFLICT",
+        `certified copy ${copyId} expected v${body.expectedVersion}, found v${current.version}`,
+      );
+    }
+
+    try {
+      assertTransition(current.status, body.target);
+    } catch (e) {
+      throw new HttpError(422, "INVALID_COPY_TRANSITION", (e as Error).message);
+    }
+
+    if (body.target === "fee_paid") {
+      let receiptMinor: bigint;
+      try {
+        receiptMinor = parseReceiptMinor(body.receiptMinor);
+      } catch (e) {
+        throw new HttpError(422, "INVALID_RECEIPT_AMOUNT", (e as Error).message);
+      }
+      try {
+        assertReceiptMatchesFee(current.feeMinor, receiptMinor);
+      } catch (e) {
+        throw new HttpError(422, "RECEIPT_AMOUNT_MISMATCH", (e as Error).message);
+      }
+    }
+  }
+
   const messageId = deterministicId(
     COURT_NAMESPACE,
     `${ctx.tenantId}:certified-copy-transition:${copyId}:${body.target}:${body.expectedVersion}`,

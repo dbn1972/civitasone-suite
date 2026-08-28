@@ -2,7 +2,7 @@
 import { describe, it, expect } from "vitest";
 import {
   canTransition, assertTransition, isTerminal, deriveCopyId, computeCopyFeeMinor,
-  assertReceiptMatchesFee,
+  assertReceiptMatchesFee, parseReceiptMinor,
 } from "../src/modules/certified-copy/domain.js";
 
 describe("certified-copy domain — state machine", () => {
@@ -78,5 +78,33 @@ describe("certified-copy domain — assertReceiptMatchesFee (§30 payment proof)
 
   it("treats zero fee and zero receipt as a match (no false positive)", () => {
     expect(() => assertReceiptMatchesFee(0n, 0n)).not.toThrow();
+  });
+});
+
+describe("certified-copy domain — parseReceiptMinor (shared by commands.ts and consumer.ts)", () => {
+  it("parses a non-negative integer number", () => {
+    expect(parseReceiptMinor(1500)).toBe(1500n);
+    expect(parseReceiptMinor(0)).toBe(0n);
+  });
+
+  it("parses a numeric string, trimming surrounding whitespace", () => {
+    expect(parseReceiptMinor("1500")).toBe(1500n);
+    expect(parseReceiptMinor(" 1500 ")).toBe(1500n);
+  });
+
+  it("throws INVALID_RECEIPT_AMOUNT for a negative number", () => {
+    expect(() => parseReceiptMinor(-5)).toThrow(/INVALID_RECEIPT_AMOUNT/);
+  });
+
+  it("throws INVALID_RECEIPT_AMOUNT for a non-integer number", () => {
+    expect(() => parseReceiptMinor(15.5)).toThrow(/INVALID_RECEIPT_AMOUNT/);
+  });
+
+  it("throws INVALID_RECEIPT_AMOUNT for a non-numeric string", () => {
+    expect(() => parseReceiptMinor("abc")).toThrow(/INVALID_RECEIPT_AMOUNT/);
+  });
+
+  it("throws INVALID_RECEIPT_AMOUNT when undefined", () => {
+    expect(() => parseReceiptMinor(undefined)).toThrow(/INVALID_RECEIPT_AMOUNT/);
   });
 });

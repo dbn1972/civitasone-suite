@@ -10,9 +10,14 @@ export const copyIdParam = z.object({ id: z.string().uuid() });
  * at rest by the consumer (encryptedText column), never persisted or logged in
  * cleartext. `feeMinorHint` is a CLIENT hint only; when the tenant has a
  * `copy_fee` schedule configured the SERVER fee is authoritative and overrides it.
+ *
+ * `caseId` is deliberately NOT a body field: this route is scoped under
+ * `/cases/:id/certified-copies`, so the URL param is the sole, authoritative
+ * source of the case id (see commands.ts `requestCopy`). A body-level `caseId`
+ * would either be redundant (matches the URL) or dangerously ambiguous (differs
+ * from it) — dropping it removes the ambiguity outright rather than resolving it.
  */
 export const requestCopyBody = z.object({
-  caseId:       z.string().uuid(),
   orderId:      z.string().uuid().optional(),
   documentRef:  z.string().trim().max(512).optional(),
   applicantName: z.string().trim().max(200).optional(),
@@ -34,6 +39,11 @@ export type RequestCopyBody = z.infer<typeof requestCopyBody>;
  * command bus. The consumer separately asserts `receiptMinor === feeMinor`
  * (domain.ts `assertReceiptMatchesFee`) since this schema alone cannot know the
  * server-authoritative fee.
+ *
+ * Rejection accountability: moving to `rejected` REQUIRES a non-empty `remarks`
+ * explaining why — mirrors the sibling `recallReason`-required pattern for
+ * recalling an issued order (client.ts `recallOrder`); an irreversible, adverse
+ * action on a citizen's application should always carry a reason on record.
  */
 export const transitionCopyBody = z
   .object({
@@ -46,19 +56,27 @@ export const transitionCopyBody = z
     receiptMinor:    z.union([z.string(), z.number()]).optional(),
   })
   .superRefine((body, ctx) => {
-    if (body.target !== "fee_paid") return;
-    if (!body.paymentRef) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ["paymentRef"],
-        message: "paymentRef is required proof of payment when transitioning to fee_paid",
-      });
+    if (body.target === "fee_paid") {
+      if (!body.paymentRef) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["paymentRef"],
+          message: "paymentRef is required proof of payment when transitioning to fee_paid",
+        });
+      }
+      if (body.receiptMinor === undefined) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["receiptMinor"],
+          message: "receiptMinor is required proof of payment when transitioning to fee_paid",
+        });
+      }
     }
-    if (body.receiptMinor === undefined) {
+    if (body.target === "rejected" && !body.remarks) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
-        path: ["receiptMinor"],
-        message: "receiptMinor is required proof of payment when transitioning to fee_paid",
+        path: ["remarks"],
+        message: "remarks is required to explain why a certified copy is being rejected",
       });
     }
   });

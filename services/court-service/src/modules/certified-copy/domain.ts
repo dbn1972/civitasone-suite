@@ -90,3 +90,19 @@ export function assertReceiptMatchesFee(feeMinor: bigint, receiptMinor: bigint):
     );
   }
 }
+
+/**
+ * Parse the payment-proof `receiptMinor` wire value (string | number) to a
+ * non-negative integer PAISE (BigInt). Pure — shared by the command layer's
+ * synchronous pre-check (commands.ts, so a bad receipt gets an immediate 4xx
+ * instead of a silent async dead-letter) and the consumer's own authoritative
+ * check (consumer.ts). Each call site wraps the plain `Error` this throws in
+ * whatever exception type fits its layer (HttpError vs NonRetryableError).
+ */
+export function parseReceiptMinor(value: string | number | undefined): bigint {
+  if (typeof value === "number" && Number.isInteger(value) && value >= 0) return BigInt(value);
+  if (typeof value === "string" && /^\d+$/.test(value.trim())) return BigInt(value.trim());
+  throw new Error(
+    `INVALID_RECEIPT_AMOUNT: receiptMinor must be a non-negative integer paise amount, got ${JSON.stringify(value)}`,
+  );
+}

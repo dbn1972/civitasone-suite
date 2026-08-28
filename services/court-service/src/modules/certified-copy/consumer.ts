@@ -5,7 +5,9 @@ import { COMMANDS, EVENTS } from "../../topics.js";
 import { certifiedCopies } from "./schema.js";
 import * as repo from "./repo.js";
 import * as configRepo from "../config-registry/repo.js";
-import { assertReceiptMatchesFee, assertTransition, computeCopyFeeMinor, type CopyStatus } from "./domain.js";
+import {
+  assertReceiptMatchesFee, assertTransition, computeCopyFeeMinor, parseReceiptMinor, type CopyStatus,
+} from "./domain.js";
 
 type RequestCopyPayload = {
   id: string;
@@ -52,20 +54,6 @@ function parseHintPaise(value: string | number | undefined): bigint | undefined 
   if (typeof value === "number" && Number.isInteger(value) && value >= 0) return BigInt(value);
   if (typeof value === "string" && /^\d+$/.test(value.trim())) return BigInt(value.trim());
   return undefined;
-}
-
-/**
- * Parse the payment-proof `receiptMinor` to a non-negative integer PAISE
- * (BigInt). Unlike the client fee HINT, this is proof of an actual payment —
- * a malformed value is a poison message (NonRetryableError
- * INVALID_RECEIPT_AMOUNT), not a silent fallback.
- */
-function parseReceiptMinor(value: string | number | undefined): bigint {
-  if (typeof value === "number" && Number.isInteger(value) && value >= 0) return BigInt(value);
-  if (typeof value === "string" && /^\d+$/.test(value.trim())) return BigInt(value.trim());
-  throw new NonRetryableError(
-    `INVALID_RECEIPT_AMOUNT: receiptMinor must be a non-negative integer paise amount, got ${JSON.stringify(value)}`,
-  );
 }
 
 export function registerCertifiedCopyConsumers(
@@ -180,13 +168,13 @@ export function registerCertifiedCopyConsumers(
       // this is the server-authoritative AMOUNT check they cannot perform.
       let paymentFields: { paymentRef?: string | null; receiptMinor?: bigint } = {};
       if (target === "fee_paid") {
-        const receiptMinor = parseReceiptMinor(p.receiptMinor); // throws NonRetryableError if malformed
         try {
+          const receiptMinor = parseReceiptMinor(p.receiptMinor);
           assertReceiptMatchesFee(current.feeMinor, receiptMinor);
+          paymentFields = { paymentRef: p.paymentRef ?? null, receiptMinor };
         } catch (e) {
           throw new NonRetryableError((e as Error).message);
         }
-        paymentFields = { paymentRef: p.paymentRef ?? null, receiptMinor };
       }
 
       const issuedFields = target === "issued"
