@@ -3,6 +3,8 @@ import { queue } from "../../shared/infra.js";
 import { COMMANDS } from "../../topics.js";
 import { deterministicId, COURT_NAMESPACE } from "../court-registry/domain.js";
 import { deriveParcelId, normalizeSurvey } from "./domain.js";
+import { getParcelForPrecheck } from "./repo.js";
+import { httpError } from "../../shared/context.js";
 import {
   addParcelBody, type AddParcelBody,
   updateParcelBody, type UpdateParcelBody,
@@ -39,11 +41,32 @@ export async function addParcel(
 /**
  * Update / soft-detach a parcel. messageId is deterministic per
  * (parcel + expectedVersion) so a redelivery of the same intent is idempotent.
+ *
+ * This module has no status state machine (active is a plain boolean toggle,
+ * the rest are plain field updates) -- the consumer only enforces optimistic
+ * locking, so this pre-check does the same, no assertTransition involved.
+ * It mirrors the consumer's own "no effective change requested -> skip the
+ * version check entirely" short-circuit exactly (same two booleans, same
+ * order), so a resubmit that changes nothing can't be rejected by THIS check
+ * for a stale version the consumer would have ignored anyway.
  */
 export async function updateParcel(
   ctx: RequestContext, parcelId: string, input: UpdateParcelBody,
 ): Promise<UpdateParcelResult> {
   const body = updateParcelBody.parse(input);
+
+  const current = await getParcelForPrecheck(ctx.tenantId, parcelId);
+  if (!current) throw httpError("PARCEL_NOT_FOUND", `Parcel not found: ${parcelId}`);
+  const changesActive = body.active !== undefined && body.active !== current.active;
+  const changesOther =
+    body.areaSqm !== undefined || body.ownershipRef !== undefined || body.remarks !== undefined;
+  if ((changesActive || changesOther) && current.version !== body.expectedVersion) {
+    throw httpError(
+      "PARCEL_VERSION_CONFLICT",
+      `Expected version ${body.expectedVersion}, found ${current.version}`,
+    );
+  }
+
   const messageId = deterministicId(
     COURT_NAMESPACE,
     `${ctx.tenantId}:parcel-update:${parcelId}:${body.expectedVersion}`,

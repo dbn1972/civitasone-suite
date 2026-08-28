@@ -333,6 +333,7 @@ describe("scrutiny commands", () => {
 
   it("resolveDefect validates + publishes", async () => {
     const { resolveDefect } = await import("../src/modules/scrutiny/commands.js");
+    precheckRows = [{ status: "raised", version: 1 }]; // raised -> rectified is legal
     const result = await resolveDefect(ctx(), DEFECT_ID, { resolution: "rectified", expectedVersion: 1 });
     expect(result.accepted).toBe(true);
     expect(publishSpy).toHaveBeenCalledTimes(1);
@@ -340,6 +341,7 @@ describe("scrutiny commands", () => {
 
   it("resolveScrutiny validates + publishes", async () => {
     const { resolveScrutiny } = await import("../src/modules/scrutiny/commands.js");
+    precheckRows = [{ status: "pending", version: 1 }]; // pending -> cleared is legal
     const result = await resolveScrutiny(ctx(), SCRUTINY_ID, { status: "cleared", expectedVersion: 1 });
     expect(result.accepted).toBe(true);
     expect(publishSpy).toHaveBeenCalledTimes(1);
@@ -610,6 +612,7 @@ describe("case-parcel commands", () => {
 
   it("updateParcel validates + publishes", async () => {
     const { updateParcel } = await import("../src/modules/case-parcel/commands.js");
+    precheckRows = [{ version: 1, active: true }];
     const result = await updateParcel(ctx(), PARCEL_ID, { areaSqm: 300, expectedVersion: 1 });
     expect(result.accepted).toBe(true);
     expect(publishSpy).toHaveBeenCalledTimes(1);

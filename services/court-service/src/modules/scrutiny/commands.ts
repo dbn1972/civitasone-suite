@@ -3,7 +3,9 @@ import { createHash } from "node:crypto";
 import { queue } from "../../shared/infra.js";
 import { COMMANDS } from "../../topics.js";
 import { deterministicId, COURT_NAMESPACE } from "../court-registry/domain.js";
-import { deriveScrutinyId, deriveDefectId } from "./domain.js";
+import { deriveScrutinyId, deriveDefectId, assertDefectTransition, assertScrutinyTransition } from "./domain.js";
+import { getDefectForPrecheck, getScrutinyForPrecheck } from "./repo.js";
+import { httpError, assertVersionAndTransition } from "../../shared/context.js";
 import {
   recordScrutinyBody, type RecordScrutinyBody,
   raiseDefectBody, type RaiseDefectBody,
@@ -83,14 +85,31 @@ export async function raiseDefect(
   return { accepted: true, defectId };
 }
 
-/** Resolve a raised defect (§13). messageId is idempotent per (defect + expectedVersion). */
+/**
+ * Resolve a raised defect (§13). messageId is idempotent per (defect +
+ * resolution + expectedVersion) -- resolution is part of the key so two
+ * DIFFERENT legal resolutions submitted at the same expectedVersion can't
+ * collide onto one messageId (mirrors appeal/commands.ts's decideAppeal).
+ *
+ * Synchronous pre-check mirrors the consumer's own checks exactly, so an
+ * illegal resolution (e.g. re-resolving an already-rectified defect) is an
+ * immediate, honest 4xx instead of a 202 that silently dead-letters.
+ */
 export async function resolveDefect(
   ctx: RequestContext, defectId: string, input: ResolveDefectBody,
 ): Promise<ResolveDefectResult> {
   const body = resolveDefectBody.parse(input);
+
+  const current = await getDefectForPrecheck(ctx.tenantId, defectId);
+  if (!current) throw httpError("DEFECT_NOT_FOUND", `Defect not found: ${defectId}`);
+  assertVersionAndTransition(current, body.expectedVersion, body.resolution, assertDefectTransition, {
+    versionConflict: "DEFECT_VERSION_CONFLICT",
+    invalidTransition: "DEFECT_INVALID_TRANSITION",
+  });
+
   const messageId = deterministicId(
     COURT_NAMESPACE,
-    `${ctx.tenantId}:defect-resolve:${defectId}:${body.expectedVersion}`,
+    `${ctx.tenantId}:defect-resolve:${defectId}:${body.resolution}:${body.expectedVersion}`,
   );
 
   await queue.publish(COMMANDS.resolveDefect, {
@@ -106,14 +125,30 @@ export async function resolveDefect(
   return { accepted: true, defectId };
 }
 
-/** Resolve a scrutiny (§13). messageId is idempotent per (scrutiny + expectedVersion). */
+/**
+ * Resolve a scrutiny (§13). messageId is idempotent per (scrutiny + status +
+ * expectedVersion) -- status is part of the key for the same reason as
+ * resolveDefect above.
+ *
+ * Synchronous pre-check mirrors the consumer's own checks exactly, so an
+ * illegal transition is an immediate, honest 4xx instead of a 202 that
+ * silently dead-letters.
+ */
 export async function resolveScrutiny(
   ctx: RequestContext, scrutinyId: string, input: ResolveScrutinyBody,
 ): Promise<ResolveScrutinyResult> {
   const body = resolveScrutinyBody.parse(input);
+
+  const current = await getScrutinyForPrecheck(ctx.tenantId, scrutinyId);
+  if (!current) throw httpError("SCRUTINY_NOT_FOUND", `Scrutiny not found: ${scrutinyId}`);
+  assertVersionAndTransition(current, body.expectedVersion, body.status, assertScrutinyTransition, {
+    versionConflict: "SCRUTINY_VERSION_CONFLICT",
+    invalidTransition: "SCRUTINY_INVALID_TRANSITION",
+  });
+
   const messageId = deterministicId(
     COURT_NAMESPACE,
-    `${ctx.tenantId}:scrutiny-resolve:${scrutinyId}:${body.expectedVersion}`,
+    `${ctx.tenantId}:scrutiny-resolve:${scrutinyId}:${body.status}:${body.expectedVersion}`,
   );
 
   await queue.publish(COMMANDS.resolveScrutiny, {

@@ -33,6 +33,18 @@ export async function getScrutinyForUpdate(
   return rows[0];
 }
 
+/** Narrow, uncached read for a synchronous pre-check before publishing
+ *  resolveScrutiny -- same {status, version} column set as
+ *  getScrutinyForUpdate (what the consumer reads inside its own tx). */
+export async function getScrutinyForPrecheck(tenantId: string, id: string): Promise<{ status: string; version: number } | undefined> {
+  const rows = await scopedRead<Array<{ status: string; version: number }>>((tx) => tx
+    .select({ status: caseScrutiny.status, version: caseScrutiny.version })
+    .from(caseScrutiny)
+    .where(and(eq(caseScrutiny.tenantId, tenantId), eq(caseScrutiny.id, id)))
+    .limit(1));
+  return rows[0];
+}
+
 export async function insertDefect(tx: Writer, row: CaseDefectInsert): Promise<void> {
   // Idempotent on the deterministic id: a redelivery with the same id is a no-op.
   await tx.insert(caseDefect).values(row).onConflictDoNothing({ target: caseDefect.id });
@@ -52,4 +64,16 @@ export async function listDefectsByCase(tenantId: string, caseId: string): Promi
   return scopedRead((tx) => tx.select().from(caseDefect)
     .where(and(eq(caseDefect.tenantId, tenantId), eq(caseDefect.caseId, caseId)))
     .orderBy(desc(caseDefect.createdAt)));
+}
+
+/** Narrow, uncached read for a synchronous pre-check before publishing
+ *  resolveDefect -- same {status, version} column set as getDefectForUpdate
+ *  (what the consumer reads inside its own tx). */
+export async function getDefectForPrecheck(tenantId: string, id: string): Promise<{ status: string; version: number } | undefined> {
+  const rows = await scopedRead<Array<{ status: string; version: number }>>((tx) => tx
+    .select({ status: caseDefect.status, version: caseDefect.version })
+    .from(caseDefect)
+    .where(and(eq(caseDefect.tenantId, tenantId), eq(caseDefect.id, id)))
+    .limit(1));
+  return rows[0];
 }
