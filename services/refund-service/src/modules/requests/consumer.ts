@@ -1,6 +1,6 @@
 import { pino } from "pino";
 import type { Queue } from "@civitasone/queue";
-import { db } from "../../shared/db.js";
+import { db, lockForStatusChange } from "../../shared/db.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { writeAudit } from "../../shared/audit.js";
 import { tenantScoped } from "../../shared/tenant-queue.js";
@@ -115,9 +115,22 @@ export function registerRequestConsumers(rawQueue: Queue): void {
     const p = msg.payload as { id: string; tenantId: string };
     const changed = await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return false;
+      // RACE-2: withdraw must be serialized against processing/consumer.ts's
+      // approve/reject/return the same way those three are serialized
+      // against each other — otherwise withdraw can commit concurrently
+      // with e.g. a return that's already past its own checkExpectedLevel
+      // read, which is exactly the live-reproduced trace where a genuinely
+      // withdrawn request still ended up with a phantom "returned" decision
+      // and an incorrectly-superseded real approval on record (closed
+      // together with the throw-on-lost-race fix in that file — see
+      // shared/db.ts's RaceLost doc comment).
+      await lockForStatusChange(tx, p.id);
       // RACE-1: withdraw is only valid from requested or under_review — a
       // racing approve that already moved the request past that (e.g. to
       // "approved") must not be silently overwritten back to "withdrawn".
+      // Safe as a plain `return false` here: updateStatus is the only write
+      // in this transaction and it's checked immediately, so nothing has
+      // been committed yet if it fails.
       const ok = await repo.updateStatus(tx, p.id, msg.tenantId, "withdrawn", msg.actorId, ["requested", "under_review"]);
       if (!ok) return false;
       await enqueue(tx, {

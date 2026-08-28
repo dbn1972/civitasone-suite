@@ -139,6 +139,14 @@ declare -A SERVICE_DBS=(
   [theme-service]="theme_svc:civitas_theme"
   [plugin-service]="plugin_svc:civitas_plugin"
   [install-service]="install_svc:civitas_install"
+  # refund-service: migrations directory lands with PR #777
+  # (fix/municipal-batch2-db-infra, not yet merged as of this line) -- this
+  # entry is a no-op until that PR merges (the loop below skips any service
+  # whose migrations dir does not exist yet), then correctly provisions
+  # civitas_refund so refund-service's DB-integration tests
+  # (services/refund-service/tests/*-integration.test.ts) can actually run
+  # in CI instead of silently protecting nobody.
+  [refund-service]="refund_svc:civitas_refund"
 )
 
 # ── Role-creating migrations must run as the bootstrapping SUPERUSER ─────────

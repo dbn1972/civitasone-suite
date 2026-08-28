@@ -1,7 +1,6 @@
 import { pino } from "pino";
-import { sql } from "drizzle-orm";
 import type { Queue } from "@civitasone/queue";
-import { db, type ScopedTx } from "../../shared/db.js";
+import { db, type ScopedTx, lockForStatusChange, RaceLost, transactionOrRaceLost } from "../../shared/db.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { writeAudit } from "../../shared/audit.js";
 import { tenantScoped } from "../../shared/tenant-queue.js";
@@ -26,33 +25,17 @@ function ctxOf(msg: { tenantId: string; actorId: string; correlationId: string }
  * only holds WITHIN a single topic (e.g. two approve calls): it does NOT
  * cover two of these three DIFFERENT actions landing on the same request at
  * the same level, because insertApproval is a plain INSERT with nothing to
- * compare-and-swap against. Concretely: approve(level 1) and return(level 1)
- * both read maxApprovedLevel=0 before either commits, both compute
- * expectedLevel=1, both pass checkExpectedLevel. If return commits first,
- * approve's later INSERT still succeeds (it isn't blocked by anything) and
- * leaves a level-1 "approved" row that supersedeApprovals already ran
- * BEFORE it existed — a stale, never-superseded approval, i.e. a narrower
- * recurrence of the exact SEQ-1 bug this file's return-for-correction fix
- * targets, just triggered by a race instead of plain sequential misuse.
- *
- * A Postgres session-level advisory lock scoped to the transaction
- * (pg_advisory_xact_lock, auto-released on commit OR rollback) closes this
+ * compare-and-swap against. lockForStatusChange (shared/db.ts) closes this
  * regardless of which topic each action is on: whichever of approve/reject/
  * return acquires the lock for this requestId first runs its ENTIRE
- * check-then-insert sequence to completion (commit or rollback) before any
- * of the other two can even begin theirs, because they block on the same
- * lock key until it's released. hashtext() folds the uuid string into the
- * bigint key pg_advisory_xact_lock expects.
- */
-async function lockRequestForApprovalDecision(tx: ScopedTx, requestId: string): Promise<void> {
-  await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${requestId}))`);
-}
-
-/**
- * SEQ-2 (TOCTOU, within one topic): re-verifies the expected level inside
- * the same transaction as the write, immediately before it — see
- * lockRequestForApprovalDecision above for the CROSS-topic race this alone
- * does not cover, which is why every caller takes both.
+ * check-then-write sequence to completion (commit or rollback) before any
+ * of the other two can even begin theirs.
+ *
+ * withdrawRequest (requests/consumer.ts) also acquires this same lock, so
+ * approve/reject/return are serialized against withdraw too, not just
+ * against each other — see that file for why, and shared/db.ts's RaceLost
+ * doc comment for the specific bug (approved-decision-silently-committed
+ * despite a losing status guard) this pairing was live-reproduced to close.
  */
 async function checkExpectedLevel(
   requestId: string,
@@ -77,6 +60,11 @@ export function registerProcessingConsumers(rawQueue: Queue): void {
 
   queue.subscribe(COMMANDS.reviewRequest, async (msg) => {
     const p = msg.payload as { requestId: string; tenantId: string };
+    // No RaceLost needed here: updateStatus is the only write in this
+    // transaction, and it's the FIRST thing checked -- nothing has been
+    // committed yet if it fails, so a plain `return false` is safe (an
+    // empty/no-op transaction, aside from markProcessed's own row, which we
+    // WANT to keep so a redelivery of this exact message doesn't reprocess).
     const changed = await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return false;
       // RACE-1: review is a no-op-ish re-affirmation, valid from either
@@ -113,9 +101,14 @@ export function registerProcessingConsumers(rawQueue: Queue): void {
       level: number;
       remarks?: string;
     };
-    const changed = await db.transaction(async (tx) => {
+    // RACE-3: insertApproval below happens BEFORE the isFullyApproved
+    // status guard, so a plain `return false` there would leave the just-
+    // inserted approval row committed even when the guard says the overall
+    // action lost its race — transactionOrRaceLost + throwing RaceLost
+    // instead makes the whole transaction roll back atomically.
+    const changed = await transactionOrRaceLost(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return false;
-      await lockRequestForApprovalDecision(tx, p.requestId);
+      await lockForStatusChange(tx, p.requestId);
       if (!(await checkExpectedLevel(p.requestId, msg.tenantId, p.level, tx))) return false;
 
       await repo.insertApproval(tx, {
@@ -137,9 +130,9 @@ export function registerProcessingConsumers(rawQueue: Queue): void {
         if (!ok) {
           log.warn(
             { requestId: p.requestId, level: p.level },
-            "approval recorded but request status unchanged: a concurrent action already moved it out of under_review",
+            "approval lost the race: a concurrent action already moved the request out of under_review — rolling back this approval entirely",
           );
-          return false;
+          throw new RaceLost();
         }
       }
       await enqueue(tx, {
@@ -176,9 +169,11 @@ export function registerProcessingConsumers(rawQueue: Queue): void {
       level: number;
       remarks: string;
     };
-    const changed = await db.transaction(async (tx) => {
+    // RACE-3: see approveRequest above — insertApproval happens before the
+    // status guard here too.
+    const changed = await transactionOrRaceLost(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return false;
-      await lockRequestForApprovalDecision(tx, p.requestId);
+      await lockForStatusChange(tx, p.requestId);
       if (!(await checkExpectedLevel(p.requestId, msg.tenantId, p.level, tx))) return false;
 
       await repo.insertApproval(tx, {
@@ -194,11 +189,14 @@ export function registerProcessingConsumers(rawQueue: Queue): void {
         updatedBy: msg.actorId,
       });
       // RACE-1: reject is only valid from under_review — must not overwrite
-      // a racing approve that already fully approved it (trace (a)).
+      // a racing approve that already fully approved it.
       const ok = await reqRepo.updateStatus(tx, p.requestId, msg.tenantId, "rejected", msg.actorId, ["under_review"]);
       if (!ok) {
-        log.warn({ requestId: p.requestId }, "rejection recorded but request status unchanged: a concurrent action already moved it out of under_review");
-        return false;
+        log.warn(
+          { requestId: p.requestId },
+          "rejection lost the race: a concurrent action already moved the request out of under_review — rolling back this rejection entirely",
+        );
+        throw new RaceLost();
       }
       await enqueue(tx, {
         topic: EVENTS.requestRejected,
@@ -228,9 +226,15 @@ export function registerProcessingConsumers(rawQueue: Queue): void {
       level: number;
       remarks: string;
     };
-    const changed = await db.transaction(async (tx) => {
+    // RACE-3: this is the exact trace live-reproduced against withdraw —
+    // insertApproval + supersedeApprovals both ran before the status guard,
+    // so a lost race here used to leave a phantom "returned" decision and an
+    // incorrectly-superseded real approval permanently on record even
+    // though the request was never actually returned (withdraw won
+    // instead). throw + transactionOrRaceLost rolls back all of it.
+    const changed = await transactionOrRaceLost(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return false;
-      await lockRequestForApprovalDecision(tx, p.requestId);
+      await lockForStatusChange(tx, p.requestId);
       if (!(await checkExpectedLevel(p.requestId, msg.tenantId, p.level, tx))) return false;
 
       await repo.insertApproval(tx, {
@@ -250,8 +254,11 @@ export function registerProcessingConsumers(rawQueue: Queue): void {
       // RACE-1: return is only valid from under_review.
       const ok = await reqRepo.updateStatus(tx, p.requestId, msg.tenantId, "requested", msg.actorId, ["under_review"]);
       if (!ok) {
-        log.warn({ requestId: p.requestId }, "return recorded but request status unchanged: a concurrent action already moved it out of under_review");
-        return false;
+        log.warn(
+          { requestId: p.requestId },
+          "return lost the race: a concurrent action already moved the request out of under_review — rolling back this return (and the approval it would have superseded) entirely",
+        );
+        throw new RaceLost();
       }
       await enqueue(tx, {
         topic: EVENTS.requestReturned,
