@@ -92,13 +92,21 @@ export function deriveServiceId(
  * recordServiceBody shape: serviceMode, recipient, dispatchRef, deliveryStatus,
  * servedAt, proof). An identical resubmission (a genuine retry) hashes to the SAME
  * value and therefore the same serviceId, so it dedupes via onConflictDoNothing
- * instead of creating a duplicate service-attempt row; an attempt differing in any
- * field hashes differently and persists as a distinct attempt.
+ * instead of creating a duplicate service-attempt row.
  *
  * The fields are combined via JSON.stringify (not a plain string join): each
  * element is individually quoted/escaped, so a free-text field (recipient, proof)
  * containing arbitrary characters can never shift across a field boundary and
  * collide with a differently-split input.
+ *
+ * USED ONLY AS A FALLBACK (see recordService in commands.ts, which prefers a
+ * caller-supplied x-idempotency-key via idempotentId() when present) — KNOWN
+ * TRADEOFF: two GENUINELY DISTINCT service attempts that happen to share every
+ * one of these fields byte-for-byte (e.g. two separate "post to Respondent 1,
+ * pending" attempts logged days apart, with no other detail yet recorded) hash
+ * identically and collapse onto one row. A caller that needs two such attempts
+ * to both persist should send a distinct x-idempotency-key per attempt instead
+ * of relying on this fallback.
  */
 export function hashServiceContent(
   serviceMode: string,

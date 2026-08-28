@@ -29,22 +29,29 @@ export function deriveFilingId(tenantId: string, caseId: string, filingType: str
  * submitFilingBody shape: filingType, filingFeeMinor, courtFeeMinor). An identical
  * resubmission (a client double-click or a network-timeout retry) hashes to the
  * SAME key and therefore the same filingId, so it dedupes instead of creating a
- * second, fee-bearing row; a submission differing in any of these fields hashes
- * differently and persists as a distinct filing.
+ * second, fee-bearing row.
  *
  * The fields are combined via JSON.stringify (not a plain string join): each
  * element is individually quoted/escaped, so a filingType value can never shift
  * across a field boundary and collide with a differently-split input.
  *
- * DELIBERATE TRADEOFF (see PR description for the full writeup): this makes the id
- * purely CONTENT-based, with no random or time component. If a court practice ever
- * genuinely intends to submit two filings that are identical in type and fee on
- * purpose (e.g. resubmitting an amended-but-identically-priced document under the
- * same filingType), this hash cannot distinguish that from an accidental retry and
- * will collapse both into one row. filing is a backend-only, admin-driven flow (no
- * public/citizen-facing double-click surface), and silently double-charging a real
- * money fee on every timeout-retry is judged the worse failure mode to close, so
- * the tradeoff is accepted here rather than left as a fresh-random key.
+ * USED ONLY AS A FALLBACK (see submitFiling in commands.ts, which prefers a
+ * caller-supplied x-idempotency-key via idempotentId() when present) — DELIBERATE
+ * TRADEOFF, see PR description for the full writeup: this fallback makes the id
+ * purely CONTENT-based, with no random or time component, so two GENUINELY
+ * DISTINCT filings that happen to share the same filingType and fee amounts
+ * collide onto one id and the second is silently dropped. This is not only the
+ * rare "resubmitting an identically-priced amended document on purpose" case —
+ * it is the NORMAL shape of any flat-fee filing type (a tenant's fee_schedule,
+ * resolveFees below, makes every filing of one type carry the identical
+ * authoritative fee), so two unrelated, ordinary filings of the same type on the
+ * same case are a realistic collision, not just a deliberate edge case. filing is
+ * a backend-only, admin-driven flow (confirmed zero frontend usage anywhere in
+ * apps/web), and silently double-charging a real money fee on every
+ * timeout-retry is judged the worse failure mode to close for a caller that
+ * manages no idempotency key of its own — a caller that needs two
+ * same-type-same-fee filings to both persist should send a distinct
+ * x-idempotency-key per submission instead of relying on this fallback.
  */
 export function hashFilingContent(filingType: string, filingFeeMinor: bigint, courtFeeMinor: bigint): string {
   const content = JSON.stringify([filingType, filingFeeMinor.toString(), courtFeeMinor.toString()]);
