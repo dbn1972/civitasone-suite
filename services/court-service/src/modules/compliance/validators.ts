@@ -3,9 +3,10 @@ import { z } from "zod";
 export const caseIdParam = z.object({ id: z.string().uuid() });
 export const directionIdParam = z.object({ id: z.string().uuid() });
 
-/** Create a compliance direction on a case (§26). */
+/** Create a compliance direction on a case (§26). `caseId` comes from the URL path
+ *  (see routes.ts), not the body — a duplicate `caseId` body field was previously
+ *  accepted here but silently discarded in favor of the path value (Bug B). */
 export const createDirectionBody = z.object({
-  caseId:               z.string().uuid(),
   orderId:              z.string().uuid().optional(),
   direction:            z.string().trim().min(1).max(4000),
   responsibleAuthority: z.string().trim().max(120).optional(),
