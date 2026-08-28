@@ -405,6 +405,7 @@ describe("appeal commands", () => {
 
   it("registerAppeal validates + publishes", async () => {
     const { registerAppeal } = await import("../src/modules/appeal/commands.js");
+    precheckRows = [{ status: "filed", version: 1 }]; // filed -> registered is legal
     const result = await registerAppeal(ctx(), APPEAL_ID, { expectedVersion: 1 });
     expect(result.accepted).toBe(true);
     expect(publishSpy).toHaveBeenCalledTimes(1);
@@ -412,6 +413,7 @@ describe("appeal commands", () => {
 
   it("decideAppeal validates + publishes", async () => {
     const { decideAppeal } = await import("../src/modules/appeal/commands.js");
+    precheckRows = [{ status: "registered", version: 2 }]; // registered -> allowed is legal
     const result = await decideAppeal(ctx(), APPEAL_ID, { decision: "allowed", decisionSummary: "Reasoned order", decidedDate: "2026-10-01", expectedVersion: 2 });
     expect(result.accepted).toBe(true);
     expect(publishSpy).toHaveBeenCalledTimes(1);
@@ -419,6 +421,7 @@ describe("appeal commands", () => {
 
   it("withdrawAppeal validates + publishes", async () => {
     const { withdrawAppeal } = await import("../src/modules/appeal/commands.js");
+    precheckRows = [{ status: "filed", version: 1 }]; // filed -> withdrawn is legal
     const result = await withdrawAppeal(ctx(), APPEAL_ID, { expectedVersion: 1 });
     expect(result.accepted).toBe(true);
     expect(publishSpy).toHaveBeenCalledTimes(1);

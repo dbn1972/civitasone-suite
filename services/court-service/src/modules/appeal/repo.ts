@@ -35,3 +35,19 @@ export async function getAppeal(tenantId: string, id: string): Promise<AppealRow
     .limit(1));
   return rows[0];
 }
+
+/** Narrow, uncached read for a synchronous pre-check before publishing a
+ *  register/decide/withdraw command -- same {status, version} column set as
+ *  getAppealForUpdate (what the consumer reads inside its own tx), so this
+ *  hot pre-write check doesn't pull grounds/decisionSummary (up to 4000
+ *  chars each) just to read two columns. Deliberately NOT the cached
+ *  getAppeal above -- see case-lifecycle/repo.ts's getCaseForPrecheck for
+ *  why a cached read here would be wrong, not just slower. */
+export async function getAppealForPrecheck(tenantId: string, id: string): Promise<{ status: string; version: number } | undefined> {
+  const rows = await scopedRead<Array<{ status: string; version: number }>>((tx) => tx
+    .select({ status: appeals.status, version: appeals.version })
+    .from(appeals)
+    .where(and(eq(appeals.tenantId, tenantId), eq(appeals.id, id)))
+    .limit(1));
+  return rows[0];
+}

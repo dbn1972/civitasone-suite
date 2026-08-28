@@ -2,7 +2,9 @@ import type { RequestContext } from "@civitasone/types";
 import { queue } from "../../shared/infra.js";
 import { COMMANDS } from "../../topics.js";
 import { deterministicId, COURT_NAMESPACE } from "../court-registry/domain.js";
-import { deriveAppealId } from "./domain.js";
+import { deriveAppealId, assertTransition, type AppealStatus } from "./domain.js";
+import { getAppealForPrecheck } from "./repo.js";
+import { httpError, assertVersionAndTransition } from "../../shared/context.js";
 import {
   fileAppealBody, type FileAppealBody,
   registerAppealBody, type RegisterAppealBody,
@@ -36,11 +38,33 @@ export async function fileAppeal(
   return { accepted: true, appealId };
 }
 
-/** Register a filed appeal (§25). messageId is idempotent per (appeal + expectedVersion). */
+async function loadAppealForPrecheck(tenantId: string, appealId: string) {
+  const current = await getAppealForPrecheck(tenantId, appealId);
+  if (!current) throw httpError("APPEAL_NOT_FOUND", `Appeal not found: ${appealId}`);
+  return current;
+}
+
+/**
+ * Register a filed appeal (§25). messageId is idempotent per (appeal + expectedVersion).
+ *
+ * Synchronous pre-check mirrors the consumer's shared `transition()` helper
+ * exactly (same assertTransition, same order) so an illegal transition (e.g.
+ * registering an appeal that's already been decided) is an immediate, honest
+ * 4xx instead of a 202 that silently dead-letters. The consumer's identical
+ * check remains the authoritative backstop for the race window between this
+ * read and the eventual write.
+ */
 export async function registerAppeal(
   ctx: RequestContext, appealId: string, input: RegisterAppealBody,
 ): Promise<RegisterAppealResult> {
   const body = registerAppealBody.parse(input);
+
+  const current = await loadAppealForPrecheck(ctx.tenantId, appealId);
+  assertVersionAndTransition(current, body.expectedVersion, "registered", assertTransition, {
+    versionConflict: "APPEAL_VERSION_CONFLICT",
+    invalidTransition: "APPEAL_INVALID_TRANSITION",
+  });
+
   const messageId = deterministicId(
     COURT_NAMESPACE,
     `${ctx.tenantId}:appeal-register:${appealId}:${body.expectedVersion}`,
@@ -59,14 +83,30 @@ export async function registerAppeal(
   return { accepted: true, appealId };
 }
 
-/** Decide a registered appeal (§25). messageId is idempotent per (appeal + expectedVersion). */
+/** Decide a registered appeal (§25). messageId is idempotent per (appeal + expectedVersion).
+ *  Synchronous pre-check -- see registerAppeal's doc comment for why. */
 export async function decideAppeal(
   ctx: RequestContext, appealId: string, input: DecideAppealBody,
 ): Promise<DecideAppealResult> {
   const body = decideAppealBody.parse(input);
+
+  const current = await loadAppealForPrecheck(ctx.tenantId, appealId);
+  const target: AppealStatus = body.decision;
+  assertVersionAndTransition(current, body.expectedVersion, target, assertTransition, {
+    versionConflict: "APPEAL_VERSION_CONFLICT",
+    invalidTransition: "APPEAL_INVALID_TRANSITION",
+  });
+
+  // decision is part of the key (not just appealId+expectedVersion): two
+  // DIFFERENT legal decisions submitted at the same expectedVersion must get
+  // DIFFERENT messageIds, or the consumer's markProcessed dedup would apply
+  // whichever is delivered first and silently drop the second as an
+  // "already processed" duplicate -- no error, no dead-letter, unlike every
+  // other rejection path here. Mirrors certified-copy/commands.ts's
+  // transitionCopy, which includes body.target for the identical reason.
   const messageId = deterministicId(
     COURT_NAMESPACE,
-    `${ctx.tenantId}:appeal-decide:${appealId}:${body.expectedVersion}`,
+    `${ctx.tenantId}:appeal-decide:${appealId}:${body.decision}:${body.expectedVersion}`,
   );
 
   await queue.publish(COMMANDS.decideAppeal, {
@@ -82,11 +122,19 @@ export async function decideAppeal(
   return { accepted: true, appealId };
 }
 
-/** Withdraw an appeal (§25). messageId is idempotent per (appeal + expectedVersion). */
+/** Withdraw an appeal (§25). messageId is idempotent per (appeal + expectedVersion).
+ *  Synchronous pre-check -- see registerAppeal's doc comment for why. */
 export async function withdrawAppeal(
   ctx: RequestContext, appealId: string, input: WithdrawAppealBody,
 ): Promise<WithdrawAppealResult> {
   const body = withdrawAppealBody.parse(input);
+
+  const current = await loadAppealForPrecheck(ctx.tenantId, appealId);
+  assertVersionAndTransition(current, body.expectedVersion, "withdrawn", assertTransition, {
+    versionConflict: "APPEAL_VERSION_CONFLICT",
+    invalidTransition: "APPEAL_INVALID_TRANSITION",
+  });
+
   const messageId = deterministicId(
     COURT_NAMESPACE,
     `${ctx.tenantId}:appeal-withdraw:${appealId}:${body.expectedVersion}`,
