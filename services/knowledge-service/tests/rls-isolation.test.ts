@@ -9,6 +9,8 @@ import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { signToken } from "@civitasone/auth";
 import { buildApp } from "../src/app.js";
 import { sqlClient } from "../src/shared/db.js";
+import { queue } from "../src/shared/infra.js";
+import { registerDocumentsConsumers } from "../src/modules/documents/consumer.js";
 import type { FastifyInstance } from "fastify";
 
 const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
@@ -30,6 +32,18 @@ beforeAll(async () => {
   app = await buildApp();
   tokenA = tokenForTenant(TENANT_A, ACTOR_A);
   tokenB = tokenForTenant(TENANT_B, ACTOR_B);
+  // buildApp() (src/app.ts) registers HTTP routes only -- the document
+  // consumer that actually performs the INSERT for POST /v1/knowledge/documents
+  // (an async CQRS command) is otherwise only registered by src/worker.ts, a
+  // separate process this test never runs. Without this, "Tenant A creates a
+  // document" below gets a 202 with no handler ever attached to receive it,
+  // and createdDocumentId never corresponds to a real row -- independent
+  // review of this test file caught that every test depending on it would
+  // then fail (or worse, pass vacuously) for that reason rather than the one
+  // each test claims to check. Register on the same `queue` singleton
+  // commands.createDocument publishes to, then drain() after creating so the
+  // (fire-and-forget) delivery has actually completed before we use the id.
+  registerDocumentsConsumers(queue);
 });
 
 afterAll(async () => {
@@ -56,6 +70,14 @@ describe("Knowledge — Cross-Tenant RLS Isolation", () => {
     const body = res.json();
     createdDocumentId = body.data?.id ?? body.id;
     expect(createdDocumentId).toBeDefined();
+    // createDocument is an async CQRS command (queue.publish, fire-and-forget);
+    // wait for the consumer registered in beforeAll to actually process it
+    // before any later test relies on createdDocumentId being a real row.
+    // drain() is a MemoryQueue-only method, not part of the public Queue
+    // interface (services/queue-service/src/bus.ts) -- resolveQueueDriver()
+    // defaults to "memory" outside production, which is what tests run
+    // against, but guard defensively in case that's ever not true here.
+    await (queue as unknown as { drain?: () => Promise<void> }).drain?.();
   });
 
   it("Tenant B list of documents returns zero of Tenant A data", async () => {
@@ -121,5 +143,93 @@ describe("Knowledge — Cross-Tenant RLS Isolation", () => {
       url: "/v1/knowledge/documents",
     });
     expect(res.statusCode).toBe(401);
+  });
+
+  // Regression test for a fake-success bug found during deep-verification:
+  // PATCH /publish called repo.updateStatusDirect(), which used a bare
+  // db.update() outside any db.transaction(). Since wrapWithTenantGuc only
+  // injects app.tenant_id for .transaction() calls, and `documents` carries
+  // FORCE ROW LEVEL SECURITY, the UPDATE's own tenant_isolation_policy WITH
+  // CHECK silently matched zero rows on every call -- the route still
+  // returned HTTP 200 with the requested status, but nothing was ever
+  // persisted. This test asserts the status change is actually durable, not
+  // just that the endpoint responds 200.
+  it("Publishing an article actually persists the status change", async () => {
+    expect(createdDocumentId).toBeDefined();
+    // x-tenant-id mirrors what the real gateway injects from the JWT's `tid`
+    // claim (services/gateway-service/src/jwt-edge.ts) before proxying --
+    // app.inject() talks to this service directly and skips that hop, so it
+    // has to be supplied here for createTenantTxHook's AsyncLocalStorage
+    // population to match production traffic. (The write path itself no
+    // longer depends on this -- see repo.ts -- but the read paths below,
+    // via scopedRead(), still do.)
+    const headersA = { authorization: `Bearer ${tokenA}`, "x-tenant-id": TENANT_A, "content-type": "application/json" };
+
+    const publishRes = await app.inject({
+      method: "PATCH",
+      url: `/v1/knowledge/articles/${createdDocumentId}/publish`,
+      headers: headersA,
+      payload: { published: true },
+    });
+    expect(publishRes.statusCode).toBe(200);
+    expect(publishRes.json().status).toBe("approved");
+
+    const getRes = await app.inject({
+      method: "GET",
+      url: `/v1/knowledge/articles/${createdDocumentId}`,
+      headers: headersA,
+    });
+    expect(getRes.statusCode).toBe(200);
+    expect(getRes.json().status).toBe("approved");
+
+    // Unpublish too, to confirm the fix works both directions.
+    const unpublishRes = await app.inject({
+      method: "PATCH",
+      url: `/v1/knowledge/articles/${createdDocumentId}/publish`,
+      headers: headersA,
+      payload: { published: false },
+    });
+    expect(unpublishRes.statusCode).toBe(200);
+
+    const getAfterUnpublish = await app.inject({
+      method: "GET",
+      url: `/v1/knowledge/articles/${createdDocumentId}`,
+      headers: headersA,
+    });
+    expect(getAfterUnpublish.json().status).toBe("draft");
+  });
+
+  // Failure-path counterpart: publishing a nonexistent (or foreign-tenant)
+  // id must not silently "succeed" the same way the original GUC bug did --
+  // it should 404, not 200. Also exercises Tenant B genuinely being denied,
+  // not just an empty list happening to contain no leaked rows.
+  it("Publishing a nonexistent article id returns 404, not a fake 200", async () => {
+    const fakeId = "00000000-0000-4000-8000-000000000000";
+    const res = await app.inject({
+      method: "PATCH",
+      url: `/v1/knowledge/articles/${fakeId}/publish`,
+      headers: { authorization: `Bearer ${tokenA}`, "x-tenant-id": TENANT_A, "content-type": "application/json" },
+      payload: { published: true },
+    });
+    expect(res.statusCode).toBe(404);
+  });
+
+  it("Tenant B cannot publish Tenant A's article", async () => {
+    expect(createdDocumentId).toBeDefined();
+    const res = await app.inject({
+      method: "PATCH",
+      url: `/v1/knowledge/articles/${createdDocumentId}/publish`,
+      headers: { authorization: `Bearer ${tokenB}`, "x-tenant-id": TENANT_B, "content-type": "application/json" },
+      payload: { published: true },
+    });
+    expect(res.statusCode).toBe(404);
+
+    // And Tenant A's copy must be unaffected by Tenant B's attempt.
+    const getRes = await app.inject({
+      method: "GET",
+      url: `/v1/knowledge/articles/${createdDocumentId}`,
+      headers: { authorization: `Bearer ${tokenA}`, "x-tenant-id": TENANT_A },
+    });
+    expect(getRes.json().status).toBe("draft");
   });
 });

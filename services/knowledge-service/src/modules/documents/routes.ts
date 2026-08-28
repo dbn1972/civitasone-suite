@@ -115,7 +115,8 @@ export async function documentRoutes(app: FastifyInstance): Promise<void> {
     const { id } = req.params as { id: string };
     const body = z.object({ published: z.boolean() }).parse(req.body);
     const status = body.published ? "approved" : "draft";
-    await queries.setDocumentStatus(ctx.tenantId, id, status);
+    const updated = await queries.setDocumentStatus(ctx.tenantId, id, status);
+    if (!updated) throw new HttpError(404, "NOT_FOUND", "article not found");
     return reply.send({ id, status, correlationId: ctx.correlationId });
   });
 
