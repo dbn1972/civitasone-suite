@@ -85,6 +85,25 @@ export type SubmissionContentFields = {
  * DIFFERENT exhibits that happen to share a title or exhibit number hash to
  * different values instead, so they get different ids rather than one silently
  * clobbering the other.
+ *
+ * Known, accepted limits of hashing content alone (flagged in review; a complete
+ * fix needs a client-supplied idempotency key, which no caller of this endpoint
+ * currently sends and which RequestContext does not thread through today — a
+ * separate, larger change than closing the always-collides bug this replaces):
+ *   - Two INDEPENDENT submissions that share a title and leave every optional
+ *     field here unset (no exhibitNumber/filingId/evidenceType/storageRef/
+ *     contentHash yet — e.g. a placeholder logged before the file is scanned)
+ *     still hash identically and so still collide onto one row. This is strictly
+ *     narrower than the bug being fixed (which collided on title ALONE, whatever
+ *     the other fields held), and content-only hashing cannot in principle tell
+ *     two such submissions apart from one retried request — there is nothing left
+ *     to distinguish them by.
+ *   - Changing this formula from the prior hardcoded `seq=0` is not retroactive:
+ *     a client retry of a submission whose FIRST attempt was accepted by the
+ *     pre-fix code, landing after this deploy, computes a different id than the
+ *     one already committed and so inserts a second row instead of deduping. A
+ *     one-time cost at this deploy boundary, not an ongoing defect — inherent to
+ *     correcting any deterministic-id formula, not specific to this fix.
  */
 export function submissionDisambiguator(fields: SubmissionContentFields): number {
   const digest = createHash("sha256")
