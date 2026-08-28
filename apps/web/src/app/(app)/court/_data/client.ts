@@ -295,14 +295,21 @@ export async function transitionCertifiedCopy(
 
 // ─── Cause list ──────────────────────────────────────────────────────────────
 
-/** Generate (materialize) a cause-list for a court/day. Returns its id. */
+/**
+ * Generate (materialize) a cause-list for a court/day. Returns its id.
+ *
+ * The service answers 202 with `{ accepted: true, causeListId }` (see
+ * services/court-service/src/modules/cause-list/commands.ts) — NOT `id` or
+ * `data.id`. Read `causeListId` directly rather than guessing at a generic
+ * envelope shape.
+ */
 export async function createCauseList(input: {
   courtId: string;
   listDate: string;
   benchId?: string;
   listType?: string;
 }): Promise<CauseListRef> {
-  const out = await send<{ id?: string; data?: { id?: string } } & Record<string, unknown>>(
+  const out = await send<{ causeListId?: string } & Record<string, unknown>>(
     "POST",
     `v1/court/cause-lists`,
     {
@@ -314,7 +321,7 @@ export async function createCauseList(input: {
       },
     },
   );
-  const id = out.data?.id ?? out.id ?? "";
+  const id = out.causeListId ?? "";
   return { id, courtId: input.courtId, listDate: input.listDate };
 }
 

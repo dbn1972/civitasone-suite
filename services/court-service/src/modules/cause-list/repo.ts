@@ -1,4 +1,4 @@
-import { eq, and, asc } from "drizzle-orm";
+import { eq, and, asc, ne } from "drizzle-orm";
 import { db, scopedRead } from "../../shared/db.js";
 import { causeLists, causeListItems } from "./schema.js";
 
@@ -18,6 +18,18 @@ export function isUniqueViolation(err: unknown): boolean {
   return code === "23505" || code === "23P01";
 }
 
+/**
+ * Postgres surfaces a reference to a case that doesn't exist (e.g. a rare
+ * TOCTOU race with the command layer's synchronous existence pre-check) as a
+ * foreign-key violation (23503) on `cause_list_items_case_id_fkey`. Maps to a
+ * NonRetryableError so it dead-letters instead of retrying forever — a
+ * backstop behind the pre-check, not the primary defense.
+ */
+export function isForeignKeyViolation(err: unknown): boolean {
+  const code = (err as { code?: string } | null | undefined)?.code;
+  return code === "23503";
+}
+
 export async function insertCauseList(tx: Writer, row: CauseListInsert): Promise<void> {
   // Idempotent on the deterministic id: a redelivery with the same id is a no-op.
   await tx.insert(causeLists).values(row).onConflictDoNothing({ target: causeLists.id });
@@ -29,6 +41,55 @@ export async function getCauseList(
   const rows = await scopedRead<{ id: string; listDate: string; courtId: string }[]>((tx) => tx.select({ id: causeLists.id, listDate: causeLists.listDate, courtId: causeLists.courtId })
     .from(causeLists)
     .where(and(eq(causeLists.tenantId, tenantId), eq(causeLists.id, id)))
+    .limit(1));
+  return rows[0];
+}
+
+/**
+ * Look up a single cause-list item by its deterministic id (tenant-scoped). Used
+ * by the command layer to detect a resubmission of the same (list, case) pair
+ * BEFORE publishing, so a genuine edit attempt (different slot/courtroom/item
+ * number) can be rejected honestly instead of silently no-op'ing (§17 gap).
+ */
+export async function getItemById(
+  tenantId: string, id: string,
+): Promise<{ id: string; slot: string | null; courtroom: string | null; itemNumber: number | null } | undefined> {
+  const rows = await scopedRead<{ id: string; slot: string | null; courtroom: string | null; itemNumber: number | null }[]>((tx) => tx.select({
+    id: causeListItems.id,
+    slot: causeListItems.slot,
+    courtroom: causeListItems.courtroom,
+    itemNumber: causeListItems.itemNumber,
+  })
+    .from(causeListItems)
+    .where(and(eq(causeListItems.tenantId, tenantId), eq(causeListItems.id, id)))
+    .limit(1));
+  return rows[0];
+}
+
+/**
+ * Find an existing item — belonging to a DIFFERENT case — already occupying
+ * (tenantId, listDate, slot, courtroom). Mirrors the scope of the DB's
+ * `cause_list_items_no_double_booking` btree_gist EXCLUDE constraint (see
+ * migrations/0001_court_core.sql), which is keyed the same way and remains the
+ * authoritative backstop for the rare concurrent-race case this pre-check
+ * can't see. Used by the command layer to turn a double-booking into an
+ * honest 409 BEFORE publishing, instead of a 202 that silently dead-letters.
+ */
+export async function findSlotConflict(
+  tenantId: string, listDate: string, slot: string, courtroom: string, excludeCaseId: string,
+): Promise<{ id: string; caseId: string } | undefined> {
+  const rows = await scopedRead<{ id: string; caseId: string }[]>((tx) => tx.select({
+    id: causeListItems.id,
+    caseId: causeListItems.caseId,
+  })
+    .from(causeListItems)
+    .where(and(
+      eq(causeListItems.tenantId, tenantId),
+      eq(causeListItems.listDate, listDate),
+      eq(causeListItems.slot, slot),
+      eq(causeListItems.courtroom, courtroom),
+      ne(causeListItems.caseId, excludeCaseId),
+    ))
     .limit(1));
   return rows[0];
 }
