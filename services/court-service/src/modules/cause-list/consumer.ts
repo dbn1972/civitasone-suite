@@ -80,6 +80,12 @@ export function registerCauseListConsumers(
         if (repo.isUniqueViolation(e)) {
           throw new NonRetryableError("CAUSELIST_SLOT_CONFLICT: courtroom/slot already booked");
         }
+        // Backstop for the rare TOCTOU race with the command layer's synchronous
+        // existence pre-check (commands.ts) — the common case is now an honest
+        // 404 there, before this insert ever runs.
+        if (repo.isForeignKeyViolation(e)) {
+          throw new NonRetryableError("CAUSELIST_CASE_NOT_FOUND: referenced case does not exist");
+        }
         throw e;
       }
 

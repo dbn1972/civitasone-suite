@@ -50,6 +50,23 @@ vi.mock("../src/modules/certified-copy/repo.js", () => ({
   getCopy: vi.fn(async () => ({ status: "prepared", version: 1, feeMinor: 500n })),
 }));
 
+// cause-list/commands.js now does synchronous pre-checks (case exists, no
+// already-listed edit, no slot conflict) before publishing — mock its repo
+// dependencies directly rather than the generic scopedRead({}) shape above,
+// which doesn't support a real Drizzle query chain.
+vi.mock("../src/modules/cause-list/repo.js", () => ({
+  // Truthy by default so the plain happy-path test below doesn't trip the
+  // CAUSELIST_NOT_FOUND check; tests that specifically need it undefined
+  // override with mockResolvedValueOnce.
+  getCauseList: vi.fn(async () => ({ id: "stub-causelist", listDate: "2026-01-01", courtId: "stub-court" })),
+  getItemById: vi.fn(async () => undefined),
+  findSlotConflict: vi.fn(async () => undefined),
+}));
+
+vi.mock("../src/modules/case-registry/repo.js", () => ({
+  getCaseById: vi.fn(async () => ({ id: "stub-case", tenantId: "stub-tenant" })),
+}));
+
 // ── Helpers ──────────────────────────────────────────────────────────────────
 const TENANT = randomUUID();
 const ACTOR = randomUUID();
@@ -168,6 +185,61 @@ describe("cause-list commands", () => {
     const result = await listCaseOnCauseList(ctx(), causeListId, { caseId: CASE_ID, itemNumber: 1, slot: "10:30", courtroom: "Court 1" });
     expect(result.accepted).toBe(true);
     expect(publishSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it("listCaseOnCauseList rejects a nonexistent case with 404 CASE_NOT_FOUND, without publishing", async () => {
+    const { listCaseOnCauseList } = await import("../src/modules/cause-list/commands.js");
+    const caseRegistryRepo = await import("../src/modules/case-registry/repo.js");
+    vi.mocked(caseRegistryRepo.getCaseById).mockResolvedValueOnce(null as never);
+    const causeListId = randomUUID();
+    await expect(
+      listCaseOnCauseList(ctx(), causeListId, { caseId: randomUUID(), itemNumber: 1, slot: "09:00", courtroom: "Court 2" }),
+    ).rejects.toMatchObject({ status: 404, code: "CASE_NOT_FOUND" });
+    expect(publishSpy).not.toHaveBeenCalled();
+  });
+
+  it("listCaseOnCauseList rejects a slot already booked by a different case with 409 CAUSELIST_SLOT_CONFLICT, without publishing", async () => {
+    const { listCaseOnCauseList } = await import("../src/modules/cause-list/commands.js");
+    const causeListRepo = await import("../src/modules/cause-list/repo.js");
+    const causeListId = randomUUID();
+    vi.mocked(causeListRepo.getCauseList).mockResolvedValueOnce({ id: causeListId, listDate: "2026-08-01", courtId: COURT_ID });
+    vi.mocked(causeListRepo.findSlotConflict).mockResolvedValueOnce({ id: randomUUID(), caseId: randomUUID() });
+    await expect(
+      listCaseOnCauseList(ctx(), causeListId, { caseId: CASE_ID, itemNumber: 2, slot: "10:30", courtroom: "Court 1" }),
+    ).rejects.toMatchObject({ status: 409, code: "CAUSELIST_SLOT_CONFLICT" });
+    expect(publishSpy).not.toHaveBeenCalled();
+  });
+
+  it("listCaseOnCauseList rejects re-listing the same case with a different slot/courtroom with 409 CAUSELIST_ITEM_ALREADY_LISTED, without publishing", async () => {
+    const { listCaseOnCauseList } = await import("../src/modules/cause-list/commands.js");
+    const causeListRepo = await import("../src/modules/cause-list/repo.js");
+    vi.mocked(causeListRepo.getItemById).mockResolvedValueOnce({ id: randomUUID(), slot: "09:00", courtroom: "Court 9", itemNumber: 1 });
+    const causeListId = randomUUID();
+    await expect(
+      listCaseOnCauseList(ctx(), causeListId, { caseId: CASE_ID, itemNumber: 2, slot: "10:30", courtroom: "Court 1" }),
+    ).rejects.toMatchObject({ status: 409, code: "CAUSELIST_ITEM_ALREADY_LISTED" });
+    expect(publishSpy).not.toHaveBeenCalled();
+  });
+
+  it("listCaseOnCauseList allows an identical resubmission through as an idempotent no-op", async () => {
+    const { listCaseOnCauseList } = await import("../src/modules/cause-list/commands.js");
+    const causeListRepo = await import("../src/modules/cause-list/repo.js");
+    vi.mocked(causeListRepo.getItemById).mockResolvedValueOnce({ id: randomUUID(), slot: "10:30", courtroom: "Court 1", itemNumber: 2 });
+    const causeListId = randomUUID();
+    const result = await listCaseOnCauseList(ctx(), causeListId, { caseId: CASE_ID, itemNumber: 2, slot: "10:30", courtroom: "Court 1" });
+    expect(result.accepted).toBe(true);
+    expect(publishSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it("listCaseOnCauseList rejects a nonexistent cause-list with 404 CAUSELIST_NOT_FOUND, without publishing", async () => {
+    const { listCaseOnCauseList } = await import("../src/modules/cause-list/commands.js");
+    const causeListRepo = await import("../src/modules/cause-list/repo.js");
+    vi.mocked(causeListRepo.getCauseList).mockResolvedValueOnce(undefined);
+    const causeListId = randomUUID();
+    await expect(
+      listCaseOnCauseList(ctx(), causeListId, { caseId: CASE_ID, itemNumber: 1, slot: "09:00", courtroom: "Court 3" }),
+    ).rejects.toMatchObject({ status: 404, code: "CAUSELIST_NOT_FOUND" });
+    expect(publishSpy).not.toHaveBeenCalled();
   });
 });
 

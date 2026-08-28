@@ -61,8 +61,17 @@ export function deriveScrutinyId(tenantId: string, caseId: string): string {
   return deterministicId(COURT_NAMESPACE, `${tenantId}:scrutiny:${caseId}`);
 }
 
-/** A defect id is deterministic on (tenant + case + category + seq) so re-raising
- *  the SAME defect (same case + category + sequence) is idempotent end-to-end. */
+/**
+ * A defect id is deterministic on (tenant + case + category + seq) so re-raising
+ * the SAME defect (identical category + content) is idempotent end-to-end.
+ *
+ * `seq` is NOT a manually-incremented counter — the command layer (commands.ts)
+ * computes it as a hash of the defect's meaningful content (description, severity,
+ * rectificationDeadline, ...), so an identical resubmission (a genuine retry)
+ * collapses to the same id while a genuinely different defect — even in the SAME
+ * category on the same case — gets a distinct one. See defectContentSeq in
+ * scrutiny/commands.ts.
+ */
 export function deriveDefectId(tenantId: string, caseId: string, category: string, seq: number): string {
   return deterministicId(COURT_NAMESPACE, `${tenantId}:defect:${caseId}:${category.trim().toLowerCase()}:${seq}`);
 }

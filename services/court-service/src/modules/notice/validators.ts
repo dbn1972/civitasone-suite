@@ -3,9 +3,12 @@ import { z } from "zod";
 export const caseIdParam = z.object({ id: z.string().uuid() });
 export const noticeIdParam = z.object({ id: z.string().uuid() });
 
-/** Issue a notice to a party on a case (§21). `issueDate` is a calendar date. */
+/** Issue a notice to a party on a case (§21). `issueDate` is a calendar date.
+ *  `caseId` comes from the `:id` path segment (see routes.ts), not the body — a
+ *  `caseId` body field used to be accepted here but was silently discarded in
+ *  commands.ts (the path value always won), so it has been removed rather than
+ *  left as dead, misleading input. */
 export const issueNoticeBody = z.object({
-  caseId:     z.string().uuid(),
   noticeType: z.string().trim().min(1).max(48),
   issuedTo:   z.string().trim().max(500).optional(),
   issueDate:  z.string().trim().regex(/^\d{4}-\d{2}-\d{2}$/, "issueDate must be YYYY-MM-DD"),
