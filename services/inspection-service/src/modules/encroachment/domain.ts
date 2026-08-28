@@ -141,7 +141,7 @@ export function assertValidComplaintTransition(
   if (!allowed.includes(target)) {
     throw new DomainError(
       "INVALID_TRANSITION",
-      `Cannot transition complaint from  to . Allowed: [${allowed.join(", ")}]`,
+      `Cannot transition complaint from ${current} to ${target}. Allowed: [${allowed.join(", ")}]`,
     );
   }
 }
@@ -157,7 +157,7 @@ export function assertValidNoticeTransition(
   if (!allowed.includes(target)) {
     throw new DomainError(
       "INVALID_TRANSITION",
-      `Cannot transition notice from  to . Allowed: [${allowed.join(", ")}]`,
+      `Cannot transition notice from ${current} to ${target}. Allowed: [${allowed.join(", ")}]`,
     );
   }
 }
@@ -173,7 +173,7 @@ export function assertValidRemovalTransition(
   if (!allowed.includes(target)) {
     throw new DomainError(
       "INVALID_TRANSITION",
-      `Cannot transition removal from  to . Allowed: [${allowed.join(", ")}]`,
+      `Cannot transition removal from ${current} to ${target}. Allowed: [${allowed.join(", ")}]`,
     );
   }
 }

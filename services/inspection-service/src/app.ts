@@ -93,6 +93,12 @@ export async function buildApp(): Promise<FastifyInstance> {
   const { registerExecutionRoutes } = await import("./modules/execution/routes.js");
   const { registerDashboardRoutes } = await import("./modules/dashboard/routes.js");
   const { registerReportsRoutes } = await import("./modules/reports/routes.js");
+  // encroachment/illegal-construction were fully built (routes, commands,
+  // domain, repo, schema) but never registered here — see this PR for the
+  // full story (also missing: consumer.ts, and the CREATE TABLE migrations
+  // for both modules' schemas, all fixed alongside this).
+  const { registerEncroachmentRoutes } = await import("./modules/encroachment/routes.js");
+  const { registerIllegalConstructionRoutes } = await import("./modules/illegal-construction/routes.js");
 
   await app.register(registerCapaRoutes);
   await app.register(registerEnforcementRoutes);
@@ -110,6 +116,8 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(registerExecutionRoutes);
   await app.register(registerDashboardRoutes);
   await app.register(registerReportsRoutes);
+  await app.register(registerEncroachmentRoutes);
+  await app.register(registerIllegalConstructionRoutes);
 
   return app;
 }

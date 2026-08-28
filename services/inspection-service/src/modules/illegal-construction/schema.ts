@@ -40,6 +40,7 @@ export const illegalConstructionCases = illegalConstructionSchema.table("illegal
   inspectedAt:           timestamp("inspected_at", { withTimezone: true }),
   inspectionFindings:    jsonb("inspection_findings"),
   violationChecklist:    jsonb("violation_checklist"),
+  regularizationDetails: jsonb("regularization_details"),
   createdAt:             timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt:             timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   createdBy:             uuid("created_by").notNull(),
