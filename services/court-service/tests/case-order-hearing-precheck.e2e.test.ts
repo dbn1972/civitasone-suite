@@ -98,6 +98,9 @@ describe.skipIf(!RUN)("synchronous pre-checks for illegal state transitions", ()
       await sql`delete from court.notices where tenant_id = ${TENANT}`;
       await sql`delete from court.evidence where tenant_id = ${TENANT}`;
       await sql`delete from court.compliance_directions where tenant_id = ${TENANT}`;
+      await sql`delete from court.case_defect where tenant_id = ${TENANT}`;
+      await sql`delete from court.case_scrutiny where tenant_id = ${TENANT}`;
+      await sql`delete from court.case_parcels where tenant_id = ${TENANT}`;
       await sql`delete from court.case_state_transitions where tenant_id = ${TENANT}`;
       await sql`delete from court.cases where tenant_id = ${TENANT}`;
       await sql`delete from court.courts where tenant_id = ${TENANT}`;
@@ -297,6 +300,75 @@ describe.skipIf(!RUN)("synchronous pre-checks for illegal state transitions", ()
     const staleVersion = await jpatch(`/v1/court/compliance/${directionId}`, { status: "in_progress", expectedVersion: 99 }, MAKER);
     expect(staleVersion.code).toBe(409);
     expect(staleVersion.body.error.code).toBe("COMPLIANCE_VERSION_CONFLICT");
+  });
+
+  it("scrutiny: rejects an illegal defect resolution immediately (422), not a fake 202", async () => {
+    const caseId = await registerCase(courtId, "Precheck Scrutiny Case");
+
+    const scrutinized = await jpost(`/v1/court/cases/${caseId}/scrutiny`, {}, MAKER);
+    expect(scrutinized.code).toBe(202);
+    const scrutinyId = scrutinized.body.scrutinyId as string;
+    expect(await waitFor(async () =>
+      (await jget(`/v1/court/cases/${caseId}/defects`, MAKER)).code === 200,
+    )).toBe(true);
+
+    const raised = await jpost(`/v1/court/cases/${caseId}/defects`, {
+      category: "missing_documents", description: "Precheck defect",
+    }, MAKER);
+    expect(raised.code).toBe(202);
+    const defectId = raised.body.defectId as string;
+    expect(await waitFor(async () =>
+      (await jget(`/v1/court/cases/${caseId}/defects`, MAKER)).body.items?.some((d: any) => d.id === defectId),
+    )).toBe(true);
+
+    // Resolve it (legal: raised -> rectified).
+    const rectified = await jpatch(`/v1/court/defects/${defectId}/resolve`, { resolution: "rectified", expectedVersion: 1 }, MAKER);
+    expect(rectified.code).toBe(202);
+    expect(await waitFor(async () =>
+      (await jget(`/v1/court/cases/${caseId}/defects`, MAKER)).body.items?.find((d: any) => d.id === defectId)?.status === "rectified",
+    )).toBe(true);
+
+    // rectified is TERMINAL -- resolving it again must be an immediate 422, not a fake 202.
+    const illegal = await jpatch(`/v1/court/defects/${defectId}/resolve`, { resolution: "waived", expectedVersion: 2 }, MAKER);
+    expect(illegal.code).toBe(422);
+    expect(illegal.body.error.code).toBe("DEFECT_INVALID_TRANSITION");
+
+    // A stale expectedVersion on the scrutiny itself is the OTHER branch: 409.
+    const staleVersion = await jpatch(`/v1/court/scrutiny/${scrutinyId}/resolve`, { status: "cleared", expectedVersion: 99 }, MAKER);
+    expect(staleVersion.code).toBe(409);
+    expect(staleVersion.body.error.code).toBe("SCRUTINY_VERSION_CONFLICT");
+
+    // The legal scrutiny path still works: pending -> cleared.
+    const cleared = await jpatch(`/v1/court/scrutiny/${scrutinyId}/resolve`, { status: "cleared", expectedVersion: 1 }, MAKER);
+    expect(cleared.code).toBe(202);
+  });
+
+  it("case-parcel: a stale expectedVersion is an immediate 409, not a fake 202", async () => {
+    const caseId = await registerCase(courtId, "Precheck Parcel Case");
+
+    const added = await jpost(`/v1/court/cases/${caseId}/parcels`, {
+      surveyNumber: "PC-SURVEY-1", village: "Precheck Village",
+    }, MAKER);
+    expect(added.code).toBe(202);
+    const parcelId = added.body.parcelId as string;
+    expect(await waitFor(async () =>
+      (await jget(`/v1/court/cases/${caseId}/parcels`, MAKER)).body.items?.some((p: any) => p.id === parcelId),
+    )).toBe(true);
+
+    // A stale expectedVersion on a REAL change must be an immediate 409, not a fake 202.
+    const staleVersion = await jpatch(`/v1/court/parcels/${parcelId}`, { areaSqm: 500, expectedVersion: 99 }, MAKER);
+    expect(staleVersion.code).toBe(409);
+    expect(staleVersion.body.error.code).toBe("PARCEL_VERSION_CONFLICT");
+
+    const untouched = await jget(`/v1/court/cases/${caseId}/parcels`, MAKER);
+    expect(untouched.body.items.find((p: any) => p.id === parcelId)?.areaSqm ?? null).toBeNull();
+
+    // The correct version still works and actually applies.
+    const applied = await jpatch(`/v1/court/parcels/${parcelId}`, { areaSqm: 500, expectedVersion: 1 }, MAKER);
+    expect(applied.code).toBe(202);
+    expect(await waitFor(async () =>
+      Number((await jget(`/v1/court/cases/${caseId}/parcels`, MAKER)).body.items?.find((p: any) => p.id === parcelId)?.areaSqm) === 500,
+    )).toBe(true);
   });
 
   it("appeal: rejects an illegal status transition immediately (422), not a fake 202", async () => {

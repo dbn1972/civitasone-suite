@@ -333,16 +333,55 @@ describe("scrutiny commands", () => {
 
   it("resolveDefect validates + publishes", async () => {
     const { resolveDefect } = await import("../src/modules/scrutiny/commands.js");
+    precheckRows = [{ status: "raised", version: 1 }]; // raised -> rectified is legal
     const result = await resolveDefect(ctx(), DEFECT_ID, { resolution: "rectified", expectedVersion: 1 });
     expect(result.accepted).toBe(true);
     expect(publishSpy).toHaveBeenCalledTimes(1);
   });
 
+  it("resolveDefect rejects a missing defect (404)", async () => {
+    const { resolveDefect } = await import("../src/modules/scrutiny/commands.js");
+    precheckRows = [];
+    await expect(
+      resolveDefect(ctx(), DEFECT_ID, { resolution: "rectified", expectedVersion: 1 }),
+    ).rejects.toMatchObject({ code: "DEFECT_NOT_FOUND" });
+    expect(publishSpy).not.toHaveBeenCalled();
+  });
+
+  it("resolveDefect rejects a stale expectedVersion (409)", async () => {
+    const { resolveDefect } = await import("../src/modules/scrutiny/commands.js");
+    precheckRows = [{ status: "raised", version: 2 }];
+    await expect(
+      resolveDefect(ctx(), DEFECT_ID, { resolution: "rectified", expectedVersion: 1 }),
+    ).rejects.toMatchObject({ code: "DEFECT_VERSION_CONFLICT" });
+    expect(publishSpy).not.toHaveBeenCalled();
+  });
+
   it("resolveScrutiny validates + publishes", async () => {
     const { resolveScrutiny } = await import("../src/modules/scrutiny/commands.js");
+    precheckRows = [{ status: "pending", version: 1 }]; // pending -> cleared is legal
     const result = await resolveScrutiny(ctx(), SCRUTINY_ID, { status: "cleared", expectedVersion: 1 });
     expect(result.accepted).toBe(true);
     expect(publishSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it("resolveScrutiny rejects a missing scrutiny (404)", async () => {
+    const { resolveScrutiny } = await import("../src/modules/scrutiny/commands.js");
+    precheckRows = [];
+    await expect(
+      resolveScrutiny(ctx(), SCRUTINY_ID, { status: "cleared", expectedVersion: 1 }),
+    ).rejects.toMatchObject({ code: "SCRUTINY_NOT_FOUND" });
+    expect(publishSpy).not.toHaveBeenCalled();
+  });
+
+  it("resolveScrutiny rejects an illegal transition (422)", async () => {
+    const { resolveScrutiny } = await import("../src/modules/scrutiny/commands.js");
+    // cleared is terminal -- cleared -> defective is not a legal edge.
+    precheckRows = [{ status: "cleared", version: 1 }];
+    await expect(
+      resolveScrutiny(ctx(), SCRUTINY_ID, { status: "defective", expectedVersion: 1 }),
+    ).rejects.toMatchObject({ code: "SCRUTINY_INVALID_TRANSITION" });
+    expect(publishSpy).not.toHaveBeenCalled();
   });
 });
 
@@ -610,9 +649,19 @@ describe("case-parcel commands", () => {
 
   it("updateParcel validates + publishes", async () => {
     const { updateParcel } = await import("../src/modules/case-parcel/commands.js");
+    precheckRows = [{ version: 1, active: true }];
     const result = await updateParcel(ctx(), PARCEL_ID, { areaSqm: 300, expectedVersion: 1 });
     expect(result.accepted).toBe(true);
     expect(publishSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it("updateParcel rejects a missing parcel (404)", async () => {
+    const { updateParcel } = await import("../src/modules/case-parcel/commands.js");
+    precheckRows = [];
+    await expect(
+      updateParcel(ctx(), PARCEL_ID, { areaSqm: 300, expectedVersion: 1 }),
+    ).rejects.toMatchObject({ code: "PARCEL_NOT_FOUND" });
+    expect(publishSpy).not.toHaveBeenCalled();
   });
 });
 

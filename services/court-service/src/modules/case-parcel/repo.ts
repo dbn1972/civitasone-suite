@@ -25,6 +25,18 @@ export async function getParcelForUpdate(
   return rows[0];
 }
 
+/** Narrow, uncached read for a synchronous pre-check before publishing
+ *  updateParcel -- same {version, active} column set as getParcelForUpdate
+ *  (what the consumer reads inside its own tx). */
+export async function getParcelForPrecheck(tenantId: string, id: string): Promise<{ version: number; active: boolean } | undefined> {
+  const rows = await scopedRead<Array<{ version: number; active: boolean }>>((tx) => tx
+    .select({ version: caseParcels.version, active: caseParcels.active })
+    .from(caseParcels)
+    .where(and(eq(caseParcels.tenantId, tenantId), eq(caseParcels.id, id)))
+    .limit(1));
+  return rows[0];
+}
+
 /** List every parcel attached to a case (most-recent first). RLS-scoped read. */
 export async function listParcelsByCase(tenantId: string, caseId: string): Promise<CaseParcelRow[]> {
   return scopedRead<CaseParcelRow[]>((tx) => tx.select().from(caseParcels)
