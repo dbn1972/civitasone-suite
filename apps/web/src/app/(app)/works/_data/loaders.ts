@@ -271,18 +271,19 @@ export function getExecutionIssues(): Promise<LoaderResult<IssueRow[]>> {
 /**
  * Display-ready shape mapClosureRow() produces for ClosureTable.
  *
- * NOTE (verified against services/works-service/src/modules/execution/repo.ts
- * listClosures()): `agreement` below always renders as the "—" fallback —
- * the closure list response has no agreement-number field. `work_closures`
- * carries no such column, and listClosures() doesn't join `awards` (the only
- * table with `agreementNumber`) the way it joins `work_proposals` for
- * workNumber/description. Would need a backend join to populate for real.
+ * No `agreement` field: work_closures has no agreement-number column, and
+ * listClosures() (services/works-service/src/modules/execution/repo.ts)
+ * doesn't join `awards` (the only table with `agreementNumber`) the way it
+ * joins `work_proposals` for workNumber/description. This was originally
+ * typed with an `agreement` field that always rendered the "—" fallback;
+ * the works-deep-verify pass (see mapClosureRow below and ClosureTable.tsx)
+ * dropped the dead field and column outright rather than leave a
+ * permanently-empty one. Would need a backend join to populate for real.
  */
 export interface ClosureRow extends Record<string, unknown> {
   id: string;
   workNumber: string;
   description: string;
-  agreement: string;
   statusDate: string;
   remarks: string;
   status: string;
