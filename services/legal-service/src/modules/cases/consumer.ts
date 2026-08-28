@@ -55,9 +55,16 @@ export function registerCaseConsumers(rawQueue: Queue): void {
       if (!legalCase) throw new Error(`case ${p.caseId} not found`);
       assertCanDispose(legalCase.status ?? "pending");
       await repo.updateCase(tx, p.caseId, {
-        status: "disposed", updatedBy: msg.actorId, version: (legalCase.version ?? 1) + 1,
+        status: "disposed", disposition: p.disposition,
+        updatedBy: msg.actorId, version: (legalCase.version ?? 1) + 1,
       });
-      await audit(tx, msg, "dispose", "case", p.caseId);
+      // Was previously discarded here entirely: disposeCaseBody
+      // (validators.ts) requires and validates this 1-500 char string, it
+      // reached this handler, and then repo.updateCase() was called
+      // without it and the audit event carried no metadata either — the
+      // disposition text vanished the instant this command was processed,
+      // with no record of it anywhere. See migration 0023_case_disposition.
+      await audit(tx, msg, "dispose", "case", p.caseId, { disposition: p.disposition });
     });
     // Disposing a case changes its status, which is a listCases() filter —
     // same list-cache gap as caseCreate above.
@@ -65,10 +72,17 @@ export function registerCaseConsumers(rawQueue: Queue): void {
   });
 }
 
-async function audit(tx: any, msg: { tenantId: string; actorId: string; correlationId: string }, action: string, resourceType: string, resourceId: string): Promise<void> {
+async function audit(
+  tx: any,
+  msg: { tenantId: string; actorId: string; correlationId: string },
+  action: string,
+  resourceType: string,
+  resourceId: string,
+  metadata?: Record<string, unknown>,
+): Promise<void> {
   await enqueue(tx, {
     topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC,
     tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
-    payload: { service: "legal", action, resourceType, resourceId, outcome: "success" },
+    payload: { service: "legal", action, resourceType, resourceId, outcome: "success", ...(metadata ? { metadata } : {}) },
   });
 }

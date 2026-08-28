@@ -433,6 +433,55 @@ describe("Case consumer — list-cache invalidation (integration)", () => {
   });
 });
 
+// ── Case consumer — dispose persists disposition (regression) ──────────────────
+// disposeCaseBody (validators.ts) requires and zod-validates a 1-500 char
+// `disposition` string, and it reached this consumer, but repo.updateCase()
+// was only ever called with { status: "disposed", updatedBy, version } — the
+// disposition text was discarded the instant the command was processed, with
+// no record of it anywhere (not the DB row, not the audit event payload
+// either). See migration 0023_case_disposition.sql. Uses its own dedicated
+// case rather than the shared CASE_ID fixture, since disposal is one-way
+// (assertCanDispose only allows pending/appealed/stayed) and other tests in
+// this file assume CASE_ID stays disposable/pending.
+describe("Case consumer — dispose persists disposition (regression)", () => {
+  const CASE_3 = "22222222-bbbb-4000-8000-000000000c03";
+
+  it("disposeCase: disposition text is persisted on the row and in the audit event", async () => {
+    const q = wireTenantAwareQueue(new MemoryQueue());
+    registerCaseConsumers(q);
+    await q.start();
+
+    await q.publish(COMMANDS.caseCreate, {
+      messageId: MSG(18), type: COMMANDS.caseCreate,
+      tenantId: TENANT, actorId: ACTOR, correlationId: "corr-case-dispose-1", schemaVersion: "1.0",
+      payload: { id: CASE_3, tenantId: TENANT, caseNo: "WP-2026-DISPOSE", title: "Dispose regression check", court: "HC Delhi" },
+    });
+    await drain();
+
+    await q.publish(COMMANDS.caseDispose, {
+      messageId: MSG(19), type: COMMANDS.caseDispose,
+      tenantId: TENANT, actorId: ACTOR, correlationId: "corr-case-dispose-2", schemaVersion: "1.0",
+      payload: { caseId: CASE_3, tenantId: TENANT, disposition: "Writ allowed, quashing impugned order" },
+    });
+    await drain();
+    await q.stop();
+
+    const [row] = await runWithTenant(TENANT, () => db.transaction(async (tx) =>
+      tx.select().from(legalCases).where(eq(legalCases.id, CASE_3))));
+    expect(row?.status).toBe("disposed");
+    // Without the fix this is null/undefined — the whole point of this test.
+    expect(row?.disposition).toBe("Writ allowed, quashing impugned order");
+
+    const events = await runWithTenant(TENANT, () => db.transaction(async (tx) =>
+      tx.select().from(outboxMessages).where(eq(outboxMessages.tenantId, TENANT))));
+    const disposeEvent = events.find((e) =>
+      e.eventType === "audit.event.record" &&
+      (e.payload as { action?: string })?.action === "dispose");
+    expect((disposeEvent?.payload as { metadata?: { disposition?: string } })?.metadata?.disposition)
+      .toBe("Writ allowed, quashing impugned order");
+  });
+});
+
 // ── eCourts sync-consumer pure functions ───────────────────────────────────────
 // NOTE: The sync-consumer exports pure functions (resolveInterval, withRetry) that
 // could be unit tested, but importing the module pulls in 10+ async functions

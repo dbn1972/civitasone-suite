@@ -26,6 +26,7 @@ export const legalCases = casesSchema.table("legal_cases", {
   counselRef: text("counsel_ref"),
   status:     varchar("status", { length: 24 }).notNull().default("pending"),
   nextDate:   date("next_date"),
+  disposition: text("disposition"),
   createdAt:  timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt:  timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   createdBy:  uuid("created_by").notNull(),
