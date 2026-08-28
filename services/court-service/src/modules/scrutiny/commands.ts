@@ -5,6 +5,18 @@ import { COMMANDS } from "../../topics.js";
 import { deterministicId, COURT_NAMESPACE } from "../court-registry/domain.js";
 import { deriveScrutinyId, deriveDefectId, assertDefectTransition, assertScrutinyTransition } from "./domain.js";
 import { getDefectForPrecheck, getScrutinyForPrecheck } from "./repo.js";
+
+async function loadDefectForPrecheck(tenantId: string, defectId: string) {
+  const current = await getDefectForPrecheck(tenantId, defectId);
+  if (!current) throw httpError("DEFECT_NOT_FOUND", `Defect not found: ${defectId}`);
+  return current;
+}
+
+async function loadScrutinyForPrecheck(tenantId: string, scrutinyId: string) {
+  const current = await getScrutinyForPrecheck(tenantId, scrutinyId);
+  if (!current) throw httpError("SCRUTINY_NOT_FOUND", `Scrutiny not found: ${scrutinyId}`);
+  return current;
+}
 import { httpError, assertVersionAndTransition } from "../../shared/context.js";
 import {
   recordScrutinyBody, type RecordScrutinyBody,
@@ -100,8 +112,7 @@ export async function resolveDefect(
 ): Promise<ResolveDefectResult> {
   const body = resolveDefectBody.parse(input);
 
-  const current = await getDefectForPrecheck(ctx.tenantId, defectId);
-  if (!current) throw httpError("DEFECT_NOT_FOUND", `Defect not found: ${defectId}`);
+  const current = await loadDefectForPrecheck(ctx.tenantId, defectId);
   assertVersionAndTransition(current, body.expectedVersion, body.resolution, assertDefectTransition, {
     versionConflict: "DEFECT_VERSION_CONFLICT",
     invalidTransition: "DEFECT_INVALID_TRANSITION",
@@ -139,8 +150,7 @@ export async function resolveScrutiny(
 ): Promise<ResolveScrutinyResult> {
   const body = resolveScrutinyBody.parse(input);
 
-  const current = await getScrutinyForPrecheck(ctx.tenantId, scrutinyId);
-  if (!current) throw httpError("SCRUTINY_NOT_FOUND", `Scrutiny not found: ${scrutinyId}`);
+  const current = await loadScrutinyForPrecheck(ctx.tenantId, scrutinyId);
   assertVersionAndTransition(current, body.expectedVersion, body.status, assertScrutinyTransition, {
     versionConflict: "SCRUTINY_VERSION_CONFLICT",
     invalidTransition: "SCRUTINY_INVALID_TRANSITION",

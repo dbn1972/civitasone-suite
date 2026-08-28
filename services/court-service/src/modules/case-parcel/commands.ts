@@ -2,7 +2,7 @@ import type { RequestContext } from "@civitasone/types";
 import { queue } from "../../shared/infra.js";
 import { COMMANDS } from "../../topics.js";
 import { deterministicId, COURT_NAMESPACE } from "../court-registry/domain.js";
-import { deriveParcelId, normalizeSurvey } from "./domain.js";
+import { deriveParcelId, normalizeSurvey, hasEffectiveParcelChange } from "./domain.js";
 import { getParcelForPrecheck } from "./repo.js";
 import { httpError } from "../../shared/context.js";
 import {
@@ -57,19 +57,27 @@ export async function updateParcel(
 
   const current = await getParcelForPrecheck(ctx.tenantId, parcelId);
   if (!current) throw httpError("PARCEL_NOT_FOUND", `Parcel not found: ${parcelId}`);
-  const changesActive = body.active !== undefined && body.active !== current.active;
-  const changesOther =
-    body.areaSqm !== undefined || body.ownershipRef !== undefined || body.remarks !== undefined;
-  if ((changesActive || changesOther) && current.version !== body.expectedVersion) {
+  if (hasEffectiveParcelChange(body, current) && current.version !== body.expectedVersion) {
     throw httpError(
       "PARCEL_VERSION_CONFLICT",
       `Expected version ${body.expectedVersion}, found ${current.version}`,
     );
   }
 
+  // The changed fields are part of the key (not just parcelId+expectedVersion):
+  // two DIFFERENT concurrent field updates at the same expectedVersion must get
+  // DIFFERENT messageIds, or markProcessed's dedup (keyed purely on messageId,
+  // @civitasone/outbox) would apply whichever is delivered first and silently
+  // drop the second -- no error, no dead-letter. Mirrors resolveDefect/
+  // resolveScrutiny above and appeal/commands.ts's decideAppeal.
   const messageId = deterministicId(
     COURT_NAMESPACE,
-    `${ctx.tenantId}:parcel-update:${parcelId}:${body.expectedVersion}`,
+    `${ctx.tenantId}:parcel-update:${parcelId}:${JSON.stringify({
+      areaSqm: body.areaSqm ?? null,
+      ownershipRef: body.ownershipRef ?? null,
+      remarks: body.remarks ?? null,
+      active: body.active ?? null,
+    })}:${body.expectedVersion}`,
   );
 
   await queue.publish(COMMANDS.updateParcel, {
