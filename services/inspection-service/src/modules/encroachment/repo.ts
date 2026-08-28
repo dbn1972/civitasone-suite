@@ -23,6 +23,7 @@ import {
   type EncroachmentRemovalRow,
   type EncroachmentRemovalInsert,
 } from "./schema.js";
+import { formatComplaintNumber, formatNoticeNumber } from "./domain.js";
 
 // ── Type Aliases ──────────────────────────────────────────────────────────────
 
@@ -88,6 +89,20 @@ export async function findComplaints(
 }
 
 // ── Complaint Writes ──────────────────────────────────────────────────────────
+
+/**
+ * Issue the next complaint number from encroachment.complaint_number_seq.
+ * Replaces the old in-process `let complaintSeq` counter (domain.ts) that
+ * reset on every restart and was shared globally across all tenants with
+ * no DB-level uniqueness check -- see migration
+ * 0028_encroachment_illegal_construction_number_sequences.sql.
+ */
+export async function nextComplaintNumber(tx: Tx): Promise<string> {
+  const [row] = (await tx.execute(
+    sql`SELECT nextval('"encroachment"."complaint_number_seq"')::bigint AS seq`,
+  )) as Array<{ seq: number }>;
+  return formatComplaintNumber(Number(row!.seq));
+}
 
 export async function insertComplaint(
   tx: Tx,
@@ -176,6 +191,17 @@ export async function findNotices(
 }
 
 // ── Notice Writes ─────────────────────────────────────────────────────────────
+
+/**
+ * Issue the next notice number from encroachment.notice_number_seq.
+ * See nextComplaintNumber's note above -- same fix, same reasoning.
+ */
+export async function nextNoticeNumber(tx: Tx): Promise<string> {
+  const [row] = (await tx.execute(
+    sql`SELECT nextval('"encroachment"."notice_number_seq"')::bigint AS seq`,
+  )) as Array<{ seq: number }>;
+  return formatNoticeNumber(Number(row!.seq));
+}
 
 export async function insertNotice(
   tx: Tx,

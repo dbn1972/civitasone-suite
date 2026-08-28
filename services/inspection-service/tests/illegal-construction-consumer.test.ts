@@ -64,9 +64,11 @@ vi.mock("../src/modules/illegal-construction/repo.js", () => ({
     updateCaseCalls.push({ id, data });
     return { ...violationConfirmedCase, ...data };
   }),
+  nextCaseNumber: vi.fn(async () => "ILBLD-2026-000001"),
   insertAction: vi.fn(async (_tx: unknown, data: Record<string, unknown>) => ({ id: "action-1", ...data })),
   updateAction: vi.fn(async (_tx: unknown, id: string, _tenantId: string, data: Record<string, unknown>) => ({ id, ...data })),
   findActionById: vi.fn(),
+  nextActionNumber: vi.fn(async () => "ILBLD-A-2026-000001"),
 }));
 
 async function loadConsumer() {

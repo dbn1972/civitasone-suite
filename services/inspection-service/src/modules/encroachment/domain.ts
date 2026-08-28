@@ -114,20 +114,32 @@ export class DomainError extends Error {
 
 // ── Pure functions ────────────────────────────────────────────────────────────
 
-/** Sequential complaint number: ENCR-{YYYY}-{SEQ:6} */
-let complaintSeq = 0;
-export function generateComplaintNumber(): string {
-  complaintSeq += 1;
+/**
+ * Format a complaint number from a DB-issued sequence value: ENCR-{YYYY}-{SEQ:6}
+ *
+ * Pure formatter -- the sequence value itself comes from
+ * encroachment.complaint_number_seq (see repo.ts's nextComplaintNumber),
+ * not from in-process state. Previously this function incremented a
+ * module-level counter directly (`let complaintSeq = 0`), which reset to 0
+ * on every process restart and was independent per replica in any
+ * multi-replica deployment -- two different processes (or the same
+ * process before/after a restart) could and did hand out the identical
+ * complaint number, and complaint_number had no UNIQUE constraint to
+ * catch it. See migration
+ * 0028_encroachment_illegal_construction_number_sequences.sql.
+ */
+export function formatComplaintNumber(seq: number): string {
   const year = new Date().getFullYear();
-  return `ENCR-${year}-${String(complaintSeq).padStart(6, "0")}`;
+  return `ENCR-${year}-${String(seq).padStart(6, "0")}`;
 }
 
-/** Sequential notice number: ENCR-N-{YYYY}-{SEQ:6} */
-let noticeSeq = 0;
-export function generateNoticeNumber(): string {
-  noticeSeq += 1;
+/**
+ * Format a notice number from a DB-issued sequence value: ENCR-N-{YYYY}-{SEQ:6}
+ * Pure formatter -- see formatComplaintNumber's note above; same fix applies.
+ */
+export function formatNoticeNumber(seq: number): string {
   const year = new Date().getFullYear();
-  return `ENCR-N-${year}-${String(noticeSeq).padStart(6, "0")}`;
+  return `ENCR-N-${year}-${String(seq).padStart(6, "0")}`;
 }
 
 /**

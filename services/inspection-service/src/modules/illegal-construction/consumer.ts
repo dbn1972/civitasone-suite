@@ -31,8 +31,6 @@ import {
   assertValidCaseTransition,
   validateViolationChecklist,
   canRegularize,
-  generateCaseNumber,
-  generateActionNumber,
   DomainError,
   type CaseState,
   type ViolationType,
@@ -41,9 +39,11 @@ import {
   insertCase,
   updateCase,
   findCaseById,
+  nextCaseNumber,
   insertAction,
   updateAction,
   findActionById,
+  nextActionNumber,
 } from "./repo.js";
 import type {
   CreateCasePayload,
@@ -89,7 +89,7 @@ export function registerIllegalConstructionConsumers(queue: Queue): void {
 
         const record = await insertCase(tx, {
           tenantId: msg.tenantId,
-          caseNumber: generateCaseNumber(),
+          caseNumber: await nextCaseNumber(tx),
           reportedBy: p.reportedBy,
           location: p.location,
           buildingPermitRef: p.buildingPermitRef ?? null,
@@ -268,7 +268,7 @@ export function registerIllegalConstructionConsumers(queue: Queue): void {
           tenantId: msg.tenantId,
           caseId: p.caseId,
           actionType: p.actionType,
-          actionNumber: generateActionNumber(),
+          actionNumber: await nextActionNumber(tx),
           issuedBy: msg.actorId,
           status: "issued",
           details: p.details ?? null,
