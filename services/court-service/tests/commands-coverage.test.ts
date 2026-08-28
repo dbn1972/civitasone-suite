@@ -482,9 +482,28 @@ describe("party commands", () => {
 
   it("updateAdvocate validates + publishes", async () => {
     const { updateAdvocate } = await import("../src/modules/party/commands.js");
+    precheckRows = [{ version: 1 }];
     const result = await updateAdvocate(ctx(), PARTY_ID, { advocateName: "Adv. Sharma", advocateBarId: "DL/1234/2020", expectedVersion: 1 });
     expect(result.accepted).toBe(true);
     expect(publishSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it("updateAdvocate rejects a missing party (404)", async () => {
+    const { updateAdvocate } = await import("../src/modules/party/commands.js");
+    precheckRows = [];
+    await expect(
+      updateAdvocate(ctx(), PARTY_ID, { advocateName: "Adv. Sharma", expectedVersion: 1 }),
+    ).rejects.toMatchObject({ code: "PARTY_NOT_FOUND" });
+    expect(publishSpy).not.toHaveBeenCalled();
+  });
+
+  it("updateAdvocate rejects a stale expectedVersion (409)", async () => {
+    const { updateAdvocate } = await import("../src/modules/party/commands.js");
+    precheckRows = [{ version: 2 }];
+    await expect(
+      updateAdvocate(ctx(), PARTY_ID, { advocateName: "Adv. Sharma", expectedVersion: 1 }),
+    ).rejects.toMatchObject({ code: "PARTY_VERSION_CONFLICT" });
+    expect(publishSpy).not.toHaveBeenCalled();
   });
 });
 
@@ -551,15 +570,63 @@ describe("order-issuance commands", () => {
 describe("config-registry commands", () => {
   beforeEach(() => { publishSpy.mockClear(); });
 
-  it("setConfig validates + publishes", async () => {
+  it("setConfig validates + publishes (no expectedVersion supplied -- a blind write/create, never precheck-guarded)", async () => {
     const { setConfig } = await import("../src/modules/config-registry/commands.js");
     const result = await setConfig(ctx(), { namespace: "court_defaults", configKey: "max_adjournments", value: "5" });
     expect(result.accepted).toBe(true);
     expect(publishSpy).toHaveBeenCalledTimes(1);
   });
 
+  it("setConfig rejects a stale expectedVersion against an EXISTING entry (409)", async () => {
+    const { setConfig } = await import("../src/modules/config-registry/commands.js");
+    precheckRows = [{ version: 2, active: true }];
+    await expect(
+      setConfig(ctx(), { namespace: "court_defaults", configKey: "max_adjournments", value: "6", expectedVersion: 1 }),
+    ).rejects.toMatchObject({ code: "CONFIG_VERSION_CONFLICT" });
+    expect(publishSpy).not.toHaveBeenCalled();
+  });
+
+  it("setConfig with expectedVersion still creates when no row exists yet (first write, not a conflict)", async () => {
+    const { setConfig } = await import("../src/modules/config-registry/commands.js");
+    precheckRows = [];
+    const result = await setConfig(ctx(), { namespace: "court_defaults", configKey: "max_adjournments", value: "6", expectedVersion: 1 });
+    expect(result.accepted).toBe(true);
+    expect(publishSpy).toHaveBeenCalledTimes(1);
+  });
+
   it("deactivateConfig validates + publishes", async () => {
     const { deactivateConfig } = await import("../src/modules/config-registry/commands.js");
+    precheckRows = [{ version: 1, active: true }];
+    const result = await deactivateConfig(ctx(), CONFIG_ID, { expectedVersion: 1 });
+    expect(result.accepted).toBe(true);
+    expect(publishSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it("deactivateConfig rejects a missing config entry (404)", async () => {
+    const { deactivateConfig } = await import("../src/modules/config-registry/commands.js");
+    precheckRows = [];
+    await expect(
+      deactivateConfig(ctx(), CONFIG_ID, { expectedVersion: 1 }),
+    ).rejects.toMatchObject({ code: "CONFIG_NOT_FOUND" });
+    expect(publishSpy).not.toHaveBeenCalled();
+  });
+
+  it("deactivateConfig rejects a stale expectedVersion on an ACTIVE entry (409)", async () => {
+    const { deactivateConfig } = await import("../src/modules/config-registry/commands.js");
+    precheckRows = [{ version: 2, active: true }];
+    await expect(
+      deactivateConfig(ctx(), CONFIG_ID, { expectedVersion: 1 }),
+    ).rejects.toMatchObject({ code: "CONFIG_VERSION_CONFLICT" });
+    expect(publishSpy).not.toHaveBeenCalled();
+  });
+
+  it("deactivateConfig accepts a stale expectedVersion when already inactive (no-op parity with the consumer)", async () => {
+    const { deactivateConfig } = await import("../src/modules/config-registry/commands.js");
+    // The consumer's own short-circuit (`if (!current.active) return;`) runs
+    // BEFORE its version check, so an already-inactive entry is accepted
+    // regardless of expectedVersion. The precheck must match that exact order
+    // or it would reject a resubmit the consumer would have silently no-op'd.
+    precheckRows = [{ version: 99, active: false }];
     const result = await deactivateConfig(ctx(), CONFIG_ID, { expectedVersion: 1 });
     expect(result.accepted).toBe(true);
     expect(publishSpy).toHaveBeenCalledTimes(1);
