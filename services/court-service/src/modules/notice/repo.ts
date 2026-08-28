@@ -39,3 +39,15 @@ export async function listNoticesByCase(tenantId: string, caseId: string): Promi
     .where(and(eq(notices.tenantId, tenantId), eq(notices.caseId, caseId)))
     .orderBy(desc(notices.issueDate)));
 }
+
+/** Narrow, uncached read for a synchronous pre-check before publishing
+ *  updateNoticeStatus -- same {status, version} column set as
+ *  getNoticeForUpdate (what the consumer reads inside its own tx). */
+export async function getNoticeForPrecheck(tenantId: string, id: string): Promise<{ status: string; version: number } | undefined> {
+  const rows = await scopedRead<Array<{ status: string; version: number }>>((tx) => tx
+    .select({ status: notices.status, version: notices.version })
+    .from(notices)
+    .where(and(eq(notices.tenantId, tenantId), eq(notices.id, id)))
+    .limit(1));
+  return rows[0];
+}

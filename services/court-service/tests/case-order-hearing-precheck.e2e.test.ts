@@ -94,6 +94,10 @@ describe.skipIf(!RUN)("synchronous pre-checks for illegal state transitions", ()
       await sql`delete from court.hearings where tenant_id = ${TENANT}`;
       await sql`delete from court.orders where tenant_id = ${TENANT}`;
       await sql`delete from court.appeals where tenant_id = ${TENANT}`;
+      await sql`delete from court.notice_service where tenant_id = ${TENANT}`;
+      await sql`delete from court.notices where tenant_id = ${TENANT}`;
+      await sql`delete from court.evidence where tenant_id = ${TENANT}`;
+      await sql`delete from court.compliance_directions where tenant_id = ${TENANT}`;
       await sql`delete from court.case_state_transitions where tenant_id = ${TENANT}`;
       await sql`delete from court.cases where tenant_id = ${TENANT}`;
       await sql`delete from court.courts where tenant_id = ${TENANT}`;
@@ -206,6 +210,78 @@ describe.skipIf(!RUN)("synchronous pre-checks for illegal state transitions", ()
     const selfApproveAgain = await jpatch(`/v1/court/orders/${orderId}/approve-issue`, { dscSignature: "fake-dsc-for-test", expectedVersion: 3 }, MAKER);
     expect(selfApproveAgain.code).toBe(403);
     expect(selfApproveAgain.body.error.code).toBe("MAKER_CHECKER_VIOLATION");
+  });
+
+  it("notice: rejects an illegal status transition immediately (422), not a fake 202", async () => {
+    const caseId = await registerCase(courtId, "Precheck Notice Case");
+
+    const issued = await jpost(`/v1/court/cases/${caseId}/notices`, {
+      noticeType: "summons", issueDate: "2026-09-01",
+    }, MAKER);
+    expect(issued.code).toBe(202);
+    const noticeId = issued.body.noticeId as string;
+    expect(await waitFor(async () =>
+      (await jget(`/v1/court/cases/${caseId}/notices`, MAKER)).body.items?.some((n: any) => n.id === noticeId),
+    )).toBe(true);
+
+    // Mark it served (legal: issued -> served).
+    const served = await jpatch(`/v1/court/notices/${noticeId}/status`, { status: "served", expectedVersion: 1 }, MAKER);
+    expect(served.code).toBe(202);
+    expect(await waitFor(async () =>
+      (await jget(`/v1/court/cases/${caseId}/notices`, MAKER)).body.items?.find((n: any) => n.id === noticeId)?.status === "served",
+    )).toBe(true);
+
+    // served is TERMINAL -- cancelling it now must be an immediate 422, not a fake 202.
+    const illegal = await jpatch(`/v1/court/notices/${noticeId}/status`, { status: "cancelled", expectedVersion: 2 }, MAKER);
+    expect(illegal.code).toBe(422);
+    expect(illegal.body.error.code).toBe("NOTICE_INVALID_TRANSITION");
+  });
+
+  it("evidence: rejects an illegal ruling immediately (422), not a fake 202", async () => {
+    const caseId = await registerCase(courtId, "Precheck Evidence Case");
+
+    const submitted = await jpost(`/v1/court/cases/${caseId}/evidence`, {
+      title: "Precheck Exhibit", evidenceType: "document",
+    }, MAKER);
+    expect(submitted.code).toBe(202);
+    const evidenceId = submitted.body.evidenceId as string;
+    expect(await waitFor(async () =>
+      (await jget(`/v1/court/cases/${caseId}/evidence`, MAKER)).body.items?.some((e: any) => e.id === evidenceId),
+    )).toBe(true);
+
+    // Admit it (legal: submitted -> admitted).
+    const admitted = await jpatch(`/v1/court/evidence/${evidenceId}/rule`, { ruling: "admitted", expectedVersion: 1 }, MAKER);
+    expect(admitted.code).toBe(202);
+    expect(await waitFor(async () =>
+      (await jget(`/v1/court/cases/${caseId}/evidence`, MAKER)).body.items?.find((e: any) => e.id === evidenceId)?.status === "admitted",
+    )).toBe(true);
+
+    // admitted is TERMINAL -- rejecting it now must be an immediate 422, not a fake 202.
+    const illegal = await jpatch(`/v1/court/evidence/${evidenceId}/rule`, { ruling: "rejected", expectedVersion: 2 }, MAKER);
+    expect(illegal.code).toBe(422);
+    expect(illegal.body.error.code).toBe("EVIDENCE_INVALID_TRANSITION");
+  });
+
+  it("compliance: rejects an illegal status transition immediately (422), not a fake 202", async () => {
+    const caseId = await registerCase(courtId, "Precheck Compliance Case");
+
+    const created = await jpost(`/v1/court/cases/${caseId}/compliance`, {
+      direction: "Precheck compliance direction",
+    }, MAKER);
+    expect(created.code).toBe(202);
+    const directionId = created.body.directionId as string;
+    expect(await waitFor(async () =>
+      (await jget(`/v1/court/cases/${caseId}/compliance`, MAKER)).body.items?.some((d: any) => d.id === directionId),
+    )).toBe(true);
+
+    // verifying a still-'pending' direction skips the required 'in_progress' ->
+    // 'completed' steps -- illegal, must be an immediate 422, not a fake 202.
+    const illegal = await jpatch(`/v1/court/compliance/${directionId}`, { status: "verified", expectedVersion: 1 }, MAKER);
+    expect(illegal.code).toBe(422);
+    expect(illegal.body.error.code).toBe("COMPLIANCE_INVALID_TRANSITION");
+
+    const untouched = await jget(`/v1/court/cases/${caseId}/compliance`, MAKER);
+    expect(untouched.body.items.find((d: any) => d.id === directionId)?.status).toBe("pending");
   });
 
   it("appeal: rejects an illegal status transition immediately (422), not a fake 202", async () => {
