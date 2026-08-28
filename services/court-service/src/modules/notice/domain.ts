@@ -4,6 +4,7 @@
  * is deterministic and side-effect free so it is trivially unit-testable and safe
  * to call from both the command and consumer paths.
  */
+import { createHash } from "node:crypto";
 import { deterministicId, COURT_NAMESPACE } from "../court-registry/domain.js";
 
 export const NOTICE_STATUSES = ["issued", "served", "unserved", "cancelled"] as const;
@@ -51,7 +52,16 @@ export function assertDeliveryTransition(from: string, to: DeliveryStatus): void
 }
 
 /** A notice id is deterministic on (tenant + case + type + issue date) so
- *  re-submitting the SAME notice is idempotent end-to-end. */
+ *  re-submitting the SAME notice is idempotent end-to-end.
+ *
+ *  KNOWN LIMITATION (theoretical, not fixed here — see PR description): because
+ *  there is no further disambiguator, two DISTINCT notices of the same type on
+ *  the same case on the same calendar date collide onto one id (e.g. two
+ *  respondents each served a "summons" the same day would produce the same
+ *  noticeId, and the second insert would be silently dropped by
+ *  onConflictDoNothing). Judged lower priority than the recordService fix below
+ *  and left alone here: changing this id's shape needs more care, since existing
+ *  notice ids are already persisted and may be read elsewhere. */
 export function deriveNoticeId(
   tenantId: string, caseId: string, noticeType: string, issueDateIso: string,
 ): string {
@@ -61,15 +71,55 @@ export function deriveNoticeId(
   );
 }
 
-/** A service-attempt id is deterministic on (tenant + notice + mode + sequence)
- *  so a redelivery of the same attempt is a no-op. */
+/** A service-attempt id is deterministic on (tenant + notice + mode + seq) so a
+ *  redelivery of the same attempt is a no-op. seq is normally
+ *  hashServiceContent(...) below (a content hash of the attempt's fields), so a
+ *  genuine retry — identical content — always derives the same seq and therefore
+ *  the same serviceId, and dedupes via onConflictDoNothing; a plain numeric
+ *  sequence is still accepted for a caller with its own sequencing scheme. */
 export function deriveServiceId(
-  tenantId: string, noticeId: string, mode: string, seq: number,
+  tenantId: string, noticeId: string, mode: string, seq: number | string,
 ): string {
   return deterministicId(
     COURT_NAMESPACE,
     `${tenantId}:notice-service:${noticeId}:${mode}:${seq}`,
   );
+}
+
+/**
+ * Content-derived disambiguator for a service attempt - a SHA-256 hex digest over
+ * every field that distinguishes one attempt from another (the full
+ * recordServiceBody shape: serviceMode, recipient, dispatchRef, deliveryStatus,
+ * servedAt, proof). An identical resubmission (a genuine retry) hashes to the SAME
+ * value and therefore the same serviceId, so it dedupes via onConflictDoNothing
+ * instead of creating a duplicate service-attempt row.
+ *
+ * The fields are combined via JSON.stringify (not a plain string join): each
+ * element is individually quoted/escaped, so a free-text field (recipient, proof)
+ * containing arbitrary characters can never shift across a field boundary and
+ * collide with a differently-split input.
+ *
+ * USED ONLY AS A FALLBACK (see recordService in commands.ts, which prefers a
+ * caller-supplied x-idempotency-key via idempotentId() when present) — KNOWN
+ * TRADEOFF: two GENUINELY DISTINCT service attempts that happen to share every
+ * one of these fields byte-for-byte (e.g. two separate "post to Respondent 1,
+ * pending" attempts logged days apart, with no other detail yet recorded) hash
+ * identically and collapse onto one row. A caller that needs two such attempts
+ * to both persist should send a distinct x-idempotency-key per attempt instead
+ * of relying on this fallback.
+ */
+export function hashServiceContent(
+  serviceMode: string,
+  recipient: string | undefined,
+  dispatchRef: string | undefined,
+  deliveryStatus: string | undefined,
+  servedAt: string | undefined,
+  proof: string | undefined,
+): string {
+  const content = JSON.stringify([
+    serviceMode, recipient ?? null, dispatchRef ?? null, deliveryStatus ?? null, servedAt ?? null, proof ?? null,
+  ]);
+  return createHash("sha256").update(content, "utf8").digest("hex");
 }
 
 /** Substitute {{key}} tokens in a template with vars[key] (missing → ""). No
