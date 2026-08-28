@@ -73,6 +73,16 @@ const PUBLIC_PREFIXES = [
   "/api/v1/install",
   "/api/v1/careers",
   "/api/v1/crm/public",
+  // Public citizen case-status lookup (OTP/captcha/open per court config) +
+  // the public court-establishment directory -- see
+  // court-service/src/modules/public-lookup/routes.ts for the threat model
+  // (same anonymous-route mechanism as /api/v1/crm/public above: the route
+  // is marked config:{public:true} service-side, this is what lets an
+  // anonymous request past the gateway's OWN bearer-token pre-check so it
+  // can even reach that service-side check). Narrow to the /public
+  // sub-tree, NOT the whole /api/v1/court prefix, so no authenticated
+  // court route loses its edge check.
+  "/api/v1/court/public",
   // MSME self-signup (deep-verification, 2026-08-27): tenant-service's own
   // route is marked config:{public:true} and does not read req.ctx, but the
   // gateway's own bearer-token pre-check (below) runs BEFORE any request is

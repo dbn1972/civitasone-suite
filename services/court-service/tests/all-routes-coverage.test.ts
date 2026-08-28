@@ -2140,9 +2140,9 @@ describe("Public Lookup Routes", () => {
     });
   });
 
-  describe("GET /v1/public/establishments", () => {
+  describe("GET /v1/court/public/establishments", () => {
     it("returns list without auth (public route)", async () => {
-      const res = await app.inject({ method: "GET", url: "/v1/public/establishments" });
+      const res = await app.inject({ method: "GET", url: "/v1/court/public/establishments" });
       expect(res.statusCode).toBe(200);
       expect(res.json().items).toBeDefined();
     });

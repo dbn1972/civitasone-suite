@@ -35,6 +35,9 @@ const PUBLIC_PREFIXES = [
   "/api/v1/install",
   "/api/v1/careers",
   "/api/v1/crm/public",
+  // Must stay in sync with PUBLIC_PREFIXES in app.ts -- see the comment
+  // there (public citizen case-status lookup, court-service).
+  "/api/v1/court/public",
   // Must stay in sync with PUBLIC_PREFIXES in app.ts — see the comment there
   // for why (MSME self-signup, deep-verification, 2026-08-27).
   "/api/v1/tenant/msme-onboard",
