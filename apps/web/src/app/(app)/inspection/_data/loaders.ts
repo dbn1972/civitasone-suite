@@ -13,7 +13,7 @@ function asRows(payload: unknown): Record<string, unknown>[] {
 }
 
 export function getInspections(): Promise<LoaderResult<Record<string, unknown>[]>> {
-  return fetchJson<unknown, Record<string, unknown>[]>("/api/v1/inspection/inspections?limit=50", [], {
+  return fetchJson<unknown, Record<string, unknown>[]>("/api/v1/inspection/inspections?pageSize=50", [], {
     revalidateSeconds: 30,
     telemetryKey: "inspection.list",
     mapResponse: asRows,
@@ -21,7 +21,7 @@ export function getInspections(): Promise<LoaderResult<Record<string, unknown>[]
 }
 
 export function getInspectionAssignments(): Promise<LoaderResult<Record<string, unknown>[]>> {
-  return fetchJson<unknown, Record<string, unknown>[]>("/api/v1/inspection/assignments?limit=50", [], {
+  return fetchJson<unknown, Record<string, unknown>[]>("/api/v1/inspection/assignments?pageSize=50", [], {
     revalidateSeconds: 30,
     telemetryKey: "inspection.assignments",
     mapResponse: asRows,
@@ -29,7 +29,7 @@ export function getInspectionAssignments(): Promise<LoaderResult<Record<string, 
 }
 
 export function getInspectionCapas(): Promise<LoaderResult<Record<string, unknown>[]>> {
-  return fetchJson<unknown, Record<string, unknown>[]>("/api/v1/inspection/capa?limit=50", [], {
+  return fetchJson<unknown, Record<string, unknown>[]>("/api/v1/inspection/capa?pageSize=50", [], {
     revalidateSeconds: 30,
     telemetryKey: "inspection.capa",
     mapResponse: asRows,

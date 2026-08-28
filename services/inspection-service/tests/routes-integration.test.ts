@@ -895,6 +895,28 @@ describe("Execution Routes", () => {
       const res = await app.inject({ method: "POST", url: `/v1/inspection/inspections/${mockInspection.id}/finalize`, headers: AUTH_HEADER });
       expect(res.statusCode).toBe(202);
     });
+
+    // Regression / hazard documentation: the test above (no content-type
+    // header on a bodyless inject()) is NOT the same request shape a real
+    // browser fetch() sends when a caller sets `Content-Type:
+    // application/json` unconditionally regardless of whether there is a
+    // body (which apps/web's InspectionActions.tsx used to do for exactly
+    // this route, confirmed live against the real running service before
+    // the frontend fix). That header survives the /api/proxy catch-all
+    // verbatim and reaches this route with an empty body, and Fastify's
+    // default JSON parser rejects it with 400 FST_ERR_CTP_EMPTY_JSON_BODY —
+    // i.e. the button always failed in real use despite the test above
+    // passing. This test locks in that real hazard so nobody "fixes" the
+    // 202 test above by re-adding an unconditional Content-Type header on
+    // the frontend's bodyless call.
+    it("REJECTS a bodyless POST that carries Content-Type: application/json (the real hazard behind a since-fixed frontend bug)", async () => {
+      const res = await app.inject({
+        method: "POST",
+        url: `/v1/inspection/inspections/${mockInspection.id}/finalize`,
+        headers: { ...AUTH_HEADER, "content-type": "application/json" },
+      });
+      expect(res.statusCode).toBe(400);
+    });
   });
 
   describe("GET /v1/inspection/inspections/:id", () => {
