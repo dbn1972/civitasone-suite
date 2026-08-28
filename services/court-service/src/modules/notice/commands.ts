@@ -3,7 +3,9 @@ import { idempotentId } from "@civitasone/auth";
 import { queue } from "../../shared/infra.js";
 import { COMMANDS } from "../../topics.js";
 import { deterministicId, COURT_NAMESPACE } from "../court-registry/domain.js";
-import { deriveNoticeId, deriveServiceId, hashServiceContent } from "./domain.js";
+import { deriveNoticeId, deriveServiceId, hashServiceContent, assertNoticeTransition } from "./domain.js";
+import { getNoticeForPrecheck } from "./repo.js";
+import { httpError, assertVersionAndTransition } from "../../shared/context.js";
 import {
   issueNoticeBody, type IssueNoticeBody,
   recordServiceBody, type RecordServiceBody,
@@ -70,15 +72,36 @@ export async function recordService(
   return { accepted: true, noticeId, serviceId };
 }
 
-/** Update a notice's lifecycle status (§21). messageId is idempotent per
- *  (notice + expectedVersion). */
+/**
+ * Update a notice's lifecycle status (§21). messageId is idempotent per
+ * (notice + target status + expectedVersion) -- status is part of the key so
+ * two DIFFERENT legal targets submitted at the same expectedVersion can't
+ * collide onto one messageId and have the second silently dropped by the
+ * consumer's markProcessed dedup (mirrors appeal/commands.ts's decideAppeal
+ * and certified-copy/commands.ts's transitionCopy, same reasoning).
+ *
+ * Synchronous pre-check mirrors the consumer's own checks exactly (same
+ * assertNoticeTransition, same order) so an illegal transition (e.g.
+ * marking cancelled a notice that's already served) is an immediate,
+ * honest 4xx instead of a 202 that silently dead-letters. The consumer's
+ * identical checks remain the authoritative backstop for the race window
+ * between this read and the eventual write.
+ */
 export async function updateNoticeStatus(
   ctx: RequestContext, noticeId: string, input: UpdateNoticeStatusBody,
 ): Promise<UpdateNoticeStatusResult> {
   const body = updateNoticeStatusBody.parse(input);
+
+  const current = await getNoticeForPrecheck(ctx.tenantId, noticeId);
+  if (!current) throw httpError("NOTICE_NOT_FOUND", `Notice not found: ${noticeId}`);
+  assertVersionAndTransition(current, body.expectedVersion, body.status, assertNoticeTransition, {
+    versionConflict: "NOTICE_VERSION_CONFLICT",
+    invalidTransition: "NOTICE_INVALID_TRANSITION",
+  });
+
   const messageId = deterministicId(
     COURT_NAMESPACE,
-    `${ctx.tenantId}:notice-status:${noticeId}:${body.expectedVersion}`,
+    `${ctx.tenantId}:notice-status:${noticeId}:${body.status}:${body.expectedVersion}`,
   );
 
   await queue.publish(COMMANDS.updateNoticeStatus, {

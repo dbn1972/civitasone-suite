@@ -33,3 +33,15 @@ export async function getDirection(tenantId: string, id: string): Promise<Compli
     .limit(1));
   return rows[0];
 }
+
+/** Narrow, uncached read for a synchronous pre-check before publishing
+ *  updateCompliance -- same {status, version} column set as
+ *  getDirectionForUpdate (what the consumer reads inside its own tx). */
+export async function getDirectionForPrecheck(tenantId: string, id: string): Promise<{ status: string; version: number } | undefined> {
+  const rows = await scopedRead<Array<{ status: string; version: number }>>((tx) => tx
+    .select({ status: complianceDirections.status, version: complianceDirections.version })
+    .from(complianceDirections)
+    .where(and(eq(complianceDirections.tenantId, tenantId), eq(complianceDirections.id, id)))
+    .limit(1));
+  return rows[0];
+}

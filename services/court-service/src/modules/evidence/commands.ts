@@ -2,7 +2,9 @@ import type { RequestContext } from "@civitasone/types";
 import { queue } from "../../shared/infra.js";
 import { COMMANDS } from "../../topics.js";
 import { deterministicId, COURT_NAMESPACE } from "../court-registry/domain.js";
-import { deriveEvidenceId, submissionDisambiguator } from "./domain.js";
+import { deriveEvidenceId, submissionDisambiguator, assertTransition } from "./domain.js";
+import { getEvidenceForPrecheck } from "./repo.js";
+import { httpError, assertVersionAndTransition } from "../../shared/context.js";
 import {
   submitEvidenceBody, type SubmitEvidenceBody,
   ruleEvidenceBody, type RuleEvidenceBody,
@@ -33,14 +35,31 @@ export async function submitEvidence(
   return { accepted: true, evidenceId };
 }
 
-/** Rule on an exhibit (§22). messageId is idempotent per (evidence + expectedVersion). */
+/**
+ * Rule on an exhibit (§22). messageId is idempotent per (evidence + ruling +
+ * expectedVersion) -- ruling is part of the key so two DIFFERENT legal
+ * rulings submitted at the same expectedVersion can't collide onto one
+ * messageId (mirrors appeal/commands.ts's decideAppeal).
+ *
+ * Synchronous pre-check mirrors the consumer's own checks exactly, so an
+ * illegal ruling (e.g. re-ruling an already-admitted exhibit) is an
+ * immediate, honest 4xx instead of a 202 that silently dead-letters.
+ */
 export async function ruleOnEvidence(
   ctx: RequestContext, evidenceId: string, input: RuleEvidenceBody,
 ): Promise<RuleEvidenceResult> {
   const body = ruleEvidenceBody.parse(input);
+
+  const current = await getEvidenceForPrecheck(ctx.tenantId, evidenceId);
+  if (!current) throw httpError("EVIDENCE_NOT_FOUND", `Evidence not found: ${evidenceId}`);
+  assertVersionAndTransition(current, body.expectedVersion, body.ruling, assertTransition, {
+    versionConflict: "EVIDENCE_VERSION_CONFLICT",
+    invalidTransition: "EVIDENCE_INVALID_TRANSITION",
+  });
+
   const messageId = deterministicId(
     COURT_NAMESPACE,
-    `${ctx.tenantId}:evidence-rule:${evidenceId}:${body.expectedVersion}`,
+    `${ctx.tenantId}:evidence-rule:${evidenceId}:${body.ruling}:${body.expectedVersion}`,
   );
 
   await queue.publish(COMMANDS.ruleOnEvidence, {

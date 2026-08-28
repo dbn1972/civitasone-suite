@@ -366,6 +366,7 @@ describe("notice commands", () => {
 
   it("updateNoticeStatus validates + publishes", async () => {
     const { updateNoticeStatus } = await import("../src/modules/notice/commands.js");
+    precheckRows = [{ status: "issued", version: 1 }]; // issued -> served is legal
     const result = await updateNoticeStatus(ctx(), NOTICE_ID, { status: "served", expectedVersion: 1 });
     expect(result.accepted).toBe(true);
     expect(publishSpy).toHaveBeenCalledTimes(1);
@@ -386,6 +387,7 @@ describe("compliance commands", () => {
   it("updateCompliance validates + publishes", async () => {
     const { updateCompliance } = await import("../src/modules/compliance/commands.js");
     const directionId = randomUUID();
+    precheckRows = [{ status: "in_progress", version: 1 }]; // in_progress -> completed is legal
     const result = await updateCompliance(ctx(), directionId, { status: "completed", expectedVersion: 1 });
     expect(result.accepted).toBe(true);
     expect(publishSpy).toHaveBeenCalledTimes(1);
@@ -460,6 +462,7 @@ describe("evidence commands", () => {
 
   it("ruleOnEvidence validates + publishes", async () => {
     const { ruleOnEvidence } = await import("../src/modules/evidence/commands.js");
+    precheckRows = [{ status: "submitted", version: 1 }]; // submitted -> admitted is legal
     const result = await ruleOnEvidence(ctx(), EVIDENCE_ID, { ruling: "admitted", expectedVersion: 1 });
     expect(result.accepted).toBe(true);
     expect(publishSpy).toHaveBeenCalledTimes(1);
