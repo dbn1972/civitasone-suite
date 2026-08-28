@@ -472,7 +472,8 @@ function AdjournDialog({
         description={
           <>
             Adjourn the {rowLabel} to <strong>{fmtDate(nextDate)}</strong>. This is final for this
-            hearing — a fresh hearing entry is created for the next date; it cannot be undone.
+            hearing and cannot be undone — the case will need a NEW hearing scheduled
+            separately for {fmtDate(nextDate)}; adjourning does not do that automatically.
           </>
         }
         onConfirm={() => void confirm()}

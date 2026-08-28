@@ -4,6 +4,7 @@ import { queue } from "../../shared/infra.js";
 import { COMMANDS } from "../../topics.js";
 import { validateCnr } from "./domain.js";
 import { registerCaseBody, type RegisterCaseBody } from "./validators.js";
+import { HttpError } from "../../shared/context.js";
 
 export type RegisterCaseResult = { accepted: true; caseId: string };
 
@@ -28,7 +29,16 @@ function deterministicCaseId(tenantId: string, normalizedCnr: string): string {
 
 export async function registerCase(ctx: RequestContext, input: RegisterCaseBody): Promise<RegisterCaseResult> {
   const body = registerCaseBody.parse(input);
-  const cnrNumber = validateCnr(body.cnrNumber);
+  // validateCnr throws a plain Error on a malformed CNR, which -- uncaught --
+  // is NOT one of the shapes this route's error handler recognises (ZodError,
+  // HttpError), so it fell through to a generic, scary 500 for a routine client
+  // input mistake. Re-thrown as a proper 400 here.
+  let cnrNumber: string;
+  try {
+    cnrNumber = validateCnr(body.cnrNumber);
+  } catch (e) {
+    throw new HttpError(400, "INVALID_CNR", (e as Error).message);
+  }
   const caseId = deterministicCaseId(ctx.tenantId, cnrNumber);
 
   await queue.publish(COMMANDS.registerCase, {

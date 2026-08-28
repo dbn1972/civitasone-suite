@@ -2,6 +2,9 @@ import type { RequestContext } from "@civitasone/types";
 import { queue } from "../../shared/infra.js";
 import { COMMANDS } from "../../topics.js";
 import { deterministicId, COURT_NAMESPACE } from "../court-registry/domain.js";
+import { assertTransition, assertDifferentApprover } from "./domain.js";
+import { getOrderById } from "../order/repo.js";
+import { HttpError } from "../../shared/context.js";
 import {
   submitForApprovalBody, type SubmitForApprovalBody,
   approveAndIssueBody, type ApproveAndIssueBody,
@@ -16,13 +19,46 @@ export type IssuanceResult = { accepted: true; orderId: string };
  * DSC-pronouncement lifecycle. Each `messageId` is deterministic per
  * (order + intent + expectedVersion) so a redelivery of the SAME intent at the
  * SAME version is exactly-once end-to-end (the consumer's markProcessed dedupes).
+ *
+ * Every command below runs a SYNCHRONOUS pre-check before publishing, reusing
+ * the exact same domain functions (assertTransition / assertDifferentApprover)
+ * the consumer uses. Without this, a foreseeable rejection -- most seriously a
+ * self-approval attempt on approveAndIssue -- returned 202 {accepted:true} and
+ * then silently dead-lettered in the consumer with ZERO signal back to the
+ * caller: the frontend's ApproveIssueDialog showed "Approval & issuance
+ * submitted" for an order that was never actually approved. Confirmed live
+ * during the deep-verification pass that produced this fix. The consumer's
+ * identical checks remain the authoritative backstop for the race window
+ * between this read and the eventual write.
  */
+
+async function loadOrderForPrecheck(tenantId: string, orderId: string) {
+  const current = await getOrderById(tenantId, orderId);
+  if (!current) throw new HttpError(404, "ORDER_NOT_FOUND", `Order not found: ${orderId}`);
+  return current;
+}
 
 /** Submit a drafted order for approval (draft → pending_approval). */
 export async function submitForApproval(
   ctx: RequestContext, orderId: string, input: SubmitForApprovalBody,
 ): Promise<IssuanceResult> {
   const body = submitForApprovalBody.parse(input);
+
+  const current = await loadOrderForPrecheck(ctx.tenantId, orderId);
+  if (current.status !== "pending_approval") {
+    if (current.version !== body.expectedVersion) {
+      throw new HttpError(
+        409, "VERSION_CONFLICT",
+        `Expected version ${body.expectedVersion}, found ${current.version}`,
+      );
+    }
+    try {
+      assertTransition(current.status, "pending_approval");
+    } catch (e) {
+      throw new HttpError(409, "ILLEGAL_TRANSITION", (e as Error).message);
+    }
+  }
+
   const messageId = deterministicId(
     COURT_NAMESPACE,
     `${ctx.tenantId}:order-submit:${orderId}:${body.expectedVersion}`,
@@ -44,14 +80,39 @@ export async function submitForApproval(
 /**
  * Approve + issue (pronounce) an order (pending_approval → issued).
  *
- * §35.5 — issuance is a HUMAN, DSC-signed act. The consumer HARD-enforces
- * maker-checker (approver ≠ maker); an AI / service actor must never reach this
- * command. The route restricts it to the checker/bench roles.
+ * §35.5 — issuance is a HUMAN, DSC-signed act. MAKER-CHECKER (approver ≠ maker)
+ * is enforced HERE, synchronously, before publish -- not just in the consumer
+ * -- so a self-approval attempt gets an immediate 403 instead of a fake 202.
+ * The route restricts this to the checker/bench roles.
  */
 export async function approveAndIssue(
   ctx: RequestContext, orderId: string, input: ApproveAndIssueBody,
 ): Promise<IssuanceResult> {
   const body = approveAndIssueBody.parse(input);
+
+  const current = await loadOrderForPrecheck(ctx.tenantId, orderId);
+  if (current.status !== "issued") {
+    if (current.version !== body.expectedVersion) {
+      throw new HttpError(
+        409, "VERSION_CONFLICT",
+        `Expected version ${body.expectedVersion}, found ${current.version}`,
+      );
+    }
+    // MAKER-CHECKER — checked before the transition check and well before any
+    // write, so a self-approval can never mutate the row. createdBy is the
+    // maker (the officer who recorded the draft); signedBy is the fallback.
+    try {
+      assertDifferentApprover(current.createdBy ?? current.signedBy, ctx.actorId);
+    } catch (e) {
+      throw new HttpError(403, "MAKER_CHECKER_VIOLATION", (e as Error).message);
+    }
+    try {
+      assertTransition(current.status, "issued");
+    } catch (e) {
+      throw new HttpError(409, "ILLEGAL_TRANSITION", (e as Error).message);
+    }
+  }
+
   const messageId = deterministicId(
     COURT_NAMESPACE,
     `${ctx.tenantId}:order-issue:${orderId}:${body.expectedVersion}`,
@@ -75,6 +136,22 @@ export async function sendBack(
   ctx: RequestContext, orderId: string, input: SendBackBody,
 ): Promise<IssuanceResult> {
   const body = sendBackBody.parse(input);
+
+  const current = await loadOrderForPrecheck(ctx.tenantId, orderId);
+  if (current.status !== "draft") {
+    if (current.version !== body.expectedVersion) {
+      throw new HttpError(
+        409, "VERSION_CONFLICT",
+        `Expected version ${body.expectedVersion}, found ${current.version}`,
+      );
+    }
+    try {
+      assertTransition(current.status, "draft");
+    } catch (e) {
+      throw new HttpError(409, "ILLEGAL_TRANSITION", (e as Error).message);
+    }
+  }
+
   const messageId = deterministicId(
     COURT_NAMESPACE,
     `${ctx.tenantId}:order-sendback:${orderId}:${body.expectedVersion}`,
@@ -98,6 +175,22 @@ export async function recall(
   ctx: RequestContext, orderId: string, input: RecallBody,
 ): Promise<IssuanceResult> {
   const body = recallBody.parse(input);
+
+  const current = await loadOrderForPrecheck(ctx.tenantId, orderId);
+  if (current.status !== "recalled") {
+    if (current.version !== body.expectedVersion) {
+      throw new HttpError(
+        409, "VERSION_CONFLICT",
+        `Expected version ${body.expectedVersion}, found ${current.version}`,
+      );
+    }
+    try {
+      assertTransition(current.status, "recalled");
+    } catch (e) {
+      throw new HttpError(409, "ILLEGAL_TRANSITION", (e as Error).message);
+    }
+  }
+
   const messageId = deterministicId(
     COURT_NAMESPACE,
     `${ctx.tenantId}:order-recall:${orderId}:${body.expectedVersion}`,
