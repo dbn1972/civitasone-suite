@@ -79,14 +79,22 @@ describe("WebAuthn — registration options", () => {
 });
 
 describe("WebAuthn — register credential", () => {
-  it("POST /v1/identity/webauthn/register → 201 after fresh options", async () => {
+  // SEC/FUNC regression (deep-verification, 2026-08-27): this route used to
+  // decode nothing, verify nothing, and store nothing, yet returned 201
+  // "registered successfully" — a fabricated success response for a security
+  // feature (a caller had no way to tell a real passkey from this fake one).
+  // This test used to assert that fake-success as intended; it now asserts
+  // the corrected, honest behavior — consistent with /authenticate, which
+  // was already honestly returning 501 for the same not-yet-implemented
+  // cryptographic verification.
+  it("POST /v1/identity/webauthn/register → 501 (not yet impl, honest about it)", async () => {
     // First get options to set up the challenge
     await app.inject({
       method: "GET", url: "/v1/identity/webauthn/register/options",
       headers: headers(["super_admin"]),
     });
 
-    // Then register
+    // Then attempt to register
     const res = await app.inject({
       method: "POST", url: "/v1/identity/webauthn/register",
       headers: headers(["super_admin"]),
@@ -100,11 +108,8 @@ describe("WebAuthn — register credential", () => {
         },
       },
     });
-    expect(res.statusCode).toBe(201);
-    const body = res.json();
-    expect(body.id).toBeDefined();
-    expect(body.status).toBe("registered");
-    expect(body.message).toContain("Passkey registered");
+    expect(res.statusCode).toBe(501);
+    expect(res.json().code).toBe("NOT_IMPLEMENTED");
   });
 
   it("POST /v1/identity/webauthn/register → 400 with missing type", async () => {

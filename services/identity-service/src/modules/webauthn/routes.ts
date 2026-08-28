@@ -112,16 +112,20 @@ export async function webauthnRoutes(app: FastifyInstance): Promise<void> {
     }
     await challengeStore.delete(ctx.actorId);
 
-    // TODO: Decode attestationObject, verify challenge matches clientDataJSON,
-    // extract public key, store credential in webauthn_credentials table.
-    // For now, acknowledge registration.
-    const credentialId = randomUUID();
-
-    return reply.code(201).send({
-      id: credentialId,
-      credentialId: body.id,
-      status: "registered",
-      message: "Passkey registered successfully",
+    // FUNC fix (deep-verification, 2026-08-27): this used to decode nothing,
+    // verify nothing, and store nothing, yet returned 201 "registered
+    // successfully" — a fabricated success response for a security feature.
+    // A caller had no way to tell a real passkey from this fake one, and would
+    // reasonably believe they had working passwordless/MFA-equivalent auth
+    // when no credential was ever verified or persisted. TODO (real fix):
+    // decode attestationObject, verify challenge matches clientDataJSON,
+    // extract public key, store credential in a webauthn_credentials table.
+    // Until that lands, be honest about it the same way /authenticate already
+    // is, instead of lying about success.
+    void body;
+    return reply.code(501).send({
+      code: "NOT_IMPLEMENTED",
+      message: "WebAuthn registration pending full cryptographic implementation",
     });
   });
 
