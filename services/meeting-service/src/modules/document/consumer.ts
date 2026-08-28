@@ -32,6 +32,7 @@
  * _Requirements: 4.1, 4.3, 4.4, 15.1, 15.2, 15.4, 15.7_
  */
 import { createHash } from "node:crypto";
+import { pino } from "pino";
 import { and, asc, eq, isNull } from "drizzle-orm";
 import type { CommandEnvelope } from "@civitasone/queue";
 import { NonRetryableError } from "@civitasone/queue";
@@ -50,6 +51,9 @@ const AUDIT_TOPIC = "audit.event.record";
 const CACHE_RESOURCE = "document";
 const CACHE_RESOURCE_VERSIONS = "document_versions";
 const AGENDA_BOOK_MIME = "application/pdf";
+
+/** Module logger (Pino) — same convention as the maintenance workers (workers/*.ts). */
+const log = pino({ name: "meeting-document-consumer" });
 
 // ─── Command payload contracts (mirror topics.ts JSDoc) ────────────────────────
 
@@ -178,6 +182,7 @@ async function handleDocumentUpload(msg: CommandEnvelope<DocumentUploadPayload>)
     // (schema/migration review finding — previously the dangling id was silently kept).
     let versionNum = 1;
     let resolvedPreviousVersionId: string | null = null;
+    let droppedPreviousVersionId: string | null = null;
     if (p.previousVersionId) {
       const prev = await tx
         .select({ versionNum: meetingDocuments.versionNum })
@@ -187,6 +192,24 @@ async function handleDocumentUpload(msg: CommandEnvelope<DocumentUploadPayload>)
       if (prev[0]) {
         versionNum = prev[0].versionNum + 1;
         resolvedPreviousVersionId = p.previousVersionId;
+      } else {
+        // The caller named a predecessor that does not resolve in this tenant (deleted, wrong
+        // tenant, or a race with its own upload). We discard it — version_num falls back to 1 and
+        // the dangling pointer is NOT persisted (the 0009 self-referential FK would reject it
+        // anyway). Discarding it silently, though, hides a legitimate versioning error; a
+        // replacement that quietly becomes a "first version" is exactly the kind of provenance
+        // gap a CERT-In audit trail must be able to see. So make the discard observable: a warn
+        // log for operators + an audit-metadata note on the upload fact (below).
+        droppedPreviousVersionId = p.previousVersionId;
+        log.warn(
+          {
+            documentId: p.documentId,
+            tenantId: p.tenantId,
+            meetingId: p.meetingId,
+            requestedPreviousVersionId: p.previousVersionId,
+          },
+          "document.upload: supplied previousVersionId did not resolve to a document in this tenant — discarding it and treating this upload as version 1",
+        );
       }
     }
 
@@ -214,6 +237,10 @@ async function handleDocumentUpload(msg: CommandEnvelope<DocumentUploadPayload>)
       meetingId: p.meetingId,
       classification,
       versionNum,
+      // Record when a caller-supplied predecessor was dropped, so the audit trail shows this row
+      // became a "version 1" because its named previousVersionId did not resolve (not because the
+      // caller intended a first upload).
+      ...(droppedPreviousVersionId ? { droppedPreviousVersionId } : {}),
     });
   });
 
