@@ -5,9 +5,7 @@ import { COMMANDS, EVENTS } from "../../topics.js";
 import { certifiedCopies } from "./schema.js";
 import * as repo from "./repo.js";
 import * as configRepo from "../config-registry/repo.js";
-import {
-  assertReceiptMatchesFee, assertTransition, computeCopyFeeMinor, parseReceiptMinor, type CopyStatus,
-} from "./domain.js";
+import { assertLegalCopyTransition, computeCopyFeeMinor, type CopyStatus } from "./domain.js";
 
 type RequestCopyPayload = {
   id: string;
@@ -145,36 +143,33 @@ export function registerCertifiedCopyConsumers(
       const current = await repo.getCopyForUpdate(tx, p.tenantId, p.copyId);
       if (!current) throw new NonRetryableError(`COPY_NOT_FOUND: ${p.copyId}`);
 
-      // Already at target → transition is done; no-op (redelivery-safe).
+      // Already at target → transition is done; no-op (redelivery-safe). This
+      // check MUST stay here too (not just inside assertLegalCopyTransition
+      // below) because it also has to skip the WRITE below — applying
+      // versionedUpdate with a since-stale expectedVersion would otherwise
+      // raise a spurious version conflict for what should be a harmless no-op.
       if (current.status === target) return;
 
-      // Stale optimistic-lock token → a concurrent update happened; do not retry.
-      if (current.version !== p.expectedVersion) {
-        throw new NonRetryableError(
-          `VERSION_CONFLICT: certified copy ${p.copyId} expected v${p.expectedVersion}, found v${current.version}`,
-        );
-      }
-
-      // Illegal edge per the state machine → do not retry.
+      // Version / transition-legality / payment-proof checks — the SAME
+      // function the command layer's synchronous pre-check already ran
+      // (commands.ts), kept here too as the authoritative backstop for the
+      // rare race window between that read and this transactional one.
+      let paymentFields: { paymentRef?: string | null; receiptMinor?: bigint } = {};
       try {
-        assertTransition(current.status, target);
+        const { receiptMinor } = assertLegalCopyTransition({
+          copyId: p.copyId,
+          currentStatus: current.status,
+          currentVersion: current.version,
+          currentFeeMinor: current.feeMinor,
+          target,
+          expectedVersion: p.expectedVersion,
+          ...(p.receiptMinor !== undefined ? { receiptMinor: p.receiptMinor } : {}),
+        });
+        if (receiptMinor !== undefined) {
+          paymentFields = { paymentRef: p.paymentRef ?? null, receiptMinor };
+        }
       } catch (e) {
         throw new NonRetryableError((e as Error).message);
-      }
-
-      // Payment proof (§30 integrity): fee_paid MUST carry a receipted amount
-      // that matches the fee recorded on this copy at request time. Validators
-      // already require paymentRef + receiptMinor to be PRESENT on the wire;
-      // this is the server-authoritative AMOUNT check they cannot perform.
-      let paymentFields: { paymentRef?: string | null; receiptMinor?: bigint } = {};
-      if (target === "fee_paid") {
-        try {
-          const receiptMinor = parseReceiptMinor(p.receiptMinor);
-          assertReceiptMatchesFee(current.feeMinor, receiptMinor);
-          paymentFields = { paymentRef: p.paymentRef ?? null, receiptMinor };
-        } catch (e) {
-          throw new NonRetryableError((e as Error).message);
-        }
       }
 
       const issuedFields = target === "issued"

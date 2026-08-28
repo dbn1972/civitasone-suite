@@ -4,7 +4,7 @@ import { COMMANDS } from "../../topics.js";
 import { HttpError } from "../../shared/context.js";
 import { deterministicId, COURT_NAMESPACE } from "../court-registry/domain.js";
 import * as repo from "./repo.js";
-import { deriveCopyId, assertTransition, assertReceiptMatchesFee, parseReceiptMinor } from "./domain.js";
+import { deriveCopyId, assertLegalCopyTransition } from "./domain.js";
 import {
   requestCopyBody, type RequestCopyBody,
   transitionCopyBody, type TransitionCopyBody,
@@ -47,12 +47,20 @@ export async function requestCopy(
  * illegal transition (e.g. `fee_paid` on an already-terminal copy), a stale
  * `expectedVersion`, or a `receiptMinor` that doesn't match the server-computed
  * fee — get an immediate, honest 4xx instead of a `202 {accepted:true}` that
- * silently dead-letters in the consumer. This mirrors consumer.ts's own checks
- * EXACTLY (same functions, same order, same "already at target ⇒ no-op"
- * idempotency shortcut) so a legitimate idempotent retry still succeeds here
- * rather than being newly rejected. The consumer's checks remain the
- * authoritative backstop for the rare race window between this read and its
- * own transactional read.
+ * silently dead-letters in the consumer. The check itself
+ * (`assertLegalCopyTransition` in domain.ts) is the SAME function the
+ * consumer calls for its own authoritative check, so the two can never
+ * silently drift apart on a future edit to either one — the consumer's
+ * transactional read remains the backstop for the rare race window between
+ * that read and this one (two concurrent requests can both pass this
+ * pre-check before either write commits; the consumer's version check is
+ * what ultimately resolves that, dead-lettering the loser honestly).
+ *
+ * This read is intentionally NOT cache-backed (unlike a query-handler GET
+ * route): it gates a correctness-critical decision made at write time, where
+ * a stale cached row could give a dishonest answer — the exact failure mode
+ * this fix exists to close. `getCopyForUpdate` in consumer.ts is uncached
+ * for the same reason.
  */
 export async function transitionCopy(
   ctx: RequestContext, copyId: string, input: TransitionCopyBody,
@@ -64,36 +72,21 @@ export async function transitionCopy(
     throw new HttpError(404, "COPY_NOT_FOUND", `certified copy ${copyId} not found`);
   }
 
-  // Already at target: redelivery/idempotent-retry-safe no-op, same as the
-  // consumer — skip the version/transition/fee checks below entirely.
-  if (current.status !== body.target) {
-    if (current.version !== body.expectedVersion) {
-      throw new HttpError(
-        409,
-        "VERSION_CONFLICT",
-        `certified copy ${copyId} expected v${body.expectedVersion}, found v${current.version}`,
-      );
-    }
-
-    try {
-      assertTransition(current.status, body.target);
-    } catch (e) {
-      throw new HttpError(422, "INVALID_COPY_TRANSITION", (e as Error).message);
-    }
-
-    if (body.target === "fee_paid") {
-      let receiptMinor: bigint;
-      try {
-        receiptMinor = parseReceiptMinor(body.receiptMinor);
-      } catch (e) {
-        throw new HttpError(422, "INVALID_RECEIPT_AMOUNT", (e as Error).message);
-      }
-      try {
-        assertReceiptMatchesFee(current.feeMinor, receiptMinor);
-      } catch (e) {
-        throw new HttpError(422, "RECEIPT_AMOUNT_MISMATCH", (e as Error).message);
-      }
-    }
+  try {
+    assertLegalCopyTransition({
+      copyId,
+      currentStatus: current.status,
+      currentVersion: current.version,
+      currentFeeMinor: current.feeMinor,
+      target: body.target,
+      expectedVersion: body.expectedVersion,
+      ...(body.receiptMinor !== undefined ? { receiptMinor: body.receiptMinor } : {}),
+    });
+  } catch (e) {
+    const message = (e as Error).message;
+    const colonIdx = message.indexOf(":");
+    const code = colonIdx === -1 ? message : message.slice(0, colonIdx);
+    throw new HttpError(code === "VERSION_CONFLICT" ? 409 : 422, code, message);
   }
 
   const messageId = deterministicId(
