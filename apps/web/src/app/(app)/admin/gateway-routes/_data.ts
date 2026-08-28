@@ -85,4 +85,4 @@ function moduleLoader(path: string, key: string) {
     });
 }
 
-export const getGatewayCatalogue = moduleLoader("/api/v1/catalogue", "gateway.catalogue");
+export const getGatewayCatalogue = moduleLoader("/api/v1/gateway/catalogue", "gateway.catalogue");

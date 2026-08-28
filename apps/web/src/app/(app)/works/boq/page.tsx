@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
 import { PageHeader, StatGrid, StatCard, Card } from "@/app/_components/ds";
+import { formatMoney } from "@/lib/formatters";
 import { getBoqItems } from "../_data/loaders";
 import { BoqTable } from "./BoqTable";
 
@@ -8,8 +9,17 @@ export default async function BoqPage() {
   const { data: items, source } = await getBoqItems();
 
   const total = items.length;
-  const totalAmountMinor = items.reduce((sum, item) => sum + Number(item.amount ?? 0), 0);
-  const totalAmount = (totalAmountMinor / 100).toLocaleString("en-IN");
+  // amount is amountMinor (paise) serialised as a string — sum with BigInt and
+  // render via formatMoney so the total is paise-exact and matches the ₹ format
+  // used everywhere else (never float-divide paise or drop trailing zeros).
+  const totalAmountMinor = items.reduce((sum, item) => {
+    try {
+      return sum + BigInt(String(item.amount ?? "0"));
+    } catch {
+      return sum;
+    }
+  }, 0n);
+  const totalAmount = formatMoney(totalAmountMinor);
   const scopes = new Set(items.map((i) => String(i.scope ?? ""))).size;
 
   return (
@@ -33,7 +43,7 @@ export default async function BoqPage() {
       />
       <StatGrid>
         <StatCard icon="📐" iconBg="#eff6ff" label="Total Items" value={total} />
-        <StatCard icon="💰" iconBg="#ecfdf3" label="Total Amount" value={"Rs. " + totalAmount} />
+        <StatCard icon="💰" iconBg="#ecfdf3" label="Total Amount" value={totalAmount} />
         <StatCard icon="📊" iconBg="#fffaeb" label="Scopes" value={scopes} />
         <StatCard
           icon="📋"

@@ -10,7 +10,7 @@ type Bill = {
   billNo: string;
   vendor: string;
   poRef?: string | null;
-  amount: number;
+  amount: string;
   submittedDate: string;
   dueDate?: string | null;
   threeWayMatch: string;

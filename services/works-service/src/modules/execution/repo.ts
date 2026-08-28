@@ -11,6 +11,23 @@ export async function listScopes(tenantId: string, workId: string) {
   });
 }
 
+export async function getWorkScope(tenantId: string, id: string) {
+  return scopedRead(async (tx) => {
+    const rows = await tx.select().from(workScopes)
+      .where(and(eq(workScopes.tenantId, tenantId), eq(workScopes.id, id)));
+    return rows[0] ?? null;
+  });
+}
+
+/** Every progress entry recorded against a scope — used to compute the
+ * running cumulative achievement synchronously at the route. */
+export async function listScopeProgress(tenantId: string, workScopeId: string) {
+  return scopedRead(async (tx) => {
+    return tx.select().from(scopeProgress)
+      .where(and(eq(scopeProgress.tenantId, tenantId), eq(scopeProgress.workScopeId, workScopeId)));
+  });
+}
+
 export async function listIssues(tenantId: string, workId: string) {
   return scopedRead(async (tx) => {
     return tx.select().from(workIssues)

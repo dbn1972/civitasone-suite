@@ -58,22 +58,46 @@ export const slipQueryParams = z.object({
 // Hoisted out of world-class-routes.ts (were inline z.object literals) so
 // commands.ts can share the exact same shape/types as the route validation —
 // mirrors createDdoBody/createPensionerBody above.
+// BUG-4 fix: oldAmountMinor/newAmountMinor are absolute salary-component
+// amounts — like createEmployeeBody.basicMinor in hrms-service, they can
+// never legitimately be negative — so both get the same .nonnegative()
+// floor. The DELTA between them (newAmountMinor - oldAmountMinor, computed
+// and persisted as difference_minor in consumer.ts's arrearCreate handler)
+// is deliberately left unconstrained in sign: a back-dated pay DECREASE is
+// a legitimate business case (demotion, correction of a prior overpayment)
+// and must produce a negative delta so it is recovered, not paid out. This
+// mirrors the codebase's own established pattern for the automatic
+// retro-arrears generator (consumer.ts generateRetroArrears, "H1" comment),
+// which explicitly treats a negative basicDelta as an ARREAR_RECOVERY, not
+// as invalid input. Constraining the two inputs (not the result) is
+// therefore the business-correct floor here.
 export const createArrearBody = z.object({
   employeeId:     z.string().uuid(),
   componentCode:  z.string(),
   fromPeriod:     z.string(),
   toPeriod:       z.string(),
-  oldAmountMinor: z.number().int(),
-  newAmountMinor: z.number().int(),
+  oldAmountMinor: z.number().int().nonnegative(),
+  newAmountMinor: z.number().int().nonnegative(),
   reason:         z.string().optional(),
 });
 export type CreateArrearBody = z.infer<typeof createArrearBody>;
 
+// BUG-4 fix: basicMinor here is the salary base a bonus percentage is
+// computed against (see consumer.ts bonusCompute: basicMinor * bonusPctBps).
+// Unlike an arrear delta, there is no legitimate business case for a
+// negative basic here, so the input itself gets the floor (no signed
+// "result" to preserve, unlike createArrearBody above).
+// round2 fix (regression re-test): bonusPct had no floor, unlike its sibling
+// basicMinor above — a negative bonusPct (e.g. -8.33) survived to the
+// consumer's bonusCompute handler and produced a negative bonus_amount_minor,
+// which collectAdHocEarnings (payroll/consumer.ts) then feeds in as a
+// negative "earning" line, bypassing the protected-net floor that only
+// guards recognized deductions. Same floor, same rationale as basicMinor.
 export const computeBonusBody = z.object({
   employeeId: z.string().uuid(),
   fy:         z.string(),
-  basicMinor: z.number().int(),
-  bonusPct:   z.number().default(8.33),
+  basicMinor: z.number().int().nonnegative(),
+  bonusPct:   z.number().nonnegative().default(8.33),
 });
 export type ComputeBonusBody = z.infer<typeof computeBonusBody>;
 

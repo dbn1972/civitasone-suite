@@ -2,7 +2,7 @@
  * Pure-domain unit tests (no DB): stage-gate, stage-ageing, quotation-approval maths.
  */
 import { describe, it, expect } from "vitest";
-import { isPresent, missingMandatoryFields, findStage } from "../src/modules/deals/stage-gate.js";
+import { isPresent, missingMandatoryFields, findStage, skippedGateStage } from "../src/modules/deals/stage-gate.js";
 import { daysInStage, evaluateAgeing } from "../src/modules/deals/stage-ageing.js";
 import { breachesThreshold, initialStatus, breachSnapshot, effectiveDiscountBps } from "../src/modules/deals/quotation-approval-domain.js";
 
@@ -53,7 +53,7 @@ describe("stage-gate.findStage", () => {
     { id: "a", name: "Lead", ordinal: 0 },
     { id: "b", name: "Won", ordinal: 1 },
   ];
-  it("finds by id first", () => {
+  it("resolves by id when that's the only identifier supplied", () => {
     expect(findStage(stages, { stageId: "b" })?.name).toBe("Won");
   });
   it("falls back to name", () => {
@@ -62,6 +62,35 @@ describe("stage-gate.findStage", () => {
   it("returns undefined for unknown / null stage list", () => {
     expect(findStage(stages, { stageName: "Nope" })).toBeUndefined();
     expect(findStage(null, { stageName: "Lead" })).toBeUndefined();
+  });
+
+  // Security regression (code review on PR #692): a stageId naming one stage combined
+  // with a stage NAME naming a different one used to resolve to the id-matched stage,
+  // letting gate/mandatory-field checks (evaluated against whatever findStage returns)
+  // pass against the WRONG stage while the actual write — which always uses the raw
+  // `stage` string, never `target.name` — landed on the stage the caller claimed by
+  // name. Concretely: PATCH {stage:"Won", stageId:<Lead's own id>} on a deal currently
+  // at Lead used to resolve `target` to Lead (id match wins) — a self-referential,
+  // always-non-forward "move" that trivially passed skippedGateStage — while the row
+  // was still written with stage="Won". Name must always win when both are supplied.
+  it("a stageId belonging to a different stage does NOT override a supplied name", () => {
+    const target = findStage(stages, { stageId: "a" /* Lead's id */, stageName: "Won" });
+    expect(target?.name).toBe("Won");
+    expect(target?.id).toBe("b");
+  });
+  it("full exploit replay: mismatched stageId no longer defeats the sequence gate", () => {
+    const gated = [
+      { id: "lead", name: "Lead", ordinal: 0 },
+      { id: "prop", name: "Proposal", ordinal: 1, gate: true },
+      { id: "neg", name: "Negotiation", ordinal: 2, gate: true },
+      { id: "won", name: "Won", ordinal: 3 },
+    ];
+    // Attacker: deal is at Lead; request claims stage="Won" but reuses Lead's own id.
+    const current = findStage(gated, { stageId: "lead", stageName: "Lead" });
+    const target = findStage(gated, { stageId: "lead" /* attacker-supplied, wrong */, stageName: "Won" });
+    expect(target?.name).toBe("Won"); // resolves to the REAL target, not Lead
+    const skipped = skippedGateStage(gated, current, target);
+    expect(skipped?.name).toBe("Proposal"); // gate now correctly fires
   });
 });
 

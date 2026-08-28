@@ -12,12 +12,12 @@ import { assertThreeWayMatchPresent, assertThreeWayMatch, assertBillPassed, asse
 import { minorString } from "@civitasone/schemas/money";
 import { assertValidDdoCode } from "../../shared/pfms.js";
 import { assertValidHoAWithMaster } from "../hoa/domain.js";
-import { ddoExists, paoExists } from "../masters/repo.js";
+import { ddoExists, paoExists, vendorExists } from "../masters/repo.js";
 import * as pfmsRepo from "../pfms/repo.js";
 import { getPeriodStatusTx } from "../period-close/repo.js";
 import * as allocRepo from "../budget/allocation-repo.js";
 import { fyFromDate, nextDocNo } from "../hoa/voucher.js";
-import type { Deduction } from "./schema.js";
+import type { Deduction, PaymentRow } from "./schema.js";
 import { enqueueSpineJournal } from "../gl/spine.js";
 import { postCashBook } from "../../shared/cashbook.js";
 import type { JournalLine } from "../gl/schema.js";
@@ -30,6 +30,40 @@ async function headIdByCode(tx: unknown, tenantId: string, code: string, label: 
   const head = await budgetRepo.findHeadByCodeTx(tx as Parameters<typeof budgetRepo.findHeadByCodeTx>[0], tenantId, code);
   if (!head) throw new Error(`MISSING_CONTROL_HEAD: ${label} head code ${code} not found for tenant`);
   return head.id;
+}
+
+/**
+ * BUG FIX (period-close cross-module inconsistency): this module used to only
+ * ever check `hard_close` before creating/approving a bill or initiating a
+ * payment, while gl/consumer.ts's postJournal blocks `soft_close` too for any
+ * journal type other than "adjustment"/"closing". Bills and payments are
+ * ALWAYS posted as GL journal type "bill"/"payment" (see enqueueSpineJournal
+ * calls below) — never adjustment/closing — so from this module's point of
+ * view a soft-closed period is exactly as blocking as a hard-closed one: the
+ * GL leg can never succeed either way.
+ *
+ * Before this fix, a bill could be approved (or a payment initiated) in a
+ * soft-closed period: the AP subledger write would commit (bill flips to
+ * passed/paid) and enqueueSpineJournal would enqueue the GL posting via the
+ * outbox — but that posting is asynchronous (a separate message, consumed
+ * later by the gl consumer), and postJournal would then reject it with
+ * PERIOD_SOFT_CLOSED. The bill/payment was left permanently marked
+ * passed/paid with no corresponding ledger entry — a silent AP/GL desync,
+ * discoverable only by chasing a dead-lettered journalPost message. Failing
+ * fast here, in the same transaction as the AP write, closes that gap and
+ * matches the GL's own rule instead of contradicting it.
+ */
+function assertPeriodOpenForApPosting(periodStatus: string, period: string, action: string): void {
+  if (periodStatus === "hard_close") {
+    throw new Error(`PERIOD_CLOSED: cannot ${action} into hard-closed period ${period}`);
+  }
+  if (periodStatus === "soft_close") {
+    throw new Error(
+      `PERIOD_SOFT_CLOSED: cannot ${action} into soft-closed period ${period} ` +
+      `(bill/payment postings are GL type "bill"/"payment", never adjustment/closing, ` +
+      `so the GL would reject this posting anyway once the period is soft-closed)`,
+    );
+  }
 }
 
 const AUDIT_TOPIC = "audit.event.record";
@@ -112,6 +146,14 @@ export function registerPaymentsConsumers(queue: Queue): void {
       if (p.paoCode && !(await paoExists(p.tenantId, p.paoCode.toUpperCase(), reader))) {
         throw new Error(`UNKNOWN_PAO: ${p.paoCode} not found in PAO master`);
       }
+      // BUG FIX: vendorId previously only got a UUID-format check (Zod) —
+      // never an existence/tenant lookup — so a bill citing a vendor that
+      // doesn't exist anywhere (or belongs to a different tenant) was
+      // accepted, approved and paid with no error at any point. Same
+      // existence + tenant-match pattern as head/DDO/PAO/sanction above.
+      if (!(await vendorExists(p.tenantId, p.vendorId, reader))) {
+        throw new Error(`UNKNOWN_VENDOR: ${p.vendorId} not found in vendor master for tenant`);
+      }
       // M3: if a sanction is REFERENCED, it must resolve for this tenant. A bill
       // citing a bogus/other-tenant sanctionRef must NOT bypass the balance check.
       let sanction: Awaited<ReturnType<typeof budgetRepo.findSanctionByIdTx>> = null;
@@ -126,10 +168,10 @@ export function registerPaymentsConsumers(queue: Queue): void {
           throw new Error(`SANCTION_NOT_APPROVED: ${p.sanctionRef} is '${sanction.status}', must be approved before billing`);
         }
       }
-      // Period hard-close: block bill posting into a hard-closed period (bill's own date).
-      if ((await getPeriodStatusTx(tx, p.tenantId, billPeriod)) === "hard_close") {
-        throw new Error(`PERIOD_CLOSED: cannot post bill into hard-closed period ${billPeriod}`);
-      }
+      // Period close: block bill creation into a hard- or soft-closed period
+      // (bill's own date) — see assertPeriodOpenForApPosting for why soft_close
+      // blocks bills exactly like hard_close does here.
+      assertPeriodOpenForApPosting(await getPeriodStatusTx(tx, p.tenantId, billPeriod), billPeriod, "post bill");
       // Budget appropriation control: locate the head allocation for the bill's FY.
       const billFy = fyFromDate(billDate);
       const alloc = await allocRepo.findAllocationTx(tx, p.tenantId, p.headId, billFy);
@@ -237,6 +279,16 @@ export function registerPaymentsConsumers(queue: Queue): void {
         version: (bill.version ?? 1) + 1,
       });
       if (isPassed) {
+        // BUG FIX: this is the point a bill actually posts to the GL (type
+        // "bill", never adjustment/closing) — gate it on the period status of
+        // the bill's own date here, in the SAME transaction as the AP stage
+        // transition, instead of letting a closed period only surface later
+        // when the async GL posting is rejected (see assertPeriodOpenForApPosting).
+        const billDateForClose = bill.billDate ?? new Date(bill.createdAt).toISOString().slice(0, 10);
+        const billPeriodForClose = billDateForClose.slice(0, 7);
+        assertPeriodOpenForApPosting(
+          await getPeriodStatusTx(tx, p.tenantId, billPeriodForClose), billPeriodForClose, "approve bill",
+        );
         await enqueue(tx, {
           topic: EVENTS.billPassed, eventType: EVENTS.billPassed,
           tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
@@ -244,7 +296,7 @@ export function registerPaymentsConsumers(queue: Queue): void {
         });
         // GL spine: bill passed -> Dr expense head / Cr Accounts-Payable control.
         const apHeadId = await headIdByCode(tx, p.tenantId, AP_CONTROL_CODE, "accounts_payable");
-        const billDate = bill.billDate ?? new Date(bill.createdAt).toISOString().slice(0, 10);
+        const billDate = billDateForClose;
         const lines: JournalLine[] = [
           { accountCode: bill.headId,  debitMinor: bill.netMinor, creditMinor: 0n },
           { accountCode: apHeadId,     debitMinor: 0n,            creditMinor: bill.netMinor },
@@ -292,6 +344,9 @@ export function registerPaymentsConsumers(queue: Queue): void {
     };
     assertValidDdoCode(p.ddoCode);
     const paymentAmount = BigInt(p.amountMinor);
+    // BUG FIX (cache poisoning): captured from inside the tx and used to prime
+    // the cache with the FULL row after commit — see cache.put below.
+    let insertedPayment: PaymentRow | undefined;
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       const bill = await repo.findBillByIdTx(tx, p.billId);
@@ -319,10 +374,11 @@ export function registerPaymentsConsumers(queue: Queue): void {
       // not wall-clock. Falls back to the bill's create date if no billDate set.
       const payDate = (bill.billDate ?? new Date(bill.createdAt).toISOString().slice(0, 10));
       const payPeriod = payDate.slice(0, 7);
-      if ((await getPeriodStatusTx(tx, p.tenantId, payPeriod)) === "hard_close") {
-        throw new Error(`PERIOD_CLOSED: cannot post payment into hard-closed period ${payPeriod}`);
-      }
-      await repo.insertPayment(tx, {
+      // Period close: block payment initiation into a hard- or soft-closed
+      // period — see assertPeriodOpenForApPosting for why soft_close blocks
+      // payments exactly like hard_close does here.
+      assertPeriodOpenForApPosting(await getPeriodStatusTx(tx, p.tenantId, payPeriod), payPeriod, "post payment");
+      insertedPayment = await repo.insertPayment(tx, {
         id: p.id, tenantId: p.tenantId, billId: p.billId,
         ddoCode: p.ddoCode.toUpperCase(),
         eftRef: p.eftRef ?? null, mode: p.mode,
@@ -369,7 +425,21 @@ export function registerPaymentsConsumers(queue: Queue): void {
       });
       await audit(tx, msg, "initiate", "payment", p.id);
     });
-    await cache.put(cache.makeKey(msg.tenantId, "payment", p.id), { id: p.id, status: "initiated" });
+    // BUG FIX (cache poisoning): previously cached a PARTIAL placeholder
+    // ({id, status}) with no tenantId field. getPayment()'s tenant-isolation
+    // guard (`row.tenantId !== tenantId`) then always saw `undefined !==
+    // realTenantId` on the very next read and returned null -> 404, for the
+    // full cache TTL (~60s) — plus any caller reading a field beyond
+    // id/status (e.g. GET /v1/finance/payments/:id reads amountMinor,
+    // billId, mode, currency, createdBy, createdAt) would have hit a
+    // TypeError on the partial object once the false-404 was fixed in
+    // isolation. Cache the FULL row (fetched via RETURNING in
+    // repo.insertPayment) instead — skip entirely on the idempotent-redelivery
+    // no-op path, where insertedPayment stays undefined and there is nothing
+    // new to cache.
+    if (insertedPayment) {
+      await cache.put(cache.makeKey(msg.tenantId, "payment", p.id), insertedPayment);
+    }
   });
 
   sub(COMMANDS.gemInvoiceMatch, async (msg) => {

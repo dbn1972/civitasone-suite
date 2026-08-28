@@ -32,12 +32,12 @@ describe("ModuleListPage", () => {
 
   it("shows DataSourceBadge when source is error", () => {
     render(<ModuleListPage title="Bills" description="desc" rows={[]} source="error" />);
-    expect(screen.getByText("Showing saved information")).toBeInTheDocument();
+    expect(screen.getByText("Couldn't load — showing nothing")).toBeInTheDocument();
   });
 
   it("does not show DataSourceBadge when source is api", () => {
     render(<ModuleListPage title="Bills" description="desc" rows={rows} source="api" />);
-    expect(screen.queryByText("Showing saved information")).not.toBeInTheDocument();
+    expect(screen.queryByText("Couldn't load — showing nothing")).not.toBeInTheDocument();
   });
 
   it("renders children", () => {

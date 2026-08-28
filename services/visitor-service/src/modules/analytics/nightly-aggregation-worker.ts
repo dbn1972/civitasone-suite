@@ -23,6 +23,7 @@ import { randomUUID } from "node:crypto";
 import { and, eq, gte, lt, sql } from "drizzle-orm";
 import { visitRequests } from "../visit-request/schema.js";
 import { checkIns } from "../check-in/schema.js";
+import { digitalPasses } from "../digital-pass/schema.js";
 import { computeDailyMetrics, type VisitRecord } from "./domain.js";
 import { runWithTenant } from "@civitasone/db";
 import type { Db } from "../../shared/db.js";
@@ -140,35 +141,46 @@ export async function processNightlyAggregation(
               ),
             );
 
-          // Step 3: check-ins for this tenant/location on the previous day
+          // Step 3: check-ins for this tenant/location on the previous day.
+          // Joined against digital_passes so the map below can be keyed by
+          // visit_requests.id (see Bug B fix below) — checkIns only stores
+          // passId (digital_passes.id), never visitRequestId directly.
           const dayCheckIns = await tx
             .select({
               id: checkIns.id,
               passId: checkIns.passId,
+              visitRequestId: digitalPasses.visitRequestId,
               direction: checkIns.direction,
               timestamp: checkIns.timestamp,
             })
             .from(checkIns)
+            .innerJoin(digitalPasses, eq(checkIns.passId, digitalPasses.id))
             .where(
               and(
                 eq(checkIns.tenantId, tenantId),
                 eq(checkIns.locationId, locationId),
+                eq(digitalPasses.tenantId, tenantId),
                 gte(checkIns.timestamp, dayStart),
                 lt(checkIns.timestamp, dayEnd),
               ),
             );
 
-          // Build a map of passId -> { checkedInAt, checkedOutAt }
+          // Build a map of visitRequestId -> { checkedInAt, checkedOutAt }.
+          // Previously this was keyed by ci.passId (digital_passes.id) but
+          // read back below via checkInMap.get(vr.id) (visit_requests.id) —
+          // two unrelated UUIDs that never matched, so checkedInAt/
+          // checkedOutAt were always null. Keying by visitRequestId (via
+          // the join above) makes the insert and lookup keys consistent.
           const checkInMap = new Map<string, { checkedInAt: Date | null; checkedOutAt: Date | null }>();
           for (const ci of dayCheckIns) {
-            const existing = checkInMap.get(ci.passId) ?? { checkedInAt: null, checkedOutAt: null };
+            const existing = checkInMap.get(ci.visitRequestId) ?? { checkedInAt: null, checkedOutAt: null };
             if (ci.direction === "in" && (existing.checkedInAt === null || ci.timestamp < existing.checkedInAt)) {
               existing.checkedInAt = ci.timestamp;
             }
             if (ci.direction === "out" && (existing.checkedOutAt === null || ci.timestamp > existing.checkedOutAt)) {
               existing.checkedOutAt = ci.timestamp;
             }
-            checkInMap.set(ci.passId, existing);
+            checkInMap.set(ci.visitRequestId, existing);
           }
 
           // Step 4: Build VisitRecord[] for domain.computeDailyMetrics()
@@ -202,14 +214,20 @@ export async function processNightlyAggregation(
             (vr) => vr.status === "rejected" || vr.status === "auto_rejected",
           ).length;
 
-          // Step 6: Insert into daily_metrics table
+          // Step 6: Insert into daily_metrics table. dayStart must be
+          // serialized via .toISOString() before interpolation — every
+          // other raw sql`` fragment in this codebase that embeds a
+          // timestamp does this (e.g. dpdp/purge-worker.ts's
+          // retentionCutoff/erasureCutoff); passing the Date object
+          // directly throws inside postgres-js's parameter binding, which
+          // the per-location try/catch below silently swallows.
           await tx.execute(sql`
             INSERT INTO visitor.daily_metrics (
               id, tenant_id, location_id, date, total_visits, unique_visitors,
               avg_approval_time_ms, avg_visit_duration_ms, peak_hour,
               no_show_count, rejected_count, created_at
             ) VALUES (
-              ${randomUUID()}, ${tenantId}, ${locationId}, ${dayStart},
+              ${randomUUID()}, ${tenantId}, ${locationId}, ${dayStart.toISOString()},
               ${metrics.totalVisits}, ${metrics.uniqueVisitors},
               ${metrics.avgApprovalTurnaroundMs}, ${metrics.avgVisitDurationMs},
               ${peakHour}, ${Math.round(metrics.noShowRate * metrics.totalVisits)},

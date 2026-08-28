@@ -19,6 +19,7 @@ import { markProcessed } from "../../shared/outbox.js";
 import { emitWithAudit } from "../../shared/route-audit.js";
 import { invalidateDashboard } from "../dashboard/queries.js";
 import * as repo from "./repo.js";
+import { deriveStageFields } from "./stage-gate.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 
 const log = pino({ name: "crm-deal-close-consumer" });
@@ -61,7 +62,6 @@ export function registerDealCloseConsumer(queue: Queue): void {
 
   queue.subscribe(COMMANDS.closeDeal, async (msg) => {
     const p = msg.payload as ClosePayload;
-    const isWonLost = p.outcome === "won" || p.outcome === "lost";
     const stage = p.outcome === "won" ? "Won" : p.outcome === "lost" ? "Lost" : null;
     // won/lost/on_hold map straight to status. A 'cancelled' CLOSURE must NOT reuse the
     // soft-delete marker ('cancelled'), or every read-path filter (NOT IN
@@ -69,13 +69,37 @@ export function registerDealCloseConsumer(queue: Queue): void {
     // It is stored as status='closed' with close_outcome='cancelled' so it stays visible
     // in GET/list/funnel while genuine soft-deletes remain hidden.
     const status = p.outcome === "cancelled" ? "closed" : p.outcome;
+    // OP-003/gate-integrity: probability + closed_at for won/lost come from the SAME
+    // single source of truth every stage-change path uses (stage-gate.ts's
+    // deriveStageFields), not a re-implemented 100/0 mapping — Won/Lost still force
+    // 100/0 regardless of any pipeline config, exactly as the PATCH /stage path does.
+    // cancelled/on_hold never move `stage` at all, so they stay outside
+    // deriveStageFields entirely (`derived` is null for those two outcomes).
+    const derived = stage ? deriveStageFields(stage, undefined) : null;
     try {
       await db.transaction(async (tx) => {
         if (!(await markProcessed(tx, msg.messageId))) return;
 
-        const stageSet = stage !== null ? sql`stage = ${stage},` : sql``;
-        const probSet = p.outcome === "won" ? sql`probability = 100,` : p.outcome === "lost" ? sql`probability = 0,` : sql``;
-        const closedAtSet = isWonLost ? sql`closed_at = now(),` : sql``;
+        // stage_id must move in lockstep with `stage`, resolved by NAME through the
+        // SAME repo.resolveTargetStage the PATCH /stage write path uses (repo.ts's
+        // updateStageWithVersion) — never left pointing at whatever stage preceded the
+        // close. cancelled/on_hold don't move `stage` (see comment above), so — like
+        // stageSet below — they don't touch stage_id either. Looked up here rather than
+        // trusting any caller-supplied value: this consumer's payload doesn't carry a
+        // stageId at all, precisely so there is nothing raw to accidentally persist.
+        let targetStageId: string | null = null;
+        if (stage !== null) {
+          const dealRows = (await tx.execute(sql`
+            SELECT pipeline_id AS "pipelineId" FROM crm.deals
+            WHERE id = ${p.dealId} AND tenant_id = ${msg.tenantId}
+          `)) as unknown as Array<{ pipelineId: string | null }>;
+          const targetStageConfig = await repo.resolveTargetStage(tx, dealRows[0]?.pipelineId ?? null, msg.tenantId, stage);
+          targetStageId = targetStageConfig?.id ?? null;
+        }
+
+        const stageSet = stage !== null ? sql`stage = ${stage}, stage_id = ${targetStageId}::uuid,` : sql``;
+        const probSet = derived ? sql`probability = ${derived.probability},` : sql``;
+        const closedAtSet = derived?.closesDeal ? sql`closed_at = now(),` : sql``;
         const competitorJson = p.competitor == null ? null : JSON.stringify(p.competitor);
 
         const rows = (await tx.execute(sql`

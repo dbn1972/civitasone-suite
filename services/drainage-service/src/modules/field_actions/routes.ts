@@ -3,6 +3,8 @@ import { z } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import * as repo from "./repo.js";
 import * as commands from "./commands.js";
+import * as complaintsRepo from "../complaints/repo.js";
+import { FIELD_ACTION_ELIGIBLE_COMPLAINT_STATUSES } from "./domain.js";
 
 const ROLES = ["drainage_user", "drainage_admin", "super_admin"];
 const ADMIN_ROLES = ["drainage_admin", "super_admin"];
@@ -27,6 +29,15 @@ export async function fieldActionRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, ADMIN_ROLES);
     const body = createBody.parse(req.body);
+    // Previously missing entirely: complaintId was published to the consumer
+    // with no existence or tenant-scope check at all (a silently-accepted FK).
+    // Also gates on complaint status so field work can't be logged against a
+    // complaint that was never assigned, or one already resolved/closed.
+    const complaint = await complaintsRepo.findById(body.complaintId, ctx.tenantId);
+    if (!complaint) throw new HttpError(404, "NOT_FOUND", "complaint not found");
+    if (!FIELD_ACTION_ELIGIBLE_COMPLAINT_STATUSES.includes(complaint.status)) {
+      throw new HttpError(422, "COMPLAINT_NOT_ACTIONABLE", `cannot log a field action while complaint is '${complaint.status}'`);
+    }
     return reply.code(202).send(await commands.createFieldAction(ctx, {
       complaintId: body.complaintId, actionType: body.actionType,
       drainAssetRef: body.drainAssetRef ?? null, notes: body.notes ?? null,

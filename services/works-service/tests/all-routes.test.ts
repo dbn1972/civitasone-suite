@@ -59,6 +59,62 @@ vi.mock("../src/modules/tender/repo.js", async (importOriginal) => {
     listTenders: vi.fn(async () => []),
     listQuotations: vi.fn(async () => []),
     hasTenderForWork: vi.fn(async () => false),
+    // Permissive default for bug #4's quotation FK gate — the "happy path"
+    // route tests below don't set up a real pre_tenders row, so treat any
+    // tenderId as valid by default; a dedicated test overrides this to
+    // prove the 404 rejection path.
+    tenderOrPreTenderExists: vi.fn(async () => true),
+  };
+});
+
+// Bug #4: award creation validates the cited contractor against a real
+// works.contractors record. Permissive default (matches whatever name is
+// queried) so the existing "happy path" award tests don't need a real
+// contractor row; a dedicated test overrides this for the rejection path.
+vi.mock("../src/modules/contractor/repo.js", async (importOriginal) => {
+  const orig = await importOriginal<typeof import("../src/modules/contractor/repo.js")>();
+  return {
+    ...orig,
+    findContractorById: vi.fn(async (_t: string, id: string) => ({ id, name: "Test Contractor", active: true })),
+    findContractorByName: vi.fn(async (_t: string, name: string) => ({ id: "00000000-cccc-4000-8000-000000000001", name, active: true })),
+  };
+});
+
+// BR-013 gate (boq/routes.ts POST /v1/works/boq): permissive default so the
+// existing "happy path" BoQ create test doesn't need a real finalized TS
+// row; a dedicated test overrides this for the rejection path.
+vi.mock("../src/modules/approval/repo.js", async (importOriginal) => {
+  const orig = await importOriginal<typeof import("../src/modules/approval/repo.js")>();
+  return { ...orig, hasFinalizedTsForWork: vi.fn(async () => true) };
+});
+
+// Bug fix (works-deep-verify): GET /v1/works/boq/:workId now verifies the
+// work exists before listing (see boq/routes.ts) — previously ANY workId,
+// real or not, returned 200 with an empty array, so a bogus id never 404'd.
+// Mirrors this file's existing "00000000-0000-... = not found" /
+// "00000000-1111-... = exists" sentinel convention (see the proposal-by-id
+// and approvals/ts DAO-gate 404 tests, which already depend on a bogus id
+// resolving to nothing) rather than being unconditionally permissive — a
+// blanket "always found" default here would silently break those two.
+// tests/boq-workid-existence.test.ts covers the boq 404 rejection path this
+// gate exists for.
+vi.mock("../src/modules/proposal/repo.js", async (importOriginal) => {
+  const orig = await importOriginal<typeof import("../src/modules/proposal/repo.js")>();
+  return {
+    ...orig,
+    getProposal: vi.fn(async (_t: string, id: string) =>
+      id.startsWith("00000000-0000-") ? null : { id, status: "dao_finalized" }),
+  };
+});
+
+// Bug #3 execution gate (execution/routes.ts POST /v1/works/execution/progress):
+// permissive default work scope with no target (so the target-cap check is
+// skipped) — a dedicated test overrides this for the rejection path.
+vi.mock("../src/modules/execution/repo.js", async (importOriginal) => {
+  const orig = await importOriginal<typeof import("../src/modules/execution/repo.js")>();
+  return {
+    ...orig,
+    getWorkScope: vi.fn(async (_t: string, id: string) => ({ id, targetValue: null })),
   };
 });
 
@@ -173,13 +229,24 @@ function authHeader(roles?: string[]) {
 
 // Controllable MB/bill lookups for the canCreateBill 409-gate test below —
 // the generic @civitasone/db mock above always resolves selects to `[]`,
-// which can't express "an MB exists in a given status".
-const mbById: Record<string, { status: string } | undefined> = {};
+// which can't express "an MB exists in a given status". workId/awardId are
+// optional so pre-existing fixtures (that only cared about `status`) still
+// type-check; the bug #1/#2 mb-belongs-to-bill tests set them explicitly.
+const mbById: Record<string, { status: string; workId?: string; awardId?: string } | undefined> = {};
 const billById: Record<string, { status: string } | undefined> = {};
 vi.mock("../src/modules/billing/repo.js", () => ({
   getMb: vi.fn(async (_tenantId: string, id: string) => mbById[id] ?? null),
   getBill: vi.fn(async (_tenantId: string, id: string) => billById[id] ?? null),
   listBillsForWork: vi.fn(async () => []),
+  // No measurements seeded by default — routes' measured-value gate then
+  // requires grossAmountMinor "0" in tests that don't care about that
+  // specific check (covered separately in orphan-consumers.test.ts).
+  listMeasurementsByMb: vi.fn(async () => []),
+  listMeasurementsByBoqItem: vi.fn(async () => []),
+  // Code-review fix (double-billing gap): no prior bills against any MB by
+  // default — the specific double-billing repro is covered in
+  // orphan-consumers.test.ts, where the mock can express "MB already billed".
+  listBillsByMb: vi.fn(async () => []),
 }));
 
 let app: FastifyInstance;
@@ -698,15 +765,27 @@ describe("Billing routes", () => {
   });
 
   it("POST /v1/works/billing/bills → 202 valid", async () => {
+    // mbId is now required (bug #1 — no-3-way-match fix) and must resolve to
+    // a do_finalized MB belonging to this work/award (bug #2 family). No
+    // measurements are seeded on the shared billing/repo mock, so gross is
+    // 0 here — the non-zero measured-value path is covered in
+    // orphan-consumers.test.ts / works-ai-pack-gaps.test.ts.
+    const mbId = "00000000-2222-4000-8000-000000000097";
+    mbById[mbId] = {
+      status: "do_finalized",
+      workId: "00000000-1111-4000-8000-000000000001",
+      awardId: "00000000-2222-4000-8000-000000000001",
+    };
     const res = await app.inject({
       method: "POST", url: "/v1/works/billing/bills", headers: authHeader(),
       payload: {
         workId: "00000000-1111-4000-8000-000000000001",
         awardId: "00000000-2222-4000-8000-000000000001",
+        mbId,
         billMode: "e_mb",
         billNumber: "BILL/2024/001",
-        grossAmountMinor: "1000000",
-        deductionsMinor: "50000",
+        grossAmountMinor: "0",
+        deductionsMinor: "0",
       },
     });
     expect(res.statusCode).toBe(202);
@@ -752,6 +831,47 @@ describe("Billing routes", () => {
     expect(res.statusCode).toBe(409);
   });
 
+  // Bug #1 (no-3-way-match fix): mbId is no longer optional.
+  it("POST /v1/works/billing/bills → 400 when mbId is missing", async () => {
+    const res = await app.inject({
+      method: "POST", url: "/v1/works/billing/bills", headers: authHeader(),
+      payload: {
+        workId: "00000000-1111-4000-8000-000000000001",
+        awardId: "00000000-2222-4000-8000-000000000001",
+        billMode: "abstract",
+        billNumber: "BILL/2024/NOMB",
+        grossAmountMinor: "100",
+      },
+    });
+    expect(res.statusCode).toBe(400);
+  });
+
+  // Bug #2: the award-ceiling check can't be defeated by citing an
+  // unrelated work's award.
+  it("POST /v1/works/billing/bills → 422 when the cited award does not belong to the work", async () => {
+    const mbId = "00000000-2222-4000-8000-000000000095";
+    mbById[mbId] = {
+      status: "do_finalized",
+      workId: "00000000-1111-4000-8000-000000000077", // does not match the award below
+      awardId: "00000000-2222-4000-8000-000000000001",
+    };
+    const res = await app.inject({
+      method: "POST", url: "/v1/works/billing/bills", headers: authHeader(),
+      payload: {
+        // defaultAward (tender/repo mock) belongs to
+        // 00000000-1111-4000-8000-000000000001, not this work.
+        workId: "00000000-1111-4000-8000-000000000077",
+        awardId: "00000000-2222-4000-8000-000000000001",
+        mbId,
+        billMode: "e_mb",
+        billNumber: "BILL/2024/AWM",
+        grossAmountMinor: "0",
+      },
+    });
+    expect(res.statusCode).toBe(422);
+    expect(res.json().error.code).toBe("AWARD_WORK_MISMATCH");
+  });
+
   it("POST /v1/works/billing/bills → 404 when the referenced MB does not exist", async () => {
     const res = await app.inject({
       method: "POST", url: "/v1/works/billing/bills", headers: authHeader(),
@@ -769,7 +889,11 @@ describe("Billing routes", () => {
 
   it("POST /v1/works/billing/bills → 202 when the referenced MB is do_finalized", async () => {
     const mbId = "00000000-2222-4000-8000-000000000098";
-    mbById[mbId] = { status: "do_finalized" };
+    mbById[mbId] = {
+      status: "do_finalized",
+      workId: "00000000-1111-4000-8000-000000000001",
+      awardId: "00000000-2222-4000-8000-000000000001",
+    };
     const res = await app.inject({
       method: "POST", url: "/v1/works/billing/bills", headers: authHeader(),
       payload: {
@@ -778,7 +902,10 @@ describe("Billing routes", () => {
         mbId,
         billMode: "e_mb",
         billNumber: "BILL/2024/202-mb",
-        grossAmountMinor: "1000000",
+        // No measurements seeded on the shared mock, so gross is 0 — the
+        // non-zero measured-value path is covered in
+        // orphan-consumers.test.ts / works-ai-pack-gaps.test.ts.
+        grossAmountMinor: "0",
       },
     });
     expect(res.statusCode).toBe(202);

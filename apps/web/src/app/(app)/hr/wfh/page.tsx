@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { PageHeader, StatGrid, StatCard, Card, DataTable } from "../../../_components/ds";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
@@ -45,8 +46,9 @@ export default async function WfhPage() {
     <main className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
         title="Work From Home Requests"
-        subtitle="Submit and track remote work days — approved by reporting officers."
+        subtitle="Track remote work days — approved by reporting officers."
         back="/hr"
+        actions={<Link href="/hr/workforce/wfh" className="btn primary">+ New Request</Link>}
       />
       <DataSourceBadge source={source} />
       <StatGrid>
@@ -66,6 +68,7 @@ export default async function WfhPage() {
           emptyIcon="🏠"
           emptyTitle="No WFH requests"
           emptyMessage="Work-from-home requests appear here once employees raise them. Requests are approved by the reporting officer."
+          emptyAction={<Link href="/hr/workforce/wfh" className="btn primary">+ New Request</Link>}
         />
       </Card>
     </main>

@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import { toHumanError } from "@/lib/messages";
 
 type IndentOption = { id: string; indentNo?: string; department?: string };
 type VendorOption = { id: string; name: string };
@@ -76,8 +77,9 @@ export function CreateRFQForm() {
       });
       const text = await res.text();
       if (!res.ok) {
+        const human = toHumanError("save", { area: "RFQ" });
         setStatus("error");
-        setMessage(text || `Create failed (${res.status})`);
+        setMessage(`${human.what} ${human.next}`);
         return;
       }
       let parsed: { id?: string } = {};

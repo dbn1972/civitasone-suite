@@ -26,10 +26,10 @@ export function registerFacilityConsumers(rawQueue: Queue): void {
       ward?: string;
       totalSpaces: number;
       operatingHours?: { open: string; close: string; days?: string[] };
-      tariffPerHourMinor?: string;
-      tariffPerDayMinor?: string;
-      monthlyPassMinor?: string;
-      annualPassMinor?: string;
+      tariffPerHourMinor?: number;
+      tariffPerDayMinor?: number;
+      monthlyPassMinor?: number;
+      annualPassMinor?: number;
       contactPerson?: string;
     };
 
@@ -81,7 +81,7 @@ export function registerFacilityConsumers(rawQueue: Queue): void {
         if (p[key] !== undefined) data[key] = p[key];
       }
       for (const key of ["tariffPerHourMinor", "tariffPerDayMinor", "monthlyPassMinor", "annualPassMinor"]) {
-        if (p[key] !== undefined) data[key] = BigInt(p[key] as string);
+        if (p[key] !== undefined) data[key] = BigInt(p[key] as number);
       }
       const ok = await repo.updateFacility(tx, p.id, msg.tenantId, data as never, msg.actorId);
       if (!ok) return;

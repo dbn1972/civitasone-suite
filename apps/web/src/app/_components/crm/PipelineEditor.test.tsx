@@ -26,7 +26,7 @@ describe("PipelineEditor (OP-002)", () => {
   it("shows the saved-info badge on a failed load", async () => {
     vi.mocked(op.getPipelines).mockResolvedValue({ data: [], source: "error" });
     render(<PipelineEditor />);
-    await waitFor(() => expect(screen.getByText(/showing saved information/i)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(/couldn.t load/i)).toBeInTheDocument());
   });
 
   it("creates a pipeline with a stage and its mandatory field", async () => {

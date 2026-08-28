@@ -42,7 +42,7 @@ describe("CostingPage", () => {
     const ui = await CostingPage({ searchParams: { period: "2026-07" } });
     render(ui);
 
-    expect(screen.getByText("Showing saved information")).toBeInTheDocument();
+    expect(screen.getByText("Couldn't load — showing nothing")).toBeInTheDocument();
   });
 
   it("notes the rules list endpoint is not available", async () => {

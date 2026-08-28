@@ -11,8 +11,11 @@ export default async function BillsPage() {
 
   const inProcess = bills.filter((b) => b.status === "pending" || b.status === "under_review").length;
   const paid = bills.filter((b) => b.status === "paid").length;
-  const totalAmount = bills.reduce((s, b) => s + b.amount, 0);
-  const paidAmount = bills.filter((b) => b.status === "paid").reduce((s, b) => s + b.amount, 0);
+  // bill.amount is a bigint-safe minor-unit STRING (see packages/types'
+  // BillSummary) -- summing with `+` would string-concatenate instead of
+  // adding, so accumulate in BigInt (formatMoney already accepts bigint).
+  const totalAmount = bills.reduce((s, b) => s + BigInt(b.amount), 0n);
+  const paidAmount = bills.filter((b) => b.status === "paid").reduce((s, b) => s + BigInt(b.amount), 0n);
 
   return (
     <>
@@ -21,7 +24,10 @@ export default async function BillsPage() {
         subtitle="Receive, pre-audit, pass and pay bills against sanctions."
         actions={
           <>
-            <Link href="/finance/config" className="btn ghost">Pre-audit rules</Link>
+            {/* /finance/config sets up FYs/banks, not pre-audit rules — there is no
+                dedicated pre-audit-rules screen yet, so this points to the closest
+                real destination rather than promising content that doesn't exist. */}
+            <Link href="/finance/config" className="btn ghost">Finance Configuration</Link>
             <BillCreateAction />
             {source === "error" ? <DataSourceBadge source={source} /> : null}
           </>

@@ -32,8 +32,58 @@ const version = z.number().int().nonnegative();
 const isoDateTime = z.string().datetime({ offset: true });
 /** Calendar date `YYYY-YY`-agnostic `YYYY-MM-DD` (matches meeting-core `isoDate`). */
 const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "expected date in YYYY-MM-DD format");
-/** ISO-4217 currency code (3 uppercase letters). */
-const currency = z.string().regex(/^[A-Z]{3}$/, "expected ISO-4217 3-letter currency code");
+
+/**
+ * ISO-4217 currency codes this platform actually supports (schema/migration review finding:
+ * the previous `/^[A-Z]{3}$/` regex accepted any 3 uppercase letters, including nonsense codes
+ * like "ZZZ"). No platform-wide currency allowlist exists elsewhere to reuse (checked
+ * finance-service and `@civitasone/schemas`), so this is a deliberately SMALL, real ISO-4217
+ * subset scoped to what an Indian government committee decision plausibly denominates in: INR
+ * (primary/default per decision/consumer.ts), G20 + major reserve currencies (foreign-funded
+ * schemes, consultancy, equipment procurement), immediate-neighbour currencies (cross-border /
+ * SAARC programmes), and XDR (IMF Special Drawing Rights — common in World Bank / multilateral
+ * loan instruments). Extend this list (never widen the check back to a bare regex) if a
+ * genuine new need arises.
+ */
+export const SUPPORTED_CURRENCY_CODES = [
+  "INR", // Indian Rupee — default/primary
+  "USD", "EUR", "GBP", "JPY", "CNY", "AUD", "CAD", "CHF", "SGD", "AED", // major reserve / G20
+  "SAR", "ZAR", "BRL", "RUB", // remaining G20 currencies seen in multilateral funding docs
+  "PKR", "BDT", "LKR", "NPR", "BTN", "MMK", "AFN", "MVR", // immediate neighbours / SAARC
+  "XDR", // IMF Special Drawing Rights
+] as const;
+/** ISO-4217 currency code, restricted to `SUPPORTED_CURRENCY_CODES` (see doc comment above). */
+const currency = z.enum(SUPPORTED_CURRENCY_CODES);
+
+/**
+ * Sane upper bound on a single decision's financial implication (schema/migration review
+ * finding: the field was previously unbounded — a test fed it ~₹90 trillion in paise and it
+ * was accepted). This is government financial data, so an unbounded field is a data-integrity
+ * smell rather than a specific exploit, but a SINGLE meeting decision recording a figure
+ * larger than a meaningful fraction of India's entire annual Union Budget (~₹48 lakh crore,
+ * FY24-25) is certainly a data-entry error, not a real committee decision — even India's
+ * largest-ever infrastructure megaprojects (e.g. the ~₹1.08 lakh crore Mumbai–Ahmedabad bullet
+ * rail) fall well under this. Bound chosen generously above any real-world figure, with a wide
+ * safety margin, while still being finite: ₹10,00,000 crore (₹10 lakh crore / ₹10 trillion),
+ * expressed in paise (the storage unit). Applied to the magnitude (`|value|`) so an extreme
+ * negative figure (e.g. a recorded saving/refund) is bounded the same way.
+ */
+export const MAX_FINANCIAL_IMPLICATION_MINOR = 1_000_000_000_000_000n; // ₹10,00,000 crore, in paise
+
+/**
+ * `financialImplication` (money minor units, paise) bounded to `MAX_FINANCIAL_IMPLICATION_MINOR`
+ * — layered on top of the shared `zMoneyMinorString` codec rather than modifying it, since that
+ * codec is a `@civitasone/schemas` package used platform-wide and this ceiling is a
+ * decision-specific business rule, not a money-transport concern.
+ */
+const financialImplicationField = zMoneyMinorString.refine(
+  (v) => {
+    const n = BigInt(v);
+    const abs = n < 0n ? -n : n;
+    return abs <= MAX_FINANCIAL_IMPLICATION_MINOR;
+  },
+  { message: "financialImplication exceeds the platform's sane ceiling (±₹10,00,000 crore, in paise)" },
+);
 
 const decisionType = z.enum(DECISION_TYPES);
 const voteType = z.enum(VOTE_TYPES);
@@ -55,7 +105,7 @@ export const decisionRecordSchema = z.object({
   effectiveDate: isoDate.optional(),
   responsibleOfficer: uuid.optional(),
   deadline: isoDateTime.optional(),
-  financialImplication: zMoneyMinorString.optional(),
+  financialImplication: financialImplicationField.optional(),
   currency: currency.optional(),
   linkedDecisionIds: z.array(uuid).max(200).optional(),
 });
@@ -70,7 +120,7 @@ export const decisionPatchSchema = z
     effectiveDate: isoDate.nullable(),
     responsibleOfficer: uuid.nullable(),
     deadline: isoDateTime.nullable(),
-    financialImplication: zMoneyMinorString.nullable(),
+    financialImplication: financialImplicationField.nullable(),
     currency: currency.nullable(),
     status: z.enum(DECISION_STATUSES),
     supersededById: uuid.nullable(),
@@ -108,9 +158,18 @@ export type ResolutionRecordInput = z.infer<typeof resolutionRecordSchema>;
 
 // ─── Sign resolution (Req 11.5 · COMMANDS.resolutionSign) ──────────────────────
 
-/** Apply the chairperson's DSC to a passed resolution (Req 11.5). `resolutionId` from path. */
+/**
+ * Apply the chairperson's DSC to a passed resolution (Req 11.5). `resolutionId` from path.
+ * `signerId` is ALWAYS the authenticated caller -- commands.ts's `resolutionSign` resolves it
+ * as `body.signerId ?? ctx.actorId` -- for the same identity-spoofing reason as minutes'
+ * `signerId`/`approverId` (minutes/validators.ts): the DSC artifacts themselves are correctly
+ * derived server-side regardless, but an unbound client `signerId` was written verbatim into
+ * the CERT-In audit-trail annexure, letting any caller poison the record of who actually signed.
+ */
 export const resolutionSignSchema = z.object({
-  signerId: uuid,
+  /** Required in shape (still 400s if missing/malformed) but the VALUE is always discarded --
+   *  see the schema doc comment above. Never trust this. */
+  signerId: uuid.transform(() => undefined),
 });
 export type ResolutionSignInput = z.infer<typeof resolutionSignSchema>;
 

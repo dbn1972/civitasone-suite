@@ -1,11 +1,12 @@
 import { randomUUID } from "node:crypto";
 import type { RequestContext } from "@civitasone/types";
 import { queue, cache } from "../../shared/infra.js";
-import { db } from "../../shared/db.js";
+import { scopedRead } from "../../shared/db.js";
 import { sql } from "drizzle-orm";
 import { HttpError } from "../../shared/context.js";
 import { COMMANDS } from "../../topics.js";
 import { deterministicUuid } from "../../shared/deterministic-id.js";
+import { verifyEmployeeExists, HrmsUnavailableError } from "../../shared/hrms-client.js";
 import type {
   CreateStructureBody, CreateRunBody, CreateDdoBody, CreatePensionerBody,
   CreateArrearBody, ComputeBonusBody, CreateReimbursementBody,
@@ -25,14 +26,39 @@ export async function createStructure(ctx: RequestContext, body: CreateStructure
 
 export async function createRun(ctx: RequestContext, body: CreateRunBody): Promise<Accepted> {
   const id = randomUUID();
-  const existing = await db.execute(sql`
-    SELECT id FROM payroll.payroll_runs
-    WHERE tenant_id = ${ctx.tenantId}::uuid AND month = ${body.month}
-      AND status <> 'failed' LIMIT 1
-  `);
-  if (existing[0]) {
-    throw new HttpError(409, "DUPLICATE_RUN",
-      `a payroll run already exists for ${body.month}: ${existing[0].id}`);
+  const runType = body.runType ?? "regular";
+  // BUG-3 fix: this fast-path pre-check must run through scopedRead (a
+  // properly RLS-scoped transaction), not a bare db.execute(). Per the doc
+  // comment on scopedRead in shared/db.ts, a plain db.execute()/db.select()
+  // has no app.tenant_id GUC set, so under the fail-closed RLS policy it
+  // always returned zero rows and this guard silently never fired — a
+  // second run for an already-`processing` month got 202 instead of 409.
+  // The async consumer's own duplicate check (consumer.ts COMMANDS.runCreate
+  // handler) is correctly scoped and already the real data-safety backstop;
+  // this only restores the synchronous fast-path contract.
+  //
+  // Also aligned the WHERE clause + error code to that consumer check
+  // (run_type = 'regular' AND COALESCE(ddo_code,'__ALL__') = ...,
+  // DUPLICATE_RUN_FOR_PERIOD): fixing only the RLS scoping while leaving the
+  // old tenant+month-only clause here would have swapped "guard never fires"
+  // for "guard now wrongly blocks" — the consumer (and the DB's partial-
+  // unique index) intentionally allow off-cycle runs (supplementary/
+  // arrears/pensioner) and a second regular run for a different DDO
+  // alongside an existing regular run in the same month; this pre-check was
+  // about to start rejecting all of those the moment it actually started
+  // seeing rows.
+  if (runType === "regular") {
+    const existing = await scopedRead((tx) => tx.execute(sql`
+      SELECT id FROM payroll.payroll_runs
+      WHERE tenant_id = ${ctx.tenantId}::uuid AND month = ${body.month}
+        AND status <> 'failed' AND run_type = 'regular'
+        AND COALESCE(ddo_code, '__ALL__') = ${body.ddoCode ?? "__ALL__"}
+      LIMIT 1
+    `));
+    if (existing[0]) {
+      throw new HttpError(409, "DUPLICATE_RUN_FOR_PERIOD",
+        `a regular payroll run already exists for ${body.month}${body.ddoCode ? ` (DDO ${body.ddoCode})` : ""}: ${existing[0].id}`);
+    }
   }
   await queue.publish(COMMANDS.runCreate, {
     messageId: id, type: COMMANDS.runCreate,
@@ -124,8 +150,39 @@ export async function createPensioner(ctx: RequestContext, body: CreatePensioner
   return { id, status: "accepted", correlationId: ctx.correlationId };
 }
 
+/**
+ * round2 fix: employeeId on arrears/bonus/reimbursements was never checked
+ * against a real employee — payroll and HRMS are separate databases (no
+ * DB-level FK possible), and no application-level check existed either. A
+ * fabricated, nowhere-existing employeeId was accepted and durably
+ * persisted. Verify existence in the caller's own tenant BEFORE publishing —
+ * the same "reject synchronously, don't 202 into a silent async no-op"
+ * principle as the run-creation duplicate guard elsewhere in this file.
+ *
+ * round2 review fix: remap HrmsUnavailableError to the same 502
+ * HRMS_UNAVAILABLE this service's other HRMS-dependent call sites already
+ * use (tax/routes.ts's Form 16 build, form16-pdf/routes.ts's PDF issuance)
+ * instead of letting it fall through to the generic 500 catch-all — bug 4
+ * in this same round was specifically about not doing that.
+ */
+async function assertEmployeeExists(ctx: RequestContext, employeeId: string): Promise<void> {
+  let exists: boolean;
+  try {
+    exists = await verifyEmployeeExists(ctx.tenantId, employeeId);
+  } catch (err) {
+    if (err instanceof HrmsUnavailableError) {
+      throw new HttpError(502, "HRMS_UNAVAILABLE", "cannot verify employee: HRMS identity source unreachable");
+    }
+    throw err;
+  }
+  if (!exists) {
+    throw new HttpError(404, "NOT_FOUND", "employee not found");
+  }
+}
+
 /** Arrear create. */
 export async function createArrear(ctx: RequestContext, body: CreateArrearBody): Promise<Accepted> {
+  await assertEmployeeExists(ctx, body.employeeId);
   const id = randomUUID();
   await queue.publish(COMMANDS.arrearCreate, {
     messageId: id, type: COMMANDS.arrearCreate,
@@ -141,6 +198,7 @@ export async function createArrear(ctx: RequestContext, body: CreateArrearBody):
  * persisted row, rather than trusting a value computed in the HTTP handler.
  */
 export async function computeBonus(ctx: RequestContext, body: ComputeBonusBody): Promise<Accepted> {
+  await assertEmployeeExists(ctx, body.employeeId);
   const id = randomUUID();
   await queue.publish(COMMANDS.bonusCompute, {
     messageId: id, type: COMMANDS.bonusCompute,
@@ -152,6 +210,7 @@ export async function computeBonus(ctx: RequestContext, body: ComputeBonusBody):
 
 /** Reimbursement create. */
 export async function createReimbursement(ctx: RequestContext, body: CreateReimbursementBody): Promise<Accepted> {
+  await assertEmployeeExists(ctx, body.employeeId);
   const id = randomUUID();
   await queue.publish(COMMANDS.reimbursementCreate, {
     messageId: id, type: COMMANDS.reimbursementCreate,

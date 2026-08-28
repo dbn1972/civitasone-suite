@@ -106,7 +106,7 @@ export default async function VendorScorecardPage({ params }: { params: { id: st
             <span style={{ background: bandColor, color: "#fff", borderRadius: 4, padding: "2px 10px", fontSize: 12, fontWeight: 600, textTransform: "capitalize" }}>
               {scorecard.ratingBand}
             </span>
-            {source === "error" ? <DataSourceBadge source={source} /> : null}
+            {source === "error" ? <DataSourceBadge source={source} message="Couldn't load — showing nothing" /> : null}
           </>
         }
       />

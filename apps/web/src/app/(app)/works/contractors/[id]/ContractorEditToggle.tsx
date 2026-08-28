@@ -87,15 +87,26 @@ function ContractorEditForm({
     e.preventDefault();
     setMsg(null);
 
+    // Bug fix (works-deep-verify, MEDIUM/L3): every optional field below used
+    // to send `value || undefined` — so clearing a field to "" silently
+    // became `undefined`, which JSON.stringify drops from the request body
+    // entirely. The backend never saw the clear, never changed anything, yet
+    // the form still showed "Contractor updated." — a false success. Send
+    // the real (possibly empty) value instead and let the backend decide:
+    // registrationNo/gst/phone/address (works-service contractor/validators.ts
+    // updateContractorSchema, all plain z.string().max(N) with no minimum)
+    // legitimately accept "" and will now actually clear; pan (.length(10))
+    // and email (.email()) correctly reject "" with a real 400, which the
+    // existing catch block below already surfaces honestly instead of lying
+    // about success.
     const patch: Record<string, unknown> = {};
     if (name !== contractor.name) patch.name = name;
-    if (registrationNo !== (contractor.registrationNo ?? ""))
-      patch.registrationNo = registrationNo || undefined;
-    if (pan !== (contractor.pan ?? "")) patch.pan = pan || undefined;
-    if (gst !== (contractor.gst ?? "")) patch.gst = gst || undefined;
-    if (email !== (contractor.email ?? "")) patch.email = email || undefined;
-    if (phone !== (contractor.phone ?? "")) patch.phone = phone || undefined;
-    if (address !== (contractor.address ?? "")) patch.address = address || undefined;
+    if (registrationNo !== (contractor.registrationNo ?? "")) patch.registrationNo = registrationNo;
+    if (pan !== (contractor.pan ?? "")) patch.pan = pan;
+    if (gst !== (contractor.gst ?? "")) patch.gst = gst;
+    if (email !== (contractor.email ?? "")) patch.email = email;
+    if (phone !== (contractor.phone ?? "")) patch.phone = phone;
+    if (address !== (contractor.address ?? "")) patch.address = address;
 
     if (Object.keys(patch).length === 0) {
       setMsg({ text: "No changes detected.", ok: false });

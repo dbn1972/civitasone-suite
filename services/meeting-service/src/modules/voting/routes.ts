@@ -39,6 +39,13 @@ import { voteInitiateSchema, voteCastSchema, voteConcludeSchema, voteRecuseSchem
 import * as repo from "./repo.js";
 import * as commands from "./commands.js";
 
+// Roles that legitimately act tenant/platform-wide, exempt from the per-committee ownership
+// check below (Gap: systemic cross-committee IDOR) — a caller holding one of these is NOT
+// required to also carry a committee_members row on the specific committee being acted on.
+const COMMITTEE_SCOPE_BYPASS_ROLES = ["meeting_admin", "tenant_admin", "super_admin"];
+/** committee_members.role values authorized to initiate/conclude a vote for their own committee. */
+const VOTE_OFFICER_ROLES = ["chairperson", "secretary"];
+
 // ─── RBAC (design § Access Control Matrix) ───────────────────────────────────
 // The chairperson controls proceedings — initiates and concludes votes (Req 11.2, 11.4).
 // Voting members (chairperson + members) cast ballots (Req 11.3). Everyone associated with
@@ -90,6 +97,25 @@ async function assertResolutionInMeeting(
   return resolution;
 }
 
+/**
+ * Assert the caller has real standing on `committeeId` — either a tenant-wide bypass role, or an
+ * ACTIVE `committee_members` row on THIS SPECIFIC committee holding one of `officerRoles` (Gap:
+ * systemic cross-committee IDOR — a flat `committee_chairperson`/`committee_secretary` role claim
+ * used to be sufficient to initiate/conclude a vote for ANY committee in the tenant, not just one
+ * the caller actually serves). No-op for a meeting with no committee at all (nothing to scope to).
+ */
+async function requireCommitteeStanding(
+  ctx: RequestContext,
+  committeeId: string,
+  officerRoles: readonly string[],
+): Promise<void> {
+  if (ctx.roles.some((r) => COMMITTEE_SCOPE_BYPASS_ROLES.includes(r))) return;
+  const membership = await repo.getActiveMembership(ctx.tenantId, committeeId, ctx.actorId);
+  if (!membership || !officerRoles.includes(membership.role)) {
+    throw new HttpError(403, "FORBIDDEN", "caller does not have standing on this committee");
+  }
+}
+
 export async function votingRoutes(app: FastifyInstance): Promise<void> {
   // ── Initiate a vote — chairperson opens a resolution for voting (Req 11.2) ──
   app.post("/v1/meetings/:meetingId/votes/initiate", async (req, reply) => {
@@ -98,7 +124,11 @@ export async function votingRoutes(app: FastifyInstance): Promise<void> {
     requireIdempotencyKey(ctx);
     const { meetingId } = meetingIdParam.parse(req.params);
     const body = voteInitiateSchema.parse(req.body);
-    await assertMeetingExists(ctx.tenantId, meetingId);
+    const meetingRef = await repo.getMeetingRef(ctx.tenantId, meetingId);
+    if (!meetingRef) throw new HttpError(404, "MEETING_NOT_FOUND", "meeting not found");
+    if (meetingRef.committeeId) {
+      await requireCommitteeStanding(ctx, meetingRef.committeeId, VOTE_OFFICER_ROLES);
+    }
     const accepted = await commands.voteInitiate(ctx, meetingId, body);
     // Location of the resource the client can poll once the consumer opens the resolution.
     reply.header("location", `/v1/meetings/${meetingId}/votes/${accepted.id}/results`);
@@ -146,6 +176,10 @@ export async function votingRoutes(app: FastifyInstance): Promise<void> {
     const { meetingId, resolutionId } = resolutionPathParams.parse(req.params);
     const body = voteConcludeSchema.parse(req.body ?? {});
     await assertResolutionInMeeting(ctx.tenantId, meetingId, resolutionId);
+    const meetingRef = await repo.getMeetingRef(ctx.tenantId, meetingId);
+    if (meetingRef?.committeeId) {
+      await requireCommitteeStanding(ctx, meetingRef.committeeId, VOTE_OFFICER_ROLES);
+    }
     const accepted = await commands.voteConclude(ctx, meetingId, resolutionId, body);
     return reply.code(202).send({ data: accepted });
   });

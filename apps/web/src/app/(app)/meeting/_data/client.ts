@@ -15,7 +15,9 @@
 import { browserFetch } from "@/lib/api/browserClient";
 import type {
   ActiveVote,
+  CommitteeSummary,
   ConfigEntry,
+  CreateMeetingInput,
   LiveAttendance,
   Meeting,
   Minutes,
@@ -103,6 +105,30 @@ export async function fetchMinutes(meetingId: string): Promise<Minutes | null> {
   if (!res.ok) throw new Error(await readError(res));
   const out = (await res.json()) as { data?: Minutes };
   return out.data ?? null;
+}
+
+// ─── Meeting create ──────────────────────────────────────────────────────────
+
+/**
+ * Schedule a new meeting (COMMANDS.meetingCreate). Mirrors createMinutes /
+ * initiateVote: POST, no idempotency key (meeting-core's create route
+ * doesn't call requireIdempotencyKey — unlike voting/attendance), 202
+ * envelope with the server-minted id.
+ */
+export async function createMeeting(input: CreateMeetingInput): Promise<{ id?: string }> {
+  const out = await send<{ data?: { id?: string } }>("POST", "v1/meeting", { body: input });
+  return out.data ?? {};
+}
+
+/** Committees selectable for the "Committee" field on the create-meeting form. */
+export async function listCommittees(): Promise<CommitteeSummary[]> {
+  const out = await get<{ data?: Record<string, unknown>[] }>("v1/meeting/committees");
+  return (out.data ?? []).map((o) => ({
+    id: typeof o.id === "string" ? o.id : "",
+    name: typeof o.name === "string" ? o.name : "Untitled committee",
+    type: typeof o.type === "string" ? o.type : "",
+    status: typeof o.status === "string" ? o.status : "",
+  }));
 }
 
 // ─── Meeting lifecycle ───────────────────────────────────────────────────────

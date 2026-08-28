@@ -16,7 +16,7 @@ export default async function GemPage() {
       <PageHeader
         title="GeM Integration"
         subtitle="Government e-Marketplace orders and delivery tracking."
-        actions={source === "error" ? <DataSourceBadge source={source} /> : null}
+        actions={source === "error" ? <DataSourceBadge source={source} message="Couldn't load — showing nothing" /> : null}
       />
 
       <StatGrid>

@@ -30,7 +30,12 @@ const transferBody = z.object({
 });
 
 const updateCapacityBody = z.object({
-  maxLeads: z.number().int().min(1).max(1000).optional(),
+  // min(0), not min(1): the assignment engine (leads/assignment.ts isEligible)
+  // treats maxLeads===0 as a valid, meaningful ineligible-for-new-leads signal
+  // (currentLoad >= maxLeads), and the UI (AgentWorkloadEditor.tsx) explicitly
+  // validates and offers 0 as "capacity of 0 or more" -- min(1) here rejected
+  // every such save with an opaque VALIDATION_FAILED.
+  maxLeads: z.number().int().min(0).max(1000).optional(),
   available: z.boolean().optional(),
   // AS-003: on_leave excludes the agent from assignment independently of the
   // manual `available` switch (e.g. HRMS-driven leave). Engine exclusion already

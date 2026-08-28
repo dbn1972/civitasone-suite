@@ -1,15 +1,7 @@
 "use client";
 
 import { useEffect, useId, useState } from "react";
-
-/** Determine the current Indian financial year (Apr-Mar). */
-function currentFy(): string {
-  const now = new Date();
-  const month = now.getMonth() + 1; // 1-12
-  const year = month >= 4 ? now.getFullYear() : now.getFullYear() - 1;
-  const suffix = String((year + 1) % 100).padStart(2, "0");
-  return `${year}-${suffix}`;
-}
+import { currentFinancialYear } from "@/lib/fiscalYear";
 
 /** Convert INR (rupees) input to paise. */
 function toPaise(inr: string): number {
@@ -24,7 +16,7 @@ function toInr(paise: number): string {
 }
 
 export function TaxDeclarationForm() {
-  const fy = currentFy();
+  const fy = currentFinancialYear();
 
   const [regime, setRegime] = useState<"old" | "new">("new");
   const [section80c, setSection80c] = useState("");
@@ -103,8 +95,6 @@ export function TaxDeclarationForm() {
       });
 
       if (!res.ok) {
-        const text = await res.text();
-        console.error("[tax-declaration] submit failed", res.status, text);
         setTone("bad");
         setMessage(`Submission failed (${res.status}). Please try again or contact support.`);
         return;

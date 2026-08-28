@@ -108,6 +108,20 @@ export async function updateWithVersion(
   return updated.length > 0;
 }
 
+/**
+ * Hard-delete a dashboard. dashboard_widgets and dashboard_shares both have
+ * ON DELETE CASCADE to dashboards.id (migration 0002_hardening.sql), so they
+ * are removed automatically — no need to delete them here first. Returns
+ * true iff a row for this id+tenant actually existed and was removed.
+ */
+export async function deleteById(tx: Writer, id: string, tenantId: string): Promise<boolean> {
+  const deleted = await tx
+    .delete(dashboards)
+    .where(and(eq(dashboards.id, id), eq(dashboards.tenantId, tenantId)))
+    .returning({ id: dashboards.id });
+  return deleted.length > 0;
+}
+
 // ── widgets ─────────────────────────────────────────────────────────────────
 export async function insertWidget(tx: Writer, row: WidgetInsert): Promise<void> {
   await tx.insert(dashboardWidgets).values(row);

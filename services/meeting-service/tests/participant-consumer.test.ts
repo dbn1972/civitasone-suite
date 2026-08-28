@@ -87,10 +87,15 @@ beforeAll(async () => {
       insert into meeting.committee_members (id, tenant_id, committee_id, member_id, role, appointment_date, status, created_by, updated_by)
       values (${randomUUID()}, ${TENANT}, ${COMMITTEE}, ${NOMINEE_EMP}, 'member', '2020-01-01', 'active', ${ACTOR}, ${ACTOR})
       on conflict do nothing`;
+    // chairperson_id/secretary_id: ACTOR — IDOR fix (Req 5.2, 5.5, 5.6): respond/nominate now
+    // require the caller to be the participant themselves OR this meeting's own chairperson/
+    // secretary (on-behalf-of standing). This file's writes all publish as ACTOR, so ACTOR is
+    // seeded as both standings here; CHAIR_EMP/SECRETARY are left declared but unused by this
+    // insert (kept in case a future test wants a distinct non-owner identity).
     await sql`
       insert into meeting.meetings (id, tenant_id, type, title, status, committee_id, chairperson_id, secretary_id, scheduled_at, created_by, updated_by)
-      values (${MEETING}, ${TENANT}, 'committee', 'Audit Q1', 'scheduled', ${COMMITTEE}, ${CHAIR_EMP}, ${SECRETARY}, now() + interval '7 days', ${ACTOR}, ${ACTOR}),
-             (${MEETING_SOON}, ${TENANT}, 'committee', 'Audit Urgent', 'scheduled', ${COMMITTEE}, ${CHAIR_EMP}, ${SECRETARY}, now() + interval '1 hour', ${ACTOR}, ${ACTOR})
+      values (${MEETING}, ${TENANT}, 'committee', 'Audit Q1', 'scheduled', ${COMMITTEE}, ${ACTOR}, ${ACTOR}, now() + interval '7 days', ${ACTOR}, ${ACTOR}),
+             (${MEETING_SOON}, ${TENANT}, 'committee', 'Audit Urgent', 'scheduled', ${COMMITTEE}, ${ACTOR}, ${ACTOR}, now() + interval '1 hour', ${ACTOR}, ${ACTOR})
       on conflict (id) do nothing`;
   });
 });

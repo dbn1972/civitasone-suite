@@ -29,8 +29,12 @@ export type RaiseEOfficeNoteProps = {
   refId: string;
   subject: string;
   dept: string;
-  /** Decision-relevant amount in minor units (paise); drives matrix routing. */
-  amountMinor?: number;
+  /** Decision-relevant amount in minor units (paise); drives matrix routing.
+   *  Accepts a bigint-safe decimal string (the convention this codebase's
+   *  money fields use, e.g. SanctionDetail.amount) as well as a plain
+   *  number — this component only forwards it in `context`, it never does
+   *  arithmetic on it locally. */
+  amountMinor?: number | string;
   /** Fallback workflow definition code when no matrix rule matches. */
   defaultApprovalChain?: string;
   classification?: "top_secret" | "secret" | "confidential" | "public";

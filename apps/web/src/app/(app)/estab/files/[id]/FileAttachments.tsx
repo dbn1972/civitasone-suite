@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { FileUpload, type UploadedFileMeta } from "../../../../_components/ds";
 
 type Attachment = {
   id: string;
@@ -16,32 +17,44 @@ type Props = {
   attachments: Attachment[];
 };
 
-export function FileAttachments({ fileId, attachments: initial }: Props) {
+type PendingUpload = {
+  storageRef: string;
+  meta: UploadedFileMeta;
+};
+
+export function FileAttachments({ fileId, attachments }: Props) {
   const router = useRouter();
-  const [attachments, setAttachments] = useState(initial);
-  const [fileName, setFileName] = useState("");
+  // `attachments` is read directly from props (not mirrored into useState) so
+  // that after upload() calls router.refresh() and the parent re-fetches the
+  // file with the new attachment, this list actually reflects it — a
+  // useState(initial) snapshot would freeze at the first mount and never
+  // pick up the fresh prop.
+  const [pending, setPending] = useState<PendingUpload | null>(null);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
 
   async function upload(e: React.FormEvent) {
     e.preventDefault();
-    if (!fileName.trim()) return;
+    if (!pending) return;
     setBusy(true);
     setMessage("");
     try {
+      // F2 — real presigned-URL upload flow: fileName/fileType/sizeBytes/
+      // storageRef all come from the actual uploaded file (via FileUpload's
+      // onUploaded callback), never a typed filename or a fake placeholder.
       const res = await fetch(`/api/proxy/v1/estab/files/${fileId}/attachments`, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
-          fileName: fileName.trim(),
-          fileType: "application/pdf",
-          sizeBytes: 0,
-          storageRef: `pending-upload:${fileName.trim()}`,
+          fileName: pending.meta.fileName,
+          fileType: pending.meta.mimeType || "application/octet-stream",
+          sizeBytes: pending.meta.size,
+          storageRef: pending.storageRef,
         }),
       });
       if (!res.ok) throw new Error(await res.text());
-      setFileName("");
-      setMessage("Attachment registered.");
+      setPending(null);
+      setMessage("Attachment uploaded.");
       router.refresh();
     } catch (err) {
       setMessage(err instanceof Error ? err.message : "Upload failed");
@@ -66,14 +79,19 @@ export function FileAttachments({ fileId, attachments: initial }: Props) {
             ))}
           </ul>
         )}
-        <form onSubmit={upload} style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-          <input
-            value={fileName}
-            onChange={(e) => setFileName(e.target.value)}
-            placeholder="Document name (e.g. Annexure-I.pdf)"
-            style={{ flex: 1, minWidth: 200, padding: 8, border: "1px solid var(--line)", borderRadius: 8, fontSize: 13 }}
+        <form onSubmit={upload} style={{ display: "flex", flexDirection: "column", gap: 10, alignItems: "flex-start" }}>
+          <FileUpload
+            category="attachment"
+            label="Choose file to attach"
+            onUploaded={(key, meta) => setPending({ storageRef: key, meta })}
           />
-          <button type="submit" className="btn ghost" disabled={busy}>Add attachment</button>
+          {pending ? (
+            <p style={{ fontSize: 12, color: "var(--muted, #64748b)", margin: 0 }}>
+              Ready to attach: <code style={{ fontSize: 11 }}>{pending.meta.fileName}</code>
+              {" "}({Math.max(1, Math.ceil(pending.meta.size / 1024))} KB)
+            </p>
+          ) : null}
+          <button type="submit" className="btn ghost" disabled={busy || !pending}>Add attachment</button>
         </form>
         {message ? <p style={{ fontSize: 13, color: "var(--good)", margin: "8px 0 0" }}>{message}</p> : null}
       </div>

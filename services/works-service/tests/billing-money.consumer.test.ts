@@ -21,6 +21,7 @@ describe("money codec — billing validators (zMoneyMinorString)", () => {
     const parsed = createBillSchema.parse({
       workId: "00000000-1111-4000-8000-000000000001",
       awardId: "00000000-2222-4000-8000-000000000001",
+      mbId: "00000000-3333-4000-8000-000000000001",
       billMode: "e_mb",
       billNumber: "BILL/2024/999",
       grossAmountMinor: bigPaise,
@@ -48,6 +49,7 @@ describe("money codec — billing validators (zMoneyMinorString)", () => {
     const parsed = createBillSchema.parse({
       workId: "00000000-1111-4000-8000-000000000001",
       awardId: "00000000-2222-4000-8000-000000000001",
+      mbId: "00000000-3333-4000-8000-000000000001",
       billMode: "abstract",
       billNumber: "BILL/2024/997",
       grossAmountMinor: 500000,

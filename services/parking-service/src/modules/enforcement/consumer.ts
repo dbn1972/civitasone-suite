@@ -1,4 +1,5 @@
 import { pino } from "pino";
+import { randomInt } from "node:crypto";
 import type { Queue } from "@civitasone/queue";
 import { db } from "../../shared/db.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
@@ -6,7 +7,7 @@ import { writeAudit } from "../../shared/audit.js";
 import { tenantScoped } from "../../shared/tenant-queue.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
-import { generateViolationNumber, calculateFineMinor } from "./domain.js";
+import { generateViolationNumber, calculateFineMinor, fromStatusesFor } from "./domain.js";
 
 const log = pino({ name: "parking.enforcement.consumer" });
 
@@ -27,7 +28,8 @@ export function registerEnforcementConsumers(rawQueue: Queue): void {
       photo?: string;
       challanRef?: string;
     };
-    const violationNumber = generateViolationNumber("ULB", Date.now() % 999999);
+    // Mitigation, not a full fix — see bookings/consumer.ts for the same pattern.
+    const violationNumber = generateViolationNumber("ULB", randomInt(1, 999999));
     const fineMinor = calculateFineMinor(p.violationType);
 
     await db.transaction(async (tx) => {
@@ -69,8 +71,8 @@ export function registerEnforcementConsumers(rawQueue: Queue): void {
     const p = msg.payload as { id: string; tenantId: string; paymentRef: string };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
-      const ok = await repo.updateStatus(tx, p.id, msg.tenantId, "paid", msg.actorId);
-      if (!ok) return;
+      const updated = await repo.updateStatus(tx, p.id, msg.tenantId, "paid", fromStatusesFor("paid"), msg.actorId);
+      if (!updated) return;
       await enqueue(tx, {
         topic: EVENTS.violationPaid,
         eventType: EVENTS.violationPaid,
@@ -83,6 +85,10 @@ export function registerEnforcementConsumers(rawQueue: Queue): void {
         action: "violation.pay",
         resourceType: "parking_violation",
         resourceId: p.id,
+        // paymentRef isn't a column on this table yet (flagged separately as a
+        // gap — see PR description); recording it in the audit details at least
+        // means it isn't lost entirely.
+        details: { paymentRef: p.paymentRef },
       });
     });
   });
@@ -91,8 +97,8 @@ export function registerEnforcementConsumers(rawQueue: Queue): void {
     const p = msg.payload as { id: string; tenantId: string; reason: string };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
-      const ok = await repo.updateStatus(tx, p.id, msg.tenantId, "contested", msg.actorId);
-      if (!ok) return;
+      const updated = await repo.updateStatus(tx, p.id, msg.tenantId, "contested", fromStatusesFor("contested"), msg.actorId);
+      if (!updated) return;
       await enqueue(tx, {
         topic: EVENTS.violationContested,
         eventType: EVENTS.violationContested,
@@ -105,6 +111,8 @@ export function registerEnforcementConsumers(rawQueue: Queue): void {
         action: "violation.contest",
         resourceType: "parking_violation",
         resourceId: p.id,
+        // Same gap as above: contest reason has no column on this table yet.
+        details: { reason: p.reason },
       });
     });
   });

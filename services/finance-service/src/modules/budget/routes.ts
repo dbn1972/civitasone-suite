@@ -4,11 +4,14 @@ import {
   BudgetSummaryListSchema,
   SanctionSummaryListSchema,
   SanctionDetailSchema,
+  FinanceDemandSummaryListSchema,
+  FinanceSchemeSummaryListSchema,
+  FinanceSchemeSummarySchema,
 } from "@civitasone/schemas/web";
 import type { FastifyInstance } from "fastify";
 import { randomUUID } from "node:crypto";
-import { z, ZodError } from "zod";
-import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
+import { z } from "zod";
+import { resolveContext, requireRole, HttpError, financeErrorHandler } from "../../shared/context.js";
 import { createBudgetBody, reappropriateBody, createSanctionBody, budgetQueryParams, idParam, updateHeadHoABody, rejectSanctionBody, submitReappropriationBody } from "./validators.js";
 import * as repo from "./repo.js";
 import { db } from "../../shared/db.js";
@@ -40,6 +43,53 @@ export async function budgetRoutes(app: FastifyInstance): Promise<void> {
     const q = listQuerySchema.parse(req.query);
     const accounts = await queries.listAccounts(ctx.tenantId, q.limit);
     return reply.send({ data: accounts, pagination: { hasMore: accounts.length === q.limit, pageSize: q.limit } });
+  });
+
+  // finance_demands table + FinanceDemandSummarySchema both already existed;
+  // this route was simply never registered, so the frontend's call to
+  // /v1/finance/budgets/demand-grants fell through to GET /v1/finance/budgets/:id
+  // below (Fastify prioritises a static path over a param route once it
+  // exists, so registration order relative to that route doesn't matter) and
+  // 400'd trying to parse "demand-grants" as a UUID.
+  app.get("/v1/finance/budgets/demand-grants", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, READER_ROLES);
+    const q = listQuerySchema.parse(req.query);
+    const rows = await repo.listDemandsByTenant(ctx.tenantId, q.limit, q.offset);
+    sendValidated(reply, FinanceDemandSummaryListSchema, rows.map((r) => ({
+      id: r.id, demandNo: r.demandNo, service: r.service,
+      amountMinor: r.amountMinor.toString(), currency: r.currency, class: r.class, status: r.status,
+      createdAt: r.createdAt.toISOString(), updatedAt: r.updatedAt.toISOString(), version: r.version,
+    })));
+  });
+
+  // finance_schemes table + FinanceSchemeSummarySchema both already existed;
+  // no route anywhere ever exposed them (scheme-tracking list + detail page).
+  app.get("/v1/finance/schemes", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, READER_ROLES);
+    const q = listQuerySchema.parse(req.query);
+    const rows = await repo.listSchemesByTenant(ctx.tenantId, q.limit, q.offset);
+    sendValidated(reply, FinanceSchemeSummaryListSchema, rows.map((r) => ({
+      id: r.id, code: r.code, name: r.name,
+      outlayMinor: r.outlayMinor.toString(), utilisedMinor: r.utilisedMinor.toString(),
+      currency: r.currency, funding: r.funding, status: r.status,
+      createdAt: r.createdAt.toISOString(), updatedAt: r.updatedAt.toISOString(), version: r.version,
+    })));
+  });
+
+  app.get("/v1/finance/schemes/:id", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, READER_ROLES);
+    const { id } = idParam.parse(req.params);
+    const r = await repo.findSchemeByIdAndTenant(id, ctx.tenantId);
+    if (!r) throw new HttpError(404, "NOT_FOUND", "scheme not found");
+    sendValidated(reply, FinanceSchemeSummarySchema, {
+      id: r.id, code: r.code, name: r.name,
+      outlayMinor: r.outlayMinor.toString(), utilisedMinor: r.utilisedMinor.toString(),
+      currency: r.currency, funding: r.funding, status: r.status,
+      createdAt: r.createdAt.toISOString(), updatedAt: r.updatedAt.toISOString(), version: r.version,
+    });
   });
 
   app.patch("/v1/finance/accounts/:id/hoa", async (req, reply) => {
@@ -237,18 +287,5 @@ export async function budgetRoutes(app: FastifyInstance): Promise<void> {
     });
   });
 
-  app.setErrorHandler((err, req, reply) => {
-    const correlationId = (req.headers["x-correlation-id"] as string) ?? req.id;
-    if (err instanceof ZodError) {
-      return reply.code(400).send({
-        code: "VALIDATION_FAILED", message: "invalid request", correlationId, retryable: false,
-        fieldErrors: err.issues.map((i) => ({ field: i.path.join("."), message: i.message })),
-      });
-    }
-    if (err instanceof HttpError) {
-      return reply.code(err.status).send({ code: err.code, message: err.message, correlationId, retryable: false });
-    }
-    req.log.error({ err }, "unhandled error");
-    return reply.code(500).send({ code: "INTERNAL", message: "internal error", correlationId, retryable: true });
-  });
+  app.setErrorHandler(financeErrorHandler);
 }

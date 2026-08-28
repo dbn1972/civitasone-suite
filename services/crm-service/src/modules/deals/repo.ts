@@ -1,7 +1,13 @@
 import { eq, desc, and, sql } from "drizzle-orm";
-import { db, scopedRead } from "../../shared/db.js";
+import { pino } from "pino";
+import { tenantTransaction } from "@civitasone/db";
+import { db } from "../../shared/db.js";
 import { deals, type DealRow, type DealInsert, type DealView } from "./schema.js";
 import { contacts } from "../contacts/schema.js";
+import { pipelines } from "../pipelines/schema.js";
+import { findStage, deriveStageFields, type PipelineStageLike } from "./stage-gate.js";
+
+const log = pino({ name: "crm-deals-repo" });
 
 /** Exact paise(bigint) -> "12,34,567.89" rupee string (Indian grouping). */
 function rupeesFromPaise(minor: bigint): string {
@@ -75,8 +81,23 @@ export function toView(r: DealRow, contactName?: string | null): DealView {
   };
 }
 
+/**
+ * Uses `tenantTransaction` (explicit tenantId), not `scopedRead`/bare `db.transaction()`:
+ * `crm.deals` is FORCE ROW LEVEL SECURITY, and `scopedRead` only gets the app.tenant_id
+ * GUC set via AsyncLocalStorage populated by `createTenantTxHook`'s onRequest hook —
+ * which keys off an `x-tenant-id` HEADER, not the JWT `tid` claim `ctx.tenantId` (the
+ * `tenantId` param here) is already derived from. Every caller — queries.ts's getDeal,
+ * ultimately routes.ts — passes its own verified `ctx.tenantId` straight through, so the
+ * read must not depend on that separate header ever having arrived; without this,
+ * findById silently returned null under FORCE RLS whenever it didn't (e.g. every
+ * direct-to-service call, including this file's own vitest coverage), which is
+ * indistinguishable from a genuine 404 to the caller. Same rationale — and same fix — as
+ * `gateSnapshot` below; see its longer comment and `pipelines/repo.ts`'s `stagesOf` for
+ * the full explanation of why the `x-tenant-id`/hook gap is flagged rather than fixed at
+ * its source (a shared `packages/db` concern, not local to this file).
+ */
 export async function findById(id: string, tenantId: string): Promise<DealView | null> {
-  const rows = await scopedRead((tx) => tx.select({ deal: deals, contactName: contacts.name })
+  const rows = await tenantTransaction(db, tenantId, (tx) => (tx as typeof db).select({ deal: deals, contactName: contacts.name })
     .from(deals)
     .leftJoin(contacts, eq(deals.contactId, contacts.id))
     .where(and(eq(deals.id, id), eq(deals.tenantId, tenantId), sql`${deals.status} NOT IN ('deleted','cancelled')`))
@@ -86,8 +107,9 @@ export async function findById(id: string, tenantId: string): Promise<DealView |
   return toView(row.deal, row.contactName);
 }
 
+/** Same `tenantTransaction`/FORCE RLS rationale as `findById` above. */
 export async function listByTenant(tenantId: string, limit: number, offset: number): Promise<DealView[]> {
-  const rows = await scopedRead((tx) => tx.select({ deal: deals, contactName: contacts.name })
+  const rows = await tenantTransaction(db, tenantId, (tx) => (tx as typeof db).select({ deal: deals, contactName: contacts.name })
     .from(deals)
     .leftJoin(contacts, eq(deals.contactId, contacts.id))
     .where(and(eq(deals.tenantId, tenantId), sql`${deals.status} NOT IN ('deleted','cancelled')`))
@@ -99,23 +121,43 @@ export async function listByTenant(tenantId: string, limit: number, offset: numb
 
 export type Writer = Pick<typeof db, "insert" | "update" | "select">;
 
-export async function insert(tx: Writer, row: DealInsert): Promise<void> {
-  await tx.insert(deals).values(row);
+/**
+ * Resolve the pipeline-configured stage matching `stageName`, by NAME — the same rule
+ * `findStage` enforces everywhere else (stage-gate.ts) — so a write can persist that
+ * stage's own real `id` as `deals.stage_id`. This is the ONLY trusted source for
+ * stage_id: never a caller-supplied stageId, never the deal's previous value. Shared by
+ * every write path that sets or moves a deal's stage (insert below, updateStageWithVersion
+ * below, and close-consumer.ts's won/lost close) so they can never drift apart on how
+ * stage_id is derived. Returns undefined when there's no pipeline, it's missing/deleted,
+ * or `stageName` isn't one of its configured stages — callers write `null` in that case
+ * (an honest "unresolved"), never a stale or raw fallback.
+ */
+export async function resolveTargetStage(
+  tx: Writer,
+  pipelineId: string | null,
+  tenantId: string,
+  stageName: string,
+): Promise<PipelineStageLike | undefined> {
+  if (!pipelineId) return undefined;
+  const pipelineRows = await (tx as typeof db).select({ stages: pipelines.stages })
+    .from(pipelines)
+    .where(and(eq(pipelines.id, pipelineId), eq(pipelines.tenantId, tenantId), sql`${pipelines.status} <> 'deleted'`))
+    .limit(1);
+  return findStage(pipelineRows[0]?.stages ?? null, { stageName });
 }
 
-export async function updateStage(tx: Writer, id: string, tenantId: string, stage: string, actorId: string, probability?: number): Promise<void> {
-  const status = stage === "Won" ? "won" : stage === "Lost" ? "lost" : "active";
-  const prob = stage === "Won" ? 100 : stage === "Lost" ? 0 : probability;
-  const patch: Record<string, unknown> = {
-    stage, status, updatedAt: new Date(), updatedBy: actorId,
-    // OP-005: reset the ageing clock whenever the stage changes.
-    stageEnteredAt: new Date(),
-    version: sql`${deals.version} + 1`,
-  };
-  if (prob !== undefined) patch.probability = prob;
-  await (tx as typeof db).update(deals)
-    .set(patch)
-    .where(and(eq(deals.id, id), eq(deals.tenantId, tenantId)));
+export async function insert(tx: Writer, row: DealInsert): Promise<void> {
+  // stage_id is derived the SAME way as every other stage-writing path — never the raw,
+  // client-supplied stageId a create request may carry. routes.ts's POST /v1/crm/deals
+  // handler calls findStage() to run the mandatory-fields gate on create, but that
+  // resolution was never reused for the write: a create with pipelineId + stage="Lead"
+  // but stageId=<some unrelated stage's real id> would otherwise persist that wrong id
+  // from the moment the row is born — the exact bug already fixed for the PATCH /stage
+  // and close write paths, reachable a third way. `row.stage` always carries a value by
+  // the time this is called (createDealBody defaults it to "Lead" at the HTTP boundary);
+  // the fallback here only guards DealInsert's own optionality.
+  const targetStageConfig = await resolveTargetStage(tx, row.pipelineId ?? null, row.tenantId, row.stage ?? "Lead");
+  await tx.insert(deals).values({ ...row, stageId: targetStageConfig?.id ?? null });
 }
 
 export async function updateStageWithVersion(
@@ -128,20 +170,48 @@ export async function updateStageWithVersion(
   actorId: string,
   probability?: number,
 ): Promise<{ updated: boolean; previousStage?: string }> {
-  const current = await (tx as typeof db).select({ stage: deals.stage, version: deals.version })
+  const current = await (tx as typeof db).select({ stage: deals.stage, version: deals.version, pipelineId: deals.pipelineId })
     .from(deals)
     .where(and(eq(deals.id, id), eq(deals.tenantId, tenantId), sql`${deals.status} NOT IN ('deleted','cancelled')`))
     .limit(1);
   if (!current[0]) return { updated: false };
 
   const previousStage = current[0].stage;
-  const dealStatus = stage === "Won" ? "won" : stage === "Lost" ? "lost" : "active";
-  const prob = stage === "Won" ? 100 : stage === "Lost" ? 0 : probability;
   const now = new Date();
 
+  // Resolved HERE, at the actual write, using `tx` (already inside this write's own
+  // transaction) rather than pre-computed by a caller — so it applies no matter which
+  // code path published the update-stage command, not only the HTTP route (which also
+  // enforces the mandatory-fields/sequence gates, but as REJECT decisions those can only
+  // be checked synchronously there; this is a WRITE decision, so it belongs at the write).
+  // By NAME only (never stageId — see findStage's doc comment: a caller-supplied stageId
+  // must never be able to pair with an unrelated stage name and win).
+  const targetStageConfig = await resolveTargetStage(tx, current[0].pipelineId, tenantId, stage);
+  const fields = deriveStageFields(stage, targetStageConfig, probability);
+
+  // Fail LOUD (matching missingMandatoryFields's documented philosophy), not just safe:
+  // a non-Won/Lost move with no caller-supplied probability and no resolvable stage
+  // config silently lands on 0. That's the correct fallback (never a stale carried-over
+  // value), but a stage config that fails to resolve is itself worth knowing about —
+  // it usually means the pipeline/stage was deleted or the deal's pipelineId is stale.
+  if (!fields.closesDeal && probability === undefined && targetStageConfig?.probability === undefined) {
+    log.warn(
+      { dealId: id, tenantId, stage, stageId, pipelineId: current[0].pipelineId },
+      "updateStageWithVersion: no explicit probability and no resolvable stage config — defaulting probability to 0",
+    );
+  }
+
+  // status/probability/closedAt are ALL written unconditionally, on every stage change —
+  // forward, backward, or lateral — straight from `fields` (stage-gate.ts's
+  // deriveStageFields, the single source of truth for what a stage means). Previously
+  // probability and closedAt were only patched in the Won/Lost direction, so moving a
+  // deal back off Won/Lost left both holding stale closed-era values; there is no
+  // "forward" vs "backward" branch left here to drift apart again.
   const patch: Record<string, unknown> = {
     stage,
-    status: dealStatus,
+    status: fields.status,
+    probability: fields.probability,
+    closedAt: fields.closesDeal ? now : null,
     updatedAt: now,
     updatedBy: actorId,
     // OP-005: stamp entry into the new stage (only meaningful when it actually moves,
@@ -149,9 +219,14 @@ export async function updateStageWithVersion(
     stageEnteredAt: now,
     version: sql`${deals.version} + 1`,
   };
-  if (stageId !== undefined) patch.stageId = stageId;
-  if (prob !== undefined) patch.probability = prob;
-  if (stage === "Won" || stage === "Lost") patch.closedAt = now;
+  // stage_id is ALWAYS derived from targetStageConfig — the same by-NAME resolution
+  // that already governs status/probability/closedAt above — never the raw `stageId`
+  // the caller supplied. A mismatched/unrelated stageId in the request must never reach
+  // the column; when no stage config resolves, stage_id is null (an honest "unresolved",
+  // matching the probability-defaults-to-0 fallback above), never a stale carry-over and
+  // never blind trust of client input. forecast-route.ts already excludes stage_id IS
+  // NULL deals from the forecast, which is exactly the safe behaviour this produces.
+  patch.stageId = targetStageConfig?.id ?? null;
 
   const result = await (tx as typeof db).update(deals)
     .set(patch)
@@ -175,15 +250,24 @@ export async function findAccountId(tx: Writer, dealId: string, tenantId: string
   return rows[0]?.accountId ?? null;
 }
 
+/**
+ * Same `tenantTransaction`/FORCE RLS rationale as `findById` above. Also called from
+ * `activities/consumer.ts` and `deals/consumer.ts` (queue consumers, no HTTP header at
+ * all) with `p.tenantId` off the validated message payload — those call sites never had
+ * an `x-tenant-id` header to begin with, so they depended entirely on AsyncLocalStorage
+ * having been populated by `runWithTenant`; `tenantTransaction` removes that dependency
+ * for this read too.
+ */
 export async function dealExists(tenantId: string, dealId: string): Promise<boolean> {
-  const rows = await scopedRead((tx) => tx.select({ one: sql`1` }).from(deals)
+  const rows = await tenantTransaction(db, tenantId, (tx) => (tx as typeof db).select({ one: sql`1` }).from(deals)
     .where(and(eq(deals.tenantId, tenantId), eq(deals.id, dealId)))
     .limit(1));
   return rows.length > 0;
 }
 
+/** Same `tenantTransaction`/FORCE RLS rationale as `findById`/`dealExists` above. */
 export async function contactExists(tenantId: string, contactId: string): Promise<boolean> {
-  const rows = await scopedRead((tx) => tx.select({ one: sql`1` }).from(contacts)
+  const rows = await tenantTransaction(db, tenantId, (tx) => (tx as typeof db).select({ one: sql`1` }).from(contacts)
     .where(and(eq(contacts.tenantId, tenantId), eq(contacts.id, contactId)))
     .limit(1));
   return rows.length > 0;
@@ -255,8 +339,20 @@ export interface GateSnapshot {
   currency: string;
 }
 
+/**
+ * Uses `tenantTransaction` (explicit tenantId), not `scopedRead`/bare `db.transaction()`:
+ * `crm.deals` is FORCE ROW LEVEL SECURITY, and `scopedRead` only gets the app.tenant_id
+ * GUC set via AsyncLocalStorage populated by `createTenantTxHook`'s onRequest hook —
+ * which keys off an `x-tenant-id` HEADER, not the JWT `tid` claim `ctx.tenantId` (the
+ * `tenantId` param here) is already derived from. Routes calling this — notably PATCH
+ * /v1/crm/deals/:id/stage's OP-002/OP-003 gate — pass their own verified `ctx.tenantId`
+ * straight through, so the read must not depend on that separate header ever having
+ * arrived; without this, gateSnapshot silently returned null under FORCE RLS whenever it
+ * didn't (e.g. every direct-to-service call, including this file's own vitest coverage),
+ * which skipped the stage gate entirely rather than enforcing or rejecting it.
+ */
 export async function gateSnapshot(id: string, tenantId: string): Promise<GateSnapshot | null> {
-  const rows = await scopedRead((tx) => tx.select({
+  const rows = await tenantTransaction(db, tenantId, (tx) => (tx as typeof db).select({
     id: deals.id,
     pipelineId: deals.pipelineId,
     stageId: deals.stageId,
@@ -314,9 +410,10 @@ export interface StageAgeingRow {
   daysOverLimit: number;
 }
 
+/** Same `tenantTransaction`/FORCE RLS rationale as `findById` above (raw-SQL read). */
 export async function stageAgeingExceeding(tenantId: string, pipelineId?: string): Promise<StageAgeingRow[]> {
   const pipeFilter = pipelineId ? sql`AND d.pipeline_id = ${pipelineId}` : sql``;
-  const rows = await scopedRead(async (tx) => tx.execute(sql`
+  const rows = await tenantTransaction(db, tenantId, async (tx) => (tx as typeof db).execute(sql`
     SELECT d.id, d.name, d.stage, d.pipeline_id AS "pipelineId", d.owner_id AS "ownerId",
            d.value_minor::text AS "valueMinor",
            d.stage_entered_at AS "stageEnteredAt",
@@ -361,9 +458,10 @@ export interface KanbanCard {
   expectedCloseDate: string | null;
 }
 
+/** Same `tenantTransaction`/FORCE RLS rationale as `findById` above (raw-SQL read). */
 export async function kanbanCards(tenantId: string, pipelineId?: string): Promise<KanbanCard[]> {
   const pipeFilter = pipelineId ? sql`AND pipeline_id = ${pipelineId}` : sql``;
-  const rows = await scopedRead(async (tx) => tx.execute(sql`
+  const rows = await tenantTransaction(db, tenantId, async (tx) => (tx as typeof db).execute(sql`
     SELECT id, name, stage, owner_id AS "ownerId", value_minor::text AS "valueMinor",
            probability, contact_id AS "contactId", version,
            expected_close_date AS "expectedCloseDate"
@@ -383,9 +481,10 @@ export interface FunnelBucket {
   totalValueMinor: string;
 }
 
+/** Same `tenantTransaction`/FORCE RLS rationale as `findById` above (raw-SQL read). */
 export async function funnelBuckets(tenantId: string, pipelineId?: string): Promise<FunnelBucket[]> {
   const pipeFilter = pipelineId ? sql`AND pipeline_id = ${pipelineId}` : sql``;
-  const rows = await scopedRead(async (tx) => tx.execute(sql`
+  const rows = await tenantTransaction(db, tenantId, async (tx) => (tx as typeof db).execute(sql`
     SELECT stage, count(*)::int AS count, COALESCE(SUM(value_minor),0)::text AS "totalValueMinor"
     FROM crm.deals
     WHERE tenant_id = ${tenantId}

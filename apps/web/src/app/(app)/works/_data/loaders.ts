@@ -293,7 +293,11 @@ function mapClosureRow(r: Row): ClosureRow {
     id: str(r.id),
     workNumber: str(r.workNumber) || shortId(strOrNull(r.workId)),
     description: str(r.description, "—"),
-    agreement: str(r.agreementNumber, "—"),
+    // Bug fix (works-deep-verify): dropped `agreement: r.agreementNumber` —
+    // listClosures (execution/repo.ts) never returns an agreementNumber
+    // field (that column only exists on the unrelated `awards` table), so
+    // this always rendered the "—" fallback. See ClosureTable.tsx for the
+    // full explanation and the join-based alternative fix.
     statusDate: fmtDate(strOrNull(r.closedDate)),
     remarks: str(r.remarks, "—"),
     status: str(r.closureType, "closed"),

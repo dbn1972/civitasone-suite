@@ -8,9 +8,15 @@ export type { Accepted };
 export interface GenerateDemandInput {
   allotmentId: string;
   demandMonth: string;
-  amountMinor: bigint;
+  // string, not bigint: goes into a queue.publish() payload that gets
+  // JSON.stringify'd on the real SQS/RabbitMQ drivers — a native bigint throws
+  // there. String (not number) specifically because this value is now derived
+  // from the allotment's own bigint monthlyRentMinor — a number could silently
+  // lose precision for values beyond Number.MAX_SAFE_INTEGER; the consumer
+  // parses back via BigInt(p.amountMinor) right before the Drizzle write.
+  amountMinor: string;
   dueDate: string;
-  lateFeeMinor?: bigint | undefined;
+  lateFeeMinor?: string | undefined;
 }
 
 export async function generateDemand(ctx: RequestContext, body: GenerateDemandInput): Promise<Accepted> {

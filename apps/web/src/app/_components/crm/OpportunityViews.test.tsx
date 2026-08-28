@@ -81,7 +81,7 @@ describe("OpportunityViews (OP-004)", () => {
   it("gates the board on a failed fetch with the saved-info badge", async () => {
     vi.mocked(op.getKanban).mockResolvedValue({ data: [], source: "error" });
     render(<OpportunityViews />);
-    await waitFor(() => expect(screen.getByText(/showing saved information/i)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(/couldn.t load/i)).toBeInTheDocument());
   });
 
   it("switches to the list view and can open the close dialog", async () => {

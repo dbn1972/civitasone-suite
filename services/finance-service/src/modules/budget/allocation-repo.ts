@@ -36,7 +36,6 @@ export async function upsertAllocation(tx: Writer, row: BudgetAllocationInsert):
       version: (existing.version ?? 1) + 1,
     };
     if (row.allocatedMinor !== undefined) patch.allocatedMinor = row.allocatedMinor;
-    if (row.enforce !== undefined) patch.enforce = row.enforce;
     await tx.update(financeBudgetAllocation).set(patch).where(eq(financeBudgetAllocation.id, existing.id));
   } else {
     await tx.insert(financeBudgetAllocation).values(row);
@@ -72,16 +71,27 @@ export async function listAllocations(tenantId: string, fy: string | undefined, 
 type Exec = { execute: (q: ReturnType<typeof sql>) => Promise<unknown> };
 
 /**
- * Atomic, race-safe commitment registration. Increments committed_minor only if
- * the row is enforce=false OR there is still enough headroom. Returns true when a
- * row was updated, false when the guard rejected it (caller must reject the bill).
+ * Atomic, race-safe commitment registration. Increments committed_minor only
+ * if there is still enough headroom. Returns true when a row was updated,
+ * false when the guard rejected it (caller must reject the bill).
+ *
+ * BUG FIX (misleading dead `enforce` flag): this guard used to also accept
+ * `enforce = false` as a bypass, but the unconditional DB CHECK
+ * chk_allocation_no_overcommit (migrations/0056_allocation_no_overcommit.sql)
+ * made that bypass unreachable in practice — the UPDATE would still be
+ * rejected, just by a raw Postgres constraint-violation exception instead of
+ * this function's normal "0 rows" return path, so callers got an untriaged
+ * PostgresError instead of the clean OVER_APPROPRIATION domain error. The
+ * `enforce` column is gone (migrations/0067_drop_allocation_enforce.sql); this
+ * guard is now the sole, always-on gate, so the clean domain error is what
+ * actually fires and the DB constraint is pure defense-in-depth.
  */
 export async function addCommittedGuarded(tx: Exec, id: string, deltaMinor: bigint): Promise<boolean> {
   const rows = await tx.execute(sql`
     UPDATE budget.finance_budget_allocation
        SET committed_minor = committed_minor + ${deltaMinor}, updated_at = now()
      WHERE id = ${id}
-       AND (enforce = false OR allocated_minor - committed_minor - actual_minor >= ${deltaMinor})
+       AND allocated_minor - committed_minor - actual_minor >= ${deltaMinor}
     RETURNING id
   `);
   return (rows as unknown as unknown[]).length > 0;

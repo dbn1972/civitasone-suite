@@ -37,7 +37,10 @@ describe("OffCyclePage", () => {
     const ui = await OffCyclePage();
     render(ui);
 
-    expect(screen.getByText("Diwali bonus")).toBeInTheDocument();
+    // "Diwali bonus" renders as part of a longer text node ("Period:
+    // <strong>2025-06</strong> · Diwali bonus"), not as an isolated string --
+    // match by substring instead of exact text.
+    expect(screen.getByText((_, el) => el?.textContent === "Period: 2025-06 · Diwali bonus")).toBeInTheDocument();
     expect(screen.getByText("2025-06")).toBeInTheDocument();
   });
 
@@ -56,6 +59,6 @@ describe("OffCyclePage", () => {
     const ui = await OffCyclePage();
     render(ui);
 
-    expect(screen.getByText("Showing saved information")).toBeInTheDocument();
+    expect(screen.getByText("Couldn't load — showing nothing")).toBeInTheDocument();
   });
 });

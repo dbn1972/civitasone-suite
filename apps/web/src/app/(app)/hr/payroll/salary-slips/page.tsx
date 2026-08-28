@@ -19,7 +19,7 @@ export default async function SalarySlipsPage() {
         subtitle="Individual employee salary statements."
         back="/hr/payroll"
       />
-      <DataSourceBadge source={source} />
+      <DataSourceBadge source={source} message="Couldn't load — showing nothing" />
       <StatGrid>
         <StatCard icon="📋" iconBg="var(--panel)" label="Total Slips" value={totalSlips} />
         <StatCard icon="💰" iconBg="var(--goodbg)" label="Total Gross" value={formatMoney(totalGross)} />

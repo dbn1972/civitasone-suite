@@ -48,6 +48,11 @@ function readHeaders(roles?: string[]) {
 function msg<T>(type: string, payload: T, messageId = randomUUID()): CommandEnvelope<T> {
   return { messageId, type, tenantId: TENANT, actorId: ACTOR, correlationId: randomUUID(), schemaVersion: "1.0", payload } as CommandEnvelope<T>;
 }
+/** Like `msg`, but with an explicit `actorId` — voteRecuse now requires the caller to be the
+ * recused member themselves (self-recusal) or that committee's own chairperson/secretary. */
+function msgAs<T>(type: string, payload: T, actorId: string): CommandEnvelope<T> {
+  return { messageId: randomUUID(), type, tenantId: TENANT, actorId, correlationId: randomUUID(), schemaVersion: "1.0", payload } as CommandEnvelope<T>;
+}
 function run<T>(m: CommandEnvelope<T>): Promise<void> {
   const handler = handlers.get(m.type);
   if (!handler) throw new Error(`no handler for ${m.type}`);
@@ -85,8 +90,8 @@ beforeAll(async () => {
     await sql`delete from meeting.attendance_records where tenant_id = ${TENANT}`;
     await sql`delete from meeting.participants where tenant_id = ${TENANT}`;
     await sql`delete from meeting.committee_members where tenant_id = ${TENANT}`;
-    await sql`delete from meeting.committees where tenant_id = ${TENANT}`;
     await sql`delete from meeting.meetings where tenant_id = ${TENANT}`;
+    await sql`delete from meeting.committees where tenant_id = ${TENANT}`;
     await sql`delete from meeting.config_entries where tenant_id = ${TENANT}`;
     await sql`delete from _outbox.messages where tenant_id = ${TENANT}`;
 
@@ -130,8 +135,8 @@ afterAll(async () => {
     await sql`delete from meeting.attendance_records where tenant_id = ${TENANT}`;
     await sql`delete from meeting.participants where tenant_id = ${TENANT}`;
     await sql`delete from meeting.committee_members where tenant_id = ${TENANT}`;
-    await sql`delete from meeting.committees where tenant_id = ${TENANT}`;
     await sql`delete from meeting.meetings where tenant_id = ${TENANT}`;
+    await sql`delete from meeting.committees where tenant_id = ${TENANT}`;
     await sql`delete from meeting.config_entries where tenant_id = ${TENANT}`;
     await sql`delete from _outbox.messages where tenant_id = ${TENANT}`;
   });
@@ -156,10 +161,12 @@ describe("recusal / conflict-of-interest (Gap 1)", () => {
       payload: { memberId: MEMBER_A, reason: "director of the bidding firm", registerRef: "ROI-2026-014" },
     });
     expect(res.statusCode).toBe(202);
-    await run(msg(COMMANDS.voteRecuse, {
+    // Self-recusal: MEMBER_A declares their own conflict of interest (the caller must be the
+    // recused member themselves, or that committee's chairperson/secretary — Gap 3 fix).
+    await run(msgAs(COMMANDS.voteRecuse, {
       meetingId: MEETING, resolutionId: rid, memberId: MEMBER_A,
       reason: "director of the bidding firm", registerRef: "ROI-2026-014", tenantId: TENANT,
-    }));
+    }, MEMBER_A));
     const recusalRows = await tenantQuery((sql) => sql`select * from meeting.recusals where resolution_id = ${rid}`);
     expect(recusalRows.length).toBe(1);
     expect(recusalRows[0].member_id).toBe(MEMBER_A);

@@ -1,13 +1,19 @@
-import { sendAccepted } from "@civitasone/schemas/validate";
-import { acceptedResponseSchema } from "@civitasone/schemas/common";
+import { sendAccepted, sendValidated } from "@civitasone/schemas/validate";
+import { acceptedResponseSchema, listQuerySchema } from "@civitasone/schemas/common";
+import {
+  FinanceDebtSummaryListSchema, FinanceGuaranteeSummaryListSchema,
+  FinanceChallanSummaryListSchema, FinanceChallanSummarySchema,
+  FinanceDepositSummaryListSchema,
+} from "@civitasone/schemas/web";
 import type { FastifyInstance } from "fastify";
-import { ZodError } from "zod";
-import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
+import { resolveContext, requireRole, HttpError, financeErrorHandler } from "../../shared/context.js";
 import { createChallanBody, createDepositBody, depositDispositionBody, idParam } from "./validators.js";
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
+import * as repo from "./repo.js";
 
 const FINANCE_ROLES = ["finance_officer", "finance_admin", "super_admin"];
+const READER_ROLES  = [...FINANCE_ROLES, "audit_officer"];
 
 export async function treasuryRoutes(app: FastifyInstance): Promise<void> {
   app.post("/v1/finance/challans", async (req, reply) => {
@@ -30,6 +36,79 @@ export async function treasuryRoutes(app: FastifyInstance): Promise<void> {
       balanceMinor: bank.balanceMinor.toString(),
       currency: bank.currency,
     });
+  });
+
+  // finance_debt table + FinanceDebtSummarySchema both already existed; this
+  // route was simply never registered, so the debt register page 404'd live.
+  app.get("/v1/finance/debt", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, READER_ROLES);
+    const q = listQuerySchema.parse(req.query);
+    const rows = await repo.listDebtByTenant(ctx.tenantId, q.limit, q.offset);
+    sendValidated(reply, FinanceDebtSummaryListSchema, rows.map((r) => ({
+      id: r.id, instrument: r.instrument, source: r.source,
+      amountMinor: r.amountMinor.toString(), currency: r.currency,
+      maturity: r.maturity, status: r.status,
+      createdAt: r.createdAt.toISOString(), updatedAt: r.updatedAt.toISOString(), version: r.version,
+    })));
+  });
+
+  // finance_guarantees table + FinanceGuaranteeSummarySchema both already
+  // existed; no route anywhere ever exposed them.
+  app.get("/v1/finance/guarantees", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, READER_ROLES);
+    const q = listQuerySchema.parse(req.query);
+    const rows = await repo.listGuaranteesByTenant(ctx.tenantId, q.limit, q.offset);
+    sendValidated(reply, FinanceGuaranteeSummaryListSchema, rows.map((r) => ({
+      id: r.id, entity: r.entity, type: r.type,
+      amountMinor: r.amountMinor.toString(), currency: r.currency,
+      feePct: String(r.feePct), status: r.status,
+      createdAt: r.createdAt.toISOString(), updatedAt: r.updatedAt.toISOString(), version: r.version,
+    })));
+  });
+
+  // The register page needs both list and detail; challans was POST-only
+  // (issuance), so both GETs were missing.
+  app.get("/v1/finance/challans", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, READER_ROLES);
+    const q = listQuerySchema.parse(req.query);
+    const rows = await repo.listChallansByTenant(ctx.tenantId, q.limit, q.offset);
+    sendValidated(reply, FinanceChallanSummaryListSchema, rows.map((r) => ({
+      id: r.id, challanNo: r.challanNo, receiptHeadId: r.receiptHeadId,
+      depositor: r.depositor, amountMinor: r.amountMinor.toString(), currency: r.currency,
+      grnNo: r.grnNo, status: r.status,
+      createdAt: r.createdAt.toISOString(), updatedAt: r.updatedAt.toISOString(), version: r.version,
+    })));
+  });
+
+  app.get("/v1/finance/challans/:id", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, READER_ROLES);
+    const { id } = idParam.parse(req.params);
+    const r = await repo.findChallanByIdAndTenant(id, ctx.tenantId);
+    if (!r) throw new HttpError(404, "NOT_FOUND", "challan not found");
+    sendValidated(reply, FinanceChallanSummarySchema, {
+      id: r.id, challanNo: r.challanNo, receiptHeadId: r.receiptHeadId,
+      depositor: r.depositor, amountMinor: r.amountMinor.toString(), currency: r.currency,
+      grnNo: r.grnNo, status: r.status,
+      createdAt: r.createdAt.toISOString(), updatedAt: r.updatedAt.toISOString(), version: r.version,
+    });
+  });
+
+  // Deposits was also POST-only (pd/emd/sd/fdr issuance); the register page
+  // needs a list.
+  app.get("/v1/finance/deposits", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, READER_ROLES);
+    const q = listQuerySchema.parse(req.query);
+    const rows = await repo.listDepositsByTenant(ctx.tenantId, q.limit, q.offset);
+    sendValidated(reply, FinanceDepositSummaryListSchema, rows.map((r) => ({
+      id: r.id, pdNo: r.pdNo, type: r.type, administrator: r.administrator,
+      balanceMinor: r.balanceMinor.toString(), currency: r.currency, status: r.status,
+      createdAt: r.createdAt.toISOString(), updatedAt: r.updatedAt.toISOString(), version: r.version,
+    })));
   });
 
   app.post("/v1/finance/deposits", async (req, reply) => {
@@ -64,18 +143,5 @@ export async function treasuryRoutes(app: FastifyInstance): Promise<void> {
     return sendAccepted(reply, acceptedResponseSchema, await commands.adjustDeposit(ctx, id, body));
   });
 
-  app.setErrorHandler((err, req, reply) => {
-    const correlationId = (req.headers["x-correlation-id"] as string) ?? req.id;
-    if (err instanceof ZodError) {
-      return reply.code(400).send({
-        code: "VALIDATION_FAILED", message: "invalid request", correlationId, retryable: false,
-        fieldErrors: err.issues.map((i) => ({ field: i.path.join("."), message: i.message })),
-      });
-    }
-    if (err instanceof HttpError) {
-      return reply.code(err.status).send({ code: err.code, message: err.message, correlationId, retryable: false });
-    }
-    req.log.error({ err }, "unhandled error");
-    return reply.code(500).send({ code: "INTERNAL", message: "internal error", correlationId, retryable: true });
-  });
+  app.setErrorHandler(financeErrorHandler);
 }

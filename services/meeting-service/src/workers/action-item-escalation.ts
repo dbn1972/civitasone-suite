@@ -60,6 +60,8 @@ import { enqueue, versionedUpdate, type DrizzleTx } from "../shared/outbox.js";
 import { EVENTS, SERVICE } from "../topics.js";
 import { actionItems } from "../modules/action-item/schema.js";
 import { meetings } from "../modules/meeting-core/schema.js";
+import { loadNamespaceOverrides } from "../modules/config-registry/repo.js";
+import { resolveEscalationChain, POLICY_NS } from "../modules/config-registry/policy.js";
 import {
   DEFAULT_ESCALATION_CHAIN,
   SETTLED_STATUSES,
@@ -283,7 +285,15 @@ export function buildEscalationMessages(
 export interface ActionItemEscalationDeps {
   /** Reference instant; defaults to `new Date()`. Drives the overdue / escalation derivation. */
   now?: Date;
-  /** Escalation chain override (defaults to the module's `DEFAULT_ESCALATION_CHAIN`). */
+  /**
+   * Escalation chain override (defaults to the module's `DEFAULT_ESCALATION_CHAIN`). Explicitly
+   * setting this is an ESCAPE HATCH that forces one flat chain for every candidate in the sweep
+   * and bypasses config-registry resolution entirely (kept for tests / callers that want full
+   * manual control). Leave unset in production so the chain is resolved PER TENANT from
+   * config-registry (`action_item.escalation_l1_hours` / `l2` / `l3`, via
+   * `resolveEscalationChain`, falling back to `DEFAULT_ESCALATION_CHAIN` for any tenant that has
+   * configured nothing — behavior-preserving when unconfigured).
+   */
   chain?: readonly EscalationRung[];
   /** Pino logger (defaults to a module logger). */
   logger?: Logger;
@@ -291,6 +301,18 @@ export interface ActionItemEscalationDeps {
   loadCandidates?: (now: Date) => Promise<EscalationCandidate[]>;
   /** Apply one escalation (optimistic-locked write + outbox) inside its tenant context. */
   emit?: (action: EscalationAction, messages: OutboxMessageInput[]) => Promise<void>;
+  /** Cross-tenant config-registry override load (default: the real BYPASSRLS scanner read). */
+  loadOverrides?: () => Promise<Map<string, Map<string, unknown>>>;
+}
+
+/**
+ * Default cross-tenant config-registry override load (schema/migration review finding:
+ * worker-path policy overrides were dead code, with zero call sites in any scheduled worker —
+ * a tenant-configured escalation chain silently never took effect). Same BYPASSRLS scanner
+ * pool as the candidate scan below.
+ */
+async function defaultLoadOverrides(): Promise<Map<string, Map<string, unknown>>> {
+  return loadNamespaceOverrides(scannerDb, POLICY_NS);
 }
 
 /** Summary of a single worker run. */
@@ -316,13 +338,39 @@ export async function runActionItemEscalation(
   deps: ActionItemEscalationDeps = {},
 ): Promise<ActionItemEscalationResult> {
   const now = deps.now ?? new Date();
-  const chain = deps.chain ?? DEFAULT_ESCALATION_CHAIN;
   const log = deps.logger ?? pino({ name: "meeting-action-item-escalation" });
   const loadCandidates = deps.loadCandidates ?? defaultLoadCandidates;
   const emit = deps.emit ?? defaultEmit;
+  const loadOverrides = deps.loadOverrides ?? defaultLoadOverrides;
 
   const candidates = await loadCandidates(now);
-  const actions = planEscalations(candidates, now, chain);
+
+  // An explicit deps.chain forces one flat chain for every candidate and skips config
+  // resolution entirely (escape hatch — see the ActionItemEscalationDeps doc comment).
+  // Otherwise resolve PER TENANT from config-registry so a tenant-configured escalation chain
+  // actually takes effect instead of silently being ignored, which is the bug this wiring
+  // closes. Note: the FIRST next_escalation_at trigger for a new/updated action item is seeded
+  // by action-item/consumer.ts using the hardcoded DEFAULT_ESCALATION_CHAIN (sibling-owned,
+  // out of scope here) — this worker's own re-anchoring of subsequent rungs (below, via
+  // planEscalations' derived nextEscalationAt) DOES correctly use the tenant-resolved chain
+  // from the second escalation onward.
+  let actions: EscalationAction[];
+  if (deps.chain) {
+    actions = planEscalations(candidates, now, deps.chain);
+  } else {
+    const overrides = await loadOverrides();
+    const byTenant = new Map<string, EscalationCandidate[]>();
+    for (const c of candidates) {
+      const list = byTenant.get(c.tenantId);
+      if (list) list.push(c);
+      else byTenant.set(c.tenantId, [c]);
+    }
+    actions = [];
+    for (const [tenantId, tenantCandidates] of byTenant) {
+      const tenantChain = resolveEscalationChain(overrides, tenantId);
+      actions.push(...planEscalations(tenantCandidates, now, tenantChain));
+    }
+  }
 
   let escalated = 0;
   let failed = 0;

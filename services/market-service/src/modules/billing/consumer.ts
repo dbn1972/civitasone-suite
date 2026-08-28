@@ -6,6 +6,7 @@ import { writeAudit } from "../../shared/audit.js";
 import { tenantScoped } from "../../shared/tenant-queue.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
+import { fromStatusesFor } from "./domain.js";
 
 const log = pino({ name: "market.billing.consumer" });
 
@@ -27,9 +28,10 @@ export function registerBillingConsumers(rawQueue: Queue): void {
       lateFeeMinor?: string;
     };
 
+    let inserted: Awaited<ReturnType<typeof repo.insertDemand>> = null;
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
-      await repo.insertDemand(tx, {
+      inserted = await repo.insertDemand(tx, {
         id: p.id,
         tenantId: msg.tenantId,
         allotmentId: p.allotmentId,
@@ -44,6 +46,11 @@ export function registerBillingConsumers(rawQueue: Queue): void {
         createdBy: msg.actorId,
         updatedBy: msg.actorId,
       });
+      // Re-review fix: a concurrent request already won the race for this
+      // exact allotment+month (onConflictDoNothing hit the unique index) —
+      // skip the event/audit rather than reporting a demand that was never
+      // actually (re-)created.
+      if (!inserted) return;
       await enqueue(tx, {
         topic: EVENTS.demandGenerated,
         eventType: EVENTS.demandGenerated,
@@ -58,14 +65,15 @@ export function registerBillingConsumers(rawQueue: Queue): void {
         resourceId: p.id,
       });
     });
-    log.info({ id: p.id, demandMonth: p.demandMonth }, "market demand generated");
+    if (inserted) log.info({ id: p.id, demandMonth: p.demandMonth }, "market demand generated");
+    else log.warn({ allotmentId: p.allotmentId, demandMonth: p.demandMonth }, "duplicate demand generation skipped (already exists for this allotment+month)");
   });
 
   queue.subscribe(COMMANDS.recordPayment, async (msg) => {
     const p = msg.payload as { id: string; tenantId: string; paymentRef: string };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
-      const ok = await repo.updateStatus(tx, p.id, msg.tenantId, "paid", msg.actorId, {
+      const ok = await repo.updateStatus(tx, p.id, msg.tenantId, "paid", fromStatusesFor("paid"), msg.actorId, {
         paidAt: new Date(),
         paymentRef: p.paymentRef,
       });
@@ -90,7 +98,7 @@ export function registerBillingConsumers(rawQueue: Queue): void {
     const p = msg.payload as { id: string; tenantId: string };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
-      const ok = await repo.updateStatus(tx, p.id, msg.tenantId, "waived", msg.actorId);
+      const ok = await repo.updateStatus(tx, p.id, msg.tenantId, "waived", fromStatusesFor("waived"), msg.actorId);
       if (!ok) return;
       await enqueue(tx, {
         topic: EVENTS.demandWaived,

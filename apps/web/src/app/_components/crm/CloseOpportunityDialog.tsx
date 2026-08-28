@@ -6,6 +6,12 @@
  * so it is gated behind an accessible confirmation and blocks submit until the
  * mandatory inputs are present (never fires a half-filled close). A 422 from the
  * backend (missing mandatory fields) is surfaced inline, not swallowed.
+ *
+ * Reason length: the backend (close-routes.ts REASON_MIN) requires a reason of
+ * at least 10 trimmed characters for every outcome except "won" (a win has no
+ * loss/park reason to enforce). canSubmit mirrors that per-outcome floor so a
+ * too-short reason is caught here instead of round-tripping to a 400
+ * REASON_REQUIRED.
  */
 import { useEffect, useId, useState } from "react";
 import {
@@ -17,6 +23,8 @@ import {
   type CloseOutcome,
   type OppFieldKey,
 } from "@/lib/crm/opportunity";
+
+const REASON_MIN_NON_WON = 10;
 
 interface CloseOpportunityDialogProps {
   opportunityId: string;
@@ -55,9 +63,12 @@ export function CloseOpportunityDialog({
 
   if (!open) return null;
 
+  const reasonMin = outcome === "won" ? 1 : REASON_MIN_NON_WON;
+  const reasonLen = reason.trim().length;
+  const reasonTooShort = reasonLen > 0 && reasonLen < reasonMin;
   const competitorRequired = outcome === "lost";
   const canSubmit =
-    reason.trim().length > 0 && (!competitorRequired || competitor.trim().length > 0) && !busy;
+    reasonLen >= reasonMin && (!competitorRequired || competitor.trim().length > 0) && !busy;
 
   async function submit() {
     setError("");
@@ -66,7 +77,12 @@ export function CloseOpportunityDialog({
       setError(
         competitorRequired && competitor.trim().length === 0
           ? "A competitor is required when an opportunity is marked lost."
-          : "A reason is required to close an opportunity.",
+          : // Only the more specific message when something was typed but it's
+            // too short — a completely empty reason keeps the original, plainer
+            // wording (also what CloseOpportunityDialog.test.tsx expects).
+            reasonTooShort
+            ? `A reason of at least ${reasonMin} characters is required to close an opportunity as ${CLOSE_OUTCOME_LABELS[outcome].toLowerCase()}.`
+            : "A reason is required to close an opportunity.",
       );
       return;
     }
@@ -120,9 +136,18 @@ export function CloseOpportunityDialog({
             rows={3}
             value={reason}
             aria-required="true"
-            aria-invalid={reason.trim() ? undefined : true}
+            aria-invalid={reasonLen >= reasonMin ? undefined : true}
+            aria-describedby={reasonMin > 1 ? `${titleId}-reason-hint` : undefined}
             onChange={(e) => setReason(e.target.value)}
           />
+          {reasonMin > 1 && (
+            <p
+              id={`${titleId}-reason-hint`}
+              style={{ fontSize: 12, color: reasonTooShort ? "#b42318" : "var(--muted)", margin: "4px 0 0" }}
+            >
+              At least {reasonMin} characters required{reasonTooShort ? ` (${reasonLen}/${reasonMin})` : ""}.
+            </p>
+          )}
         </div>
 
         <div className="cd-field">

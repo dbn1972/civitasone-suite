@@ -29,6 +29,15 @@ export interface ConfirmDialogProps {
   /** Require the user to type a reason before confirming (maker-checker). */
   requireReason?: boolean;
   reasonLabel?: string;
+  /**
+   * Minimum trimmed-reason length required before Confirm enables. Defaults to
+   * 1 (i.e. "non-empty"), matching every existing caller. Only set this above
+   * 1 when a specific backend route enforces a longer minimum (e.g. CRM deal
+   * close requires >=10 chars for a non-won outcome) — otherwise the dialog
+   * lets a too-short reason through and the user only finds out from a raw
+   * server error after round-tripping.
+   */
+  minReasonLength?: number;
   /** Disable the confirm button & show a busy state. */
   busy?: boolean;
   /** Error message shown via aria-live after a failed attempt. */
@@ -50,6 +59,7 @@ export function ConfirmDialog({
   danger = false,
   requireReason = false,
   reasonLabel = "Reason",
+  minReasonLength = 1,
   busy = false,
   errorMessage,
   onConfirm,
@@ -61,6 +71,7 @@ export function ConfirmDialog({
   const titleId = useId();
   const descId = useId();
   const errId = useId();
+  const reasonHintId = useId();
 
   // Reset the reason whenever the dialog (re)opens.
   useEffect(() => {
@@ -110,7 +121,9 @@ export function ConfirmDialog({
 
   if (!open) return null;
 
-  const confirmDisabled = busy || (requireReason && reason.trim().length === 0);
+  const trimmedLen = reason.trim().length;
+  const reasonTooShort = requireReason && trimmedLen > 0 && trimmedLen < minReasonLength;
+  const confirmDisabled = busy || (requireReason && trimmedLen < minReasonLength);
 
   return (
     <div
@@ -147,7 +160,16 @@ export function ConfirmDialog({
               value={reason}
               onChange={(e) => setReason(e.target.value)}
               aria-required="true"
+              aria-describedby={minReasonLength > 1 ? reasonHintId : undefined}
             />
+            {minReasonLength > 1 && (
+              <p
+                id={reasonHintId}
+                style={{ fontSize: 12, color: reasonTooShort ? "#b42318" : "var(--muted)", margin: "4px 0 0" }}
+              >
+                At least {minReasonLength} characters required{reasonTooShort ? ` (${trimmedLen}/${minReasonLength})` : ""}.
+              </p>
+            )}
           </div>
         )}
 

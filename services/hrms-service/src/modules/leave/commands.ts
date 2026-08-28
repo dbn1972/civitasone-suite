@@ -5,6 +5,7 @@ import { COMMANDS } from "../../topics.js";
 import type { CreateLeaveTypeBody, AllocateLeaveBody, ApplyLeaveBody } from "./validators.js";
 import * as repo from "./repo.js";
 import { HttpError } from "../../shared/context.js";
+import { assertLeaveAppStatusTransition, DomainError } from "./domain.js";
 
 export type Accepted = { id: string; status: string; correlationId: string };
 
@@ -55,6 +56,24 @@ export async function approveLeave(ctx: RequestContext, id: string): Promise<Acc
 }
 
 export async function rejectLeave(ctx: RequestContext, id: string, reason: string): Promise<Accepted> {
+  const leaveApp = await repo.findLeaveAppById(id, ctx.tenantId);
+  if (!leaveApp) throw new HttpError(404, "NOT_FOUND", "leave application not found");
+  // BUG-3 fix: mirror approveLeave's maker-checker self-check — it was missing
+  // here entirely, letting an applicant reject their own application.
+  if (leaveApp.createdBy === ctx.actorId) {
+    throw new HttpError(403, "SELF_APPROVAL_FORBIDDEN", "Maker-checker: you cannot reject your own leave application.");
+  }
+  // BUG-5 fix: synchronous pre-check mirroring the payroll duplicate-run guard
+  // pattern (commands.ts fast-path ahead of the queue publish) — assert the
+  // transition is legal *before* returning 202, instead of letting an
+  // approved->rejected request accept and then silently no-op inside the async
+  // consumer (assertLeaveAppStatusTransition already enforces this there).
+  try {
+    assertLeaveAppStatusTransition(leaveApp.status, "rejected");
+  } catch (err) {
+    if (err instanceof DomainError) throw new HttpError(409, err.code, err.message);
+    throw err;
+  }
   const messageId = randomUUID();
   await queue.publish(COMMANDS.leaveReject, {
     messageId, type: COMMANDS.leaveReject,

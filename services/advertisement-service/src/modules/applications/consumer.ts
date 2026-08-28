@@ -3,6 +3,7 @@ import type { Queue } from "@civitasone/queue";
 import { db } from "../../shared/db.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { writeAudit } from "../../shared/audit.js";
+import { cache } from "../../shared/infra.js";
 import { tenantScoped } from "../../shared/tenant-queue.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
@@ -72,12 +73,17 @@ export function registerApplicationConsumers(rawQueue: Queue): void {
 
   queue.subscribe(COMMANDS.submitApplication, async (msg) => {
     const p = msg.payload as { id: string; tenantId: string };
+    let applied = false;
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       const ok = await repo.updateStatus(tx, p.id, msg.tenantId, "submitted", msg.actorId);
       if (!ok) return;
+      applied = true;
       await enqueue(tx, { topic: EVENTS.applicationSubmitted, eventType: EVENTS.applicationSubmitted, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { applicationId: p.id } });
       await writeAudit(tx, ctxOf(msg), { action: "application.submit", resourceType: "adv_application", resourceId: p.id });
     });
+    // GET /v1/advertisement/applications/:id (applications/routes.ts) reads
+    // through a cache that only this write path can invalidate (CLAUDE.md §6).
+    if (applied) await cache.invalidate(cache.makeKey(msg.tenantId, "application", p.id));
   });
 }

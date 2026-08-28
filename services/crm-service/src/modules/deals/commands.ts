@@ -26,7 +26,11 @@ export async function createDeal(ctx: RequestContext, body: CreateDealBody): Pro
     pipelineId: body.pipelineId ?? null,
     stageId: body.stageId ?? null,
     name: body.name,
-    stage: body.stage,
+    // Belt-and-suspenders: routes.ts always resolves a concrete stage (the pipeline's own
+    // entry stage, or "Lead" when there's no pipeline) before calling this, but `stage` is
+    // optional on CreateDealBody itself (validators.ts) — this function's own contract
+    // must not silently persist "undefined" as a deal's stage if ever called otherwise.
+    stage: body.stage ?? "Lead",
     valueMinor: valueMinor.toString(),
     currency: body.currency,
     valueDisplay: formatValue(valueMinor, body.currency),
@@ -71,6 +75,9 @@ export async function updateDealStage(ctx: RequestContext, id: string, body: Upd
       stage: body.stage,
       stageId: body.stageId,
       version: body.version,
+      // `probability` here is only ever a caller-REQUESTED override; the consumer's
+      // repo.updateStageWithVersion derives the real status/probability/closedAt from
+      // the target stage regardless of whether this key is present at all.
       ...(body.probability !== undefined ? { probability: body.probability } : {}),
     },
   });

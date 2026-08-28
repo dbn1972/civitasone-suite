@@ -15,6 +15,14 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }),
 }));
 
+// ForceFileButton (rendered by the reconciliation-blocked branch below) calls
+// useToast(), which throws without a ToastProvider ancestor — stub it the
+// same way NewTicketForm.test.tsx etc. do, since this file never asserts on
+// toast content.
+vi.mock("@/app/_components/ds/Toast", () => ({
+  useToast: () => ({ toast: { success: vi.fn(), error: vi.fn(), info: vi.fn(), warning: vi.fn() } }),
+}));
+
 import ReturnsPage from "./page";
 
 const populated26Q = {
@@ -81,7 +89,7 @@ describe("ReturnsPage", () => {
     const ui = await ReturnsPage({ searchParams: { fy: "2025-26", quarter: "Q1" } });
     render(ui);
 
-    expect(screen.getAllByText("Showing saved information").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Couldn't load — showing nothing").length).toBeGreaterThan(0);
     expect(screen.getByText("Could not load Form-24Q for FY 2025-26 Q1")).toBeInTheDocument();
     expect(screen.queryByText("File anyway — bypass reconciliation (force)")).not.toBeInTheDocument();
     expect(screen.queryByText("Form-24Q blocked for FY 2025-26 Q1")).not.toBeInTheDocument();

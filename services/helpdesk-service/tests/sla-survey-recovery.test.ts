@@ -220,6 +220,29 @@ describe("P1-13 — POST /v1/helpdesk/csat pre-conditions", () => {
   });
 });
 
+describe("SEC-REVIEW — POST /v1/helpdesk/csat requires a helpdesk role", () => {
+  it("rejects a caller with no helpdesk role (403 FORBIDDEN, not silently accepted)", async () => {
+    const ticketId = await seedTicket(TENANT_A, "resolved");
+    const outsider = token(TENANT_A, randomUUID(), ["citizen"]);
+    const res = await post("/v1/helpdesk/csat", outsider, { ticketId, rating: 5 });
+    expect(res.statusCode).toBe(403);
+    expect(res.json().error.code).toBe("FORBIDDEN");
+
+    const rows = await runWithTenant(TENANT_A, () =>
+      db.transaction((tx) => tx.select().from(csatResponses).where(eq(csatResponses.ticketId, ticketId))),
+    );
+    expect(rows).toHaveLength(0);
+  });
+
+  it("rejects a caller with zero roles (403 FORBIDDEN)", async () => {
+    const ticketId = await seedTicket(TENANT_A, "resolved");
+    const noRoles = token(TENANT_A, randomUUID(), []);
+    const res = await post("/v1/helpdesk/csat", noRoles, { ticketId, rating: 3 });
+    expect(res.statusCode).toBe(403);
+    expect(res.json().error.code).toBe("FORBIDDEN");
+  });
+});
+
 describe("P1-13 — detractor CSAT triggers service recovery", () => {
   it("opens a service-recovery escalation and notifies the ticket owner", async () => {
     const ticketId = await seedTicket(TENANT_A, "resolved", AGENT_A);

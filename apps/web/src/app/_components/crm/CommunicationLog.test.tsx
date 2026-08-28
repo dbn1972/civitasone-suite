@@ -17,7 +17,7 @@ describe("CommunicationLog (AC-003)", () => {
   it("shows the saved-info badge on a failed load", async () => {
     vi.mocked(aa.getCommunications).mockResolvedValue({ data: [], source: "error" });
     render(<CommunicationLog subjectType="contact" subjectId="c1" />);
-    await waitFor(() => expect(screen.getAllByText(/showing saved information/i)[0]).toBeInTheDocument());
+    await waitFor(() => expect(screen.getAllByText(/couldn.t load/i)[0]).toBeInTheDocument());
     expect(screen.getByText(/communications unavailable/i)).toBeInTheDocument();
   });
 

@@ -2,7 +2,7 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { sendAccepted } from "@civitasone/schemas/validate";
 import { acceptedResponseSchema } from "@civitasone/schemas/common";
-import type { FastifyInstance } from "fastify";
+import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
 import { ZodError, z } from "zod";
 import { hasAnyRole } from "@civitasone/auth";
 import type { RequestContext } from "@civitasone/types";
@@ -51,13 +51,27 @@ function statusDto(ctx: RequestContext, r: NonNullable<Awaited<ReturnType<typeof
   };
 }
 
+async function createExportHandler(req: FastifyRequest, reply: FastifyReply) {
+  const ctx = resolveContext(req);
+  requireRole(ctx, EXPORT_ROLES);
+  const body = createExportBody.parse(req.body);
+  return sendAccepted(reply, acceptedResponseSchema, await commands.requestExport(ctx, body));
+}
+
 export async function exportRoutes(app: FastifyInstance): Promise<void> {
-  app.post("/audit/exports", async (req, reply) => {
-    const ctx = resolveContext(req);
-    requireRole(ctx, EXPORT_ROLES);
-    const body = createExportBody.parse(req.body);
-    return sendAccepted(reply, acceptedResponseSchema, await commands.requestExport(ctx, body));
-  });
+  // G-FIX-4: this route only ever existed under the legacy /audit prefix
+  // (gateway "audit-events", /api/audit) — every other export endpoint
+  // (status, download, verify, below) is v1-only. Confirmed live: POST
+  // /api/v1/audit/exports 404'd while POST /api/audit/exports reached this
+  // handler. The web app's ExportConsole.tsx already knew about the split
+  // and calls /api/proxy/audit/exports specifically for create, so nothing
+  // was actually broken end-to-end — but any other client assuming the v1
+  // prefix is a complete, self-sufficient namespace for this resource would
+  // 404 trying to create an export. Registering the same handler under both
+  // prefixes closes that trap without touching the legacy path anything
+  // else might still depend on.
+  app.post("/audit/exports", createExportHandler);
+  app.post("/v1/audit/exports", createExportHandler);
 
   // P1-5: poll export status / get the download location.
   app.get("/v1/audit/exports/:id", async (req, reply) => {

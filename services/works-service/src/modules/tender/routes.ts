@@ -4,8 +4,9 @@ import { acceptedResponseSchema } from "@civitasone/schemas/common";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import * as v from "./validators.js";
 import * as commands from "./commands.js";
-import { getAwardById, listTenders, listQuotations } from "./repo.js";
+import { getAwardById, listTenders, listQuotations, tenderOrPreTenderExists } from "./repo.js";
 import { canDaoFinalizeAward, canDoFinalizeAward, canViewBidDetails, redactQuotation } from "./domain.js";
+import { findContractorById, findContractorByName } from "../contractor/repo.js";
 import { paginationSchema } from "../masters/validators.js";
 
 const WRITE_ROLES = ["works_admin", "works_operator", "super_admin", "dao", "do", "sdo"];
@@ -57,6 +58,14 @@ export async function tenderRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, WRITE_ROLES);
     const body = v.addQuotationSchema.parse(req.body);
+
+    // Bug #4: tenderId must reference an actually-existing tender/pre-tender
+    // — previously a quotation could cite a tenderId that never existed.
+    const tenderExists = await tenderOrPreTenderExists(ctx.tenantId, body.tenderId);
+    if (!tenderExists) {
+      throw new HttpError(404, "NOT_FOUND", "tenderId does not reference an existing tender or pre-tender");
+    }
+
     return sendAccepted(reply, acceptedResponseSchema, await commands.addQuotationCommand(ctx, body));
   });
 
@@ -65,6 +74,35 @@ export async function tenderRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, WRITE_ROLES);
     const body = v.createAwardSchema.parse(req.body);
+
+    // Bug #4: an award must reference a real, registered contractor — the
+    // structured entity created via POST /v1/works/contractors, not just a
+    // free-text name disconnected from it. Prefer the structured
+    // contractorId when supplied (and require it to match contractorName);
+    // otherwise require contractorName to match an existing contractor
+    // record by name so a caller can't award to a name that was never
+    // registered.
+    if (body.contractorId) {
+      const contractor = await findContractorById(ctx.tenantId, body.contractorId);
+      if (!contractor) throw new HttpError(404, "NOT_FOUND", "contractor not found for contractorId");
+      if (contractor.name.trim().toLowerCase() !== body.contractorName.trim().toLowerCase()) {
+        throw new HttpError(
+          422,
+          "CONTRACTOR_NAME_MISMATCH",
+          "contractorName does not match the registered contractor record for contractorId",
+        );
+      }
+    } else {
+      const contractor = await findContractorByName(ctx.tenantId, body.contractorName);
+      if (!contractor) {
+        throw new HttpError(
+          404,
+          "CONTRACTOR_NOT_FOUND",
+          "No registered contractor matches contractorName — register the contractor first (POST /v1/works/contractors) or pass contractorId",
+        );
+      }
+    }
+
     return sendAccepted(reply, acceptedResponseSchema, await commands.createAwardCommand(ctx, body));
   });
 

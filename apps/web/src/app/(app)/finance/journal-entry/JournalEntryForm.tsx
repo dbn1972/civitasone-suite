@@ -128,8 +128,12 @@ export function JournalEntryForm({ accounts, redirectTo }: Props) {
       reason:      reason ?? undefined,
       lines: lines.map((l) => ({
         accountCode:  l.accountCode.trim(),
-        debitMinor:   rupeesToPaise(l.debit),
-        creditMinor:  rupeesToPaise(l.credit),
+        // Backend's zMoneyMinor (gl/validators.ts) accepts only a digit-string
+        // or a real bigint — JSON has neither a bigint type nor an implicit
+        // number->string coercion, so sending the raw number here made every
+        // submission 400 with "Invalid input" on both fields, every time.
+        debitMinor:   String(rupeesToPaise(l.debit)),
+        creditMinor:  String(rupeesToPaise(l.credit)),
       })),
     };
 

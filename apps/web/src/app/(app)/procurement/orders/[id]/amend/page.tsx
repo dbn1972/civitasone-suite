@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { toHumanError } from "@/lib/messages";
 
 const AMENDMENT_TYPES = ["quantity", "price", "schedule", "scope", "change_order"] as const;
 
@@ -34,10 +35,10 @@ export default function POAmendPage({ params }: { params: { id: string } }) {
           effectiveDate: effectiveDate || undefined,
         }),
       });
-      const text = await res.text();
       if (!res.ok) {
+        const human = toHumanError("save", { area: "PO amendment" });
         setStatus("error");
-        setMessage(text || "Request failed");
+        setMessage(`${human.what} ${human.next}`);
         return;
       }
       setStatus("accepted");
@@ -65,7 +66,7 @@ export default function POAmendPage({ params }: { params: { id: string } }) {
             <label className="label" htmlFor="amendmentType">Amendment type *</label>
             <select id="amendmentType" className="inp" value={amendmentType} onChange={(e) => setAmendmentType(e.target.value)} style={{ minHeight: 44 }}>
               {AMENDMENT_TYPES.map((t) => (
-                <option key={t} value={t}>{t.replace(/_/g, " ").replace(/\w/g, (c) => c.toUpperCase())}</option>
+                <option key={t} value={t}>{t.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())}</option>
               ))}
             </select>
           </div>

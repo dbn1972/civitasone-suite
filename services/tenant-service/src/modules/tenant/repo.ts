@@ -28,13 +28,39 @@ function toView(r: TenantRow): TenantView {
 }
 
 // ── reads (query path) ───────────────────────────────────────────────
+/**
+ * TENANT-SCOPING FIX (deep-verification, 2026-08-27): tenant.tenants has had
+ * FORCE ROW LEVEL SECURITY since migration 0003, and migration 0010 removed
+ * the earlier "OR current_tenant_id() IS NULL" super-admin escape hatch
+ * (world-class-closure hardening) -- the live policy is now strictly
+ * `tenant_id = tenant.current_tenant_id()`. These two functions used to query
+ * via a bare db.select(), which never sets the app.tenant_id GUC (only
+ * db.transaction() does, via wrapWithTenantGuc) -- so with no escape hatch
+ * left, they matched ZERO rows for every call, every tenant, always. Live-
+ * confirmed: GET /v1/tenants/:tenantId 404'd for a tenant id verified to
+ * exist in the table via a direct superuser query. The existing tests never
+ * caught this because they only assert the not-found path (comments read
+ * "won't exist" / "if it existed") -- none ever inserted a real row and
+ * fetched it back. tenantScoped() (below) is the exact fix already used
+ * correctly elsewhere in this same file for tenant.tenant_quotas.
+ */
 export async function findById(id: string): Promise<TenantView | null> {
-  const rows = await db.select().from(tenants).where(eq(tenants.id, id)).limit(1);
+  const rows = await tenantScoped(id, (tx) =>
+    (tx as unknown as typeof db).select().from(tenants).where(eq(tenants.id, id)).limit(1),
+  );
   return rows[0] ? toView(rows[0]) : null;
 }
 
-export async function findByDomain(domain: string): Promise<TenantView | null> {
-  const rows = await db.select().from(tenants).where(eq(tenants.domain, domain)).limit(1);
+/**
+ * `tenantId` must be the caller's OWN tenant id (the RLS scope) -- this can
+ * never be used to resolve an unknown caller's tenant purely from a domain
+ * string, the same way findById can't resolve an id it doesn't already trust.
+ * See TENANT-SCOPING FIX note above.
+ */
+export async function findByDomain(tenantId: string, domain: string): Promise<TenantView | null> {
+  const rows = await tenantScoped(tenantId, (tx) =>
+    (tx as unknown as typeof db).select().from(tenants).where(eq(tenants.domain, domain)).limit(1),
+  );
   return rows[0] ? toView(rows[0]) : null;
 }
 

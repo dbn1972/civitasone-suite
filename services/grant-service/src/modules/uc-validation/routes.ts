@@ -28,6 +28,15 @@ export async function ucValidationRoutes(app: FastifyInstance): Promise<void> {
       throw new HttpError(404, "NOT_FOUND", "utilisation certificate not found");
     }
 
+    // P0-4 SoD: the validator must be distinct from whoever submitted the UC.
+    // Without this, the same grant_officer who files a (possibly fabricated)
+    // utilisation certificate could self-validate it, which is exactly the
+    // signal the PFMS next-tranche gate (hasSubmittedUcForApplication) trusts
+    // before releasing the next real disbursement.
+    if (uc.createdBy && uc.createdBy === ctx.actorId) {
+      throw new HttpError(403, "SOD_VIOLATION", "UC validation must be performed by someone other than the submitter (separation of duties)");
+    }
+
     return sendAccepted(
       reply,
       acceptedResponseSchema,

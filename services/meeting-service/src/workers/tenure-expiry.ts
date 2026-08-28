@@ -42,6 +42,8 @@ import { enqueue, versionedUpdate } from "../shared/outbox.js";
 import { EVENTS, SERVICE } from "../topics.js";
 import { committeeMembers } from "../modules/committee/schema.js";
 import { daysUntilTenureEnd } from "../modules/committee/domain.js";
+import { loadNamespaceOverrides } from "../modules/config-registry/repo.js";
+import { resolveNumber, POLICY_NS } from "../modules/config-registry/policy.js";
 
 const AUDIT_TOPIC = "audit.event.record";
 const CACHE_RESOURCE = "committee";
@@ -161,7 +163,14 @@ export interface TenureExpiryResult {
 export interface TenureExpiryDeps {
   /** Clock — defaults to the real current instant. */
   now?: Date;
-  /** Advance-notice window in days (default 30). */
+  /**
+   * Advance-notice window in days (default 30). Explicitly setting this is an ESCAPE HATCH
+   * that forces one flat window for the whole run and bypasses config-registry resolution
+   * entirely (kept for tests / callers that want full manual control). Leave unset in
+   * production so the window is resolved PER TENANT from config-registry
+   * (`committee.tenure_advance_notice_days`, falling back to `DEFAULT_ADVANCE_NOTICE_DAYS` for
+   * any tenant that has configured nothing — behavior-preserving when unconfigured).
+   */
   withinDays?: number;
   /** Discover ACTIVE memberships whose tenure_end is on/before `cutoffIso`. */
   scan?: (cutoffIso: string) => Promise<MembershipRow[]>;
@@ -169,8 +178,21 @@ export interface TenureExpiryDeps {
   expireMembership?: (row: MembershipRow, correlationId: string) => Promise<void>;
   /** Emit `committee.tenure_expiring` advance notice. */
   notifyExpiring?: (row: MembershipRow, correlationId: string) => Promise<void>;
+  /** Cross-tenant config-registry override load (default: the real BYPASSRLS scanner read). */
+  loadOverrides?: () => Promise<Map<string, Map<string, unknown>>>;
   /** Logger (defaults to a named pino logger). */
   logger?: Logger;
+}
+
+/**
+ * Default cross-tenant config-registry override load (schema/migration review finding:
+ * worker-path policy overrides — `loadNamespaceOverrides` / `resolveNumber` — were dead code,
+ * with zero call sites in any scheduled worker, so a tenant-configured
+ * `committee.tenure_advance_notice_days` silently never took effect). Same BYPASSRLS scanner
+ * pool as the membership scan below.
+ */
+async function defaultLoadOverrides(): Promise<Map<string, Map<string, unknown>>> {
+  return loadNamespaceOverrides(scannerDb, POLICY_NS);
 }
 
 /**
@@ -302,18 +324,56 @@ async function defaultNotifyExpiring(row: MembershipRow, correlationId: string):
  */
 export async function runTenureExpiryWorker(deps: TenureExpiryDeps = {}): Promise<TenureExpiryResult> {
   const now = deps.now ?? new Date();
-  const withinDays = deps.withinDays ?? DEFAULT_ADVANCE_NOTICE_DAYS;
   const log = deps.logger ?? pino({ name: "meeting-tenure-expiry-worker" });
   const scan = deps.scan ?? defaultScan;
   const expireMembership = deps.expireMembership ?? defaultExpireMembership;
   const notifyExpiring = deps.notifyExpiring ?? defaultNotifyExpiring;
+  const loadOverrides = deps.loadOverrides ?? defaultLoadOverrides;
 
   const today = toIsoDate(now);
-  const cutoffIso = addDaysIso(today, withinDays);
   const correlationId = randomUUID();
 
+  // An explicit deps.withinDays forces one flat window and skips config resolution entirely
+  // (escape hatch — see the TenureExpiryDeps doc comment). Otherwise load the cross-tenant
+  // override map once per cycle so a tenant-configured window (config-registry
+  // committee.tenure_advance_notice_days) actually takes effect instead of silently being
+  // ignored, which is the bug this wiring closes.
+  const overrides =
+    deps.withinDays === undefined ? await loadOverrides() : new Map<string, Map<string, unknown>>();
+
+  // The SQL scan needs ONE cutoff up front, before it is known which tenants the rows belong
+  // to, so it must be at least as wide as the LARGEST window any tenant has configured
+  // (otherwise a tenant with a bigger-than-default window would have candidates silently
+  // missed by the pre-filter). Per-tenant classification below then applies each row's own
+  // tenant window, so a tenant with a smaller window is unaffected by a larger one elsewhere.
+  const maxWithinDays =
+    deps.withinDays ??
+    Math.max(
+      DEFAULT_ADVANCE_NOTICE_DAYS,
+      ...[...overrides.keys()].map((tenantId) =>
+        resolveNumber(overrides, tenantId, "committee.tenure_advance_notice_days"),
+      ),
+    );
+  const cutoffIso = addDaysIso(today, maxWithinDays);
+
   const rows = await scan(cutoffIso);
-  const plan = planTenureActions(rows, today, withinDays);
+
+  // Group by tenant and plan each group with that tenant's resolved window (defaults to 30
+  // days when unconfigured — behavior-preserving for every tenant that has set nothing).
+  const byTenant = new Map<string, MembershipRow[]>();
+  for (const row of rows) {
+    const list = byTenant.get(row.tenantId);
+    if (list) list.push(row);
+    else byTenant.set(row.tenantId, [row]);
+  }
+  const plan: TenurePlan = { expiries: [], expiringNotices: [] };
+  for (const [tenantId, tenantRows] of byTenant) {
+    const tenantWithinDays =
+      deps.withinDays ?? resolveNumber(overrides, tenantId, "committee.tenure_advance_notice_days");
+    const tenantPlan = planTenureActions(tenantRows, today, tenantWithinDays);
+    plan.expiries.push(...tenantPlan.expiries);
+    plan.expiringNotices.push(...tenantPlan.expiringNotices);
+  }
 
   let expired = 0;
   let expiring = 0;
@@ -346,7 +406,7 @@ export async function runTenureExpiryWorker(deps: TenureExpiryDeps = {}): Promis
   }
 
   const result: TenureExpiryResult = { scanned: rows.length, expired, expiring, failed };
-  log.info({ ...result, correlationId, today, withinDays }, "tenure-expiry: cycle complete");
+  log.info({ ...result, correlationId, today, maxWithinDays }, "tenure-expiry: cycle complete");
   return result;
 }
 

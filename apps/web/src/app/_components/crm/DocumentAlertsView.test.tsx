@@ -30,7 +30,7 @@ describe("DocumentAlertsView (DM-002)", () => {
     vi.mocked(dm.getDocuments).mockResolvedValue({ data: [], source: "error" });
     vi.mocked(dm.getDocumentTypes).mockResolvedValue({ data: [], source: "api" });
     render(<DocumentAlertsView subjectType="contact" subjectId="c1" />);
-    await waitFor(() => expect(screen.getAllByText(/showing saved information/i)[0]).toBeInTheDocument());
+    await waitFor(() => expect(screen.getAllByText(/couldn.t load/i)[0]).toBeInTheDocument());
     expect(screen.getByText(/document requirements unavailable/i)).toBeInTheDocument();
   });
 

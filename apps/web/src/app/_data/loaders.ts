@@ -89,6 +89,7 @@ import type {
   FinanceSchemeSummary,
   FinanceDemandSummary,
   FinanceAuditParaSummary,
+  DisciplinaryCaseDetail,
   FinanceVendorDetail,
   FinanceVendorSummary,
   ProcurementDashboard,
@@ -254,6 +255,7 @@ import {
   FinanceDemandSummaryListSchema,
   FinanceAuditParaSummarySchema,
   FinanceAuditParaSummaryListSchema,
+  DisciplinaryCaseDetailSchema,
   FinanceVendorDetailSchema,
   FinanceVendorSummaryListSchema,
   ProcurementDashboardSchema,
@@ -270,10 +272,8 @@ import {
   PODetailSchema,
   CRMDashboardSchema,
   DealSummaryListSchema,
-  DealSummarySchema,
   ContactDetailSchema,
   CRMActivityEntryListSchema,
-  TicketDetailListSchema,
   TicketDetailSchema,
   TicketAnalyticsSchema,
   CitizenRequestSummaryListSchema,
@@ -349,6 +349,7 @@ import {
   NotificationDeliveryListSchema,
 } from "@civitasone/schemas/web";
 import { fetchJson, type LoaderResult } from "./apiClient";
+import { formatMoney } from "@/lib/formatters";
 import {
   mapAdminUserSummaries,
   mapAssetSummaries,
@@ -482,7 +483,10 @@ function mapTickets(payload: unknown): HelpdeskTicketSummary[] | null {
     if (status !== "Open" && status !== "In Progress" && status !== "Resolved" && status !== "Closed") continue;
     mapped.push({ id, subject, priority, status });
   }
-  return mapped.length > 0 ? mapped : null;
+  // A tenant with zero matching tickets is a legitimate empty state, not a
+  // mapping failure — returning null here made fetchJson report source:"error"
+  // (and show the "data source" warning badge) for an ordinary empty queue.
+  return mapped;
 }
 
 function mapPayments(payload: unknown): PaymentSummary[] | null {
@@ -492,13 +496,14 @@ function mapPayments(payload: unknown): PaymentSummary[] | null {
   const mapped: PaymentSummary[] = [];
   for (const row of rows) {
     if (!isRecord(row)) continue;
+    const id = toText(row.id);
     const referenceId = toText(row.referenceId) ?? toText(row.ref) ?? toText(row.id);
     const beneficiary = toText(row.beneficiary) ?? toText(row.payee);
     const amountDisplay = toText(row.amountDisplay) ?? toText(row.amount);
     const status = row.status;
     if (!referenceId || !beneficiary || !amountDisplay) continue;
     if (status !== "Queued" && status !== "Released" && status !== "Pending Approval" && status !== "Failed") continue;
-    mapped.push({ referenceId, beneficiary, amountDisplay, status });
+    mapped.push({ ...(id ? { id } : {}), referenceId, beneficiary, amountDisplay, status });
   }
   return mapped.length > 0 ? mapped : null;
 }
@@ -1096,8 +1101,9 @@ export async function getAdminOperationsDashboard(): Promise<LoaderResult<AdminO
   );
 }
 
-export async function getEmployees(limit = 50, offset = 0): Promise<LoaderResult<EmployeeSummary[]>> {
-  return fetchJson(`/api/v1/hrms/employees?limit=${limit}&offset=${offset}`, [] as EmployeeSummary[], {
+export async function getEmployees(limit = 50, offset = 0, employeeType?: string): Promise<LoaderResult<EmployeeSummary[]>> {
+  const typeQs = employeeType ? `&employeeType=${encodeURIComponent(employeeType)}` : "";
+  return fetchJson(`/api/v1/hrms/employees?limit=${limit}&offset=${offset}${typeQs}`, [] as EmployeeSummary[], {
     revalidateSeconds: 30,
     telemetryKey: "hr.employees",
     responseSchema: employeesListSchema,
@@ -1217,7 +1223,8 @@ function mapCrmContacts(payload: unknown): CRMContactSummary[] | null {
     const segment = toText(row.segment) ?? undefined;
     const product = toText(row.product) ?? undefined;
     const region = toText(row.region) ?? undefined;
-    const expectedValueDisplay = toText(row.expectedValueDisplay) ?? undefined;
+    const expectedValueMinorRaw = toText(row.expectedValueMinor);
+    const expectedValueDisplay = expectedValueMinorRaw ? formatMoney(expectedValueMinorRaw) : undefined;
     mapped.push({ id, name, account, email, phone, leadStatus, tags, lastActivity, temperature, priority, segment, product, region, expectedValueDisplay });
   }
   return mapped.length > 0 ? mapped : null;
@@ -1740,8 +1747,9 @@ export async function getFinanceGLEntries(): Promise<LoaderResult<GLEntrySummary
   });
 }
 
-export async function getFinancialStatements(): Promise<LoaderResult<FinancialStatementSummary[]>> {
-  return fetchJson<unknown, FinancialStatementSummary[]>("/api/v1/finance/statements", [], {
+export async function getFinancialStatements(fy?: string): Promise<LoaderResult<FinancialStatementSummary[]>> {
+  const qs = fy ? `?fy=${encodeURIComponent(fy)}` : "";
+  return fetchJson<unknown, FinancialStatementSummary[]>(`/api/v1/finance/statements${qs}`, [], {
     revalidateSeconds: 300,
     telemetryKey: "finance.statements",
     responseSchema: FinancialStatementSummaryListSchema,
@@ -2017,6 +2025,7 @@ const HR_DASHBOARD_EMPTY: HRDashboard = {
   onLeave: 0,
   payrollDue: 0,
   departmentBreakdown: [],
+  employeeTypeBreakdown: [],
 };
 
 function mapHRDashboard(payload: unknown): HRDashboard | null {
@@ -2031,6 +2040,9 @@ function mapHRDashboard(payload: unknown): HRDashboard | null {
     payrollDue: typeof raw.payrollDue === "number" ? raw.payrollDue : 0,
     departmentBreakdown: Array.isArray(raw.departmentBreakdown)
       ? (raw.departmentBreakdown as { name: string; count: number }[])
+      : [],
+    employeeTypeBreakdown: Array.isArray(raw.employeeTypeBreakdown)
+      ? (raw.employeeTypeBreakdown as { name: string; count: number }[])
       : [],
   };
 }
@@ -2560,11 +2572,19 @@ export async function getDeals(): Promise<LoaderResult<DealSummary[]>> {
 }
 
 export async function getDealById(id: string): Promise<LoaderResult<DealSummary | null>> {
+  // NOTE: deliberately not using DealSummarySchema as a responseSchema gate here —
+  // its stage/status enums are stale relative to the real backend contract (which
+  // returns Capitalized stage values like "Lead"/"Proposal"/"Won"), so every
+  // parse used to fail and this endpoint always reported source:"error" /
+  // Deal Not Found for every real deal. mapDealSummaries already normalizes that
+  // same shape correctly for the deals list — reuse it here for a single row.
   return fetchJson<unknown, DealSummary | null>(`/api/v1/crm/deals/${id}`, null, {
-    revalidateSeconds: 30,
+    revalidateSeconds: 0,
     telemetryKey: "crm.deal.detail",
-    responseSchema: DealSummarySchema,
-    mapResponse: (p) => (isRecord(p) ? (p as DealSummary) : null),
+    mapResponse: (p) => {
+      const mapped = mapDealSummaries(isRecord(p) ? [p] : null);
+      return mapped && mapped[0] ? mapped[0] : null;
+    },
   });
 }
 
@@ -2933,7 +2953,16 @@ export async function getContactById(id: string): Promise<LoaderResult<ContactDe
     revalidateSeconds: 60,
     telemetryKey: "crm.contact.detail",
     responseSchema: ContactDetailSchema,
-    mapResponse: (p) => (isRecord(p) ? (p as ContactDetail) : null),
+    mapResponse: (p) => {
+      if (!isRecord(p)) return null;
+      const detail = p as ContactDetail;
+      // The backend sends the raw expectedValueMinor but never a precomputed
+      // display string; derive it the same way the contacts list does.
+      if (!detail.expectedValueDisplay && detail.expectedValueMinor) {
+        return { ...detail, expectedValueDisplay: formatMoney(detail.expectedValueMinor) };
+      }
+      return detail;
+    },
   });
 }
 
@@ -3016,7 +3045,11 @@ function mapTicketDetails(payload: unknown): TicketDetail[] | null {
       comments: [],
     });
   }
-  return mapped.length > 0 ? mapped : null;
+  // Same reasoning as mapTickets() above: an empty (but valid) result set is
+  // not a mapping failure. getBreachedSLATickets() below relies on this for
+  // each of its three per-status fetches — a tenant with e.g. zero due_soon
+  // tickets is common and must not flip the whole SLA Queue page to source:"error".
+  return mapped;
 }
 
 export async function getHelpdeskTicketList(): Promise<LoaderResult<TicketDetail[]>> {
@@ -3035,13 +3068,45 @@ export async function getHelpdeskTicketById(id: string): Promise<LoaderResult<Ti
   });
 }
 
+/**
+ * Powers /helpdesk/slas (SLA Queue). That page computes its own
+ * Breached/Due Soon/Within SLA/Total stat cards by filtering the returned
+ * list client-side, then separately re-filters+sorts to "breached" for the
+ * table — i.e. it expects the FULL cross-status population, not a
+ * pre-filtered slice. citizen-service's list endpoint only returns the rich
+ * per-ticket shape (requesterName, createdAt, etc. — via listTicketDetails)
+ * when a slaStatus filter is supplied; the unfiltered call returns a much
+ * narrower summary instead (see getHelpdeskTicketList's toSummary()
+ * counterpart). So fetch all three valid slaStatus buckets and merge, rather
+ * than a single filtered or unfiltered call, to get both the rich shape and
+ * the full population.
+ *
+ * NOTE: no `responseSchema` here — citizen-service wraps this branch's
+ * response as `{ data, pagination }`, not a bare array (TicketDetailListSchema
+ * is `z.array(...)` and would fail to parse the envelope, forcing
+ * source:"error" on every call) — mapTicketDetails already unwraps the
+ * envelope itself via getArrayPayload().
+ */
 export async function getBreachedSLATickets(): Promise<LoaderResult<TicketDetail[]>> {
-  return fetchJson<unknown, TicketDetail[]>("/api/v1/citizen/tickets?slaStatus=breached", [], {
-    revalidateSeconds: 30,
-    telemetryKey: "helpdesk.sla.breached",
-    responseSchema: TicketDetailListSchema,
-    mapResponse: mapTicketDetails,
-  });
+  const fetchBucket = (slaStatus: "breached" | "due_soon" | "within_sla") =>
+    fetchJson<unknown, TicketDetail[]>(`/api/v1/citizen/tickets?slaStatus=${slaStatus}`, [], {
+      revalidateSeconds: 30,
+      telemetryKey: `helpdesk.sla.${slaStatus}`,
+      mapResponse: mapTicketDetails,
+    });
+
+  const [breached, dueSoon, withinSla] = await Promise.all([
+    fetchBucket("breached"),
+    fetchBucket("due_soon"),
+    fetchBucket("within_sla"),
+  ]);
+
+  return {
+    data: [...breached.data, ...dueSoon.data, ...withinSla.data],
+    source: breached.source === "error" || dueSoon.source === "error" || withinSla.source === "error"
+      ? "error"
+      : "api",
+  };
 }
 
 const TICKET_ANALYTICS_EMPTY: TicketAnalytics = {
@@ -3284,11 +3349,12 @@ export async function getGrantDisbursementById(id: string): Promise<LoaderResult
   return { data: match, source };
 }
 
-export async function getDisciplinaryCaseById(id: string): Promise<LoaderResult<Record<string, unknown> | null>> {
-  return fetchJson<unknown, Record<string, unknown> | null>(`/api/v1/hrms/disciplinary-cases/${id}`, null, {
+export async function getDisciplinaryCaseById(id: string): Promise<LoaderResult<DisciplinaryCaseDetail | null>> {
+  return fetchJson<unknown, DisciplinaryCaseDetail | null>(`/api/v1/hrms/disciplinary-cases/${id}`, null, {
     revalidateSeconds: 30,
     telemetryKey: "hrms.disciplinary.detail",
-    mapResponse: (payload) => (isRecord(payload) ? (payload as Record<string, unknown>) : null),
+    responseSchema: DisciplinaryCaseDetailSchema,
+    mapResponse: (payload) => (isRecord(payload) ? (payload as DisciplinaryCaseDetail) : null),
   });
 }
 
@@ -4939,6 +5005,53 @@ export async function getProcurementAnnualPlans(query?: { department?: string; y
       revalidateSeconds: 60,
       telemetryKey: "procurement.plans",
       mapResponse: (p) => getArrayPayload(p) as AnnualPlanSummary[] | null,
+    }
+  );
+}
+
+export type AnnualPlanLine = {
+  id: string;
+  itemCode: string;
+  description: string;
+  aggregatedQty: number;
+  uom: string;
+  procurementCategory: string;
+  procurementMethod: string;
+  budgetLine: string | null;
+  estimatedValueMinor: string;
+  timelineQuarter: string | null;
+  packageGroup: string | null;
+  tenderId: string | null;
+};
+
+// L1/L2 fix: GET /v1/procurement/plans/:id has been a real, working backend
+// endpoint (services/procurement-service/src/modules/planning/routes.ts) since
+// this module shipped, but there was no frontend loader — and therefore no
+// /procurement/planning/[id] page — to call it. The plans LIST page has always
+// linked to /procurement/planning/{plan.id}, so every one of those links 404'd.
+export type AnnualPlanDetail = Omit<AnnualPlanSummary, "itemCount"> & {
+  planNo: string;
+  currency: string;
+  notes: string | null;
+  submittedBy: string | null;
+  submittedAt: string | null;
+  approvedBy: string | null;
+  approvedAt: string | null;
+  rejectedReason: string | null;
+  lines: AnnualPlanLine[];
+};
+
+export async function getProcurementAnnualPlanById(id: string): Promise<LoaderResult<AnnualPlanDetail | null>> {
+  return fetchJson<unknown, AnnualPlanDetail | null>(
+    "/api/v1/procurement/plans/" + encodeURIComponent(id),
+    null,
+    {
+      revalidateSeconds: 30,
+      telemetryKey: "procurement.plan.detail",
+      mapResponse: (p) => {
+        const data = isRecord(p) && "data" in p ? (p as { data: unknown }).data : null;
+        return isRecord(data) ? (data as unknown as AnnualPlanDetail) : null;
+      },
     }
   );
 }

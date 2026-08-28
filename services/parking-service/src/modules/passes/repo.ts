@@ -1,4 +1,4 @@
-import { eq, and, sql, desc } from "drizzle-orm";
+import { eq, and, sql, desc, inArray } from "drizzle-orm";
 import { scopedRead, type ScopedTx } from "../../shared/db.js";
 import { parkingPasses, type PassRow, type PassInsert } from "./schema.js";
 
@@ -13,7 +13,7 @@ export async function findById(id: string, tenantId: string): Promise<PassRow | 
 
 export async function list(
   tenantId: string,
-  opts: { status?: string | undefined; facilityId?: string | undefined; page?: number | undefined; pageSize?: number | undefined } = {},
+  opts: { status?: string | undefined; facilityId?: string | undefined; page?: number | undefined; pageSize?: number | undefined; createdBy?: string | undefined } = {},
 ): Promise<{ rows: PassRow[]; total: number }> {
   const page = opts.page ?? 1;
   const pageSize = opts.pageSize ?? 20;
@@ -22,6 +22,7 @@ export async function list(
   const conditions = [eq(parkingPasses.tenantId, tenantId)];
   if (opts.status) conditions.push(eq(parkingPasses.status, opts.status));
   if (opts.facilityId) conditions.push(eq(parkingPasses.facilityId, opts.facilityId));
+  if (opts.createdBy) conditions.push(eq(parkingPasses.createdBy, opts.createdBy));
 
   const rows = await scopedRead((tx) =>
     tx.select().from(parkingPasses)
@@ -48,8 +49,9 @@ export async function updateStatus(
   id: string,
   tenantId: string,
   status: string,
+  fromStatuses: readonly string[],
   updatedBy: string,
-): Promise<boolean> {
+): Promise<PassRow | null> {
   const result = await tx.update(parkingPasses)
     .set({
       status,
@@ -57,7 +59,11 @@ export async function updateStatus(
       updatedAt: new Date(),
       version: sql`${parkingPasses.version} + 1`,
     })
-    .where(and(eq(parkingPasses.id, id), eq(parkingPasses.tenantId, tenantId)))
-    .returning({ id: parkingPasses.id });
-  return result.length > 0;
+    .where(and(
+      eq(parkingPasses.id, id),
+      eq(parkingPasses.tenantId, tenantId),
+      inArray(parkingPasses.status, fromStatuses as string[]),
+    ))
+    .returning();
+  return result[0] ?? null;
 }

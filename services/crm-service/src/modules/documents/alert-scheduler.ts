@@ -20,6 +20,7 @@ import { randomUUID } from "node:crypto";
 import { sql } from "drizzle-orm";
 import { runWithTenant } from "@civitasone/db";
 import { db, sqlClient } from "../../shared/db.js";
+import { scannerSqlClient } from "../../shared/scanner-db.js";
 import { enqueue } from "../../shared/outbox.js";
 import { EVENTS } from "../../topics.js";
 import {
@@ -49,7 +50,9 @@ function expiryHorizonDays(): number {
 }
 
 interface MandatoryType {
-  appliesTo: string;
+  /** The subject types this document type applies to; EMPTY means every subject type
+   *  (DocumentTypesEditor.tsx's wildcard convention — see validators.ts). */
+  appliesTo: string[];
   code: string;
 }
 
@@ -57,7 +60,7 @@ async function mandatoryTypes(tx: Tx, tenantId: string): Promise<MandatoryType[]
   const rows = (await tx.execute(sql`
     SELECT applies_to AS "appliesTo", code FROM crm.document_types
     WHERE tenant_id = ${tenantId} AND enabled = true AND mandatory = true
-  `)) as unknown as Array<{ appliesTo: string; code: string }>;
+  `)) as unknown as Array<{ appliesTo: string[]; code: string }>;
   return rows.map((r) => ({ appliesTo: r.appliesTo, code: r.code }));
 }
 
@@ -123,13 +126,20 @@ export async function runTenantDocumentAlerts(tenantId: string, now: Date = new 
         emitted += 1;
       };
 
-      // (a) Missing mandatory documents, per applies_to subject_type.
+      // (a) Missing mandatory documents, per applies_to subject_type. appliesTo is now
+      // an array (DM-002 fix: a type can genuinely apply to several subject types), and
+      // an EMPTY array is the "applies to every subject type" wildcard — expand it to
+      // every enumerable one (SUBJECT_TABLE already excludes `case`, which is
+      // cross-service and can't be scanned here) rather than silently matching nothing.
       const mand = await mandatoryTypes(tx, tenantId);
       const bySubjectType = new Map<string, string[]>();
       for (const m of mand) {
-        const arr = bySubjectType.get(m.appliesTo) ?? [];
-        arr.push(m.code);
-        bySubjectType.set(m.appliesTo, arr);
+        const subjectTypes = m.appliesTo.length > 0 ? m.appliesTo : Object.keys(SUBJECT_TABLE);
+        for (const subjectType of subjectTypes) {
+          const arr = bySubjectType.get(subjectType) ?? [];
+          arr.push(m.code);
+          bySubjectType.set(subjectType, arr);
+        }
       }
       for (const [subjectType, codes] of bySubjectType) {
         if (!SUBJECT_TABLE[subjectType]) continue; // case excluded — cannot enumerate
@@ -165,7 +175,10 @@ export async function runTenantDocumentAlerts(tenantId: string, now: Date = new 
 
 /** One full cycle across every tenant with enabled types or dated documents. */
 export async function runDocumentAlertCycle(now: Date = new Date()): Promise<number> {
-  const rows = (await sqlClient`SELECT tenant_id FROM crm.list_document_alert_tenants()`) as unknown as Array<{ tenant_id: string }>;
+  // Tenant discovery MUST run on the BYPASSRLS crm_scanner connection: crm_svc
+  // (correctly NOBYPASSRLS) cannot see rows across tenants through FORCE RLS,
+  // even via this SECURITY DEFINER function — see 0089_crm_scanner_role.sql.
+  const rows = (await scannerSqlClient`SELECT tenant_id FROM crm.list_document_alert_tenants()`) as unknown as Array<{ tenant_id: string }>;
   let total = 0;
   for (const r of rows) {
     try {

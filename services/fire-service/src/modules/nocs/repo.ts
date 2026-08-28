@@ -1,4 +1,4 @@
-import { eq, and, sql, desc } from "drizzle-orm";
+import { eq, and, sql, desc, inArray } from "drizzle-orm";
 import { fireNocsTable } from "./schema.js";
 import { scopedRead, type ScopedTx } from "../../shared/db.js";
 import type { FireNocInsert } from "./schema.js";
@@ -27,7 +27,7 @@ export async function findByVerificationCode(verificationCode: string) {
 
 export async function list(
   tenantId: string,
-  opts: { status?: string; limit?: number; offset?: number } = {},
+  opts: { status?: string | undefined; limit?: number | undefined; offset?: number | undefined } = {},
 ) {
   return scopedRead(async (tx) => {
     const conditions = [eq(fireNocsTable.tenantId, tenantId)];
@@ -56,11 +56,28 @@ export async function insert(tx: ScopedTx, data: FireNocInsert) {
   return rows[0]!;
 }
 
+/** Used to prevent issuing a second active NOC for an application that already has one. */
+export async function findActiveByApplicationId(tenantId: string, applicationId: string) {
+  return scopedRead(async (tx) => {
+    const rows = await tx
+      .select()
+      .from(fireNocsTable)
+      .where(and(
+        eq(fireNocsTable.tenantId, tenantId),
+        eq(fireNocsTable.applicationId, applicationId),
+        inArray(fireNocsTable.status, ["issued", "active"]),
+      ))
+      .limit(1);
+    return rows[0] ?? null;
+  });
+}
+
 export async function updateStatus(
   tx: ScopedTx,
   tenantId: string,
   id: string,
   status: string,
+  fromStatuses: readonly string[],
   actorId: string,
 ) {
   const rows = await tx
@@ -71,7 +88,11 @@ export async function updateStatus(
       updatedAt: new Date(),
       updatedBy: actorId,
     })
-    .where(and(eq(fireNocsTable.tenantId, tenantId), eq(fireNocsTable.id, id)))
+    .where(and(
+      eq(fireNocsTable.tenantId, tenantId),
+      eq(fireNocsTable.id, id),
+      inArray(fireNocsTable.status, fromStatuses as string[]),
+    ))
     .returning();
   return rows[0] ?? null;
 }

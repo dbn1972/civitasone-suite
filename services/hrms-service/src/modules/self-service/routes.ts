@@ -1,21 +1,13 @@
-import type { FastifyInstance, FastifyRequest } from "fastify";
+import type { FastifyInstance } from "fastify";
 import { z, ZodError } from "zod";
 import { eq, and } from "drizzle-orm";
 import { resolveContext, HttpError } from "../../shared/context.js";
-import { db, scopedRead} from "../../shared/db.js";
+import { scopedRead} from "../../shared/db.js";
 import { maskPii } from "../../shared/pii-mask.js";
 import { hrmsEmployees } from "../employee/schema.js";
+import { resolveEmployeeForActor, extractActorEmail } from "../employee/actor-link.js";
 import { hrmsLeaveAllocs, hrmsLeaveApps } from "../leave/schema.js";
 import { hrmsAttendance } from "../attendance/schema.js";
-
-/** Extract email from the decoded JWT payload attached by authPlugin. */
-function extractEmail(req: FastifyRequest): string | undefined {
-  const raw = (req as unknown as { jwtPayload?: { email?: string } }).jwtPayload;
-  if (raw?.email) return raw.email;
-  // Fallback: check x-user-email header forwarded by gateway
-  const hdr = req.headers["x-user-email"];
-  return typeof hdr === "string" ? hdr : undefined;
-}
 
 const listQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(100).default(31),
@@ -23,33 +15,15 @@ const listQuerySchema = z.object({
 }).partial();
 
 export async function selfServiceRoutes(app: FastifyInstance): Promise<void> {
-  // My profile — employee sees their own data linked by actorId → userRef.
-  // Fallback: if no userRef match, try matching by email from JWT claims and
-  // auto-link for next time (solves the bootstrap problem where employees are
-  // seeded without user_ref populated).
+  // My profile — employee sees their own data linked by actorId → userRef,
+  // falling back to an email match (+ auto-link for next time) when not yet
+  // linked. resolveEmployeeForActor is the shared source of truth for this
+  // resolution — leave/routes.ts's apply-on-behalf-of checks use the same
+  // function so a not-yet-linked employee doesn't get inconsistent treatment
+  // depending on which endpoint they hit first.
   app.get("/v1/hrms/me/profile", async (req, reply) => {
     const ctx = resolveContext(req);
-    // Primary lookup: userRef = actorId
-    let rows = await scopedRead((tx) => tx.select().from(hrmsEmployees)
-      .where(and(eq(hrmsEmployees.tenantId, ctx.tenantId), eq(hrmsEmployees.userRef, ctx.actorId))));
-    let emp = rows[0];
-
-    // Fallback: match by email from JWT if userRef is not linked yet
-    if (!emp) {
-      const email = extractEmail(req);
-      if (email) {
-        rows = await scopedRead((tx) => tx.select().from(hrmsEmployees)
-          .where(and(eq(hrmsEmployees.tenantId, ctx.tenantId), eq(hrmsEmployees.email, email))));
-        emp = rows[0];
-        if (emp) {
-          // Auto-link userRef so future lookups are fast
-          await db.update(hrmsEmployees)
-            .set({ userRef: ctx.actorId })
-            .where(and(eq(hrmsEmployees.id, emp.id), eq(hrmsEmployees.tenantId, ctx.tenantId)));
-        }
-      }
-    }
-
+    const emp = await resolveEmployeeForActor(ctx.tenantId, ctx.actorId, extractActorEmail(req));
     if (!emp) return reply.code(404).send({ code: "NOT_FOUND", message: "No employee record linked to your user" });
     return reply.send(maskPii(emp));
   });

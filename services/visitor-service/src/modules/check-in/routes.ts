@@ -23,7 +23,7 @@ import { cache } from "../../shared/infra.js";
 import { verifyPassQr, type PassQrPayload } from "../../shared/qr-crypto.js";
 import { gates, locations } from "../location/schema.js";
 import { isRevoked } from "../digital-pass/revocation-store.js";
-import { isBlacklisted } from "../blacklist/screening-store.js";
+import { isBlacklisted, isWatchlisted } from "../blacklist/screening-store.js";
 import {
   verifyQrForGate,
   classifyQrError,
@@ -104,15 +104,16 @@ export async function checkInRoutes(app: FastifyInstance): Promise<void> {
       const blocked = await isBlacklisted(ctx.tenantId, body.identityDocHash);
       screening.blocked = blocked;
       // Watchlist check uses the same store interface — flagged but not blocked.
-      // For the verify endpoint, we treat watchlist as "flagged" if the same
-      // hash is in the watchlist set. For simplicity, if blocked we don't check
-      // watchlist (already rejected).
+      // If blocked, we don't bother checking watchlist too (already rejected).
+      // SECURITY FIX: this used to hardcode `screening.flagged = false` behind a
+      // stale comment claiming isWatchlisted() didn't exist on screening-store —
+      // it does, and check-in/consumer.ts already calls it post-commit for the
+      // async security-notification path. This synchronous endpoint (the actual
+      // real-time gate response, Requirement 5.7) never called it, so
+      // `watchlistFlagged` in the verify response was unconditionally false no
+      // matter what was actually on the watchlist.
       if (!blocked) {
-        // Watchlist uses a separate key: `visitor:{tid}:watchlist:hashes`
-        // The screening-store only exports isBlacklisted. For watchlist flagging
-        // at the gate, we rely on the domain layer's `screening.flagged` field.
-        // A future enhancement could add `isWatchlisted()` to screening-store.
-        screening.flagged = false;
+        screening.flagged = await isWatchlisted(ctx.tenantId, body.identityDocHash);
       }
     }
 

@@ -5,7 +5,8 @@ const drainageSchema = pgSchema("civitas_drainage");
 export const drainageHotspots = drainageSchema.table("drainage_hotspots", {
   id: uuid("id").primaryKey().defaultRandom(),
   tenantId: uuid("tenant_id").notNull(),
-  hotspotCode: varchar("hotspot_code", { length: 32 }).notNull(),
+  // .unique() added in this pass, same reasoning as complaints.complaintNumber.
+  hotspotCode: varchar("hotspot_code", { length: 32 }).notNull().unique(),
   location: jsonb("location").$type<Record<string, unknown>>(),
   category: varchar("category", { length: 32 }),
   complaintCount: integer("complaint_count").notNull().default(0),

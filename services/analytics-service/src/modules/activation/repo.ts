@@ -3,9 +3,23 @@
  *
  * Reuses analytics' own `fact_events` projection table (no new schema). Each
  * golden-path milestone is one row with source="activation" and event_type=step.
- * Idempotent earliest-wins: dedupe_key = "activation:<step>" + ON CONFLICT DO
- * NOTHING keeps the FIRST occurrence, so TTFRT uses the earliest timestamp even
- * if a step is emitted more than once. Tenant-scoped (RLS isolates per office).
+ * Idempotent earliest-wins: dedupe_key = "activation:<step>" and an explicit
+ * existence check runs INSIDE the same transaction as the insert, so the FIRST
+ * occurrence wins even if a step is emitted more than once. Tenant-scoped (RLS
+ * isolates per office).
+ *
+ * NOTE: fact_events is PARTITION BY RANGE (ingested_at) (migration 0007). On a
+ * partitioned table every unique index must include the partition key, so the
+ * old 2-column onConflictDoNothing({ target: [tenantId, dedupeKey] }) arbiter
+ * cannot exist and throws 42P10 on every call (the same bug already found and
+ * fixed in facts/repo.ts's ingest()). Unlike facts/repo.ts — which can safely
+ * drop to a targetless onConflictDoNothing() because its idempotency is fully
+ * guaranteed upstream by the inbox markProcessed() — this function has no such
+ * upstream guarantee, and a targetless conflict target would not match on a
+ * dedupe_key repeat (ingested_at differs per insert), silently allowing
+ * duplicate rows per step. So we check-then-insert inside the transaction
+ * instead, and keep a targetless onConflictDoNothing() only as a harmless
+ * secondary net against a genuine PK collision.
  */
 import { and, eq } from "drizzle-orm";
 import { db, scopedRead } from "../../shared/db.js";
@@ -13,7 +27,15 @@ import { factEvents } from "../facts/schema.js";
 
 export async function recordActivation(tenantId: string, step: string): Promise<void> {
   const systemActor = "00000000-0000-0000-0000-000000000000";
+  const dedupeKey = `activation:${step}`;
   await db.transaction(async (tx) => {
+    const existing = await tx
+      .select({ id: factEvents.id })
+      .from(factEvents)
+      .where(and(eq(factEvents.tenantId, tenantId), eq(factEvents.dedupeKey, dedupeKey)))
+      .limit(1);
+    if (existing.length > 0) return; // earliest occurrence already recorded — keep it
+
     await tx
       .insert(factEvents)
       .values({
@@ -22,11 +44,11 @@ export async function recordActivation(tenantId: string, step: string): Promise<
         eventType: step,
         category: "activation",
         status: "ok",
-        dedupeKey: `activation:${step}`,
+        dedupeKey,
         createdBy: systemActor,
         updatedBy: systemActor,
       })
-      .onConflictDoNothing({ target: [factEvents.tenantId, factEvents.dedupeKey] });
+      .onConflictDoNothing();
   });
 }
 

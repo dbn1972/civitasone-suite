@@ -32,6 +32,9 @@ function Bar({
   );
 }
 
+/** Public single shimmer bar/block — the primitive the other Skeleton* shapes are built from. */
+export { Bar as SkeletonBar };
+
 /** Single shimmer row: name + dept + date + status badge. */
 export function SkeletonRow() {
   return (

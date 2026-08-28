@@ -81,14 +81,14 @@ describe("CAP-052 seed helpers (pure)", () => {
 
 describe("CAP-052 catalogue routes (CQRS)", () => {
   it("rejects unauthenticated access", async () => {
-    const res = await app.inject({ method: "GET", url: "/api/v1/catalogue" });
+    const res = await app.inject({ method: "GET", url: "/api/v1/gateway/catalogue" });
     expect(res.statusCode).toBe(401);
   });
 
   it("accepts seed command with 202 (no sync write)", async () => {
     const res = await app.inject({
       method: "POST",
-      url: "/api/v1/catalogue/seed",
+      url: "/api/v1/gateway/catalogue/seed",
       headers: auth(adminToken(TENANT_A)),
     });
     expect(res.statusCode).toBe(202);
@@ -101,7 +101,7 @@ describe("CAP-052 catalogue routes (CQRS)", () => {
   it("lists catalogue for authenticated reader", async () => {
     const res = await app.inject({
       method: "GET",
-      url: "/api/v1/catalogue",
+      url: "/api/v1/gateway/catalogue",
       headers: auth(readerToken(TENANT_A)),
     });
     expect(res.statusCode).toBe(200);
@@ -111,7 +111,7 @@ describe("CAP-052 catalogue routes (CQRS)", () => {
   it("enforces RBAC on register (reader forbidden)", async () => {
     const res = await app.inject({
       method: "POST",
-      url: "/api/v1/catalogue",
+      url: "/api/v1/gateway/catalogue",
       headers: auth(readerToken(TENANT_A)),
       payload: { name: "reports-export", module: "reports", path: "/api/v1/reports/export", method: "GET" },
     });
@@ -121,7 +121,7 @@ describe("CAP-052 catalogue routes (CQRS)", () => {
   it("registers via CQRS (202) and rejects invalid lifecycle", async () => {
     const reg = await app.inject({
       method: "POST",
-      url: "/api/v1/catalogue",
+      url: "/api/v1/gateway/catalogue",
       headers: auth(adminToken(TENANT_A)),
       payload: {
         name: `reports-export-${Date.now()}`,
@@ -139,7 +139,7 @@ describe("CAP-052 catalogue routes (CQRS)", () => {
     // unknown id → 404 on lifecycle (read-side validation)
     const missing = await app.inject({
       method: "POST",
-      url: `/api/v1/catalogue/${crypto.randomUUID()}/lifecycle`,
+      url: `/api/v1/gateway/catalogue/${crypto.randomUUID()}/lifecycle`,
       headers: auth(adminToken(TENANT_A)),
       payload: { action: "activate" },
     });
@@ -148,14 +148,14 @@ describe("CAP-052 catalogue routes (CQRS)", () => {
     // get by id — may 404 until consumer applies (read-your-writes via cache is optional)
     const got = await app.inject({
       method: "GET",
-      url: `/api/v1/catalogue/${id}`,
+      url: `/api/v1/gateway/catalogue/${id}`,
       headers: auth(readerToken(TENANT_A)),
     });
     expect([200, 404]).toContain(got.statusCode);
   });
 
   it("isolates tenants — Tenant B never sees Tenant A's catalogue (RLS)", async () => {
-    const res = await app.inject({ method: "GET", url: "/api/v1/catalogue", headers: auth(readerToken(TENANT_B)) });
+    const res = await app.inject({ method: "GET", url: "/api/v1/gateway/catalogue", headers: auth(readerToken(TENANT_B)) });
     expect(res.statusCode).toBe(200);
     expect(res.json().meta.total).toBe(0);
   });

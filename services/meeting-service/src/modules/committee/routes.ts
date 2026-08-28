@@ -26,6 +26,7 @@
  * version read alongside the existence (404) check.
  */
 import type { FastifyInstance } from "fastify";
+import type { RequestContext } from "@civitasone/types";
 import { z } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import {
@@ -44,6 +45,12 @@ import * as commands from "./commands.js";
 const COMMITTEE_ADMIN_ROLES = ["meeting_admin", "tenant_admin", "super_admin", "admin"];
 /** Roles allowed to manage the membership roster (admins + secretariat). */
 const MEMBER_WRITE_ROLES = ["meeting_admin", "committee_secretary", "tenant_admin", "super_admin", "admin"];
+// Roles that legitimately act tenant/platform-wide, exempt from the per-committee ownership
+// check below (Gap: systemic cross-committee IDOR) — identical bypass set to
+// COMMITTEE_ADMIN_ROLES, since those are precisely the roles with no committee-scoping concept.
+const COMMITTEE_SCOPE_BYPASS_ROLES = COMMITTEE_ADMIN_ROLES;
+/** committee_members.role values authorized to manage their OWN committee's membership roster. */
+const MEMBER_WRITE_OFFICER_ROLES = ["chairperson", "secretary"];
 /** Read access to committee governance data. */
 const COMMITTEE_READ_ROLES = [
   "meeting_admin",
@@ -65,6 +72,25 @@ const versionBody = z.object({
 /** Build the standard list envelope meta from offset/limit pagination. */
 function listMeta(offset: number, limit: number, total: number) {
   return { page: Math.floor(offset / limit) + 1, pageSize: limit, total };
+}
+
+/**
+ * Assert the caller has real standing on `committeeId` — either a tenant-wide bypass role, or an
+ * ACTIVE `committee_members` row on THIS SPECIFIC committee holding one of `officerRoles` (Gap:
+ * systemic cross-committee IDOR — a flat `committee_secretary` role claim used to be sufficient
+ * to add/remove/amend membership on ANY committee in the tenant, not just one the caller actually
+ * serves — see tests/committee-membership-idor.test.ts).
+ */
+async function requireCommitteeStanding(
+  ctx: RequestContext,
+  committeeId: string,
+  officerRoles: readonly string[],
+): Promise<void> {
+  if (ctx.roles.some((r) => COMMITTEE_SCOPE_BYPASS_ROLES.includes(r))) return;
+  const membership = await repo.getActiveMembership(ctx.tenantId, committeeId, ctx.actorId);
+  if (!membership || !officerRoles.includes(membership.role)) {
+    throw new HttpError(403, "FORBIDDEN", "caller does not have standing on this committee");
+  }
 }
 
 export async function committeeRoutes(app: FastifyInstance): Promise<void> {
@@ -125,6 +151,7 @@ export async function committeeRoutes(app: FastifyInstance): Promise<void> {
     const { committeeId } = committeeIdParam.parse(req.params);
     const committee = await repo.getCommitteeById(ctx.tenantId, committeeId);
     if (!committee) throw new HttpError(404, "COMMITTEE_NOT_FOUND", "committee not found");
+    await requireCommitteeStanding(ctx, committeeId, MEMBER_WRITE_OFFICER_ROLES);
     const body = addMemberBody.parse(req.body);
     const accepted = await commands.committeeMemberAdd(ctx, committeeId, body);
     return reply.code(202).send({ data: accepted });
@@ -148,6 +175,7 @@ export async function committeeRoutes(app: FastifyInstance): Promise<void> {
     const { committeeId, memberId } = memberIdParam.parse(req.params);
     const member = await repo.getMemberById(ctx.tenantId, committeeId, memberId);
     if (!member) throw new HttpError(404, "COMMITTEE_NOT_FOUND", "committee membership not found");
+    await requireCommitteeStanding(ctx, committeeId, MEMBER_WRITE_OFFICER_ROLES);
     const patch = updateMemberBody.parse(req.body);
     const { version } = versionBody.parse(req.body ?? {});
     const accepted = await commands.committeeMemberUpdate(
@@ -167,6 +195,7 @@ export async function committeeRoutes(app: FastifyInstance): Promise<void> {
     const { committeeId, memberId } = memberIdParam.parse(req.params);
     const member = await repo.getMemberById(ctx.tenantId, committeeId, memberId);
     if (!member) throw new HttpError(404, "COMMITTEE_NOT_FOUND", "committee membership not found");
+    await requireCommitteeStanding(ctx, committeeId, MEMBER_WRITE_OFFICER_ROLES);
     const { version, reason } = versionBody.parse(req.body ?? {});
     const accepted = await commands.committeeMemberRemove(
       ctx,

@@ -1,4 +1,16 @@
 import { z } from "zod";
+import { listQuerySchema } from "@civitasone/schemas/common";
+
+// GET /v1/hrms/employees query params: standard pagination plus an optional
+// tenant-scoped employeeType filter (see repo.listByTenant / queries.listEmployees).
+// NOTE: also declared verbatim on the employee-detail/id-cards/disciplinary
+// cluster branch (PR #753), which touched this file for an unrelated fix
+// (basicMinor bigint->number) but happened to carry this hunk along; the two
+// insertions are identical so whichever PR merges second should merge cleanly.
+export const employeeListQuery = listQuerySchema.extend({
+  employeeType: z.string().min(1).max(32).optional(),
+});
+export type EmployeeListQuery = z.infer<typeof employeeListQuery>;
 
 export const createEmployeeBody = z.object({
   employeeNo:    z.string().min(1).max(32),
@@ -53,7 +65,12 @@ export const updateEmployeeBody = z.object({
   email:          z.string().email().optional(),
   bankAccountNo:  z.string().optional(),
   bankIfsc:       z.string().max(16).optional(),
-  basicMinor:     z.bigint().optional(),
+  // HR-A deep-verify finding: this was `z.bigint()`, which can never parse a
+  // real HTTP JSON body (JSON has no bigint literal) -- every PATCH that
+  // included basicMinor would 400 with "Expected bigint, received number".
+  // Match createEmployeeBody's basicMinor type; commands.ts already does
+  // `.toString()` on this value, which works the same on a plain number.
+  basicMinor:     z.number().int().nonnegative().optional(),
   payStructureId: z.string().uuid().optional(),
   managerId:      z.string().uuid().optional(),
   uanNumber:      z.string().max(12).optional(),

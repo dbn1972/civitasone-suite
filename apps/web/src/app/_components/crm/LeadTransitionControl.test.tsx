@@ -114,6 +114,6 @@ describe("LeadTransitionControl (LQ-004)", () => {
   it("shows the saved-info badge when reason codes fail to load", async () => {
     vi.mocked(lq.getReasonCodes).mockResolvedValue({ data: [], source: "error" });
     render(<LeadTransitionControl leadId="l1" currentStatus="new" />);
-    await waitFor(() => expect(screen.getByText(/showing saved information/i)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(/couldn.t load/i)).toBeInTheDocument());
   });
 });

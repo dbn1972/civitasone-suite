@@ -2,17 +2,13 @@ import { PageHeader, StatGrid, StatCard, Card } from "../../../_components/ds";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import { formatMoney } from "@/lib/formatters";
+import { currentMonthPeriod } from "@/lib/fiscalYear";
 import { PeriodSelector } from "./PeriodSelector";
 import { GstConsole } from "./GstConsole";
 import type { SummaryRow, LedgerRow, ItcRow } from "./types";
 
 type SummaryResponse = { period: string; summary: SummaryRow[] };
 type ItcResponse = { period: string; reconciliation: ItcRow[] };
-
-function currentPeriod(): string {
-  const now = new Date();
-  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
-}
 
 async function getSummary(period: string): Promise<LoaderResult<SummaryRow[]>> {
   return fetchJson<SummaryResponse, SummaryRow[]>(`/api/v1/finance/gst/summary?period=${encodeURIComponent(period)}`, [], {
@@ -39,7 +35,7 @@ async function getItcReconciliation(period: string): Promise<LoaderResult<ItcRow
 }
 
 export default async function GstConsolePage({ searchParams }: { searchParams?: { period?: string } }) {
-  const period = searchParams?.period && /^\d{4}-\d{2}$/.test(searchParams.period) ? searchParams.period : currentPeriod();
+  const period = searchParams?.period && /^\d{4}-\d{2}$/.test(searchParams.period) ? searchParams.period : currentMonthPeriod();
 
   const [
     { data: summary, source: summarySource },

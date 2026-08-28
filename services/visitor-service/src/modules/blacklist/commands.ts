@@ -85,6 +85,33 @@ export async function blacklistApprove(ctx: RequestContext, input: BlacklistAppr
   return { id: input.entryId, status: "accepted", correlationId: ctx.correlationId };
 }
 
+export interface BlacklistDeactivateInput {
+  entryId: string;
+}
+
+/**
+ * Fix 3: lifts an `active` blacklist entry, transitioning it to `archived`
+ * (a valid transition per domain.ts#VALID_TRANSITIONS) and removing its
+ * hash from the live Redis screening set so the block stops applying
+ * immediately. Same maker-checker rigor as `blacklistApprove`: the consumer
+ * rejects if the deactivating actor is the same as the entry's original
+ * creator (Property 18 — segregation of duties applies symmetrically to
+ * granting AND lifting a block).
+ */
+export async function blacklistDeactivate(ctx: RequestContext, input: BlacklistDeactivateInput): Promise<Accepted> {
+  const messageId = randomUUID();
+  await queue.publish(COMMANDS.blacklistDeactivate, {
+    messageId,
+    type: COMMANDS.blacklistDeactivate,
+    tenantId: ctx.tenantId,
+    actorId: ctx.actorId,
+    correlationId: ctx.correlationId,
+    schemaVersion: "1.0",
+    payload: { id: input.entryId, tenantId: ctx.tenantId },
+  });
+  return { id: input.entryId, status: "accepted", correlationId: ctx.correlationId };
+}
+
 export interface WatchlistAddInput {
   personName: string;
   identityDocType?: string | null;

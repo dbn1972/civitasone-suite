@@ -19,8 +19,8 @@
  * transaction.
  */
 import type { FastifyInstance } from "fastify";
-import { z, ZodError } from "zod";
-import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
+import { z } from "zod";
+import { resolveContext, requireRole, financeErrorHandler } from "../../shared/context.js";
 import {
   submitPaymentAdvice,
   getPaymentStatus,
@@ -91,13 +91,10 @@ export async function pfmsTreasuryStubRoutes(app: FastifyInstance): Promise<void
 
   app.setErrorHandler((err, req, reply) => {
     const correlationId = (req.headers["x-correlation-id"] as string) ?? req.id;
-    if (err instanceof ZodError) {
-      return reply.code(400).send({
-        code: "VALIDATION_FAILED", message: "invalid request", correlationId,
-        fieldErrors: err.issues.map((i) => ({ field: i.path.join("."), message: i.message })),
-      });
-    }
-    if (err instanceof HttpError) return reply.code(err.status).send({ code: err.code, message: err.message, correlationId });
+    // PfmsTreasuryError is specific to this module's upstream integration —
+    // check it first, then delegate ZodError/HttpError/everything else to the
+    // shared handler (which now preserves a real statusCode instead of
+    // flattening it to 500, e.g. malformed JSON body / rate-limit 429).
     if (err instanceof PfmsTreasuryError) {
       // Explicit cast: setErrorHandler types its callback's error as a generic
       // `TError extends Error = FastifyError` (see fastify/types/instance.d.ts), and
@@ -116,7 +113,6 @@ export async function pfmsTreasuryStubRoutes(app: FastifyInstance): Promise<void
       );
       return reply.code(status).send({ code: pfmsErr.code, message: "PFMS treasury service error", correlationId });
     }
-    req.log.error({ err }, "unhandled error");
-    return reply.code(500).send({ code: "INTERNAL", message: "internal error", correlationId });
+    return financeErrorHandler(err, req, reply);
   });
 }

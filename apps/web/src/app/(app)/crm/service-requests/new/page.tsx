@@ -55,7 +55,7 @@ export default function NewServiceRequestPage() {
     };
 
     try {
-      const res = await fetch("/api/v1/crm/service-requests", {
+      const res = await fetch("/api/proxy/v1/crm/service-requests", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),

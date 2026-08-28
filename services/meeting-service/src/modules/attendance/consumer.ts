@@ -56,6 +56,7 @@ import {
   type QuorumAttendee,
   type QuorumRule,
 } from "./domain.js";
+import { assertWithinMeetingWindow, assertCheckOutAfterCheckIn } from "./validators.js";
 
 const AUDIT_TOPIC = "audit.event.record";
 const CACHE_RESOURCE = "attendance";
@@ -126,7 +127,11 @@ interface MeetingContext {
   type: string;
   committeeId: string | null;
   actualStartAt: Date | null;
+  scheduledAt: Date | null;
   quorumEstablished: boolean;
+  secretaryId: string | null;
+  chairpersonId: string | null;
+  createdBy: string;
 }
 
 /** Load the parent meeting within the tx (null when missing / other tenant). */
@@ -138,12 +143,27 @@ async function loadMeeting(tx: DrizzleTx, meetingId: string, tenantId: string): 
       type: meetings.type,
       committeeId: meetings.committeeId,
       actualStartAt: meetings.actualStartAt,
+      scheduledAt: meetings.scheduledAt,
       quorumEstablished: meetings.quorumEstablished,
+      secretaryId: meetings.secretaryId,
+      chairpersonId: meetings.chairpersonId,
+      createdBy: meetings.createdBy,
     })
     .from(meetings)
     .where(and(eq(meetings.id, meetingId), eq(meetings.tenantId, tenantId)))
     .limit(1);
   return rows[0] ?? null;
+}
+
+/**
+ * Who (besides the participant themselves) is authorized to check in / manually mark another
+ * invited participant of this meeting on their behalf (Req 6.2) — the meeting's own secretary,
+ * chairperson, or the actor who created/administers it (the closest available proxy for
+ * "secretariat staff" when the named roles are unset). See `attendance/domain.ts`
+ * `assertParticipantInvited`.
+ */
+function checkInAgentsFor(meeting: Pick<MeetingContext, "secretaryId" | "chairpersonId" | "createdBy">) {
+  return [meeting.secretaryId, meeting.chairpersonId, meeting.createdBy];
 }
 
 /** Load the participant row for check-in authorisation (null when missing / other tenant). */
@@ -154,6 +174,7 @@ async function loadParticipant(tx: DrizzleTx, meetingId: string, participantId: 
       meetingId: participants.meetingId,
       invitationStatus: participants.invitationStatus,
       role: participants.role,
+      employeeId: participants.employeeId,
     })
     .from(participants)
     .where(and(eq(participants.id, participantId), eq(participants.tenantId, tenantId)))
@@ -341,10 +362,21 @@ async function handleCheckIn(msg: CommandEnvelope<CheckInPayload>): Promise<void
     const meeting = await loadMeeting(tx, p.meetingId, msg.tenantId);
     if (!meeting) return; // unknown meeting → nothing to do (route 404s before publishing)
 
-    // Req 6.2: only an invited participant may check in.
+    // Req 6.1 timestamp-bounds fix: checkInAt had no relation to the meeting's own schedule.
+    try {
+      assertWithinMeetingWindow(checkInAt, meeting.scheduledAt, "checkInAt");
+    } catch (err) {
+      asPermanent(err);
+    }
+
+    // Req 6.2: only an invited participant may check in, recorded only by themselves or an
+    // authorized agent of the meeting (secretary/chairperson/creator — see checkInAgentsFor).
     const participant = await loadParticipant(tx, p.meetingId, p.participantId, msg.tenantId);
     try {
-      assertParticipantInvited(participant, p.meetingId);
+      assertParticipantInvited(participant, p.meetingId, {
+        actorId: msg.actorId,
+        authorizedAgentIds: checkInAgentsFor(meeting),
+      });
     } catch (err) {
       asPermanent(err);
     }
@@ -416,13 +448,41 @@ async function handleCheckIn(msg: CommandEnvelope<CheckInPayload>): Promise<void
   await cache.invalidate(cache.makeKey(msg.tenantId, MEETING_RESOURCE, p.meetingId));
 }
 
-/** attendance.check_out — stamp `check_out_at` on the participant's existing record (Req 6.6). */
+/**
+ * attendance.check_out — stamp `check_out_at` on the participant's existing record (Req 6.6).
+ * Req 6.6 timestamp-bounds fix: previously a blind UPDATE with no read of the existing
+ * `check_in_at` and no comparison — a check-out strictly BEFORE its own check-in (a negative
+ * attendance duration) was accepted. Now reads the record first and validates order + the
+ * meeting-window bound before applying the write.
+ */
 async function handleCheckOut(msg: CommandEnvelope<CheckOutPayload>): Promise<void> {
   const p = msg.payload;
   const checkOutAt = new Date(p.checkOutAt);
 
   await db.transaction(async (tx) => {
     if (!(await markProcessed(tx, msg.messageId))) return;
+
+    const existing = await tx
+      .select({ id: attendanceRecords.id, checkInAt: attendanceRecords.checkInAt })
+      .from(attendanceRecords)
+      .where(
+        and(
+          eq(attendanceRecords.tenantId, msg.tenantId),
+          eq(attendanceRecords.meetingId, p.meetingId),
+          eq(attendanceRecords.participantId, p.participantId),
+        ),
+      )
+      .limit(1);
+    const record = existing[0];
+    if (!record) return; // no check-in on record → nothing to check out
+
+    const meeting = await loadMeeting(tx, p.meetingId, msg.tenantId);
+    try {
+      assertCheckOutAfterCheckIn(record.checkInAt, checkOutAt);
+      assertWithinMeetingWindow(checkOutAt, meeting?.scheduledAt ?? null, "checkOutAt");
+    } catch (err) {
+      asPermanent(err);
+    }
 
     const updated = await tx
       .update(attendanceRecords)
@@ -432,17 +492,11 @@ async function handleCheckOut(msg: CommandEnvelope<CheckOutPayload>): Promise<vo
         updatedAt: new Date(),
         version: sql`${attendanceRecords.version} + 1`,
       })
-      .where(
-        and(
-          eq(attendanceRecords.tenantId, msg.tenantId),
-          eq(attendanceRecords.meetingId, p.meetingId),
-          eq(attendanceRecords.participantId, p.participantId),
-        ),
-      )
+      .where(eq(attendanceRecords.id, record.id))
       .returning({ id: attendanceRecords.id });
 
     const recordId = updated[0]?.id;
-    if (!recordId) return; // no check-in on record → nothing to check out
+    if (!recordId) return;
 
     await audit(tx, msg, "check_out", recordId);
   });
@@ -466,10 +520,14 @@ async function handleManualMark(msg: CommandEnvelope<ManualMarkPayload>): Promis
     const meeting = await loadMeeting(tx, p.meetingId, msg.tenantId);
     if (!meeting) return;
 
-    // Req 6.2: the manually-marked person must still be an invited participant of the meeting.
+    // Req 6.2: the manually-marked person must still be an invited participant of the meeting,
+    // and the marker must be themselves or an authorized agent (secretariat) of the meeting.
     const participant = await loadParticipant(tx, p.meetingId, p.participantId, msg.tenantId);
     try {
-      assertParticipantInvited(participant, p.meetingId);
+      assertParticipantInvited(participant, p.meetingId, {
+        actorId: msg.actorId,
+        authorizedAgentIds: checkInAgentsFor(meeting),
+      });
     } catch (err) {
       asPermanent(err);
     }

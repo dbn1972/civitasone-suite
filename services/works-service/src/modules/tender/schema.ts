@@ -1,4 +1,5 @@
 import { pgSchema, uuid, varchar, integer, bigint, timestamp } from "drizzle-orm/pg-core";
+import { contractors } from "../contractor/schema.js";
 
 const works = pgSchema("works");
 
@@ -71,6 +72,11 @@ export const awards = works.table("awards", {
   tenantId: uuid("tenant_id").notNull(),
   workId: uuid("work_id").notNull(),
   contractorName: varchar("contractor_name", { length: 256 }).notNull(),
+  // Structured link to works.contractors — nullable for back-compat with
+  // rows created before this column existed, but application code requires
+  // it to resolve to (or be validated against) a real contractor record on
+  // every new award. See billing-integrity fix #4.
+  contractorId: uuid("contractor_id").references(() => contractors.id),
   agreementNumber: varchar("agreement_number", { length: 128 }),
   workOrderNumber: varchar("work_order_number", { length: 128 }),
   agreementDate: timestamp("agreement_date", { withTimezone: true }),

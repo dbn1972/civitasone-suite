@@ -64,12 +64,12 @@ describe("OrdersConsole", () => {
   it("renders a genuine empty state (not the saved-information badge) when there are no orders", () => {
     render(<OrdersConsole caseId="case-1" caseSummary={caseSummary} initialOrders={[]} ordersSource="api" />);
     expect(screen.getByText("No orders yet")).toBeInTheDocument();
-    expect(screen.queryByText("Showing saved information")).not.toBeInTheDocument();
+    expect(screen.queryByText("Couldn't load — showing nothing")).not.toBeInTheDocument();
   });
 
   it("renders the saved-information badge (not an empty state) when the orders source is 'error'", () => {
     render(<OrdersConsole caseId="case-1" caseSummary={caseSummary} initialOrders={[]} ordersSource="error" />);
-    expect(screen.getByText("Showing saved information")).toBeInTheDocument();
+    expect(screen.getByText("Couldn't load — showing nothing")).toBeInTheDocument();
     expect(screen.queryByText("No orders yet")).not.toBeInTheDocument();
   });
 
@@ -88,7 +88,7 @@ describe("OrdersConsole", () => {
     fireEvent.change(screen.getByLabelText(/Order type/), { target: { value: "final" } });
     fireEvent.change(screen.getByLabelText(/Order text/), { target: { value: "Suit decreed." } });
     fireEvent.click(screen.getByRole("button", { name: "Draft order" }));
-    await waitFor(() => expect(screen.getByText("Showing saved information")).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText("Couldn't load — showing nothing")).toBeInTheDocument());
   });
 
   it("rejects an empty order type/text via the custom validator without calling the server", () => {

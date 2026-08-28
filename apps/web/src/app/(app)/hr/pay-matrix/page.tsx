@@ -43,7 +43,7 @@ export default async function PayMatrixPage() {
         back="/hr"
         actions={<span />}
       />
-      <DataSourceBadge source={source} />
+      <DataSourceBadge source={source} message="Couldn't load — showing nothing" />
       <StatGrid>
         <StatCard icon="📊" iconBg="#e6f0ff" label="Pay Levels" value={levelCount} />
         <StatCard icon="🗂️" iconBg="#f5f5f5" label="Total Cells" value={cellCount} />

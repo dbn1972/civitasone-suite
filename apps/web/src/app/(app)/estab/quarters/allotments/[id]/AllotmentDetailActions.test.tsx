@@ -75,7 +75,7 @@ describe("AllotmentDetailActions", () => {
     fireEvent.click(screen.getByRole("button", { name: "Allot quarter" }));
 
     expect(await screen.findByText(/could not be verified/)).toBeInTheDocument();
-    expect(screen.getAllByText("Showing saved information").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Couldn't load — showing nothing").length).toBeGreaterThan(0);
     expect(screen.queryByText(/No licence-fee rate is configured/)).not.toBeInTheDocument();
   });
 
@@ -92,6 +92,6 @@ describe("AllotmentDetailActions", () => {
     fireEvent.click(screen.getByRole("button", { name: "Allot quarter" }));
 
     expect(await screen.findByText(/No licence-fee rate is configured/)).toBeInTheDocument();
-    expect(screen.queryByText("Showing saved information")).not.toBeInTheDocument();
+    expect(screen.queryByText("Couldn't load — showing nothing")).not.toBeInTheDocument();
   });
 });

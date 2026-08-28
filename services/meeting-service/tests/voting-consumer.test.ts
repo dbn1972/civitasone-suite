@@ -57,6 +57,20 @@ function run<T>(m: CommandEnvelope<T>): Promise<void> {
   return runWithTenant(TENANT, () => handler(m)) as Promise<void>;
 }
 
+/** Like `msg`, but with an explicit `actorId` — voteCirculationRespond now requires
+ * `payload.memberId === envelope.actorId` (the responding member must be the caller). */
+function msgAs<T>(type: string, payload: T, actorId: string): CommandEnvelope<T> {
+  return {
+    messageId: randomUUID(),
+    type,
+    tenantId: TENANT,
+    actorId,
+    correlationId: randomUUID(),
+    schemaVersion: "1.0",
+    payload,
+  } as CommandEnvelope<T>;
+}
+
 function tenantQuery<T>(fn: (sql: typeof sqlClient) => Promise<T>): Promise<T> {
   return runWithTenant(TENANT, () =>
     sqlClient.begin(async (sql) => {
@@ -102,8 +116,8 @@ beforeAll(async () => {
     await sql`delete from meeting.attendance_records where tenant_id = ${TENANT}`;
     await sql`delete from meeting.participants where tenant_id = ${TENANT}`;
     await sql`delete from meeting.committee_members where tenant_id = ${TENANT}`;
-    await sql`delete from meeting.committees where tenant_id = ${TENANT}`;
     await sql`delete from meeting.meetings where tenant_id = ${TENANT}`;
+    await sql`delete from meeting.committees where tenant_id = ${TENANT}`;
     await sql`delete from _outbox.messages where tenant_id = ${TENANT}`;
 
     await sql`
@@ -141,8 +155,8 @@ afterAll(async () => {
     await sql`delete from meeting.attendance_records where tenant_id = ${TENANT}`;
     await sql`delete from meeting.participants where tenant_id = ${TENANT}`;
     await sql`delete from meeting.committee_members where tenant_id = ${TENANT}`;
-    await sql`delete from meeting.committees where tenant_id = ${TENANT}`;
     await sql`delete from meeting.meetings where tenant_id = ${TENANT}`;
+    await sql`delete from meeting.committees where tenant_id = ${TENANT}`;
     await sql`delete from _outbox.messages where tenant_id = ${TENANT}`;
   });
   await sqlClient.end();
@@ -325,8 +339,8 @@ describe("vote.circulation_respond", () => {
       );
     }
     const completedBefore = await outboxCount(EVENTS.circulationResolutionCompleted);
-    // Third (final) member responds → all 3 of 3 responded → conclude.
-    await run(msg(COMMANDS.voteCirculationRespond, { resolutionId: rid, memberId: MEMBER_C, position: "approve", tenantId: TENANT }));
+    // Third (final) member responds AS themselves → all 3 of 3 responded → conclude.
+    await run(msgAs(COMMANDS.voteCirculationRespond, { resolutionId: rid, memberId: MEMBER_C, position: "approve", tenantId: TENANT }, MEMBER_C));
     const row = await readResolution(rid);
     expect(row?.result).toBe("passed");
     expect(row?.status).toBe("effective");
@@ -339,7 +353,7 @@ describe("vote.circulation_respond", () => {
     await seedCirculation(rid, new Date(Date.now() - 1000)); // deadline already passed → first response concludes
     const alertBefore = await outboxCount(EVENTS.complianceAlert);
     // Only one of three members responds → response rate 33% < required two-thirds → invalid.
-    await run(msg(COMMANDS.voteCirculationRespond, { resolutionId: rid, memberId: MEMBER_A, position: "approve", tenantId: TENANT }));
+    await run(msgAs(COMMANDS.voteCirculationRespond, { resolutionId: rid, memberId: MEMBER_A, position: "approve", tenantId: TENANT }, MEMBER_A));
     const row = await readResolution(rid);
     expect(row?.result).toBe("invalid");
     expect(row?.status).toBe("invalid");
@@ -350,9 +364,9 @@ describe("vote.circulation_respond", () => {
   it("rejects a duplicate circulation response from the same member (P17, permanent → DLQ)", async () => {
     const rid = randomUUID();
     await seedCirculation(rid, new Date(Date.now() + 172800000));
-    await run(msg(COMMANDS.voteCirculationRespond, { resolutionId: rid, memberId: MEMBER_A, position: "approve", tenantId: TENANT }));
+    await run(msgAs(COMMANDS.voteCirculationRespond, { resolutionId: rid, memberId: MEMBER_A, position: "approve", tenantId: TENANT }, MEMBER_A));
     await expect(
-      run(msg(COMMANDS.voteCirculationRespond, { resolutionId: rid, memberId: MEMBER_A, position: "reject", tenantId: TENANT })),
+      run(msgAs(COMMANDS.voteCirculationRespond, { resolutionId: rid, memberId: MEMBER_A, position: "reject", tenantId: TENANT }, MEMBER_A)),
     ).rejects.toBeInstanceOf(NonRetryableError);
   });
 
@@ -368,6 +382,142 @@ describe("vote.circulation_respond", () => {
     await expect(
       run(msg(COMMANDS.voteCirculationRespond, { resolutionId: randomUUID(), memberId: MEMBER_A, position: "approve", tenantId: TENANT })),
     ).rejects.toBeInstanceOf(NonRetryableError);
+  });
+});
+
+describe("vote eligibility — committee-membership enforcement (SECURITY GAP)", () => {
+  /**
+   * AUDIT FINDING (CRITICAL): `handleVoteCast` / `handleCirculationRespond` never verify that the
+   * voting `memberId` is an ACTIVE member of the committee that owns the resolution
+   * (`meeting.committee_members`, status='active'). `handleVoteCast`'s own `getMemberVoteWeight`
+   * queries that EXACT roster — but only to resolve the ballot's WEIGHT, silently defaulting to 1
+   * when the id is absent from the roster instead of rejecting the ballot. `meeting.votes.member_id`
+   * also carries no FK (migrations/0001_meeting_core.sql). Route-level RBAC only checks the coarse,
+   * tenant-wide `committee_member` role claim — never that the caller sits on THIS committee's
+   * roster — and `voting/commands.ts`'s `voteCirculationRespond` publisher pins `memberId` to
+   * `ctx.actorId` (good) while `decision/routes.ts`'s `publishCirculationVote` does NOT — it takes
+   * `memberId` straight from the request body (see the existing, already-merged
+   * `tests/decision-routes.test.ts` "202 records a circulation vote" case, which authenticates as
+   * `ACTOR` and submits `{ memberId: MEMBER_B, ... }`, i.e. already demonstrates impersonation is
+   * *accepted* at the route layer). Contrast the sibling, CORRECTLY-implemented checks elsewhere in
+   * this very module set: attendance/domain.ts `assertParticipantInvited` (`PARTICIPANT_NOT_MEMBER`,
+   * wired at attendance/consumer.ts:347,472) and vc-integration/consumer.ts's webhook handler
+   * ("the external VC identity must map to an INVITED participant of THIS meeting", line ~532) both
+   * gate on real membership before recording a governance-relevant fact. Voting has no analogous
+   * gate at the one place it matters most — who gets to decide a binding resolution.
+   *
+   * `handleVoteCast`/`handleCirculationRespond` now gain a membership + actor-binding check —
+   * the cases below prove a non-member's ballot, and a ballot attributed to someone other than
+   * the authenticated actor, are both rejected. The "[FIXED]" cases confirm the corresponding
+   * "blast radius" scenario no longer works: phantom, unaffiliated identities can no longer
+   * decide a resolution.
+   */
+  it("rejects a roll-call ballot from a memberId that is not on the committee roster", async () => {
+    const rid = randomUUID();
+    await seedOpenResolution(rid, MEETING_OK);
+    const NON_MEMBER = randomUUID(); // never inserted into meeting.committee_members for COMMITTEE
+    await expect(
+      run(msg(COMMANDS.voteCast, { meetingId: MEETING_OK, resolutionId: rid, memberId: NON_MEMBER, position: "for", tenantId: TENANT })),
+    ).rejects.toBeInstanceOf(NonRetryableError);
+  });
+
+  it("[FIXED] phantom (non-member) voters can no longer pass a resolution — every ballot is rejected, none are cast", async () => {
+    const rid = randomUUID();
+    await seedOpenResolution(rid, MEETING_OK);
+    const phantoms = [randomUUID(), randomUUID(), randomUUID()]; // none are MEMBER_A/B/C, none on any roster
+    for (const phantom of phantoms) {
+      await expect(
+        run(msg(COMMANDS.voteCast, { meetingId: MEETING_OK, resolutionId: rid, memberId: phantom, position: "for", tenantId: TENANT })),
+      ).rejects.toBeInstanceOf(NonRetryableError);
+    }
+    expect(await voteCount(rid)).toBe(0);
+
+    // With zero real ballots, the resolution concludes on an empty tally — rejected, not passed.
+    await run(msg(COMMANDS.voteConclude, { meetingId: MEETING_OK, resolutionId: rid, tenantId: TENANT }));
+    const row = await readResolution(rid);
+    expect(row?.status).toBe("rejected");
+    expect(row?.result).toBe("rejected");
+    expect(row?.votes_for).toBe(0);
+  });
+
+  /** Seed a circulation resolution with a chosen deadline (mirrors the describe block above). */
+  async function seedCirculationEligibility(resolutionId: string, deadline: Date): Promise<void> {
+    await tenantQuery(
+      (sql) => sql`
+        insert into meeting.resolutions
+          (id, tenant_id, meeting_id, resolution_number, text, vote_type, majority_rule, result, status, is_circulation, circulation_deadline, created_by, updated_by)
+        values (${resolutionId}, ${TENANT}, ${MEETING_OK}, ${"GB/RES/2025-26/eligibility-" + resolutionId.slice(0, 8)}, 'Circulation motion',
+                'circulation_resolution', 'simple_majority', 'invalid', 'circulating', true, ${deadline.toISOString()}, ${ACTOR}, ${ACTOR})`,
+    );
+  }
+
+  it("rejects a circulation response from a memberId that is not on the committee roster", async () => {
+    const rid = randomUUID();
+    await seedCirculationEligibility(rid, new Date(Date.now() + 172800000));
+    const NON_MEMBER = randomUUID();
+    await expect(
+      run({
+        messageId: randomUUID(),
+        type: COMMANDS.voteCirculationRespond,
+        tenantId: TENANT,
+        actorId: NON_MEMBER, // self-response — isolates the membership check from the impersonation check
+        correlationId: randomUUID(),
+        schemaVersion: "1.0",
+        payload: { resolutionId: rid, memberId: NON_MEMBER, position: "approve", tenantId: TENANT },
+      } as CommandEnvelope<any>),
+    ).rejects.toBeInstanceOf(NonRetryableError);
+  });
+
+  it("[FIXED] phantom (non-member) responders can no longer conclude a circulation resolution — every response is rejected", async () => {
+    const rid = randomUUID();
+    await seedCirculationEligibility(rid, new Date(Date.now() + 172800000));
+    const phantoms = [randomUUID(), randomUUID(), randomUUID()];
+    for (const phantom of phantoms) {
+      await expect(
+        run(msg(COMMANDS.voteCirculationRespond, { resolutionId: rid, memberId: phantom, position: "approve", tenantId: TENANT })),
+      ).rejects.toBeInstanceOf(NonRetryableError);
+    }
+    // No real response was ever recorded — the resolution stays open, never concluded on
+    // fabricated identities.
+    const row = await readResolution(rid);
+    expect(row?.status).toBe("circulating");
+    expect(row?.result).toBe("invalid");
+    expect(row?.votes_for).toBe(0);
+  });
+
+  it("rejects a circulation response whose memberId does not match the authenticated actor (impersonation)", async () => {
+    const rid = randomUUID();
+    await seedCirculationEligibility(rid, new Date(Date.now() + 172800000));
+    // `msg()` always sets `actorId: ACTOR` — simulating a caller that names a DIFFERENT member as
+    // the respondent (the shape `decision/routes.ts`'s `publishCirculationVote` used to allow,
+    // before it was fixed to pin `memberId: ctx.actorId`). Here ACTOR (the real, authenticated
+    // sender) is impersonating MEMBER_A.
+    const command = msg(COMMANDS.voteCirculationRespond, { resolutionId: rid, memberId: MEMBER_A, position: "approve", tenantId: TENANT });
+    expect(command.actorId).not.toBe(MEMBER_A); // sanity: the sender really is a distinct identity
+    await expect(run(command)).rejects.toBeInstanceOf(NonRetryableError);
+  });
+
+  it("[FIXED] the authenticated actor's OWN response is correctly recorded — no misattribution possible", async () => {
+    const rid = randomUUID();
+    await seedCirculationEligibility(rid, new Date(Date.now() + 172800000));
+    // MEMBER_A responds AS themselves — matching the pattern the real command publishers
+    // (voting/commands.ts's voteCirculationRespond, and decision/routes.ts's
+    // publishCirculationVote after the fix) both now enforce: memberId is always ctx.actorId.
+    await run({
+      messageId: randomUUID(),
+      type: COMMANDS.voteCirculationRespond,
+      tenantId: TENANT,
+      actorId: MEMBER_A,
+      correlationId: randomUUID(),
+      schemaVersion: "1.0",
+      payload: { resolutionId: rid, memberId: MEMBER_A, position: "approve", tenantId: TENANT },
+    } as CommandEnvelope<any>);
+    const rows = await tenantQuery(
+      (sql) => sql`select member_id, position from meeting.votes where resolution_id = ${rid} and tenant_id = ${TENANT}`,
+    );
+    expect(rows).toHaveLength(1);
+    expect(rows[0].member_id).toBe(MEMBER_A);
+    expect(rows[0].position).toBe("approve");
   });
 });
 

@@ -18,9 +18,11 @@ export async function findByNo(employeeNo: string, tenantId: string): Promise<Em
   return rows[0] ?? null;
 }
 
-export async function listByTenant(tenantId: string, limit = 100, offset = 0): Promise<EmployeeRow[]> {
+export async function listByTenant(tenantId: string, limit = 100, offset = 0, employeeType?: string): Promise<EmployeeRow[]> {
   return scopedRead((tx) => tx.select().from(hrmsEmployees)
-    .where(eq(hrmsEmployees.tenantId, tenantId))
+    .where(employeeType
+      ? and(eq(hrmsEmployees.tenantId, tenantId), eq(hrmsEmployees.employeeType, employeeType))
+      : eq(hrmsEmployees.tenantId, tenantId))
     .limit(limit)
     .offset(offset));
 }

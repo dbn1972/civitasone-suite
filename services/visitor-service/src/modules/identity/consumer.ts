@@ -116,13 +116,35 @@ export function registerIdentityConsumers(queue: Queue): void {
         });
         await enqueue(tx, { topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { service: "visitor-service", action: "fail", resourceType: "identity", resourceId: msg.messageId, outcome: "success" } });
 
-        // If unavailable, mark identity_method as manual fallback so the
-        // gate security guard knows to verify identity physically.
         if (result.status === "unavailable") {
+          // Service unavailable: mark identity_method as manual fallback so
+          // the gate security guard knows to verify identity physically.
+          // This is a sanctioned degraded path, not a failure — check-in
+          // must NOT block on it.
           await tx
             .update(visitRequests)
             .set({
               identityMethod: "manual",
+              updatedAt: new Date(),
+              updatedBy: msg.actorId,
+            })
+            .where(and(eq(visitRequests.id, p.visitRequestId), eq(visitRequests.tenantId, msg.tenantId)));
+        } else {
+          // Genuine verification failure. `identityVerified` was already
+          // false (column default) and stays false — but identityMethod
+          // was, until now, left completely untouched on a real failure, so
+          // "verification attempted via DigiLocker and failed" was
+          // indistinguishable from "verification never attempted" (both
+          // read as identityMethod: null, identityVerified: false). Setting
+          // identityMethod here gives check-in/consumer.ts's identity gate
+          // (Requirement — block check-in on a failed verification) a
+          // reliable signal: identityMethod === "digilocker" AND
+          // identityVerified === false uniquely means "attempted and
+          // failed", never "not applicable to this visit".
+          await tx
+            .update(visitRequests)
+            .set({
+              identityMethod: "digilocker",
               updatedAt: new Date(),
               updatedBy: msg.actorId,
             })
@@ -245,9 +267,18 @@ export function registerIdentityConsumers(queue: Queue): void {
         // but if the caller (route/kiosk) stored a reference in photoRef,
         // the purge worker uses `biometricPurgeAfterCheckout = true` as the
         // signal to delete it 24h after checkout.
+        //
+        // Also set identityMethod here (previously left untouched on a
+        // real failure): without it, "Aadhaar face-match attempted and
+        // failed" is indistinguishable from "verification never attempted"
+        // — both would read identityMethod: null, identityVerified: false.
+        // check-in/consumer.ts's identity gate relies on identityMethod ===
+        // "aadhaar_face" AND identityVerified === false to mean "attempted
+        // and failed" specifically, never "not applicable to this visit".
         await tx
           .update(visitRequests)
           .set({
+            identityMethod: "aadhaar_face",
             updatedAt: new Date(),
             updatedBy: msg.actorId,
           })

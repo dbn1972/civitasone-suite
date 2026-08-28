@@ -1,5 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
+import { hasAnyRole } from "@civitasone/auth";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import * as repo from "./repo.js";
 import { validateComplaintTransition, classifySeverity, type ComplaintStatus, type ComplaintType } from "./domain.js";
@@ -76,6 +77,16 @@ export async function complaintRoutes(app: FastifyInstance): Promise<void> {
     const body = resolveBody.parse(req.body);
     const existing = await repo.findById(id, ctx.tenantId);
     if (!existing) throw new HttpError(404, "NOT_FOUND", "complaint not found");
+    // Previously this route alone accepted the broad ROLES check while its
+    // siblings assign/close both require ADMIN_ROLES — any drainage_user could
+    // resolve any complaint in the tenant, including ones assigned to someone
+    // else, with no connection to the work. Rather than blanket-restrict to
+    // admins only (which would block the legitimate case of the assigned field
+    // worker marking their own completed work resolved), this allows either an
+    // admin or the worker this complaint is currently assigned to.
+    if (!hasAnyRole(ctx, ADMIN_ROLES) && existing.assignedTo !== ctx.actorId) {
+      throw new HttpError(403, "FORBIDDEN", "only the assigned worker or an admin may resolve this complaint");
+    }
     const err = validateComplaintTransition(existing.status as ComplaintStatus, "resolved");
     if (err) throw new HttpError(422, "TRANSITION_INVALID", err);
     if (body.version !== existing.version) throw new HttpError(409, "VERSION_CONFLICT", "retry with current version");

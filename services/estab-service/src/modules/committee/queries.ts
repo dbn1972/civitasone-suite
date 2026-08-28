@@ -10,7 +10,23 @@ function mapMeetingStatus(status: string): "scheduled" | "in_progress" | "comple
   return "scheduled";
 }
 
-function mapMeetingRow(row: MeetingRow) {
+/**
+ * `attendeesCount`/`agendaItemsCount` on `MeetingSummarySchema` used to have no backing query
+ * at all -- `mapMeetingRow` never set them, and the zod schema's `.default(0)` silently
+ * papered over the gap, so the estab/meetings dashboard's "Agenda Items" stat card and the
+ * per-row "Attendees" column were ALWAYS 0/blank regardless of real data (found reviewing the
+ * frontend fix for the "Agenda Items" stat that was previously showing meetings.length
+ * mislabeled -- summing a field that the backend never populated would have been an equally
+ * hollow fix). estab-service's own meeting model has no distinct "agenda item" concept (only
+ * meeting-service's does); `estab_resolutions` -- already surfaced as `actionPoints` on the
+ * single-meeting detail view -- is this feature's real analog of "substantive items attached
+ * to a meeting", so that's what backs `agendaItemsCount` here. `attendeesCount` is a straight
+ * count of `estab_attendees`.
+ */
+function mapMeetingRow(
+  row: MeetingRow,
+  counts: { attendeesCount: number; agendaItemsCount: number } = { attendeesCount: 0, agendaItemsCount: 0 },
+) {
   const whenAt = row.whenAt instanceof Date ? new Date(row.whenAt as unknown as string).toISOString() : String(row.whenAt ?? "");
   return {
     id: row.id,
@@ -20,8 +36,18 @@ function mapMeetingRow(row: MeetingRow) {
     scheduledDate: whenAt.slice(0, 10),
     scheduledTime: whenAt.slice(11, 16),
     venue: row.venue ?? undefined,
+    attendeesCount: counts.attendeesCount,
+    agendaItemsCount: counts.agendaItemsCount,
     status: mapMeetingStatus(row.status),
   };
+}
+
+async function countsForMeeting(meetingId: string, tenantId: string): Promise<{ attendeesCount: number; agendaItemsCount: number }> {
+  const [attendees, resolutions] = await Promise.all([
+    repo.findAttendeesByMeeting(meetingId, tenantId),
+    repo.findResolutionsByMeeting(meetingId, tenantId),
+  ]);
+  return { attendeesCount: attendees.length, agendaItemsCount: resolutions.length };
 }
 
 export async function getMeetingsByCommittee(tenantId: string, committeeId: string): Promise<MeetingRow[]> {
@@ -37,13 +63,16 @@ export async function listMeetingSummaries(tenantId: string, limit: number) {
     cache.makeKey(tenantId, "meetings", `list:${limit}`),
     () => repo.listMeetingsByTenant(tenantId, limit),
   );
-  return (rows ?? []).map(mapMeetingRow);
+  return Promise.all(
+    (rows ?? []).map(async (row) => mapMeetingRow(row, await countsForMeeting(row.id, tenantId))),
+  );
 }
 
 export async function getMeetingDetail(id: string, tenantId: string) {
   const row = await repo.findMeetingById(id, tenantId);
   if (!row) return null;
   const resolutions = await repo.findResolutionsByMeeting(id, tenantId);
+  const attendees = await repo.findAttendeesByMeeting(id, tenantId);
   // Map resolution fields to the MeetingDetailSchema actionPoints shape
   const actionPoints = resolutions.map((r) => ({
     id: r.id,
@@ -52,7 +81,16 @@ export async function getMeetingDetail(id: string, tenantId: string) {
     dueDate: r.dueDate ?? undefined,
     status: (r.status === "complied" ? "completed" : "pending") as "pending" | "completed",
   }));
-  return { ...mapMeetingRow(row), agenda: [], attendees: [], actionPoints };
+  return {
+    ...mapMeetingRow(row, { attendeesCount: attendees.length, agendaItemsCount: resolutions.length }),
+    agenda: [],
+    // NOTE: the named-attendee roster (name/role, not just a count) is still a separate,
+    // unbuilt feature -- estab_attendees only stores a memberRef, not a display name, and
+    // resolving that would need a cross-service identity lookup. Left as [] (flagged, not
+    // silently built) -- attendeesCount above is real; this array is not.
+    attendees: [],
+    actionPoints,
+  };
 }
 
 function mapFrequency(f: string): "daily" | "weekly" | "monthly" | "quarterly" | "annual" | "one_time" {

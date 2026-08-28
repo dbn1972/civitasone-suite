@@ -56,11 +56,20 @@ export function registerPostEventConsumers(rawQueue: Queue): void {
   });
 
   queue.subscribe(COMMANDS.decideDeposit, async (msg) => {
+    // refundMinor is now always a definite, pre-validated, bounds-checked
+    // numeric string computed by routes.ts's computeRefundMinor() — the `?? 0n`
+    // fallback below is defense-in-depth only (e.g. a direct queue message
+    // that bypassed the route), not the primary path.
     const p = msg.payload as { id: string; tenantId: string; decision: string; refundMinor?: string };
     const refundAmount = p.refundMinor ? BigInt(p.refundMinor) : 0n;
+    let updated: Awaited<ReturnType<typeof repo.updateDepositDecision>> = null;
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
-      await repo.updateDepositDecision(tx, p.id, msg.tenantId, p.decision, refundAmount, msg.actorId);
+      // Was: return value discarded, so a duplicate/racing decide command could
+      // silently overwrite an already-decided deposit (repo.ts now guards this
+      // atomically via `depositDecision IS NULL` in the WHERE clause).
+      updated = await repo.updateDepositDecision(tx, p.id, msg.tenantId, p.decision, refundAmount, msg.actorId);
+      if (!updated) return;
       await enqueue(tx, {
         topic: EVENTS.depositDecided,
         eventType: EVENTS.depositDecided,
@@ -75,6 +84,6 @@ export function registerPostEventConsumers(rawQueue: Queue): void {
         resourceId: p.id,
       });
     });
-    log.info({ id: p.id, decision: p.decision }, "deposit decided");
+    log.info({ id: p.id, decision: p.decision, matched: updated !== null }, "deposit decided");
   });
 }

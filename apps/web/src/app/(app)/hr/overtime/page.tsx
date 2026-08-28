@@ -44,7 +44,7 @@ export default async function OvertimePage() {
     <main className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
         title="Overtime Requests"
-        subtitle="Review, approve, and track employee overtime — linked to payroll disbursement."
+        subtitle="Review and track employee overtime requests — linked to payroll disbursement."
         back="/hr"
         actions={
           <Link href="/hr/overtime/new" className="btn primary">+ New Request</Link>

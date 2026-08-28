@@ -35,30 +35,31 @@ CREATE POLICY tenant_isolation_policy ON breakglass.grants
   USING (tenant_id = users.current_tenant_id())
   WITH CHECK (tenant_id = users.current_tenant_id());
 
--- devices.entity_changelog
-ALTER TABLE devices.entity_changelog ENABLE ROW LEVEL SECURITY;
-ALTER TABLE devices.entity_changelog FORCE ROW LEVEL SECURITY;
-DROP POLICY IF EXISTS tenant_isolation_policy ON devices.entity_changelog;
-DROP POLICY IF EXISTS tenant_isolation ON devices.entity_changelog;
-CREATE POLICY tenant_isolation_policy ON devices.entity_changelog
+-- sync.entity_changelog (created in sync schema by 0002_devices_sync.sql —
+-- not devices; only registered_devices lives in the devices schema)
+ALTER TABLE sync.entity_changelog ENABLE ROW LEVEL SECURITY;
+ALTER TABLE sync.entity_changelog FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation_policy ON sync.entity_changelog;
+DROP POLICY IF EXISTS tenant_isolation ON sync.entity_changelog;
+CREATE POLICY tenant_isolation_policy ON sync.entity_changelog
   USING (tenant_id = users.current_tenant_id())
   WITH CHECK (tenant_id = users.current_tenant_id());
 
--- devices.mailbox_cursors
-ALTER TABLE devices.mailbox_cursors ENABLE ROW LEVEL SECURITY;
-ALTER TABLE devices.mailbox_cursors FORCE ROW LEVEL SECURITY;
-DROP POLICY IF EXISTS tenant_isolation_policy ON devices.mailbox_cursors;
-DROP POLICY IF EXISTS tenant_isolation ON devices.mailbox_cursors;
-CREATE POLICY tenant_isolation_policy ON devices.mailbox_cursors
+-- sync.mailbox_cursors (created in sync schema by 0002_devices_sync.sql)
+ALTER TABLE sync.mailbox_cursors ENABLE ROW LEVEL SECURITY;
+ALTER TABLE sync.mailbox_cursors FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation_policy ON sync.mailbox_cursors;
+DROP POLICY IF EXISTS tenant_isolation ON sync.mailbox_cursors;
+CREATE POLICY tenant_isolation_policy ON sync.mailbox_cursors
   USING (tenant_id = users.current_tenant_id())
   WITH CHECK (tenant_id = users.current_tenant_id());
 
--- devices.processed_mutations
-ALTER TABLE devices.processed_mutations ENABLE ROW LEVEL SECURITY;
-ALTER TABLE devices.processed_mutations FORCE ROW LEVEL SECURITY;
-DROP POLICY IF EXISTS tenant_isolation_policy ON devices.processed_mutations;
-DROP POLICY IF EXISTS tenant_isolation ON devices.processed_mutations;
-CREATE POLICY tenant_isolation_policy ON devices.processed_mutations
+-- sync.processed_mutations (created in sync schema by 0007_sync_processed_mutations.sql)
+ALTER TABLE sync.processed_mutations ENABLE ROW LEVEL SECURITY;
+ALTER TABLE sync.processed_mutations FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation_policy ON sync.processed_mutations;
+DROP POLICY IF EXISTS tenant_isolation ON sync.processed_mutations;
+CREATE POLICY tenant_isolation_policy ON sync.processed_mutations
   USING (tenant_id = users.current_tenant_id())
   WITH CHECK (tenant_id = users.current_tenant_id());
 

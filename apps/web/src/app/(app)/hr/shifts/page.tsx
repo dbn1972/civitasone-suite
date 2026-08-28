@@ -98,7 +98,7 @@ export default async function ShiftsPage() {
         subtitle="Manage shift schedules and department assignments. GoI standard hours: 09:00–17:30 Mon–Fri (DoPT O.M.)."
         back="/hr"
         actions={
-          <Link href="/hr/shifts/requests" className="btn ghost" aria-label="View shift change requests">
+          <Link href="/hr/shift-requests" className="btn ghost" aria-label="View shift change requests">
             Change Requests
           </Link>
         }

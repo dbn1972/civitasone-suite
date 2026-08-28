@@ -3,6 +3,7 @@ import type { Queue } from "@civitasone/queue";
 import { db } from "../../shared/db.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { writeAudit } from "../../shared/audit.js";
+import { cache } from "../../shared/infra.js";
 import { tenantScoped } from "../../shared/tenant-queue.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
@@ -56,34 +57,45 @@ export function registerApplicationConsumers(rawQueue: Queue): void {
 
   queue.subscribe(COMMANDS.submitApplication, async (msg) => {
     const p = msg.payload as { id: string; tenantId: string };
+    let applied = false;
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       const ok = await repo.updateStatus(tx, p.id, msg.tenantId, "submitted", msg.actorId);
       if (!ok) return;
+      applied = true;
       await enqueue(tx, { topic: EVENTS.applicationSubmitted, eventType: EVENTS.applicationSubmitted, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { applicationId: p.id } });
       await writeAudit(tx, ctxOf(msg), { action: "application.submit", resourceType: "building_application", resourceId: p.id });
     });
+    // Read-through GET-by-id cache must not keep serving pre-submit state
+    // (CLAUDE.md §6: "the consumer invalidates here").
+    if (applied) await cache.invalidate(cache.makeKey(msg.tenantId, "application", p.id));
   });
 
   queue.subscribe(COMMANDS.withdrawApplication, async (msg) => {
     const p = msg.payload as { id: string; tenantId: string };
+    let applied = false;
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       const ok = await repo.updateStatus(tx, p.id, msg.tenantId, "withdrawn", msg.actorId);
       if (!ok) return;
+      applied = true;
       await enqueue(tx, { topic: EVENTS.applicationWithdrawn, eventType: EVENTS.applicationWithdrawn, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { applicationId: p.id } });
       await writeAudit(tx, ctxOf(msg), { action: "application.withdraw", resourceType: "building_application", resourceId: p.id });
     });
+    if (applied) await cache.invalidate(cache.makeKey(msg.tenantId, "application", p.id));
   });
 
   queue.subscribe(COMMANDS.recordFeePayment, async (msg) => {
     const p = msg.payload as { id: string; tenantId: string; transactionId: string };
+    let applied = false;
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       const ok = await repo.updateFeePayment(tx, p.id, msg.tenantId, p.transactionId, msg.actorId);
       if (!ok) return;
+      applied = true;
       await enqueue(tx, { topic: EVENTS.feePaymentRecorded, eventType: EVENTS.feePaymentRecorded, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { applicationId: p.id, transactionId: p.transactionId } });
       await writeAudit(tx, ctxOf(msg), { action: "application.fee_payment", resourceType: "building_application", resourceId: p.id });
     });
+    if (applied) await cache.invalidate(cache.makeKey(msg.tenantId, "application", p.id));
   });
 }

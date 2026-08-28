@@ -318,6 +318,35 @@ export function registerPayrollConsumers(rawQueue: Queue): void {
       // the same rule (COALESCE(ddo_code,'__ALL__')) as a belt-and-suspenders
       // guard — so two DDOs each get one regular run in the same month.
       if (runType === "regular") {
+        // round2 fix: this check-and-insert is not atomic under READ
+        // COMMITTED. Two runCreate messages for the same tenant+month+DDO
+        // landing close together can both run the SELECT below before either
+        // has committed an INSERT, so neither sees the other — both pass,
+        // both attempt repo.insertRun, and the DB's partial-unique index
+        // (ux_payroll_runs_tenant_month_ddo_regular) stops the loser's
+        // INSERT, but that surfaces as a raw constraint-violation rather than
+        // this handler's own well-understood DUPLICATE_RUN_FOR_PERIOD
+        // rejection — and by then the HTTP layer has already returned 202 for
+        // BOTH requests (commands.ts's synchronous pre-check has the same
+        // blind spot: it also just SELECTs). The loser's run row never exists
+        // (GET on its id 404s forever) and nothing observable records the
+        // failure at the data level.
+        //
+        // A transaction-scoped advisory lock keyed on the same period the
+        // unique index protects serializes concurrent attempts: the loser
+        // blocks here until the winner commits (releasing the lock), then
+        // re-runs the SELECT below, now sees the committed row, and throws
+        // the same clean DUPLICATE_RUN_FOR_PERIOD DomainError as the ordinary
+        // (non-race) duplicate case — which the queue consumer already logs
+        // (queue_consumer_error) and eventually dead-letters like any other
+        // failed handler, instead of racing the INSERT and losing to a raw
+        // unique-violation with no clean rejection path. Mirrors the
+        // established pattern in audit-service's chain-append guard and
+        // hrms-service's GPF/CPF/NPS ledger locks (hashtextextended keyed on
+        // the same columns the invariant is scoped to).
+        const lockKey = `payroll_run:${p.tenantId}:${p.month}:${ddoCode ?? "__ALL__"}:regular`;
+        await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtextextended(${lockKey}, 0))`);
+
         const dup = (await tx.execute(sql`
           SELECT 1 FROM payroll.payroll_runs
           WHERE tenant_id = ${p.tenantId}::uuid AND month = ${p.month}
@@ -915,7 +944,28 @@ async function processPayrollRun(
       // HRMS payroll-input feed. We never add the two together — that deducted
       // the same LOP twice.
       const ledgerLop = await lopRepo.getLopForMonth(p.tenantId, emp.id, p.month);
-      const lopDays = ledgerLop.hasLedger ? ledgerLop.days : (input.lopDays[emp.id] ?? 0);
+      const attendanceLopDays = ledgerLop.hasLedger ? ledgerLop.days : (input.lopDays[emp.id] ?? 0);
+      // BUG-1 fix: mid-month joining pro-ration. Days in the run month BEFORE
+      // dateOfJoining are unpaid, on top of (added to, not instead of) the
+      // leave/attendance LOP above. The two sources cannot legitimately overlap
+      // — no attendance/leave row can exist for a date before the employee's
+      // HRMS record was even created — but Math.min(daysInMonth, ...) below is
+      // a belt-and-suspenders cap so we never withhold pay for more days than
+      // the month actually has, however the two sources combine.
+      // Leaving mid-month is NOT handled here by design: a separated employee
+      // is dropped from the HRMS active-employee feed entirely (see
+      // hrms-client.ts / hrms routes.ts comments), so they never reach this
+      // loop — their last partial month + terminal dues are the Full & Final
+      // Settlement flow's job, priced off its own separationDate.
+      const doj = emp.dateOfJoining;
+      const joinedThisMonth = doj != null && doj.slice(0, 7) === p.month;
+      const joinedAfterThisMonth = doj != null && doj.slice(0, 7) > p.month;
+      const joiningUnpaidDays = joinedAfterThisMonth
+        ? Number(daysInMonth)
+        : joinedThisMonth
+        ? Math.max(0, Number(doj!.slice(8, 10)) - 1)
+        : 0;
+      const lopDays = Math.min(Number(daysInMonth), attendanceLopDays + joiningUnpaidDays);
       // LOP daily rate on (Basic + DA) over actual days in month.
       const dailyRate = (basicMinor + daMinor) / daysInMonth;
       const lopDeduction = dailyRate * BigInt(lopDays);

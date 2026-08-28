@@ -44,6 +44,13 @@ export interface TranscriptView {
   meetingId: string;
   storageKey: string;
   hash: string;
+  /**
+   * Confidentiality classification inherited from the meeting (Req 19.1, 19.3). Gates the read
+   * at the route via `canAccessClassification`, reused from the document module — the SAME
+   * check document/routes.ts applies to every other read of this shared `meeting_documents`
+   * table (audit finding: this module used to skip it entirely).
+   */
+  classification: string;
   fileName: string;
   createdAt: string;
   /** Transcript text, fetched best-effort from object storage (null if unavailable). */
@@ -66,6 +73,7 @@ export async function getTranscript(tenantId: string, meetingId: string): Promis
           meetingId: meetingDocuments.meetingId,
           storageKey: meetingDocuments.storageKey,
           hash: meetingDocuments.hash,
+          classification: meetingDocuments.classification,
           fileName: meetingDocuments.fileName,
           createdAt: meetingDocuments.createdAt,
         })
@@ -86,6 +94,7 @@ export async function getTranscript(tenantId: string, meetingId: string): Promis
         meetingId: row.meetingId,
         storageKey: row.storageKey,
         hash: row.hash,
+        classification: row.classification,
         fileName: row.fileName,
         createdAt: row.createdAt.toISOString(),
       };

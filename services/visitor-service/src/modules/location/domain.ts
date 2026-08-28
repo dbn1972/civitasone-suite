@@ -9,17 +9,31 @@ type DayKey = (typeof DAY_KEYS)[number];
 
 /**
  * Property 28: Capacity Threshold Alerting — true once currentOccupancy
- * reaches or exceeds capacityThreshold (>=, not strictly >, so the
- * check-in that would push occupancy to the threshold is itself rejected).
+ * reaches or exceeds capacityThreshold (>=, not strictly >).
+ *
+ * `currentOccupancy` is the occupancy from BEFORE the check-in under
+ * evaluation (see the check-in/consumer.ts call site). That means a
+ * location CAN reach capacityThreshold exactly: the check-in that brings
+ * occupancy from threshold-1 up to threshold is admitted — only a
+ * check-in evaluated once occupancy is already at/over threshold is
+ * rejected. Do not "fix" the call site to pass occupancy + 1 for a
+ * stricter "occupancy must never reach the threshold at all" behavior
+ * without first confirming that's actually the intended UX.
  */
 export function isOverCapacityThreshold(currentOccupancy: number, capacityThreshold: number): boolean {
   return currentOccupancy >= capacityThreshold;
 }
 
 /**
- * Property 28: Capacity Threshold Alerting — reject new check-ins while the
- * location is at/over its configured capacity threshold. Maps to
- * CAPACITY_EXCEEDED (422) per the design's error-code table.
+ * Property 28: Capacity Threshold Alerting — reject a new check-in once
+ * pre-check-in occupancy is already at/over the configured capacity
+ * threshold. Maps to CAPACITY_EXCEEDED (422) per the design's error-code
+ * table.
+ *
+ * Callers must pass the occupancy from BEFORE the check-in under
+ * evaluation, not occupancy + 1 — see isOverCapacityThreshold's doc
+ * comment above for what that means for whether occupancy can reach
+ * capacityThreshold exactly.
  */
 export function assertWithinCapacity(currentOccupancy: number, capacityThreshold: number): void {
   if (isOverCapacityThreshold(currentOccupancy, capacityThreshold)) {

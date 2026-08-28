@@ -1,4 +1,4 @@
-import { eq, and, sql, desc } from "drizzle-orm";
+import { eq, and, sql, desc, inArray } from "drizzle-orm";
 import { scopedRead, type ScopedTx } from "../../shared/db.js";
 import { parkingViolations, type ViolationRow, type ViolationInsert } from "./schema.js";
 
@@ -47,8 +47,9 @@ export async function updateStatus(
   id: string,
   tenantId: string,
   status: string,
+  fromStatuses: readonly string[],
   updatedBy: string,
-): Promise<boolean> {
+): Promise<ViolationRow | null> {
   const result = await tx.update(parkingViolations)
     .set({
       status,
@@ -56,7 +57,11 @@ export async function updateStatus(
       updatedAt: new Date(),
       version: sql`${parkingViolations.version} + 1`,
     })
-    .where(and(eq(parkingViolations.id, id), eq(parkingViolations.tenantId, tenantId)))
-    .returning({ id: parkingViolations.id });
-  return result.length > 0;
+    .where(and(
+      eq(parkingViolations.id, id),
+      eq(parkingViolations.tenantId, tenantId),
+      inArray(parkingViolations.status, fromStatuses as string[]),
+    ))
+    .returning();
+  return result[0] ?? null;
 }

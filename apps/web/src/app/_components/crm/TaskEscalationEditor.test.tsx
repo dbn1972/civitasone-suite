@@ -21,7 +21,7 @@ describe("TaskEscalationEditor (AC-005)", () => {
   it("shows the saved-info badge on a failed load", async () => {
     vi.mocked(aa.getTaskEscalationRules).mockResolvedValue({ data: [], source: "error" });
     render(<TaskEscalationEditor />);
-    await waitFor(() => expect(screen.getAllByText(/showing saved information/i)[0]).toBeInTheDocument());
+    await waitFor(() => expect(screen.getAllByText(/couldn.t load/i)[0]).toBeInTheDocument());
     expect(screen.getByText(/no task-escalation rules yet/i)).toBeInTheDocument();
   });
 

@@ -4,7 +4,7 @@
  * Mutations are CQRS (queue.publish → 202). Reads remain synchronous.
  */
 import type { FastifyInstance } from "fastify";
-import { z, ZodError } from "zod";
+import { z } from "zod";
 import { sendAccepted } from "@civitasone/schemas/validate";
 import { acceptedResponseSchema } from "@civitasone/schemas/common";
 import {
@@ -13,7 +13,7 @@ import {
   type ExceptionStatus,
   type ExceptionAction,
 } from "@civitasone/reconciliation";
-import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
+import { resolveContext, requireRole, HttpError, financeErrorHandler } from "../../shared/context.js";
 import * as repo from "./repo.js";
 import { listProviders, getProvider } from "./providers.js";
 import * as commands from "./commands.js";
@@ -108,18 +108,5 @@ export async function reconRoutes(app: FastifyInstance): Promise<void> {
     );
   });
 
-  app.setErrorHandler((err, req, reply) => {
-    const correlationId = (req.headers["x-correlation-id"] as string) ?? req.id;
-    if (err instanceof ZodError) {
-      return reply.code(400).send({
-        code: "VALIDATION_FAILED", message: "invalid request", correlationId, retryable: false,
-        fieldErrors: err.issues.map((i) => ({ field: i.path.join("."), message: i.message })),
-      });
-    }
-    if (err instanceof HttpError) {
-      return reply.code(err.status).send({ code: err.code, message: err.message, correlationId, retryable: false });
-    }
-    req.log.error({ err }, "unhandled error");
-    return reply.code(500).send({ code: "INTERNAL", message: "internal error", correlationId, retryable: true });
-  });
+  app.setErrorHandler(financeErrorHandler);
 }

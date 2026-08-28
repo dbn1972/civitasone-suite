@@ -24,11 +24,14 @@ const TYPE_FILTER: Record<StatementType, ((s: FinancialStatementSummary) => bool
 interface StatementsTableProps {
   statements: FinancialStatementSummary[];
   source?: "api" | "error";
+  /** Fiscal year label ("2026-27") the caller resolved from `?fy=` — shown in
+   * the segmented-control header instead of a hardcoded year. */
+  fy?: string;
 }
 
 type StatRow = FinancialStatementSummary & Record<string, unknown>;
 
-export function StatementsTable({ statements, source = "api" }: StatementsTableProps) {
+export function StatementsTable({ statements, source = "api", fy }: StatementsTableProps) {
   const [activeType, setActiveType] = useState<StatementType>("R&P");
   const { data: rows, fromCache, offline, cachedAt } = useSeededResource<FinancialStatementSummary[]>(
     "finance.financialStatements",
@@ -59,7 +62,7 @@ export function StatementsTable({ statements, source = "api" }: StatementsTableP
       ) : null}
       <div className="card-h" style={{ marginBottom: "1rem" }}>
         <span style={{ fontWeight: 500, color: "var(--ink2)" }}>
-          {TYPE_LABEL[activeType]} · FY 2026-27
+          {TYPE_LABEL[activeType]}{fy ? ` · FY ${fy}` : ""}
         </span>
         <Segmented
           options={[...STATEMENT_TYPES]}

@@ -14,6 +14,7 @@ import { pino } from "pino";
 import { and, eq } from "drizzle-orm";
 import { Redis } from "ioredis";
 import type { Queue } from "@civitasone/queue";
+import { NonRetryableError } from "@civitasone/queue";
 import { NOTIFICATION_SEND, buildNotificationPayload } from "@civitasone/events";
 import { db } from "../../shared/db.js";
 import { enqueue, markProcessed, versionedUpdate } from "../../shared/outbox.js";
@@ -152,6 +153,15 @@ export function registerBadgePrintConsumers(queue: Queue): void {
       const pass = passes[0];
       if (!pass) {
         throw new Error(`digital pass '${p.passId}' not found for tenant '${msg.tenantId}'`);
+      }
+      // Revoked/expired passes must never produce a printable badge — a
+      // revoked pass has no scannable QR at the turnstile, but the physical
+      // badge itself would otherwise still be rendered and handed out.
+      // Non-retryable: retrying will never make a revoked pass printable.
+      if (pass.revoked || pass.status === "revoked" || pass.status === "expired") {
+        throw new NonRetryableError(
+          `digital pass '${p.passId}' is ${pass.status}${pass.revoked ? " (revoked)" : ""} — refusing to print a badge for it`,
+        );
       }
 
       const requests = await tx

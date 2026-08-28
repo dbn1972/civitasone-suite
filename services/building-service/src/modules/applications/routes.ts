@@ -57,7 +57,7 @@ export async function applicationRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, BUILDING_ROLES);
     const { id } = idParam.parse(req.params);
-    const cacheKey = `building:${ctx.tenantId}:application:${id}`;
+    const cacheKey = cache.makeKey(ctx.tenantId, "application", id);
     const row = await cache.getOrLoad(cacheKey, () => repo.findById(id, ctx.tenantId));
     if (!row) throw new HttpError(404, "APPLICATION_NOT_FOUND", "Application not found");
     return reply.send({ data: row });

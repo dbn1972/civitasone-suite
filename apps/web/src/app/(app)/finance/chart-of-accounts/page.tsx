@@ -16,7 +16,11 @@ export default async function ChartOfAccountsPage() {
         subtitle="Standard government head-of-account structure synced with CGA."
         actions={
           <>
-            <a href="/finance/chart-of-accounts/new" className="btn ghost">Import LMMHA</a>
+            {/* "Import LMMHA" used to point at the same href as "+ Add Head" —
+                there is no bulk-import feature behind it (that page is a
+                single-head manual create form), so the duplicate button is
+                removed rather than left as a dead second link to the same
+                form. */}
             <a href="/finance/chart-of-accounts/new" className="btn primary">+ Add Head</a>
             {source === "error" ? <DataSourceBadge source={source} /> : null}
           </>

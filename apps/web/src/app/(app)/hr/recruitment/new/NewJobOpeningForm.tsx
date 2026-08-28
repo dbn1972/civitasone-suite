@@ -1,7 +1,8 @@
 "use client";
 
 import { useId, useState, useEffect } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -31,7 +32,6 @@ const inputInvalidStyle: React.CSSProperties = {
 };
 
 export function NewJobOpeningForm() {
-  const router = useRouter();
   const searchParams = useSearchParams();
   const templateId = searchParams.get("templateId");
 
@@ -130,9 +130,12 @@ export function NewJobOpeningForm() {
         return;
       }
 
+      // The API returns 202 Accepted (CQRS command queued), not a completed
+      // creation — say so honestly rather than claiming it's done. Stay on
+      // this page so the confirmation is actually seen (a redirect would
+      // race it off-screen).
       setStatus("success");
-      setMessage("Job opening created successfully.");
-      router.push("/hr/recruitment");
+      setMessage("Job opening submitted. It will appear in the vacancy list shortly.");
     } catch (err) {
       setStatus("error");
       setMessage(err instanceof Error ? err.message : "Network error");
@@ -247,14 +250,21 @@ export function NewJobOpeningForm() {
         />
       </div>
 
-      <button
-        type="submit"
-        disabled={status === "submitting"}
-        className="btn primary"
-        style={{ minHeight: 44, alignSelf: "flex-start" }}
-      >
-        {status === "submitting" ? "Creating…" : "Create Job Opening"}
-      </button>
+      <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
+        <button
+          type="submit"
+          disabled={status === "submitting" || status === "success"}
+          className="btn primary"
+          style={{ minHeight: 44, alignSelf: "flex-start" }}
+        >
+          {status === "submitting" ? "Creating…" : status === "success" ? "Submitted" : "Create Job Opening"}
+        </button>
+        {status === "success" && (
+          <Link href="/hr/recruitment" className="btn ghost" style={{ minHeight: 44, display: "inline-flex", alignItems: "center" }}>
+            Back to Recruitment
+          </Link>
+        )}
+      </div>
 
       {message && (
         <p

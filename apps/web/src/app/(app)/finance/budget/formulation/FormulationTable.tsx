@@ -19,10 +19,12 @@ const TAB_STATUS_MAP: Record<Tab, string[]> = {
 type Row = {
   majorHead: string;
   subHead: string;
-  lastYear: number;
-  proposed: number;
-  expenditure: number;
-  balance: number;
+  // Minor-unit (paise) decimal strings — cellType:"amount" passes these to
+  // formatMoney() directly; do not convert to number here.
+  lastYear: string;
+  proposed: string;
+  expenditure: string;
+  balance: string;
   financialYear: string;
   status: string;
 };

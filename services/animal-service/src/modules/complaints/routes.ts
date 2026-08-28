@@ -64,7 +64,7 @@ export async function complaintRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, USER_ROLES);
     const { id } = idParam.parse(req.params);
-    const cacheKey = `animal:${ctx.tenantId}:complaint:${id}`;
+    const cacheKey = cache.makeKey(ctx.tenantId, "complaint", id);
     const row = await cache.getOrLoad(cacheKey, () => repo.findById(id, ctx.tenantId));
     if (!row) throw new HttpError(404, "COMPLAINT_NOT_FOUND", "Complaint not found");
     return reply.send({ data: row });

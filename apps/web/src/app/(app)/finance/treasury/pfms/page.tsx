@@ -6,9 +6,13 @@ import { PFMSTable } from "./PFMSTable";
 export default async function PfmsPage() {
   const { data: scrolls, source } = await getFinancePFMSScrolls();
   // The pfms/batches row calls this field submissionStatus, not status.
-  const approved = scrolls.filter((s) => String(s.submissionStatus).toLowerCase() === "approved").length;
+  // Real values this enum ever takes (traced every writer in pfms/consumer.ts
+  // and payments/schema.ts's default): "pending", "signed", "submitted".
+  // "approved"/"rejected" are never written anywhere in this codebase — those
+  // two stats were permanently stuck at 0.
+  const signed = scrolls.filter((s) => String(s.submissionStatus).toLowerCase() === "signed").length;
   const pending = scrolls.filter((s) => String(s.submissionStatus).toLowerCase() === "pending").length;
-  const rejected = scrolls.filter((s) => String(s.submissionStatus).toLowerCase() === "rejected").length;
+  const submitted = scrolls.filter((s) => String(s.submissionStatus).toLowerCase() === "submitted").length;
 
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
@@ -20,9 +24,9 @@ export default async function PfmsPage() {
       />
       <StatGrid>
         <StatCard icon="📜" iconBg="#e7edfd" label="Total Scrolls" value={scrolls.length} />
-        <StatCard icon="✅" iconBg="#ecfdf3" label="Approved" value={approved} />
+        <StatCard icon="✅" iconBg="#ecfdf3" label="Signed" value={signed} />
         <StatCard icon="⏳" iconBg="#fffaeb" label="Pending" value={pending} />
-        <StatCard icon="❌" iconBg="#fce7ee" label="Rejected" value={rejected} />
+        <StatCard icon="📤" iconBg="#eff6ff" label="Submitted" value={submitted} />
       </StatGrid>
       <Card title="Payment Scrolls">
         <PFMSTable scrolls={scrolls} source={source === "error" ? "error" : "api"} />

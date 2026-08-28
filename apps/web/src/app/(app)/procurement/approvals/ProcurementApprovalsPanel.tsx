@@ -5,7 +5,8 @@ import { useRouter } from "next/navigation";
 import { useCallback, useState } from "react";
 import { useOfflineResource } from "@/lib/sync/resource";
 import { fetchOrQueue } from "@/lib/sync/requestQueue";
-import { ConfirmDialog, DataTable, EmptyState } from "@/app/_components/ds";
+import { ConfirmDialog, DataTable, EmptyState, ErrorState } from "@/app/_components/ds";
+import { toHumanError } from "@/lib/messages";
 
 type WorkflowTask = {
   id: string;
@@ -17,7 +18,20 @@ type WorkflowTask = {
   refId?: string | null;
 };
 
-const REF_TYPES = new Set(["procurement_indent", "procurement_po"]);
+// L1/L2/L3 fix: this was ["procurement_indent", "procurement_po"] only. The
+// backend also raises workflow approval tasks with refType "procurement_plan"
+// (services/procurement-service/src/modules/planning/consumer.ts, on plan
+// submit) and "procurement_po_amendment" (.../po/amendment-consumer.ts, on
+// amendment request) — see planningRoutes' submit/approve/reject and
+// poAmendmentRoutes' approve/reject. Because this filter ran before those two
+// refTypes existed, any pending Annual Procurement Plan or PO Amendment
+// approval was silently dropped from "Workflow approval queue": it never
+// rendered, so an approver had no way to see or act on it, and the queue's
+// "No pending tasks" empty state was a lie whenever one of these was
+// outstanding. `complete()` below already POSTs generically to
+// /v1/workflow/tasks/:id/complete regardless of refType, so no other change
+// is needed to make Approve/Reject actually work for these task types.
+const REF_TYPES = new Set(["procurement_indent", "procurement_po", "procurement_plan", "procurement_po_amendment"]);
 
 function toTasks(payload: unknown): WorkflowTask[] {
   const rows: WorkflowTask[] = Array.isArray(payload)
@@ -35,7 +49,13 @@ export function ProcurementApprovalsPanel() {
   const [pending, setPending] = useState<Pending | null>(null);
   const [dialogError, setDialogError] = useState<string | undefined>(undefined);
 
-  const { data: tasks, loading, offline, source, cachedAt, refresh } = useOfflineResource<unknown, WorkflowTask[]>(
+  // L3 fix: `error` was never destructured, so a genuine fetch failure (not
+  // offline, just failed, and nothing cached yet) fell straight through to
+  // the tasks.length===0 branch below and rendered "No pending tasks" — the
+  // same "lying empty state" bug class already fixed for DataSourceBadge
+  // elsewhere in this cluster, here hiding real outstanding approvals from an
+  // officer behind what looks like a clean inbox.
+  const { data: tasks, loading, offline, source, cachedAt, error, refresh } = useOfflineResource<unknown, WorkflowTask[]>(
     "procurement.approvals.tasks",
     "/v1/workflow/tasks?status=pending&limit=50",
     { map: toTasks, initialData: [] },
@@ -82,6 +102,11 @@ export function ProcurementApprovalsPanel() {
   function refLink(task: WorkflowTask): string | null {
     if (task.refType === "procurement_indent" && task.refId) return `/procurement/indents/${task.refId}`;
     if (task.refType === "procurement_po" && task.refId) return `/procurement/orders/${task.refId}`;
+    if (task.refType === "procurement_plan" && task.refId) return `/procurement/planning/${task.refId}`;
+    // procurement_po_amendment: refId is the amendment's own id, not the PO's —
+    // there is no per-amendment detail route to link to, so fall back to plain
+    // text (same as any other unrecognised refType) rather than link somewhere
+    // wrong. The row is still fully actionable via Approve/Reject below.
     return null;
   }
 
@@ -165,6 +190,8 @@ export function ProcurementApprovalsPanel() {
 
       {loading && tasks.length === 0 ? (
         <p className="pad" style={{ textAlign: "center", color: "#94a3b8" }}>Loading workflow tasks…</p>
+      ) : error && tasks.length === 0 ? (
+        <ErrorState error={toHumanError("load", { area: "workflow approval queue" })} onRetry={refresh} />
       ) : tasks.length === 0 ? (
         <EmptyState icon="✅" title="No pending tasks" message="No pending procurement workflow tasks at this time." />
       ) : (

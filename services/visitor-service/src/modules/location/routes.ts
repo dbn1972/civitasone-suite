@@ -1,6 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { createLocationBody, createAreaBody, idParam } from "./validators.js";
+import { createLocationBody, createAreaBody, idParam, DEFAULT_BUSINESS_HOURS } from "./validators.js";
 import type { BusinessHours } from "./schema.js";
 import * as repo from "./repo.js";
 import * as commands from "./commands.js";
@@ -29,14 +29,21 @@ export async function locationRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, WRITE_ROLES);
     const body = createLocationBody.parse(req.body);
-    // zod's inferred optional-boolean fields carry an explicit `| undefined`
-    // arm (exactOptionalPropertyTypes-incompatible with the plain-optional
-    // `BusinessHours` type from schema.ts), so re-assert the validated shape.
-    // Task Q-95.1: queue-first CQRS write (route -> zod validate -> publish
-    // -> 202), matching the convention used by every other mutating module.
+    // Fix (2026-08-27 deep-verify): `businessHours` is optional here but
+    // NOT NULL with no DB default on `locations.business_hours` — an
+    // unsafe `as BusinessHours` cast used to paper over that instead of
+    // supplying a value, so omitting the field returned a fake 202
+    // Accepted while the consumer's insert failed closed and the location
+    // never existed. Fall back to DEFAULT_BUSINESS_HOURS instead of casting.
     const accepted = await commands.locationCreate(ctx, {
       ...body,
-      businessHours: body.businessHours as BusinessHours,
+      // Cast: zod's optional fields carry an explicit `| undefined` arm
+      // under exactOptionalPropertyTypes, which the plain-optional
+      // BusinessHours type from schema.ts does not -- a structural-strictness
+      // mismatch only; both accept a missing key identically at runtime.
+      // (This is now the ONLY thing the cast covers -- the undefined-VALUE
+      // bug above it is fixed by the ?? DEFAULT_BUSINESS_HOURS fallback.)
+      businessHours: (body.businessHours ?? DEFAULT_BUSINESS_HOURS) as BusinessHours,
     });
     return reply.code(202).send({ data: accepted });
   });

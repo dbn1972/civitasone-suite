@@ -1,3 +1,4 @@
+import { tenantTransaction } from "@civitasone/db";
 import { cache } from "../../shared/infra.js";
 import { db } from "../../shared/db.js";
 import { assessees } from "./schema.js";
@@ -6,17 +7,23 @@ import { SERVICE } from "../../topics.js";
 
 export async function findAssessee(tenantId: string, id: string) {
   const rows = await cache.getOrLoad(`${SERVICE}:${tenantId}:assessee:${id}`, async () => {
-    return db
-      .select()
-      .from(assessees)
-      .where(and(eq(assessees.tenantId, tenantId), eq(assessees.id, id)));
+    return tenantTransaction(db, tenantId, async (tx) => {
+      const t = tx as typeof db;
+      return t
+        .select()
+        .from(assessees)
+        .where(and(eq(assessees.tenantId, tenantId), eq(assessees.id, id)));
+    });
   });
   return rows?.[0] ?? null;
 }
 
 export async function listAssessees(tenantId: string, pagination: { limit: number; offset: number }) {
   const rows = await cache.getOrLoad(`${SERVICE}:${tenantId}:assessees`, async () => {
-    return db.select().from(assessees).where(eq(assessees.tenantId, tenantId));
+    return tenantTransaction(db, tenantId, async (tx) => {
+      const t = tx as typeof db;
+      return t.select().from(assessees).where(eq(assessees.tenantId, tenantId));
+    });
   });
   const all = rows ?? [];
   const total = all.length;

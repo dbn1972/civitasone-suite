@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { formatMoney } from "@/lib/formatters";
+import { toHumanError } from "@/lib/messages";
 
 type VendorOption = { id: string; name: string };
 
@@ -60,10 +61,10 @@ export function CreateContractForm() {
         headers: { "content-type": "application/json" },
         body: JSON.stringify(body),
       });
-      const text = await res.text();
       if (!res.ok) {
+        const human = toHumanError("save", { area: "contract" });
         setStatus("error");
-        setMessage(text || `Create failed (${res.status})`);
+        setMessage(`${human.what} ${human.next}`);
         return;
       }
       setStatus("accepted");

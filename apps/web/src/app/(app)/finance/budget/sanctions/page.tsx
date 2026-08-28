@@ -10,7 +10,9 @@ export default async function SanctionsPage() {
 
   const approved = sanctions.filter((s) => s.status === "approved").length;
   const pending = sanctions.filter((s) => s.status === "pending").length;
-  const totalAmount = sanctions.reduce((sum, s) => sum + s.amount, 0);
+  // amount is a minor-unit (paise) decimal string — sum as BigInt so
+  // formatMoney() gets the right scale and large totals can't drift.
+  const totalAmount = sanctions.reduce((sum, s) => sum + BigInt(s.amount || "0"), 0n);
 
   return (
     <>

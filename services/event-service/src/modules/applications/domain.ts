@@ -7,23 +7,44 @@ export const APPLICATION_STATUSES = [
   "rejected",
   "permitted",
   "completed",
+  // Was missing entirely: consumer.ts's withdrawApplication handler sets
+  // status="withdrawn" — a value that didn't exist anywhere in this enum or
+  // VALID_TRANSITIONS below, even though routes.ts's own pre-check
+  // (`["draft","submitted"].includes(existing.status)`) clearly intends it as
+  // a real, reachable status. The canonical state machine and actual runtime
+  // behavior had no relationship to each other.
+  "withdrawn",
 ] as const;
 
 export type ApplicationStatus = (typeof APPLICATION_STATUSES)[number];
 
 const VALID_TRANSITIONS: Record<string, ApplicationStatus[]> = {
-  draft: ["submitted"],
-  submitted: ["noc_pending", "approved", "rejected"],
+  draft: ["submitted", "withdrawn"],
+  submitted: ["noc_pending", "approved", "rejected", "withdrawn"],
   noc_pending: ["nocs_received"],
   nocs_received: ["approved", "rejected"],
   approved: ["permitted"],
   permitted: ["completed"],
   rejected: [],
   completed: [],
+  withdrawn: [],
 };
 
 export function canTransition(from: string, to: ApplicationStatus): boolean {
   return (VALID_TRANSITIONS[from] ?? []).includes(to);
+}
+
+/**
+ * The set of statuses an application may currently be in for `to` to be a legal
+ * next status, derived from VALID_TRANSITIONS (same table canTransition uses).
+ * Pass to repo.updateStatus's `fromStatuses` so the guard is enforced atomically
+ * in the UPDATE's WHERE clause, not just as a route-level pre-check that races
+ * against the async consumer doing the actual write.
+ */
+export function fromStatusesFor(to: ApplicationStatus): ApplicationStatus[] {
+  return (Object.keys(VALID_TRANSITIONS) as ApplicationStatus[]).filter((from) =>
+    (VALID_TRANSITIONS[from] ?? []).includes(to),
+  );
 }
 
 export const EVENT_TYPES = [

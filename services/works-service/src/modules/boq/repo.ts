@@ -1,4 +1,4 @@
-import { eq, and, desc } from "drizzle-orm";
+import { eq, and, desc, inArray } from "drizzle-orm";
 import { scopedRead } from "../../shared/db.js";
 import { boqItems, recapitulation } from "./schema.js";
 
@@ -6,6 +6,24 @@ export async function listBoqItems(tenantId: string, workId: string) {
   return scopedRead(async (tx) => {
     return tx.select().from(boqItems)
       .where(and(eq(boqItems.tenantId, tenantId), eq(boqItems.workId, workId)));
+  });
+}
+
+export async function getBoqItemById(tenantId: string, id: string) {
+  return scopedRead(async (tx) => {
+    const rows = await tx.select().from(boqItems)
+      .where(and(eq(boqItems.tenantId, tenantId), eq(boqItems.id, id)));
+    return rows[0] ?? null;
+  });
+}
+
+/** Batch lookup — avoids N+1 when pricing a set of measurement lines (e.g.
+ * computing a bill's measured value from every measurement under an MB). */
+export async function listBoqItemsByIds(tenantId: string, ids: string[]) {
+  if (ids.length === 0) return [];
+  return scopedRead(async (tx) => {
+    return tx.select().from(boqItems)
+      .where(and(eq(boqItems.tenantId, tenantId), inArray(boqItems.id, ids)));
   });
 }
 

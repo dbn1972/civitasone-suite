@@ -16,7 +16,7 @@ function ctxOf(msg: { tenantId: string; actorId: string; correlationId: string }
 export function registerAssetConsumers(rawQueue: Queue): void {
   const queue = tenantScoped(rawQueue);
 
-  queue.subscribe(COMMANDS.assetCreate, async (msg) => {
+  queue.subscribe(COMMANDS.CREATE_ASSET, async (msg) => {
     const p = msg.payload as any;
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
@@ -27,7 +27,7 @@ export function registerAssetConsumers(rawQueue: Queue): void {
         createdBy: msg.actorId, updatedBy: msg.actorId,
       });
       await enqueue(tx, {
-        topic: EVENTS.assetCreated, eventType: EVENTS.assetCreated,
+        topic: EVENTS.ASSET_CREATED, eventType: EVENTS.ASSET_CREATED,
         tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
         payload: { assetId: p.id, assetCode: p.assetCode, assetType: p.assetType },
       });
@@ -36,7 +36,7 @@ export function registerAssetConsumers(rawQueue: Queue): void {
     log.info({ id: p.id }, "asset created");
   });
 
-  queue.subscribe(COMMANDS.assetUpdate, async (msg) => {
+  queue.subscribe(COMMANDS.UPDATE_ASSET, async (msg) => {
     const p = msg.payload as any;
     let applied = false;
     await db.transaction(async (tx) => {
@@ -45,7 +45,7 @@ export function registerAssetConsumers(rawQueue: Queue): void {
       if (!ok) return;
       applied = true;
       await enqueue(tx, {
-        topic: EVENTS.assetUpdated, eventType: EVENTS.assetUpdated,
+        topic: EVENTS.ASSET_UPDATED, eventType: EVENTS.ASSET_UPDATED,
         tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
         payload: { assetId: p.id, fields: Object.keys(p.patch) },
       });
@@ -54,7 +54,7 @@ export function registerAssetConsumers(rawQueue: Queue): void {
     if (applied) log.info({ id: p.id }, "asset updated");
   });
 
-  queue.subscribe(COMMANDS.assetMaintenance, async (msg) => {
+  queue.subscribe(COMMANDS.RECORD_MAINTENANCE, async (msg) => {
     const p = msg.payload as any;
     let applied = false;
     await db.transaction(async (tx) => {
@@ -71,7 +71,7 @@ export function registerAssetConsumers(rawQueue: Queue): void {
       if (!ok) return;
       applied = true;
       await enqueue(tx, {
-        topic: EVENTS.assetMaintenanceRecorded, eventType: EVENTS.assetMaintenanceRecorded,
+        topic: EVENTS.MAINTENANCE_RECORDED, eventType: EVENTS.MAINTENANCE_RECORDED,
         tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
         payload: { assetId: p.id },
       });

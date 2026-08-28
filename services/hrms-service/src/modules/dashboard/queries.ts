@@ -12,12 +12,13 @@ export async function getDashboard(tenantId: string): Promise<{
   onLeave: number;
   payrollDue: number;
   departmentBreakdown: { name: string; count: number }[];
+  employeeTypeBreakdown: { name: string; count: number }[];
 }> {
   const today = new Date().toISOString().slice(0, 10);
   const now = new Date();
   const firstOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10);
 
-  const { headcountRow, headcountLastMonthRow, pendingRow, presentRow, onLeaveRow, deptRows } =
+  const { headcountRow, headcountLastMonthRow, pendingRow, presentRow, onLeaveRow, deptRows, employeeTypeRows } =
     await db.transaction(async (tx) => {
       const [headcountRow] = await tx
         .select({ count: sql<number>`count(*)::int` })
@@ -74,7 +75,22 @@ export async function getDashboard(tenantId: string): Promise<{
           eq(hrmsEmployees.status, "on_leave"),
         ));
 
-      return { headcountRow, headcountLastMonthRow, pendingRow, presentRow, onLeaveRow, deptRows };
+      // Tenant-wide headcount by employeeType (mirrors headcount's "not separated" scope,
+      // so per-type counts sum to the same total shown for "All"). Independent of any
+      // list-endpoint pagination -- see employees/page.tsx type-tabs.
+      const employeeTypeRows = await tx
+        .select({
+          name: hrmsEmployees.employeeType,
+          count: sql<number>`count(*)::int`,
+        })
+        .from(hrmsEmployees)
+        .where(and(
+          eq(hrmsEmployees.tenantId, tenantId),
+          ne(hrmsEmployees.status, "separated"),
+        ))
+        .groupBy(hrmsEmployees.employeeType);
+
+      return { headcountRow, headcountLastMonthRow, pendingRow, presentRow, onLeaveRow, deptRows, employeeTypeRows };
     });
 
   const headcount = headcountRow?.count ?? 0;
@@ -99,6 +115,7 @@ export async function getDashboard(tenantId: string): Promise<{
     onLeave: onLeaveRow?.count ?? 0,
     payrollDue: 0,
     departmentBreakdown,
+    employeeTypeBreakdown: employeeTypeRows.map((r) => ({ name: r.name, count: r.count })),
   };
 }
 

@@ -77,7 +77,7 @@
             </div>
             <div class="demo-password">
                 <span class="demo-pw-label">Password (all accounts):</span>
-                <code class="demo-pw-value">CivitasOne#2026!</code>
+                <span class="demo-pw-value">Ask your team lead for the current sandbox password</span>
             </div>
         </div>
       </div>

@@ -84,6 +84,13 @@ run_bootstrap "$ROOT/infra/db/bootstrap/bootstrap_inspection.sql"
 # against a throwaway container: `schema "X" does not exist` was the largest single
 # cause of migration failure (30 of 97). Must run before the migration loop.
 run_bootstrap "$ROOT/infra/db/bootstrap/bootstrap_missing_schemas.sql"
+# Municipal Sec5 batch 3 (crematorium/drainage/event/fire/market/parking) had
+# roles/dbs wired into scripts/dev/migrate-all.mjs + grant-all.mjs for local dev
+# (PR #830) but no bootstrap file here at all -- the same "role/database never
+# created in CI" gap the blocks above this one already fixed for their own
+# batches. Without this, all 6 services' migrations fail in CI with
+# "database does not exist" before the migration loop ever reaches them.
+run_bootstrap "$ROOT/infra/db/bootstrap/bootstrap_sec5_batch3.sql"
 
 # Every migration that fails is recorded here and reconciled against a committed
 # allow-list at the end of this script. Before that reconciliation existed, a
@@ -276,11 +283,16 @@ psql -h "$PGHOST" -p "$PGPORT" -U "$ADMIN_USER" -d civitas_inspection \
 # mechanism behind the 231 declared-but-missing columns the schema-drift guard
 # reports: a migration aborts, its tables are never created, and nothing fails.
 #
-# Ratcheted rather than strict, because 33 migrations still fail for reasons that
-# each need their own fix. The allow-list is TRACKED DEBT, not approval:
+# Ratcheted rather than strict, so any future migration that fails on a fresh
+# cluster gets exactly one chance to be tracked-and-explained before it's a hard
+# failure. The allow-list is TRACKED DEBT, not approval:
 #   - a failure NOT in the list      -> exit 1 (new breakage)
 #   - a list entry that now PASSES   -> exit 1 (stale; remove it so the breakage
 #                                       cannot be reintroduced for free)
+# As of the fix landed 2026-08-27, the list is empty (0 entries) — every
+# migration that used to fail on a fresh cluster has a real fix. Kept as an
+# empty, version-controlled file rather than deleting the mechanism: the day a
+# migration breaks again, this is where it gets caught and named.
 #
 # Regenerate only after a real fix, and only against a FRESH cluster — measuring
 # on a developer machine understates failures, because schemas and roles created
@@ -290,10 +302,20 @@ psql -h "$PGHOST" -p "$PGPORT" -U "$ADMIN_USER" -d civitas_inspection \
 #   PGHOST=localhost PGPORT=5499 PGUSER=civitas PGPASSWORD=civitas_test \
 #     PGDATABASE=civitas_test POSTGRES_ADMIN_PASSWORD=civitas_test \
 #     BOOTSTRAP_WRITE_ALLOWLIST=1 bash scripts/ci/bootstrap-postgres.sh
+#
+# `awk 'NF'` below, not `grep -v '^$'`: with `set -o pipefail` (see top of file),
+# a pipeline's exit status is non-zero if ANY stage fails, and `grep -v` follows
+# the general grep convention of exiting 1 when it selects zero lines — which is
+# exactly what "zero observed failures" or "zero allow-listed entries" produces.
+# That non-zero status would trip `set -e` and abort the script before it could
+# ever print success, INCLUDING in the now-real case of a fully clean run. Never
+# reproduced before today because the allow-list had never been empty. `awk 'NF'`
+# does the same "drop blank lines" job but exits 0 regardless of how many lines
+# matched, so a genuinely clean result can actually be reported as one.
 ALLOWLIST="$ROOT/scripts/ci/migration-failure-allowlist.txt"
 
 printf '%s\n' "${MIGRATION_FAILURES[@]+"${MIGRATION_FAILURES[@]}"}" \
-  | grep -v '^$' | sort -u > /tmp/bootstrap-failures-observed.txt || true
+  | awk 'NF' | sort -u > /tmp/bootstrap-failures-observed.txt
 observed_count=$(wc -l < /tmp/bootstrap-failures-observed.txt | tr -d ' ')
 
 if [ "${BOOTSTRAP_WRITE_ALLOWLIST:-0}" = "1" ]; then
@@ -305,7 +327,7 @@ if [ "${BOOTSTRAP_WRITE_ALLOWLIST:-0}" = "1" ]; then
     echo "# Regenerate with BOOTSTRAP_WRITE_ALLOWLIST=1 against a throwaway container."
     echo "# Generated: $(date -u +%Y-%m-%d)  Count: ${observed_count}"
     printf '%s\n' "${MIGRATION_FAILURE_REASONS[@]+"${MIGRATION_FAILURE_REASONS[@]}"}" \
-      | grep -v '^$' | sort -u \
+      | awk 'NF' | sort -u \
       | awk -F'|' '{ printf "%-58s # %s\n", $1, $2 }'
   } > "$ALLOWLIST"
   echo "📝 allow-list written: ${observed_count} entries → ${ALLOWLIST}"
@@ -321,7 +343,7 @@ fi
 
 # Strip the trailing "# reason" annotation and surrounding whitespace before
 # comparing, so editing a reason never changes the gate's verdict.
-sed 's/#.*//' "$ALLOWLIST" | sed 's/[[:space:]]*$//' | grep -v '^$' | sort -u \
+sed 's/#.*//' "$ALLOWLIST" | sed 's/[[:space:]]*$//' | awk 'NF' | sort -u \
   > /tmp/bootstrap-failures-allowed.txt
 novel=$(comm -23 /tmp/bootstrap-failures-observed.txt /tmp/bootstrap-failures-allowed.txt)
 stale=$(comm -13 /tmp/bootstrap-failures-observed.txt /tmp/bootstrap-failures-allowed.txt)

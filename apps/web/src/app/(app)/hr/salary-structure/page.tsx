@@ -80,7 +80,7 @@ export default async function SalaryStructurePage() {
         back="/hr"
         actions={<span />}
       />
-      <DataSourceBadge source={source} />
+      <DataSourceBadge source={source} message="Couldn't load — showing nothing" />
       <StatGrid>
         <StatCard icon="📊" iconBg="#e6f0ff" label="Structures" value={items.length} />
         <StatCard icon="✅" iconBg="#e6f7f0" label="Active" value={active} />

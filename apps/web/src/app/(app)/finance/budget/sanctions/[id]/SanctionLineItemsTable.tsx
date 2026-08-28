@@ -3,7 +3,9 @@
 import { DataTable } from "../../../../../_components/ds";
 import { formatMoney } from "@/lib/formatters";
 
-type LineItem = { description: string; amount: number; head: string } & Record<string, unknown>;
+// Minor units (paise) as a bigint-safe decimal string, matching
+// SanctionDetailSchema.lineItems[].amount — pass straight to formatMoney().
+type LineItem = { description: string; amount: string; head: string } & Record<string, unknown>;
 
 export function SanctionLineItemsTable({ rows }: { rows: LineItem[] }) {
   return (
@@ -16,8 +18,8 @@ export function SanctionLineItemsTable({ rows }: { rows: LineItem[] }) {
           label: "Amount",
           align: "right",
           render: (item) => (
-            <span aria-label={`Amount ${formatMoney(item.amount as number)}`}>
-              {formatMoney(item.amount as number)}
+            <span aria-label={`Amount ${formatMoney(item.amount as string)}`}>
+              {formatMoney(item.amount as string)}
             </span>
           ),
         },

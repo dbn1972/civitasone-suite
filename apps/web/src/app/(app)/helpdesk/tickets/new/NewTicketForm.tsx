@@ -7,6 +7,19 @@ import { useToast } from "@/app/_components/ds/Toast";
 
 type Priority = "Low" | "Medium" | "High" | "Critical";
 
+/**
+ * Citizen-facing ticket intake — posts to citizen-service (POST
+ * /v1/citizen/tickets), which is what /helpdesk/tickets (the list this form
+ * links back to) also reads from. citizen-service's priority enum is
+ * lowercase ("low"|"medium"|"high"|"critical"), unlike the Capitalized
+ * helpdesk-service enum, so the value is lowercased before sending. Staff
+ * ticket intake for the internal ops queue lives at helpdesk/internal/new
+ * (NewInternalTicketForm.tsx), which correctly targets helpdesk-service.
+ */
+function toApiPriority(p: Priority): string {
+  return p.toLowerCase();
+}
+
 export function NewTicketForm() {
   const router = useRouter();
   const { toast } = useToast();
@@ -34,19 +47,26 @@ export function NewTicketForm() {
     const body: Record<string, string> = {
       subject: subject.trim(),
       description: description.trim(),
-      priority,
+      priority: toApiPriority(priority),
     };
 
     try {
-      const res = await fetch("/api/proxy/v1/helpdesk/tickets", {
+      const res = await fetch("/api/proxy/v1/citizen/tickets", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify(body),
       });
-      const text = await res.text();
       if (!res.ok) {
+        const text = await res.text();
+        let human = text || `Request failed (${res.status})`;
+        try {
+          const parsed = JSON.parse(text) as { message?: string };
+          if (parsed.message) human = parsed.message;
+        } catch {
+          /* not JSON — fall back to the raw text above */
+        }
         setStatus("error");
-        setMessage(text || `Request failed (${res.status})`);
+        setMessage(human);
         return;
       }
       toast.success("Ticket submitted successfully.");
@@ -79,6 +99,7 @@ export function NewTicketForm() {
             value={subject}
             onChange={(e) => setSubject(e.target.value)}
             required
+            maxLength={200}
             style={{ minHeight: 44 }}
             placeholder="Brief summary of the issue"
             disabled={isSubmitting}
@@ -96,6 +117,7 @@ export function NewTicketForm() {
             value={description}
             onChange={(e) => setDescription(e.target.value)}
             required
+            maxLength={5000}
             placeholder="Describe the issue in detail…"
             disabled={isSubmitting}
           />

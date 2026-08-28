@@ -6,7 +6,7 @@
  * Action buttons per stage. Horizontal progress timeline.
  */
 import { useState } from "react";
-import { StatusPill } from "@/app/_components/ds";
+import { StatusPill, ConfirmDialog } from "@/app/_components/ds";
 import { formatIndianDate } from "@/lib/formatters";
 import { useToast } from "@/app/_components/ds/Toast";
 
@@ -68,16 +68,29 @@ interface Props {
   onAction?: () => void;
 }
 
+type PendingStage = {
+  path: string;
+  body: Record<string, string>;
+  label: string;
+  title: string;
+  description: string;
+};
+
 export function TransferOrderCard({ transfer, onAction }: Props) {
   const { toast } = useToast();
   const [acting, setActing] = useState(false);
+  const [pending, setPending] = useState<PendingStage | null>(null);
+  const [dialogError, setDialogError] = useState<string | undefined>();
   const statusLabel = STAGE_LABEL[transfer.status] ?? transfer.status;
   const currentIdx = stageIndex(transfer.status);
   const today = new Date().toISOString().split("T")[0] ?? "";
   const isClosed = ["joined", "completed", "cancelled"].includes(transfer.status);
+  const isCancelled = transfer.status === "cancelled";
+  const empLabel = transfer.employee ?? transfer.employeeId ?? "Unknown";
 
   const postAction = async (path: string, body: Record<string, string>) => {
     setActing(true);
+    setDialogError(undefined);
     try {
       const res = await fetch(
         `/api/proxy/v1/hrms/lifecycle/transfers/${transfer.id}/${path}`,
@@ -85,9 +98,10 @@ export function TransferOrderCard({ transfer, onAction }: Props) {
       );
       if (!res.ok) throw new Error(await res.text() || `HTTP ${res.status}`);
       toast.success("Transfer updated. Change will reflect shortly.");
+      setPending(null);
       onAction?.();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Action failed");
+      setDialogError(err instanceof Error ? err.message : "Action failed");
     } finally {
       setActing(false);
     }
@@ -95,7 +109,6 @@ export function TransferOrderCard({ transfer, onAction }: Props) {
 
   const fromLabel = transfer.fromOffice ?? transfer.fromDeptId ?? "—";
   const toLabel   = transfer.toOffice   ?? transfer.toDeptId   ?? "—";
-  const empLabel  = transfer.employee   ?? transfer.employeeId ?? "Unknown";
 
   return (
     <div className="card" style={{ marginBottom: 0 }} aria-label={`Transfer order for ${empLabel}`}>
@@ -144,6 +157,11 @@ export function TransferOrderCard({ transfer, onAction }: Props) {
         </div>
 
         {/* Stage progress timeline */}
+        {isCancelled ? (
+          <p style={{ margin: "16px 0 6px", fontSize: "0.8125rem", color: "var(--ink2)" }}>
+            This transfer order was cancelled before completing the pipeline below.
+          </p>
+        ) : (
         <div
           aria-label="Transfer status timeline"
           style={{ display: "flex", alignItems: "flex-start", margin: "16px 0 6px", overflowX: "auto", paddingBottom: 4 }}
@@ -183,34 +201,65 @@ export function TransferOrderCard({ transfer, onAction }: Props) {
             );
           })}
         </div>
+        )}
 
-        {/* Action buttons per stage */}
+        {/* Action buttons per stage -- each is a real, hard-to-reverse
+            lifecycle transition (an issued order number, an official
+            relieving date, a join date), so each is gated by a
+            ConfirmDialog naming the employee and the exact effective date
+            rather than firing on a bare click. */}
         {!isClosed && (
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 12 }}>
             {(transfer.status === "pending" || transfer.status === "initiated") && (
               <button className="btn primary" style={{ fontSize: 13 }} disabled={acting}
-                onClick={() => void postAction("issue-order", {
-                  orderNo: `TO-${transfer.id.slice(0, 8).toUpperCase()}`,
-                  orderDate: today,
+                onClick={() => setPending({
+                  path: "issue-order",
+                  body: { orderNo: `TO-${transfer.id.slice(0, 8).toUpperCase()}`, orderDate: today },
+                  label: "Issue Order",
+                  title: "Issue the transfer order?",
+                  description: `This issues a formal transfer order for ${empLabel} (${fromLabel} → ${toLabel}), dated ${today}. The order number cannot be un-issued once created.`,
                 })}>
                 {acting ? "Processing…" : "Issue Order"}
               </button>
             )}
             {(transfer.status === "order_issued" || transfer.status === "approved") && !transfer.relievedDate && (
               <button className="btn primary" style={{ fontSize: 13 }} disabled={acting}
-                onClick={() => void postAction("relieve", { relievedDate: today })}>
+                onClick={() => setPending({
+                  path: "relieve",
+                  body: { relievedDate: today },
+                  label: "Mark Relieved",
+                  title: "Mark this employee relieved?",
+                  description: `This records ${empLabel} as relieved from ${fromLabel} effective ${today}, ending their tenure at the current post.`,
+                })}>
                 {acting ? "Processing…" : "Mark Relieved"}
               </button>
             )}
             {transfer.status === "relieved" && !transfer.joinedDate && (
               <button className="btn primary" style={{ fontSize: 13 }} disabled={acting}
-                onClick={() => void postAction("join", { joinedDate: today })}>
+                onClick={() => setPending({
+                  path: "join",
+                  body: { joinedDate: today },
+                  label: "Mark Joined",
+                  title: "Mark this employee joined?",
+                  description: `This records ${empLabel} as joined at ${toLabel} effective ${today} and completes the transfer.`,
+                })}>
                 {acting ? "Processing…" : "Mark Joined"}
               </button>
             )}
           </div>
         )}
       </div>
+
+      <ConfirmDialog
+        open={pending !== null}
+        title={pending?.title ?? "Confirm"}
+        description={pending?.description}
+        confirmLabel={pending?.label ?? "Confirm"}
+        busy={acting}
+        errorMessage={dialogError}
+        onConfirm={() => pending && void postAction(pending.path, pending.body)}
+        onCancel={() => { if (!acting) { setPending(null); setDialogError(undefined); } }}
+      />
     </div>
   );
 }

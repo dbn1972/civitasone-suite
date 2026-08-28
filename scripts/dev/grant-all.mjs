@@ -46,6 +46,32 @@ const DB_USERS = {
   civitas_meeting: "meeting_svc",
   civitas_ml: "ml_svc",
   civitas_inspection: "inspection_svc",
+  // Municipal Sec5 batch 2 (deep-verification pass, 2026-08-27): roles/DBs
+  // provisioned and migrations authored for these 5 in the same change. Scoped
+  // deliberately to just these 5 — civitas_advertisement/animal/vendor above
+  // this block have the identical missing-grant defect (their *_svc roles hold
+  // only the CONNECT/CREATE bits `\l` shows at the database level, not the
+  // schema/table grants this script applies) but that gap predates this batch
+  // and is tracked separately; left untouched here to avoid colliding with
+  // whoever picks that up.
+  civitas_parks: "parks_svc",
+  civitas_refund: "refund_svc",
+  civitas_roadcut: "roadcut_svc",
+  civitas_shop: "shop_svc",
+  civitas_trade: "trade_svc",
+  // Municipal Sec5 batch 3 (deep-verification pass, 2026-08-27): migrate-all.mjs's
+  // SERVICES list now provisions civitas_crematorium/drainage/event/fire/market/
+  // parking (see the matching comment there), but grant-all.mjs never learned
+  // about this batch either -- same "tables exist, *_svc role has no grants on
+  // them" gap the async-infra and Sec5-batch-2 blocks above this one already
+  // fixed for their own services. Caught reviewing PR #830 (drainage-service);
+  // fixed for the whole batch at once rather than leaving the other 5 broken.
+  civitas_crematorium: "crematorium_svc",
+  civitas_drainage: "drainage_svc",
+  civitas_event: "event_svc",
+  civitas_fire: "fire_svc",
+  civitas_market: "market_svc",
+  civitas_parking: "parking_svc",
 };
 
 const GRANT_SQL = (role) => `

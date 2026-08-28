@@ -101,6 +101,14 @@ export async function findDisbursementByIdTx(tx: Writer, id: string, tenantId: s
   return rows[0] ?? null;
 }
 
+export async function findDisbursementById(id: string, tenantId: string): Promise<DisbursementRow | null> {
+  return runWithTenant(tenantId, () => scopedRead(async (tx) => {
+    const rows = await tx.select().from(grantDisbursements)
+      .where(and(eq(grantDisbursements.id, id), eq(grantDisbursements.tenantId, tenantId))).limit(1);
+    return rows[0] ?? null;
+  }));
+}
+
 export async function insertPfmsRecord(tx: Writer, row: PfmsRecordInsert): Promise<void> {
   await tx.insert(grantPfmsRecords).values(row);
 }
@@ -147,11 +155,39 @@ export async function findReleasableInstallmentsByMilestone(
     .limit(200);
 }
 
-/** Resolve beneficiary bank details from a reference. Returns null if not found. */
-export async function findBeneficiaryByRef(tx: Writer, ref: string, tenantId: string): Promise<{ name: string; accountNo: string; ifsc: string } | null> {
+/**
+ * Resolve beneficiary bank details from a `beneficiaryBankRef` pointer
+ * ("grant_bank_accounts:UUID") for a real (non-mock) PFMS submission.
+ *
+ * BUG FIX: this previously queried `disbursement.grant_bank_accounts`
+ * (columns `beneficiary_name`, `account_no`) — a table/schema that has never
+ * existed in any migration. The real table is `beneficiary.grant_bank_accounts`
+ * (joined to `beneficiary.grant_beneficiaries` for the name), and by DPDP
+ * design (see beneficiary/schema.ts) it only ever holds `account_no_masked`
+ * (last 4 digits) — grant-service never stores a full account number anywhere.
+ * In mock mode (the default, and what this environment runs) this function is
+ * never called, so the bug was latent. The moment PFMS_MODE is sandbox/production
+ * this would have thrown "relation does not exist", or — if some other table
+ * happened to exist at that name — silently sent unvetted data to a real
+ * government disbursement API.
+ *
+ * Returned `accountNoMasked` is NOT sufficient to actually route a bank
+ * transfer; callers in real PFMS mode must fail closed rather than send a
+ * masked/blank account number to PFMS (see disbursement/consumer.ts).
+ * Resolving a genuine full account number for live PFMS submission requires a
+ * dedicated, separately-secured KYC/bank vault this service intentionally does
+ * not hold — that is a follow-up integration decision, not something to patch
+ * over here.
+ */
+export async function findBeneficiaryByRef(
+  tx: Writer, ref: string, tenantId: string,
+): Promise<{ name: string; accountNoMasked: string; ifsc: string } | null> {
   const rows = await (tx as typeof db).execute(
-    sql`SELECT beneficiary_name AS name, account_no, ifsc FROM disbursement.grant_bank_accounts WHERE id = ${ref}::uuid AND tenant_id = ${tenantId}::uuid LIMIT 1`,
-  ) as unknown as Array<{ name: string; account_no: string; ifsc: string }>;
+    sql`SELECT gb.name AS name, ba.account_no_masked AS account_no_masked, ba.bank_ifsc AS ifsc
+        FROM beneficiary.grant_bank_accounts ba
+        JOIN beneficiary.grant_beneficiaries gb ON gb.id = ba.beneficiary_id AND gb.tenant_id = ba.tenant_id
+        WHERE ba.id = ${ref}::uuid AND ba.tenant_id = ${tenantId}::uuid LIMIT 1`,
+  ) as unknown as Array<{ name: string; account_no_masked: string; ifsc: string }>;
   const r = rows[0];
-  return r ? { name: r.name, accountNo: r.account_no, ifsc: r.ifsc } : null;
+  return r ? { name: r.name, accountNoMasked: r.account_no_masked, ifsc: r.ifsc } : null;
 }

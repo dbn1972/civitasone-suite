@@ -20,6 +20,7 @@ export const COMMANDS = {
   // lifecycle
   requestRenewal: "shop.renewal.request",
   decideRenewal: "shop.renewal.decide",
+  recordRenewalFeePayment: "shop.renewal.record_fee_payment",
 } as const;
 
 export const EVENTS = {
@@ -44,6 +45,7 @@ export const EVENTS = {
   // lifecycle
   renewalRequested: "shop.renewal.requested",
   renewalDecided: "shop.renewal.decided",
+  renewalFeePaymentRecorded: "shop.renewal.fee_payment_recorded",
 } as const;
 
 export const CONSUMED_EVENTS = {} as const;

@@ -18,7 +18,7 @@ describe("AssignmentLogView (AS-001/002 history + AS-004 ageing)", () => {
   it("shows the saved-info badge and dashes on a failed load", async () => {
     vi.mocked(as.getAssignmentLog).mockResolvedValue({ data: [], source: "error" });
     render(<AssignmentLogView leadId="l1" />);
-    await waitFor(() => expect(screen.getByText(/showing saved information/i)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText("Couldn't load — showing nothing")).toBeInTheDocument());
     expect(screen.getByText(/assignment history unavailable/i)).toBeInTheDocument();
     // ageing header must not fabricate a value.
     expect(screen.getAllByText("—").length).toBeGreaterThan(0);

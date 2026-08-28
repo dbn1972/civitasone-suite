@@ -36,7 +36,12 @@ export function DispatchPOActions({ poId, canDispatch }: { poId: string; canDisp
         throw new Error(msg);
       }
       setOpen(false);
-      setMessage("PO dispatched to vendor.");
+      // L3 fix: `/dispatch` is a 202-accepted async command (processed by a
+      // queue consumer), not a synchronous state change — the PO's status may
+      // not be "dispatched" yet by the time this resolves. Don't claim the
+      // vendor has been notified; say what actually happened (accepted for
+      // processing) and let the refreshed StatusPill show the real state.
+      setMessage("Dispatch request submitted. The status above will update to “Dispatched” once processing completes.");
       router.refresh();
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Network error";

@@ -47,7 +47,7 @@ describe("CampaignList (MK-001)", () => {
   it("shows the saved-information badge on a failed list load, not fabricated zeros", async () => {
     vi.mocked(api.getCampaigns).mockResolvedValue({ data: [], source: "error" });
     render(<CampaignList />);
-    await waitFor(() => expect(screen.getAllByText(/showing saved information/i).length).toBeGreaterThan(0));
+    await waitFor(() => expect(screen.getAllByText(/couldn.t load/i).length).toBeGreaterThan(0));
     // must NOT claim "No campaigns yet" as fact when the fetch failed
     expect(screen.queryByText(/no campaigns yet/i)).not.toBeInTheDocument();
   });

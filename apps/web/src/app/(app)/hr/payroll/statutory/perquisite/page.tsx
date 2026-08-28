@@ -57,7 +57,7 @@ export default async function PerquisitePage({ searchParams }: { searchParams?: 
         subtitle="Itemised perquisite components (Sec 17(2)) and the statutory Form 12BA statement."
         back="/hr/payroll/statutory"
       />
-      {canLookup && <DataSourceBadge source={source === "error" ? "error" : "api"} />}
+      {canLookup && <DataSourceBadge source={source === "error" ? "error" : "api"} message="Couldn't load — showing nothing" />}
 
       {canLookup && form12ba && (
         <StatGrid>

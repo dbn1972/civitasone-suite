@@ -22,7 +22,7 @@ const ACTIONS: QuickAction[] = [
   {
     label: "Run Payroll",
     desc: "Current month cycle",
-    href: "/hr/payroll/period",
+    href: "/hr/payroll",
     iconColor: "#f0fdf4",
     icon: <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#16a34a" strokeWidth="2" aria-hidden="true"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg>,
   },

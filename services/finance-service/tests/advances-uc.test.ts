@@ -97,7 +97,11 @@ describe("POST /v1/finance/advances — HTTP surface", () => {
     const res = await app.inject({
       method: "POST", url: "/v1/finance/advances",
       headers: { authorization: `Bearer ${makeToken()}`, "content-type": "application/json" },
-      payload: { advanceNo: "ADV-OK-1", purpose: "Site visit", payee: "R. Sharma", amountMinor: 250000, currency: "INR", dueDate: "2025-12-31" },
+      // BUG FIX (bigint-safe money fields): amountMinor is now string-only at
+      // this route (matches createBillBody.grossMinor's established
+      // precision-safe pattern) — a raw JSON number can silently lose
+      // precision above 2^53 before Zod ever sees it.
+      payload: { advanceNo: "ADV-OK-1", purpose: "Site visit", payee: "R. Sharma", amountMinor: "250000", currency: "INR", dueDate: "2025-12-31" },
     });
     await app.close();
     expect(res.statusCode).toBe(202);
@@ -176,7 +180,9 @@ describe("POST /v1/finance/utilization-certificates — HTTP surface", () => {
     const res = await app.inject({
       method: "POST", url: "/v1/finance/utilization-certificates",
       headers: { authorization: `Bearer ${makeToken()}`, "content-type": "application/json" },
-      payload: { ucNo: "UC-OK-1", purpose: "Scheme X utilisation", scheme: "PMAY-G", amountMinor: 750000, currency: "INR" },
+      // BUG FIX (bigint-safe money fields): amountMinor is now string-only at
+      // this route — see the advances test above for the full rationale.
+      payload: { ucNo: "UC-OK-1", purpose: "Scheme X utilisation", scheme: "PMAY-G", amountMinor: "750000", currency: "INR" },
     });
     await app.close();
     expect(res.statusCode).toBe(202);

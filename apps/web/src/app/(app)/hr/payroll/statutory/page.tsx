@@ -16,7 +16,6 @@ const tiles: NavTile[] = [
 ];
 
 // GoI statutory rates — updated per latest FinMin / EPFO / ESIC circulars (Aug 2026)
-// Status is placeholder; a real implementation would query challan filings API.
 // Wage ceilings in paise (minor units): EPF wage ceil = ₹15,000 = 1,500,000 minor
 const STATUTORY_CARDS = [
   {
@@ -26,7 +25,6 @@ const STATUTORY_CARDS = [
     erPct: 12,
     wageCeilingMonthly: 1_500_000, // ₹15,000/mo (EPFO ceiling)
     challanDueDay: 15,
-    complianceStatus: "filed" as const,
     href: "/hr/payroll/statutory/pf",
   },
   {
@@ -36,7 +34,6 @@ const STATUTORY_CARDS = [
     erPct: 3.25,
     wageCeilingMonthly: 2_100_000, // ₹21,000/mo (ESIC ceiling)
     challanDueDay: 15,
-    complianceStatus: "pending" as const,
     href: "/hr/payroll/statutory/esi",
   },
   {
@@ -46,7 +43,6 @@ const STATUTORY_CARDS = [
     erPct: 0,
     wageCeilingMonthly: undefined, // State-specific
     challanDueDay: 15,
-    complianceStatus: "filed" as const,
     href: "/hr/payroll/statutory/pt",
   },
   {
@@ -56,7 +52,6 @@ const STATUTORY_CARDS = [
     erPct: 1,
     wageCeilingMonthly: undefined, // State-specific
     challanDueDay: 15,
-    complianceStatus: "filed" as const,
     href: "/hr/payroll/statutory/lwf",
   },
   {
@@ -66,7 +61,6 @@ const STATUTORY_CARDS = [
     erPct: 14,
     wageCeilingMonthly: undefined, // No ceiling
     challanDueDay: 15,
-    complianceStatus: "filed" as const,
     href: "/hr/payroll/nps",
   },
   {
@@ -76,7 +70,6 @@ const STATUTORY_CARDS = [
     erPct: 0,
     wageCeilingMonthly: undefined, // No ceiling
     challanDueDay: 15,
-    complianceStatus: "pending" as const,
     href: "/hr/payroll/gpf",
   },
 ];

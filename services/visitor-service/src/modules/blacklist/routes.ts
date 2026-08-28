@@ -52,6 +52,23 @@ export async function blacklistRoutes(app: FastifyInstance): Promise<void> {
     return reply.code(202).send({ data: accepted });
   });
 
+  // Fix 3: previously there was no way to lift/remove a blacklist entry at
+  // all — only add/approve existed. Same WRITE_ROLES + 404-on-missing
+  // pattern as the approve route above; the maker-checker distinct-actor
+  // rule and the pending->active->archived state-machine check are
+  // enforced in the consumer (domain.ts#assertDistinctMakerChecker /
+  // assertBlacklistTransition), matching how approve delegates the same
+  // checks rather than duplicating them at the route layer.
+  app.post("/v1/visitor/blacklist/:id/deactivate", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, WRITE_ROLES);
+    const { id } = idParam.parse(req.params);
+    const entry = await repo.getBlacklistEntryById(ctx.tenantId, id, { actorId: ctx.actorId, correlationId: ctx.correlationId });
+    if (!entry) throw new HttpError(404, "NOT_FOUND", "blacklist entry not found");
+    const accepted = await commands.blacklistDeactivate(ctx, { entryId: id });
+    return reply.code(202).send({ data: accepted });
+  });
+
   app.get("/v1/visitor/watchlist", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, READ_ROLES);

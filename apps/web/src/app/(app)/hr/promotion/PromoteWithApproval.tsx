@@ -10,8 +10,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { useToast } from "@/app/_components/ds/Toast";
 
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
 type Employee = { id: string; name?: string; designation?: string; designationId?: string };
 type Designation = { id: string; name: string; grade?: string };
 type Officer = { id: string; name: string; designation?: string };
@@ -35,6 +33,12 @@ export function PromoteWithApproval() {
   const [initiatedBy, setInitiatedBy] = useState("");
   const [currentWith, setCurrentWith] = useState("");
   const [note, setNote] = useState("");
+  // Set once step 1 (create the pending_approval promotion request) succeeds.
+  // Retrying after a step-2 (eFile) failure must resume from here instead of
+  // re-running step 1 — submit-approval has no idempotency key, so restarting
+  // from step 1 on every retry created a brand-new duplicate promotion
+  // request for the same employee each time the eFile step failed.
+  const [submittedPromotionId, setSubmittedPromotionId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!open) return;
@@ -64,6 +68,7 @@ export function PromoteWithApproval() {
   const reset = () => {
     setEmployeeId(""); setFromDesigId(""); setFromDesigName(""); setToDesigId("");
     setEffectiveDate(""); setOrderRef(""); setInitiatedBy(""); setCurrentWith(""); setNote("");
+    setSubmittedPromotionId(null);
     setStep(1);
   };
 
@@ -95,15 +100,20 @@ export function PromoteWithApproval() {
       };
       if (orderRef.trim()) reqBody.orderRef = orderRef.trim();
 
-      const subRes = await fetch(`/api/proxy/v1/hrms/employees/${employeeId}/promotion/submit-approval`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify(reqBody),
-      });
-      if (!subRes.ok) throw new Error((await subRes.text()) || "Could not create promotion request");
-      const sub = (await subRes.json()) as { id?: string };
-      const promotionId = sub.id;
-      if (!promotionId) throw new Error("Promotion request id missing in response");
+      // Resume from an already-created request instead of re-running step 1.
+      let promotionId = submittedPromotionId;
+      if (!promotionId) {
+        const subRes = await fetch(`/api/proxy/v1/hrms/employees/${employeeId}/promotion/submit-approval`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify(reqBody),
+        });
+        if (!subRes.ok) throw new Error((await subRes.text()) || "Could not create promotion request");
+        const sub = (await subRes.json()) as { id?: string };
+        if (!sub.id) throw new Error("Promotion request id missing in response");
+        promotionId = sub.id;
+        setSubmittedPromotionId(promotionId);
+      }
 
       const raiseRes = await fetch("/api/proxy/v1/estab/files/from-module", {
         method: "POST",
@@ -122,7 +132,12 @@ export function PromoteWithApproval() {
           context: { employeeId, fromDesigId, toDesigId, effectiveDate },
         }),
       });
-      if (!raiseRes.ok) throw new Error((await raiseRes.text()) || "Promotion request created, but raising the eFile failed");
+      if (!raiseRes.ok) {
+        throw new Error(
+          (await raiseRes.text()) ||
+          "Promotion request created, but raising the eFile failed. It is safe to click Submit again — it will retry only the eFile step, not create another promotion request.",
+        );
+      }
       const file = (await raiseRes.json()) as { fileNo?: string };
       toast.success(`Promotion raised for approval${file.fileNo ? ` (eFile ${file.fileNo})` : ""}. On approval the new grade is effected automatically.`);
       reset();
@@ -132,7 +147,7 @@ export function PromoteWithApproval() {
     } finally {
       setSaving(false);
     }
-  }, [employeeId, fromDesigId, toDesigId, effectiveDate, orderRef, initiatedBy, currentWith, note, selectedEmployee, toast]);
+  }, [employeeId, fromDesigId, toDesigId, effectiveDate, orderRef, initiatedBy, currentWith, note, selectedEmployee, submittedPromotionId, toast]);
 
   return (
     <>
@@ -247,6 +262,11 @@ export function PromoteWithApproval() {
 
           {step === 2 && (
             <div className="pad" style={{ display: "grid", gap: 16 }}>
+              {submittedPromotionId && (
+                <div style={{ fontSize: "0.8125rem", padding: "10px 14px", background: "#fffbeb", borderRadius: 8, border: "1px solid #fde68a" }}>
+                  The promotion request was already created — retrying now only raises the eFile, it will not create a duplicate.
+                </div>
+              )}
               {selectedEmployee && (
                 <div style={{ fontSize: "0.8125rem", padding: "10px 14px", background: "#f0fdf4", borderRadius: 8, border: "1px solid #bbf7d0" }}>
                   <strong>{selectedEmployee.name}</strong>: {fromDesigName} → {designations.find((d) => d.id === toDesigId)?.name ?? toDesigId}

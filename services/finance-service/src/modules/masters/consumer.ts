@@ -8,6 +8,7 @@ import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS } from "../../topics.js";
 import { encryptedText } from "../../shared/pii-crypto.js";
 import { HttpError } from "../../shared/context.js";
+import { assertOpeningBalancesBalanced } from "./domain.js";
 
 const log = pino({ name: "finance.masters.consumer" });
 const AUDIT_TOPIC = "audit.event.record";
@@ -146,6 +147,14 @@ export function registerMastersConsumers(queue: Queue): void {
     };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
+      // Non-bypassable enforcement (mirrors gl/consumer.ts's postJournal
+      // calling assertJournalBalances right before it inserts anything): even
+      // if a caller publishes this command directly -- skipping the HTTP
+      // route's own check in fy-routes.ts -- an unbalanced set can never
+      // reach the ledger. Throwing here rolls back the whole transaction,
+      // including the markProcessed row, so a redelivery is rejected the
+      // same way every time rather than being silently swallowed.
+      assertOpeningBalancesBalanced(p.entries);
       for (const entry of p.entries) {
         await tx.insert(openingBalances).values({
           id: entry.id, tenantId: p.tenantId, fyCode: p.fyCode,

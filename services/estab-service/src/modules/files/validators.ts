@@ -22,7 +22,10 @@ export const createFileBody = z.object({
   dept:           z.string().min(1),
   priority:       z.enum(["normal", "urgent", "immediate"]).default("normal"),
   classification: z.enum(["top_secret", "secret", "confidential", "public"]).default("public"),
-  currentWith:    z.string().uuid(),
+  // SECURITY: optional — the officer a file is routed to at creation must
+  // default to the authenticated creator (ctx.actorId), never a client-chosen
+  // fallback constant. The server fills this in when omitted (commands.ts).
+  currentWith:    z.string().uuid().optional(),
   initialNote:    z.string().optional(),
   inwardId:       z.string().uuid().optional(),
   dakNo:          z.string().optional(),
@@ -33,7 +36,12 @@ export type CreateFileBody = z.infer<typeof createFileBody>;
 export const addNotingBody = z.object({
   body:      z.string().min(1),
   action:    z.string().optional(),
-  officerId: z.string().uuid(),
+  // SECURITY: optional and IGNORED server-side — the noting's officer of
+  // record is always the authenticated actor (ctx.actorId), never a
+  // client-supplied id. Kept optional (rather than removed) only so older
+  // clients that still send it don't fail validation; commands.ts overrides
+  // it unconditionally. See addNoting() in commands.ts.
+  officerId: z.string().uuid().optional(),
   officerName:        z.string().optional(),
   officerDesignation: z.string().optional(),
   officerSection:     z.string().optional(),
@@ -122,7 +130,9 @@ export type AddAttachmentBody = z.infer<typeof addAttachmentBody>;
 
 export const openFileFromInwardBody = z.object({
   dept:           z.string().min(1),
-  currentWith:    z.string().uuid(),
+  // SECURITY: optional — defaults to ctx.actorId server-side when omitted
+  // (same rationale as createFileBody.currentWith above).
+  currentWith:    z.string().uuid().optional(),
   classification: z.enum(["top_secret", "secret", "confidential", "public"]).default("public"),
   initialNote:    z.string().optional(),
 });

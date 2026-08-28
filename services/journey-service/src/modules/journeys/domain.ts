@@ -62,3 +62,29 @@ export function validateCreate(name: string): string | null {
   }
   return null;
 }
+
+export interface ResolvedStep {
+  stepType: string;
+  stepConfig: Record<string, unknown>;
+}
+
+/**
+ * Pull a step's declared type + config out of a journey definition's stored
+ * `steps` array (jsonb, untyped at rest). Returns null when the index is out
+ * of bounds or the step has no string `type` — callers must treat that as
+ * "this step cannot be dispatched," never default to some assumed type.
+ *
+ * Shared by the manual execute-step route and the executions consumer's
+ * auto-chain to the next step, so both entry points resolve a step definition
+ * identically.
+ */
+export function resolveStep(steps: Array<Record<string, unknown>>, stepIndex: number): ResolvedStep | null {
+  const step = steps[stepIndex];
+  if (!step || typeof step["type"] !== "string") return null;
+  const rawConfig = step["config"];
+  const stepConfig =
+    rawConfig !== null && typeof rawConfig === "object" && !Array.isArray(rawConfig)
+      ? (rawConfig as Record<string, unknown>)
+      : {};
+  return { stepType: step["type"], stepConfig };
+}

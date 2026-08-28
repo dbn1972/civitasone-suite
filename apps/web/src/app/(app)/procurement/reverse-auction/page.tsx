@@ -15,7 +15,7 @@ export default async function ReverseAuctionPage() {
       <PageHeader
         title="Reverse Auctions"
         subtitle="Live and scheduled reverse auction events for competitive procurement."
-        actions={source === "error" ? <DataSourceBadge source={source} /> : null}
+        actions={source === "error" ? <DataSourceBadge source={source} message="Couldn't load — showing nothing" /> : null}
       />
 
       <StatGrid>

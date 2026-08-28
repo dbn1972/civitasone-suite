@@ -13,11 +13,43 @@ function mapRunStatus(status: string): "draft" | "processing" | "completed" | "p
   return "processing";
 }
 
-export async function getSlip(id: string, tenantId: string): Promise<PayrollSlipRow | null> {
-  return cache.getOrLoad<PayrollSlipRow>(
+export async function getSlip(id: string, tenantId: string) {
+  // The raw PayrollSlipRow (below) is a straight DB row: it has
+  // netPayMinor (not netMinor), and no employeeName/department at all --
+  // only employeeId/employeeNo. The frontend detail pages
+  // (hr/payroll/slips/[id] and hr/payroll/salary-slips/[id]) read
+  // employeeName/department and slip.netMinor, matching the *list*
+  // endpoint's enriched/renamed shape (listSalarySlips, above) instead --
+  // so a single slip rendered "Rs.NaN" for Net Pay and fell back to the raw
+  // employeeId for identity. Apply the same hrms-client enrichment and the
+  // same field rename here so a single slip and a listed slip agree.
+  const row = await cache.getOrLoad<PayrollSlipRow>(
     cache.makeKey(tenantId, "payroll_slip", id),
     () => repo.findSlipById(id, tenantId)
   );
+  if (!row) return null;
+  const empMap = await fetchEmployeeSummaries(tenantId);
+  const emp = empMap.get(row.employeeId);
+  return {
+    ...row,
+    employeeName: emp?.fullName ?? row.employeeNo,
+    department: emp?.departmentName ?? "—",
+    // Two frontend consumers of this one endpoint expect two different
+    // naming conventions for the same minor-unit values -- hr/payroll/
+    // salary-slips/[id]/page.tsx reads *Minor-suffixed names, while
+    // hr/payroll/slips/[id]/page.tsx (via getSlipById -> SalarySlipSummary)
+    // reads the unsuffixed names listSalarySlips already returns for the
+    // list view. Provide both rather than picking one and leaving the
+    // other page broken; the two frontend surfaces should eventually be
+    // consolidated onto one shape (see PR notes).
+    netMinor: Number(row.netPayMinor),
+    net: Number(row.netPayMinor),
+    grossMinor: Number(row.grossMinor),
+    gross: Number(row.grossMinor),
+    basicMinor: Number(row.basicMinor),
+    totalDeductionsMinor: Number(row.totalDeductionsMinor),
+    deductions: Number(row.totalDeductionsMinor),
+  };
 }
 
 export async function getRun(id: string, tenantId: string): Promise<PayrollRunRow | null> {
@@ -54,13 +86,24 @@ export async function getRunDetail(id: string, tenantId: string) {
     netAmount: Number(run.totalNetMinor) / 100,
     deductions: Math.max(0, Number(run.totalGrossMinor - run.totalNetMinor) / 100),
     status: mapRunStatus(run.status),
+    // BUG-2 fix: this payload's grossAmount/netAmount/deductions above are
+    // already rupees (/100 of the minor-unit column), and the frontend's
+    // run-detail view (SalarySlipsClientTable.tsx) renders these embedded
+    // slip fields with formatRupees(), not formatMoney() — i.e. it already
+    // expects rupees here too. The old `Number(s.grossMinor)` (raw paise, no
+    // /100) was a 100x mismatch against both the sibling run-level fields in
+    // this same response and what the frontend actually does with the value.
+    // NOT touched: listSalarySlips()/GET /v1/payroll/salary-slips below is a
+    // different endpoint, correctly consumed via formatMoney() (paise) by
+    // SalarySlipsTable.tsx's DataTable — that convention is independently
+    // correct and out of scope here.
     salarySlips: runSlips.map((s) => ({
       id: s.id,
       employeeId: s.employeeId,
       employeeName: s.employeeNo,
-      gross: Number(s.grossMinor),
-      deductions: Number(s.totalDeductionsMinor),
-      net: Number(s.netPayMinor),
+      gross: Number(s.grossMinor) / 100,
+      deductions: Number(s.totalDeductionsMinor) / 100,
+      net: Number(s.netPayMinor) / 100,
       status: s.status,
     })),
   };

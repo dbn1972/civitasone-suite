@@ -33,7 +33,7 @@ describe("ProductCatalogueEditor (QP-001)", () => {
   it("shows the saved-info badge on a failed load", async () => {
     vi.mocked(qp.getProducts).mockResolvedValue({ data: [], source: "error" });
     render(<ProductCatalogueEditor />);
-    await waitFor(() => expect(screen.getByText(/showing saved information/i)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(/couldn.t load/i)).toBeInTheDocument());
   });
 
   it("creates a product converting rupees to paise and % to bps", async () => {

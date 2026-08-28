@@ -6,7 +6,7 @@ import { recordLoaderFallback, type LoaderFallbackReason } from "./loaderTelemet
 export type LoaderSource = "api" | "error";
 export type LoaderResult<T> = { data: T; source: LoaderSource };
 
-interface FetchJsonOptions<TApi, TOutput> {
+export interface FetchJsonOptions<TApi, TOutput> {
   revalidateSeconds?: number;
   telemetryKey: string;
   mapResponse: (payload: TApi) => TOutput | null;

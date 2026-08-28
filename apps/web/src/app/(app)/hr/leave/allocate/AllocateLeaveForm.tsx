@@ -42,8 +42,8 @@ export function AllocateLeaveForm() {
 
   useEffect(() => {
     Promise.all([
-      fetch("/api/proxy/v1/hrms/employees?limit=500").then((r) => r.json()),
-      fetch("/api/proxy/v1/hrms/leave-types").then((r) => r.json()),
+      fetch("/api/proxy/v1/hrms/employees?limit=500").then((r) => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); }),
+      fetch("/api/proxy/v1/hrms/leave-types").then((r) => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); }),
     ])
       .then(([empBody, ltBody]) => {
         const empRows: EmployeeOption[] = Array.isArray(empBody) ? empBody : (empBody.data ?? []);
@@ -92,8 +92,10 @@ export function AllocateLeaveForm() {
         setMessage(text || `Request failed (${res.status})`);
         return;
       }
+      // POST /v1/hrms/leave-allocations returns 202 (queued command), not a
+      // completed allocation — say so honestly rather than claiming it's done.
       setStatus("success");
-      setMessage("Leave allocated successfully.");
+      setMessage("Leave allocation submitted. The employee's balance will update shortly.");
       setTotalDays("");
     } catch {
       setStatus("error");
@@ -123,7 +125,7 @@ export function AllocateLeaveForm() {
           aria-describedby={invalid.has("employee") ? `${empId}-err` : undefined}
         >
           {employees.length === 0
-            ? <option value="">Loading…</option>
+            ? <option value="">{status === "error" ? "Unable to load employees" : "Loading…"}</option>
             : employees.map((emp) => (
                 <option key={emp.id} value={emp.id}>{emp.name} ({emp.employeeNo})</option>
               ))}
@@ -146,7 +148,7 @@ export function AllocateLeaveForm() {
           aria-describedby={invalid.has("leaveType") ? `${ltId}-err` : undefined}
         >
           {leaveTypes.length === 0
-            ? <option value="">Loading…</option>
+            ? <option value="">{status === "error" ? "Unable to load leave types" : "Loading…"}</option>
             : leaveTypes.map((lt) => (
                 <option key={lt.id} value={lt.id}>{lt.name} ({lt.code})</option>
               ))}

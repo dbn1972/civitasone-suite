@@ -32,8 +32,8 @@ const ACTOR = "0a000000-7c3d-4a1a-9b2c-0000000007a3";
 
 const IDEMPOTENCY = { "x-idempotency-key": "test-key-7c3d-0001" } as const;
 
-function token(roles: string[] = ["committee_secretary"], tid: string = TENANT): string {
-  return signToken({ sub: ACTOR, tid, roles, sid: "sess-7c3d" }, SECRET);
+function token(roles: string[] = ["committee_secretary"], tid: string = TENANT, sub: string = ACTOR): string {
+  return signToken({ sub, tid, roles, sid: "sess-7c3d" }, SECRET);
 }
 
 let app: Awaited<ReturnType<typeof buildApp>>;
@@ -397,10 +397,13 @@ describe("POST /v1/meetings/:meetingId/participants/:participantId/respond", () 
   });
 
   it("202 accepts a valid RSVP", async () => {
+    // IDOR fix (Req 5.2, 5.6): a plain committee_member must now be the invited participant
+    // themselves — authenticate as MEMBER_EMP (P_MEMBER's own employee_id), not the generic
+    // ACTOR, to exercise the legitimate self-RSVP path this endpoint documents.
     const res = await app.inject({
       method: "POST",
       url: `/v1/meetings/${MEETING}/participants/${P_MEMBER}/respond`,
-      headers: { authorization: `Bearer ${token(["committee_member"])}`, ...IDEMPOTENCY },
+      headers: { authorization: `Bearer ${token(["committee_member"], TENANT, MEMBER_EMP)}`, ...IDEMPOTENCY },
       payload: { response: "accept", attendanceMode: "in_person" },
     });
     expect(res.statusCode).toBe(202);
@@ -451,10 +454,12 @@ describe("POST /v1/meetings/:meetingId/participants/:participantId/nominate", ()
   });
 
   it("202 accepts a valid nomination", async () => {
+    // IDOR fix (Req 5.5): a plain committee_member must now be the invited participant
+    // themselves — authenticate as MEMBER_EMP (P_MEMBER's own employee_id).
     const res = await app.inject({
       method: "POST",
       url: `/v1/meetings/${MEETING}/participants/${P_MEMBER}/nominate`,
-      headers: { authorization: `Bearer ${token(["committee_member"])}`, ...IDEMPOTENCY },
+      headers: { authorization: `Bearer ${token(["committee_member"], TENANT, MEMBER_EMP)}`, ...IDEMPOTENCY },
       payload: { nomineeId: NOMINEE_EMP, reason: "on official tour" },
     });
     expect(res.statusCode).toBe(202);

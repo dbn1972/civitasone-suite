@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { PageHeader, StatGrid, StatCard, Card, EmptyState } from "../../../../_components/ds";
+import { PageHeader, StatGrid, StatCard, Card, EmptyState, ConfirmDialog, useConfirmAction } from "../../../../_components/ds";
 import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
 
 type EmployeeOption = { id: string; name: string; employeeNo: string };
@@ -41,11 +41,12 @@ export default function LeaveHistoryPage() {
   const [cancelling, setCancelling] = useState<string | null>(null);
   const [cancelError, setCancelError] = useState<string | null>(null);
   const [source, setSource]         = useState<"api" | "error">("api");
+  const [pendingCancel, setPendingCancel] = useState<LeaveApp | null>(null);
 
   useEffect(() => {
     const controller = new AbortController()
     fetch("/api/proxy/v1/hrms/employees?limit=500", { signal: controller.signal })
-      .then((r) => r.json())
+      .then((r) => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
       .then((body) => {
         const rows: EmployeeOption[] = Array.isArray(body) ? body : (body.data ?? []);
         setEmployees(rows);
@@ -61,7 +62,7 @@ export default function LeaveHistoryPage() {
     setLoading(true);
     setError(null);
     fetch(`/api/proxy/v1/hrms/leave/applications?empId=${encodeURIComponent(empId)}&limit=50`, { signal: controller.signal })
-      .then((r) => r.json())
+      .then((r) => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
       .then((body) => {
         const rows: LeaveApp[] = Array.isArray(body) ? body : (body.data ?? []);
         setApps(rows);
@@ -82,16 +83,36 @@ export default function LeaveHistoryPage() {
       });
       const text = await res.text();
       if (!res.ok) {
-        setCancelError(text || `Cancel failed (${res.status})`);
-        return;
+        throw new Error(text || `Cancel failed (${res.status})`);
       }
       setApps((prev) => prev.map((a) => (a.id === appId ? { ...a, status: "cancelled" } : a)));
-    } catch {
-      setCancelError("Network error while cancelling.");
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Network error while cancelling.";
+      setCancelError(msg);
+      throw err instanceof Error ? err : new Error(msg);
     } finally {
       setCancelling(null);
     }
   }
+
+  const {
+    open: cancelOpen,
+    busy: cancelBusy,
+    error: cancelDialogError,
+    trigger: triggerCancel,
+    cancel: closeCancelDialog,
+    confirm: confirmCancel,
+  } = useConfirmAction({
+    onConfirm: async () => {
+      if (pendingCancel) await handleCancel(pendingCancel.id);
+    },
+    onSuccess: () => setPendingCancel(null),
+  });
+
+  // A leave application can be cancelled while pending OR after approval
+  // (hrms-service cancel-route.ts allows status "pending" | "approved" | "draft");
+  // only rejected/cancelled applications cannot be.
+  const isCancellable = (status: string) => status === "pending" || status === "approved" || status === "draft";
 
   const approved  = apps.filter((a) => a.status === "approved").length;
   const pending   = apps.filter((a) => a.status === "pending").length;
@@ -108,7 +129,7 @@ export default function LeaveHistoryPage() {
       <DataSourceBadge source={source} />
 
       <StatGrid>
-        <StatCard icon="\U0001f4cb" iconBg="var(--infobg)" label="Total Applications" value={apps.length} />
+        <StatCard icon="📋" iconBg="var(--infobg)" label="Total Applications" value={apps.length} />
         <StatCard icon="\u2705"       iconBg="var(--goodbg)" label="Approved"           value={approved} />
         <StatCard icon="\u23f3"       iconBg="var(--warnbg)" label="Pending"            value={pending} />
         <StatCard icon="\u274c"       iconBg="var(--badbg)" label="Rejected"           value={rejected} />
@@ -160,7 +181,7 @@ export default function LeaveHistoryPage() {
         apps.length === 0 ? (
           <Card title="Applications">
             <EmptyState
-              icon="\U0001f334"
+              icon="🌴"
               title="No leave applications"
               message="This employee has not applied for any leave yet."
             />
@@ -210,10 +231,10 @@ export default function LeaveHistoryPage() {
                           </span>
                         </td>
                         <td style={{ padding: "10px 14px" }}>
-                          {app.status === "pending" && (
+                          {isCancellable(app.status) && (
                             <button
                               type="button"
-                              onClick={() => void handleCancel(app.id)}
+                              onClick={() => { setPendingCancel(app); triggerCancel(); }}
                               disabled={cancelling === app.id}
                               style={{
                                 padding: "4px 12px",
@@ -240,6 +261,28 @@ export default function LeaveHistoryPage() {
           </Card>
         )
       )}
+
+      <ConfirmDialog
+        open={cancelOpen}
+        title="Cancel this leave application?"
+        description={
+          pendingCancel ? (
+            <>
+              This withdraws the <strong>{pendingCancel.leaveTypeName ?? pendingCancel.leaveType ?? "leave"}</strong>{" "}
+              request for {fmt(pendingCancel.fromDate)} – {fmt(pendingCancel.toDate)}
+              {pendingCancel.status === "approved" ? " and reverses the approval" : ""}. This cannot be undone —
+              a new request would need to be submitted from scratch.
+            </>
+          ) : null
+        }
+        danger
+        confirmLabel="Cancel leave"
+        cancelLabel="Keep it"
+        busy={cancelBusy}
+        errorMessage={cancelDialogError}
+        onConfirm={() => void confirmCancel()}
+        onCancel={() => { closeCancelDialog(); setPendingCancel(null); }}
+      />
     </main>
   );
 }

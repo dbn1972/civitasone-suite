@@ -2,6 +2,14 @@
 -- Covers: employees, vendor/outsourced staff, contractor project teams
 -- HR issues → employee shows QR at gate → security verifies via scan
 
+-- 2026-08-27: schema "hrms" never existed in this database (which uses per-domain
+-- schemas like employee/leave/disciplinary, not a literal hrms schema) --
+-- CREATE TABLE hrms.id_cards below always failed with "schema does not exist",
+-- silently, because migrate-all.mjs runs psql without ON_ERROR_STOP. Application
+-- code (routes.ts) also hardcodes hrms.id_cards, so creating the schema is the
+-- correct fix rather than renaming to match the domain-schema convention.
+CREATE SCHEMA IF NOT EXISTS hrms;
+
 -- Card types: employee (permanent), contractual, vendor_staff, project_team, intern, visitor
 CREATE TABLE IF NOT EXISTS hrms.id_cards (
   id UUID PRIMARY KEY,

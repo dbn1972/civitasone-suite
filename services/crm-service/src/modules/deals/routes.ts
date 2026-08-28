@@ -8,7 +8,7 @@ import * as commands from "./commands.js";
 import * as queries from "./queries.js";
 import * as repo from "./repo.js";
 import * as pipelineRepo from "../pipelines/repo.js";
-import { missingMandatoryFields, findStage } from "./stage-gate.js";
+import { missingMandatoryFields, findStage, skippedGateStage } from "./stage-gate.js";
 
 const CRM_ROLES = ["crm_user", "crm_admin", "super_admin"];
 
@@ -20,16 +20,28 @@ export async function dealRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, CRM_ROLES);
     const body = createDealBody.parse(req.body);
 
+    // OP-002: stage names are per-pipeline, not a fixed enum (see validators.ts) — so
+    // when the deal is scoped to a pipeline, resolve + validate the stage dynamically
+    // against THAT pipeline's own configured stages instead of trusting a bare string.
+    // `stage` defaults to the pipeline's own entry (lowest-ordinal) stage when the
+    // caller doesn't name one — never the literal "Lead", which a custom pipeline is not
+    // guaranteed to have.
+    //
     // OP-003: the stage gate is not only for PATCH transitions — a deal must not be
     // CREATED directly into a gated stage with its mandatory fields unset. When the
     // requested stage is beyond the pipeline's entry (lowest-ordinal) stage, enforce the
     // target stage's mandatory fields against the create body, synchronously (422).
+    let stage = body.stage;
     if (body.pipelineId) {
       const stages = await pipelineRepo.stagesOf(body.pipelineId, ctx.tenantId);
       if (stages && stages.length > 0) {
         const entry = stages.reduce((min, s) => (s.ordinal < min.ordinal ? s : min), stages[0]!);
-        const target = findStage(stages, { ...(body.stageId ? { stageId: body.stageId } : {}), stageName: body.stage });
-        if (target && target.id !== entry.id && target.name !== entry.name) {
+        stage = stage ?? entry.name;
+        const target = findStage(stages, { ...(body.stageId ? { stageId: body.stageId } : {}), stageName: stage });
+        if (!target) {
+          throw new HttpError(422, "INVALID_STAGE", `stage '${stage}' is not configured on this pipeline`);
+        }
+        if (target.id !== entry.id && target.name !== entry.name) {
           const snap = {
             product: body.product ?? null,
             quantity: body.quantity ?? null,
@@ -51,7 +63,7 @@ export async function dealRoutes(app: FastifyInstance): Promise<void> {
       }
     }
 
-    return sendAccepted(reply, acceptedResponseSchema, await commands.createDeal(ctx, body));
+    return sendAccepted(reply, acceptedResponseSchema, await commands.createDeal(ctx, { ...body, stage: stage ?? "Lead" }));
   });
 
   app.get("/v1/crm/deals", async (req, reply) => {
@@ -110,6 +122,18 @@ export async function dealRoutes(app: FastifyInstance): Promise<void> {
    * field is unpopulated — enforcement is synchronous because a 202/consumer path could
    * not report the rejection. Optimistic-lock version conflicts are still resolved
    * asynchronously by the consumer.
+   *
+   * Sequence gate: a PATCH may not skip over an intervening stage whose pipeline config
+   * marks it `gate: true` (pipelines/schema.ts) — enforcement is by ordinal, exactly as
+   * that field's own doc comment promises (422 GATED_STAGE_SKIPPED). Backward moves
+   * (e.g. reopening a mistakenly-closed deal) are not treated as a skip — see
+   * stage-gate.ts's skippedGateStage. Like the mandatory-fields gate above, this is a
+   * request-time REJECT decision, so — same as that gate — it can only be enforced here,
+   * synchronously; a 202/consumer path has no way to report the rejection back.
+   *
+   * Field derivation (status/probability/closed_at) is deliberately NOT done here: it is
+   * resolved inside repo.updateStageWithVersion, at the actual write, so it applies no
+   * matter how the stage-change command reaches the consumer — not only via this route.
    */
   app.patch("/v1/crm/deals/:id/stage", async (req, reply) => {
     const ctx = resolveContext(req);
@@ -124,15 +148,31 @@ export async function dealRoutes(app: FastifyInstance): Promise<void> {
     if (snap && snap.pipelineId) {
       const stages = await pipelineRepo.stagesOf(snap.pipelineId, ctx.tenantId);
       const target = findStage(stages, { stageId: body.stageId, stageName: body.stage });
-      if (target) {
-        const missing = missingMandatoryFields(snap, target);
-        if (missing.length > 0) {
-          throw new HttpError(
-            422,
-            "MANDATORY_STAGE_FIELDS_MISSING",
-            `stage '${target.name}' requires: ${missing.join(", ")}`,
-          );
-        }
+      // OP-002: `body.stage` is now a free-form (but bounded) string, not a fixed enum —
+      // it is only real if it names one of THIS deal's pipeline's configured stages.
+      // Without this check a typo'd/unrelated name would sail through as a "successful"
+      // move (the DB no longer has a static CHECK to catch it either — see migration
+      // 0087 — because a per-pipeline dynamic set of valid names can't be expressed as
+      // one; this application-level lookup is the only place that can enforce it).
+      if (!target) {
+        throw new HttpError(422, "INVALID_STAGE", `stage '${body.stage}' is not configured on this pipeline`);
+      }
+      const missing = missingMandatoryFields(snap, target);
+      if (missing.length > 0) {
+        throw new HttpError(
+          422,
+          "MANDATORY_STAGE_FIELDS_MISSING",
+          `stage '${target.name}' requires: ${missing.join(", ")}`,
+        );
+      }
+      const current = findStage(stages, { stageId: snap.stageId ?? undefined, stageName: snap.stage });
+      const skipped = skippedGateStage(stages, current, target);
+      if (skipped) {
+        throw new HttpError(
+          422,
+          "GATED_STAGE_SKIPPED",
+          `stage '${target.name}' cannot be reached by skipping gated stage '${skipped.name}'`,
+        );
       }
     }
 

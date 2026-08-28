@@ -85,6 +85,32 @@ describe("registry — non-whitelisted identifiers are rejected", () => {
     } as never;
     expect(() => buildAggregateQuery(db, TENANT, badSpec)).toThrow(RegistryError);
   });
+
+  // Regression: resolveMetric/resolveDimension/resolveFilterField used to do
+  // `const def = MAP[key]; if (!def) throw ...` — for a plain object literal,
+  // MAP["__proto__"] resolves (via the prototype chain) to the real, truthy
+  // Object.prototype instead of undefined, so the "unknown identifier" guard
+  // never fired. Same for "constructor", "toString", etc. Now guarded with
+  // Object.prototype.hasOwnProperty before the index access.
+  it("rejects '__proto__' as a metric key (prototype-chain lookup bypass)", () => {
+    const badSpec = { metric: "__proto__", dimensions: [], filters: [], limit: 100 } as never;
+    expect(() => buildAggregateQuery(db, TENANT, badSpec)).toThrow(RegistryError);
+  });
+
+  it("rejects 'constructor' as a dimension key (prototype-chain lookup bypass)", () => {
+    const badSpec = { metric: "event_count", dimensions: ["constructor"], filters: [], limit: 100 } as never;
+    expect(() => buildAggregateQuery(db, TENANT, badSpec)).toThrow(RegistryError);
+  });
+
+  it("rejects '__proto__' as a filter field (prototype-chain lookup bypass)", () => {
+    const badSpec = {
+      metric: "event_count",
+      dimensions: [],
+      filters: [{ field: "__proto__", op: "eq", value: "x" }],
+      limit: 100,
+    } as never;
+    expect(() => buildAggregateQuery(db, TENANT, badSpec)).toThrow(RegistryError);
+  });
 });
 
 describe("spec validation — the API surface accepts no raw SQL", () => {

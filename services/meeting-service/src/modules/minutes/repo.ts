@@ -25,12 +25,14 @@
  *
  * _Requirements: 7.1, 7.3, 7.5, 7.8, 8.1, 8.4_
  */
-import { and, asc, eq } from "drizzle-orm";
+import { and, asc, eq, inArray } from "drizzle-orm";
 import { db, scopedRead } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
 import { minutes, minutesVersions, type MinutesRow, type MinutesVersionRow } from "./schema.js";
 import { meetings } from "../meeting-core/schema.js";
-import { computeHash } from "./domain.js";
+import { committeeMembers } from "../committee/schema.js";
+import { decisions } from "../decision/schema.js";
+import { computeHash, verifyChain, isDecisionAmendedAfterApproval, type ChainRecord } from "./domain.js";
 
 /** Cache resource segments (second-to-last key component). */
 const RESOURCE_MINUTES = "minutes";
@@ -138,6 +140,54 @@ export async function getMeetingStatus(tenantId: string, meetingId: string): Pro
   return rows[0] ?? null;
 }
 
+/** Ownership-relevant fields on the parent meeting, for the per-meeting standing check
+ *  (IDOR fix, Req 7.5, 7.6, 8.1, 8.3) on the approve/reject/sign/submit/circulate write
+ *  routes -- mirrors meeting-core/repo.ts's own read exactly. */
+export interface MeetingRef {
+  id: string;
+  committeeId: string | null;
+  chairpersonId: string | null;
+  secretaryId: string | null;
+}
+
+export async function getMeetingRef(tenantId: string, meetingId: string): Promise<MeetingRef | null> {
+  const rows = await scopedRead((tx) => tx
+    .select({
+      id: meetings.id,
+      committeeId: meetings.committeeId,
+      chairpersonId: meetings.chairpersonId,
+      secretaryId: meetings.secretaryId,
+    })
+    .from(meetings)
+    .where(and(eq(meetings.id, meetingId), eq(meetings.tenantId, tenantId)))
+    .limit(1));
+  return rows[0] ?? null;
+}
+
+/** True iff `actorId` holds one of `roles` as an ACTIVE committee_members row on `committeeId`
+ *  -- byte-for-byte the same query as meeting-core/repo.ts's `hasCommitteeStanding`. */
+export async function hasCommitteeStanding(
+  tenantId: string,
+  committeeId: string,
+  actorId: string,
+  roles: readonly string[],
+): Promise<boolean> {
+  const rows = await scopedRead((tx) => tx
+    .select({ id: committeeMembers.id })
+    .from(committeeMembers)
+    .where(
+      and(
+        eq(committeeMembers.tenantId, tenantId),
+        eq(committeeMembers.committeeId, committeeId),
+        eq(committeeMembers.memberId, actorId),
+        eq(committeeMembers.status, "active"),
+        inArray(committeeMembers.role, [...roles]),
+      ),
+    )
+    .limit(1));
+  return rows.length > 0;
+}
+
 // ─── Public verification (Req 8.4 · P24) ─────────────────────────────────────
 
 /** Integrity classification returned by the public verification endpoint. */
@@ -174,17 +224,49 @@ export interface MinutesVerifyLookup {
   hashCurrent?: string;
 }
 
-/** Classify a located minutes row's integrity (P24) into the public result shape. */
-function classifyIntegrity(row: MinutesRow): MinutesVerificationResult {
+/**
+ * Load the committee's full approved+ minutes hash chain (P23), oldest → newest, as the
+ * `ChainRecord`s `verifyChain` consumes. Mirrors the ordering `minutes/consumer.ts`'s
+ * `previousChainHash` relies on when linking a new approval — the same committee-scoped,
+ * approved/signed/circulated-only, tenant-scoped query, just unbounded instead of `LIMIT 1`.
+ */
+async function loadCommitteeChain(tenantId: string, committeeId: string): Promise<ChainRecord[]> {
+  return scopedRead((tx) => tx
+    .select({ content: minutes.content, hashPrevious: minutes.hashPrevious, hashCurrent: minutes.hashCurrent })
+    .from(minutes)
+    .innerJoin(meetings, and(eq(meetings.id, minutes.meetingId), eq(meetings.tenantId, minutes.tenantId)))
+    .where(
+      and(
+        eq(minutes.tenantId, tenantId),
+        eq(meetings.committeeId, committeeId),
+        inArray(minutes.status, ["approved", "signed", "circulated"]),
+      ),
+    )
+    .orderBy(asc(minutes.approvedAt)));
+}
+
+/**
+ * Classify a located minutes row's integrity (P24 + P23) into the public result shape.
+ *
+ * A signed document is "valid" only when BOTH hold:
+ *   - P24: its own `hash_current` equals `SHA256(content)` (self-consistency).
+ *   - P23: the committee's FULL hash chain it belongs to verifies end-to-end (`verifyChain`) —
+ *     not merely this one row in isolation. Self-consistency alone is not tamper-evident: a
+ *     direct DB edit that rewrites `content` and also recomputes `hash_current` to match would
+ *     pass a self-only check, because it leaves THIS row internally consistent — the tampering
+ *     only shows up as a broken link on the NEXT record in the chain, whose `hash_previous` still
+ *     points at this row's pre-tamper hash. Walking the whole committee chain catches that break
+ *     regardless of which record in the chain happens to be the one a caller is verifying.
+ *   - A meeting with no committee has no cross-meeting chain (each such minutes is its own
+ *     genesis); P24 self-consistency is the full check in that case.
+ *
+ * Unsigned records are reported as such rather than "valid" (nothing has been sealed yet) — the
+ * chain walk only runs for a signed document, same gate as before.
+ */
+async function classifyIntegrity(tenantId: string, row: MinutesRow): Promise<MinutesVerificationResult> {
   const signed = Boolean(row.dscSignature);
-  // P24: a signed document's persisted hash_current MUST equal SHA256(content). Any drift means
-  // the stored content was altered after sealing → tampered. Unsigned records are reported as
-  // such rather than "valid" (nothing has been sealed yet).
-  const hashMatches = row.hashCurrent !== null && row.hashCurrent === computeHash(row.content);
-  const integrity: MinutesIntegrity = signed ? (hashMatches ? "valid" : "tampered") : "unsigned";
-  return {
-    found: true,
-    integrity,
+  const base = {
+    found: true as const,
     signed,
     minutesId: row.id,
     meetingId: row.meetingId,
@@ -193,6 +275,26 @@ function classifyIntegrity(row: MinutesRow): MinutesVerificationResult {
     signedAt: row.dscSignedAt ? row.dscSignedAt.toISOString() : null,
     hashCurrent: row.hashCurrent,
   };
+  if (!signed) return { ...base, integrity: "unsigned" };
+
+  // P24 self-consistency first (cheap, no query) — only walk the chain when it holds, since a
+  // self-hash mismatch is already conclusive "tampered" on its own.
+  let valid = row.hashCurrent !== null && row.hashCurrent === computeHash(row.content);
+  if (valid) {
+    const meetingRows = await scopedRead((tx) => tx
+      .select({ committeeId: meetings.committeeId })
+      .from(meetings)
+      .where(and(eq(meetings.id, row.meetingId), eq(meetings.tenantId, tenantId)))
+      .limit(1));
+    const committeeId = meetingRows[0]?.committeeId ?? null;
+    if (committeeId) {
+      // P23: the FULL committee chain, not just this row — see the doc comment above.
+      const chain = await loadCommitteeChain(tenantId, committeeId);
+      valid = verifyChain(chain).valid;
+    }
+  }
+  const integrity: MinutesIntegrity = valid ? "valid" : "tampered";
+  return { ...base, integrity };
 }
 
 /**
@@ -227,7 +329,7 @@ export async function verifySignature(
         .limit(1));
     }
     const row = rows[0];
-    return row ? classifyIntegrity(row) : null;
+    return row ? await classifyIntegrity(tenantId, row) : null;
   };
 
   // No tenant / no lookup key → cannot resolve; report not_found without touching the DB.
@@ -239,4 +341,45 @@ export async function verifySignature(
 
   const result = await cache.getOrLoad<MinutesVerificationResult>(key, load);
   return result ?? notFound;
+}
+
+// ─── Decision drift detection (Req 7.5 spirit, cross-module read-only) ───────
+
+/** A decision that appears to have drifted from the minutes that recorded it. */
+export interface DecisionDrift {
+  decisionId: string;
+  updatedAt: string;
+}
+
+/**
+ * Detect decisions belonging to an approved+ minutes' meeting that were updated AFTER the
+ * minutes were approved (Req 7.5 spirit; see domain.ts `isDecisionAmendedAfterApproval`).
+ *
+ * PARTIAL MITIGATION, NOT PREVENTION. `minutes/consumer.ts`'s `assertMinutesEditable` correctly
+ * locks the minutes' OWN content once approved — but nothing today stops the underlying
+ * `meeting.decisions` row(s) it recorded from being amended afterward, because
+ * `decision/consumer.ts`'s `handleDecisionUpdate` never queries `minutes` before writing a patch.
+ * This function only makes that drift DETECTABLE from the minutes side (read-only cross-module
+ * query, the same established pattern this module already uses for resolutions/committees/
+ * participants) — it does not and cannot prevent the amendment. A caller wires it into a read
+ * path (e.g. the minutes GET route, or alongside `verifySignature`) when it wants to surface the
+ * drift to a user.
+ *
+ * Closing this for real needs ONE guard in decision/consumer.ts's `handleDecisionUpdate` (around
+ * where it currently does `select({ id: decisions.id })` as a bare existence check): also select
+ * `meetingId`, look up that meeting's minutes status (mirroring `minutes/repo.ts`'s
+ * `getMinutesByMeeting`), and reject the patch (like `minutes/consumer.ts`'s
+ * `handleMinutesUpdate` already does via `assertMinutesEditable`) when `isMinutesLocked(status)`
+ * is true — both `isMinutesLocked` and the minutes query pattern already exist and are exported
+ * for exactly this reuse. Not made here: decision/** is a sibling module's ownership.
+ */
+export async function getDecisionDrift(tenantId: string, minutesRow: MinutesRow): Promise<DecisionDrift[]> {
+  if (!minutesRow.approvedAt) return [];
+  const rows = await scopedRead((tx) => tx
+    .select({ id: decisions.id, updatedAt: decisions.updatedAt })
+    .from(decisions)
+    .where(and(eq(decisions.tenantId, tenantId), eq(decisions.meetingId, minutesRow.meetingId))));
+  return rows
+    .filter((d) => isDecisionAmendedAfterApproval(d.updatedAt, minutesRow.approvedAt))
+    .map((d) => ({ decisionId: d.id, updatedAt: d.updatedAt.toISOString() }));
 }

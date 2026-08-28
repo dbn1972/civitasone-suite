@@ -70,6 +70,6 @@ describe("LibraryIssuesPage", () => {
     render(ui);
 
     expect(screen.queryByText("No loans yet")).not.toBeInTheDocument();
-    expect(screen.getAllByText("Showing saved information").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Couldn't load — showing nothing").length).toBeGreaterThan(0);
   });
 });

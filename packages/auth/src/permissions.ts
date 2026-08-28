@@ -22,31 +22,52 @@ export async function checkPermission(
     return { decision: "allow", reason: "role:super_admin" };
   }
 
-  const res = await fetch(`${POLICY_URL()}/v1/policy/evaluate`, {
-    method: "POST",
-    headers: {
-      "content-type": "application/json",
-      "x-internal": "1",
-      // SAST-002: the fail-closed authPlugin rejects x-internal calls unless the
-      // service secret matches INTERNAL_SERVICE_SECRET. Send it under the exact
-      // header name the plugin checks (`x-service-secret`).
-      "x-service-secret": process.env.INTERNAL_SERVICE_SECRET ?? "",
-      "x-tenant-id": ctx.tenantId,
-      "x-correlation-id": ctx.correlationId,
-    },
-    body: JSON.stringify({
-      permissionKey,
-      actor: { userId: ctx.actorId, tenantId: ctx.tenantId, roles: ctx.roles },
-      resource,
-    }),
-    signal: AbortSignal.timeout(5000),
-  });
+  let res: Response;
+  try {
+    res = await fetch(`${POLICY_URL()}/v1/policy/evaluate`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-internal": "1",
+        // SAST-002: the fail-closed authPlugin rejects x-internal calls unless the
+        // service secret matches INTERNAL_SERVICE_SECRET. Send it under the exact
+        // header name the plugin checks (`x-service-secret`).
+        "x-service-secret": process.env.INTERNAL_SERVICE_SECRET ?? "",
+        "x-tenant-id": ctx.tenantId,
+        "x-correlation-id": ctx.correlationId,
+      },
+      body: JSON.stringify({
+        permissionKey,
+        actor: { userId: ctx.actorId, tenantId: ctx.tenantId, roles: ctx.roles },
+        resource,
+      }),
+      signal: AbortSignal.timeout(5000),
+    });
+  } catch (err) {
+    // Connection-level failure (ECONNREFUSED, DNS failure, timeout/abort, etc.) —
+    // fetch() rejects before res.ok can ever be checked below. Without this catch
+    // the rejection propagates as a raw, unhandled error (surfacing to callers as
+    // a bare 500) instead of the clean POLICY_UNAVAILABLE the HTTP-level failure
+    // path already provides. Map both failure classes to the same result.
+    const detail = err instanceof Error ? err.message : String(err);
+    throw new AuthContextError(503, "POLICY_UNAVAILABLE", `policy evaluate unreachable: ${detail}`);
+  }
 
   if (!res.ok) {
     throw new AuthContextError(503, "POLICY_UNAVAILABLE", `policy evaluate failed: ${res.status}`);
   }
 
-  return res.json() as Promise<PermissionCheckResult>;
+  try {
+    return (await res.json()) as PermissionCheckResult;
+  } catch (err) {
+    // A 200 with a malformed/empty body (e.g. policy-service returned truncated
+    // JSON, or no body at all) is neither the connection-level nor the
+    // HTTP-level failure above, but it's the same underlying problem — the
+    // decision can't be trusted — so it gets the same clean result rather than
+    // a raw, unhandled SyntaxError from res.json().
+    const detail = err instanceof Error ? err.message : String(err);
+    throw new AuthContextError(503, "POLICY_UNAVAILABLE", `policy evaluate returned a malformed response: ${detail}`);
+  }
 }
 
 export async function requirePermission(

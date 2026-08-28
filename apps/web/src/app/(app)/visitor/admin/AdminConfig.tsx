@@ -170,6 +170,13 @@ export function AdminConfig({
 
               const currentNum = typeof entry?.value === "number" ? entry.value : (field.default as number);
               const draft = drafts[k] ?? String(currentNum);
+              const draftNum = Number(draft);
+              const outOfRange =
+                draft.trim() !== "" &&
+                Number.isFinite(draftNum) &&
+                ((field.min !== undefined && draftNum < field.min) ||
+                  (field.max !== undefined && draftNum > field.max));
+              const invalid = draft.trim() === "" || !Number.isFinite(draftNum) || outOfRange;
               return (
                 <div key={k} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, padding: "12px 0", borderBottom: "1px solid var(--line2)" }}>
                   <div>
@@ -180,19 +187,36 @@ export function AdminConfig({
                     </div>
                   </div>
                   <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                    <input
-                      type="number"
-                      aria-label={field.label}
-                      value={draft}
-                      onChange={(e) => setDrafts((d) => ({ ...d, [k]: e.target.value }))}
-                      style={{ width: 92, padding: 8, borderRadius: 8, border: "1px solid var(--line)", ...monoStyle, textAlign: "right" }}
-                    />
+                    <div>
+                      <input
+                        type="number"
+                        aria-label={field.label}
+                        aria-invalid={outOfRange || undefined}
+                        value={draft}
+                        min={field.min}
+                        max={field.max}
+                        onChange={(e) => setDrafts((d) => ({ ...d, [k]: e.target.value }))}
+                        style={{
+                          width: 92,
+                          padding: 8,
+                          borderRadius: 8,
+                          border: `1px solid ${outOfRange ? "var(--bad)" : "var(--line)"}`,
+                          ...monoStyle,
+                          textAlign: "right",
+                        }}
+                      />
+                      {outOfRange && (
+                        <div style={{ fontSize: 11, color: "var(--bad)", marginTop: 3, textAlign: "right" }}>
+                          {field.min}–{field.max}
+                        </div>
+                      )}
+                    </div>
                     {field.unit && <span style={{ fontSize: 12.5, color: "var(--ink2)", minWidth: 48 }}>{field.unit}</span>}
                     <button
                       type="button"
                       className="btn ghost sm"
-                      disabled={busy || draft.trim() === "" || Number(draft) === currentNum}
-                      onClick={() => void save(field, Number(draft))}
+                      disabled={busy || invalid || draftNum === currentNum}
+                      onClick={() => void save(field, draftNum)}
                     >
                       {busy ? "…" : "Save"}
                     </button>

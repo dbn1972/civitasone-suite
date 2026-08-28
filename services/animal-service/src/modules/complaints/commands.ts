@@ -6,7 +6,7 @@ import { COMMANDS } from "../../topics.js";
 export type { Accepted };
 
 export interface ReportComplaintInput {
-  location: { lat?: number; lng?: number; address?: string; ward?: string; landmark?: string };
+  location: { lat?: number | undefined; lng?: number | undefined; address?: string | undefined; ward?: string | undefined; landmark?: string | undefined };
   animalType: string;
   complaintType: string;
   description?: string | undefined;

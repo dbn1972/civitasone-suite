@@ -68,13 +68,25 @@ export async function journeyRoutes(app: FastifyInstance): Promise<void> {
     const { id } = idParam.parse(req.params);
 
     const cacheKey = cache.makeKey(ctx.tenantId, "journey", id);
-    const journey = await cache.getOrLoad(cacheKey, () => repo.findById(id, ctx.tenantId));
+    // Cache the mapped VIEW, not the raw row. @civitasone/cache's getOrLoad
+    // round-trips cached values through JSON (serialize/deserialize), so a
+    // cached raw JourneyRow's createdAt/updatedAt come back as plain strings on
+    // every cache HIT. repo.toView() calls .toISOString() on them
+    // unconditionally, so caching the row and mapping afterward — as this used
+    // to do — worked on a cache MISS (fresh row still has real Dates) but threw
+    // `TypeError: ... toISOString is not a function` on every cache HIT. Mapping
+    // once, before caching, means the cached value is already wire-shaped and a
+    // JSON round-trip is a no-op for it.
+    const journey = await cache.getOrLoad(cacheKey, async () => {
+      const row = await repo.findById(id, ctx.tenantId);
+      return row ? repo.toView(row) : null;
+    });
 
     if (!journey) {
       throw new HttpError(404, "NOT_FOUND", "journey not found");
     }
 
-    return reply.send({ data: repo.toView(journey) });
+    return reply.send({ data: journey });
   });
 
   // PATCH /v1/journeys/:id — update draft journey

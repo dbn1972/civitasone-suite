@@ -1,4 +1,4 @@
-import { and, eq, sql, inArray } from "drizzle-orm";
+import { and, eq, sql, inArray, desc } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import { db, scopedRead } from "../../shared/db.js";
 import { financeBills, financePayments, financeAdvances, financeUC, financeGrnMatch, type BillRow, type BillInsert, type PaymentRow, type PaymentInsert, type AdvanceRow, type AdvanceInsert, type UCRow, type UCInsert, type GrnMatchRow } from "./schema.js";
@@ -54,6 +54,24 @@ export async function findBillsByIds(ids: string[], tenantId: string): Promise<B
   );
 }
 
+/**
+ * All bills issued against a vendor, newest first -- backs the
+ * finance/vendors/[id] detail page's bill-history rollup (Total Bills/Total
+ * Paid/TDS Deducted stat cards + Bill History table). Filters on the
+ * existing vendor_id column directly: a FK constraint is only needed to
+ * ENFORCE referential integrity, not to filter by it (see migration 0065's
+ * note on why that FK is deliberately deferred pending a backfill pass), so
+ * this rollup was always buildable with a plain WHERE.
+ */
+export async function findBillsByVendorAndTenant(vendorId: string, tenantId: string, limit = 500): Promise<BillRow[]> {
+  return scopedRead((tx) =>
+    tx.select().from(financeBills)
+      .where(and(eq(financeBills.vendorId, vendorId), eq(financeBills.tenantId, tenantId)))
+      .orderBy(desc(financeBills.createdAt))
+      .limit(limit)
+  );
+}
+
 export async function findBillByIdTx(tx: Writer, id: string): Promise<BillRow | null> {
   const rows = await (tx as typeof db).select().from(financeBills).where(eq(financeBills.id, id)).limit(1);
   return rows[0] ?? null;
@@ -102,8 +120,16 @@ export async function listBillsByTenant(tenantId: string, limit: number, offset 
     .offset(offset));
 }
 
-export async function insertPayment(tx: Writer, row: PaymentInsert): Promise<void> {
-  await tx.insert(financePayments).values(row);
+/**
+ * BUG FIX: returns the inserted row (via RETURNING) so the caller can prime
+ * the read cache with the FULL, real row instead of hand-rolling a partial
+ * placeholder object — see payments/consumer.ts's paymentInitiate handler and
+ * payments/queries.ts's getPayment for the cache-poisoning bug this closes.
+ */
+export async function insertPayment(tx: Writer, row: PaymentInsert): Promise<PaymentRow> {
+  const [inserted] = await tx.insert(financePayments).values(row).returning();
+  if (!inserted) throw new Error(`insertPayment: RETURNING produced no row for payment ${row.id}`);
+  return inserted;
 }
 
 // ── Sample data ("try it") — clearly-marked example bills, safe to clear ──────

@@ -16,7 +16,7 @@ export default async function EmpanelmentPage() {
       <PageHeader
         title="Vendor Empanelment"
         subtitle="Empanelled vendors with category-wise validity and performance ratings."
-        actions={source === "error" ? <DataSourceBadge source={source} /> : null}
+        actions={source === "error" ? <DataSourceBadge source={source} message="Couldn't load — showing nothing" /> : null}
       />
 
       <StatGrid>

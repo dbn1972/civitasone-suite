@@ -30,7 +30,7 @@ describe("DocumentTypesEditor (DM-002)", () => {
   it("shows the saved-info badge on a failed load", async () => {
     vi.mocked(dm.getDocumentTypes).mockResolvedValue({ data: [], source: "error" });
     render(<DocumentTypesEditor />);
-    await waitFor(() => expect(screen.getAllByText(/showing saved information/i)[0]).toBeInTheDocument());
+    await waitFor(() => expect(screen.getAllByText(/couldn.t load/i)[0]).toBeInTheDocument());
     expect(screen.getByText(/document types unavailable/i)).toBeInTheDocument();
   });
 

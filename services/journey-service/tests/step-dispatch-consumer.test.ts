@@ -66,6 +66,7 @@ const H = vi.hoisted(() => ({
   runs: [] as unknown[],
   outbox: [] as unknown[],
   processed: new Set<string>(),
+  journeyFindByIdMock: vi.fn(),
 }));
 
 vi.mock("../src/shared/db.js", () => ({
@@ -114,6 +115,17 @@ vi.mock("../src/modules/steps/repo.js", () => ({
   listByJourney: vi.fn(),
   updateStatus: vi.fn(),
   toView: (r: Record<string, unknown>) => r,
+}));
+
+// The executions consumer's auto-chain (P1-8 follow-up) looks up the journey
+// definition to dispatch the next step. Defaulted below (beforeEach) to a
+// journey whose steps beyond index 0 are long `wait`s, so the auto-chained
+// dispatch parks immediately instead of cascading — existing tests below
+// assert the state right after ONE explicit step dispatch, and were written
+// before auto-chaining existed. Tests that want to observe real cascading
+// override this mock directly (see "execution advance — auto-chains...").
+vi.mock("../src/modules/journeys/repo.js", () => ({
+  findById: (...a: unknown[]) => H.journeyFindByIdMock(...a),
 }));
 
 vi.mock("../src/modules/executions/repo.js", () => ({
@@ -250,6 +262,13 @@ beforeEach(() => {
     version: 1,
   });
   process.env["JOURNEY_API_CALL_ALLOWED_HOSTS"] = "hooks.example.gov.in";
+
+  H.journeyFindByIdMock.mockReset();
+  H.journeyFindByIdMock.mockResolvedValue({
+    id: JOURNEY,
+    tenantId: TENANT,
+    steps: Array.from({ length: 5 }, () => ({ type: "wait", config: { delayDays: 999 } })),
+  });
 });
 
 afterEach(() => {
@@ -714,5 +733,89 @@ describe("run advance — guards", () => {
     expect(runs()).toHaveLength(0);
     // The step itself still recorded what it did.
     expect(steps()[0]!.status).toBe("completed");
+  });
+});
+
+// ── execution advance auto-chain (P1-8 follow-up) ───────────────────────────
+//
+// Before this fix, executionAdvance only bumped currentStepIndex — nothing
+// ever published journey.step.execute for the new index, so a run silently
+// froze "in_progress" forever after its first step. These tests assert the
+// EFFECT (a real dispatch happened for the next step), not just that the
+// run's bookkeeping moved, since bookkeeping alone is exactly the shape of
+// "fake progress" this whole module otherwise guards against.
+describe("execution advance — auto-chains to the next step", () => {
+  it("actually dispatches the next step, not just the run's bookkeeping", async () => {
+    H.journeyFindByIdMock.mockResolvedValue({
+      id: JOURNEY,
+      tenantId: TENANT,
+      steps: [
+        { type: "send_notification", config: { templateId: TEMPLATE } },
+        { type: "send_notification", config: { templateId: TEMPLATE } },
+      ],
+    });
+
+    const bus = makeBus();
+    await executeStep(bus, { stepIndex: 0, totalSteps: 2, stepConfig: { templateId: TEMPLATE } });
+    await relay(bus);
+
+    // Two real dispatches, not one: step 0 (explicit) and step 1 (auto-chained).
+    expect(outbox().filter((e) => e.topic === "notification.send")).toHaveLength(2);
+    expect(steps()).toHaveLength(2);
+    expect(steps()[1]).toMatchObject({ stepIndex: 1, stepType: "send_notification", status: "completed" });
+    // Both steps done, on the last index of a 2-step journey — run completes.
+    expect(runs()[0]).toMatchObject({ status: "completed" });
+    expect(topics()).toContain(EVENTS.journeyCompleted);
+  });
+
+  it("stops the chain at a wait step instead of cascading through it", async () => {
+    H.journeyFindByIdMock.mockResolvedValue({
+      id: JOURNEY,
+      tenantId: TENANT,
+      steps: [
+        { type: "send_notification", config: { templateId: TEMPLATE } },
+        { type: "wait", config: { delayDays: 1 } },
+        { type: "send_notification", config: { templateId: TEMPLATE } },
+      ],
+    });
+
+    const bus = makeBus();
+    await executeStep(bus, { stepIndex: 0, totalSteps: 3, stepConfig: { templateId: TEMPLATE } });
+    await relay(bus);
+
+    expect(steps()).toHaveLength(2);
+    expect(steps()[1]).toMatchObject({ stepIndex: 1, stepType: "wait", status: "waiting" });
+    // A parked wait only resumes via the sweeper — the chain must not reach
+    // index 2 on its own.
+    expect(runs()[0]).toMatchObject({ status: "in_progress", currentStepIndex: 1 });
+    expect(outbox().filter((e) => e.topic === "notification.send")).toHaveLength(1);
+  });
+
+  it("throws instead of silently enqueuing a dispatch it cannot resolve", async () => {
+    // Simulates an orphaned journeyId: findById returns nothing to dispatch.
+    H.journeyFindByIdMock.mockResolvedValue(null);
+
+    const bus = makeBus();
+    await executeStep(bus, { stepIndex: 0, totalSteps: 3 });
+    await relay(bus);
+
+    // The step itself still recorded what happened...
+    expect(steps()[0]).toMatchObject({ status: "completed" });
+    // ...but the advance must never fabricate a dispatch for a step it could
+    // not resolve — that would be the same "fake progress" shape as reporting
+    // a step done when it was not.
+    //
+    // This is checked at the "no fake stepExecute" level rather than by
+    // asserting the eventual queue outcome (retry-then-DLQ), because this
+    // file's `db.transaction`/`markProcessed` mocks call straight through
+    // without simulating a real Postgres ROLLBACK: the inbox-claim row the
+    // mock records on the first (failing) attempt is never "undone", so
+    // MemoryQueue's internal retry sees the messageId already claimed and
+    // returns early as a successful no-op instead of genuinely retrying —
+    // an artifact of mock fidelity, not of the fix. A real transaction rolls
+    // the inbox claim back together with the currentStepIndex bump (see the
+    // comment in executions/consumer.ts), which is what lets a genuine retry
+    // attempt the whole advance again and eventually DLQ if it keeps failing.
+    expect(outbox().filter((e) => e.topic === COMMANDS.stepExecute && e.payload["stepIndex"] === 1)).toHaveLength(0);
   });
 });

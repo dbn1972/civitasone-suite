@@ -16,9 +16,27 @@ type ActivityRow = {
 };
 
 const SEGMENTS = ["All", "Today", "Overdue"] as const;
+type Segment = (typeof SEGMENTS)[number];
 
-export function ActivitiesTable({ activities }: { activities: CRMActivityEntry[] }) {
-  const [segment, setSegment] = useState<string>("All");
+/**
+ * Resolve a case-insensitive `?segment=` query value (e.g. from the Control
+ * Tower's "Overdue follow-ups" exception drill-down) to one of the real
+ * segments, defaulting to "All" for anything else so an unrecognised value
+ * never renders a blank/broken toggle state.
+ */
+function resolveSegment(raw?: string): Segment {
+  const match = SEGMENTS.find((s) => s.toLowerCase() === raw?.toLowerCase());
+  return match ?? "All";
+}
+
+export function ActivitiesTable({
+  activities,
+  initialSegment,
+}: {
+  activities: CRMActivityEntry[];
+  initialSegment?: string;
+}) {
+  const [segment, setSegment] = useState<string>(resolveSegment(initialSegment));
   const today = new Date().toISOString().slice(0, 10);
 
   const tableRows: ActivityRow[] = activities

@@ -42,7 +42,7 @@ describe("WriteOffDecidePage", () => {
     const ui = await WriteOffDecidePage({ params: { id: WRITE_OFF_ID } });
     render(ui);
 
-    expect(screen.getAllByText("Showing saved information").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Couldn't load — showing nothing").length).toBeGreaterThan(0);
     expect(screen.getByRole("button", { name: `Approve write-off ${WRITE_OFF_ID.slice(0, 8)}` })).toBeDisabled();
     expect(screen.getByRole("button", { name: `Reject write-off ${WRITE_OFF_ID.slice(0, 8)}` })).toBeDisabled();
     // Never fabricate an amount when the record couldn't load.

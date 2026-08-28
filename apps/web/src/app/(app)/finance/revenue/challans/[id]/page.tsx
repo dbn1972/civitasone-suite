@@ -1,63 +1,60 @@
-import { PageHeader, StatGrid, StatCard, StatusPill, Card } from "@/app/_components/ds";
+import { PageHeader, StatGrid, StatCard, StatusPill, Card, EmptyState } from "@/app/_components/ds";
+import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
+import { getFinanceChallanById } from "@/app/_data/loaders";
+import { formatIndianDate, formatMoney } from "@/lib/formatters";
 
-export default function ChallanDetailPage({ params }: { params: { id: string } }) {
-  const challan = {
-    challanNo: "CHN/2024/001",
-    department: "Revenue Department",
-    amount: "₹15,00,000",
-    bank: "SBI",
-    branch: "Civil Lines, Lucknow",
-    date: "15-Jan-2025",
-    status: "approved",
-    depositor: "Sh. Arun Mishra, Accounts Officer",
-    purpose: "Deposit of Stamp Duty collections for Q3 FY2024-25",
-    headOfAccount: "0030-Stamps & Registration",
-    treasuryCode: "TR-LKO-001",
-  };
+/**
+ * Challan detail. Previously 100% hardcoded fake data with `params.id` never
+ * read — now wired to the real GET /v1/finance/challans/:id loader (same one
+ * the challan register list already uses for its row links). That backend
+ * route does not exist yet (see FinanceChallanSummary's "no live GET route"
+ * note in packages/types), so today this honestly falls into the empty state
+ * below; once finance-service ships the route, real data flows through
+ * automatically with no further frontend change.
+ */
+export default async function ChallanDetailPage({ params }: { params: { id: string } }) {
+  const { data: challan, source } = await getFinanceChallanById(params.id);
 
-  const breakdown = [
-    { particular: "Stamp Duty — Residential", amount: "₹8,50,000" },
-    { particular: "Stamp Duty — Commercial", amount: "₹4,25,000" },
-    { particular: "Registration Fees", amount: "₹1,75,000" },
-    { particular: "Miscellaneous", amount: "₹50,000" },
-  ];
+  if (!challan) {
+    return (
+      <main className="page-main wrap" aria-labelledby="page-heading">
+        <PageHeader title="Challan Detail" back="/finance/revenue/challans" />
+        <EmptyState
+          icon="🧾"
+          title="Challan detail not available"
+          message="This challan may not exist, or challan detail lookup isn't available yet. Check the challan register for the current list."
+        />
+      </main>
+    );
+  }
 
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
-      <PageHeader title={`Challan ${challan.challanNo}`} subtitle={challan.department} back="/finance/revenue/challans" />
+      <PageHeader
+        title={`Challan ${challan.challanNo}`}
+        subtitle={challan.depositor}
+        back="/finance/revenue/challans"
+        actions={source === "error" ? <DataSourceBadge source={source} /> : null}
+      />
       <StatGrid>
-        <StatCard icon="₹" iconBg="#ecfdf3" label="Amount" value={challan.amount} />
-        <StatCard icon="🏦" iconBg="#e7edfd" label="Bank" value={challan.bank} />
-        <StatCard icon="📅" iconBg="#fffaeb" label="Date" value={challan.date} />
-        <StatCard icon="✅" iconBg="#ecfdf3" label="Status" value="Approved" />
+        <StatCard icon="₹" iconBg="#ecfdf3" label="Amount" value={formatMoney(challan.amountMinor)} />
+        <StatCard icon="🧾" iconBg="#e7edfd" label="GRN No" value={challan.grnNo ?? "—"} />
+        <StatCard icon="📅" iconBg="#fffaeb" label="Created" value={formatIndianDate(challan.createdAt)} />
+        <StatCard icon="✅" iconBg="#ecfdf3" label="Status" value={challan.status} />
       </StatGrid>
 
       <Card title="Challan Details" padding>
         <div className="fields">
           <div className="field"><span className="label">Challan No</span><span className="mono">{challan.challanNo}</span></div>
-          <div className="field"><span className="label">Department</span><span>{challan.department}</span></div>
-          <div className="field"><span className="label">Amount</span><span>{challan.amount}</span></div>
-          <div className="field"><span className="label">Bank & Branch</span><span>{challan.bank} — {challan.branch}</span></div>
-          <div className="field"><span className="label">Head of Account</span><span>{challan.headOfAccount}</span></div>
-          <div className="field"><span className="label">Treasury Code</span><span className="mono">{challan.treasuryCode}</span></div>
           <div className="field"><span className="label">Depositor</span><span>{challan.depositor}</span></div>
-          <div className="field"><span className="label">Purpose</span><span>{challan.purpose}</span></div>
+          <div className="field"><span className="label">Amount</span><span>{formatMoney(challan.amountMinor)}</span></div>
+          <div className="field"><span className="label">Currency</span><span>{challan.currency}</span></div>
+          <div className="field"><span className="label">GRN No</span><span className="mono">{challan.grnNo ?? "—"}</span></div>
+          <div className="field"><span className="label">Receipt Head</span><span className="mono">{challan.receiptHeadId}</span></div>
+          <div className="field"><span className="label">Created</span><span>{formatIndianDate(challan.createdAt)}</span></div>
+          <div className="field"><span className="label">Last Updated</span><span>{formatIndianDate(challan.updatedAt)}</span></div>
           <div className="field"><span className="label">Status</span><StatusPill status={challan.status} /></div>
         </div>
-      </Card>
-
-      <Card title="Amount Breakdown" padding>
-        <table className="tbl" aria-label="Challan amount breakdown">
-          <thead>
-            <tr><th>Particular</th><th style={{ textAlign: "right" }}>Amount</th></tr>
-          </thead>
-          <tbody>
-            {breakdown.map((item, i) => (
-              <tr key={i}><td>{item.particular}</td><td style={{ textAlign: "right" }}>{item.amount}</td></tr>
-            ))}
-            <tr style={{ fontWeight: 600 }}><td>Total</td><td style={{ textAlign: "right" }}>{challan.amount}</td></tr>
-          </tbody>
-        </table>
       </Card>
     </main>
   );

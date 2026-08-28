@@ -54,6 +54,16 @@ export function validateProgressNotExceedTarget(cumulative: number, target: numb
 }
 
 /**
+ * Bug fix (works-billing-integrity #5): a progress delta that would take
+ * cumulative achievement backward (i.e. a negative delta) is only allowed
+ * when it is an explicit, distinctly-flagged correction — never silently.
+ */
+export function canApplyProgressDelta(delta: number, correctionReason?: string | null): boolean {
+  if (delta >= 0) return true;
+  return typeof correctionReason === "string" && correctionReason.trim().length > 0;
+}
+
+/**
  * BR-032: Parent/split consistency — parent cannot transition to a status
  * unless all splits are at or beyond that status.
  * For closure: parent cannot close unless all splits are closed.

@@ -148,6 +148,30 @@ export interface OfflineSyncPayload {
   }>;
 }
 
+/**
+ * Fix 5 (gate binding, consumer level): resolve a device's registered gate
+ * binding by (tenantId, deviceId) directly against the devices table —
+ * deliberately a local, minimal query rather than importing
+ * device-registry/repo.js#getDeviceById, which pulls in
+ * shared/scanner-db.js transitively and is heavier than this handler needs.
+ * Returns null both when the device does not exist and when it exists with
+ * no gate binding — either way, the caller's gateId comparison correctly
+ * treats that as "cannot match any claimed gate".
+ * Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
+ * before this read — a bare db.select() runs with no RLS GUC set (same
+ * convention as this file's other reads, e.g. emergencyUnlock below).
+ */
+async function getDeviceGateBinding(tenantId: string, deviceId: string): Promise<string | null> {
+  const rows = await db.transaction((tx) =>
+    tx
+      .select({ gateId: devices.gateId })
+      .from(devices)
+      .where(and(eq(devices.id, deviceId), eq(devices.tenantId, tenantId)))
+      .limit(1),
+  );
+  return rows[0]?.gateId ?? null;
+}
+
 // ── Consumer Registration ─────────────────────────────────────────────────
 
 export function registerTurnstileControlConsumers(queue: Queue): void {
@@ -155,6 +179,40 @@ export function registerTurnstileControlConsumers(queue: Queue): void {
   queue.subscribe<PassageRecordPayload>(COMMANDS.passageRecord, async (msg) => {
     const p = msg.payload;
     const now = new Date();
+
+    // Fix 5 (gate binding, consumer level): the route enforces
+    // body.gateId === deviceContext.gateId, but this command may also reach
+    // the consumer directly (e.g. a future internal publisher, or a queue
+    // that isn't exclusively fed by the route) — defense in depth requires
+    // the consumer to independently verify the claimed gateId against the
+    // device's actual registered binding (device-registry devices.gate_id,
+    // resolved by msg.actorId = deviceId, via getDeviceGateBinding above)
+    // before recording anything. A mismatch (or an unknown device) is
+    // rejected outright: no passage_event row, no downstream
+    // checkInRecord/tailgating/anti-passback processing — a fabricated gate
+    // must never reach the check-in audit trail, pass state, or evacuation
+    // roster.
+    const boundGateId = await getDeviceGateBinding(msg.tenantId, msg.actorId);
+    if (boundGateId !== p.gateId) {
+      log.warn(
+        {
+          tenantId: msg.tenantId, deviceId: msg.actorId, claimedGateId: p.gateId,
+          boundGateId, event: "turnstile_gate_binding_mismatch",
+        },
+        "rejected passage event: claimed gateId does not match device's registered gate binding",
+      );
+      await db.transaction(async (tx): Promise<void> => {
+        if (!(await markProcessed(tx, msg.messageId))) return; // idempotent replay
+        await enqueue(tx, {
+          topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+          payload: {
+            service: "visitor-service", action: "process", resourceType: "turnstile_control", resourceId: p.id,
+            outcome: "rejected",
+          },
+        });
+      });
+      return;
+    }
 
     // Anti-passback needs the pass's last-known direction. Read it (best-effort)
     // BEFORE the tx — Redis/memory-backed; a read failure just means "no prior".

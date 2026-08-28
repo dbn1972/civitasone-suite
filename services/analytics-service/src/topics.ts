@@ -22,6 +22,7 @@ export const EVENTS = {
   dashboardCreated: "analytics.dashboard.created",
   dashboardUpdated: "analytics.dashboard.updated",
   dashboardShared: "analytics.dashboard.shared",
+  dashboardDeleted: "analytics.dashboard.deleted",
   widgetAdded: "analytics.widget.added",
   metricSaved: "analytics.metric.saved",
 } as const;

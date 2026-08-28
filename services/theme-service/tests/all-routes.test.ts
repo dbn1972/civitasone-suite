@@ -90,10 +90,16 @@ vi.mock("../src/modules/templates/repo.js", () => ({
     }
     return null;
   }),
-  listByTenant: vi.fn(async () => ({
-    data: [{ id: TEMPLATE_ID, tenantId: TENANT, type: "email", name: "Welcome", htmlBody: "<h1>Hi</h1>", variables: null, version: 1 }],
-    pagination: { hasMore: false, pageSize: 50 },
-  })),
+  // The real templates/repo.ts::listByTenant returns a bare array (there is
+  // no separate queries.js wrapping layer for this module, unlike tokens/
+  // below). templates/routes.ts itself wraps it into {data, pagination}
+  // before handing it to sendValidated. This mock previously returned the
+  // already-wrapped shape, which masked a real bug: routes.ts used to pass
+  // the bare array straight through, so every real (unmocked) call 400'd
+  // with "Expected object, received array".
+  listByTenant: vi.fn(async () => [
+    { id: TEMPLATE_ID, tenantId: TENANT, type: "email", name: "Welcome", htmlBody: "<h1>Hi</h1>", variables: null, version: 1 },
+  ]),
 }));
 
 vi.mock("../src/modules/tokens/repo.js", () => ({

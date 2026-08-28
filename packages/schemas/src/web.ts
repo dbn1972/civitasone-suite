@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { paginatedSchema } from "./common.js";
+import { zMoneyMinorString } from "./money.js";
 
 export const auditRowSchema = z.object({
   actor: z.string(),
@@ -32,6 +33,12 @@ export const slaQueueSchema = z.object({
 });
 
 export const paymentSummarySchema = z.object({
+  // Backend row id (UUID). Optional so partial/legacy payloads still satisfy
+  // the schema; the real query (payments/queries.ts's listPayments) always
+  // sets it. Without this field, .parse() silently stripped `id` off every
+  // response, leaving the frontend's payment-detail link dead even though
+  // PaymentsTable.tsx already reads `p.id` to build it.
+  id: z.string().optional(),
   referenceId: z.string(),
   beneficiary: z.string(),
   amountDisplay: z.string(),
@@ -517,14 +524,20 @@ export const FinanceDashboardSchema = z.object({
   totalExpenditure: z.number().default(0),
 });
 
+// Bigint-safe strings, not z.number(): budget/queries.ts's listBudgetSummaries
+// returns sanctionedAmount/releasedAmount/expenditure/balance via .toString()
+// (H3: paise can exceed 2^53) — a plain z.number() here means sendValidated()
+// throws a ZodError (-> 400 VALIDATION_FAILED) the instant a tenant has one
+// real non-zero budget row. Same fix already applied to BillSummarySchema
+// above; this mirrors it for Budget/Sanctions, which had been missed.
 export const BudgetSummarySchema = z.object({
   id: z.string(),
   majorHead: z.string(),
   subHead: z.string().optional(),
-  sanctionedAmount: z.number(),
-  releasedAmount: z.number(),
-  expenditure: z.number(),
-  balance: z.number(),
+  sanctionedAmount: zMoneyMinorString,
+  releasedAmount: zMoneyMinorString,
+  expenditure: zMoneyMinorString,
+  balance: zMoneyMinorString,
   beMinor: z.string(),
   reMinor: z.string(),
   status: z.string(),
@@ -536,7 +549,9 @@ export const SanctionSummarySchema = z.object({
   id: z.string(),
   sanctionNo: z.string(),
   subject: z.string(),
-  amount: z.number(),
+  // Bigint-safe string: budget/queries.ts sends row.amountMinor.toString()
+  // (H3: avoid 2^53 precision loss on large government sanction amounts).
+  amount: zMoneyMinorString,
   sanctionedBy: z.string(),
   date: z.string(),
   status: z.enum(["approved", "pending", "rejected"]),
@@ -547,7 +562,7 @@ export const SanctionSummaryListSchema = z.array(SanctionSummarySchema);
 export const SanctionDetailSchema = SanctionSummarySchema.extend({
   lineItems: z.array(z.object({
     description: z.string(),
-    amount: z.number(),
+    amount: zMoneyMinorString,
     head: z.string(),
   })).default([]),
   remarks: z.string().optional(),
@@ -562,7 +577,10 @@ export const BillSummarySchema = z.object({
   id: z.string(),
   billNo: z.string(),
   vendor: z.string(),
-  amount: z.number(),
+  // Bigint-safe string, not z.number(): payments/queries.ts's listBillSummaries
+  // and getBillDetail return row.netMinor.toString() (paise can exceed 2^53),
+  // so a plain z.number() here made GET /v1/finance/bills 400 on every call.
+  amount: zMoneyMinorString,
   amountDisplay: z.string().optional(),
   submittedDate: z.string(),
   dueDate: z.string().optional(),
@@ -577,7 +595,9 @@ export const BillDetailSchema = BillSummarySchema.extend({
     description: z.string(),
     quantity: z.number(),
     unitPrice: z.number(),
-    amount: z.number(),
+    // Same bigint-safe-string convention as BillSummarySchema.amount above
+    // (money is integer-minor-unit strings throughout this codebase).
+    amount: zMoneyMinorString,
     taxCode: z.string().optional(),
   })).default([]),
   grnRef: z.string().optional(),
@@ -590,11 +610,15 @@ export const AdvanceSummarySchema = z.object({
   advanceNo: z.string(),
   beneficiary: z.string(),
   type: z.enum(["employee", "vendor", "other"]),
-  amount: z.number(),
+  // Bigint-safe strings, not z.number(): payments/queries.ts's listAdvances
+  // returns amount/adjustedAmount/balance via .toString() (H3: paise can
+  // exceed 2^53), which a plain z.number() here would 400 on real data (it
+  // only passed before because the advances table was empty).
+  amount: zMoneyMinorString,
   disbursedDate: z.string(),
   dueDate: z.string().optional(),
-  adjustedAmount: z.number().default(0),
-  balance: z.number(),
+  adjustedAmount: zMoneyMinorString.default(0),
+  balance: zMoneyMinorString,
   status: z.enum(["active", "adjusted", "overdue", "closed"]),
 });
 export const AdvanceSummaryListSchema = z.array(AdvanceSummarySchema);
@@ -618,8 +642,12 @@ export const GLEntrySummarySchema = z.object({
   date: z.string(),
   accountCode: z.string(),
   accountName: z.string(),
-  debit: z.number().default(0),
-  credit: z.number().default(0),
+  // Minor units (paise) as a bigint-safe decimal string, e.g. "500000" for
+  // ₹5,000.00 — NOT rupees, NOT a float. Consumers pass this straight to
+  // formatMoney(); do not divide by 100 or coerce with Number() anywhere in
+  // this pipeline (see gl/queries.ts listJournalEntries for why that broke).
+  debit: z.string().default("0"),
+  credit: z.string().default("0"),
   narration: z.string().optional(),
   referenceNo: z.string().optional(),
   type: z.enum(["payment", "receipt", "journal", "budget"]).optional(),
@@ -646,6 +674,7 @@ export const HRDashboardSchema = z.object({
   onLeave: z.number().default(0),
   payrollDue: z.number().default(0),
   departmentBreakdown: z.array(z.object({ name: z.string(), count: z.number() })).default([]),
+  employeeTypeBreakdown: z.array(z.object({ name: z.string(), count: z.number() })).default([]),
 });
 
 export const AttendanceSummaryItemSchema = z.object({
@@ -917,9 +946,27 @@ export const TenderDetailSchema = TenderSummarySchema.extend({
   scope: z.string().optional(),
   eligibilityCriteria: z.string().optional(),
   bids: z.array(z.object({
+    // CRITICAL fix: bidAmount was required (no .optional()), but
+    // procurement-service's queries.ts getTenderDetail deliberately sends
+    // `bidAmount: undefined` for any bid whose financial envelope hasn't been
+    // opened yet ("SEALING GUARD: financial value only surfaced once the
+    // envelope is opened") — the two-envelope sealing property this module
+    // exists to enforce. Because sendValidated() does a strict
+    // TenderDetailSchema.parse(detail) server-side before every response,
+    // GET /v1/procurement/tenders/:id threw a ZodError (-> 400
+    // VALIDATION_FAILED) for ANY tender with at least one bid still sealed —
+    // i.e. essentially every real tender between first-bid-submitted and
+    // financial-open. The tender detail page was unreachable for that entire
+    // window, not as an edge case but as the common case.
+    bidAmount: z.number().optional(),
+    // bidId: needed by the tender lifecycle UI to submit per-bid technical
+    // evaluation results (POST /v1/procurement/tenders/:id/technical-evaluation
+    // takes { results: [{ bidId, qualified, score }] }) — vendorId alone can't
+    // stand in for it (a vendor's identity, not the bid row itself).
+    // Optional so any other consumer relying on the previous shape can't break.
+    bidId: z.string().optional(),
     vendorId: z.string(),
     vendorName: z.string(),
-    bidAmount: z.number(),
     technicalScore: z.number().optional(),
     financialScore: z.number().optional(),
     status: z.string(),
@@ -2153,6 +2200,14 @@ export const AllocationDistributionSummarySchema = z.object({
 });
 export const AllocationDistributionSummaryListSchema = z.array(AllocationDistributionSummarySchema);
 
+// `enforce` was deliberately removed on the backend (DB column dropped in
+// migrations/0067_drop_allocation_enforce.sql; allocation-routes.ts's own
+// comment calls it a "misleading dead flag" that never worked as advertised)
+// but this schema still required it — since GET /v1/finance/budget-allocations
+// sends a plain 200 (no server-side sendValidated), the mismatch wasn't a
+// 400: the frontend's own responseSchema.safeParse silently rejected every
+// real row instead, collapsing the Allocation list to {data: [], source:
+// "error"} the instant a tenant has real data.
 export const FinanceBudgetAllocationSummarySchema = z.object({
   id: z.string(),
   headId: z.string(),
@@ -2161,7 +2216,6 @@ export const FinanceBudgetAllocationSummarySchema = z.object({
   committedMinor: z.string(),
   actualMinor: z.string(),
   availableMinor: z.string(),
-  enforce: z.boolean(),
 });
 export const FinanceBudgetAllocationSummaryListSchema = z.array(FinanceBudgetAllocationSummarySchema);
 
@@ -2357,6 +2411,47 @@ export const FinanceAuditParaSummarySchema = z.object({
 });
 export const FinanceAuditParaSummaryListSchema = z.array(FinanceAuditParaSummarySchema);
 
+export const DisciplinaryCaseDetailSchema = z.object({
+  id: z.string(),
+  tenantId: z.string(),
+  employeeId: z.string(),
+  caseNo: z.string(),
+  proceedingType: z.string(),
+  status: z.string(),
+  allegation: z.string(),
+  chargeMemoRef: z.string().nullable(),
+  chargeMemoDate: z.string().nullable(),
+  inquiryOfficerId: z.string().nullable(),
+  inquiryOfficerName: z.string().nullable(),
+  inquiryAppointedDate: z.string().nullable(),
+  finding: z.string().nullable(),
+  findingNotes: z.string().nullable(),
+  findingDate: z.string().nullable(),
+  penaltyClass: z.string().nullable(),
+  penaltyType: z.string().nullable(),
+  penaltyDetail: z.string().nullable(),
+  penaltyDate: z.string().nullable(),
+  appealFiledDate: z.string().nullable(),
+  appealAuthority: z.string().nullable(),
+  appealOutcome: z.string().nullable(),
+  appealDecidedDate: z.string().nullable(),
+  closedAt: z.string().nullable(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+  createdBy: z.string(),
+  updatedBy: z.string(),
+  version: z.number(),
+});
+
+export const FinanceVendorBillHistoryEntrySchema = z.object({
+  id: z.string(),
+  billNo: z.string(),
+  date: z.string(),
+  amount: z.string(),
+  tds: z.string(),
+  status: z.string(),
+});
+
 export const FinanceVendorDetailSchema = z.object({
   id: z.string(),
   name: z.string(),
@@ -2375,6 +2470,11 @@ export const FinanceVendorDetailSchema = z.object({
   version: z.number(),
   createdAt: z.string(),
   updatedAt: z.string(),
+  // Vendor<->bills rollup for the [id] page's Total Bills/Total Paid/TDS
+  // Deducted stat cards + Bill History table (masters/routes.ts's
+  // toVendorBillHistory()). Defaults to [] so a POST/PATCH echo (which never
+  // looks bills up) still satisfies this schema.
+  bills: z.array(FinanceVendorBillHistoryEntrySchema).default([]),
 });
 
 export const FinanceVendorSummarySchema = z.object({

@@ -244,6 +244,24 @@ export function verifyChain(records: readonly ChainRecord[]): ChainVerification 
   return { valid: true };
 }
 
+// ─── Decision drift (cross-module awareness, Req 7.5 spirit) ─────────────────
+
+/**
+ * True when a decision the minutes recorded was updated AFTER the minutes were approved/locked
+ * (Req 7.5 spirit: an approved minutes record should not silently drift from what it recorded
+ * without that becoming visible somewhere). Pure predicate — see `minutes/repo.ts`'s
+ * `getDecisionDrift` for the query that resolves the candidate decisions and calls this.
+ *
+ * NOTE (scope): this only makes drift DETECTABLE from the minutes side. It cannot PREVENT a
+ * decision from being amended after the minutes recording it are signed — that requires a guard
+ * in decision/consumer.ts's `handleDecisionUpdate`, outside this module. See `getDecisionDrift`'s
+ * doc comment for the precise one-guard fix that closes this for real.
+ */
+export function isDecisionAmendedAfterApproval(decisionUpdatedAt: Date, minutesApprovedAt: Date | null): boolean {
+  if (!minutesApprovedAt) return false;
+  return decisionUpdatedAt.getTime() > minutesApprovedAt.getTime();
+}
+
 // ─── Version diff (Req 7.8) ──────────────────────────────────────────────────
 
 /** A single line in a computed diff. */

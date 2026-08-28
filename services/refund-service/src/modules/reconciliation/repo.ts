@@ -36,7 +36,7 @@ export async function updateStatus(
       status,
       updatedBy,
       updatedAt: new Date(),
-      disbursedAt: status === "completed" ? new Date() : undefined,
+      ...(status === "completed" ? { disbursedAt: new Date() } : {}),
       version: sql`${refundDisbursements.version} + 1`,
     })
     .where(and(eq(refundDisbursements.id, id), eq(refundDisbursements.tenantId, tenantId)))

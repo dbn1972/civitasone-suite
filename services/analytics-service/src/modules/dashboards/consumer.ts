@@ -185,4 +185,33 @@ export function registerDashboardsConsumers(rawQueue: Queue): void {
       throw err; // H11 FIX: rethrow so message redelivers/DLQs
     }
   });
+
+  // Was entirely missing: commands.deleteDashboard() published
+  // "analytics.dashboard.delete" but nothing ever subscribed to it, so
+  // DELETE /v1/analytics/dashboards/:id returned 202 "accepted" while the
+  // dashboard silently continued to exist forever (confirmed live: created a
+  // dashboard, called DELETE, got 202, re-fetched it 2s later — unchanged).
+  // Mirrors the sibling handlers above: inbox idempotency, transactional
+  // write, domain event + audit record.
+  queue.subscribe<Record<string, unknown>>(COMMANDS.deleteDashboard, async (msg) => {
+    try {
+      const p = msg.payload as { dashboardId: string };
+      await db.transaction(async (tx) => {
+        if (!(await markProcessed(tx, msg.messageId))) return;
+        const removed = await repo.deleteById(tx, p.dashboardId, msg.tenantId);
+        if (!removed) {
+          // already gone (or never existed under this tenant) — nothing to do.
+          await audit(tx, msg, "delete_not_found", p.dashboardId, "failure");
+          return;
+        }
+        await emit(tx, msg, EVENTS.dashboardDeleted, { dashboardId: p.dashboardId });
+        await audit(tx, msg, "delete", p.dashboardId);
+      });
+      await cache.invalidate(cache.makeKey(msg.tenantId, DASHBOARD_RESOURCE, p.dashboardId));
+      await cache.invalidateResource(msg.tenantId, DASHBOARD_RESOURCE);
+    } catch (err) {
+      log.error({ err, messageId: msg.messageId, type: COMMANDS.deleteDashboard }, "Consumer processing failed");
+      throw err; // H11 FIX: rethrow so message redelivers/DLQs
+    }
+  });
 }

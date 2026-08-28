@@ -110,6 +110,13 @@ export type ActionItemEvidenceInput = z.infer<typeof actionItemEvidenceSchema>;
  * The secretary/chairperson verifies (or rejects) submitted evidence (Req 9.7). `verified: true`
  * transitions the item to `verified`; `false` returns it to the assignee with an optional `note`.
  * `actionItemId` from path.
+ *
+ * `verifierId` is shape-validated here but is NOT the identity the consumer records or trusts —
+ * `handleVerify` (action-item/consumer.ts) binds the persisted `verified_by` to the authenticated
+ * caller (`ctx.actorId`, carried on the command envelope) instead, plus rejects self-verification
+ * (verifier == assignee). A client-supplied identity field with no relationship check let a
+ * caller name an arbitrary "verifier" while acting as anyone; kept on the wire for backward
+ * compatibility only.
  */
 export const actionItemVerifySchema = z.object({
   verifierId: uuid,

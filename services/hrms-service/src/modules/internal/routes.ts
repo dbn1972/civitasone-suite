@@ -64,6 +64,17 @@ export async function internalRoutes(app: FastifyInstance): Promise<void> {
           employeeNo: e.employeeNo,
           fullName: e.fullName,
           basicMinor: e.basicMinor.toString(),
+          // BUG-1 fix: payroll-service needs this to pro-rate a mid-month joiner's
+          // first slip (days before joining, within the run month, are unpaid).
+          // There is no symmetric "date of leaving" column on hrms_employees — a
+          // separated employee's status flips to "separated" as part of the same
+          // lifecycle transaction that records the separation (see
+          // lifecycle/consumer.ts COMMANDS.lifecycleSeparate), so they are already
+          // excluded above (`status !== "separated"`) before this projection ever
+          // runs; their partial final month + terminal dues are priced by the
+          // Full & Final Settlement flow off its own separationDate, not by this
+          // endpoint or the regular payroll run.
+          dateOfJoining: e.dateOfJoining,
           payStructureId: e.payStructureId,
           bankAccountNo: e.bankAccountNo,
           bankIfsc: e.bankIfsc,
@@ -123,5 +134,23 @@ export async function internalRoutes(app: FastifyInstance): Promise<void> {
     return reply.send(employees.map((e) => ({ id: e.id, fullName: e.fullName, departmentName: deptMap.get(e.departmentId) ?? "" })));
   });
 
-
+  // round2 review fix: payroll-service's employee-existence check (arrears/
+  // bonus/reimbursements) originally reused employee-summaries above, but
+  // that endpoint is `.limit(2000)` with no `.orderBy(...)` — for a tenant
+  // over that size it returns an arbitrary, unordered subset, so a real
+  // employeeId outside that subset would be wrongly reported as
+  // nonexistent. employee-summaries' two existing callers both treat
+  // incompleteness as tolerable (display enrichment, best-effort); a hard
+  // reject needs an actual point lookup instead. Reuses employeeRepo.findById
+  // (already tenant-scoped, RLS-safe, used by this same module's lifecycle
+  // consumer and by employee/queries.ts) rather than paging through the list.
+  // Returns only a boolean, not the employee record, so the internal
+  // boundary doesn't leak more PII than the caller actually needs.
+  app.get("/v1/hrms/internal/employees/:id/exists", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, INTERNAL_ROLES);
+    const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
+    const emp = await employeeRepo.findById(id, ctx.tenantId);
+    return reply.send({ exists: emp !== null });
+  });
 }

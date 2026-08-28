@@ -78,25 +78,29 @@ const arbNonNegInt = fc.integer({ min: 0, max: 100 });
 // ---------------------------------------------------------------------------
 
 /**
- * Oracle computation for majority rule result. Uses the same cross-multiplication
- * logic documented in the design but is written independently from the SUT.
+ * Oracle computation for majority rule result. Uses the same cross-multiplication logic
+ * documented in the design but is written independently from the SUT.
+ *
+ * Denominator convention (unified with decision/domain.ts — see voting/domain.ts
+ * `computeVoteResult`'s docstring): the threshold is measured against DECISIVE votes
+ * (`for + against`) — abstentions are recorded but never count toward the majority base.
  */
 function oracleVoteResult(tally: VoteTally, rule: MajorityRule): "passed" | "rejected" {
-  const { votesFor, total } = tally;
-  if (total <= 0) return "rejected";
+  const { votesFor, votesAgainst, votesAbstain } = tally;
+  const decisive = votesFor + votesAgainst;
   switch (rule) {
     case "simple_majority":
-      // strictly more than half: votesFor / total > 0.5 ↔ votesFor * 2 > total
-      return votesFor * 2 > total ? "passed" : "rejected";
+      // strictly more decisive votes in favour than against (abstentions don't affect this)
+      return votesFor > votesAgainst ? "passed" : "rejected";
     case "two_thirds":
-      // at least two-thirds: votesFor / total >= 2/3 ↔ votesFor * 3 >= total * 2
-      return votesFor * 3 >= total * 2 ? "passed" : "rejected";
+      // at least two-thirds of decisive votes: votesFor / decisive >= 2/3 ↔ votesFor*3 >= decisive*2
+      return decisive > 0 && votesFor * 3 >= decisive * 2 ? "passed" : "rejected";
     case "three_fourths":
-      // at least three-fourths: votesFor / total >= 3/4 ↔ votesFor * 4 >= total * 3
-      return votesFor * 4 >= total * 3 ? "passed" : "rejected";
+      // at least three-fourths of decisive votes: votesFor*4 >= decisive*3
+      return decisive > 0 && votesFor * 4 >= decisive * 3 ? "passed" : "rejected";
     case "unanimous":
-      // every ballot in favour
-      return votesFor === total ? "passed" : "rejected";
+      // every ballot cast (including abstentions) must be in favour
+      return votesFor > 0 && votesAgainst === 0 && votesAbstain === 0 ? "passed" : "rejected";
   }
 }
 
@@ -229,47 +233,36 @@ describe("P16: Majority rule correctness", () => {
     );
   });
 
-  it("simple_majority: passes IFF votesFor > 50% of total", () => {
+  it("simple_majority: passes IFF votesFor > votesAgainst (decisive votes only — abstentions don't affect it)", () => {
     fc.assert(
       fc.property(arbTally, (tally) => {
         const result = computeVoteResult(tally, "simple_majority");
-        if (tally.total <= 0) {
-          expect(result).toBe("rejected");
-        } else {
-          // Strictly more than half
-          const shouldPass = tally.votesFor * 2 > tally.total;
-          expect(result).toBe(shouldPass ? "passed" : "rejected");
-        }
+        const shouldPass = tally.votesFor > tally.votesAgainst;
+        expect(result).toBe(shouldPass ? "passed" : "rejected");
       }),
       { numRuns: 200 },
     );
   });
 
-  it("two_thirds: passes IFF votesFor ≥ 66.67% of total", () => {
+  it("two_thirds: passes IFF votesFor ≥ 66.67% of decisive votes (for + against)", () => {
     fc.assert(
       fc.property(arbTally, (tally) => {
         const result = computeVoteResult(tally, "two_thirds");
-        if (tally.total <= 0) {
-          expect(result).toBe("rejected");
-        } else {
-          const shouldPass = tally.votesFor * 3 >= tally.total * 2;
-          expect(result).toBe(shouldPass ? "passed" : "rejected");
-        }
+        const decisive = tally.votesFor + tally.votesAgainst;
+        const shouldPass = decisive > 0 && tally.votesFor * 3 >= decisive * 2;
+        expect(result).toBe(shouldPass ? "passed" : "rejected");
       }),
       { numRuns: 200 },
     );
   });
 
-  it("three_fourths: passes IFF votesFor ≥ 75% of total", () => {
+  it("three_fourths: passes IFF votesFor ≥ 75% of decisive votes (for + against)", () => {
     fc.assert(
       fc.property(arbTally, (tally) => {
         const result = computeVoteResult(tally, "three_fourths");
-        if (tally.total <= 0) {
-          expect(result).toBe("rejected");
-        } else {
-          const shouldPass = tally.votesFor * 4 >= tally.total * 3;
-          expect(result).toBe(shouldPass ? "passed" : "rejected");
-        }
+        const decisive = tally.votesFor + tally.votesAgainst;
+        const shouldPass = decisive > 0 && tally.votesFor * 4 >= decisive * 3;
+        expect(result).toBe(shouldPass ? "passed" : "rejected");
       }),
       { numRuns: 200 },
     );

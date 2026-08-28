@@ -59,7 +59,7 @@ export default async function GpfStatementsPage() {
         subtitle="General Provident Fund contributions — interest @ 7.1% p.a. (GoI Q1 FY 2026-27)."
         back="/hr/payroll"
       />
-      <DataSourceBadge source={source} />
+      <DataSourceBadge source={source} message="Couldn't load — showing nothing" />
 
       <StatGrid>
         <StatCard icon="📋" iconBg="var(--infobg)" label="Statements" value={tableRows.length} />

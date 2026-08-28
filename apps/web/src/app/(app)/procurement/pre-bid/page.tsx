@@ -16,7 +16,7 @@ export default async function PreBidPage() {
       <PageHeader
         title="Pre-Bid Conferences"
         subtitle="Pre-bid meetings, queries and response tracking for open tenders."
-        actions={source === "error" ? <DataSourceBadge source={source} /> : null}
+        actions={source === "error" ? <DataSourceBadge source={source} message="Couldn't load — showing nothing" /> : null}
       />
 
       <StatGrid>

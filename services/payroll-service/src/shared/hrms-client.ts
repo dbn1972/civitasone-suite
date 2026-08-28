@@ -21,6 +21,14 @@ export type PayrollInputEmployee = {
   employeeNo: string;
   fullName: string;
   basicMinor: string;
+  /**
+   * BUG-1 fix: YYYY-MM-DD. Used to pro-rate a mid-month joiner's first slip —
+   * days before joining within the run month are unpaid. No symmetric
+   * dateOfLeaving here: a separated employee is dropped from the HRMS feed
+   * entirely (see routes.ts comment), so leaving-date proration for the
+   * regular run has no live case; separation pay is the FnF flow's job.
+   */
+  dateOfJoining: string;
   payStructureId: string | null;
   bankAccountNo: string | null;
   bankIfsc: string | null;
@@ -84,4 +92,46 @@ export async function fetchEmployeeSummaries(tenantId: string): Promise<Map<stri
   } catch {
     return new Map();
   }
+}
+
+/**
+ * round2 fix: payroll and HRMS are separate databases (no DB-level FK is
+ * possible), and arrears/bonus/reimbursements accepted any well-formed UUID
+ * as employeeId with no check it corresponds to a real employee in the
+ * caller's tenant.
+ *
+ * round2 review fix: the first version of this function reused
+ * fetchEmployeeSummaries' /v1/hrms/internal/employee-summaries endpoint,
+ * which is `.limit(2000)` with no `.orderBy(...)` — for a tenant over that
+ * size it returns an arbitrary, unordered subset, so a real employeeId
+ * landing outside that subset would be wrongly reported as nonexistent and
+ * a legitimate request rejected. employee-summaries' two existing callers
+ * both treat that incompleteness as tolerable (display enrichment,
+ * best-effort); a hard reject cannot. Calls a dedicated internal point
+ * lookup instead (hrms-service's employeeRepo.findById under the hood, via
+ * GET .../employees/:id/exists) — correct at any tenant size, and returns
+ * only a boolean rather than a full employee record, so the internal
+ * boundary doesn't leak more PII than this caller actually needs.
+ *
+ * Fails CLOSED (throws HrmsUnavailableError) on an unreachable/erroring
+ * HRMS, unlike fetchEmployeeSummaries above which fails OPEN to an empty Map
+ * for its display-only, best-effort use case. Silently treating "HRMS
+ * unreachable" as "employee doesn't exist" here would produce a
+ * false-positive rejection indistinguishable from a genuinely bad
+ * employeeId. Mirrors fetchPayrollInput's own fail-closed contract above.
+ */
+export async function verifyEmployeeExists(tenantId: string, employeeId: string): Promise<boolean> {
+  const url = `${HRMS_URL}/v1/hrms/internal/employees/${encodeURIComponent(employeeId)}/exists`;
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      headers: { "x-internal": "1", "x-service-secret": process.env.INTERNAL_SERVICE_SECRET ?? "", "x-tenant-id": tenantId },
+      signal: AbortSignal.timeout(5000),
+    });
+  } catch (err) {
+    throw new HrmsUnavailableError(`hrms employee existence check unreachable: ${(err as Error).message}`);
+  }
+  if (!res.ok) throw new HrmsUnavailableError(`hrms employee existence check failed: ${res.status}`);
+  const body = await res.json() as { exists: boolean };
+  return body.exists;
 }

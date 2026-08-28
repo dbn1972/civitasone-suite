@@ -18,7 +18,9 @@ export default async function UCsPage() {
         subtitle="Submit and track UCs for grants and scheme expenditure."
         actions={
           <>
-            <a href="/finance/expenditure/utilization-certificates/new" className="btn ghost">Download Format</a>
+            {/* A "Download Format" action used to link here too, identical to
+                "+ New UC" — there's no UC template file to download, so the
+                dead duplicate button was removed rather than left misleading. */}
             <a href="/finance/expenditure/utilization-certificates/new" className="btn primary">+ New UC</a>
             {source === "error" ? <DataSourceBadge source={source} /> : null}
           </>

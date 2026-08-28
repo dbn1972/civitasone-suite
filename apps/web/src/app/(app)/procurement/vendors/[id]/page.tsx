@@ -1,6 +1,8 @@
+import Link from "next/link";
 import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
-import { PageHeader, Card, StatusPill, EmptyState } from "../../../../_components/ds";
+import { PageHeader, Card, StatusPill, EmptyState, ErrorState } from "../../../../_components/ds";
 import { getProcurementVendorById } from "../../../../_data/loaders";
+import { toHumanError } from "@/lib/messages";
 
 const EMPANELMENT_LABELS: Record<string, string> = {
   empanelled: "Empanelled",
@@ -13,10 +15,16 @@ export default async function VendorDetailPage({ params }: { params: { id: strin
   const { data: vendor, source } = await getProcurementVendorById(params.id);
 
   if (!vendor) {
+    // L3 fix: see indents/[id]/page.tsx — don't tell the officer a vendor is
+    // "removed or invalid" when the real cause was a fetch error.
     return (
       <>
         <PageHeader title="Vendor Profile" back="/procurement/vendors" />
-        <EmptyState icon="🏢" title="Vendor not found" message="This vendor may have been removed or the ID is invalid." />
+        {source === "error" ? (
+          <ErrorState error={toHumanError("load", { area: "vendor" })} backHref="/procurement/vendors" />
+        ) : (
+          <EmptyState icon="🏢" title="Vendor not found" message="This vendor may have been removed or the ID is invalid." />
+        )}
       </>
     );
   }
@@ -33,7 +41,8 @@ export default async function VendorDetailPage({ params }: { params: { id: strin
             {vendor.rating !== undefined && (
               <span className="pill info">{vendor.rating}/5<span aria-hidden="true"> ★</span><span className="sr-only"> rating out of 5</span></span>
             )}
-            {source === "error" ? <DataSourceBadge source={source} /> : null}
+            <Link href={`/procurement/vendors/${vendor.id}/scorecard`} className="btn ghost">View scorecard</Link>
+            {source === "error" ? <DataSourceBadge source={source} message="Couldn't load — showing nothing" /> : null}
           </>
         }
       />

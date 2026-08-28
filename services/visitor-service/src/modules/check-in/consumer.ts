@@ -24,21 +24,32 @@
 import { randomUUID } from "node:crypto";
 import { pino } from "pino";
 import { and, eq, lt } from "drizzle-orm";
-import type { Queue } from "@civitasone/queue";
+import { NonRetryableError, type Queue } from "@civitasone/queue";
 import { NOTIFICATION_SEND, buildNotificationPayload } from "@civitasone/events";
 import { db } from "../../shared/db.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import { notifyVipArrival } from "../vip/routes.js";
+import { releaseParkingIfAllocated } from "../vehicle-pass/commands.js";
 import { getPolicyBoolean } from "../config-registry/policy.js";
 import { checkIns } from "./schema.js";
 import { digitalPasses } from "../digital-pass/schema.js";
-import { visitRequests } from "../visit-request/schema.js";
-import { locations } from "../location/schema.js";
-import { checkIn as domainCheckIn, checkOut as domainCheckOut, type CheckInStatus } from "./domain.js";
-import { isOverCapacityThreshold } from "../location/domain.js";
+import { visitRequests, type VisitRequestRow } from "../visit-request/schema.js";
+import { locations, gates } from "../location/schema.js";
+import { devices } from "../device-registry/schema.js";
+import { securityIncidents } from "../identity/schema.js";
+import {
+  checkIn as domainCheckIn,
+  checkOut as domainCheckOut,
+  isLocationScopeValid,
+  isAreaPermitted,
+  type CheckInStatus,
+} from "./domain.js";
+import { assertWithinCapacity, isOverCapacityThreshold } from "../location/domain.js";
 import { addToRoster, removeFromRoster, getVisitorCount, type RosterEntry } from "../evacuation/roster.js";
-import { isWatchlisted } from "../blacklist/screening-store.js";
+import { isBlacklisted, isWatchlisted } from "../blacklist/screening-store.js";
+import { identityDocHash } from "../blacklist/blind-index.js";
+import { isRevoked } from "../digital-pass/revocation-store.js";
 
 const AUDIT_TOPIC = "audit.event.record";
 
@@ -86,6 +97,14 @@ interface OvrstayDetectPayload {
   locationId?: string;
 }
 
+/** Payload shape published by document-scan/consumer.ts on a confirmed blacklist match. */
+interface ScanBlacklistMatchPayload {
+  sessionId: string;
+  ocrResultId: string;
+  deviceId: string;
+  idDocumentType?: string | null;
+}
+
 export function registerCheckInConsumers(queue: Queue): void {
   queue.subscribe<CheckInRecordPayload>(COMMANDS.checkInRecord, async (msg) => {
     const p = msg.payload;
@@ -101,6 +120,130 @@ export function registerCheckInConsumers(queue: Queue): void {
       const pass = passRows[0];
       if (!pass) {
         throw new Error(`digital pass '${p.passId}' not found for tenant '${msg.tenantId}'`);
+      }
+
+      // SECURITY FIX (gate/location/area scope bypass): the synchronous
+      // /passes/verify endpoint (check-in/routes.ts) enforces Property 26
+      // (isLocationScopeValid) and Property 19 (isAreaPermitted) before ever
+      // returning "valid" — but this consumer, which is what actually
+      // COMMITS the check-in, previously trusted a bare {passId, gateId}
+      // completely: no gate lookup, no location/area comparison. Reachable
+      // by the broad "employee" role (check-in/routes.ts's WRITE_ROLES), not
+      // only a gate_terminal device identity, a caller could check in any
+      // pass at any gate string, including one matching no real gate row at
+      // all. Fail closed: dead-letter (NonRetryableError, matching this
+      // codebase's convention — see config-registry/consumer.ts) rather than
+      // silently committing a scope-violating check-in. checkInRecord's
+      // payload carries no QR token to re-verify a signature against (that
+      // already happened at /passes/verify); the gate/location/area scope is
+      // the part of Property 9 this write path CAN and now does re-assert.
+      const gateRows = await tx
+        .select()
+        .from(gates)
+        .where(and(eq(gates.id, p.gateId), eq(gates.tenantId, msg.tenantId)))
+        .limit(1);
+      const gate = gateRows[0];
+      if (!gate) {
+        throw new NonRetryableError(`gate '${p.gateId}' not found for tenant '${msg.tenantId}'`);
+      }
+      if (!isLocationScopeValid(pass.locationId, gate.locationId)) {
+        throw new NonRetryableError(
+          `pass '${p.passId}' is scoped to location '${pass.locationId}', not gate location '${gate.locationId}'`,
+        );
+      }
+      if (!isAreaPermitted(gate.areaId, pass.permittedAreas as string[])) {
+        throw new NonRetryableError(
+          `gate '${p.gateId}' area '${gate.areaId ?? "(perimeter)"}' is not among pass '${p.passId}''s permitted areas`,
+        );
+      }
+
+      // SECURITY FIX (revocation bypass at commit time): the synchronous
+      // /passes/verify endpoint (check-in/routes.ts) enforces Property 9
+      // condition (b) isRevoked before ever returning "valid" — but,
+      // exactly like the gate/location/area scope above before that fix,
+      // this consumer referenced neither isRevoked nor pass.revoked at
+      // all. A DIRECTLY-revoked pass (digital-pass/consumer.ts's
+      // passRevoke handler) happens to also flip digitalPasses.status to
+      // "revoked", which domainCheckIn (below) rejects via
+      // INVALID_TRANSITION — but a suspended/revoked recurring pass
+      // (recurring-pass/consumer.ts's suspend/revoke handlers) never
+      // touches digitalPasses.status at all; it only dual-writes into
+      // this same Redis revocation set (see commit 25949e30,
+      // "recurring-pass revocation now blocks at the gate") — a write
+      // that "only matters if something at commit time reads it", and
+      // nothing did. POST /v1/visitor/check-ins (check-in/routes.ts)
+      // publishes checkInRecord straight from {passId, gateId} with no
+      // precondition that /passes/verify was ever called, reachable by
+      // the broad "employee" role — so an employee-role caller who knows
+      // a passId+gateId could check in a revoked pass by hitting this
+      // endpoint directly, skipping verify entirely. Fail closed:
+      // NonRetryableError, the same convention the scope check above
+      // established for this exact commit path.
+      if (await isRevoked(msg.tenantId, p.passId)) {
+        throw new NonRetryableError(`pass '${p.passId}' has been revoked`);
+      }
+
+      // Visit request is loaded here (rather than later, as it was before)
+      // so the identity/blacklist gate below can run BEFORE any check-in
+      // side effect is written.
+      const visitRows = await tx
+        .select()
+        .from(visitRequests)
+        .where(and(eq(visitRequests.id, pass.visitRequestId), eq(visitRequests.tenantId, msg.tenantId)))
+        .limit(1);
+      const visit: VisitRequestRow | undefined = visitRows[0];
+
+      // Identity-verification / blacklist gate. Previously a failed
+      // DigiLocker/Aadhaar verification (identity/consumer.ts) or a
+      // document-scan blacklist match (document-scan/consumer.ts) only
+      // ever logged an event for a human to notice later — nothing
+      // stopped the visit from being checked in. Two conditions block:
+      //
+      // 1. identityMethod is a REAL verification method ("digilocker" /
+      //    "aadhaar_face") AND identityVerified is still false. This
+      //    specifically means "a verification was attempted and did not
+      //    succeed" — NOT "verification was never required for this
+      //    visit" (identityMethod null/"none") and NOT "service was
+      //    unavailable, guard verifies manually" (identityMethod
+      //    "manual", a sanctioned degraded path). Blocking on bare
+      //    `identityVerified === false` would also block every visit that
+      //    never uses digital identity verification at all (the common
+      //    case), so that distinction matters.
+      // 2. The visit's own identity document hash is present in the
+      //    canonical blacklist screening set (the same
+      //    `visitor:{tid}:blacklist:hashes` set document-scan now
+      //    correctly screens against — see modules/blacklist/
+      //    screening-store.ts). This independently catches a blacklist
+      //    match regardless of whether a document-scan actually ran for
+      //    this visit, as long as the visit's own identityDocRef is the
+      //    blacklisted document. identityDocRef is an encryptedText()
+      //    column (visit-request/schema.ts) — DPDP ciphertext at rest,
+      //    but transparently decrypted on read — so it MUST be rehashed
+      //    via identityDocHash() before ever reaching isBlacklisted,
+      //    never compared/forwarded raw (see
+      //    tests/check-in-watchlist-consumer-hash.test.ts for the
+      //    separate, now-fixed bug this same mistake caused elsewhere in
+      //    this handler).
+      //
+      // Non-retryable: retrying will never make a failed verification or
+      // an active blacklist match go away.
+      if (visit) {
+        const attemptedRealVerification =
+          visit.identityMethod === "digilocker" || visit.identityMethod === "aadhaar_face";
+        if (attemptedRealVerification && !visit.identityVerified) {
+          throw new NonRetryableError(
+            `visit request '${visit.id}' failed identity verification (method=${visit.identityMethod}) — refusing check-in for pass '${p.passId}'`,
+          );
+        }
+
+        if (visit.identityDocRef) {
+          const docHash = identityDocHash(visit.identityDocRef, visit.identityDocType);
+          if (await isBlacklisted(msg.tenantId, docHash)) {
+            throw new NonRetryableError(
+              `visit request '${visit.id}' identity document is blacklisted — refusing check-in for pass '${p.passId}'`,
+            );
+          }
+        }
       }
 
       const nextStatus = domainCheckIn(pass.status as CheckInStatus, { passType: pass.passType as never });
@@ -125,12 +268,7 @@ export function registerCheckInConsumers(queue: Queue): void {
         .set({ status: nextStatus, updatedAt: new Date(), updatedBy: msg.actorId })
         .where(and(eq(digitalPasses.id, p.passId), eq(digitalPasses.tenantId, msg.tenantId)));
 
-      const visitRows = await tx
-        .select()
-        .from(visitRequests)
-        .where(and(eq(visitRequests.id, pass.visitRequestId), eq(visitRequests.tenantId, msg.tenantId)))
-        .limit(1);
-      const visit = visitRows[0];
+      // visit was already loaded above (before the identity/blacklist gate).
 
       await enqueue(tx, {
         topic: EVENTS.visitorCheckedIn,
@@ -141,8 +279,42 @@ export function registerCheckInConsumers(queue: Queue): void {
         payload: { passId: p.passId, locationId: pass.locationId, gateId: p.gateId, timestamp: timestamp.toISOString() },
       });
 
-      // Requirement 19.5 / Property 28: capacity-threshold check after check-in commits.
-      // Query current occupancy (roster count) and location's capacityThreshold.
+      // Requirement 19.5 / Property 28: capacity-threshold ENFORCEMENT, before
+      // this check-in commits. `assertWithinCapacity` (the throwing/
+      // enforcing variant in modules/location/domain.ts) previously sat
+      // dead code — only the boolean isOverCapacityThreshold was consulted,
+      // and only AFTER commit (see the post-commit block below), purely to
+      // fire an alert. That contradicted assertWithinCapacity's own doc
+      // comment ("reject new check-ins while the location is at/over its
+      // configured capacity threshold"). Throwing here rolls back this
+      // entire transaction (checkIns insert + digitalPasses status update
+      // included), so a location at/over capacityThreshold now actually
+      // blocks the new check-in instead of merely alerting after admitting
+      // it.
+      //
+      // Judgment call: `occupancy` is the roster count BEFORE this visitor
+      // is added (addToRoster runs after commit, per this module's
+      // graceful-degradation contract) — the SAME value this handler always
+      // computed for the post-commit alert below. Reusing that (rather than
+      // occupancy + 1, i.e. "would admitting this visitor reach the
+      // threshold") keeps a configured capacityThreshold meaning what the
+      // alert already established it to mean at this call site: the Nth
+      // concurrent occupant is admitted and the (N+1)th is turned away, not
+      // the (N-1)th. If the intended UX is actually the stricter "occupancy
+      // must never reach capacityThreshold at all" reading of
+      // assertWithinCapacity's own doc comment, this is the call to change
+      // (pass occupancy + 1 instead) — flagging that ambiguity plainly since
+      // it's a real behavioral choice, not just a wiring detail.
+      //
+      // Residual race: this read isn't lock-protected (getVisitorCount is a
+      // Redis call, not part of this Postgres transaction), and
+      // addToRoster for THIS visitor doesn't happen until after commit — so
+      // two check-ins at the same location, right at the threshold, can
+      // still both read the same pre-add occupancy and both be admitted.
+      // The post-commit alert below remains as a backstop notification for
+      // that case; closing the race itself would need atomic Redis
+      // check-and-incr or moving occupancy accounting into this
+      // transaction, out of scope for this fix.
       const locationRows = await tx
         .select({ capacityThreshold: locations.capacityThreshold })
         .from(locations)
@@ -150,8 +322,10 @@ export function registerCheckInConsumers(queue: Queue): void {
         .limit(1);
       const location = locationRows[0];
 
-      // We'll check capacity AFTER this transaction commits (using roster count).
-      // For now, capture location info needed for the capacity check.
+      if (location?.capacityThreshold != null) {
+        const occupancy = await getVisitorCount(msg.tenantId, pass.locationId);
+        assertWithinCapacity(occupancy, location.capacityThreshold);
+      }
 
       // Requirement 5.5: NOTIFICATION_SEND to host on visitor arrival (push)
       if (visit?.hostEmployeeId) {
@@ -236,18 +410,30 @@ export function registerCheckInConsumers(queue: Queue): void {
         hostEmployeeId: visit?.hostEmployeeId ?? "",
         contactNumber: visit?.visitorPhone ?? "",
         checkInTime: timestamp.toISOString(),
-        identityDocHash: visit?.identityDocRef ?? null,
+        // Previously this stored the raw decrypted identityDocRef itself
+        // (not a hash), so the isWatchlisted() call below was comparing a
+        // cleartext doc number against a Redis set of HMAC hashes — it
+        // could never match. identityDocHash() is the same canonical,
+        // doc-type-folded hash used by the blacklist add-path and by
+        // document-scan's screening (see modules/blacklist/blind-index.ts).
+        identityDocHash: visit?.identityDocRef ? identityDocHash(visit.identityDocRef, visit.identityDocType) : null,
         capacityThreshold: location?.capacityThreshold ?? null,
       };
     });
 
     if (!committed) return; // already processed (idempotent replay)
 
-    // Requirement 19.5 / Property 28: capacity-threshold check AFTER commit.
-    // Uses the roster counter (already incremented by addToRoster below or
-    // by a prior successful check-in) to decide whether occupancy exceeds
-    // the location's configured threshold. On breach, outbox a
-    // `capacityThresholdReached` event + NOTIFICATION_SEND to security.
+    // Requirement 19.5 / Property 28: capacity-threshold ALERT, after
+    // commit. Enforcement now happens pre-commit above (assertWithinCapacity)
+    // — this block remains a best-effort notification to security control
+    // room so they see the location cross the line, including for the
+    // residual race the pre-commit check can't close on its own (see the
+    // comment above it): two check-ins reading the same pre-add occupancy
+    // and both being admitted. Uses the roster counter (already incremented
+    // by addToRoster below, or by a prior successful check-in) to decide
+    // whether occupancy exceeds the location's configured threshold. On
+    // breach, outbox a `capacityThresholdReached` event + NOTIFICATION_SEND
+    // to security.
     try {
       if (committed.capacityThreshold != null) {
         const occupancy = await getVisitorCount(msg.tenantId, committed.locationId);
@@ -426,6 +612,23 @@ export function registerCheckInConsumers(queue: Queue): void {
         "evacuation roster remove failed; check-out already committed, roster will self-heal on next check-in/out",
       );
     }
+
+    // Fix (2026-08-27 deep-verify): release any parking slot this pass had
+    // allocated — `parkingSlotRelease` already existed (command + consumer +
+    // DB update, Requirement 14.5) but was never actually called on
+    // checkout despite its own doc comment claiming it was. Best-effort,
+    // same rationale as the roster removal above.
+    try {
+      await releaseParkingIfAllocated(
+        { tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId },
+        p.passId,
+      );
+    } catch (err) {
+      log.warn(
+        { err, tenantId: msg.tenantId, passId: p.passId, event: "checkout_parking_release_failed" },
+        "parking slot release failed; check-out already committed",
+      );
+    }
   });
 
   // ─── overstayDetect ──────────────────────────────────────────────────
@@ -538,5 +741,94 @@ export function registerCheckInConsumers(queue: Queue): void {
         "overstay detection completed",
       );
     });
+  });
+
+  // ─── scanBlacklistMatch ─────────────────────────────────────────────────
+  // document-scan/consumer.ts publishes this when a kiosk scan's identity
+  // document hash matches the canonical blacklist set, but until now
+  // nothing in the service ever subscribed to it — the event was enqueued
+  // into the void (no security_incidents row, no alert, nothing the
+  // check-in flow could see). This mirrors identity/consumer.ts's
+  // face_match_fail handling: create a security_incidents row (incident
+  // type "blacklist_match", already documented in schema.ts's comment)
+  // and notify security control room, the same way check-in's own
+  // watchlist-match path above does. The actual check-in BLOCK for a
+  // blacklisted visitor is enforced independently in checkInRecord above
+  // (it re-derives and checks the same canonical hash from the visit's own
+  // identityDocRef), so this handler's job is purely to make the scan-time
+  // hit visible to security ops — it does not gate anything itself.
+  queue.subscribe<ScanBlacklistMatchPayload>(EVENTS.scanBlacklistMatch, async (msg) => {
+    const p = msg.payload;
+
+    const committed = await db.transaction(async (tx): Promise<{ locationId: string } | null> => {
+      if (!(await markProcessed(tx, msg.messageId))) return null; // idempotent replay
+
+      const deviceRows = await tx
+        .select({ locationId: devices.locationId })
+        .from(devices)
+        .where(and(eq(devices.id, p.deviceId), eq(devices.tenantId, msg.tenantId)))
+        .limit(1);
+      const locationId = deviceRows[0]?.locationId;
+      if (!locationId) {
+        log.warn(
+          { tenantId: msg.tenantId, deviceId: p.deviceId, sessionId: p.sessionId, event: "scan_blacklist_match_no_location" },
+          "scanBlacklistMatch: could not resolve scanner device to a location; security incident not recorded",
+        );
+        return null;
+      }
+
+      await tx.insert(securityIncidents).values({
+        tenantId: msg.tenantId,
+        locationId,
+        incidentType: "blacklist_match",
+        description: `Document scan matched an active blacklist entry (session ${p.sessionId}, doc type ${p.idDocumentType ?? "unknown"})`,
+        severity: "critical",
+        createdBy: msg.actorId,
+      });
+
+      await enqueue(tx, {
+        topic: EVENTS.securityIncidentCreated,
+        eventType: EVENTS.securityIncidentCreated,
+        tenantId: msg.tenantId,
+        actorId: msg.actorId,
+        correlationId: msg.correlationId,
+        payload: {
+          locationId,
+          incidentType: "blacklist_match",
+          severity: "critical",
+          sessionId: p.sessionId,
+          ocrResultId: p.ocrResultId,
+        },
+      });
+
+      await enqueue(tx, {
+        topic: NOTIFICATION_SEND,
+        eventType: NOTIFICATION_SEND,
+        tenantId: msg.tenantId,
+        actorId: msg.actorId,
+        correlationId: msg.correlationId,
+        payload: buildNotificationPayload({
+          eventType: EVENTS.scanBlacklistMatch,
+          recipient: "security_control_room",
+          channel: "push",
+          variables: {
+            sessionId: p.sessionId,
+            deviceId: p.deviceId,
+            locationId,
+          },
+        }),
+      });
+
+      await enqueue(tx, { topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { service: "visitor-service", action: "create", resourceType: "security_incident", resourceId: msg.messageId, outcome: "success" } });
+
+      return { locationId };
+    });
+
+    if (!committed) return; // already processed, or location could not be resolved
+
+    log.info(
+      { tenantId: msg.tenantId, sessionId: p.sessionId, locationId: committed.locationId, event: "scan_blacklist_match_incident_created" },
+      "document-scan blacklist match recorded as a security incident",
+    );
   });
 }

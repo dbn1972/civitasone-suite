@@ -28,7 +28,7 @@ describe("OpportunityForm (OP-003)", () => {
   it("shows the saved-info badge when pipelines fail to load", async () => {
     vi.mocked(op.getPipelines).mockResolvedValue({ data: [], source: "error" });
     render(<OpportunityForm />);
-    await waitFor(() => expect(screen.getByText(/showing saved information/i)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(/couldn.t load/i)).toBeInTheDocument());
   });
 
   it("converts the rupee value to paise and creates the opportunity", async () => {
