@@ -1524,7 +1524,27 @@ export async function getCrmRti(
     },
   );
 }
-function mapModuleRows(payload: unknown): ModuleRowSummary[] | null {
+// Generic mapper backing every simple "module list" loader built via
+// moduleLoader() below -- currently 16 loaders across legal, billing (x4),
+// inventory, telephony, locations, notifications, grants (x2), estab,
+// knowledge, workflow, analytics and projects. Exported (not a private
+// closure) so it's directly unit testable without mocking fetchJson -- see
+// loaders.moduleRows.test.ts.
+//
+// IMPORTANT: return the mapped array as-is, even when empty. A tenant with
+// zero rows for a given module is a normal, successful state (the backend
+// replies 200 with an empty list), not a parse failure -- fetchJson treats a
+// `null` mapResponse return as source:"error" (invalid_payload), which would
+// incorrectly render an error/couldn't-load state instead of the correct
+// empty state. This is the exact same regression fixed for contracts in
+// mapContractsListRows below (see fixup commit b6bd6740 / PR #813) -- this
+// generic mapper had the identical `mapped.length > 0 ? mapped : null` bug,
+// which mapContractsListRows had in turn copied from here when it was still
+// a bespoke inline closure. Only return null when the payload itself
+// couldn't be understood as a row list at all (getArrayPayload returns
+// null); that case is a genuine invalid-payload failure, distinct from a
+// well-formed empty list.
+export function mapModuleRows(payload: unknown): ModuleRowSummary[] | null {
   const rows = getArrayPayload(payload);
   if (!rows) return null;
   const mapped: ModuleRowSummary[] = [];
@@ -1561,7 +1581,7 @@ function mapModuleRows(payload: unknown): ModuleRowSummary[] | null {
       ...(meta ? { meta } : {}),
     });
   }
-  return mapped.length > 0 ? mapped : null;
+  return mapped;
 }
 
 function moduleLoader(path: string, key: string) {
