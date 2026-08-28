@@ -15,7 +15,16 @@ export async function registryRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, ROLES);
     const q = listQuerySchema.parse(req.query);
-    sendValidated(reply, pluginsListSchema, await repo.listByTenant(ctx.tenantId, q.limit, q.offset));
+    const rows = await repo.listByTenant(ctx.tenantId, q.limit, q.offset);
+    // pluginsListSchema is paginatedSchema(...) — {data, pagination}, NOT a bare
+    // array. repo.listByTenant() returns a bare array, so this endpoint always
+    // 400'd with "Expected object, received array" before this fix (sendValidated
+    // runs schema.parse() on the way out and throws on mismatch). Matches the
+    // wrapping already done correctly in items/queries.ts and tokens/queries.ts.
+    sendValidated(reply, pluginsListSchema, {
+      data: rows,
+      pagination: { hasMore: rows.length === q.limit, pageSize: q.limit, ...(rows.length ? { cursor: String(q.offset + rows.length) } : {}) },
+    });
   });
 
   // Get single plugin

@@ -5,6 +5,7 @@ import { useState } from "react";
 import { rupeesToMinorString } from "@/lib/money";
 import { saveClassification, LEAD_STATUSES, type ClassificationPatch, type Temperature, type Priority } from "@/lib/crm/leadQualification";
 import { ClassificationFields, type ClassificationFormValue } from "../../../../../_components/crm/ClassificationFields";
+import { browserFetch, errorMessageFromResponse } from "@/lib/api/browserClient";
 
 type Initial = {
   name: string;
@@ -115,9 +116,8 @@ export default function EditContactForm({ params, initial }: Props) {
 
     setBusy(true);
     try {
-      const res = await fetch(`/api/proxy/v1/crm/contacts/${params.id}`, {
+      const res = await browserFetch(`v1/crm/contacts/${params.id}`, {
         method: "PATCH",
-        headers: { "content-type": "application/json" },
         body: JSON.stringify({
           name: form.name,
           email: form.email || undefined,
@@ -129,7 +129,7 @@ export default function EditContactForm({ params, initial }: Props) {
           marketingConsent: form.marketingConsent,
         }),
       });
-      if (!res.ok) throw new Error(await res.text());
+      if (!res.ok) throw new Error(await errorMessageFromResponse(res));
       // LQ-003: persist classification on its dedicated endpoint.
       await saveClassification(params.id, classificationPatch);
       setMessage("Contact updated.");

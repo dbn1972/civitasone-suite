@@ -71,10 +71,16 @@ beforeAll(async () => {
   await sqlClient.begin(async (sql) => {
     await sql`select set_config('app.tenant_id', ${TENANT}, true)`;
     await sql`
+    -- chairperson_id/secretary_id: ACTOR — IDOR fix (Req 1.1): PATCH/DELETE/transition now
+    -- require the caller to actually be this meeting's own chairperson/secretary. Every write
+    -- test below authenticates as the single fixed ACTOR (via auth()/token()), so ACTOR is
+    -- seeded here as BOTH standings on this fixture meeting; CHAIR/SECRETARY remain distinct
+    -- identities used only as inert "some other user id" query-param values elsewhere in this
+    -- file (the leadership-dashboard tests), unaffected by this change.
     INSERT INTO meeting.meetings
       (id, tenant_id, type, title, status, committee_id, chairperson_id, secretary_id, scheduled_at,
        financial_year, meeting_number, version, created_by, updated_by)
-    VALUES (${MEETING_ID}, ${TENANT}, 'committee', 'Q1 Review', 'draft', ${COMMITTEE_ID}, ${CHAIR}, ${SECRETARY},
+    VALUES (${MEETING_ID}, ${TENANT}, 'committee', 'Q1 Review', 'draft', ${COMMITTEE_ID}, ${ACTOR}, ${ACTOR},
             '2026-06-01T09:00:00Z', '2025-26', 'FC/2025-26/001', 1, ${ACTOR}, ${ACTOR})`;
   });
 

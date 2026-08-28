@@ -3,8 +3,6 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
-const DEFAULT_OFFICER = "00000000-0000-0000-0000-000000000099";
-
 const CLASS_MAP: Record<string, string> = {
   unclassified: "public",
   restricted: "confidential",
@@ -28,14 +26,16 @@ export default function NewFilePage() {
     e.preventDefault();
     setSubmitting(true);
     try {
-      const year = new Date().getFullYear();
-      const fileNo = `F/${year}/${String(Math.floor(Math.random() * 9000) + 1000)}`;
+      // Do NOT invent a file number on the client — the gapless CSMOP file
+      // number is allocated server-side (per section + year). Sending a random
+      // one both showed the officer a wrong number and risked persisting it.
       const payload = {
-        fileNo,
         subject,
         dept: department || "ADMIN",
         classification: CLASS_MAP[classification] ?? "public",
-        currentWith: DEFAULT_OFFICER,
+        // SECURITY: no officer placeholder — currentWith is intentionally
+        // omitted so the server defaults it to the authenticated actor
+        // creating this file (never a client-suppliable id).
         initialNote: initialNote || undefined,
         dakNo: dakNo || undefined,
         parentFileId: parentFileId.trim() || undefined,
@@ -47,7 +47,7 @@ export default function NewFilePage() {
       });
       if (res.status === 202 || res.ok) {
         const body = await res.json().catch(() => ({})) as { id?: string };
-        setToast({ type: "success", message: `File ${fileNo} created with yellow note.` });
+        setToast({ type: "success", message: "File created with an opening yellow note. Opening it now…" });
         if (body.id) {
           setTimeout(() => router.push(`/estab/files/${body.id}`), 800);
         }

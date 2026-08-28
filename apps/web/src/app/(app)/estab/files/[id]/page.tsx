@@ -1,7 +1,8 @@
 import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
 import { getEstabFileById } from "../../../../_data/loaders";
-import { PageHeader, StatusPill, EmptyState, DataTable } from "../../../../_components/ds";
+import { PageHeader, StatusPill, EmptyState, DataTable, RefreshErrorState } from "../../../../_components/ds";
 import { formatIndianDate } from "@/lib/formatters";
+import { toHumanError } from "@/lib/messages";
 import { FileDetailActions } from "./FileDetailActions";
 import { FileAttachments } from "./FileAttachments";
 import { OfficerName } from "./OfficerName";
@@ -26,6 +27,17 @@ export default async function EstabFileDetailPage({ params }: { params: { id: st
   const { data: file, source } = await getEstabFileById(params.id);
 
   if (!file) {
+    // The loader collapses 404, 5xx and network errors all into source:"error",
+    // so we cannot claim "not found" — that would tell an officer an existing
+    // file was lost during a backend blip. Offer a real retry instead.
+    if (source === "error") {
+      return (
+        <>
+          <PageHeader title="File" back="/estab/list" />
+          <RefreshErrorState error={toHumanError("load", { area: "file" })} backHref="/estab/list" />
+        </>
+      );
+    }
     return (
       <>
         <PageHeader title="File not found" back="/estab/list" />

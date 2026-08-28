@@ -24,17 +24,27 @@ type EventRow = { id: string; eventType: string; occurredAt: string };
 type LineageRow = { id: string; source: string; sourceId: string; recordedAt: string; supplied: string };
 
 export default async function CustomerProfilePage({ params }: { params: { id: string } }) {
-  const [{ data: profile, source }, { data: identities }, { data: events }] = await Promise.all([
+  const [
+    { data: profile, source },
+    { data: identities, source: identitySource },
+    { data: events, source: eventsSource },
+  ] = await Promise.all([
     getCdpProfile(params.id),
     getCdpProfileIdentity(params.id),
     getCdpProfileTimeline(params.id),
   ]);
 
+  // Each of the three loaders can fail independently. A profile that loads fine
+  // while its identity links or timeline fail to load must not read the same as
+  // a profile that genuinely has none — that's the honest-empty-state contract
+  // every list on this page promises (see the emptyMessage copy below).
+  const anyLoadFailed = source === "error" || identitySource === "error" || eventsSource === "error";
+
   if (!profile) {
     return (
       <>
         <PageHeader title="Customer 360" back="/cdp/profiles" backLabel="Profiles" />
-        {source === "error" && <DataSourceBadge source={source} />}
+        {anyLoadFailed && <DataSourceBadge source="error" />}
         <EmptyState
           icon="👤"
           title="Profile not found"
@@ -85,7 +95,7 @@ export default async function CustomerProfilePage({ params }: { params: { id: st
         back="/cdp/profiles"
         backLabel="Profiles"
       />
-      {source === "error" && <DataSourceBadge source={source} />}
+      {anyLoadFailed && <DataSourceBadge source="error" />}
       <StatGrid>
         <StatCard icon="🧾" iconBg="#e0f2fe" label="Attributes" value={attributeSources.length.toLocaleString("en-IN")} />
         <StatCard icon="🔎" iconBg="#dcfce7" label="Attribution Coverage" value={`${coverage}%`} />

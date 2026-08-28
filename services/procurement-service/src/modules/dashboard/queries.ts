@@ -21,10 +21,17 @@ export async function getDashboard(tenantId: string) {
       .from(procurementPos)
       .where(and(eq(procurementPos.tenantId, tenantId), eq(procurementPos.status, "approved")));
 
+    // "This month" = current calendar month at the DB server's clock, not the
+    // lifetime GRN count — bug fix: this previously had no date filter at all,
+    // so "GRNs (MTD)" on the dashboard silently showed the all-time total.
     const [grnsRow] = await tx
       .select({ count: sql<number>`count(*)::int` })
       .from(procurementGrns)
-      .where(eq(procurementGrns.tenantId, tenantId));
+      .where(and(
+        eq(procurementGrns.tenantId, tenantId),
+        sql`${procurementGrns.receivedDate} >= date_trunc('month', now())::date`,
+        sql`${procurementGrns.receivedDate} < date_trunc('month', now())::date + interval '1 month'`,
+      ));
 
     return [pendingIndentsRow, activePosRow, grnsRow] as const;
   });
@@ -33,6 +40,13 @@ export async function getDashboard(tenantId: string) {
     pendingIndents: pendingIndents?.count ?? 0,
     activePOs: activePos?.count ?? 0,
     grnsThisMonth: grns?.count ?? 0,
+    // contractRenewalsDue is intentionally not computed here yet: contract
+    // renewals live in contract-service, a separate physical database, and
+    // this dashboard has no cross-service read for it (see the precedent for
+    // internal service-to-service reads in services/inventory-service/src/
+    // modules/srn/grn-client.ts and services/payroll-service/src/shared/
+    // hrms-client.ts). Hardcoding 0 here is a known gap, not a real "zero due"
+    // — flagged for a follow-up rather than silently left looking correct.
     contractRenewalsDue: 0,
   };
 }

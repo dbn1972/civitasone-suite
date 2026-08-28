@@ -22,6 +22,7 @@
  * _Requirements: 11.1, 11.2, 11.3, 11.4, 11.5, 11.6_
  */
 import { httpError } from "../../shared/context.js";
+import { computeVoteResult as computeResolutionVoteResult } from "../decision/domain.js";
 
 // ─── Domain vocabularies (mirror the migration CHECK-able value sets) ────────
 
@@ -137,40 +138,21 @@ export function assertTallyConsistent(tally: VoteTally, recordedVoteCount: numbe
 /**
  * Compute the result of a concluded vote per the configured majority rule (P16).
  *
- * Denominator convention: the threshold is measured against the TOTAL ballots cast
- * (`for + against + abstain`). Abstentions therefore count toward the base — a conservative
- * governance stance under which abstaining makes a super-majority harder to reach, and which
- * gives "unanimous = 100%" its literal meaning (every ballot is `for`). This matches the
- * design's stated thresholds (simple > 50%, two_thirds ≥ 66.67%, three_fourths ≥ 75%,
- * unanimous 100%) and the P14 total (`for + against + abstain`).
+ * Denominator convention (unified with `decision/domain.ts`'s `computeVoteResult`, the module
+ * that owns the OFFICIAL resolution record — see that function's docstring for the full
+ * rationale): the threshold is measured against the DECISIVE votes cast (`for + against`).
+ * Abstentions are recorded but do NOT count toward the majority base — standard parliamentary
+ * procedure, and the rule this codebase's own resolution-recording path already enforced. This
+ * module used to compute the SAME tally against a different (total-including-abstentions) base,
+ * which meant the identical ballots could be scored "passed" by one code path and "rejected" by
+ * the other for the same resolution (audit finding — see
+ * tests/resolution-fabrication-bypass.test.ts). Delegating here — rather than maintaining two
+ * independent implementations — makes that impossible by construction.
  *
- * Comparisons use exact integer cross-multiplication (no floating point), so the fractional
- * thresholds are evaluated precisely:
- *   - simple_majority: votesFor * 2 >  total          (strictly more than half)
- *   - two_thirds:      votesFor * 3 >= total * 2       (at least two-thirds)
- *   - three_fourths:   votesFor * 4 >= total * 3       (at least three-fourths)
- *   - unanimous:       votesFor === total              (every ballot in favour)
- *
- * A vote with no ballots cast (`total <= 0`) can never pass and returns `rejected`.
+ * A vote with no decisive ballots cast can never pass and returns `rejected` for every rule.
  */
 export function computeVoteResult(tally: VoteTally, rule: MajorityRule): VoteResult {
-  const { votesFor, total } = tally;
-  if (total <= 0) return "rejected";
-  switch (rule) {
-    case "simple_majority":
-      return votesFor * 2 > total ? "passed" : "rejected";
-    case "two_thirds":
-      return votesFor * 3 >= total * 2 ? "passed" : "rejected";
-    case "three_fourths":
-      return votesFor * 4 >= total * 3 ? "passed" : "rejected";
-    case "unanimous":
-      return votesFor === total ? "passed" : "rejected";
-    default: {
-      // Exhaustiveness guard: an unknown rule is a programming/config error, not client input.
-      const _exhaustive: never = rule;
-      throw httpError("VALIDATION_FAILED", `unknown majority rule: ${String(_exhaustive)}`);
-    }
-  }
+  return computeResolutionVoteResult(tally, rule);
 }
 
 /** Affirmative-vote percentage of total ballots cast (0 when no ballots). For display/audit. */

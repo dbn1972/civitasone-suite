@@ -75,3 +75,18 @@ export async function releaseHeld(tx: Writer, id: string): Promise<void> {
     eq(heldNotifications.status, "held"),
   ));
 }
+
+/**
+ * Find a single DND window by id (tenant-scoped), for ownership checks
+ * before allowing a PATCH/DELETE by a non-admin caller.
+ */
+export async function findWindowById(
+  tenantId: string, id: string,
+): Promise<typeof dndWindows.$inferSelect | undefined> {
+  const rows = await scopedRead((tx) =>
+    tx.select().from(dndWindows)
+      .where(and(eq(dndWindows.tenantId, tenantId), eq(dndWindows.id, id)))
+      .limit(1),
+  );
+  return rows[0];
+}

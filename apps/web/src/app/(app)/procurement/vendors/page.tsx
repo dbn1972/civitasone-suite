@@ -19,7 +19,7 @@ export default async function VendorsPage() {
         actions={
           <>
             <Link href="/procurement/vendors/new" className="btn primary">+ Register Vendor</Link>
-            {source === "error" ? <DataSourceBadge source={source} /> : null}
+            {source === "error" ? <DataSourceBadge source={source} message="Couldn't load — showing nothing" /> : null}
           </>
         }
       />

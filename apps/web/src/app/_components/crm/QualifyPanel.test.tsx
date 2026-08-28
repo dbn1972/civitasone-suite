@@ -48,7 +48,7 @@ describe("QualifyPanel (LQ-001)", () => {
   it("shows the saved-info badge and an empty state on a failed framework load", async () => {
     vi.mocked(lq.getFrameworks).mockResolvedValue({ data: [], source: "error" });
     render(<QualifyPanel leadId="l1" businessLine="government" />);
-    await waitFor(() => expect(screen.getByText(/showing saved information/i)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(/couldn.t load/i)).toBeInTheDocument());
     expect(screen.getByText(/no qualification framework/i)).toBeInTheDocument();
   });
 

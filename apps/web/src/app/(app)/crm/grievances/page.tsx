@@ -22,9 +22,14 @@ export default async function GrievancesPage({ searchParams }: { searchParams?: 
   // Counts are derived from the page the API returned, so they describe the
   // current view, not the register. `total` is the only figure that comes from
   // the server and is safe to present as a whole-register number.
-  const open = rows.filter((r) => r.status === "open").length;
-  const escalated = rows.filter((r) => r.status === "escalated").length;
-  const resolved = rows.filter((r) => r.status === "resolved" || r.status === "closed").length;
+  // CPGRAMS status vocabulary (services/crm-service grievances-domain.ts STATUS):
+  // REGISTERED / FORWARDED / ATTENDED / DISPOSED / APPEAL. These filters used
+  // to compare against a legacy open/escalated/resolved/closed vocabulary
+  // that the backend has not returned since the CPGRAMS migration, so every
+  // bucket here silently showed 0 regardless of the real register.
+  const open = rows.filter((r) => r.status === "REGISTERED" || r.status === "FORWARDED" || r.status === "ATTENDED").length;
+  const escalated = rows.filter((r) => r.status === "APPEAL").length;
+  const resolved = rows.filter((r) => r.status === "DISPOSED").length;
   const stat = (n: number) => (source === "error" ? "—" : n.toLocaleString("en-IN"));
 
   return (

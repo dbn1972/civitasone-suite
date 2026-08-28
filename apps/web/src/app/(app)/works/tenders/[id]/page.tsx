@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { notFound } from "next/navigation";
 import { fetchJson } from "@/app/_data/apiClient";
 import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
 import { PageHeader, Card, DataTable, StatGrid, StatCard } from "@/app/_components/ds";
@@ -66,6 +67,15 @@ export default async function TenderDetailPage({
   const quotations = quotationsResult.data;
   const tenders = tendersResult.data;
   const tender = tenders.find((t) => t.id === params.id);
+
+  // A bogus / non-existent tender id must 404 cleanly rather than render a
+  // shell that offers to add quotations and awards to a tender that does not
+  // exist. Only 404 when the register actually loaded (source !== "error"); a
+  // load failure is a transient error, not a missing record. (Mirrors the AA/TS
+  // detail pages; the register is capped at pageSize=200, same as those.)
+  if (tendersResult.source !== "error" && !tender) {
+    notFound();
+  }
 
   // ── Stats ──────────────────────────────────────────────────────────────────
 

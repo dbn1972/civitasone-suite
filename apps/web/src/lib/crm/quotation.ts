@@ -180,7 +180,12 @@ export function normalisePriceBook(raw: unknown): PriceBook | null {
     currency: str(r.currency) || "INR",
     geography: str(r.geography),
     channel: str(r.channel),
-    entries: toArray(r.entries, "entries")
+    // The backend's actual field name is `items` (GET /v1/crm/price-books[/:id] attaches
+    // `items`, never `entries` — see price-books/routes.ts) — `toArray` checks "items"
+    // before any caller-supplied key, so pass the whole book object `r`, not `r.entries`
+    // (which is always undefined against a real response and silently produced an empty
+    // list). "entries" stays listed as a fallback for callers/tests using that name.
+    entries: toArray(r, "items", "entries")
       .map(normalisePriceBookEntry)
       .filter((e): e is PriceBookEntry => e !== null),
     enabled: bool(r.enabled, true),

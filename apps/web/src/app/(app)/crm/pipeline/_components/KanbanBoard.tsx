@@ -10,6 +10,14 @@ import { StageColumn } from "./StageColumn";
 /**
  * Default stages used when no pipeline is configured.
  * The backend supports 3–10 stages; these are the default set.
+ *
+ * These ids ("lead", "proposal", ...) are synthetic — they exist only so the
+ * board has something to key columns on locally. They are NOT real
+ * crm.pipeline_stages rows, so they must never be sent to the backend as
+ * `stageId`: PATCH /v1/crm/deals/:id/stage validates stageId with
+ * z.string().uuid().optional() and 400s on a non-uuid value. See
+ * moveDealToStage, which only includes stageId when `pipeline` (and therefore
+ * a real, uuid-keyed stage) is present.
  */
 const DEFAULT_STAGES = [
   { id: "lead", name: "Lead", probability: 10, ordinal: 0 },
@@ -39,6 +47,9 @@ export function KanbanBoard({ pipeline, deals: serverDeals, source }: Props) {
   );
 
   const stages = pipeline?.stages ?? DEFAULT_STAGES;
+  // True only when these are real crm.pipeline_stages rows (uuid ids) — see the
+  // DEFAULT_STAGES doc comment above for why that distinction matters on PATCH.
+  const hasRealPipeline = Boolean(pipeline?.stages && pipeline.stages.length > 0);
   const [localDeals, setLocalDeals] = useState<PipelineDealCard[]>(deals);
   const [draggedDealId, setDraggedDealId] = useState<string | null>(null);
   const [dropTargetStage, setDropTargetStage] = useState<string | null>(null);
@@ -105,7 +116,12 @@ export function KanbanBoard({ pipeline, deals: serverDeals, source }: Props) {
         credentials: "same-origin",
         body: JSON.stringify({
           stage: targetStage.name,
-          stageId: targetStageId,
+          // Only a real pipeline's stages have a uuid id — DEFAULT_STAGES' ids
+          // ("lead", "proposal", ...) are synthetic and would fail the
+          // backend's z.string().uuid() check on this field, 400ing every move
+          // for a deal that has no pipeline. Move-by-name alone still works:
+          // routes.ts falls back to matching by stage name when stageId is absent.
+          ...(hasRealPipeline ? { stageId: targetStageId } : {}),
           probability: targetStage.probability,
           version: deal.version,
         }),
@@ -143,7 +159,7 @@ export function KanbanBoard({ pipeline, deals: serverDeals, source }: Props) {
     } finally {
       setMovingDealId(null);
     }
-  }, [localDeals, stages, announce]);
+  }, [localDeals, stages, hasRealPipeline, announce]);
 
   const handleDrop = useCallback(async (targetStageId: string) => {
     if (!draggedDealId) return;

@@ -12,10 +12,14 @@ export interface CreateFacilityInput {
   ward?: string | undefined;
   totalSpaces: number;
   operatingHours?: { open: string; close: string; days?: string[] | undefined } | undefined;
-  tariffPerHourMinor?: bigint | undefined;
-  tariffPerDayMinor?: bigint | undefined;
-  monthlyPassMinor?: bigint | undefined;
-  annualPassMinor?: bigint | undefined;
+  // Numbers, not bigint: these go straight into a queue.publish() payload that
+  // gets JSON.stringify'd on the real SQS/RabbitMQ drivers. A native bigint
+  // throws there ("Do not know how to serialize a BigInt") — the consumer
+  // converts to BigInt itself right before the Drizzle insert/update.
+  tariffPerHourMinor?: number | undefined;
+  tariffPerDayMinor?: number | undefined;
+  monthlyPassMinor?: number | undefined;
+  annualPassMinor?: number | undefined;
   contactPerson?: string | undefined;
 }
 
@@ -29,10 +33,14 @@ export interface UpdateFacilityInput {
   totalSpaces?: number | undefined;
   availableSpaces?: number | undefined;
   operatingHours?: { open: string; close: string; days?: string[] | undefined } | undefined;
-  tariffPerHourMinor?: bigint | undefined;
-  tariffPerDayMinor?: bigint | undefined;
-  monthlyPassMinor?: bigint | undefined;
-  annualPassMinor?: bigint | undefined;
+  // Numbers, not bigint: these go straight into a queue.publish() payload that
+  // gets JSON.stringify'd on the real SQS/RabbitMQ drivers. A native bigint
+  // throws there ("Do not know how to serialize a BigInt") — the consumer
+  // converts to BigInt itself right before the Drizzle insert/update.
+  tariffPerHourMinor?: number | undefined;
+  tariffPerDayMinor?: number | undefined;
+  monthlyPassMinor?: number | undefined;
+  annualPassMinor?: number | undefined;
   status?: string | undefined;
   contactPerson?: string | undefined;
 }

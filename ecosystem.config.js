@@ -71,6 +71,50 @@ const DEVICE_TRUST_SECRET = IS_PROD
 // Only honoured outside production (tests/dev). Empty in prod.
 const JWT_SECRET = IS_PROD ? undefined : (process.env.JWT_SECRET ?? "civitasone-dev-secret");
 
+// visit-request approval (the system-originated pass-generate cascade in
+// modules/visit-request/consumer.ts#tenantSigningKeyPem, NOT the
+// caller-supplied digital-pass/routes.ts call sites) signs the pass QR
+// with this service-level RSA key. It was never wired into this file at
+// all, for either svc("visitor") or worker("visitor") — confirmed live
+// 2026-08-27: approving a visit request queued cleanly (202) but the
+// worker's post-commit pass-generate step threw
+// "VISITOR_TENANT_SIGNING_KEY_PEM is not configured" on every attempt, so
+// no deployment started from this file could ever complete that cascade.
+// Only the worker process calls tenantSigningKeyPem() — wired into
+// worker("visitor") below, not svc("visitor"). Fail-closed in prod (no
+// insecure default); dev/test gets a stable generated-for-this-repo
+// RSA-2048 key (not used anywhere else, safe to keep in source).
+const VISITOR_TENANT_SIGNING_KEY_PEM = IS_PROD
+  ? requireSecret("VISITOR_TENANT_SIGNING_KEY_PEM")
+  : (process.env.VISITOR_TENANT_SIGNING_KEY_PEM ?? `-----BEGIN PRIVATE KEY-----
+MIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQChgFyoBZkpVFCv
+T9CNY0O6C3SbSofZGu4acnGo6WyRRJfUHokWS2vgnQBeXv1bHeUU0zFVRD/VOsnX
+z00zhKoPKkLBzY/dEedIvLFT0Ho5hpCUtYeTI2DQtRcU+JBIgGjj3dsogQU180Dr
+SD/VMp5Cr+5G4qj5I7o0Mpd1GIko0lJ4CDAihzfZqOODudTwKaxlC8gBBwU6gl/e
+N0LNovbcy6dOq6WSx3Fr4gXFfEAD9ZntLhvEzoSWRwZ6q7rXhfcmHMO7N4Yv/UUG
+8cTF4fAgEjTrW7SNUfJN+CVl1CL1VrDBOZpbG6iZdUWpmMYYxkXgcfTNXdYaG8NU
++CkN43W1AgMBAAECggEARNKGqbN5CXu8xnikzxu2CNpI3sRsD8DCJtMOTITslxs7
++FDq6m1Jk3ZUaeLg5Ktgq/cz1ro22Y8r5KOaqpGmRsAjoqMO4451mTGP/7+f1lPZ
+2QViuPkikM4a//zMv5i5GiG4+xHAPrVivOEVEq13c8O1Ls/4YfMvrn7AvE2wZYxN
+0s5vxsmXXE9xcuKpfmD3ZEHJAsAZsNPNqjQ3xWijB7fhPskJCTt4MmbX97xSAvUw
+AmR2D0wtAKHkvz/pWz7bMgvXRcdb2bBbrP5HhKHh8jxoH4z2SY/s4ZQdhJ3CsQCy
+ycnX2HwRKuLKdMKtrrlYnfaEDuuzP/v+KxOG8SQgIQKBgQDUQz1VjEBZbUH6QcaN
+gk4Sa7c1/v2l8r2UNAGm+0DqX30RKJaRi57RyVw83mZn3g2cB/k7jKr3dYWYFTUP
+dPWggunHBr5L+AdxJWTbwLwWL3qGVbIGATOZcfOTmNB+nvmz5ol7Nl4WaPNLa3Be
+oIwZ886Zaxknz09RqHqBNTSMrwKBgQDCx31RoR4KS3y2DQppXz4IXPoaur+PYJPl
+tz7ByuZC5eybXhYuCjKCnXi1xrT1Ht+tme1yaF7WRMV9DVmNJL5U3oh6vzFGPD+M
+xhtHTDFzYn3GPAFVK3vuqWj38d6wcsjlldxTVYsamHSVDK91UQD6puhqqQkK4EFH
+Jmzq5uGk2wKBgQDReIW3vc/nMJZSxMSP887eCOTl6X0hXnrOHcCfrAY1BQTkgPyO
+J44VE7Tt8MB4sj8WAxxnMvupd5XeLteNKGwZ+feAzNvRFrUpaLCu2PYEotg0Z69m
+k5r7S+QHfWAMBREBA3obWNzjGrE2dZGQILoCBoOVDYbmrYRmXnB+wCXaywKBgFp7
+KS/+VGIb5vb639dLMxnXdydrkQkdqBaSJUkI5CY3gM47yrngas5aMHTgtbcYfHe8
+hZ0b9tI6aDNLPEpgwznRljzPDCjAXBUdAhcAwggDvMGVpljWNmALuoNTjEsTR1e/
+YfYkStYz9BQ5LFinJHlLh7PkihrPSgOvSfFlB3T5AoGAJrbcXAEkZ2Doihd5feBo
+suVkXESdRMKJuD0fGy1TMnrkGvZ2/bEfS1S+EBVg3BbiBZmSgL81HeyGdGExbMG3
+lAUCZOnu8SGRABd8kJsEDWy6DcHWTqAuTSDflJdKm+gCqt8O2YiPZowOyPRxCMW2
+pthCQsCWknmFVyjDWGco5Yw=
+-----END PRIVATE KEY-----`);
+
 const AUTH_ENV = {
   JWT_ALGORITHM,
   KEYCLOAK_URL,
@@ -382,7 +426,10 @@ module.exports = {
     worker("helpdesk",     "helpdesk_svc",     "civitas_helpdesk"),
     worker("audit",        "audit_svc",        "civitas_audit"),
     worker("legal",        "legal_svc",        "civitas_legal"),
-    worker("crm",          "crm_svc",          "civitas_crm", { CRM_PII_KEY }),
+    worker("crm",          "crm_svc",          "civitas_crm", {
+      CRM_PII_KEY,
+      CRM_SCANNER_DATABASE_URL: scannerDbUrl("crm_scanner", "civitas_crm", "CRM_SCANNER_DATABASE_URL"),
+    }),
     worker("admin",        "admin_svc",        "civitas_admin"),
     worker("billing",      "billing_svc",      "civitas_billing"),
     worker("contract",     "contract_svc",     "civitas_contract", {
@@ -429,7 +476,7 @@ module.exports = {
     // it forever (restarts climbing, status "waiting restart"). Point pm2 at
     // the same compiled entrypoint the "pnpm worker" script uses.
     worker("court",        "court_svc",        "civitas_court", { COURT_PII_KEY, COURT_SCANNER_DATABASE_URL: scannerDbUrl("court_scanner", "civitas_court", "COURT_SCANNER_DATABASE_URL") }, "dist/worker-main.js"),
-    worker("visitor",      "visitor_svc",      "civitas_visitor", { VISITOR_PII_KEY, VISITOR_SCANNER_DATABASE_URL: scannerDbUrl("visitor_scanner", "civitas_visitor", "VISITOR_SCANNER_DATABASE_URL") }),
+    worker("visitor",      "visitor_svc",      "civitas_visitor", { VISITOR_PII_KEY, VISITOR_TENANT_SIGNING_KEY_PEM, VISITOR_SCANNER_DATABASE_URL: scannerDbUrl("visitor_scanner", "civitas_visitor", "VISITOR_SCANNER_DATABASE_URL") }),
     worker("works",        "works_svc",        "civitas_works", { WORKS_SCANNER_DATABASE_URL: scannerDbUrl("works_scanner", "civitas_works", "WORKS_SCANNER_DATABASE_URL") }),
     worker("revenue",      "revenue_svc",      "civitas_revenue"),
     worker("inspection",   "inspection_svc",   "civitas_inspection", {
@@ -443,6 +490,28 @@ module.exports = {
     // T1-02: entities consumer + outbox relay were registered in worker.ts but
     // metadata-worker was never declared here, so CQRS writes black-holed.
     worker("metadata",     "metadata_svc",     "civitas_metadata"),
+
+    // Municipal Sec5 — see svc() block above for context and history. All 17
+    // now typecheck/build clean; all 17 ship src/worker.ts (no worker-main.ts
+    // split like court's), so the default worker() script ("dist/worker.js")
+    // applies to every one.
+    worker("advertisement", "advertisement_svc", "civitas_advertisement"),
+    worker("animal",        "animal_svc",        "civitas_animal"),
+    worker("building",      "building_svc",      "civitas_building"),
+    worker("crematorium",   "crematorium_svc",   "civitas_crematorium"),
+    worker("drainage",      "drainage_svc",      "civitas_drainage"),
+    worker("event",         "event_svc",         "civitas_event"),
+    worker("fire",          "fire_svc",          "civitas_fire"),
+    worker("market",        "market_svc",        "civitas_market"),
+    worker("parking",       "parking_svc",       "civitas_parking"),
+    worker("parks",         "parks_svc",         "civitas_parks"),
+    worker("refund",        "refund_svc",        "civitas_refund"),
+    worker("roadcut",       "roadcut_svc",       "civitas_roadcut"),
+    worker("sewerage",      "sewerage_svc",      "civitas_sewerage"),
+    worker("shop",          "shop_svc",          "civitas_shop"),
+    worker("swm",           "swm_svc",           "civitas_swm"),
+    worker("trade",         "trade_svc",         "civitas_trade"),
+    worker("vendor",        "vendor_svc",        "civitas_vendor"),
 
     // Gateway catalogue CQRS — mutations publish gateway.catalogue.*; worker applies.
     worker("gateway",      "gateway_svc",      "civitas_gateway"),
@@ -495,6 +564,53 @@ module.exports = {
       HRMS_SERVICE_URL: "http://127.0.0.1:3012",
     }),
     svc("location",     4012, "location_svc",     "civitas_location"),
+
+    // ── Municipal Sec5 services (BRD Section 5) ─────────────────────────────────
+    // 17 municipal licence/permit services landed on `services/*` via an
+    // unrelated commit (8d542ee0) and were never wired into this file — exactly
+    // the defect the Architecture Guard (deployment-declaration-guard.mjs)
+    // exists to catch.
+    //
+    // 2026-08-27: first pass found only sewerage/swm/vendor typecheck-clean;
+    // the other 14 failed `tsc` (missing app.ts on advertisement/fire, missing
+    // consumer.ts files on shop, a fleet-wide COMMANDS/EVENTS mismatch on
+    // parks, exactOptionalPropertyTypes errors on the rest) and were left
+    // deliberately unwired. Re-checked after main advanced ~36 commits
+    // (#757 exact-optional-property-types-municipal, #761 parks-service
+    // command/event keys, #762 recover-missing-municipal-modules, and others)
+    // that fixed those exact defects: all 17 now typecheck clean, build clean
+    // (`dist/{app,index,topics,worker}.js` present for every one), and have
+    // zero TODO/FIXME/not-implemented markers. Re-verified directly — forced,
+    // non-cached `tsc --noEmit` on the four worst offenders (advertisement,
+    // fire, shop, parks) plus a manual read of advertisement's now-present
+    // app.ts, shop's now-present consumer.ts files, and parks's now-consistent
+    // topics.ts/commands.ts — rather than trusting the commit messages alone.
+    // All 17 declared below.
+    //
+    // NOT yet true regardless of the above: none of the 17 has any test
+    // coverage, and only advertisement/animal/vendor have a DB migration (see
+    // scripts/dev/migrate-all.mjs) — civitas_building, civitas_fire, etc. don't
+    // exist yet, so those services will fail any request that touches the DB
+    // until migrations are authored. That's runtime readiness, a different
+    // lane per this guard's own docstring, not a reason to withhold the
+    // static "startable + reachable" declaration below.
+    svc("advertisement", 3073, "advertisement_svc", "civitas_advertisement"),
+    svc("animal",        3082, "animal_svc",        "civitas_animal"),
+    svc("building",      3071, "building_svc",      "civitas_building"),
+    svc("crematorium",   3083, "crematorium_svc",   "civitas_crematorium"),
+    svc("drainage",      3080, "drainage_svc",      "civitas_drainage"),
+    svc("event",         3076, "event_svc",         "civitas_event"),
+    svc("fire",          3072, "fire_svc",          "civitas_fire"),
+    svc("market",        3085, "market_svc",        "civitas_market"),
+    svc("parking",       3084, "parking_svc",       "civitas_parking"),
+    svc("parks",         3081, "parks_svc",         "civitas_parks"),
+    svc("refund",        3077, "refund_svc",        "civitas_refund"),
+    svc("roadcut",       3075, "roadcut_svc",       "civitas_roadcut"),
+    svc("sewerage",      3078, "sewerage_svc",      "civitas_sewerage"),
+    svc("shop",          3060, "shop_svc",          "civitas_shop"),
+    svc("swm",           3079, "swm_svc",           "civitas_swm"),
+    svc("trade",         3070, "trade_svc",         "civitas_trade"),
+    svc("vendor",        3074, "vendor_svc",        "civitas_vendor"),
 
     // ── Gateway ────────────────────────────────────────────────────────────────
     // DATABASE_URL required to mount CAP-052 catalogue routes (FORCE-RLS reads)

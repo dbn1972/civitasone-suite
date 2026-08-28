@@ -6,6 +6,41 @@ import { sendValidated } from "@civitasone/schemas/validate";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import * as queries from "./queries.js";
 
+/**
+ * G-FIX-3 (partial): CLAUDE.md requires cross-tenant data access to "trigger
+ * audit + alert". The RLS-GUC fix in events/repo.ts (see its top-of-file
+ * comment) is what makes this endpoint return real cross-tenant data for the
+ * first time — before that fix it always silently returned [], so this
+ * accountability gap existed only in theory. Recording the access itself
+ * closes the "audit" half of that rule using infrastructure already in this
+ * module (writeEvent's hash-chained append-only log). NOT closed here: an
+ * actual gate requiring an active break-glass grant before the read is even
+ * allowed, and a real-time alert. identity-service already owns a full
+ * break-glass grant/TTL/audit lifecycle (services/identity-service/src/
+ * modules/breakglass) that nothing in audit-service checks against —
+ * wiring that in is a cross-service integration decision, not something to
+ * improvise inside a route handler; flagged separately, not built here.
+ */
+async function auditCrossTenantRead(
+  ctx: { tenantId: string; actorId: string; correlationId: string },
+  targetTenantId: string,
+  route: string,
+  req: { headers: Record<string, unknown>; ip: string },
+): Promise<void> {
+  await queries.writeEvent(
+    ctx.tenantId,
+    ctx.actorId,
+    "audit.cross_tenant_read",
+    "audit_trail",
+    targetTenantId,
+    "critical",
+    { route, targetTenantId },
+    ctx.correlationId,
+    (req.headers["x-forwarded-for"] as string | undefined) ?? req.ip,
+    req.headers["user-agent"] as string | undefined,
+  );
+}
+
 export async function eventRoutes(app: FastifyInstance): Promise<void> {
   app.get("/audit/events", async (req, reply) => {
     const ctx = resolveContext(req);
@@ -16,12 +51,19 @@ export async function eventRoutes(app: FastifyInstance): Promise<void> {
       type:     z.string().optional(),
     }).parse(req.query);
     const tenantId = q.tenantId ?? ctx.tenantId;
-    if (tenantId !== ctx.tenantId && !ctx.roles.some((r) => ["platform_admin", "super_admin", "audit_admin"].includes(r))) {
+    const isCrossTenant = tenantId !== ctx.tenantId;
+    if (isCrossTenant && !ctx.roles.some((r) => ["platform_admin", "super_admin", "audit_admin"].includes(r))) {
       throw new HttpError(403, "FORBIDDEN", "cross-tenant audit access denied");
     }
     requireRole(ctx, ["audit_officer", "audit_admin", "super_admin", "platform_admin"]);
+    if (isCrossTenant) await auditCrossTenantRead(ctx, tenantId, "GET /audit/events", req);
     const from = q.from ? new Date(q.from) : new Date(Date.now() - 7 * 86400 * 1000);
     const to   = q.to   ? new Date(q.to)   : new Date();
+    // G-FIX-3: RLS scoping for this cross-tenant-capable read is now
+    // guaranteed inside queries.listEvents()/repo.listEvents() itself — see
+    // that file for why a bare db.transaction() here was not enough. Fixed
+    // at the repo layer (not per call site) so no future caller can forget
+    // it the way this one originally did.
     sendValidated(reply, auditEventsListSchema, await queries.listEvents(tenantId, from, to, q.type, q.limit, q.offset));
   });
 
@@ -40,13 +82,17 @@ export async function eventRoutes(app: FastifyInstance): Promise<void> {
     }).parse(req.query);
     requireRole(ctx, ["audit_officer", "audit_admin", "super_admin", "platform_admin"]);
     const tenantId = q.tenantScoped === false ? (q.tenantId ?? ctx.tenantId) : ctx.tenantId;
+    const isCrossTenant = tenantId !== ctx.tenantId;
     // P0-2: cross-tenant trail reads (tenantScoped=false, or an explicit foreign tenantId)
     // require an admin/platform role — audit_officer must stay scoped to its own tenant.
-    if (tenantId !== ctx.tenantId && !ctx.roles.some((r) => ["platform_admin", "super_admin", "audit_admin"].includes(r))) {
+    if (isCrossTenant && !ctx.roles.some((r) => ["platform_admin", "super_admin", "audit_admin"].includes(r))) {
       throw new HttpError(403, "FORBIDDEN", "cross-tenant audit access denied");
     }
+    if (isCrossTenant) await auditCrossTenantRead(ctx, tenantId, "GET /v1/audit/events", req);
     const from = q.from ? new Date(q.from) : new Date(Date.now() - 7 * 86400 * 1000);
     const to = q.to ? new Date(q.to) : new Date();
+    // G-FIX-3: see the identical note on GET /audit/events above — RLS
+    // scoping is guaranteed inside queries.listEvents()/repo.listEvents().
     sendValidated(reply, TenantAuditEventListSchema, (await queries.listEvents(tenantId, from, to, q.type, q.limit, q.offset)).map((event) => ({
       id: event.id,
       actor: typeof event.actor === "object" && event.actor !== null && "email" in event.actor

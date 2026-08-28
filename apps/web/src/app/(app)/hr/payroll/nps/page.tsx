@@ -64,7 +64,7 @@ export default async function NpsStatementsPage() {
         subtitle="National Pension System contributions — 10% employee + 14% employer (GoI 2019 amendment)."
         back="/hr/payroll"
       />
-      <DataSourceBadge source={source} />
+      <DataSourceBadge source={source} message="Couldn't load — showing nothing" />
 
       <StatGrid>
         <StatCard icon="📋" iconBg="var(--infobg)" label="Statements" value={tableRows.length} />

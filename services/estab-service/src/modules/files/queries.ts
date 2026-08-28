@@ -2,6 +2,7 @@ import { cache } from "../../shared/infra.js";
 import * as repo from "./repo.js";
 import { computeFileDueBy, mapNoteTypeForUi } from "./domain.js";
 import type { FileRow, NotingRow } from "./schema.js";
+import { getEmployeeDisplayMap, type EmployeeDisplay } from "../../shared/hrms-client.js";
 
 export type FileDetailDto = {
   id: string;
@@ -56,14 +57,25 @@ export type FileDetailDto = {
   }>;
 };
 
-function officerLabel(id: string): string {
-  return id.slice(0, 8);
+// SECURITY/DATA-INTEGRITY: this used to unconditionally truncate the id
+// (`id.slice(0, 8)`) and never even attempted a real lookup. officerId here
+// may be a real hrms employeeId (explicit routing/movement/dispatch to a
+// named colleague, sourced from the operators directory) — in that case we
+// now resolve and show their actual name via hrms-service, the authoritative
+// source for employee identity, instead of always fabricating a fake label.
+// A self-authored id (ctx.actorId, a Keycloak subject) will still not be
+// found in `employees` and falls back to truncation: there is currently no
+// employee↔identity bridge anywhere in this platform to resolve that case
+// (see hrms-client.ts's doc comment and the PR description) — that is a
+// separate, larger platform gap, not something this fix can close.
+function officerLabel(id: string, employees: Map<string, EmployeeDisplay>): string {
+  return employees.get(id)?.fullName ?? id.slice(0, 8);
 }
 
-function mapNoting(n: NotingRow) {
+function mapNoting(n: NotingRow, employees: Map<string, EmployeeDisplay>) {
   return {
     id: n.id,
-    author: officerLabel(n.officerId),
+    author: officerLabel(n.officerId, employees),
     content: n.body,
     timestamp: n.createdAt.toISOString(),
     type: mapNoteTypeForUi(n.noteType, n.eSigned),
@@ -73,7 +85,7 @@ function mapNoting(n: NotingRow) {
   };
 }
 
-function mapFileBase(file: FileRow) {
+function mapFileBase(file: FileRow, employees: Map<string, EmployeeDisplay>) {
   return {
     id: file.id,
     fileNo: file.fileNo,
@@ -82,7 +94,7 @@ function mapFileBase(file: FileRow) {
     department: file.dept,
     classification: file.classification,
     currentWith: file.currentWith,
-    currentHolder: officerLabel(file.currentWith),
+    currentHolder: officerLabel(file.currentWith, employees),
     status: file.status,
     fileType: file.fileType,
     volumeNo: file.volumeNo,
@@ -103,16 +115,20 @@ export async function getFileDetail(tenantId: string, id: string): Promise<FileD
   );
   if (!file) return null;
 
-  const [notings, movements, dispatches, attachments] = await Promise.all([
+  const [notings, movements, dispatches, attachments, employees] = await Promise.all([
     repo.findNotingsByFile(id),
     repo.listFileMovements(id, tenantId),
     repo.listDispatchByFile(id, tenantId),
     repo.listAttachmentsByFile(id, tenantId),
+    // Best-effort, cached, tenant-scoped hrms lookup for officer display
+    // names — see hrms-client.ts. Never throws/blocks: an hrms-service
+    // outage degrades every label to id truncation, it never breaks the read.
+    getEmployeeDisplayMap(tenantId),
   ]);
 
   return {
-    ...mapFileBase(file),
-    noteSheets: notings.map(mapNoting),
+    ...mapFileBase(file, employees),
+    noteSheets: notings.map((n) => mapNoting(n, employees)),
     movementHistory: movements.map((m) => ({
       id: m.id,
       fromOfficerId: m.fromOfficerId,
@@ -124,7 +140,7 @@ export async function getFileDetail(tenantId: string, id: string): Promise<FileD
     dispatchHistory: dispatches.map((d) => ({
       id: d.id,
       dispatchedTo: d.toAddress,
-      dispatchedBy: officerLabel(d.createdBy),
+      dispatchedBy: officerLabel(d.createdBy, employees),
       timestamp: (d.dispatchedAt ?? d.createdAt).toISOString(),
       remarks: d.mode,
     })),

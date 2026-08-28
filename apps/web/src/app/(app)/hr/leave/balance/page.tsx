@@ -32,7 +32,7 @@ export default function LeaveBalancePage() {
   useEffect(() => {
     const controller = new AbortController()
     fetch("/api/proxy/v1/hrms/employees?limit=500", { signal: controller.signal })
-      .then((r) => r.json())
+      .then((r) => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
       .then((body) => {
         const rows: EmployeeOption[] = Array.isArray(body) ? body : (body.data ?? []);
         setEmployees(rows);
@@ -48,7 +48,7 @@ export default function LeaveBalancePage() {
     setLoading(true);
     setError(null);
     fetch(`/api/proxy/v1/hrms/leave-context?employeeId=${encodeURIComponent(empId)}`, { signal: controller.signal })
-      .then((r) => r.json())
+      .then((r) => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
       .then((data: LeaveContext) => setCtx(data))
       .catch((e) => { if (e.name !== 'AbortError') { setError("Failed to load leave balance."); setSource("error"); } })
       .finally(() => setLoading(false));
@@ -87,8 +87,8 @@ export default function LeaveBalancePage() {
 
       {ctx && (
         <StatGrid>
-          <StatCard icon="\U0001f334" iconBg="var(--goodbg)" label="Leave Types"     value={totalTypes} />
-          <StatCard icon="\U0001f4c5" iconBg="var(--infobg)" label="Total Entitlement" value={`${totalEntitlement}d`} />
+          <StatCard icon="\ud83c\udf34" iconBg="var(--goodbg)" label="Leave Types"     value={totalTypes} />
+          <StatCard icon="\ud83d\udcc5" iconBg="var(--infobg)" label="Total Entitlement" value={`${totalEntitlement}d`} />
           <StatCard icon="\u2705"       iconBg="var(--warnbg)" label="Total Used"      value={`${totalUsed}d`} />
           <StatCard icon="\u23f3"       iconBg="var(--panel)" label="Total Remaining" value={`${totalBalance}d`} />
         </StatGrid>
@@ -139,7 +139,7 @@ export default function LeaveBalancePage() {
         ctx.allocations.length === 0 ? (
           <Card title="Leave Entitlement">
             <div style={{ padding: "48px 24px", textAlign: "center", color: "var(--mut)" }}>
-              <div style={{ fontSize: 40, marginBottom: 12 }}>\U0001f334</div>
+              <div style={{ fontSize: 40, marginBottom: 12 }}>🌴</div>
               <p style={{ fontWeight: 600, marginBottom: 4, color: "var(--ink)" }}>No leave allocated</p>
               <p style={{ fontSize: 14, marginBottom: 16 }}>This employee has no leave allocation for this FY.</p>
               <Link href="/hr/leave/allocate" className="btn primary">Allocate Leave</Link>

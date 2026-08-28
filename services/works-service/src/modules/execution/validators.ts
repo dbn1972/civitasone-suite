@@ -46,6 +46,17 @@ export const closeWorkSchema = z.object({
 
 export const physicalCompleteSchema = z.object({
   workId: z.string().uuid(),
-  completionDate: z.string().datetime().optional(),
+  // Bug fix (works-deep-verify, HIGH/L2): was z.string().datetime(), which
+  // requires a full ISO-8601 timestamp (e.g. "2026-01-10T00:00:00Z"). The
+  // only caller — apps/web/.../works/execution/[workId]/ExecutionActions.tsx
+  // — uses a plain <input type="date">, which produces bare "YYYY-MM-DD"
+  // values; every real submission with a date filled in was rejected with
+  // 400 (live-confirmed). aaDate/tsDate (approval/validators.ts) already
+  // establish the working convention for this exact situation elsewhere in
+  // this service: a plain, unconstrained z.string() date, paired with the
+  // same <input type="date"> pattern. Matched that here instead of forcing
+  // the frontend to fabricate a time-of-day for a field the UI only ever
+  // collects as a calendar date.
+  completionDate: z.string().optional(),
   certificateFileKey: z.string().max(512).optional(),
 });

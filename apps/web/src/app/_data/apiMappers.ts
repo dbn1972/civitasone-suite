@@ -472,6 +472,7 @@ export function mapDealSummaries(payload: unknown): DealSummary[] | null {
       closeDate: toText(row.closeDate) ?? undefined,
       probability: typeof row.probability === "number" ? row.probability : 0,
       status,
+      version: typeof row.version === "number" ? row.version : undefined,
     });
   }
   return mapped;

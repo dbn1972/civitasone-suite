@@ -21,7 +21,7 @@ describe("AccountRelationshipsEditor (CM-002)", () => {
   it("shows the saved-info badge on a failed load", async () => {
     vi.mocked(aa.getAccountRelationships).mockResolvedValue({ data: [], source: "error" });
     render(<AccountRelationshipsEditor accountId="acc1" accountOptions={options} />);
-    await waitFor(() => expect(screen.getAllByText(/showing saved information/i)[0]).toBeInTheDocument());
+    await waitFor(() => expect(screen.getAllByText(/couldn.t load/i)[0]).toBeInTheDocument());
   });
 
   it("filters self out of the target picker and blocks add with no target", async () => {

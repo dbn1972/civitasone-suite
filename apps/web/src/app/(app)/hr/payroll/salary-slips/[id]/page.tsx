@@ -51,7 +51,7 @@ export default async function SalarySlipPage({ params }: { params: { id: string 
           <PrintButton />
         </div>
       </div>
-      <DataSourceBadge source={source} />
+      <DataSourceBadge source={source} message="Couldn't load — showing nothing" />
 
       <div id="salary-slip" className="salary-slip-print" style={{ background: "var(--color-bg)", border: "1px solid var(--color-border)", borderRadius: 12, padding: 32, fontFamily: "system-ui" }}>
         <div className="print-header" aria-hidden="true">

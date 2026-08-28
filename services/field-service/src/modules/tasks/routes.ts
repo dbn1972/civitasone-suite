@@ -117,14 +117,26 @@ export async function taskRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, FIELD_ROLES);
     const { id } = idParam.parse(req.params);
 
+    // Cache the already-mapped VIEW (string dates), not the raw DB row. The cache
+    // store round-trips values through JSON (see @civitasone/cache's serialize/
+    // deserialize), which silently turns a Date into a plain string on the way
+    // back out. Caching the raw TaskRow and calling repo.toView() on it afterwards
+    // -- as this used to do -- worked on a cache MISS (the loader's row still has
+    // real Date objects) but threw `TypeError: r.createdAt.toISOString is not a
+    // function` on every cache HIT, since toView() calls .toISOString()
+    // unconditionally. Mapping to the view once, before caching, means the cached
+    // value is already wire-shaped and a JSON round-trip is a no-op for it.
     const cacheKey = cache.makeKey(ctx.tenantId, "task", id);
-    const task = await cache.getOrLoad(cacheKey, () => repo.findById(id, ctx.tenantId));
+    const task = await cache.getOrLoad(cacheKey, async () => {
+      const row = await repo.findById(id, ctx.tenantId);
+      return row ? repo.toView(row) : null;
+    });
 
     if (!task) {
       throw new HttpError(404, "NOT_FOUND", "task not found");
     }
 
-    return reply.send({ data: repo.toView(task) });
+    return reply.send({ data: task });
   });
 
   // PATCH /v1/field/tasks/:id — update task details

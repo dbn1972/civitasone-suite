@@ -101,6 +101,13 @@ export default async function BillingDetailPage({
               <DataSourceBadge source={billsResult.source} />
             )}
             <Link
+              href={newMbHref}
+              className="btn ghost"
+              style={{ minHeight: 36, fontSize: 13, padding: "6px 14px" }}
+            >
+              + Issue MB
+            </Link>
+            <Link
               href={`/works/billing/measurements/new?workId=${params.workId}`}
               className="btn ghost"
               style={{ minHeight: 36, fontSize: 13, padding: "6px 14px" }}
@@ -108,11 +115,11 @@ export default async function BillingDetailPage({
               + Record measurement
             </Link>
             <Link
-              href={newMbHref}
+              href={`/works/billing/bills/new?workId=${params.workId}`}
               className="btn primary"
               style={{ minHeight: 36, fontSize: 13, padding: "6px 14px" }}
             >
-              + Issue MB
+              + Generate bill
             </Link>
           </div>
         }
@@ -180,8 +187,8 @@ export default async function BillingDetailPage({
         <Link href="/works/billing" className="btn ghost">
           ← Billing register
         </Link>
-        <Link href={newMbHref} className="btn primary">
-          Issue MB →
+        <Link href={`/works/billing/bills/new?workId=${params.workId}`} className="btn primary">
+          Generate bill →
         </Link>
       </div>
     </main>

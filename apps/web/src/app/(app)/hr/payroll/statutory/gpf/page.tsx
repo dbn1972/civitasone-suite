@@ -44,7 +44,7 @@ export default async function GpfStatutoryPage() {
         subtitle="GPF subscription ledger for eligible employees under the old pension scheme."
         back="/hr/payroll/statutory"
       />
-      <DataSourceBadge source={source} />
+      <DataSourceBadge source={source} message="Couldn't load — showing nothing" />
       <StatGrid>
         <StatCard icon="🏛️" iconBg="var(--infobg)" label="GPF Records" value={rows.length} />
         <StatCard icon="💰" iconBg="var(--goodbg)" label="Total GPF Subscription" value={formatMoney(totalContribMinor)} />

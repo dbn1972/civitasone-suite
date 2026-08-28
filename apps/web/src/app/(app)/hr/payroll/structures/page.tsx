@@ -65,7 +65,7 @@ export default async function PayStructuresPage() {
         subtitle="Define earning and deduction components that make up an employee's pay."
         back="/hr/payroll"
       />
-      {hasError && <DataSourceBadge source="error" />}
+      {hasError && <DataSourceBadge source="error" message="Couldn't load — showing nothing" />}
 
       <StatGrid>
         <StatCard icon="🧱" iconBg="var(--infobg)" label="Total Structures" value={structures.length} />

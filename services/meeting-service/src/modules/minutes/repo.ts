@@ -30,6 +30,7 @@ import { db, scopedRead } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
 import { minutes, minutesVersions, type MinutesRow, type MinutesVersionRow } from "./schema.js";
 import { meetings } from "../meeting-core/schema.js";
+import { committeeMembers } from "../committee/schema.js";
 import { decisions } from "../decision/schema.js";
 import { computeHash, verifyChain, isDecisionAmendedAfterApproval, type ChainRecord } from "./domain.js";
 
@@ -137,6 +138,54 @@ export async function getMeetingStatus(tenantId: string, meetingId: string): Pro
     .where(and(eq(meetings.id, meetingId), eq(meetings.tenantId, tenantId)))
     .limit(1));
   return rows[0] ?? null;
+}
+
+/** Ownership-relevant fields on the parent meeting, for the per-meeting standing check
+ *  (IDOR fix, Req 7.5, 7.6, 8.1, 8.3) on the approve/reject/sign/submit/circulate write
+ *  routes -- mirrors meeting-core/repo.ts's own read exactly. */
+export interface MeetingRef {
+  id: string;
+  committeeId: string | null;
+  chairpersonId: string | null;
+  secretaryId: string | null;
+}
+
+export async function getMeetingRef(tenantId: string, meetingId: string): Promise<MeetingRef | null> {
+  const rows = await scopedRead((tx) => tx
+    .select({
+      id: meetings.id,
+      committeeId: meetings.committeeId,
+      chairpersonId: meetings.chairpersonId,
+      secretaryId: meetings.secretaryId,
+    })
+    .from(meetings)
+    .where(and(eq(meetings.id, meetingId), eq(meetings.tenantId, tenantId)))
+    .limit(1));
+  return rows[0] ?? null;
+}
+
+/** True iff `actorId` holds one of `roles` as an ACTIVE committee_members row on `committeeId`
+ *  -- byte-for-byte the same query as meeting-core/repo.ts's `hasCommitteeStanding`. */
+export async function hasCommitteeStanding(
+  tenantId: string,
+  committeeId: string,
+  actorId: string,
+  roles: readonly string[],
+): Promise<boolean> {
+  const rows = await scopedRead((tx) => tx
+    .select({ id: committeeMembers.id })
+    .from(committeeMembers)
+    .where(
+      and(
+        eq(committeeMembers.tenantId, tenantId),
+        eq(committeeMembers.committeeId, committeeId),
+        eq(committeeMembers.memberId, actorId),
+        eq(committeeMembers.status, "active"),
+        inArray(committeeMembers.role, [...roles]),
+      ),
+    )
+    .limit(1));
+  return rows.length > 0;
 }
 
 // ─── Public verification (Req 8.4 · P24) ─────────────────────────────────────

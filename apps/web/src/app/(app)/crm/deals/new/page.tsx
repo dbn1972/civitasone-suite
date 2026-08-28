@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useToast } from "@/app/_components/ds/Toast";
 import { PageHeader } from "@/app/_components/ds";
+import { browserFetch, errorMessageFromResponse } from "@/lib/api/browserClient";
 
 type ContactOption = { id: string; name: string };
 
@@ -38,7 +39,7 @@ export default function NewDealPage() {
     let active = true;
     void (async () => {
       try {
-        const res = await fetch("/api/proxy/v1/crm/contacts");
+        const res = await browserFetch("v1/crm/contacts");
         if (!res.ok) return;
         const body = (await res.json()) as { data?: Array<{ id?: string; name?: string }> };
         if (!active) return;
@@ -64,9 +65,8 @@ export default function NewDealPage() {
       const rupees = Number(form.value || "0");
       const valueMinor = Number.isFinite(rupees) ? Math.round(rupees * 100) : 0;
       const probability = Math.max(0, Math.min(100, Number(form.probability || "0") || 0));
-      const res = await fetch("/api/proxy/v1/crm/deals", {
+      const res = await browserFetch("v1/crm/deals", {
         method: "POST",
-        headers: { "content-type": "application/json" },
         body: JSON.stringify({
           name: form.name,
           stage: form.stage,
@@ -77,7 +77,7 @@ export default function NewDealPage() {
           ...(form.closeDate ? { closeDate: form.closeDate } : {}),
         }),
       });
-      if (!res.ok) throw new Error((await res.text()) || "Create failed");
+      if (!res.ok) throw new Error(await errorMessageFromResponse(res));
       setMessage("Deal created.");
       toast.success("Deal created successfully.");
       setTimeout(() => router.push("/crm/deals"), 600);

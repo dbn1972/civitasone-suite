@@ -35,8 +35,11 @@
  */
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { randomUUID } from "node:crypto";
+import { signToken } from "@civitasone/auth";
 import { runWithTenant } from "@civitasone/db";
 import type { CommandEnvelope } from "@civitasone/queue";
+import type { FastifyInstance } from "fastify";
+import { buildApp } from "../src/app.js";
 import { sqlClient } from "../src/shared/db.js";
 import { COMMANDS } from "../src/topics.js";
 import { registerMeetingCoreConsumers } from "../src/modules/meeting-core/consumer.js";
@@ -45,9 +48,16 @@ import { registerParticipantConsumers } from "../src/modules/participant/consume
 import { registerCalendarConsumers } from "../src/modules/calendar/consumer.js";
 import * as calendarRepo from "../src/modules/calendar/repo.js";
 
+const SECRET = "test_secret_for_civitasone_32chr";
+
 const TENANT = randomUUID();
-const ACTOR = randomUUID();
 const SHARED_CHAIR = randomUUID(); // chairs BOTH meetings below
+// IDOR fix (Req 1.1): meetingTransition/roomBook-adjacent writes now require the caller to be
+// this meeting's own chairperson/secretary. Every meeting in this file is chaired by
+// SHARED_CHAIR, so ACTOR is aliased to it (rather than a distinct identity) purely so the
+// existing transition calls keep passing the new ownership check — this file isn't about
+// ownership, it's about scheduling-conflict detection.
+const ACTOR = SHARED_CHAIR;
 const SHARED_MEMBER = randomUUID(); // a mandatory participant on BOTH meetings below
 const SECRETARY = randomUUID();
 
@@ -74,6 +84,14 @@ function run<T>(m: CommandEnvelope<T>): Promise<void> {
   if (!handler) throw new Error(`no handler for ${m.type}`);
   return runWithTenant(TENANT, () => handler(m)) as Promise<void>;
 }
+
+/** Auth header for the calendar booking ROUTE (fix 4 is wired at the HTTP boundary). */
+function writeHeaders(actorId: string, roles: string[]) {
+  const token = signToken({ sub: actorId, tid: TENANT, roles, sid: `sess-${actorId}` }, SECRET, 3600);
+  return { authorization: `Bearer ${token}`, "x-idempotency-key": `idem-${randomUUID()}` };
+}
+
+let app: FastifyInstance;
 
 function tenantQuery<T>(fn: (sql: typeof sqlClient) => Promise<T>): Promise<T> {
   return runWithTenant(TENANT, () =>
@@ -155,9 +173,11 @@ beforeAll(async () => {
     await sql`select set_config('app.tenant_id', ${TENANT}, true)`;
     await sql`DELETE FROM meeting.meetings WHERE tenant_id = ${TENANT}`;
   });
+  app = await buildApp();
 });
 
 afterAll(async () => {
+  await app.close();
   await sqlClient.end();
 });
 
@@ -187,8 +207,8 @@ describe("meeting-core scheduling: zero conflict awareness", () => {
   });
 });
 
-describe("calendar booking route: room conflict is checked, participant conflict is not", () => {
-  it("BUG: booking two DIFFERENT rooms for overlapping meetings sharing a participant produces no conflict", async () => {
+describe("calendar booking route: room conflict is checked, participant conflict is now checked too (fix 4)", () => {
+  it("booking two DIFFERENT rooms for overlapping meetings sharing a participant is blocked (409 CALENDAR_CONFLICT) unless acknowledged", async () => {
     const start = new Date(Date.now() + 20 * 86_400_000);
     const end = new Date(start.getTime() + 60 * 60_000);
     // Meeting Y overlaps meeting X by 30 minutes, same shared participant.
@@ -201,32 +221,73 @@ describe("calendar booking route: room conflict is checked, participant conflict
     const roomA = await createRoom("Committee Room A");
     const roomB = await createRoom("Committee Room B");
 
-    const bookingA = randomUUID();
-    await run(msg(COMMANDS.roomBook, { bookingId: bookingA, tenantId: TENANT, meetingId: meetingX, roomId: roomA, startAt: start.toISOString(), endAt: end.toISOString() }));
-
-    // The route-level pre-check as actually implemented: window + roomId only, no participantIds.
-    // checkConflicts reads via scopedRead (db.transaction), which sources the RLS `app.tenant_id`
-    // GUC from AsyncLocalStorage (shared/db.ts) -- exactly like a real request's tenant-tx hook --
-    // so this must run inside runWithTenant or a FORCE-RLS table fails closed to zero rows.
-    const report = await runWithTenant(TENANT, () =>
-      calendarRepo.checkConflicts(TENANT, { window: { start: overlapStart, end: overlapEnd }, roomId: roomB }),
+    // Book room A for meeting X through the REAL route (this is the code path fix 4 changes).
+    const bookARes = await app.inject({
+      method: "POST",
+      url: "/v1/meetings/calendar/bookings",
+      headers: writeHeaders(ACTOR, ["committee_secretary"]),
+      payload: { meetingId: meetingX, roomId: roomA, startAt: start.toISOString(), endAt: end.toISOString() },
+    });
+    expect(bookARes.statusCode).toBe(202);
+    await run(
+      msg(COMMANDS.roomBook, {
+        bookingId: bookARes.json().data.id,
+        tenantId: TENANT,
+        meetingId: meetingX,
+        roomId: roomA,
+        startAt: start.toISOString(),
+        endAt: end.toISOString(),
+      }),
     );
-    expect(report.room.length).toBe(0); // different room -> route would return 202, not 409
 
-    const bookingB = randomUUID();
-    await run(msg(COMMANDS.roomBook, { bookingId: bookingB, tenantId: TENANT, meetingId: meetingY, roomId: roomB, startAt: overlapStart.toISOString(), endAt: overlapEnd.toISOString() }));
+    // Book a DIFFERENT room (B) for the overlapping meeting Y, sharing SHARED_MEMBER, WITHOUT
+    // passing participantIds -- the route still only checks the room by default (unchanged
+    // behavior for a caller who doesn't ask for the participant check).
+    const noParticipantCheckRes = await app.inject({
+      method: "POST",
+      url: "/v1/meetings/calendar/bookings",
+      headers: writeHeaders(ACTOR, ["committee_secretary"]),
+      payload: { meetingId: meetingY, roomId: roomB, startAt: overlapStart.toISOString(), endAt: overlapEnd.toISOString() },
+    });
+    expect(noParticipantCheckRes.statusCode).toBe(202); // different room, no participantIds requested -> still fine
 
-    const bookings = await tenantQuery(
-      (sql) => sql`SELECT meeting_id, room_id, status FROM meeting.room_bookings WHERE tenant_id = ${TENANT} AND id IN (${bookingA}, ${bookingB})`,
-    );
-    expect((bookings as any[]).length).toBe(2);
-    expect((bookings as any[]).every((b) => b.status === "confirmed")).toBe(true);
-    // SHARED_MEMBER is now double-booked across meetingX and meetingY for an overlapping
-    // 30-minute window, in two different rooms, and the system recorded both bookings as
-    // confirmed with no conflict raised at any layer.
+    // Now request the SAME booking WITH participantIds -- fix 4 wires this through to
+    // checkConflicts and surfaces a 409 CALENDAR_CONFLICT (a distinct code from
+    // ROOM_DOUBLE_BOOKED) instead of silently allowing it.
+    const conflictRes = await app.inject({
+      method: "POST",
+      url: "/v1/meetings/calendar/bookings",
+      headers: writeHeaders(ACTOR, ["committee_secretary"]),
+      payload: {
+        meetingId: meetingY,
+        roomId: roomB,
+        startAt: overlapStart.toISOString(),
+        endAt: overlapEnd.toISOString(),
+        participantIds: [SHARED_MEMBER],
+      },
+    });
+    expect(conflictRes.statusCode).toBe(409);
+    expect(conflictRes.json().code).toBe("CALENDAR_CONFLICT");
+
+    // Acknowledging the conflict lets the same request through (warn-with-explicit-waiver,
+    // matching this service's shortNoticeWaiver precedent).
+    const ackRes = await app.inject({
+      method: "POST",
+      url: "/v1/meetings/calendar/bookings",
+      headers: writeHeaders(ACTOR, ["committee_secretary"]),
+      payload: {
+        meetingId: meetingY,
+        roomId: roomB,
+        startAt: overlapStart.toISOString(),
+        endAt: overlapEnd.toISOString(),
+        participantIds: [SHARED_MEMBER],
+        acknowledgeConflicts: true,
+      },
+    });
+    expect(ackRes.statusCode).toBe(202);
   });
 
-  it("the underlying conflict machinery CAN detect this — it is simply never wired to participantIds by the route", async () => {
+  it("the underlying conflict machinery CAN detect this — the route now wires participantIds through to it", async () => {
     const start = new Date(Date.now() + 30 * 86_400_000);
     const end = new Date(start.getTime() + 60 * 60_000);
     const overlapStart = new Date(start.getTime() + 15 * 60_000);

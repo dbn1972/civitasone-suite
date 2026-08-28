@@ -79,6 +79,21 @@ export const bookRoomSchema = z
     roomId: uuid,
     startAt: isoDateTime,
     endAt: isoDateTime,
+    /**
+     * Mandatory-participant ids to conflict-check the proposed window against (Req 14.3, P28
+     * completeness fix). `calendar/repo.ts#checkConflicts` already supported this — the field
+     * simply never existed on this request schema for the route to pass it through. Optional /
+     * omitted preserves the previous room-only check exactly.
+     */
+    participantIds: z.array(uuid).max(500).optional(),
+    /**
+     * Explicit override to book anyway despite a detected participant conflict (mirrors this
+     * service's existing warn-with-explicit-waiver precedent, `meeting-core`'s
+     * `shortNoticeWaiver` — scheduling is REJECTED unless the caller explicitly acknowledges).
+     * Has no effect on a ROOM conflict, which stays a hard block (409 `ROOM_DOUBLE_BOOKED`,
+     * unchanged) — only a participant-calendar clash is soft enough to override.
+     */
+    acknowledgeConflicts: z.boolean().optional().default(false),
   })
   .refine((b) => Date.parse(b.endAt) > Date.parse(b.startAt), {
     message: "endAt must be strictly after startAt",

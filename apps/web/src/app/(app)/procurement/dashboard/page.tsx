@@ -26,7 +26,7 @@ export default async function ProcurementDashboardPage() {
           <>
             <Link href="/procurement/indents" className="btn ghost">View all</Link>
             <Link href="/procurement/indents/new" className="btn primary">+ New Indent</Link>
-            {source === "error" ? <DataSourceBadge source={source} /> : null}
+            {source === "error" ? <DataSourceBadge source={source} message="Couldn't load — showing nothing" /> : null}
           </>
         }
       />

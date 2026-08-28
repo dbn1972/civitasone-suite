@@ -16,6 +16,11 @@ import {
 export default async function VoiceOfCitizenPage() {
   const { data: summary, source } = await getCrmSentimentSummary();
 
+  // The loader falls back to an all-zero summary on a failed fetch (there's no
+  // sensible non-zero default for an aggregate), so every figure below must be
+  // gated on source==="error" too — otherwise a failed load reads as "citizen
+  // sentiment is neutral and nothing was scored" instead of "unavailable".
+  const isError = source === "error";
   const mood = moodOf(summary);
   const themes = rankThemes(summary);
   const concern = topConcern(summary);
@@ -43,25 +48,25 @@ export default async function VoiceOfCitizenPage() {
           icon={MOOD_ICON[mood]}
           iconBg={MOOD_ICON_BG[mood]}
           label="Overall Sentiment"
-          value={MOOD_LABEL[mood]}
+          value={isError ? "—" : MOOD_LABEL[mood]}
         />
         <StatCard
           icon="▣"
           iconBg="#e0f2fe"
           label="Interactions Scored"
-          value={summary.total.toLocaleString("en-IN")}
+          value={isError ? "—" : summary.total.toLocaleString("en-IN")}
         />
         <StatCard
           icon="△"
           iconBg="#fee2e2"
           label="Negative Share"
-          value={summary.total === 0 ? "—" : `${summary.negativeShare}%`}
+          value={isError || summary.total === 0 ? "—" : `${summary.negativeShare}%`}
         />
         <StatCard
           icon="◈"
           iconBg="#fef3c7"
           label="Primary Concern"
-          value={concern ? themeLabel(concern.theme) : "None"}
+          value={isError ? "—" : concern ? themeLabel(concern.theme) : "None"}
         />
       </StatGrid>
 
@@ -81,25 +86,25 @@ export default async function VoiceOfCitizenPage() {
             icon="▲"
             iconBg="#dcfce7"
             label="Positive"
-            value={`${summary.byPolarity.positive.toLocaleString("en-IN")} (${shareOf(summary, "positive")}%)`}
+            value={isError ? "—" : `${summary.byPolarity.positive.toLocaleString("en-IN")} (${shareOf(summary, "positive")}%)`}
           />
           <StatCard
             icon="○"
             iconBg="#fef3c7"
             label="Neutral"
-            value={`${summary.byPolarity.neutral.toLocaleString("en-IN")} (${shareOf(summary, "neutral")}%)`}
+            value={isError ? "—" : `${summary.byPolarity.neutral.toLocaleString("en-IN")} (${shareOf(summary, "neutral")}%)`}
           />
           <StatCard
             icon="▽"
             iconBg="#fee2e2"
             label="Negative"
-            value={`${summary.byPolarity.negative.toLocaleString("en-IN")} (${shareOf(summary, "negative")}%)`}
+            value={isError ? "—" : `${summary.byPolarity.negative.toLocaleString("en-IN")} (${shareOf(summary, "negative")}%)`}
           />
           <StatCard
             icon="▣"
             iconBg="#e0e7ff"
             label="Average Score"
-            value={summary.total === 0 ? "—" : `${summary.averageScore} / 100`}
+            value={isError || summary.total === 0 ? "—" : `${summary.averageScore} / 100`}
           />
         </StatGrid>
       </Card>

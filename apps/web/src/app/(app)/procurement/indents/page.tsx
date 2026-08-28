@@ -1,8 +1,9 @@
 import Link from "next/link";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
-import { PageHeader, StatGrid, StatCard, Card, DataTable, EmptyState } from "../../../_components/ds";
+import { PageHeader, StatGrid, StatCard, Card, DataTable, EmptyState, ErrorState } from "../../../_components/ds";
 import { getProcurementIndents } from "../../../_data/loaders";
 import { formatIndianDate } from "@/lib/formatters";
+import { toHumanError } from "@/lib/messages";
 
 const STATUS_LABELS: Record<string, string> = {
   draft: "Draft",
@@ -51,7 +52,7 @@ export default async function IndentsPage() {
         actions={
           <>
             <Link href="/procurement/indents/new" className="btn primary">+ New Indent</Link>
-            {source === "error" ? <DataSourceBadge source={source} /> : null}
+            {source === "error" ? <DataSourceBadge source={source} message="Couldn't load — showing nothing" /> : null}
           </>
         }
       />
@@ -65,12 +66,8 @@ export default async function IndentsPage() {
 
       <Card title="All indents">
         {source === "error" ? (
-          <EmptyState
-            icon="⚠️"
-            title="Couldn’t load indents"
-            message="The procurement service didn’t respond. Check your connection and try again."
-            action={<Link href="/procurement/indents" className="btn ghost">Retry</Link>}
-          />
+          // L4 fix: see tenders/page.tsx for the same fix and rationale.
+          <ErrorState error={toHumanError("load", { area: "indents" })} backHref="/procurement/indents" />
         ) : rows.length === 0 ? (
           <EmptyState
             icon="📋"

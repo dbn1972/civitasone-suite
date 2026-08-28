@@ -8,6 +8,7 @@ import { listBoqItems, getRecapitulation, listAllBoqItems, getBoqItemById } from
 import { canEnterBoq, canModifyBoq } from "./domain.js";
 import { hasFinalizedTsForWork } from "../approval/repo.js";
 import { hasTenderForWork, hasPreTenderForWork } from "../tender/repo.js";
+import { getProposal } from "../proposal/repo.js";
 import { paginationSchema } from "../masters/validators.js";
 
 /** BR-015 input: "tender details exist" for the work (checks both the
@@ -30,10 +31,26 @@ export async function boqRoutes(app: FastifyInstance): Promise<void> {
   });
 
   // List BoQ items for a work
+  //
+  // Bug fix (works-deep-verify, MEDIUM/L1): this never checked that `workId`
+  // refers to a real work — listBoqItems() just runs a WHERE that legitimately
+  // (and silently) matches zero rows for ANY id, real or not. Confirmed live:
+  // GET /v1/works/boq/<random-uuid> returned 200 {"data":[]}, identical to a
+  // real work with no BoQ entered yet. Because the frontend
+  // (apps/web/.../works/boq/[workId]/page.tsx) only calls notFound() when
+  // BOTH the items call AND the recapitulation call report source:"error",
+  // and the items call never failed, /works/boq/<bogus-id> rendered a normal
+  // "Bill of Quantities" page instead of 404ing — the exact "detail routes
+  // 404 cleanly for a bogus id" failure mode this pass targets. Every other
+  // :id/:workId detail route in this service (contractor, masters, proposal)
+  // already validates existence and 404s; this brings boq in line with that
+  // convention instead of pushing the check into the frontend.
   app.get("/v1/works/boq/:workId", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, READ_ROLES);
     const { workId } = req.params as { workId: string };
+    const work = await getProposal(ctx.tenantId, workId);
+    if (!work) throw new HttpError(404, "NOT_FOUND", "work not found");
     const data = await listBoqItems(ctx.tenantId, workId);
     return reply.send({ data });
   });

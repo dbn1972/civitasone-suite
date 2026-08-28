@@ -1,4 +1,4 @@
-import { eq, and, sql } from "drizzle-orm";
+import { eq, and, sql, isNull } from "drizzle-orm";
 import { scopedRead, type ScopedTx } from "../../shared/db.js";
 import { eventPostInspections, type PostInspectionRow, type PostInspectionInsert } from "./schema.js";
 
@@ -31,7 +31,7 @@ export async function updateDepositDecision(
   depositDecision: string,
   refundMinor: bigint,
   updatedBy: string,
-): Promise<boolean> {
+): Promise<PostInspectionRow | null> {
   const result = await tx.update(eventPostInspections)
     .set({
       depositDecision,
@@ -40,7 +40,14 @@ export async function updateDepositDecision(
       updatedAt: new Date(),
       version: sql`${eventPostInspections.version} + 1`,
     })
-    .where(and(eq(eventPostInspections.id, id), eq(eventPostInspections.tenantId, tenantId)))
-    .returning({ id: eventPostInspections.id });
-  return result.length > 0;
+    .where(and(
+      eq(eventPostInspections.id, id),
+      eq(eventPostInspections.tenantId, tenantId),
+      // Atomic equivalent of canDecideDeposit's `depositDecision === null` — a
+      // duplicate/racing deposit-decide command can no longer silently
+      // overwrite an already-decided deposit.
+      isNull(eventPostInspections.depositDecision),
+    ))
+    .returning();
+  return result[0] ?? null;
 }

@@ -72,6 +72,37 @@ const SERVICES = [
   // Gateway owns civitas_gateway (api catalogue). Was the only service with a
   // migrations/ dir missing from this list.
   { name: "gateway-service",    db: "civitas_gateway" },
+  // Municipal Sec5 — of the 17 BRD Sec5 scaffolds (see ecosystem.config.js),
+  // only advertisement-service, animal-service, and vendor-service ship a
+  // migrations/0001_initial.sql; the other 14 have no migrations directory at
+  // all yet. All three below are now wired into ecosystem.config.js / gateway
+  // registry.ts (re-verified 2026-08-27, all 17 typecheck/build clean), so all
+  // three need to be here too or migrate-all never provisions their schemas.
+  { name: "advertisement-service", db: "civitas_advertisement" },
+  { name: "animal-service",        db: "civitas_animal" },
+  { name: "vendor-service",        db: "civitas_vendor" },
+  // Municipal Sec5 batch 2 (deep-verification pass, 2026-08-27): these 5 had
+  // no migrations/0001_initial.sql either — same gap as the 11 other Sec5
+  // scaffolds still missing one. Written to match each service's
+  // src/modules/*/schema.ts exactly (see PR adding these 5 migration files).
+  { name: "parks-service",   db: "civitas_parks" },
+  { name: "refund-service",  db: "civitas_refund" },
+  { name: "roadcut-service", db: "civitas_roadcut" },
+  { name: "shop-service",    db: "civitas_shop" },
+  { name: "trade-service",   db: "civitas_trade" },
+  // Municipal Sec5 batch 3 (deep-verification pass, 2026-08-27): all 6
+  // municipal services in this batch (crematorium, drainage, event, fire,
+  // market, parking) had no migrations/0001_initial.sql either, until this
+  // same pass wrote them — CI's migrate-all-inventory test caught this
+  // directly (parking-service PR #799: "expected ['parking-service'] to
+  // deeply equal []"). fire-service (#825) already merged to main without
+  // this entry, so this also backfills that gap.
+  { name: "crematorium-service", db: "civitas_crematorium" },
+  { name: "drainage-service",    db: "civitas_drainage" },
+  { name: "event-service",       db: "civitas_event" },
+  { name: "fire-service",        db: "civitas_fire" },
+  { name: "market-service",      db: "civitas_market" },
+  { name: "parking-service",     db: "civitas_parking" },
 ];
 
 let applied = 0;
@@ -101,7 +132,7 @@ for (const svc of SERVICES) {
     const sql = readFileSync(filePath);
     try {
       execSync(
-        `docker exec -i civitasone-postgres psql -U civitas_admin -d ${svc.db}`,
+        `docker exec -i civitasone-postgres psql -U civitas_admin -d ${svc.db} -v ON_ERROR_STOP=1`,
         { input: sql, stdio: ["pipe", "pipe", "pipe"] }
       );
       console.log(`[ok]   ${svc.name}/${file} → ${svc.db}`);

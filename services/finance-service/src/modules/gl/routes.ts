@@ -8,13 +8,23 @@ import * as commands from "./commands.js";
 import * as queries from "./queries.js";
 
 const FINANCE_ROLES = ["finance_officer", "finance_admin", "super_admin"];
-const FINANCE_ADMIN_ROLES = ["finance_admin", "super_admin"];
 const READER_ROLES  = [...FINANCE_ROLES, "audit_officer"];
 
 export async function glRoutes(app: FastifyInstance): Promise<void> {
+  // NOTE (flagged for explicit review): this was FINANCE_ROLES (includes
+  // finance_officer) until commit 1bf09e5c ("API validation — bigint
+  // monetary types, error handlers, pagination offset, period YYYY-MM")
+  // silently narrowed it to FINANCE_ADMIN_ROLES as a side effect of an
+  // unrelated diff — the commit message never mentions a role/permission
+  // change. Every sibling finance-officer-facing endpoint in this file
+  // (reverse, ledger, journals list, trial balance) still uses
+  // FINANCE_ROLES, so a normal finance officer could see the GL and the
+  // journal-entry form but got a 403 on the one action the page exists for.
+  // Restored to match; if finance_officer posting journals unattended was in
+  // fact an intentional tightening, re-narrow this deliberately instead.
   app.post("/v1/finance/journals", { config: { rateLimit: { max: 10, timeWindow: "1 minute" } } }, async (req, reply) => {
     const ctx = resolveContext(req);
-    requireRole(ctx, FINANCE_ADMIN_ROLES);
+    requireRole(ctx, FINANCE_ROLES);
     const body = postJournalBody.parse(req.body);
     return sendAccepted(reply, acceptedResponseSchema, await commands.postJournal(ctx, body));
   });

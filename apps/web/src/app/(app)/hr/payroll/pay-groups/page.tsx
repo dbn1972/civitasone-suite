@@ -41,7 +41,7 @@ export default async function PayGroupsPage() {
         subtitle="Groups of employees paid on a common schedule (monthly, bi-weekly, or weekly)."
         back="/hr/payroll"
       />
-      <DataSourceBadge source={source} />
+      <DataSourceBadge source={source} message="Couldn't load — showing nothing" />
 
       <StatGrid>
         <StatCard icon="👥" iconBg="var(--infobg)" label="Total Pay Groups" value={groups.length} />

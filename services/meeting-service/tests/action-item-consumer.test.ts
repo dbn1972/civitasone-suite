@@ -125,6 +125,12 @@ function assignMsg(actionItemId: string, opts: { deadline?: string; priority?: s
 beforeAll(async () => {
   await sqlClient.begin(async (sql) => {
     await sql`select set_config('app.tenant_id', ${TENANT}, true)`;
+    // Fix 8: meeting.meetings.committee_id now carries a real FK to meeting.committees — this
+    // fixture's meetings reference COMMITTEE, so a row for it must actually exist.
+    await sql`
+      insert into meeting.committees (id, tenant_id, name, code, type, constitution_date, quorum_rule, created_by, updated_by)
+      values (${COMMITTEE}, ${TENANT}, 'Action Item Test Committee', 'AIC', 'standing', '2025-01-01', ${'{"minMembers":2}'}::jsonb, ${ACTOR}, ${ACTOR})
+      on conflict (id) do nothing`;
     // Source meeting: in-progress (actual_start_at set) so deadlines validate against it (P19).
     await sql`
       insert into meeting.meetings

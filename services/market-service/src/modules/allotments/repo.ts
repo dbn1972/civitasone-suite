@@ -1,4 +1,4 @@
-import { eq, and, sql, desc } from "drizzle-orm";
+import { eq, and, sql, desc, inArray } from "drizzle-orm";
 import { scopedRead, type ScopedTx } from "../../shared/db.js";
 import { marketAllotments, type AllotmentRow, type AllotmentInsert } from "./schema.js";
 
@@ -48,9 +48,10 @@ export async function updateStatus(
   id: string,
   tenantId: string,
   status: string,
+  fromStatuses: readonly string[],
   updatedBy: string,
-  extra?: { allotmentDate?: string; agreementStartDate?: string; agreementEndDate?: string },
-): Promise<boolean> {
+  extra?: { allotmentDate?: string; agreementStartDate?: string; agreementEndDate?: string; allotteeName?: string | undefined; allotteeAadhaar?: string | null | undefined },
+): Promise<AllotmentRow | null> {
   const result = await tx.update(marketAllotments)
     .set({
       status,
@@ -59,9 +60,15 @@ export async function updateStatus(
       ...(extra?.allotmentDate ? { allotmentDate: extra.allotmentDate } : {}),
       ...(extra?.agreementStartDate ? { agreementStartDate: extra.agreementStartDate } : {}),
       ...(extra?.agreementEndDate ? { agreementEndDate: extra.agreementEndDate } : {}),
+      ...(extra?.allotteeName ? { allotteeName: extra.allotteeName } : {}),
+      ...(extra?.allotteeAadhaar !== undefined ? { allotteeAadhaar: extra.allotteeAadhaar } : {}),
       version: sql`${marketAllotments.version} + 1`,
     })
-    .where(and(eq(marketAllotments.id, id), eq(marketAllotments.tenantId, tenantId)))
-    .returning({ id: marketAllotments.id });
-  return result.length > 0;
+    .where(and(
+      eq(marketAllotments.id, id),
+      eq(marketAllotments.tenantId, tenantId),
+      inArray(marketAllotments.status, fromStatuses as string[]),
+    ))
+    .returning();
+  return result[0] ?? null;
 }

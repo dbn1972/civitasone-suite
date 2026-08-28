@@ -28,7 +28,15 @@ type Policy = {
 
 type PolicyRow = Policy & Record<string, unknown>;
 
-const EMPLOYEE_TYPES = ["permanent", "contractual", "vendor_deputed", "deputation", "consultant"];
+// Kept in sync with employeeTypeEnum in policy-admin-routes.ts and
+// CreateLeavePolicyForm's own EMPLOYEE_TYPES — previously only 5 of the 9
+// backend-supported types were listed here, so a policy created for e.g.
+// "temporary" or "intern" (allowed by the create form and the backend
+// validator) had no dedicated filter button, only "All Types".
+const EMPLOYEE_TYPES = [
+  "permanent", "contractual", "vendor_deputed", "deputation", "consultant",
+  "temporary", "intern", "apprentice", "volunteer",
+];
 
 const TYPE_VARIANT: Record<string, string> = {
   permanent: "info",
@@ -123,6 +131,12 @@ export default function LeavePoliciesPage() {
     }
   }
 
+  async function handlePolicyCreated() {
+    setToast({ tone: "good", text: "Policy created successfully." });
+    await fetchPolicies();
+    setTimeout(() => setToast(null), 4000);
+  }
+
   const editingPolicy = policies.find((p) => p.id === editId) ?? null;
   const rows: PolicyRow[] = policies as PolicyRow[];
 
@@ -135,10 +149,10 @@ export default function LeavePoliciesPage() {
       <DataSourceBadge source={state === "error" ? "error" : "api"} />
       {state === "ready" && policies.length > 0 && (
         <StatGrid>
-          <StatCard icon="\U0001f4cb" iconBg="#e6f0ff" label="Total Policies"   value={policies.length} />
+          <StatCard icon="\ud83d\udccb" iconBg="#e6f0ff" label="Total Policies"   value={policies.length} />
           <StatCard icon="\u2705"       iconBg="#e6f7f0" label="Active"           value={policies.filter((p) => p.isActive).length} />
-          <StatCard icon="\U0001f501" iconBg="#fff7e6" label="Carry Forward"    value={policies.filter((p) => p.carryForward).length} />
-          <StatCard icon="\U0001f4b0" iconBg="#f5f5f5" label="Encashable"       value={policies.filter((p) => p.encashable).length} />
+          <StatCard icon="\ud83d\udd01" iconBg="#fff7e6" label="Carry Forward"    value={policies.filter((p) => p.carryForward).length} />
+          <StatCard icon="\ud83d\udcb0" iconBg="#f5f5f5" label="Encashable"       value={policies.filter((p) => p.encashable).length} />
         </StatGrid>
       )}
 
@@ -162,6 +176,8 @@ export default function LeavePoliciesPage() {
           {toast.text}
         </p>
       )}
+
+      <CreateLeavePolicyForm onCreated={() => void handlePolicyCreated()} />
 
       <Card title="Leave Policies">
         {state === "loading" ? (

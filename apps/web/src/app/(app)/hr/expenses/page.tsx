@@ -67,7 +67,7 @@ export default async function ExpensesPage() {
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader title="Expense Claims" subtitle="Employee expense claims with approval tracking." back="/hr" />
-      <DataSourceBadge source={source} />
+      <DataSourceBadge source={source} message="Couldn't load — showing nothing" />
       <StatGrid>
         <StatCard icon="🧾" iconBg="#e6f0ff" label="Total Claims" value={items.length} />
         <StatCard icon="✅" iconBg="#e6f7f0" label="Approved" value={approved} />

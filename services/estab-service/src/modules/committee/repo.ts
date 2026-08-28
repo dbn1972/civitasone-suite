@@ -1,7 +1,7 @@
 import { eq, and } from "drizzle-orm";
 import { db } from "../../shared/db.js";
-import { estabCommittees, estabMeetings, estabResolutions, estabCompliance } from "./schema.js";
-import type { CommitteeInsert, MeetingInsert, MeetingRow, ResolutionInsert, ResolutionRow, ComplianceRow } from "./schema.js";
+import { estabCommittees, estabMeetings, estabResolutions, estabAttendees, estabCompliance } from "./schema.js";
+import type { CommitteeInsert, MeetingInsert, MeetingRow, ResolutionInsert, ResolutionRow, AttendeeRow, ComplianceRow } from "./schema.js";
 
 export type Writer = Pick<typeof db, "insert" | "update" | "select">;
 
@@ -36,6 +36,17 @@ export async function countResolutions(tx: Writer, meetingId: string): Promise<n
 export async function findResolutionsByMeeting(meetingId: string, tenantId: string): Promise<ResolutionRow[]> {
   return db.transaction((tx) => tx.select().from(estabResolutions)
     .where(and(eq(estabResolutions.meetingId, meetingId), eq(estabResolutions.tenantId, tenantId))));
+}
+
+// Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
+// before this read — a bare db.select() runs with no RLS GUC set. Mirrors
+// findResolutionsByMeeting exactly (queries.ts uses both to populate the real
+// attendeesCount/agendaItemsCount on MeetingSummary -- these previously had
+// no backing query at all and silently defaulted to 0 via the zod schema's
+// `.default(0)`).
+export async function findAttendeesByMeeting(meetingId: string, tenantId: string): Promise<AttendeeRow[]> {
+  return db.transaction((tx) => tx.select().from(estabAttendees)
+    .where(and(eq(estabAttendees.meetingId, meetingId), eq(estabAttendees.tenantId, tenantId))));
 }
 
 export async function insertCommittee(tx: Writer, row: CommitteeInsert): Promise<void> {

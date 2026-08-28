@@ -93,6 +93,6 @@ describe("BillsPage", () => {
     const ui = await BillsPage({ searchParams: { assesseeId: "a1" } });
     render(ui);
 
-    expect(screen.getAllByText("Showing saved information").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Couldn't load — showing nothing").length).toBeGreaterThan(0);
   });
 });

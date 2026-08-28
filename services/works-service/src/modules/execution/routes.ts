@@ -6,10 +6,14 @@ import * as v from "./validators.js";
 import * as commands from "./commands.js";
 import {
   listScopes, listIssues, listExecutionProgress, listAllIssues, listClosures,
-  getWorkScope, listScopeProgress,
+  getWorkScope, listScopeProgress, hasPhysicalCompletion,
 } from "./repo.js";
 import { getAward } from "../tender/repo.js";
-import { canRecordPhysicalCompletion, canApplyProgressDelta, validateProgressNotExceedTarget } from "./domain.js";
+import { listSplits } from "../proposal/repo.js";
+import {
+  canRecordPhysicalCompletion, canApplyProgressDelta, validateProgressNotExceedTarget,
+  closureEligibility, parentSplitConsistency,
+} from "./domain.js";
 import { paginationSchema } from "../masters/validators.js";
 
 const WRITE_ROLES = ["works_admin", "works_operator", "super_admin", "dao", "do", "sdo", "section_officer"];
@@ -133,10 +137,56 @@ export async function executionRoutes(app: FastifyInstance): Promise<void> {
   });
 
   // Close work
+  //
+  // Bug fix (works-deep-verify, HIGH/L3): closureEligibility() and
+  // parentSplitConsistency() were enforced ONLY inside the async consumer
+  // (execution/consumer.ts COMMANDS.workClose), which silently `return`s —
+  // no throw, no failure event, no audit trail — when the requested
+  // closureType doesn't match the work's real eligibility, or a split is
+  // still open. This route always answered 202 regardless, and the
+  // frontend (execution/[workId]/ExecutionActions.tsx) shows an
+  // unconditional "Work closed" success toast on any 202 — so an
+  // ineligible close request looked, to the officer who submitted it,
+  // identical to a real one, with nothing ever persisted. This is the same
+  // anti-pattern already found and fixed once in this file for
+  // recordProgress (see "Bug #3" below) — apply the same synchronous-check
+  // fix here; the consumer keeps its own check as defense in depth.
   app.post("/v1/works/execution/close", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ["dao", "do", "works_admin", "super_admin"]);
     const body = v.closeWorkSchema.parse(req.body);
+
+    const [award, hasCompletion, splits] = await Promise.all([
+      getAward(ctx.tenantId, body.workId),
+      hasPhysicalCompletion(ctx.tenantId, body.workId),
+      listSplits(ctx.tenantId, body.workId),
+    ]);
+    const hasAgreement = !!award && (award.status === "dao_finalized" || award.status === "do_finalized");
+    const eligibility = closureEligibility({
+      id: body.workId,
+      status: "",
+      hasAgreement,
+      hasSplits: splits.length > 0,
+      allSplitsClosed: splits.every((s) => s.status === "closed"),
+      hasPhysicalCompletion: hasCompletion,
+    });
+
+    // A pre-agreement work may legitimately be closed as EITHER "closed"
+    // (never tendered) or "dropped" (abandoned before physical completion);
+    // closureEligibility collapses that case to a single canonical value
+    // ("closed"). Mirrors the identical widening already in the consumer.
+    const preAgreementClose = !hasAgreement && (body.closureType === "closed" || body.closureType === "dropped");
+    if (eligibility === null || (eligibility !== body.closureType && !preAgreementClose)) {
+      throw new HttpError(
+        422,
+        "CLOSURE_NOT_ELIGIBLE",
+        `Work is not eligible for a '${body.closureType}' closure right now`,
+      );
+    }
+    if (!parentSplitConsistency("", splits.map((s) => ({ id: s.id, status: s.status })), body.closureType)) {
+      throw new HttpError(409, "SPLITS_NOT_CLOSED", "All splits must be closed before the parent work can be closed");
+    }
+
     return sendAccepted(reply, acceptedResponseSchema, await commands.closeWorkCommand(ctx, body));
   });
 

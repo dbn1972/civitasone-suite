@@ -451,3 +451,61 @@ export async function committeeExists(tenantId: string, committeeId: string): Pr
     .limit(1));
   return rows.length > 0;
 }
+
+// ─── Per-committee standing guards (Gap: the committee-standing gate fix 6 added to
+//     committee/voting routes was never applied to decision/routes.ts) ──────────────────────────
+
+/**
+ * Minimal parent-meeting reference used by the write routes to resolve the committee a meeting
+ * belongs to, so the per-committee standing check can be applied on a `meetingId`-keyed route.
+ * Uncached (cheap PK lookup) — mirrors `voting/repo.ts`'s `getMeetingRef` exactly so decision
+ * routes gate identically to voting's initiate/conclude.
+ */
+export interface MeetingRef {
+  id: string;
+  committeeId: string | null;
+  status: string;
+}
+
+export async function getMeetingRef(tenantId: string, meetingId: string): Promise<MeetingRef | null> {
+  const rows = await scopedRead((tx) => tx
+    .select({ id: meetings.id, committeeId: meetings.committeeId, status: meetings.status })
+    .from(meetings)
+    .where(and(eq(meetings.id, meetingId), eq(meetings.tenantId, tenantId)))
+    .limit(1));
+  return rows[0] ?? null;
+}
+
+/** An actor's own committee-membership row, for the per-committee ownership check on write routes. */
+export interface CommitteeMembershipRef {
+  role: string;
+  status: string;
+}
+
+/**
+ * Direct (uncached) lookup of `actorId`'s own ACTIVE membership on `committeeId` (Gap: systemic
+ * cross-committee IDOR — `decision/routes.ts`'s record/sign/update/circulation routes used to
+ * authorize purely on the caller's flat, tenant-wide role claim, so a flat `committee_secretary`
+ * / `committee_chairperson` with ZERO roster rows could record and sign a resolution for a
+ * committee they never served). Returns null when the caller has no active roster row on this
+ * SPECIFIC committee at all. Mirrors `voting/repo.ts`'s `getActiveMembership` exactly.
+ */
+export async function getActiveMembership(
+  tenantId: string,
+  committeeId: string,
+  actorId: string,
+): Promise<CommitteeMembershipRef | null> {
+  const rows = await scopedRead((tx) => tx
+    .select({ role: committeeMembers.role, status: committeeMembers.status })
+    .from(committeeMembers)
+    .where(
+      and(
+        eq(committeeMembers.tenantId, tenantId),
+        eq(committeeMembers.committeeId, committeeId),
+        eq(committeeMembers.memberId, actorId),
+        eq(committeeMembers.status, "active"),
+      ),
+    )
+    .limit(1));
+  return rows[0] ?? null;
+}

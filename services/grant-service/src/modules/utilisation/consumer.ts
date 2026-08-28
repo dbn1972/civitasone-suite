@@ -84,6 +84,19 @@ export function registerUtilisationConsumers(queue: Queue): void {
     };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
+      const uc = await repo.findUcByIdTx(tx, p.ucId, p.tenantId);
+      if (!uc) return;
+      // P0-4 SoD (defence in depth): never persist a validation decision
+      // when the validator is the same actor who submitted the UC.
+      if (uc.createdBy && uc.createdBy === msg.actorId) {
+        await enqueue(tx, {
+          topic: EVENTS.ucSodViolation, eventType: EVENTS.ucSodViolation,
+          tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+          payload: { ucId: p.ucId, applicationId: p.applicationId, reason: "SOD_VIOLATION: UC validator must differ from submitter" },
+        });
+        await audit(tx, msg, "uc_sod_violation", "grant_uc_statement", p.ucId);
+        return;
+      }
       await repo.insertUcValidation(tx, {
         id: p.id,
         tenantId: p.tenantId,

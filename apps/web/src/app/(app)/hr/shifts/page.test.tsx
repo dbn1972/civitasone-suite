@@ -22,8 +22,10 @@ describe("ShiftsPage", () => {
   it("renders shift definitions from API", async () => {
     fetchJsonMock.mockResolvedValue({ data: MOCK_SHIFTS, source: "api" });
     render(await ShiftsPage());
-    expect(screen.getByText("General Duty")).toBeInTheDocument();
-    expect(screen.getByText("Night Shift")).toBeInTheDocument();
+    // Each shift name legitimately appears twice by design: once in the
+    // ShiftCard grid above, once in the "All Shift Definitions" table row.
+    expect(screen.getAllByText("General Duty").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Night Shift").length).toBeGreaterThan(0);
   });
 
   it("renders stat cards with counts", async () => {
@@ -36,14 +38,14 @@ describe("ShiftsPage", () => {
   it("falls back to government standard shifts when API returns empty", async () => {
     fetchJsonMock.mockResolvedValue({ data: [], source: "api" });
     render(await ShiftsPage());
-    expect(screen.getByText("General Duty")).toBeInTheDocument();
-    expect(screen.getByText("09:00")).toBeInTheDocument();
+    expect(screen.getAllByText("General Duty").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("09:00").length).toBeGreaterThan(0);
   });
 
   it("shows link to shift change requests", async () => {
     fetchJsonMock.mockResolvedValue({ data: MOCK_SHIFTS, source: "api" });
     render(await ShiftsPage());
-    expect(screen.getByRole("link", { name: /change requests/i })).toHaveAttribute("href", "/hr/shifts/requests");
+    expect(screen.getByRole("link", { name: /change requests/i })).toHaveAttribute("href", "/hr/shift-requests");
   });
 
   it("renders ShiftCard view for shifts", async () => {

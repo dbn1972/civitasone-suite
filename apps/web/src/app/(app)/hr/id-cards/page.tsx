@@ -54,7 +54,7 @@ export default async function IdCardsPage() {
         subtitle="Issue, manage, and verify digital identity cards for employees and vendor staff."
         back="/hr"
       />
-      <DataSourceBadge source={source} />
+      <DataSourceBadge source={source} message="Couldn't load — showing nothing" />
       <StatGrid>
         <StatCard icon="🆔" iconBg="#e6f0ff" label="Total Cards"    value={items.length} />
         <StatCard icon="✅"          iconBg="#e6f7f0" label="Active"         value={active} />
@@ -71,7 +71,13 @@ export default async function IdCardsPage() {
           pageSize={20}
           emptyIcon="🆔"
           emptyTitle="No ID cards issued"
-          emptyMessage="ID cards for employees and vendor staff appear here once issued. Use the card management portal to issue cards."
+          // HR-A deep-verify finding: this pointed users at a "card management
+          // portal" that does not exist anywhere in the app (repo-wide grep
+          // confirms zero matches beyond this string) -- this page is a
+          // read-only list (no issue/suspend/revoke UI at all, though the
+          // backend fully supports all of it). Removed the dead reference
+          // rather than invent a destination.
+          emptyMessage="ID cards for employees and vendor staff appear here once issued by HR administration."
         />
       </Card>
     </main>

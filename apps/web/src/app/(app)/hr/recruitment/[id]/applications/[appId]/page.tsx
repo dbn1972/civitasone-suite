@@ -18,15 +18,15 @@ type Application = {
   mobile?: string;
   qualification?: string;
   experienceYears?: number;
+  skills?: string[];
   source: string;
   stage: string;
-  status: string;
-  jobOpeningId: string;
+  screeningDecision: string;
   appliedAt: string;
 };
 
 export default function ApplicationDetailPage() {
-  const { appId } = useParams<{ id: string; appId: string }>();
+  const { id: jobOpeningId, appId } = useParams<{ id: string; appId: string }>();
   const router = useRouter();
 
   const [application, setApplication] = useState<Application | null>(null);
@@ -54,14 +54,24 @@ export default function ApplicationDetailPage() {
   useEffect(() => {
     async function load() {
       try {
-        const res = await fetch(`/api/proxy/v1/hrms/applications/${appId}`);
+        // There is no GET /v1/hrms/applications/:id route (confirmed 404 against
+        // the live gateway) — only GET /v1/hrms/job-openings/:id/applications
+        // (a list) exists. Fetch the pipeline for this vacancy and find the one
+        // application we need, mirroring the same list-and-find pattern the
+        // parent job-opening page already uses for its own missing singular GET.
+        const res = await fetch(`/api/proxy/v1/hrms/job-openings/${jobOpeningId}/applications`);
         if (!res.ok) {
           setSource("error");
-          setError(res.status === 404 ? "Application not found." : `Failed to load (${res.status})`);
+          setError(`Failed to load (${res.status})`);
           return;
         }
-        const data = await res.json() as { payload?: Application } & Application;
-        setApplication(data.payload ?? data);
+        const data = await res.json() as { data?: Application[] };
+        const found = (data.data ?? []).find((a) => a.id === appId) ?? null;
+        if (!found) {
+          setError("Application not found.");
+          return;
+        }
+        setApplication(found);
       } catch {
         setSource("error");
         setError("Network error loading application.");
@@ -69,8 +79,8 @@ export default function ApplicationDetailPage() {
         setLoading(false);
       }
     }
-    if (appId) load();
-  }, [appId]);
+    if (appId && jobOpeningId) load();
+  }, [appId, jobOpeningId]);
 
   async function handleHire(e: React.FormEvent) {
     e.preventDefault();
@@ -114,7 +124,7 @@ export default function ApplicationDetailPage() {
   if (error || !application) {
     return (
       <main className="page-main wrap" aria-labelledby="page-heading">
-        <PageHeader title="Application" subtitle="Not found" back=".." />
+        <PageHeader title="Application" subtitle="Not found" back={`/hr/recruitment/${jobOpeningId}`} />
         <DataSourceBadge source={source} />
         <Card padding>
           <p style={{ color: "var(--mut)", textAlign: "center" }}>{error ?? "Application not found."}</p>
@@ -130,9 +140,9 @@ export default function ApplicationDetailPage() {
       <PageHeader
         title={application.applicantName}
         subtitle="Application detail"
-        back="."
+        back={`/hr/recruitment/${jobOpeningId}`}
         actions={
-          canHire ? (
+          canHire && hireStatus !== "success" ? (
             <button onClick={() => setShowHireDialog(true)} className="btn primary">
               Hire
             </button>
@@ -151,7 +161,7 @@ export default function ApplicationDetailPage() {
         <div style={{ padding: "16px 20px", display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px 24px", fontSize: 14 }}>
           <div><span style={{ color: "var(--mut)", marginRight: 8 }}>Application ID</span><code style={{ fontSize: 12 }}>{application.id}</code></div>
           <div><span style={{ color: "var(--mut)", marginRight: 8 }}>Stage</span><span style={{ textTransform: "capitalize" }}>{application.stage}</span></div>
-          <div><span style={{ color: "var(--mut)", marginRight: 8 }}>Status</span><span style={{ textTransform: "capitalize" }}>{application.status}</span></div>
+          <div><span style={{ color: "var(--mut)", marginRight: 8 }}>Screening decision</span><span style={{ textTransform: "capitalize" }}>{application.screeningDecision}</span></div>
           <div><span style={{ color: "var(--mut)", marginRight: 8 }}>Source</span>{application.source}</div>
           {application.email && <div><span style={{ color: "var(--mut)", marginRight: 8 }}>Email</span>{application.email}</div>}
           {application.qualification && <div><span style={{ color: "var(--mut)", marginRight: 8 }}>Qualification</span>{application.qualification}</div>}

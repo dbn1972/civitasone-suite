@@ -51,6 +51,6 @@ describe("SalaryRevisionsPage", () => {
     const ui = await SalaryRevisionsPage();
     render(ui);
 
-    expect(screen.getByText("Showing saved information")).toBeInTheDocument();
+    expect(screen.getByText("Couldn't load — showing nothing")).toBeInTheDocument();
   });
 });

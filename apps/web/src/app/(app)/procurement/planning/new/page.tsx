@@ -58,7 +58,7 @@ export default function NewAnnualPlanPage() {
       });
       const text = await res.text();
       if (!res.ok) { setStatus("error"); setMessage(text || "Request failed"); return; }
-      setStatus("accepted"); setMessage("Plan created.");
+      setStatus("accepted"); setMessage("Plan submitted. It will appear in the list shortly.");
       setTimeout(() => router.push("/procurement/planning"), 1200);
     } catch (err) {
       setStatus("error"); setMessage(err instanceof Error ? err.message : "Network error");

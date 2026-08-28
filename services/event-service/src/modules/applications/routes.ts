@@ -4,6 +4,7 @@ import { resolveContext, requireRole, HttpError } from "../../shared/context.js"
 import { cache } from "../../shared/infra.js";
 import * as repo from "./repo.js";
 import * as commands from "./commands.js";
+import { canTransition } from "./domain.js";
 
 const EVENT_ROLES = ["event_user", "event_admin", "super_admin"];
 
@@ -80,7 +81,7 @@ export async function applicationRoutes(app: FastifyInstance): Promise<void> {
     const { id } = idParam.parse(req.params);
     const existing = await repo.findById(id, ctx.tenantId);
     if (!existing) throw new HttpError(404, "APPLICATION_NOT_FOUND", "Application not found");
-    if (existing.status !== "draft") {
+    if (!canTransition(existing.status, "submitted")) {
       throw new HttpError(422, "INVALID_STATUS", `Cannot submit application in status '${existing.status}'`);
     }
     return reply.code(202).send(await commands.submitApplication(ctx, id));
@@ -92,7 +93,7 @@ export async function applicationRoutes(app: FastifyInstance): Promise<void> {
     const { id } = idParam.parse(req.params);
     const existing = await repo.findById(id, ctx.tenantId);
     if (!existing) throw new HttpError(404, "APPLICATION_NOT_FOUND", "Application not found");
-    if (!["draft", "submitted"].includes(existing.status)) {
+    if (!canTransition(existing.status, "withdrawn")) {
       throw new HttpError(422, "INVALID_STATUS", `Cannot withdraw application in status '${existing.status}'`);
     }
     return reply.code(202).send(await commands.withdrawApplication(ctx, id));

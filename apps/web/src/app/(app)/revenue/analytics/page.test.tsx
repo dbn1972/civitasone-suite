@@ -82,7 +82,7 @@ describe("RevenueAnalyticsPage", () => {
 
     const ui = await RevenueAnalyticsPage({ searchParams: {} });
     render(ui);
-    expect(screen.getAllByText("Showing saved information").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Couldn't load — showing nothing").length).toBeGreaterThan(0);
   });
 
   it("never fabricates ₹0.00 / 0% stat-card figures when the efficiency read fails", async () => {
@@ -102,6 +102,6 @@ describe("RevenueAnalyticsPage", () => {
     expect(screen.queryByText("₹0.00")).not.toBeInTheDocument();
     expect(screen.queryByText("0%")).not.toBeInTheDocument();
     expect(screen.getAllByText("—").length).toBeGreaterThanOrEqual(3);
-    expect(screen.getAllByText("Showing saved information").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Couldn't load — showing nothing").length).toBeGreaterThan(0);
   });
 });

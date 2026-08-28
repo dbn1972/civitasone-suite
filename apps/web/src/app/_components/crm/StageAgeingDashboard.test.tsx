@@ -42,7 +42,7 @@ describe("StageAgeingDashboard (OP-005)", () => {
   it("gates the ageing table on a failed fetch", async () => {
     vi.mocked(op.getStageAgeing).mockResolvedValue({ data: [], source: "error" });
     render(<StageAgeingDashboard />);
-    await waitFor(() => expect(screen.getAllByText(/showing saved information/i).length).toBeGreaterThan(0));
+    await waitFor(() => expect(screen.getAllByText(/couldn.t load/i).length).toBeGreaterThan(0));
   });
 
   it("creates a stage limit", async () => {

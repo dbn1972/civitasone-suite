@@ -19,7 +19,7 @@ export async function publishCommand(
   id: string,
   payload: Record<string, unknown>,
 ): Promise<Accepted> {
-  await queue.publish({
+  await queue.publish(type, {
     messageId: randomUUID(),
     type,
     tenantId: ctx.tenantId,

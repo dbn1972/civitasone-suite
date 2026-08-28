@@ -89,8 +89,10 @@ beforeAll(async () => {
     await sql`delete from meeting.resolutions where tenant_id = ${TENANT}`;
     await sql`delete from meeting.decisions where tenant_id = ${TENANT}`;
     await sql`delete from meeting.committee_members where tenant_id = ${TENANT}`;
-    await sql`delete from meeting.committees where tenant_id = ${TENANT}`;
+    await sql`delete from meeting.attendance_records where tenant_id = ${TENANT}`;
+    await sql`delete from meeting.participants where tenant_id = ${TENANT}`;
     await sql`delete from meeting.meetings where tenant_id = ${TENANT}`;
+    await sql`delete from meeting.committees where tenant_id = ${TENANT}`;
     await sql`delete from _outbox.messages where tenant_id = ${TENANT}`;
 
     await sql`
@@ -106,6 +108,21 @@ beforeAll(async () => {
       insert into meeting.meetings (id, tenant_id, type, title, status, committee_id, financial_year, scheduled_at, quorum_established, created_by, updated_by)
       values (${MEETING}, ${TENANT}, 'committee', 'Q1 Finance', 'in_progress', ${COMMITTEE}, '2025-26',
               '2025-06-01T09:00:00Z', true, ${ACTOR}, ${ACTOR})`;
+
+    // Gap 2: resolution.record now re-derives quorum LIVE from attendance and bounds the claimed
+    // aggregate tally by the present-member headcount. Seed enough present attendees to (a) meet
+    // quorum (minMembers 2) and (b) cover the largest aggregate tally any record test below
+    // supplies (total 4). Without this the handler correctly refuses to record on an empty room.
+    for (let i = 0; i < 4; i++) {
+      const participantId = randomUUID();
+      await sql`
+        insert into meeting.participants (id, tenant_id, meeting_id, employee_id, role, created_by, updated_by)
+        values (${participantId}, ${TENANT}, ${MEETING}, ${randomUUID()}, 'member', ${ACTOR}, ${ACTOR})`;
+      await sql`
+        insert into meeting.attendance_records
+          (id, tenant_id, meeting_id, participant_id, method, check_in_at, mode, status, created_by, updated_by)
+        values (${randomUUID()}, ${TENANT}, ${MEETING}, ${participantId}, 'manual', '2025-06-01T09:00:00Z', 'in_person', 'present', ${ACTOR}, ${ACTOR})`;
+    }
   });
 });
 
@@ -116,8 +133,10 @@ afterAll(async () => {
     await sql`delete from meeting.resolutions where tenant_id = ${TENANT}`;
     await sql`delete from meeting.decisions where tenant_id = ${TENANT}`;
     await sql`delete from meeting.committee_members where tenant_id = ${TENANT}`;
-    await sql`delete from meeting.committees where tenant_id = ${TENANT}`;
+    await sql`delete from meeting.attendance_records where tenant_id = ${TENANT}`;
+    await sql`delete from meeting.participants where tenant_id = ${TENANT}`;
     await sql`delete from meeting.meetings where tenant_id = ${TENANT}`;
+    await sql`delete from meeting.committees where tenant_id = ${TENANT}`;
     await sql`delete from _outbox.messages where tenant_id = ${TENANT}`;
   });
   await sqlClient.end();

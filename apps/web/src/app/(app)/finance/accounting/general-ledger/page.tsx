@@ -8,8 +8,12 @@ import { formatMoney } from "@/lib/formatters";
 export default async function GeneralLedgerPage() {
   const { data: entries, source } = await getFinanceGLEntries();
 
-  const totalDebit = entries.reduce((s, e) => s + e.debit, 0);
-  const totalCredit = entries.reduce((s, e) => s + e.credit, 0);
+  // debit/credit are minor-unit (paise) decimal strings — sum as BigInt, not
+  // float addition, so large ledgers can't drift and formatMoney() (which
+  // expects minor units) gets the right scale. See gl/queries.ts
+  // listJournalEntries for the backend side of this contract.
+  const totalDebit = entries.reduce((s, e) => s + BigInt(e.debit || "0"), 0n);
+  const totalCredit = entries.reduce((s, e) => s + BigInt(e.credit || "0"), 0n);
   const uniqueAccounts = new Set(entries.map((e) => e.accountCode)).size;
   const isBalanced = totalDebit === totalCredit;
 
@@ -34,7 +38,7 @@ export default async function GeneralLedgerPage() {
         <StatCard icon="📥" iconBg="#ecfdf3" label="Total Credit" value={formatMoney(totalCredit)} delta={isBalanced ? "Balanced" : "Unbalanced"} up={isBalanced} />
       </StatGrid>
 
-      <Card title="General ledger · FY 2026-27">
+      <Card title="General ledger — all fiscal years">
         <GLTable entries={entries} source={source} />
       </Card>
     </>

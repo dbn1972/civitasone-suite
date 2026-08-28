@@ -46,7 +46,7 @@ describe("InvoiceDetailPage", () => {
 
     expect(screen.getByText("Platform fee")).toBeInTheDocument();
     expect(screen.getByText("No e-invoice generated")).toBeInTheDocument();
-    expect(screen.queryByText("Showing saved information")).not.toBeInTheDocument();
+    expect(screen.queryByText("Couldn't load — showing nothing")).not.toBeInTheDocument();
   });
 
   it("renders e-invoice status when one exists", async () => {
@@ -95,6 +95,6 @@ describe("InvoiceDetailPage", () => {
     const ui = await InvoiceDetailPage({ params: { id: "inv-1" } });
     render(ui);
 
-    expect(screen.getByText("Showing saved information")).toBeInTheDocument();
+    expect(screen.getByText("Couldn't load — showing nothing")).toBeInTheDocument();
   });
 });

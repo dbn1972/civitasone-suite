@@ -9,11 +9,17 @@ export interface CreatePropertyInput {
   propertyCode: string;
   marketName: string;
   propertyType: string;
-  location?: { address?: string; ward?: string; zone?: string; lat?: number; lng?: number } | undefined;
+  location?: { address?: string | undefined; ward?: string | undefined; zone?: string | undefined; lat?: number | undefined; lng?: number | undefined } | undefined;
   area?: string | undefined;
   areaUnit?: string | undefined;
   floorNumber?: number | undefined;
-  monthlyRentMinor?: bigint | undefined;
+  // number, not bigint: goes straight into a queue.publish() payload that gets
+  // JSON.stringify'd on the real SQS/RabbitMQ drivers — a native bigint throws
+  // there ("Do not know how to serialize a BigInt"), silently only "working" in
+  // tests (MemoryQueue never serializes). The consumer converts to BigInt
+  // itself right before the Drizzle insert/update.
+  monthlyRentMinor?: number | undefined;
+  securityDepositMinor?: number | undefined;
 }
 
 export async function createProperty(ctx: RequestContext, body: CreatePropertyInput): Promise<Accepted> {
@@ -23,7 +29,13 @@ export async function createProperty(ctx: RequestContext, body: CreatePropertyIn
 
 export interface UpdatePropertyInput {
   marketName?: string | undefined;
-  monthlyRentMinor?: bigint | undefined;
+  // number, not bigint: goes straight into a queue.publish() payload that gets
+  // JSON.stringify'd on the real SQS/RabbitMQ drivers — a native bigint throws
+  // there ("Do not know how to serialize a BigInt"), silently only "working" in
+  // tests (MemoryQueue never serializes). The consumer converts to BigInt
+  // itself right before the Drizzle insert/update.
+  monthlyRentMinor?: number | undefined;
+  securityDepositMinor?: number | undefined;
   status?: string | undefined;
   area?: string | undefined;
   areaUnit?: string | undefined;

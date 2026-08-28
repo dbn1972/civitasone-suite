@@ -7,10 +7,11 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { randomUUID } from "node:crypto";
 import { eq, and } from "drizzle-orm";
-import { resolveContext, requireRole } from "../../shared/context.js";
+import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { scopedRead } from "../../shared/db.js";
 import { queue } from "../../shared/infra.js";
 import { COMMANDS } from "../../topics.js";
+import { assertOpeningBalancesBalanced, DomainError } from "./domain.js";
 import { pgSchema, uuid, varchar, integer, timestamp, bigint, text, date } from "drizzle-orm/pg-core";
 
 const FINANCE_ROLES = ["finance_admin", "super_admin"];
@@ -115,6 +116,19 @@ export async function fyRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, FINANCE_ROLES);
     const body = openingBalanceBody.parse(req.body);
+    // Server-side balanced-entry enforcement: the client's own "fail closed"
+    // balance check is trivially bypassable by a direct API call, which
+    // would otherwise let an unbalanced opening trial balance straight
+    // through. Mirrors gl/domain.ts's assertJournalBalances; the consumer
+    // below re-checks the same invariant right before insert so a caller
+    // that publishes the command directly (skipping this route) can't
+    // bypass it either.
+    try {
+      assertOpeningBalancesBalanced(body.entries);
+    } catch (err) {
+      if (err instanceof DomainError) throw new HttpError(400, err.code, err.message);
+      throw err;
+    }
     const id = randomUUID();
     const entries = body.entries.map((e) => ({
       id: randomUUID(),

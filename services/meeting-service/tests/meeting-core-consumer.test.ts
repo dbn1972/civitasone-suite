@@ -23,7 +23,12 @@ const TENANT = "aaaaaaaa-3c11-4a1a-9b2c-0000000003c0";
 const COMMITTEE = "bbbbbbbb-3c11-4a1a-9b2c-0000000003c0";
 const CHAIR = "f1111111-3c11-4a1a-9b2c-0000000003c0";
 const SECRETARY = "f0000000-3c11-4a1a-9b2c-0000000003c0";
-const ACTOR = "0a000000-3c11-4a1a-9b2c-0000000003c0";
+// IDOR fix (Req 1.1): update/transition/cancel now require the caller to actually be the
+// meeting's own chairperson/secretary. This suite's fixtures always set chairpersonId: CHAIR,
+// so ACTOR is aliased to CHAIR here (rather than a distinct identity) purely so every existing
+// write in this file keeps passing the new ownership check — none of these tests are ABOUT
+// ownership (that's integration-ownership-gaps.test.ts), they exercise the state machine.
+const ACTOR = CHAIR;
 
 // Capture the registered handlers by topic.
 const handlers = new Map<string, (msg: CommandEnvelope<any>) => Promise<void>>();

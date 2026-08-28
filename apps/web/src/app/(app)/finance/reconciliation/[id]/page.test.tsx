@@ -69,6 +69,6 @@ describe("ReconciliationRunDetailPage", () => {
     const ui = await ReconciliationRunDetailPage({ params: { id: RUN.id } });
     render(ui);
 
-    expect(screen.getAllByText("Showing saved information").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Couldn't load — showing nothing").length).toBeGreaterThan(0);
   });
 });

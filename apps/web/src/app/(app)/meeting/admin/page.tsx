@@ -23,7 +23,9 @@ export default async function MeetingAdminConfigPage() {
         back="/meeting"
         backLabel="Meeting"
       />
-      {source === "error" && <DataSourceBadge source={source} />}
+      {source === "error" && (
+        <DataSourceBadge source={source} message="Couldn't load — showing defaults below" />
+      )}
       <AdminConfig initialEntries={entries} initialSource={source} />
     </>
   );

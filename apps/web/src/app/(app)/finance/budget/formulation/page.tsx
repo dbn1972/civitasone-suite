@@ -7,8 +7,11 @@ import { formatMoney } from "@/lib/formatters";
 export default async function BudgetFormulationPage() {
   const { data: budgets, source } = await getFinanceBudgets();
 
-  const totalSanctioned = budgets.reduce((s, b) => s + b.sanctionedAmount, 0);
-  const totalExpenditure = budgets.reduce((s, b) => s + b.expenditure, 0);
+  // sanctionedAmount/expenditure are minor-unit (paise) decimal strings —
+  // sum as BigInt so formatMoney() gets the right scale and large budgets
+  // can't drift under float addition.
+  const totalSanctioned = budgets.reduce((s, b) => s + BigInt(b.sanctionedAmount || "0"), 0n);
+  const totalExpenditure = budgets.reduce((s, b) => s + BigInt(b.expenditure || "0"), 0n);
   const pending = budgets.filter((b) => b.status === "pending").length;
   const uniqueHeads = new Set(budgets.map((b) => b.majorHead)).size;
 
@@ -19,7 +22,10 @@ export default async function BudgetFormulationPage() {
         subtitle="Prepare departmental budget estimates by major/minor head."
         actions={
           <>
-            <a href="/finance/budget/formulation/new" className="btn ghost">Circular</a>
+            {/* "Circular" used to point at the same href as "+ New Estimate" —
+                there is no separate circular/notice feature to link to, so the
+                duplicate (misleading) action is removed rather than left as a
+                dead second button to the same form. */}
             <a href="/finance/budget/formulation/new" className="btn primary">+ New Estimate</a>
             {source === "error" ? <DataSourceBadge source={source} /> : null}
           </>
@@ -33,7 +39,7 @@ export default async function BudgetFormulationPage() {
         <StatCard icon="⏳" iconBg="#fef3f2" label="Pending Review" value={pending} />
       </StatGrid>
 
-      <Card title="Budget estimates (BE) · FY 2026-27">
+      <Card title="Budget estimates (BE) — all fiscal years">
         <FormulationTable budgets={budgets} source={source} />
       </Card>
     </>

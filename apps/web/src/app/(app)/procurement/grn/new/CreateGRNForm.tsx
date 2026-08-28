@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import { toHumanError } from "@/lib/messages";
 
 type VendorOption = { id: string; name: string };
 type POOption = { id: string; poNo: string; vendor?: string; vendorId?: string };
@@ -139,11 +140,13 @@ export function CreateGRNForm({ inspectorId }: { inspectorId: string }) {
       });
       const text = await res.text();
       if (!res.ok) {
+        const human = toHumanError("save", { area: "goods receipt note" });
         setStatus("error");
-        setMessage(text || `Create failed (${res.status})`);
+        setMessage(`${human.what} ${human.next}`);
         return;
       }
-      const parsed = JSON.parse(text) as { id?: string };
+      let parsed: { id?: string } = {};
+      try { parsed = JSON.parse(text) as { id?: string }; } catch { /* ignore */ }
       setStatus("accepted");
       setMessage("GRN recorded — three-way match computed on acceptance.");
       router.push(parsed.id ? `/procurement/grn/${parsed.id}` : "/procurement/grn");

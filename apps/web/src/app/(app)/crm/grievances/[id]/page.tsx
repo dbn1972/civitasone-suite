@@ -104,7 +104,7 @@ export default async function GrievanceDetailPage({
   const { data: g, source } = await fetchJson<unknown, GrievanceDetail | null>(
     `/api/v1/crm/grievances/${params.id}`,
     null,
-    { revalidateSeconds: 30, telemetryKey: "crm.grievance.detail",
+    { revalidateSeconds: 0, telemetryKey: "crm.grievance.detail",
       mapResponse: (p) => {
         if (p && typeof p === "object" && "data" in (p as object)) {
           return (p as { data: GrievanceDetail }).data;

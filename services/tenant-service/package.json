@@ -18,6 +18,7 @@
     "@civitasone/auth": "workspace:*",
     "@civitasone/cache": "workspace:*",
     "@civitasone/db": "workspace:*",
+    "@civitasone/rate-limit": "workspace:*",
     "@civitasone/events": "workspace:*",
     "@civitasone/observability": "workspace:*",
     "@civitasone/outbox": "workspace:*",

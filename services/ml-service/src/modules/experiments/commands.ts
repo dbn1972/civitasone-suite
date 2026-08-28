@@ -84,7 +84,13 @@ export async function experimentEnd(
   body: EndExperimentBody,
 ): Promise<Accepted> {
   const correlationId = ctx.correlationId ?? randomUUID();
-  const messageId = `${id}-${Date.now()}`;
+  // Must be a real UUID: markProcessed() inserts this as the primary key of
+  // _inbox.processed.message_id, which is `uuid NOT NULL`. The previous
+  // `${id}-${Date.now()}` value is not valid UUID syntax, so that insert threw
+  // on every single call, rolling back the whole consumer transaction — the
+  // HTTP route still returned 202 Accepted, but the experiment's status/endedAt
+  // never actually updated (fake success).
+  const messageId = randomUUID();
 
   await queue.publish(COMMANDS.experimentEnd, {
     messageId,

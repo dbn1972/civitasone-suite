@@ -3,6 +3,7 @@ import type { Queue } from "@civitasone/queue";
 import { db } from "../../shared/db.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { writeAudit } from "../../shared/audit.js";
+import { cache } from "../../shared/infra.js";
 import { tenantScoped } from "../../shared/tenant-queue.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
@@ -79,10 +80,12 @@ export function registerRegistrationConsumers(rawQueue: Queue): void {
 
   queue.subscribe(COMMANDS.submitRegistration, async (msg) => {
     const p = msg.payload as { id: string; tenantId: string };
+    let applied = false;
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       const ok = await repo.updateStatus(tx, p.id, msg.tenantId, "submitted", msg.actorId);
       if (!ok) return;
+      applied = true;
       await enqueue(tx, {
         topic: EVENTS.registrationSubmitted,
         eventType: EVENTS.registrationSubmitted,
@@ -97,14 +100,19 @@ export function registerRegistrationConsumers(rawQueue: Queue): void {
         resourceId: p.id,
       });
     });
+    // GET /v1/vendor/registrations/:id (registrations/routes.ts) reads
+    // through a cache that only this write path can invalidate (CLAUDE.md §6).
+    if (applied) await cache.invalidate(cache.makeKey(msg.tenantId, "registration", p.id));
   });
 
   queue.subscribe(COMMANDS.withdrawRegistration, async (msg) => {
     const p = msg.payload as { id: string; tenantId: string };
+    let applied = false;
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       const ok = await repo.updateStatus(tx, p.id, msg.tenantId, "withdrawn", msg.actorId);
       if (!ok) return;
+      applied = true;
       await enqueue(tx, {
         topic: EVENTS.registrationWithdrawn,
         eventType: EVENTS.registrationWithdrawn,
@@ -119,5 +127,6 @@ export function registerRegistrationConsumers(rawQueue: Queue): void {
         resourceId: p.id,
       });
     });
+    if (applied) await cache.invalidate(cache.makeKey(msg.tenantId, "registration", p.id));
   });
 }

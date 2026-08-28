@@ -2,11 +2,22 @@
 
 import { useRef, useState } from "react";
 
+/** Real metadata of the file that was just uploaded (from the browser File object). */
+export type UploadedFileMeta = {
+  fileName: string;
+  size: number;
+  mimeType: string;
+};
+
 /**
  * FileUpload — reusable file upload component that gets a pre-signed URL from
  * the backend, then uploads directly to S3. No file passes through the API server.
  *
  * Usage: <FileUpload category="resume" onUploaded={(key) => setResumeKey(key)} />
+ *
+ * `onUploaded`'s second argument carries the real fileName/size/mimeType from
+ * the browser File object, for callers whose backend record needs them (e.g.
+ * an attachment row) — existing callers that only read the key are unaffected.
  */
 export function FileUpload({
   category = "attachment",
@@ -19,7 +30,7 @@ export function FileUpload({
   accept?: string;
   label?: string;
   maxSizeMb?: number;
-  onUploaded?: (key: string) => void;
+  onUploaded?: (key: string, meta: UploadedFileMeta) => void;
 }) {
   const fileRef = useRef<HTMLInputElement>(null);
   const [status, setStatus] = useState<"idle" | "uploading" | "done" | "error">("idle");
@@ -70,7 +81,7 @@ export function FileUpload({
 
       setStatus("done");
       setMessage(`Uploaded: ${file.name}`);
-      onUploaded?.(key);
+      onUploaded?.(key, { fileName: file.name, size: file.size, mimeType: file.type });
     } catch {
       setStatus("error");
       setMessage("Network error during upload. Check your connection.");

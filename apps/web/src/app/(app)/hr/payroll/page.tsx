@@ -37,7 +37,7 @@ export default async function PayrollPage() {
         subtitle="Monthly salary processing and statutory run status."
         help="payroll"
       />
-      <DataSourceBadge source={source} />
+      <DataSourceBadge source={source} message="Couldn't load payroll runs — showing nothing" />
       {canAdminister && (
         structures.length === 0 ? (
           <Card>

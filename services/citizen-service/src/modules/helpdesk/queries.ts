@@ -13,6 +13,16 @@ function mapTicketStatus(status: string): HelpdeskTicketStatus {
 }
 
 function toSummary(row: TicketRow): HelpdeskTicketSummary {
+  // slaStatus was previously omitted here, so every ticket returned by the
+  // unfiltered GET /v1/citizen/tickets (which powers the Helpdesk hub's SLA
+  // Breached/SLA Breach% cards and the Citizen Tickets table's SLA column and
+  // "SLA Met %" stat) fell back to the frontend mapper's "within_sla" default —
+  // i.e. those cards always read 0 breaches / 100% healthy regardless of
+  // reality. computeSlaStatus() uses "due_soon" for the mid state, but the
+  // wire contract (helpdeskTicketSchema in @civitasone/schemas/web) declares
+  // "at_risk" for the same state — translate at this boundary so the response
+  // still validates against that schema.
+  const sla = computeSlaStatus(row);
   return {
     id: row.id,
     subject: row.subject,
@@ -21,6 +31,7 @@ function toSummary(row: TicketRow): HelpdeskTicketSummary {
         : mapPriority(row.priority) === "low" ? "Low"
           : "Medium",
     status: mapTicketStatus(row.status),
+    slaStatus: sla === "due_soon" ? "at_risk" : sla,
   };
 }
 

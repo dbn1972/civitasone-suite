@@ -1,6 +1,6 @@
 "use client";
-import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useState, Suspense } from "react";
 import { useToast } from "@/app/_components/ds/Toast";
 import { PageHeader } from "@/app/_components/ds";
 
@@ -15,12 +15,13 @@ type MbForm = {
   mbNumber: string;
 };
 
-export default function NewMbPage() {
+function NewMbForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { toast } = useToast();
   const [form, setForm] = useState<MbForm>({
-    workId: "",
-    awardId: "",
+    workId: searchParams.get("workId") ?? "",
+    awardId: searchParams.get("awardId") ?? "",
     mbNumber: "",
   });
   const [busy, setBusy] = useState(false);
@@ -51,7 +52,7 @@ export default function NewMbPage() {
       if (!res.ok) throw new Error(data?.message ?? "Create failed");
       setMessage("Created.");
       toast.success("Measurement book issued.");
-      setTimeout(() => router.push("/works/billing"), 600);
+      setTimeout(() => router.push(form.workId.trim() ? `/works/billing/${form.workId.trim()}` : "/works/billing"), 600);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong.");
     } finally {
@@ -64,7 +65,7 @@ export default function NewMbPage() {
       <PageHeader
         title="Issue Measurement Book"
         subtitle="Create a new measurement book entry."
-        back="/works/billing"
+        back={form.workId.trim() ? `/works/billing/${form.workId.trim()}` : "/works/billing"}
         backLabel="Billing"
       />
       {message ? (
@@ -143,5 +144,13 @@ export default function NewMbPage() {
         </form>
       </div>
     </>
+  );
+}
+
+export default function NewMbPage() {
+  return (
+    <Suspense>
+      <NewMbForm />
+    </Suspense>
   );
 }

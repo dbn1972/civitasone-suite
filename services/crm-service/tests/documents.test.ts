@@ -16,12 +16,14 @@ import { queue } from "../src/shared/infra.js";
 import { registerAllConsumers } from "../src/consumers.js";
 import { drainQueue } from "./consumer-harness.js";
 import { runTenantDocumentAlerts, runDocumentAlertCycle } from "../src/modules/documents/alert-scheduler.js";
+import { scannerSqlClient } from "../src/shared/scanner-db.js";
 
 const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
 const INTERNAL_SECRET = "dm_test_internal_secret";
 const TENANT = "aaaaaaaa-1111-4000-8000-00000000d001";
 const OTHER = "aaaaaaaa-1111-4000-8000-00000000d009";
 const ALERT_TENANT = "aaaaaaaa-1111-4000-8000-00000000d0a1";
+const ALERT_TENANT_2 = "aaaaaaaa-1111-4000-8000-00000000d0a2";
 const ACTOR = "cccccccc-3333-4000-8000-00000000d001";
 const SUBJECT = "22222222-bbbb-4000-8000-00000000d001";
 
@@ -40,7 +42,7 @@ function internalHeaders(tenant = TENANT) {
 }
 
 async function cleanup() {
-  for (const t of [TENANT, OTHER, ALERT_TENANT]) {
+  for (const t of [TENANT, OTHER, ALERT_TENANT, ALERT_TENANT_2]) {
     await sqlClient.begin(async (tx) => {
       await tx`SELECT set_config('app.tenant_id', ${t}, true)`;
       await tx`DELETE FROM crm.documents WHERE tenant_id = ${t}`.catch(() => {});
@@ -263,13 +265,13 @@ describe("DM-002 document types + verify", () => {
   it("CRUD on document types", async () => {
     const create = await inject("POST", "/v1/crm/document-types", {
       headers: adminHeaders(),
-      payload: { code: "pan_card", name: "PAN Card", appliesTo: "contact", mandatory: true, verificationRequired: true },
+      payload: { code: "pan_card", name: "PAN Card", appliesTo: ["contact"], mandatory: true, verificationRequired: true },
     });
     expect(create.statusCode).toBe(201);
     const typeId = create.json().data.id as string;
 
     const dup = await inject("POST", "/v1/crm/document-types", {
-      headers: adminHeaders(), payload: { code: "pan_card", name: "dup", appliesTo: "contact" },
+      headers: adminHeaders(), payload: { code: "pan_card", name: "dup", appliesTo: ["contact"] },
     });
     expect(dup.statusCode).toBe(409);
 
@@ -284,9 +286,50 @@ describe("DM-002 document types + verify", () => {
     expect(del.statusCode).toBe(204);
   });
 
+  // Regression coverage: applies_to used to be a scalar column + z.enum() validator, so
+  // ANY array the frontend's checkbox UI sent (even a single checked box) failed
+  // validation unconditionally. Now a real array, allowing >1 subject type per document
+  // type and an empty array as "applies to every subject type" (DocumentTypesEditor.tsx
+  // / documents.ts's computeAlerts convention).
+  it("persists appliesTo as a real multi-value array, and an update replaces it", async () => {
+    const create = await inject("POST", "/v1/crm/document-types", {
+      headers: adminHeaders(),
+      payload: { code: "id_proof", name: "ID Proof", appliesTo: ["contact", "account", "lead"] },
+    });
+    expect(create.statusCode).toBe(201);
+    expect(create.json().data.appliesTo).toEqual(["contact", "account", "lead"]);
+    const typeId = create.json().data.id as string;
+
+    const list = await inject("GET", "/v1/crm/document-types", { headers: headers() });
+    const listed = (list.json().data as Array<{ code: string; appliesTo: string[] }>).find((t) => t.code === "id_proof");
+    expect(listed?.appliesTo).toEqual(["contact", "account", "lead"]);
+
+    // Narrow it down to one subject type on update — a full replace, not a merge.
+    const upd = await inject("PUT", `/v1/crm/document-types/${typeId}`, {
+      headers: adminHeaders(), payload: { appliesTo: ["account"] },
+    });
+    expect(upd.statusCode).toBe(200);
+    expect(upd.json().data.appliesTo).toEqual(["account"]);
+
+    // The empty array is a deliberate, distinct value ("applies to everything"), not an
+    // error — must round-trip too, not get coerced to something else.
+    const wild = await inject("PUT", `/v1/crm/document-types/${typeId}`, {
+      headers: adminHeaders(), payload: { appliesTo: [] },
+    });
+    expect(wild.statusCode).toBe(200);
+    expect(wild.json().data.appliesTo).toEqual([]);
+  });
+
+  it("rejects a subject type outside the known six inside the appliesTo array (400)", async () => {
+    const res = await inject("POST", "/v1/crm/document-types", {
+      headers: adminHeaders(), payload: { code: "bad_type", name: "Bad", appliesTo: ["contact", "not_a_real_subject"] },
+    });
+    expect(res.statusCode).toBe(400);
+  });
+
   it("forbids a non-admin from creating a document type (403)", async () => {
     const res = await inject("POST", "/v1/crm/document-types", {
-      headers: headers(), payload: { code: "gst", name: "GST", appliesTo: "account" },
+      headers: headers(), payload: { code: "gst", name: "GST", appliesTo: ["account"] },
     });
     expect(res.statusCode).toBe(403);
   });
@@ -307,7 +350,7 @@ describe("DM-002 alert scheduler round-trip", () => {
     // A mandatory type (exercises the missing-mandatory scan) + one already-expired doc.
     await inject("POST", "/v1/crm/document-types", {
       headers: adminHeaders(ALERT_TENANT),
-      payload: { code: "trade_licence", name: "Trade Licence", appliesTo: "contact", mandatory: true, expiryRequired: true },
+      payload: { code: "trade_licence", name: "Trade Licence", appliesTo: ["contact"], mandatory: true, expiryRequired: true },
     });
     const pre = await presign({ subjectType: "contact", subjectId: SUBJECT, filename: "lic.pdf", mimeType: "application/pdf" }, ALERT_TENANT);
     const { storageKey } = pre.json().data;
@@ -323,5 +366,50 @@ describe("DM-002 alert scheduler round-trip", () => {
     // The cross-tenant cycle discovers ALERT_TENANT via list_document_alert_tenants().
     const total = await runDocumentAlertCycle(new Date("2026-08-05T00:00:00Z"));
     expect(total).toBeGreaterThanOrEqual(1);
+  });
+
+  it("a mandatory type with appliesTo=[] (wildcard) is scanned as applying to every enumerable subject type", async () => {
+    // Previously impossible to even express: the old scalar applies_to column required
+    // exactly one of the six names, with no "applies to everything" value. Confirms
+    // alert-scheduler.ts's expansion of an empty appliesTo actually reaches "contact"
+    // (SUBJECT has no "universal_id" document on file) instead of silently matching
+    // nothing (which is what treating appliesTo as an opaque, never-equal Map key would
+    // have done for an array/empty value).
+    const create = await inject("POST", "/v1/crm/document-types", {
+      headers: adminHeaders(ALERT_TENANT),
+      payload: { code: "universal_id", name: "Universal ID", appliesTo: [], mandatory: true },
+    });
+    expect(create.statusCode).toBe(201);
+    expect(create.json().data.appliesTo).toEqual([]);
+
+    const emitted = await runTenantDocumentAlerts(ALERT_TENANT, new Date("2026-08-05T00:00:00Z"));
+    expect(emitted).toBeGreaterThanOrEqual(1); // SUBJECT is missing a "universal_id" doc
+  });
+
+  it("list_document_alert_tenants() discovers tenants across the WHOLE table, not just one (BYPASSRLS scanner)", async () => {
+    // A second, independent tenant with its own expired trade_licence — proves
+    // the cross-tenant discovery step (crm_scanner, BYPASSRLS; see
+    // 0089_crm_scanner_role.sql) really scans across tenants, rather than only
+    // ever surfacing whichever single tenant an earlier test happened to seed.
+    await inject("POST", "/v1/crm/document-types", {
+      headers: adminHeaders(ALERT_TENANT_2),
+      payload: { code: "trade_licence", name: "Trade Licence", appliesTo: ["contact"], mandatory: true, expiryRequired: true },
+    });
+    const pre2 = await presign({ subjectType: "contact", subjectId: SUBJECT, filename: "lic2.pdf", mimeType: "application/pdf" }, ALERT_TENANT_2);
+    const c2 = await confirm({
+      subjectType: "contact", subjectId: SUBJECT, title: "Licence", filename: "lic2.pdf",
+      storageKey: pre2.json().data.storageKey, mimeType: "application/pdf", sizeBytes: 10,
+      docType: "trade_licence", expiryDate: "2020-01-01",
+    }, ALERT_TENANT_2);
+    expect(c2.statusCode).toBe(202);
+
+    // The raw discovery function itself must name BOTH tenants.
+    const discovered = (await scannerSqlClient`SELECT tenant_id FROM crm.list_document_alert_tenants()`) as unknown as Array<{ tenant_id: string }>;
+    const discoveredIds = discovered.map((r) => r.tenant_id);
+    expect(discoveredIds).toEqual(expect.arrayContaining([ALERT_TENANT, ALERT_TENANT_2]));
+
+    // And the full cycle actually processes both, not just the first one found.
+    const total = await runDocumentAlertCycle(new Date("2026-08-05T00:00:00Z"));
+    expect(total).toBeGreaterThanOrEqual(2); // at least one expired-doc alert per tenant
   });
 });

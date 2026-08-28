@@ -118,7 +118,7 @@ export default async function DisbursementPage() {
         subtitle="Employee bank transfers, NACH mandates, bank file generation, DSC signing."
         back="/hr/payroll"
       />
-      {anyError && <DataSourceBadge source="error" />}
+      {anyError && <DataSourceBadge source="error" message="Couldn't load — showing nothing" />}
 
       <StatGrid>
         <StatCard icon="🏦" iconBg="var(--infobg)" label="Runs Ready for Disbursement" value={eligibleRuns.length} />
@@ -149,8 +149,8 @@ export default async function DisbursementPage() {
         <NachMandateForm />
         <EmptyState
           icon="📋"
-          title="No active mandates"
-          message="Registered NACH mandates will appear here. Use the submit form above to register a new mandate."
+          title="Mandate list not yet available"
+          message="There is no mandate-listing endpoint yet — use the form above to submit a new mandate, or check an existing one by reference."
         />
       </Card>
 

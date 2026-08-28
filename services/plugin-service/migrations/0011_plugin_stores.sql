@@ -24,15 +24,29 @@ CREATE TABLE IF NOT EXISTS store.plugin_stores (
   CONSTRAINT uq_plugin_stores_tenant_plugin_key UNIQUE (tenant_id, plugin_id, key)
 );
 
--- RLS enforcement for tenant isolation
+-- RLS enforcement for tenant isolation. current_tenant_id() is defined in
+-- 0003_rls_tenant_isolation.sql (which sorts before this file); recreated
+-- defensively so this migration is self-contained. Uses the helper rather
+-- than a bare `current_setting('app.tenant_id')::uuid` — every other table
+-- in this service (and codebase) goes through current_tenant_id(), which
+-- treats a missing/blank GUC as NULL (policy evaluates to false, zero rows)
+-- via `current_setting(..., true)` + NULLIF. The bare form used `missing_ok
+-- = false` (the 1-arg call) and cast '' straight to uuid, so any session that
+-- hasn't set app.tenant_id yet raised a hard Postgres ERROR instead of a
+-- clean empty result — same tenant-isolation guarantee, but an inconsistent,
+-- surprising failure mode relative to every sibling table.
+CREATE OR REPLACE FUNCTION current_tenant_id() RETURNS uuid
+  LANGUAGE sql STABLE SECURITY DEFINER
+  AS $$ SELECT NULLIF(current_setting('app.tenant_id', true), '')::uuid $$;
+
 ALTER TABLE store.plugin_stores ENABLE ROW LEVEL SECURITY;
 ALTER TABLE store.plugin_stores FORCE ROW LEVEL SECURITY;
 
 DROP POLICY IF EXISTS tenant_isolation ON store.plugin_stores;
 CREATE POLICY tenant_isolation
   ON store.plugin_stores
-  USING (tenant_id = current_setting('app.tenant_id')::uuid)
-  WITH CHECK (tenant_id = current_setting('app.tenant_id')::uuid);
+  USING (tenant_id = current_tenant_id())
+  WITH CHECK (tenant_id = current_tenant_id());
 
 -- Indexes for common query patterns
 CREATE INDEX IF NOT EXISTS idx_plugin_stores_tenant_plugin

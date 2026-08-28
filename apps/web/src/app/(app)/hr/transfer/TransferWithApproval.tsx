@@ -16,8 +16,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { useToast } from "@/app/_components/ds/Toast";
 
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
 type Employee = { id: string; name?: string; designation?: string; departmentId?: string; department?: string };
 type Department = { id: string; name: string };
 type Officer = { id: string; name: string; designation?: string };
@@ -40,6 +38,12 @@ export function TransferWithApproval() {
   const [initiatedBy, setInitiatedBy] = useState("");
   const [currentWith, setCurrentWith] = useState("");
   const [note, setNote] = useState("");
+  // Set once step 1 (create the pending_approval transfer request) succeeds.
+  // Retrying after a step-2 (eFile) failure must resume from here instead of
+  // re-running step 1 — otherwise every retry created a brand-new duplicate
+  // transfer request for the same employee, since submit-approval has no
+  // idempotency key and the old code always restarted from step 1.
+  const [submittedTransferId, setSubmittedTransferId] = useState<string | null>(null);
 
   // Load employees, departments, and officers when form opens
   useEffect(() => {
@@ -70,6 +74,7 @@ export function TransferWithApproval() {
   const reset = () => {
     setEmployeeId(""); setFromDeptId(""); setFromDeptName(""); setToDeptId("");
     setEffectiveDate(""); setInitiatedBy(""); setCurrentWith(""); setNote("");
+    setSubmittedTransferId(null);
     setStep(1);
   };
 
@@ -96,15 +101,23 @@ export function TransferWithApproval() {
     setError("");
     setSaving(true);
     try {
-      const subRes = await fetch(`/api/proxy/v1/hrms/employees/${employeeId}/transfer/submit-approval`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ fromDeptId, toDeptId, effectiveDate }),
-      });
-      if (!subRes.ok) throw new Error((await subRes.text()) || "Could not create transfer request");
-      const sub = (await subRes.json()) as { id?: string };
-      const transferId = sub.id;
-      if (!transferId) throw new Error("Transfer request id missing in response");
+      // Resume from an already-created request instead of re-running step 1.
+      // submit-approval has no idempotency key, so calling it again on retry
+      // would create a second, distinct pending_approval transfer request for
+      // the same employee every time the eFile step failed.
+      let transferId = submittedTransferId;
+      if (!transferId) {
+        const subRes = await fetch(`/api/proxy/v1/hrms/employees/${employeeId}/transfer/submit-approval`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ fromDeptId, toDeptId, effectiveDate }),
+        });
+        if (!subRes.ok) throw new Error((await subRes.text()) || "Could not create transfer request");
+        const sub = (await subRes.json()) as { id?: string };
+        if (!sub.id) throw new Error("Transfer request id missing in response");
+        transferId = sub.id;
+        setSubmittedTransferId(transferId);
+      }
 
       const raiseRes = await fetch("/api/proxy/v1/estab/files/from-module", {
         method: "POST",
@@ -123,7 +136,12 @@ export function TransferWithApproval() {
           context: { employeeId, fromDeptId, toDeptId, effectiveDate },
         }),
       });
-      if (!raiseRes.ok) throw new Error((await raiseRes.text()) || "Transfer request created, but raising the eFile failed");
+      if (!raiseRes.ok) {
+        throw new Error(
+          (await raiseRes.text()) ||
+          "Transfer request created, but raising the eFile failed. It is safe to click Submit again — it will retry only the eFile step, not create another transfer request.",
+        );
+      }
       const file = (await raiseRes.json()) as { fileNo?: string };
       toast.success(`Transfer raised for approval${file.fileNo ? ` (eFile ${file.fileNo})` : ""}. On approval the posting is effected automatically.`);
       reset();
@@ -133,7 +151,7 @@ export function TransferWithApproval() {
     } finally {
       setSaving(false);
     }
-  }, [employeeId, fromDeptId, toDeptId, effectiveDate, initiatedBy, currentWith, note, selectedEmployee, toast]);
+  }, [employeeId, fromDeptId, toDeptId, effectiveDate, initiatedBy, currentWith, note, selectedEmployee, submittedTransferId, toast]);
 
   return (
     <>
@@ -238,6 +256,11 @@ export function TransferWithApproval() {
 
           {step === 2 && (
             <div className="pad" style={{ display: "grid", gap: 16 }}>
+              {submittedTransferId && (
+                <div style={{ fontSize: "0.8125rem", padding: "10px 14px", background: "#fffbeb", borderRadius: 8, border: "1px solid #fde68a" }}>
+                  The transfer request was already created — retrying now only raises the eFile, it will not create a duplicate.
+                </div>
+              )}
               {selectedEmployee && (
                 <div style={{ fontSize: "0.8125rem", padding: "10px 14px", background: "#f0f9ff", borderRadius: 8, border: "1px solid #bae6fd" }}>
                   <strong>{selectedEmployee.name}</strong> → {departments.find((d) => d.id === toDeptId)?.name ?? toDeptId}

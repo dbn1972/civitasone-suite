@@ -74,6 +74,23 @@ function msg<T>(type: string, payload: T, messageId = randomUUID()): CommandEnve
   } as CommandEnvelope<T>;
 }
 
+/**
+ * Like `msg`, but with an explicit `actorId` — needed for `voteCirculationRespond`, whose
+ * consumer now requires `payload.memberId === envelope.actorId` (the responding member must be
+ * the authenticated caller; see voting/consumer.ts `handleCirculationRespond`).
+ */
+function msgAs<T>(type: string, payload: T, actorId: string): CommandEnvelope<T> {
+  return {
+    messageId: randomUUID(),
+    type,
+    tenantId: TENANT,
+    actorId,
+    correlationId: randomUUID(),
+    schemaVersion: "1.0",
+    payload,
+  } as CommandEnvelope<T>;
+}
+
 function run<T>(m: CommandEnvelope<T>): Promise<void> {
   const handler = handlers.get(m.type);
   if (!handler) throw new Error(`no handler for ${m.type}`);
@@ -129,8 +146,8 @@ beforeAll(async () => {
     await sql`delete from meeting.attendance_records where tenant_id = ${TENANT}`;
     await sql`delete from meeting.participants where tenant_id = ${TENANT}`;
     await sql`delete from meeting.committee_members where tenant_id = ${TENANT}`;
-    await sql`delete from meeting.committees where tenant_id = ${TENANT}`;
     await sql`delete from meeting.meetings where tenant_id = ${TENANT}`;
+    await sql`delete from meeting.committees where tenant_id = ${TENANT}`;
     await sql`delete from _outbox.messages where tenant_id = ${TENANT}`;
 
     // Committee: quorum = 3, vc counts
@@ -188,8 +205,8 @@ afterAll(async () => {
     await sql`delete from meeting.attendance_records where tenant_id = ${TENANT}`;
     await sql`delete from meeting.participants where tenant_id = ${TENANT}`;
     await sql`delete from meeting.committee_members where tenant_id = ${TENANT}`;
-    await sql`delete from meeting.committees where tenant_id = ${TENANT}`;
     await sql`delete from meeting.meetings where tenant_id = ${TENANT}`;
+    await sql`delete from meeting.committees where tenant_id = ${TENANT}`;
     await sql`delete from _outbox.messages where tenant_id = ${TENANT}`;
   });
   await app.close();
@@ -563,13 +580,15 @@ describe("circulation resolution: init → distribute → collect responses → 
   });
 
   it("consumer collects responses and concludes when all members respond (Req 12.4)", async () => {
-    // Respond for each of the 5 members
-    await run(msg(COMMANDS.voteCirculationRespond, { resolutionId: circulationId, memberId: MEMBER_A, position: "approve", tenantId: TENANT }));
-    await run(msg(COMMANDS.voteCirculationRespond, { resolutionId: circulationId, memberId: MEMBER_B, position: "approve", tenantId: TENANT }));
-    await run(msg(COMMANDS.voteCirculationRespond, { resolutionId: circulationId, memberId: MEMBER_C, position: "approve", tenantId: TENANT }));
-    await run(msg(COMMANDS.voteCirculationRespond, { resolutionId: circulationId, memberId: MEMBER_D, position: "reject", tenantId: TENANT }));
+    // Respond for each of the 5 members — each responds AS themselves (actorId === memberId),
+    // matching the real command publisher's binding (voting/commands.ts's voteCirculationRespond
+    // always sets memberId: ctx.actorId; the consumer now defends this invariant itself too).
+    await run(msgAs(COMMANDS.voteCirculationRespond, { resolutionId: circulationId, memberId: MEMBER_A, position: "approve", tenantId: TENANT }, MEMBER_A));
+    await run(msgAs(COMMANDS.voteCirculationRespond, { resolutionId: circulationId, memberId: MEMBER_B, position: "approve", tenantId: TENANT }, MEMBER_B));
+    await run(msgAs(COMMANDS.voteCirculationRespond, { resolutionId: circulationId, memberId: MEMBER_C, position: "approve", tenantId: TENANT }, MEMBER_C));
+    await run(msgAs(COMMANDS.voteCirculationRespond, { resolutionId: circulationId, memberId: MEMBER_D, position: "reject", tenantId: TENANT }, MEMBER_D));
     // Fifth (final) member → triggers conclusion
-    await run(msg(COMMANDS.voteCirculationRespond, { resolutionId: circulationId, memberId: MEMBER_E, position: "approve", tenantId: TENANT }));
+    await run(msgAs(COMMANDS.voteCirculationRespond, { resolutionId: circulationId, memberId: MEMBER_E, position: "approve", tenantId: TENANT }, MEMBER_E));
 
     const row = await readResolution(circulationId);
     // 4 approve, 1 reject → simple majority passed
@@ -613,12 +632,16 @@ describe("circulation resolution: insufficient response rate declares invalid (R
     const alertBefore = await outboxCount(EVENTS.complianceAlert);
     // Only 1 of 5 members responds (20% < two-thirds default 66.67%) → invalid
     await run(
-      msg(COMMANDS.voteCirculationRespond, {
-        resolutionId: rid,
-        memberId: MEMBER_A,
-        position: "approve",
-        tenantId: TENANT,
-      }),
+      msgAs(
+        COMMANDS.voteCirculationRespond,
+        {
+          resolutionId: rid,
+          memberId: MEMBER_A,
+          position: "approve",
+          tenantId: TENANT,
+        },
+        MEMBER_A,
+      ),
     );
 
     const row = await readResolution(rid);

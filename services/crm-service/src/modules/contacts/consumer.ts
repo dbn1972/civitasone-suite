@@ -92,11 +92,15 @@ export function registerContactConsumers(rawQueue: Queue): void {
   });
 
   queue.subscribe(COMMANDS.deleteContact, async (msg) => {
-    const p = msg.payload as { id: string; tenantId: string };
+    const p = msg.payload as { id: string; tenantId: string; reason?: string | null };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       await repo.softDelete(tx, p.id, p.tenantId, msg.actorId);
-      await emit(tx, msg, EVENTS.contactDeleted, { contactId: p.id }, "delete", p.id);
+      // The deletion reason (maker-checker note collected by the UI's confirm
+      // dialog) rides in the audit-trail record, not the domain event — the
+      // domain event is what other consumers react to (shape must stay stable),
+      // the audit record is what a compliance reviewer reads "why".
+      await emit(tx, msg, EVENTS.contactDeleted, { contactId: p.id }, "delete", p.id, p.reason ? { reason: p.reason } : undefined);
     });
     await cache.invalidate(keyFor(msg.tenantId, p.id));
     await cache.invalidateResource(msg.tenantId, RESOURCE);
@@ -243,6 +247,7 @@ async function emit(
   payload: Record<string, unknown>,
   action: string,
   resourceId: string,
+  auditExtra?: Record<string, unknown>,
 ): Promise<void> {
   const t = tx as Parameters<typeof enqueue>[0];
   await enqueue(t, {
@@ -253,7 +258,7 @@ async function emit(
   await enqueue(t, {
     topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC,
     tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
-    payload: { service: "crm", action, resourceType: "contact", resourceId, outcome: "success" },
+    payload: { service: "crm", action, resourceType: "contact", resourceId, outcome: "success", ...auditExtra },
   });
 }
 

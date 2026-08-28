@@ -3,6 +3,7 @@ import type { Queue } from "@civitasone/queue";
 import { db } from "../../shared/db.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { writeAudit } from "../../shared/audit.js";
+import { cache } from "../../shared/infra.js";
 import { tenantScoped } from "../../shared/tenant-queue.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
@@ -72,9 +73,12 @@ export function registerLicenceConsumers(rawQueue: Queue): void {
 
   queue.subscribe(COMMANDS.suspendLicence, async (msg) => {
     const p = msg.payload as { id: string; tenantId: string; reason: string };
+    let applied = false;
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
-      await repo.updateStatus(tx, p.id, msg.tenantId, "suspended", msg.actorId);
+      const ok = await repo.updateStatus(tx, p.id, msg.tenantId, "suspended", msg.actorId);
+      if (!ok) return;
+      applied = true;
       await enqueue(tx, {
         topic: EVENTS.licenceSuspended,
         eventType: EVENTS.licenceSuspended,
@@ -89,13 +93,19 @@ export function registerLicenceConsumers(rawQueue: Queue): void {
         resourceId: p.id,
       });
     });
+    // GET /v1/vendor/licences/:id (licences/routes.ts) reads through a cache
+    // that only this write path can invalidate (CLAUDE.md §6).
+    if (applied) await cache.invalidate(cache.makeKey(msg.tenantId, "licence", p.id));
   });
 
   queue.subscribe(COMMANDS.cancelLicence, async (msg) => {
     const p = msg.payload as { id: string; tenantId: string; reason: string };
+    let applied = false;
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
-      await repo.updateStatus(tx, p.id, msg.tenantId, "cancelled", msg.actorId);
+      const ok = await repo.updateStatus(tx, p.id, msg.tenantId, "cancelled", msg.actorId);
+      if (!ok) return;
+      applied = true;
       await enqueue(tx, {
         topic: EVENTS.licenceCancelled,
         eventType: EVENTS.licenceCancelled,
@@ -110,6 +120,7 @@ export function registerLicenceConsumers(rawQueue: Queue): void {
         resourceId: p.id,
       });
     });
+    if (applied) await cache.invalidate(cache.makeKey(msg.tenantId, "licence", p.id));
   });
 
   queue.subscribe(COMMANDS.recordLicenceFee, async (msg) => {

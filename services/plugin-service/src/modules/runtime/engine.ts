@@ -96,9 +96,15 @@ function checkPermissions(manifest: PluginManifest, required: string[]): string 
  *   - ctx.emit(eventType, payload) — emit events (requires emit:event permission)
  *   - ctx.fetch(url, options) — outbound HTTP (requires http:outbound permission)
  *
- * The handler is a function string or a reference to a stored handler.
- * In this implementation, we use Function() with a timeout wrapper.
- * In production, this would use Node.js worker_threads or vm2 for true isolation.
+ * The handler is a function string or a reference to a stored handler,
+ * executed via runInSandbox() (./sandbox/runtime.js) — an isolated node:vm
+ * context with a null-prototype global/ctx, disabled codeGeneration, and
+ * object-valued ctx properties (payload) reconstructed inside the context
+ * via its own JSON.parse. See that file's own header for the full threat
+ * model and residual limitations. This comment previously described an
+ * earlier, superseded `new Function(handler)` implementation (a real RCE —
+ * see SEC-P0-03 in sandbox/runtime.ts) and was never updated after the fix;
+ * stale comments next to security-critical code are their own hazard.
  */
 async function executeInSandbox(
   handler: string,

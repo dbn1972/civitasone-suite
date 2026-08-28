@@ -16,21 +16,21 @@ export interface SubmitInput {
 export async function submitTreeRequest(ctx: RequestContext, body: SubmitInput): Promise<Accepted> {
   const id = randomUUID();
   const requestNumber = `PRKT-${Date.now()}`;
-  return publishCommand(ctx, COMMANDS.treeRequestSubmit, id, { id, requestNumber, requestedBy: ctx.actorId, ...body });
+  return publishCommand(ctx, COMMANDS.CREATE_TREE_REQUEST, id, { id, requestNumber, requestedBy: ctx.actorId, ...body });
 }
 
 export async function inspectTreeRequest(ctx: RequestContext, id: string, inspectionReport: Record<string, unknown>, version: number): Promise<Accepted> {
-  return publishCommand(ctx, COMMANDS.treeRequestInspect, id, { id, inspectorId: ctx.actorId, inspectionReport, version });
+  return publishCommand(ctx, COMMANDS.INSPECT_TREE_REQUEST, id, { id, inspectorId: ctx.actorId, inspectionReport, version });
 }
 
 export async function approveTreeRequest(ctx: RequestContext, id: string, version: number): Promise<Accepted> {
-  return publishCommand(ctx, COMMANDS.treeRequestApprove, id, { id, approvedBy: ctx.actorId, version });
+  return publishCommand(ctx, COMMANDS.APPROVE_TREE_REQUEST, id, { id, approvedBy: ctx.actorId, version });
 }
 
 export async function rejectTreeRequest(ctx: RequestContext, id: string, version: number): Promise<Accepted> {
-  return publishCommand(ctx, COMMANDS.treeRequestReject, id, { id, version });
+  return publishCommand(ctx, COMMANDS.REJECT_TREE_REQUEST, id, { id, version });
 }
 
 export async function completeTreeRequest(ctx: RequestContext, id: string, version: number): Promise<Accepted> {
-  return publishCommand(ctx, COMMANDS.treeRequestComplete, id, { id, version });
+  return publishCommand(ctx, COMMANDS.COMPLETE_TREE_REQUEST, id, { id, version });
 }

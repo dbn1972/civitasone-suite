@@ -1,8 +1,9 @@
-import { eq, sql } from "drizzle-orm";
+import { eq, and, sql, desc } from "drizzle-orm";
 import { db, scopedRead } from "../../shared/db.js";
 import {
-  financeBanks, financeChallans, financeDeposits, financeDepositEvents,
-  type BankRow, type ChallanInsert, type DepositInsert, type DepositRow, type DepositEventInsert,
+  financeBanks, financeChallans, financeDeposits, financeDepositEvents, financeDebt, financeGuarantees,
+  type BankRow, type ChallanInsert, type ChallanRow, type DepositInsert, type DepositRow, type DepositEventInsert,
+  type DebtRow, type GuaranteeRow,
 } from "./schema.js";
 
 export type Writer = Pick<typeof db, "insert" | "update" | "select">;
@@ -12,6 +13,46 @@ type Executor = { execute: (query: ReturnType<typeof sql>) => Promise<unknown> }
 export async function findBankById(id: string): Promise<BankRow | null> {
   const rows = await scopedRead((tx) => tx.select().from(financeBanks).where(eq(financeBanks.id, id)).limit(1));
   return rows[0] ?? null;
+}
+
+// ── C-series reads: debt / guarantees / challans register / deposits register ──
+
+export async function listDebtByTenant(tenantId: string, limit: number, offset = 0): Promise<DebtRow[]> {
+  return scopedRead((tx) => tx.select().from(financeDebt)
+    .where(eq(financeDebt.tenantId, tenantId))
+    .orderBy(desc(financeDebt.createdAt))
+    .limit(limit)
+    .offset(offset));
+}
+
+export async function listGuaranteesByTenant(tenantId: string, limit: number, offset = 0): Promise<GuaranteeRow[]> {
+  return scopedRead((tx) => tx.select().from(financeGuarantees)
+    .where(eq(financeGuarantees.tenantId, tenantId))
+    .orderBy(desc(financeGuarantees.createdAt))
+    .limit(limit)
+    .offset(offset));
+}
+
+export async function listChallansByTenant(tenantId: string, limit: number, offset = 0): Promise<ChallanRow[]> {
+  return scopedRead((tx) => tx.select().from(financeChallans)
+    .where(eq(financeChallans.tenantId, tenantId))
+    .orderBy(desc(financeChallans.createdAt))
+    .limit(limit)
+    .offset(offset));
+}
+
+export async function findChallanByIdAndTenant(id: string, tenantId: string): Promise<ChallanRow | null> {
+  const rows = await scopedRead((tx) => tx.select().from(financeChallans)
+    .where(and(eq(financeChallans.id, id), eq(financeChallans.tenantId, tenantId))).limit(1));
+  return rows[0] ?? null;
+}
+
+export async function listDepositsByTenant(tenantId: string, limit: number, offset = 0): Promise<DepositRow[]> {
+  return scopedRead((tx) => tx.select().from(financeDeposits)
+    .where(eq(financeDeposits.tenantId, tenantId))
+    .orderBy(desc(financeDeposits.createdAt))
+    .limit(limit)
+    .offset(offset));
 }
 
 export async function insertChallan(tx: Writer, row: ChallanInsert): Promise<void> {

@@ -3,7 +3,11 @@ import { PageHeader } from "../../../../_components/ds";
 import { getEmployees, getMyProfile } from "../../../../_data/loaders";
 import { ApplyLeaveForm } from "./ApplyLeaveForm";
 
-export default async function ApplyLeavePage() {
+export default async function ApplyLeavePage({
+  searchParams,
+}: {
+  searchParams?: { empId?: string };
+}) {
   // Try the admin employees list first (works for hr_admin / hr_officer / manager).
   // If it returns empty (403 for employee role), fall back to the self-service
   // profile endpoint so a regular employee can apply for their own leave.
@@ -21,7 +25,10 @@ export default async function ApplyLeavePage() {
         department: myProfile.department ?? "",
         status: myProfile.status ?? "active",
       }];
-      resolvedSource = mySource;
+      // Only adopt the fallback's source if the primary call didn't itself fail —
+      // a real fetch failure on the admin list must still show the error badge,
+      // even though the self-service fallback happened to succeed.
+      resolvedSource = source === "error" ? "error" : mySource;
     }
   }
 
@@ -33,7 +40,10 @@ export default async function ApplyLeavePage() {
         back="/hr/leave"
       />
       <DataSourceBadge source={resolvedSource} />
-      <ApplyLeaveForm employees={resolvedEmployees} />
+      {/* The employee profile's "Apply Leave" quick action links here with
+          ?empId= — previously ignored entirely, so it always defaulted to
+          whichever employee happened to be first in the list. */}
+      <ApplyLeaveForm employees={resolvedEmployees} initialEmployeeId={searchParams?.empId} />
     </main>
   );
 }

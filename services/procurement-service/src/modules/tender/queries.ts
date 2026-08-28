@@ -58,6 +58,10 @@ export async function getTenderDetail(id: string, tenantId: string) {
     scope: row.scope ?? undefined,
     eligibilityCriteria: row.eligibility ?? undefined,
     bids: bids.map((b) => ({
+      // Needed by the web UI to submit per-bid technical evaluation results
+      // (POST .../technical-evaluation takes { results: [{ bidId, ... }] }) —
+      // previously omitted, so there was no way to address an individual bid.
+      bidId: b.id,
       vendorId: b.vendorId,
       vendorName: b.vendorName,
       // SEALING GUARD: financial value only surfaced once the envelope is opened.

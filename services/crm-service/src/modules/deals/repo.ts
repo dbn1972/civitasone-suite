@@ -1,6 +1,7 @@
 import { eq, desc, and, sql } from "drizzle-orm";
 import { pino } from "pino";
-import { db, scopedRead } from "../../shared/db.js";
+import { tenantTransaction } from "@civitasone/db";
+import { db } from "../../shared/db.js";
 import { deals, type DealRow, type DealInsert, type DealView } from "./schema.js";
 import { contacts } from "../contacts/schema.js";
 import { pipelines } from "../pipelines/schema.js";
@@ -80,8 +81,23 @@ export function toView(r: DealRow, contactName?: string | null): DealView {
   };
 }
 
+/**
+ * Uses `tenantTransaction` (explicit tenantId), not `scopedRead`/bare `db.transaction()`:
+ * `crm.deals` is FORCE ROW LEVEL SECURITY, and `scopedRead` only gets the app.tenant_id
+ * GUC set via AsyncLocalStorage populated by `createTenantTxHook`'s onRequest hook —
+ * which keys off an `x-tenant-id` HEADER, not the JWT `tid` claim `ctx.tenantId` (the
+ * `tenantId` param here) is already derived from. Every caller — queries.ts's getDeal,
+ * ultimately routes.ts — passes its own verified `ctx.tenantId` straight through, so the
+ * read must not depend on that separate header ever having arrived; without this,
+ * findById silently returned null under FORCE RLS whenever it didn't (e.g. every
+ * direct-to-service call, including this file's own vitest coverage), which is
+ * indistinguishable from a genuine 404 to the caller. Same rationale — and same fix — as
+ * `gateSnapshot` below; see its longer comment and `pipelines/repo.ts`'s `stagesOf` for
+ * the full explanation of why the `x-tenant-id`/hook gap is flagged rather than fixed at
+ * its source (a shared `packages/db` concern, not local to this file).
+ */
 export async function findById(id: string, tenantId: string): Promise<DealView | null> {
-  const rows = await scopedRead((tx) => tx.select({ deal: deals, contactName: contacts.name })
+  const rows = await tenantTransaction(db, tenantId, (tx) => (tx as typeof db).select({ deal: deals, contactName: contacts.name })
     .from(deals)
     .leftJoin(contacts, eq(deals.contactId, contacts.id))
     .where(and(eq(deals.id, id), eq(deals.tenantId, tenantId), sql`${deals.status} NOT IN ('deleted','cancelled')`))
@@ -91,8 +107,9 @@ export async function findById(id: string, tenantId: string): Promise<DealView |
   return toView(row.deal, row.contactName);
 }
 
+/** Same `tenantTransaction`/FORCE RLS rationale as `findById` above. */
 export async function listByTenant(tenantId: string, limit: number, offset: number): Promise<DealView[]> {
-  const rows = await scopedRead((tx) => tx.select({ deal: deals, contactName: contacts.name })
+  const rows = await tenantTransaction(db, tenantId, (tx) => (tx as typeof db).select({ deal: deals, contactName: contacts.name })
     .from(deals)
     .leftJoin(contacts, eq(deals.contactId, contacts.id))
     .where(and(eq(deals.tenantId, tenantId), sql`${deals.status} NOT IN ('deleted','cancelled')`))
@@ -233,15 +250,24 @@ export async function findAccountId(tx: Writer, dealId: string, tenantId: string
   return rows[0]?.accountId ?? null;
 }
 
+/**
+ * Same `tenantTransaction`/FORCE RLS rationale as `findById` above. Also called from
+ * `activities/consumer.ts` and `deals/consumer.ts` (queue consumers, no HTTP header at
+ * all) with `p.tenantId` off the validated message payload — those call sites never had
+ * an `x-tenant-id` header to begin with, so they depended entirely on AsyncLocalStorage
+ * having been populated by `runWithTenant`; `tenantTransaction` removes that dependency
+ * for this read too.
+ */
 export async function dealExists(tenantId: string, dealId: string): Promise<boolean> {
-  const rows = await scopedRead((tx) => tx.select({ one: sql`1` }).from(deals)
+  const rows = await tenantTransaction(db, tenantId, (tx) => (tx as typeof db).select({ one: sql`1` }).from(deals)
     .where(and(eq(deals.tenantId, tenantId), eq(deals.id, dealId)))
     .limit(1));
   return rows.length > 0;
 }
 
+/** Same `tenantTransaction`/FORCE RLS rationale as `findById`/`dealExists` above. */
 export async function contactExists(tenantId: string, contactId: string): Promise<boolean> {
-  const rows = await scopedRead((tx) => tx.select({ one: sql`1` }).from(contacts)
+  const rows = await tenantTransaction(db, tenantId, (tx) => (tx as typeof db).select({ one: sql`1` }).from(contacts)
     .where(and(eq(contacts.tenantId, tenantId), eq(contacts.id, contactId)))
     .limit(1));
   return rows.length > 0;
@@ -313,8 +339,20 @@ export interface GateSnapshot {
   currency: string;
 }
 
+/**
+ * Uses `tenantTransaction` (explicit tenantId), not `scopedRead`/bare `db.transaction()`:
+ * `crm.deals` is FORCE ROW LEVEL SECURITY, and `scopedRead` only gets the app.tenant_id
+ * GUC set via AsyncLocalStorage populated by `createTenantTxHook`'s onRequest hook —
+ * which keys off an `x-tenant-id` HEADER, not the JWT `tid` claim `ctx.tenantId` (the
+ * `tenantId` param here) is already derived from. Routes calling this — notably PATCH
+ * /v1/crm/deals/:id/stage's OP-002/OP-003 gate — pass their own verified `ctx.tenantId`
+ * straight through, so the read must not depend on that separate header ever having
+ * arrived; without this, gateSnapshot silently returned null under FORCE RLS whenever it
+ * didn't (e.g. every direct-to-service call, including this file's own vitest coverage),
+ * which skipped the stage gate entirely rather than enforcing or rejecting it.
+ */
 export async function gateSnapshot(id: string, tenantId: string): Promise<GateSnapshot | null> {
-  const rows = await scopedRead((tx) => tx.select({
+  const rows = await tenantTransaction(db, tenantId, (tx) => (tx as typeof db).select({
     id: deals.id,
     pipelineId: deals.pipelineId,
     stageId: deals.stageId,
@@ -372,9 +410,10 @@ export interface StageAgeingRow {
   daysOverLimit: number;
 }
 
+/** Same `tenantTransaction`/FORCE RLS rationale as `findById` above (raw-SQL read). */
 export async function stageAgeingExceeding(tenantId: string, pipelineId?: string): Promise<StageAgeingRow[]> {
   const pipeFilter = pipelineId ? sql`AND d.pipeline_id = ${pipelineId}` : sql``;
-  const rows = await scopedRead(async (tx) => tx.execute(sql`
+  const rows = await tenantTransaction(db, tenantId, async (tx) => (tx as typeof db).execute(sql`
     SELECT d.id, d.name, d.stage, d.pipeline_id AS "pipelineId", d.owner_id AS "ownerId",
            d.value_minor::text AS "valueMinor",
            d.stage_entered_at AS "stageEnteredAt",
@@ -419,9 +458,10 @@ export interface KanbanCard {
   expectedCloseDate: string | null;
 }
 
+/** Same `tenantTransaction`/FORCE RLS rationale as `findById` above (raw-SQL read). */
 export async function kanbanCards(tenantId: string, pipelineId?: string): Promise<KanbanCard[]> {
   const pipeFilter = pipelineId ? sql`AND pipeline_id = ${pipelineId}` : sql``;
-  const rows = await scopedRead(async (tx) => tx.execute(sql`
+  const rows = await tenantTransaction(db, tenantId, async (tx) => (tx as typeof db).execute(sql`
     SELECT id, name, stage, owner_id AS "ownerId", value_minor::text AS "valueMinor",
            probability, contact_id AS "contactId", version,
            expected_close_date AS "expectedCloseDate"
@@ -441,9 +481,10 @@ export interface FunnelBucket {
   totalValueMinor: string;
 }
 
+/** Same `tenantTransaction`/FORCE RLS rationale as `findById` above (raw-SQL read). */
 export async function funnelBuckets(tenantId: string, pipelineId?: string): Promise<FunnelBucket[]> {
   const pipeFilter = pipelineId ? sql`AND pipeline_id = ${pipelineId}` : sql``;
-  const rows = await scopedRead(async (tx) => tx.execute(sql`
+  const rows = await tenantTransaction(db, tenantId, async (tx) => (tx as typeof db).execute(sql`
     SELECT stage, count(*)::int AS count, COALESCE(SUM(value_minor),0)::text AS "totalValueMinor"
     FROM crm.deals
     WHERE tenant_id = ${tenantId}

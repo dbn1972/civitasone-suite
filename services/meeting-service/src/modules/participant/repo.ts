@@ -82,10 +82,16 @@ const participantColumns = {
 
 // ─── Existence guard (read-side, tenant-scoped) ──────────────────────────────
 
-/** Minimal parent-meeting reference for the route existence guard + quorum inputs. */
+/**
+ * Minimal parent-meeting reference for the route existence guard + quorum inputs, PLUS
+ * `chairpersonId`/`secretaryId` (IDOR fix, Req 5.2, 5.5, 5.6) — the RSVP/nominate routes need
+ * these to authorize an "on behalf of" caller against `domain.canActOnParticipant`.
+ */
 export interface MeetingRef {
   id: string;
   committeeId: string | null;
+  chairpersonId: string | null;
+  secretaryId: string | null;
 }
 
 /**
@@ -95,7 +101,12 @@ export interface MeetingRef {
  */
 export async function getMeetingRef(tenantId: string, meetingId: string): Promise<MeetingRef | null> {
   const rows = await scopedRead((tx) => tx
-    .select({ id: meetings.id, committeeId: meetings.committeeId })
+    .select({
+      id: meetings.id,
+      committeeId: meetings.committeeId,
+      chairpersonId: meetings.chairpersonId,
+      secretaryId: meetings.secretaryId,
+    })
     .from(meetings)
     .where(and(eq(meetings.id, meetingId), eq(meetings.tenantId, tenantId)))
     .limit(1));

@@ -192,10 +192,17 @@ export async function getPolicyBool(
 
 /**
  * String governance knobs. `voting.default_threshold` is the majority rule applied to a vote when
- * the initiator does not specify one (default `simple_majority`).
+ * the initiator does not specify one (default `simple_majority`). `meeting.tenant_timezone` is the
+ * tenant's UTC offset (`±HH:MM`, same representation as the plain-meeting `scheduledAt` request
+ * field) used to convert a recurring series' bare `HH:MM` `time_of_day` into an absolute instant
+ * (meeting-core/consumer.ts `toScheduledAt`) — default `"+00:00"` so a tenant that has configured
+ * nothing keeps the PRE-EXISTING (if unintended) UTC interpretation exactly, per this file's
+ * behavior-preserving-default rule; a tenant sets its real offset (e.g. `"+05:30"` for IST) once
+ * to get series instances scheduled at their intended local wall-clock time.
  */
 export const POLICY_STRING_DEFAULTS = {
   "voting.default_threshold": "simple_majority",
+  "meeting.tenant_timezone":  "+00:00",
 } as const;
 export type PolicyStringKey = keyof typeof POLICY_STRING_DEFAULTS;
 

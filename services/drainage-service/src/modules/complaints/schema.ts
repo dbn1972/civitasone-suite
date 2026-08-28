@@ -5,7 +5,10 @@ const drainageSchema = pgSchema("civitas_drainage");
 export const drainageComplaints = drainageSchema.table("drainage_complaints", {
   id: uuid("id").primaryKey().defaultRandom(),
   tenantId: uuid("tenant_id").notNull(),
-  complaintNumber: varchar("complaint_number", { length: 32 }).notNull(),
+  // .unique() added in this pass: complaint_number generation (see
+  // ../commands.ts) was only Date.now()-based with no DB-level guarantee.
+  // Safe to add now — this table has no existing rows.
+  complaintNumber: varchar("complaint_number", { length: 32 }).notNull().unique(),
   reportedBy: uuid("reported_by").notNull(),
   location: jsonb("location").$type<Record<string, unknown>>(),
   complaintType: varchar("complaint_type", { length: 32 }).notNull(),

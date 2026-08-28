@@ -241,7 +241,9 @@ describe("GlobalSearch", () => {
     // Press Enter
     fireEvent.keyDown(dialog, { key: "Enter" });
 
-    expect(mockPush).toHaveBeenCalledWith("/finance/bill-001");
+    // finance has no `/finance/[id]` route, so we must NOT push a 404 deep link;
+    // the clerk lands on the real module page instead.
+    expect(mockPush).toHaveBeenCalledWith("/finance");
   });
 
   it("navigates on click", async () => {
@@ -256,7 +258,8 @@ describe("GlobalSearch", () => {
     });
 
     fireEvent.click(screen.getByText("Office Supplies PO"));
-    expect(mockPush).toHaveBeenCalledWith("/procurement/po-002");
+    // procurement has no `/procurement/[id]` route -> land on the module page.
+    expect(mockPush).toHaveBeenCalledWith("/procurement");
   });
 
   it("closes on backdrop click", () => {
@@ -347,6 +350,52 @@ describe("GlobalSearch", () => {
 
     const firstOption = screen.getByText("Electricity Bill Q4").closest("[role='option']");
     expect(firstOption).toHaveAttribute("aria-selected", "true");
+  });
+
+  // ── Reachability guard (fails-before / passes-after) ─────────────────────
+  // Before the fix, buildResultHref appended `/<id>` for EVERY module, so a
+  // finance hit navigated to `/finance/bill-001` — a route that does not exist
+  // (no `/finance/[id]`), i.e. global search dead-ended in a 404 for ~17 of 23
+  // modules. These lock in that a result only deep-links when the detail route
+  // exists, and otherwise resolves to the module's real landing page.
+  it("deep-links only for a module that has a detail route", async () => {
+    global.fetch = mockFetchResponse({
+      data: [
+        {
+          id: "proj-42",
+          module: "projects",
+          name: "Rural Road Upgrade",
+          refNumber: "PRJ-2024-042",
+          description: null,
+          status: "active",
+          snippet: "Upgrade of rural connectivity corridor",
+        },
+      ],
+      meta: { page: 1, pageSize: 20, total: 1 },
+    });
+    render(<GlobalSearch />);
+    openPalette();
+    fireEvent.change(getSearchInput(), { target: { value: "road" } });
+    await waitFor(() => {
+      expect(screen.getByText("Rural Road Upgrade")).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByText("Rural Road Upgrade"));
+    expect(mockPush).toHaveBeenCalledWith("/projects/proj-42");
+  });
+
+  it("never navigates a result to a non-existent /<module>/<id> route", async () => {
+    // finance, procurement, crm, billing, estab, … have no `[id]` child route.
+    render(<GlobalSearch />);
+    openPalette();
+    fireEvent.change(getSearchInput(), { target: { value: "bill" } });
+    await waitFor(() => {
+      expect(screen.getByText("Electricity Bill Q4")).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByText("Electricity Bill Q4"));
+    const pushed = mockPush.mock.calls.at(-1)?.[0] as string;
+    // Must be the module landing page, not a fabricated detail deep link.
+    expect(pushed).toBe("/finance");
+    expect(pushed).not.toMatch(/\/finance\/.+/);
   });
 
   it("responds to voicenav:search custom event", async () => {

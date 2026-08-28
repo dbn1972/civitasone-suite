@@ -12,7 +12,14 @@ export function toView(r: IdentityGraphRow) {
     profileId: r.profileId,
     identifierType: r.identifierType,
     identifierHash: r.identifierHash,
-    confidence: r.confidence,
+    // `confidence` is numeric(5,4) in Postgres, so postgres-js/drizzle hand it
+    // back as a 0-1 decimal string (e.g. "0.9500"), not a number. The API
+    // contract (CDPIdentityLink.confidence, packages/types) is a 0-100 number
+    // that callers render directly as a percentage, so it is converted here —
+    // at the DB-row -> API-view boundary — rather than changing the column or
+    // the internal matching domain, which both work in the 0-1 string/number
+    // form on purpose.
+    confidence: Math.round(Number(r.confidence) * 100),
     createdAt: r.createdAt.toISOString(),
   };
 }

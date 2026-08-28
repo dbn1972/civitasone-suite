@@ -1,3 +1,4 @@
+import { tenantTransaction } from "@civitasone/db";
 import { cache } from "../../shared/infra.js";
 import { db } from "../../shared/db.js";
 import { instalmentPlans, writeOffs } from "./schema.js";
@@ -10,11 +11,14 @@ export async function listInstalmentPlans(
   pagination: { limit: number; offset: number },
 ) {
   const rows = await cache.getOrLoad(`${SERVICE}:${tenantId}:instalments:${assesseeId}`, async () => {
-    return db
-      .select()
-      .from(instalmentPlans)
-      .where(and(eq(instalmentPlans.tenantId, tenantId), eq(instalmentPlans.assesseeId, assesseeId)))
-      .orderBy(desc(instalmentPlans.createdAt));
+    return tenantTransaction(db, tenantId, async (tx) => {
+      const t = tx as typeof db;
+      return t
+        .select()
+        .from(instalmentPlans)
+        .where(and(eq(instalmentPlans.tenantId, tenantId), eq(instalmentPlans.assesseeId, assesseeId)))
+        .orderBy(desc(instalmentPlans.createdAt));
+    });
   });
   return rows ?? [];
 }
@@ -25,10 +29,13 @@ export async function listInstalmentPlans(
  * needs amountMinor + the reason + who raised it before deciding.
  */
 export async function findWriteOffById(tenantId: string, id: string) {
-  const rows = await db
-    .select()
-    .from(writeOffs)
-    .where(and(eq(writeOffs.tenantId, tenantId), eq(writeOffs.id, id)))
-    .limit(1);
+  const rows = await tenantTransaction(db, tenantId, async (tx) => {
+    const t = tx as typeof db;
+    return t
+      .select()
+      .from(writeOffs)
+      .where(and(eq(writeOffs.tenantId, tenantId), eq(writeOffs.id, id)))
+      .limit(1);
+  });
   return rows[0] ?? null;
 }

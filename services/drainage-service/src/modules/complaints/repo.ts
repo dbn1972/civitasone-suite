@@ -20,7 +20,21 @@ export async function findById(id: string, tenantId: string): Promise<ComplaintR
   return rows[0] ?? null;
 }
 
-export async function listByTenant(tenantId: string, limit: number, offset: number, filters: { status?: string; severity?: string } = {}) {
+// Same lookup as findById, but runs inside a caller-supplied transaction rather
+// than opening its own via scopedRead. Needed so the field-action consumer can
+// read this complaint's current status/version and then CAS-update it (see
+// field_actions/consumer.ts) atomically within one transaction, instead of
+// racing a separate read against its own write.
+export async function findByIdTx(tx: ScopedTx, id: string, tenantId: string): Promise<ComplaintRow | null> {
+  const rows = await tx
+    .select()
+    .from(drainageComplaints)
+    .where(and(eq(drainageComplaints.id, id), eq(drainageComplaints.tenantId, tenantId)))
+    .limit(1);
+  return rows[0] ?? null;
+}
+
+export async function listByTenant(tenantId: string, limit: number, offset: number, filters: { status?: string | undefined; severity?: string | undefined } = {}) {
   const conditions = [eq(drainageComplaints.tenantId, tenantId)];
   if (filters.status) conditions.push(eq(drainageComplaints.status, filters.status));
   if (filters.severity) conditions.push(eq(drainageComplaints.severity, filters.severity));

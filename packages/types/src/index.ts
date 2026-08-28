@@ -585,6 +585,9 @@ export interface ThemeTokenSummary {
 }
 
 export interface PaymentSummary {
+  /** Backend row id (UUID) — used to open /finance/payments/[id]. Optional so
+   *  partial/legacy payloads still satisfy the type. */
+  id?: string;
   referenceId: string;
   beneficiary: string;
   amountDisplay: string;
@@ -621,10 +624,13 @@ export type BudgetSummary = {
   id: string;
   majorHead: string;
   subHead?: string;
-  sanctionedAmount: number;
-  releasedAmount: number;
-  expenditure: number;
-  balance: number;
+  /** Minor units (paise) as a bigint-safe decimal string — budget/queries.ts
+   *  sends these via .toString() (H3: avoid 2^53 precision loss); pass to
+   *  formatMoney(), sum as BigInt, never as a plain number. */
+  sanctionedAmount: string;
+  releasedAmount: string;
+  expenditure: string;
+  balance: string;
   /** Raw Budget Estimate, paise as string — distinct from releasedAmount, which is BE-capped. */
   beMinor: string;
   /** Raw Revised Estimate, paise as string — can legitimately exceed beMinor pre-reconciliation. */
@@ -637,7 +643,10 @@ export type SanctionSummary = {
   id: string;
   sanctionNo: string;
   subject: string;
-  amount: number;
+  /** Minor units (paise) as a bigint-safe decimal string (budget/queries.ts's
+   *  row.amountMinor.toString(), H3: avoid 2^53 precision loss on large
+   *  government sanction amounts) — pass to formatMoney(), never Number(). */
+  amount: string;
   sanctionedBy: string;
   date: string;
   status: "approved" | "pending" | "rejected";
@@ -645,7 +654,7 @@ export type SanctionSummary = {
 };
 
 export type SanctionDetail = SanctionSummary & {
-  lineItems: Array<{ description: string; amount: number; head: string }>;
+  lineItems: Array<{ description: string; amount: string; head: string }>;
   remarks?: string;
   approvalTrail: Array<{ actor: string; action: string; timestamp: string }>;
 };
@@ -654,7 +663,7 @@ export type BillSummary = {
   id: string;
   billNo: string;
   vendor: string;
-  amount: number;        // minor units (paise)
+  amount: string;        // minor units (paise), bigint-safe decimal string
   amountDisplay?: string; // pre-formatted display string e.g. "₹47,500.00"
   submittedDate: string;
   dueDate?: string;
@@ -664,7 +673,7 @@ export type BillSummary = {
 };
 
 export type BillDetail = BillSummary & {
-  lineItems: Array<{ description: string; quantity: number; unitPrice: number; amount: number; taxCode?: string }>;
+  lineItems: Array<{ description: string; quantity: number; unitPrice: number; amount: string; taxCode?: string }>;
   grnRef?: string;
   invoiceNo?: string;
   paymentRef?: string;
@@ -675,11 +684,11 @@ export type AdvanceSummary = {
   advanceNo: string;
   beneficiary: string;
   type: "employee" | "vendor" | "other";
-  amount: number;
+  amount: string;
   disbursedDate: string;
   dueDate?: string;
-  adjustedAmount: number;
-  balance: number;
+  adjustedAmount: string;
+  balance: string;
   status: "active" | "adjusted" | "overdue" | "closed";
 };
 
@@ -701,8 +710,10 @@ export type GLEntrySummary = {
   date: string;
   accountCode: string;
   accountName: string;
-  debit: number;
-  credit: number;
+  /** Minor units (paise) as a bigint-safe decimal string — pass to formatMoney(), never divide. */
+  debit: string;
+  /** Minor units (paise) as a bigint-safe decimal string — pass to formatMoney(), never divide. */
+  credit: string;
   narration?: string;
   referenceNo?: string;
   type?: "payment" | "receipt" | "journal" | "budget";
@@ -727,6 +738,8 @@ export type HRDashboard = {
   onLeave: number;
   payrollDue: number;
   departmentBreakdown: { name: string; count: number }[];
+  /** Tenant-wide headcount grouped by employeeType (excludes separated), independent of any list pagination. */
+  employeeTypeBreakdown: { name: string; count: number }[];
 };
 
 export type LeaveInboxItem = {
@@ -1042,9 +1055,20 @@ export type TenderDetail = TenderSummary & {
   scope?: string;
   eligibilityCriteria?: string;
   bids: Array<{
+    // bidId: needed by the tender lifecycle UI to submit per-bid technical
+    // evaluation results (POST /v1/procurement/tenders/:id/technical-evaluation
+    // takes { results: [{ bidId, qualified, score }] }) — vendorId alone can't
+    // stand in for it (a vendor's identity, not the bid row itself). Optional
+    // so any other consumer relying on the previous shape can't break.
+    bidId?: string;
     vendorId: string;
     vendorName: string;
-    bidAmount: number;
+    // Optional: procurement-service's getTenderDetail deliberately omits this
+    // for any bid whose financial envelope hasn't been opened yet — the
+    // two-envelope bid-sealing property (GFR two-bid system). Keep this in
+    // sync with TenderDetailSchema in packages/schemas/src/web.ts, which is
+    // the corrected, authoritative shape enforced server-side.
+    bidAmount?: number;
     technicalScore?: number;
     financialScore?: number;
     status: string;
@@ -1102,6 +1126,8 @@ export type DealSummary = {
   closeDate?: string;
   probability: number;
   status: "open" | "won" | "lost";
+  /** Optimistic-lock row version (services/crm-service deals.version) — required by PATCH .../stage. */
+  version?: number;
 };
 
 export type ContactDetail = {
@@ -2259,7 +2285,6 @@ export type FinanceBudgetAllocationSummary = {
   committedMinor: string;
   actualMinor: string;
   availableMinor: string;
-  enforce: boolean;
 };
 
 export type BudgetMonitoringTotals = {
@@ -2513,6 +2538,15 @@ export type DisciplinaryCaseDetail = {
  * 0065_vendor_master.sql). Field names match the route's response mapping exactly — this is a
  * runtime-verified contract, not a prediction.
  */
+export type FinanceVendorBillHistoryEntry = {
+  id: string;
+  billNo: string;
+  date: string;
+  amount: string;
+  tds: string;
+  status: string;
+};
+
 export type FinanceVendorDetail = {
   id: string;
   name: string;
@@ -2531,6 +2565,7 @@ export type FinanceVendorDetail = {
   version: number;
   createdAt: string;
   updatedAt: string;
+  bills?: FinanceVendorBillHistoryEntry[];
 };
 
 /**

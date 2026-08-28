@@ -23,6 +23,16 @@ export interface PolicyField {
   kind: FieldKind;
   default: number | boolean;
   unit?: string;
+  /**
+   * Client-side bounds for `kind: "number"` fields (ignored otherwise). Chosen
+   * per-field below, generously above the shipped default so legitimate
+   * tuning isn't blocked, but tight enough to catch fat-fingered entry (e.g.
+   * "24" typed as "240000" for an hours field). The service's own validator
+   * (config-registry/validators.ts) is the authority server-side — these are
+   * a UX guard only, not a substitute for it.
+   */
+  min?: number;
+  max?: number;
 }
 
 export interface PolicyGroup {
@@ -44,6 +54,8 @@ export const POLICY_GROUPS: PolicyGroup[] = [
         kind: "number",
         default: 7,
         unit: "days",
+        min: 1,
+        max: 90,
       },
       {
         namespace: POLICY_NS,
@@ -53,6 +65,8 @@ export const POLICY_GROUPS: PolicyGroup[] = [
         kind: "number",
         default: 15,
         unit: "minutes",
+        min: 1,
+        max: 480,
       },
     ],
   },
@@ -68,6 +82,8 @@ export const POLICY_GROUPS: PolicyGroup[] = [
         kind: "number",
         default: 7,
         unit: "days",
+        min: 1,
+        max: 90,
       },
       {
         namespace: POLICY_NS,
@@ -77,6 +93,11 @@ export const POLICY_GROUPS: PolicyGroup[] = [
         kind: "number",
         default: 2,
         unit: "days",
+        // 0 is valid here (alert on the deadline day itself) — this is a
+        // lead time, not a deadline, so unlike the deadline fields above it
+        // isn't required to be positive.
+        min: 0,
+        max: 30,
       },
     ],
   },
@@ -92,6 +113,8 @@ export const POLICY_GROUPS: PolicyGroup[] = [
         kind: "number",
         default: 30,
         unit: "days",
+        min: 1,
+        max: 365,
       },
     ],
   },
@@ -107,6 +130,10 @@ export const POLICY_GROUPS: PolicyGroup[] = [
         kind: "number",
         default: 24,
         unit: "hours",
+        // Ceiling of 2160h (90 days) — an escalation ladder measured in
+        // months-plus stops being a meaningful escalation.
+        min: 1,
+        max: 2160,
       },
       {
         namespace: POLICY_NS,
@@ -116,6 +143,8 @@ export const POLICY_GROUPS: PolicyGroup[] = [
         kind: "number",
         default: 72,
         unit: "hours",
+        min: 1,
+        max: 2160,
       },
       {
         namespace: POLICY_NS,
@@ -125,6 +154,8 @@ export const POLICY_GROUPS: PolicyGroup[] = [
         kind: "number",
         default: 168,
         unit: "hours",
+        min: 1,
+        max: 2160,
       },
     ],
   },

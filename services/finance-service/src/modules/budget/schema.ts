@@ -123,5 +123,7 @@ export type SanctionRow  = typeof financeSanctions.$inferSelect;
 export type SanctionInsert = typeof financeSanctions.$inferInsert;
 export type ReappropriationRow    = typeof financeReappropriations.$inferSelect;
 export type ReappropriationInsert = typeof financeReappropriations.$inferInsert;
+export type DemandRow = typeof financeDemands.$inferSelect;
+export type SchemeRow = typeof financeSchemes.$inferSelect;
 
 export const schema = { financeHeads, financeBudgets, financeDemands, financeSchemes, financeSanctions, financeReappropriations };

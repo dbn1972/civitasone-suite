@@ -27,7 +27,7 @@ describe("LinkedAccountsPanel (AC-004)", () => {
   it("shows the saved-info badge on a failed load", async () => {
     vi.mocked(aa.getLinkedAccounts).mockResolvedValue({ data: [], source: "error" });
     render(<LinkedAccountsPanel />);
-    await waitFor(() => expect(screen.getAllByText(/showing saved information/i)[0]).toBeInTheDocument());
+    await waitFor(() => expect(screen.getAllByText(/couldn.t load/i)[0]).toBeInTheDocument());
   });
 
   it("blocks connect for an invalid email", async () => {

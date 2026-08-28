@@ -2,49 +2,7 @@ import { PageHeader, StatGrid, StatCard, Card, DataTable } from "../../../_compo
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import { RequestAdvanceForm } from "./RequestAdvanceForm";
-
-type ApiAdvance = {
-  id: string;
-  employee?: { name?: string; employeeNo?: string };
-  amountMinor: number;
-  purpose: string;
-  recoveryMonths: number;
-  recoveredMinor?: number;
-  requestDate?: string;
-  status: string;
-  created_at?: string;
-};
-
-type Row = {
-  id: string;
-  employee: string;
-  amount: string;
-  purpose: string;
-  recoveryMonths: string;
-  recovered: string;
-  requestDate: string;
-  status: string;
-} & Record<string, unknown>;
-
-function formatINR(minor: number | undefined): string {
-  if (minor == null) return "—";
-  return `₹${(minor / 100).toLocaleString("en-IN")}`;
-}
-
-function mapAdvances(rows: ApiAdvance[]): Row[] {
-  return rows.map((a) => ({
-    id: a.id,
-    employee: a.employee?.name
-      ? `${a.employee.name} (${a.employee.employeeNo ?? "—"})`
-      : "—",
-    amount: formatINR(a.amountMinor),
-    purpose: a.purpose ?? "—",
-    recoveryMonths: `${String(a.recoveryMonths).padStart(2, "0")} mo`,
-    recovered: formatINR(a.recoveredMinor),
-    requestDate: a.requestDate ?? a.created_at ?? "—",
-    status: a.status ?? "pending",
-  }));
-}
+import { mapAdvances, type ApiAdvance, type Row } from "./mapAdvances";
 
 async function getData(): Promise<LoaderResult<Row[]>> {
   const r = await fetchJson<unknown, Row[]>("/api/v1/hrms/salary-advances", [], {
@@ -77,7 +35,7 @@ export default async function AdvancesPage() {
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader title="Salary Advances" subtitle="Request and track salary advance disbursements." back="/hr" />
-      <DataSourceBadge source={source} />
+      <DataSourceBadge source={source} message="Couldn't load — showing nothing" />
       <StatGrid>
         <StatCard icon="💰" iconBg="#e6f0ff" label="Total Advances" value={items.length} />
         <StatCard icon="⏳" iconBg="#fffbe6" label="Pending" value={pending} />

@@ -131,6 +131,13 @@ export type ContactDetailView = {
   phone?: string;
   designation?: string;
   city?: string;
+  /** LQ-003 classification / segmentation — mirrors ContactView's fields. */
+  temperature?: string;
+  priority?: string;
+  segment?: string;
+  product?: string;
+  region?: string;
+  expectedValueMinor?: string;
   leadStatus?: string;
   marketingConsent?: boolean;
   lastActivityDate?: string;

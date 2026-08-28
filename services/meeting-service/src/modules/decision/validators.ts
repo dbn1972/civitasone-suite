@@ -158,9 +158,18 @@ export type ResolutionRecordInput = z.infer<typeof resolutionRecordSchema>;
 
 // ─── Sign resolution (Req 11.5 · COMMANDS.resolutionSign) ──────────────────────
 
-/** Apply the chairperson's DSC to a passed resolution (Req 11.5). `resolutionId` from path. */
+/**
+ * Apply the chairperson's DSC to a passed resolution (Req 11.5). `resolutionId` from path.
+ * `signerId` is ALWAYS the authenticated caller -- commands.ts's `resolutionSign` resolves it
+ * as `body.signerId ?? ctx.actorId` -- for the same identity-spoofing reason as minutes'
+ * `signerId`/`approverId` (minutes/validators.ts): the DSC artifacts themselves are correctly
+ * derived server-side regardless, but an unbound client `signerId` was written verbatim into
+ * the CERT-In audit-trail annexure, letting any caller poison the record of who actually signed.
+ */
 export const resolutionSignSchema = z.object({
-  signerId: uuid,
+  /** Required in shape (still 400s if missing/malformed) but the VALUE is always discarded --
+   *  see the schema doc comment above. Never trust this. */
+  signerId: uuid.transform(() => undefined),
 });
 export type ResolutionSignInput = z.infer<typeof resolutionSignSchema>;
 

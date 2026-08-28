@@ -52,7 +52,9 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import type { RequestContext } from "@civitasone/types";
+import { hasAnyRole } from "@civitasone/auth";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
+import { isDirectMeetingOwner, CHAIR_STANDING_ROLES, SECRETARIAL_STANDING_ROLES } from "./domain.js";
 import {
   createMeetingSchema,
   updateMeetingSchema,
@@ -110,6 +112,33 @@ function resolveDashboardTarget(ctx: RequestContext, query: unknown): string {
     return userId;
   }
   return ctx.actorId;
+}
+
+/**
+ * Ownership/standing check (IDOR fix, Req 1.1, 1.3–1.6): `requireRole` alone only proved the
+ * caller holds *a* relevant role somewhere in the tenant — it never compared them to THIS
+ * meeting's own `chairpersonId`/`secretaryId`, so any `committee_secretary` could edit, and any
+ * `committee_chairperson` could transition/cancel, a meeting they have no staffing relationship
+ * to. Admins (`ADMIN_ROLES`) retain the documented "Full CRUD" bypass (design.md § Access
+ * Control Matrix); everyone else must actually BE this meeting's chairperson/secretary, or hold
+ * matching standing (`standingRoles`) on its committee roster (covers a deputy secretary /
+ * co-chair not yet the single name stamped on the meeting row).
+ */
+async function assertMeetingOwnership(
+  ctx: RequestContext,
+  meeting: { committeeId: string | null; chairpersonId: string | null; secretaryId: string | null },
+  standingRoles: readonly string[],
+): Promise<void> {
+  if (hasAnyRole(ctx, ADMIN_ROLES)) return;
+  if (isDirectMeetingOwner(ctx.actorId, meeting)) return;
+  if (meeting.committeeId && (await repo.hasCommitteeStanding(ctx.tenantId, meeting.committeeId, ctx.actorId, standingRoles))) {
+    return;
+  }
+  throw new HttpError(
+    403,
+    "FORBIDDEN",
+    "you must be this meeting's own chairperson/secretary (or hold matching committee standing) to perform this action",
+  );
 }
 
 export async function meetingCoreRoutes(app: FastifyInstance): Promise<void> {
@@ -249,6 +278,7 @@ export async function meetingCoreRoutes(app: FastifyInstance): Promise<void> {
     const { meetingId } = meetingIdParam.parse(req.params);
     const meeting = await repo.getMeetingById(ctx.tenantId, meetingId);
     if (!meeting) throw new HttpError(404, "MEETING_NOT_FOUND", "meeting not found");
+    await assertMeetingOwnership(ctx, meeting, SECRETARIAL_STANDING_ROLES);
     const { version, patch } = updateMeetingSchema.parse(req.body);
     const accepted = await commands.publishMeetingUpdate(ctx, meetingId, version, patch);
     return reply.code(202).send({ data: accepted });
@@ -261,6 +291,7 @@ export async function meetingCoreRoutes(app: FastifyInstance): Promise<void> {
     const { meetingId } = meetingIdParam.parse(req.params);
     const meeting = await repo.getMeetingById(ctx.tenantId, meetingId);
     if (!meeting) throw new HttpError(404, "MEETING_NOT_FOUND", "meeting not found");
+    await assertMeetingOwnership(ctx, meeting, CHAIR_STANDING_ROLES);
     const body = cancelMeetingSchema.parse(req.body);
     const accepted = await commands.publishMeetingCancel(ctx, meetingId, body);
     return reply.code(202).send({ data: accepted });
@@ -273,6 +304,7 @@ export async function meetingCoreRoutes(app: FastifyInstance): Promise<void> {
     const { meetingId } = meetingIdParam.parse(req.params);
     const meeting = await repo.getMeetingById(ctx.tenantId, meetingId);
     if (!meeting) throw new HttpError(404, "MEETING_NOT_FOUND", "meeting not found");
+    await assertMeetingOwnership(ctx, meeting, CHAIR_STANDING_ROLES);
     const body = transitionMeetingSchema.parse(req.body);
     const accepted = await commands.publishMeetingTransition(ctx, meetingId, body);
     return reply.code(202).send({ data: accepted });

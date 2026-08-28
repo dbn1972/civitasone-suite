@@ -1,8 +1,9 @@
 import Link from "next/link";
 import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
-import { PageHeader, Card, StatusPill, EmptyState, DataTable } from "../../../../_components/ds";
+import { PageHeader, Card, StatusPill, EmptyState, ErrorState, DataTable } from "../../../../_components/ds";
 import { getProcurementGRNById, getSrnByGrn } from "../../../../_data/loaders";
 import { formatIndianDate } from "@/lib/formatters";
+import { toHumanError } from "@/lib/messages";
 import { AmendGrnForm } from "./AmendGrnForm";
 
 const STATUS_LABELS: Record<string, string> = {
@@ -47,10 +48,16 @@ export default async function GRNDetailPage({ params }: { params: { id: string }
   ]);
 
   if (!grn) {
+    // L3 fix: see indents/[id]/page.tsx — don't tell the officer a GRN is
+    // "removed or invalid" when the real cause was a fetch error.
     return (
       <>
         <PageHeader title="Goods Receipt Note" back="/procurement/grn" />
-        <EmptyState icon="📦" title="GRN not found" message="This GRN may have been removed or the ID is invalid." />
+        {source === "error" ? (
+          <ErrorState error={toHumanError("load", { area: "GRN" })} backHref="/procurement/grn" />
+        ) : (
+          <EmptyState icon="📦" title="GRN not found" message="This GRN may have been removed or the ID is invalid." />
+        )}
       </>
     );
   }
@@ -77,7 +84,7 @@ export default async function GRNDetailPage({ params }: { params: { id: string }
               label={grn.threeWayMatch ? "Three-way match" : "Three-way mismatch"}
             />
             <StatusPill status={grn.status} label={STATUS_LABELS[grn.status] ?? grn.status} />
-            {source === "error" ? <DataSourceBadge source={source} /> : null}
+            {source === "error" ? <DataSourceBadge source={source} message="Couldn't load — showing nothing" /> : null}
           </>
         }
       />

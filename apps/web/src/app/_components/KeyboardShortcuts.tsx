@@ -29,8 +29,8 @@ export function KeyboardShortcuts() {
     { keys: "g p", label: "Go to Procurement", category: "Navigation", action: () => router.push("/procurement") },
     { keys: "g a", label: "Go to Assets", category: "Navigation", action: () => router.push("/assets") },
     { keys: "g r", label: "Go to Reports", category: "Navigation", action: () => router.push("/reports") },
-    { keys: "n v", label: "New Voucher", category: "Actions", action: () => router.push("/finance/vouchers/new") },
-    { keys: "n l", label: "New Leave Request", category: "Actions", action: () => router.push("/hr/leave/new") },
+    { keys: "n v", label: "New Voucher", category: "Actions", action: () => router.push("/finance/accounting/vouchers/new") },
+    { keys: "n l", label: "New Leave Request", category: "Actions", action: () => router.push("/hr/leave/apply") },
     { keys: "?", label: "Show keyboard shortcuts", category: "System", action: () => setSheetOpen(true) },
   ];
 

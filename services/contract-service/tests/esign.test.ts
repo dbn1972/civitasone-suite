@@ -46,8 +46,8 @@ const SIGNER_2 = "22222222-2222-4000-8000-000000000002";
 const SIGNER_3 = "33333333-3333-4000-8000-000000000003";
 const OWNER = "eeeeeeee-5555-4000-8000-000000000030";
 
-function makeToken(roles: string[] = ["super_admin"], tenantId = TENANT) {
-  return signToken({ sub: ACTOR, tid: tenantId, roles, sid: "sess-esign-001" }, SECRET);
+function makeToken(roles: string[] = ["super_admin"], tenantId = TENANT, sub = ACTOR) {
+  return signToken({ sub, tid: tenantId, roles, sid: "sess-esign-001" }, SECRET);
 }
 
 let app: FastifyInstance;
@@ -441,6 +441,11 @@ describe("POST /v1/contract/esign/:id/sign — sign current signatory", () => {
     return route.id;
   }
 
+  // SEC: the signer identity is bound to the AUTHENTICATED caller (the
+  // token's `sub`), never to a request-body field (see validators.ts /
+  // commands.ts). So "sign as SIGNER_1" below means calling with a token
+  // whose sub is SIGNER_1 — not passing { userId: SIGNER_1 } in the body.
+
   it("returns 202 accepted when correct signatory signs (queue-first)", async () => {
     const routeId = await seedRoute([
       { userId: SIGNER_1, ordinal: 1, deadlineDays: 7 },
@@ -449,8 +454,8 @@ describe("POST /v1/contract/esign/:id/sign — sign current signatory", () => {
     const res = await app.inject({
       method: "POST",
       url: `/v1/contract/esign/${routeId}/sign`,
-      headers: { authorization: `Bearer ${makeToken()}` },
-      payload: { userId: SIGNER_1 },
+      headers: { authorization: `Bearer ${makeToken(["super_admin"], TENANT, SIGNER_1)}` },
+      payload: {},
     });
     expect(res.statusCode).toBe(202);
     const body = res.json();
@@ -466,19 +471,47 @@ describe("POST /v1/contract/esign/:id/sign — sign current signatory", () => {
     const res = await app.inject({
       method: "POST",
       url: `/v1/contract/esign/${routeId}/sign`,
-      headers: { authorization: `Bearer ${makeToken()}` },
-      payload: { userId: SIGNER_2 }, // Not ordinal 1
+      headers: { authorization: `Bearer ${makeToken(["super_admin"], TENANT, SIGNER_2)}` }, // Not ordinal 1
+      payload: {},
     });
     expect(res.statusCode).toBe(422);
     expect(res.json().code).toBe("CANNOT_SIGN");
+  });
+
+  it("SEC regression: a userId in the request body cannot forge another signatory's signature", async () => {
+    // Before the fix, POSTing { userId: SIGNER_1 } while authenticated as a
+    // totally different, non-signatory actor would sign on SIGNER_1's behalf.
+    // The body field must now be inert: only the caller's own authenticated
+    // identity (ACTOR, who is not a signatory on this route) is checked.
+    const routeId = await seedRoute([
+      { userId: SIGNER_1, ordinal: 1, deadlineDays: 7 },
+      { userId: SIGNER_2, ordinal: 2, deadlineDays: 14 },
+    ]);
+    const res = await app.inject({
+      method: "POST",
+      url: `/v1/contract/esign/${routeId}/sign`,
+      headers: { authorization: `Bearer ${makeToken()}` }, // sub: ACTOR — not a signatory
+      payload: { userId: SIGNER_1 }, // attempted spoof — must be ignored
+    });
+    expect(res.statusCode).toBe(422);
+    expect(res.json().code).toBe("CANNOT_SIGN");
+
+    // The route must be untouched: SIGNER_1 still shows pending, not signed.
+    const status = await app.inject({
+      method: "GET",
+      url: `/v1/contract/esign/${routeId}`,
+      headers: { authorization: `Bearer ${makeToken()}` },
+    });
+    const signatories = status.json().data.signatories as SignatoryEntry[];
+    expect(signatories.find((s) => s.userId === SIGNER_1)?.status).toBe("pending");
   });
 
   it("returns 404 for non-existent route", async () => {
     const res = await app.inject({
       method: "POST",
       url: "/v1/contract/esign/00000000-0000-4000-8000-000000000099/sign",
-      headers: { authorization: `Bearer ${makeToken()}` },
-      payload: { userId: SIGNER_1 },
+      headers: { authorization: `Bearer ${makeToken(["super_admin"], TENANT, SIGNER_1)}` },
+      payload: {},
     });
     expect(res.statusCode).toBe(404);
   });
@@ -491,8 +524,8 @@ describe("POST /v1/contract/esign/:id/sign — sign current signatory", () => {
     const res = await app.inject({
       method: "POST",
       url: `/v1/contract/esign/${routeId}/sign`,
-      headers: { authorization: `Bearer ${makeToken()}` },
-      payload: { userId: SIGNER_1 },
+      headers: { authorization: `Bearer ${makeToken(["super_admin"], TENANT, SIGNER_1)}` },
+      payload: {},
     });
     expect(res.statusCode).toBe(422);
     expect(res.json().code).toBe("ROUTE_NOT_ACTIVE");
@@ -502,7 +535,7 @@ describe("POST /v1/contract/esign/:id/sign — sign current signatory", () => {
     const res = await app.inject({
       method: "POST",
       url: "/v1/contract/esign/some-id/sign",
-      payload: { userId: SIGNER_1 },
+      payload: {},
     });
     expect(res.statusCode).toBe(401);
   });
@@ -694,6 +727,71 @@ describe("E-sign consumer — CQRS wiring (integration)", () => {
     await pub(COMMANDS.esignSign, { id: routeId, tenantId: TENANT, userId: SIGNER_2 });
     const done = await waitForRoute({ status: "completed" });
     expect((done.signatories as SignatoryEntry[]).every((s) => s.status === "signed")).toBe(true);
+
+    await rawQueue.stop();
+  });
+
+  it("consumer independently rejects a sign command whose userId is not the current signatory", async () => {
+    // The route layer can never construct this payload today (the signer is
+    // always ctx.actorId — see routes.ts/commands.ts), but the consumer must
+    // not blindly trust the queue payload either. This proves its own
+    // canSign() re-check is real defense-in-depth, not dead code: a
+    // hypothetical second producer, or a future refactor that swaps which
+    // field feeds userId, would still be caught here even if the route-level
+    // guard were ever weakened.
+    const { MemoryQueue } = await import("@civitasone/queue");
+    const { withTenantConsumer } = await import("@civitasone/db");
+    const { registerEsignConsumers } = await import("../src/modules/esign/consumer.js");
+    const { COMMANDS } = await import("../src/topics.js");
+
+    const rawQueue = new MemoryQueue();
+    const rawSubscribe = rawQueue.subscribe.bind(rawQueue);
+    rawQueue.subscribe = ((topic: string, handler: any) =>
+      rawSubscribe(topic, withTenantConsumer(handler) as any)) as typeof rawQueue.subscribe;
+    registerEsignConsumers(rawQueue);
+    await rawQueue.start();
+
+    const routeId = randomUUID();
+    function pub(type: string, payload: Record<string, unknown>) {
+      return rawQueue.publish(type, {
+        messageId: randomUUID(), type, tenantId: TENANT, actorId: ACTOR,
+        correlationId: "corr-" + randomUUID().slice(0, 8), schemaVersion: "1.0", payload,
+      });
+    }
+
+    async function waitForRoute(want: { status?: string; currentOrdinal?: number }) {
+      for (let i = 0; i < 40; i++) {
+        const row = await withTenantScope(db, TENANT, (tx) =>
+          tx.select().from(esignRoutes).where(eq(esignRoutes.id, routeId)).then((r) => r[0]));
+        if (row && (want.status === undefined || row.status === want.status)
+          && (want.currentOrdinal === undefined || row.currentOrdinal === want.currentOrdinal)) {
+          return row;
+        }
+        await new Promise((r) => setTimeout(r, 100));
+      }
+      throw new Error(`e-sign route ${routeId} did not reach expected state ${JSON.stringify(want)}`);
+    }
+
+    await pub(COMMANDS.esignCreate, {
+      id: routeId, tenantId: TENANT, contractId: CONTRACT_ID, ownerId: OWNER,
+      signatories: [
+        { userId: SIGNER_1, ordinal: 1, deadlineDays: 7 },
+        { userId: SIGNER_2, ordinal: 2, deadlineDays: 14 },
+      ],
+    });
+    await waitForRoute({ status: "in_progress", currentOrdinal: 1 });
+
+    // Forged/mismatched payload: userId is SIGNER_2, but ordinal 1 (SIGNER_1) is current.
+    await pub(COMMANDS.esignSign, { id: routeId, tenantId: TENANT, userId: SIGNER_2 });
+
+    // Give the (no-op) handler a moment to run, then assert nothing changed.
+    await new Promise((r) => setTimeout(r, 300));
+    const row = await withTenantScope(db, TENANT, (tx) =>
+      tx.select().from(esignRoutes).where(eq(esignRoutes.id, routeId)).then((r) => r[0]));
+    expect(row?.status).toBe("in_progress");
+    expect(row?.currentOrdinal).toBe(1);
+    expect((row?.signatories as SignatoryEntry[]).find((s) => s.userId === SIGNER_1)?.status).toBe("pending");
+    expect((row?.signatories as SignatoryEntry[]).find((s) => s.userId === SIGNER_2)?.status).toBe("pending");
 
     await rawQueue.stop();
   });

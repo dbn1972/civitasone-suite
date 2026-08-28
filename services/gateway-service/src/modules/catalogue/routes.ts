@@ -1,12 +1,28 @@
 /**
  * CAP-052 — API catalogue routes (gateway-native, DB civitas_gateway).
  *
- * GET    /api/v1/catalogue               list (filter: status, module)
- * GET    /api/v1/catalogue/:id           get one + changelog
- * POST   /api/v1/catalogue               register → queue → 202
- * POST   /api/v1/catalogue/:id/deprecate lifecycle → queue → 202
- * POST   /api/v1/catalogue/:id/lifecycle lifecycle → queue → 202
- * POST   /api/v1/catalogue/seed          seed → queue → 202
+ * Moved off the bare /api/v1/catalogue prefix during the CEP-cluster deep-verify
+ * pass: this is a registry of the PLATFORM'S OWN internal API surface (draft ->
+ * active -> deprecated -> retired), completely unrelated to catalogue-service's
+ * citizen/business-facing product catalogue -- but both had registered routes at
+ * exactly `/api/v1/catalogue`. Because these routes are registered directly on the
+ * gateway's own Fastify instance while catalogue-service is reached through the
+ * generic `/api/*` proxy fallback, Fastify's router always preferred this
+ * gateway-native `:id`-parametric match over the proxy for ANY single-segment path
+ * (e.g. `/api/v1/catalogue/products` matched `GET /api/v1/catalogue/:id` with
+ * id="products", never reaching catalogue-service at all). That silently broke
+ * every top-level list endpoint of the real product catalogue
+ * (products/rates/bundles/etc.) through the gateway -- the only path the actual
+ * frontend uses. Confirmed live. This module is admin-only (apps/web's
+ * admin/gateway-routes page is its sole consumer, updated in the same change) so
+ * it moves; catalogue-service keeps the prefix real users depend on.
+ *
+ * GET    /api/v1/gateway/catalogue               list (filter: status, module)
+ * GET    /api/v1/gateway/catalogue/:id           get one + changelog
+ * POST   /api/v1/gateway/catalogue               register → queue → 202
+ * POST   /api/v1/gateway/catalogue/:id/deprecate lifecycle → queue → 202
+ * POST   /api/v1/gateway/catalogue/:id/lifecycle lifecycle → queue → 202
+ * POST   /api/v1/gateway/catalogue/seed          seed → queue → 202
  *
  * Reads use withTenant() (FORCE-RLS via app.tenant_id GUC).
  * Writes are CQRS: validate → publish → 202; consumer applies under RLS.
@@ -51,7 +67,7 @@ const lifecycleBody = z.object({
 
 export async function catalogueRoutes(app: FastifyInstance): Promise<void> {
   // ── List ────────────────────────────────────────────────────────────────
-  app.get("/api/v1/catalogue", async (req, reply) => {
+  app.get("/api/v1/gateway/catalogue", async (req, reply) => {
     const ctx = resolveContext(req);
     const q = z
       .object({
@@ -66,7 +82,7 @@ export async function catalogueRoutes(app: FastifyInstance): Promise<void> {
   });
 
   // ── Get one + changelog ───────────────────────────────────────────────────
-  app.get("/api/v1/catalogue/:id", async (req, reply) => {
+  app.get("/api/v1/gateway/catalogue/:id", async (req, reply) => {
     const ctx = resolveContext(req);
     const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
     const result = await withTenant(
@@ -83,7 +99,7 @@ export async function catalogueRoutes(app: FastifyInstance): Promise<void> {
   });
 
   // ── Register (CQRS) ───────────────────────────────────────────────────────
-  app.post("/api/v1/catalogue", async (req, reply) => {
+  app.post("/api/v1/gateway/catalogue", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ADMIN_ROLES);
     const body = registerBody.parse(req.body);
@@ -105,7 +121,7 @@ export async function catalogueRoutes(app: FastifyInstance): Promise<void> {
   });
 
   // ── Deprecate (convenience wrapper) ───────────────────────────────────────
-  app.post("/api/v1/catalogue/:id/deprecate", async (req, reply) => {
+  app.post("/api/v1/gateway/catalogue/:id/deprecate", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ADMIN_ROLES);
     const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
@@ -115,7 +131,7 @@ export async function catalogueRoutes(app: FastifyInstance): Promise<void> {
   });
 
   // ── Generic lifecycle transition ────────────────────────────────────────────
-  app.post("/api/v1/catalogue/:id/lifecycle", async (req, reply) => {
+  app.post("/api/v1/gateway/catalogue/:id/lifecycle", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ADMIN_ROLES);
     const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
@@ -125,7 +141,7 @@ export async function catalogueRoutes(app: FastifyInstance): Promise<void> {
   });
 
   // ── Seed from the live route registry ─────────────────────────────────────
-  app.post("/api/v1/catalogue/seed", async (req, reply) => {
+  app.post("/api/v1/gateway/catalogue/seed", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ["super_admin", "platform_admin"]);
     const accepted = await commands.seedCatalogue(ctx);

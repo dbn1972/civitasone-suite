@@ -57,14 +57,14 @@ describe("HearingsConsole", () => {
       <HearingsConsole caseId="case-1" caseSummary={caseSummary} initialHearings={[]} hearingsSource="api" />,
     );
     expect(screen.getByText("No hearings yet")).toBeInTheDocument();
-    expect(screen.queryByText("Showing saved information")).not.toBeInTheDocument();
+    expect(screen.queryByText("Couldn't load — showing nothing")).not.toBeInTheDocument();
   });
 
   it("renders the saved-information badge (not an empty state) when the hearings source is 'error'", () => {
     render(
       <HearingsConsole caseId="case-1" caseSummary={caseSummary} initialHearings={[]} hearingsSource="error" />,
     );
-    expect(screen.getByText("Showing saved information")).toBeInTheDocument();
+    expect(screen.getByText("Couldn't load — showing nothing")).toBeInTheDocument();
     expect(screen.queryByText("No hearings yet")).not.toBeInTheDocument();
   });
 
@@ -96,7 +96,7 @@ describe("HearingsConsole", () => {
     );
     fireEvent.change(screen.getByLabelText(/Date & time/), { target: { value: "2099-06-01T09:30" } });
     fireEvent.click(screen.getByRole("button", { name: "Schedule hearing" }));
-    await waitFor(() => expect(screen.getByText("Showing saved information")).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText("Couldn't load — showing nothing")).toBeInTheDocument());
     // The stale row is still shown, just no longer asserted as fresh.
     expect(screen.getByText(/arguments/i)).toBeInTheDocument();
   });

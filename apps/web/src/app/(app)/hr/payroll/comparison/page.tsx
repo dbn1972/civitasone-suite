@@ -95,7 +95,7 @@ export default async function PayrollComparisonPage({
         subtitle="Month-on-month comparison of payroll register totals."
         back="/hr/payroll"
       />
-      <DataSourceBadge source={source === "error" ? "error" : "api"} />
+      <DataSourceBadge source={source === "error" ? "error" : "api"} message="Couldn't load — showing nothing" />
 
       {canCompare && data && (
         <StatGrid>

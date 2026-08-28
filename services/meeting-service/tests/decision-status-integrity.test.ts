@@ -28,7 +28,7 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { randomUUID } from "node:crypto";
 import { runWithTenant } from "@civitasone/db";
-import type { CommandEnvelope } from "@civitasone/queue";
+import { NonRetryableError, type CommandEnvelope } from "@civitasone/queue";
 import { sqlClient } from "../src/shared/db.js";
 import { COMMANDS } from "../src/topics.js";
 import { registerDecisionConsumers } from "../src/modules/decision/consumer.js";
@@ -98,8 +98,8 @@ beforeAll(async () => {
     await sql`select set_config('app.tenant_id', ${TENANT}, true)`;
     await sql`delete from meeting.resolutions where tenant_id = ${TENANT}`;
     await sql`delete from meeting.decisions where tenant_id = ${TENANT}`;
-    await sql`delete from meeting.committees where tenant_id = ${TENANT}`;
     await sql`delete from meeting.meetings where tenant_id = ${TENANT}`;
+    await sql`delete from meeting.committees where tenant_id = ${TENANT}`;
     await sql`delete from _outbox.messages where tenant_id = ${TENANT}`;
 
     await sql`
@@ -116,17 +116,22 @@ afterAll(async () => {
     await sql`select set_config('app.tenant_id', ${TENANT}, true)`;
     await sql`delete from meeting.resolutions where tenant_id = ${TENANT}`;
     await sql`delete from meeting.decisions where tenant_id = ${TENANT}`;
-    await sql`delete from meeting.committees where tenant_id = ${TENANT}`;
     await sql`delete from meeting.meetings where tenant_id = ${TENANT}`;
+    await sql`delete from meeting.committees where tenant_id = ${TENANT}`;
     await sql`delete from _outbox.messages where tenant_id = ${TENANT}`;
   });
   await sqlClient.end();
 });
 
-describe("[BUG] decision.status can be set inconsistent with its linked resolution's real outcome", () => {
-  it.fails("must not accept status='effective' on a decision whose linked resolution actually failed", async () => {
+describe("[FIXED] decision.status can no longer be set inconsistent with its linked resolution's real outcome", () => {
+  it("rejects status='effective' on a decision whose linked resolution actually failed", async () => {
     const decisionId = randomUUID();
-    await recordDecision(decisionId);
+    await recordDecision(decisionId); // handleDecisionRecord always creates status="effective"
+
+    // Move it OFF "effective" first (e.g. an administrative withdrawal) so the later attempt to
+    // set it back to "effective" is a genuine, observable status change, not a same-value no-op.
+    await updateDecision(decisionId, 1, { status: "withdrawn" });
+    expect((await readDecision(decisionId)).status).toBe("withdrawn");
 
     const resolutionId = randomUUID();
     await tenantQuery(
@@ -138,15 +143,17 @@ describe("[BUG] decision.status can be set inconsistent with its linked resoluti
                 'roll_call', 'simple_majority', 1, 4, 0, 'rejected', 'rejected', false, ${ACTOR}, ${ACTOR})`,
     );
 
-    await updateDecision(decisionId, 1, { status: "effective" });
+    await expect(updateDecision(decisionId, 2, { status: "effective" })).rejects.toBeInstanceOf(NonRetryableError);
 
     const decision = await readDecision(decisionId);
-    // Correct behavior: a decision cannot be "effective" while its own linked resolution result
-    // is "rejected" — the two records would openly contradict each other in the official minutes.
+    // A decision cannot be "effective" while its own linked resolution result is "rejected" —
+    // the two records would openly contradict each other in the official minutes. The patch is
+    // rejected outright, so the decision keeps its prior (withdrawn) status, not "effective".
+    expect(decision.status).toBe("withdrawn");
     expect(decision.status).not.toBe("effective");
   });
 
-  it("characterizes today's actual (buggy) behavior: the contradiction is accepted silently", async () => {
+  it("confirms the fix: status='effective' IS accepted once the linked resolution actually passed", async () => {
     const decisionId = randomUUID();
     await recordDecision(decisionId);
     const resolutionId = randomUUID();
@@ -156,42 +163,45 @@ describe("[BUG] decision.status can be set inconsistent with its linked resoluti
           (id, tenant_id, meeting_id, decision_id, resolution_number, text, vote_type, majority_rule,
            votes_for, votes_against, votes_abstain, result, status, is_circulation, created_by, updated_by)
         values (${resolutionId}, ${TENANT}, ${MEETING}, ${decisionId}, ${"RES-" + resolutionId}, 'The linked motion',
-                'roll_call', 'simple_majority', 1, 4, 0, 'rejected', 'rejected', false, ${ACTOR}, ${ACTOR})`,
+                'roll_call', 'simple_majority', 4, 1, 0, 'passed', 'effective', false, ${ACTOR}, ${ACTOR})`,
     );
     await updateDecision(decisionId, 1, { status: "effective" });
 
     const decision = await readDecision(decisionId);
-    const resolution = (await tenantQuery((sql) => sql`select * from meeting.resolutions where id = ${resolutionId}`))[0];
     expect(decision.status).toBe("effective");
-    expect(resolution.result).toBe("rejected"); // the two records now flatly contradict each other
   });
 });
 
-describe("[BUG] supersededById is never checked to reference a real decision", () => {
-  it.fails("must not accept a supersededById that matches no decision at all", async () => {
+describe("[FIXED] supersededById is now checked to reference a real decision", () => {
+  it("rejects a supersededById that matches no decision at all", async () => {
     const decisionId = randomUUID();
     await recordDecision(decisionId);
     const ghost = randomUUID(); // no row in meeting.decisions anywhere
 
-    await updateDecision(decisionId, 1, { status: "superseded", supersededById: ghost });
+    await expect(
+      updateDecision(decisionId, 1, { status: "superseded", supersededById: ghost }),
+    ).rejects.toBeInstanceOf(NonRetryableError);
 
     const decision = await readDecision(decisionId);
     expect(decision.superseded_by_id).toBeNull();
   });
 
-  it("characterizes today's actual (buggy) behavior: the dangling pointer is persisted", async () => {
-    const decisionId = randomUUID();
-    await recordDecision(decisionId);
-    const ghost = randomUUID();
-    await updateDecision(decisionId, 1, { status: "superseded", supersededById: ghost });
+  it("confirms the fix: a supersededById that DOES reference a real, same-tenant decision is accepted", async () => {
+    const oldId = randomUUID();
+    const newId = randomUUID();
+    await recordDecision(oldId);
+    await recordDecision(newId);
 
-    const decision = await readDecision(decisionId);
-    expect(decision.superseded_by_id).toBe(ghost);
+    await updateDecision(oldId, 1, { status: "superseded", supersededById: newId });
+
+    const decision = await readDecision(oldId);
+    expect(decision.superseded_by_id).toBe(newId);
+    expect(decision.status).toBe("superseded");
   });
 });
 
-describe("[BUG] the acyclic-lineage guard (domain.ts) is never invoked by the write path", () => {
-  it.fails("must not allow a 3-node supersession cycle to be completed", async () => {
+describe("[FIXED] the acyclic-lineage guard (domain.ts) is now wired into the write path", () => {
+  it("must not allow a 3-node supersession cycle to be completed", async () => {
     const A = randomUUID();
     const B = randomUUID();
     const C = randomUUID();
@@ -199,16 +209,22 @@ describe("[BUG] the acyclic-lineage guard (domain.ts) is never invoked by the wr
     await recordDecision(B);
     await recordDecision(C);
 
-    // A -> supersedes -> B
+    // A's supersededById -> B
     await updateDecision(A, 1, { status: "superseded", supersededById: B });
-    // B -> supersedes -> C
+    // B's supersededById -> C
     await updateDecision(B, 1, { status: "superseded", supersededById: C });
-    // C -> supersedes -> A: closes the cycle A -> B -> C -> A. This third update is exactly the
-    // case `wouldCreateCycle`/`assertAcyclicLineage` (domain.ts:364-420) exists to reject.
-    await expect(updateDecision(C, 1, { status: "superseded", supersededById: A })).rejects.toThrow();
+    // C's supersededById -> A: closes the cycle A -> B -> C -> A. This third update is exactly the
+    // case `wouldCreateCycle`/`assertAcyclicLineage` (domain.ts:364-420) exists to reject, now
+    // actually wired into handleDecisionUpdate.
+    await expect(updateDecision(C, 1, { status: "superseded", supersededById: A })).rejects.toBeInstanceOf(NonRetryableError);
+
+    // The would-be-cyclic edge was never persisted — C's own row is unchanged.
+    const c = await readDecision(C);
+    expect(c.superseded_by_id).toBeNull();
+    expect(c.status).toBe("effective");
   });
 
-  it("characterizes today's actual (buggy) behavior: the 3-cycle is fully persisted with no error", async () => {
+  it("confirms the fix: a non-cyclic 3-node supersession chain (A -> B -> C, no closing edge) is accepted", async () => {
     const A = randomUUID();
     const B = randomUUID();
     const C = randomUUID();
@@ -218,11 +234,9 @@ describe("[BUG] the acyclic-lineage guard (domain.ts) is never invoked by the wr
 
     await updateDecision(A, 1, { status: "superseded", supersededById: B });
     await updateDecision(B, 1, { status: "superseded", supersededById: C });
-    await updateDecision(C, 1, { status: "superseded", supersededById: A }); // does not throw today
 
-    const [a, b, c] = await Promise.all([readDecision(A), readDecision(B), readDecision(C)]);
+    const [a, b] = await Promise.all([readDecision(A), readDecision(B)]);
     expect(a.superseded_by_id).toBe(B);
     expect(b.superseded_by_id).toBe(C);
-    expect(c.superseded_by_id).toBe(A); // the register's lineage graph is now a closed cycle
   });
 });

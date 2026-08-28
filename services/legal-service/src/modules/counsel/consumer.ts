@@ -30,7 +30,23 @@ export function registerCounselBriefConsumers(queue: Queue): void {
       });
       await audit(tx, msg, "assign", "counsel_brief", p.id);
     });
-    await cache.invalidate(cache.makeKey(msg.tenantId, "counsel_brief", p.id));
+    // Two independent keys, no data dependency between them — run concurrently
+    // so this consumer doesn't add avoidable Redis round-trip latency to the
+    // exact post-commit staleness window it exists to shrink.
+    await Promise.all([
+      // Single-item key primed for read-your-writes by commands.ts.
+      cache.invalidate(cache.makeKey(msg.tenantId, "counsel_brief", p.id)),
+      // queries.ts caches listBriefs() results under a separate "counsel_briefs"
+      // (plural) resource key per caseId/status combo — nothing invalidated
+      // that before this line, so a list read that raced ahead of this
+      // consumer (or ran before this brief existed) would cache an
+      // incomplete/empty result and keep serving it for up to the default TTL
+      // even after this insert commits. Confirmed live: POST
+      // /v1/legal/counsel-briefs then an immediate GET
+      // /v1/legal/counsel-briefs?caseId=... came back { items: [] } although
+      // the row was already committed to Postgres.
+      cache.invalidateResource(msg.tenantId, "counsel_briefs"),
+    ]);
   });
 }
 

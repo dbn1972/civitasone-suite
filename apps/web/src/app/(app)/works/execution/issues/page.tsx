@@ -1,4 +1,5 @@
 import { PageHeader, Card, DataTable, StatGrid, StatCard } from "@/app/_components/ds";
+import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
 import { fetchJson } from "@/app/_data/apiClient";
 import { formatIndianDate } from "@/lib/formatters";
 import { IssueCloseForm } from "./IssueCloseForm";
@@ -60,6 +61,11 @@ export default async function IssuesRegisterPage() {
         title="Issues Register"
         subtitle="All field issues across works."
         back="/works"
+        actions={
+          response.source === "error" ? (
+            <DataSourceBadge source="error" message="Couldn't load issues — the list may be incomplete." />
+          ) : null
+        }
       />
       <div
         style={{

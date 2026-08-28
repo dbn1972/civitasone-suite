@@ -18,10 +18,15 @@ UPDATE events.events
    SET retain_until = occurred_at + INTERVAL '180 days'
  WHERE retain_until IS NULL;
 
--- Index to support retention sweep queries (purge only rows past retain_until)
+-- Index to support retention sweep queries (purge only rows past retain_until).
+-- Not a partial index: "WHERE retain_until < now()" is not a valid index
+-- predicate (now() is STABLE, not IMMUTABLE -- a row's membership would have
+-- to change over time with no corresponding row update, which Postgres
+-- forbids for index predicates). A plain index on the column already lets the
+-- planner use it efficiently for "retain_until < now()" range scans at query
+-- time; only the persisted predicate needs to avoid now().
 CREATE INDEX IF NOT EXISTS idx_audit_events_retain_until
-  ON events.events(retain_until)
-  WHERE retain_until < now();
+  ON events.events(retain_until);
 
 -- observation.audit_observations — add replied_rejected status (AU-01 review loop)
 -- The status column is varchar(24) which already accommodates the new values.

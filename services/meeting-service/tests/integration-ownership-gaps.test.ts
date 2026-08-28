@@ -28,11 +28,15 @@
  *      (schedule, cancel, ...) of a meeting they do not chair.
  *   3. Any `committee_member` can RSVP-decline or nominate a proxy on behalf of a
  *      completely different participant, silently, without that participant's knowledge.
- *   4. Any `committee_member` can mark ANY OTHER invited participant "present" via
- *      check-in/manual-mark — including participants they have no relationship to beyond
- *      sharing a meeting — which is sufficient, on its own, to fabricate quorum: this test
- *      shows a single unrelated actor single-handedly flips `quorum_established` to true by
- *      "checking in" two other people who never actually attended.
+ *   4. [FIXED — see the third describe block below] Attendance check-in/manual-mark used to
+ *      have no identity check at all: any `committee_member` could mark ANY OTHER invited
+ *      participant "present" — including participants they had no relationship to beyond
+ *      sharing a meeting — which was sufficient, on its own, to fabricate quorum.
+ *      `attendance/domain.ts#assertParticipantInvited` now also verifies the caller is either
+ *      the participant themselves or an authorized agent of the meeting (its secretary,
+ *      chairperson, or creator — the roll-call case); an unrelated actor's check-in is accepted
+ *      at the HTTP boundary (202, CQRS) but rejected by the consumer, so no attendance record is
+ *      persisted and quorum is never fabricated.
  *
  * Verified live via the real consumer + real Postgres (this file), matching the visitor-
  * service audit's identity-verify-ownership.integration.test.ts methodology and the local
@@ -45,7 +49,7 @@ import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { randomUUID } from "node:crypto";
 import { signToken } from "@civitasone/auth";
 import { runWithTenant } from "@civitasone/db";
-import type { CommandEnvelope } from "@civitasone/queue";
+import { NonRetryableError, type CommandEnvelope } from "@civitasone/queue";
 import type { FastifyInstance } from "fastify";
 import { buildApp } from "../src/app.js";
 import { sqlClient } from "../src/shared/db.js";
@@ -233,7 +237,7 @@ afterAll(async () => {
 });
 
 describe("meeting-core: no ownership check on update/transition/cancel (IDOR)", () => {
-  it("PATCH /v1/meetings/:id — an unrelated committee_secretary can edit AND reassign a meeting they do not staff", async () => {
+  it("PATCH /v1/meetings/:id — an unrelated committee_secretary is rejected (403) and cannot edit or reassign a meeting they do not staff", async () => {
     const meetingId = await createMeeting({
       chairpersonId: OWNER_CHAIR,
       secretaryId: OWNER_SECRETARY,
@@ -243,8 +247,9 @@ describe("meeting-core: no ownership check on update/transition/cancel (IDOR)", 
     expect(before.secretary_id).toBe(OWNER_SECRETARY);
 
     // ATTACKER_SECRETARY has never been added to this meeting or its committee in any role.
-    // The route only checks `requireRole(ctx, WRITE_ROLES)` — holding *a* committee_secretary
-    // role anywhere in the tenant is sufficient.
+    // Fix: the route now compares the caller to meeting.chairpersonId/secretaryId (or committee
+    // standing) — holding *a* committee_secretary role anywhere in the tenant is no longer
+    // sufficient.
     const res = await app.inject({
       method: "PATCH",
       url: `/v1/meetings/${meetingId}`,
@@ -253,29 +258,50 @@ describe("meeting-core: no ownership check on update/transition/cancel (IDOR)", 
         version: before.version,
         patch: {
           title: "Retitled by a stranger",
-          secretaryId: ATTACKER_SECRETARY, // the attacker hijacks ownership going forward
+          secretaryId: ATTACKER_SECRETARY, // the attacker attempts to hijack ownership
         },
       },
     });
-    // NOT 403 — this is the bug: role-only check passes for a complete stranger to this meeting.
-    expect(res.statusCode).toBe(202);
+    expect(res.statusCode).toBe(403);
 
-    await run(
-      msg(COMMANDS.meetingUpdate, ATTACKER_SECRETARY, {
-        meetingId,
-        version: before.version,
-        patch: { title: "Retitled by a stranger", secretaryId: ATTACKER_SECRETARY },
-      }),
-    );
+    // Defense in depth: even a direct-to-consumer write (bypassing the route entirely) is
+    // independently rejected.
+    await expect(
+      run(
+        msg(COMMANDS.meetingUpdate, ATTACKER_SECRETARY, {
+          meetingId,
+          version: before.version,
+          patch: { title: "Retitled by a stranger", secretaryId: ATTACKER_SECRETARY },
+        }),
+      ),
+    ).rejects.toThrow();
 
     const after = await readMeeting(meetingId);
-    // BUG: a stranger's write took effect, including reassigning secretaryId to themselves.
-    expect(after.title).toBe("Retitled by a stranger");
-    expect(after.secretary_id).toBe(ATTACKER_SECRETARY);
-    expect(after.updated_by).toBe(ATTACKER_SECRETARY);
+    // The stranger's write never took effect at either layer.
+    expect(after.title).toBe(before.title);
+    expect(after.secretary_id).toBe(OWNER_SECRETARY);
+    expect(after.updated_by).toBe(OWNER_SECRETARY);
+
+    // Positive path: the meeting's OWN secretary can still legitimately edit it.
+    const ownRes = await app.inject({
+      method: "PATCH",
+      url: `/v1/meetings/${meetingId}`,
+      headers: writeHeaders(OWNER_SECRETARY, ["committee_secretary"]),
+      payload: { version: before.version, patch: { title: "Retitled by its own secretary" } },
+    });
+    expect(ownRes.statusCode).toBe(202);
+    await run(
+      msg(COMMANDS.meetingUpdate, OWNER_SECRETARY, {
+        meetingId,
+        version: before.version,
+        patch: { title: "Retitled by its own secretary" },
+      }),
+    );
+    const afterOwn = await readMeeting(meetingId);
+    expect(afterOwn.title).toBe("Retitled by its own secretary");
   });
 
-  it("transition + cancel — an unrelated committee_chairperson can schedule then cancel a meeting they do not chair", async () => {
+  it("transition + cancel — an unrelated committee_chairperson is rejected (403) and cannot drive a meeting they do not chair", async () => {
     const meetingId = await createMeeting({
       chairpersonId: OWNER_CHAIR,
       secretaryId: OWNER_SECRETARY,
@@ -294,43 +320,49 @@ describe("meeting-core: no ownership check on update/transition/cancel (IDOR)", 
       headers: writeHeaders(ATTACKER_CHAIR, ["committee_chairperson"]),
       payload: { version: meeting.version, to: "scheduled" },
     });
-    expect(scheduleRes.statusCode).toBe(202); // NOT 403
-
-    await run(msg(COMMANDS.meetingTransition, ATTACKER_CHAIR, { meetingId, version: meeting.version, to: "scheduled" }));
+    expect(scheduleRes.statusCode).toBe(403);
+    await expect(
+      run(msg(COMMANDS.meetingTransition, ATTACKER_CHAIR, { meetingId, version: meeting.version, to: "scheduled" })),
+    ).rejects.toThrow();
     meeting = await readMeeting(meetingId);
-    expect(meeting.status).toBe("scheduled");
+    expect(meeting.status).toBe("draft"); // unchanged
 
-    // Same stranger now cancels the meeting outright.
+    // Same stranger attempts to cancel the meeting outright — also rejected.
     const cancelRes = await app.inject({
       method: "DELETE",
       url: `/v1/meetings/${meetingId}`,
       headers: writeHeaders(ATTACKER_CHAIR, ["committee_chairperson"]),
       payload: { version: meeting.version, reason: "cancelled by a stranger" },
     });
-    expect(cancelRes.statusCode).toBe(202); // NOT 403
-
-    await run(
-      msg(COMMANDS.meetingCancel, ATTACKER_CHAIR, {
-        meetingId,
-        version: meeting.version,
-        reason: "cancelled by a stranger",
-      }),
-    );
+    expect(cancelRes.statusCode).toBe(403);
+    await expect(
+      run(msg(COMMANDS.meetingCancel, ATTACKER_CHAIR, { meetingId, version: meeting.version, reason: "cancelled by a stranger" })),
+    ).rejects.toThrow();
     meeting = await readMeeting(meetingId);
-    // BUG: a non-chairperson, non-staffed actor drove the entire state machine, including the
-    // irreversible cancel.
-    expect(meeting.status).toBe("cancelled");
+    expect(meeting.status).toBe("draft"); // still unchanged — no transition ever recorded
 
     const transitions = await tenantQuery(
       (sql) => sql`SELECT actor_id, to_state FROM meeting.meeting_state_transitions
                    WHERE meeting_id = ${meetingId} AND tenant_id = ${TENANT} ORDER BY transitioned_at ASC`,
     );
-    expect((transitions as any[]).every((t) => t.actor_id === ATTACKER_CHAIR)).toBe(true);
+    expect((transitions as any[]).length).toBe(0);
+
+    // Positive path: the meeting's OWN chairperson can still legitimately drive it.
+    const ownRes = await app.inject({
+      method: "POST",
+      url: `/v1/meetings/${meetingId}/transition`,
+      headers: writeHeaders(OWNER_CHAIR, ["committee_chairperson"]),
+      payload: { version: meeting.version, to: "scheduled" },
+    });
+    expect(ownRes.statusCode).toBe(202);
+    await run(msg(COMMANDS.meetingTransition, OWNER_CHAIR, { meetingId, version: meeting.version, to: "scheduled" }));
+    meeting = await readMeeting(meetingId);
+    expect(meeting.status).toBe("scheduled");
   });
 });
 
 describe("participant: RSVP/nominate ignore the documented 'act on your own invitation' model (IDOR)", () => {
-  it("respond — an unrelated committee_member can decline on a stranger's behalf, without their knowledge", async () => {
+  it("respond — an unrelated committee_member is rejected (403) and cannot decline on a stranger's behalf", async () => {
     const meetingId = await createMeeting({
       chairpersonId: OWNER_CHAIR,
       secretaryId: OWNER_SECRETARY,
@@ -343,35 +375,47 @@ describe("participant: RSVP/nominate ignore the documented 'act on your own invi
     expect(before.invitation_status).toBe("pending");
 
     // ATTACKER_MEMBER is a committee_member somewhere in the tenant, but is not VICTIM_A and
-    // has no relationship to this participant row. participant/routes.ts's own doc comment
-    // says RSVP is "the invited member act[ing] on their own invitation" — the route never
-    // checks that.
+    // has no relationship to this participant row. Fix: the route now requires the caller to
+    // BE VICTIM_A (self) or hold on-behalf-of standing (secretariat/chair/admin) — a plain
+    // committee_member no longer passes for a stranger's invitation.
     const res = await app.inject({
       method: "POST",
       url: `/v1/meetings/${meetingId}/participants/${participantId}/respond`,
       headers: writeHeaders(ATTACKER_MEMBER, ["committee_member"]),
       payload: { response: "decline", declineReason: "forged decline by an unrelated actor" },
     });
-    expect(res.statusCode).toBe(202); // NOT 403
+    expect(res.statusCode).toBe(403);
 
-    await run(
-      msg(COMMANDS.participantRespond, ATTACKER_MEMBER, {
-        meetingId,
-        participantId,
-        response: "decline",
-        declineReason: "forged decline by an unrelated actor",
-      }),
-    );
+    await expect(
+      run(
+        msg(COMMANDS.participantRespond, ATTACKER_MEMBER, {
+          meetingId,
+          participantId,
+          response: "decline",
+          declineReason: "forged decline by an unrelated actor",
+        }),
+      ),
+    ).rejects.toThrow();
 
     const after = await readParticipant(participantId);
-    // BUG: VICTIM_A's invitation was declined by someone who is not VICTIM_A — VICTIM_A never
-    // made this choice and may not even know it happened.
-    expect(after.invitation_status).toBe("declined");
-    expect(after.decline_reason).toBe("forged decline by an unrelated actor");
-    expect(after.updated_by).toBe(ATTACKER_MEMBER);
+    // VICTIM_A's invitation was never touched by the stranger.
+    expect(after.invitation_status).toBe("pending");
+    expect(after.decline_reason).toBeNull();
+
+    // Positive path: VICTIM_A (the invitee) can respond to their own invitation.
+    const ownRes = await app.inject({
+      method: "POST",
+      url: `/v1/meetings/${meetingId}/participants/${participantId}/respond`,
+      headers: writeHeaders(VICTIM_A, ["committee_member"]),
+      payload: { response: "accept" },
+    });
+    expect(ownRes.statusCode).toBe(202);
+    await run(msg(COMMANDS.participantRespond, VICTIM_A, { meetingId, participantId, response: "accept" }));
+    const afterOwn = await readParticipant(participantId);
+    expect(afterOwn.invitation_status).toBe("accepted");
   });
 
-  it("nominate — an unrelated committee_member can designate a proxy on a stranger's behalf", async () => {
+  it("nominate — an unrelated committee_member is rejected (403) and cannot designate a proxy on a stranger's behalf", async () => {
     // committeeId is set here (unlike the other fixtures) because handleParticipantNominate
     // resolves the approved-nominee list from the meeting's committee roster — VICTIM_B
     // qualifies as the nominee only because it was seeded as an active member of COMMITTEE.
@@ -390,27 +434,39 @@ describe("participant: RSVP/nominate ignore the documented 'act on your own invi
       headers: writeHeaders(ATTACKER_MEMBER, ["committee_member"]),
       payload: { nomineeId: VICTIM_B, reason: "forged nomination by an unrelated actor" },
     });
-    expect(res.statusCode).toBe(202); // NOT 403
+    expect(res.statusCode).toBe(403);
 
-    await run(
-      msg(COMMANDS.participantNominate, ATTACKER_MEMBER, {
-        meetingId,
-        participantId,
-        nomineeId: VICTIM_B,
-        reason: "forged nomination by an unrelated actor",
-      }),
-    );
+    await expect(
+      run(
+        msg(COMMANDS.participantNominate, ATTACKER_MEMBER, {
+          meetingId,
+          participantId,
+          nomineeId: VICTIM_B,
+          reason: "forged nomination by an unrelated actor",
+        }),
+      ),
+    ).rejects.toThrow();
 
     const after = await readParticipant(participantId);
-    // BUG: VICTIM_A now has a proxy (VICTIM_B) attending in their place, designated entirely
-    // by ATTACKER_MEMBER — VICTIM_A had no say in who represents them.
-    expect(after.nominee_id).toBe(VICTIM_B);
-    expect(after.updated_by).toBe(ATTACKER_MEMBER);
+    // VICTIM_A was never assigned a proxy by the stranger.
+    expect(after.nominee_id).toBeNull();
+
+    // Positive path: VICTIM_A (the invitee) can nominate their own proxy.
+    const ownRes = await app.inject({
+      method: "POST",
+      url: `/v1/meetings/${meetingId}/participants/${participantId}/nominate`,
+      headers: writeHeaders(VICTIM_A, ["committee_member"]),
+      payload: { nomineeId: VICTIM_B, reason: "on official tour" },
+    });
+    expect(ownRes.statusCode).toBe(202);
+    await run(msg(COMMANDS.participantNominate, VICTIM_A, { meetingId, participantId, nomineeId: VICTIM_B, reason: "on official tour" }));
+    const afterOwn = await readParticipant(participantId);
+    expect(afterOwn.nominee_id).toBe(VICTIM_B);
   });
 });
 
-describe("attendance: check-in has no self/identity check — quorum can be fabricated (IDOR)", () => {
-  it("a single unrelated actor checks in two other participants and single-handedly establishes quorum", async () => {
+describe("attendance: check-in now has a self/identity check — quorum can no longer be fabricated by a stranger (Req 6.2)", () => {
+  it("a single unrelated actor's check-in of two other participants is accepted at the HTTP boundary (202, CQRS) but rejected by the consumer — no records, no fabricated quorum", async () => {
     const meetingId = await createMeeting({
       chairpersonId: OWNER_CHAIR,
       secretaryId: OWNER_SECRETARY,
@@ -430,29 +486,35 @@ describe("attendance: check-in has no self/identity check — quorum can be fabr
     expect(meeting.quorum_established).toBe(false);
 
     // ATTACKER_MEMBER holds CHECKIN_ROLES (committee_member) but is not VICTIM_A, not
-    // VICTIM_B, and has no relationship to either participant row. attendance/domain.ts's
-    // assertParticipantInvited only checks that the *target* participantId is an invited
-    // member of *this meeting* — it never checks who is making the HTTP call.
+    // VICTIM_B, is not this meeting's secretary/chairperson/creator (OWNER_SECRETARY /
+    // OWNER_CHAIR), and has no relationship to either participant row.
+    //
+    // The route still accepts the write at 202 (CQRS: routes never reject a domain-rule
+    // violation synchronously, they just queue the command) — the actual authorization decision
+    // is made by attendance/domain.ts#assertParticipantInvited inside the consumer, so the
+    // corresponding `run()` call below rejects instead of persisting anything.
     const res1 = await app.inject({
       method: "POST",
       url: `/v1/meetings/${meetingId}/attendance/check-in`,
       headers: writeHeaders(ATTACKER_MEMBER, ["committee_member"]),
       payload: { participantId: participantA, method: "manual", mode: "in_person" },
     });
-    expect(res1.statusCode).toBe(202); // NOT 403, NOT "you may only check yourself in"
+    expect(res1.statusCode).toBe(202);
 
     const now = new Date().toISOString();
-    await run(
-      msg(COMMANDS.attendanceCheckIn, ATTACKER_MEMBER, {
-        attendanceId: randomUUID(),
-        meetingId,
-        tenantId: TENANT,
-        participantId: participantA,
-        method: "manual",
-        mode: "in_person",
-        checkInAt: now,
-      }),
-    );
+    await expect(
+      run(
+        msg(COMMANDS.attendanceCheckIn, ATTACKER_MEMBER, {
+          attendanceId: randomUUID(),
+          meetingId,
+          tenantId: TENANT,
+          participantId: participantA,
+          method: "manual",
+          mode: "in_person",
+          checkInAt: now,
+        }),
+      ),
+    ).rejects.toBeInstanceOf(NonRetryableError);
 
     const res2 = await app.inject({
       method: "POST",
@@ -462,30 +524,64 @@ describe("attendance: check-in has no self/identity check — quorum can be fabr
     });
     expect(res2.statusCode).toBe(202);
 
-    await run(
-      msg(COMMANDS.attendanceCheckIn, ATTACKER_MEMBER, {
-        attendanceId: randomUUID(),
-        meetingId,
-        tenantId: TENANT,
-        participantId: participantB,
-        method: "manual",
-        mode: "in_person",
-        checkInAt: now,
-      }),
-    );
+    await expect(
+      run(
+        msg(COMMANDS.attendanceCheckIn, ATTACKER_MEMBER, {
+          attendanceId: randomUUID(),
+          meetingId,
+          tenantId: TENANT,
+          participantId: participantB,
+          method: "manual",
+          mode: "in_person",
+          checkInAt: now,
+        }),
+      ),
+    ).rejects.toBeInstanceOf(NonRetryableError);
 
-    // BUG: neither VICTIM_A nor VICTIM_B ever called the API themselves — a single unrelated
-    // actor "checked in" both of them from one HTTP identity — yet the meeting now reads as
-    // quorate, which downstream governance modules (voting, decision) treat as trustworthy.
+    // FIXED: neither VICTIM_A nor VICTIM_B ever called the API themselves, and ATTACKER_MEMBER
+    // is not authorized to act for either of them — no attendance record was persisted, and the
+    // meeting does NOT read as quorate.
     meeting = await readMeeting(meetingId);
-    expect(meeting.quorum_established).toBe(true);
+    expect(meeting.quorum_established).toBe(false);
 
     const records = await tenantQuery(
       (sql) => sql`SELECT participant_id, created_by, status FROM meeting.attendance_records
                    WHERE meeting_id = ${meetingId} AND tenant_id = ${TENANT} ORDER BY created_at ASC`,
     );
-    expect((records as any[]).length).toBe(2);
-    expect((records as any[]).every((r) => r.created_by === ATTACKER_MEMBER)).toBe(true);
-    expect((records as any[]).every((r) => r.status === "present")).toBe(true);
+    expect((records as any[]).length).toBe(0);
   }, 15000);
+
+  it("the meeting's own secretary CAN check in another participant on their behalf (roll call)", async () => {
+    const meetingId = await createMeeting({
+      chairpersonId: OWNER_CHAIR,
+      secretaryId: OWNER_SECRETARY,
+      scheduledAt: new Date(Date.now() + 60_000),
+    });
+    await tenantQuery(
+      (sql) => sql`UPDATE meeting.meetings SET committee_id = ${COMMITTEE} WHERE id = ${meetingId} AND tenant_id = ${TENANT}`,
+    );
+    const participantA = randomUUID();
+    await addParticipant(meetingId, participantA, VICTIM_A);
+
+    // OWNER_SECRETARY is THIS meeting's named secretary — a legitimate roll-call check-in.
+    await run(
+      msg(COMMANDS.attendanceCheckIn, OWNER_SECRETARY, {
+        attendanceId: randomUUID(),
+        meetingId,
+        tenantId: TENANT,
+        participantId: participantA,
+        method: "manual",
+        mode: "in_person",
+        checkInAt: new Date().toISOString(),
+      }),
+    );
+
+    const records = await tenantQuery(
+      (sql) => sql`SELECT participant_id, created_by, status FROM meeting.attendance_records
+                   WHERE meeting_id = ${meetingId} AND tenant_id = ${TENANT}`,
+    );
+    expect((records as any[]).length).toBe(1);
+    expect((records as any[])[0].created_by).toBe(OWNER_SECRETARY);
+    expect((records as any[])[0].status).toBe("present");
+  });
 });

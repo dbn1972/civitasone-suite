@@ -81,11 +81,18 @@ export function BillingActions({ bills }: BillingActionsProps) {
   // ── MB finalize ────────────────────────────────────────────────────────────
   const [mbId, setMbId] = useState("");
   const [mbNextStatus, setMbNextStatus] = useState<string>(MB_SEQUENCE[0]);
+  const [mbDialog, setMbDialog] = useState(false);
   const [mbBusy, setMbBusy] = useState(false);
   const [mbError, setMbError] = useState("");
 
-  async function handleMbFinalize(e: React.FormEvent) {
+  function openMbDialog(e: React.FormEvent) {
     e.preventDefault();
+    if (!mbId.trim()) return;
+    setMbError("");
+    setMbDialog(true);
+  }
+
+  async function handleMbFinalize() {
     if (!mbId.trim()) return;
     setMbBusy(true);
     setMbError("");
@@ -103,6 +110,7 @@ export function BillingActions({ bills }: BillingActionsProps) {
         return;
       }
       toast.success(`MB advanced to ${statusLabel(mbNextStatus)}.`);
+      setMbDialog(false);
       setMbId("");
       setTimeout(() => router.refresh(), 600);
     } catch {
@@ -162,7 +170,7 @@ export function BillingActions({ bills }: BillingActionsProps) {
       {/* ── MB finalization (manual ID entry — no list endpoint exists yet) ── */}
       <Card title="Finalize Measurement Book">
         <form
-          onSubmit={handleMbFinalize}
+          onSubmit={openMbDialog}
           style={{ padding: "16px 20px", display: "flex", flexDirection: "column", gap: 12 }}
         >
           <div
@@ -251,6 +259,23 @@ export function BillingActions({ bills }: BillingActionsProps) {
         onCancel={() => {
           setBillDialog(null);
           setBillError("");
+        }}
+      />
+
+      <ConfirmDialog
+        open={mbDialog}
+        title="Advance Measurement Book"
+        description={`This will advance the measurement book to ${statusLabel(
+          mbNextStatus,
+        )}. This cannot be undone.`}
+        confirmLabel="Advance"
+        danger
+        busy={mbBusy}
+        errorMessage={mbError || undefined}
+        onConfirm={handleMbFinalize}
+        onCancel={() => {
+          setMbDialog(false);
+          setMbError("");
         }}
       />
     </div>

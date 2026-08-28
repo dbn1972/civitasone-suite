@@ -10,7 +10,7 @@ import { randomUUID } from "node:crypto";
 import type { RequestContext } from "@civitasone/types";
 import { sqlClient } from "../src/shared/db.js";
 import { queue } from "../src/shared/infra.js";
-import { createDashboard, updateDashboard, addWidget, shareDashboard } from "../src/modules/dashboards/commands.js";
+import { createDashboard, updateDashboard, addWidget, shareDashboard, deleteDashboard } from "../src/modules/dashboards/commands.js";
 import { runQuery, scheduleQuery, createExport } from "../src/modules/queries/commands.js";
 import { saveMetric } from "../src/modules/metrics/commands.js";
 
@@ -69,6 +69,21 @@ describe("dashboards/commands — shareDashboard", () => {
   it("throws 404 for non-existent dashboard", async () => {
     await expect(
       shareDashboard(ctx(), randomUUID(), { principalId: randomUUID(), access: "view" }),
+    ).rejects.toMatchObject({ status: 404 });
+  });
+});
+
+describe("dashboards/commands — deleteDashboard", () => {
+  // Regression: deleteDashboard() used to publish the delete command
+  // unconditionally to anyone holding a coarse WRITE_ROLES role, unlike its
+  // siblings above (update/addWidget/share), which all gate on canEdit/
+  // canShare from access.ts first — letting any analytics_user in the tenant
+  // delete another user's private dashboard. Now gated the same way (see the
+  // canEdit call in deleteDashboard()); the owner/admin/share decision itself
+  // is exhaustively unit-tested in access-control.test.ts.
+  it("throws 404 for non-existent dashboard", async () => {
+    await expect(
+      deleteDashboard(ctx(), randomUUID()),
     ).rejects.toMatchObject({ status: 404 });
   });
 });

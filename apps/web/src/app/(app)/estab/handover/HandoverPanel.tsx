@@ -1,7 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { DataTable, StatusPill } from "../../../_components/ds";
+import { DataTable, StatusPill, ConfirmDialog, useConfirmAction, ErrorState } from "../../../_components/ds";
+import { toHumanError } from "@/lib/messages";
 
 type Operator = { id: string; employeeId: string; division: string; deskRole: string; active: boolean };
 type Handover = {
@@ -26,19 +27,24 @@ export function HandoverPanel() {
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  const [loadError, setLoadError] = useState("");
 
   const load = useCallback(async () => {
     setLoading(true);
+    setLoadError("");
     try {
       const [opRes, hoRes] = await Promise.all([
         fetch("/api/proxy/v1/estab/operators?activeOnly=false&limit=500"),
         fetch("/api/proxy/v1/estab/handovers?limit=100"),
       ]);
-      if (opRes.ok) setOperators(((await opRes.json()) as { data?: Operator[] }).data ?? []);
-      if (hoRes.ok) setRows(((await hoRes.json()) as { data?: Handover[] }).data ?? []);
-      setError("");
+      // A non-OK status is a real failure — never swallow it into an empty list,
+      // which would falsely read as "no handovers recorded".
+      if (!opRes.ok) throw new Error("Couldn't load the operator list.");
+      if (!hoRes.ok) throw new Error("Couldn't load the handover history.");
+      setOperators(((await opRes.json()) as { data?: Operator[] }).data ?? []);
+      setRows(((await hoRes.json()) as { data?: Handover[] }).data ?? []);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load");
+      setLoadError(err instanceof Error ? err.message : "Failed to load");
     } finally {
       setLoading(false);
     }
@@ -51,11 +57,11 @@ export function HandoverPanel() {
     return o ? `${empId.slice(0, 8)}… · ${o.division}` : empId.slice(0, 8) + "…";
   }, [operators]);
 
-  const submit = useCallback(async () => {
+  // The actual reassignment — moves every file on the outgoing officer's desk.
+  // Irreversible, so it runs only after the ConfirmDialog (handoverConfirm).
+  const submitAction = useCallback(async () => {
     setSaving(true); setMessage(""); setError("");
     try {
-      if (!form.fromOfficerId || !form.toOfficerId) throw new Error("Select both officers");
-      if (form.fromOfficerId === form.toOfficerId) throw new Error("Officers must differ");
       const res = await fetch("/api/proxy/v1/estab/handovers", {
         method: "POST", headers: { "content-type": "application/json" },
         body: JSON.stringify({
@@ -68,11 +74,23 @@ export function HandoverPanel() {
       setForm({ ...EMPTY });
       setTimeout(() => void load(), 900);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Handover failed");
+      // Re-throw so the ConfirmDialog surfaces the error and stays open.
+      setSaving(false);
+      throw err instanceof Error ? err : new Error("Handover failed");
     } finally {
       setSaving(false);
     }
   }, [form, load]);
+
+  const handoverConfirm = useConfirmAction({ onConfirm: () => submitAction() });
+
+  // Validate before opening the confirm dialog.
+  const onHandoverClick = useCallback(() => {
+    setMessage(""); setError("");
+    if (!form.fromOfficerId || !form.toOfficerId) { setError("Select both officers"); return; }
+    if (form.fromOfficerId === form.toOfficerId) { setError("Officers must differ"); return; }
+    handoverConfirm.trigger();
+  }, [form, handoverConfirm]);
 
   const activeOps = operators.filter((o) => o.active);
 
@@ -80,8 +98,12 @@ export function HandoverPanel() {
     <div style={{ display: "grid", gap: 18, marginTop: 18 }}>
       <div role="status" aria-live="polite">
         {message ? <p style={{ color: "var(--good)", fontSize: "0.875rem" }}>{message}</p> : null}
-        {error ? <p style={{ color: "var(--bad)", fontSize: "0.875rem" }}>{error}</p> : null}
       </div>
+      {error ? (
+        <div role="alert" aria-live="assertive">
+          <p style={{ color: "var(--bad)", fontSize: "0.875rem" }}>{error}</p>
+        </div>
+      ) : null}
 
       <div className="card">
         <div className="card-h"><h3>New charge handover</h3></div>
@@ -112,7 +134,7 @@ export function HandoverPanel() {
           </label>
         </div>
         <div className="pad" style={{ paddingTop: 0 }}>
-          <button className="btn primary" disabled={saving || !form.fromOfficerId || !form.toOfficerId} onClick={() => void submit()}>
+          <button className="btn primary" disabled={saving || handoverConfirm.busy || !form.fromOfficerId || !form.toOfficerId} onClick={onHandoverClick}>
             {saving ? "Handing over…" : "Hand over charge"}
           </button>
         </div>
@@ -122,6 +144,10 @@ export function HandoverPanel() {
         <div className="card-h"><h3>Handover history</h3></div>
         {loading ? (
           <p className="pad" style={{ textAlign: "center", color: "#94a3b8" }}>Loading…</p>
+        ) : loadError ? (
+          <div className="pad">
+            <ErrorState error={toHumanError("load", { area: "handover history" })} onRetry={() => void load()} />
+          </div>
         ) : rows.length === 0 ? (
           <p className="pad" style={{ color: "#94a3b8" }}>No handovers recorded.</p>
         ) : (
@@ -137,6 +163,18 @@ export function HandoverPanel() {
           />
         )}
       </div>
+
+      <ConfirmDialog
+        open={handoverConfirm.open}
+        title="Hand over this officer's entire file charge?"
+        description={`This reassigns every file currently on ${label(form.fromOfficerId)}'s desk to ${label(form.toOfficerId)} (reason: ${form.reason}). Charge transfer takes effect once processed and cannot be undone from here.`}
+        confirmLabel="Hand over charge"
+        danger
+        busy={handoverConfirm.busy}
+        errorMessage={handoverConfirm.error}
+        onConfirm={handoverConfirm.confirm}
+        onCancel={handoverConfirm.cancel}
+      />
     </div>
   );
 }

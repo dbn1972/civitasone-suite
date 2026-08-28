@@ -24,7 +24,7 @@ type SpeechRecognitionInstance = {
   onend: (() => void) | null;
 };
 
-const COMMANDS: Record<string, string> = {
+export const COMMANDS: Record<string, string> = {
   // English commands
   "go to finance": "/finance",
   "go to hr": "/hr",
@@ -35,9 +35,9 @@ const COMMANDS: Record<string, string> = {
   "go to projects": "/projects",
   "go to grants": "/grants",
   "go to reports": "/reports",
-  "go to settings": "/settings",
-  "new voucher": "/finance/vouchers/new",
-  "new leave": "/hr/leave/new",
+  "go to settings": "/settings/branding",
+  "new voucher": "/finance/accounting/vouchers/new",
+  "new leave": "/hr/leave/apply",
   help: "/help",
   // Hindi commands
   "वित्त": "/finance",

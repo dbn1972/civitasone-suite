@@ -6,7 +6,7 @@
  * Writes go through CQRS command publishers in `./commands.ts` — this file
  * is read-only.
  */
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { db, scopedRead } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
 import { digitalPasses, type DigitalPassRow } from "./schema.js";
@@ -30,4 +30,28 @@ export async function getPassById(tenantId: string, id: string): Promise<Digital
     },
     PASS_TTL_SECONDS,
   );
+}
+
+/**
+ * IDs of passes for `visitRequestId` that are still in a state where
+ * they could be scanned/used (not already checked_out/revoked/expired).
+ * Used by visit-request/consumer.ts's cancellation cascade — deliberately
+ * NOT a cache.getOrLoad read (this drives a one-shot revoke, a stale hit
+ * would skip revoking a pass that just became active).
+ */
+export async function listRevocablePassIdsByVisitRequest(
+  tenantId: string,
+  visitRequestId: string,
+): Promise<string[]> {
+  const rows = await scopedRead((tx) => tx
+    .select({ id: digitalPasses.id })
+    .from(digitalPasses)
+    .where(
+      and(
+        eq(digitalPasses.visitRequestId, visitRequestId),
+        eq(digitalPasses.tenantId, tenantId),
+        inArray(digitalPasses.status, ["active", "checked_in", "checked_out"]),
+      ),
+    ));
+  return rows.map((r) => r.id);
 }

@@ -44,7 +44,7 @@ describe("RecoveryPage", () => {
     const ui = await RecoveryPage({ searchParams: {} });
     render(ui);
 
-    expect(screen.getAllByText("Showing saved information").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Couldn't load — showing nothing").length).toBeGreaterThan(0);
   });
 
   it("documents the missing list endpoint instead of fabricating a recovery register", async () => {

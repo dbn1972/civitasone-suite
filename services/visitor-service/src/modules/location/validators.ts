@@ -20,6 +20,29 @@ export const businessHoursSchema = z.object({
   sun: businessHoursDayEntry,
 });
 
+/**
+ * Fallback applied when a caller omits `businessHours` on location create.
+ * The API validator marks the field optional (`createLocationBody` below),
+ * but the `locations.business_hours` column is NOT NULL with no DB-level
+ * default — omitting it used to reach routes.ts's unsafe
+ * `body.businessHours as BusinessHours` cast, which silenced the type
+ * mismatch instead of resolving it: the route still returned 202
+ * Accepted, but the consumer's insert then failed a NOT NULL constraint
+ * and the location silently never existed (confirmed live 2026-08-27).
+ * Standard government working week — Mon-Fri 09:00-18:00, Sat/Sun closed
+ * — chosen as a reasonable default; callers that need different hours
+ * should keep supplying `businessHours` explicitly, as most already do.
+ */
+export const DEFAULT_BUSINESS_HOURS: z.infer<typeof businessHoursSchema> = {
+  mon: { open: "09:00", close: "18:00" },
+  tue: { open: "09:00", close: "18:00" },
+  wed: { open: "09:00", close: "18:00" },
+  thu: { open: "09:00", close: "18:00" },
+  fri: { open: "09:00", close: "18:00" },
+  sat: null,
+  sun: null,
+};
+
 export const idParam = z.object({ id: z.string().uuid("invalid id") });
 
 export const createLocationBody = z.object({

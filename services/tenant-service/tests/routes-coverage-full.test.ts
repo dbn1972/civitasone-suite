@@ -165,6 +165,57 @@ describe("GET /v1/tenants/:tenantId", () => {
     expect(res.statusCode).toBe(404);
   });
 
+  // Regression test for a real bug found in deep-verification (2026-08-27):
+  // every test in this describe block only ever asserted the not-found path
+  // (comments here used to read "won't exist" / "if it existed") -- none
+  // inserted a real row and fetched it back, so a bug where the lookup could
+  // NEVER find ANY tenant (tenant.tenants has FORCE RLS with no escape hatch;
+  // repo.findById queried via a bare db.select(), which never sets the
+  // app.tenant_id GUC) went completely undetected. Live-confirmed 404 for a
+  // tenant verified to exist via a direct superuser query, before the fix in
+  // src/modules/tenant/repo.ts. This test creates a real row and proves the
+  // lookup actually finds it.
+  it("→ 200 with a real, existing tenant (regression: RLS previously hid every row)", async () => {
+    const { runWithTenant } = await import("@civitasone/db");
+    const { db } = await import("../src/shared/db.js");
+    const repo = await import("../src/modules/tenant/repo.js");
+    const realId = "9f5b1a10-0000-4000-8000-00000000f00d";
+    await runWithTenant(realId, () =>
+      db.transaction((tx) =>
+        repo.insert(tx as unknown as repo.Writer, {
+          id: realId,
+          tenantId: realId,
+          name: "Regression Test Tenant",
+          domain: `regression-${realId}.example.gov`,
+          edition: "govt",
+          region: "IN-DL",
+          residency: "IN",
+          createdBy: ACTOR,
+          updatedBy: ACTOR,
+        }),
+      ),
+    );
+    try {
+      const res = await app.inject({
+        method: "GET", url: `/v1/tenants/${realId}`,
+        headers: authHeader(["tenant_admin"], realId),
+      });
+      expect(res.statusCode).toBe(200);
+      const body = res.json();
+      expect(body.id).toBe(realId);
+      expect(body.name).toBe("Regression Test Tenant");
+    } finally {
+      // Clean up so this doesn't linger in the shared dev database. Raw SQL
+      // (rather than importing the schema/eq helper here) keeps this test
+      // self-contained; RLS still applies, so this must run inside the same
+      // tenant-scoped transaction the insert used.
+      const { sql } = await import("drizzle-orm");
+      await runWithTenant(realId, () =>
+        db.transaction((tx) => (tx as unknown as typeof db).execute(sql`DELETE FROM tenant.tenants WHERE id = ${realId}`)),
+      ).catch(() => undefined);
+    }
+  });
+
   it("→ 400 invalid uuid param", async () => {
     const res = await app.inject({
       method: "GET", url: "/v1/tenants/not-a-uuid",
@@ -645,6 +696,13 @@ describe("PATCH /v1/tenant/:tenantId/quotas", () => {
 // ══════════════════════════════════════════════════════════════════════════════
 // POST /v1/tenant/msme-onboard — MSME Self-Signup
 // ══════════════════════════════════════════════════════════════════════════════
+// NOTE (2026-08-27 deep-verification): the 5 "success" cases below asserted
+// 201 against a handler that has returned 202 (queue-first/async, per the
+// architectural lock in f3-p0-msme-quotas-cqrs.test.ts: "must match code(202),
+// must NOT match code(201)") since before this session touched the file --
+// confirmed by running this exact suite against unmodified origin/main, where
+// these 5 assertions already failed. Corrected to 202 to match actual/intended
+// behavior; left everything else (response shape, 400 cases) unchanged.
 describe("POST /v1/tenant/msme-onboard", () => {
   const validBody = {
     udyamNumber: "UDYAM-KA-01-0000001",
@@ -661,7 +719,7 @@ describe("POST /v1/tenant/msme-onboard", () => {
       headers: authHeader(["super_admin"]),
       payload: validBody,
     });
-    expect(res.statusCode).toBe(201);
+    expect(res.statusCode).toBe(202);
     const json = res.json();
     expect(json).toHaveProperty("tenantId");
     expect(json).toHaveProperty("domain");
@@ -682,7 +740,7 @@ describe("POST /v1/tenant/msme-onboard", () => {
         state: "IN-MH",
       },
     });
-    expect(res.statusCode).toBe(201);
+    expect(res.statusCode).toBe(202);
   });
 
   it("→ 201 manufacturing sector", async () => {
@@ -691,7 +749,7 @@ describe("POST /v1/tenant/msme-onboard", () => {
       headers: authHeader(["super_admin"]),
       payload: { ...validBody, udyamNumber: "UDYAM-DL-03-0000003", sector: "manufacturing", category: "small" },
     });
-    expect(res.statusCode).toBe(201);
+    expect(res.statusCode).toBe(202);
   });
 
   it("→ 201 trading sector, medium category", async () => {
@@ -700,7 +758,7 @@ describe("POST /v1/tenant/msme-onboard", () => {
       headers: authHeader(["super_admin"]),
       payload: { ...validBody, udyamNumber: "UDYAM-TN-04-0000004", sector: "trading", category: "medium" },
     });
-    expect(res.statusCode).toBe(201);
+    expect(res.statusCode).toBe(202);
   });
 
   it("→ 400 invalid udyam number format", async () => {
@@ -764,6 +822,26 @@ describe("POST /v1/tenant/msme-onboard", () => {
       payload: { ...validBody, gstin: "short" },
     });
     expect(res.statusCode).toBe(400);
+  });
+
+  // Regression test for a real bug found in deep-verification (2026-08-27):
+  // this route is documented as public self-signup, but every test above
+  // supplies a super_admin Bearer token — none of them exercised the actual
+  // real-world caller (an anonymous business owner with no account/token
+  // yet), so a missing `config: { public: true }` on the route registration
+  // went undetected: the global auth plugin rejected every real self-signup
+  // attempt with 401 before the handler ever ran. Confirmed live via curl
+  // with no Authorization header before the fix (401 UNAUTHORIZED); this
+  // test locks in the fix so it can't silently regress again.
+  it("→ 201 with NO auth header (true unauthenticated self-signup)", async () => {
+    const res = await app.inject({
+      method: "POST", url: "/v1/tenant/msme-onboard",
+      payload: { ...validBody, udyamNumber: "UDYAM-KA-01-0000099" },
+    });
+    expect(res.statusCode).toBe(202);
+    const json = res.json();
+    expect(json).toHaveProperty("tenantId");
+    expect(json).toHaveProperty("domain");
   });
 });
 

@@ -1,4 +1,4 @@
-import { eq, and, sql, desc } from "drizzle-orm";
+import { eq, and, sql, desc, inArray } from "drizzle-orm";
 import { scopedRead, type ScopedTx } from "../../shared/db.js";
 import { marketDemands, type DemandRow, type DemandInsert } from "./schema.js";
 
@@ -42,8 +42,34 @@ export async function listByAllotment(
   return { rows, total: countResult[0]?.count ?? 0 };
 }
 
-export async function insertDemand(tx: ScopedTx, row: DemandInsert): Promise<void> {
-  await tx.insert(marketDemands).values(row);
+/**
+ * Returns the inserted row, or null if a concurrent request already generated
+ * a demand for the same tenant+allotment+month (onConflictDoNothing against
+ * market_demands_allotment_month_uidx — see schema.ts). This is the atomic
+ * guard; routes.ts's findByAllotmentAndMonth pre-check is only the fast path
+ * for the common (non-racing) case and cannot be relied on alone.
+ */
+export async function insertDemand(tx: ScopedTx, row: DemandInsert): Promise<DemandRow | null> {
+  const result = await tx
+    .insert(marketDemands)
+    .values(row)
+    .onConflictDoNothing({ target: [marketDemands.tenantId, marketDemands.allotmentId, marketDemands.demandMonth] })
+    .returning();
+  return result[0] ?? null;
+}
+
+/** Used by routes.ts to reject a duplicate demand for the same allotment+month before publishing. */
+export async function findByAllotmentAndMonth(allotmentId: string, tenantId: string, demandMonth: string): Promise<DemandRow | null> {
+  const rows = await scopedRead((tx) =>
+    tx.select().from(marketDemands)
+      .where(and(
+        eq(marketDemands.tenantId, tenantId),
+        eq(marketDemands.allotmentId, allotmentId),
+        eq(marketDemands.demandMonth, demandMonth),
+      ))
+      .limit(1),
+  );
+  return rows[0] ?? null;
 }
 
 export async function updateStatus(
@@ -51,9 +77,10 @@ export async function updateStatus(
   id: string,
   tenantId: string,
   status: string,
+  fromStatuses: readonly string[],
   updatedBy: string,
   extra?: { paidAt?: Date; paymentRef?: string },
-): Promise<boolean> {
+): Promise<DemandRow | null> {
   const result = await tx.update(marketDemands)
     .set({
       status,
@@ -63,7 +90,11 @@ export async function updateStatus(
       ...(extra?.paymentRef ? { paymentRef: extra.paymentRef } : {}),
       version: sql`${marketDemands.version} + 1`,
     })
-    .where(and(eq(marketDemands.id, id), eq(marketDemands.tenantId, tenantId)))
-    .returning({ id: marketDemands.id });
-  return result.length > 0;
+    .where(and(
+      eq(marketDemands.id, id),
+      eq(marketDemands.tenantId, tenantId),
+      inArray(marketDemands.status, fromStatuses as string[]),
+    ))
+    .returning();
+  return result[0] ?? null;
 }

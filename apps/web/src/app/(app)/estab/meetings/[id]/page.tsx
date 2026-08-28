@@ -1,24 +1,44 @@
+import Link from "next/link";
 import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
 import { getMeetingById } from "../../../../_data/loaders";
-import { PageHeader, StatusPill } from "../../../../_components/ds";
+import { PageHeader, RefreshErrorState, StatusPill } from "../../../../_components/ds";
 import { ActionPointsTable, AttendeesTable } from "./MeetingDetailTables";
 import { MeetingActions } from "./MeetingActions";
 
-export default async function MeetingDetailPage({ params }: { params: { id: string } }) {
+export default async function MeetingDetailPage({
+  params,
+  searchParams,
+}: {
+  params: { id: string };
+  searchParams?: { tab?: string };
+}) {
   const { data: meeting, source } = await getMeetingById(params.id);
+  const onAgendaTab = searchParams?.tab === "agenda";
 
   if (!meeting) {
+    // Same note as meeting/meetings/[meetingId]/page.tsx: fetchJson folds a
+    // real 404 and a transient failure into the same source:"error" signal,
+    // so one truthful message + a real retry covers both.
     return (
       <>
-        <PageHeader title="Meeting not found" back="/estab/meetings" />
-        <p className="sub">The requested meeting could not be found.</p>
+        <PageHeader title="Meeting not available" back="/estab/meetings" />
+        <RefreshErrorState
+          error={{
+            what: "This meeting couldn't be loaded.",
+            next: "It may not exist, or live data couldn't be reached. Try again, or go back and pick another meeting.",
+            actions: ["retry", "back", "help"],
+          }}
+          backHref="/estab/meetings"
+        />
       </>
     );
   }
 
   return (
     <>
-      {source === "error" && <DataSourceBadge source={source} />}
+      {source === "error" && (
+        <DataSourceBadge source={source} message="Couldn't load — showing nothing" />
+      )}
       <a className="back" href="/estab/meetings">← Back</a>
       <div className="ph" style={{ marginTop: 6 }}>
         <div>
@@ -31,6 +51,66 @@ export default async function MeetingDetailPage({ params }: { params: { id: stri
           <MeetingActions meetingId={params.id} />
         </div>
       </div>
+
+      <div className="tabs" role="tablist" style={{ marginBottom: 14 }}>
+        <Link
+          href={`/estab/meetings/${params.id}`}
+          role="tab"
+          aria-selected={!onAgendaTab}
+          className={!onAgendaTab ? "on" : undefined}
+        >
+          Details
+        </Link>
+        <Link
+          href={`/estab/meetings/${params.id}?tab=agenda`}
+          role="tab"
+          aria-selected={onAgendaTab}
+          className={onAgendaTab ? "on" : undefined}
+        >
+          Agenda ({meeting.agenda.length})
+        </Link>
+      </div>
+
+      {onAgendaTab ? (
+        <div className="card">
+          <div className="card-h">
+            <h3>Agenda</h3>
+          </div>
+          {meeting.agenda.length === 0 ? (
+            <p className="sub" style={{ padding: "0 0 16px" }}>
+              No agenda items recorded for this meeting yet.
+            </p>
+          ) : (
+            <div className="fields" style={{ padding: "4px 16px 16px" }}>
+              {[...meeting.agenda]
+                .sort((a, b) => a.itemNo - b.itemNo)
+                .map((item) => (
+                  <div
+                    key={item.id}
+                    style={{ padding: "12px 0", borderBottom: "1px solid var(--line2)" }}
+                  >
+                    <div style={{ display: "flex", gap: 10, alignItems: "baseline" }}>
+                      <span style={{ fontWeight: 700, color: "var(--ink2)", fontSize: 13 }}>
+                        {item.itemNo}.
+                      </span>
+                      <span style={{ fontWeight: 600 }}>{item.title}</span>
+                    </div>
+                    {item.description && (
+                      <p style={{ fontSize: 13, color: "var(--ink2)", marginTop: 4 }}>
+                        {item.description}
+                      </p>
+                    )}
+                    {item.decision && (
+                      <p style={{ fontSize: 13, marginTop: 4 }}>
+                        <strong>Decision:</strong> {item.decision}
+                      </p>
+                    )}
+                  </div>
+                ))}
+            </div>
+          )}
+        </div>
+      ) : (
       <div className="grid g-main" style={{ alignItems: "start" }}>
         <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
           <div className="card">
@@ -72,6 +152,7 @@ export default async function MeetingDetailPage({ params }: { params: { id: stri
           ) : null}
         </div>
       </div>
+      )}
     </>
   );
 }

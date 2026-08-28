@@ -8,6 +8,7 @@ import {
   listContactsQuery, createAccountBody, idParam, contactsListSchema, accountsListSchema,
   classificationBody,
   internalBulkImportBody,
+  deleteContactBody,
 } from "./validators.js";
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
@@ -155,7 +156,11 @@ export async function contactRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, ADMIN_ROLES);
     const { id } = idParam.parse(req.params);
-    return sendAccepted(reply, acceptedResponseSchema, await commands.deleteContact(ctx, id));
+    // Body is optional (see deleteContactBody) so a caller sending none still
+    // works; when present, `reason` is the maker-checker deletion note and
+    // flows through to the contactDeleted audit-trail record.
+    const body = deleteContactBody.parse(req.body ?? {});
+    return sendAccepted(reply, acceptedResponseSchema, await commands.deleteContact(ctx, id, body.reason));
   });
 
   // LQ-003: classify a lead (temperature/priority/segment/product/region/expected value).

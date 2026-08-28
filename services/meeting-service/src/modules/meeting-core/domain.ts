@@ -404,6 +404,32 @@ function requireCtx(ctx: TransitionContext | undefined, from: MeetingState, to: 
   return ctx;
 }
 
+// ─── Ownership (IDOR fix — Req 1.1, 1.3–1.6) ──────────────────────────────────
+
+/**
+ * Committee-member roles that carry secretarial write-standing for a meeting (PATCH), used
+ * to extend ownership beyond the single `secretaryId` stamped on the meeting row (e.g. a
+ * deputy/co-secretary registered on the committee roster).
+ */
+export const SECRETARIAL_STANDING_ROLES = ["secretary"] as const;
+/** Committee-member roles that carry chair standing for a meeting's transition/cancel authority. */
+export const CHAIR_STANDING_ROLES = ["chairperson"] as const;
+
+/**
+ * True iff `actorId` is recorded directly on the meeting row as its chairperson or secretary
+ * (IDOR fix, Req 1.1: role-only gating previously let ANY `committee_secretary`/
+ * `committee_chairperson` in the tenant write/transition ANY meeting). Committee-roster
+ * standing (a deputy secretary / co-chair not yet the literal `chairpersonId`/`secretaryId`)
+ * is a DB-backed extension layered on top by the caller (`repo.hasCommitteeStanding`) — this
+ * pure form only compares what is already loaded on the meeting row.
+ */
+export function isDirectMeetingOwner(
+  actorId: string,
+  meeting: { chairpersonId: string | null; secretaryId: string | null },
+): boolean {
+  return actorId === meeting.chairpersonId || actorId === meeting.secretaryId;
+}
+
 // ─── Meeting number generation (Req 1.2) ──────────────────────────────────────
 
 /**

@@ -3,6 +3,7 @@ import { z } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import * as repo from "./repo.js";
 import * as commands from "./commands.js";
+import { validateInspectionTransition, type InspectionStatus } from "./domain.js";
 
 const ROLES = ["parks_user", "parks_admin", "super_admin"];
 const ADMIN_ROLES = ["parks_admin", "super_admin"];
@@ -62,7 +63,13 @@ export async function inspectionRoutes(app: FastifyInstance): Promise<void> {
     const body = completeBody.parse(req.body);
     const existing = await repo.findById(id, ctx.tenantId);
     if (!existing) throw new HttpError(404, "NOT_FOUND", "inspection not found");
-    if (existing.status === "completed") throw new HttpError(422, "ALREADY_COMPLETED", "inspection already completed");
+    // Was previously only guarded by an ad-hoc "not already completed" check,
+    // which never called this module's own validateInspectionTransition —
+    // meaning a "cancelled" inspection (once cancellation exists) could be
+    // completed too. Uses the same TRANSITION_INVALID pattern as the
+    // complaints/tree_requests modules for consistency.
+    const err = validateInspectionTransition(existing.status as InspectionStatus, "completed");
+    if (err) throw new HttpError(422, "TRANSITION_INVALID", err);
     if (body.version !== existing.version) throw new HttpError(409, "VERSION_CONFLICT", "retry with current version");
     return reply.code(202).send(await commands.completeInspection(ctx, id, body.findings, body.photos ?? null, body.workOrderRequired, body.version));
   });

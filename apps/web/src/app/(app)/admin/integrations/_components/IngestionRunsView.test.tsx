@@ -28,20 +28,20 @@ describe("IngestionRunsView", () => {
     expect(screen.getByText("90")).toBeInTheDocument();
     expect(screen.getByText("10")).toBeInTheDocument();
     expect(screen.getByText(/10 rows rejected/)).toBeInTheDocument();
-    expect(screen.queryByText(/showing saved information/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/couldn.t load/i)).not.toBeInTheDocument();
   });
 
   it("shows the empty state ONLY on a successful (source api) empty load", async () => {
     getRuns.mockResolvedValue({ data: [], source: "api" });
     render(<IngestionRunsView provider="sftp" env="prod" />);
     await waitFor(() => expect(screen.getByText(/no ingestion runs yet/i)).toBeInTheDocument());
-    expect(screen.queryByText(/showing saved information/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/couldn.t load/i)).not.toBeInTheDocument();
   });
 
   it("on a failed load shows DataSourceBadge and NEVER a fabricated '0 rows'/empty-state", async () => {
     getRuns.mockResolvedValue({ data: [], source: "error" });
     render(<IngestionRunsView provider="sftp" env="prod" />);
-    await waitFor(() => expect(screen.getByText(/showing saved information/i)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(/couldn.t load/i)).toBeInTheDocument());
     // must NOT claim there are zero runs, and must NOT print a "0" count
     expect(screen.queryByText(/no ingestion runs yet/i)).not.toBeInTheDocument();
     expect(screen.queryByRole("table")).not.toBeInTheDocument();

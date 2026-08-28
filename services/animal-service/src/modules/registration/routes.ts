@@ -69,7 +69,7 @@ export async function registrationRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, USER_ROLES);
     const { id } = idParam.parse(req.params);
-    const cacheKey = `animal:${ctx.tenantId}:registration:${id}`;
+    const cacheKey = cache.makeKey(ctx.tenantId, "registration", id);
     const row = await cache.getOrLoad(cacheKey, () => repo.findById(id, ctx.tenantId));
     if (!row) throw new HttpError(404, "REGISTRATION_NOT_FOUND", "Registration not found");
     return reply.send({ data: row });

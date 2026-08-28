@@ -50,6 +50,15 @@ export async function getEmployeeDetail(id: string, tenantId: string): Promise<E
       .limit(1),
   );
 
+  // HR-A deep-verify finding: managerId is a real column (settable via both
+  // employee edit forms) and `reportingTo` is a declared field on both the
+  // shared EmployeeDetailSchema (packages/schemas/src/web.ts) and the
+  // EmployeeDetail type -- and is rendered on the detail page -- but this
+  // function never populated it, so "Reports To" could never appear even
+  // after successfully setting a manager. Resolve to the manager's name the
+  // same way dept/designation are resolved above, scoped to the same tenant.
+  const manager = emp.managerId ? await repo.findById(emp.managerId, tenantId) : null;
+
   return {
     id: emp.id,
     employeeId: emp.employeeNo,
@@ -58,16 +67,22 @@ export async function getEmployeeDetail(id: string, tenantId: string): Promise<E
     designation: desig?.name ?? "—",
     joiningDate: emp.dateOfJoining,
     status: emp.status,
-    ...(emp.email        ? { email: emp.email }             : {}),
-    ...(emp.mobile       ? { phone: emp.mobile }             : {}),
-    ...(desig?.payGrade  ? { grade: desig.payGrade }         : {}),
-    ...(emp.station      ? { postingLocation: emp.station }  : {}),
+    ...(emp.email          ? { email: emp.email }                     : {}),
+    ...(emp.mobile         ? { phone: emp.mobile }                    : {}),
+    ...(desig?.payGrade    ? { grade: desig.payGrade }                : {}),
+    ...(emp.station        ? { postingLocation: emp.station }         : {}),
+    // HR-A deep-verify finding: confirmationDate is a real column already on
+    // `emp` (no extra query), declared on the EmployeeDetail type, and used by
+    // the frontend to render a "Service Confirmed" lifecycle event -- but was
+    // never included here, so that event could never appear for anyone.
+    ...(emp.confirmationDate ? { confirmationDate: emp.confirmationDate } : {}),
+    ...(manager?.fullName  ? { reportingTo: manager.fullName }        : {}),
   };
 }
 
-export async function listEmployees(tenantId: string, limit: number, offset: number): Promise<{ data: Array<{ id: string; name: string; department: string; status: string }>; pagination: { hasMore: boolean; pageSize: number; cursor?: string } }> {
-  return cache.listOrLoad(tenantId, "employee", `list:${limit}:${offset}`, async () => {
-    const rows = await repo.listByTenant(tenantId, limit, offset);
+export async function listEmployees(tenantId: string, limit: number, offset: number, employeeType?: string): Promise<{ data: Array<{ id: string; name: string; department: string; status: string }>; pagination: { hasMore: boolean; pageSize: number; cursor?: string } }> {
+  return cache.listOrLoad(tenantId, "employee", `list:${limit}:${offset}:${employeeType ?? "all"}`, async () => {
+    const rows = await repo.listByTenant(tenantId, limit, offset, employeeType);
     const depts = await scopedRead((tx) => tx.select().from(hrmsDepartments).where(eq(hrmsDepartments.tenantId, tenantId)));
     const deptNameById = new Map(depts.map((d) => [d.id, d.name]));
     return {

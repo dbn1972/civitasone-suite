@@ -51,7 +51,7 @@ describe("QuartersPage", () => {
     const ui = await QuartersPage();
     render(ui);
 
-    expect(screen.getAllByText("Showing saved information").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Couldn't load — showing nothing").length).toBeGreaterThan(0);
     expect(screen.queryByText("No quarters yet")).not.toBeInTheDocument();
     // StatCards must show "—" (unknown), never a fabricated "0" count, when the source errored.
     expect(screen.getAllByText("—").length).toBe(4);

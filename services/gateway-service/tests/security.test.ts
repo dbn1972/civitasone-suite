@@ -4,7 +4,11 @@ import { buildApp } from "../src/app.js";
 
 // HS256 test token
 const SECRET = "test_secret_for_civitasone_32chr";
-const VALID_TOKEN = signToken({ sub: "actor-1", tid: "tenant-1", roles: ["admin"] }, SECRET, 3600);
+const VALID_TOKEN = signToken(
+  { sub: "actor-1", tid: "tenant-1", roles: ["admin"] },
+  SECRET,
+  3600,
+);
 
 // Stub upstream fetch so we can verify what headers reach "upstream" services.
 let lastUpstreamHeaders: Record<string, string> = {};
@@ -151,7 +155,10 @@ describe("LM-002: public lead capture is reachable without a token", () => {
   it("still requires a token for the authenticated CRM routes", async () => {
     // The allow-list is the `public` sub-tree only — /api/v1/crm itself must not open up.
     const app = await buildApp();
-    for (const url of ["/api/v1/crm/contacts", "/api/v1/crm/lead-capture-forms"]) {
+    for (const url of [
+      "/api/v1/crm/contacts",
+      "/api/v1/crm/lead-capture-forms",
+    ]) {
       const res = await app.inject({ method: "GET", url });
       expect(res.statusCode).toBe(401);
     }
@@ -180,5 +187,62 @@ describe("LM-002: public lead capture is reachable without a token", () => {
     // A caller that could inject its own hop would mint a fresh "IP" per request and
     // walk straight past the limiter.
     expect(lastUpstreamHeaders["x-forwarded-for"]).not.toContain("1.2.3.4");
+  });
+});
+
+describe("MSME self-signup (deep-verification, 2026-08-27): public onboarding is reachable without a token", () => {
+  it("does not 401 an anonymous POST to /api/v1/tenant/msme-onboard", async () => {
+    // A small-business owner self-registering has no bearer token by definition --
+    // tenant-service's own handler was already fixed to accept this (config:{public:true}),
+    // but the gateway's OWN pre-check runs before any request is proxied downstream, so an
+    // anonymous caller was still 401'd here even after that fix. This is the missing half.
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/v1/tenant/msme-onboard",
+      payload: {
+        businessName: "Test Kirana Store",
+        udyamNumber: "UDYAM-KA-01-0000001",
+        ownerName: "Owner",
+        email: "owner@example.in",
+        category: "micro",
+        sector: "services",
+      },
+    });
+    expect(res.statusCode).not.toBe(401);
+  });
+
+  it("still requires a token for every other tenant-service route", async () => {
+    // The allow-list is this ONE exact path -- /api/v1/tenant and /api/v1/tenants must not
+    // open up (create-tenant, suspend, edition-change, etc. all still require a real role).
+    const app = await buildApp();
+    for (const url of [
+      "/api/v1/tenants",
+      "/api/v1/tenant/overview",
+      "/api/v1/tenant/msme-onboard-typo",
+    ]) {
+      const res = await app.inject({ method: "GET", url });
+      expect(res.statusCode).toBe(401);
+    }
+  });
+
+  it("forwards the observed client IP so tenant-service can rate-limit per IP", async () => {
+    const app = await buildApp();
+    await app.inject({
+      method: "POST",
+      url: "/api/v1/tenant/msme-onboard",
+      payload: {
+        businessName: "Test Kirana Store",
+        udyamNumber: "UDYAM-KA-01-0000002",
+        ownerName: "Owner",
+        email: "owner2@example.in",
+        category: "micro",
+        sector: "services",
+      },
+    });
+    // Without this, a public tenant-creation endpoint's rate limit collapses into one
+    // shared counter for every anonymous caller behind the gateway -- an abuse vector for
+    // an endpoint that creates a real tenant + a real Keycloak-federated user per call.
+    expect(lastUpstreamHeaders["x-forwarded-for"]).toBeDefined();
   });
 });

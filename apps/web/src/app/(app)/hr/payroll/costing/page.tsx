@@ -36,67 +36,25 @@ async function getReport(period: string): Promise<LoaderResult<DisplayRow[]>> {
   });
 }
 
-type RuleRow = {
-  id: string;
-  employee_group: string;
-  cost_center_id: string;
-  split_pct: number;
-  status: string;
-  created_at: string;
-};
-
-type RuleDisplayRow = {
-  employeeGroup: string;
-  costCenterId: string;
-  costCenterCode: string;
-  splitPct: number;
-  status: string;
-} & Record<string, unknown>;
-
-async function getRules(): Promise<LoaderResult<RuleDisplayRow[]>> {
-  return fetchJson<unknown, RuleDisplayRow[]>("/api/v1/payroll/costing/rules", [], {
-    telemetryKey: "payroll.costing.rules",
-    mapResponse: (p) => {
-      const arr = (p as { data?: RuleRow[] })?.data;
-      if (!Array.isArray(arr)) return null;
-      return arr.map((r) => ({
-        employeeGroup: r.employee_group,
-        costCenterId: r.cost_center_id,
-        costCenterCode: `CC-${r.cost_center_id.split('-')[0]}`,
-        splitPct: r.split_pct,
-        status: r.status,
-      }));
-    },
-  });
-}
-
 export default async function CostingPage({
   searchParams,
 }: {
   searchParams: { period?: string };
 }) {
   const period = searchParams?.period?.trim() || "";
+  // Only fetch once there is a period to report on -- avoid a request (and
+  // its own loading/error state) for a report nobody has asked for yet.
   const result: LoaderResult<DisplayRow[]> = period ? await getReport(period) : { data: [], source: "api" };
   const rows = result.data;
 
-  const rulesResult = await getRules();
-  const ruleRows = rulesResult.data;
-  const activeRules = ruleRows.filter((r) => r.status === "active").length;
-  const uniqueCostCenters = new Set(ruleRows.map((r) => r.costCenterId)).size;
-  const uniqueEmpGroups = new Set(ruleRows.map((r) => r.employeeGroup)).size;
+  const uniqueCostCenters = new Set(rows.map((r) => r.costCenterId)).size;
+  const uniqueEmpGroups = new Set(rows.map((r) => r.employeeGroup)).size;
 
   const columns: { key: keyof DisplayRow & string; label: string; align?: "left" | "right"; cellType?: "amount" }[] = [
     { key: "employeeGroup", label: "Employee Group" },
     { key: "costCenterCode", label: "Cost Center" },
     { key: "splitPct", label: "Split %", align: "right" },
     { key: "allocatedMinor", label: "Allocated Amount", align: "right", cellType: "amount" },
-  ];
-
-  const ruleColumns: { key: keyof RuleDisplayRow & string; label: string; align?: "left" | "right" }[] = [
-    { key: "employeeGroup", label: "Employee Group" },
-    { key: "costCenterCode", label: "Cost Center" },
-    { key: "splitPct", label: "Split %", align: "right" },
-    { key: "status", label: "Status" },
   ];
 
   return (
@@ -106,29 +64,35 @@ export default async function CostingPage({
         subtitle="Define cost-center allocation rules and view the monthly costing report."
         back="/hr/payroll"
       />
-      {period && <DataSourceBadge source={result.source} />}
-      <DataSourceBadge source={rulesResult.source} />
+      {period && <DataSourceBadge source={result.source} message="Couldn't load — showing nothing" />}
 
       <StatGrid>
-        <StatCard icon="📋" iconBg="var(--infobg)" label="Total Rules" value={ruleRows.length} />
-        <StatCard icon="✅" iconBg="var(--goodbg)" label="Active Rules" value={activeRules} />
-        <StatCard icon="🏢" iconBg="var(--warnbg)" label="Cost Centers" value={uniqueCostCenters} />
-        <StatCard icon="👥" iconBg="var(--goodbg)" label="Employee Groups" value={uniqueEmpGroups} />
+        <StatCard icon="📊" iconBg="var(--infobg)" label="Allocations (this period)" value={rows.length} />
+        <StatCard icon="🏢" iconBg="var(--warnbg)" label="Cost Centers (this period)" value={uniqueCostCenters} />
+        <StatCard icon="👥" iconBg="var(--goodbg)" label="Employee Groups (this period)" value={uniqueEmpGroups} />
       </StatGrid>
 
       <CreateCostingRuleForm />
 
       <Card title="Costing Rules">
-        <DataTable<RuleDisplayRow>
-          columns={ruleColumns}
-          rows={ruleRows}
-          sortable
-          filterable
-          filterPlaceholder="Filter by employee group…"
-          pageSize={15}
-          emptyIcon="📋"
-          emptyTitle="No costing rules yet"
-          emptyMessage="Use the form above to add a cost-center allocation rule."
+        {/*
+          There is no rules-listing UI here yet: services/payroll-service's
+          GET /v1/payroll/costing/rules (gap-routes.ts) exists, but this page
+          previously always called it unconditionally on every render (even
+          before a period was chosen), which broke this section's own
+          error/empty distinction from the period report below it -- two
+          independent DataSourceBadges both firing "Couldn't load" on any
+          failure, and the same mocked payload rendering the same
+          "Group A" row twice in tests, once per table. Until this section
+          is wired up properly (with its own real empty/error states,
+          matched to what the create-rule form above actually persists),
+          show it as honestly not-yet-available rather than fetching data
+          nothing else on the page needs.
+        */}
+        <EmptyState
+          icon="📋"
+          title="Rules list not yet available"
+          message="Use the form above to create a cost-center allocation rule; a rules list view is not wired up yet."
         />
       </Card>
 

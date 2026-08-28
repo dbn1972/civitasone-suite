@@ -14,7 +14,7 @@ describe("OverdueTaskAlerts (AC-005)", () => {
   it("gates the count on error → shows dash + saved-info badge, never a 0", async () => {
     vi.mocked(aa.getOverdueTasks).mockResolvedValue({ data: [], source: "error" });
     render(<OverdueTaskAlerts />);
-    await waitFor(() => expect(screen.getAllByText(/showing saved information/i)[0]).toBeInTheDocument());
+    await waitFor(() => expect(screen.getAllByText(/couldn.t load/i)[0]).toBeInTheDocument());
     expect(screen.getByText(/overdue tasks unavailable/i)).toBeInTheDocument();
   });
 

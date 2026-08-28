@@ -21,13 +21,13 @@ describe("LeadScoreRulesEditor (LQ-002 admin)", () => {
     render(<LeadScoreRulesEditor />);
     await waitFor(() => expect(screen.getByRole("table")).toBeInTheDocument());
     expect(screen.getByLabelText(/attribute for rule 1/i)).toHaveValue("industry");
-    expect(screen.queryByText(/showing saved information/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/couldn.t load/i)).not.toBeInTheDocument();
   });
 
   it("shows the saved-info badge on a failed load (source===error)", async () => {
     vi.mocked(lq.getScoreRules).mockResolvedValue({ data: [], source: "error" });
     render(<LeadScoreRulesEditor />);
-    await waitFor(() => expect(screen.getByText(/showing saved information/i)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(/couldn.t load/i)).toBeInTheDocument());
     expect(screen.getByText(/no scoring rules yet/i)).toBeInTheDocument();
   });
 
@@ -50,7 +50,7 @@ describe("LeadScoreRulesEditor (LQ-002 admin)", () => {
     render(<LeadScoreRulesEditor />);
     await waitFor(() => expect(screen.getByRole("table")).toBeInTheDocument());
     fireEvent.click(screen.getByRole("button", { name: /save rules/i }));
-    expect(await screen.findByText(/needs an attribute, a numeric weight/i)).toBeInTheDocument();
+    expect(await screen.findByText(/needs an attribute, a whole-number weight/i)).toBeInTheDocument();
     expect(lq.saveScoreRules).not.toHaveBeenCalled();
   });
 

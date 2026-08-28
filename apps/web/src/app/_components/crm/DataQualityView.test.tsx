@@ -33,7 +33,7 @@ describe("DataQualityView (DQ-004)", () => {
       source: "error",
     });
     render(<DataQualityView />);
-    await waitFor(() => expect(screen.getAllByText(/showing saved information/i).length).toBeGreaterThan(0));
+    await waitFor(() => expect(screen.getAllByText(/couldn.t load/i).length).toBeGreaterThan(0));
     // stat tiles show em dash, not "0"
     expect(screen.getAllByText("—").length).toBeGreaterThan(0);
     expect(screen.getByText(/records unavailable/i)).toBeInTheDocument();

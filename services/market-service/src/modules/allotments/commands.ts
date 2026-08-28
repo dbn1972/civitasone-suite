@@ -11,8 +11,13 @@ export interface ApplyAllotmentInput {
   allotteePhone?: string | undefined;
   allotteeAadhaar?: string | undefined;
   allotmentType: string;
-  monthlyRentMinor?: bigint | undefined;
-  securityDepositMinor?: bigint | undefined;
+  // string, not number or bigint: re-review fix — these are now always
+  // server-derived from the property's own fields (routes.ts calls
+  // `property.monthlyRentMinor?.toString()`), a bigint converted to string,
+  // never a client-supplied value. String (not native bigint) for the same
+  // JSON.stringify/queue.publish() reason documented in properties/commands.ts.
+  monthlyRentMinor?: string | undefined;
+  securityDepositMinor?: string | undefined;
 }
 
 export async function applyAllotment(ctx: RequestContext, body: ApplyAllotmentInput): Promise<Accepted> {

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { LineItemsEditor, emptyLineItem, type LineItem } from "../../_components/LineItemsEditor";
+import { toHumanError } from "@/lib/messages";
 
 type VendorOption = { id: string; name: string };
 type IndentOption = { id: string; indentNo?: string; department?: string };
@@ -76,11 +77,13 @@ export function CreatePOForm() {
       });
       const text = await res.text();
       if (!res.ok) {
+        const human = toHumanError("save", { area: "purchase order" });
         setStatus("error");
-        setMessage(text || `Create failed (${res.status})`);
+        setMessage(`${human.what} ${human.next}`);
         return;
       }
-      const parsed = JSON.parse(text) as { id?: string };
+      let parsed: { id?: string } = {};
+      try { parsed = JSON.parse(text) as { id?: string }; } catch { /* ignore */ }
       setStatus("accepted");
       setMessage("PO submitted for workflow approval.");
       router.push(parsed.id ? `/procurement/orders/${parsed.id}` : "/procurement/orders");

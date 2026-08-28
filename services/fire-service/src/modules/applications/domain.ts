@@ -10,11 +10,19 @@ export const APPLICATION_STATUSES = [
 
 export type ApplicationStatus = (typeof APPLICATION_STATUSES)[number];
 
+// Note: "withdrawn" added to under_review/inspection_scheduled below — the
+// original table only allowed it from draft/submitted, but routes.ts's own
+// pre-check already allowed withdrawing from "under_review" too
+// (`!["draft","submitted","under_review"].includes(...)`), and letting an
+// applicant withdraw while still under review (rather than only before
+// review starts) is the more sensible real-world behavior anyway. Fixed the
+// model to match the sensible, already-implemented behavior, same as the
+// analogous fix in the market-service PR's lifecycle transitions.
 export const VALID_TRANSITIONS: Record<ApplicationStatus, readonly ApplicationStatus[]> = {
   draft: ["submitted", "withdrawn"],
   submitted: ["under_review", "withdrawn"],
-  under_review: ["inspection_scheduled", "approved", "rejected"],
-  inspection_scheduled: ["under_review", "approved", "rejected"],
+  under_review: ["inspection_scheduled", "approved", "rejected", "withdrawn"],
+  inspection_scheduled: ["under_review", "approved", "rejected", "withdrawn"],
   approved: [],
   rejected: [],
   withdrawn: [],
@@ -22,6 +30,18 @@ export const VALID_TRANSITIONS: Record<ApplicationStatus, readonly ApplicationSt
 
 export function canTransition(from: ApplicationStatus, to: ApplicationStatus): boolean {
   return (VALID_TRANSITIONS[from] ?? []).includes(to);
+}
+
+/**
+ * Was defined (canTransition/VALID_TRANSITIONS) but never called anywhere in
+ * this module — repo.updateStatus had no current-status guard, so a
+ * duplicate/racing submit+withdraw pair could both pass a route-level
+ * pre-check and both apply. Derived from the same table so it can't drift.
+ */
+export function fromStatusesFor(to: ApplicationStatus): ApplicationStatus[] {
+  return (Object.keys(VALID_TRANSITIONS) as ApplicationStatus[]).filter((from) =>
+    (VALID_TRANSITIONS[from] ?? []).includes(to),
+  );
 }
 
 export const OCCUPANCY_TYPES = [

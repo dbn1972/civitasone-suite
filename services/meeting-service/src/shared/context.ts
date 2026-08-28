@@ -40,6 +40,7 @@ export const ERROR_CODES = {
   AI_PROCESSING_FAILED: 500,
   ROOM_DOUBLE_BOOKED: 409,
   CALENDAR_CONFLICT: 409,
+  ATTENDANCE_INVALID_TIMESTAMP: 422,
   TENANT_CONFIG_MISSING: 500,
   // Cross-cutting auth/generic codes (also raised by resolveContext / requireRole).
   UNAUTHENTICATED: 401,

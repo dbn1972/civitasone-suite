@@ -16,15 +16,23 @@ export function MeetingActions({ meetingId }: MeetingActionsProps) {
       >
         Agenda
       </Link>
+      {/*
+        There is no /generate-mom route (and no backend endpoint this page
+        knows of) — the button used to silently no-op via a client-side
+        redirect to a 404. Disabled honestly until MOM generation is built,
+        rather than left as a dead link. MOM is still capturable today via
+        the "MOM" field/Action items shown below once a meeting completes.
+      */}
       <button
         type="button"
         className="btn primary"
         style={{ minHeight: 44 }}
-        onClick={() => {
-          window.location.href = `/estab/meetings/${meetingId}/generate-mom`;
-        }}
+        disabled
+        aria-disabled="true"
+        title="Generating MOM automatically is coming soon."
       >
-        Generate MOM
+        Generate MOM{" "}
+        <span style={{ fontSize: 11, fontWeight: 500, opacity: 0.85 }}>(coming soon)</span>
       </button>
     </>
   );

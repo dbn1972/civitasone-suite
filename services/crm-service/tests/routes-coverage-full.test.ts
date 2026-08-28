@@ -524,13 +524,26 @@ describe("POST /v1/crm/deals", () => {
     expect(res.statusCode).toBe(400);
   });
 
-  it("returns 400 with invalid stage", async () => {
+  it("returns 400 with empty stage — still a required, real value (OP-002: no longer a fixed enum)", async () => {
     const res = await app.inject({
       method: "POST", url: "/v1/crm/deals",
       headers: authHeader(["crm_user"]),
-      payload: { name: "Bad", stage: "InvalidStage" },
+      payload: { name: "Bad", stage: "" },
     });
     expect(res.statusCode).toBe(400);
+  });
+
+  // OP-002: stage is validated dynamically against the deal's own pipeline (see
+  // pipelines-deals.test.ts for the full custom-pipeline coverage), not a fixed 5-value
+  // enum — a non-legacy name with no pipelineId at all has nothing to validate against
+  // and is accepted, where it used to 400 unconditionally.
+  it("returns 202 with a non-legacy stage name when no pipeline is scoped", async () => {
+    const res = await app.inject({
+      method: "POST", url: "/v1/crm/deals",
+      headers: authHeader(["crm_user"]),
+      payload: { name: "Custom-stage deal", stage: "InvalidStage" },
+    });
+    expect(res.statusCode).toBe(202);
   });
 
   it("returns 400 with negative valueMinor", async () => {
@@ -1057,10 +1070,17 @@ describe("Validator edge cases", () => {
     expect(result.leadStatus).toBe("new");
   });
 
-  it("createDealBody defaults stage to Lead", async () => {
+  // OP-002: `stage` is no longer defaulted inside the zod schema itself — a custom
+  // pipeline is not guaranteed to have a stage literally named "Lead" (validators.ts no
+  // longer has that context; only deals/routes.ts knows the deal's actual pipeline). The
+  // schema now leaves it unset when omitted; routes.ts resolves the effective default —
+  // the pipeline's own entry stage when one is scoped, "Lead" only when it isn't — see
+  // pipelines-deals.test.ts's "omitting stage on a pipeline-scoped deal lands on THAT
+  // pipeline's own entry stage" for that resolution covered end-to-end over HTTP.
+  it("createDealBody leaves stage unset when omitted (OP-002: resolved dynamically by routes.ts, not defaulted in the schema)", async () => {
     const { createDealBody } = await import("../src/modules/deals/validators.js");
     const result = createDealBody.parse({ name: "Test" });
-    expect(result.stage).toBe("Lead");
+    expect(result.stage).toBeUndefined();
     expect(result.valueMinor).toBe(0);
     expect(result.currency).toBe("INR");
     expect(result.probability).toBe(0);

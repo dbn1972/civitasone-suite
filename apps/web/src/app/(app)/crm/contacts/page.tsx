@@ -78,7 +78,11 @@ export default async function Page({ searchParams }: { searchParams?: SP }) {
       <StatGrid>
         <StatCard icon="▣" iconBg="#eef2ff" label="Total Contacts" value={stat(contacts.length)} />
         <StatCard icon="△" iconBg="#fef2f2" label="Priority Contacts" value={stat(contacts.filter(c => c.priority === "high").length)} />
-        <StatCard icon="◉" iconBg="#fffbeb" label="With Priority Tag" value={stat(contacts.filter(c => c.priority === "high").length)} />
+        {/* Distinct from "Priority Contacts" above: any classification priority set
+            (high/medium/low), not just high. These previously used the identical
+            `priority === "high"` expression, so the two cards always showed the same
+            number — this one now counts what its label says. */}
+        <StatCard icon="◉" iconBg="#fffbeb" label="With Priority Tag" value={stat(contacts.filter(c => Boolean(c.priority)).length)} />
         <StatCard icon="◈" iconBg="#eef2ff" label="Reachable by Email" value={stat(contacts.filter(c => c.email).length)} />
       </StatGrid>
       <ContactsTable contacts={contacts} source={source} />

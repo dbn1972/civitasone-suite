@@ -119,8 +119,8 @@ beforeAll(async () => {
     await sql`select set_config('app.tenant_id', ${TENANT}, true)`;
     await sql`delete from meeting.action_progress where tenant_id = ${TENANT}`;
     await sql`delete from meeting.action_items where tenant_id = ${TENANT}`;
-    await sql`delete from meeting.committees where tenant_id = ${TENANT}`;
     await sql`delete from meeting.meetings where tenant_id = ${TENANT}`;
+    await sql`delete from meeting.committees where tenant_id = ${TENANT}`;
     await sql`delete from _outbox.messages where tenant_id = ${TENANT}`;
 
     await sql`
@@ -137,8 +137,8 @@ afterAll(async () => {
     await sql`select set_config('app.tenant_id', ${TENANT}, true)`;
     await sql`delete from meeting.action_progress where tenant_id = ${TENANT}`;
     await sql`delete from meeting.action_items where tenant_id = ${TENANT}`;
-    await sql`delete from meeting.committees where tenant_id = ${TENANT}`;
     await sql`delete from meeting.meetings where tenant_id = ${TENANT}`;
+    await sql`delete from meeting.committees where tenant_id = ${TENANT}`;
     await sql`delete from _outbox.messages where tenant_id = ${TENANT}`;
   });
   await sqlClient.end();

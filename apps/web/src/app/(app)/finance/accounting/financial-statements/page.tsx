@@ -5,9 +5,11 @@ import { StatementsTable } from "./StatementsTable";
 import { PrintExportButton } from "../../_components/PrintExportButton";
 import { FyFilter } from "../../_components/FyFilter";
 import { formatMoney } from "@/lib/formatters";
+import { currentFinancialYear } from "@/lib/fiscalYear";
 
-export default async function FinancialStatementsPage() {
-  const { data: statements, source } = await getFinancialStatements();
+export default async function FinancialStatementsPage({ searchParams }: { searchParams?: { fy?: string } }) {
+  const fy = searchParams?.fy && /^\d{4}-\d{2}$/.test(searchParams.fy) ? searchParams.fy : currentFinancialYear();
+  const { data: statements, source } = await getFinancialStatements(fy);
 
   const totalReceipts = statements.reduce((s, st) => s + st.receipts, 0);
   const totalPayments = statements.reduce((s, st) => s + st.payments, 0);
@@ -35,8 +37,8 @@ export default async function FinancialStatementsPage() {
         <StatCard icon="💰" iconBg="#eff6ff" label="Closing Balance" value={formatMoney(totalClosing)} />
       </StatGrid>
 
-      <Card title="Financial Statements · FY 2026-27">
-        <StatementsTable statements={statements} source={source} />
+      <Card title={`Financial Statements · FY ${fy}`}>
+        <StatementsTable statements={statements} source={source} fy={fy} />
       </Card>
     </>
   );

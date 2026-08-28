@@ -125,6 +125,7 @@ export async function onboardingRoutes(app: FastifyInstance): Promise<void> {
         joiningDate: emp?.dateOfJoining ?? "—",
         stepsCompleted: `${completed}/${total}`,
         totalSteps: String(total),
+        overdue,
         progress: total > 0 ? `${Math.round((completed / total) * 100)}%` : "0%",
         status,
       };

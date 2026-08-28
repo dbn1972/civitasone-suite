@@ -52,6 +52,6 @@ describe("FleetDevicesPage", () => {
     const ui = await FleetDevicesPage();
     render(ui);
 
-    expect(screen.getByText("Showing saved information")).toBeInTheDocument();
+    expect(screen.getByText("Couldn't load — showing nothing")).toBeInTheDocument();
   });
 });

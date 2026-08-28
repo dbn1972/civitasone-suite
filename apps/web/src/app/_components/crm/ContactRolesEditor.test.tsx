@@ -31,7 +31,7 @@ describe("ContactRolesEditor (CM-003)", () => {
   it("shows the saved-info badge on a failed load", async () => {
     vi.mocked(aa.getContactRoles).mockResolvedValue({ data: [], source: "error" });
     render(<ContactRolesEditor contactId="c1" />);
-    await waitFor(() => expect(screen.getAllByText(/showing saved information/i)[0]).toBeInTheDocument());
+    await waitFor(() => expect(screen.getAllByText(/couldn.t load/i)[0]).toBeInTheDocument());
   });
 
   it("blocks add when the deal id is not a uuid", async () => {

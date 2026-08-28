@@ -39,7 +39,7 @@ import { randomUUID } from "node:crypto";
 import type { FastifyInstance } from "fastify";
 import { runWithTenant } from "@civitasone/db";
 import { signToken } from "@civitasone/auth";
-import type { CommandEnvelope } from "@civitasone/queue";
+import { NonRetryableError, type CommandEnvelope } from "@civitasone/queue";
 import { buildApp } from "../src/app.js";
 import { sqlClient } from "../src/shared/db.js";
 import { COMMANDS } from "../src/topics.js";
@@ -124,8 +124,8 @@ beforeAll(async () => {
     await sql`delete from meeting.attendance_records where tenant_id = ${TENANT}`;
     await sql`delete from meeting.participants where tenant_id = ${TENANT}`;
     await sql`delete from meeting.committee_members where tenant_id = ${TENANT}`;
-    await sql`delete from meeting.committees where tenant_id = ${TENANT}`;
     await sql`delete from meeting.meetings where tenant_id = ${TENANT}`;
+    await sql`delete from meeting.committees where tenant_id = ${TENANT}`;
     await sql`delete from _outbox.messages where tenant_id = ${TENANT}`;
 
     await sql`
@@ -168,102 +168,130 @@ afterAll(async () => {
     await sql`delete from meeting.attendance_records where tenant_id = ${TENANT}`;
     await sql`delete from meeting.participants where tenant_id = ${TENANT}`;
     await sql`delete from meeting.committee_members where tenant_id = ${TENANT}`;
-    await sql`delete from meeting.committees where tenant_id = ${TENANT}`;
     await sql`delete from meeting.meetings where tenant_id = ${TENANT}`;
+    await sql`delete from meeting.committees where tenant_id = ${TENANT}`;
     await sql`delete from _outbox.messages where tenant_id = ${TENANT}`;
   });
   await sqlClient.end();
 });
 
-describe("[BUG] vote.cast has no committee-membership check", () => {
-  it.fails("an OUTSIDER with zero committee_members rows anywhere must not be able to cast a counted vote", async () => {
+describe("[FIXED] vote.cast enforces a committee-membership check", () => {
+  it("an OUTSIDER with zero committee_members rows anywhere cannot cast a counted vote", async () => {
     const resolutionId = randomUUID();
     await seedOpenResolution(resolutionId, MEETING_B);
 
-    await run(
-      msg(COMMANDS.voteCast, {
-        meetingId: MEETING_B,
-        resolutionId,
-        memberId: OUTSIDER,
-        position: "for",
-        tenantId: TENANT,
-      }),
-    );
+    await expect(
+      run(
+        msg(COMMANDS.voteCast, {
+          meetingId: MEETING_B,
+          resolutionId,
+          memberId: OUTSIDER,
+          position: "for",
+          tenantId: TENANT,
+        }),
+      ),
+    ).rejects.toBeInstanceOf(NonRetryableError);
 
     const row = await voteRow(resolutionId, OUTSIDER);
-    expect(row).toBeNull(); // fails today — the ballot IS recorded
+    expect(row).toBeNull();
 
     const resolution = await readResolution(resolutionId);
-    expect(resolution.votes_for).toBe(0); // fails today — the tally IS incremented
+    expect(resolution.votes_for).toBe(0);
   });
 
-  it.fails("a member of Committee A must not be able to cast a counted vote on Committee B's resolution", async () => {
+  it("a member of Committee A cannot cast a counted vote on Committee B's resolution", async () => {
     const resolutionId = randomUUID();
     await seedOpenResolution(resolutionId, MEETING_B);
 
-    await run(
-      msg(COMMANDS.voteCast, {
-        meetingId: MEETING_B,
-        resolutionId,
-        memberId: MEMBER_A1, // real member — of the WRONG committee
-        position: "against",
-        tenantId: TENANT,
-      }),
-    );
+    await expect(
+      run(
+        msg(COMMANDS.voteCast, {
+          meetingId: MEETING_B,
+          resolutionId,
+          memberId: MEMBER_A1, // real member — of the WRONG committee
+          position: "against",
+          tenantId: TENANT,
+        }),
+      ),
+    ).rejects.toBeInstanceOf(NonRetryableError);
 
     expect(await voteRow(resolutionId, MEMBER_A1)).toBeNull();
   });
 
-  it.fails("a member REMOVED from the committee (stale permission) must not be able to cast a counted vote", async () => {
+  it("a member REMOVED from the committee (stale permission) cannot cast a counted vote", async () => {
     const resolutionId = randomUUID();
     await seedOpenResolution(resolutionId, MEETING_A);
 
-    await run(
-      msg(COMMANDS.voteCast, {
-        meetingId: MEETING_A,
-        resolutionId,
-        memberId: MEMBER_A_REMOVED, // status = 'removed' in committee_members
-        position: "for",
-        tenantId: TENANT,
-      }),
-    );
+    await expect(
+      run(
+        msg(COMMANDS.voteCast, {
+          meetingId: MEETING_A,
+          resolutionId,
+          memberId: MEMBER_A_REMOVED, // status = 'removed' in committee_members
+          position: "for",
+          tenantId: TENANT,
+        }),
+      ),
+    ).rejects.toBeInstanceOf(NonRetryableError);
 
     expect(await voteRow(resolutionId, MEMBER_A_REMOVED)).toBeNull();
   });
 
-  it("characterizes today's actual (buggy) behavior: the outsider's ballot IS recorded and tallied", async () => {
+  it("confirms the fix: getMemberVoteWeight now REJECTS a non-member instead of silently defaulting to weight 1", async () => {
     const resolutionId = randomUUID();
     await seedOpenResolution(resolutionId, MEETING_B);
 
-    await run(
-      msg(COMMANDS.voteCast, {
-        meetingId: MEETING_B,
-        resolutionId,
-        memberId: OUTSIDER,
-        position: "for",
-        tenantId: TENANT,
-      }),
-    );
+    await expect(
+      run(
+        msg(COMMANDS.voteCast, {
+          meetingId: MEETING_B,
+          resolutionId,
+          memberId: OUTSIDER,
+          position: "for",
+          tenantId: TENANT,
+        }),
+      ),
+    ).rejects.toBeInstanceOf(NonRetryableError);
 
     const row = await voteRow(resolutionId, OUTSIDER);
-    expect(row).not.toBeNull();
-    expect(row.weight).toBe(1); // getMemberVoteWeight silently defaults a non-member to weight 1
+    expect(row).toBeNull(); // no ballot, no weight-1 fallback — the ballot was never recorded
     const resolution = await readResolution(resolutionId);
-    expect(resolution.votes_for).toBe(1);
+    expect(resolution.votes_for).toBe(0);
   });
 });
 
-describe("[BUG] vote.recuse has no check tying the caller to the member being recused", () => {
-  it.fails(
-    "an arbitrary caller must not be able to record a recusal against a DIFFERENT member with no relationship check",
+describe("[FIXED] vote.recuse now ties the caller to the member being recused", () => {
+  it(
+    "an arbitrary caller cannot record a recusal against a DIFFERENT member with no relationship to them",
     async () => {
       const resolutionId = randomUUID();
       await seedOpenResolution(resolutionId, MEETING_A);
 
       // msg.actorId (ACTOR) has no standing on COMMITTEE_A at all, yet names MEMBER_A1 (a real,
-      // eligible voter) as the person being recused. handleVoteRecuse (consumer.ts:863-911)
-      // never checks who ACTOR is relative to MEMBER_A1 — only that MEMBER_A1 hasn't voted yet.
-      await run(
+      // eligible voter) as the person being recused. handleVoteRecuse now rejects unless the
+      // caller IS the member, or is COMMITTEE_A's own chairperson/secretary.
+      await expect(
+        run(
+          msg(COMMANDS.voteRecuse, {
+            meetingId: MEETING_A,
+            resolutionId,
+            memberId: MEMBER_A1,
+            reason: "forced recusal by an unrelated caller",
+            tenantId: TENANT,
+          }),
+        ),
+      ).rejects.toBeInstanceOf(NonRetryableError);
+
+      expect(await recusalRow(resolutionId, MEMBER_A1)).toBeNull();
+    },
+  );
+
+  it("confirms the fix: MEMBER_A1's real ballot is no longer blocked by an unauthorized third-party recusal", async () => {
+    const resolutionId = randomUUID();
+    await seedOpenResolution(resolutionId, MEETING_A);
+
+    await expect(
+      run(
         msg(COMMANDS.voteRecuse, {
           meetingId: MEETING_A,
           resolutionId,
@@ -271,40 +299,44 @@ describe("[BUG] vote.recuse has no check tying the caller to the member being re
           reason: "forced recusal by an unrelated caller",
           tenantId: TENANT,
         }),
-      );
+      ),
+    ).rejects.toBeInstanceOf(NonRetryableError);
+    expect(await recusalRow(resolutionId, MEMBER_A1)).toBeNull();
 
-      expect(await recusalRow(resolutionId, MEMBER_A1)).toBeNull();
-    },
-  );
-
-  it("characterizes today's actual (buggy) behavior: the forced recusal IS recorded and then blocks the target member's real ballot", async () => {
-    const resolutionId = randomUUID();
-    await seedOpenResolution(resolutionId, MEETING_A);
-
+    // MEMBER_A1 casts their own, genuine ballot — no illegitimate recusal exists to block it.
     await run(
-      msg(COMMANDS.voteRecuse, {
+      msg(COMMANDS.voteCast, {
         meetingId: MEETING_A,
         resolutionId,
         memberId: MEMBER_A1,
-        reason: "forced recusal by an unrelated caller",
+        position: "for",
         tenantId: TENANT,
       }),
     );
-    expect(await recusalRow(resolutionId, MEMBER_A1)).not.toBeNull();
+    expect((await voteRow(resolutionId, MEMBER_A1))?.position).toBe("for");
+  });
 
-    // MEMBER_A1 now tries to cast their OWN, genuine ballot and is silently blocked by the
-    // recusal someone else registered against them without permission.
-    await expect(
-      run(
-        msg(COMMANDS.voteCast, {
-          meetingId: MEETING_A,
-          resolutionId,
-          memberId: MEMBER_A1,
-          position: "for",
-          tenantId: TENANT,
-        }),
-      ),
-    ).rejects.toThrow(/recused/i);
+  it("CHAIR_OF_A (this committee's own chairperson) CAN record a recusal for another member", async () => {
+    const resolutionId = randomUUID();
+    await seedOpenResolution(resolutionId, MEETING_A);
+
+    await run({
+      messageId: randomUUID(),
+      type: COMMANDS.voteRecuse,
+      tenantId: TENANT,
+      actorId: CHAIR_OF_A, // this committee's own chairperson, not just msg.actorId's default ACTOR
+      correlationId: randomUUID(),
+      schemaVersion: "1.0",
+      payload: {
+        meetingId: MEETING_A,
+        resolutionId,
+        memberId: MEMBER_A1,
+        reason: "declared conflict of interest, recorded by the chair",
+        tenantId: TENANT,
+      },
+    } as CommandEnvelope<any>);
+
+    expect(await recusalRow(resolutionId, MEMBER_A1)).not.toBeNull();
   });
 });
 
@@ -350,7 +382,7 @@ describe("[BUG] quorum is re-verified at vote.initiate but never again at vote.c
   });
 });
 
-describe("[BUG, HTTP layer] a chairperson of Committee A can initiate a vote for Committee B's meeting", () => {
+describe("[FIXED, HTTP layer] a chairperson of Committee A can no longer initiate a vote for Committee B's meeting", () => {
   let app: FastifyInstance;
   beforeAll(async () => {
     app = await buildApp();
@@ -363,7 +395,7 @@ describe("[BUG, HTTP layer] a chairperson of Committee A can initiate a vote for
     return signToken({ sub, tid: TENANT, roles, sid: "sess-idor" }, SECRET);
   }
 
-  it.fails("must reject a chairperson who does not chair the target meeting's committee", async () => {
+  it("rejects a chairperson who does not chair the target meeting's committee", async () => {
     const res = await app.inject({
       method: "POST",
       url: `/v1/meetings/${MEETING_B}/votes/initiate`,
@@ -373,19 +405,21 @@ describe("[BUG, HTTP layer] a chairperson of Committee A can initiate a vote for
       },
       payload: { resolutionText: "Motion on Committee B business", voteType: "roll_call" },
     });
-    // Correct behavior: 403/404 — CHAIR_OF_A has zero committee_members rows for COMMITTEE_B.
+    // CHAIR_OF_A has zero committee_members rows for COMMITTEE_B — requireCommitteeStanding
+    // rejects with 403 before the command is ever published.
     expect(res.statusCode).not.toBe(202);
+    expect(res.statusCode).toBe(403);
   });
 
-  it("characterizes today's actual (buggy) behavior: the route accepts it (202)", async () => {
+  it("confirms the fix: the SAME chairperson CAN initiate a vote for their own Committee A's meeting", async () => {
     const res = await app.inject({
       method: "POST",
-      url: `/v1/meetings/${MEETING_B}/votes/initiate`,
+      url: `/v1/meetings/${MEETING_A}/votes/initiate`,
       headers: {
         authorization: `Bearer ${token(["committee_chairperson"], CHAIR_OF_A)}`,
         "x-idempotency-key": randomUUID(),
       },
-      payload: { resolutionText: "Motion on Committee B business", voteType: "roll_call" },
+      payload: { resolutionText: "Motion on Committee A's own business", voteType: "roll_call" },
     });
     expect(res.statusCode).toBe(202);
   });

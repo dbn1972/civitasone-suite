@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { validateGstin, validatePan, validateIfsc, validateEmail, validatePhone } from "../../_components/validators";
+import { toHumanError } from "@/lib/messages";
 
 type Errors = Partial<Record<"name" | "gstin" | "pan" | "email" | "phone" | "ifsc", string>>;
 
@@ -54,10 +55,10 @@ export function RegisterVendorForm() {
           ifsc: ifsc.trim().toUpperCase() || undefined,
         }),
       });
-      const text = await res.text();
       if (!res.ok) {
+        const human = toHumanError("save", { area: "vendor" });
         setStatus("error");
-        setMessage(text || `Request failed (${res.status})`);
+        setMessage(`${human.what} ${human.next}`);
         return;
       }
       setStatus("accepted");

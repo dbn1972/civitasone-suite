@@ -114,11 +114,39 @@ export function RetirementProcessWizard({ employeeName }: Props) {
 
   return (
     <div>
-      {employeeName && (
-        <p style={{ margin: "0 0 14px", fontSize: "0.875rem", color: "var(--ink2)" }}>
+      {employeeName ? (
+        <p style={{ margin: "0 0 10px", fontSize: "0.875rem", color: "var(--ink2)" }}>
           Processing retirement for: <strong>{employeeName}</strong>
         </p>
+      ) : (
+        <p style={{ margin: "0 0 10px", fontSize: "0.875rem", color: "var(--ink2)" }}>
+          No retiree selected — pick one from &quot;Retiring in Next 6 Months&quot; above to track their case.
+        </p>
       )}
+
+      {/* Honest disclaimer: this checklist has no backend yet (Sprint 14 /
+          Lifecycle Phase 2 is a client-side-only prototype). Without this,
+          the progress bar and green checkmarks look exactly like a real,
+          saved case tracker -- an officer could reasonably believe ticking
+          every box here has recorded the retirement processing, when a
+          refresh (or simply opening the same case on another machine)
+          silently discards everything. */}
+      <div
+        role="status"
+        style={{
+          display: "flex", gap: 8, alignItems: "flex-start",
+          padding: "10px 14px", marginBottom: 16, borderRadius: 8,
+          background: "var(--warnbg, #fffbe6)", border: "1px solid #f5d97a",
+          fontSize: "0.8125rem", color: "#8a6416",
+        }}
+      >
+        <span aria-hidden="true">⚠️</span>
+        <span>
+          This checklist is a local processing aid only. Checked items are <strong>not saved</strong> —
+          they reset if you reload this page, navigate away, or another officer opens the same case.
+          Record completed steps in the physical/service-book file until a saved case tracker ships.
+        </span>
+      </div>
 
       {/* Overall progress bar */}
       <div style={{ marginBottom: 20 }}>

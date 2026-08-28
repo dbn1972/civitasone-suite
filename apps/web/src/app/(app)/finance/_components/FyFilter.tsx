@@ -10,21 +10,12 @@
  * `searchParams.fy`, the filtered data will follow automatically.
  */
 import { useRouter, useSearchParams } from "next/navigation";
-
-function fiscalYears(count = 5): string[] {
-  const now = new Date();
-  // Indian FY starts in April; before April we are still in the previous FY.
-  const startYear = now.getMonth() >= 3 ? now.getFullYear() : now.getFullYear() - 1;
-  return Array.from({ length: count }, (_, i) => {
-    const y = startYear - i;
-    return `${y}-${String((y + 1) % 100).padStart(2, "0")}`;
-  });
-}
+import { recentFinancialYears } from "@/lib/fiscalYear";
 
 export function FyFilter() {
   const router = useRouter();
   const params = useSearchParams();
-  const options = fiscalYears();
+  const options = recentFinancialYears();
   const current = params.get("fy") ?? options[0];
 
   function onChange(e: React.ChangeEvent<HTMLSelectElement>) {

@@ -1,8 +1,9 @@
 import Link from "next/link";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
-import { PageHeader, StatGrid, StatCard, Card, DataTable, EmptyState } from "../../../_components/ds";
+import { PageHeader, StatGrid, StatCard, Card, DataTable, EmptyState, ErrorState } from "../../../_components/ds";
 import { getProcurementTenders } from "../../../_data/loaders";
 import { formatIndianDate } from "@/lib/formatters";
+import { toHumanError } from "@/lib/messages";
 
 const TYPE_LABELS: Record<string, string> = {
   open: "Open",
@@ -59,7 +60,7 @@ export default async function TendersPage() {
               <span className="sr-only"> (opens in a new tab)</span>
             </a>
             <Link href="/procurement/tenders/new" className="btn primary">+ New Tender</Link>
-            {source === "error" ? <DataSourceBadge source={source} /> : null}
+            {source === "error" ? <DataSourceBadge source={source} message="Couldn't load — showing nothing" /> : null}
           </>
         }
       />
@@ -73,12 +74,14 @@ export default async function TendersPage() {
 
       <Card title="Tenders register">
         {source === "error" ? (
-          <EmptyState
-            icon="⚠️"
-            title="Couldn’t load tenders"
-            message="The tender service didn’t respond. Check your connection and try again."
-            action={<Link href="/procurement/tenders" className="btn ghost">Retry</Link>}
-          />
+          // L4 fix: this was EmptyState — no role="alert"/aria-live, so a
+          // screen-reader user got no indication a fetch actually failed
+          // versus the register genuinely being empty. ds/ErrorState.tsx is
+          // the component the design system provides specifically for this
+          // (§7: "Use for genuine errors; not EmptyState"). backHref points
+          // at this same page (matching the old Retry link's target) since a
+          // fresh navigation re-runs the SSR loader.
+          <ErrorState error={toHumanError("load", { area: "tenders" })} backHref="/procurement/tenders" />
         ) : rows.length === 0 ? (
           <EmptyState
             icon="🏛️"

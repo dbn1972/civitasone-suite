@@ -392,21 +392,24 @@ CREATE POLICY tenant_isolation_policy ON hrms.pulse_surveys
   USING (tenant_id = employee.current_tenant_id())
   WITH CHECK (tenant_id = employee.current_tenant_id());
 
--- hrms.social_announcements
-ALTER TABLE hrms.social_announcements ENABLE ROW LEVEL SECURITY;
-ALTER TABLE hrms.social_announcements FORCE ROW LEVEL SECURITY;
-DROP POLICY IF EXISTS tenant_isolation_policy ON hrms.social_announcements;
-DROP POLICY IF EXISTS tenant_isolation ON hrms.social_announcements;
-CREATE POLICY tenant_isolation_policy ON hrms.social_announcements
+-- employee.hrms_social_announcements (FIXED 2026-08-27: was "hrms." — that
+-- schema is real for a different group of tables, e.g. hrms.ai_plugin_configs
+-- (0021), but this one is created by 0115_social_feed.sql under employee)
+ALTER TABLE employee.hrms_social_announcements ENABLE ROW LEVEL SECURITY;
+ALTER TABLE employee.hrms_social_announcements FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation_policy ON employee.hrms_social_announcements;
+DROP POLICY IF EXISTS tenant_isolation ON employee.hrms_social_announcements;
+CREATE POLICY tenant_isolation_policy ON employee.hrms_social_announcements
   USING (tenant_id = employee.current_tenant_id())
   WITH CHECK (tenant_id = employee.current_tenant_id());
 
--- hrms.social_kudos
-ALTER TABLE hrms.social_kudos ENABLE ROW LEVEL SECURITY;
-ALTER TABLE hrms.social_kudos FORCE ROW LEVEL SECURITY;
-DROP POLICY IF EXISTS tenant_isolation_policy ON hrms.social_kudos;
-DROP POLICY IF EXISTS tenant_isolation ON hrms.social_kudos;
-CREATE POLICY tenant_isolation_policy ON hrms.social_kudos
+-- employee.hrms_social_kudos (FIXED 2026-08-27: same "hrms." mistake; also
+-- from 0115_social_feed.sql, under employee)
+ALTER TABLE employee.hrms_social_kudos ENABLE ROW LEVEL SECURITY;
+ALTER TABLE employee.hrms_social_kudos FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation_policy ON employee.hrms_social_kudos;
+DROP POLICY IF EXISTS tenant_isolation ON employee.hrms_social_kudos;
+CREATE POLICY tenant_isolation_policy ON employee.hrms_social_kudos
   USING (tenant_id = employee.current_tenant_id())
   WITH CHECK (tenant_id = employee.current_tenant_id());
 
@@ -535,12 +538,15 @@ CREATE POLICY tenant_isolation_policy ON training.lms_enrollments
 
 -- ── Upgrade USING-only policies to USING + WITH CHECK ─────────────
 
--- employee.hrms_employee_letters
-ALTER TABLE employee.hrms_employee_letters ENABLE ROW LEVEL SECURITY;
-ALTER TABLE employee.hrms_employee_letters FORCE ROW LEVEL SECURITY;
-DROP POLICY IF EXISTS tenant_isolation_policy ON employee.hrms_employee_letters;
-DROP POLICY IF EXISTS tenant_isolation ON employee.hrms_employee_letters;
-CREATE POLICY tenant_isolation_policy ON employee.hrms_employee_letters
+-- employee.hrms_generated_letters (FIXED 2026-08-27: this file called it
+-- "hrms_employee_letters", which has never existed anywhere in this
+-- service; the real "documents" table from 0009_letters_shifts_fnf.sql is
+-- employee.hrms_generated_letters — corrected to match, same as 0122.)
+ALTER TABLE employee.hrms_generated_letters ENABLE ROW LEVEL SECURITY;
+ALTER TABLE employee.hrms_generated_letters FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation_policy ON employee.hrms_generated_letters;
+DROP POLICY IF EXISTS tenant_isolation ON employee.hrms_generated_letters;
+CREATE POLICY tenant_isolation_policy ON employee.hrms_generated_letters
   USING (tenant_id = employee.current_tenant_id())
   WITH CHECK (tenant_id = employee.current_tenant_id());
 
@@ -571,12 +577,13 @@ CREATE POLICY tenant_isolation_policy ON employee.hrms_salary_advances
   USING (tenant_id = employee.current_tenant_id())
   WITH CHECK (tenant_id = employee.current_tenant_id());
 
--- hrms.expense_claims
-ALTER TABLE hrms.expense_claims ENABLE ROW LEVEL SECURITY;
-ALTER TABLE hrms.expense_claims FORCE ROW LEVEL SECURITY;
-DROP POLICY IF EXISTS tenant_isolation_policy ON hrms.expense_claims;
-DROP POLICY IF EXISTS tenant_isolation ON hrms.expense_claims;
-CREATE POLICY tenant_isolation_policy ON hrms.expense_claims
+-- claims.hrms_expense_claims (FIXED 2026-08-27: was "hrms."; created by
+-- 0115_social_feed.sql under claims)
+ALTER TABLE claims.hrms_expense_claims ENABLE ROW LEVEL SECURITY;
+ALTER TABLE claims.hrms_expense_claims FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation_policy ON claims.hrms_expense_claims;
+DROP POLICY IF EXISTS tenant_isolation ON claims.hrms_expense_claims;
+CREATE POLICY tenant_isolation_policy ON claims.hrms_expense_claims
   USING (tenant_id = employee.current_tenant_id())
   WITH CHECK (tenant_id = employee.current_tenant_id());
 
@@ -598,20 +605,22 @@ CREATE POLICY tenant_isolation_policy ON hrms.face_verification_log
   USING (tenant_id = employee.current_tenant_id())
   WITH CHECK (tenant_id = employee.current_tenant_id());
 
--- hrms.push_devices
-ALTER TABLE hrms.push_devices ENABLE ROW LEVEL SECURITY;
-ALTER TABLE hrms.push_devices FORCE ROW LEVEL SECURITY;
-DROP POLICY IF EXISTS tenant_isolation_policy ON hrms.push_devices;
-DROP POLICY IF EXISTS tenant_isolation ON hrms.push_devices;
-CREATE POLICY tenant_isolation_policy ON hrms.push_devices
+-- employee.hrms_push_devices (FIXED 2026-08-27: was "hrms."; created by
+-- 0115_social_feed.sql under employee)
+ALTER TABLE employee.hrms_push_devices ENABLE ROW LEVEL SECURITY;
+ALTER TABLE employee.hrms_push_devices FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation_policy ON employee.hrms_push_devices;
+DROP POLICY IF EXISTS tenant_isolation ON employee.hrms_push_devices;
+CREATE POLICY tenant_isolation_policy ON employee.hrms_push_devices
   USING (tenant_id = employee.current_tenant_id())
   WITH CHECK (tenant_id = employee.current_tenant_id());
 
--- hrms.travel_requests
-ALTER TABLE hrms.travel_requests ENABLE ROW LEVEL SECURITY;
-ALTER TABLE hrms.travel_requests FORCE ROW LEVEL SECURITY;
-DROP POLICY IF EXISTS tenant_isolation_policy ON hrms.travel_requests;
-DROP POLICY IF EXISTS tenant_isolation ON hrms.travel_requests;
-CREATE POLICY tenant_isolation_policy ON hrms.travel_requests
+-- claims.hrms_travel_requests (FIXED 2026-08-27: was "hrms."; created by
+-- 0115_social_feed.sql under claims)
+ALTER TABLE claims.hrms_travel_requests ENABLE ROW LEVEL SECURITY;
+ALTER TABLE claims.hrms_travel_requests FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation_policy ON claims.hrms_travel_requests;
+DROP POLICY IF EXISTS tenant_isolation ON claims.hrms_travel_requests;
+CREATE POLICY tenant_isolation_policy ON claims.hrms_travel_requests
   USING (tenant_id = employee.current_tenant_id())
   WITH CHECK (tenant_id = employee.current_tenant_id());

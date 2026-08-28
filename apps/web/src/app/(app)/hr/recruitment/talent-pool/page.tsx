@@ -43,7 +43,12 @@ export default async function TalentPoolPage({
 
   const rows = candidates.map((c) => ({
     ...c,
-    skillsDisplay: c.skills?.join(", ") ?? "—",
+    // Real data has both shapes for "no skills": a SQL NULL (skills == null)
+    // and an empty array (skills == []). c.skills?.join(", ") only caught the
+    // first -- an empty array produced "".join() === "" (a blank cell that
+    // reads as a rendering glitch), not the placeholder every other empty
+    // field in this table uses. Both shapes now render the same placeholder.
+    skillsDisplay: c.skills && c.skills.length > 0 ? c.skills.join(", ") : "—",
     expDisplay: c.experienceYears != null ? `${c.experienceYears} yr` : "—",
     appliedDate: new Date(c.appliedAt).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" }),
   }));
@@ -59,9 +64,9 @@ export default async function TalentPoolPage({
       />
       <DataSourceBadge source={source} />
       <StatGrid>
-        <StatCard icon="\U0001f465" iconBg="var(--infobg)" label="Total Candidates"   value={candidates.length} />
-        <StatCard icon="\U0001f4a1" iconBg="var(--primary-soft)" label="With Skills"        value={withSkills} />
-        <StatCard icon="\U0001f9e0" iconBg="var(--warnbg)" label="Experienced (5+ yr)" value={experienced} />
+        <StatCard icon="\ud83d\udc65" iconBg="var(--infobg)" label="Total Candidates"   value={candidates.length} />
+        <StatCard icon="\ud83d\udca1" iconBg="var(--primary-soft)" label="With Skills"        value={withSkills} />
+        <StatCard icon="\ud83e\udde0" iconBg="var(--warnbg)" label="Experienced (5+ yr)" value={experienced} />
         <StatCard icon="\u2705"       iconBg="var(--line2)" label="Active Stages"     value={activeStage} />
       </StatGrid>
 

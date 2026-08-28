@@ -15,14 +15,17 @@ export type FileRow = {
   statusRaw: string;
 };
 
-const SEGMENTS = ["All", "With me", "In transit", "Closed"];
+// "Active" (not "With me"): the file rows carry no per-officer holder, so this
+// filters by status, not by the signed-in officer. The real per-desk view is
+// /estab/inbox ("My Desk").
+const SEGMENTS = ["All", "Active", "In transit", "Closed"];
 
 export function FilesTable({ rows }: { rows: FileRow[] }) {
   const [seg, setSeg] = useState("All");
 
   const filtered = rows.filter((r) => {
     switch (seg) {
-      case "With me":
+      case "Active":
         return r.statusRaw === "active";
       case "In transit":
         return r.statusRaw === "pending";

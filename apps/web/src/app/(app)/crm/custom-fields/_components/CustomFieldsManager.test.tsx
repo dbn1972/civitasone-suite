@@ -36,7 +36,7 @@ describe("CustomFieldsManager", () => {
     vi.mocked(cf.listCustomFields).mockResolvedValue({ data: [], source: "error" });
     render(<CustomFieldsManager />);
     await waitFor(() =>
-      expect(screen.getAllByText(/showing saved information/i)[0]).toBeInTheDocument(),
+      expect(screen.getAllByText(/couldn.t load/i)[0]).toBeInTheDocument(),
     );
     expect(screen.getByText(/custom fields unavailable/i)).toBeInTheDocument();
     // never presents an empty catalogue as fact

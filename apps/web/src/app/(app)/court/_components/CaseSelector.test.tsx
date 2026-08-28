@@ -33,19 +33,19 @@ describe("CaseSelector", () => {
   it("renders a genuine empty state when there are no cases and the fetch succeeded", () => {
     render(<CaseSelector cases={[]} casesSource="api" basePath="/court/hearings" selectedCaseId="" />);
     expect(screen.getByText("No cases to pick from")).toBeInTheDocument();
-    expect(screen.queryByText("Showing saved information")).not.toBeInTheDocument();
+    expect(screen.queryByText("Couldn't load — showing nothing")).not.toBeInTheDocument();
   });
 
   it("renders the saved-information badge (not the register-a-case copy) when the cases fetch failed", () => {
     render(<CaseSelector cases={[]} casesSource="error" basePath="/court/hearings" selectedCaseId="" />);
-    expect(screen.getByText("Showing saved information")).toBeInTheDocument();
+    expect(screen.getByText("Couldn't load — showing nothing")).toBeInTheDocument();
     expect(screen.getByText("Couldn't load your cases")).toBeInTheDocument();
     expect(screen.queryByText("No cases to pick from")).not.toBeInTheDocument();
   });
 
   it("renders the saved-information badge even if a stale (non-empty) case list is passed alongside an error source", () => {
     render(<CaseSelector cases={[c1]} casesSource="error" basePath="/court/hearings" selectedCaseId="" />);
-    expect(screen.getByText("Showing saved information")).toBeInTheDocument();
+    expect(screen.getByText("Couldn't load — showing nothing")).toBeInTheDocument();
     expect(screen.queryByLabelText("Case")).not.toBeInTheDocument();
   });
 

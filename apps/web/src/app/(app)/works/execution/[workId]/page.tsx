@@ -1,20 +1,24 @@
 import Link from "next/link";
 import { fetchJson } from "@/app/_data/apiClient";
-import { PageHeader, Card, DataTable, StatGrid, StatCard, ProgressBar } from "@/app/_components/ds";
+import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
+import { PageHeader, Card, DataTable, StatGrid, StatCard } from "@/app/_components/ds";
 import { fmtDate } from "../../_data/format";
 import { ExecutionActions } from "./ExecutionActions";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
+// Mirrors a work_scopes row from GET /v1/works/execution/:workId/scopes — a raw
+// select (works-service execution/repo.ts listScopes, schema.ts). The columns
+// are { id, scopeId, targetValue, description, plannedStart, plannedEnd, ... };
+// there is no scopeName / unit / status column and no scope-catalog join, so the
+// label comes from `description` (optional) with a scopeId-derived fallback.
 interface WorkScope {
   id: string;
-  workId: string;
-  scopeName: string;
-  targetQuantity: string;
-  unit: string;
-  startDate: string | null;
-  endDate: string | null;
-  status: string;
+  scopeId: string;
+  description: string | null;
+  targetValue: string;
+  plannedStart: string | null;
+  plannedEnd: string | null;
 }
 
 interface WorkIssue {
@@ -49,15 +53,22 @@ function asNullableStr(v: unknown): string | null {
 function asWorkScope(r: unknown): WorkScope {
   const o = (r && typeof r === "object" ? r : {}) as Record<string, unknown>;
   return {
-    id:             asStr(o.id, ""),
-    workId:         asStr(o.workId, ""),
-    scopeName:      asStr(o.scopeName),
-    targetQuantity: asStr(o.targetQuantity, "0"),
-    unit:           asStr(o.unit),
-    startDate:      asNullableStr(o.startDate),
-    endDate:        asNullableStr(o.endDate),
-    status:         asStr(o.status, "active"),
+    id:           asStr(o.id, ""),
+    scopeId:      asStr(o.scopeId, ""),
+    description:  asNullableStr(o.description),
+    targetValue:  o.targetValue == null ? "" : String(o.targetValue),
+    plannedStart: asNullableStr(o.plannedStart),
+    plannedEnd:   asNullableStr(o.plannedEnd),
   };
+}
+
+/** Display label for a scope: its description, else a scopeId-derived fallback
+ *  (description is optional per addScopeSchema) so two scopes never collide. */
+function scopeLabel(s: WorkScope, index: number): string {
+  const desc = s.description?.trim();
+  if (desc) return desc;
+  if (s.scopeId) return `Scope ${s.scopeId.slice(0, 8)}…`;
+  return `Scope ${index + 1}`;
 }
 
 function asWorkIssue(r: unknown): WorkIssue {
@@ -69,7 +80,14 @@ function asWorkIssue(r: unknown): WorkIssue {
     description: asStr(o.description),
     raisedDate:  asNullableStr(o.raisedDate),
     status:      asStr(o.status, "open"),
-    priority:    asStr(o.priority, "medium"),
+    // Bug fix (works-deep-verify, LOW/L3): work_issues has no `priority`
+    // column (execution/schema.ts) and nothing ever sends one (issues/new
+    // form, createIssueSchema) — o.priority is always undefined from the
+    // real API, so this unconditionally fabricated "medium" for every
+    // issue, on every work, forever. The sibling Issues Register
+    // (execution/issues/page.tsx) already renders this honestly as "—";
+    // match that instead of inventing data.
+    priority:    asStr(o.priority, "—"),
   };
 }
 
@@ -103,23 +121,23 @@ export default async function ExecutionDetailPage({
 
   const scopes = scopesResult.data;
   const issues = issuesResult.data;
+  const loadFailed = scopesResult.source === "error" || issuesResult.source === "error";
 
   // ── Stats ──────────────────────────────────────────────────────────────────
-  const totalScopes     = scopes.length;
-  const completedScopes = scopes.filter((s) => s.status === "completed").length;
-  const overallPct      = totalScopes > 0 ? Math.round((completedScopes / totalScopes) * 100) : 0;
-  const openIssues      = issues.filter((i) => i.status === "open").length;
-  const closedIssues    = issues.filter((i) => i.status !== "open").length;
+  // work_scopes has no per-scope completion/status field, so overall progress
+  // cannot be derived here (real progress lives in scope_progress, not on this
+  // payload) — show only counts that are actually backed by the response.
+  const totalScopes  = scopes.length;
+  const openIssues   = issues.filter((i) => i.status === "open").length;
+  const closedIssues = issues.filter((i) => i.status !== "open").length;
 
   // ── DataTable rows ─────────────────────────────────────────────────────────
-  const scopeRows: Record<string, unknown>[] = scopes.map((s) => ({
-    id:             s.id,
-    scopeName:      s.scopeName,
-    targetQuantity: s.targetQuantity,
-    unit:           s.unit,
-    startDate:      fmtDate(s.startDate),
-    endDate:        fmtDate(s.endDate),
-    status:         s.status,
+  const scopeRows: Record<string, unknown>[] = scopes.map((s, i) => ({
+    id:     s.id,
+    scope:  scopeLabel(s, i),
+    target: s.targetValue || "—",
+    start:  fmtDate(s.plannedStart),
+    end:    fmtDate(s.plannedEnd),
   }));
 
   const issueRows: Record<string, unknown>[] = issues.map((i) => ({
@@ -139,6 +157,9 @@ export default async function ExecutionDetailPage({
         backLabel="Execution"
         actions={
           <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+            {loadFailed && (
+              <DataSourceBadge source="error" message="Couldn't load this work — some details may be missing." />
+            )}
             <Link
               href={"/works/execution/record-progress?workId=" + params.workId}
               className="btn primary"
@@ -170,27 +191,13 @@ export default async function ExecutionDetailPage({
         <StatCard icon="✅" iconBg="#ecfdf3" label="Closed Issues" value={closedIssues} />
       </StatGrid>
 
-      <Card title="Overall Progress" padding>
-        <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-          <ProgressBar value={overallPct} />
-          <span style={{ fontSize: 20, fontWeight: 800, fontVariantNumeric: "tabular-nums", color: "var(--ink)", minWidth: 48 }}>
-            {overallPct}%
-          </span>
-        </div>
-        <p style={{ fontSize: 12, color: "var(--muted)", marginTop: 8 }}>
-          {completedScopes} of {totalScopes} scope{totalScopes !== 1 ? "s" : ""} completed
-        </p>
-      </Card>
-
       <Card title="Work Scopes">
         <DataTable
           columns={[
-            { key: "scopeName",      label: "Scope" },
-            { key: "targetQuantity", label: "Target Qty", align: "right" },
-            { key: "unit",           label: "Unit" },
-            { key: "startDate",      label: "Start" },
-            { key: "endDate",        label: "End" },
-            { key: "status",         label: "Status", cellType: "status" },
+            { key: "scope",  label: "Scope" },
+            { key: "target", label: "Target", align: "right" },
+            { key: "start",  label: "Start" },
+            { key: "end",    label: "End" },
           ]}
           rows={scopeRows}
           emptyIcon="🏗️"

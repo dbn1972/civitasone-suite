@@ -1,6 +1,7 @@
 import { PageHeader, StatGrid, StatCard, Card, DataTable } from "../../../../_components/ds";
 import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
+import { currentFinancialYear } from "@/lib/fiscalYear";
 
 type Row = {
   id: string;
@@ -38,10 +39,12 @@ export default async function IncomeTaxPage() {
     { key: "status", label: "Status", cellType: "status" },
   ];
 
+  const fy = currentFinancialYear();
+
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
-      <PageHeader title="Income Tax Computation" subtitle="Annual IT computation summary for FY 2024-25." back="/hr" />
-      <DataSourceBadge source={source} />
+      <PageHeader title="Income Tax Computation" subtitle={`Annual IT computation summary for FY ${fy}.`} back="/hr" />
+      <DataSourceBadge source={source} message="Couldn't load — showing nothing" />
       <StatGrid>
         <StatCard icon="📋" iconBg="var(--infobg)" label="Total" value={items.length} />
         <StatCard icon="✅" iconBg="var(--goodbg)" label="Finalized" value={items.filter((i) => i.status === "finalized" || i.status === "completed").length} />

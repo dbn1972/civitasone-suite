@@ -30,7 +30,7 @@ export default function NewGrievancePage() {
     };
 
     try {
-      const res = await fetch("/api/v1/crm/grievances", {
+      const res = await fetch("/api/proxy/v1/crm/grievances", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
