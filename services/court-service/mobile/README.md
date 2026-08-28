@@ -5,7 +5,8 @@ A real, API-backed court module for the CivitasOne mobile app. It consumes the
 and a public citizen case-status lookup with an OTP gate).
 
 > **Authored against the LIVE API shapes** running on the build box
-> (`http://127.0.0.1:3034`, gateway path prefix `/v1/court/*` and `/v1/public/*`).
+> (`http://127.0.0.1:3034`, gateway path prefix `/v1/court/*`, which includes the
+> anonymous `/v1/court/public/*` sub-tree used below).
 > Every `fromJson` field name was verified byte-for-byte against real responses.
 >
 > **Not compiled here.** The build box has **no Flutter/Dart toolchain**, so
@@ -70,7 +71,8 @@ and a public citizen case-status lookup with an OTP gate).
 - **Base URL** comes from `apiBaseProvider`
   (`--dart-define=API_BASE=...`, default `http://10.0.2.2:8080`). The court-service
   runs on `:3034`; in a deployed environment the **gateway proxies** `/v1/court/*`
-  and `/v1/public/*` to court-service, so the app keeps using the gateway base URL.
+  (including its anonymous `/v1/court/public/*` sub-tree) to court-service, so the
+  app keeps using the gateway base URL.
   For direct-to-service testing, point `API_BASE` at the court-service origin.
 
 ## Endpoints consumed (only the ones that exist — no invented routes)
@@ -89,9 +91,9 @@ Public (no auth):
 
 | Method | Path                            | Used by |
 |--------|---------------------------------|---------|
-| GET    | `/v1/public/establishments`     | `publicEstablishments()` |
-| POST   | `/v1/public/case-status/otp`    | `requestOtp({mobile})` |
-| POST   | `/v1/public/case-status`        | `publicCaseStatus({cnr, slug, challengeId, otp, captchaToken})` |
+| GET    | `/v1/court/public/establishments`     | `publicEstablishments()` |
+| POST   | `/v1/court/public/case-status/otp`    | `requestOtp({mobile})` |
+| POST   | `/v1/court/public/case-status`        | `publicCaseStatus({cnr, slug, challengeId, otp, captchaToken})` |
 
 ## Model ⇄ live-JSON field mapping (verified)
 

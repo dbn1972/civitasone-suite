@@ -234,6 +234,16 @@ export function hashIp(ip: string | undefined): string {
  *   TRUSTED_PROXY_HOPS = n            trust the last n entries as proxy-appended.
  *
  * A deployment behind the CivitasOne gateway sets TRUSTED_PROXY_HOPS=1.
+ *
+ * KNOWN DUPLICATION, not fixed here: this is a line-for-line copy of
+ * crm-service's resolveClientIp (public-capture-rate-limit.ts), because no
+ * shared package currently owns this logic -- @civitasone/rate-limit wraps
+ * @fastify/rate-limit's throttling middleware, a different concern from
+ * "resolve the trustworthy client IP to use as a rate-limit key" needed here.
+ * A real fix extracts this into @civitasone/rate-limit (or a new shared
+ * package) and switches BOTH crm-service and court-service to import it,
+ * which is a cross-service change outside a single-service reachability fix
+ * -- flagging rather than doing it here under review-response pressure.
  */
 export function resolveClientIp(req: Pick<FastifyRequest, "ip" | "headers">): string {
   const raw = Number(process.env.TRUSTED_PROXY_HOPS);
