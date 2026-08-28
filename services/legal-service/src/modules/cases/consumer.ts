@@ -55,9 +55,17 @@ export function registerCaseConsumers(rawQueue: Queue): void {
       if (!legalCase) throw new Error(`case ${p.caseId} not found`);
       assertCanDispose(legalCase.status ?? "pending");
       await repo.updateCase(tx, p.caseId, {
-        status: "disposed", updatedBy: msg.actorId, version: (legalCase.version ?? 1) + 1,
+        status: "disposed", disposition: p.disposition,
+        updatedBy: msg.actorId, version: (legalCase.version ?? 1) + 1,
       });
-      await audit(tx, msg, "dispose", "case", p.caseId);
+      // disposition was previously discarded entirely here — see
+      // migration 0023_case_disposition.sql for the full story. newValue
+      // (not a bespoke "metadata" key) matches the convention
+      // rti/consumer.ts already uses for the same concept, which matters
+      // beyond naming consistency: audit-service's export pipeline
+      // (exports/consumer.ts) only PII-gates payload.oldValue/newValue
+      // behind an extra role check, not an arbitrary key name.
+      await audit(tx, msg, "dispose", "case", p.caseId, { disposition: p.disposition });
     });
     // Disposing a case changes its status, which is a listCases() filter —
     // same list-cache gap as caseCreate above.
@@ -65,10 +73,17 @@ export function registerCaseConsumers(rawQueue: Queue): void {
   });
 }
 
-async function audit(tx: any, msg: { tenantId: string; actorId: string; correlationId: string }, action: string, resourceType: string, resourceId: string): Promise<void> {
+async function audit(
+  tx: any,
+  msg: { tenantId: string; actorId: string; correlationId: string },
+  action: string,
+  resourceType: string,
+  resourceId: string,
+  newValue?: Record<string, unknown>,
+): Promise<void> {
   await enqueue(tx, {
     topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC,
     tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
-    payload: { service: "legal", action, resourceType, resourceId, outcome: "success" },
+    payload: { service: "legal", action, resourceType, resourceId, outcome: "success", ...(newValue ? { newValue } : {}) },
   });
 }

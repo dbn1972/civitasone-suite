@@ -433,6 +433,95 @@ describe("Case consumer — list-cache invalidation (integration)", () => {
   });
 });
 
+// ── Case consumer — dispose persists disposition (regression) ──────────────────
+// disposeCaseBody (validators.ts) requires and zod-validates a 1-500 char
+// `disposition` string, and it reached this consumer, but repo.updateCase()
+// was only ever called with { status: "disposed", updatedBy, version } — the
+// disposition text was discarded the instant the command was processed, with
+// no record of it anywhere (not the DB row, not the audit event payload
+// either). See migration 0023_case_disposition.sql. Uses its own dedicated
+// case rather than the shared CASE_ID fixture, since disposal is one-way
+// (assertCanDispose only allows pending/appealed/stayed) and other tests in
+// this file assume CASE_ID stays disposable/pending.
+describe("Case consumer — dispose persists disposition (regression)", () => {
+  const CASE_3 = "22222222-bbbb-4000-8000-000000000c03";
+
+  it("disposeCase: disposition text is persisted on the row and in the audit event", async () => {
+    const q = wireTenantAwareQueue(new MemoryQueue());
+    registerCaseConsumers(q);
+    await q.start();
+
+    await q.publish(COMMANDS.caseCreate, {
+      messageId: MSG(18), type: COMMANDS.caseCreate,
+      tenantId: TENANT, actorId: ACTOR, correlationId: "corr-case-dispose-1", schemaVersion: "1.0",
+      payload: { id: CASE_3, tenantId: TENANT, caseNo: "WP-2026-DISPOSE", title: "Dispose regression check", court: "HC Delhi" },
+    });
+    await drain();
+
+    await q.publish(COMMANDS.caseDispose, {
+      messageId: MSG(19), type: COMMANDS.caseDispose,
+      tenantId: TENANT, actorId: ACTOR, correlationId: "corr-case-dispose-2", schemaVersion: "1.0",
+      payload: { caseId: CASE_3, tenantId: TENANT, disposition: "Writ allowed, quashing impugned order" },
+    });
+    await drain();
+    await q.stop();
+
+    const [row] = await runWithTenant(TENANT, () => db.transaction(async (tx) =>
+      tx.select().from(legalCases).where(eq(legalCases.id, CASE_3))));
+    expect(row?.status).toBe("disposed");
+    // Without the fix this is null/undefined — the whole point of this test.
+    expect(row?.disposition).toBe("Writ allowed, quashing impugned order");
+
+    const events = await runWithTenant(TENANT, () => db.transaction(async (tx) =>
+      tx.select().from(outboxMessages).where(eq(outboxMessages.tenantId, TENANT))));
+    const disposeEvent = events.find((e) =>
+      e.eventType === "audit.event.record" &&
+      (e.payload as { action?: string })?.action === "dispose");
+    // newValue (not a bespoke key) matters beyond naming: audit-service's
+    // export pipeline only PII-gates payload.oldValue/newValue.
+    expect((disposeEvent?.payload as { newValue?: { disposition?: string } })?.newValue?.disposition)
+      .toBe("Writ allowed, quashing impugned order");
+  });
+
+  it("idempotency: redelivered caseDispose (same case, same messageId) is a clean no-op, not a domain-guard error", async () => {
+    // Regression for commands.ts:disposeCase(), which published caseDispose
+    // with no messageId at all before this PR — envelope() defaulted to a
+    // fresh random UUID every time, so a redelivered/retried dispose could
+    // never be recognized as a duplicate by markProcessed() and would
+    // instead reach assertCanDispose() a second time and throw
+    // INVALID_STATUS (already disposed). disposeCase() now sends caseId
+    // itself as messageId, so the exact same envelope shape a real retry
+    // would produce is reproduced here directly (not by re-publishing the
+    // same envelope object, but by constructing a second one with the
+    // same messageId, matching how two independent HTTP retries would
+    // each call disposeCase() and each derive the same deterministic id).
+    const q = wireTenantAwareQueue(new MemoryQueue());
+    registerCaseConsumers(q);
+    await q.start();
+
+    await expect(
+      q.publish(COMMANDS.caseDispose, {
+        messageId: CASE_3, // same deterministic id disposeCase() would send again
+        type: COMMANDS.caseDispose,
+        tenantId: TENANT, actorId: ACTOR, correlationId: "corr-case-dispose-retry", schemaVersion: "1.0",
+        payload: { caseId: CASE_3, tenantId: TENANT, disposition: "A second, different disposition text" },
+      }),
+    ).resolves.not.toThrow();
+    await drain();
+    await q.stop();
+
+    // Without the fix (a fresh random messageId every publish), this
+    // redelivery would not have been the same messageId as the original
+    // dispose in the previous test in the first place — but simulating
+    // what the fix guarantees: same messageId in, markProcessed() returns
+    // false, the handler returns immediately, and the original disposition
+    // from the previous test is left completely untouched.
+    const [row] = await runWithTenant(TENANT, () => db.transaction(async (tx) =>
+      tx.select().from(legalCases).where(eq(legalCases.id, CASE_3))));
+    expect(row?.disposition).toBe("Writ allowed, quashing impugned order");
+  });
+});
+
 // ── eCourts sync-consumer pure functions ───────────────────────────────────────
 // NOTE: The sync-consumer exports pure functions (resolveInterval, withRetry) that
 // could be unit tested, but importing the module pulls in 10+ async functions
