@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { field, deriveContractDisplayFields } from "./page";
+import { field, deriveContractDisplayFields } from "./page.helpers";
 
 // Real GET /v1/contract/contracts/:id response shape, captured live from the
 // running contract-service dev stack.
