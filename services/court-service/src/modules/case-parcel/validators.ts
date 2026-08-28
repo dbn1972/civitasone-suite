@@ -17,7 +17,7 @@ export const addParcelBody = z.object({
   tehsil:       z.string().trim().max(120).optional(),
   district:     z.string().trim().max(120).optional(),
   areaSqm:      z.coerce.number().int().min(0).optional(),
-  subjectType:  z.enum(SUBJECT_TYPES).optional(),
+  subjectType:  z.string().trim().pipe(z.enum(SUBJECT_TYPES)).optional(),
   ownershipRef: z.string().trim().max(120).optional(),
   remarks:      z.string().trim().max(2000).optional(),
 });
