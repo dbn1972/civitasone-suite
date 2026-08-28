@@ -9,7 +9,9 @@ import * as repo from "./repo.js";
 const EVIDENCE_WRITE_ROLES = ["registrar", "court_admin", "advocate", "super_admin"];
 // Only the bench rules on admissibility.
 const EVIDENCE_RULE_ROLES = ["judge", "court_admin", "super_admin"];
-const EVIDENCE_READ_ROLES = ["registrar", "court_admin", "advocate", "court_clerk", "super_admin"];
+// Everyone who can write evidence, plus the clerk who preps the case file and the
+// judge who rules on it — a role that can rule on an exhibit must be able to read it.
+const EVIDENCE_READ_ROLES = ["registrar", "court_admin", "advocate", "court_clerk", "judge", "super_admin"];
 
 export async function evidenceRoutes(app: FastifyInstance): Promise<void> {
   // Submit a piece of evidence/exhibit on a case.

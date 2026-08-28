@@ -4,6 +4,7 @@
  * side-effect free so it is trivially unit-testable and safe to call from both the
  * command and consumer paths.
  */
+import { createHash } from "node:crypto";
 import { deterministicId, COURT_NAMESPACE } from "../court-registry/domain.js";
 
 export const EVIDENCE_STATUSES = ["submitted", "admitted", "rejected", "marked"] as const;
@@ -56,6 +57,68 @@ export function deriveEvidenceId(
     COURT_NAMESPACE,
     `${tenantId}:evidence:${caseId}:${exhibitNumberOrTitle}:${seq}`,
   );
+}
+
+/**
+ * Fields of a submission that define an exhibit's actual content, consumed by
+ * `submissionDisambiguator` below. Kept as a standalone shape (rather than importing
+ * `SubmitEvidenceBody`) so this pure-domain module has no dependency on the
+ * validators/zod layer. The `| undefined` on each optional matches how zod's
+ * `.optional()` infers under this project's `exactOptionalPropertyTypes`.
+ */
+export type SubmissionContentFields = {
+  exhibitNumber?: string | undefined;
+  title: string;
+  filingId?: string | undefined;
+  evidenceType?: string | undefined;
+  storageRef?: string | undefined;
+  contentHash?: string | undefined;
+};
+
+/**
+ * The `seq` disambiguator for `deriveEvidenceId`, derived from a hash of every field
+ * that defines this submission's content — NOT a hardcoded constant and NOT a
+ * stateful counter. A byte-for-byte retry of the same request (e.g. a client
+ * resending after a network timeout) hashes to the same value here, so the derived
+ * evidence id is unchanged and the resubmission dedupes as intended (via
+ * `insertEvidence`'s `onConflictDoNothing` / the consumer's `markProcessed`). Two
+ * DIFFERENT exhibits that happen to share a title or exhibit number hash to
+ * different values instead, so they get different ids rather than one silently
+ * clobbering the other.
+ *
+ * Known, accepted limits of hashing content alone (flagged in review; a complete
+ * fix needs a client-supplied idempotency key, which no caller of this endpoint
+ * currently sends and which RequestContext does not thread through today — a
+ * separate, larger change than closing the always-collides bug this replaces):
+ *   - Two INDEPENDENT submissions that share a title and leave every optional
+ *     field here unset (no exhibitNumber/filingId/evidenceType/storageRef/
+ *     contentHash yet — e.g. a placeholder logged before the file is scanned)
+ *     still hash identically and so still collide onto one row. This is strictly
+ *     narrower than the bug being fixed (which collided on title ALONE, whatever
+ *     the other fields held), and content-only hashing cannot in principle tell
+ *     two such submissions apart from one retried request — there is nothing left
+ *     to distinguish them by.
+ *   - Changing this formula from the prior hardcoded `seq=0` is not retroactive:
+ *     a client retry of a submission whose FIRST attempt was accepted by the
+ *     pre-fix code, landing after this deploy, computes a different id than the
+ *     one already committed and so inserts a second row instead of deduping. A
+ *     one-time cost at this deploy boundary, not an ongoing defect — inherent to
+ *     correcting any deterministic-id formula, not specific to this fix.
+ */
+export function submissionDisambiguator(fields: SubmissionContentFields): number {
+  const digest = createHash("sha256")
+    .update(JSON.stringify({
+      exhibitNumber: fields.exhibitNumber ?? null,
+      title: fields.title,
+      filingId: fields.filingId ?? null,
+      evidenceType: fields.evidenceType ?? null,
+      storageRef: fields.storageRef ?? null,
+      contentHash: fields.contentHash ?? null,
+    }))
+    .digest("hex");
+  // 8 hex chars = 32 bits — comfortably a safe integer, and far more disambiguating
+  // range than any one case will plausibly have same-titled exhibits.
+  return parseInt(digest.slice(0, 8), 16);
 }
 
 /**
