@@ -16,10 +16,34 @@ vi.mock("../src/shared/infra.js", () => ({
   queue: { publish: (...args: unknown[]) => publishSpy(...args) },
 }));
 
+/**
+ * A minimal chainable Drizzle-query-builder stub: .select()/.from()/.where()/
+ * .limit()/.orderBy() all return itself, and awaiting it resolves to whatever
+ * row(s) `precheckRows` currently holds. Needed because case-lifecycle/
+ * hearing/order-issuance's commands.ts now run a synchronous pre-check
+ * (getCaseById/getHearingById/getOrderById) BEFORE publish -- a real DB read
+ * this file's DB mock never had to support before. Each test that exercises
+ * one of those three modules sets `precheckRows` to the current state it
+ * wants the pre-check to see.
+ */
+let precheckRows: unknown[] = [];
+function chainableTx(): unknown {
+  const builder: Record<string, unknown> = {};
+  const self = () => builder;
+  builder.select = self;
+  builder.from = self;
+  builder.where = self;
+  builder.limit = self;
+  builder.orderBy = self;
+  builder.then = (resolve: (v: unknown) => void, reject?: (e: unknown) => void) =>
+    Promise.resolve(precheckRows).then(resolve, reject);
+  return builder;
+}
+
 vi.mock("../src/shared/db.js", () => ({
-  db: { transaction: async (fn: (tx: unknown) => Promise<unknown>) => fn({}) },
+  db: { transaction: async (fn: (tx: unknown) => Promise<unknown>) => fn(chainableTx()) },
   sqlClient: {},
-  scopedRead: async (fn: (tx: unknown) => Promise<unknown>) => fn({}),
+  scopedRead: async (fn: (tx: unknown) => Promise<unknown>) => fn(chainableTx()),
 }));
 
 vi.mock("../src/shared/outbox.js", () => ({
@@ -28,12 +52,22 @@ vi.mock("../src/shared/outbox.js", () => ({
   versionedUpdate: vi.fn(async () => {}),
 }));
 
-vi.mock("../src/shared/pii-crypto.js", () => ({
-  assertPiiKeyConfigured: () => {},
-  encryptPii: (v: string) => `enc:${v}`,
-  decryptPii: (v: string) => v.replace(/^enc:/, ""),
-  encryptedText: () => ({}),
-}));
+vi.mock("../src/shared/pii-crypto.js", async () => {
+  // encryptedText is a Drizzle customType factory -- at schema definition
+  // time it is called like `encryptedText("column_name")` and must return a
+  // real column builder or loading case-registry/schema.ts (now reachable
+  // from case-lifecycle's commands.ts pre-check via case-registry/repo.js)
+  // throws deep inside drizzle-orm's table() rather than something we chose.
+  // A plain `{}` compiled here but crashed at schema-load time. Same fix as
+  // all-routes-coverage.test.ts's identical mock.
+  const { text } = await import("drizzle-orm/pg-core");
+  return {
+    assertPiiKeyConfigured: () => {},
+    encryptPii: (v: string) => `enc:${v}`,
+    decryptPii: (v: string) => v.replace(/^enc:/, ""),
+    encryptedText: (name: string) => text(name),
+  };
+});
 
 vi.mock("@civitasone/db", () => ({
   createSqlClient: () => ({}),
@@ -88,6 +122,16 @@ function ctx() {
   return { tenantId: TENANT, actorId: ACTOR, correlationId: randomUUID(), roles: ["super_admin"], sessionId: "s" };
 }
 
+// Defensive reset before EVERY test in this file (not just the describe
+// blocks that currently set it): a future test added between two existing
+// describes that calls a pre-checked command without setting precheckRows
+// would otherwise silently reuse whatever a prior test left behind, either
+// throwing with a confusing stack trace or spuriously passing. An empty
+// array makes getCaseForPrecheck/getHearingById/getOrderForPrecheck return
+// undefined, so the command fails loudly with its own NOT_FOUND error --
+// obviously wrong, not silently wrong.
+beforeEach(() => { precheckRows = []; });
+
 describe("case-registry commands", () => {
   beforeEach(() => { publishSpy.mockClear(); });
 
@@ -112,6 +156,7 @@ describe("case-lifecycle commands", () => {
 
   it("updateCaseStatus validates + publishes", async () => {
     const { updateCaseStatus } = await import("../src/modules/case-lifecycle/commands.js");
+    precheckRows = [{ status: "registered", version: 1 }]; // registered -> admitted is legal
     const result = await updateCaseStatus(ctx(), CASE_ID, { toStatus: "admitted", expectedVersion: 1 });
     expect(result.accepted).toBe(true);
     expect(result.caseId).toBe(CASE_ID);
@@ -132,6 +177,7 @@ describe("hearing commands", () => {
 
   it("adjournHearing validates + publishes", async () => {
     const { adjournHearing } = await import("../src/modules/hearing/commands.js");
+    precheckRows = [{ status: "scheduled", version: 1 }]; // scheduled -> adjourned is legal
     const result = await adjournHearing(ctx(), HEARING_ID, { reason: "Advocate unavailable", nextDate: "2026-08-15", expectedVersion: 1 });
     expect(result.accepted).toBe(true);
     expect(publishSpy).toHaveBeenCalledTimes(1);
@@ -139,6 +185,7 @@ describe("hearing commands", () => {
 
   it("recordHearingOutcome validates + publishes", async () => {
     const { recordHearingOutcome } = await import("../src/modules/hearing/commands.js");
+    precheckRows = [{ status: "scheduled", version: 2 }]; // scheduled -> held is legal
     const result = await recordHearingOutcome(ctx(), HEARING_ID, { outcome: "held", expectedVersion: 2 });
     expect(result.accepted).toBe(true);
     expect(publishSpy).toHaveBeenCalledTimes(1);
@@ -399,6 +446,7 @@ describe("order-issuance commands", () => {
 
   it("submitForApproval validates + publishes", async () => {
     const { submitForApproval } = await import("../src/modules/order-issuance/commands.js");
+    precheckRows = [{ status: "draft", version: 1, createdBy: ACTOR, signedBy: null }]; // draft -> pending_approval is legal
     const result = await submitForApproval(ctx(), ORDER_ID, { expectedVersion: 1 });
     expect(result.accepted).toBe(true);
     expect(publishSpy).toHaveBeenCalledTimes(1);
@@ -406,6 +454,11 @@ describe("order-issuance commands", () => {
 
   it("approveAndIssue validates + publishes", async () => {
     const { approveAndIssue } = await import("../src/modules/order-issuance/commands.js");
+    // Maker MUST differ from ctx().actorId (the approver) -- this is the
+    // maker-checker guard the pre-check enforces; a same-actor row here would
+    // 403 instead of publishing, which is a DIFFERENT test (see the new e2e
+    // suite tests/case-order-hearing-precheck.e2e.test.ts for that scenario).
+    precheckRows = [{ status: "pending_approval", version: 2, createdBy: randomUUID(), signedBy: null }];
     const result = await approveAndIssue(ctx(), ORDER_ID, { dscSignature: "ABCDEF1234567890", expectedVersion: 2 });
     expect(result.accepted).toBe(true);
     expect(publishSpy).toHaveBeenCalledTimes(1);
@@ -413,6 +466,7 @@ describe("order-issuance commands", () => {
 
   it("sendBack validates + publishes", async () => {
     const { sendBack } = await import("../src/modules/order-issuance/commands.js");
+    precheckRows = [{ status: "pending_approval", version: 2, createdBy: ACTOR, signedBy: null }]; // pending_approval -> draft is legal
     const result = await sendBack(ctx(), ORDER_ID, { remarks: "Needs revision", expectedVersion: 2 });
     expect(result.accepted).toBe(true);
     expect(publishSpy).toHaveBeenCalledTimes(1);
@@ -420,6 +474,7 @@ describe("order-issuance commands", () => {
 
   it("recall validates + publishes", async () => {
     const { recall } = await import("../src/modules/order-issuance/commands.js");
+    precheckRows = [{ status: "issued", version: 3, createdBy: ACTOR, signedBy: null }]; // issued -> recalled is legal
     const result = await recall(ctx(), ORDER_ID, { recallReason: "Clerical error", expectedVersion: 3 });
     expect(result.accepted).toBe(true);
     expect(publishSpy).toHaveBeenCalledTimes(1);

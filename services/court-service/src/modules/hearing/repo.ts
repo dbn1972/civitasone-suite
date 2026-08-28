@@ -26,3 +26,15 @@ export async function listHearingsByCase(tenantId: string, caseId: string): Prom
     .where(and(eq(hearings.tenantId, tenantId), eq(hearings.caseId, caseId)))
     .orderBy(desc(hearings.scheduledDate)));
 }
+
+/** Single-row read for a synchronous pre-check before publishing an adjourn/
+ *  outcome command (mirrors what the consumer reads inside its own tx, so the
+ *  route can reject a foreseeable illegal transition immediately instead of
+ *  the caller getting a 202 that silently dead-letters). Not cached -- this
+ *  module does not use the read-through cache anywhere else either. */
+export async function getHearingById(tenantId: string, id: string): Promise<HearingRow | undefined> {
+  const rows = await scopedRead<HearingRow[]>((tx) => tx.select().from(hearings)
+    .where(and(eq(hearings.tenantId, tenantId), eq(hearings.id, id)))
+    .limit(1));
+  return rows[0];
+}

@@ -7,8 +7,12 @@ import { deterministicId, COURT_NAMESPACE } from "../court-registry/domain.js";
 export const HEARING_STATUSES = ["scheduled", "held", "adjourned", "cancelled"] as const;
 export type HearingStatus = typeof HEARING_STATUSES[number];
 
-/** A scheduled hearing can be held, adjourned (a fresh hearing is listed for the
- *  next date), or cancelled. Held/adjourned/cancelled are terminal for THIS row. */
+/** A scheduled hearing can be held, adjourned, or cancelled. Held/adjourned/
+ *  cancelled are all TERMINAL for this row -- adjourning does NOT create a new
+ *  hearing row for the next date (there is no insertHearing call anywhere in
+ *  the adjourn path; confirmed live during the deep-verification pass that
+ *  produced this fix). A human must separately schedule the follow-up hearing;
+ *  see HearingsConsole.tsx's adjourn dialog, which used to claim otherwise. */
 const TRANSITIONS: Record<HearingStatus, HearingStatus[]> = {
   scheduled: ["held", "adjourned", "cancelled"],
   held:      [],

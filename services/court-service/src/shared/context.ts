@@ -16,9 +16,15 @@ export const ERROR_CODES = {
   CASE_INVALID_TRANSITION: 422,
   CASE_VERSION_CONFLICT: 409,
   CNR_ALREADY_EXISTS: 409,
+  INVALID_CNR: 400,
   HEARING_NOT_FOUND: 404,
+  HEARING_INVALID_TRANSITION: 422,
+  HEARING_VERSION_CONFLICT: 409,
   CAUSELIST_SLOT_CONFLICT: 409,
   ORDER_NOT_FOUND: 404,
+  ORDER_INVALID_TRANSITION: 422,
+  ORDER_VERSION_CONFLICT: 409,
+  MAKER_CHECKER_VIOLATION: 403,
   FILING_INVALID: 400,
   COURT_NOT_FOUND: 404,
   // Cross-cutting auth/generic codes (also raised by resolveContext / requireRole).
@@ -55,6 +61,41 @@ export class HttpError extends Error {
  */
 export function httpError(code: ErrorCode, message?: string, details?: Record<string, unknown>): HttpError {
   return new HttpError(ERROR_CODES[code], code, message ?? code, details);
+}
+
+/**
+ * Shared shape for the synchronous pre-check a write-intent command runs
+ * before publish: read the row's current (status, version), and -- UNLESS
+ * it is already at `target` (the same idempotent-retry no-op the consumer
+ * itself allows) -- enforce optimistic locking, then transition legality via
+ * the SAME `assertTransition` the consumer uses, so this can never drift
+ * from what the consumer will actually enforce.
+ *
+ * Deliberately skips both checks on the already-at-target path, mirroring
+ * every consumer's own `if (current.status === target) return;` no-op. That
+ * makes this helper WRONG for a security invariant (e.g. maker-checker):
+ * such checks must run unconditionally, before calling this, not be folded
+ * into it.
+ */
+export function assertVersionAndTransition<T extends string>(
+  current: { status: string; version: number },
+  expectedVersion: number,
+  target: T,
+  assertTransition: (from: string, to: T) => void,
+  codes: { versionConflict: ErrorCode; invalidTransition: ErrorCode },
+): void {
+  if (current.status === target) return;
+  if (current.version !== expectedVersion) {
+    throw httpError(
+      codes.versionConflict,
+      `Expected version ${expectedVersion}, found ${current.version}`,
+    );
+  }
+  try {
+    assertTransition(current.status, target);
+  } catch (e) {
+    throw httpError(codes.invalidTransition, (e as Error).message);
+  }
 }
 
 /** Standard error envelope shape: `{ error: { code, message, details?, correlationId } }`. */
