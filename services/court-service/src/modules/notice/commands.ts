@@ -2,7 +2,7 @@ import type { RequestContext } from "@civitasone/types";
 import { queue } from "../../shared/infra.js";
 import { COMMANDS } from "../../topics.js";
 import { deterministicId, COURT_NAMESPACE } from "../court-registry/domain.js";
-import { deriveNoticeId, deriveServiceId } from "./domain.js";
+import { deriveNoticeId, deriveServiceId, hashServiceContent } from "./domain.js";
 import {
   issueNoticeBody, type IssueNoticeBody,
   recordServiceBody, type RecordServiceBody,
@@ -13,7 +13,9 @@ export type IssueNoticeResult = { accepted: true; noticeId: string };
 export type RecordServiceResult = { accepted: true; noticeId: string; serviceId: string };
 export type UpdateNoticeStatusResult = { accepted: true; noticeId: string };
 
-/** Issue a notice on a case (§21). Idempotent per (case + type + issue date). */
+/** Issue a notice on a case (§21). Idempotent per (case + type + issue date) —
+ *  see deriveNoticeId's doc comment (domain.ts) for a known, lower-priority
+ *  theoretical collision edge case that is not fixed here. */
 export async function issueNotice(
   ctx: RequestContext, caseId: string, input: IssueNoticeBody,
 ): Promise<IssueNoticeResult> {
@@ -34,13 +36,16 @@ export async function issueNotice(
 }
 
 /** Record a service attempt against a notice (§21). Each attempt gets a distinct
- *  deterministic id (seq disambiguates attempts); messageId == serviceId so a
- *  redelivery of the SAME attempt is exactly-once. */
+ *  deterministic id — the disambiguator is a CONTENT hash of the attempt's fields
+ *  (hashServiceContent), not a timestamp, so an identical resubmission (a genuine
+ *  retry) reuses the same id and dedupes, while a genuinely different attempt gets
+ *  a different one; messageId == serviceId so a redelivery of the SAME attempt is
+ *  exactly-once. */
 export async function recordService(
   ctx: RequestContext, noticeId: string, input: RecordServiceBody,
 ): Promise<RecordServiceResult> {
   const body = recordServiceBody.parse(input);
-  const seq = Date.now();
+  const seq = hashServiceContent(body.serviceMode, body.recipient, body.dispatchRef, body.deliveryStatus, body.servedAt, body.proof);
   const serviceId = deriveServiceId(ctx.tenantId, noticeId, body.serviceMode, seq);
 
   await queue.publish(COMMANDS.recordService, {

@@ -8,14 +8,47 @@
  * config/wire value to an exact bigint, rejecting unsafe (already-lossy) JSON
  * numbers — see packages/schemas/src/money.ts.
  */
+import { createHash } from "node:crypto";
 import { deterministicId, COURT_NAMESPACE } from "../court-registry/domain.js";
 import { parseMinor } from "@civitasone/schemas";
 
 /** A filing id is deterministic on (tenant + case + type + idempotencyKey) so a
- *  redelivery of the SAME submit is idempotent end-to-end; a case may have many
- *  filings, so the caller supplies a fresh idempotencyKey per submit. */
+ *  redelivery of the SAME submit is idempotent end-to-end. idempotencyKey is
+ *  normally hashFilingContent(...) below (a content hash of the submitted
+ *  fields), so a genuine client retry - same case, same filing content - always
+ *  derives the SAME key and therefore the same filingId, and dedupes via
+ *  onConflictDoNothing; a caller with its own stronger idempotency key (e.g. a
+ *  client-supplied request id) may still pass one directly instead. */
 export function deriveFilingId(tenantId: string, caseId: string, filingType: string, idempotencyKey: string): string {
   return deterministicId(COURT_NAMESPACE, `${tenantId}:filing:${caseId}:${filingType}:${idempotencyKey}`);
+}
+
+/**
+ * Content-derived idempotency key for a filing submission - a SHA-256 hex digest
+ * over every field that distinguishes one filing from another (the full
+ * submitFilingBody shape: filingType, filingFeeMinor, courtFeeMinor). An identical
+ * resubmission (a client double-click or a network-timeout retry) hashes to the
+ * SAME key and therefore the same filingId, so it dedupes instead of creating a
+ * second, fee-bearing row; a submission differing in any of these fields hashes
+ * differently and persists as a distinct filing.
+ *
+ * The fields are combined via JSON.stringify (not a plain string join): each
+ * element is individually quoted/escaped, so a filingType value can never shift
+ * across a field boundary and collide with a differently-split input.
+ *
+ * DELIBERATE TRADEOFF (see PR description for the full writeup): this makes the id
+ * purely CONTENT-based, with no random or time component. If a court practice ever
+ * genuinely intends to submit two filings that are identical in type and fee on
+ * purpose (e.g. resubmitting an amended-but-identically-priced document under the
+ * same filingType), this hash cannot distinguish that from an accidental retry and
+ * will collapse both into one row. filing is a backend-only, admin-driven flow (no
+ * public/citizen-facing double-click surface), and silently double-charging a real
+ * money fee on every timeout-retry is judged the worse failure mode to close, so
+ * the tradeoff is accepted here rather than left as a fresh-random key.
+ */
+export function hashFilingContent(filingType: string, filingFeeMinor: bigint, courtFeeMinor: bigint): string {
+  const content = JSON.stringify([filingType, filingFeeMinor.toString(), courtFeeMinor.toString()]);
+  return createHash("sha256").update(content, "utf8").digest("hex");
 }
 
 /** Money-conservation guard: a fee (in PAISE) must be a non-negative bigint. */
