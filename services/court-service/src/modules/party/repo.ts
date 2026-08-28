@@ -28,5 +28,8 @@ export async function getPartyForUpdate(
 export async function listPartiesByCase(tenantId: string, caseId: string): Promise<CasePartyRow[]> {
   return scopedRead((tx) => tx.select().from(caseParties)
     .where(and(eq(caseParties.tenantId, tenantId), eq(caseParties.caseId, caseId)))
-    .orderBy(asc(caseParties.createdAt)));
+    // id tiebreaker: parties added together in one case-registration
+    // transaction share the same defaultNow() createdAt, so createdAt
+    // alone does not guarantee two identical queries agree on order.
+    .orderBy(asc(caseParties.createdAt), asc(caseParties.id)));
 }

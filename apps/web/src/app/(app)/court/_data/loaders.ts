@@ -93,9 +93,11 @@ function mapCase(o: Record<string, unknown>): CourtCase {
 }
 
 function mapParty(o: Record<string, unknown>): CaseParty {
-  // PII columns are AES-256-GCM; the gateway may return the decrypted value
-  // under the same key (nameEnc) or a plain `name` — read whichever is present.
-  const name = strOrNull(o.name) ?? strOrNull(o.nameEnc);
+  // The API always masks/presents parties server-side (presentParty(), see
+  // court-service party/domain.ts): `name` is either the decrypted cleartext
+  // (privileged roles) or null (redacted for everyone else). The raw `nameEnc`
+  // column name never reaches the wire, so there is no fallback to read here.
+  const name = strOrNull(o.name);
   return {
     id: str(o.id),
     caseId: str(o.caseId),
