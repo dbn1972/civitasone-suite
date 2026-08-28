@@ -23,6 +23,23 @@ export async function getPartyForUpdate(
   return rows[0];
 }
 
+/**
+ * Narrow, UNCACHED read of a party's current version, for commands.ts's
+ * synchronous pre-check BEFORE a command is published (no transaction exists
+ * yet at that point, so getPartyForUpdate's tx-scoped signature does not apply
+ * here). Mirrors case-parcel/repo.ts's getParcelForPrecheck.
+ */
+export async function getPartyForPrecheck(
+  tenantId: string, id: string,
+): Promise<{ version: number } | undefined> {
+  const rows = await scopedRead<Array<{ version: number }>>((tx) => tx
+    .select({ version: caseParties.version })
+    .from(caseParties)
+    .where(and(eq(caseParties.tenantId, tenantId), eq(caseParties.id, id)))
+    .limit(1));
+  return rows[0];
+}
+
 /** List a case's parties. The encryptedText columns return CLEARTEXT here — the
  *  route layer masks per role before serialising to the client. */
 export async function listPartiesByCase(tenantId: string, caseId: string): Promise<CasePartyRow[]> {

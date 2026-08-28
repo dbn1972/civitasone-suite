@@ -101,6 +101,7 @@ describe.skipIf(!RUN)("synchronous pre-checks for illegal state transitions", ()
       await sql`delete from court.case_defect where tenant_id = ${TENANT}`;
       await sql`delete from court.case_scrutiny where tenant_id = ${TENANT}`;
       await sql`delete from court.case_parcels where tenant_id = ${TENANT}`;
+      await sql`delete from court.config_entries where tenant_id = ${TENANT}`;
       await sql`delete from court.case_state_transitions where tenant_id = ${TENANT}`;
       await sql`delete from court.cases where tenant_id = ${TENANT}`;
       await sql`delete from court.courts where tenant_id = ${TENANT}`;
@@ -408,5 +409,123 @@ describe.skipIf(!RUN)("synchronous pre-checks for illegal state transitions", ()
     }, MAKER);
     expect(decide.code).toBe(202);
     expect(await waitFor(async () => (await jget(`/v1/court/appeals/${appealId}`, MAKER)).body.status === "allowed")).toBe(true);
+  });
+
+  it("party: rejects an advocate update on a missing party (404) and a stale expectedVersion (409), not a fake 202", async () => {
+    const caseId = await registerCase(courtId, "Precheck Party Case");
+
+    // A partyId that does not exist at all -- immediate 404, not a 202 that
+    // dead-letters with zero signal.
+    const missing = await jpatch(`/v1/court/parties/${randomUUID()}/advocate`, { advocateName: "Nobody", expectedVersion: 1 }, MAKER);
+    expect(missing.code).toBe(404);
+    expect(missing.body.error.code).toBe("PARTY_NOT_FOUND");
+
+    const addRes = await jpost(`/v1/court/cases/${caseId}/parties`, {
+      partyRole: "advocate", advocateName: "Adv. Original", advocateBarId: "DL/0001/2020",
+    }, MAKER);
+    expect(addRes.code).toBe(202);
+    const partyId = addRes.body.partyId as string;
+    expect(await waitFor(async () => {
+      const list = await jget(`/v1/court/cases/${caseId}/parties`, MAKER);
+      return (list.body.items as any[]).some((p) => p.id === partyId);
+    })).toBe(true);
+
+    // Stale expectedVersion on a REAL party -- immediate 409, the write never
+    // reaches the consumer at all.
+    const stale = await jpatch(`/v1/court/parties/${partyId}/advocate`, { advocateName: "Adv. Hijacked", expectedVersion: 99 }, MAKER);
+    expect(stale.code).toBe(409);
+    expect(stale.body.error.code).toBe("PARTY_VERSION_CONFLICT");
+
+    const untouched = (await jget(`/v1/court/cases/${caseId}/parties`, MAKER)).body.items.find((p: any) => p.id === partyId);
+    expect(untouched.advocateName).toBe("Adv. Original");
+    expect(untouched.version).toBe(1);
+
+    // The legal path (correct expectedVersion) still works end to end.
+    const legal = await jpatch(`/v1/court/parties/${partyId}/advocate`, { advocateName: "Adv. Updated", expectedVersion: 1 }, MAKER);
+    expect(legal.code).toBe(202);
+    expect(await waitFor(async () => {
+      const list = await jget(`/v1/court/cases/${caseId}/parties`, MAKER);
+      return (list.body.items as any[]).find((p) => p.id === partyId)?.advocateName === "Adv. Updated";
+    })).toBe(true);
+  });
+
+  it("config-registry: rejects a missing/stale-version deactivate (404/409) and a stale-version set (409), not a fake 202", async () => {
+    const setRes = await jpost("/v1/court/config", {
+      namespace: "court_defaults", configKey: `precheck_max_adj_${randomUUID().slice(0, 8)}`, value: "5",
+    }, MAKER);
+    expect(setRes.code).toBe(202);
+    const configId = setRes.body.configId as string;
+    const namespace = "court_defaults";
+    expect(await waitFor(async () => {
+      const list = await jget(`/v1/court/config/${namespace}`, MAKER);
+      // value round-trips through the jsonb column as the JSON NUMBER 5, not
+      // the string "5" -- a bare-digit string cast to jsonb is valid JSON
+      // grammar for a number, so Postgres (correctly) reparses it as one.
+      return (list.body.items as any[]).some((c) => c.id === configId && c.value === 5);
+    })).toBe(true);
+    const row = (await jget(`/v1/court/config/${namespace}`, MAKER)).body.items.find((c: any) => c.id === configId);
+
+    // setConfig against an EXISTING entry with a stale expectedVersion -- 409,
+    // not a fake 202 (this branch only fires when expectedVersion is supplied).
+    const staleSet = await jpost("/v1/court/config", {
+      namespace, configKey: row.configKey, value: "6", expectedVersion: 99,
+    }, MAKER);
+    expect(staleSet.code).toBe(409);
+    expect(staleSet.body.error.code).toBe("CONFIG_VERSION_CONFLICT");
+    const stillFive = (await jget(`/v1/court/config/${namespace}`, MAKER)).body.items.find((c: any) => c.id === configId);
+    expect(stillFive.value).toBe(5);
+
+    // Two SEQUENTIAL, correctly-versioned updates must BOTH actually apply --
+    // not just the first one. Before independent review caught it, setConfig's
+    // messageId was `configId` alone (identical on every call for this entry,
+    // regardless of content or expectedVersion), so markProcessed's dedup would
+    // have silently swallowed the SECOND update below even though its
+    // expectedVersion is 100% correct -- exactly the update-after-create path
+    // the original test suite never once exercised.
+    const firstUpdate = await jpost("/v1/court/config", {
+      namespace, configKey: row.configKey, value: "6", expectedVersion: 1,
+    }, MAKER);
+    expect(firstUpdate.code).toBe(202);
+    expect(await waitFor(async () => {
+      const found = (await jget(`/v1/court/config/${namespace}`, MAKER)).body.items.find((c: any) => c.id === configId);
+      return found?.value === 6 && found?.version === 2;
+    })).toBe(true);
+
+    const secondUpdate = await jpost("/v1/court/config", {
+      namespace, configKey: row.configKey, value: "7", expectedVersion: 2,
+    }, MAKER);
+    expect(secondUpdate.code).toBe(202);
+    expect(await waitFor(async () => {
+      const found = (await jget(`/v1/court/config/${namespace}`, MAKER)).body.items.find((c: any) => c.id === configId);
+      return found?.value === 7 && found?.version === 3;
+    })).toBe(true);
+
+    // deactivateConfig on a random, nonexistent id -- immediate 404.
+    const missingDeactivate = await jpatch(`/v1/court/config/${randomUUID()}/deactivate`, { expectedVersion: 1 }, MAKER);
+    expect(missingDeactivate.code).toBe(404);
+    expect(missingDeactivate.body.error.code).toBe("CONFIG_NOT_FOUND");
+
+    // deactivateConfig on the REAL, active entry with a stale expectedVersion --
+    // immediate 409, the write never reaches the consumer.
+    const staleDeactivate = await jpatch(`/v1/court/config/${configId}/deactivate`, { expectedVersion: 99 }, MAKER);
+    expect(staleDeactivate.code).toBe(409);
+    expect(staleDeactivate.body.error.code).toBe("CONFIG_VERSION_CONFLICT");
+
+    // The legal path still works end to end. expectedVersion is 3, not 1 --
+    // the two sequential updates above already bumped it twice.
+    const legalDeactivate = await jpatch(`/v1/court/config/${configId}/deactivate`, { expectedVersion: 3 }, MAKER);
+    expect(legalDeactivate.code).toBe(202);
+    expect(await waitFor(async () => {
+      const list = await jget(`/v1/court/config/${namespace}`, MAKER);
+      return (list.body.items as any[]).find((c) => c.id === configId)?.active === false;
+    })).toBe(true);
+
+    // No-op parity: deactivating the now-ALREADY-INACTIVE entry again, even with
+    // a wildly stale expectedVersion, is still accepted (matches the consumer's
+    // own "already inactive -> no-op" short-circuit, which runs BEFORE its
+    // version check) -- proving the pre-check is not STRICTER than the
+    // authoritative consumer.
+    const alreadyInactive = await jpatch(`/v1/court/config/${configId}/deactivate`, { expectedVersion: 12345 }, MAKER);
+    expect(alreadyInactive.code).toBe(202);
   });
 });

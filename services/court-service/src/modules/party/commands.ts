@@ -3,6 +3,8 @@ import { queue } from "../../shared/infra.js";
 import { COMMANDS } from "../../topics.js";
 import { deterministicId, COURT_NAMESPACE } from "../court-registry/domain.js";
 import { derivePartyId } from "./domain.js";
+import { getPartyForPrecheck } from "./repo.js";
+import { httpError } from "../../shared/context.js";
 import {
   addPartyBody, type AddPartyBody,
   updateAdvocateBody, type UpdateAdvocateBody,
@@ -38,14 +40,40 @@ export async function addParty(
   return { accepted: true, partyId };
 }
 
-/** Update an advocate's details (§15). messageId is idempotent per (party + expectedVersion). */
+/**
+ * Update an advocate's details (§15). messageId is idempotent per
+ * (party + the changed fields + expectedVersion) -- the fields are part of
+ * the key, not just partyId+expectedVersion, or two DIFFERENT concurrent
+ * edits at the same expectedVersion would collide onto one messageId and
+ * markProcessed's dedup would silently drop the second, no error, no
+ * dead-letter (the same bug class already fixed for case-parcel's
+ * updateParcel and appeal's decideAppeal).
+ */
 export async function updateAdvocate(
   ctx: RequestContext, partyId: string, input: UpdateAdvocateBody,
 ): Promise<UpdateAdvocateResult> {
   const body = updateAdvocateBody.parse(input);
+
+  // Synchronous pre-check: the consumer enforces this SAME version guard inside
+  // its transaction (party/consumer.ts) and NonRetryable-dead-letters a stale
+  // expectedVersion with zero signal back to the caller. A foreseeable conflict
+  // is rejected here instead of behind a fake 202. Uncached, narrow read --
+  // never the cached/cross-module party list.
+  const current = await getPartyForPrecheck(ctx.tenantId, partyId);
+  if (!current) throw httpError("PARTY_NOT_FOUND", `Party not found: ${partyId}`);
+  if (current.version !== body.expectedVersion) {
+    throw httpError(
+      "PARTY_VERSION_CONFLICT",
+      `Expected version ${body.expectedVersion}, found ${current.version}`,
+    );
+  }
+
   const messageId = deterministicId(
     COURT_NAMESPACE,
-    `${ctx.tenantId}:party-advocate:${partyId}:${body.expectedVersion}`,
+    `${ctx.tenantId}:party-advocate:${partyId}:${JSON.stringify({
+      advocateName: body.advocateName ?? null,
+      advocateBarId: body.advocateBarId ?? null,
+    })}:${body.expectedVersion}`,
   );
 
   await queue.publish(COMMANDS.updateAdvocate, {
