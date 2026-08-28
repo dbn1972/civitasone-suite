@@ -97,6 +97,16 @@ function ctx() {
   return { tenantId: TENANT, actorId: ACTOR, correlationId: randomUUID(), roles: ["super_admin"], sessionId: "s" };
 }
 
+// Defensive reset before EVERY test in this file (not just the describe
+// blocks that currently set it): a future test added between two existing
+// describes that calls a pre-checked command without setting precheckRows
+// would otherwise silently reuse whatever a prior test left behind, either
+// throwing with a confusing stack trace or spuriously passing. An empty
+// array makes getCaseForPrecheck/getHearingById/getOrderForPrecheck return
+// undefined, so the command fails loudly with its own NOT_FOUND error --
+// obviously wrong, not silently wrong.
+beforeEach(() => { precheckRows = []; });
+
 describe("case-registry commands", () => {
   beforeEach(() => { publishSpy.mockClear(); });
 

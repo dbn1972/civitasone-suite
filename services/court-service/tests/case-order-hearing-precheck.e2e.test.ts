@@ -100,8 +100,15 @@ describe.skipIf(!RUN)("synchronous pre-checks for illegal state transitions", ()
     await app.close();
   });
 
-  it("case-lifecycle: rejects an illegal status transition immediately (409), not a fake 202", async () => {
+  it("case-lifecycle: rejects an illegal status transition immediately (422), not a fake 202", async () => {
     const caseId = await registerCase(courtId, "Precheck Case Status");
+
+    // A stale expectedVersion is checked BEFORE transition legality -- a real
+    // version conflict (409), the one branch of assertVersionAndTransition
+    // nothing else in this file exercises.
+    const staleVersion = await jpatch(`/v1/court/cases/${caseId}/status`, { toStatus: "registered", expectedVersion: 99 }, MAKER);
+    expect(staleVersion.code).toBe(409);
+    expect(staleVersion.body.error.code).toBe("CASE_VERSION_CONFLICT");
 
     // filed -> disposed directly is illegal (skips registered/admitted/pending/...).
     const illegal = await jpatch(`/v1/court/cases/${caseId}/status`, { toStatus: "disposed", expectedVersion: 1 }, MAKER);
@@ -127,7 +134,7 @@ describe.skipIf(!RUN)("synchronous pre-checks for illegal state transitions", ()
     expect(res.body.error.code).toBe("INVALID_CNR");
   });
 
-  it("hearing: rejects recording an outcome on an already-terminal hearing immediately (409), not a fake 202", async () => {
+  it("hearing: rejects recording an outcome on an already-terminal hearing immediately (422), not a fake 202", async () => {
     const caseId = await registerCase(courtId, "Precheck Hearing Case");
 
     const sched = await jpost(`/v1/court/cases/${caseId}/hearings`, { scheduledAt: "2026-09-15T10:00:00Z" }, MAKER);
@@ -143,7 +150,9 @@ describe.skipIf(!RUN)("synchronous pre-checks for illegal state transitions", ()
       (await jget(`/v1/court/cases/${caseId}/hearings`, MAKER)).body.items?.find((h: any) => h.id === hearingId)?.status === "held",
     )).toBe(true);
 
-    // held is TERMINAL for this row -- recording another outcome must be an immediate 409.
+    // held is TERMINAL for this row -- recording another outcome must be an immediate 422
+    // (HEARING_INVALID_TRANSITION; a stale-version 409 is the OTHER branch, covered by
+    // the case-lifecycle test above using the same shared assertVersionAndTransition).
     const again = await jpatch(`/v1/court/hearings/${hearingId}/outcome`, { outcome: "cancelled", expectedVersion: 2 }, MAKER);
     expect(again.code).toBe(422);
     expect(again.body.error.code).toBe("HEARING_INVALID_TRANSITION");
@@ -187,5 +196,14 @@ describe.skipIf(!RUN)("synchronous pre-checks for illegal state transitions", ()
     expect(await waitFor(async () =>
       (await jget(`/v1/court/cases/${caseId}/orders`, MAKER)).body.items.find((o: any) => o.id === orderId)?.status === "issued",
     )).toBe(true);
+
+    // MAKER tries to self-approve AGAIN, now that the order is already issued.
+    // The plain version/transition check would treat "already at target" as an
+    // idempotent no-op and let this through -- maker-checker must NOT ride along
+    // with that short-circuit, or a repeat self-approval attempt against an
+    // already-issued order would get a fake 202 with zero integrity signal.
+    const selfApproveAgain = await jpatch(`/v1/court/orders/${orderId}/approve-issue`, { dscSignature: "fake-dsc-for-test", expectedVersion: 3 }, MAKER);
+    expect(selfApproveAgain.code).toBe(403);
+    expect(selfApproveAgain.body.error.code).toBe("MAKER_CHECKER_VIOLATION");
   });
 });
