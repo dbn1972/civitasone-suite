@@ -235,6 +235,11 @@ describe.skipIf(!RUN)("synchronous pre-checks for illegal state transitions", ()
     const illegal = await jpatch(`/v1/court/notices/${noticeId}/status`, { status: "cancelled", expectedVersion: 2 }, MAKER);
     expect(illegal.code).toBe(422);
     expect(illegal.body.error.code).toBe("NOTICE_INVALID_TRANSITION");
+
+    // A stale expectedVersion on a legal target is the OTHER branch: 409, not 422.
+    const staleVersion = await jpatch(`/v1/court/notices/${noticeId}/status`, { status: "unserved", expectedVersion: 99 }, MAKER);
+    expect(staleVersion.code).toBe(409);
+    expect(staleVersion.body.error.code).toBe("NOTICE_VERSION_CONFLICT");
   });
 
   it("evidence: rejects an illegal ruling immediately (422), not a fake 202", async () => {
@@ -260,6 +265,11 @@ describe.skipIf(!RUN)("synchronous pre-checks for illegal state transitions", ()
     const illegal = await jpatch(`/v1/court/evidence/${evidenceId}/rule`, { ruling: "rejected", expectedVersion: 2 }, MAKER);
     expect(illegal.code).toBe(422);
     expect(illegal.body.error.code).toBe("EVIDENCE_INVALID_TRANSITION");
+
+    // A stale expectedVersion on a legal target is the OTHER branch: 409, not 422.
+    const staleVersion = await jpatch(`/v1/court/evidence/${evidenceId}/rule`, { ruling: "rejected", expectedVersion: 99 }, MAKER);
+    expect(staleVersion.code).toBe(409);
+    expect(staleVersion.body.error.code).toBe("EVIDENCE_VERSION_CONFLICT");
   });
 
   it("compliance: rejects an illegal status transition immediately (422), not a fake 202", async () => {
@@ -282,6 +292,11 @@ describe.skipIf(!RUN)("synchronous pre-checks for illegal state transitions", ()
 
     const untouched = await jget(`/v1/court/cases/${caseId}/compliance`, MAKER);
     expect(untouched.body.items.find((d: any) => d.id === directionId)?.status).toBe("pending");
+
+    // A stale expectedVersion on a legal target is the OTHER branch: 409, not 422.
+    const staleVersion = await jpatch(`/v1/court/compliance/${directionId}`, { status: "in_progress", expectedVersion: 99 }, MAKER);
+    expect(staleVersion.code).toBe(409);
+    expect(staleVersion.body.error.code).toBe("COMPLIANCE_VERSION_CONFLICT");
   });
 
   it("appeal: rejects an illegal status transition immediately (422), not a fake 202", async () => {
