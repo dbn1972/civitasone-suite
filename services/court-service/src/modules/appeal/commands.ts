@@ -3,7 +3,7 @@ import { queue } from "../../shared/infra.js";
 import { COMMANDS } from "../../topics.js";
 import { deterministicId, COURT_NAMESPACE } from "../court-registry/domain.js";
 import { deriveAppealId, assertTransition, type AppealStatus } from "./domain.js";
-import { getAppeal } from "./repo.js";
+import { getAppealForPrecheck } from "./repo.js";
 import { httpError, assertVersionAndTransition } from "../../shared/context.js";
 import {
   fileAppealBody, type FileAppealBody,
@@ -39,7 +39,7 @@ export async function fileAppeal(
 }
 
 async function loadAppealForPrecheck(tenantId: string, appealId: string) {
-  const current = await getAppeal(tenantId, appealId);
+  const current = await getAppealForPrecheck(tenantId, appealId);
   if (!current) throw httpError("APPEAL_NOT_FOUND", `Appeal not found: ${appealId}`);
   return current;
 }
@@ -97,9 +97,16 @@ export async function decideAppeal(
     invalidTransition: "APPEAL_INVALID_TRANSITION",
   });
 
+  // decision is part of the key (not just appealId+expectedVersion): two
+  // DIFFERENT legal decisions submitted at the same expectedVersion must get
+  // DIFFERENT messageIds, or the consumer's markProcessed dedup would apply
+  // whichever is delivered first and silently drop the second as an
+  // "already processed" duplicate -- no error, no dead-letter, unlike every
+  // other rejection path here. Mirrors certified-copy/commands.ts's
+  // transitionCopy, which includes body.target for the identical reason.
   const messageId = deterministicId(
     COURT_NAMESPACE,
-    `${ctx.tenantId}:appeal-decide:${appealId}:${body.expectedVersion}`,
+    `${ctx.tenantId}:appeal-decide:${appealId}:${body.decision}:${body.expectedVersion}`,
   );
 
   await queue.publish(COMMANDS.decideAppeal, {
