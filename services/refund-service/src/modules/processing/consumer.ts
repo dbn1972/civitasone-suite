@@ -1,4 +1,5 @@
 import { pino } from "pino";
+import { sql } from "drizzle-orm";
 import type { Queue } from "@civitasone/queue";
 import { db, type ScopedTx } from "../../shared/db.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
@@ -17,24 +18,41 @@ function ctxOf(msg: { tenantId: string; actorId: string; correlationId: string }
 }
 
 /**
- * SEQ-2 (TOCTOU): processing/routes.ts already checks this via
- * assertNextApprovalLevel, but only as a SELECT at request time — the actual
- * write happens later, asynchronously, in this consumer. Two approve/reject/
- * return calls at the same level, submitted close enough together that both
- * pass the route-level check before either command is consumed, would
- * otherwise both be applied here with nothing to stop them (no re-check, no
- * DB uniqueness on (request, level, "approved") until this same PR's
- * migration 0002). This re-verifies the expected level inside the same
- * transaction as the write, immediately before it, mirroring the
- * findActiveByRequestTx pattern already used in reconciliation/consumer.ts
- * for the double-disbursement guard. Message processing for a single topic
- * is strictly sequential in this service (one worker instance, one poll
- * loop per topic — see SqsQueue.pollTopic), so a check-then-write inside one
- * transaction is race-free for the current deployment topology; a stale/
- * duplicate action is logged and skipped rather than silently re-applied.
- * Live-verified: two concurrent level-1 approve calls for the same request
- * both return 202, but exactly one "approved" row is inserted and the
- * other is logged as "stale approval-sequence action ignored".
+ * RACE-2: approve, reject, and return each publish to a DIFFERENT topic
+ * (refund.approval.approve / .reject / .return), and per SqsQueue.start()
+ * (services/queue-service/src/bus.ts) each topic runs its own independent,
+ * unsynchronized poll loop — there is no ordering guarantee between them.
+ * checkExpectedLevel's own "one poll loop per topic, race-free" reasoning
+ * only holds WITHIN a single topic (e.g. two approve calls): it does NOT
+ * cover two of these three DIFFERENT actions landing on the same request at
+ * the same level, because insertApproval is a plain INSERT with nothing to
+ * compare-and-swap against. Concretely: approve(level 1) and return(level 1)
+ * both read maxApprovedLevel=0 before either commits, both compute
+ * expectedLevel=1, both pass checkExpectedLevel. If return commits first,
+ * approve's later INSERT still succeeds (it isn't blocked by anything) and
+ * leaves a level-1 "approved" row that supersedeApprovals already ran
+ * BEFORE it existed — a stale, never-superseded approval, i.e. a narrower
+ * recurrence of the exact SEQ-1 bug this file's return-for-correction fix
+ * targets, just triggered by a race instead of plain sequential misuse.
+ *
+ * A Postgres session-level advisory lock scoped to the transaction
+ * (pg_advisory_xact_lock, auto-released on commit OR rollback) closes this
+ * regardless of which topic each action is on: whichever of approve/reject/
+ * return acquires the lock for this requestId first runs its ENTIRE
+ * check-then-insert sequence to completion (commit or rollback) before any
+ * of the other two can even begin theirs, because they block on the same
+ * lock key until it's released. hashtext() folds the uuid string into the
+ * bigint key pg_advisory_xact_lock expects.
+ */
+async function lockRequestForApprovalDecision(tx: ScopedTx, requestId: string): Promise<void> {
+  await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${requestId}))`);
+}
+
+/**
+ * SEQ-2 (TOCTOU, within one topic): re-verifies the expected level inside
+ * the same transaction as the write, immediately before it — see
+ * lockRequestForApprovalDecision above for the CROSS-topic race this alone
+ * does not cover, which is why every caller takes both.
  */
 async function checkExpectedLevel(
   requestId: string,
@@ -59,11 +77,14 @@ export function registerProcessingConsumers(rawQueue: Queue): void {
 
   queue.subscribe(COMMANDS.reviewRequest, async (msg) => {
     const p = msg.payload as { requestId: string; tenantId: string };
-    // CACHE-2: no cache call inside the transaction — see
-    // shared/infra.ts's invalidateCacheSafely doc comment.
     const changed = await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return false;
-      await reqRepo.updateStatus(tx, p.requestId, msg.tenantId, "under_review", msg.actorId);
+      // RACE-1: review is a no-op-ish re-affirmation, valid from either
+      // requested or under_review (matches the route's own pre-check), but
+      // must not silently succeed once a racing action has moved the
+      // request somewhere else (e.g. rejected/withdrawn/approved).
+      const ok = await reqRepo.updateStatus(tx, p.requestId, msg.tenantId, "under_review", msg.actorId, ["requested", "under_review"]);
+      if (!ok) return false;
       await enqueue(tx, {
         topic: EVENTS.requestReviewed,
         eventType: EVENTS.requestReviewed,
@@ -94,6 +115,7 @@ export function registerProcessingConsumers(rawQueue: Queue): void {
     };
     const changed = await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return false;
+      await lockRequestForApprovalDecision(tx, p.requestId);
       if (!(await checkExpectedLevel(p.requestId, msg.tenantId, p.level, tx))) return false;
 
       await repo.insertApproval(tx, {
@@ -109,7 +131,16 @@ export function registerProcessingConsumers(rawQueue: Queue): void {
         updatedBy: msg.actorId,
       });
       if (isFullyApproved(p.level)) {
-        await reqRepo.updateStatus(tx, p.requestId, msg.tenantId, "approved", msg.actorId);
+        // RACE-1: fully approving is only valid from under_review — must not
+        // overwrite a racing reject/withdraw that already moved it away.
+        const ok = await reqRepo.updateStatus(tx, p.requestId, msg.tenantId, "approved", msg.actorId, ["under_review"]);
+        if (!ok) {
+          log.warn(
+            { requestId: p.requestId, level: p.level },
+            "approval recorded but request status unchanged: a concurrent action already moved it out of under_review",
+          );
+          return false;
+        }
       }
       await enqueue(tx, {
         topic: EVENTS.requestApproved,
@@ -147,6 +178,7 @@ export function registerProcessingConsumers(rawQueue: Queue): void {
     };
     const changed = await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return false;
+      await lockRequestForApprovalDecision(tx, p.requestId);
       if (!(await checkExpectedLevel(p.requestId, msg.tenantId, p.level, tx))) return false;
 
       await repo.insertApproval(tx, {
@@ -161,7 +193,13 @@ export function registerProcessingConsumers(rawQueue: Queue): void {
         createdBy: msg.actorId,
         updatedBy: msg.actorId,
       });
-      await reqRepo.updateStatus(tx, p.requestId, msg.tenantId, "rejected", msg.actorId);
+      // RACE-1: reject is only valid from under_review — must not overwrite
+      // a racing approve that already fully approved it (trace (a)).
+      const ok = await reqRepo.updateStatus(tx, p.requestId, msg.tenantId, "rejected", msg.actorId, ["under_review"]);
+      if (!ok) {
+        log.warn({ requestId: p.requestId }, "rejection recorded but request status unchanged: a concurrent action already moved it out of under_review");
+        return false;
+      }
       await enqueue(tx, {
         topic: EVENTS.requestRejected,
         eventType: EVENTS.requestRejected,
@@ -192,6 +230,7 @@ export function registerProcessingConsumers(rawQueue: Queue): void {
     };
     const changed = await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return false;
+      await lockRequestForApprovalDecision(tx, p.requestId);
       if (!(await checkExpectedLevel(p.requestId, msg.tenantId, p.level, tx))) return false;
 
       await repo.insertApproval(tx, {
@@ -208,7 +247,12 @@ export function registerProcessingConsumers(rawQueue: Queue): void {
       });
       // SEQ-1: start the next review round clean — see repo.supersedeApprovals.
       await repo.supersedeApprovals(tx, p.requestId, msg.tenantId, msg.actorId);
-      await reqRepo.updateStatus(tx, p.requestId, msg.tenantId, "requested", msg.actorId);
+      // RACE-1: return is only valid from under_review.
+      const ok = await reqRepo.updateStatus(tx, p.requestId, msg.tenantId, "requested", msg.actorId, ["under_review"]);
+      if (!ok) {
+        log.warn({ requestId: p.requestId }, "return recorded but request status unchanged: a concurrent action already moved it out of under_review");
+        return false;
+      }
       await enqueue(tx, {
         topic: EVENTS.requestReturned,
         eventType: EVENTS.requestReturned,

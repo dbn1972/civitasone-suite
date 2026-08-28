@@ -87,7 +87,9 @@ export function registerRequestConsumers(rawQueue: Queue): void {
     // just records whether the write actually happened.
     const changed = await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return false;
-      const ok = await repo.updateStatus(tx, p.id, msg.tenantId, "under_review", msg.actorId);
+      // RACE-1: only a "requested" request can be submitted — see
+      // requests/repo.ts's updateStatus doc comment.
+      const ok = await repo.updateStatus(tx, p.id, msg.tenantId, "under_review", msg.actorId, ["requested"]);
       if (!ok) return false;
       await enqueue(tx, {
         topic: EVENTS.requestSubmitted,
@@ -113,7 +115,10 @@ export function registerRequestConsumers(rawQueue: Queue): void {
     const p = msg.payload as { id: string; tenantId: string };
     const changed = await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return false;
-      const ok = await repo.updateStatus(tx, p.id, msg.tenantId, "withdrawn", msg.actorId);
+      // RACE-1: withdraw is only valid from requested or under_review — a
+      // racing approve that already moved the request past that (e.g. to
+      // "approved") must not be silently overwritten back to "withdrawn".
+      const ok = await repo.updateStatus(tx, p.id, msg.tenantId, "withdrawn", msg.actorId, ["requested", "under_review"]);
       if (!ok) return false;
       await enqueue(tx, {
         topic: EVENTS.requestWithdrawn,

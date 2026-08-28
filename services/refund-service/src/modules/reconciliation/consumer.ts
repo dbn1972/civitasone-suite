@@ -26,24 +26,16 @@ export function registerReconciliationConsumers(rawQueue: Queue): void {
       bankAccountDetails: { accountNumber: string; ifscCode: string; accountHolderName: string; bankName?: string };
       disbursedAmountMinor: string;
     };
-    // `inserted` does double duty: gates the "disbursement initiated" success
-    // log (only true when something really happened — see the earlier
-    // "misleading log" fix below) AND, per CACHE-2, gates the cache
-    // invalidation call made AFTER this transaction resolves (no cache call
-    // inside the transaction at all any more — see shared/infra.ts's
-    // invalidateCacheSafely doc comment for why).
     const inserted = await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return false;
 
       // FIN-3 / double-disbursement guard, defense in depth: routes.ts already
       // refuses a second active disbursement, but this re-checks inside the
       // same transaction immediately before inserting so this consumer never
-      // creates a duplicate even if two initiate commands were both accepted
-      // (e.g. two nearly-simultaneous HTTP requests racing the route-level
-      // check before either command was consumed). Message processing for a
-      // single topic is strictly sequential in this service (one worker
-      // instance, one poll loop per topic), so this check-then-insert inside
-      // one transaction is race-free for the current deployment topology.
+      // creates a duplicate even if two initiate commands were both accepted.
+      // Only "initiateDisbursement" ever inserts a disbursement row, so
+      // unlike RACE-2's approve/reject/return, this really is a single-topic
+      // race and the tx-scoped re-check alone is race-free here.
       const existingActive = await repo.findActiveByRequestTx(tx, p.requestId, msg.tenantId);
       if (existingActive) {
         log.warn(
@@ -65,7 +57,13 @@ export function registerReconciliationConsumers(rawQueue: Queue): void {
         createdBy: msg.actorId,
         updatedBy: msg.actorId,
       });
-      await reqRepo.updateStatus(tx, p.requestId, msg.tenantId, "processing", msg.actorId);
+      // RACE-1: initiating a disbursement is only valid from approved or
+      // failed (retry) — matches reconciliation/routes.ts's own guard.
+      const ok = await reqRepo.updateStatus(tx, p.requestId, msg.tenantId, "processing", msg.actorId, ["approved", "failed"]);
+      if (!ok) {
+        log.warn({ requestId: p.requestId }, "disbursement inserted but request status unchanged: a concurrent action already moved it out of approved/failed");
+        return false;
+      }
       await enqueue(tx, {
         topic: EVENTS.disbursementInitiated,
         eventType: EVENTS.disbursementInitiated,
@@ -86,9 +84,6 @@ export function registerReconciliationConsumers(rawQueue: Queue): void {
       return true;
     });
     if (inserted) {
-      // CACHE-1: this changes the request's own status (-> "processing"), so
-      // the cached GET /:id view must be invalidated. Not called on the
-      // duplicate-skip path above since nothing changed there.
       await invalidateCacheSafely(reqRepo.cacheKey(msg.tenantId, p.requestId), log);
       log.info({ id: p.id, requestId: p.requestId }, "disbursement initiated");
     }
@@ -96,17 +91,30 @@ export function registerReconciliationConsumers(rawQueue: Queue): void {
 
   queue.subscribe(COMMANDS.completeDisbursement, async (msg) => {
     const p = msg.payload as { id: string; tenantId: string; disbursementRef: string };
-    // CACHE-2: `requestId` is set from inside the transaction (it's only
-    // known once the disbursement row is looked up there), but the actual
-    // cache call happens after the transaction resolves — see
-    // shared/infra.ts's invalidateCacheSafely doc comment.
     let requestId: string | null = null;
-    const processed = await db.transaction(async (tx) => {
+    const completed = await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return false;
-      await repo.updateStatus(tx, p.id, msg.tenantId, "completed", msg.actorId);
-      const disb = await repo.findById(p.id, msg.tenantId);
+      // RACE-1 (THE SEVERE ONE): completeDisbursement and failDisbursement
+      // publish to two DIFFERENT topics with no ordering between their poll
+      // loops. Without this precondition, a fail racing in after a complete
+      // had already sent real money would flip the SAME row to "failed" --
+      // and since findActiveByRequest/migration 0002's unique index both key
+      // off status <> 'failed', and initiateDisbursement treats "failed" as
+      // retryable, that reopens this exact request for a brand new, real
+      // second disbursement: a genuine double payout. Requiring the row to
+      // still be initiated/processing makes this atomic: whichever of
+      // complete/fail commits first wins, and the other's UPDATE matches
+      // zero rows.
+      const ok = await repo.updateStatus(tx, p.id, msg.tenantId, "completed", msg.actorId, ["initiated", "processing"]);
+      if (!ok) {
+        log.warn({ id: p.id }, "duplicate/stale disbursement completion ignored: disbursement is no longer initiated/processing");
+        return false;
+      }
+      const disb = await repo.findByIdTx(tx, p.id, msg.tenantId);
       if (disb) {
-        await reqRepo.updateStatus(tx, disb.requestId, msg.tenantId, "refunded", msg.actorId);
+        // RACE-1: completing a disbursement moves the request from
+        // "processing" to "refunded" -- guarded the same way.
+        await reqRepo.updateStatus(tx, disb.requestId, msg.tenantId, "refunded", msg.actorId, ["processing"]);
         requestId = disb.requestId;
       }
       await enqueue(tx, {
@@ -127,7 +135,7 @@ export function registerReconciliationConsumers(rawQueue: Queue): void {
     if (requestId) {
       await invalidateCacheSafely(reqRepo.cacheKey(msg.tenantId, requestId), log);
     }
-    if (processed) {
+    if (completed) {
       log.info({ id: p.id }, "disbursement completed");
     }
   });
@@ -137,10 +145,19 @@ export function registerReconciliationConsumers(rawQueue: Queue): void {
     let requestId: string | null = null;
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
-      await repo.markFailed(tx, p.id, msg.tenantId, p.reason, msg.actorId);
-      const disb = await repo.findById(p.id, msg.tenantId);
+      // RACE-1 (THE SEVERE ONE): see completeDisbursement above -- the same
+      // guard, symmetrically. If complete already committed, this correctly
+      // no-ops instead of flipping an already-paid disbursement to "failed".
+      const ok = await repo.markFailed(tx, p.id, msg.tenantId, p.reason, msg.actorId, ["initiated", "processing"]);
+      if (!ok) {
+        log.warn({ id: p.id }, "duplicate/stale disbursement failure ignored: disbursement is no longer initiated/processing");
+        return;
+      }
+      const disb = await repo.findByIdTx(tx, p.id, msg.tenantId);
       if (disb) {
-        await reqRepo.updateStatus(tx, disb.requestId, msg.tenantId, "failed", msg.actorId);
+        // RACE-1: failing a disbursement moves the request from "processing"
+        // to "failed" -- guarded the same way.
+        await reqRepo.updateStatus(tx, disb.requestId, msg.tenantId, "failed", msg.actorId, ["processing"]);
         requestId = disb.requestId;
       }
       await enqueue(tx, {
@@ -166,8 +183,8 @@ export function registerReconciliationConsumers(rawQueue: Queue): void {
     const p = msg.payload as { id: string; tenantId: string };
     const reconciled = await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return false;
-      // FIN-5 / TOCTOU: repo.reconcile's WHERE clause now re-asserts
-      // reconciledAt IS NULL, so a second (concurrent or redelivered) call
+      // FIN-5 / TOCTOU: repo.reconcile's WHERE clause re-asserts
+      // reconciled_at IS NULL, so a second (concurrent or redelivered) call
       // for an already-reconciled disbursement returns false here instead
       // of silently overwriting reconciledAt/reconciledBy a second time.
       const ok = await repo.reconcile(tx, p.id, msg.tenantId, msg.actorId);
