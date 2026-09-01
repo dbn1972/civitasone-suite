@@ -25,7 +25,7 @@ export const illegalConstructionSchema = pgSchema("illegal_construction");
 export const illegalConstructionCases = illegalConstructionSchema.table("illegal_construction_cases", {
   id:                    uuid("id").primaryKey().defaultRandom(),
   tenantId:              uuid("tenant_id").notNull(),
-  caseNumber:            varchar("case_number", { length: 40 }).notNull(),
+  caseNumber:            varchar("case_number", { length: 40 }).notNull().unique(),
   reportedBy:            uuid("reported_by").notNull(),
   reportedAt:            timestamp("reported_at", { withTimezone: true }).notNull().defaultNow(),
   location:              jsonb("location").notNull(),
@@ -54,7 +54,7 @@ export const illegalConstructionActions = illegalConstructionSchema.table("illeg
   tenantId:         uuid("tenant_id").notNull(),
   caseId:           uuid("case_id").notNull(),
   actionType:       varchar("action_type", { length: 30 }).notNull(),
-  actionNumber:     varchar("action_number", { length: 40 }).notNull(),
+  actionNumber:     varchar("action_number", { length: 40 }).notNull().unique(),
   issuedAt:         timestamp("issued_at", { withTimezone: true }).notNull().defaultNow(),
   issuedBy:         uuid("issued_by").notNull(),
   status:           varchar("status", { length: 20 }).notNull().default("issued"),

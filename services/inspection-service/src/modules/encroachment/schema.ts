@@ -28,7 +28,7 @@ export const encroachmentSchema = pgSchema("encroachment");
 export const encroachmentComplaints = encroachmentSchema.table("encroachment_complaints", {
   id:                      uuid("id").primaryKey().defaultRandom(),
   tenantId:                uuid("tenant_id").notNull(),
-  complaintNumber:         varchar("complaint_number", { length: 40 }).notNull(),
+  complaintNumber:         varchar("complaint_number", { length: 40 }).notNull().unique(),
   reportedBy:              uuid("reported_by").notNull(),
   reportedAt:              timestamp("reported_at", { withTimezone: true }).notNull().defaultNow(),
   location:                jsonb("location").notNull(), // { lat, lng, ward, zone, landmark }
@@ -52,7 +52,7 @@ export const encroachmentNotices = encroachmentSchema.table("encroachment_notice
   id:                uuid("id").primaryKey().defaultRandom(),
   tenantId:          uuid("tenant_id").notNull(),
   complaintId:       uuid("complaint_id").notNull(),
-  noticeNumber:      varchar("notice_number", { length: 40 }).notNull(),
+  noticeNumber:      varchar("notice_number", { length: 40 }).notNull().unique(),
   noticeType:        varchar("notice_type", { length: 20 }).notNull(), // show_cause | eviction | demolition
   issuedTo:          text("issued_to").notNull(),
   issuedAt:          timestamp("issued_at", { withTimezone: true }).notNull().defaultNow(),

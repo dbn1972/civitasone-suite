@@ -17,6 +17,7 @@ import {
   type IllegalConstructionActionRow,
   type IllegalConstructionActionInsert,
 } from "./schema.js";
+import { formatCaseNumber, formatActionNumber } from "./domain.js";
 
 // ── Type Aliases ──────────────────────────────────────────────────────────────
 
@@ -85,6 +86,20 @@ export async function findCases(
 }
 
 // ── Case Writes ───────────────────────────────────────────────────────────────
+
+/**
+ * Issue the next case number from illegal_construction.case_number_seq.
+ * Replaces the old in-process `let caseSeq` counter (domain.ts) that reset
+ * on every restart and was shared globally across all tenants with no
+ * DB-level uniqueness check -- see migration
+ * 0028_encroachment_illegal_construction_number_sequences.sql.
+ */
+export async function nextCaseNumber(tx: Tx): Promise<string> {
+  const [row] = (await tx.execute(
+    sql`SELECT nextval('"illegal_construction"."case_number_seq"')::bigint AS seq`,
+  )) as Array<{ seq: number }>;
+  return formatCaseNumber(Number(row!.seq));
+}
 
 export async function insertCase(
   tx: Tx,
@@ -169,6 +184,17 @@ export async function findActionsByCaseId(
 }
 
 // ── Action Writes ─────────────────────────────────────────────────────────────
+
+/**
+ * Issue the next action number from illegal_construction.action_number_seq.
+ * See nextCaseNumber's note above -- same fix, same reasoning.
+ */
+export async function nextActionNumber(tx: Tx): Promise<string> {
+  const [row] = (await tx.execute(
+    sql`SELECT nextval('"illegal_construction"."action_number_seq"')::bigint AS seq`,
+  )) as Array<{ seq: number }>;
+  return formatActionNumber(Number(row!.seq));
+}
 
 export async function insertAction(
   tx: Tx,

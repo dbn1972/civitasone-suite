@@ -78,20 +78,31 @@ export class DomainError extends Error {
 
 // ── Pure functions ────────────────────────────────────────────────────────────
 
-/** Sequential case number: ILBLD-{YYYY}-{SEQ:6} */
-let caseSeq = 0;
-export function generateCaseNumber(): string {
-  caseSeq += 1;
+/**
+ * Format a case number from a DB-issued sequence value: ILBLD-{YYYY}-{SEQ:6}
+ *
+ * Pure formatter -- the sequence value comes from
+ * illegal_construction.case_number_seq (see repo.ts's nextCaseNumber), not
+ * from in-process state. Previously this incremented a module-level
+ * counter directly (`let caseSeq = 0`), which reset to 0 on every process
+ * restart and was independent per replica in any multi-replica
+ * deployment -- two different processes (or the same process
+ * before/after a restart) could and did hand out the identical case
+ * number, and case_number had no UNIQUE constraint to catch it. See
+ * migration 0028_encroachment_illegal_construction_number_sequences.sql.
+ */
+export function formatCaseNumber(seq: number): string {
   const year = new Date().getFullYear();
-  return `ILBLD-${year}-${String(caseSeq).padStart(6, "0")}`;
+  return `ILBLD-${year}-${String(seq).padStart(6, "0")}`;
 }
 
-/** Sequential action number: ILBLD-A-{YYYY}-{SEQ:6} */
-let actionSeq = 0;
-export function generateActionNumber(): string {
-  actionSeq += 1;
+/**
+ * Format an action number from a DB-issued sequence value: ILBLD-A-{YYYY}-{SEQ:6}
+ * Pure formatter -- see formatCaseNumber's note above; same fix applies.
+ */
+export function formatActionNumber(seq: number): string {
   const year = new Date().getFullYear();
-  return `ILBLD-A-${year}-${String(actionSeq).padStart(6, "0")}`;
+  return `ILBLD-A-${year}-${String(seq).padStart(6, "0")}`;
 }
 
 /**

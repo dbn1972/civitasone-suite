@@ -37,8 +37,6 @@ import {
   assertValidNoticeTransition,
   assertValidRemovalTransition,
   validateVerification,
-  generateComplaintNumber,
-  generateNoticeNumber,
   DomainError,
   type ComplaintState,
   type NoticeState,
@@ -48,9 +46,11 @@ import {
   insertComplaint,
   updateComplaint,
   findComplaintById,
+  nextComplaintNumber,
   insertNotice,
   updateNotice,
   findNoticeById,
+  nextNoticeNumber,
   insertHearing,
   updateHearing,
   findHearingById,
@@ -93,7 +93,7 @@ export function registerEncroachmentConsumers(queue: Queue): void {
 
         const complaint = await insertComplaint(tx, {
           tenantId: msg.tenantId,
-          complaintNumber: generateComplaintNumber(),
+          complaintNumber: await nextComplaintNumber(tx),
           reportedBy: p.reportedBy,
           location: p.location,
           encroachmentType: p.encroachmentType,
@@ -191,7 +191,7 @@ export function registerEncroachmentConsumers(queue: Queue): void {
         const notice = await insertNotice(tx, {
           tenantId: msg.tenantId,
           complaintId: p.complaintId,
-          noticeNumber: generateNoticeNumber(),
+          noticeNumber: await nextNoticeNumber(tx),
           noticeType: p.noticeType,
           issuedTo: p.issuedTo,
           responseDeadline: p.responseDeadline,
