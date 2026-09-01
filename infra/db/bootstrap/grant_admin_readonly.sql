@@ -13,6 +13,14 @@
 -- service-owned databases like civitas_inventory or civitas_asset, so those
 -- checks failed with `permission denied for schema inventory` etc.
 --
+-- Several of these databases (confirmed: civitas_finance, civitas_procurement)
+-- additionally do `REVOKE ALL ON DATABASE ... FROM PUBLIC` as deliberate
+-- per-database isolation (bootstrap.generated.sql), which blocks even
+-- CONNECT for any role not explicitly granted it — civitas_admin failed
+-- there with `permission denied for database`, not a schema error, so this
+-- also grants CONNECT explicitly. Harmless where PUBLIC still has default
+-- CONNECT (grant is additive, not exclusive).
+--
 -- This closes that gap WITHOUT BYPASSRLS: civitas_admin still cannot see other
 -- tenants' rows through RLS — it can only now see the schema/tables that the
 -- service role's own migrations created, the same as connecting directly as
@@ -24,6 +32,12 @@
 --   psql -U inventory_svc -d civitas_inventory -f grant_admin_readonly.sql
 --
 -- Idempotent; safe to re-run after new migrations add schemas/tables.
+
+DO $$
+BEGIN
+  EXECUTE format('GRANT CONNECT ON DATABASE %I TO civitas_admin', current_database());
+END
+$$;
 
 DO $$
 DECLARE

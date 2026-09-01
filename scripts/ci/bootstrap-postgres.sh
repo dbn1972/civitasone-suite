@@ -58,6 +58,13 @@ psql -h "$PGHOST" -p "$PGPORT" -U "$PGUSER" -d "$PGDATABASE" -v ON_ERROR_STOP=1 
 
 run_bootstrap "$ROOT/infra/db/bootstrap/bootstrap.generated.sql"
 run_bootstrap "$ROOT/infra/db/bootstrap/bootstrap_new_services.sql"
+# refund-service is in the SERVICE_DBS migration loop below (its own
+# migrations create the refund/_outbox/_inbox schemas), but no file ever
+# created refund_svc or civitas_refund — every migration failed to
+# authenticate, indistinguishable from a wrong password. See
+# bootstrap_refund.sql for the full story.
+run_bootstrap "$ROOT/infra/db/bootstrap/bootstrap_refund.sql"
+run_bootstrap "$ROOT/infra/db/bootstrap/bootstrap_unregistered_services.sql"
 run_bootstrap "$ROOT/infra/db/bootstrap/bootstrap_contract.sql"
 run_bootstrap "$ROOT/scripts/ci/bootstrap-remaining-services.sql"
 # Three bootstrap files existed in infra/db/bootstrap/ but were never invoked by
@@ -154,6 +161,14 @@ declare -A SERVICE_DBS=(
   # (services/refund-service/tests/*-integration.test.ts) can actually run
   # in CI instead of silently protecting nobody.
   [refund-service]="refund_svc:civitas_refund"
+  # cdp-service, catalogue-service, loyalty-service, journey-service: real
+  # migrations + 37 test files between them, but none of the four were ever
+  # added here, so their roles/databases never existed in CI (see
+  # bootstrap_unregistered_services.sql).
+  [cdp-service]="cdp_svc:civitas_cdp"
+  [catalogue-service]="catalogue_svc:civitas_catalogue"
+  [loyalty-service]="loyalty_svc:civitas_loyalty"
+  [journey-service]="journey_svc:civitas_journey"
 )
 
 # ── Role-creating migrations must run as the bootstrapping SUPERUSER ─────────
