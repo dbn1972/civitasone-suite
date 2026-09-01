@@ -794,12 +794,17 @@ describe("POST /v1/hrms/disciplinary-cases/:caseId/drop", () => {
 describe("POST /v1/hrms/employees/:id/suspensions", () => {
   const payload = { fromDate: "2026-01-15", paySuspended: true, subsistencePct: 50 };
 
-  it("creates a suspension (201)", async () => {
+  it("accepts a suspension for async write (202)", async () => {
+    // This write is now asynchronous: the route publishes the F3 command
+    // `disciplinary_routes__3` and answers 202 Accepted; the row itself is
+    // written by the module's F3 consumer (covered by
+    // src/modules/disciplinary/f3-consumer.test.ts). It used to answer 201
+    // with status "active" when the insert happened inline.
     const app = await buildApp();
     const r = await app.inject({ method: "POST", url: `/v1/hrms/employees/${EMP}/suspensions`, headers: auth(), payload });
-    expect(r.statusCode).toBe(201);
+    expect(r.statusCode).toBe(202);
     expect(r.json().employeeId).toBe(EMP);
-    expect(r.json().status).toBe("active");
+    expect(r.json().status).toBe("accepted");
     expect(r.json().paySuspended).toBe(true);
     await app.close();
   });
