@@ -24,6 +24,12 @@ const H = vi.hoisted(() => ({
   transaction: vi.fn(),
 }));
 
+// A real in-memory queue so the async F3 write consumer actually runs in tests.
+const Q = await vi.hoisted(async () => {
+  const { MemoryQueue } = await import("@civitasone/queue");
+  return { queue: new MemoryQueue() };
+});
+
 vi.mock("../src/shared/db.js", () => {
   const createSelectChain = (...args: unknown[]) => ({
     from: (t: unknown) => ({
@@ -63,6 +69,10 @@ vi.mock("../src/shared/db.js", () => {
         onConflictDoUpdate: (opts: unknown) => ({
           returning: () => H.insert(v),
         }),
+        // markProcessed() claims the message with ON CONFLICT DO NOTHING ... RETURNING and
+        // treats an empty result as "already processed"; without this the F3 consumer bails
+        // out before the switch and no write is exercised.
+        onConflictDoNothing: () => ({ returning: () => [{ messageId: "stub" }] }),
       }),
     }),
     execute: (q: unknown) => H.execute(q),
@@ -82,10 +92,24 @@ vi.mock("../src/shared/db.js", () => {
 
 vi.mock("../src/shared/infra.js", () => ({
   cache: { invalidate: async () => {}, makeKey: (...a: string[]) => a.join(":"), getOrLoad: async (_k: string, fn: () => Promise<unknown>) => fn() },
-  queue: { publish: async () => {} },
+  queue: Q.queue,
 }));
 
 import { buildApp } from "../src/app.js";
+import { queue } from "../src/shared/infra.js";
+import { registerF3_contracts_Consumers } from "../src/modules/contracts/f3-consumer.js";
+
+// PATCH /contracts/config answers 200 as soon as the upsert is QUEUED; the real write
+// happens in this consumer. Without registering + draining it, these tests asserted only
+// the optimistic HTTP response and stayed green while the consumer crashed on undefined
+// `insertValues` / `updateSet` locals and never wrote the tenant's config.
+registerF3_contracts_Consumers(queue);
+async function drainF3() {
+  await (queue as unknown as import("@civitasone/queue").MemoryQueue).drain();
+}
+function f3Dlq() {
+  return (queue as unknown as import("@civitasone/queue").MemoryQueue).dlq;
+}
 
 const tok = (sub = USER, roles = ["hr_admin"]) => signToken({ sub, tid: TENANT, roles, sid: "s" }, SECRET);
 const auth = (sub = USER, roles = ["hr_admin"]) => ({ authorization: `Bearer ${tok(sub, roles)}` });
@@ -964,6 +988,13 @@ describe("PATCH /v1/hrms/contracts/config", () => {
     });
     expect(r.statusCode).toBe(200);
     expect(r.json().data).toBeDefined();
+    // The 200 above is only an ACK that the upsert was queued. Drain and assert the
+    // consumer actually built the insert payload and wrote it.
+    await drainF3();
+    expect(f3Dlq()).toHaveLength(0);
+    expect(H.insert).toHaveBeenCalledWith(expect.objectContaining({
+      tenantId: TENANT, reminderMilestones: [30, 60], autoSeparationEnabled: true,
+    }));
     await app.close();
   });
 
@@ -979,6 +1010,11 @@ describe("PATCH /v1/hrms/contracts/config", () => {
       payload: { schedulerTimeUtc: "06:00" },
     });
     expect(r.statusCode).toBe(200);
+    await drainF3();
+    expect(f3Dlq()).toHaveLength(0);
+    expect(H.insert).toHaveBeenCalledWith(expect.objectContaining({
+      tenantId: TENANT, schedulerTimeUtc: "06:00",
+    }));
     await app.close();
   });
 
@@ -994,6 +1030,11 @@ describe("PATCH /v1/hrms/contracts/config", () => {
       payload: { approvalChain: [{ role: "hr_admin" }] },
     });
     expect(r.statusCode).toBe(200);
+    await drainF3();
+    expect(f3Dlq()).toHaveLength(0);
+    expect(H.insert).toHaveBeenCalledWith(expect.objectContaining({
+      tenantId: TENANT, approvalChain: [{ role: "hr_admin" }],
+    }));
     await app.close();
   });
 

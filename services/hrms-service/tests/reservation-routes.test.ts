@@ -20,6 +20,12 @@ const H = vi.hoisted(() => ({
   deleteFn: vi.fn(),
 }));
 
+// A real in-memory queue so the async F3 write consumer actually runs in tests.
+const Q = await vi.hoisted(async () => {
+  const { MemoryQueue } = await import("@civitasone/queue");
+  return { queue: new MemoryQueue() };
+});
+
 vi.mock("../src/shared/db.js", () => {
   const createSelectChain = (...args: unknown[]) => ({
     from: (t: unknown) => ({
@@ -52,7 +58,18 @@ vi.mock("../src/shared/db.js", () => {
   const mockTx = {
     select: (...args: unknown[]) => createSelectChain(...args),
     update: (t: unknown) => ({ set: (v: unknown) => ({ where: (...a: unknown[]) => H.update(v, ...a) }) }),
-    insert: (t: unknown) => ({ values: (v: unknown) => H.insert(v) }),
+    insert: (t: unknown) => ({
+      values: (v: unknown) => {
+        const res = H.insert(v);
+        // markProcessed() claims the message with ON CONFLICT DO NOTHING ... RETURNING and
+        // treats an empty result as "already processed"; without this the F3 consumer bails
+        // out before the switch and no write is exercised.
+        return Object.assign(
+          res && typeof res === "object" ? res : {},
+          { onConflictDoNothing: () => ({ returning: () => [{ messageId: "stub" }] }) },
+        );
+      },
+    }),
     delete: (t: unknown) => ({ where: (...a: unknown[]) => H.deleteFn(...a) }),
     execute: (q: unknown) => H.execute(q),
   };
@@ -70,10 +87,24 @@ vi.mock("../src/shared/infra.js", () => ({
     makeKey: (...a: string[]) => a.join(":"),
     getOrLoad: async (_k: string, fn: () => Promise<unknown>) => fn(),
   },
-  queue: { publish: async () => {} },
+  queue: Q.queue,
 }));
 
 import { buildApp } from "../src/app.js";
+import { queue } from "../src/shared/infra.js";
+import { registerF3_reservation_Consumers } from "../src/modules/reservation/f3-consumer.js";
+
+// These routes answer 200/201 as soon as the write is QUEUED; the real write happens in
+// this consumer, which buildApp() does NOT register (only worker.ts does). Without
+// registering + draining it, the suite asserted only the optimistic HTTP response and
+// stayed green while the consumer crashed and wrote nothing.
+registerF3_reservation_Consumers(queue);
+async function drainF3() {
+  await (queue as unknown as import("@civitasone/queue").MemoryQueue).drain();
+}
+function f3Dlq() {
+  return (queue as unknown as import("@civitasone/queue").MemoryQueue).dlq;
+}
 
 const tok = (sub = USER, roles = ["hr_admin"]) =>
   signToken({ sub, tid: TENANT, roles, sid: "s" }, SECRET);
@@ -113,6 +144,7 @@ beforeEach(() => {
   H.update.mockResolvedValue(undefined);
   H.execute.mockResolvedValue([{ n: "10" }]);
   H.deleteFn.mockResolvedValue(undefined);
+  f3Dlq().length = 0;
 });
 
 afterAll(async () => {
@@ -133,6 +165,17 @@ describe("POST /v1/hrms/reservation/rosters", () => {
     expect(body.cadre).toBe("Assistant Director");
     expect(body.rosterSize).toBe(100);
     expect(body.id).toBeDefined();
+    // The 201 above is only an ACK that the insert was queued. Drain and assert the
+    // consumer actually wrote the roster — including the reservation percentages, which
+    // it must re-derive from routes.ts's Zod .default(...) values because the queued body
+    // is raw and pre-validation (body.pctSc.toFixed(2) previously threw a TypeError).
+    await drainF3();
+    expect(f3Dlq()).toHaveLength(0);
+    expect(H.insert).toHaveBeenCalledWith(expect.objectContaining({
+      tenantId: TENANT, cadre: "Assistant Director", rosterKind: "point100", rosterSize: 100,
+      pctSc: "15.00", pctSt: "7.50", pctObc: "27.00", pctEws: "10.00", pctPwd: "4.00",
+      cfSc: 0, cfSt: 0, cfObc: 0, cfEws: 0, cfUr: 0,
+    }));
     await app.close();
   });
 
@@ -374,6 +417,23 @@ describe("POST /v1/hrms/reservation/rosters/:rid/points", () => {
     expect(body.rosterId).toBe(ROSTER_ID);
     expect(body.points).toBe(100);
     expect(body.data).toHaveLength(100);
+    // The consumer re-fetches the roster, regenerates the chart, clears the old points and
+    // re-materialises them. Before the fix it threw on undefined `rid`/`points`, so the
+    // chart was silently never rebuilt despite this 200.
+    await drainF3();
+    expect(f3Dlq()).toHaveLength(0);
+    expect(H.deleteFn).toHaveBeenCalled();
+    const pointInserts = H.insert.mock.calls
+      .map((c) => c[0] as Record<string, unknown>)
+      .filter((v) => v && typeof v === "object" && "pointNo" in v);
+    expect(pointInserts).toHaveLength(100);
+    // Every point must carry the payload tenant and the :rid roster — the generated loop
+    // variable used to shadow the message payload `p`, writing the point object's
+    // (undefined) tenantId instead.
+    for (const v of pointInserts) {
+      expect(v.tenantId).toBe(TENANT);
+      expect(v.rosterId).toBe(ROSTER_ID);
+    }
     await app.close();
   });
 

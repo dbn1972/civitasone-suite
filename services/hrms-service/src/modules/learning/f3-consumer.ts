@@ -1,4 +1,3 @@
-// @ts-nocheck — generated F3 leftover consumer; locals closed over from route txs
 import { randomUUID } from "node:crypto";
 import type { Queue } from "@civitasone/queue";
 import { pino } from "pino";
@@ -9,8 +8,35 @@ import { COMMANDS } from "../../topics.js";
 import {
   computeProgress, deriveEnrollmentStatus, nextResumeLesson, checkPrerequisites,
 } from "./domain.js";
+import { lessons, modules, enrollments } from "./schema.js";
 import * as repo from "./repo.js";
 const log = pino({ name: "hrms-f3-learning" });
+
+/**
+ * F3 leftover fix (same bug class as leave/f3-consumer `leave_policy_admin_routes__0`):
+ *
+ *  - `learning_routes__4` referenced an undefined `mod` — routes.ts fetches the parent
+ *    module (`repo.getModule`) so the lesson can be denormalised onto its course
+ *    (`courseId: mod.courseId`), but the fetch was dropped. Every "add lesson" POST threw
+ *    a ReferenceError in this consumer after the route had already answered 201.
+ *  - `learning_routes__6` referenced undefined `enrollment` and `lesson` — routes.ts
+ *    fetches the lesson, then the learner's enrollment for that lesson's course, before
+ *    publishing. Both were dropped, so *every* lesson-progress POST crashed here after
+ *    answering 200: progress, completion percentage, resume pointer and course-completion
+ *    status were all silently never recorded.
+ *
+ * Unlike the other modules in this batch, routes.ts here publishes the real `:id` path
+ * param as the message id, so the generated `id` local is correct and is left as-is.
+ *
+ * Zod `.default(...)` values from validators.ts are mirrored field-for-field below,
+ * because `body` here is the raw pre-validation request body forwarded through the queue
+ * (`creditHours`, `sequence`, `durationMins` and `category` are all NOT NULL columns that
+ * would otherwise be written as undefined).
+ *
+ * The two lookups added here read inside `tx` rather than via the repo's scopedRead
+ * helpers so they are read-your-own-writes consistent with the writes in the same
+ * transaction (and match the existing `...Tx` helpers this file already uses).
+ */
 export function registerF3_learning_Consumers(queue: Queue): void {
   queue.subscribe(COMMANDS.f3RouteWrite, async (msg) => {
     const p = msg.payload as Record<string, any>;
@@ -35,8 +61,8 @@ export function registerF3_learning_Consumers(queue: Queue): void {
           case "learning_routes__0": {
             await repo.insertCourse(tx, {
                   id, tenantId: p.tenantId, code: body.code, title: body.title,
-                  description: body.description ?? null, category: body.category,
-                  creditHours: String(body.creditHours), status: "draft", createdBy: msg.actorId,
+                  description: body.description ?? null, category: body.category ?? "general",
+                  creditHours: String(body.creditHours ?? 0), status: "draft", createdBy: msg.actorId,
                 });
             break;
           }
@@ -52,15 +78,25 @@ export function registerF3_learning_Consumers(queue: Queue): void {
           }
           case "learning_routes__3": {
             await repo.insertModule(tx, {
-                  id: randomUUID(), tenantId: p.tenantId, courseId: id, title: body.title, sequence: body.sequence,
+                  id: randomUUID(), tenantId: p.tenantId, courseId: id, title: body.title,
+                  sequence: body.sequence ?? 1,
                 });
             break;
           }
           case "learning_routes__4": {
+            // routes.ts: const mod = await repo.getModule(ctx.tenantId, id);
+            const modRows = await tx.select().from(modules)
+              .where(and(eq(modules.tenantId, p.tenantId), eq(modules.id, id)))
+              .limit(1);
+            const mod = modRows[0];
+            if (!mod) {
+              log.warn({ op, moduleId: id, messageId: msg.messageId }, "module disappeared before async lesson insert");
+              return;
+            }
             await repo.insertLesson(tx, {
                   id: randomUUID(), tenantId: p.tenantId, moduleId: id, courseId: mod.courseId,
-                  title: body.title, sequence: body.sequence, contentType: body.contentType,
-                  contentUri: body.contentUri ?? null, durationMins: body.durationMins,
+                  title: body.title, sequence: body.sequence ?? 1, contentType: body.contentType,
+                  contentUri: body.contentUri ?? null, durationMins: body.durationMins ?? 0,
                 });
             break;
           }
@@ -71,9 +107,31 @@ export function registerF3_learning_Consumers(queue: Queue): void {
             break;
           }
           case "learning_routes__6": {
+            // routes.ts: const lesson = await repo.getLesson(...); const enrollment = await repo.getEnrollment(tenantId, lesson.courseId, body.employeeId);
+            const lessonRows = await tx.select().from(lessons)
+              .where(and(eq(lessons.tenantId, p.tenantId), eq(lessons.id, id)))
+              .limit(1);
+            const lesson = lessonRows[0];
+            if (!lesson) {
+              log.warn({ op, lessonId: id, messageId: msg.messageId }, "lesson disappeared before async progress write");
+              return;
+            }
+            const enrollmentRows = await tx.select().from(enrollments)
+              .where(and(
+                eq(enrollments.tenantId, p.tenantId),
+                eq(enrollments.courseId, lesson.courseId),
+                eq(enrollments.employeeId, body.employeeId),
+              ))
+              .limit(1);
+            const enrollment = enrollmentRows[0];
+            if (!enrollment) {
+              log.warn({ op, lessonId: id, employeeId: body.employeeId, messageId: msg.messageId }, "enrollment disappeared before async progress write");
+              return;
+            }
             await repo.upsertLessonProgress(tx, {
                     tenantId: p.tenantId, enrollmentId: enrollment.id, lessonId: id,
-                    status: body.status, completedAt: body.status === "completed" ? new Date() : null,
+                    status: body.status ?? "completed",
+                    completedAt: (body.status ?? "completed") === "completed" ? new Date() : null,
                   });
                   const allLessons = await repo.listLessonsByCourseTx(tx, p.tenantId, lesson.courseId);
                   const done = await repo.completedLessonIdsTx(tx, p.tenantId, enrollment.id);
@@ -82,7 +140,7 @@ export function registerF3_learning_Consumers(queue: Queue): void {
                   const status = deriveEnrollmentStatus(progressPct);
                   const resumeLessonId = nextResumeLesson(allLessons.map((l) => l.id), doneSet);
                   const completedAt = status === "completed" ? new Date() : null;
-                  return repo.updateEnrollmentProgress(tx, p.tenantId, enrollment.id, { progressPct, status, resumeLessonId, completedAt });
+                  await repo.updateEnrollmentProgress(tx, p.tenantId, enrollment.id, { progressPct, status, resumeLessonId, completedAt });
             break;
           }
         }
