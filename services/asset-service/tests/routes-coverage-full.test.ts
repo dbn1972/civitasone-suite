@@ -564,13 +564,13 @@ describe("Dashboard routes", () => {
 // VERIFICATION MODULE
 // ══════════════════════════════════════════════════════════════════════════════
 describe("Verification routes", () => {
-  it("POST /v1/assets/verifications → 201", async () => {
+  it("POST /v1/assets/verifications → 202", async () => {
     const res = await app.inject({
       method: "POST", url: "/v1/assets/verifications",
       headers: authHeader(),
       payload: { verificationDate: "2024-06-01" },
     });
-    expect(res.statusCode).toBe(201);
+    expect(res.statusCode).toBe(202);
   });
 
   it("POST /v1/assets/verifications → 400 missing date", async () => {
@@ -591,13 +591,13 @@ describe("Verification routes", () => {
     expect(res.statusCode).toBe(403);
   });
 
-  it("POST /v1/assets/verifications/:id/items → 201 or 500 (no verification)", async () => {
+  it("POST /v1/assets/verifications/:id/items → 202 (existence check deferred to the async consumer)", async () => {
     const res = await app.inject({
       method: "POST", url: `/v1/assets/verifications/${FAKE_UUID}/items`,
       headers: authHeader(),
       payload: { assetId: FAKE_UUID2, condition: "good" },
     });
-    expect([201, 500]).toContain(res.statusCode);
+    expect(res.statusCode).toBe(202);
   });
 
   it("POST /v1/assets/verifications/:id/items → 400 bad uuid", async () => {
@@ -618,12 +618,12 @@ describe("Verification routes", () => {
     expect(res.statusCode).toBe(400);
   });
 
-  it("POST /v1/assets/verifications/:id/submit → 200", async () => {
+  it("POST /v1/assets/verifications/:id/submit → 202 (existence check deferred to the async consumer)", async () => {
     const res = await app.inject({
       method: "POST", url: `/v1/assets/verifications/${FAKE_UUID}/submit`,
       headers: authHeader(),
     });
-    expect([200, 404]).toContain(res.statusCode);
+    expect(res.statusCode).toBe(202);
   });
 
   it("POST /v1/assets/verifications/:id/submit → 400 bad uuid", async () => {
@@ -634,12 +634,12 @@ describe("Verification routes", () => {
     expect(res.statusCode).toBe(400);
   });
 
-  it("POST /v1/assets/verifications/:id/approve → 200", async () => {
+  it("POST /v1/assets/verifications/:id/approve → 202 (existence check deferred to the async consumer)", async () => {
     const res = await app.inject({
       method: "POST", url: `/v1/assets/verifications/${FAKE_UUID}/approve`,
       headers: authHeader(),
     });
-    expect([200, 404]).toContain(res.statusCode);
+    expect(res.statusCode).toBe(202);
   });
 
   it("POST /v1/assets/verifications/:id/approve → 400 bad uuid", async () => {
@@ -667,13 +667,13 @@ describe("Verification routes", () => {
     expect(res.statusCode).toBe(403);
   });
 
-  it("POST /v1/assets/assets/:id/writeoff-request → 201", async () => {
+  it("POST /v1/assets/assets/:id/writeoff-request → 202", async () => {
     const res = await app.inject({
       method: "POST", url: `/v1/assets/assets/${FAKE_UUID}/writeoff-request`,
       headers: authHeader(),
       payload: { remarks: "beyond economical repair" },
     });
-    expect(res.statusCode).toBe(201);
+    expect(res.statusCode).toBe(202);
   });
 
   it("POST /v1/assets/assets/:id/writeoff-request → 400 bad uuid", async () => {
