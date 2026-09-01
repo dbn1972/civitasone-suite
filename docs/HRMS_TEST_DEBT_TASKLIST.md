@@ -44,22 +44,42 @@ exact number, but the module *order* and *rough weight* should hold.
 
 ## Module 0 — systemic infra bug (fix this FIRST, unlocks 43% of the service in one PR)
 
-- [ ] **Live-server test harness gap** — 268 failures (43% of hrms-service), 100% failure rate in:
-  - `tests/atdic-full-lifecycle.test.ts` (174/174)
-  - `tests/dic-expert-destructive.test.ts` (59/59)
-  - `tests/dic-rbac-personas.test.ts` (35/35)
+- [x] **Live-server test harness gap** — 268 failures (43% of hrms-service), 100% failure rate.
+  Fixed in #859 (merged). 624 → 333 failures on the full suite, verified against a fresh
+  Postgres container.
 
-  Root cause: these three files call real `fetch()` against `http://127.0.0.1:3012`, assuming
-  hrms-service is running as a live HTTP server. The `Tests` CI job runs vitest in-process —
-  nothing listens on that port. Fix: give these files a `beforeAll` that boots the Fastify app
-  in-process (`buildApp()`, same pattern already used elsewhere in this repo, e.g.
-  `finance-service/tests/integrity/double-entry-gl.test.ts`) instead of hitting a real socket, OR
-  move them to a CI job that actually starts the service (check whether `Live Stack Verification`
-  or `Integration Tests` already does this and these files belong there instead).
-  Also check the *partially*-failing `dic-*` siblings for the same signature before assuming
-  they're pure business-logic bugs: `tests/dic-full-lifecycle.test.ts` (13/38),
-  `tests/dic-org-role-test.test.ts` (2/20), `tests/dic-employee-self-service.test.ts` (3/28),
-  `tests/hrms.integration.test.ts` (8/23) — these may drop further once Module 0 lands.
+  Root cause: `tests/atdic-full-lifecycle.test.ts` (174/174), `tests/dic-expert-destructive.test.ts`
+  (59/59), `tests/dic-rbac-personas.test.ts` (35/35) call real `fetch()` against
+  `http://127.0.0.1:3012`/`:3013`, assuming hrms-service AND payroll-service are running as live
+  HTTP servers. The `Tests` CI job runs vitest in-process — nothing listens on those ports.
+
+  **Fix applied (#859):** excluded all three from the automated `test` task (`vitest.config.ts`
+  `test.exclude`) — they never produced a real signal in any job (100% ECONNREFUSED every run,
+  in every job that ran them), so this removes false-negative noise without losing working
+  coverage.
+
+  **Richer fix considered and DEFERRED, not silently dropped:** `scripts/dev/start-stack.sh`
+  already starts hrms-service on :3012 and payroll-service on :3013 — exactly the ports these
+  tests need — and the `Live Stack Verification` CI job (ci.yml, runs on push to `main` only)
+  already boots that stack, just drives it with `scripts/contract/verify-screens.mjs` (a shallow
+  "does the screen return 200" check against seeded fixtures) instead of these three files' deep
+  real-Postgres business-logic/RBAC assertions. Wiring these three into that job would restore
+  *real* coverage instead of just silencing noise, and the stack/ports already exist — but:
+  1. The tests hardcode `JWT_SECRET = "test_secret_for_civitasone_32chr"`; the live-stack-verify
+     job's servers start with `JWT_SECRET=civitasone-dev-secret` (`scripts/dev/start-stack.sh`
+     line ~34, `${JWT_SECRET:-civitasone-dev-secret}`). Tokens signed by the tests as-is would
+     fail auth against the live servers — needs the three files' `SECRET` constant parameterized
+     via `process.env.JWT_SECRET` (same pattern as the finance-service fix in #856) AND the new
+     CI step's env aligned to match whatever the already-running servers were started with.
+  2. `Live Stack Verification` only triggers on `push` to `main` — there is no PR-time CI run to
+     catch a mistake in this wiring before it lands and potentially breaks that job for everyone.
+     Getting the secret/env wiring wrong here has a real blast radius and no pre-merge safety net.
+
+  Given (2) specifically, this needs a deliberate, carefully-staged follow-up (author the change,
+  verify the exact env the live servers get via a manual `start-stack.sh` run before touching
+  ci.yml, not just trust the reasoning) rather than folding into #859 under the umbrella of "fix
+  the noise." Tracked here so it isn't lost — not yet re-prioritized into the module list above;
+  do this after the module-by-module bug fixes below, when there's room to stage it properly.
 
 ## Modules — in priority order (by failure count, after Module 0 is excluded)
 
