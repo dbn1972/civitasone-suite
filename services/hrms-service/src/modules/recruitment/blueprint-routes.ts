@@ -87,7 +87,7 @@ export async function assessmentBlueprintRoutes(app: FastifyInstance): Promise<v
 
     const id = randomUUID();
     try {
-      await publishF3Write(ctx, "recruitment_blueprint_routes__0", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+      await publishF3Write(ctx, "recruitment_blueprint_routes__0", id, { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     } catch (e) {
       if ((e as { code?: string }).code === "23505") throw new HttpError(409, "DUPLICATE_CODE", `a blueprint with code "${body.code}" already exists`) as any;
       throw e;
@@ -197,7 +197,7 @@ export async function assessmentBlueprintRoutes(app: FastifyInstance): Promise<v
     requireRole(ctx, HR_ROLES);
     const body = questionBody.parse(req.body);
     const id = randomUUID();
-    await publishF3Write(ctx, "recruitment_blueprint_routes__4", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    await publishF3Write(ctx, "recruitment_blueprint_routes__4", id, { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     return reply.code(201).send({ id, status: "draft" }) as any;
   });
 

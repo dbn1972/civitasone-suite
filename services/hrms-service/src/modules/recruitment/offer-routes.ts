@@ -89,7 +89,7 @@ export async function offerRoutes(app: FastifyInstance): Promise<void> {
     const nextVersion = (await repo.maxOfferVersion(ctx.tenantId, id)) + 1;
     const c = comp(body);
     try {
-    await publishF3Write(ctx, "recruitment_offer_routes__0", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    await publishF3Write(ctx, "recruitment_offer_routes__0", offerId, { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     } catch (err) {
       if (String((err as { code?: string }).code) === "23505") throw new HttpError(409, "OFFER_VERSION_CONFLICT", "a concurrent offer was created; reload and retry");
       throw err;
@@ -179,7 +179,7 @@ export async function offerRoutes(app: FastifyInstance): Promise<void> {
     if (o.status !== "released") throw new HttpError(409, "WRONG_STATE", `offer is '${o.status}', not released`);
     // R-RA-0162: capture acceptance timestamp, the accepted version, and IP/device.
     const meta = { ip: (req.headers["x-forwarded-for"] as string) ?? req.ip, userAgent: req.headers["user-agent"] ?? null, device: body.device ?? null };
-    await publishF3Write(ctx, "recruitment_offer_routes__5", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    await publishF3Write(ctx, "recruitment_offer_routes__5", offerId, { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown>, meta })
     return reply.send(jsonSafe({ id: offerId, status: "accepted", acceptedVersion: o.offerVersion })) as any;
   });
 
@@ -237,7 +237,7 @@ export async function offerRoutes(app: FastifyInstance): Promise<void> {
     const newId = randomUUID();
     const nextVersion = (await repo.maxOfferVersion(ctx.tenantId, prev.applicationId)) + 1;
     try {
-    await publishF3Write(ctx, "recruitment_offer_routes__9", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    await publishF3Write(ctx, "recruitment_offer_routes__9", newId, { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     } catch (err) {
       if (String((err as { code?: string }).code) === "23505") throw new HttpError(409, "OFFER_VERSION_CONFLICT", "a concurrent revision was created; reload and retry");
       throw err;

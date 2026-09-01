@@ -112,7 +112,7 @@ export async function requisitionRoutes(app: FastifyInstance): Promise<void> {
     if (b.approvalChain && !privileged) throw new HttpError(403, "CHAIN_NOT_ALLOWED", "only HR admins may set a custom approval chain");
     const chain: ApprovalStage[] = b.approvalChain ?? DEFAULT_GOVT_CHAIN;
     validateChain(chain);
-    await publishF3Write(ctx, "recruitment_requisition_routes__0", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    await publishF3Write(ctx, "recruitment_requisition_routes__0", id, { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     return reply.code(201).send({ id, requisitionNo: reqNo(id), status: "draft" }) as any;
     function reqNo(x: string) { return `REQ-${x.slice(0, 8).toUpperCase()}`; }
   });
@@ -275,7 +275,7 @@ export async function requisitionRoutes(app: FastifyInstance): Promise<void> {
     assertCanView(ctx, r);
     const newId = randomUUID();
     const carried = cloneFields(r as unknown as Record<string, unknown>);
-    await publishF3Write(ctx, "recruitment_requisition_routes__9", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    await publishF3Write(ctx, "recruitment_requisition_routes__9", newId, { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     return reply.code(201).send({ id: newId, clonedFrom: id, status: "draft" }) as any;
   });
 
@@ -288,7 +288,7 @@ export async function requisitionRoutes(app: FastifyInstance): Promise<void> {
     if (!canPublish(r.status)) throw new HttpError(409, "NOT_APPROVED", `requisition is '${r.status}', not fully approved — cannot publish`);
     if (!r.departmentId) throw new HttpError(400, "MISSING_DEPARTMENT", "a department is required to publish a job opening");
     const openingId = randomUUID();
-    await publishF3Write(ctx, "recruitment_requisition_routes__10", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    await publishF3Write(ctx, "recruitment_requisition_routes__10", openingId, { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     return reply.send(jsonSafe({ id, status: "published", publishedOpeningId: openingId })) as any;
   });
 

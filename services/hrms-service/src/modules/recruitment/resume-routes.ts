@@ -46,7 +46,7 @@ export async function candidateResumeRoutes(app: FastifyInstance): Promise<void>
     if (errors.length > 0) throw new HttpError(422, "INVALID_RESUME", errors.join("; "));
 
     const rid = randomUUID();
-    const result = await publishF3Write(ctx, "recruitment_resume_routes__0", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    const result = await publishF3Write(ctx, "recruitment_resume_routes__0", rid, { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
 
     return reply.code(201).send({ id: rid, candidateId: id, versionNo: result.versionNo, isActive: result.isActive }) as any;
   });

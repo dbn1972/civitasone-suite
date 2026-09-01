@@ -59,7 +59,7 @@ export async function applicationFeeRoutes(app: FastifyInstance): Promise<void> 
     const assessment = assessFee(vacancyFee, { category: a.category, categoryVerified: body.categoryVerified });
     const fid = randomUUID();
     try {
-      await publishF3Write(ctx, "recruitment_application_fee_routes__0", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+      await publishF3Write(ctx, "recruitment_application_fee_routes__0", fid, { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     } catch (err) {
       if (String((err as { code?: string }).code) === "23505") {
         const now = await repo.findFee(ctx.tenantId, id) as any;

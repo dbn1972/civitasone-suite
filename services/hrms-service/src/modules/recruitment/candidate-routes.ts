@@ -79,7 +79,7 @@ export async function candidateRoutes(app: FastifyInstance): Promise<void> {
     }
     const id = randomUUID();
     try {
-      await publishF3Write(ctx, "recruitment_candidate_routes__0", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+      await publishF3Write(ctx, "recruitment_candidate_routes__0", id, { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     } catch (err) {
       if (String((err as { code?: string }).code) === "23505") {
         return reply.code(409).send({ code: "DUPLICATE_CANDIDATE", message: "an active candidate profile already exists" }) as any;
@@ -143,7 +143,7 @@ export async function candidateRoutes(app: FastifyInstance): Promise<void> {
     const c = await mustCand(ctx.tenantId, id);
     if (c.status !== "draft") throw new HttpError(409, "LOCKED", "history can only be added while the profile is a draft");
     const eid = randomUUID();
-    await publishF3Write(ctx, "recruitment_candidate_routes__2", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    await publishF3Write(ctx, "recruitment_candidate_routes__2", eid, { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     return reply.code(201).send({ id: eid, candidateId: id }) as any;
   });
 
@@ -160,7 +160,7 @@ export async function candidateRoutes(app: FastifyInstance): Promise<void> {
     const c = await mustCand(ctx.tenantId, id);
     if (c.status !== "draft") throw new HttpError(409, "LOCKED", "history can only be added while the profile is a draft");
     const eid = randomUUID();
-    await publishF3Write(ctx, "recruitment_candidate_routes__3", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    await publishF3Write(ctx, "recruitment_candidate_routes__3", eid, { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     return reply.code(201).send({ id: eid, candidateId: id }) as any;
   });
 

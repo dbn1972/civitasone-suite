@@ -14,10 +14,16 @@ const app1 = (n: number) => `11111111-aaaa-4000-8000-0000000000${String(n).padSt
 
 const H = vi.hoisted(() => ({ findByJob: vi.fn(), insertRoster: vi.fn(), updateRoster: vi.fn() }));
 
-vi.mock("../src/shared/db.js", async (io) => ({
-  ...(await io<Record<string, unknown>>()),
-  db: { transaction: async (cb: (tx: unknown) => Promise<void>) => cb({}), insert: () => ({ values: async () => undefined }) },
-}));
+vi.mock("../src/shared/db.js", async (io) => {
+  // markProcessed() in the F3 consumer runs
+  // insert(...).values(...).onConflictDoNothing().returning() on the tx, which a
+  // bare {} cannot answer — the consumer threw before reaching any case.
+  const stubTx = { insert: () => ({ values: () => ({ onConflictDoNothing: () => ({ returning: async () => [{ messageId: "stub" }] }) }) }) };
+  return {
+    ...(await io<Record<string, unknown>>()),
+    db: { transaction: async (cb: (tx: unknown) => Promise<unknown>) => cb(stubTx), insert: () => ({ values: async () => undefined }) },
+  };
+});
 vi.mock("../src/modules/recruitment/reservation-repo.js", async (io) => ({
   ...(await io<Record<string, unknown>>()),
   findByJob: (...a: unknown[]) => H.findByJob(...a),
@@ -26,6 +32,26 @@ vi.mock("../src/modules/recruitment/reservation-repo.js", async (io) => ({
 }));
 
 import { buildApp } from "../src/app.js";
+
+import { queue } from "../src/shared/infra.js";
+import { registerF3_recruitment_Consumers } from "../src/modules/recruitment/f3-consumer.js";
+
+// These routes only PUBLISH; the row is written by the recruitment F3 consumer
+// that f3-leftover-register.ts wires into the worker. Register it here so the
+// suite exercises the whole write path instead of the HTTP layer alone.
+registerF3_recruitment_Consumers(queue);
+/** Await the in-memory queue's fan-out so the consumer's write has happened. */
+async function drainF3(): Promise<void> {
+  await (queue as unknown as import("@civitasone/queue").MemoryQueue).drain();
+}
+type TestApp = { inject: (opts: never) => Promise<never> };
+/** inject() + drain, so an assertion never races the async F3 write. */
+async function injectF3(app: TestApp, opts: unknown): Promise<never> {
+  const res = await app.inject(opts as never);
+  await drainF3();
+  return res;
+}
+
 import { sqlClient } from "../src/shared/db.js";
 
 const tok = (sub: string, roles: string[]) => `Bearer ${signToken({ sub, tid: TENANT, roles, sid: "s" }, SECRET)}`;
@@ -45,7 +71,7 @@ afterAll(async () => { await sqlClient.end(); });
 describe("reservation roster + shortlist routes", () => {
   it("creates a draft roster when the category vacancies sum to the total (200)", async () => {
     const app = await buildApp();
-    const r = await app.inject({ method: "PUT", url: `/v1/hrms/job-openings/${JOB}/reservation-roster`, headers: creator, payload: { totalVacancies: 4, categoryVacancies: { UR: 2, SC: 1, OBC: 1 } } });
+    const r = await injectF3(app, { method: "PUT", url: `/v1/hrms/job-openings/${JOB}/reservation-roster`, headers: creator, payload: { totalVacancies: 4, categoryVacancies: { UR: 2, SC: 1, OBC: 1 } } });
     expect(r.statusCode).toBe(200);
     expect(H.insertRoster).toHaveBeenCalledOnce();
     await app.close();
@@ -53,7 +79,7 @@ describe("reservation roster + shortlist routes", () => {
 
   it("rejects a roster whose category vacancies do not sum to the total (422)", async () => {
     const app = await buildApp();
-    const r = await app.inject({ method: "PUT", url: `/v1/hrms/job-openings/${JOB}/reservation-roster`, headers: creator, payload: { totalVacancies: 4, categoryVacancies: { UR: 2, SC: 1 } } });
+    const r = await injectF3(app, { method: "PUT", url: `/v1/hrms/job-openings/${JOB}/reservation-roster`, headers: creator, payload: { totalVacancies: 4, categoryVacancies: { UR: 2, SC: 1 } } });
     expect(r.statusCode).toBe(422);
     expect(r.json().code).toBe("INVALID_ROSTER");
     await app.close();
@@ -62,7 +88,7 @@ describe("reservation roster + shortlist routes", () => {
   it("refuses to change an approved roster (409)", async () => {
     H.findByJob.mockResolvedValue(roster({ status: "approved" }));
     const app = await buildApp();
-    const r = await app.inject({ method: "PUT", url: `/v1/hrms/job-openings/${JOB}/reservation-roster`, headers: creator, payload: { totalVacancies: 4, categoryVacancies: { UR: 2, SC: 1, OBC: 1 } } });
+    const r = await injectF3(app, { method: "PUT", url: `/v1/hrms/job-openings/${JOB}/reservation-roster`, headers: creator, payload: { totalVacancies: 4, categoryVacancies: { UR: 2, SC: 1, OBC: 1 } } });
     expect(r.statusCode).toBe(409);
     expect(r.json().code).toBe("APPROVED");
     await app.close();
@@ -71,12 +97,12 @@ describe("reservation roster + shortlist routes", () => {
   it("blocks the creator from approving the roster (403 SoD) and is senior-only", async () => {
     H.findByJob.mockResolvedValue(roster());
     const app = await buildApp();
-    const self = await app.inject({ method: "POST", url: `/v1/hrms/job-openings/${JOB}/reservation-roster/approve`, headers: creator, payload: {} });
+    const self = await injectF3(app, { method: "POST", url: `/v1/hrms/job-openings/${JOB}/reservation-roster/approve`, headers: creator, payload: {} });
     expect(self.statusCode).toBe(403);
     expect(self.json().code).toBe("SOD_VIOLATION");
-    const denied = await app.inject({ method: "POST", url: `/v1/hrms/job-openings/${JOB}/reservation-roster/approve`, headers: officer, payload: {} });
+    const denied = await injectF3(app, { method: "POST", url: `/v1/hrms/job-openings/${JOB}/reservation-roster/approve`, headers: officer, payload: {} });
     expect(denied.statusCode).toBe(403);
-    const ok = await app.inject({ method: "POST", url: `/v1/hrms/job-openings/${JOB}/reservation-roster/approve`, headers: approver, payload: {} });
+    const ok = await injectF3(app, { method: "POST", url: `/v1/hrms/job-openings/${JOB}/reservation-roster/approve`, headers: approver, payload: {} });
     expect(ok.statusCode).toBe(200);
     await app.close();
   });
@@ -84,7 +110,7 @@ describe("reservation roster + shortlist routes", () => {
   it("refuses to shortlist against an unapproved roster (409)", async () => {
     H.findByJob.mockResolvedValue(roster({ status: "draft" }));
     const app = await buildApp();
-    const r = await app.inject({ method: "POST", url: `/v1/hrms/job-openings/${JOB}/reservation-shortlist`, headers: creator, payload: { candidates: [{ applicationId: app1(1), category: "GEN", score: 90 }] } });
+    const r = await injectF3(app, { method: "POST", url: `/v1/hrms/job-openings/${JOB}/reservation-shortlist`, headers: creator, payload: { candidates: [{ applicationId: app1(1), category: "GEN", score: 90 }] } });
     expect(r.statusCode).toBe(409);
     expect(r.json().code).toBe("ROSTER_NOT_APPROVED");
     await app.close();
@@ -93,7 +119,7 @@ describe("reservation roster + shortlist routes", () => {
   it("computes the category-wise shortlist with the meritorious-reserved rule (200)", async () => {
     H.findByJob.mockResolvedValue(roster({ status: "approved" }));
     const app = await buildApp();
-    const r = await app.inject({ method: "POST", url: `/v1/hrms/job-openings/${JOB}/reservation-shortlist`, headers: creator, payload: {
+    const r = await injectF3(app, { method: "POST", url: `/v1/hrms/job-openings/${JOB}/reservation-shortlist`, headers: creator, payload: {
       candidates: [
         { applicationId: app1(1), category: "OBC", score: 90 }, // top -> UR (meritorious)
         { applicationId: app1(2), category: "GEN", score: 85 },
@@ -112,7 +138,7 @@ describe("reservation roster + shortlist routes", () => {
   it("fails closed on an unrecognised candidate category (422), never silently UR", async () => {
     H.findByJob.mockResolvedValue(roster({ status: "approved" }));
     const app = await buildApp();
-    const r = await app.inject({ method: "POST", url: `/v1/hrms/job-openings/${JOB}/reservation-shortlist`, headers: creator, payload: {
+    const r = await injectF3(app, { method: "POST", url: `/v1/hrms/job-openings/${JOB}/reservation-shortlist`, headers: creator, payload: {
       candidates: [{ applicationId: app1(1), category: "OBC", score: 90 }, { applicationId: app1(2), category: "MYSTERY", score: 95 }],
     } });
     expect(r.statusCode).toBe(422);
@@ -123,7 +149,7 @@ describe("reservation roster + shortlist routes", () => {
   it("rejects a location roster that over-allocates beyond the approved category vacancies (422)", async () => {
     H.findByJob.mockResolvedValue(null);
     const app = await buildApp();
-    const r = await app.inject({ method: "PUT", url: `/v1/hrms/job-openings/${JOB}/reservation-roster`, headers: creator, payload: {
+    const r = await injectF3(app, { method: "PUT", url: `/v1/hrms/job-openings/${JOB}/reservation-roster`, headers: creator, payload: {
       totalVacancies: 4, categoryVacancies: { UR: 2, SC: 1, OBC: 1 },
       locationRosters: { north: { UR: 1, SC: 1, OBC: 1 }, south: { UR: 1, SC: 1 } }, // SC sums to 2 > approved 1
     } });
@@ -135,7 +161,7 @@ describe("reservation roster + shortlist routes", () => {
   it("refuses a location shortlist when the roster has no per-location breakdown (409)", async () => {
     H.findByJob.mockResolvedValue(roster({ status: "approved", locationRosters: {} }));
     const app = await buildApp();
-    const r = await app.inject({ method: "POST", url: `/v1/hrms/job-openings/${JOB}/reservation-shortlist`, headers: creator, payload: { byLocation: true, candidates: [{ applicationId: app1(1), category: "GEN", score: 90, location: "north" }] } });
+    const r = await injectF3(app, { method: "POST", url: `/v1/hrms/job-openings/${JOB}/reservation-shortlist`, headers: creator, payload: { byLocation: true, candidates: [{ applicationId: app1(1), category: "GEN", score: 90, location: "north" }] } });
     expect(r.statusCode).toBe(409);
     expect(r.json().code).toBe("NO_LOCATION_ROSTERS");
     await app.close();

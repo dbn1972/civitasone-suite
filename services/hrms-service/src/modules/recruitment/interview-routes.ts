@@ -65,7 +65,7 @@ export async function interviewRoutes(app: FastifyInstance): Promise<void> {
     const scheduledTime = when.toISOString().slice(11, 16); // HH:MM
 
     const id = randomUUID();
-    await publishF3Write(ctx, "recruitment_interview_routes__0", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    await publishF3Write(ctx, "recruitment_interview_routes__0", id, { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
 
     return reply.code(201).send({ id, status: "scheduled", message: "interview scheduled" }) as any;
   });

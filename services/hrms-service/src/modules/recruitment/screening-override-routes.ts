@@ -52,7 +52,7 @@ export async function screeningOverrideRoutes(app: FastifyInstance): Promise<voi
 
     const rid = randomUUID();
     try {
-      await publishF3Write(ctx, "recruitment_screening_override_routes__0", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+      await publishF3Write(ctx, "recruitment_screening_override_routes__0", rid, { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     } catch (err) {
       // partial unique index (one pending per application) — concurrent request
       if (String((err as { code?: string }).code) === "23505") {

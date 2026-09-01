@@ -21,10 +21,16 @@ const H = vi.hoisted(() => ({
 }));
 
 vi.mock("../src/modules/recruitment/audit-emit.js", () => ({ emitAudit: async () => undefined }));
-vi.mock("../src/shared/db.js", async (io) => ({
-  ...(await io<Record<string, unknown>>()),
-  db: { transaction: async (cb: (tx: unknown) => Promise<unknown>) => cb({}) },
-}));
+vi.mock("../src/shared/db.js", async (io) => {
+  // markProcessed() in the F3 consumer runs
+  // insert(...).values(...).onConflictDoNothing().returning() on the tx, which a
+  // bare {} cannot answer — the consumer threw before reaching any case.
+  const stubTx = { insert: () => ({ values: () => ({ onConflictDoNothing: () => ({ returning: async () => [{ messageId: "stub" }] }) }) }) };
+  return {
+    ...(await io<Record<string, unknown>>()),
+    db: { transaction: async (cb: (tx: unknown) => Promise<unknown>) => cb(stubTx), insert: () => ({ values: async () => undefined }) },
+  };
+});
 vi.mock("../src/modules/recruitment/screening-repo.js", async (io) => ({
   ...(await io<Record<string, unknown>>()),
   findApplication: (...a: unknown[]) => H.findApplication(...a),
@@ -41,6 +47,26 @@ vi.mock("../src/modules/recruitment/screening-override-repo.js", async (io) => (
 }));
 
 import { buildApp } from "../src/app.js";
+
+import { queue } from "../src/shared/infra.js";
+import { registerF3_recruitment_Consumers } from "../src/modules/recruitment/f3-consumer.js";
+
+// These routes only PUBLISH; the row is written by the recruitment F3 consumer
+// that f3-leftover-register.ts wires into the worker. Register it here so the
+// suite exercises the whole write path instead of the HTTP layer alone.
+registerF3_recruitment_Consumers(queue);
+/** Await the in-memory queue's fan-out so the consumer's write has happened. */
+async function drainF3(): Promise<void> {
+  await (queue as unknown as import("@civitasone/queue").MemoryQueue).drain();
+}
+type TestApp = { inject: (opts: never) => Promise<never> };
+/** inject() + drain, so an assertion never races the async F3 write. */
+async function injectF3(app: TestApp, opts: unknown): Promise<never> {
+  const res = await app.inject(opts as never);
+  await drainF3();
+  return res;
+}
+
 import { sqlClient } from "../src/shared/db.js";
 
 const tok = (sub: string, roles: string[]) => signToken({ sub, tid: TENANT, roles, sid: "s" }, SECRET);
@@ -64,7 +90,7 @@ afterAll(async () => { await sqlClient.end(); });
 describe("screening override maker-checker (R-RA-0111)", () => {
   it("requests an override (201, pending) as an admin", async () => {
     const app = await buildApp();
-    const r = await app.inject({ method: "POST", url: `/v1/hrms/applications/${APP}/screening-overrides`, headers: hdr(REQUESTER, ["hr_admin"]), payload: { toDecision: "eligible", reason: "docs re-verified" } });
+    const r = await injectF3(app, { method: "POST", url: `/v1/hrms/applications/${APP}/screening-overrides`, headers: hdr(REQUESTER, ["hr_admin"]), payload: { toDecision: "eligible", reason: "docs re-verified" } });
     expect(r.statusCode).toBe(201);
     expect(r.json().status).toBe("pending");
     expect(H.createRequest).toHaveBeenCalledOnce();
@@ -73,7 +99,7 @@ describe("screening override maker-checker (R-RA-0111)", () => {
 
   it("forbids an hr_officer (non-admin) from requesting (403)", async () => {
     const app = await buildApp();
-    const r = await app.inject({ method: "POST", url: `/v1/hrms/applications/${APP}/screening-overrides`, headers: hdr(REQUESTER, ["hr_officer"]), payload: { toDecision: "eligible", reason: "x" } });
+    const r = await injectF3(app, { method: "POST", url: `/v1/hrms/applications/${APP}/screening-overrides`, headers: hdr(REQUESTER, ["hr_officer"]), payload: { toDecision: "eligible", reason: "x" } });
     expect(r.statusCode).toBe(403);
     await app.close();
   });
@@ -81,7 +107,7 @@ describe("screening override maker-checker (R-RA-0111)", () => {
   it("rejects an override on a pending application (422)", async () => {
     H.findApplication.mockResolvedValue(appRow({ screeningDecision: "pending", screenedBy: null }));
     const app = await buildApp();
-    const r = await app.inject({ method: "POST", url: `/v1/hrms/applications/${APP}/screening-overrides`, headers: hdr(REQUESTER, ["hr_admin"]), payload: { toDecision: "eligible", reason: "x" } });
+    const r = await injectF3(app, { method: "POST", url: `/v1/hrms/applications/${APP}/screening-overrides`, headers: hdr(REQUESTER, ["hr_admin"]), payload: { toDecision: "eligible", reason: "x" } });
     expect(r.statusCode).toBe(422);
     expect(r.json().code).toBe("INVALID_OVERRIDE");
     await app.close();
@@ -90,7 +116,7 @@ describe("screening override maker-checker (R-RA-0111)", () => {
   it("rejects a duplicate pending request (409 OVERRIDE_PENDING)", async () => {
     H.findPending.mockResolvedValue(reqRow());
     const app = await buildApp();
-    const r = await app.inject({ method: "POST", url: `/v1/hrms/applications/${APP}/screening-overrides`, headers: hdr(REQUESTER, ["hr_admin"]), payload: { toDecision: "eligible", reason: "x" } });
+    const r = await injectF3(app, { method: "POST", url: `/v1/hrms/applications/${APP}/screening-overrides`, headers: hdr(REQUESTER, ["hr_admin"]), payload: { toDecision: "eligible", reason: "x" } });
     expect(r.statusCode).toBe(409);
     expect(r.json().code).toBe("OVERRIDE_PENDING");
     await app.close();
@@ -98,7 +124,7 @@ describe("screening override maker-checker (R-RA-0111)", () => {
 
   it("approves + applies the override as an independent admin (200)", async () => {
     const app = await buildApp();
-    const r = await app.inject({ method: "POST", url: `/v1/hrms/screening-overrides/${REQ}/approve`, headers: hdr(APPROVER, ["hr_admin"]), payload: { note: "reviewed" } });
+    const r = await injectF3(app, { method: "POST", url: `/v1/hrms/screening-overrides/${REQ}/approve`, headers: hdr(APPROVER, ["hr_admin"]), payload: { note: "reviewed" } });
     expect(r.statusCode).toBe(200);
     expect(r.json()).toMatchObject({ status: "approved", screeningDecision: "eligible" });
     expect(H.setScreening).toHaveBeenCalledOnce();
@@ -109,7 +135,7 @@ describe("screening override maker-checker (R-RA-0111)", () => {
 
   it("blocks the requester from approving their own override (403 SOD_VIOLATION)", async () => {
     const app = await buildApp();
-    const r = await app.inject({ method: "POST", url: `/v1/hrms/screening-overrides/${REQ}/approve`, headers: hdr(REQUESTER, ["hr_admin"]), payload: {} });
+    const r = await injectF3(app, { method: "POST", url: `/v1/hrms/screening-overrides/${REQ}/approve`, headers: hdr(REQUESTER, ["hr_admin"]), payload: {} });
     expect(r.statusCode).toBe(403);
     expect(r.json().code).toBe("SOD_VIOLATION");
     expect(H.setScreening).not.toHaveBeenCalled();
@@ -118,7 +144,7 @@ describe("screening override maker-checker (R-RA-0111)", () => {
 
   it("blocks the original screener from approving (403 SOD_VIOLATION)", async () => {
     const app = await buildApp();
-    const r = await app.inject({ method: "POST", url: `/v1/hrms/screening-overrides/${REQ}/approve`, headers: hdr(SCREENER, ["hr_admin"]), payload: {} });
+    const r = await injectF3(app, { method: "POST", url: `/v1/hrms/screening-overrides/${REQ}/approve`, headers: hdr(SCREENER, ["hr_admin"]), payload: {} });
     expect(r.statusCode).toBe(403);
     expect(r.json().code).toBe("SOD_VIOLATION");
     await app.close();
@@ -127,7 +153,7 @@ describe("screening override maker-checker (R-RA-0111)", () => {
   it("rejects a stale override when the decision moved on (409 STALE_OVERRIDE)", async () => {
     H.findApplication.mockResolvedValue(appRow({ screeningDecision: "shortlisted" }));
     const app = await buildApp();
-    const r = await app.inject({ method: "POST", url: `/v1/hrms/screening-overrides/${REQ}/approve`, headers: hdr(APPROVER, ["hr_admin"]), payload: {} });
+    const r = await injectF3(app, { method: "POST", url: `/v1/hrms/screening-overrides/${REQ}/approve`, headers: hdr(APPROVER, ["hr_admin"]), payload: {} });
     expect(r.statusCode).toBe(409);
     expect(r.json().code).toBe("STALE_OVERRIDE");
     await app.close();
@@ -137,7 +163,7 @@ describe("screening override maker-checker (R-RA-0111)", () => {
     // Same decision value as raised against, but the version advanced.
     H.findApplication.mockResolvedValue(appRow({ screeningDecision: "ineligible", version: 5 }));
     const app = await buildApp();
-    const r = await app.inject({ method: "POST", url: `/v1/hrms/screening-overrides/${REQ}/approve`, headers: hdr(APPROVER, ["hr_admin"]), payload: {} });
+    const r = await injectF3(app, { method: "POST", url: `/v1/hrms/screening-overrides/${REQ}/approve`, headers: hdr(APPROVER, ["hr_admin"]), payload: {} });
     expect(r.statusCode).toBe(409);
     expect(r.json().code).toBe("STALE_OVERRIDE");
     expect(H.setScreening).not.toHaveBeenCalled();
@@ -148,7 +174,7 @@ describe("screening override maker-checker (R-RA-0111)", () => {
     // request was raised with originalScreenedBy=SCREENER, but the current author is APPROVER
     H.findApplication.mockResolvedValue(appRow({ screenedBy: APPROVER }));
     const app = await buildApp();
-    const r = await app.inject({ method: "POST", url: `/v1/hrms/screening-overrides/${REQ}/approve`, headers: hdr(APPROVER, ["hr_admin"]), payload: {} });
+    const r = await injectF3(app, { method: "POST", url: `/v1/hrms/screening-overrides/${REQ}/approve`, headers: hdr(APPROVER, ["hr_admin"]), payload: {} });
     expect(r.statusCode).toBe(403);
     expect(r.json().code).toBe("SOD_VIOLATION");
     await app.close();
@@ -156,7 +182,7 @@ describe("screening override maker-checker (R-RA-0111)", () => {
 
   it("lets the requester cancel their own pending request (200)", async () => {
     const app = await buildApp();
-    const r = await app.inject({ method: "POST", url: `/v1/hrms/screening-overrides/${REQ}/cancel`, headers: hdr(REQUESTER, ["hr_admin"]), payload: {} });
+    const r = await injectF3(app, { method: "POST", url: `/v1/hrms/screening-overrides/${REQ}/cancel`, headers: hdr(REQUESTER, ["hr_admin"]), payload: {} });
     expect(r.statusCode).toBe(200);
     expect(r.json().status).toBe("cancelled");
     expect(H.setRequestStatus).toHaveBeenCalledOnce();
@@ -165,7 +191,7 @@ describe("screening override maker-checker (R-RA-0111)", () => {
 
   it("forbids a different admin from cancelling someone else's request (403)", async () => {
     const app = await buildApp();
-    const r = await app.inject({ method: "POST", url: `/v1/hrms/screening-overrides/${REQ}/cancel`, headers: hdr(APPROVER, ["hr_admin"]), payload: {} });
+    const r = await injectF3(app, { method: "POST", url: `/v1/hrms/screening-overrides/${REQ}/cancel`, headers: hdr(APPROVER, ["hr_admin"]), payload: {} });
     expect(r.statusCode).toBe(403);
     expect(r.json().code).toBe("NOT_REQUESTER");
     await app.close();
@@ -174,7 +200,7 @@ describe("screening override maker-checker (R-RA-0111)", () => {
   it("rejects approving a non-pending request (409 NOT_PENDING)", async () => {
     H.findRequest.mockResolvedValue(reqRow({ status: "approved" }));
     const app = await buildApp();
-    const r = await app.inject({ method: "POST", url: `/v1/hrms/screening-overrides/${REQ}/approve`, headers: hdr(APPROVER, ["hr_admin"]), payload: {} });
+    const r = await injectF3(app, { method: "POST", url: `/v1/hrms/screening-overrides/${REQ}/approve`, headers: hdr(APPROVER, ["hr_admin"]), payload: {} });
     expect(r.statusCode).toBe(409);
     expect(r.json().code).toBe("NOT_PENDING");
     await app.close();
@@ -182,7 +208,7 @@ describe("screening override maker-checker (R-RA-0111)", () => {
 
   it("rejects an override as a different admin (200)", async () => {
     const app = await buildApp();
-    const r = await app.inject({ method: "POST", url: `/v1/hrms/screening-overrides/${REQ}/reject`, headers: hdr(APPROVER, ["hr_admin"]), payload: { note: "insufficient" } });
+    const r = await injectF3(app, { method: "POST", url: `/v1/hrms/screening-overrides/${REQ}/reject`, headers: hdr(APPROVER, ["hr_admin"]), payload: { note: "insufficient" } });
     expect(r.statusCode).toBe(200);
     expect(r.json().status).toBe("rejected");
     expect(H.setRequestStatus).toHaveBeenCalledOnce();
@@ -191,7 +217,7 @@ describe("screening override maker-checker (R-RA-0111)", () => {
 
   it("blocks the requester from rejecting their own override (403)", async () => {
     const app = await buildApp();
-    const r = await app.inject({ method: "POST", url: `/v1/hrms/screening-overrides/${REQ}/reject`, headers: hdr(REQUESTER, ["hr_admin"]), payload: {} });
+    const r = await injectF3(app, { method: "POST", url: `/v1/hrms/screening-overrides/${REQ}/reject`, headers: hdr(REQUESTER, ["hr_admin"]), payload: {} });
     expect(r.statusCode).toBe(403);
     expect(r.json().code).toBe("SOD_VIOLATION");
     await app.close();
@@ -200,14 +226,14 @@ describe("screening override maker-checker (R-RA-0111)", () => {
   it("404 when approving a request that does not exist", async () => {
     H.findRequest.mockResolvedValue(null);
     const app = await buildApp();
-    const r = await app.inject({ method: "POST", url: `/v1/hrms/screening-overrides/${REQ}/approve`, headers: hdr(APPROVER, ["hr_admin"]), payload: {} });
+    const r = await injectF3(app, { method: "POST", url: `/v1/hrms/screening-overrides/${REQ}/approve`, headers: hdr(APPROVER, ["hr_admin"]), payload: {} });
     expect(r.statusCode).toBe(404);
     await app.close();
   });
 
   it("lists override requests for an application (200, any HR reader)", async () => {
     const app = await buildApp();
-    const r = await app.inject({ method: "GET", url: `/v1/hrms/applications/${APP}/screening-overrides`, headers: hdr(REQUESTER, ["hr_officer"]) });
+    const r = await injectF3(app, { method: "GET", url: `/v1/hrms/applications/${APP}/screening-overrides`, headers: hdr(REQUESTER, ["hr_officer"]) });
     expect(r.statusCode).toBe(200);
     expect(r.json().data).toHaveLength(1);
     await app.close();
@@ -215,7 +241,7 @@ describe("screening override maker-checker (R-RA-0111)", () => {
 
   it("requires auth (401)", async () => {
     const app = await buildApp();
-    const r = await app.inject({ method: "GET", url: `/v1/hrms/applications/${APP}/screening-overrides` });
+    const r = await injectF3(app, { method: "GET", url: `/v1/hrms/applications/${APP}/screening-overrides` });
     expect(r.statusCode).toBe(401);
     await app.close();
   });

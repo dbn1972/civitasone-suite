@@ -22,10 +22,16 @@ const H = vi.hoisted(() => ({
   listEventsMock: vi.fn(),
 }));
 
-vi.mock("../src/shared/db.js", async (io) => ({
-  ...(await io<Record<string, unknown>>()),
-  db: { transaction: async (cb: (tx: unknown) => Promise<void>) => cb({}), insert: () => ({ values: async () => undefined }) },
-}));
+vi.mock("../src/shared/db.js", async (io) => {
+  // markProcessed() in the F3 consumer runs
+  // insert(...).values(...).onConflictDoNothing().returning() on the tx, which a
+  // bare {} cannot answer — the consumer threw before reaching any case.
+  const stubTx = { insert: () => ({ values: () => ({ onConflictDoNothing: () => ({ returning: async () => [{ messageId: "stub" }] }) }) }) };
+  return {
+    ...(await io<Record<string, unknown>>()),
+    db: { transaction: async (cb: (tx: unknown) => Promise<unknown>) => cb(stubTx), insert: () => ({ values: async () => undefined }) },
+  };
+});
 vi.mock("../src/modules/recruitment/screening-repo.js", async (io) => ({
   ...(await io<Record<string, unknown>>()),
   findApplication: (...a: unknown[]) => H.findAppMock(...a),
@@ -38,6 +44,26 @@ vi.mock("../src/modules/recruitment/screening-repo.js", async (io) => ({
 }));
 
 import { buildApp } from "../src/app.js";
+
+import { queue } from "../src/shared/infra.js";
+import { registerF3_recruitment_Consumers } from "../src/modules/recruitment/f3-consumer.js";
+
+// These routes only PUBLISH; the row is written by the recruitment F3 consumer
+// that f3-leftover-register.ts wires into the worker. Register it here so the
+// suite exercises the whole write path instead of the HTTP layer alone.
+registerF3_recruitment_Consumers(queue);
+/** Await the in-memory queue's fan-out so the consumer's write has happened. */
+async function drainF3(): Promise<void> {
+  await (queue as unknown as import("@civitasone/queue").MemoryQueue).drain();
+}
+type TestApp = { inject: (opts: never) => Promise<never> };
+/** inject() + drain, so an assertion never races the async F3 write. */
+async function injectF3(app: TestApp, opts: unknown): Promise<never> {
+  const res = await app.inject(opts as never);
+  await drainF3();
+  return res;
+}
+
 import { sqlClient } from "../src/shared/db.js";
 
 const auth = (roles: string[]) => ({ authorization: `Bearer ${signToken({ sub: USER, tid: TENANT, roles, sid: "s" }, SECRET)}` });
@@ -61,7 +87,7 @@ describe("screening routes", () => {
       appRow({ id: "a4", screeningDecision: "pending", eligibilityResult: {} }), // never evaluated -> skip
     ]);
     const app = await buildApp();
-    const r = await app.inject({ method: "POST", url: `/v1/hrms/job-openings/${VAC}/auto-screen`, headers: auth(["hr_admin"]) });
+    const r = await injectF3(app, { method: "POST", url: `/v1/hrms/job-openings/${VAC}/auto-screen`, headers: auth(["hr_admin"]) });
     expect(r.statusCode).toBe(200);
     expect(r.json()).toMatchObject({ screened: 2, skipped: 2 });
     await app.close();
@@ -70,7 +96,7 @@ describe("screening routes", () => {
   it("requires a structured reason to mark an application ineligible (400)", async () => {
     H.findAppMock.mockResolvedValue(appRow({ screeningDecision: "pending" }));
     const app = await buildApp();
-    const r = await app.inject({ method: "POST", url: `/v1/hrms/applications/${APP}/screening-decision`, headers: auth(["hr_officer"]), payload: { decision: "ineligible" } });
+    const r = await injectF3(app, { method: "POST", url: `/v1/hrms/applications/${APP}/screening-decision`, headers: auth(["hr_officer"]), payload: { decision: "ineligible" } });
     expect(r.statusCode).toBe(400);
     expect(r.json().code).toBe("REASON_REQUIRED");
     await app.close();
@@ -79,7 +105,7 @@ describe("screening routes", () => {
   it("records an ineligible decision with a reason code", async () => {
     H.findAppMock.mockResolvedValue(appRow({ screeningDecision: "pending" }));
     const app = await buildApp();
-    const r = await app.inject({ method: "POST", url: `/v1/hrms/applications/${APP}/screening-decision`, headers: auth(["hr_officer"]), payload: { decision: "ineligible", reasonCode: "experience", remarks: "short" } });
+    const r = await injectF3(app, { method: "POST", url: `/v1/hrms/applications/${APP}/screening-decision`, headers: auth(["hr_officer"]), payload: { decision: "ineligible", reasonCode: "experience", remarks: "short" } });
     expect(r.statusCode).toBe(200);
     expect(H.insertEventMock.mock.calls[0][1].action).toBe("decision");
     await app.close();
@@ -88,7 +114,7 @@ describe("screening routes", () => {
   it("routes an override of a decided application to the maker-checker flow (409) — no single-admin direct override", async () => {
     H.findAppMock.mockResolvedValue(appRow({ screeningDecision: "ineligible" }));
     const app = await buildApp();
-    const r = await app.inject({ method: "POST", url: `/v1/hrms/applications/${APP}/screening-decision`, headers: auth(["hr_admin"]), payload: { decision: "eligible" } });
+    const r = await injectF3(app, { method: "POST", url: `/v1/hrms/applications/${APP}/screening-decision`, headers: auth(["hr_admin"]), payload: { decision: "eligible" } });
     expect(r.statusCode).toBe(409);
     expect(r.json().code).toBe("OVERRIDE_VIA_MAKER_CHECKER");
     expect(H.setScreeningMock).not.toHaveBeenCalled();
@@ -98,7 +124,7 @@ describe("screening routes", () => {
   it("re-affirming the same decision is an idempotent no-op that does NOT rewrite the author", async () => {
     H.findAppMock.mockResolvedValue(appRow({ screeningDecision: "shortlisted" }));
     const app = await buildApp();
-    const r = await app.inject({ method: "POST", url: `/v1/hrms/applications/${APP}/screening-decision`, headers: auth(["hr_officer"]), payload: { decision: "shortlisted" } });
+    const r = await injectF3(app, { method: "POST", url: `/v1/hrms/applications/${APP}/screening-decision`, headers: auth(["hr_officer"]), payload: { decision: "shortlisted" } });
     expect(r.statusCode).toBe(200);
     expect(r.json().unchanged).toBe(true);
     expect(H.setScreeningMock).not.toHaveBeenCalled();
@@ -108,7 +134,7 @@ describe("screening routes", () => {
   it("rejects any screening change once the shortlist is frozen (409)", async () => {
     H.findAppMock.mockResolvedValue(appRow({ screeningDecision: "shortlisted", shortlistFrozen: true }));
     const app = await buildApp();
-    const r = await app.inject({ method: "POST", url: `/v1/hrms/applications/${APP}/screening-decision`, headers: auth(["hr_admin"]), payload: { decision: "waitlisted" } });
+    const r = await injectF3(app, { method: "POST", url: `/v1/hrms/applications/${APP}/screening-decision`, headers: auth(["hr_admin"]), payload: { decision: "waitlisted" } });
     expect(r.statusCode).toBe(409);
     expect(r.json().code).toBe("SHORTLIST_FROZEN");
     await app.close();
@@ -117,7 +143,7 @@ describe("screening routes", () => {
   it("bulk-shortlists the requested applications", async () => {
     H.findByIdsMock.mockResolvedValue([appRow({ id: "a1" }), appRow({ id: "a2", shortlistFrozen: true })]);
     const app = await buildApp();
-    const r = await app.inject({ method: "POST", url: `/v1/hrms/job-openings/${VAC}/shortlist`, headers: auth(["hr_admin"]), payload: { applicationIds: ["11111111-1111-4000-8000-000000000001", "22222222-2222-4000-8000-000000000002"] } });
+    const r = await injectF3(app, { method: "POST", url: `/v1/hrms/job-openings/${VAC}/shortlist`, headers: auth(["hr_admin"]), payload: { applicationIds: ["11111111-1111-4000-8000-000000000001", "22222222-2222-4000-8000-000000000002"] } });
     expect(r.statusCode).toBe(200);
     expect(r.json()).toMatchObject({ shortlisted: 1, skipped: 1 });
     await app.close();
@@ -134,7 +160,7 @@ describe("screening routes", () => {
       appRow({ id: "f1", screeningDecision: "eligible", shortlistFrozen: true }), // frozen -> SKIP
     ]);
     const app = await buildApp();
-    const r = await app.inject({ method: "POST", url: `/v1/hrms/job-openings/${VAC}/shortlist`, headers: auth(["hr_officer"]),
+    const r = await injectF3(app, { method: "POST", url: `/v1/hrms/job-openings/${VAC}/shortlist`, headers: auth(["hr_officer"]),
       payload: { applicationIds: ["11111111-1111-4000-8000-000000000001"] } });
     expect(r.statusCode).toBe(200);
     expect(r.json()).toMatchObject({ shortlisted: 3, skipped: 4 }); // p1/e1/s1 advanced; r1/w1/m1/f1 skipped
@@ -147,7 +173,7 @@ describe("screening routes", () => {
   it("freezes the shortlisted applications", async () => {
     H.listForVacMock.mockResolvedValue([appRow({ id: "a1", screeningDecision: "shortlisted" }), appRow({ id: "a2", screeningDecision: "ineligible" })]);
     const app = await buildApp();
-    const r = await app.inject({ method: "POST", url: `/v1/hrms/job-openings/${VAC}/shortlist/freeze`, headers: auth(["hr_admin"]) });
+    const r = await injectF3(app, { method: "POST", url: `/v1/hrms/job-openings/${VAC}/shortlist/freeze`, headers: auth(["hr_admin"]) });
     expect(r.statusCode).toBe(200);
     expect(r.json().frozen).toBe(1);
     await app.close();
@@ -156,7 +182,7 @@ describe("screening routes", () => {
   it("returns a blind list with protected attributes removed", async () => {
     H.listForVacMock.mockResolvedValue([appRow()]);
     const app = await buildApp();
-    const r = await app.inject({ method: "GET", url: `/v1/hrms/job-openings/${VAC}/blind-list`, headers: auth(["hr_officer"]) });
+    const r = await injectF3(app, { method: "GET", url: `/v1/hrms/job-openings/${VAC}/blind-list`, headers: auth(["hr_officer"]) });
     expect(r.statusCode).toBe(200);
     const row = r.json().data[0];
     expect(row).not.toHaveProperty("applicantName");
@@ -170,7 +196,7 @@ describe("screening routes", () => {
     H.findAppMock.mockResolvedValue(appRow());
     H.listEventsMock.mockResolvedValue([{ id: "e1", action: "decision", decision: "eligible" }]);
     const app = await buildApp();
-    const r = await app.inject({ method: "GET", url: `/v1/hrms/applications/${APP}/screening-audit`, headers: auth(["hr_admin"]) });
+    const r = await injectF3(app, { method: "GET", url: `/v1/hrms/applications/${APP}/screening-audit`, headers: auth(["hr_admin"]) });
     expect(r.statusCode).toBe(200);
     expect(r.json().data).toHaveLength(1);
     await app.close();

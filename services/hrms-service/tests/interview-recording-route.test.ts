@@ -16,10 +16,16 @@ const H = vi.hoisted(() => ({
   listForInterview: vi.fn(), listExpired: vi.fn(), softDelete: vi.fn(),
 }));
 
-vi.mock("../src/shared/db.js", async (io) => ({
-  ...(await io<Record<string, unknown>>()),
-  db: { transaction: async (cb: (tx: unknown) => Promise<unknown>) => cb({}) },
-}));
+vi.mock("../src/shared/db.js", async (io) => {
+  // markProcessed() in the F3 consumer runs
+  // insert(...).values(...).onConflictDoNothing().returning() on the tx, which a
+  // bare {} cannot answer — the consumer threw before reaching any case.
+  const stubTx = { insert: () => ({ values: () => ({ onConflictDoNothing: () => ({ returning: async () => [{ messageId: "stub" }] }) }) }) };
+  return {
+    ...(await io<Record<string, unknown>>()),
+    db: { transaction: async (cb: (tx: unknown) => Promise<unknown>) => cb(stubTx), insert: () => ({ values: async () => undefined }) },
+  };
+});
 vi.mock("../src/modules/recruitment/interview-comms-repo.js", async (io) => ({
   ...(await io<Record<string, unknown>>()),
   findInterview: (...a: unknown[]) => H.findInterview(...a),
@@ -34,6 +40,26 @@ vi.mock("../src/modules/recruitment/interview-recording-repo.js", async (io) => 
 }));
 
 import { buildApp } from "../src/app.js";
+
+import { queue } from "../src/shared/infra.js";
+import { registerF3_recruitment_Consumers } from "../src/modules/recruitment/f3-consumer.js";
+
+// These routes only PUBLISH; the row is written by the recruitment F3 consumer
+// that f3-leftover-register.ts wires into the worker. Register it here so the
+// suite exercises the whole write path instead of the HTTP layer alone.
+registerF3_recruitment_Consumers(queue);
+/** Await the in-memory queue's fan-out so the consumer's write has happened. */
+async function drainF3(): Promise<void> {
+  await (queue as unknown as import("@civitasone/queue").MemoryQueue).drain();
+}
+type TestApp = { inject: (opts: never) => Promise<never> };
+/** inject() + drain, so an assertion never races the async F3 write. */
+async function injectF3(app: TestApp, opts: unknown): Promise<never> {
+  const res = await app.inject(opts as never);
+  await drainF3();
+  return res;
+}
+
 import { sqlClient } from "../src/shared/db.js";
 
 const tok = (roles: string[]) => signToken({ sub: USER, tid: TENANT, roles, sid: "s" }, SECRET);
@@ -54,7 +80,7 @@ afterAll(async () => { await sqlClient.end(); });
 describe("interview recording consent + retention (R-RA-0152)", () => {
   it("registers a consented recording with a retention deadline (201)", async () => {
     const app = await buildApp();
-    const r = await app.inject({ method: "POST", url: `/v1/hrms/interviews/${IV}/recordings`, headers: auth(), payload: { kind: "recording", storageKey: KEY, consentGiven: true, consentReference: "econsent-1", retentionDays: 90 } });
+    const r = await injectF3(app, { method: "POST", url: `/v1/hrms/interviews/${IV}/recordings`, headers: auth(), payload: { kind: "recording", storageKey: KEY, consentGiven: true, consentReference: "econsent-1", retentionDays: 90 } });
     expect(r.statusCode).toBe(201);
     expect(r.json().status).toBe("active");
     expect(r.json().retentionUntil).toMatch(/^\d{4}-\d{2}-\d{2}$/);
@@ -64,7 +90,7 @@ describe("interview recording consent + retention (R-RA-0152)", () => {
 
   it("REJECTS a recording without consent (422)", async () => {
     const app = await buildApp();
-    const r = await app.inject({ method: "POST", url: `/v1/hrms/interviews/${IV}/recordings`, headers: auth(), payload: { kind: "recording", storageKey: KEY, consentGiven: false } });
+    const r = await injectF3(app, { method: "POST", url: `/v1/hrms/interviews/${IV}/recordings`, headers: auth(), payload: { kind: "recording", storageKey: KEY, consentGiven: false } });
     expect(r.statusCode).toBe(422);
     expect(r.json().code).toBe("INVALID_RECORDING");
     expect(H.insertRecording).not.toHaveBeenCalled();
@@ -73,7 +99,7 @@ describe("interview recording consent + retention (R-RA-0152)", () => {
 
   it("rejects a storageKey outside the interview namespace (422, IDOR guard)", async () => {
     const app = await buildApp();
-    const r = await app.inject({ method: "POST", url: `/v1/hrms/interviews/${IV}/recordings`, headers: auth(), payload: { kind: "recording", storageKey: "interviews/other/recordings/x.mp4", consentGiven: true, consentReference: "e-1" } });
+    const r = await injectF3(app, { method: "POST", url: `/v1/hrms/interviews/${IV}/recordings`, headers: auth(), payload: { kind: "recording", storageKey: "interviews/other/recordings/x.mp4", consentGiven: true, consentReference: "e-1" } });
     expect(r.statusCode).toBe(422);
     expect(H.insertRecording).not.toHaveBeenCalled();
     await app.close();
@@ -81,7 +107,7 @@ describe("interview recording consent + retention (R-RA-0152)", () => {
 
   it("rejects a path-traversal storageKey even under the prefix (422)", async () => {
     const app = await buildApp();
-    const r = await app.inject({ method: "POST", url: `/v1/hrms/interviews/${IV}/recordings`, headers: auth(), payload: { kind: "recording", storageKey: `interviews/${IV}/recordings/../../other/x.mp4`, consentGiven: true, consentReference: "e-1" } });
+    const r = await injectF3(app, { method: "POST", url: `/v1/hrms/interviews/${IV}/recordings`, headers: auth(), payload: { kind: "recording", storageKey: `interviews/${IV}/recordings/../../other/x.mp4`, consentGiven: true, consentReference: "e-1" } });
     expect(r.statusCode).toBe(422);
     expect(H.insertRecording).not.toHaveBeenCalled();
     await app.close();
@@ -90,14 +116,14 @@ describe("interview recording consent + retention (R-RA-0152)", () => {
   it("404 when registering for a missing interview", async () => {
     H.findInterview.mockResolvedValue(null);
     const app = await buildApp();
-    const r = await app.inject({ method: "POST", url: `/v1/hrms/interviews/${IV}/recordings`, headers: auth(), payload: { kind: "recording", storageKey: KEY, consentGiven: true } });
+    const r = await injectF3(app, { method: "POST", url: `/v1/hrms/interviews/${IV}/recordings`, headers: auth(), payload: { kind: "recording", storageKey: KEY, consentGiven: true } });
     expect(r.statusCode).toBe(404);
     await app.close();
   });
 
   it("lists active recordings (200)", async () => {
     const app = await buildApp();
-    const r = await app.inject({ method: "GET", url: `/v1/hrms/interviews/${IV}/recordings`, headers: auth(["hr_officer"]) });
+    const r = await injectF3(app, { method: "GET", url: `/v1/hrms/interviews/${IV}/recordings`, headers: auth(["hr_officer"]) });
     expect(r.statusCode).toBe(200);
     expect(r.json().data).toHaveLength(1);
     await app.close();
@@ -105,7 +131,7 @@ describe("interview recording consent + retention (R-RA-0152)", () => {
 
   it("erases (soft-deletes) a recording as an admin (200)", async () => {
     const app = await buildApp();
-    const r = await app.inject({ method: "DELETE", url: `/v1/hrms/interview-recordings/${REC}`, headers: auth(["hr_admin"]) });
+    const r = await injectF3(app, { method: "DELETE", url: `/v1/hrms/interview-recordings/${REC}`, headers: auth(["hr_admin"]) });
     expect(r.statusCode).toBe(200);
     expect(r.json().status).toBe("deleted");
     expect(H.softDelete).toHaveBeenCalledOnce();
@@ -114,7 +140,7 @@ describe("interview recording consent + retention (R-RA-0152)", () => {
 
   it("forbids a non-admin from erasing (403)", async () => {
     const app = await buildApp();
-    const r = await app.inject({ method: "DELETE", url: `/v1/hrms/interview-recordings/${REC}`, headers: auth(["hr_officer"]) });
+    const r = await injectF3(app, { method: "DELETE", url: `/v1/hrms/interview-recordings/${REC}`, headers: auth(["hr_officer"]) });
     expect(r.statusCode).toBe(403);
     await app.close();
   });
@@ -122,14 +148,14 @@ describe("interview recording consent + retention (R-RA-0152)", () => {
   it("404 when erasing a non-active/absent recording", async () => {
     H.findRecording.mockResolvedValue(null);
     const app = await buildApp();
-    const r = await app.inject({ method: "DELETE", url: `/v1/hrms/interview-recordings/${REC}`, headers: auth(["hr_admin"]) });
+    const r = await injectF3(app, { method: "DELETE", url: `/v1/hrms/interview-recordings/${REC}`, headers: auth(["hr_admin"]) });
     expect(r.statusCode).toBe(404);
     await app.close();
   });
 
   it("lists retention purge candidates for an admin (200)", async () => {
     const app = await buildApp();
-    const r = await app.inject({ method: "GET", url: `/v1/hrms/recordings/expired?asOf=2026-01-01`, headers: auth(["hr_admin"]) });
+    const r = await injectF3(app, { method: "GET", url: `/v1/hrms/recordings/expired?asOf=2026-01-01`, headers: auth(["hr_admin"]) });
     expect(r.statusCode).toBe(200);
     expect(r.json().asOf).toBe("2026-01-01");
     expect(r.json().data).toHaveLength(1);
@@ -139,7 +165,7 @@ describe("interview recording consent + retention (R-RA-0152)", () => {
   it("maps a duplicate active storage key to 409 (not 500)", async () => {
     H.insertRecording.mockRejectedValue(Object.assign(new Error("dup"), { code: "23505" }));
     const app = await buildApp();
-    const r = await app.inject({ method: "POST", url: `/v1/hrms/interviews/${IV}/recordings`, headers: auth(), payload: { kind: "recording", storageKey: KEY, consentGiven: true, consentReference: "e-1" } });
+    const r = await injectF3(app, { method: "POST", url: `/v1/hrms/interviews/${IV}/recordings`, headers: auth(), payload: { kind: "recording", storageKey: KEY, consentGiven: true, consentReference: "e-1" } });
     expect(r.statusCode).toBe(409);
     expect(r.json().code).toBe("DUPLICATE_RECORDING");
     await app.close();
@@ -147,7 +173,7 @@ describe("interview recording consent + retention (R-RA-0152)", () => {
 
   it("requires auth (401)", async () => {
     const app = await buildApp();
-    const r = await app.inject({ method: "GET", url: `/v1/hrms/interviews/${IV}/recordings` });
+    const r = await injectF3(app, { method: "GET", url: `/v1/hrms/interviews/${IV}/recordings` });
     expect(r.statusCode).toBe(401);
     await app.close();
   });

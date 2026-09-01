@@ -16,10 +16,16 @@ const H = vi.hoisted(() => ({
   reschedule: vi.fn(), cancel: vi.fn(), enqueue: vi.fn(), findByIdempotencyKey: vi.fn(),
 }));
 
-vi.mock("../src/shared/db.js", async (io) => ({
-  ...(await io<Record<string, unknown>>()),
-  db: { transaction: async (cb: (tx: unknown) => Promise<unknown>) => cb({}) },
-}));
+vi.mock("../src/shared/db.js", async (io) => {
+  // markProcessed() in the F3 consumer runs
+  // insert(...).values(...).onConflictDoNothing().returning() on the tx, which a
+  // bare {} cannot answer — the consumer threw before reaching any case.
+  const stubTx = { insert: () => ({ values: () => ({ onConflictDoNothing: () => ({ returning: async () => [{ messageId: "stub" }] }) }) }) };
+  return {
+    ...(await io<Record<string, unknown>>()),
+    db: { transaction: async (cb: (tx: unknown) => Promise<unknown>) => cb(stubTx), insert: () => ({ values: async () => undefined }) },
+  };
+});
 vi.mock("../src/shared/outbox.js", async (io) => ({
   ...(await io<Record<string, unknown>>()),
   enqueue: (...a: unknown[]) => H.enqueue(...a),
@@ -35,6 +41,26 @@ vi.mock("../src/modules/recruitment/interview-comms-repo.js", async (io) => ({
 }));
 
 import { buildApp } from "../src/app.js";
+
+import { queue } from "../src/shared/infra.js";
+import { registerF3_recruitment_Consumers } from "../src/modules/recruitment/f3-consumer.js";
+
+// These routes only PUBLISH; the row is written by the recruitment F3 consumer
+// that f3-leftover-register.ts wires into the worker. Register it here so the
+// suite exercises the whole write path instead of the HTTP layer alone.
+registerF3_recruitment_Consumers(queue);
+/** Await the in-memory queue's fan-out so the consumer's write has happened. */
+async function drainF3(): Promise<void> {
+  await (queue as unknown as import("@civitasone/queue").MemoryQueue).drain();
+}
+type TestApp = { inject: (opts: never) => Promise<never> };
+/** inject() + drain, so an assertion never races the async F3 write. */
+async function injectF3(app: TestApp, opts: unknown): Promise<never> {
+  const res = await app.inject(opts as never);
+  await drainF3();
+  return res;
+}
+
 import { sqlClient } from "../src/shared/db.js";
 
 const tok = (roles: string[]) => signToken({ sub: USER, tid: TENANT, roles, sid: "s" }, SECRET);
@@ -57,7 +83,7 @@ afterAll(async () => { await sqlClient.end(); });
 describe("interview comms lifecycle (R-RA-0142)", () => {
   it("records an invite as a STUB when the flag is off, without enqueueing (201)", async () => {
     const app = await buildApp();
-    const r = await app.inject({ method: "POST", url: `/v1/hrms/interviews/${IV}/comms`, headers: auth(), payload: { type: "invite" } });
+    const r = await injectF3(app, { method: "POST", url: `/v1/hrms/interviews/${IV}/comms`, headers: auth(), payload: { type: "invite" } });
     expect(r.statusCode).toBe(201);
     expect(r.json()).toMatchObject({ status: "stubbed", channel: "stub" });
     expect(H.insertComm).toHaveBeenCalledOnce();
@@ -69,7 +95,7 @@ describe("interview comms lifecycle (R-RA-0142)", () => {
     process.env.FEATURE_INTERVIEW_COMMS_ENABLED = "true";
     H.findByIdempotencyKey.mockResolvedValue(null);
     const app = await buildApp();
-    const r = await app.inject({ method: "POST", url: `/v1/hrms/interviews/${IV}/comms`, headers: { ...auth(), "x-idempotency-key": "k-1" }, payload: { type: "invite", channel: "email" } });
+    const r = await injectF3(app, { method: "POST", url: `/v1/hrms/interviews/${IV}/comms`, headers: { ...auth(), "x-idempotency-key": "k-1" }, payload: { type: "invite", channel: "email" } });
     expect(r.statusCode).toBe(201);
     expect(r.json()).toMatchObject({ status: "queued", channel: "email" });
     expect(H.enqueue).toHaveBeenCalledOnce();
@@ -79,7 +105,7 @@ describe("interview comms lifecycle (R-RA-0142)", () => {
   it("requires an idempotency key when the flag is on (400)", async () => {
     process.env.FEATURE_INTERVIEW_COMMS_ENABLED = "true";
     const app = await buildApp();
-    const r = await app.inject({ method: "POST", url: `/v1/hrms/interviews/${IV}/comms`, headers: auth(), payload: { type: "invite" } });
+    const r = await injectF3(app, { method: "POST", url: `/v1/hrms/interviews/${IV}/comms`, headers: auth(), payload: { type: "invite" } });
     expect(r.statusCode).toBe(400);
     expect(r.json().code).toBe("IDEMPOTENCY_KEY_REQUIRED");
     expect(H.enqueue).not.toHaveBeenCalled();
@@ -90,7 +116,7 @@ describe("interview comms lifecycle (R-RA-0142)", () => {
     process.env.FEATURE_INTERVIEW_COMMS_ENABLED = "true";
     H.findByIdempotencyKey.mockResolvedValue({ id: "prev", interviewId: IV, commType: "invite", channel: "email", status: "queued" });
     const app = await buildApp();
-    const r = await app.inject({ method: "POST", url: `/v1/hrms/interviews/${IV}/comms`, headers: { ...auth(), "x-idempotency-key": "k-1" }, payload: { type: "invite", channel: "email" } });
+    const r = await injectF3(app, { method: "POST", url: `/v1/hrms/interviews/${IV}/comms`, headers: { ...auth(), "x-idempotency-key": "k-1" }, payload: { type: "invite", channel: "email" } });
     expect(r.statusCode).toBe(200);
     expect(r.json().replay).toBe(true);
     expect(H.insertComm).not.toHaveBeenCalled();
@@ -100,7 +126,7 @@ describe("interview comms lifecycle (R-RA-0142)", () => {
 
   it("rejects an invalid calendar date on reschedule (400)", async () => {
     const app = await buildApp();
-    const r = await app.inject({ method: "POST", url: `/v1/hrms/interviews/${IV}/comms`, headers: auth(), payload: { type: "reschedule", newDate: "2026-13-45", newTime: "10:00" } });
+    const r = await injectF3(app, { method: "POST", url: `/v1/hrms/interviews/${IV}/comms`, headers: auth(), payload: { type: "reschedule", newDate: "2026-13-45", newTime: "10:00" } });
     expect(r.statusCode).toBe(400);
     expect(H.reschedule).not.toHaveBeenCalled();
     await app.close();
@@ -108,7 +134,7 @@ describe("interview comms lifecycle (R-RA-0142)", () => {
 
   it("requires newDate/newTime for a reschedule (422)", async () => {
     const app = await buildApp();
-    const r = await app.inject({ method: "POST", url: `/v1/hrms/interviews/${IV}/comms`, headers: auth(), payload: { type: "reschedule" } });
+    const r = await injectF3(app, { method: "POST", url: `/v1/hrms/interviews/${IV}/comms`, headers: auth(), payload: { type: "reschedule" } });
     expect(r.statusCode).toBe(422);
     expect(r.json().code).toBe("SCHEDULE_REQUIRED");
     expect(H.reschedule).not.toHaveBeenCalled();
@@ -117,7 +143,7 @@ describe("interview comms lifecycle (R-RA-0142)", () => {
 
   it("reschedules the interview and records the comm (201)", async () => {
     const app = await buildApp();
-    const r = await app.inject({ method: "POST", url: `/v1/hrms/interviews/${IV}/comms`, headers: auth(), payload: { type: "reschedule", newDate: "2026-08-05", newTime: "14:30" } });
+    const r = await injectF3(app, { method: "POST", url: `/v1/hrms/interviews/${IV}/comms`, headers: auth(), payload: { type: "reschedule", newDate: "2026-08-05", newTime: "14:30" } });
     expect(r.statusCode).toBe(201);
     expect(H.reschedule).toHaveBeenCalledOnce();
     expect(H.insertComm).toHaveBeenCalledOnce();
@@ -126,7 +152,7 @@ describe("interview comms lifecycle (R-RA-0142)", () => {
 
   it("cancels the interview and records the comm (201)", async () => {
     const app = await buildApp();
-    const r = await app.inject({ method: "POST", url: `/v1/hrms/interviews/${IV}/comms`, headers: auth(), payload: { type: "cancel" } });
+    const r = await injectF3(app, { method: "POST", url: `/v1/hrms/interviews/${IV}/comms`, headers: auth(), payload: { type: "cancel" } });
     expect(r.statusCode).toBe(201);
     expect(H.cancel).toHaveBeenCalledOnce();
     await app.close();
@@ -135,7 +161,7 @@ describe("interview comms lifecycle (R-RA-0142)", () => {
   it("blocks any comm on an already-cancelled interview (409)", async () => {
     H.findInterview.mockResolvedValue(ivRow({ status: "cancelled" }));
     const app = await buildApp();
-    const r = await app.inject({ method: "POST", url: `/v1/hrms/interviews/${IV}/comms`, headers: auth(), payload: { type: "reminder" } });
+    const r = await injectF3(app, { method: "POST", url: `/v1/hrms/interviews/${IV}/comms`, headers: auth(), payload: { type: "reminder" } });
     expect(r.statusCode).toBe(409);
     expect(r.json().code).toBe("INTERVIEW_NOT_COMMABLE");
     await app.close();
@@ -144,7 +170,7 @@ describe("interview comms lifecycle (R-RA-0142)", () => {
   it("maps a version conflict on reschedule to 409", async () => {
     H.reschedule.mockResolvedValue(false);
     const app = await buildApp();
-    const r = await app.inject({ method: "POST", url: `/v1/hrms/interviews/${IV}/comms`, headers: auth(), payload: { type: "reschedule", newDate: "2026-08-05", newTime: "14:30" } });
+    const r = await injectF3(app, { method: "POST", url: `/v1/hrms/interviews/${IV}/comms`, headers: auth(), payload: { type: "reschedule", newDate: "2026-08-05", newTime: "14:30" } });
     expect(r.statusCode).toBe(409);
     expect(r.json().code).toBe("VERSION_CONFLICT");
     await app.close();
@@ -153,21 +179,21 @@ describe("interview comms lifecycle (R-RA-0142)", () => {
   it("404 for a missing interview", async () => {
     H.findInterview.mockResolvedValue(null);
     const app = await buildApp();
-    const r = await app.inject({ method: "POST", url: `/v1/hrms/interviews/${IV}/comms`, headers: auth(), payload: { type: "invite" } });
+    const r = await injectF3(app, { method: "POST", url: `/v1/hrms/interviews/${IV}/comms`, headers: auth(), payload: { type: "invite" } });
     expect(r.statusCode).toBe(404);
     await app.close();
   });
 
   it("forbids a non-HR role (403)", async () => {
     const app = await buildApp();
-    const r = await app.inject({ method: "POST", url: `/v1/hrms/interviews/${IV}/comms`, headers: auth(["employee"]), payload: { type: "invite" } });
+    const r = await injectF3(app, { method: "POST", url: `/v1/hrms/interviews/${IV}/comms`, headers: auth(["employee"]), payload: { type: "invite" } });
     expect(r.statusCode).toBe(403);
     await app.close();
   });
 
   it("lists the comms log (200)", async () => {
     const app = await buildApp();
-    const r = await app.inject({ method: "GET", url: `/v1/hrms/interviews/${IV}/comms`, headers: auth(["hr_officer"]) });
+    const r = await injectF3(app, { method: "GET", url: `/v1/hrms/interviews/${IV}/comms`, headers: auth(["hr_officer"]) });
     expect(r.statusCode).toBe(200);
     expect(r.json().data).toHaveLength(1);
     await app.close();
@@ -175,7 +201,7 @@ describe("interview comms lifecycle (R-RA-0142)", () => {
 
   it("requires auth (401)", async () => {
     const app = await buildApp();
-    const r = await app.inject({ method: "GET", url: `/v1/hrms/interviews/${IV}/comms` });
+    const r = await injectF3(app, { method: "GET", url: `/v1/hrms/interviews/${IV}/comms` });
     expect(r.statusCode).toBe(401);
     await app.close();
   });

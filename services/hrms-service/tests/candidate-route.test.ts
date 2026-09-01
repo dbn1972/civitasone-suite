@@ -15,10 +15,16 @@ const H = vi.hoisted(() => ({
   insEduMock: vi.fn(), insEmpMock: vi.fn(), cEduMock: vi.fn(), cEmpMock: vi.fn(),
 }));
 
-vi.mock("../src/shared/db.js", async (io) => ({
-  ...(await io<Record<string, unknown>>()),
-  db: { transaction: async (cb: (tx: unknown) => Promise<void>) => cb({}), insert: () => ({ values: async () => undefined }) },
-}));
+vi.mock("../src/shared/db.js", async (io) => {
+  // markProcessed() in the F3 consumer runs
+  // insert(...).values(...).onConflictDoNothing().returning() on the tx, which a
+  // bare {} cannot answer — the consumer threw before reaching any case.
+  const stubTx = { insert: () => ({ values: () => ({ onConflictDoNothing: () => ({ returning: async () => [{ messageId: "stub" }] }) }) }) };
+  return {
+    ...(await io<Record<string, unknown>>()),
+    db: { transaction: async (cb: (tx: unknown) => Promise<unknown>) => cb(stubTx), insert: () => ({ values: async () => undefined }) },
+  };
+});
 vi.mock("../src/modules/recruitment/candidate-repo.js", async (io) => ({
   ...(await io<Record<string, unknown>>()),
   findCandidate: (...a: unknown[]) => H.findMock(...a),
@@ -33,6 +39,26 @@ vi.mock("../src/modules/recruitment/candidate-repo.js", async (io) => ({
 }));
 
 import { buildApp } from "../src/app.js";
+
+import { queue } from "../src/shared/infra.js";
+import { registerF3_recruitment_Consumers } from "../src/modules/recruitment/f3-consumer.js";
+
+// These routes only PUBLISH; the row is written by the recruitment F3 consumer
+// that f3-leftover-register.ts wires into the worker. Register it here so the
+// suite exercises the whole write path instead of the HTTP layer alone.
+registerF3_recruitment_Consumers(queue);
+/** Await the in-memory queue's fan-out so the consumer's write has happened. */
+async function drainF3(): Promise<void> {
+  await (queue as unknown as import("@civitasone/queue").MemoryQueue).drain();
+}
+type TestApp = { inject: (opts: never) => Promise<never> };
+/** inject() + drain, so an assertion never races the async F3 write. */
+async function injectF3(app: TestApp, opts: unknown): Promise<never> {
+  const res = await app.inject(opts as never);
+  await drainF3();
+  return res;
+}
+
 import { sqlClient } from "../src/shared/db.js";
 
 const auth = { authorization: `Bearer ${signToken({ sub: USER, tid: TENANT, roles: ["hr_admin"], sid: "s" }, SECRET)}` };
@@ -49,11 +75,11 @@ afterAll(async () => { await sqlClient.end(); });
 describe("candidate routes", () => {
   it("registers a candidate (201) and blocks a duplicate (409)", async () => {
     const app = await buildApp();
-    const ok = await app.inject({ method: "POST", url: "/v1/hrms/candidates", headers: auth, payload: { email: "New@X.in", mobile: "+91 98765 43210", fullName: "N" } });
+    const ok = await injectF3(app, { method: "POST", url: "/v1/hrms/candidates", headers: auth, payload: { email: "New@X.in", mobile: "+91 98765 43210", fullName: "N" } });
     expect(ok.statusCode).toBe(201);
     expect(H.insMock).toHaveBeenCalledOnce();
     H.dupMock.mockResolvedValue([{ id: "existing", matchedOn: "email" }]);
-    const dup = await app.inject({ method: "POST", url: "/v1/hrms/candidates", headers: auth, payload: { email: "new@x.in" } });
+    const dup = await injectF3(app, { method: "POST", url: "/v1/hrms/candidates", headers: auth, payload: { email: "new@x.in" } });
     expect(dup.statusCode).toBe(409);
     expect(dup.json().code).toBe("DUPLICATE_CANDIDATE");
     await app.close();
@@ -61,7 +87,7 @@ describe("candidate routes", () => {
 
   it("does not use a garbage mobile as a dedup key (no false duplicate collision)", async () => {
     const app = await buildApp();
-    const r = await app.inject({ method: "POST", url: "/v1/hrms/candidates", headers: auth, payload: { email: "g@x.in", mobile: "N/A" } });
+    const r = await injectF3(app, { method: "POST", url: "/v1/hrms/candidates", headers: auth, payload: { email: "g@x.in", mobile: "N/A" } });
     expect(r.statusCode).toBe(201);
     // findDuplicates was called WITHOUT a normalizedMobile key
     expect(H.dupMock.mock.calls[0][1]).not.toHaveProperty("normalizedMobile");
@@ -73,7 +99,7 @@ describe("candidate routes", () => {
   it("duplicate-check reports matches without writing", async () => {
     H.dupMock.mockResolvedValue([{ id: "x", matchedOn: "mobile" }]);
     const app = await buildApp();
-    const r = await app.inject({ method: "POST", url: "/v1/hrms/candidates/duplicate-check", headers: auth, payload: { mobile: "9876543210" } });
+    const r = await injectF3(app, { method: "POST", url: "/v1/hrms/candidates/duplicate-check", headers: auth, payload: { mobile: "9876543210" } });
     expect(r.json()).toMatchObject({ duplicate: true });
     expect(H.insMock).not.toHaveBeenCalled();
     await app.close();
@@ -82,10 +108,10 @@ describe("candidate routes", () => {
   it("rejects editing a locked field after submission but allows contact edits", async () => {
     H.findMock.mockResolvedValue(cand({ status: "submitted" }));
     const app = await buildApp();
-    const locked = await app.inject({ method: "PATCH", url: `/v1/hrms/candidates/${CID}`, headers: auth, payload: { dateOfBirth: "2000-01-01" } });
+    const locked = await injectF3(app, { method: "PATCH", url: `/v1/hrms/candidates/${CID}`, headers: auth, payload: { dateOfBirth: "2000-01-01" } });
     expect(locked.statusCode).toBe(409);
     expect(locked.json().code).toBe("FIELDS_LOCKED");
-    const ok = await app.inject({ method: "PATCH", url: `/v1/hrms/candidates/${CID}`, headers: auth, payload: { correspondenceAddress: "New addr" } });
+    const ok = await injectF3(app, { method: "PATCH", url: `/v1/hrms/candidates/${CID}`, headers: auth, payload: { correspondenceAddress: "New addr" } });
     expect(ok.statusCode).toBe(200);
     await app.close();
   });
@@ -93,10 +119,10 @@ describe("candidate routes", () => {
   it("requires versioned consent to submit", async () => {
     H.findMock.mockResolvedValue(cand({ status: "draft" }));
     const app = await buildApp();
-    const noConsent = await app.inject({ method: "POST", url: `/v1/hrms/candidates/${CID}/submit`, headers: auth, payload: {} });
+    const noConsent = await injectF3(app, { method: "POST", url: `/v1/hrms/candidates/${CID}/submit`, headers: auth, payload: {} });
     expect(noConsent.statusCode).toBe(400);
     expect(noConsent.json().code).toBe("CONSENT_REQUIRED");
-    const ok = await app.inject({ method: "POST", url: `/v1/hrms/candidates/${CID}/submit`, headers: auth, payload: { consentAccepted: true, consentVersion: "v2.0" } });
+    const ok = await injectF3(app, { method: "POST", url: `/v1/hrms/candidates/${CID}/submit`, headers: auth, payload: { consentAccepted: true, consentVersion: "v2.0" } });
     expect(ok.json()).toMatchObject({ status: "submitted", consentVersion: "v2.0" });
     await app.close();
   });
@@ -104,10 +130,10 @@ describe("candidate routes", () => {
   it("adds history only while draft", async () => {
     H.findMock.mockResolvedValue(cand({ status: "draft" }));
     const app = await buildApp();
-    const ok = await app.inject({ method: "POST", url: `/v1/hrms/candidates/${CID}/education`, headers: auth, payload: { qualification: "B.Tech", yearOfPassing: 2020, marksPercent: 78.5 } });
+    const ok = await injectF3(app, { method: "POST", url: `/v1/hrms/candidates/${CID}/education`, headers: auth, payload: { qualification: "B.Tech", yearOfPassing: 2020, marksPercent: 78.5 } });
     expect(ok.statusCode).toBe(201);
     H.findMock.mockResolvedValue(cand({ status: "submitted" }));
-    const locked = await app.inject({ method: "POST", url: `/v1/hrms/candidates/${CID}/employment`, headers: auth, payload: { employer: "X" } });
+    const locked = await injectF3(app, { method: "POST", url: `/v1/hrms/candidates/${CID}/employment`, headers: auth, payload: { employer: "X" } });
     expect(locked.statusCode).toBe(409);
     await app.close();
   });
@@ -115,9 +141,9 @@ describe("candidate routes", () => {
   it("withdraws and records a data request", async () => {
     H.findMock.mockResolvedValue(cand({ status: "submitted" }));
     const app = await buildApp();
-    const w = await app.inject({ method: "POST", url: `/v1/hrms/candidates/${CID}/withdraw`, headers: auth });
+    const w = await injectF3(app, { method: "POST", url: `/v1/hrms/candidates/${CID}/withdraw`, headers: auth });
     expect(w.json().status).toBe("withdrawn");
-    const d = await app.inject({ method: "POST", url: `/v1/hrms/candidates/${CID}/data-request`, headers: auth });
+    const d = await injectF3(app, { method: "POST", url: `/v1/hrms/candidates/${CID}/data-request`, headers: auth });
     expect(d.json().dataRequestRecorded).toBe(true);
     await app.close();
   });

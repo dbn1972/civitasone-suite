@@ -21,10 +21,16 @@ const H = vi.hoisted(() => ({
   withdrawMock: vi.fn(),
 }));
 
-vi.mock("../src/shared/db.js", async (io) => ({
-  ...(await io<Record<string, unknown>>()),
-  db: { transaction: async (cb: (tx: unknown) => Promise<void>) => cb({}), insert: () => ({ values: async () => undefined }) },
-}));
+vi.mock("../src/shared/db.js", async (io) => {
+  // markProcessed() in the F3 consumer runs
+  // insert(...).values(...).onConflictDoNothing().returning() on the tx, which a
+  // bare {} cannot answer — the consumer threw before reaching any case.
+  const stubTx = { insert: () => ({ values: () => ({ onConflictDoNothing: () => ({ returning: async () => [{ messageId: "stub" }] }) }) }) };
+  return {
+    ...(await io<Record<string, unknown>>()),
+    db: { transaction: async (cb: (tx: unknown) => Promise<unknown>) => cb(stubTx), insert: () => ({ values: async () => undefined }) },
+  };
+});
 vi.mock("../src/modules/recruitment/eligibility-repo.js", async (io) => ({
   ...(await io<Record<string, unknown>>()),
   findVacancy: (...a: unknown[]) => H.findVacancyMock(...a),
@@ -36,6 +42,26 @@ vi.mock("../src/modules/recruitment/eligibility-repo.js", async (io) => ({
 }));
 
 import { buildApp } from "../src/app.js";
+
+import { queue } from "../src/shared/infra.js";
+import { registerF3_recruitment_Consumers } from "../src/modules/recruitment/f3-consumer.js";
+
+// These routes only PUBLISH; the row is written by the recruitment F3 consumer
+// that f3-leftover-register.ts wires into the worker. Register it here so the
+// suite exercises the whole write path instead of the HTTP layer alone.
+registerF3_recruitment_Consumers(queue);
+/** Await the in-memory queue's fan-out so the consumer's write has happened. */
+async function drainF3(): Promise<void> {
+  await (queue as unknown as import("@civitasone/queue").MemoryQueue).drain();
+}
+type TestApp = { inject: (opts: never) => Promise<never> };
+/** inject() + drain, so an assertion never races the async F3 write. */
+async function injectF3(app: TestApp, opts: unknown): Promise<never> {
+  const res = await app.inject(opts as never);
+  await drainF3();
+  return res;
+}
+
 import { sqlClient } from "../src/shared/db.js";
 
 const auth = { authorization: `Bearer ${signToken({ sub: USER, tid: TENANT, roles: ["hr_admin"], sid: "s" }, SECRET)}` };
@@ -55,16 +81,16 @@ afterAll(async () => { await sqlClient.end(); });
 describe("application eligibility routes", () => {
   it("requires a cut-off date when an age limit is configured (400)", async () => {
     const app = await buildApp();
-    const bad = await app.inject({ method: "PATCH", url: `/v1/hrms/job-openings/${VAC}/eligibility`, headers: auth, payload: { ageMax: 35 } });
+    const bad = await injectF3(app, { method: "PATCH", url: `/v1/hrms/job-openings/${VAC}/eligibility`, headers: auth, payload: { ageMax: 35 } });
     expect(bad.statusCode).toBe(400);
-    const ok = await app.inject({ method: "PATCH", url: `/v1/hrms/job-openings/${VAC}/eligibility`, headers: auth, payload: { ageMax: 35, cutoffDate: "2026-01-01" } });
+    const ok = await injectF3(app, { method: "PATCH", url: `/v1/hrms/job-openings/${VAC}/eligibility`, headers: auth, payload: { ageMax: 35, cutoffDate: "2026-01-01" } });
     expect(ok.statusCode).toBe(200);
     await app.close();
   });
 
   it("dry-runs an eligibility check without writing", async () => {
     const app = await buildApp();
-    const r = await app.inject({ method: "POST", url: `/v1/hrms/job-openings/${VAC}/eligibility-check`, headers: auth,
+    const r = await injectF3(app, { method: "POST", url: `/v1/hrms/job-openings/${VAC}/eligibility-check`, headers: auth,
       payload: { dateOfBirth: "1998-01-01", category: "GEN", experienceYears: 4 } });
     expect(r.statusCode).toBe(200);
     expect(r.json().eligible).toBe(true);
@@ -74,7 +100,7 @@ describe("application eligibility routes", () => {
 
   it("accepts an eligible applicant and issues an application number", async () => {
     const app = await buildApp();
-    const r = await app.inject({ method: "POST", url: `/v1/hrms/job-openings/${VAC}/applications`, headers: auth,
+    const r = await injectF3(app, { method: "POST", url: `/v1/hrms/job-openings/${VAC}/applications`, headers: auth,
       payload: { applicantName: "A", email: "a@x.in", dateOfBirth: "1998-01-01", category: "GEN", experienceYears: 4 } });
     expect(r.statusCode).toBe(201);
     expect(r.json().applicationNo).toMatch(/^APP-/);
@@ -85,7 +111,7 @@ describe("application eligibility routes", () => {
 
   it("blocks an over-age applicant with a structured 422", async () => {
     const app = await buildApp();
-    const r = await app.inject({ method: "POST", url: `/v1/hrms/job-openings/${VAC}/applications`, headers: auth,
+    const r = await injectF3(app, { method: "POST", url: `/v1/hrms/job-openings/${VAC}/applications`, headers: auth,
       payload: { applicantName: "B", email: "b@x.in", dateOfBirth: "1985-01-01", category: "GEN", experienceYears: 10 } });
     expect(r.statusCode).toBe(422);
     expect(r.json().code).toBe("NOT_ELIGIBLE");
@@ -96,7 +122,7 @@ describe("application eligibility routes", () => {
 
   it("admits the same over-age applicant under OBC relaxation", async () => {
     const app = await buildApp();
-    const r = await app.inject({ method: "POST", url: `/v1/hrms/job-openings/${VAC}/applications`, headers: auth,
+    const r = await injectF3(app, { method: "POST", url: `/v1/hrms/job-openings/${VAC}/applications`, headers: auth,
       payload: { applicantName: "B", email: "b2@x.in", dateOfBirth: "1989-01-01", category: "OBC", experienceYears: 10 } });
     expect(r.statusCode).toBe(201); // age 37, max 35 + 3 = 38 -> eligible
     await app.close();
@@ -105,7 +131,7 @@ describe("application eligibility routes", () => {
   it("prevents a duplicate application (409)", async () => {
     H.countMock.mockResolvedValue(1);
     const app = await buildApp();
-    const r = await app.inject({ method: "POST", url: `/v1/hrms/job-openings/${VAC}/applications`, headers: auth,
+    const r = await injectF3(app, { method: "POST", url: `/v1/hrms/job-openings/${VAC}/applications`, headers: auth,
       payload: { applicantName: "A", email: "a@x.in", dateOfBirth: "1998-01-01", category: "GEN", experienceYears: 4 } });
     expect(r.statusCode).toBe(409);
     expect(r.json().code).toBe("DUPLICATE_APPLICATION");
@@ -115,7 +141,7 @@ describe("application eligibility routes", () => {
 
   it("rejects a calendar-invalid date of birth (400)", async () => {
     const app = await buildApp();
-    const r = await app.inject({ method: "POST", url: `/v1/hrms/job-openings/${VAC}/applications`, headers: auth,
+    const r = await injectF3(app, { method: "POST", url: `/v1/hrms/job-openings/${VAC}/applications`, headers: auth,
       payload: { applicantName: "A", email: "a@x.in", dateOfBirth: "2026-02-30", category: "GEN", experienceYears: 4 } });
     expect(r.statusCode).toBe(400);
     expect(H.insertAppMock).not.toHaveBeenCalled();
@@ -125,7 +151,7 @@ describe("application eligibility routes", () => {
   it("sets a null dedup_key when the vacancy allows multiple applications", async () => {
     H.findVacancyMock.mockResolvedValue(vacancy({ eligibility: { ...CRITERIA, allowMultiple: true } }));
     const app = await buildApp();
-    const r = await app.inject({ method: "POST", url: `/v1/hrms/job-openings/${VAC}/applications`, headers: auth,
+    const r = await injectF3(app, { method: "POST", url: `/v1/hrms/job-openings/${VAC}/applications`, headers: auth,
       payload: { applicantName: "A", email: "a@x.in", dateOfBirth: "1998-01-01", category: "GEN", experienceYears: 4 } });
     expect(r.statusCode).toBe(201);
     expect(H.insertAppMock.mock.calls[0][1].dedupKey).toBeNull();
@@ -134,7 +160,7 @@ describe("application eligibility routes", () => {
 
   it("sets dedup_key to lower(email) when multiples are not allowed", async () => {
     const app = await buildApp();
-    const r = await app.inject({ method: "POST", url: `/v1/hrms/job-openings/${VAC}/applications`, headers: auth,
+    const r = await injectF3(app, { method: "POST", url: `/v1/hrms/job-openings/${VAC}/applications`, headers: auth,
       payload: { applicantName: "A", email: "MixedCase@X.in", dateOfBirth: "1998-01-01", category: "GEN", experienceYears: 4 } });
     expect(r.statusCode).toBe(201);
     expect(H.insertAppMock.mock.calls[0][1].dedupKey).toBe("mixedcase@x.in");
@@ -144,7 +170,7 @@ describe("application eligibility routes", () => {
   it("withdraws an application with a reason", async () => {
     H.findAppMock.mockResolvedValue({ id: APP, tenantId: TENANT, status: "active", stage: "applied", version: 1 });
     const app = await buildApp();
-    const r = await app.inject({ method: "POST", url: `/v1/hrms/applications/${APP}/withdraw`, headers: auth, payload: { reason: "accepted elsewhere" } });
+    const r = await injectF3(app, { method: "POST", url: `/v1/hrms/applications/${APP}/withdraw`, headers: auth, payload: { reason: "accepted elsewhere" } });
     expect(r.statusCode).toBe(200);
     expect(r.json().status).toBe("withdrawn");
     expect(H.withdrawMock).toHaveBeenCalledOnce();
