@@ -116,7 +116,7 @@ export async function eligibilityRoutes(app: FastifyInstance): Promise<void> {
     // a hard 23505 rather than a best-effort check.
     const dedupKey = criteria.allowMultiple ? null : body.email.toLowerCase();
     try {
-      await publishF3Write(ctx, "recruitment_eligibility_routes__1", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+      await publishF3Write(ctx, "recruitment_eligibility_routes__1", appId, { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     } catch (err) {
       if (String((err as { code?: string }).code) === "23505") {
         throw new HttpError(409, "DUPLICATE_APPLICATION", "a duplicate application was detected") as any;

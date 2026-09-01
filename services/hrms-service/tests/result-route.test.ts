@@ -21,10 +21,16 @@ const H = vi.hoisted(() => ({
   saveEvaluation: vi.fn(), listEvaluations: vi.fn(), insertResultEvent: vi.fn(), listResultEvents: vi.fn(),
 }));
 
-vi.mock("../src/shared/db.js", async (io) => ({
-  ...(await io<Record<string, unknown>>()),
-  db: { transaction: async (cb: (tx: unknown) => Promise<void>) => cb({}), insert: () => ({ values: async () => undefined }) },
-}));
+vi.mock("../src/shared/db.js", async (io) => {
+  // markProcessed() in the F3 consumer runs
+  // insert(...).values(...).onConflictDoNothing().returning() on the tx, which a
+  // bare {} cannot answer — the consumer threw before reaching any case.
+  const stubTx = { insert: () => ({ values: () => ({ onConflictDoNothing: () => ({ returning: async () => [{ messageId: "stub" }] }) }) }) };
+  return {
+    ...(await io<Record<string, unknown>>()),
+    db: { transaction: async (cb: (tx: unknown) => Promise<unknown>) => cb(stubTx), insert: () => ({ values: async () => undefined }) },
+  };
+});
 vi.mock("../src/modules/recruitment/attempt-repo.js", async (io) => ({
   ...(await io<Record<string, unknown>>()),
   findAttempt: (...a: unknown[]) => H.findAttempt(...a),
@@ -45,6 +51,26 @@ vi.mock("../src/modules/recruitment/result-repo.js", async (io) => ({
 }));
 
 import { buildApp } from "../src/app.js";
+
+import { queue } from "../src/shared/infra.js";
+import { registerF3_recruitment_Consumers } from "../src/modules/recruitment/f3-consumer.js";
+
+// These routes only PUBLISH; the row is written by the recruitment F3 consumer
+// that f3-leftover-register.ts wires into the worker. Register it here so the
+// suite exercises the whole write path instead of the HTTP layer alone.
+registerF3_recruitment_Consumers(queue);
+/** Await the in-memory queue's fan-out so the consumer's write has happened. */
+async function drainF3(): Promise<void> {
+  await (queue as unknown as import("@civitasone/queue").MemoryQueue).drain();
+}
+type TestApp = { inject: (opts: never) => Promise<never> };
+/** inject() + drain, so an assertion never races the async F3 write. */
+async function injectF3(app: TestApp, opts: unknown): Promise<never> {
+  const res = await app.inject(opts as never);
+  await drainF3();
+  return res;
+}
+
 import { sqlClient } from "../src/shared/db.js";
 
 const tok = (sub: string) => `Bearer ${signToken({ sub, tid: TENANT, roles: ["hr_admin"], sid: "s" }, SECRET)}`;
@@ -80,7 +106,7 @@ describe("assessment result finalisation routes", () => {
   it("serves an anonymised manual-evaluation queue (no candidate identity)", async () => {
     H.findAttempt.mockResolvedValue(attempt());
     const app = await buildApp();
-    const r = await app.inject({ method: "GET", url: `/v1/hrms/assessments/attempts/${ATT}/manual-queue`, headers: authMaker });
+    const r = await injectF3(app, { method: "GET", url: `/v1/hrms/assessments/attempts/${ATT}/manual-queue`, headers: authMaker });
     expect(r.statusCode).toBe(200);
     const body = r.json();
     expect(body.questions).toHaveLength(1); // only the descriptive
@@ -92,10 +118,10 @@ describe("assessment result finalisation routes", () => {
   it("rejects manual scoring of an objective question (422) and an over-max score (422)", async () => {
     H.findAttempt.mockResolvedValue(attempt());
     const app = await buildApp();
-    const obj = await app.inject({ method: "POST", url: `/v1/hrms/assessments/attempts/${ATT}/evaluations`, headers: authMaker, payload: { questionId: M1, score: 5 } });
+    const obj = await injectF3(app, { method: "POST", url: `/v1/hrms/assessments/attempts/${ATT}/evaluations`, headers: authMaker, payload: { questionId: M1, score: 5 } });
     expect(obj.statusCode).toBe(422);
     expect(obj.json().code).toBe("NOT_MANUAL");
-    const over = await app.inject({ method: "POST", url: `/v1/hrms/assessments/attempts/${ATT}/evaluations`, headers: authMaker, payload: { questionId: D1, score: 25 } });
+    const over = await injectF3(app, { method: "POST", url: `/v1/hrms/assessments/attempts/${ATT}/evaluations`, headers: authMaker, payload: { questionId: D1, score: 25 } });
     expect(over.statusCode).toBe(422);
     expect(over.json().code).toBe("SCORE_TOO_HIGH");
     await app.close();
@@ -104,7 +130,7 @@ describe("assessment result finalisation routes", () => {
   it("records a manual evaluator score (200)", async () => {
     H.findAttempt.mockResolvedValue(attempt());
     const app = await buildApp();
-    const r = await app.inject({ method: "POST", url: `/v1/hrms/assessments/attempts/${ATT}/evaluations`, headers: authMaker, payload: { questionId: D1, score: 15, remarks: "good" } });
+    const r = await injectF3(app, { method: "POST", url: `/v1/hrms/assessments/attempts/${ATT}/evaluations`, headers: authMaker, payload: { questionId: D1, score: 15, remarks: "good" } });
     expect(r.statusCode).toBe(200);
     expect(H.saveEvaluation).toHaveBeenCalledOnce();
     await app.close();
@@ -114,7 +140,7 @@ describe("assessment result finalisation routes", () => {
     H.findAttempt.mockResolvedValue(attempt());
     H.listEvaluations.mockResolvedValue([]); // d1 not evaluated
     const app = await buildApp();
-    const r = await app.inject({ method: "POST", url: `/v1/hrms/assessments/attempts/${ATT}/consolidate`, headers: authMaker, payload: {} });
+    const r = await injectF3(app, { method: "POST", url: `/v1/hrms/assessments/attempts/${ATT}/consolidate`, headers: authMaker, payload: {} });
     expect(r.statusCode).toBe(422);
     expect(r.json().code).toBe("PENDING_EVALUATION");
     await app.close();
@@ -124,7 +150,7 @@ describe("assessment result finalisation routes", () => {
     H.findAttempt.mockResolvedValue(attempt());
     H.listEvaluations.mockResolvedValue([{ questionId: D1, score: "15" }]);
     const app = await buildApp();
-    const r = await app.inject({ method: "POST", url: `/v1/hrms/assessments/attempts/${ATT}/consolidate`, headers: authMaker, payload: {} });
+    const r = await injectF3(app, { method: "POST", url: `/v1/hrms/assessments/attempts/${ATT}/consolidate`, headers: authMaker, payload: {} });
     expect(r.statusCode).toBe(200);
     expect(r.json().totalScore).toBe(25); // mcq 10 + manual 15
     expect(r.json().result).toBe("qualified"); // 25/30 = 83% >= 40%
@@ -135,7 +161,7 @@ describe("assessment result finalisation routes", () => {
     // proposed by MAKER
     H.findAttempt.mockResolvedValue(attempt({ needsManualEval: false, rawTotalScore: "25.00", moderation: { method: "scale", factor: 1.1, proposedBy: MAKER } }));
     const app = await buildApp();
-    const r = await app.inject({ method: "POST", url: `/v1/hrms/assessments/attempts/${ATT}/moderate/approve`, headers: authMaker, payload: {} });
+    const r = await injectF3(app, { method: "POST", url: `/v1/hrms/assessments/attempts/${ATT}/moderate/approve`, headers: authMaker, payload: {} });
     expect(r.statusCode).toBe(403);
     expect(r.json().code).toBe("SOD_VIOLATION");
     expect(H.updateAttempt).not.toHaveBeenCalled();
@@ -145,7 +171,7 @@ describe("assessment result finalisation routes", () => {
   it("applies moderation when approved by an independent checker (200)", async () => {
     H.findAttempt.mockResolvedValue(attempt({ needsManualEval: false, result: "qualified", rawTotalScore: "25.00", sectionScores: { s: { score: 25, max: 30 } }, moderation: { method: "scale", factor: 1.1, proposedBy: MAKER } }));
     const app = await buildApp();
-    const r = await app.inject({ method: "POST", url: `/v1/hrms/assessments/attempts/${ATT}/moderate/approve`, headers: authChecker, payload: {} });
+    const r = await injectF3(app, { method: "POST", url: `/v1/hrms/assessments/attempts/${ATT}/moderate/approve`, headers: authChecker, payload: {} });
     expect(r.statusCode).toBe(200);
     expect(r.json().totalScore).toBe(27.5); // 25 * 1.1
     await app.close();
@@ -155,7 +181,7 @@ describe("assessment result finalisation routes", () => {
     H.findAttempt.mockResolvedValue(attempt({ needsManualEval: true, moderatedBy: CHECKER, moderation: { method: "scale", factor: 1.1, proposedBy: MAKER, approvedBy: CHECKER } }));
     H.listEvaluations.mockResolvedValue([{ questionId: D1, score: "15" }]);
     const app = await buildApp();
-    const r = await app.inject({ method: "POST", url: `/v1/hrms/assessments/attempts/${ATT}/consolidate`, headers: authMaker, payload: {} });
+    const r = await injectF3(app, { method: "POST", url: `/v1/hrms/assessments/attempts/${ATT}/consolidate`, headers: authMaker, payload: {} });
     expect(r.statusCode).toBe(200);
     const patch = H.updateAttempt.mock.calls[0][3] as { moderation: unknown; moderatedBy: unknown };
     expect(patch.moderation).toEqual({});
@@ -168,7 +194,7 @@ describe("assessment result finalisation routes", () => {
   it("blocks the moderation approver from also freezing the result (403 SoD)", async () => {
     H.findAttempt.mockResolvedValue(attempt({ needsManualEval: false, result: "qualified", moderatedBy: CHECKER, moderation: { method: "scale", factor: 1.1, proposedBy: MAKER, approvedBy: CHECKER } }));
     const app = await buildApp();
-    const r = await app.inject({ method: "POST", url: `/v1/hrms/assessments/attempts/${ATT}/freeze`, headers: authChecker, payload: {} });
+    const r = await injectF3(app, { method: "POST", url: `/v1/hrms/assessments/attempts/${ATT}/freeze`, headers: authChecker, payload: {} });
     expect(r.statusCode).toBe(403);
     expect(r.json().code).toBe("SOD_VIOLATION");
     await app.close();
@@ -178,9 +204,9 @@ describe("assessment result finalisation routes", () => {
     H.findAttempt.mockResolvedValue(attempt());
     const officer = { authorization: `Bearer ${signToken({ sub: MAKER, tid: TENANT, roles: ["hr_officer"], sid: "s" }, SECRET)}` };
     const app = await buildApp();
-    const denied = await app.inject({ method: "GET", url: `/v1/hrms/assessments/attempts/${ATT}/result`, headers: officer });
+    const denied = await injectF3(app, { method: "GET", url: `/v1/hrms/assessments/attempts/${ATT}/result`, headers: officer });
     expect(denied.statusCode).toBe(403);
-    const ok = await app.inject({ method: "GET", url: `/v1/hrms/assessments/attempts/${ATT}/result`, headers: authMaker });
+    const ok = await injectF3(app, { method: "GET", url: `/v1/hrms/assessments/attempts/${ATT}/result`, headers: authMaker });
     expect(ok.statusCode).toBe(200);
     await app.close();
   });
@@ -188,7 +214,7 @@ describe("assessment result finalisation routes", () => {
   it("cannot freeze with an unapproved moderation proposal (409)", async () => {
     H.findAttempt.mockResolvedValue(attempt({ needsManualEval: false, result: "qualified", moderation: { method: "scale", factor: 1.1, proposedBy: MAKER } }));
     const app = await buildApp();
-    const r = await app.inject({ method: "POST", url: `/v1/hrms/assessments/attempts/${ATT}/freeze`, headers: authChecker, payload: {} });
+    const r = await injectF3(app, { method: "POST", url: `/v1/hrms/assessments/attempts/${ATT}/freeze`, headers: authChecker, payload: {} });
     expect(r.statusCode).toBe(409);
     expect(r.json().code).toBe("MODERATION_PENDING");
     await app.close();
@@ -197,7 +223,7 @@ describe("assessment result finalisation routes", () => {
   it("publish is gated on freeze: cannot publish an unfrozen result (409)", async () => {
     H.findAttempt.mockResolvedValue(attempt({ needsManualEval: false, result: "qualified", frozen: false }));
     const app = await buildApp();
-    const r = await app.inject({ method: "POST", url: `/v1/hrms/assessments/attempts/${ATT}/publish`, headers: authMaker, payload: {} });
+    const r = await injectF3(app, { method: "POST", url: `/v1/hrms/assessments/attempts/${ATT}/publish`, headers: authMaker, payload: {} });
     expect(r.statusCode).toBe(409);
     expect(r.json().code).toBe("NOT_FROZEN");
     await app.close();
@@ -206,12 +232,12 @@ describe("assessment result finalisation routes", () => {
   it("freezes then publishes an authorised result (200 -> 200)", async () => {
     H.findAttempt.mockResolvedValue(attempt({ needsManualEval: false, result: "qualified", moderation: {} }));
     const app = await buildApp();
-    const fr = await app.inject({ method: "POST", url: `/v1/hrms/assessments/attempts/${ATT}/freeze`, headers: authChecker, payload: {} });
+    const fr = await injectF3(app, { method: "POST", url: `/v1/hrms/assessments/attempts/${ATT}/freeze`, headers: authChecker, payload: {} });
     expect(fr.statusCode).toBe(200);
     expect(fr.json().frozen).toBe(true);
     // now frozen
     H.findAttempt.mockResolvedValue(attempt({ needsManualEval: false, result: "qualified", frozen: true }));
-    const pub = await app.inject({ method: "POST", url: `/v1/hrms/assessments/attempts/${ATT}/publish`, headers: authChecker, payload: {} });
+    const pub = await injectF3(app, { method: "POST", url: `/v1/hrms/assessments/attempts/${ATT}/publish`, headers: authChecker, payload: {} });
     expect(pub.statusCode).toBe(200);
     expect(pub.json().published).toBe(true);
     await app.close();
@@ -220,7 +246,7 @@ describe("assessment result finalisation routes", () => {
   it("locks evaluations once frozen (409)", async () => {
     H.findAttempt.mockResolvedValue(attempt({ frozen: true }));
     const app = await buildApp();
-    const r = await app.inject({ method: "POST", url: `/v1/hrms/assessments/attempts/${ATT}/evaluations`, headers: authMaker, payload: { questionId: D1, score: 15 } });
+    const r = await injectF3(app, { method: "POST", url: `/v1/hrms/assessments/attempts/${ATT}/evaluations`, headers: authMaker, payload: { questionId: D1, score: 15 } });
     expect(r.statusCode).toBe(409);
     expect(r.json().code).toBe("FROZEN");
     await app.close();

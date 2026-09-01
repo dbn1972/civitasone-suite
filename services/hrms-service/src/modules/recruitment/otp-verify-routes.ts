@@ -39,7 +39,7 @@ export async function otpVerifyRoutes(app: FastifyInstance): Promise<void> {
     const code = generateOtp(randomBytes);
     const expiresAt = new Date(Date.now() + OTP_TTL_SECONDS * 1000);
     const cid = randomUUID();
-    await publishF3Write(ctx, "recruitment_otp_verify_routes__0", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    await publishF3Write(ctx, "recruitment_otp_verify_routes__0", cid, { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown>, code, expiresAt: expiresAt.toISOString() })
 
     // In dev/test (no delivery adapter) as any, echo the code. In production the
     // notification service sends it. The adapter seam is NOT built here —

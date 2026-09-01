@@ -20,10 +20,16 @@ const H = vi.hoisted(() => ({
 }));
 
 vi.mock("../src/modules/recruitment/audit-emit.js", () => ({ emitAudit: async () => undefined }));
-vi.mock("../src/shared/db.js", async (io) => ({
-  ...(await io<Record<string, unknown>>()),
-  db: { transaction: async (cb: (tx: unknown) => Promise<unknown>) => cb({}) },
-}));
+vi.mock("../src/shared/db.js", async (io) => {
+  // markProcessed() in the F3 consumer runs
+  // insert(...).values(...).onConflictDoNothing().returning() on the tx, which a
+  // bare {} cannot answer — the consumer threw before reaching any case.
+  const stubTx = { insert: () => ({ values: () => ({ onConflictDoNothing: () => ({ returning: async () => [{ messageId: "stub" }] }) }) }) };
+  return {
+    ...(await io<Record<string, unknown>>()),
+    db: { transaction: async (cb: (tx: unknown) => Promise<unknown>) => cb(stubTx), insert: () => ({ values: async () => undefined }) },
+  };
+});
 vi.mock("../src/modules/recruitment/candidate-repo.js", async (io) => ({
   ...(await io<Record<string, unknown>>()),
   findCandidate: (...a: unknown[]) => H.findCandidate(...a),
@@ -37,6 +43,26 @@ vi.mock("../src/modules/recruitment/resume-repo.js", async (io) => ({
 }));
 
 import { buildApp } from "../src/app.js";
+
+import { queue } from "../src/shared/infra.js";
+import { registerF3_recruitment_Consumers } from "../src/modules/recruitment/f3-consumer.js";
+
+// These routes only PUBLISH; the row is written by the recruitment F3 consumer
+// that f3-leftover-register.ts wires into the worker. Register it here so the
+// suite exercises the whole write path instead of the HTTP layer alone.
+registerF3_recruitment_Consumers(queue);
+/** Await the in-memory queue's fan-out so the consumer's write has happened. */
+async function drainF3(): Promise<void> {
+  await (queue as unknown as import("@civitasone/queue").MemoryQueue).drain();
+}
+type TestApp = { inject: (opts: never) => Promise<never> };
+/** inject() + drain, so an assertion never races the async F3 write. */
+async function injectF3(app: TestApp, opts: unknown): Promise<never> {
+  const res = await app.inject(opts as never);
+  await drainF3();
+  return res;
+}
+
 import { sqlClient } from "../src/shared/db.js";
 
 const token = (roles: string[]) => signToken({ sub: USER, tid: TENANT, roles, sid: "s" }, SECRET);
@@ -59,7 +85,7 @@ afterAll(async () => { await sqlClient.end(); });
 describe("candidate resume-version routes (R-RA-0087)", () => {
   it("uploads a new resume version (201) and reports the version + active flag", async () => {
     const app = await buildApp();
-    const r = await app.inject({ method: "POST", url: `/v1/hrms/candidates/${CID}/resumes`, headers: auth, payload: upload });
+    const r = await injectF3(app, { method: "POST", url: `/v1/hrms/candidates/${CID}/resumes`, headers: auth, payload: upload });
     expect(r.statusCode).toBe(201);
     expect(r.json().versionNo).toBe(1);
     expect(r.json().isActive).toBe(true);
@@ -69,7 +95,7 @@ describe("candidate resume-version routes (R-RA-0087)", () => {
 
   it("rejects an unsupported file type (422 INVALID_RESUME)", async () => {
     const app = await buildApp();
-    const r = await app.inject({ method: "POST", url: `/v1/hrms/candidates/${CID}/resumes`, headers: auth, payload: { ...upload, mimeType: "image/png" } });
+    const r = await injectF3(app, { method: "POST", url: `/v1/hrms/candidates/${CID}/resumes`, headers: auth, payload: { ...upload, mimeType: "image/png" } });
     expect(r.statusCode).toBe(422);
     expect(r.json().code).toBe("INVALID_RESUME");
     expect(H.createResumeVersion).not.toHaveBeenCalled();
@@ -78,7 +104,7 @@ describe("candidate resume-version routes (R-RA-0087)", () => {
 
   it("rejects a fileKey outside the candidate namespace (422 INVALID_RESUME, IDOR guard)", async () => {
     const app = await buildApp();
-    const r = await app.inject({ method: "POST", url: `/v1/hrms/candidates/${CID}/resumes`, headers: auth, payload: { ...upload, fileKey: "candidates/someone-else/resumes/cv.pdf" } });
+    const r = await injectF3(app, { method: "POST", url: `/v1/hrms/candidates/${CID}/resumes`, headers: auth, payload: { ...upload, fileKey: "candidates/someone-else/resumes/cv.pdf" } });
     expect(r.statusCode).toBe(422);
     expect(r.json().code).toBe("INVALID_RESUME");
     expect(H.createResumeVersion).not.toHaveBeenCalled();
@@ -87,7 +113,7 @@ describe("candidate resume-version routes (R-RA-0087)", () => {
 
   it("returns 400 on a malformed body (missing fileKey)", async () => {
     const app = await buildApp();
-    const r = await app.inject({ method: "POST", url: `/v1/hrms/candidates/${CID}/resumes`, headers: auth, payload: { fileName: "cv.pdf", mimeType: "application/pdf", fileSizeBytes: 10 } });
+    const r = await injectF3(app, { method: "POST", url: `/v1/hrms/candidates/${CID}/resumes`, headers: auth, payload: { fileName: "cv.pdf", mimeType: "application/pdf", fileSizeBytes: 10 } });
     expect(r.statusCode).toBe(400);
     await app.close();
   });
@@ -95,14 +121,14 @@ describe("candidate resume-version routes (R-RA-0087)", () => {
   it("404 when uploading for a missing candidate", async () => {
     H.findCandidate.mockResolvedValue(null);
     const app = await buildApp();
-    const r = await app.inject({ method: "POST", url: `/v1/hrms/candidates/${CID}/resumes`, headers: auth, payload: upload });
+    const r = await injectF3(app, { method: "POST", url: `/v1/hrms/candidates/${CID}/resumes`, headers: auth, payload: upload });
     expect(r.statusCode).toBe(404);
     await app.close();
   });
 
   it("lists versions newest-first with a stringified size (200)", async () => {
     const app = await buildApp();
-    const r = await app.inject({ method: "GET", url: `/v1/hrms/candidates/${CID}/resumes`, headers: auth });
+    const r = await injectF3(app, { method: "GET", url: `/v1/hrms/candidates/${CID}/resumes`, headers: auth });
     expect(r.statusCode).toBe(200);
     const data = r.json().data;
     expect(data[0].versionNo).toBe(2);
@@ -113,7 +139,7 @@ describe("candidate resume-version routes (R-RA-0087)", () => {
 
   it("activates a resume version (200)", async () => {
     const app = await buildApp();
-    const r = await app.inject({ method: "POST", url: `/v1/hrms/candidates/${CID}/resumes/${RID}/activate`, headers: auth });
+    const r = await injectF3(app, { method: "POST", url: `/v1/hrms/candidates/${CID}/resumes/${RID}/activate`, headers: auth });
     expect(r.statusCode).toBe(200);
     expect(r.json().isActive).toBe(true);
     expect(H.activateResume).toHaveBeenCalledOnce();
@@ -122,7 +148,7 @@ describe("candidate resume-version routes (R-RA-0087)", () => {
 
   it("activates with an application/json content-type and empty body without 500ing (maps to 400 or succeeds)", async () => {
     const app = await buildApp();
-    const r = await app.inject({
+    const r = await injectF3(app, {
       method: "POST", url: `/v1/hrms/candidates/${CID}/resumes/${RID}/activate`,
       headers: { ...auth, "content-type": "application/json" },
       // no payload → Fastify raises FST_ERR_CTP_EMPTY_JSON_BODY (400); must NOT be a 500
@@ -134,7 +160,7 @@ describe("candidate resume-version routes (R-RA-0087)", () => {
   it("404 when activating a resume version that does not exist", async () => {
     H.findResume.mockResolvedValue(null);
     const app = await buildApp();
-    const r = await app.inject({ method: "POST", url: `/v1/hrms/candidates/${CID}/resumes/${RID}/activate`, headers: auth });
+    const r = await injectF3(app, { method: "POST", url: `/v1/hrms/candidates/${CID}/resumes/${RID}/activate`, headers: auth });
     expect(r.statusCode).toBe(404);
     expect(H.activateResume).not.toHaveBeenCalled();
     await app.close();
@@ -142,14 +168,14 @@ describe("candidate resume-version routes (R-RA-0087)", () => {
 
   it("requires auth (401)", async () => {
     const app = await buildApp();
-    const r = await app.inject({ method: "GET", url: `/v1/hrms/candidates/${CID}/resumes` });
+    const r = await injectF3(app, { method: "GET", url: `/v1/hrms/candidates/${CID}/resumes` });
     expect(r.statusCode).toBe(401);
     await app.close();
   });
 
   it("forbids a non-HR role (403)", async () => {
     const app = await buildApp();
-    const r = await app.inject({ method: "POST", url: `/v1/hrms/candidates/${CID}/resumes`, headers: { authorization: `Bearer ${token(["employee"])}` }, payload: upload });
+    const r = await injectF3(app, { method: "POST", url: `/v1/hrms/candidates/${CID}/resumes`, headers: { authorization: `Bearer ${token(["employee"])}` }, payload: upload });
     expect(r.statusCode).toBe(403);
     await app.close();
   });

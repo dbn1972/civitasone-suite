@@ -46,14 +46,26 @@ const H = vi.hoisted(() => ({
   listOffersForAnalytics: vi.fn(),
 }));
 
-vi.mock("../src/shared/db.js", async (io) => ({
-  ...(await io<Record<string, unknown>>()),
-  db: { transaction: async (cb: (tx: unknown) => Promise<unknown>) => cb({}) },
-}));
-vi.mock("../src/shared/infra.js", () => ({
-  cache: { invalidate: async () => {}, makeKey: (...a: string[]) => a.join(":"), getOrLoad: async (_k: string, fn: () => Promise<unknown>) => fn() },
-  queue: { publish: async () => {} },
-}));
+vi.mock("../src/shared/db.js", async (io) => {
+  // markProcessed() in the F3 consumer runs
+  // insert(...).values(...).onConflictDoNothing().returning() on the tx, which a
+  // bare {} cannot answer — the consumer threw before reaching any case.
+  const stubTx = { insert: () => ({ values: () => ({ onConflictDoNothing: () => ({ returning: async () => [{ messageId: "stub" }] }) }) }) };
+  return {
+    ...(await io<Record<string, unknown>>()),
+    db: { transaction: async (cb: (tx: unknown) => Promise<unknown>) => cb(stubTx), insert: () => ({ values: async () => undefined }) },
+  };
+});
+vi.mock("../src/shared/infra.js", async () => {
+  // A real MemoryQueue, not a publish-only stub: the routes here publish their
+  // writes to the recruitment F3 consumer, so the suite needs a queue that can
+  // actually deliver them (and that drain() can await).
+  const { MemoryQueue } = await import("@civitasone/queue");
+  return {
+    cache: { invalidate: async () => {}, makeKey: (...a: string[]) => a.join(":"), getOrLoad: async (_k: string, fn: () => Promise<unknown>) => fn() },
+    queue: new MemoryQueue(),
+  };
+});
 vi.mock("../src/modules/recruitment/publication-repo.js", async (io) => ({
   ...(await io<Record<string, unknown>>()),
   findVacancy: (...a: unknown[]) => H.findVacancy(...a),
@@ -91,6 +103,26 @@ vi.mock("../src/modules/recruitment/offer-analytics-repo.js", async (io) => ({
 }));
 
 import { buildApp } from "../src/app.js";
+
+import { queue } from "../src/shared/infra.js";
+import { registerF3_recruitment_Consumers } from "../src/modules/recruitment/f3-consumer.js";
+
+// These routes only PUBLISH; the row is written by the recruitment F3 consumer
+// that f3-leftover-register.ts wires into the worker. Register it here so the
+// suite exercises the whole write path instead of the HTTP layer alone.
+registerF3_recruitment_Consumers(queue);
+/** Await the in-memory queue's fan-out so the consumer's write has happened. */
+async function drainF3(): Promise<void> {
+  await (queue as unknown as import("@civitasone/queue").MemoryQueue).drain();
+}
+type TestApp = { inject: (opts: never) => Promise<never> };
+/** inject() + drain, so an assertion never races the async F3 write. */
+async function injectF3(app: TestApp, opts: unknown): Promise<never> {
+  const res = await app.inject(opts as never);
+  await drainF3();
+  return res;
+}
+
 import { sqlClient } from "../src/shared/db.js";
 
 const tok = (sub = USER, roles = ["hr_admin"]) => signToken({ sub, tid: TENANT, roles, sid: "s" }, SECRET);
@@ -140,7 +172,7 @@ afterAll(async () => { await sqlClient.end(); });
 describe("publication routes — advertisement", () => {
   it("updates advertisement details (200)", async () => {
     const app = await buildApp();
-    const r = await app.inject({
+    const r = await injectF3(app, {
       method: "PATCH", url: `/v1/hrms/job-openings/${JOB}/advertisement`,
       headers: auth(), payload: { feesMinor: 500, portalScope: "both", selectionProcess: "Written exam + interview" },
     });
@@ -152,21 +184,21 @@ describe("publication routes — advertisement", () => {
 
   it("returns 400 for invalid UUID param", async () => {
     const app = await buildApp();
-    const r = await app.inject({ method: "PATCH", url: `/v1/hrms/job-openings/not-a-uuid/advertisement`, headers: auth(), payload: {} });
+    const r = await injectF3(app, { method: "PATCH", url: `/v1/hrms/job-openings/not-a-uuid/advertisement`, headers: auth(), payload: {} });
     expect(r.statusCode).toBe(400);
     await app.close();
   });
 
   it("returns 401 without auth", async () => {
     const app = await buildApp();
-    const r = await app.inject({ method: "PATCH", url: `/v1/hrms/job-openings/${JOB}/advertisement`, payload: {} });
+    const r = await injectF3(app, { method: "PATCH", url: `/v1/hrms/job-openings/${JOB}/advertisement`, payload: {} });
     expect(r.statusCode).toBe(401);
     await app.close();
   });
 
   it("returns 403 for unauthorised role", async () => {
     const app = await buildApp();
-    const r = await app.inject({ method: "PATCH", url: `/v1/hrms/job-openings/${JOB}/advertisement`, headers: auth(USER, ["employee"]), payload: {} });
+    const r = await injectF3(app, { method: "PATCH", url: `/v1/hrms/job-openings/${JOB}/advertisement`, headers: auth(USER, ["employee"]), payload: {} });
     expect(r.statusCode).toBe(403);
     await app.close();
   });
@@ -174,7 +206,7 @@ describe("publication routes — advertisement", () => {
   it("returns 404 when vacancy not found", async () => {
     H.findVacancy.mockResolvedValue(null);
     const app = await buildApp();
-    const r = await app.inject({ method: "PATCH", url: `/v1/hrms/job-openings/${JOB}/advertisement`, headers: auth(), payload: { portalScope: "internal" } });
+    const r = await injectF3(app, { method: "PATCH", url: `/v1/hrms/job-openings/${JOB}/advertisement`, headers: auth(), payload: { portalScope: "internal" } });
     expect(r.statusCode).toBe(404);
     await app.close();
   });
@@ -183,7 +215,7 @@ describe("publication routes — advertisement", () => {
 describe("publication routes — corrigendum", () => {
   it("records a corrigendum (200)", async () => {
     const app = await buildApp();
-    const r = await app.inject({ method: "POST", url: `/v1/hrms/job-openings/${JOB}/corrigendum`, headers: auth(), payload: { changes: "Updated eligibility criteria for age relaxation" } });
+    const r = await injectF3(app, { method: "POST", url: `/v1/hrms/job-openings/${JOB}/corrigendum`, headers: auth(), payload: { changes: "Updated eligibility criteria for age relaxation" } });
     expect(r.statusCode).toBe(200);
     expect(r.json().corrigendumSeq).toBe(1);
     expect(H.insertCorrigendum).toHaveBeenCalledOnce();
@@ -192,7 +224,7 @@ describe("publication routes — corrigendum", () => {
 
   it("returns 400 when changes field is missing", async () => {
     const app = await buildApp();
-    const r = await app.inject({ method: "POST", url: `/v1/hrms/job-openings/${JOB}/corrigendum`, headers: auth(), payload: {} });
+    const r = await injectF3(app, { method: "POST", url: `/v1/hrms/job-openings/${JOB}/corrigendum`, headers: auth(), payload: {} });
     expect(r.statusCode).toBe(400);
     await app.close();
   });
@@ -200,7 +232,7 @@ describe("publication routes — corrigendum", () => {
   it("returns 409 for a cancelled vacancy", async () => {
     H.findVacancy.mockResolvedValue(vacancy({ status: "cancelled" }));
     const app = await buildApp();
-    const r = await app.inject({ method: "POST", url: `/v1/hrms/job-openings/${JOB}/corrigendum`, headers: auth(), payload: { changes: "some fix" } });
+    const r = await injectF3(app, { method: "POST", url: `/v1/hrms/job-openings/${JOB}/corrigendum`, headers: auth(), payload: { changes: "some fix" } });
     expect(r.statusCode).toBe(409);
     expect(r.json().code).toBe("CANCELLED");
     await app.close();
@@ -209,7 +241,7 @@ describe("publication routes — corrigendum", () => {
   it("returns 404 when vacancy not found", async () => {
     H.findVacancy.mockResolvedValue(null);
     const app = await buildApp();
-    const r = await app.inject({ method: "POST", url: `/v1/hrms/job-openings/${JOB}/corrigendum`, headers: auth(), payload: { changes: "fix" } });
+    const r = await injectF3(app, { method: "POST", url: `/v1/hrms/job-openings/${JOB}/corrigendum`, headers: auth(), payload: { changes: "fix" } });
     expect(r.statusCode).toBe(404);
     await app.close();
   });
@@ -220,7 +252,7 @@ describe("publication routes — extend deadline", () => {
     // Set existing deadline to a past/near date so the extension is "later"
     H.findVacancy.mockResolvedValue(vacancy({ applicationDeadline: new Date("2025-01-15") }));
     const app = await buildApp();
-    const r = await app.inject({ method: "POST", url: `/v1/hrms/job-openings/${JOB}/extend`, headers: auth(), payload: { newDeadline: futureIso, reason: "more applicants needed" } });
+    const r = await injectF3(app, { method: "POST", url: `/v1/hrms/job-openings/${JOB}/extend`, headers: auth(), payload: { newDeadline: futureIso, reason: "more applicants needed" } });
     expect(r.statusCode).toBe(200);
     expect(r.json().status).toBe("open");
     expect(H.insertCorrigendum).toHaveBeenCalledOnce();
@@ -230,7 +262,7 @@ describe("publication routes — extend deadline", () => {
   it("returns 400 when the new deadline is not later than the current one", async () => {
     H.findVacancy.mockResolvedValue(vacancy({ applicationDeadline: new Date("2027-12-31") }));
     const app = await buildApp();
-    const r = await app.inject({ method: "POST", url: `/v1/hrms/job-openings/${JOB}/extend`, headers: auth(), payload: { newDeadline: "2026-06-01T00:00:00.000Z" } });
+    const r = await injectF3(app, { method: "POST", url: `/v1/hrms/job-openings/${JOB}/extend`, headers: auth(), payload: { newDeadline: "2026-06-01T00:00:00.000Z" } });
     expect(r.statusCode).toBe(400);
     expect(r.json().code).toBe("NOT_AN_EXTENSION");
     await app.close();
@@ -239,7 +271,7 @@ describe("publication routes — extend deadline", () => {
   it("returns 409 for a cancelled vacancy", async () => {
     H.findVacancy.mockResolvedValue(vacancy({ status: "cancelled" }));
     const app = await buildApp();
-    const r = await app.inject({ method: "POST", url: `/v1/hrms/job-openings/${JOB}/extend`, headers: auth(), payload: { newDeadline: futureIso } });
+    const r = await injectF3(app, { method: "POST", url: `/v1/hrms/job-openings/${JOB}/extend`, headers: auth(), payload: { newDeadline: futureIso } });
     expect(r.statusCode).toBe(409);
     expect(r.json().code).toBe("CANCELLED");
     await app.close();
@@ -247,14 +279,14 @@ describe("publication routes — extend deadline", () => {
 
   it("returns 401 without auth", async () => {
     const app = await buildApp();
-    const r = await app.inject({ method: "POST", url: `/v1/hrms/job-openings/${JOB}/extend`, payload: { newDeadline: futureIso } });
+    const r = await injectF3(app, { method: "POST", url: `/v1/hrms/job-openings/${JOB}/extend`, payload: { newDeadline: futureIso } });
     expect(r.statusCode).toBe(401);
     await app.close();
   });
 
   it("returns 403 for unauthorised role", async () => {
     const app = await buildApp();
-    const r = await app.inject({ method: "POST", url: `/v1/hrms/job-openings/${JOB}/extend`, headers: auth(USER, ["employee"]), payload: { newDeadline: futureIso } });
+    const r = await injectF3(app, { method: "POST", url: `/v1/hrms/job-openings/${JOB}/extend`, headers: auth(USER, ["employee"]), payload: { newDeadline: futureIso } });
     expect(r.statusCode).toBe(403);
     await app.close();
   });
@@ -263,7 +295,7 @@ describe("publication routes — extend deadline", () => {
 describe("publication routes — cancel vacancy", () => {
   it("cancels an open vacancy (200)", async () => {
     const app = await buildApp();
-    const r = await app.inject({ method: "POST", url: `/v1/hrms/job-openings/${JOB}/cancel`, headers: auth(), payload: { reason: "position no longer required" } });
+    const r = await injectF3(app, { method: "POST", url: `/v1/hrms/job-openings/${JOB}/cancel`, headers: auth(), payload: { reason: "position no longer required" } });
     expect(r.statusCode).toBe(200);
     expect(r.json().status).toBe("cancelled");
     await app.close();
@@ -272,7 +304,7 @@ describe("publication routes — cancel vacancy", () => {
   it("returns 409 when already cancelled", async () => {
     H.findVacancy.mockResolvedValue(vacancy({ status: "cancelled" }));
     const app = await buildApp();
-    const r = await app.inject({ method: "POST", url: `/v1/hrms/job-openings/${JOB}/cancel`, headers: auth(), payload: { reason: "duplicate" } });
+    const r = await injectF3(app, { method: "POST", url: `/v1/hrms/job-openings/${JOB}/cancel`, headers: auth(), payload: { reason: "duplicate" } });
     expect(r.statusCode).toBe(409);
     expect(r.json().code).toBe("ALREADY_CANCELLED");
     await app.close();
@@ -280,7 +312,7 @@ describe("publication routes — cancel vacancy", () => {
 
   it("returns 400 when reason is missing", async () => {
     const app = await buildApp();
-    const r = await app.inject({ method: "POST", url: `/v1/hrms/job-openings/${JOB}/cancel`, headers: auth(), payload: {} });
+    const r = await injectF3(app, { method: "POST", url: `/v1/hrms/job-openings/${JOB}/cancel`, headers: auth(), payload: {} });
     expect(r.statusCode).toBe(400);
     await app.close();
   });
@@ -288,7 +320,7 @@ describe("publication routes — cancel vacancy", () => {
   it("returns 404 when vacancy not found", async () => {
     H.findVacancy.mockResolvedValue(null);
     const app = await buildApp();
-    const r = await app.inject({ method: "POST", url: `/v1/hrms/job-openings/${JOB}/cancel`, headers: auth(), payload: { reason: "gone" } });
+    const r = await injectF3(app, { method: "POST", url: `/v1/hrms/job-openings/${JOB}/cancel`, headers: auth(), payload: { reason: "gone" } });
     expect(r.statusCode).toBe(404);
     await app.close();
   });
@@ -298,7 +330,7 @@ describe("publication routes — corrigenda history", () => {
   it("returns corrigendum history (200)", async () => {
     H.listCorrigenda.mockResolvedValue([{ seq: 1, action: "corrigendum", changes: "age updated" }]);
     const app = await buildApp();
-    const r = await app.inject({ method: "GET", url: `/v1/hrms/job-openings/${JOB}/corrigenda`, headers: auth() });
+    const r = await injectF3(app, { method: "GET", url: `/v1/hrms/job-openings/${JOB}/corrigenda`, headers: auth() });
     expect(r.statusCode).toBe(200);
     expect(r.json().data).toHaveLength(1);
     await app.close();
@@ -307,21 +339,21 @@ describe("publication routes — corrigenda history", () => {
   it("returns 404 when vacancy not found", async () => {
     H.findVacancy.mockResolvedValue(null);
     const app = await buildApp();
-    const r = await app.inject({ method: "GET", url: `/v1/hrms/job-openings/${JOB}/corrigenda`, headers: auth() });
+    const r = await injectF3(app, { method: "GET", url: `/v1/hrms/job-openings/${JOB}/corrigenda`, headers: auth() });
     expect(r.statusCode).toBe(404);
     await app.close();
   });
 
   it("allows manager role to view corrigenda (200)", async () => {
     const app = await buildApp();
-    const r = await app.inject({ method: "GET", url: `/v1/hrms/job-openings/${JOB}/corrigenda`, headers: auth(USER, ["manager"]) });
+    const r = await injectF3(app, { method: "GET", url: `/v1/hrms/job-openings/${JOB}/corrigenda`, headers: auth(USER, ["manager"]) });
     expect(r.statusCode).toBe(200);
     await app.close();
   });
 
   it("returns 403 for unauthorised role", async () => {
     const app = await buildApp();
-    const r = await app.inject({ method: "GET", url: `/v1/hrms/job-openings/${JOB}/corrigenda`, headers: auth(USER, ["employee"]) });
+    const r = await injectF3(app, { method: "GET", url: `/v1/hrms/job-openings/${JOB}/corrigenda`, headers: auth(USER, ["employee"]) });
     expect(r.statusCode).toBe(403);
     await app.close();
   });
@@ -331,7 +363,7 @@ describe("publication routes — career search (public)", () => {
   it("searches public vacancies without auth (200)", async () => {
     H.searchVacancies.mockResolvedValue([{ id: JOB, refNo: "REF-1", title: "Engineer", titleAlt: null, location: "Delhi", vacancyType: "regular", vacancies: 5, qualification: "BE", minExperienceYears: 2, feesMinor: 500, selectionProcess: "test", importantDates: {}, eligibility: "grad", postedAt: new Date(), applicationDeadline: new Date() }]);
     const app = await buildApp();
-    const r = await app.inject({ method: "GET", url: `/v1/careers/search?tenantId=${TENANT}&keyword=Engineer` });
+    const r = await injectF3(app, { method: "GET", url: `/v1/careers/search?tenantId=${TENANT}&keyword=Engineer` });
     expect(r.statusCode).toBe(200);
     expect(r.json().data).toHaveLength(1);
     expect(r.json().data[0].title).toBe("Engineer");
@@ -340,14 +372,14 @@ describe("publication routes — career search (public)", () => {
 
   it("returns 400 when tenantId is missing", async () => {
     const app = await buildApp();
-    const r = await app.inject({ method: "GET", url: `/v1/careers/search` });
+    const r = await injectF3(app, { method: "GET", url: `/v1/careers/search` });
     expect(r.statusCode).toBe(400);
     await app.close();
   });
 
   it("returns 400 for invalid tenantId format", async () => {
     const app = await buildApp();
-    const r = await app.inject({ method: "GET", url: `/v1/careers/search?tenantId=not-a-uuid` });
+    const r = await injectF3(app, { method: "GET", url: `/v1/careers/search?tenantId=not-a-uuid` });
     expect(r.statusCode).toBe(400);
     await app.close();
   });
@@ -355,7 +387,7 @@ describe("publication routes — career search (public)", () => {
   it("returns empty data when no vacancies match (200)", async () => {
     H.searchVacancies.mockResolvedValue([]);
     const app = await buildApp();
-    const r = await app.inject({ method: "GET", url: `/v1/careers/search?tenantId=${TENANT}&keyword=nonexistent` });
+    const r = await injectF3(app, { method: "GET", url: `/v1/careers/search?tenantId=${TENANT}&keyword=nonexistent` });
     expect(r.statusCode).toBe(200);
     expect(r.json().data).toHaveLength(0);
     await app.close();
@@ -369,7 +401,7 @@ describe("selection list routes — expire", () => {
   it("expires a published list (200)", async () => {
     H.findList.mockResolvedValue(selList({ status: "published" }));
     const app = await buildApp();
-    const r = await app.inject({ method: "POST", url: `/v1/hrms/selection-lists/${LIST_ID}/expire`, headers: auth() });
+    const r = await injectF3(app, { method: "POST", url: `/v1/hrms/selection-lists/${LIST_ID}/expire`, headers: auth() });
     expect(r.statusCode).toBe(200);
     expect(r.json().status).toBe("expired");
     await app.close();
@@ -378,7 +410,7 @@ describe("selection list routes — expire", () => {
   it("expires an approved list (200)", async () => {
     H.findList.mockResolvedValue(selList({ status: "approved" }));
     const app = await buildApp();
-    const r = await app.inject({ method: "POST", url: `/v1/hrms/selection-lists/${LIST_ID}/expire`, headers: auth() });
+    const r = await injectF3(app, { method: "POST", url: `/v1/hrms/selection-lists/${LIST_ID}/expire`, headers: auth() });
     expect(r.statusCode).toBe(200);
     expect(r.json().status).toBe("expired");
     await app.close();
@@ -387,7 +419,7 @@ describe("selection list routes — expire", () => {
   it("returns 409 when already expired", async () => {
     H.findList.mockResolvedValue(selList({ status: "expired" }));
     const app = await buildApp();
-    const r = await app.inject({ method: "POST", url: `/v1/hrms/selection-lists/${LIST_ID}/expire`, headers: auth() });
+    const r = await injectF3(app, { method: "POST", url: `/v1/hrms/selection-lists/${LIST_ID}/expire`, headers: auth() });
     expect(r.statusCode).toBe(409);
     expect(r.json().code).toBe("INVALID_STATE");
     await app.close();
@@ -396,7 +428,7 @@ describe("selection list routes — expire", () => {
   it("returns 409 for a draft list", async () => {
     H.findList.mockResolvedValue(selList({ status: "draft" }));
     const app = await buildApp();
-    const r = await app.inject({ method: "POST", url: `/v1/hrms/selection-lists/${LIST_ID}/expire`, headers: auth() });
+    const r = await injectF3(app, { method: "POST", url: `/v1/hrms/selection-lists/${LIST_ID}/expire`, headers: auth() });
     expect(r.statusCode).toBe(409);
     expect(r.json().code).toBe("INVALID_STATE");
     await app.close();
@@ -404,7 +436,7 @@ describe("selection list routes — expire", () => {
 
   it("returns 403 for hr_officer (senior-only)", async () => {
     const app = await buildApp();
-    const r = await app.inject({ method: "POST", url: `/v1/hrms/selection-lists/${LIST_ID}/expire`, headers: auth(USER, ["hr_officer"]) });
+    const r = await injectF3(app, { method: "POST", url: `/v1/hrms/selection-lists/${LIST_ID}/expire`, headers: auth(USER, ["hr_officer"]) });
     expect(r.statusCode).toBe(403);
     await app.close();
   });
@@ -412,7 +444,7 @@ describe("selection list routes — expire", () => {
   it("returns 404 when list not found", async () => {
     H.findList.mockResolvedValue(null);
     const app = await buildApp();
-    const r = await app.inject({ method: "POST", url: `/v1/hrms/selection-lists/${LIST_ID}/expire`, headers: auth() });
+    const r = await injectF3(app, { method: "POST", url: `/v1/hrms/selection-lists/${LIST_ID}/expire`, headers: auth() });
     expect(r.statusCode).toBe(404);
     await app.close();
   });
@@ -427,7 +459,7 @@ describe("selection list routes — get by ID", () => {
       { applicationId: M2, candidateName: "B", category: "waitlist", rank: 1, score: "72", remarks: null },
     ]);
     const app = await buildApp();
-    const r = await app.inject({ method: "GET", url: `/v1/hrms/selection-lists/${LIST_ID}`, headers: auth() });
+    const r = await injectF3(app, { method: "GET", url: `/v1/hrms/selection-lists/${LIST_ID}`, headers: auth() });
     expect(r.statusCode).toBe(200);
     const body = r.json();
     expect(body.withinValidity).toBe(true);
@@ -440,7 +472,7 @@ describe("selection list routes — get by ID", () => {
     H.findList.mockResolvedValue(selList({ status: "published", validityUntil: pastDate }));
     H.listEntries.mockResolvedValue([]);
     const app = await buildApp();
-    const r = await app.inject({ method: "GET", url: `/v1/hrms/selection-lists/${LIST_ID}`, headers: auth() });
+    const r = await injectF3(app, { method: "GET", url: `/v1/hrms/selection-lists/${LIST_ID}`, headers: auth() });
     expect(r.statusCode).toBe(200);
     expect(r.json().withinValidity).toBe(false);
     await app.close();
@@ -449,14 +481,14 @@ describe("selection list routes — get by ID", () => {
   it("returns 404 when list not found", async () => {
     H.findList.mockResolvedValue(null);
     const app = await buildApp();
-    const r = await app.inject({ method: "GET", url: `/v1/hrms/selection-lists/${LIST_ID}`, headers: auth() });
+    const r = await injectF3(app, { method: "GET", url: `/v1/hrms/selection-lists/${LIST_ID}`, headers: auth() });
     expect(r.statusCode).toBe(404);
     await app.close();
   });
 
   it("returns 401 without auth", async () => {
     const app = await buildApp();
-    const r = await app.inject({ method: "GET", url: `/v1/hrms/selection-lists/${LIST_ID}` });
+    const r = await injectF3(app, { method: "GET", url: `/v1/hrms/selection-lists/${LIST_ID}` });
     expect(r.statusCode).toBe(401);
     await app.close();
   });
@@ -466,7 +498,7 @@ describe("selection list routes — get by job opening", () => {
   it("returns lists for a job opening (200)", async () => {
     H.listByJob.mockResolvedValue([selList(), selList({ id: "dddddddd-0001-4000-8000-00000000d002", status: "published" })]);
     const app = await buildApp();
-    const r = await app.inject({ method: "GET", url: `/v1/hrms/job-openings/${JOB}/selection-lists`, headers: auth() });
+    const r = await injectF3(app, { method: "GET", url: `/v1/hrms/job-openings/${JOB}/selection-lists`, headers: auth() });
     expect(r.statusCode).toBe(200);
     expect(r.json().data).toHaveLength(2);
     await app.close();
@@ -474,14 +506,14 @@ describe("selection list routes — get by job opening", () => {
 
   it("returns 400 for invalid job opening ID", async () => {
     const app = await buildApp();
-    const r = await app.inject({ method: "GET", url: `/v1/hrms/job-openings/bad-id/selection-lists`, headers: auth() });
+    const r = await injectF3(app, { method: "GET", url: `/v1/hrms/job-openings/bad-id/selection-lists`, headers: auth() });
     expect(r.statusCode).toBe(400);
     await app.close();
   });
 
   it("returns 403 for unauthorised role", async () => {
     const app = await buildApp();
-    const r = await app.inject({ method: "GET", url: `/v1/hrms/job-openings/${JOB}/selection-lists`, headers: auth(USER, ["employee"]) });
+    const r = await injectF3(app, { method: "GET", url: `/v1/hrms/job-openings/${JOB}/selection-lists`, headers: auth(USER, ["employee"]) });
     expect(r.statusCode).toBe(403);
     await app.close();
   });
@@ -497,7 +529,7 @@ describe("panel routes — get panel", () => {
       panelist({ memberId: M2, panelRole: "member", memberName: "Member" }),
     ]);
     const app = await buildApp();
-    const r = await app.inject({ method: "GET", url: `/v1/hrms/interviews/${IV}/panel`, headers: auth() });
+    const r = await injectF3(app, { method: "GET", url: `/v1/hrms/interviews/${IV}/panel`, headers: auth() });
     expect(r.statusCode).toBe(200);
     const body = r.json();
     expect(body.panelists).toHaveLength(2);
@@ -509,21 +541,21 @@ describe("panel routes — get panel", () => {
   it("returns 404 when interview not found", async () => {
     H.findInterview.mockResolvedValue(null);
     const app = await buildApp();
-    const r = await app.inject({ method: "GET", url: `/v1/hrms/interviews/${IV}/panel`, headers: auth() });
+    const r = await injectF3(app, { method: "GET", url: `/v1/hrms/interviews/${IV}/panel`, headers: auth() });
     expect(r.statusCode).toBe(404);
     await app.close();
   });
 
   it("returns 401 without auth", async () => {
     const app = await buildApp();
-    const r = await app.inject({ method: "GET", url: `/v1/hrms/interviews/${IV}/panel` });
+    const r = await injectF3(app, { method: "GET", url: `/v1/hrms/interviews/${IV}/panel` });
     expect(r.statusCode).toBe(401);
     await app.close();
   });
 
   it("returns 403 for unauthorised role", async () => {
     const app = await buildApp();
-    const r = await app.inject({ method: "GET", url: `/v1/hrms/interviews/${IV}/panel`, headers: auth(USER, ["employee"]) });
+    const r = await injectF3(app, { method: "GET", url: `/v1/hrms/interviews/${IV}/panel`, headers: auth(USER, ["employee"]) });
     expect(r.statusCode).toBe(403);
     await app.close();
   });
@@ -532,7 +564,7 @@ describe("panel routes — get panel", () => {
 describe("panel routes — duplicate panelists validation", () => {
   it("returns 422 for duplicate panelist IDs", async () => {
     const app = await buildApp();
-    const r = await app.inject({ method: "POST", url: `/v1/hrms/interviews/${IV}/panel`, headers: auth(), payload: {
+    const r = await injectF3(app, { method: "POST", url: `/v1/hrms/interviews/${IV}/panel`, headers: auth(), payload: {
       members: [
         { memberId: M1, memberName: "A", panelRole: "chair" },
         { memberId: M1, memberName: "A again", panelRole: "member" },
@@ -545,7 +577,7 @@ describe("panel routes — duplicate panelists validation", () => {
 
   it("returns 422 when coiType is set without coiDeclared flag", async () => {
     const app = await buildApp();
-    const r = await app.inject({ method: "POST", url: `/v1/hrms/interviews/${IV}/panel`, headers: auth(), payload: {
+    const r = await injectF3(app, { method: "POST", url: `/v1/hrms/interviews/${IV}/panel`, headers: auth(), payload: {
       members: [{ memberId: M1, memberName: "A", panelRole: "chair", coiDeclared: false, coiType: "relative" }],
     } });
     expect(r.statusCode).toBe(422);
@@ -558,7 +590,7 @@ describe("panel routes — waitlist outcome", () => {
   it("records a waitlist outcome with rank and validity (200)", async () => {
     H.listPanelists.mockResolvedValue([panelist({ memberId: M1, panelRole: "chair" }), panelist({ memberId: M2 })]);
     const app = await buildApp();
-    const r = await app.inject({ method: "POST", url: `/v1/hrms/interviews/${IV}/outcome`, headers: auth(), payload: { status: "waitlisted", waitlistRank: 3, validUntil: futureIso } });
+    const r = await injectF3(app, { method: "POST", url: `/v1/hrms/interviews/${IV}/outcome`, headers: auth(), payload: { status: "waitlisted", waitlistRank: 3, validUntil: futureIso } });
     expect(r.statusCode).toBe(200);
     expect(r.json().outcomeStatus).toBe("waitlisted");
     await app.close();
@@ -567,7 +599,7 @@ describe("panel routes — waitlist outcome", () => {
   it("returns 422 when waitlistRank is missing for waitlisted status", async () => {
     H.listPanelists.mockResolvedValue([panelist({ memberId: M1, panelRole: "chair" })]);
     const app = await buildApp();
-    const r = await app.inject({ method: "POST", url: `/v1/hrms/interviews/${IV}/outcome`, headers: auth(), payload: { status: "waitlisted", validUntil: futureIso } });
+    const r = await injectF3(app, { method: "POST", url: `/v1/hrms/interviews/${IV}/outcome`, headers: auth(), payload: { status: "waitlisted", validUntil: futureIso } });
     expect(r.statusCode).toBe(422);
     expect(r.json().code).toBe("INVALID_OUTCOME");
     await app.close();
@@ -576,7 +608,7 @@ describe("panel routes — waitlist outcome", () => {
   it("returns 422 when validUntil is missing for recommended status", async () => {
     H.listPanelists.mockResolvedValue([panelist({ memberId: M1, panelRole: "chair" })]);
     const app = await buildApp();
-    const r = await app.inject({ method: "POST", url: `/v1/hrms/interviews/${IV}/outcome`, headers: auth(), payload: { status: "recommended" } });
+    const r = await injectF3(app, { method: "POST", url: `/v1/hrms/interviews/${IV}/outcome`, headers: auth(), payload: { status: "recommended" } });
     expect(r.statusCode).toBe(422);
     expect(r.json().code).toBe("INVALID_OUTCOME");
     await app.close();
@@ -585,7 +617,7 @@ describe("panel routes — waitlist outcome", () => {
   it("returns 404 when interview not found", async () => {
     H.findInterview.mockResolvedValue(null);
     const app = await buildApp();
-    const r = await app.inject({ method: "POST", url: `/v1/hrms/interviews/${IV}/outcome`, headers: auth(), payload: { status: "recommended", validUntil: futureIso } });
+    const r = await injectF3(app, { method: "POST", url: `/v1/hrms/interviews/${IV}/outcome`, headers: auth(), payload: { status: "recommended", validUntil: futureIso } });
     expect(r.statusCode).toBe(404);
     await app.close();
   });
@@ -593,7 +625,7 @@ describe("panel routes — waitlist outcome", () => {
   it("records a rejected outcome with reason (200)", async () => {
     H.listPanelists.mockResolvedValue([panelist({ memberId: M1, panelRole: "chair" }), panelist({ memberId: M2 })]);
     const app = await buildApp();
-    const r = await app.inject({ method: "POST", url: `/v1/hrms/interviews/${IV}/outcome`, headers: auth(), payload: { status: "rejected", rejectionReason: "low_score", rejectionNote: "Below threshold" } });
+    const r = await injectF3(app, { method: "POST", url: `/v1/hrms/interviews/${IV}/outcome`, headers: auth(), payload: { status: "rejected", rejectionReason: "low_score", rejectionNote: "Below threshold" } });
     expect(r.statusCode).toBe(200);
     expect(r.json().outcomeStatus).toBe("rejected");
     await app.close();
@@ -603,7 +635,7 @@ describe("panel routes — waitlist outcome", () => {
     // All members recused — panel not ready
     H.listPanelists.mockResolvedValue([panelist({ memberId: M1, panelRole: "observer" })]);
     const app = await buildApp();
-    const r = await app.inject({ method: "POST", url: `/v1/hrms/interviews/${IV}/outcome`, headers: auth(), payload: { status: "recommended", validUntil: futureIso } });
+    const r = await injectF3(app, { method: "POST", url: `/v1/hrms/interviews/${IV}/outcome`, headers: auth(), payload: { status: "recommended", validUntil: futureIso } });
     expect(r.statusCode).toBe(409);
     await app.close();
   });
@@ -613,7 +645,7 @@ describe("panel routes — recuse panelist", () => {
   it("returns 404 when panelist not found on interview", async () => {
     H.recusePanelist.mockResolvedValue(0);
     const app = await buildApp();
-    const r = await app.inject({ method: "POST", url: `/v1/hrms/interviews/${IV}/panelists/${M1}/recuse`, headers: auth() });
+    const r = await injectF3(app, { method: "POST", url: `/v1/hrms/interviews/${IV}/panelists/${M1}/recuse`, headers: auth() });
     expect(r.statusCode).toBe(404);
     expect(r.json().code).toBe("NOT_FOUND");
     await app.close();
@@ -621,7 +653,7 @@ describe("panel routes — recuse panelist", () => {
 
   it("returns 400 for invalid memberId param", async () => {
     const app = await buildApp();
-    const r = await app.inject({ method: "POST", url: `/v1/hrms/interviews/${IV}/panelists/not-a-uuid/recuse`, headers: auth() });
+    const r = await injectF3(app, { method: "POST", url: `/v1/hrms/interviews/${IV}/panelists/not-a-uuid/recuse`, headers: auth() });
     expect(r.statusCode).toBe(400);
     await app.close();
   });
@@ -634,7 +666,7 @@ describe("offer-extra routes — extension rejection", () => {
   it("rejects a pending extension (200)", async () => {
     H.findOffer.mockResolvedValue({ id: OFF, tenantId: TENANT, status: "accepted", joiningExtensionStatus: "requested", requestedJoiningDate: "2026-10-15", requestedBy: USER2, version: 1 });
     const app = await buildApp();
-    const r = await app.inject({ method: "POST", url: `/v1/hrms/offers/${OFF}/joining-extension/reject`, headers: auth() });
+    const r = await injectF3(app, { method: "POST", url: `/v1/hrms/offers/${OFF}/joining-extension/reject`, headers: auth() });
     expect(r.statusCode).toBe(200);
     expect(r.json().joiningExtensionStatus).toBe("rejected");
     await app.close();
@@ -643,7 +675,7 @@ describe("offer-extra routes — extension rejection", () => {
   it("returns 409 when no pending extension to reject", async () => {
     H.findOffer.mockResolvedValue({ id: OFF, tenantId: TENANT, status: "accepted", joiningExtensionStatus: "none", version: 1 });
     const app = await buildApp();
-    const r = await app.inject({ method: "POST", url: `/v1/hrms/offers/${OFF}/joining-extension/reject`, headers: auth() });
+    const r = await injectF3(app, { method: "POST", url: `/v1/hrms/offers/${OFF}/joining-extension/reject`, headers: auth() });
     expect(r.statusCode).toBe(409);
     expect(r.json().code).toBe("NO_REQUEST");
     await app.close();
@@ -652,7 +684,7 @@ describe("offer-extra routes — extension rejection", () => {
   it("returns 403 for hr_officer (senior-only)", async () => {
     H.findOffer.mockResolvedValue({ id: OFF, tenantId: TENANT, status: "accepted", joiningExtensionStatus: "requested", requestedBy: USER2, version: 1 });
     const app = await buildApp();
-    const r = await app.inject({ method: "POST", url: `/v1/hrms/offers/${OFF}/joining-extension/reject`, headers: auth(USER, ["hr_officer"]) });
+    const r = await injectF3(app, { method: "POST", url: `/v1/hrms/offers/${OFF}/joining-extension/reject`, headers: auth(USER, ["hr_officer"]) });
     expect(r.statusCode).toBe(403);
     await app.close();
   });
@@ -660,14 +692,14 @@ describe("offer-extra routes — extension rejection", () => {
   it("returns 404 when offer not found", async () => {
     H.findOffer.mockResolvedValue(null);
     const app = await buildApp();
-    const r = await app.inject({ method: "POST", url: `/v1/hrms/offers/${OFF}/joining-extension/reject`, headers: auth() });
+    const r = await injectF3(app, { method: "POST", url: `/v1/hrms/offers/${OFF}/joining-extension/reject`, headers: auth() });
     expect(r.statusCode).toBe(404);
     await app.close();
   });
 
   it("returns 401 without auth", async () => {
     const app = await buildApp();
-    const r = await app.inject({ method: "POST", url: `/v1/hrms/offers/${OFF}/joining-extension/reject` });
+    const r = await injectF3(app, { method: "POST", url: `/v1/hrms/offers/${OFF}/joining-extension/reject` });
     expect(r.statusCode).toBe(401);
     await app.close();
   });
@@ -677,7 +709,7 @@ describe("offer-extra routes — extension request edge cases", () => {
   it("returns 409 when an extension is already pending", async () => {
     H.findOffer.mockResolvedValue({ id: OFF, tenantId: TENANT, status: "accepted", joiningDate: "2026-09-01", joiningExtensionStatus: "requested", originalJoiningDate: "2026-09-01", version: 1 });
     const app = await buildApp();
-    const r = await app.inject({ method: "POST", url: `/v1/hrms/offers/${OFF}/joining-extension`, headers: auth(), payload: { requestedJoiningDate: "2026-11-01", reason: "need more time" } });
+    const r = await injectF3(app, { method: "POST", url: `/v1/hrms/offers/${OFF}/joining-extension`, headers: auth(), payload: { requestedJoiningDate: "2026-11-01", reason: "need more time" } });
     expect(r.statusCode).toBe(409);
     expect(r.json().code).toBe("EXTENSION_PENDING");
     await app.close();
@@ -686,7 +718,7 @@ describe("offer-extra routes — extension request edge cases", () => {
   it("returns 400 for invalid body (reason too short)", async () => {
     H.findOffer.mockResolvedValue({ id: OFF, tenantId: TENANT, status: "accepted", joiningDate: "2026-09-01", joiningExtensionStatus: "none", version: 1 });
     const app = await buildApp();
-    const r = await app.inject({ method: "POST", url: `/v1/hrms/offers/${OFF}/joining-extension`, headers: auth(), payload: { requestedJoiningDate: "2026-10-15", reason: "ab" } });
+    const r = await injectF3(app, { method: "POST", url: `/v1/hrms/offers/${OFF}/joining-extension`, headers: auth(), payload: { requestedJoiningDate: "2026-10-15", reason: "ab" } });
     expect(r.statusCode).toBe(400);
     await app.close();
   });
@@ -694,7 +726,7 @@ describe("offer-extra routes — extension request edge cases", () => {
   it("returns 400 for invalid date format", async () => {
     H.findOffer.mockResolvedValue({ id: OFF, tenantId: TENANT, status: "accepted", joiningDate: "2026-09-01", joiningExtensionStatus: "none", version: 1 });
     const app = await buildApp();
-    const r = await app.inject({ method: "POST", url: `/v1/hrms/offers/${OFF}/joining-extension`, headers: auth(), payload: { requestedJoiningDate: "not-a-date", reason: "relocation" } });
+    const r = await injectF3(app, { method: "POST", url: `/v1/hrms/offers/${OFF}/joining-extension`, headers: auth(), payload: { requestedJoiningDate: "not-a-date", reason: "relocation" } });
     expect(r.statusCode).toBe(400);
     await app.close();
   });

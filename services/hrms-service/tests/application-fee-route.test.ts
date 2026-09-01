@@ -16,10 +16,16 @@ const H = vi.hoisted(() => ({
 }));
 
 vi.mock("../src/modules/recruitment/audit-emit.js", () => ({ emitAudit: async () => undefined }));
-vi.mock("../src/shared/db.js", async (io) => ({
-  ...(await io<Record<string, unknown>>()),
-  db: { transaction: async (cb: (tx: unknown) => Promise<unknown>) => cb({}) },
-}));
+vi.mock("../src/shared/db.js", async (io) => {
+  // markProcessed() in the F3 consumer runs
+  // insert(...).values(...).onConflictDoNothing().returning() on the tx, which a
+  // bare {} cannot answer — the consumer threw before reaching any case.
+  const stubTx = { insert: () => ({ values: () => ({ onConflictDoNothing: () => ({ returning: async () => [{ messageId: "stub" }] }) }) }) };
+  return {
+    ...(await io<Record<string, unknown>>()),
+    db: { transaction: async (cb: (tx: unknown) => Promise<unknown>) => cb(stubTx), insert: () => ({ values: async () => undefined }) },
+  };
+});
 vi.mock("../src/modules/recruitment/screening-repo.js", async (io) => ({
   ...(await io<Record<string, unknown>>()),
   findApplication: (...a: unknown[]) => H.findApplication(...a),
@@ -33,6 +39,26 @@ vi.mock("../src/modules/recruitment/application-fee-repo.js", async (io) => ({
 }));
 
 import { buildApp } from "../src/app.js";
+
+import { queue } from "../src/shared/infra.js";
+import { registerF3_recruitment_Consumers } from "../src/modules/recruitment/f3-consumer.js";
+
+// These routes only PUBLISH; the row is written by the recruitment F3 consumer
+// that f3-leftover-register.ts wires into the worker. Register it here so the
+// suite exercises the whole write path instead of the HTTP layer alone.
+registerF3_recruitment_Consumers(queue);
+/** Await the in-memory queue's fan-out so the consumer's write has happened. */
+async function drainF3(): Promise<void> {
+  await (queue as unknown as import("@civitasone/queue").MemoryQueue).drain();
+}
+type TestApp = { inject: (opts: never) => Promise<never> };
+/** inject() + drain, so an assertion never races the async F3 write. */
+async function injectF3(app: TestApp, opts: unknown): Promise<never> {
+  const res = await app.inject(opts as never);
+  await drainF3();
+  return res;
+}
+
 import { sqlClient } from "../src/shared/db.js";
 
 const tok = (roles: string[]) => signToken({ sub: USER, tid: TENANT, roles, sid: "s" }, SECRET);
@@ -53,7 +79,7 @@ afterAll(async () => { await sqlClient.end(); });
 describe("application fee (R-RA-0099)", () => {
   it("assesses a pending fee for a non-exempt candidate (201, amount as string)", async () => {
     const app = await buildApp();
-    const r = await app.inject({ method: "POST", url: `/v1/hrms/applications/${APP}/fee/assess`, headers: auth(["hr_officer"]) });
+    const r = await injectF3(app, { method: "POST", url: `/v1/hrms/applications/${APP}/fee/assess`, headers: auth(["hr_officer"]) });
     expect(r.statusCode).toBe(201);
     expect(r.json().data).toMatchObject({ status: "pending", amountMinor: "50000", currency: "INR" });
     await app.close();
@@ -62,7 +88,7 @@ describe("application fee (R-RA-0099)", () => {
   it("assesses exempt for a reserved category", async () => {
     H.findApplication.mockResolvedValue({ id: APP, tenantId: TENANT, jobOpeningId: JOB, category: "SC" });
     const app = await buildApp();
-    const r = await app.inject({ method: "POST", url: `/v1/hrms/applications/${APP}/fee/assess`, headers: auth(), payload: { categoryVerified: true } });
+    const r = await injectF3(app, { method: "POST", url: `/v1/hrms/applications/${APP}/fee/assess`, headers: auth(), payload: { categoryVerified: true } });
     expect(r.statusCode).toBe(201);
     expect(r.json().data).toMatchObject({ status: "exempt", amountMinor: "0" });
     await app.close();
@@ -71,7 +97,7 @@ describe("application fee (R-RA-0099)", () => {
   it("does NOT exempt a self-declared category without verification (pending)", async () => {
     H.findApplication.mockResolvedValue({ id: APP, tenantId: TENANT, jobOpeningId: JOB, category: "SC" });
     const app = await buildApp();
-    const r = await app.inject({ method: "POST", url: `/v1/hrms/applications/${APP}/fee/assess`, headers: auth() });
+    const r = await injectF3(app, { method: "POST", url: `/v1/hrms/applications/${APP}/fee/assess`, headers: auth() });
     expect(r.statusCode).toBe(201);
     expect(r.json().data).toMatchObject({ status: "pending", amountMinor: "50000" });
     await app.close();
@@ -80,7 +106,7 @@ describe("application fee (R-RA-0099)", () => {
   it("is idempotent — returns the existing fee (200 assessed:false)", async () => {
     H.findFee.mockResolvedValue(feeRow());
     const app = await buildApp();
-    const r = await app.inject({ method: "POST", url: `/v1/hrms/applications/${APP}/fee/assess`, headers: auth() });
+    const r = await injectF3(app, { method: "POST", url: `/v1/hrms/applications/${APP}/fee/assess`, headers: auth() });
     expect(r.statusCode).toBe(200);
     expect(r.json().assessed).toBe(false);
     expect(H.insertFee).not.toHaveBeenCalled();
@@ -90,7 +116,7 @@ describe("application fee (R-RA-0099)", () => {
   it("404 assess for a missing application", async () => {
     H.findApplication.mockResolvedValue(null);
     const app = await buildApp();
-    const r = await app.inject({ method: "POST", url: `/v1/hrms/applications/${APP}/fee/assess`, headers: auth() });
+    const r = await injectF3(app, { method: "POST", url: `/v1/hrms/applications/${APP}/fee/assess`, headers: auth() });
     expect(r.statusCode).toBe(404);
     await app.close();
   });
@@ -98,7 +124,7 @@ describe("application fee (R-RA-0099)", () => {
   it("records a manual payment with a reference (200 paid)", async () => {
     H.findFee.mockResolvedValue(feeRow());
     const app = await buildApp();
-    const r = await app.inject({ method: "POST", url: `/v1/hrms/applications/${APP}/fee/pay`, headers: auth(["hr_admin"]), payload: { mode: "manual", paymentRef: "CHALLAN-9" } });
+    const r = await injectF3(app, { method: "POST", url: `/v1/hrms/applications/${APP}/fee/pay`, headers: auth(["hr_admin"]), payload: { mode: "manual", paymentRef: "CHALLAN-9" } });
     expect(r.statusCode).toBe(200);
     expect(r.json().data).toMatchObject({ status: "paid", provider: "manual", paymentRef: "CHALLAN-9" });
     expect(H.updateFee).toHaveBeenCalledOnce();
@@ -108,7 +134,7 @@ describe("application fee (R-RA-0099)", () => {
   it("rejects a manual payment without a reference (422)", async () => {
     H.findFee.mockResolvedValue(feeRow());
     const app = await buildApp();
-    const r = await app.inject({ method: "POST", url: `/v1/hrms/applications/${APP}/fee/pay`, headers: auth(["hr_admin"]), payload: { mode: "manual" } });
+    const r = await injectF3(app, { method: "POST", url: `/v1/hrms/applications/${APP}/fee/pay`, headers: auth(["hr_admin"]), payload: { mode: "manual" } });
     expect(r.statusCode).toBe(422);
     expect(r.json().code).toBe("INVALID_PAYMENT");
     await app.close();
@@ -117,7 +143,7 @@ describe("application fee (R-RA-0099)", () => {
   it("cannot pay an exempt fee (409)", async () => {
     H.findFee.mockResolvedValue(feeRow({ status: "exempt", amountMinor: 0n }));
     const app = await buildApp();
-    const r = await app.inject({ method: "POST", url: `/v1/hrms/applications/${APP}/fee/pay`, headers: auth(["hr_admin"]), payload: { paymentRef: "x" } });
+    const r = await injectF3(app, { method: "POST", url: `/v1/hrms/applications/${APP}/fee/pay`, headers: auth(["hr_admin"]), payload: { paymentRef: "x" } });
     expect(r.statusCode).toBe(409);
     expect(r.json().code).toBe("FEE_EXEMPT");
     await app.close();
@@ -126,7 +152,7 @@ describe("application fee (R-RA-0099)", () => {
   it("cannot pay a refunded fee (409 NOT_PAYABLE)", async () => {
     H.findFee.mockResolvedValue(feeRow({ status: "refunded" }));
     const app = await buildApp();
-    const r = await app.inject({ method: "POST", url: `/v1/hrms/applications/${APP}/fee/pay`, headers: auth(["hr_admin"]), payload: { paymentRef: "x" } });
+    const r = await injectF3(app, { method: "POST", url: `/v1/hrms/applications/${APP}/fee/pay`, headers: auth(["hr_admin"]), payload: { paymentRef: "x" } });
     expect(r.statusCode).toBe(409);
     expect(r.json().code).toBe("NOT_PAYABLE");
     await app.close();
@@ -135,7 +161,7 @@ describe("application fee (R-RA-0099)", () => {
   it("online payment is 501 when the gateway is not enabled (honest, not faked)", async () => {
     H.findFee.mockResolvedValue(feeRow());
     const app = await buildApp();
-    const r = await app.inject({ method: "POST", url: `/v1/hrms/applications/${APP}/fee/pay`, headers: auth(["hr_admin"]), payload: { mode: "online" } });
+    const r = await injectF3(app, { method: "POST", url: `/v1/hrms/applications/${APP}/fee/pay`, headers: auth(["hr_admin"]), payload: { mode: "online" } });
     expect(r.statusCode).toBe(501);
     expect(H.updateFee).not.toHaveBeenCalled();
     await app.close();
@@ -144,7 +170,7 @@ describe("application fee (R-RA-0099)", () => {
   it("forbids an hr_officer from recording a payment (403)", async () => {
     H.findFee.mockResolvedValue(feeRow());
     const app = await buildApp();
-    const r = await app.inject({ method: "POST", url: `/v1/hrms/applications/${APP}/fee/pay`, headers: auth(["hr_officer"]), payload: { paymentRef: "x" } });
+    const r = await injectF3(app, { method: "POST", url: `/v1/hrms/applications/${APP}/fee/pay`, headers: auth(["hr_officer"]), payload: { paymentRef: "x" } });
     expect(r.statusCode).toBe(403);
     await app.close();
   });
@@ -152,7 +178,7 @@ describe("application fee (R-RA-0099)", () => {
   it("gets the fee status (200)", async () => {
     H.findFee.mockResolvedValue(feeRow({ status: "paid", provider: "manual", paymentRef: "CH-1", paidAt: new Date("2026-07-01T00:00:00Z") }));
     const app = await buildApp();
-    const r = await app.inject({ method: "GET", url: `/v1/hrms/applications/${APP}/fee`, headers: auth(["hr_officer"]) });
+    const r = await injectF3(app, { method: "GET", url: `/v1/hrms/applications/${APP}/fee`, headers: auth(["hr_officer"]) });
     expect(r.statusCode).toBe(200);
     expect(r.json().data).toMatchObject({ status: "paid", amountMinor: "50000", paymentRef: "CH-1" });
     await app.close();
@@ -160,7 +186,7 @@ describe("application fee (R-RA-0099)", () => {
 
   it("requires auth (401)", async () => {
     const app = await buildApp();
-    const r = await app.inject({ method: "GET", url: `/v1/hrms/applications/${APP}/fee` });
+    const r = await injectF3(app, { method: "GET", url: `/v1/hrms/applications/${APP}/fee` });
     expect(r.statusCode).toBe(401);
     await app.close();
   });

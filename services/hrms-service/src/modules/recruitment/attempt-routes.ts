@@ -118,7 +118,7 @@ export async function assessmentAttemptRoutes(app: FastifyInstance): Promise<voi
     }
 
     const id = randomUUID();
-    await publishF3Write(ctx, "recruitment_attempt_routes__0", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    await publishF3Write(ctx, "recruitment_attempt_routes__0", id, { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     return reply.code(201).send({ id, status: "scheduled", totalMarks, questions: paper.length }) as any;
   });
 
@@ -129,7 +129,7 @@ export async function assessmentAttemptRoutes(app: FastifyInstance): Promise<voi
       const { id } = idParam.parse(req.params);
       const s = await mustSchedule(ctx.tenantId, id);
       if (!(from as readonly string[]).includes(s.status)) throw new HttpError(409, "INVALID_STATE", `cannot ${action} a schedule in status "${s.status}"`);
-      await publishF3Write(ctx, "recruitment_attempt_routes__1", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+      await publishF3Write(ctx, "recruitment_attempt_routes__1", id, { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown>, nextStatus: to })
       return reply.send({ id, status: to }) as any;
     });
   }
@@ -171,7 +171,7 @@ export async function assessmentAttemptRoutes(app: FastifyInstance): Promise<voi
     const paperIds = (s.paper as PaperEntry[]).map((p) => p.questionId);
     const order = randomizeQuestionOrder(paperIds, attemptId); // per-candidate deterministic order
     try {
-      await publishF3Write(ctx, "recruitment_attempt_routes__2", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+      await publishF3Write(ctx, "recruitment_attempt_routes__2", attemptId, { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     } catch (e) {
       if ((e as { code?: string }).code === "23505") throw new HttpError(409, "DUPLICATE_ATTEMPT", "this candidate already has an attempt for this schedule") as any;
       throw e;

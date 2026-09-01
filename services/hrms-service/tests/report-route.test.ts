@@ -18,10 +18,16 @@ const H = vi.hoisted(() => ({
   insertResultEvent: vi.fn(), listResponsesForAttempts: vi.fn(),
 }));
 
-vi.mock("../src/shared/db.js", async (io) => ({
-  ...(await io<Record<string, unknown>>()),
-  db: { transaction: async (cb: (tx: unknown) => Promise<void>) => cb({}), insert: () => ({ values: async () => undefined }) },
-}));
+vi.mock("../src/shared/db.js", async (io) => {
+  // markProcessed() in the F3 consumer runs
+  // insert(...).values(...).onConflictDoNothing().returning() on the tx, which a
+  // bare {} cannot answer — the consumer threw before reaching any case.
+  const stubTx = { insert: () => ({ values: () => ({ onConflictDoNothing: () => ({ returning: async () => [{ messageId: "stub" }] }) }) }) };
+  return {
+    ...(await io<Record<string, unknown>>()),
+    db: { transaction: async (cb: (tx: unknown) => Promise<unknown>) => cb(stubTx), insert: () => ({ values: async () => undefined }) },
+  };
+});
 vi.mock("../src/modules/recruitment/attempt-repo.js", async (io) => ({
   ...(await io<Record<string, unknown>>()),
   findAttempt: (...a: unknown[]) => H.findAttempt(...a),
@@ -40,6 +46,26 @@ vi.mock("../src/modules/recruitment/report-repo.js", async (io) => ({
 }));
 
 import { buildApp } from "../src/app.js";
+
+import { queue } from "../src/shared/infra.js";
+import { registerF3_recruitment_Consumers } from "../src/modules/recruitment/f3-consumer.js";
+
+// These routes only PUBLISH; the row is written by the recruitment F3 consumer
+// that f3-leftover-register.ts wires into the worker. Register it here so the
+// suite exercises the whole write path instead of the HTTP layer alone.
+registerF3_recruitment_Consumers(queue);
+/** Await the in-memory queue's fan-out so the consumer's write has happened. */
+async function drainF3(): Promise<void> {
+  await (queue as unknown as import("@civitasone/queue").MemoryQueue).drain();
+}
+type TestApp = { inject: (opts: never) => Promise<never> };
+/** inject() + drain, so an assertion never races the async F3 write. */
+async function injectF3(app: TestApp, opts: unknown): Promise<never> {
+  const res = await app.inject(opts as never);
+  await drainF3();
+  return res;
+}
+
 import { sqlClient } from "../src/shared/db.js";
 
 const admin = { authorization: `Bearer ${signToken({ sub: ADMIN, tid: TENANT, roles: ["hr_admin"], sid: "s" }, SECRET)}` };
@@ -66,9 +92,9 @@ describe("assessment disposition + report routes", () => {
   it("voids an attempt for malpractice (senior role) and blocks hr_officer (403)", async () => {
     H.findAttempt.mockResolvedValue(attempt());
     const app = await buildApp();
-    const denied = await app.inject({ method: "POST", url: `/v1/hrms/assessments/attempts/${ATT}/malpractice`, headers: officer, payload: { reason: "impersonation" } });
+    const denied = await injectF3(app, { method: "POST", url: `/v1/hrms/assessments/attempts/${ATT}/malpractice`, headers: officer, payload: { reason: "impersonation" } });
     expect(denied.statusCode).toBe(403);
-    const r = await app.inject({ method: "POST", url: `/v1/hrms/assessments/attempts/${ATT}/malpractice`, headers: admin, payload: { reason: "impersonation" } });
+    const r = await injectF3(app, { method: "POST", url: `/v1/hrms/assessments/attempts/${ATT}/malpractice`, headers: admin, payload: { reason: "impersonation" } });
     expect(r.statusCode).toBe(200);
     expect(r.json().disposition).toBe("malpractice");
     const patch = H.updateAttempt.mock.calls[0][3] as { status: string; disposition: string };
@@ -80,7 +106,7 @@ describe("assessment disposition + report routes", () => {
   it("refuses to malpractice an already-void attempt (409)", async () => {
     H.findAttempt.mockResolvedValue(attempt({ status: "void" }));
     const app = await buildApp();
-    const r = await app.inject({ method: "POST", url: `/v1/hrms/assessments/attempts/${ATT}/malpractice`, headers: admin, payload: { reason: "duplicate flag" } });
+    const r = await injectF3(app, { method: "POST", url: `/v1/hrms/assessments/attempts/${ATT}/malpractice`, headers: admin, payload: { reason: "duplicate flag" } });
     expect(r.statusCode).toBe(409);
     expect(r.json().code).toBe("ALREADY_VOID");
     await app.close();
@@ -89,7 +115,7 @@ describe("assessment disposition + report routes", () => {
   it("malpractice on a published+frozen result revokes it (clears frozen/published)", async () => {
     H.findAttempt.mockResolvedValue(attempt({ frozen: true, published: true }));
     const app = await buildApp();
-    const r = await app.inject({ method: "POST", url: `/v1/hrms/assessments/attempts/${ATT}/malpractice`, headers: admin, payload: { reason: "post-result impersonation finding" } });
+    const r = await injectF3(app, { method: "POST", url: `/v1/hrms/assessments/attempts/${ATT}/malpractice`, headers: admin, payload: { reason: "post-result impersonation finding" } });
     expect(r.statusCode).toBe(200);
     const patch = H.updateAttempt.mock.calls[0][3] as { frozen: boolean; published: boolean; status: string };
     expect(patch.frozen).toBe(false);
@@ -101,7 +127,7 @@ describe("assessment disposition + report routes", () => {
   it("reschedules: voids the original and creates a fresh randomised attempt (201)", async () => {
     H.findAttempt.mockResolvedValue(attempt());
     const app = await buildApp();
-    const r = await app.inject({ method: "POST", url: `/v1/hrms/assessments/attempts/${ATT}/reschedule`, headers: admin, payload: { type: "technical_disruption", reason: "power outage" } });
+    const r = await injectF3(app, { method: "POST", url: `/v1/hrms/assessments/attempts/${ATT}/reschedule`, headers: admin, payload: { type: "technical_disruption", reason: "power outage" } });
     expect(r.statusCode).toBe(201);
     expect(r.json().newAttemptId).toBeTruthy();
     // original voided + superseded
@@ -118,7 +144,7 @@ describe("assessment disposition + report routes", () => {
   it("refuses to reschedule a frozen result (409)", async () => {
     H.findAttempt.mockResolvedValue(attempt({ frozen: true }));
     const app = await buildApp();
-    const r = await app.inject({ method: "POST", url: `/v1/hrms/assessments/attempts/${ATT}/reschedule`, headers: admin, payload: { type: "retest", reason: "network failed mid-exam" } });
+    const r = await injectF3(app, { method: "POST", url: `/v1/hrms/assessments/attempts/${ATT}/reschedule`, headers: admin, payload: { type: "retest", reason: "network failed mid-exam" } });
     expect(r.statusCode).toBe(409);
     expect(r.json().code).toBe("FROZEN");
     await app.close();
@@ -132,10 +158,10 @@ describe("assessment disposition + report routes", () => {
       attempt({ id: "y", status: "void", disposition: "malpractice" }),
     ]);
     const app = await buildApp();
-    const denied = await app.inject({ method: "GET", url: `/v1/hrms/assessments/schedules/${SCH}/report`, headers: officer });
+    const denied = await injectF3(app, { method: "GET", url: `/v1/hrms/assessments/schedules/${SCH}/report`, headers: officer });
     expect(denied.statusCode).toBe(403);
     expect(denied.json().code).toBe("SMALL_COHORT");
-    const ok = await app.inject({ method: "GET", url: `/v1/hrms/assessments/schedules/${SCH}/report`, headers: admin });
+    const ok = await injectF3(app, { method: "GET", url: `/v1/hrms/assessments/schedules/${SCH}/report`, headers: admin });
     expect(ok.statusCode).toBe(200);
     await app.close();
   });
@@ -146,7 +172,7 @@ describe("assessment disposition + report routes", () => {
     rows.push(attempt({ id: "voided1", status: "void", result: "not_qualified", disposition: "malpractice" }));
     H.listAttemptsBySchedule.mockResolvedValue(rows);
     const app = await buildApp();
-    const r = await app.inject({ method: "GET", url: `/v1/hrms/assessments/schedules/${SCH}/report`, headers: officer });
+    const r = await injectF3(app, { method: "GET", url: `/v1/hrms/assessments/schedules/${SCH}/report`, headers: officer });
     expect(r.statusCode).toBe(200); // 7 non-void >= MIN_REPORT_COHORT -> aggregate, hr_officer allowed
     const b = r.json();
     expect(b.attendance).toMatchObject({ evaluated: 6, assigned: 1, voided: 1 });
@@ -163,7 +189,7 @@ describe("assessment disposition + report routes", () => {
       { questionId: Q2, isCorrect: null, autoScore: null },
     ]);
     const app = await buildApp();
-    const r = await app.inject({ method: "GET", url: `/v1/hrms/assessments/schedules/${SCH}/item-analysis`, headers: admin });
+    const r = await injectF3(app, { method: "GET", url: `/v1/hrms/assessments/schedules/${SCH}/item-analysis`, headers: admin });
     expect(r.statusCode).toBe(200);
     const items = r.json().items;
     expect(items.find((i: { questionId: string }) => i.questionId === Q1)).toMatchObject({ attempted: 2, correct: 1, difficultyIndex: 0.5 });

@@ -58,7 +58,7 @@ export async function interviewResponseRoutes(app: FastifyInstance): Promise<voi
 
     const rid = randomUUID();
     try {
-      await publishF3Write(ctx, "recruitment_interview_response_routes__0", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+      await publishF3Write(ctx, "recruitment_interview_response_routes__0", rid, { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     } catch (err) {
       if (String((err as { code?: string }).code) === "23505") {
         throw new HttpError(409, "RESCHEDULE_PENDING", "a reschedule request is already pending for this interview") as any;

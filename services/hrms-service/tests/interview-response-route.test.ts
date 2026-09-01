@@ -16,10 +16,16 @@ const H = vi.hoisted(() => ({
   insertResponse: vi.fn(), findResponse: vi.fn(), findPending: vi.fn(), listForInterview: vi.fn(), setStatus: vi.fn(),
 }));
 
-vi.mock("../src/shared/db.js", async (io) => ({
-  ...(await io<Record<string, unknown>>()),
-  db: { transaction: async (cb: (tx: unknown) => Promise<unknown>) => cb({}) },
-}));
+vi.mock("../src/shared/db.js", async (io) => {
+  // markProcessed() in the F3 consumer runs
+  // insert(...).values(...).onConflictDoNothing().returning() on the tx, which a
+  // bare {} cannot answer — the consumer threw before reaching any case.
+  const stubTx = { insert: () => ({ values: () => ({ onConflictDoNothing: () => ({ returning: async () => [{ messageId: "stub" }] }) }) }) };
+  return {
+    ...(await io<Record<string, unknown>>()),
+    db: { transaction: async (cb: (tx: unknown) => Promise<unknown>) => cb(stubTx), insert: () => ({ values: async () => undefined }) },
+  };
+});
 vi.mock("../src/modules/recruitment/interview-comms-repo.js", async (io) => ({
   ...(await io<Record<string, unknown>>()),
   findInterview: (...a: unknown[]) => H.findInterview(...a),
@@ -35,6 +41,26 @@ vi.mock("../src/modules/recruitment/interview-response-repo.js", async (io) => (
 }));
 
 import { buildApp } from "../src/app.js";
+
+import { queue } from "../src/shared/infra.js";
+import { registerF3_recruitment_Consumers } from "../src/modules/recruitment/f3-consumer.js";
+
+// These routes only PUBLISH; the row is written by the recruitment F3 consumer
+// that f3-leftover-register.ts wires into the worker. Register it here so the
+// suite exercises the whole write path instead of the HTTP layer alone.
+registerF3_recruitment_Consumers(queue);
+/** Await the in-memory queue's fan-out so the consumer's write has happened. */
+async function drainF3(): Promise<void> {
+  await (queue as unknown as import("@civitasone/queue").MemoryQueue).drain();
+}
+type TestApp = { inject: (opts: never) => Promise<never> };
+/** inject() + drain, so an assertion never races the async F3 write. */
+async function injectF3(app: TestApp, opts: unknown): Promise<never> {
+  const res = await app.inject(opts as never);
+  await drainF3();
+  return res;
+}
+
 import { sqlClient } from "../src/shared/db.js";
 
 const tok = (roles: string[]) => signToken({ sub: USER, tid: TENANT, roles, sid: "s" }, SECRET);
@@ -57,7 +83,7 @@ afterAll(async () => { await sqlClient.end(); });
 describe("candidate interview response (R-RA-0143)", () => {
   it("records a confirm (201 confirmed)", async () => {
     const app = await buildApp();
-    const r = await app.inject({ method: "POST", url: `/v1/hrms/interviews/${IV}/candidate-response`, headers: auth(["hr_officer"]), payload: { type: "confirm" } });
+    const r = await injectF3(app, { method: "POST", url: `/v1/hrms/interviews/${IV}/candidate-response`, headers: auth(["hr_officer"]), payload: { type: "confirm" } });
     expect(r.statusCode).toBe(201);
     expect(r.json().status).toBe("confirmed");
     expect(H.insertResponse).toHaveBeenCalledOnce();
@@ -66,7 +92,7 @@ describe("candidate interview response (R-RA-0143)", () => {
 
   it("records a reschedule request (201 pending)", async () => {
     const app = await buildApp();
-    const r = await app.inject({ method: "POST", url: `/v1/hrms/interviews/${IV}/candidate-response`, headers: auth(), payload: { type: "reschedule_request", preferredDate: "2035-08-20", preferredTime: "09:30", reason: "exam clash" } });
+    const r = await injectF3(app, { method: "POST", url: `/v1/hrms/interviews/${IV}/candidate-response`, headers: auth(), payload: { type: "reschedule_request", preferredDate: "2035-08-20", preferredTime: "09:30", reason: "exam clash" } });
     expect(r.statusCode).toBe(201);
     expect(r.json().status).toBe("pending");
     await app.close();
@@ -74,7 +100,7 @@ describe("candidate interview response (R-RA-0143)", () => {
 
   it("rejects a reschedule request without a preferred slot (422)", async () => {
     const app = await buildApp();
-    const r = await app.inject({ method: "POST", url: `/v1/hrms/interviews/${IV}/candidate-response`, headers: auth(), payload: { type: "reschedule_request", reason: "clash" } });
+    const r = await injectF3(app, { method: "POST", url: `/v1/hrms/interviews/${IV}/candidate-response`, headers: auth(), payload: { type: "reschedule_request", reason: "clash" } });
     expect(r.statusCode).toBe(422);
     expect(r.json().code).toBe("INVALID_RESPONSE");
     await app.close();
@@ -83,7 +109,7 @@ describe("candidate interview response (R-RA-0143)", () => {
   it("rejects a second pending reschedule request (409)", async () => {
     H.findPending.mockResolvedValue(reqRow());
     const app = await buildApp();
-    const r = await app.inject({ method: "POST", url: `/v1/hrms/interviews/${IV}/candidate-response`, headers: auth(), payload: { type: "reschedule_request", preferredDate: "2035-08-20", preferredTime: "09:30", reason: "clash" } });
+    const r = await injectF3(app, { method: "POST", url: `/v1/hrms/interviews/${IV}/candidate-response`, headers: auth(), payload: { type: "reschedule_request", preferredDate: "2035-08-20", preferredTime: "09:30", reason: "clash" } });
     expect(r.statusCode).toBe(409);
     expect(r.json().code).toBe("RESCHEDULE_PENDING");
     await app.close();
@@ -92,7 +118,7 @@ describe("candidate interview response (R-RA-0143)", () => {
   it("blocks a response on a cancelled interview (409)", async () => {
     H.findInterview.mockResolvedValue(ivRow({ status: "cancelled" }));
     const app = await buildApp();
-    const r = await app.inject({ method: "POST", url: `/v1/hrms/interviews/${IV}/candidate-response`, headers: auth(), payload: { type: "confirm" } });
+    const r = await injectF3(app, { method: "POST", url: `/v1/hrms/interviews/${IV}/candidate-response`, headers: auth(), payload: { type: "confirm" } });
     expect(r.statusCode).toBe(409);
     expect(r.json().code).toBe("INTERVIEW_NOT_COMMABLE");
     await app.close();
@@ -100,7 +126,7 @@ describe("candidate interview response (R-RA-0143)", () => {
 
   it("HR approves a reschedule request and applies the slot (200)", async () => {
     const app = await buildApp();
-    const r = await app.inject({ method: "POST", url: `/v1/hrms/interview-reschedule-requests/${REQ}/approve`, headers: auth(["hr_admin"]), payload: { note: "ok" } });
+    const r = await injectF3(app, { method: "POST", url: `/v1/hrms/interview-reschedule-requests/${REQ}/approve`, headers: auth(["hr_admin"]), payload: { note: "ok" } });
     expect(r.statusCode).toBe(200);
     expect(r.json()).toMatchObject({ status: "approved", scheduledDate: "2026-08-20", scheduledTime: "09:30" });
     expect(H.reschedule).toHaveBeenCalledOnce();
@@ -110,7 +136,7 @@ describe("candidate interview response (R-RA-0143)", () => {
 
   it("forbids an hr_officer from approving (403)", async () => {
     const app = await buildApp();
-    const r = await app.inject({ method: "POST", url: `/v1/hrms/interview-reschedule-requests/${REQ}/approve`, headers: auth(["hr_officer"]), payload: {} });
+    const r = await injectF3(app, { method: "POST", url: `/v1/hrms/interview-reschedule-requests/${REQ}/approve`, headers: auth(["hr_officer"]), payload: {} });
     expect(r.statusCode).toBe(403);
     await app.close();
   });
@@ -118,7 +144,7 @@ describe("candidate interview response (R-RA-0143)", () => {
   it("rejects approving a non-pending request (409 NOT_PENDING)", async () => {
     H.findResponse.mockResolvedValue(reqRow({ status: "approved" }));
     const app = await buildApp();
-    const r = await app.inject({ method: "POST", url: `/v1/hrms/interview-reschedule-requests/${REQ}/approve`, headers: auth(["hr_admin"]), payload: {} });
+    const r = await injectF3(app, { method: "POST", url: `/v1/hrms/interview-reschedule-requests/${REQ}/approve`, headers: auth(["hr_admin"]), payload: {} });
     expect(r.statusCode).toBe(409);
     expect(r.json().code).toBe("NOT_PENDING");
     await app.close();
@@ -127,7 +153,7 @@ describe("candidate interview response (R-RA-0143)", () => {
   it("maps a version conflict on approve to 409", async () => {
     H.reschedule.mockResolvedValue(false);
     const app = await buildApp();
-    const r = await app.inject({ method: "POST", url: `/v1/hrms/interview-reschedule-requests/${REQ}/approve`, headers: auth(["hr_admin"]), payload: {} });
+    const r = await injectF3(app, { method: "POST", url: `/v1/hrms/interview-reschedule-requests/${REQ}/approve`, headers: auth(["hr_admin"]), payload: {} });
     expect(r.statusCode).toBe(409);
     expect(r.json().code).toBe("VERSION_CONFLICT");
     await app.close();
@@ -135,7 +161,7 @@ describe("candidate interview response (R-RA-0143)", () => {
 
   it("HR declines a reschedule request (200)", async () => {
     const app = await buildApp();
-    const r = await app.inject({ method: "POST", url: `/v1/hrms/interview-reschedule-requests/${REQ}/decline`, headers: auth(["hr_admin"]), payload: { note: "no slots" } });
+    const r = await injectF3(app, { method: "POST", url: `/v1/hrms/interview-reschedule-requests/${REQ}/decline`, headers: auth(["hr_admin"]), payload: { note: "no slots" } });
     expect(r.statusCode).toBe(200);
     expect(r.json().status).toBe("declined");
     expect(H.reschedule).not.toHaveBeenCalled();
@@ -145,14 +171,14 @@ describe("candidate interview response (R-RA-0143)", () => {
   it("404 when approving a request that does not exist", async () => {
     H.findResponse.mockResolvedValue(null);
     const app = await buildApp();
-    const r = await app.inject({ method: "POST", url: `/v1/hrms/interview-reschedule-requests/${REQ}/approve`, headers: auth(["hr_admin"]), payload: {} });
+    const r = await injectF3(app, { method: "POST", url: `/v1/hrms/interview-reschedule-requests/${REQ}/approve`, headers: auth(["hr_admin"]), payload: {} });
     expect(r.statusCode).toBe(404);
     await app.close();
   });
 
   it("lists candidate responses (200)", async () => {
     const app = await buildApp();
-    const r = await app.inject({ method: "GET", url: `/v1/hrms/interviews/${IV}/candidate-responses`, headers: auth(["hr_officer"]) });
+    const r = await injectF3(app, { method: "GET", url: `/v1/hrms/interviews/${IV}/candidate-responses`, headers: auth(["hr_officer"]) });
     expect(r.statusCode).toBe(200);
     expect(r.json().data).toHaveLength(1);
     await app.close();
@@ -160,7 +186,7 @@ describe("candidate interview response (R-RA-0143)", () => {
 
   it("requires auth (401)", async () => {
     const app = await buildApp();
-    const r = await app.inject({ method: "GET", url: `/v1/hrms/interviews/${IV}/candidate-responses` });
+    const r = await injectF3(app, { method: "GET", url: `/v1/hrms/interviews/${IV}/candidate-responses` });
     expect(r.statusCode).toBe(401);
     await app.close();
   });

@@ -22,10 +22,16 @@ const H = vi.hoisted(() => ({
   saveResponse: vi.fn(), updateResponseScore: vi.fn(), listResponses: vi.fn(),
 }));
 
-vi.mock("../src/shared/db.js", async (io) => ({
-  ...(await io<Record<string, unknown>>()),
-  db: { transaction: async (cb: (tx: unknown) => Promise<void>) => cb({}), insert: () => ({ values: async () => undefined }) },
-}));
+vi.mock("../src/shared/db.js", async (io) => {
+  // markProcessed() in the F3 consumer runs
+  // insert(...).values(...).onConflictDoNothing().returning() on the tx, which a
+  // bare {} cannot answer — the consumer threw before reaching any case.
+  const stubTx = { insert: () => ({ values: () => ({ onConflictDoNothing: () => ({ returning: async () => [{ messageId: "stub" }] }) }) }) };
+  return {
+    ...(await io<Record<string, unknown>>()),
+    db: { transaction: async (cb: (tx: unknown) => Promise<unknown>) => cb(stubTx), insert: () => ({ values: async () => undefined }) },
+  };
+});
 vi.mock("../src/modules/recruitment/blueprint-repo.js", async (io) => ({
   ...(await io<Record<string, unknown>>()),
   findBlueprint: (...a: unknown[]) => H.findBlueprint(...a),
@@ -47,6 +53,26 @@ vi.mock("../src/modules/recruitment/attempt-repo.js", async (io) => ({
 }));
 
 import { buildApp } from "../src/app.js";
+
+import { queue } from "../src/shared/infra.js";
+import { registerF3_recruitment_Consumers } from "../src/modules/recruitment/f3-consumer.js";
+
+// These routes only PUBLISH; the row is written by the recruitment F3 consumer
+// that f3-leftover-register.ts wires into the worker. Register it here so the
+// suite exercises the whole write path instead of the HTTP layer alone.
+registerF3_recruitment_Consumers(queue);
+/** Await the in-memory queue's fan-out so the consumer's write has happened. */
+async function drainF3(): Promise<void> {
+  await (queue as unknown as import("@civitasone/queue").MemoryQueue).drain();
+}
+type TestApp = { inject: (opts: never) => Promise<never> };
+/** inject() + drain, so an assertion never races the async F3 write. */
+async function injectF3(app: TestApp, opts: unknown): Promise<never> {
+  const res = await app.inject(opts as never);
+  await drainF3();
+  return res;
+}
+
 import { sqlClient } from "../src/shared/db.js";
 
 const auth = { authorization: `Bearer ${signToken({ sub: USER, tid: TENANT, roles: ["hr_admin"], sid: "s" }, SECRET)}` };
@@ -93,7 +119,7 @@ describe("assessment schedule + attempt routes", () => {
     H.findBlueprint.mockResolvedValue(activeBlueprint());
     H.findQuestion.mockImplementation((_t: string, id: string) => Promise.resolve(validatedQ(id)));
     const app = await buildApp();
-    const r = await app.inject({ method: "POST", url: "/v1/hrms/assessments/schedules", headers: auth, payload: createBody([{ questionId: Q1, section: "apt" }, { questionId: Q2, section: "apt" }]) });
+    const r = await injectF3(app, { method: "POST", url: "/v1/hrms/assessments/schedules", headers: auth, payload: createBody([{ questionId: Q1, section: "apt" }, { questionId: Q2, section: "apt" }]) });
     expect(r.statusCode).toBe(201);
     expect(r.json().totalMarks).toBe(10);
     expect(H.insertSchedule).toHaveBeenCalledOnce();
@@ -104,7 +130,7 @@ describe("assessment schedule + attempt routes", () => {
     H.findBlueprint.mockResolvedValue(activeBlueprint());
     H.findQuestion.mockImplementation((_t: string, id: string) => Promise.resolve(validatedQ(id)));
     const app = await buildApp();
-    const r = await app.inject({ method: "POST", url: "/v1/hrms/assessments/schedules", headers: auth, payload: createBody([{ questionId: Q1, section: "apt" }]) });
+    const r = await injectF3(app, { method: "POST", url: "/v1/hrms/assessments/schedules", headers: auth, payload: createBody([{ questionId: Q1, section: "apt" }]) });
     expect(r.statusCode).toBe(422);
     expect(r.json().code).toBe("SECTION_COUNT_MISMATCH");
     await app.close();
@@ -113,7 +139,7 @@ describe("assessment schedule + attempt routes", () => {
   it("refuses to schedule from an inactive blueprint (409)", async () => {
     H.findBlueprint.mockResolvedValue(activeBlueprint({ status: "draft" }));
     const app = await buildApp();
-    const r = await app.inject({ method: "POST", url: "/v1/hrms/assessments/schedules", headers: auth, payload: createBody([{ questionId: Q1, section: "apt" }, { questionId: Q2, section: "apt" }]) });
+    const r = await injectF3(app, { method: "POST", url: "/v1/hrms/assessments/schedules", headers: auth, payload: createBody([{ questionId: Q1, section: "apt" }, { questionId: Q2, section: "apt" }]) });
     expect(r.statusCode).toBe(409);
     expect(r.json().code).toBe("BLUEPRINT_NOT_ACTIVE");
     await app.close();
@@ -123,7 +149,7 @@ describe("assessment schedule + attempt routes", () => {
     H.findBlueprint.mockResolvedValue(activeBlueprint());
     H.findQuestion.mockImplementation((_t: string, id: string) => Promise.resolve({ ...validatedQ(id), status: "draft" }));
     const app = await buildApp();
-    const r = await app.inject({ method: "POST", url: "/v1/hrms/assessments/schedules", headers: auth, payload: createBody([{ questionId: Q1, section: "apt" }, { questionId: Q2, section: "apt" }]) });
+    const r = await injectF3(app, { method: "POST", url: "/v1/hrms/assessments/schedules", headers: auth, payload: createBody([{ questionId: Q1, section: "apt" }, { questionId: Q2, section: "apt" }]) });
     expect(r.statusCode).toBe(422);
     expect(r.json().code).toBe("QUESTION_NOT_VALIDATED");
     await app.close();
@@ -132,7 +158,7 @@ describe("assessment schedule + attempt routes", () => {
   it("assigns a candidate and randomises their question order (201)", async () => {
     H.findSchedule.mockResolvedValue(schedule());
     const app = await buildApp();
-    const r = await app.inject({ method: "POST", url: `/v1/hrms/assessments/schedules/${SCH}/attempts`, headers: auth, payload: { candidateId: USER } });
+    const r = await injectF3(app, { method: "POST", url: `/v1/hrms/assessments/schedules/${SCH}/attempts`, headers: auth, payload: { candidateId: USER } });
     expect(r.statusCode).toBe(201);
     const order = H.insertAttempt.mock.calls[0][1].questionOrder as string[];
     expect([...order].sort()).toEqual([Q1, Q2].sort());
@@ -143,7 +169,7 @@ describe("assessment schedule + attempt routes", () => {
     H.findAttempt.mockResolvedValue(attempt({ identityVerified: false }));
     H.findSchedule.mockResolvedValue(schedule());
     const app = await buildApp();
-    const r = await app.inject({ method: "POST", url: `/v1/hrms/assessments/attempts/${ATT}/start`, headers: auth, payload: {} });
+    const r = await injectF3(app, { method: "POST", url: `/v1/hrms/assessments/attempts/${ATT}/start`, headers: auth, payload: {} });
     expect(r.statusCode).toBe(409);
     expect(r.json().code).toBe("IDENTITY_REQUIRED");
     await app.close();
@@ -154,7 +180,7 @@ describe("assessment schedule + attempt routes", () => {
     H.findSchedule.mockResolvedValue(schedule({ status: "open" }));
     H.findBlueprint.mockResolvedValue(activeBlueprint());
     const app = await buildApp();
-    const r = await app.inject({ method: "POST", url: `/v1/hrms/assessments/attempts/${ATT}/start`, headers: auth, payload: {} });
+    const r = await injectF3(app, { method: "POST", url: `/v1/hrms/assessments/attempts/${ATT}/start`, headers: auth, payload: {} });
     expect(r.statusCode).toBe(200);
     expect(r.json().status).toBe("in_progress");
     expect(r.json().deadlineAt).toBeTruthy();
@@ -165,7 +191,7 @@ describe("assessment schedule + attempt routes", () => {
     H.findAttempt.mockResolvedValue(attempt({ status: "in_progress", questionOrder: [Q2, Q1] }));
     H.findSchedule.mockResolvedValue(schedule());
     const app = await buildApp();
-    const r = await app.inject({ method: "GET", url: `/v1/hrms/assessments/attempts/${ATT}/paper`, headers: auth });
+    const r = await injectF3(app, { method: "GET", url: `/v1/hrms/assessments/attempts/${ATT}/paper`, headers: auth });
     expect(r.statusCode).toBe(200);
     const qs = r.json().questions;
     expect(qs.map((q: { questionId: string }) => q.questionId)).toEqual([Q2, Q1]); // candidate order
@@ -176,10 +202,10 @@ describe("assessment schedule + attempt routes", () => {
   it("auto-saves responses while in progress (200) and rejects unknown questions (422)", async () => {
     H.findAttempt.mockResolvedValue(attempt({ status: "in_progress", deadlineAt: new Date(Date.now() + 600_000) }));
     const app = await buildApp();
-    const ok = await app.inject({ method: "PATCH", url: `/v1/hrms/assessments/attempts/${ATT}/responses`, headers: auth, payload: { responses: [{ questionId: Q1, response: { selected: ["b"] } }] } });
+    const ok = await injectF3(app, { method: "PATCH", url: `/v1/hrms/assessments/attempts/${ATT}/responses`, headers: auth, payload: { responses: [{ questionId: Q1, response: { selected: ["b"] } }] } });
     expect(ok.statusCode).toBe(200);
     expect(H.saveResponse).toHaveBeenCalledOnce();
-    const bad = await app.inject({ method: "PATCH", url: `/v1/hrms/assessments/attempts/${ATT}/responses`, headers: auth, payload: { responses: [{ questionId: "99999999-3333-4000-8000-000000000009", response: {} }] } });
+    const bad = await injectF3(app, { method: "PATCH", url: `/v1/hrms/assessments/attempts/${ATT}/responses`, headers: auth, payload: { responses: [{ questionId: "99999999-3333-4000-8000-000000000009", response: {} }] } });
     expect(bad.statusCode).toBe(422);
     expect(bad.json().code).toBe("UNKNOWN_QUESTION");
     await app.close();
@@ -189,11 +215,11 @@ describe("assessment schedule + attempt routes", () => {
     H.findAttempt.mockResolvedValue(attempt({ status: "in_progress", deadlineAt: new Date(Date.now() + 600_000) }));
     H.findSchedule.mockResolvedValue(schedule({ status: "cancelled" }));
     const app = await buildApp();
-    const save = await app.inject({ method: "PATCH", url: `/v1/hrms/assessments/attempts/${ATT}/responses`, headers: auth, payload: { responses: [{ questionId: Q1, response: { selected: ["b"] } }] } });
+    const save = await injectF3(app, { method: "PATCH", url: `/v1/hrms/assessments/attempts/${ATT}/responses`, headers: auth, payload: { responses: [{ questionId: Q1, response: { selected: ["b"] } }] } });
     expect(save.statusCode).toBe(409);
     expect(save.json().code).toBe("SCHEDULE_CANCELLED");
     expect(H.saveResponse).not.toHaveBeenCalled();
-    const sub = await app.inject({ method: "POST", url: `/v1/hrms/assessments/attempts/${ATT}/submit`, headers: auth, payload: {} });
+    const sub = await injectF3(app, { method: "POST", url: `/v1/hrms/assessments/attempts/${ATT}/submit`, headers: auth, payload: {} });
     expect(sub.statusCode).toBe(409);
     expect(sub.json().code).toBe("SCHEDULE_CANCELLED");
     expect(H.updateAttempt).not.toHaveBeenCalled();
@@ -204,7 +230,7 @@ describe("assessment schedule + attempt routes", () => {
     H.findBlueprint.mockResolvedValue(activeBlueprint());
     H.findQuestion.mockImplementation((_t: string, id: string) => Promise.resolve(validatedQ(id)));
     const app = await buildApp();
-    const r = await app.inject({ method: "POST", url: "/v1/hrms/assessments/schedules", headers: auth, payload: createBody([{ questionId: Q1, section: "apt" }, { questionId: Q1, section: "apt" }]) });
+    const r = await injectF3(app, { method: "POST", url: "/v1/hrms/assessments/schedules", headers: auth, payload: createBody([{ questionId: Q1, section: "apt" }, { questionId: Q1, section: "apt" }]) });
     expect(r.statusCode).toBe(422);
     expect(r.json().code).toBe("DUPLICATE_QUESTION");
     await app.close();
@@ -219,7 +245,7 @@ describe("assessment schedule + attempt routes", () => {
       { questionId: Q2, response: { selected: ["b"] } }, // wrong (correct a) -> -1.25
     ]);
     const app = await buildApp();
-    const r = await app.inject({ method: "POST", url: `/v1/hrms/assessments/attempts/${ATT}/submit`, headers: auth, payload: {} });
+    const r = await injectF3(app, { method: "POST", url: `/v1/hrms/assessments/attempts/${ATT}/submit`, headers: auth, payload: {} });
     expect(r.statusCode).toBe(200);
     expect(r.json().status).toBe("evaluated");
     expect(r.json().totalScore).toBe(3.75); // 5 - 1.25

@@ -44,7 +44,7 @@ export async function selectionListRoutes(app: FastifyInstance): Promise<void> {
     const { id: jobOpeningId } = idParam.parse(req.params);
     const body = z.object({ title: z.string().min(1).max(256), vacancies: z.coerce.number().int().min(1) }).parse(req.body);
     const listId = randomUUID();
-    await publishF3Write(ctx, "recruitment_selection_routes__0", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    await publishF3Write(ctx, "recruitment_selection_routes__0", listId, { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     return reply.code(201).send({ id: listId, jobOpeningId, status: "draft", vacancies: body.vacancies }) as any;
   });
 

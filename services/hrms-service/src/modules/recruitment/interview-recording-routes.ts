@@ -61,7 +61,7 @@ export async function interviewRecordingRoutes(app: FastifyInstance): Promise<vo
 
     const rid = randomUUID();
     const retentionUntil = computeRetentionUntil(Date.now(), body.retentionDays ?? DEFAULT_RETENTION_DAYS);
-    await publishF3Write(ctx, "recruitment_interview_recording_routes__0", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    await publishF3Write(ctx, "recruitment_interview_recording_routes__0", rid, { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     return reply.code(201).send({ id: rid, interviewId: id, kind: body.kind, retentionUntil, status: "active" }) as any;
   });
 

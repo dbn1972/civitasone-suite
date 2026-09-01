@@ -22,10 +22,16 @@ const H = vi.hoisted(() => ({
   maxVersionMock: vi.fn(),
 }));
 
-vi.mock("../src/shared/db.js", async (io) => ({
-  ...(await io<Record<string, unknown>>()),
-  db: { transaction: async (cb: (tx: unknown) => Promise<void>) => cb({}), insert: () => ({ values: async () => undefined }) },
-}));
+vi.mock("../src/shared/db.js", async (io) => {
+  // markProcessed() in the F3 consumer runs
+  // insert(...).values(...).onConflictDoNothing().returning() on the tx, which a
+  // bare {} cannot answer — the consumer threw before reaching any case.
+  const stubTx = { insert: () => ({ values: () => ({ onConflictDoNothing: () => ({ returning: async () => [{ messageId: "stub" }] }) }) }) };
+  return {
+    ...(await io<Record<string, unknown>>()),
+    db: { transaction: async (cb: (tx: unknown) => Promise<unknown>) => cb(stubTx), insert: () => ({ values: async () => undefined }) },
+  };
+});
 vi.mock("../src/modules/recruitment/offer-repo.js", async (io) => ({
   ...(await io<Record<string, unknown>>()),
   findApplication: (...a: unknown[]) => H.findAppMock(...a),
@@ -39,6 +45,26 @@ vi.mock("../src/modules/recruitment/offer-repo.js", async (io) => ({
 }));
 
 import { buildApp } from "../src/app.js";
+
+import { queue } from "../src/shared/infra.js";
+import { registerF3_recruitment_Consumers } from "../src/modules/recruitment/f3-consumer.js";
+
+// These routes only PUBLISH; the row is written by the recruitment F3 consumer
+// that f3-leftover-register.ts wires into the worker. Register it here so the
+// suite exercises the whole write path instead of the HTTP layer alone.
+registerF3_recruitment_Consumers(queue);
+/** Await the in-memory queue's fan-out so the consumer's write has happened. */
+async function drainF3(): Promise<void> {
+  await (queue as unknown as import("@civitasone/queue").MemoryQueue).drain();
+}
+type TestApp = { inject: (opts: never) => Promise<never> };
+/** inject() + drain, so an assertion never races the async F3 write. */
+async function injectF3(app: TestApp, opts: unknown): Promise<never> {
+  const res = await app.inject(opts as never);
+  await drainF3();
+  return res;
+}
+
 import { sqlClient } from "../src/shared/db.js";
 import { DEFAULT_OFFER_CHAIN } from "../src/modules/recruitment/offer-domain.js";
 
@@ -58,7 +84,7 @@ describe("offer routes", () => {
   it("creates a draft offer for a shortlisted candidate with computed gross CTC (201)", async () => {
     H.findAppMock.mockResolvedValue({ id: APPL, tenantId: TENANT, screeningDecision: "shortlisted" });
     const app = await buildApp();
-    const r = await app.inject({ method: "POST", url: `/v1/hrms/applications/${APPL}/offers`, headers: auth(["hr_admin"]),
+    const r = await injectF3(app, { method: "POST", url: `/v1/hrms/applications/${APPL}/offers`, headers: auth(["hr_admin"]),
       payload: { basicMinor: 80000000, joiningBonusMinor: 10000000, relocationMinor: 5000000, variablePayMinor: 20000000, grade: "L1" } });
     expect(r.statusCode).toBe(201);
     expect(r.json().grossCtcMinor).toBe("115000000");
@@ -69,7 +95,7 @@ describe("offer routes", () => {
   it("refuses an offer to a candidate who is not shortlisted (409)", async () => {
     H.findAppMock.mockResolvedValue({ id: APPL, tenantId: TENANT, screeningDecision: "eligible" });
     const app = await buildApp();
-    const r = await app.inject({ method: "POST", url: `/v1/hrms/applications/${APPL}/offers`, headers: auth(["hr_admin"]), payload: { basicMinor: 1 } });
+    const r = await injectF3(app, { method: "POST", url: `/v1/hrms/applications/${APPL}/offers`, headers: auth(["hr_admin"]), payload: { basicMinor: 1 } });
     expect(r.statusCode).toBe(409);
     expect(r.json().code).toBe("NOT_SHORTLISTED");
     await app.close();
@@ -78,10 +104,10 @@ describe("offer routes", () => {
   it("advances the approval chain but forbids the creator from approving (SoD)", async () => {
     H.findOfferMock.mockResolvedValue(offer({ status: "pending_approval", currentStage: 0, createdBy: USER }));
     const app = await buildApp();
-    const sod = await app.inject({ method: "POST", url: `/v1/hrms/offers/${OFF}/approve`, headers: auth(["hr_admin"], USER), payload: {} });
+    const sod = await injectF3(app, { method: "POST", url: `/v1/hrms/offers/${OFF}/approve`, headers: auth(["hr_admin"], USER), payload: {} });
     expect(sod.statusCode).toBe(409);
     expect(sod.json().code).toBe("SOD_VIOLATION");
-    const ok = await app.inject({ method: "POST", url: `/v1/hrms/offers/${OFF}/approve`, headers: auth(["hr_admin"], OTHER), payload: {} });
+    const ok = await injectF3(app, { method: "POST", url: `/v1/hrms/offers/${OFF}/approve`, headers: auth(["hr_admin"], OTHER), payload: {} });
     expect(ok.statusCode).toBe(200);
     expect(ok.json().currentStage).toBe(1);
     await app.close();
@@ -90,10 +116,10 @@ describe("offer routes", () => {
   it("marks approved at the final stage and blocks release until then", async () => {
     H.findOfferMock.mockResolvedValue(offer({ status: "pending_approval", currentStage: 3, createdBy: USER }));
     const app = await buildApp();
-    const notYet = await app.inject({ method: "POST", url: `/v1/hrms/offers/${OFF}/release`, headers: auth(["hr_admin"]), payload: {} });
+    const notYet = await injectF3(app, { method: "POST", url: `/v1/hrms/offers/${OFF}/release`, headers: auth(["hr_admin"]), payload: {} });
     expect(notYet.statusCode).toBe(409);
     expect(notYet.json().code).toBe("NOT_APPROVED");
-    const fin = await app.inject({ method: "POST", url: `/v1/hrms/offers/${OFF}/approve`, headers: auth(["competent_authority"], OTHER), payload: {} });
+    const fin = await injectF3(app, { method: "POST", url: `/v1/hrms/offers/${OFF}/approve`, headers: auth(["competent_authority"], OTHER), payload: {} });
     expect(fin.json().status).toBe("approved");
     await app.close();
   });
@@ -101,10 +127,10 @@ describe("offer routes", () => {
   it("releases an approved offer and captures acceptance metadata + version", async () => {
     H.findOfferMock.mockResolvedValueOnce(offer({ status: "approved" }));
     const app = await buildApp();
-    const rel = await app.inject({ method: "POST", url: `/v1/hrms/offers/${OFF}/release`, headers: auth(["hr_admin"]), payload: { expiresAt: "2026-12-31" } });
+    const rel = await injectF3(app, { method: "POST", url: `/v1/hrms/offers/${OFF}/release`, headers: auth(["hr_admin"]), payload: { expiresAt: "2026-12-31" } });
     expect(rel.json().status).toBe("released");
     H.findOfferMock.mockResolvedValueOnce(offer({ status: "released", offerVersion: 1 }));
-    const acc = await app.inject({ method: "POST", url: `/v1/hrms/offers/${OFF}/accept`, headers: auth(["hr_admin"]), payload: { device: "web" } });
+    const acc = await injectF3(app, { method: "POST", url: `/v1/hrms/offers/${OFF}/accept`, headers: auth(["hr_admin"]), payload: { device: "web" } });
     expect(acc.json()).toMatchObject({ status: "accepted", acceptedVersion: 1 });
     const patch = H.updateOfferMock.mock.calls.at(-1)![3];
     expect(patch.acceptedVersion).toBe(1);
@@ -115,9 +141,9 @@ describe("offer routes", () => {
   it("requires a structured decline reason", async () => {
     H.findOfferMock.mockResolvedValue(offer({ status: "released" }));
     const app = await buildApp();
-    const noReason = await app.inject({ method: "POST", url: `/v1/hrms/offers/${OFF}/decline`, headers: auth(["hr_admin"]), payload: {} });
+    const noReason = await injectF3(app, { method: "POST", url: `/v1/hrms/offers/${OFF}/decline`, headers: auth(["hr_admin"]), payload: {} });
     expect(noReason.statusCode).toBe(400);
-    const ok = await app.inject({ method: "POST", url: `/v1/hrms/offers/${OFF}/decline`, headers: auth(["hr_admin"]), payload: { reasonCode: "salary", remarks: "low" } });
+    const ok = await injectF3(app, { method: "POST", url: `/v1/hrms/offers/${OFF}/decline`, headers: auth(["hr_admin"]), payload: { reasonCode: "salary", remarks: "low" } });
     expect(ok.json()).toMatchObject({ status: "declined", reasonCode: "salary" });
     await app.close();
   });
@@ -126,7 +152,7 @@ describe("offer routes", () => {
     H.findOfferMock.mockResolvedValue(offer({ status: "declined", offerVersion: 1 }));
     H.maxVersionMock.mockResolvedValue(1);
     const app = await buildApp();
-    const r = await app.inject({ method: "POST", url: `/v1/hrms/offers/${OFF}/revise`, headers: auth(["hr_admin"]), payload: { basicMinor: 90000000 } });
+    const r = await injectF3(app, { method: "POST", url: `/v1/hrms/offers/${OFF}/revise`, headers: auth(["hr_admin"]), payload: { basicMinor: 90000000 } });
     expect(r.statusCode).toBe(201);
     expect(r.json()).toMatchObject({ offerVersion: 2, supersedesOfferId: OFF, status: "draft" });
     // previous marked revised + new offer inserted
@@ -138,9 +164,9 @@ describe("offer routes", () => {
   it("withdraws a non-terminal offer (admin only)", async () => {
     H.findOfferMock.mockResolvedValue(offer({ status: "released" }));
     const app = await buildApp();
-    const forbidden = await app.inject({ method: "POST", url: `/v1/hrms/offers/${OFF}/withdraw`, headers: auth(["hr_officer"]), payload: { reason: "x" } });
+    const forbidden = await injectF3(app, { method: "POST", url: `/v1/hrms/offers/${OFF}/withdraw`, headers: auth(["hr_officer"]), payload: { reason: "x" } });
     expect(forbidden.statusCode).toBe(403);
-    const ok = await app.inject({ method: "POST", url: `/v1/hrms/offers/${OFF}/withdraw`, headers: auth(["hr_admin"]), payload: { reason: "budget cut" } });
+    const ok = await injectF3(app, { method: "POST", url: `/v1/hrms/offers/${OFF}/withdraw`, headers: auth(["hr_admin"]), payload: { reason: "budget cut" } });
     expect(ok.json().status).toBe("withdrawn");
     await app.close();
   });
