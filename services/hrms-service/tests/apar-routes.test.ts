@@ -206,7 +206,9 @@ describe("APAR — POST /v1/hrms/apar/:id/reporting", () => {
     const r = await app.inject({ method: "POST", url: `/v1/hrms/apar/${APAR_ID}/reporting`,
       headers: auth(RO, ["manager"]), payload: {
         penPicture: "Good officer",
-        scores: [{ attribute: "integrity", score: 8 }, { attribute: "leadership", score: 7 }],
+        // KRA weights must sum to 100 (route schema refine); `weight` is not
+        // optional in practice despite its Zod default.
+        scores: [{ attribute: "integrity", weight: 60, score: 8 }, { attribute: "leadership", weight: 40, score: 7 }],
       }});
     expect(r.statusCode).toBe(200);
     expect(r.json().status).toBe("reviewing_officer");
@@ -226,7 +228,7 @@ describe("APAR — POST /v1/hrms/apar/:id/reporting", () => {
     H.findAppraisal.mockResolvedValue(baseAppraisal({ status: "reporting_officer" }));
     const app = await buildApp();
     const r = await app.inject({ method: "POST", url: `/v1/hrms/apar/${APAR_ID}/reporting`,
-      headers: auth(EMP, ["employee"]), payload: { penPicture: "x", scores: [{ attribute: "a", score: 5 }] }});
+      headers: auth(EMP, ["employee"]), payload: { penPicture: "x", scores: [{ attribute: "a", weight: 100, score: 5 }] }});
     expect(r.statusCode).toBe(403);
     expect(r.json().code).toBe("SELF_REVIEW_FORBIDDEN");
     await app.close();
@@ -236,7 +238,7 @@ describe("APAR — POST /v1/hrms/apar/:id/reporting", () => {
     H.findAppraisal.mockResolvedValue(baseAppraisal({ status: "self_pending" }));
     const app = await buildApp();
     const r = await app.inject({ method: "POST", url: `/v1/hrms/apar/${APAR_ID}/reporting`,
-      headers: auth(RO, ["manager"]), payload: { penPicture: "x", scores: [{ attribute: "a", score: 5 }] }});
+      headers: auth(RO, ["manager"]), payload: { penPicture: "x", scores: [{ attribute: "a", weight: 100, score: 5 }] }});
     expect(r.statusCode).toBe(409);
     await app.close();
   });
@@ -245,7 +247,7 @@ describe("APAR — POST /v1/hrms/apar/:id/reporting", () => {
     H.findAppraisal.mockResolvedValue(null);
     const app = await buildApp();
     const r = await app.inject({ method: "POST", url: `/v1/hrms/apar/${APAR_ID}/reporting`,
-      headers: auth(RO, ["manager"]), payload: { penPicture: "x", scores: [{ attribute: "a", score: 5 }] }});
+      headers: auth(RO, ["manager"]), payload: { penPicture: "x", scores: [{ attribute: "a", weight: 100, score: 5 }] }});
     expect(r.statusCode).toBe(404);
     await app.close();
   });
