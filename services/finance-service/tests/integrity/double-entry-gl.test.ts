@@ -26,9 +26,20 @@ const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
 const TENANT = "aaaaaaaa-0000-4000-8000-000000000001";
 const ACTOR = "aaaaaaaa-0000-4000-8000-aaaaaaaaaaaa";
 
+// CI bootstrap sets civitas_admin from PGPASSWORD/POSTGRES_ADMIN_PASSWORD
+// (civitas_test). Local compose defaults to civitas_dev_pw. Hardcoding the
+// local password here fails auth in CI, same as
+// services/inventory-service/tests/data-quality.test.ts (see turbo.json
+// test.passThroughEnv).
+const ADMIN_PW =
+  process.env.POSTGRES_ADMIN_PASSWORD ??
+  process.env.PGPASSWORD ??
+  (process.env.CI === "true" || process.env.GITHUB_ACTIONS === "true"
+    ? "civitas_test"
+    : "civitas_dev_pw");
 const ADMIN_DSN =
   process.env.ADMIN_DATABASE_URL ??
-  "postgres://civitas_admin:civitas_dev_pw@localhost:5435/civitas_finance";
+  `postgres://civitas_admin:${ADMIN_PW}@localhost:5435/civitas_finance`;
 
 function token(): string {
   return signToken(
