@@ -96,13 +96,43 @@ BEGIN
   END IF;
 END $$;
 
--- 2. Sequences replacing the in-process counters (start at 1; a real
---    deployment with non-empty tables would seed START from current max + 1
---    — not needed here, see row counts in the header note above).
+-- 2. Sequences replacing the in-process counters, seeded from the highest
+--    existing trailing number so a table that already has rows (this one
+--    does -- 1 complaint, 1 case, 1 action per the header note above) can't
+--    hand out a number that collides with one already in use. The old
+--    in-process counter also started at 1 each restart, so a fresh
+--    `START 1` sequence would reproduce that exact already-used number on
+--    its very first nextval() -- caught immediately by the UNIQUE
+--    constraint above, but as a hard failure on the first insert after this
+--    migration ships, not a corrected sequence.
+--    setval(seq, N, false) makes the NEXT nextval() return exactly N (no
+--    increment-past-N the way is_called=true would). GREATEST(1, max+1)
+--    keeps N >= 1 always -- a bare `COALESCE(max,0)+1` would try to seed 0
+--    for an empty table's max+1... no, +1 makes that 1 already; the
+--    GREATEST is defensive in case a future format ever allows a 0 value --
+--    and matters because plain setval(seq,0,...) errors with "value 0 is
+--    out of bounds" (default sequences have MINVALUE 1). An empty table
+--    (max IS NULL) seeds N=1, identical to the original `START 1` behavior.
+--    Matches trailing digits via regex rather than a fixed substring, since
+--    the value is a zero-padded seq (not a fixed-width record) that
+--    formatComplaintNumber/etc. never truncate past 6 digits.
 CREATE SEQUENCE IF NOT EXISTS encroachment.complaint_number_seq START 1;
 CREATE SEQUENCE IF NOT EXISTS encroachment.notice_number_seq START 1;
 CREATE SEQUENCE IF NOT EXISTS illegal_construction.case_number_seq START 1;
 CREATE SEQUENCE IF NOT EXISTS illegal_construction.action_number_seq START 1;
+
+SELECT setval('encroachment.complaint_number_seq',
+  GREATEST(1, COALESCE((SELECT MAX((regexp_match(complaint_number, '(\d+)$'))[1]::bigint)
+              FROM encroachment.encroachment_complaints), 0) + 1), false);
+SELECT setval('encroachment.notice_number_seq',
+  GREATEST(1, COALESCE((SELECT MAX((regexp_match(notice_number, '(\d+)$'))[1]::bigint)
+              FROM encroachment.encroachment_notices), 0) + 1), false);
+SELECT setval('illegal_construction.case_number_seq',
+  GREATEST(1, COALESCE((SELECT MAX((regexp_match(case_number, '(\d+)$'))[1]::bigint)
+              FROM illegal_construction.illegal_construction_cases), 0) + 1), false);
+SELECT setval('illegal_construction.action_number_seq',
+  GREATEST(1, COALESCE((SELECT MAX((regexp_match(action_number, '(\d+)$'))[1]::bigint)
+              FROM illegal_construction.illegal_construction_actions), 0) + 1), false);
 
 -- ── Grants ─────────────────────────────────────────────────────────────────
 -- Mirrors 0026/0027's grants block for the two new sequences: inspection_svc
