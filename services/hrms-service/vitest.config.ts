@@ -1,4 +1,4 @@
-import { defineConfig } from "vitest/config";
+import { configDefaults, defineConfig } from "vitest/config";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
@@ -13,6 +13,32 @@ function readPiiKey(): string {
 
 export default defineConfig({
   test: {
+    // These three are manual live-stack UAT scripts, not unit/integration
+    // tests: they fetch() real HTTP servers on 127.0.0.1:3012/3013
+    // (hrms-service / payroll-service) instead of exercising the app
+    // in-process. Nothing in the `Tests` CI job (plain `vitest run`) starts
+    // those servers, so all three failed 100% (268 assertions) with
+    // ECONNREFUSED on every run -- not a bug in the code under test, a
+    // false-negative from running a live-stack script under a job that
+    // never brings up a live stack. `Live Stack Verification` (ci.yml) DOES
+    // start the real stack (scripts/dev/start-stack.sh) but drives it with
+    // scripts/contract/verify-screens.mjs, not vitest, so these files were
+    // never actually exercised by any green CI signal either way.
+    // To run them for real: `bash scripts/dev/start-stack.sh` locally, then
+    // TEMPORARILY comment out the three lines below and run
+    // `pnpm vitest run tests/atdic-full-lifecycle.test.ts` (etc.). vitest's
+    // `exclude` wins over an explicit file argument on the CLI (verified:
+    // passing the path directly still reports "No test files found" while
+    // it's listed here), so there is no flag-only way to run one of these
+    // without editing this file. Do NOT remove this exclude permanently to
+    // "fix" them via the normal `test` task -- that just reintroduces the
+    // 268 ECONNREFUSED false-negatives this exclude removes.
+    exclude: [
+      ...configDefaults.exclude,
+      "tests/atdic-full-lifecycle.test.ts",
+      "tests/dic-expert-destructive.test.ts",
+      "tests/dic-rbac-personas.test.ts",
+    ],
     env: {
       JWT_ALGORITHM: "HS256",
       JWT_SECRET: "test_secret_for_civitasone_32chr",
