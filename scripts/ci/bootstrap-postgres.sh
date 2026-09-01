@@ -58,6 +58,13 @@ psql -h "$PGHOST" -p "$PGPORT" -U "$PGUSER" -d "$PGDATABASE" -v ON_ERROR_STOP=1 
 
 run_bootstrap "$ROOT/infra/db/bootstrap/bootstrap.generated.sql"
 run_bootstrap "$ROOT/infra/db/bootstrap/bootstrap_new_services.sql"
+# refund-service is in the SERVICE_DBS migration loop below (its own
+# migrations create the refund/_outbox/_inbox schemas), but no file ever
+# created refund_svc or civitas_refund — every migration failed to
+# authenticate, indistinguishable from a wrong password. See
+# bootstrap_refund.sql for the full story.
+run_bootstrap "$ROOT/infra/db/bootstrap/bootstrap_refund.sql"
+run_bootstrap "$ROOT/infra/db/bootstrap/bootstrap_unregistered_services.sql"
 run_bootstrap "$ROOT/infra/db/bootstrap/bootstrap_contract.sql"
 run_bootstrap "$ROOT/scripts/ci/bootstrap-remaining-services.sql"
 # Three bootstrap files existed in infra/db/bootstrap/ but were never invoked by
@@ -154,6 +161,14 @@ declare -A SERVICE_DBS=(
   # (services/refund-service/tests/*-integration.test.ts) can actually run
   # in CI instead of silently protecting nobody.
   [refund-service]="refund_svc:civitas_refund"
+  # cdp-service, catalogue-service, loyalty-service, journey-service: real
+  # migrations + 37 test files between them, but none of the four were ever
+  # added here, so their roles/databases never existed in CI (see
+  # bootstrap_unregistered_services.sql).
+  [cdp-service]="cdp_svc:civitas_cdp"
+  [catalogue-service]="catalogue_svc:civitas_catalogue"
+  [loyalty-service]="loyalty_svc:civitas_loyalty"
+  [journey-service]="journey_svc:civitas_journey"
 )
 
 # ── Role-creating migrations must run as the bootstrapping SUPERUSER ─────────
@@ -191,6 +206,35 @@ needs_superuser() {
   sed 's/--.*$//' "$1" | grep -qiE "(CREATE|ALTER)[[:space:]]+ROLE[[:space:]]+[a-z_]+"
 }
 
+# ── Scanner-role password GUCs ────────────────────────────────────────────
+#
+# The `*_scanner_role.sql` migrations (helpdesk, visitor, crm, finance, ...)
+# deliberately ship no password literal — they read it from a
+# `civitas.<role>_password` GUC and fall back to a RANDOM one-time password
+# when that GUC is absent, so no committed credential exists for these
+# BYPASSRLS roles. This script never set that GUC, so every scanner role got
+# an unknown random password on every CI run, while each service's own
+# vitest.config.ts already hardcodes the expected CI test DSN as
+# `<role>_dev_pw` (e.g. helpdesk_scanner_dev_pw — see
+# services/helpdesk-service/vitest.config.ts and the matching
+# .env.example files). Result: every test that touched a *_scanner role
+# failed with `password authentication failed`, which is what showed up as
+# widespread, seemingly-unrelated failures across the Tests job.
+#
+# Fix: for exactly the migrations that create/alter a `*_scanner` role, set
+# that role's GUC to the SAME `<role>_dev_pw` convention already hardcoded
+# everywhere else in this repo, via PGOPTIONS for that one psql invocation.
+# Not a secret — this only ever runs against an ephemeral CI/dev Postgres
+# container, matching civitas_test/helpdesk_dev_pw/etc. elsewhere in this
+# script.
+scanner_role_guc_options() {
+  local role
+  role="$(sed 's/--.*$//' "$1" | grep -ioE "CREATE ROLE[[:space:]]+[a-z_]*_scanner\b" | awk '{print $3}' | head -1)"
+  if [ -n "$role" ]; then
+    echo "-c civitas.${role}_password=${role}_dev_pw"
+  fi
+}
+
 for svc in $(printf '%s\n' "${!SERVICE_DBS[@]}" | sort); do
   mig_dir="$ROOT/services/$svc/migrations"
   [ -d "$mig_dir" ] || continue
@@ -206,7 +250,8 @@ for svc in $(printf '%s\n' "${!SERVICE_DBS[@]}" | sort); do
       run_as="$role"; run_pw="$pw"
       echo "Applying $(basename "$f") → $db ($svc)"
     fi
-    if ! PGPASSWORD="$run_pw" psql -h "$PGHOST" -p "$PGPORT" -U "$run_as" -d "$db" -v ON_ERROR_STOP=1 -f "$f" \
+    if ! PGOPTIONS="$(scanner_role_guc_options "$f")" PGPASSWORD="$run_pw" \
+         psql -h "$PGHOST" -p "$PGPORT" -U "$run_as" -d "$db" -v ON_ERROR_STOP=1 -f "$f" \
          2>&1 | tee /tmp/bootstrap-migration-out.txt | grep -v '^$'; then :; fi
     if grep -q '^psql:.*ERROR:' /tmp/bootstrap-migration-out.txt; then
       echo "⚠ Migration failed for $svc/$(basename "$f") — DB integration tests for this service may fail in CI."
@@ -215,6 +260,37 @@ for svc in $(printf '%s\n' "${!SERVICE_DBS[@]}" | sort); do
       MIGRATION_FAILURE_REASONS+=("$svc/$(basename "$f")|$(sed -n 's/^psql:.*ERROR:  //p' /tmp/bootstrap-migration-out.txt | head -1 | cut -c1-110)")
     fi
   done
+done
+
+# ── Cross-service read-only evidence grants ───────────────────────────────
+#
+# services/inventory-service/tests/data-quality.test.ts connects as
+# civitas_admin to run READ-ONLY reconciliation checks across several
+# service-owned databases (asset, inventory, hrms, payroll, procurement,
+# contract, finance). civitas_admin is deliberately NOSUPERUSER NOBYPASSRLS
+# and only owns the admin-owned services (see the ADMIN_OWNED_DBS block
+# below) — it was never granted into these service-owned databases, so every
+# query in that suite failed with `permission denied for schema ...`.
+#
+# grant_admin_readonly.sql grants USAGE + SELECT only (no BYPASSRLS, no
+# ownership change) on every schema the service role owns. Must run AFTER
+# that service's own migration loop above, as the owning service role, so
+# the schemas already exist.
+EVIDENCE_SUITE_DBS=(
+  "asset-service:civitas_asset:asset_svc"
+  "inventory-service:civitas_inventory:inventory_svc"
+  "hrms-service:civitas_hrms:hrms_svc"
+  "payroll-service:civitas_payroll:payroll_svc"
+  "procurement-service:civitas_procurement:procurement_svc"
+  "contract-service:civitas_contract:contract_svc"
+  "finance-service:civitas_finance:finance_svc"
+)
+for entry in "${EVIDENCE_SUITE_DBS[@]}"; do
+  IFS=: read -r svc db role <<< "$entry"
+  pw="$(echo "$role" | sed 's/_svc/_dev_pw/')"
+  PGPASSWORD="$pw" psql -h "$PGHOST" -p "$PGPORT" -U "$role" -d "$db" -v ON_ERROR_STOP=1 \
+    -f "$ROOT/infra/db/bootstrap/grant_admin_readonly.sql" >/dev/null \
+    || echo "⚠ $svc civitas_admin read-only grant failed"
 done
 
 # ── Admin-owned databases: admin-run migrations + grant re-assert ────────────
