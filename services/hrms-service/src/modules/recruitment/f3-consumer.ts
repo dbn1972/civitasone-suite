@@ -52,6 +52,7 @@ import * as responseRepo from "./interview-response-repo.js";
 import * as scoringRepo from "./interview-scoring-repo.js";
 import * as offerRepo from "./offer-repo.js";
 import * as otpRepo from "./otp-verify-repo.js";
+import { OTP_TTL_SECONDS } from "./otp-verify.js";
 import * as panelRepo from "./panel-repo.js";
 import * as publicationRepo from "./publication-repo.js";
 import * as qualificationRepo from "./qualification-repo.js";
@@ -1015,7 +1016,7 @@ export function registerF3_recruitment_Consumers(queue: Queue): void {
             const cid = genId;
             const code = p.code as string | undefined;
             if (!code) throw new HttpError(422, "MISSING_OTP", "the generated OTP code is missing from the payload");
-            const expiresAt = p.expiresAt ? new Date(p.expiresAt as string) : new Date(Date.now() + 300_000);
+            const expiresAt = p.expiresAt ? new Date(p.expiresAt as string) : new Date(Date.now() + OTP_TTL_SECONDS * 1000);
             await otpRepo.insertChallenge(tx, {
                   id: cid, tenantId: p.tenantId, candidateId: id, channel: body.channel ?? "email",
                   code, expiresAt,
