@@ -71,13 +71,17 @@ vi.mock("../src/shared/db.js", () => {
   };
 });
 
-vi.mock("../src/shared/infra.js", () => ({
+vi.mock("../src/shared/infra.js", async () => ({
   cache: {
     invalidate: async () => {},
     makeKey: (...a: string[]) => a.join(":"),
     getOrLoad: async (_k: string, fn: () => Promise<unknown>) => fn(),
   },
-  queue: { publish: async () => {} },
+  // A real in-memory queue, not a no-op: these routes only PUBLISH, and the row
+  // is written by the F3 consumer. With `publish: async () => {}` the consumer
+  // never ran, so the repo mocks below could not tell a working write from a
+  // crashing one.
+  queue: new (await import("@civitasone/queue")).MemoryQueue(),
 }));
 
 vi.mock("../src/modules/apprentice-stipend/repo.js", () => ({
@@ -95,7 +99,7 @@ vi.mock("../src/modules/apprentice-stipend/repo.js", () => ({
 
 vi.mock("../src/shared/outbox.js", () => ({
   enqueue: (...a: unknown[]) => H.enqueueMock(...a),
-  markProcessed: async () => {},
+  markProcessed: async () => true,
   startRelay: async () => {},
 }));
 
@@ -108,7 +112,16 @@ vi.mock("../src/modules/employee/engagement-policy.js", async (io) => {
 });
 
 import { buildApp } from "../src/app.js";
+import { queue } from "../src/shared/infra.js";
 import { buildTypeResolver } from "../src/modules/employee/engagement-policy.js";
+import { registerF3_apprentice_stipend_Consumers } from "../src/modules/apprentice-stipend/f3-consumer.js";
+
+registerF3_apprentice_stipend_Consumers(queue);
+
+/** Await the in-memory queue's fan-out so the consumer's write has happened. */
+async function drainF3(): Promise<void> {
+  await (queue as unknown as import("@civitasone/queue").MemoryQueue).drain();
+}
 
 const CANON = [
   { category: "apprentice", eligibleForPayroll: false },
@@ -188,6 +201,7 @@ describe("POST /v1/hrms/apprenticeships", () => {
     const r = await app.inject({ method: "POST", url: "/v1/hrms/apprenticeships", headers: auth(), payload });
     expect(r.statusCode).toBe(201);
     expect(r.json().status).toBe("active");
+    await drainF3();
     expect(H.insertApprenticeship).toHaveBeenCalledOnce();
     await app.close();
   });
@@ -335,6 +349,7 @@ describe("POST /v1/hrms/apprenticeships/:id/stipends", () => {
     const r = await app.inject({ method: "POST", url: `/v1/hrms/apprenticeships/${APR_ID}/stipends`, headers: auth(), payload });
     expect(r.statusCode).toBe(201);
     expect(r.json().status).toBe("submitted");
+    await drainF3();
     expect(H.insertStipend).toHaveBeenCalledOnce();
     await app.close();
   });
@@ -519,6 +534,7 @@ describe("POST /v1/hrms/apprentice-stipends/:stipendId/approve", () => {
     expect(body.grossStipendMinor).toBe("500000");
     expect(body.napsReimbMinor).toBe("125000");
     expect(body.employerCostMinor).toBe("375000");
+    await drainF3();
     expect(H.enqueueMock).toHaveBeenCalledOnce();
     await app.close();
   });
@@ -609,6 +625,7 @@ describe("POST /v1/hrms/apprentice-stipends/:stipendId/mark-paid", () => {
     expect(r.statusCode).toBe(200);
     expect(r.json().status).toBe("paid");
     expect(r.json().paymentRef).toBe("DBT-2026-001");
+    await drainF3();
     expect(H.enqueueMock).toHaveBeenCalledOnce();
     await app.close();
   });

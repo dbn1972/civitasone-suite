@@ -27,10 +27,20 @@ const H = vi.hoisted(() => ({
   empType: { type: "consultant" },
 }));
 
+const stubTx = vi.hoisted(() => ({
+  // The F3 consumer opens db.transaction() and calls markProcessed(tx, ...) first,
+  // which needs insert().values().onConflictDoNothing().returning() to resolve to a
+  // NON-empty array (empty means "already processed" and the consumer returns without
+  // writing). The old bare `{}` tx made every consumer write silently disappear.
+  insert: () => ({ values: () => ({ onConflictDoNothing: () => ({ returning: async () => [{ messageId: "stub" }] }) }) }),
+  // Some consumer cases read a row inside their own write transaction.
+  select: () => ({ from: () => ({ where: () => ({ limit: async () => H.scopedReadMock() }) }) }),
+}));
+
 vi.mock("../src/shared/db.js", async (io) => ({
   ...(await io<Record<string, unknown>>()),
   scopedRead: (...a: unknown[]) => H.scopedReadMock(...a),
-  db: { transaction: async (cb: (tx: unknown) => Promise<void>) => cb({}), insert: () => ({ values: async () => undefined }) },
+  db: { transaction: async (cb: (tx: unknown) => Promise<void>) => cb(stubTx), insert: () => ({ values: async () => undefined }) },
 }));
 vi.mock("../src/modules/consultant-invoice/repo.js", async (io) => ({
   ...(await io<Record<string, unknown>>()),
@@ -53,6 +63,18 @@ vi.mock("../src/modules/employee/engagement-policy.js", async (io) => {
 });
 
 import { buildApp } from "../src/app.js";
+import { queue } from "../src/shared/infra.js";
+import { registerF3_consultant_invoice_Consumers } from "../src/modules/consultant-invoice/f3-consumer.js";
+
+// These routes only PUBLISH; the row is written by the F3 consumer the worker
+// runs. Without registering it the repo mocks below are never exercised at all,
+// so the suite could not tell a working write from a crashing one.
+registerF3_consultant_invoice_Consumers(queue);
+
+/** Await the in-memory queue's fan-out so the consumer's write has happened. */
+async function drainF3(): Promise<void> {
+  await (queue as unknown as import("@civitasone/queue").MemoryQueue).drain();
+}
 import { sqlClient } from "../src/shared/db.js";
 import { buildTypeResolver } from "../src/modules/employee/engagement-policy.js";
 
@@ -95,6 +117,7 @@ describe("consultant invoice routes", () => {
       headers: auth(MAKER),
       payload: { invoiceNo: "INV-1", invoiceDate: "2026-05-10", grossMinor: 5000000, gstApplicable: true, gstRateBps: 1800 },
     });
+    await drainF3();
     expect(r.statusCode).toBe(201);
     expect(H.insertInvoiceMock).toHaveBeenCalledOnce();
     await app.close();
@@ -108,6 +131,7 @@ describe("consultant invoice routes", () => {
       headers: auth(MAKER),
       payload: { invoiceNo: "INV-2", invoiceDate: "2026-05-10", grossMinor: 5000000 },
     });
+    await drainF3();
     expect(r.statusCode).toBe(409);
     expect(r.json().code).toBe("NOT_A_CONSULTANT");
     expect(H.insertInvoiceMock).not.toHaveBeenCalled();
@@ -120,6 +144,7 @@ describe("consultant invoice routes", () => {
     const r = await app.inject({
       method: "POST", url: `/v1/hrms/consultant-invoices/${INV}/approve`, headers: auth(CHECKER), payload: {},
     });
+    await drainF3();
     expect(r.statusCode).toBe(200);
     const body = r.json();
     expect(body.gstMinor).toBe("900000");
@@ -145,6 +170,7 @@ describe("consultant invoice routes", () => {
       method: "POST", url: `/v1/hrms/consultant-invoices/${INV}/approve`, headers: auth(CHECKER),
       payload: { tdsRateBps: 1000 },
     });
+    await drainF3();
     expect(r.statusCode).toBe(200);
     expect(r.json().tdsMinor).toBe("500000"); // 10% enforced by checker despite tdsRateBps:0 on submit
     const patch = H.updateInvoiceMock.mock.calls[0][3];
@@ -158,6 +184,7 @@ describe("consultant invoice routes", () => {
     const r = await app.inject({
       method: "POST", url: `/v1/hrms/consultant-invoices/${INV}/approve`, headers: auth(CHECKER), payload: {},
     });
+    await drainF3();
     expect(r.statusCode).toBe(409);
     expect(r.json().code).toBe("SOD_VIOLATION");
     expect(H.updateInvoiceMock).not.toHaveBeenCalled();
@@ -170,6 +197,7 @@ describe("consultant invoice routes", () => {
     const r = await app.inject({
       method: "POST", url: `/v1/hrms/consultant-invoices/${INV}/approve`, headers: auth(CHECKER), payload: {},
     });
+    await drainF3();
     expect(r.statusCode).toBe(409);
     expect(r.json().code).toBe("WRONG_STATE");
     await app.close();
@@ -182,6 +210,7 @@ describe("consultant invoice routes", () => {
       method: "POST", url: `/v1/hrms/consultant-invoices/${INV}/mark-paid`, headers: auth(CHECKER),
       payload: { paymentRef: "UTR-123" },
     });
+    await drainF3();
     expect(r.statusCode).toBe(200);
     expect(r.json().status).toBe("paid");
     expect(H.enqueueMock.mock.calls[0][1].topic).toBe("hrms.consultant_invoice.paid");

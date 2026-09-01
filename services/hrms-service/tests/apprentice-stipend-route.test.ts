@@ -26,10 +26,22 @@ const H = vi.hoisted(() => ({
   empType: { type: "apprentice" },
 }));
 
+const stubTx = vi.hoisted(() => ({
+  insert: () => ({ values: () => ({ onConflictDoNothing: () => ({ returning: async () => [{ messageId: "stub" }] }) }) }),
+  // The enrol consumer reads the employee row inside its own write transaction
+  // (for the NAPS-id fallback); serve it the same fixture scopedRead returns.
+  select: () => ({ from: () => ({ where: () => ({ limit: async () => H.scopedReadMock() }) }) }),
+}));
+
 vi.mock("../src/shared/db.js", async (io) => ({
   ...(await io<Record<string, unknown>>()),
   scopedRead: (...a: unknown[]) => H.scopedReadMock(...a),
-  db: { transaction: async (cb: (tx: unknown) => Promise<void>) => cb({}), insert: () => ({ values: async () => undefined }) },
+  // The F3 consumer opens this transaction and calls markProcessed(tx, ...)
+  // first, which needs insert().values().onConflictDoNothing().returning() to
+  // resolve to a non-empty array (an empty one means "already processed" and
+  // the consumer returns without writing). A bare `{}` tx silently swallowed
+  // every consumer write.
+  db: { transaction: async (cb: (tx: unknown) => Promise<void>) => cb(stubTx), insert: () => ({ values: async () => undefined }) },
 }));
 vi.mock("../src/modules/apprentice-stipend/repo.js", async (io) => ({
   ...(await io<Record<string, unknown>>()),
@@ -54,7 +66,19 @@ vi.mock("../src/modules/employee/engagement-policy.js", async (io) => {
 
 import { buildApp } from "../src/app.js";
 import { sqlClient } from "../src/shared/db.js";
+import { queue } from "../src/shared/infra.js";
 import { buildTypeResolver } from "../src/modules/employee/engagement-policy.js";
+import { registerF3_apprentice_stipend_Consumers } from "../src/modules/apprentice-stipend/f3-consumer.js";
+
+// These routes only PUBLISH; the row is written by the F3 consumer the worker
+// runs. Without registering it the repo mocks below are never called at all, so
+// the suite could not tell a working write from a crashing one.
+registerF3_apprentice_stipend_Consumers(queue);
+
+/** Await the in-memory queue's fan-out so the consumer's write has happened. */
+async function drainF3(): Promise<void> {
+  await (queue as unknown as import("@civitasone/queue").MemoryQueue).drain();
+}
 
 const CANON = [
   { category: "apprentice", eligibleForPayroll: false },
@@ -95,6 +119,7 @@ describe("apprentice stipend routes", () => {
     const r = await app.inject({ method: "POST", url: "/v1/hrms/apprenticeships", headers: auth(MAKER),
       payload: { apprenticeId: APPR_EMP, qualification: "iti", monthlyStipendMinor: 500000, trainingStart: "2026-04-01" } });
     expect(r.statusCode).toBe(201);
+    await drainF3();
     expect(H.insertApprMock).toHaveBeenCalledOnce();
     await app.close();
   });
@@ -115,6 +140,7 @@ describe("apprentice stipend routes", () => {
     const r = await app.inject({ method: "POST", url: `/v1/hrms/apprenticeships/${APR}/stipends`, headers: auth(MAKER),
       payload: { month: "2026-05", workingDays: 26, daysPresent: 26 } });
     expect(r.statusCode).toBe(201);
+    await drainF3();
     expect(H.insertStipendMock).toHaveBeenCalledOnce();
     await app.close();
   });
@@ -125,6 +151,7 @@ describe("apprentice stipend routes", () => {
     const app = await buildApp();
     const r = await app.inject({ method: "POST", url: `/v1/hrms/apprentice-stipends/${STP}/approve`, headers: auth(CHECKER), payload: {} });
     expect(r.statusCode).toBe(200);
+    await drainF3();
     const b = r.json();
     expect(b.grossStipendMinor).toBe("500000");
     expect(b.napsReimbMinor).toBe("125000");
@@ -139,6 +166,7 @@ describe("apprentice stipend routes", () => {
     H.findStipendMock.mockResolvedValue(stipend({ daysPresent: 13 }));
     const app = await buildApp();
     const r = await app.inject({ method: "POST", url: `/v1/hrms/apprentice-stipends/${STP}/approve`, headers: auth(CHECKER), payload: {} });
+    await drainF3();
     expect(r.json().grossStipendMinor).toBe("250000"); // half of 5,000
     await app.close();
   });
@@ -157,6 +185,7 @@ describe("apprentice stipend routes", () => {
     const app = await buildApp();
     const r = await app.inject({ method: "POST", url: `/v1/hrms/apprentice-stipends/${STP}/mark-paid`, headers: auth(CHECKER), payload: { paymentRef: "DBT-1" } });
     expect(r.statusCode).toBe(200);
+    await drainF3();
     expect(r.json().status).toBe("paid");
     expect(H.enqueueMock.mock.calls[0][1].topic).toBe("hrms.apprentice_stipend.paid");
     await app.close();
