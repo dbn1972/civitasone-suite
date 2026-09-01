@@ -61,15 +61,14 @@ async function wipe(): Promise<void> {
   // assertions below pass or fail for the wrong reason.
   await cache.invalidateResource(TENANT, "counsel_brief");
   await cache.invalidateResource(TENANT, "counsel_briefs");
-  // NOTE: invalidateResource does an unanchored prefix match, so the
-  // "counsel_brief" call above already deletes every "counsel_briefs:*" key
-  // too (it's a string-prefix of the plural) -- the second call is a
-  // harmless no-op today, not a mistake here specifically, but it is a real
-  // landmine in the shared cache package (packages/cache/src/index.ts) that
-  // has been flagged as its own follow-up rather than fixed in this PR.
-  // "case" has the identical prefix relationship with "cases" below, for
-  // the same reason: both calls are kept for clarity/symmetry with the
-  // pattern above even though the first already covers the second.
+  // NOTE: invalidateResource() used to do an unanchored prefix match, so the
+  // "counsel_brief" call above would also have deleted every "counsel_briefs:*"
+  // key as a side effect (it's a string-prefix of the plural), making the
+  // second call a harmless no-op. That landmine in the shared cache package
+  // (packages/cache/src/index.ts) is now fixed -- delByPrefix() is anchored to
+  // a full key-segment boundary -- so both calls below are independently
+  // necessary: each clears only its own resource. Kept as two explicit calls
+  // for clarity/symmetry either way. "case"/"cases" is the identical pair.
   await cache.invalidateResource(TENANT, "case");
   await cache.invalidateResource(TENANT, "cases");
 }

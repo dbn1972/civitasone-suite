@@ -301,8 +301,20 @@ export class Cache {
 
   /** Invalidate one key or a whole resource prefix (called by the consumer after a write). */
   async invalidate(key: string): Promise<void> { await this.store.del(key); }
+  /**
+   * Delete every key under this resource. The scanned prefix MUST end with the
+   * same ":" delimiter makeKey()/listKey() place immediately after the resource
+   * segment — matching on the bare `${service}:${tenantId}:${resource}` (no
+   * trailing separator) is a raw string-prefix scan, so a resource whose name is
+   * a textual prefix of another resource's name (e.g. "contract" / "contractLine",
+   * or a singular/plural pair like "counsel_brief" / "counsel_briefs") would
+   * cross-invalidate: clearing the shorter-named resource also wiped every entry
+   * under the longer-named one, because "contractLine:1" starts with the same
+   * characters as "contract" once the segment delimiter is missing from the scan.
+   * The trailing ":" anchors the match to a full key-segment boundary instead.
+   */
   async invalidateResource(tenantId: string, resource: string): Promise<void> {
-    await this.store.delByPrefix(`${this.opts.service}:${tenantId}:${resource}`);
+    await this.store.delByPrefix(`${this.opts.service}:${tenantId}:${resource}:`);
   }
 
   /**
