@@ -155,6 +155,38 @@ describe("createTenantDb — dbFor/tierOf/dbForRead shape assertions", () => {
     void t.sqlClient.end({ timeout: 0 }).catch(() => undefined);
   });
 
+  it("dbFor(tenantId) is wrapped with tenant-GUC injection, same as db (regression guard)", async () => {
+    // wrapWithTenantGuc() returns Object.create(rawDb) with `transaction`
+    // reassigned as an OWN property of the wrapper. A raw, unwrapped Drizzle
+    // instance inherits `transaction` from its class prototype instead, so
+    // `transaction` is NOT its own property. This distinguishes "wrapped"
+    // from "raw" without needing a live transaction / real Postgres —
+    // exactly the distinction that matters here: dbFor() used to return the
+    // raw (unwrapped) instance, so its transaction() never set app.tenant_id,
+    // silently skipping RLS scoping for every FORCE ROW LEVEL SECURITY table.
+    const t = createTenantDb({ schema: SCHEMA, poolDsn: "postgres://user:pw@host/db" });
+    const dbForPool = await t.dbFor(T_POOL);
+
+    expect(Object.prototype.hasOwnProperty.call(t.db, "transaction")).toBe(true);
+    expect(Object.prototype.hasOwnProperty.call(dbForPool, "transaction")).toBe(true);
+
+    void t.sqlClient.end({ timeout: 0 }).catch(() => undefined);
+  });
+
+  it("dbForRead(tenantId) is likewise wrapped with tenant-GUC injection on the no-replica fallback path", async () => {
+    const prevReplica = process.env.DATABASE_REPLICA_URL;
+    delete process.env.DATABASE_REPLICA_URL;
+
+    const t = createTenantDb({ schema: SCHEMA, poolDsn: "postgres://user:pw@host/db" });
+    const dbForReadResult = await t.dbForRead(T_POOL);
+
+    expect(Object.prototype.hasOwnProperty.call(dbForReadResult, "transaction")).toBe(true);
+
+    void t.sqlClient.end({ timeout: 0 }).catch(() => undefined);
+    if (prevReplica === undefined) delete process.env.DATABASE_REPLICA_URL;
+    else process.env.DATABASE_REPLICA_URL = prevReplica;
+  });
+
   it("tierOf(tenantId) resolves to one of the three known TenantTier string literals", async () => {
     const t = createTenantDb({ schema: SCHEMA, poolDsn: "postgres://user:pw@host/db" });
     const tier = await t.tierOf(T_POOL);

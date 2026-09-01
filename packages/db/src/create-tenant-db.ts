@@ -76,7 +76,16 @@ export interface TenantDb<TSchema extends Record<string, unknown>> {
   router: TenantRouter;
   /** The raw postgres-js client for a tenant (pool shared client or silo/shard client). */
   sqlClientFor(tenantId: string): Promise<ReturnType<typeof createSqlClient>>;
-  /** A Drizzle db bound to the tenant's tier (cached per underlying client). */
+  /**
+   * A Drizzle db bound to the tenant's tier (cached per underlying client),
+   * wrapped with tenant-GUC injection — same `wrapWithTenantGuc` protection as
+   * `db` above, so `dbFor(tenantId).transaction(...)` sets `app.tenant_id`
+   * from the ambient tenant context exactly like the pool-tier `db` does. A
+   * caller MUST still be inside a matching `runWithTenant(tenantId, ...)` (or
+   * request-hook-established) context for the GUC to be set — `dbFor()` picks
+   * which physical connection to use; it does not itself establish the
+   * ambient tenant context that supplies the GUC value.
+   */
   dbFor(tenantId: string): Promise<PostgresJsDatabase<TSchema>>;
   /** Tenant isolation tier (for observability / routing decisions). */
   tierOf(tenantId: string): Promise<TenantTier>;
@@ -85,6 +94,7 @@ export interface TenantDb<TSchema extends Record<string, unknown>> {
    * replica when reachable, falling back to the primary on any failure or
    * absent configuration; silo/shard tenants always read the primary. An
    * unresolvable tier rejects rather than returning any connection.
+   * Wrapped with tenant-GUC injection on every path, same as `dbFor`.
    */
   dbForRead(tenantId: string): Promise<PostgresJsDatabase<TSchema>>;
 }
@@ -134,7 +144,12 @@ export function createTenantDb<TSchema extends Record<string, unknown>>(
     const client = await router.sqlFor(tenantId);
     let d = drizzleByClient.get(client);
     if (!d) {
-      d = drizzle(client, { schema });
+      // Wrapped exactly like `db` above: without this, dbFor()'s transaction()
+      // never sets app.tenant_id, so any caller querying a FORCE ROW LEVEL
+      // SECURITY table through it hits "unrecognized configuration parameter
+      // app.tenant_id" — the same class of bug fixed piecemeal this session in
+      // crm-service, revenue-service, knowledge-service, and install-service.
+      d = wrapWithTenantGuc(drizzle(client, { schema }));
       drizzleByClient.set(client, d);
     }
     return d;
@@ -177,7 +192,9 @@ export function createTenantDb<TSchema extends Record<string, unknown>>(
       await client`SELECT 1`;
       let d = drizzleByClient.get(client);
       if (!d) {
-        d = drizzle(client, { schema });
+        // Same tenant-GUC wrap as the primary path in dbFor() above — a
+        // replica-tier read still runs through an RLS-scoped connection.
+        d = wrapWithTenantGuc(drizzle(client, { schema }));
         drizzleByClient.set(client, d);
       }
       return d;
