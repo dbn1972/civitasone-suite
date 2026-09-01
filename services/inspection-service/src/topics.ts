@@ -114,6 +114,14 @@ export const COMMANDS = {
   capaCreate: "inspection.capa.create",
   /** payload: { capaId, version, ownerId?, dueDate?, description? } */
   capaUpdate: "inspection.capa.update",
+  /**
+   * payload: { capaId } — start work on an open/overdue CAPA (open|overdue -> in_progress).
+   * Required precursor to capaComplete: CAPA_TRANSITIONS (domain.ts) has no open -> completed
+   * edge by design (a CAPA must pass through in_progress first), but before this command
+   * existed nothing could ever perform that transition — every CAPA was permanently stuck
+   * in 'open' and /complete always failed with INVALID_TRANSITION.
+   */
+  capaStart: "inspection.capa.start",
   /** payload: { capaId, evidenceOfClosure: unknown[] } — mark CAPA complete with closure evidence */
   capaComplete: "inspection.capa.complete",
   /** payload: { capaId, effectivenessVerified: boolean } — verify effectiveness (maker-checker) */
@@ -251,6 +259,8 @@ export const EVENTS = {
   // ── CAPA (SVC-106) ───────────────────────────────────────────────────────
   /** payload: { capaId, findingId, type, ownerId } */
   capaCreated: "inspection.capa.created",
+  /** payload: { capaId, startedBy } */
+  capaStarted: "inspection.capa.started",
   /** payload: { capaId, completedBy } */
   capaCompleted: "inspection.capa.completed",
   /** payload: { capaId, verifiedBy, effectivenessVerified } */

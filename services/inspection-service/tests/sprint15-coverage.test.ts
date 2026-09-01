@@ -291,6 +291,45 @@ describe("CAPA consumers — Sprint 15 coverage", () => {
     }));
   });
 
+  // Regression for a CRITICAL bug: CAPA_TRANSITIONS (domain.ts) has no
+  // open -> completed edge by design (must go through in_progress first —
+  // enforced by an existing domain test), but before capaStart existed,
+  // nothing anywhere ever performed open -> in_progress. Every CAPA is
+  // created with status "open" (capaCreate, above) and stayed there
+  // permanently — /complete always threw INVALID_TRANSITION for every real
+  // CAPA, silently, because the 202 was already sent before this consumer
+  // ran. This test would have nothing to call before the fix (no
+  // "inspection.capa.start" handler was ever registered).
+  it("handles capaStart — open CAPA transitions to in_progress", async () => {
+    const { findCapaById, updateCapa } = await import("../src/modules/capa/repo.js");
+    (findCapaById as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      id: "capa-1", status: "open", version: 1, tenantId: TENANT_ID,
+      findingId: "find-1", assignedTo: USER_ID, createdBy: USER_ID,
+    });
+    const handler = handlers.get("inspection.capa.start");
+    expect(handler).toBeDefined();
+    await handler!(makeMsg("inspection.capa.start", { capaId: "capa-1" }));
+    expect(updateCapa).toHaveBeenCalledWith(
+      expect.anything(),
+      "capa-1",
+      TENANT_ID,
+      expect.objectContaining({ status: "in_progress" }),
+      1,
+    );
+  });
+
+  it("rejects capaStart when the CAPA is already completed (invalid transition, no write)", async () => {
+    const { findCapaById, updateCapa } = await import("../src/modules/capa/repo.js");
+    (findCapaById as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      id: "capa-2", status: "completed", version: 3, tenantId: TENANT_ID,
+      findingId: "find-1", assignedTo: USER_ID, createdBy: USER_ID,
+    });
+    const handler = handlers.get("inspection.capa.start");
+    await expect(handler!(makeMsg("inspection.capa.start", { capaId: "capa-2" })))
+      .rejects.toThrow(/Cannot transition CAPA/);
+    expect(updateCapa).not.toHaveBeenCalled();
+  });
+
   it("handles capaComplete", async () => {
     const { findCapaById } = await import("../src/modules/capa/repo.js");
     (findCapaById as ReturnType<typeof vi.fn>).mockResolvedValueOnce({

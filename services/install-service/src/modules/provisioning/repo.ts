@@ -1,11 +1,33 @@
 import { eq, and, desc, inArray, lt, or } from "drizzle-orm";
 import { drizzle, type PostgresJsDatabase } from "drizzle-orm/postgres-js";
 import type postgres from "postgres";
+import { runWithTenant } from "@civitasone/db";
 import { db } from "../../shared/db.js";
 import { siloProvisions } from "./schema.js";
 import type { SiloProvisionRow, SiloProvisionInsert } from "./schema.js";
 
 export type Writer = Pick<typeof db, "insert" | "update" | "select">;
+
+/**
+ * TENANT-SCOPING FIX (deep-verification, 2026-08-27): install.silo_provisions
+ * has FORCE ROW LEVEL SECURITY (`tenant_id = install.current_tenant_id()`,
+ * migration 0006) and install_svc is explicitly NOBYPASSRLS (see privilegedDb
+ * below) -- there is no escape hatch for the ordinary tenant-scoped `db`.
+ * wrapWithTenantGuc only injects the app.tenant_id GUC around
+ * db.transaction() calls, so a bare db.select() never gets it. This is a
+ * DIFFERENT function from findById/list further down (removed by this fix --
+ * see git history if you need the old signatures): those were called
+ * directly from the HTTP routes (GET /v1/install/silo-provisions[/:id]) with
+ * NO tenant filter applied ANYWHERE -- not app-level, not via this wrapper --
+ * so today they return zero rows for every caller (broken but not leaking);
+ * the moment someone "fixes" that by only adding this GUC wrapper without
+ * ALSO scoping the query to the caller's own tenant, it becomes a real
+ * cross-tenant data leak (every tenant's provisioning records, to any
+ * READER_ROLES caller). Fixed both at once below.
+ */
+async function tenantScoped<T>(tenantId: string, fn: (tx: Writer) => Promise<T>): Promise<T> {
+  return runWithTenant(tenantId, () => db.transaction((tx) => fn(tx as unknown as Writer)));
+}
 
 export async function findByTenantTx(tx: Writer, tenantId: string): Promise<SiloProvisionRow | null> {
   const rows = await (tx as typeof db).select().from(siloProvisions)
@@ -13,14 +35,27 @@ export async function findByTenantTx(tx: Writer, tenantId: string): Promise<Silo
   return rows[0] ?? null;
 }
 
-export async function findById(id: string): Promise<SiloProvisionRow | null> {
-  const rows = await db.select().from(siloProvisions).where(eq(siloProvisions.id, id)).limit(1);
-  return rows[0] ?? null;
+/** Tenant-scoped single-record lookup for the GET /v1/install/silo-provisions/:id route. */
+export async function findByIdForTenant(id: string, tenantId: string): Promise<SiloProvisionRow | null> {
+  return tenantScoped(tenantId, async (tx) => {
+    const rows = await (tx as unknown as typeof db)
+      .select().from(siloProvisions)
+      .where(and(eq(siloProvisions.id, id), eq(siloProvisions.tenantId, tenantId)))
+      .limit(1);
+    return rows[0] ?? null;
+  });
 }
 
-export async function list(limit: number, status?: string): Promise<SiloProvisionRow[]> {
-  const rows = await db.select().from(siloProvisions).orderBy(desc(siloProvisions.requestedAt)).limit(limit);
-  return status ? rows.filter((r) => r.status === status) : rows;
+/** Tenant-scoped list for the GET /v1/install/silo-provisions route. */
+export async function listForTenant(tenantId: string, limit: number, status?: string): Promise<SiloProvisionRow[]> {
+  return tenantScoped(tenantId, async (tx) => {
+    const rows = await (tx as unknown as typeof db)
+      .select().from(siloProvisions)
+      .where(eq(siloProvisions.tenantId, tenantId))
+      .orderBy(desc(siloProvisions.requestedAt))
+      .limit(limit);
+    return status ? rows.filter((r) => r.status === status) : rows;
+  });
 }
 
 export async function insert(tx: Writer, row: SiloProvisionInsert): Promise<void> {

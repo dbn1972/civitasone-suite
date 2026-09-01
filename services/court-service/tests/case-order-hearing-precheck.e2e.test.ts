@@ -93,6 +93,15 @@ describe.skipIf(!RUN)("synchronous pre-checks for illegal state transitions", ()
       await sql`delete from court.case_parties where tenant_id = ${TENANT}`;
       await sql`delete from court.hearings where tenant_id = ${TENANT}`;
       await sql`delete from court.orders where tenant_id = ${TENANT}`;
+      await sql`delete from court.appeals where tenant_id = ${TENANT}`;
+      await sql`delete from court.notice_service where tenant_id = ${TENANT}`;
+      await sql`delete from court.notices where tenant_id = ${TENANT}`;
+      await sql`delete from court.evidence where tenant_id = ${TENANT}`;
+      await sql`delete from court.compliance_directions where tenant_id = ${TENANT}`;
+      await sql`delete from court.case_defect where tenant_id = ${TENANT}`;
+      await sql`delete from court.case_scrutiny where tenant_id = ${TENANT}`;
+      await sql`delete from court.case_parcels where tenant_id = ${TENANT}`;
+      await sql`delete from court.config_entries where tenant_id = ${TENANT}`;
       await sql`delete from court.case_state_transitions where tenant_id = ${TENANT}`;
       await sql`delete from court.cases where tenant_id = ${TENANT}`;
       await sql`delete from court.courts where tenant_id = ${TENANT}`;
@@ -205,5 +214,318 @@ describe.skipIf(!RUN)("synchronous pre-checks for illegal state transitions", ()
     const selfApproveAgain = await jpatch(`/v1/court/orders/${orderId}/approve-issue`, { dscSignature: "fake-dsc-for-test", expectedVersion: 3 }, MAKER);
     expect(selfApproveAgain.code).toBe(403);
     expect(selfApproveAgain.body.error.code).toBe("MAKER_CHECKER_VIOLATION");
+  });
+
+  it("notice: rejects an illegal status transition immediately (422), not a fake 202", async () => {
+    const caseId = await registerCase(courtId, "Precheck Notice Case");
+
+    const issued = await jpost(`/v1/court/cases/${caseId}/notices`, {
+      noticeType: "summons", issueDate: "2026-09-01",
+    }, MAKER);
+    expect(issued.code).toBe(202);
+    const noticeId = issued.body.noticeId as string;
+    expect(await waitFor(async () =>
+      (await jget(`/v1/court/cases/${caseId}/notices`, MAKER)).body.items?.some((n: any) => n.id === noticeId),
+    )).toBe(true);
+
+    // Mark it served (legal: issued -> served).
+    const served = await jpatch(`/v1/court/notices/${noticeId}/status`, { status: "served", expectedVersion: 1 }, MAKER);
+    expect(served.code).toBe(202);
+    expect(await waitFor(async () =>
+      (await jget(`/v1/court/cases/${caseId}/notices`, MAKER)).body.items?.find((n: any) => n.id === noticeId)?.status === "served",
+    )).toBe(true);
+
+    // served is TERMINAL -- cancelling it now must be an immediate 422, not a fake 202.
+    const illegal = await jpatch(`/v1/court/notices/${noticeId}/status`, { status: "cancelled", expectedVersion: 2 }, MAKER);
+    expect(illegal.code).toBe(422);
+    expect(illegal.body.error.code).toBe("NOTICE_INVALID_TRANSITION");
+
+    // A stale expectedVersion on a legal target is the OTHER branch: 409, not 422.
+    const staleVersion = await jpatch(`/v1/court/notices/${noticeId}/status`, { status: "unserved", expectedVersion: 99 }, MAKER);
+    expect(staleVersion.code).toBe(409);
+    expect(staleVersion.body.error.code).toBe("NOTICE_VERSION_CONFLICT");
+  });
+
+  it("evidence: rejects an illegal ruling immediately (422), not a fake 202", async () => {
+    const caseId = await registerCase(courtId, "Precheck Evidence Case");
+
+    const submitted = await jpost(`/v1/court/cases/${caseId}/evidence`, {
+      title: "Precheck Exhibit", evidenceType: "document",
+    }, MAKER);
+    expect(submitted.code).toBe(202);
+    const evidenceId = submitted.body.evidenceId as string;
+    expect(await waitFor(async () =>
+      (await jget(`/v1/court/cases/${caseId}/evidence`, MAKER)).body.items?.some((e: any) => e.id === evidenceId),
+    )).toBe(true);
+
+    // Admit it (legal: submitted -> admitted).
+    const admitted = await jpatch(`/v1/court/evidence/${evidenceId}/rule`, { ruling: "admitted", expectedVersion: 1 }, MAKER);
+    expect(admitted.code).toBe(202);
+    expect(await waitFor(async () =>
+      (await jget(`/v1/court/cases/${caseId}/evidence`, MAKER)).body.items?.find((e: any) => e.id === evidenceId)?.status === "admitted",
+    )).toBe(true);
+
+    // admitted is TERMINAL -- rejecting it now must be an immediate 422, not a fake 202.
+    const illegal = await jpatch(`/v1/court/evidence/${evidenceId}/rule`, { ruling: "rejected", expectedVersion: 2 }, MAKER);
+    expect(illegal.code).toBe(422);
+    expect(illegal.body.error.code).toBe("EVIDENCE_INVALID_TRANSITION");
+
+    // A stale expectedVersion on a legal target is the OTHER branch: 409, not 422.
+    const staleVersion = await jpatch(`/v1/court/evidence/${evidenceId}/rule`, { ruling: "rejected", expectedVersion: 99 }, MAKER);
+    expect(staleVersion.code).toBe(409);
+    expect(staleVersion.body.error.code).toBe("EVIDENCE_VERSION_CONFLICT");
+  });
+
+  it("compliance: rejects an illegal status transition immediately (422), not a fake 202", async () => {
+    const caseId = await registerCase(courtId, "Precheck Compliance Case");
+
+    const created = await jpost(`/v1/court/cases/${caseId}/compliance`, {
+      direction: "Precheck compliance direction",
+    }, MAKER);
+    expect(created.code).toBe(202);
+    const directionId = created.body.directionId as string;
+    expect(await waitFor(async () =>
+      (await jget(`/v1/court/cases/${caseId}/compliance`, MAKER)).body.items?.some((d: any) => d.id === directionId),
+    )).toBe(true);
+
+    // verifying a still-'pending' direction skips the required 'in_progress' ->
+    // 'completed' steps -- illegal, must be an immediate 422, not a fake 202.
+    const illegal = await jpatch(`/v1/court/compliance/${directionId}`, { status: "verified", expectedVersion: 1 }, MAKER);
+    expect(illegal.code).toBe(422);
+    expect(illegal.body.error.code).toBe("COMPLIANCE_INVALID_TRANSITION");
+
+    const untouched = await jget(`/v1/court/cases/${caseId}/compliance`, MAKER);
+    expect(untouched.body.items.find((d: any) => d.id === directionId)?.status).toBe("pending");
+
+    // A stale expectedVersion on a legal target is the OTHER branch: 409, not 422.
+    const staleVersion = await jpatch(`/v1/court/compliance/${directionId}`, { status: "in_progress", expectedVersion: 99 }, MAKER);
+    expect(staleVersion.code).toBe(409);
+    expect(staleVersion.body.error.code).toBe("COMPLIANCE_VERSION_CONFLICT");
+  });
+
+  it("scrutiny: rejects an illegal defect resolution immediately (422), not a fake 202", async () => {
+    const caseId = await registerCase(courtId, "Precheck Scrutiny Case");
+
+    const scrutinized = await jpost(`/v1/court/cases/${caseId}/scrutiny`, {}, MAKER);
+    expect(scrutinized.code).toBe(202);
+    const scrutinyId = scrutinized.body.scrutinyId as string;
+    expect(await waitFor(async () =>
+      (await jget(`/v1/court/cases/${caseId}/defects`, MAKER)).code === 200,
+    )).toBe(true);
+
+    const raised = await jpost(`/v1/court/cases/${caseId}/defects`, {
+      category: "missing_documents", description: "Precheck defect",
+    }, MAKER);
+    expect(raised.code).toBe(202);
+    const defectId = raised.body.defectId as string;
+    expect(await waitFor(async () =>
+      (await jget(`/v1/court/cases/${caseId}/defects`, MAKER)).body.items?.some((d: any) => d.id === defectId),
+    )).toBe(true);
+
+    // Resolve it (legal: raised -> rectified).
+    const rectified = await jpatch(`/v1/court/defects/${defectId}/resolve`, { resolution: "rectified", expectedVersion: 1 }, MAKER);
+    expect(rectified.code).toBe(202);
+    expect(await waitFor(async () =>
+      (await jget(`/v1/court/cases/${caseId}/defects`, MAKER)).body.items?.find((d: any) => d.id === defectId)?.status === "rectified",
+    )).toBe(true);
+
+    // rectified is TERMINAL -- resolving it again must be an immediate 422, not a fake 202.
+    const illegal = await jpatch(`/v1/court/defects/${defectId}/resolve`, { resolution: "waived", expectedVersion: 2 }, MAKER);
+    expect(illegal.code).toBe(422);
+    expect(illegal.body.error.code).toBe("DEFECT_INVALID_TRANSITION");
+
+    // A stale expectedVersion on the scrutiny itself is the OTHER branch: 409.
+    const staleVersion = await jpatch(`/v1/court/scrutiny/${scrutinyId}/resolve`, { status: "cleared", expectedVersion: 99 }, MAKER);
+    expect(staleVersion.code).toBe(409);
+    expect(staleVersion.body.error.code).toBe("SCRUTINY_VERSION_CONFLICT");
+
+    // The legal scrutiny path still works: pending -> cleared.
+    const cleared = await jpatch(`/v1/court/scrutiny/${scrutinyId}/resolve`, { status: "cleared", expectedVersion: 1 }, MAKER);
+    expect(cleared.code).toBe(202);
+  });
+
+  it("case-parcel: a stale expectedVersion is an immediate 409, not a fake 202", async () => {
+    const caseId = await registerCase(courtId, "Precheck Parcel Case");
+
+    const added = await jpost(`/v1/court/cases/${caseId}/parcels`, {
+      surveyNumber: "PC-SURVEY-1", village: "Precheck Village",
+    }, MAKER);
+    expect(added.code).toBe(202);
+    const parcelId = added.body.parcelId as string;
+    expect(await waitFor(async () =>
+      (await jget(`/v1/court/cases/${caseId}/parcels`, MAKER)).body.items?.some((p: any) => p.id === parcelId),
+    )).toBe(true);
+
+    // A stale expectedVersion on a REAL change must be an immediate 409, not a fake 202.
+    const staleVersion = await jpatch(`/v1/court/parcels/${parcelId}`, { areaSqm: 500, expectedVersion: 99 }, MAKER);
+    expect(staleVersion.code).toBe(409);
+    expect(staleVersion.body.error.code).toBe("PARCEL_VERSION_CONFLICT");
+
+    const untouched = await jget(`/v1/court/cases/${caseId}/parcels`, MAKER);
+    expect(untouched.body.items.find((p: any) => p.id === parcelId)?.areaSqm ?? null).toBeNull();
+
+    // The correct version still works and actually applies.
+    const applied = await jpatch(`/v1/court/parcels/${parcelId}`, { areaSqm: 500, expectedVersion: 1 }, MAKER);
+    expect(applied.code).toBe(202);
+    expect(await waitFor(async () =>
+      Number((await jget(`/v1/court/cases/${caseId}/parcels`, MAKER)).body.items?.find((p: any) => p.id === parcelId)?.areaSqm) === 500,
+    )).toBe(true);
+  });
+
+  it("appeal: rejects an illegal status transition immediately (422), not a fake 202", async () => {
+    const caseId = await registerCase(courtId, "Precheck Appeal Case");
+
+    const filed = await jpost("/v1/court/appeals", {
+      originalCaseId: caseId, appealType: "appeal", grounds: "Error of law", filedDate: "2026-09-01",
+    }, MAKER);
+    expect(filed.code).toBe(202);
+    const appealId = filed.body.appealId as string;
+    expect(await waitFor(async () => (await jget(`/v1/court/appeals/${appealId}`, MAKER)).code === 200)).toBe(true);
+
+    // Deciding a still-'filed' appeal skips the required 'registered' step --
+    // illegal, must be an immediate 422, not a 202 that silently dead-letters.
+    const illegalDecide = await jpatch(`/v1/court/appeals/${appealId}/decide`, {
+      decision: "allowed", decisionSummary: "Reasoned order", decidedDate: "2026-10-01", expectedVersion: 1,
+    }, MAKER);
+    expect(illegalDecide.code).toBe(422);
+    expect(illegalDecide.body.error.code).toBe("APPEAL_INVALID_TRANSITION");
+
+    const untouched = await jget(`/v1/court/appeals/${appealId}`, MAKER);
+    expect(untouched.body.status).toBe("filed");
+    expect(untouched.body.version).toBe(1);
+
+    // A stale expectedVersion on a legal target is a 409, the other branch.
+    const staleVersion = await jpatch(`/v1/court/appeals/${appealId}/register`, { expectedVersion: 99 }, MAKER);
+    expect(staleVersion.code).toBe(409);
+    expect(staleVersion.body.error.code).toBe("APPEAL_VERSION_CONFLICT");
+
+    // The legal path still works end to end: register, then decide.
+    const register = await jpatch(`/v1/court/appeals/${appealId}/register`, { expectedVersion: 1 }, MAKER);
+    expect(register.code).toBe(202);
+    expect(await waitFor(async () => (await jget(`/v1/court/appeals/${appealId}`, MAKER)).body.status === "registered")).toBe(true);
+
+    const decide = await jpatch(`/v1/court/appeals/${appealId}/decide`, {
+      decision: "allowed", decisionSummary: "Reasoned order", decidedDate: "2026-10-01", expectedVersion: 2,
+    }, MAKER);
+    expect(decide.code).toBe(202);
+    expect(await waitFor(async () => (await jget(`/v1/court/appeals/${appealId}`, MAKER)).body.status === "allowed")).toBe(true);
+  });
+
+  it("party: rejects an advocate update on a missing party (404) and a stale expectedVersion (409), not a fake 202", async () => {
+    const caseId = await registerCase(courtId, "Precheck Party Case");
+
+    // A partyId that does not exist at all -- immediate 404, not a 202 that
+    // dead-letters with zero signal.
+    const missing = await jpatch(`/v1/court/parties/${randomUUID()}/advocate`, { advocateName: "Nobody", expectedVersion: 1 }, MAKER);
+    expect(missing.code).toBe(404);
+    expect(missing.body.error.code).toBe("PARTY_NOT_FOUND");
+
+    const addRes = await jpost(`/v1/court/cases/${caseId}/parties`, {
+      partyRole: "advocate", advocateName: "Adv. Original", advocateBarId: "DL/0001/2020",
+    }, MAKER);
+    expect(addRes.code).toBe(202);
+    const partyId = addRes.body.partyId as string;
+    expect(await waitFor(async () => {
+      const list = await jget(`/v1/court/cases/${caseId}/parties`, MAKER);
+      return (list.body.items as any[]).some((p) => p.id === partyId);
+    })).toBe(true);
+
+    // Stale expectedVersion on a REAL party -- immediate 409, the write never
+    // reaches the consumer at all.
+    const stale = await jpatch(`/v1/court/parties/${partyId}/advocate`, { advocateName: "Adv. Hijacked", expectedVersion: 99 }, MAKER);
+    expect(stale.code).toBe(409);
+    expect(stale.body.error.code).toBe("PARTY_VERSION_CONFLICT");
+
+    const untouched = (await jget(`/v1/court/cases/${caseId}/parties`, MAKER)).body.items.find((p: any) => p.id === partyId);
+    expect(untouched.advocateName).toBe("Adv. Original");
+    expect(untouched.version).toBe(1);
+
+    // The legal path (correct expectedVersion) still works end to end.
+    const legal = await jpatch(`/v1/court/parties/${partyId}/advocate`, { advocateName: "Adv. Updated", expectedVersion: 1 }, MAKER);
+    expect(legal.code).toBe(202);
+    expect(await waitFor(async () => {
+      const list = await jget(`/v1/court/cases/${caseId}/parties`, MAKER);
+      return (list.body.items as any[]).find((p) => p.id === partyId)?.advocateName === "Adv. Updated";
+    })).toBe(true);
+  });
+
+  it("config-registry: rejects a missing/stale-version deactivate (404/409) and a stale-version set (409), not a fake 202", async () => {
+    const setRes = await jpost("/v1/court/config", {
+      namespace: "court_defaults", configKey: `precheck_max_adj_${randomUUID().slice(0, 8)}`, value: "5",
+    }, MAKER);
+    expect(setRes.code).toBe(202);
+    const configId = setRes.body.configId as string;
+    const namespace = "court_defaults";
+    expect(await waitFor(async () => {
+      const list = await jget(`/v1/court/config/${namespace}`, MAKER);
+      // value round-trips through the jsonb column as the JSON NUMBER 5, not
+      // the string "5" -- a bare-digit string cast to jsonb is valid JSON
+      // grammar for a number, so Postgres (correctly) reparses it as one.
+      return (list.body.items as any[]).some((c) => c.id === configId && c.value === 5);
+    })).toBe(true);
+    const row = (await jget(`/v1/court/config/${namespace}`, MAKER)).body.items.find((c: any) => c.id === configId);
+
+    // setConfig against an EXISTING entry with a stale expectedVersion -- 409,
+    // not a fake 202 (this branch only fires when expectedVersion is supplied).
+    const staleSet = await jpost("/v1/court/config", {
+      namespace, configKey: row.configKey, value: "6", expectedVersion: 99,
+    }, MAKER);
+    expect(staleSet.code).toBe(409);
+    expect(staleSet.body.error.code).toBe("CONFIG_VERSION_CONFLICT");
+    const stillFive = (await jget(`/v1/court/config/${namespace}`, MAKER)).body.items.find((c: any) => c.id === configId);
+    expect(stillFive.value).toBe(5);
+
+    // Two SEQUENTIAL, correctly-versioned updates must BOTH actually apply --
+    // not just the first one. Before independent review caught it, setConfig's
+    // messageId was `configId` alone (identical on every call for this entry,
+    // regardless of content or expectedVersion), so markProcessed's dedup would
+    // have silently swallowed the SECOND update below even though its
+    // expectedVersion is 100% correct -- exactly the update-after-create path
+    // the original test suite never once exercised.
+    const firstUpdate = await jpost("/v1/court/config", {
+      namespace, configKey: row.configKey, value: "6", expectedVersion: 1,
+    }, MAKER);
+    expect(firstUpdate.code).toBe(202);
+    expect(await waitFor(async () => {
+      const found = (await jget(`/v1/court/config/${namespace}`, MAKER)).body.items.find((c: any) => c.id === configId);
+      return found?.value === 6 && found?.version === 2;
+    })).toBe(true);
+
+    const secondUpdate = await jpost("/v1/court/config", {
+      namespace, configKey: row.configKey, value: "7", expectedVersion: 2,
+    }, MAKER);
+    expect(secondUpdate.code).toBe(202);
+    expect(await waitFor(async () => {
+      const found = (await jget(`/v1/court/config/${namespace}`, MAKER)).body.items.find((c: any) => c.id === configId);
+      return found?.value === 7 && found?.version === 3;
+    })).toBe(true);
+
+    // deactivateConfig on a random, nonexistent id -- immediate 404.
+    const missingDeactivate = await jpatch(`/v1/court/config/${randomUUID()}/deactivate`, { expectedVersion: 1 }, MAKER);
+    expect(missingDeactivate.code).toBe(404);
+    expect(missingDeactivate.body.error.code).toBe("CONFIG_NOT_FOUND");
+
+    // deactivateConfig on the REAL, active entry with a stale expectedVersion --
+    // immediate 409, the write never reaches the consumer.
+    const staleDeactivate = await jpatch(`/v1/court/config/${configId}/deactivate`, { expectedVersion: 99 }, MAKER);
+    expect(staleDeactivate.code).toBe(409);
+    expect(staleDeactivate.body.error.code).toBe("CONFIG_VERSION_CONFLICT");
+
+    // The legal path still works end to end. expectedVersion is 3, not 1 --
+    // the two sequential updates above already bumped it twice.
+    const legalDeactivate = await jpatch(`/v1/court/config/${configId}/deactivate`, { expectedVersion: 3 }, MAKER);
+    expect(legalDeactivate.code).toBe(202);
+    expect(await waitFor(async () => {
+      const list = await jget(`/v1/court/config/${namespace}`, MAKER);
+      return (list.body.items as any[]).find((c) => c.id === configId)?.active === false;
+    })).toBe(true);
+
+    // No-op parity: deactivating the now-ALREADY-INACTIVE entry again, even with
+    // a wildly stale expectedVersion, is still accepted (matches the consumer's
+    // own "already inactive -> no-op" short-circuit, which runs BEFORE its
+    // version check) -- proving the pre-check is not STRICTER than the
+    // authoritative consumer.
+    const alreadyInactive = await jpatch(`/v1/court/config/${configId}/deactivate`, { expectedVersion: 12345 }, MAKER);
+    expect(alreadyInactive.code).toBe(202);
   });
 });

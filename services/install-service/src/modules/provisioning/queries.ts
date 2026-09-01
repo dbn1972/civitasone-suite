@@ -25,11 +25,11 @@ function toDto(r: SiloProvisionRow): SiloProvisionDto {
   };
 }
 
-export async function listProvisions(limit: number, status?: string): Promise<SiloProvisionDto[]> {
-  return (await repo.list(limit, status)).map(toDto);
+export async function listProvisions(tenantId: string, limit: number, status?: string): Promise<SiloProvisionDto[]> {
+  return (await repo.listForTenant(tenantId, limit, status)).map(toDto);
 }
 
-export async function getProvision(id: string): Promise<SiloProvisionDto | null> {
-  const r = await repo.findById(id);
+export async function getProvision(id: string, tenantId: string): Promise<SiloProvisionDto | null> {
+  const r = await repo.findByIdForTenant(id, tenantId);
   return r ? toDto(r) : null;
 }

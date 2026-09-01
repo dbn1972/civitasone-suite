@@ -33,3 +33,15 @@ export async function getEvidence(tenantId: string, id: string): Promise<Evidenc
     .limit(1));
   return rows[0];
 }
+
+/** Narrow, uncached read for a synchronous pre-check before publishing
+ *  ruleOnEvidence -- same {status, version} column set as
+ *  getEvidenceForUpdate (what the consumer reads inside its own tx). */
+export async function getEvidenceForPrecheck(tenantId: string, id: string): Promise<{ status: string; version: number } | undefined> {
+  const rows = await scopedRead<Array<{ status: string; version: number }>>((tx) => tx
+    .select({ status: evidence.status, version: evidence.version })
+    .from(evidence)
+    .where(and(eq(evidence.tenantId, tenantId), eq(evidence.id, id)))
+    .limit(1));
+  return rows[0];
+}

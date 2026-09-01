@@ -34,12 +34,17 @@ export default async function Page() {
               {data.map((row) => (
                 <tr key={String(row.id)}>
                   <td>{String(row.id).slice(0, 8)}…</td>
-                  <td>{String(row.status ?? "—")}</td>
+                  {/* execution.inspections' status column is named `state`, not `status`
+                      (see services/inspection-service/src/modules/execution/schema.ts) —
+                      the API returns the row verbatim, so `row.status` is always undefined
+                      here. Reading `row.state` is what actually renders the real status and
+                      is what makes InspectionRowAction's action-per-status switch reachable. */}
+                  <td>{String(row.state ?? "—")}</td>
                   <td>{String(row.title ?? row.name ?? row.findingCode ?? row.entityId ?? "—")}</td>
                   <td>
                     <InspectionRowAction
                       id={String(row.id)}
-                      status={String(row.status ?? "")}
+                      status={String(row.state ?? "")}
                     />
                   </td>
                 </tr>

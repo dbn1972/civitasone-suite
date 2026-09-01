@@ -214,6 +214,28 @@ describe("order commands", () => {
     expect(result.orderId).toBeDefined();
     expect(publishSpy).toHaveBeenCalledTimes(1);
   });
+
+  it("recordOrder derives the SAME orderId for an identical retry, a DIFFERENT one for different content", async () => {
+    // Regression guard: orderId used to be keyed on a fresh randomUUID() per
+    // call, so a genuine client retry (timeout, double-click) created a second,
+    // distinct draft order instead of being recognised as the same intent. Now
+    // keyed on a content hash, so an identical resubmission dedupes.
+    const { recordOrder } = await import("../src/modules/order/commands.js");
+    const first = await recordOrder(ctx(), CASE_ID, { orderType: "interim", orderText: "Stay granted" });
+    const retry = await recordOrder(ctx(), CASE_ID, { orderType: "interim", orderText: "Stay granted" });
+    expect(retry.orderId).toBe(first.orderId);
+
+    const different = await recordOrder(ctx(), CASE_ID, { orderType: "interim", orderText: "Stay VACATED" });
+    expect(different.orderId).not.toBe(first.orderId);
+  });
+
+  it("recordOrder rejects an empty orderText (failure path)", async () => {
+    const { recordOrder } = await import("../src/modules/order/commands.js");
+    await expect(
+      recordOrder(ctx(), CASE_ID, { orderType: "interim", orderText: "" }),
+    ).rejects.toThrow();
+    expect(publishSpy).not.toHaveBeenCalled();
+  });
 });
 
 describe("cause-list commands", () => {
@@ -311,16 +333,55 @@ describe("scrutiny commands", () => {
 
   it("resolveDefect validates + publishes", async () => {
     const { resolveDefect } = await import("../src/modules/scrutiny/commands.js");
+    precheckRows = [{ status: "raised", version: 1 }]; // raised -> rectified is legal
     const result = await resolveDefect(ctx(), DEFECT_ID, { resolution: "rectified", expectedVersion: 1 });
     expect(result.accepted).toBe(true);
     expect(publishSpy).toHaveBeenCalledTimes(1);
   });
 
+  it("resolveDefect rejects a missing defect (404)", async () => {
+    const { resolveDefect } = await import("../src/modules/scrutiny/commands.js");
+    precheckRows = [];
+    await expect(
+      resolveDefect(ctx(), DEFECT_ID, { resolution: "rectified", expectedVersion: 1 }),
+    ).rejects.toMatchObject({ code: "DEFECT_NOT_FOUND" });
+    expect(publishSpy).not.toHaveBeenCalled();
+  });
+
+  it("resolveDefect rejects a stale expectedVersion (409)", async () => {
+    const { resolveDefect } = await import("../src/modules/scrutiny/commands.js");
+    precheckRows = [{ status: "raised", version: 2 }];
+    await expect(
+      resolveDefect(ctx(), DEFECT_ID, { resolution: "rectified", expectedVersion: 1 }),
+    ).rejects.toMatchObject({ code: "DEFECT_VERSION_CONFLICT" });
+    expect(publishSpy).not.toHaveBeenCalled();
+  });
+
   it("resolveScrutiny validates + publishes", async () => {
     const { resolveScrutiny } = await import("../src/modules/scrutiny/commands.js");
+    precheckRows = [{ status: "pending", version: 1 }]; // pending -> cleared is legal
     const result = await resolveScrutiny(ctx(), SCRUTINY_ID, { status: "cleared", expectedVersion: 1 });
     expect(result.accepted).toBe(true);
     expect(publishSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it("resolveScrutiny rejects a missing scrutiny (404)", async () => {
+    const { resolveScrutiny } = await import("../src/modules/scrutiny/commands.js");
+    precheckRows = [];
+    await expect(
+      resolveScrutiny(ctx(), SCRUTINY_ID, { status: "cleared", expectedVersion: 1 }),
+    ).rejects.toMatchObject({ code: "SCRUTINY_NOT_FOUND" });
+    expect(publishSpy).not.toHaveBeenCalled();
+  });
+
+  it("resolveScrutiny rejects an illegal transition (422)", async () => {
+    const { resolveScrutiny } = await import("../src/modules/scrutiny/commands.js");
+    // cleared is terminal -- cleared -> defective is not a legal edge.
+    precheckRows = [{ status: "cleared", version: 1 }];
+    await expect(
+      resolveScrutiny(ctx(), SCRUTINY_ID, { status: "defective", expectedVersion: 1 }),
+    ).rejects.toMatchObject({ code: "SCRUTINY_INVALID_TRANSITION" });
+    expect(publishSpy).not.toHaveBeenCalled();
   });
 });
 
@@ -344,6 +405,7 @@ describe("notice commands", () => {
 
   it("updateNoticeStatus validates + publishes", async () => {
     const { updateNoticeStatus } = await import("../src/modules/notice/commands.js");
+    precheckRows = [{ status: "issued", version: 1 }]; // issued -> served is legal
     const result = await updateNoticeStatus(ctx(), NOTICE_ID, { status: "served", expectedVersion: 1 });
     expect(result.accepted).toBe(true);
     expect(publishSpy).toHaveBeenCalledTimes(1);
@@ -364,6 +426,7 @@ describe("compliance commands", () => {
   it("updateCompliance validates + publishes", async () => {
     const { updateCompliance } = await import("../src/modules/compliance/commands.js");
     const directionId = randomUUID();
+    precheckRows = [{ status: "in_progress", version: 1 }]; // in_progress -> completed is legal
     const result = await updateCompliance(ctx(), directionId, { status: "completed", expectedVersion: 1 });
     expect(result.accepted).toBe(true);
     expect(publishSpy).toHaveBeenCalledTimes(1);
@@ -383,6 +446,7 @@ describe("appeal commands", () => {
 
   it("registerAppeal validates + publishes", async () => {
     const { registerAppeal } = await import("../src/modules/appeal/commands.js");
+    precheckRows = [{ status: "filed", version: 1 }]; // filed -> registered is legal
     const result = await registerAppeal(ctx(), APPEAL_ID, { expectedVersion: 1 });
     expect(result.accepted).toBe(true);
     expect(publishSpy).toHaveBeenCalledTimes(1);
@@ -390,6 +454,7 @@ describe("appeal commands", () => {
 
   it("decideAppeal validates + publishes", async () => {
     const { decideAppeal } = await import("../src/modules/appeal/commands.js");
+    precheckRows = [{ status: "registered", version: 2 }]; // registered -> allowed is legal
     const result = await decideAppeal(ctx(), APPEAL_ID, { decision: "allowed", decisionSummary: "Reasoned order", decidedDate: "2026-10-01", expectedVersion: 2 });
     expect(result.accepted).toBe(true);
     expect(publishSpy).toHaveBeenCalledTimes(1);
@@ -397,6 +462,7 @@ describe("appeal commands", () => {
 
   it("withdrawAppeal validates + publishes", async () => {
     const { withdrawAppeal } = await import("../src/modules/appeal/commands.js");
+    precheckRows = [{ status: "filed", version: 1 }]; // filed -> withdrawn is legal
     const result = await withdrawAppeal(ctx(), APPEAL_ID, { expectedVersion: 1 });
     expect(result.accepted).toBe(true);
     expect(publishSpy).toHaveBeenCalledTimes(1);
@@ -416,9 +482,39 @@ describe("party commands", () => {
 
   it("updateAdvocate validates + publishes", async () => {
     const { updateAdvocate } = await import("../src/modules/party/commands.js");
+    precheckRows = [{ version: 1 }];
     const result = await updateAdvocate(ctx(), PARTY_ID, { advocateName: "Adv. Sharma", advocateBarId: "DL/1234/2020", expectedVersion: 1 });
     expect(result.accepted).toBe(true);
     expect(publishSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it("updateAdvocate rejects a missing party (404)", async () => {
+    const { updateAdvocate } = await import("../src/modules/party/commands.js");
+    precheckRows = [];
+    await expect(
+      updateAdvocate(ctx(), PARTY_ID, { advocateName: "Adv. Sharma", expectedVersion: 1 }),
+    ).rejects.toMatchObject({ code: "PARTY_NOT_FOUND" });
+    expect(publishSpy).not.toHaveBeenCalled();
+  });
+
+  it("updateAdvocate rejects a stale expectedVersion (409)", async () => {
+    const { updateAdvocate } = await import("../src/modules/party/commands.js");
+    precheckRows = [{ version: 2 }];
+    await expect(
+      updateAdvocate(ctx(), PARTY_ID, { advocateName: "Adv. Sharma", expectedVersion: 1 }),
+    ).rejects.toMatchObject({ code: "PARTY_VERSION_CONFLICT" });
+    expect(publishSpy).not.toHaveBeenCalled();
+  });
+
+  it("updateAdvocate gives two DIFFERENT-content edits at the SAME expectedVersion DIFFERENT messageIds (else markProcessed dedup silently drops the second)", async () => {
+    const { updateAdvocate } = await import("../src/modules/party/commands.js");
+    precheckRows = [{ version: 1 }];
+    await updateAdvocate(ctx(), PARTY_ID, { advocateName: "Adv. A", expectedVersion: 1 });
+    precheckRows = [{ version: 1 }];
+    await updateAdvocate(ctx(), PARTY_ID, { advocateBarId: "DL/9999/2020", expectedVersion: 1 });
+    const id1 = (publishSpy.mock.calls[0][1] as { messageId: string }).messageId;
+    const id2 = (publishSpy.mock.calls[1][1] as { messageId: string }).messageId;
+    expect(id1).not.toBe(id2);
   });
 });
 
@@ -435,6 +531,7 @@ describe("evidence commands", () => {
 
   it("ruleOnEvidence validates + publishes", async () => {
     const { ruleOnEvidence } = await import("../src/modules/evidence/commands.js");
+    precheckRows = [{ status: "submitted", version: 1 }]; // submitted -> admitted is legal
     const result = await ruleOnEvidence(ctx(), EVIDENCE_ID, { ruling: "admitted", expectedVersion: 1 });
     expect(result.accepted).toBe(true);
     expect(publishSpy).toHaveBeenCalledTimes(1);
@@ -484,15 +581,82 @@ describe("order-issuance commands", () => {
 describe("config-registry commands", () => {
   beforeEach(() => { publishSpy.mockClear(); });
 
-  it("setConfig validates + publishes", async () => {
+  it("setConfig validates + publishes (no expectedVersion supplied -- a blind write/create, never precheck-guarded)", async () => {
     const { setConfig } = await import("../src/modules/config-registry/commands.js");
     const result = await setConfig(ctx(), { namespace: "court_defaults", configKey: "max_adjournments", value: "5" });
     expect(result.accepted).toBe(true);
     expect(publishSpy).toHaveBeenCalledTimes(1);
   });
 
+  it("setConfig rejects a stale expectedVersion against an EXISTING entry (409)", async () => {
+    const { setConfig } = await import("../src/modules/config-registry/commands.js");
+    precheckRows = [{ version: 2, active: true }];
+    await expect(
+      setConfig(ctx(), { namespace: "court_defaults", configKey: "max_adjournments", value: "6", expectedVersion: 1 }),
+    ).rejects.toMatchObject({ code: "CONFIG_VERSION_CONFLICT" });
+    expect(publishSpy).not.toHaveBeenCalled();
+  });
+
+  it("setConfig with expectedVersion still creates when no row exists yet (first write, not a conflict)", async () => {
+    const { setConfig } = await import("../src/modules/config-registry/commands.js");
+    precheckRows = [];
+    const result = await setConfig(ctx(), { namespace: "court_defaults", configKey: "max_adjournments", value: "6", expectedVersion: 1 });
+    expect(result.accepted).toBe(true);
+    expect(publishSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it("setConfig applies a version-guarded update against an EXISTING entry when expectedVersion matches (the actual successful-update path, not just create-or-reject)", async () => {
+    const { setConfig } = await import("../src/modules/config-registry/commands.js");
+    precheckRows = [{ version: 1, active: true }];
+    const result = await setConfig(ctx(), { namespace: "court_defaults", configKey: "max_adjournments", value: "6", expectedVersion: 1 });
+    expect(result.accepted).toBe(true);
+    expect(publishSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it("setConfig gives two DIFFERENT-content updates at the SAME expectedVersion DIFFERENT messageIds (else markProcessed dedup silently drops the second forever)", async () => {
+    const { setConfig } = await import("../src/modules/config-registry/commands.js");
+    precheckRows = [{ version: 1, active: true }];
+    await setConfig(ctx(), { namespace: "court_defaults", configKey: "max_adjournments", value: "6", expectedVersion: 1 });
+    precheckRows = [{ version: 1, active: true }];
+    await setConfig(ctx(), { namespace: "court_defaults", configKey: "max_adjournments", value: "7", expectedVersion: 1 });
+    const id1 = (publishSpy.mock.calls[0][1] as { messageId: string }).messageId;
+    const id2 = (publishSpy.mock.calls[1][1] as { messageId: string }).messageId;
+    expect(id1).not.toBe(id2);
+  });
+
   it("deactivateConfig validates + publishes", async () => {
     const { deactivateConfig } = await import("../src/modules/config-registry/commands.js");
+    precheckRows = [{ version: 1, active: true }];
+    const result = await deactivateConfig(ctx(), CONFIG_ID, { expectedVersion: 1 });
+    expect(result.accepted).toBe(true);
+    expect(publishSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it("deactivateConfig rejects a missing config entry (404)", async () => {
+    const { deactivateConfig } = await import("../src/modules/config-registry/commands.js");
+    precheckRows = [];
+    await expect(
+      deactivateConfig(ctx(), CONFIG_ID, { expectedVersion: 1 }),
+    ).rejects.toMatchObject({ code: "CONFIG_NOT_FOUND" });
+    expect(publishSpy).not.toHaveBeenCalled();
+  });
+
+  it("deactivateConfig rejects a stale expectedVersion on an ACTIVE entry (409)", async () => {
+    const { deactivateConfig } = await import("../src/modules/config-registry/commands.js");
+    precheckRows = [{ version: 2, active: true }];
+    await expect(
+      deactivateConfig(ctx(), CONFIG_ID, { expectedVersion: 1 }),
+    ).rejects.toMatchObject({ code: "CONFIG_VERSION_CONFLICT" });
+    expect(publishSpy).not.toHaveBeenCalled();
+  });
+
+  it("deactivateConfig accepts a stale expectedVersion when already inactive (no-op parity with the consumer)", async () => {
+    const { deactivateConfig } = await import("../src/modules/config-registry/commands.js");
+    // The consumer's own short-circuit (`if (!current.active) return;`) runs
+    // BEFORE its version check, so an already-inactive entry is accepted
+    // regardless of expectedVersion. The precheck must match that exact order
+    // or it would reject a resubmit the consumer would have silently no-op'd.
+    precheckRows = [{ version: 99, active: false }];
     const result = await deactivateConfig(ctx(), CONFIG_ID, { expectedVersion: 1 });
     expect(result.accepted).toBe(true);
     expect(publishSpy).toHaveBeenCalledTimes(1);
@@ -582,9 +746,19 @@ describe("case-parcel commands", () => {
 
   it("updateParcel validates + publishes", async () => {
     const { updateParcel } = await import("../src/modules/case-parcel/commands.js");
+    precheckRows = [{ version: 1, active: true }];
     const result = await updateParcel(ctx(), PARCEL_ID, { areaSqm: 300, expectedVersion: 1 });
     expect(result.accepted).toBe(true);
     expect(publishSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it("updateParcel rejects a missing parcel (404)", async () => {
+    const { updateParcel } = await import("../src/modules/case-parcel/commands.js");
+    precheckRows = [];
+    await expect(
+      updateParcel(ctx(), PARCEL_ID, { areaSqm: 300, expectedVersion: 1 }),
+    ).rejects.toMatchObject({ code: "PARCEL_NOT_FOUND" });
+    expect(publishSpy).not.toHaveBeenCalled();
   });
 });
 

@@ -27,6 +27,7 @@ import { insertCapa, updateCapa, findCapaById } from "./repo.js";
 import type {
   CapaCreatePayload,
   CapaUpdatePayload,
+  CapaStartPayload,
   CapaCompletePayload,
   CapaVerifyPayload,
   CapaTriggerReinspectionPayload,
@@ -139,6 +140,80 @@ export function registerCapaConsumers(queue: Queue): void {
       } catch (err) {
         log.warn({ err, tenantId: msg.tenantId, capaId: p.capaId, event: "cache_invalidate_failed" },
           "failed to invalidate capa cache after update");
+      }
+    },
+  );
+
+  // ─── capaStart ────────────────────────────────────────────────────────────
+  // Starts work on an open/overdue CAPA: open|overdue -> in_progress. This is
+  // the missing precursor to capaComplete — CAPA_TRANSITIONS (domain.ts) has
+  // no open -> completed edge by design (a CAPA must pass through in_progress
+  // first, per the domain test "throws for open -> completed (must go through
+  // in_progress)"), but before this handler existed nothing anywhere ever
+  // performed the open -> in_progress transition. Every CAPA was created via
+  // capaCreate with status "open" and stayed there permanently: /complete
+  // always threw INVALID_TRANSITION, silently, because the 202-accepted HTTP
+  // response had already been sent before this consumer ever ran.
+  queue.subscribe<CapaStartPayload & { tenantId: string }>(
+    COMMANDS.capaStart,
+    async (msg) => {
+      const p = msg.payload;
+
+      await db.transaction(async (tx) => {
+        if (!(await markProcessed(tx, msg.messageId))) return;
+
+        const capa = await findCapaById(msg.tenantId, p.capaId);
+        if (!capa) {
+          throw new NonRetryableError(`CAPA not found: ${p.capaId} (tenant: ${msg.tenantId})`);
+        }
+
+        // Idempotent no-op: already at the target state (redelivery with a
+        // different messageId, e.g. a client retry after a slow 202).
+        if (capa.status === "in_progress") {
+          return;
+        }
+
+        try {
+          assertValidCapaTransition(capa.status as CapaState, "in_progress");
+        } catch (err) {
+          if (err instanceof DomainError) throw new NonRetryableError(err.message);
+          throw err;
+        }
+
+        await updateCapa(tx, p.capaId, msg.tenantId, {
+          status: "in_progress",
+          updatedBy: msg.actorId,
+        }, capa.version);
+
+        await enqueue(tx, {
+          topic: EVENTS.capaStarted,
+          eventType: EVENTS.capaStarted,
+          tenantId: msg.tenantId,
+          actorId: msg.actorId,
+          correlationId: msg.correlationId,
+          payload: { capaId: p.capaId, startedBy: msg.actorId },
+        });
+
+        await enqueue(tx, {
+          topic: AUDIT_TOPIC,
+          eventType: AUDIT_TOPIC,
+          tenantId: msg.tenantId,
+          actorId: msg.actorId,
+          correlationId: msg.correlationId,
+          payload: {
+            action: "capa.started",
+            resourceType: "corrective_action",
+            resourceId: p.capaId,
+            details: { previousStatus: capa.status },
+          },
+        });
+      });
+
+      try {
+        await cache.invalidate(cache.makeKey(msg.tenantId, "capa", p.capaId));
+      } catch (err) {
+        log.warn({ err, tenantId: msg.tenantId, capaId: p.capaId, event: "cache_invalidate_failed" },
+          "failed to invalidate capa cache after start");
       }
     },
   );

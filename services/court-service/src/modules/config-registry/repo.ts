@@ -44,6 +44,22 @@ export async function getConfigForUpdate(
 }
 
 /**
+ * Narrow, UNCACHED read of a config entry's (version, active) for commands.ts's
+ * synchronous pre-check BEFORE a command is published (no transaction exists
+ * yet at that point). Mirrors case-parcel/repo.ts's getParcelForPrecheck.
+ */
+export async function getConfigForPrecheck(
+  tenantId: string, id: string,
+): Promise<{ version: number; active: boolean } | undefined> {
+  const rows = await scopedRead<Array<{ version: number; active: boolean }>>((tx) => tx
+    .select({ version: configEntries.version, active: configEntries.active })
+    .from(configEntries)
+    .where(and(eq(configEntries.tenantId, tenantId), eq(configEntries.id, id)))
+    .limit(1));
+  return rows[0];
+}
+
+/**
  * List the ACTIVE config keys for a (tenant, namespace) on the caller's tx
  * (inside the handler transaction) so a consumer can validate a value against
  * tenant configuration on the same GUC-scoped connection. Used by the config/

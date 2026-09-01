@@ -3,7 +3,9 @@ import { createHash } from "node:crypto";
 import { queue } from "../../shared/infra.js";
 import { COMMANDS } from "../../topics.js";
 import { deterministicId, COURT_NAMESPACE } from "../court-registry/domain.js";
-import { deriveDirectionId } from "./domain.js";
+import { deriveDirectionId, assertTransition } from "./domain.js";
+import { getDirectionForPrecheck } from "./repo.js";
+import { httpError, assertVersionAndTransition } from "../../shared/context.js";
 import {
   createDirectionBody, type CreateDirectionBody,
   updateComplianceBody, type UpdateComplianceBody,
@@ -58,15 +60,31 @@ export async function createDirection(
   return { accepted: true, directionId };
 }
 
-/** Record progress / close a compliance direction (§26). messageId is idempotent
- *  per (direction + expectedVersion). */
+/**
+ * Record progress / close a compliance direction (§26). messageId is
+ * idempotent per (direction + target status + expectedVersion) -- status is
+ * part of the key for the same reason as appeal/commands.ts's decideAppeal.
+ *
+ * Synchronous pre-check mirrors the consumer's own checks exactly, so an
+ * illegal transition (e.g. verifying a direction that's still pending, not
+ * yet completed) is an immediate, honest 4xx instead of a 202 that silently
+ * dead-letters.
+ */
 export async function updateCompliance(
   ctx: RequestContext, directionId: string, input: UpdateComplianceBody,
 ): Promise<UpdateComplianceResult> {
   const body = updateComplianceBody.parse(input);
+
+  const current = await getDirectionForPrecheck(ctx.tenantId, directionId);
+  if (!current) throw httpError("COMPLIANCE_NOT_FOUND", `Compliance direction not found: ${directionId}`);
+  assertVersionAndTransition(current, body.expectedVersion, body.status, assertTransition, {
+    versionConflict: "COMPLIANCE_VERSION_CONFLICT",
+    invalidTransition: "COMPLIANCE_INVALID_TRANSITION",
+  });
+
   const messageId = deterministicId(
     COURT_NAMESPACE,
-    `${ctx.tenantId}:compliance-update:${directionId}:${body.expectedVersion}`,
+    `${ctx.tenantId}:compliance-update:${directionId}:${body.status}:${body.expectedVersion}`,
   );
 
   await queue.publish(COMMANDS.updateCompliance, {

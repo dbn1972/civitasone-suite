@@ -1,6 +1,7 @@
 import { NonRetryableError, type CommandEnvelope } from "@civitasone/queue";
 import { db } from "../../shared/db.js";
 import { enqueue, markProcessed, versionedUpdate } from "../../shared/outbox.js";
+import { hasEffectiveParcelChange } from "./domain.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import { caseParcels } from "./schema.js";
 import * as repo from "./repo.js";
@@ -88,11 +89,10 @@ export function registerParcelConsumers(
       if (!current) throw new NonRetryableError(`PARCEL_NOT_FOUND: ${p.parcelId}`);
 
       // No-op if the message carries no effective change (e.g. active already at
-      // the requested target and no other field supplied).
-      const changesActive = p.active !== undefined && p.active !== current.active;
-      const changesOther =
-        p.areaSqm !== undefined || p.ownershipRef !== undefined || p.remarks !== undefined;
-      if (!changesActive && !changesOther) return;
+      // the requested target and no other field supplied). Shared with
+      // commands.ts's synchronous precheck (hasEffectiveParcelChange, domain.ts)
+      // so the two can never drift apart.
+      if (!hasEffectiveParcelChange(p, current)) return;
 
       if (current.version !== p.expectedVersion) {
         throw new NonRetryableError(

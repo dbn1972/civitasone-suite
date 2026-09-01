@@ -26,14 +26,14 @@ export async function provisioningRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, READER_ROLES);
     const q = listQuery.parse(req.query);
-    return reply.send({ data: await queries.listProvisions(q.limit, q.status) });
+    return reply.send({ data: await queries.listProvisions(ctx.tenantId, q.limit, q.status) });
   });
 
   app.get("/v1/install/silo-provisions/:id", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, READER_ROLES);
     const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
-    const row = await queries.getProvision(id);
+    const row = await queries.getProvision(id, ctx.tenantId);
     if (!row) throw new HttpError(404, "NOT_FOUND", "provision record not found");
     return reply.send({ data: row });
   });
