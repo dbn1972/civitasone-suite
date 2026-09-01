@@ -25,6 +25,12 @@ const H = vi.hoisted(() => ({
   listByTenantEmp: vi.fn(),
 }));
 
+// A real in-memory queue so the async F3 write consumer actually runs in tests.
+const Q = await vi.hoisted(async () => {
+  const { MemoryQueue } = await import("@civitasone/queue");
+  return { queue: new MemoryQueue() };
+});
+
 vi.mock("../src/shared/db.js", () => {
   const createSelectChain = (...args: unknown[]) => ({
     from: (t: unknown) => ({
@@ -43,7 +49,18 @@ vi.mock("../src/shared/db.js", () => {
   const mockTx = {
     select: (...args: unknown[]) => createSelectChain(...args),
     update: (t: unknown) => ({ set: (v: unknown) => ({ where: (...a: unknown[]) => H.update(v, ...a) }) }),
-    insert: (t: unknown) => ({ values: (v: unknown) => H.insert(v) }),
+    insert: (t: unknown) => ({
+      values: (v: unknown) => {
+        const res = H.insert(v);
+        // markProcessed() claims the message with ON CONFLICT DO NOTHING ... RETURNING and
+        // treats an empty result as "already processed"; without this the F3 consumer bails
+        // out before the switch and no write is exercised.
+        return Object.assign(
+          res && typeof res === "object" ? res : {},
+          { onConflictDoNothing: () => ({ returning: () => [{ messageId: "stub" }] }) },
+        );
+      },
+    }),
     execute: (q: unknown) => H.execute(q),
   };
   return {
@@ -61,7 +78,7 @@ vi.mock("../src/shared/infra.js", () => ({
     listKey: (...a: string[]) => a.join(":"),
     getOrLoad: async (_k: string, fn: () => Promise<unknown>) => fn(),
   },
-  queue: { publish: async () => {} },
+  queue: Q.queue,
 }));
 
 vi.mock("../src/modules/appraisals/queries.js", () => ({
@@ -83,6 +100,20 @@ vi.mock("../src/modules/employee/repo.js", () => ({
 }));
 
 import { buildApp } from "../src/app.js";
+import { queue } from "../src/shared/infra.js";
+import { registerF3_appraisals_Consumers } from "../src/modules/appraisals/f3-consumer.js";
+
+// 360-feedback / disclosure / appeal all answer 201 as soon as the insert is QUEUED; the
+// real write happens in this consumer. Without registering + draining it, these tests
+// asserted only the optimistic HTTP response and stayed green while the consumer crashed
+// on undefined `fid` / `did` / `aid` locals and never inserted a row.
+registerF3_appraisals_Consumers(queue);
+async function drainF3() {
+  await (queue as unknown as import("@civitasone/queue").MemoryQueue).drain();
+}
+function f3Dlq() {
+  return (queue as unknown as import("@civitasone/queue").MemoryQueue).dlq;
+}
 
 const tok = (sub = USER, roles = ["hr_admin"]) =>
   signToken({ sub, tid: TENANT, roles, sid: "s" }, SECRET);
@@ -345,6 +376,14 @@ describe("POST /v1/hrms/appraisals/:id/360-feedback", () => {
     const body = r.json();
     expect(body.id).toBeDefined();
     expect(body.appraisalId).toBe(APPRAISAL_ID);
+    // The 201 above is only an ACK that the insert was queued. Drain and assert the
+    // consumer actually wrote the feedback row against the right appraisal.
+    await drainF3();
+    expect(f3Dlq()).toHaveLength(0);
+    expect(H.insert).toHaveBeenCalledWith(expect.objectContaining({
+      tenantId: TENANT, appraisalId: APPRAISAL_ID,
+      reviewerId: REVIEWER_ID, relationship: "peer",
+    }));
     await app.close();
   });
 
@@ -512,6 +551,11 @@ describe("POST /v1/hrms/appraisals/:id/disclosure", () => {
     expect(body.id).toBeDefined();
     expect(body.appraisalId).toBe(APPRAISAL_ID);
     expect(body.disclosed).toBe(true);
+    await drainF3();
+    expect(f3Dlq()).toHaveLength(0);
+    expect(H.insert).toHaveBeenCalledWith(expect.objectContaining({
+      tenantId: TENANT, appraisalId: APPRAISAL_ID, employeeId: EMP,
+    }));
     await app.close();
   });
 
@@ -592,6 +636,15 @@ describe("POST /v1/hrms/appraisals/:id/appeal", () => {
     expect(body.id).toBeDefined();
     expect(body.appraisalId).toBe(APPRAISAL_ID);
     expect(body.status).toBe("filed");
+    await drainF3();
+    expect(f3Dlq()).toHaveLength(0);
+    expect(H.insert).toHaveBeenCalledWith(expect.objectContaining({
+      tenantId: TENANT, appraisalId: APPRAISAL_ID, employeeId: EMP,
+      appealReason: payload.appealReason,
+      // routes.ts declares pipLinked as z.boolean().default(false); the queued body is raw,
+      // so the consumer must reapply that default rather than writing undefined.
+      pipLinked: false,
+    }));
     await app.close();
   });
 

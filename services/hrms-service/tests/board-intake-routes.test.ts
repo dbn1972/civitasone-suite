@@ -14,7 +14,15 @@ const H = vi.hoisted(() => ({
   listByStatus: vi.fn(),
   findById: vi.fn(),
   review: vi.fn(),
+  // Row the F3 consumer re-reads inside its own transaction (see f3-consumer.ts).
+  intakeRow: null as Record<string, unknown> | null,
 }));
+
+// A real in-memory queue so the async F3 write consumer actually runs in tests.
+const Q = await vi.hoisted(async () => {
+  const { MemoryQueue } = await import("@civitasone/queue");
+  return { queue: new MemoryQueue() };
+});
 
 vi.mock("../src/modules/board-intake/repo.js", () => ({
   listByStatus: (...a: unknown[]) => H.listByStatus(...a),
@@ -24,9 +32,12 @@ vi.mock("../src/modules/board-intake/repo.js", () => ({
 
 vi.mock("../src/shared/db.js", () => {
   const mockTx = {
-    select: () => ({ from: () => ({ where: () => ({ limit: () => [] }) }) }),
+    select: () => ({ from: () => ({ where: () => ({ limit: () => (H.intakeRow ? [H.intakeRow] : []) }) }) }),
     update: (t: unknown) => ({ set: (v: unknown) => ({ where: (...a: unknown[]) => ({ rowCount: 1 }) }) }),
-    insert: (t: unknown) => ({ values: (v: unknown) => ({ onConflictDoNothing: () => ({ returning: () => [] }) }) }),
+    // markProcessed() claims the message via ON CONFLICT DO NOTHING ... RETURNING and
+    // treats an empty result as "already processed". The old stub returned [], so the
+    // consumer bailed out before reaching the switch and no write was ever exercised.
+    insert: (t: unknown) => ({ values: (v: unknown) => ({ onConflictDoNothing: () => ({ returning: () => [{ messageId: "stub" }] }) }) }),
   };
   return {
     db: { transaction: async (cb: (tx: typeof mockTx) => Promise<unknown>) => cb(mockTx) },
@@ -37,11 +48,25 @@ vi.mock("../src/shared/db.js", () => {
 
 vi.mock("../src/shared/infra.js", () => ({
   cache: { invalidate: async () => {}, makeKey: (...a: string[]) => a.join(":"), getOrLoad: async (_k: string, fn: () => Promise<unknown>) => fn() },
-  queue: { publish: async () => {} },
+  queue: Q.queue,
 }));
 
 import { buildApp } from "../src/app.js";
 import { sqlClient } from "../src/shared/db.js";
+import { queue } from "../src/shared/infra.js";
+import { registerF3_board_intake_Consumers } from "../src/modules/board-intake/f3-consumer.js";
+
+// The accept/reject routes answer 200 as soon as the write is QUEUED; the real
+// update happens in this consumer. Without registering + draining it, these tests
+// asserted only the optimistic HTTP response and stayed green while the consumer
+// crashed on an undefined `row` local and never wrote anything.
+registerF3_board_intake_Consumers(queue);
+async function drainF3() {
+  await (queue as unknown as import("@civitasone/queue").MemoryQueue).drain();
+}
+function f3Dlq() {
+  return (queue as unknown as import("@civitasone/queue").MemoryQueue).dlq;
+}
 
 const tok = (sub = USER, roles = ["hr_admin"]) => signToken({ sub, tid: TENANT, roles, sid: "s" }, SECRET);
 const auth = (sub = USER, roles = ["hr_admin"]) => ({ authorization: `Bearer ${tok(sub, roles)}` });
@@ -53,7 +78,7 @@ const pendingRow = () => ({
   payload: { subject: "transfer order" },
 });
 
-beforeEach(() => { vi.clearAllMocks(); });
+beforeEach(() => { vi.clearAllMocks(); H.intakeRow = null; f3Dlq().length = 0; });
 afterAll(async () => { await sqlClient.end(); });
 
 describe("Board Intake — GET /v1/hrms/board-intake", () => {
@@ -143,22 +168,36 @@ describe("Board Intake — GET /v1/hrms/board-intake/:id", () => {
 describe("Board Intake — POST /v1/hrms/board-intake/:id/accept", () => {
   it("200 — accepts a pending item (happy path)", async () => {
     H.findById.mockResolvedValue(pendingRow());
+    H.intakeRow = pendingRow();
     H.review.mockResolvedValue(undefined);
     const app = await buildApp();
     const r = await app.inject({ method: "POST", url: `/v1/hrms/board-intake/${ITEM_ID}/accept`, headers: auth(), payload: { note: "looks good" } });
     expect(r.statusCode).toBe(200);
     expect(r.json().status).toBe("accepted");
     expect(r.json().reviewedBy).toBe(USER);
+    // The 200 above is only an ACK that the write was queued. Drain the queue and
+    // assert the consumer actually performed the update it promised.
+    await drainF3();
+    expect(f3Dlq()).toHaveLength(0);
+    expect(H.review).toHaveBeenCalledWith(
+      expect.anything(), TENANT, ITEM_ID, "accepted", USER, "looks good", 1,
+    );
     await app.close();
   });
 
   it("200 — accepts without note (optional)", async () => {
     H.findById.mockResolvedValue(pendingRow());
+    H.intakeRow = pendingRow();
     H.review.mockResolvedValue(undefined);
     const app = await buildApp();
     const r = await app.inject({ method: "POST", url: `/v1/hrms/board-intake/${ITEM_ID}/accept`, headers: auth(), payload: {} });
     expect(r.statusCode).toBe(200);
     expect(r.json().status).toBe("accepted");
+    await drainF3();
+    expect(f3Dlq()).toHaveLength(0);
+    expect(H.review).toHaveBeenCalledWith(
+      expect.anything(), TENANT, ITEM_ID, "accepted", USER, null, 1,
+    );
     await app.close();
   });
 
@@ -205,12 +244,18 @@ describe("Board Intake — POST /v1/hrms/board-intake/:id/accept", () => {
 describe("Board Intake — POST /v1/hrms/board-intake/:id/reject", () => {
   it("200 — rejects with note (happy path)", async () => {
     H.findById.mockResolvedValue(pendingRow());
+    H.intakeRow = pendingRow();
     H.review.mockResolvedValue(undefined);
     const app = await buildApp();
     const r = await app.inject({ method: "POST", url: `/v1/hrms/board-intake/${ITEM_ID}/reject`, headers: auth(), payload: { note: "not applicable" } });
     expect(r.statusCode).toBe(200);
     expect(r.json().status).toBe("rejected");
     expect(r.json().reviewedBy).toBe(USER);
+    await drainF3();
+    expect(f3Dlq()).toHaveLength(0);
+    expect(H.review).toHaveBeenCalledWith(
+      expect.anything(), TENANT, ITEM_ID, "rejected", USER, "not applicable", 1,
+    );
     await app.close();
   });
 
