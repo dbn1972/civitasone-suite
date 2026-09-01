@@ -4,7 +4,7 @@
  * 0195 — no-show reversal, 0227 — functional/project managers,
  * 0230 — cycle detection, 0233 — span-of-control, 0314 — hold/release
  */
-import { describe, it, expect, beforeEach, afterAll, vi } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, afterAll, vi } from "vitest";
 import { signToken } from "@civitasone/auth";
 
 const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
@@ -46,11 +46,34 @@ vi.mock("../src/shared/db.js", () => {
     insert: (t: unknown) => ({ values: (v: unknown) => H.insert(v) }),
     execute: (q: unknown) => H.execute(q),
   };
+  // The F3 consumer runs inside db.transaction(...) and its first call is
+  // markProcessed(tx, msg.messageId), which needs
+  // insert().values().onConflictDoNothing().returning(). The bare mockTx insert
+  // has no such chain, so the transaction gets its own stub; the route path
+  // (scopedRead) keeps using mockTx unchanged.
+  const stubTx = {
+    ...mockTx,
+    insert: (t: unknown) => ({
+      values: (v: unknown) => {
+        // markProcessed() ends at .onConflictDoNothing().returning(), while the
+        // consumer's own inserts are awaited either directly on .values(...) or
+        // on .onConflictDoNothing(). Both of those await points are thenable and
+        // record via H.insert; .returning() is not, so the inbox row never shows
+        // up as a spurious H.insert call.
+        const settle = (resolve: (x: unknown) => void, reject?: (e: unknown) => void) =>
+          Promise.resolve(H.insert(v)).then(resolve, reject);
+        return {
+          onConflictDoNothing: () => ({ returning: async () => [{ messageId: "stub" }], then: settle }),
+          then: settle,
+        };
+      },
+    }),
+  };
   return {
     db: {
       transaction: async (cb: (tx: typeof mockTx) => Promise<unknown>) => {
         if (H.transaction.getMockImplementation()) return H.transaction(cb);
-        return cb(mockTx);
+        return cb(stubTx as unknown as typeof mockTx);
       },
     },
     scopedRead: async (fn: (tx: typeof mockTx) => Promise<unknown>) => fn(mockTx),
@@ -59,15 +82,40 @@ vi.mock("../src/shared/db.js", () => {
   };
 });
 
-vi.mock("../src/shared/infra.js", () => ({
-  cache: { invalidate: async () => {}, makeKey: (...a: string[]) => a.join(":"), getOrLoad: async (_k: string, fn: () => Promise<unknown>) => fn() },
-  queue: { publish: async () => {} },
-}));
+vi.mock("../src/shared/infra.js", async () => {
+  // A real MemoryQueue, not a no-op publish stub: these routes answer 200 as
+  // soon as the write is QUEUED, so with a stub queue a consumer that throws is
+  // indistinguishable from a consumer that works. See drainF3() below.
+  const { MemoryQueue } = await import("@civitasone/queue");
+  return {
+    cache: { invalidate: async () => {}, makeKey: (...a: string[]) => a.join(":"), getOrLoad: async (_k: string, fn: () => Promise<unknown>) => fn() },
+    queue: new MemoryQueue(),
+  };
+});
 
 import { buildApp } from "../src/app.js";
+import { queue } from "../src/shared/infra.js";
+import { registerF3_employee_Consumers } from "../src/modules/employee/f3-consumer.js";
+
+// Only worker.ts wires the F3 consumers in production, so tests must subscribe
+// it themselves. Registered once for the whole file (MemoryQueue accumulates
+// handlers, so re-registering per test would double every write).
+registerF3_employee_Consumers(queue);
+
+/** Await the async F3 write published by the route just injected. */
+async function drainF3(): Promise<void> {
+  await (queue as unknown as import("@civitasone/queue").MemoryQueue).drain();
+}
 
 const tok = (sub = USER, roles = ["hr_admin"]) => signToken({ sub, tid: TENANT, roles, sid: "s" }, SECRET);
 const auth = (sub = USER, roles = ["hr_admin"]) => ({ authorization: `Bearer ${tok(sub, roles)}` });
+
+// A consumer that throws is retried by MemoryQueue with backoff. Without this
+// the retries of one test's failed write land in the middle of the NEXT test
+// (whose beforeEach has since re-armed the mocks) and are counted there.
+afterEach(async () => {
+  await drainF3();
+});
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -99,6 +147,11 @@ describe("0175 — PATCH /v1/hrms/employees/:id/fitness-status", () => {
     });
     expect(r.statusCode).toBe(200);
     expect(r.json().data.fitnessStatus).toBe("fit");
+    // The 200 above only means "queued" — assert the consumer actually reached
+    // the UPDATE instead of throwing on an unreconstructed local.
+    await drainF3();
+    expect(H.update).toHaveBeenCalledTimes(1);
+    expect(H.update.mock.calls[0]?.[0]).toMatchObject({ fitnessStatus: "fit" });
     await app.close();
   });
 
@@ -161,6 +214,12 @@ describe("0180 — POST /v1/hrms/employees/:id/activate", () => {
     });
     expect(r.statusCode).toBe(200);
     expect(r.json().data.status).toBe("active");
+    // Regression guard: the consumer's activation case referenced an undefined
+    // `emp` (its optimistic-concurrency token) and threw AFTER this 200, so the
+    // employee was reported active while their row never changed.
+    await drainF3();
+    expect(H.update).toHaveBeenCalledTimes(1);
+    expect(H.update.mock.calls[0]?.[0]).toMatchObject({ status: "active" });
     await app.close();
   });
 
@@ -588,6 +647,94 @@ describe("0314 — Employee hold/release", () => {
       payload: { holdType: "invalid", reason: "x", effectiveFrom: "2026-08-01" },
     });
     expect(r.statusCode).toBe(400);
+    await app.close();
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// F3 async-write coverage for the remaining employee consumer cases.
+//
+// These four routes had NO test at all, which is how the generated consumer
+// shipped referencing locals that were never declared (`nid`, `aid`, `patch`,
+// and an `employeeTypeMaster` table that was never imported). Each route
+// answers 201/200 the moment the write is queued, so every assertion below
+// drains the queue first and then checks the write actually reached the DB
+// layer — a plain status-code assertion cannot see this class of bug.
+// ─────────────────────────────────────────────────────────────────────────────
+describe("F3 async writes — employee nominees / addresses / employee-types", () => {
+  it("POST /v1/hrms/employees/:id/nominees persists the nominee against the path employee", async () => {
+    const app = await buildApp();
+    const r = await app.inject({
+      method: "POST",
+      url: `/v1/hrms/employees/${EMP_ID}/nominees`,
+      headers: auth(),
+      payload: { name: "Sita Devi", relationship: "spouse", purpose: "gpf", sharePercent: 100 },
+    });
+    expect(r.statusCode).toBe(201);
+    await drainF3();
+    expect(H.insert).toHaveBeenCalledTimes(1);
+    // employeeId must be the :id path param, not the F3 envelope's fresh UUID.
+    expect(H.insert.mock.calls[0]?.[0]).toMatchObject({
+      employeeId: EMP_ID, tenantId: TENANT, name: "Sita Devi", relationship: "spouse", purpose: "gpf", sharePercent: 100,
+    });
+    await app.close();
+  });
+
+  it("POST /v1/hrms/employees/:id/addresses persists the address against the path employee", async () => {
+    const app = await buildApp();
+    const r = await app.inject({
+      method: "POST",
+      url: `/v1/hrms/employees/${EMP_ID}/addresses`,
+      headers: auth(),
+      payload: { addressType: "permanent", line1: "12 MG Road", city: "Delhi", pincode: "110001" },
+    });
+    expect(r.statusCode).toBe(201);
+    await drainF3();
+    expect(H.insert).toHaveBeenCalledTimes(1);
+    expect(H.insert.mock.calls[0]?.[0]).toMatchObject({
+      employeeId: EMP_ID, tenantId: TENANT, addressType: "permanent", line1: "12 MG Road", city: "Delhi",
+    });
+    await app.close();
+  });
+
+  it("POST /v1/hrms/employee-types persists the type with the schema's defaults applied", async () => {
+    const app = await buildApp();
+    const r = await app.inject({
+      method: "POST",
+      url: "/v1/hrms/employee-types",
+      headers: auth(),
+      payload: { code: "CONSULT", name: "Consultant", category: "consultant", paymentRoute: "invoice", taxSection: "194J", eligibleForPayroll: false },
+    });
+    expect(r.statusCode).toBe(201);
+    await drainF3();
+    expect(H.insert).toHaveBeenCalledTimes(1);
+    const row = H.insert.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(row).toMatchObject({
+      tenantId: TENANT, code: "CONSULT", name: "Consultant",
+      category: "consultant", paymentRoute: "invoice", taxSection: "194J", eligibleForPayroll: false,
+    });
+    // Defaults come from createBody's Zod .default(...) values — `body` on the
+    // queue is the RAW request body, so the consumer has to apply them itself.
+    expect(row).toMatchObject({ payMode: "monthly", statutoryPf: true, eligibleForBonus: false, sortOrder: 0, defaultProbationMonths: 0 });
+    // A caller must never be able to steer the row's tenant via the body.
+    expect(row.tenantId).toBe(TENANT);
+    await app.close();
+  });
+
+  it("PATCH /v1/hrms/employee-types/:id writes a sparse patch of only the supplied fields", async () => {
+    const TYPE_ID = "ffffffff-0001-4000-8000-000000000001";
+    const app = await buildApp();
+    const r = await app.inject({
+      method: "PATCH",
+      url: `/v1/hrms/employee-types/${TYPE_ID}`,
+      headers: auth(),
+      payload: { name: "Senior Consultant", sortOrder: 5 },
+    });
+    expect(r.statusCode).toBe(200);
+    await drainF3();
+    expect(H.update).toHaveBeenCalledTimes(1);
+    const patch = H.update.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(patch).toEqual({ name: "Senior Consultant", sortOrder: 5 });
     await app.close();
   });
 });

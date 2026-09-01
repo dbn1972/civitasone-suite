@@ -49,18 +49,47 @@ vi.mock("../src/shared/db.js", () => {
     insert: (t: unknown) => ({ values: (v: unknown) => H.insert(v) }),
     execute: (q: unknown) => H.execute(q),
   };
+  // The F3 consumer runs inside db.transaction(...) and its first call is
+  // markProcessed(tx, msg.messageId), which needs
+  // insert().values().onConflictDoNothing().returning(). The bare mockTx insert
+  // has no such chain, so the transaction gets its own stub; the route path
+  // (scopedRead) keeps using mockTx unchanged.
+  const stubTx = {
+    ...mockTx,
+    insert: (t: unknown) => ({
+      values: (v: unknown) => {
+        // markProcessed() ends at .onConflictDoNothing().returning(), while the
+        // consumer's own inserts are awaited either directly on .values(...) or
+        // on .onConflictDoNothing(). Both of those await points are thenable and
+        // record via H.insert; .returning() is not, so the inbox row never shows
+        // up as a spurious H.insert call.
+        const settle = (resolve: (x: unknown) => void, reject?: (e: unknown) => void) =>
+          Promise.resolve(H.insert(v)).then(resolve, reject);
+        return {
+          onConflictDoNothing: () => ({ returning: async () => [{ messageId: "stub" }], then: settle }),
+          then: settle,
+        };
+      },
+    }),
+  };
   return {
-    db: { transaction: async (cb: (tx: typeof mockTx) => Promise<unknown>) => cb(mockTx) },
+    db: { transaction: async (cb: (tx: typeof mockTx) => Promise<unknown>) => cb(stubTx as unknown as typeof mockTx) },
     scopedRead: async (fn: (tx: typeof mockTx) => Promise<unknown>) => fn(mockTx),
     sqlClient: { end: async () => {} },
     sqlPool: { query: async () => ({ rows: [], rowCount: 0 }) },
   };
 });
 
-vi.mock("../src/shared/infra.js", () => ({
-  cache: { invalidate: async () => {}, makeKey: (...a: string[]) => a.join(":"), getOrLoad: async (_k: string, fn: () => Promise<unknown>) => fn() },
-  queue: { publish: async () => {} },
-}));
+vi.mock("../src/shared/infra.js", async () => {
+  // A real MemoryQueue, not a no-op publish stub: these routes answer 200/201
+  // as soon as the write is QUEUED, so with a stub queue a consumer that throws
+  // is indistinguishable from a consumer that works. See drainF3() below.
+  const { MemoryQueue } = await import("@civitasone/queue");
+  return {
+    cache: { invalidate: async () => {}, makeKey: (...a: string[]) => a.join(":"), getOrLoad: async (_k: string, fn: () => Promise<unknown>) => fn() },
+    queue: new MemoryQueue(),
+  };
+});
 
 vi.mock("../src/modules/claims/repo.js", () => ({
   insertLtc: (...a: unknown[]) => H.insertLtc(...a),
@@ -75,6 +104,18 @@ vi.mock("../src/modules/claims/repo.js", () => ({
 }));
 
 import { buildApp } from "../src/app.js";
+import { queue } from "../src/shared/infra.js";
+import { registerF3_claims_Consumers } from "../src/modules/claims/f3-consumer.js";
+
+// Only worker.ts wires the F3 consumers in production, so tests must subscribe
+// it themselves. Registered once for the whole file (MemoryQueue accumulates
+// handlers, so re-registering per test would double every write).
+registerF3_claims_Consumers(queue);
+
+/** Await the async F3 write published by the route just injected. */
+async function drainF3(): Promise<void> {
+  await (queue as unknown as import("@civitasone/queue").MemoryQueue).drain();
+}
 
 const tok = (sub = USER, roles = ["hr_admin"]) => signToken({ sub, tid: TENANT, roles, sid: "s" }, SECRET);
 const auth = (sub = USER, roles = ["hr_admin"]) => ({ authorization: `Bearer ${tok(sub, roles)}` });
@@ -233,6 +274,14 @@ describe("LTC claims", () => {
       // claimed 50000 > entitlement 40000 → capped
       expect(r.json().approvedFareMinor).toBe("40000");
       expect(r.json().cappedToEntitlement).toBe(true);
+      // The 200 above only means "queued". Regression guard for the F3 bug:
+      // updateLtc must actually be reached, against the :claimId path param and
+      // the claim's current version, with the entitlement-capped fare.
+      await drainF3();
+      expect(H.updateLtc).toHaveBeenCalledTimes(1);
+      expect(H.updateLtc.mock.calls[0]?.[2]).toBe(CLAIM);
+      expect(H.updateLtc.mock.calls[0]?.[3]).toMatchObject({ status: "approved", approvedFareMinor: 40000n });
+      expect(H.updateLtc.mock.calls[0]?.[4]).toBe(1);
       await app.close();
     });
 
@@ -243,6 +292,9 @@ describe("LTC claims", () => {
       expect(r.statusCode).toBe(200);
       expect(r.json().approvedFareMinor).toBe("30000");
       expect(r.json().cappedToEntitlement).toBe(false);
+      await drainF3();
+      expect(H.updateLtc).toHaveBeenCalledTimes(1);
+      expect(H.updateLtc.mock.calls[0]?.[3]).toMatchObject({ status: "approved", approvedFareMinor: 30000n });
       await app.close();
     });
 
@@ -278,6 +330,10 @@ describe("LTC claims", () => {
       const r = await app.inject({ method: "POST", url: `/v1/hrms/ltc-claims/${CLAIM}/reject`, headers: auth(), payload: { approverRemarks: "docs missing" } });
       expect(r.statusCode).toBe(200);
       expect(r.json().status).toBe("rejected");
+      await drainF3();
+      expect(H.updateLtc).toHaveBeenCalledTimes(1);
+      expect(H.updateLtc.mock.calls[0]?.[2]).toBe(CLAIM);
+      expect(H.updateLtc.mock.calls[0]?.[3]).toMatchObject({ status: "rejected", approverRemarks: "docs missing" });
       await app.close();
     });
 
@@ -391,6 +447,13 @@ describe("CEA claims", () => {
       // remaining = 50000 - 30000 = 20000, claimed = 30000 → capped to 20000
       expect(r.json().approvedAmountMinor).toBe("20000");
       expect(r.json().cappedToAnnualCap).toBe(true);
+      // Regression guard for the F3 bug: the consumer must recompute the
+      // per-child remaining cap and reach updateCea, not throw on undefined locals.
+      await drainF3();
+      expect(H.updateCea).toHaveBeenCalledTimes(1);
+      expect(H.updateCea.mock.calls[0]?.[2]).toBe(CLAIM);
+      expect(H.updateCea.mock.calls[0]?.[3]).toMatchObject({ status: "approved", approvedAmountMinor: 20000n });
+      expect(H.updateCea.mock.calls[0]?.[4]).toBe(1);
       await app.close();
     });
 
@@ -402,6 +465,9 @@ describe("CEA claims", () => {
       expect(r.statusCode).toBe(200);
       expect(r.json().approvedAmountMinor).toBe("10000");
       expect(r.json().cappedToAnnualCap).toBe(false);
+      await drainF3();
+      expect(H.updateCea).toHaveBeenCalledTimes(1);
+      expect(H.updateCea.mock.calls[0]?.[3]).toMatchObject({ status: "approved", approvedAmountMinor: 10000n });
       await app.close();
     });
 
@@ -437,6 +503,10 @@ describe("CEA claims", () => {
       const r = await app.inject({ method: "POST", url: `/v1/hrms/cea-claims/${CLAIM}/reject`, headers: auth(), payload: {} });
       expect(r.statusCode).toBe(200);
       expect(r.json().status).toBe("rejected");
+      await drainF3();
+      expect(H.updateCea).toHaveBeenCalledTimes(1);
+      expect(H.updateCea.mock.calls[0]?.[2]).toBe(CLAIM);
+      expect(H.updateCea.mock.calls[0]?.[3]).toMatchObject({ status: "rejected" });
       await app.close();
     });
 

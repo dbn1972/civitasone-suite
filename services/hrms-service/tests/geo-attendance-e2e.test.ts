@@ -1,7 +1,21 @@
 import { describe, it, expect, beforeAll } from "vitest";
 import { buildApp } from "../src/app.js";
+import { queue } from "../src/shared/infra.js";
+import { registerF3_geo_attendance_Consumers } from "../src/modules/geo-attendance/f3-consumer.js";
 import type { FastifyInstance } from "fastify";
 import { createHmac } from "node:crypto";
+
+// Office-location creation and every geo punch are async F3 writes: the route
+// publishes the write and answers 201 immediately, so without the consumer
+// subscribed nothing is ever persisted and this suite could not tell a working
+// write from one that throws inside the consumer. Only worker.ts registers the
+// F3 consumers in production, so register once here and drain after each POST.
+registerF3_geo_attendance_Consumers(queue);
+
+/** Await the async F3 write published by the route just injected. */
+async function drainF3(): Promise<void> {
+  await (queue as unknown as import("@civitasone/queue").MemoryQueue).drain();
+}
 
 let app: FastifyInstance;
 
@@ -47,6 +61,7 @@ describe("A. Office Locations", () => {
       headers: { ...AUTH, ...CT },
       payload: { name: "Satellite Office Noida", latitude: 28.5355, longitude: 77.3910, radiusMeters: 300, address: "Sector 62, Noida" },
     });
+    await drainF3();
     expect(r.statusCode).toBe(201);
     expect(r.json().radiusMeters).toBe(300);
   });
@@ -71,6 +86,7 @@ describe("B. Geo-Fenced Attendance — Check-In", () => {
       headers: { ...AUTH, ...CT },
       payload: { employeeId: EMP1, latitude: DELHI_LAT + 0.0001, longitude: DELHI_LNG + 0.0001, accuracyMeters: 10, selfieFileKey: "selfies/emp1-2026-07-01.jpg", deviceId: "device-001", officeLocationId: OFFICE_DELHI },
     });
+    await drainF3();
     expect(r.statusCode).toBe(201);
     expect(r.json().status).toBe("within_geofence");
     expect(r.json().withinGeofence ?? r.json().status === "within_geofence").toBeTruthy();
@@ -83,6 +99,7 @@ describe("B. Geo-Fenced Attendance — Check-In", () => {
       headers: { ...AUTH, ...CT },
       payload: { employeeId: EMP2, latitude: DELHI_LAT + 0.01, longitude: DELHI_LNG + 0.01, accuracyMeters: 15, selfieFileKey: "selfies/emp2-outside.jpg", officeLocationId: OFFICE_DELHI },
     });
+    await drainF3();
     expect(r.statusCode).toBe(201);
     expect(r.json().status).toBe("outside_geofence");
     expect(r.json().distanceMeters).toBeGreaterThan(200);
@@ -94,6 +111,7 @@ describe("B. Geo-Fenced Attendance — Check-In", () => {
       headers: { ...AUTH, ...CT },
       payload: { employeeId: EMP1, latitude: DELHI_LAT, longitude: DELHI_LNG, selfieFileKey: "video/emp1-checkin-2026-07-02.mp4", deviceId: "mobile-001", officeLocationId: OFFICE_DELHI },
     });
+    await drainF3();
     expect(r.statusCode).toBe(201);
     expect(r.json().id).toBeDefined();
   });
@@ -124,6 +142,7 @@ describe("C. Geo-Fenced Attendance — Check-Out", () => {
       headers: { ...AUTH, ...CT },
       payload: { employeeId: EMP1, latitude: DELHI_LAT + 0.0002, longitude: DELHI_LNG - 0.0001, selfieFileKey: "video/emp1-checkout.mp4" },
     });
+    await drainF3();
     expect([201, 500].includes(r.statusCode)).toBe(true);
     expect(r.json().status).toBe("check_out_recorded");
   });
@@ -133,6 +152,8 @@ describe("C. Geo-Fenced Attendance — Check-Out", () => {
 // D. GEO ATTENDANCE HISTORY
 // ═══════════════════════════════════════════════════════════
 describe("D. Attendance History & Reporting Officer View", () => {
+  // These two are the real regression guards for the geo F3 consumer: they can
+  // only pass if section B/C's punches were actually persisted by the consumer.
   it("D1. Employee views own geo-attendance history", async () => {
     const r = await app.inject({ method: "GET", url: `/v1/hrms/attendance/geo-history?employeeId=${EMP1}`, headers: AUTH });
     expect(r.statusCode).toBe(200);
