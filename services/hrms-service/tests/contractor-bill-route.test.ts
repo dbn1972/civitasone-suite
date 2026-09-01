@@ -23,9 +23,17 @@ const H = vi.hoisted(() => ({
   enqueueMock: vi.fn(),
 }));
 
+const stubTx = vi.hoisted(() => ({
+  // The F3 consumer opens db.transaction() and calls markProcessed(tx, ...) first,
+  // which needs insert().values().onConflictDoNothing().returning() to resolve to a
+  // NON-empty array (empty means "already processed" and the consumer returns without
+  // writing). The old bare `{}` tx made every consumer write silently disappear.
+  insert: () => ({ values: () => ({ onConflictDoNothing: () => ({ returning: async () => [{ messageId: "stub" }] }) }) }),
+}));
+
 vi.mock("../src/shared/db.js", async (io) => ({
   ...(await io<Record<string, unknown>>()),
-  db: { transaction: async (cb: (tx: unknown) => Promise<void>) => cb({}), insert: () => ({ values: async () => undefined }) },
+  db: { transaction: async (cb: (tx: unknown) => Promise<void>) => cb(stubTx), insert: () => ({ values: async () => undefined }) },
 }));
 vi.mock("../src/modules/contractor-bill/repo.js", async (io) => ({
   ...(await io<Record<string, unknown>>()),
@@ -47,6 +55,18 @@ vi.mock("../src/shared/outbox.js", async (io) => ({
 }));
 
 import { buildApp } from "../src/app.js";
+import { queue } from "../src/shared/infra.js";
+import { registerF3_contractor_bill_Consumers } from "../src/modules/contractor-bill/f3-consumer.js";
+
+// These routes only PUBLISH; the row is written by the F3 consumer the worker
+// runs. Without registering it the repo mocks below are never exercised at all,
+// so the suite could not tell a working write from a crashing one.
+registerF3_contractor_bill_Consumers(queue);
+
+/** Await the in-memory queue's fan-out so the consumer's write has happened. */
+async function drainF3(): Promise<void> {
+  await (queue as unknown as import("@civitasone/queue").MemoryQueue).drain();
+}
 import { sqlClient } from "../src/shared/db.js";
 
 const tok = (sub: string) => signToken({ sub, tid: TENANT, roles: ["hr_admin", "finance_officer"], sid: "s" }, SECRET);
@@ -80,6 +100,7 @@ describe("contractor bill routes", () => {
     const app = await buildApp();
     const r = await app.inject({ method: "POST", url: "/v1/hrms/contractors", headers: auth(MAKER),
       payload: { name: "ACME Labour", contractorKind: "other", clraLicenseNo: "CLRA/2026/1", clraLicenseValidTill: "2027-03-31" } });
+    await drainF3();
     expect(r.statusCode).toBe(201);
     expect(H.insertContractorMock).toHaveBeenCalledOnce();
     await app.close();
@@ -89,6 +110,7 @@ describe("contractor bill routes", () => {
     const app = await buildApp();
     const r = await app.inject({ method: "POST", url: `/v1/hrms/contractors/${CTR}/bills`, headers: auth(MAKER),
       payload: { billNo: "B-1", billDate: "2026-05-10", grossMinor: 5000000, gstApplicable: true, gstRateBps: 1800, workersCount: 25, wagesDisbursedVerified: true } });
+    await drainF3();
     expect(r.statusCode).toBe(201);
     expect(H.insertBillMock).toHaveBeenCalledOnce();
     await app.close();
@@ -98,6 +120,7 @@ describe("contractor bill routes", () => {
     H.findBillMock.mockResolvedValue(bill({ wagesDisbursedVerified: false }));
     const app = await buildApp();
     const r = await app.inject({ method: "POST", url: `/v1/hrms/contractor-bills/${BILL}/approve`, headers: auth(CHECKER), payload: {} });
+    await drainF3();
     expect(r.statusCode).toBe(409);
     expect(r.json().code).toBe("CLRA_WAGES_UNVERIFIED");
     expect(H.updateBillMock).not.toHaveBeenCalled();
@@ -109,6 +132,7 @@ describe("contractor bill routes", () => {
     H.findContractorMock.mockResolvedValue(contractor({ clraLicenseNo: null, clraLicenseValidTill: null }));
     const app = await buildApp();
     const r = await app.inject({ method: "POST", url: `/v1/hrms/contractor-bills/${BILL}/approve`, headers: auth(CHECKER), payload: {} });
+    await drainF3();
     expect(r.statusCode).toBe(409);
     expect(r.json().code).toBe("CLRA_LICENSE_INVALID");
     await app.close();
@@ -118,6 +142,7 @@ describe("contractor bill routes", () => {
     H.findBillMock.mockResolvedValue(bill());
     const app = await buildApp();
     const r = await app.inject({ method: "POST", url: `/v1/hrms/contractor-bills/${BILL}/approve`, headers: auth(CHECKER), payload: {} });
+    await drainF3();
     expect(r.statusCode).toBe(200);
     const b = r.json();
     expect(b.gstMinor).toBe("900000");
@@ -135,6 +160,7 @@ describe("contractor bill routes", () => {
     H.findBillMock.mockResolvedValue(bill({ verifiedBy: CHECKER }));
     const app = await buildApp();
     const r = await app.inject({ method: "POST", url: `/v1/hrms/contractor-bills/${BILL}/approve`, headers: auth(CHECKER), payload: {} });
+    await drainF3();
     expect(r.statusCode).toBe(409);
     expect(r.json().code).toBe("SOD_VIOLATION");
     await app.close();
@@ -144,6 +170,7 @@ describe("contractor bill routes", () => {
     H.findBillMock.mockResolvedValue(bill({ status: "approved", netPayableMinor: 5_800_000n }));
     const app = await buildApp();
     const r = await app.inject({ method: "POST", url: `/v1/hrms/contractor-bills/${BILL}/mark-paid`, headers: auth(CHECKER), payload: { paymentRef: "UTR-9" } });
+    await drainF3();
     expect(r.statusCode).toBe(200);
     expect(r.json().status).toBe("paid");
     expect(H.enqueueMock.mock.calls[0][1].topic).toBe("hrms.contractor_bill.paid");

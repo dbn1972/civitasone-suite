@@ -26,10 +26,20 @@ const H = vi.hoisted(() => ({
   listByStatusMock: vi.fn(),
 }));
 
+const stubTx = vi.hoisted(() => ({
+  // The F3 consumer opens db.transaction() and calls markProcessed(tx, ...) first,
+  // which needs insert().values().onConflictDoNothing().returning() to resolve to a
+  // NON-empty array (empty means "already processed" and the consumer returns without
+  // writing). The old bare `{}` tx made every consumer write silently disappear.
+  insert: () => ({ values: () => ({ onConflictDoNothing: () => ({ returning: async () => [{ messageId: "stub" }] }) }) }),
+  // Some consumer cases read a row inside their own write transaction.
+  select: () => ({ from: () => ({ where: () => ({ limit: async () => H.scopedReadMock() }) }) }),
+}));
+
 vi.mock("../src/shared/db.js", async (io) => ({
   ...(await io<Record<string, unknown>>()),
   scopedRead: async (fn: (tx: unknown) => Promise<unknown>) => H.scopedReadMock(fn),
-  db: { transaction: async (cb: (tx: unknown) => Promise<unknown>) => cb({}) },
+  db: { transaction: async (cb: (tx: unknown) => Promise<unknown>) => cb(stubTx) },
 }));
 vi.mock("../src/modules/consultant-invoice/repo.js", async (io) => ({
   ...(await io<Record<string, unknown>>()),
@@ -51,6 +61,18 @@ vi.mock("../src/modules/employee/engagement-policy.js", async (io) => {
 });
 
 import { buildApp } from "../src/app.js";
+import { queue } from "../src/shared/infra.js";
+import { registerF3_consultant_invoice_Consumers } from "../src/modules/consultant-invoice/f3-consumer.js";
+
+// These routes only PUBLISH; the row is written by the F3 consumer the worker
+// runs. Without registering it the repo mocks below are never exercised at all,
+// so the suite could not tell a working write from a crashing one.
+registerF3_consultant_invoice_Consumers(queue);
+
+/** Await the in-memory queue's fan-out so the consumer's write has happened. */
+async function drainF3(): Promise<void> {
+  await (queue as unknown as import("@civitasone/queue").MemoryQueue).drain();
+}
 import { sqlClient } from "../src/shared/db.js";
 import { buildTypeResolver } from "../src/modules/employee/engagement-policy.js";
 
@@ -106,6 +128,7 @@ describe("POST /v1/hrms/consultants/:id/invoices (submit)", () => {
       method: "POST", url: `/v1/hrms/consultants/${CONSULTANT_ID}/invoices`,
       headers: auth(MAKER), payload: { invoiceNo: "INV-001", invoiceDate: "2026-06-15", grossMinor: 5000000, gstApplicable: true, gstRateBps: 1800 },
     });
+    await drainF3();
     expect(r.statusCode).toBe(201);
     const body = r.json();
     expect(body.invoiceNo).toBe("INV-001");
@@ -120,6 +143,7 @@ describe("POST /v1/hrms/consultants/:id/invoices (submit)", () => {
       method: "POST", url: `/v1/hrms/consultants/${CONSULTANT_ID}/invoices`,
       headers: auth(MAKER), payload: {},
     });
+    await drainF3();
     expect(r.statusCode).toBe(400);
     expect(r.json().code).toBe("VALIDATION_FAILED");
     await app.close();
@@ -131,6 +155,7 @@ describe("POST /v1/hrms/consultants/:id/invoices (submit)", () => {
       method: "POST", url: `/v1/hrms/consultants/not-a-uuid/invoices`,
       headers: auth(MAKER), payload: { invoiceNo: "X", invoiceDate: "2026-06-15", grossMinor: 1000 },
     });
+    await drainF3();
     expect(r.statusCode).toBe(400);
     await app.close();
   });
@@ -141,6 +166,7 @@ describe("POST /v1/hrms/consultants/:id/invoices (submit)", () => {
       method: "POST", url: `/v1/hrms/consultants/${CONSULTANT_ID}/invoices`,
       headers: auth(MAKER), payload: { invoiceNo: "INV-X", invoiceDate: "15-06-2026", grossMinor: 1000 },
     });
+    await drainF3();
     expect(r.statusCode).toBe(400);
     await app.close();
   });
@@ -151,6 +177,7 @@ describe("POST /v1/hrms/consultants/:id/invoices (submit)", () => {
       method: "POST", url: `/v1/hrms/consultants/${CONSULTANT_ID}/invoices`,
       headers: auth(MAKER), payload: { invoiceNo: "INV-X", invoiceDate: "2026-06-15", grossMinor: -100 },
     });
+    await drainF3();
     expect(r.statusCode).toBe(400);
     await app.close();
   });
@@ -161,6 +188,7 @@ describe("POST /v1/hrms/consultants/:id/invoices (submit)", () => {
       method: "POST", url: `/v1/hrms/consultants/${CONSULTANT_ID}/invoices`,
       payload: { invoiceNo: "INV-X", invoiceDate: "2026-06-15", grossMinor: 1000 },
     });
+    await drainF3();
     expect(r.statusCode).toBe(401);
     await app.close();
   });
@@ -171,6 +199,7 @@ describe("POST /v1/hrms/consultants/:id/invoices (submit)", () => {
       method: "POST", url: `/v1/hrms/consultants/${CONSULTANT_ID}/invoices`,
       headers: auth(USER, ["viewer"]), payload: { invoiceNo: "INV-X", invoiceDate: "2026-06-15", grossMinor: 1000 },
     });
+    await drainF3();
     expect(r.statusCode).toBe(403);
     await app.close();
   });
@@ -182,6 +211,7 @@ describe("POST /v1/hrms/consultants/:id/invoices (submit)", () => {
       method: "POST", url: `/v1/hrms/consultants/${CONSULTANT_ID}/invoices`,
       headers: auth(MAKER), payload: { invoiceNo: "INV-X", invoiceDate: "2026-06-15", grossMinor: 1000 },
     });
+    await drainF3();
     expect(r.statusCode).toBe(404);
     expect(r.json().code).toBe("NOT_FOUND");
     await app.close();
@@ -194,6 +224,7 @@ describe("POST /v1/hrms/consultants/:id/invoices (submit)", () => {
       method: "POST", url: `/v1/hrms/consultants/${CONSULTANT_ID}/invoices`,
       headers: auth(MAKER), payload: { invoiceNo: "INV-X", invoiceDate: "2026-06-15", grossMinor: 1000 },
     });
+    await drainF3();
     expect(r.statusCode).toBe(409);
     expect(r.json().code).toBe("NOT_A_CONSULTANT");
     await app.close();
@@ -206,6 +237,7 @@ describe("POST /v1/hrms/consultants/:id/invoices (submit)", () => {
       method: "POST", url: `/v1/hrms/consultants/${CONSULTANT_ID}/invoices`,
       headers: auth(MAKER), payload: { invoiceNo: "INV-001", invoiceDate: "2026-06-15", grossMinor: 1000 },
     });
+    await drainF3();
     expect(r.statusCode).toBe(409);
     expect(r.json().code).toBe("DUPLICATE_INVOICE");
     await app.close();
@@ -220,6 +252,7 @@ describe("GET /v1/hrms/consultants/:id/invoices (list by consultant)", () => {
       method: "GET", url: `/v1/hrms/consultants/${CONSULTANT_ID}/invoices`,
       headers: auth(MAKER),
     });
+    await drainF3();
     expect(r.statusCode).toBe(200);
     expect(r.json().data).toHaveLength(1);
     await app.close();
@@ -228,6 +261,7 @@ describe("GET /v1/hrms/consultants/:id/invoices (list by consultant)", () => {
   it("401 — no auth", async () => {
     const app = await buildApp();
     const r = await app.inject({ method: "GET", url: `/v1/hrms/consultants/${CONSULTANT_ID}/invoices` });
+    await drainF3();
     expect(r.statusCode).toBe(401);
     await app.close();
   });
@@ -238,6 +272,7 @@ describe("GET /v1/hrms/consultants/:id/invoices (list by consultant)", () => {
       method: "GET", url: `/v1/hrms/consultants/${CONSULTANT_ID}/invoices`,
       headers: auth(USER, ["viewer"]),
     });
+    await drainF3();
     expect(r.statusCode).toBe(403);
     await app.close();
   });
@@ -251,6 +286,7 @@ describe("GET /v1/hrms/consultant-invoices (AP queue by status)", () => {
       method: "GET", url: "/v1/hrms/consultant-invoices?status=submitted",
       headers: auth(MAKER),
     });
+    await drainF3();
     expect(r.statusCode).toBe(200);
     expect(r.json().data).toHaveLength(1);
     await app.close();
@@ -263,6 +299,7 @@ describe("GET /v1/hrms/consultant-invoices (AP queue by status)", () => {
       method: "GET", url: "/v1/hrms/consultant-invoices",
       headers: auth(MAKER),
     });
+    await drainF3();
     expect(r.statusCode).toBe(200);
     await app.close();
   });
@@ -273,6 +310,7 @@ describe("GET /v1/hrms/consultant-invoices (AP queue by status)", () => {
       method: "GET", url: "/v1/hrms/consultant-invoices?status=invalid",
       headers: auth(MAKER),
     });
+    await drainF3();
     expect(r.statusCode).toBe(400);
     await app.close();
   });
@@ -280,6 +318,7 @@ describe("GET /v1/hrms/consultant-invoices (AP queue by status)", () => {
   it("401 — no auth", async () => {
     const app = await buildApp();
     const r = await app.inject({ method: "GET", url: "/v1/hrms/consultant-invoices" });
+    await drainF3();
     expect(r.statusCode).toBe(401);
     await app.close();
   });
@@ -290,6 +329,7 @@ describe("GET /v1/hrms/consultant-invoices (AP queue by status)", () => {
       method: "GET", url: "/v1/hrms/consultant-invoices",
       headers: auth(USER, ["employee"]),
     });
+    await drainF3();
     expect(r.statusCode).toBe(403);
     await app.close();
   });
@@ -303,6 +343,7 @@ describe("GET /v1/hrms/consultant-invoices/:invId (read single)", () => {
       method: "GET", url: `/v1/hrms/consultant-invoices/${INV_ID}`,
       headers: auth(MAKER),
     });
+    await drainF3();
     expect(r.statusCode).toBe(200);
     expect(r.json().invoiceNo).toBe("INV-001");
     await app.close();
@@ -314,6 +355,7 @@ describe("GET /v1/hrms/consultant-invoices/:invId (read single)", () => {
       method: "GET", url: "/v1/hrms/consultant-invoices/bad-id",
       headers: auth(MAKER),
     });
+    await drainF3();
     expect(r.statusCode).toBe(400);
     await app.close();
   });
@@ -321,6 +363,7 @@ describe("GET /v1/hrms/consultant-invoices/:invId (read single)", () => {
   it("401 — no auth", async () => {
     const app = await buildApp();
     const r = await app.inject({ method: "GET", url: `/v1/hrms/consultant-invoices/${INV_ID}` });
+    await drainF3();
     expect(r.statusCode).toBe(401);
     await app.close();
   });
@@ -331,6 +374,7 @@ describe("GET /v1/hrms/consultant-invoices/:invId (read single)", () => {
       method: "GET", url: `/v1/hrms/consultant-invoices/${INV_ID}`,
       headers: auth(USER, ["viewer"]),
     });
+    await drainF3();
     expect(r.statusCode).toBe(403);
     await app.close();
   });
@@ -342,6 +386,7 @@ describe("GET /v1/hrms/consultant-invoices/:invId (read single)", () => {
       method: "GET", url: `/v1/hrms/consultant-invoices/${INV_ID}`,
       headers: auth(MAKER),
     });
+    await drainF3();
     expect(r.statusCode).toBe(404);
     expect(r.json().code).toBe("NOT_FOUND");
     await app.close();
@@ -356,6 +401,7 @@ describe("POST /v1/hrms/consultant-invoices/:invId/verify", () => {
       method: "POST", url: `/v1/hrms/consultant-invoices/${INV_ID}/verify`,
       headers: auth(MAKER),
     });
+    await drainF3();
     expect(r.statusCode).toBe(200);
     expect(r.json().status).toBe("verified");
     expect(H.updateInvoiceMock).toHaveBeenCalledOnce();
@@ -365,6 +411,7 @@ describe("POST /v1/hrms/consultant-invoices/:invId/verify", () => {
   it("401 — no auth", async () => {
     const app = await buildApp();
     const r = await app.inject({ method: "POST", url: `/v1/hrms/consultant-invoices/${INV_ID}/verify` });
+    await drainF3();
     expect(r.statusCode).toBe(401);
     await app.close();
   });
@@ -375,6 +422,7 @@ describe("POST /v1/hrms/consultant-invoices/:invId/verify", () => {
       method: "POST", url: `/v1/hrms/consultant-invoices/${INV_ID}/verify`,
       headers: auth(USER, ["employee"]),
     });
+    await drainF3();
     expect(r.statusCode).toBe(403);
     await app.close();
   });
@@ -386,6 +434,7 @@ describe("POST /v1/hrms/consultant-invoices/:invId/verify", () => {
       method: "POST", url: `/v1/hrms/consultant-invoices/${INV_ID}/verify`,
       headers: auth(MAKER),
     });
+    await drainF3();
     expect(r.statusCode).toBe(404);
     await app.close();
   });
@@ -397,6 +446,7 @@ describe("POST /v1/hrms/consultant-invoices/:invId/verify", () => {
       method: "POST", url: `/v1/hrms/consultant-invoices/${INV_ID}/verify`,
       headers: auth(MAKER),
     });
+    await drainF3();
     expect(r.statusCode).toBe(409);
     expect(r.json().code).toBe("WRONG_STATE");
     await app.close();
@@ -411,7 +461,16 @@ describe("POST /v1/hrms/consultant-invoices/:invId/approve", () => {
       method: "POST", url: `/v1/hrms/consultant-invoices/${INV_ID}/approve`,
       headers: auth(CHECKER), payload: {},
     });
+    await drainF3();
     expect(r.statusCode).toBe(200);
+    // The tax is computed and PERSISTED by the F3 consumer, so assert on the
+    // update it made — that is the value that actually reaches the ledger.
+    const [, , , patch] = H.updateInvoiceMock.mock.calls[0];
+    expect(patch.status).toBe("approved");
+    expect(patch.gstMinor).toBe(900_000n);   // 5,000,000 * 1800 / 10000
+    expect(patch.tdsMinor).toBe(500_000n);   // 5,000,000 * 1000 / 10000
+    expect(patch.netPayableMinor).toBe(5_400_000n);
+    expect(H.enqueueMock).toHaveBeenCalledOnce();
     const body = r.json();
     expect(body.status).toBe("approved");
     // GST = 5,000,000 * 1800 / 10000 = 900,000
@@ -432,7 +491,12 @@ describe("POST /v1/hrms/consultant-invoices/:invId/approve", () => {
       method: "POST", url: `/v1/hrms/consultant-invoices/${INV_ID}/approve`,
       headers: auth(CHECKER), payload: { tdsRateBps: 1000 },
     });
+    await drainF3();
     expect(r.statusCode).toBe(200);
+    // The checker's override must reach the PERSISTED row, not just the reply.
+    const [, , , patch] = H.updateInvoiceMock.mock.calls[0];
+    expect(patch.tdsRateBps).toBe(1000);
+    expect(patch.tdsMinor).toBe(500_000n);
     expect(r.json().tdsMinor).toBe("500000");
     await app.close();
   });
@@ -446,6 +510,7 @@ describe("POST /v1/hrms/consultant-invoices/:invId/approve", () => {
       method: "POST", url: `/v1/hrms/consultant-invoices/${INV_ID}/approve`,
       headers: auth(CHECKER), payload: {},
     });
+    await drainF3();
     expect(r.statusCode).toBe(200);
     expect(r.json().tdsApplied).toBe(false);
     expect(r.json().tdsMinor).toBe("0");
@@ -455,6 +520,7 @@ describe("POST /v1/hrms/consultant-invoices/:invId/approve", () => {
   it("401 — no auth", async () => {
     const app = await buildApp();
     const r = await app.inject({ method: "POST", url: `/v1/hrms/consultant-invoices/${INV_ID}/approve`, payload: {} });
+    await drainF3();
     expect(r.statusCode).toBe(401);
     await app.close();
   });
@@ -465,6 +531,7 @@ describe("POST /v1/hrms/consultant-invoices/:invId/approve", () => {
       method: "POST", url: `/v1/hrms/consultant-invoices/${INV_ID}/approve`,
       headers: auth(USER, ["employee"]), payload: {},
     });
+    await drainF3();
     expect(r.statusCode).toBe(403);
     await app.close();
   });
@@ -476,6 +543,7 @@ describe("POST /v1/hrms/consultant-invoices/:invId/approve", () => {
       method: "POST", url: `/v1/hrms/consultant-invoices/${INV_ID}/approve`,
       headers: auth(CHECKER), payload: {},
     });
+    await drainF3();
     expect(r.statusCode).toBe(404);
     await app.close();
   });
@@ -487,6 +555,7 @@ describe("POST /v1/hrms/consultant-invoices/:invId/approve", () => {
       method: "POST", url: `/v1/hrms/consultant-invoices/${INV_ID}/approve`,
       headers: auth(CHECKER), payload: {},
     });
+    await drainF3();
     expect(r.statusCode).toBe(409);
     expect(r.json().code).toBe("WRONG_STATE");
     await app.close();
@@ -499,6 +568,7 @@ describe("POST /v1/hrms/consultant-invoices/:invId/approve", () => {
       method: "POST", url: `/v1/hrms/consultant-invoices/${INV_ID}/approve`,
       headers: auth(CHECKER), payload: {},
     });
+    await drainF3();
     expect(r.statusCode).toBe(409);
     expect(r.json().code).toBe("SOD_VIOLATION");
     expect(H.updateInvoiceMock).not.toHaveBeenCalled();
@@ -514,6 +584,7 @@ describe("POST /v1/hrms/consultant-invoices/:invId/reject", () => {
       method: "POST", url: `/v1/hrms/consultant-invoices/${INV_ID}/reject`,
       headers: auth(CHECKER), payload: { approverRemarks: "Incomplete docs" },
     });
+    await drainF3();
     expect(r.statusCode).toBe(200);
     expect(r.json().status).toBe("rejected");
     await app.close();
@@ -526,6 +597,7 @@ describe("POST /v1/hrms/consultant-invoices/:invId/reject", () => {
       method: "POST", url: `/v1/hrms/consultant-invoices/${INV_ID}/reject`,
       headers: auth(CHECKER), payload: {},
     });
+    await drainF3();
     expect(r.statusCode).toBe(200);
     expect(r.json().status).toBe("rejected");
     await app.close();
@@ -534,6 +606,7 @@ describe("POST /v1/hrms/consultant-invoices/:invId/reject", () => {
   it("401 — no auth", async () => {
     const app = await buildApp();
     const r = await app.inject({ method: "POST", url: `/v1/hrms/consultant-invoices/${INV_ID}/reject`, payload: {} });
+    await drainF3();
     expect(r.statusCode).toBe(401);
     await app.close();
   });
@@ -544,6 +617,7 @@ describe("POST /v1/hrms/consultant-invoices/:invId/reject", () => {
       method: "POST", url: `/v1/hrms/consultant-invoices/${INV_ID}/reject`,
       headers: auth(USER, ["employee"]), payload: {},
     });
+    await drainF3();
     expect(r.statusCode).toBe(403);
     await app.close();
   });
@@ -555,6 +629,7 @@ describe("POST /v1/hrms/consultant-invoices/:invId/reject", () => {
       method: "POST", url: `/v1/hrms/consultant-invoices/${INV_ID}/reject`,
       headers: auth(CHECKER), payload: {},
     });
+    await drainF3();
     expect(r.statusCode).toBe(404);
     await app.close();
   });
@@ -566,6 +641,7 @@ describe("POST /v1/hrms/consultant-invoices/:invId/reject", () => {
       method: "POST", url: `/v1/hrms/consultant-invoices/${INV_ID}/reject`,
       headers: auth(CHECKER), payload: {},
     });
+    await drainF3();
     expect(r.statusCode).toBe(409);
     expect(r.json().code).toBe("WRONG_STATE");
     await app.close();
@@ -585,6 +661,7 @@ describe("POST /v1/hrms/consultants/:id/invoices — optional fields & edge case
         sacCode: "998311", remarks: "June invoice",
       },
     });
+    await drainF3();
     expect(r.statusCode).toBe(201);
     expect(H.insertInvoiceMock).toHaveBeenCalledOnce();
     await app.close();
@@ -597,6 +674,7 @@ describe("POST /v1/hrms/consultants/:id/invoices — optional fields & edge case
       method: "POST", url: `/v1/hrms/consultants/${CONSULTANT_ID}/invoices`,
       headers: auth(MAKER), payload: { invoiceNo: "INV-EMP", invoiceDate: "2026-06-15", grossMinor: 1000000 },
     });
+    await drainF3();
     expect(r.statusCode).toBe(201);
     await app.close();
   });
@@ -608,6 +686,7 @@ describe("POST /v1/hrms/consultants/:id/invoices — optional fields & edge case
       method: "POST", url: `/v1/hrms/consultants/${CONSULTANT_ID}/invoices`,
       headers: auth(MAKER), payload: { invoiceNo: "INV-F", invoiceDate: "2026-06-15", grossMinor: 500000 },
     });
+    await drainF3();
     expect(r.statusCode).toBe(201);
     await app.close();
   });
@@ -621,7 +700,15 @@ describe("POST /v1/hrms/consultants/:id/invoices — optional fields & edge case
       method: "POST", url: `/v1/hrms/consultant-invoices/${INV_ID}/approve`,
       headers: auth(CHECKER), payload: {},
     });
+    await drainF3();
     expect(r.statusCode).toBe(200);
+    // The FY window is computed in the consumer now; assert the branch directly
+    // on the YTD lookup it performed (Jan 2027 => FY starts Apr 2026).
+    // ytdApprovedGrossTx(tx, tenantId, consultantId, from, to, excludeId);
+    // the repo mock drops the leading tx.
+    const [, , from, to] = H.ytdMock.mock.calls[0];
+    expect(from).toBe("2026-04-01");
+    expect(to).toBe("2027-03-31");
     expect(r.json().tdsApplied).toBe(true);
     await app.close();
   });
@@ -633,6 +720,7 @@ describe("POST /v1/hrms/consultants/:id/invoices — optional fields & edge case
       method: "POST", url: `/v1/hrms/consultants/${CONSULTANT_ID}/invoices`,
       headers: auth(MAKER), payload: { invoiceNo: "INV-ERR", invoiceDate: "2026-06-15", grossMinor: 1000 },
     });
+    await drainF3();
     expect(r.statusCode).toBe(500);
     expect(r.json().code).toBe("INTERNAL");
     await app.close();
@@ -644,6 +732,7 @@ describe("POST /v1/hrms/consultants/:id/invoices — optional fields & edge case
       method: "POST", url: `/v1/hrms/consultants/${CONSULTANT_ID}/invoices`,
       headers: auth(MAKER), payload: { invoiceNo: "INV-X", invoiceDate: "2026-06-15", grossMinor: 1000, gstRateBps: 20000 },
     });
+    await drainF3();
     expect(r.statusCode).toBe(400);
     await app.close();
   });
@@ -657,6 +746,7 @@ describe("POST /v1/hrms/consultant-invoices/:invId/mark-paid", () => {
       method: "POST", url: `/v1/hrms/consultant-invoices/${INV_ID}/mark-paid`,
       headers: auth(CHECKER), payload: { paymentRef: "UTR-999" },
     });
+    await drainF3();
     expect(r.statusCode).toBe(200);
     expect(r.json().status).toBe("paid");
     expect(r.json().paymentRef).toBe("UTR-999");
@@ -673,6 +763,7 @@ describe("POST /v1/hrms/consultant-invoices/:invId/mark-paid", () => {
       method: "POST", url: `/v1/hrms/consultant-invoices/${INV_ID}/mark-paid`,
       headers: auth(CHECKER), payload: {},
     });
+    await drainF3();
     expect(r.statusCode).toBe(400);
     await app.close();
   });
@@ -680,6 +771,7 @@ describe("POST /v1/hrms/consultant-invoices/:invId/mark-paid", () => {
   it("401 — no auth", async () => {
     const app = await buildApp();
     const r = await app.inject({ method: "POST", url: `/v1/hrms/consultant-invoices/${INV_ID}/mark-paid`, payload: { paymentRef: "X" } });
+    await drainF3();
     expect(r.statusCode).toBe(401);
     await app.close();
   });
@@ -690,6 +782,7 @@ describe("POST /v1/hrms/consultant-invoices/:invId/mark-paid", () => {
       method: "POST", url: `/v1/hrms/consultant-invoices/${INV_ID}/mark-paid`,
       headers: auth(USER, ["employee"]), payload: { paymentRef: "X" },
     });
+    await drainF3();
     expect(r.statusCode).toBe(403);
     await app.close();
   });
@@ -701,6 +794,7 @@ describe("POST /v1/hrms/consultant-invoices/:invId/mark-paid", () => {
       method: "POST", url: `/v1/hrms/consultant-invoices/${INV_ID}/mark-paid`,
       headers: auth(CHECKER), payload: { paymentRef: "X" },
     });
+    await drainF3();
     expect(r.statusCode).toBe(404);
     await app.close();
   });
@@ -712,6 +806,7 @@ describe("POST /v1/hrms/consultant-invoices/:invId/mark-paid", () => {
       method: "POST", url: `/v1/hrms/consultant-invoices/${INV_ID}/mark-paid`,
       headers: auth(CHECKER), payload: { paymentRef: "X" },
     });
+    await drainF3();
     expect(r.statusCode).toBe(409);
     expect(r.json().code).toBe("WRONG_STATE");
     await app.close();

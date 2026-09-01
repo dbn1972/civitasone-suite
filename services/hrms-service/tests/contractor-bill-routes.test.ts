@@ -28,9 +28,17 @@ const H = vi.hoisted(() => ({
   listBillsByStatusMock: vi.fn(),
 }));
 
+const stubTx = vi.hoisted(() => ({
+  // The F3 consumer opens db.transaction() and calls markProcessed(tx, ...) first,
+  // which needs insert().values().onConflictDoNothing().returning() to resolve to a
+  // NON-empty array (empty means "already processed" and the consumer returns without
+  // writing). The old bare `{}` tx made every consumer write silently disappear.
+  insert: () => ({ values: () => ({ onConflictDoNothing: () => ({ returning: async () => [{ messageId: "stub" }] }) }) }),
+}));
+
 vi.mock("../src/shared/db.js", async (io) => ({
   ...(await io<Record<string, unknown>>()),
-  db: { transaction: async (cb: (tx: unknown) => Promise<unknown>) => cb({}) },
+  db: { transaction: async (cb: (tx: unknown) => Promise<unknown>) => cb(stubTx) },
   scopedRead: async (fn: (tx: unknown) => Promise<unknown>) => fn({}),
 }));
 vi.mock("../src/modules/contractor-bill/repo.js", async (io) => ({
@@ -53,6 +61,18 @@ vi.mock("../src/shared/outbox.js", async (io) => ({
 }));
 
 import { buildApp } from "../src/app.js";
+import { queue } from "../src/shared/infra.js";
+import { registerF3_contractor_bill_Consumers } from "../src/modules/contractor-bill/f3-consumer.js";
+
+// These routes only PUBLISH; the row is written by the F3 consumer the worker
+// runs. Without registering it the repo mocks below are never exercised at all,
+// so the suite could not tell a working write from a crashing one.
+registerF3_contractor_bill_Consumers(queue);
+
+/** Await the in-memory queue's fan-out so the consumer's write has happened. */
+async function drainF3(): Promise<void> {
+  await (queue as unknown as import("@civitasone/queue").MemoryQueue).drain();
+}
 import { sqlClient } from "../src/shared/db.js";
 
 const tok = (sub = USER, roles = ["hr_admin"]) =>
@@ -108,6 +128,7 @@ describe("POST /v1/hrms/contractors (register)", () => {
       method: "POST", url: "/v1/hrms/contractors",
       headers: auth(MAKER), payload: { name: "ACME Labour", contractorKind: "other", clraLicenseNo: "CLRA/2026/01", clraLicenseValidTill: "2027-03-31" },
     });
+    await drainF3();
     expect(r.statusCode).toBe(201);
     expect(r.json().name).toBe("ACME Labour");
     expect(r.json().status).toBe("active");
@@ -121,6 +142,7 @@ describe("POST /v1/hrms/contractors (register)", () => {
       method: "POST", url: "/v1/hrms/contractors",
       headers: auth(MAKER), payload: {},
     });
+    await drainF3();
     expect(r.statusCode).toBe(400);
     expect(r.json().code).toBe("VALIDATION_FAILED");
     await app.close();
@@ -132,6 +154,7 @@ describe("POST /v1/hrms/contractors (register)", () => {
       method: "POST", url: "/v1/hrms/contractors",
       headers: auth(MAKER), payload: { name: "X", clraLicenseValidTill: "31-03-2027" },
     });
+    await drainF3();
     expect(r.statusCode).toBe(400);
     await app.close();
   });
@@ -139,6 +162,7 @@ describe("POST /v1/hrms/contractors (register)", () => {
   it("401 — no auth", async () => {
     const app = await buildApp();
     const r = await app.inject({ method: "POST", url: "/v1/hrms/contractors", payload: { name: "X" } });
+    await drainF3();
     expect(r.statusCode).toBe(401);
     await app.close();
   });
@@ -149,6 +173,7 @@ describe("POST /v1/hrms/contractors (register)", () => {
       method: "POST", url: "/v1/hrms/contractors",
       headers: auth(USER, ["employee"]), payload: { name: "X" },
     });
+    await drainF3();
     expect(r.statusCode).toBe(403);
     await app.close();
   });
@@ -159,6 +184,7 @@ describe("GET /v1/hrms/contractors (list)", () => {
     H.listContractorsMock.mockResolvedValue([contractor()]);
     const app = await buildApp();
     const r = await app.inject({ method: "GET", url: "/v1/hrms/contractors", headers: auth(MAKER) });
+    await drainF3();
     expect(r.statusCode).toBe(200);
     expect(r.json().data).toHaveLength(1);
     await app.close();
@@ -167,6 +193,7 @@ describe("GET /v1/hrms/contractors (list)", () => {
   it("401 — no auth", async () => {
     const app = await buildApp();
     const r = await app.inject({ method: "GET", url: "/v1/hrms/contractors" });
+    await drainF3();
     expect(r.statusCode).toBe(401);
     await app.close();
   });
@@ -174,6 +201,7 @@ describe("GET /v1/hrms/contractors (list)", () => {
   it("403 — wrong role", async () => {
     const app = await buildApp();
     const r = await app.inject({ method: "GET", url: "/v1/hrms/contractors", headers: auth(USER, ["viewer"]) });
+    await drainF3();
     expect(r.statusCode).toBe(403);
     await app.close();
   });
@@ -183,6 +211,7 @@ describe("GET /v1/hrms/contractors/:id (read single)", () => {
   it("200 — returns contractor", async () => {
     const app = await buildApp();
     const r = await app.inject({ method: "GET", url: `/v1/hrms/contractors/${CTR_ID}`, headers: auth(MAKER) });
+    await drainF3();
     expect(r.statusCode).toBe(200);
     expect(r.json().name).toBe("ACME Labour Services");
     await app.close();
@@ -191,6 +220,7 @@ describe("GET /v1/hrms/contractors/:id (read single)", () => {
   it("400 — invalid UUID", async () => {
     const app = await buildApp();
     const r = await app.inject({ method: "GET", url: "/v1/hrms/contractors/bad-uuid", headers: auth(MAKER) });
+    await drainF3();
     expect(r.statusCode).toBe(400);
     await app.close();
   });
@@ -198,6 +228,7 @@ describe("GET /v1/hrms/contractors/:id (read single)", () => {
   it("401 — no auth", async () => {
     const app = await buildApp();
     const r = await app.inject({ method: "GET", url: `/v1/hrms/contractors/${CTR_ID}` });
+    await drainF3();
     expect(r.statusCode).toBe(401);
     await app.close();
   });
@@ -206,6 +237,7 @@ describe("GET /v1/hrms/contractors/:id (read single)", () => {
     H.findContractorMock.mockResolvedValue(null);
     const app = await buildApp();
     const r = await app.inject({ method: "GET", url: `/v1/hrms/contractors/${CTR_ID}`, headers: auth(MAKER) });
+    await drainF3();
     expect(r.statusCode).toBe(404);
     expect(r.json().code).toBe("NOT_FOUND");
     await app.close();
@@ -219,6 +251,7 @@ describe("PATCH /v1/hrms/contractors/:id (update)", () => {
       method: "PATCH", url: `/v1/hrms/contractors/${CTR_ID}`,
       headers: auth(MAKER), payload: { status: "blacklisted" },
     });
+    await drainF3();
     expect(r.statusCode).toBe(200);
     expect(r.json().status).toBe("blacklisted");
     expect(H.updateContractorMock).toHaveBeenCalledOnce();
@@ -231,6 +264,7 @@ describe("PATCH /v1/hrms/contractors/:id (update)", () => {
       method: "PATCH", url: `/v1/hrms/contractors/${CTR_ID}`,
       headers: auth(MAKER), payload: { status: "invalid_status" },
     });
+    await drainF3();
     expect(r.statusCode).toBe(400);
     await app.close();
   });
@@ -238,6 +272,7 @@ describe("PATCH /v1/hrms/contractors/:id (update)", () => {
   it("401 — no auth", async () => {
     const app = await buildApp();
     const r = await app.inject({ method: "PATCH", url: `/v1/hrms/contractors/${CTR_ID}`, payload: {} });
+    await drainF3();
     expect(r.statusCode).toBe(401);
     await app.close();
   });
@@ -248,6 +283,7 @@ describe("PATCH /v1/hrms/contractors/:id (update)", () => {
       method: "PATCH", url: `/v1/hrms/contractors/${CTR_ID}`,
       headers: auth(USER, ["employee"]), payload: { status: "active" },
     });
+    await drainF3();
     expect(r.statusCode).toBe(403);
     await app.close();
   });
@@ -259,6 +295,7 @@ describe("PATCH /v1/hrms/contractors/:id (update)", () => {
       method: "PATCH", url: `/v1/hrms/contractors/${CTR_ID}`,
       headers: auth(MAKER), payload: { status: "active" },
     });
+    await drainF3();
     expect(r.statusCode).toBe(404);
     await app.close();
   });
@@ -271,6 +308,7 @@ describe("POST /v1/hrms/contractors/:id/bills (submit bill)", () => {
       method: "POST", url: `/v1/hrms/contractors/${CTR_ID}/bills`,
       headers: auth(MAKER), payload: { billNo: "BILL-001", billDate: "2026-06-15", grossMinor: 5000000, gstApplicable: true, gstRateBps: 1800, workersCount: 25, wagesDisbursedVerified: true },
     });
+    await drainF3();
     expect(r.statusCode).toBe(201);
     expect(r.json().billNo).toBe("BILL-001");
     expect(r.json().status).toBe("submitted");
@@ -284,6 +322,7 @@ describe("POST /v1/hrms/contractors/:id/bills (submit bill)", () => {
       method: "POST", url: `/v1/hrms/contractors/${CTR_ID}/bills`,
       headers: auth(MAKER), payload: { billDate: "2026-06-15", grossMinor: 1000 },
     });
+    await drainF3();
     expect(r.statusCode).toBe(400);
     expect(r.json().code).toBe("VALIDATION_FAILED");
     await app.close();
@@ -295,6 +334,7 @@ describe("POST /v1/hrms/contractors/:id/bills (submit bill)", () => {
       method: "POST", url: `/v1/hrms/contractors/${CTR_ID}/bills`,
       headers: auth(MAKER), payload: { billNo: "B-1", billDate: "15/06/2026", grossMinor: 1000 },
     });
+    await drainF3();
     expect(r.statusCode).toBe(400);
     await app.close();
   });
@@ -305,6 +345,7 @@ describe("POST /v1/hrms/contractors/:id/bills (submit bill)", () => {
       method: "POST", url: `/v1/hrms/contractors/${CTR_ID}/bills`,
       headers: auth(MAKER), payload: { billNo: "B-1", billDate: "2026-06-15", grossMinor: 0 },
     });
+    await drainF3();
     expect(r.statusCode).toBe(400);
     await app.close();
   });
@@ -315,6 +356,7 @@ describe("POST /v1/hrms/contractors/:id/bills (submit bill)", () => {
       method: "POST", url: `/v1/hrms/contractors/${CTR_ID}/bills`,
       payload: { billNo: "B-1", billDate: "2026-06-15", grossMinor: 1000 },
     });
+    await drainF3();
     expect(r.statusCode).toBe(401);
     await app.close();
   });
@@ -325,6 +367,7 @@ describe("POST /v1/hrms/contractors/:id/bills (submit bill)", () => {
       method: "POST", url: `/v1/hrms/contractors/${CTR_ID}/bills`,
       headers: auth(USER, ["viewer"]), payload: { billNo: "B-1", billDate: "2026-06-15", grossMinor: 1000 },
     });
+    await drainF3();
     expect(r.statusCode).toBe(403);
     await app.close();
   });
@@ -336,6 +379,7 @@ describe("POST /v1/hrms/contractors/:id/bills (submit bill)", () => {
       method: "POST", url: `/v1/hrms/contractors/${CTR_ID}/bills`,
       headers: auth(MAKER), payload: { billNo: "B-1", billDate: "2026-06-15", grossMinor: 1000 },
     });
+    await drainF3();
     expect(r.statusCode).toBe(404);
     await app.close();
   });
@@ -347,6 +391,7 @@ describe("POST /v1/hrms/contractors/:id/bills (submit bill)", () => {
       method: "POST", url: `/v1/hrms/contractors/${CTR_ID}/bills`,
       headers: auth(MAKER), payload: { billNo: "B-1", billDate: "2026-06-15", grossMinor: 1000 },
     });
+    await drainF3();
     expect(r.statusCode).toBe(409);
     expect(r.json().code).toBe("CONTRACTOR_BLACKLISTED");
     await app.close();
@@ -359,6 +404,7 @@ describe("POST /v1/hrms/contractors/:id/bills (submit bill)", () => {
       method: "POST", url: `/v1/hrms/contractors/${CTR_ID}/bills`,
       headers: auth(MAKER), payload: { billNo: "BILL-001", billDate: "2026-06-15", grossMinor: 1000 },
     });
+    await drainF3();
     expect(r.statusCode).toBe(409);
     expect(r.json().code).toBe("DUPLICATE_BILL");
     await app.close();
@@ -370,6 +416,7 @@ describe("GET /v1/hrms/contractors/:id/bills (list by contractor)", () => {
     H.listBillsByContractorMock.mockResolvedValue([bill()]);
     const app = await buildApp();
     const r = await app.inject({ method: "GET", url: `/v1/hrms/contractors/${CTR_ID}/bills`, headers: auth(MAKER) });
+    await drainF3();
     expect(r.statusCode).toBe(200);
     expect(r.json().data).toHaveLength(1);
     await app.close();
@@ -378,6 +425,7 @@ describe("GET /v1/hrms/contractors/:id/bills (list by contractor)", () => {
   it("401 — no auth", async () => {
     const app = await buildApp();
     const r = await app.inject({ method: "GET", url: `/v1/hrms/contractors/${CTR_ID}/bills` });
+    await drainF3();
     expect(r.statusCode).toBe(401);
     await app.close();
   });
@@ -388,6 +436,7 @@ describe("GET /v1/hrms/contractor-bills (AP queue)", () => {
     H.listBillsByStatusMock.mockResolvedValue([bill()]);
     const app = await buildApp();
     const r = await app.inject({ method: "GET", url: "/v1/hrms/contractor-bills?status=submitted", headers: auth(MAKER) });
+    await drainF3();
     expect(r.statusCode).toBe(200);
     expect(r.json().data).toHaveLength(1);
     await app.close();
@@ -396,6 +445,7 @@ describe("GET /v1/hrms/contractor-bills (AP queue)", () => {
   it("400 — invalid status", async () => {
     const app = await buildApp();
     const r = await app.inject({ method: "GET", url: "/v1/hrms/contractor-bills?status=bogus", headers: auth(MAKER) });
+    await drainF3();
     expect(r.statusCode).toBe(400);
     await app.close();
   });
@@ -403,6 +453,7 @@ describe("GET /v1/hrms/contractor-bills (AP queue)", () => {
   it("401 — no auth", async () => {
     const app = await buildApp();
     const r = await app.inject({ method: "GET", url: "/v1/hrms/contractor-bills" });
+    await drainF3();
     expect(r.statusCode).toBe(401);
     await app.close();
   });
@@ -410,6 +461,7 @@ describe("GET /v1/hrms/contractor-bills (AP queue)", () => {
   it("403 — non-finance role", async () => {
     const app = await buildApp();
     const r = await app.inject({ method: "GET", url: "/v1/hrms/contractor-bills", headers: auth(USER, ["employee"]) });
+    await drainF3();
     expect(r.statusCode).toBe(403);
     await app.close();
   });
@@ -420,6 +472,7 @@ describe("GET /v1/hrms/contractor-bills/:billId (read single)", () => {
     H.findBillMock.mockResolvedValue(bill());
     const app = await buildApp();
     const r = await app.inject({ method: "GET", url: `/v1/hrms/contractor-bills/${BILL_ID}`, headers: auth(MAKER) });
+    await drainF3();
     expect(r.statusCode).toBe(200);
     expect(r.json().billNo).toBe("BILL-001");
     await app.close();
@@ -428,6 +481,7 @@ describe("GET /v1/hrms/contractor-bills/:billId (read single)", () => {
   it("400 — invalid UUID", async () => {
     const app = await buildApp();
     const r = await app.inject({ method: "GET", url: "/v1/hrms/contractor-bills/not-uuid", headers: auth(MAKER) });
+    await drainF3();
     expect(r.statusCode).toBe(400);
     await app.close();
   });
@@ -435,6 +489,7 @@ describe("GET /v1/hrms/contractor-bills/:billId (read single)", () => {
   it("401 — no auth", async () => {
     const app = await buildApp();
     const r = await app.inject({ method: "GET", url: `/v1/hrms/contractor-bills/${BILL_ID}` });
+    await drainF3();
     expect(r.statusCode).toBe(401);
     await app.close();
   });
@@ -443,6 +498,7 @@ describe("GET /v1/hrms/contractor-bills/:billId (read single)", () => {
     H.findBillMock.mockResolvedValue(null);
     const app = await buildApp();
     const r = await app.inject({ method: "GET", url: `/v1/hrms/contractor-bills/${BILL_ID}`, headers: auth(MAKER) });
+    await drainF3();
     expect(r.statusCode).toBe(404);
     expect(r.json().code).toBe("NOT_FOUND");
     await app.close();
@@ -457,6 +513,7 @@ describe("POST /v1/hrms/contractor-bills/:billId/verify", () => {
       method: "POST", url: `/v1/hrms/contractor-bills/${BILL_ID}/verify`,
       headers: auth(MAKER),
     });
+    await drainF3();
     expect(r.statusCode).toBe(200);
     expect(r.json().status).toBe("verified");
     expect(H.updateBillMock).toHaveBeenCalledOnce();
@@ -466,6 +523,7 @@ describe("POST /v1/hrms/contractor-bills/:billId/verify", () => {
   it("401 — no auth", async () => {
     const app = await buildApp();
     const r = await app.inject({ method: "POST", url: `/v1/hrms/contractor-bills/${BILL_ID}/verify` });
+    await drainF3();
     expect(r.statusCode).toBe(401);
     await app.close();
   });
@@ -476,6 +534,7 @@ describe("POST /v1/hrms/contractor-bills/:billId/verify", () => {
       method: "POST", url: `/v1/hrms/contractor-bills/${BILL_ID}/verify`,
       headers: auth(USER, ["employee"]),
     });
+    await drainF3();
     expect(r.statusCode).toBe(403);
     await app.close();
   });
@@ -487,6 +546,7 @@ describe("POST /v1/hrms/contractor-bills/:billId/verify", () => {
       method: "POST", url: `/v1/hrms/contractor-bills/${BILL_ID}/verify`,
       headers: auth(MAKER),
     });
+    await drainF3();
     expect(r.statusCode).toBe(404);
     await app.close();
   });
@@ -498,6 +558,7 @@ describe("POST /v1/hrms/contractor-bills/:billId/verify", () => {
       method: "POST", url: `/v1/hrms/contractor-bills/${BILL_ID}/verify`,
       headers: auth(MAKER),
     });
+    await drainF3();
     expect(r.statusCode).toBe(409);
     expect(r.json().code).toBe("WRONG_STATE");
     await app.close();
@@ -512,7 +573,17 @@ describe("POST /v1/hrms/contractor-bills/:billId/approve", () => {
       method: "POST", url: `/v1/hrms/contractor-bills/${BILL_ID}/approve`,
       headers: auth(CHECKER), payload: {},
     });
+    await drainF3();
     expect(r.statusCode).toBe(200);
+    // The tax is computed and PERSISTED by the F3 consumer, so assert on the
+    // update it made — that is the value that actually reaches the ledger.
+    const [, , , patch] = H.updateBillMock.mock.calls[0];
+    expect(patch.status).toBe("approved");
+    expect(patch.gstMinor).toBe(900_000n);       // 5,000,000 * 1800 / 10000
+    expect(patch.tdsRateBps).toBe(200);          // 2% — contractorKind "other"
+    expect(patch.tdsMinor).toBe(100_000n);       // 5,000,000 * 200 / 10000
+    expect(patch.netPayableMinor).toBe(5_800_000n);
+    expect(H.enqueueMock).toHaveBeenCalledOnce();
     const body = r.json();
     expect(body.status).toBe("approved");
     // GST: 5,000,000 * 1800 / 10000 = 900,000
@@ -537,7 +608,13 @@ describe("POST /v1/hrms/contractor-bills/:billId/approve", () => {
       method: "POST", url: `/v1/hrms/contractor-bills/${BILL_ID}/approve`,
       headers: auth(CHECKER), payload: {},
     });
+    await drainF3();
     expect(r.statusCode).toBe(200);
+    // The 194C rate depends on the CONTRACTOR kind, which only the consumer
+    // reads — assert on what it persisted.
+    const [, , , patch] = H.updateBillMock.mock.calls[0];
+    expect(patch.tdsRateBps).toBe(100);          // 1% — individual/HUF
+    expect(patch.tdsMinor).toBe(50_000n);        // 5,000,000 * 100 / 10000
     expect(r.json().tdsRateBps).toBe(100);
     // TDS: 5,000,000 * 100 / 10000 = 50,000
     expect(r.json().tdsMinor).toBe("50000");
@@ -553,6 +630,7 @@ describe("POST /v1/hrms/contractor-bills/:billId/approve", () => {
       method: "POST", url: `/v1/hrms/contractor-bills/${BILL_ID}/approve`,
       headers: auth(CHECKER), payload: {},
     });
+    await drainF3();
     expect(r.statusCode).toBe(200);
     expect(r.json().tdsApplied).toBe(false);
     expect(r.json().tdsMinor).toBe("0");
@@ -562,6 +640,7 @@ describe("POST /v1/hrms/contractor-bills/:billId/approve", () => {
   it("401 — no auth", async () => {
     const app = await buildApp();
     const r = await app.inject({ method: "POST", url: `/v1/hrms/contractor-bills/${BILL_ID}/approve`, payload: {} });
+    await drainF3();
     expect(r.statusCode).toBe(401);
     await app.close();
   });
@@ -572,6 +651,7 @@ describe("POST /v1/hrms/contractor-bills/:billId/approve", () => {
       method: "POST", url: `/v1/hrms/contractor-bills/${BILL_ID}/approve`,
       headers: auth(USER, ["employee"]), payload: {},
     });
+    await drainF3();
     expect(r.statusCode).toBe(403);
     await app.close();
   });
@@ -583,6 +663,7 @@ describe("POST /v1/hrms/contractor-bills/:billId/approve", () => {
       method: "POST", url: `/v1/hrms/contractor-bills/${BILL_ID}/approve`,
       headers: auth(CHECKER), payload: {},
     });
+    await drainF3();
     expect(r.statusCode).toBe(404);
     await app.close();
   });
@@ -594,6 +675,7 @@ describe("POST /v1/hrms/contractor-bills/:billId/approve", () => {
       method: "POST", url: `/v1/hrms/contractor-bills/${BILL_ID}/approve`,
       headers: auth(CHECKER), payload: {},
     });
+    await drainF3();
     expect(r.statusCode).toBe(409);
     expect(r.json().code).toBe("WRONG_STATE");
     await app.close();
@@ -606,6 +688,7 @@ describe("POST /v1/hrms/contractor-bills/:billId/approve", () => {
       method: "POST", url: `/v1/hrms/contractor-bills/${BILL_ID}/approve`,
       headers: auth(CHECKER), payload: {},
     });
+    await drainF3();
     expect(r.statusCode).toBe(409);
     expect(r.json().code).toBe("SOD_VIOLATION");
     expect(H.updateBillMock).not.toHaveBeenCalled();
@@ -620,6 +703,7 @@ describe("POST /v1/hrms/contractor-bills/:billId/approve", () => {
       method: "POST", url: `/v1/hrms/contractor-bills/${BILL_ID}/approve`,
       headers: auth(CHECKER), payload: {},
     });
+    await drainF3();
     expect(r.statusCode).toBe(409);
     expect(r.json().code).toBe("CONTRACTOR_BLACKLISTED");
     await app.close();
@@ -632,6 +716,7 @@ describe("POST /v1/hrms/contractor-bills/:billId/approve", () => {
       method: "POST", url: `/v1/hrms/contractor-bills/${BILL_ID}/approve`,
       headers: auth(CHECKER), payload: {},
     });
+    await drainF3();
     expect(r.statusCode).toBe(409);
     expect(r.json().code).toBe("CLRA_WAGES_UNVERIFIED");
     await app.close();
@@ -645,6 +730,7 @@ describe("POST /v1/hrms/contractor-bills/:billId/approve", () => {
       method: "POST", url: `/v1/hrms/contractor-bills/${BILL_ID}/approve`,
       headers: auth(CHECKER), payload: {},
     });
+    await drainF3();
     expect(r.statusCode).toBe(409);
     expect(r.json().code).toBe("CLRA_LICENSE_INVALID");
     await app.close();
@@ -658,6 +744,7 @@ describe("POST /v1/hrms/contractor-bills/:billId/approve", () => {
       method: "POST", url: `/v1/hrms/contractor-bills/${BILL_ID}/approve`,
       headers: auth(CHECKER), payload: {},
     });
+    await drainF3();
     expect(r.statusCode).toBe(409);
     expect(r.json().code).toBe("CLRA_LICENSE_INVALID");
     await app.close();
@@ -671,6 +758,7 @@ describe("POST /v1/hrms/contractor-bills/:billId/approve", () => {
       method: "POST", url: `/v1/hrms/contractor-bills/${BILL_ID}/approve`,
       headers: auth(CHECKER), payload: {},
     });
+    await drainF3();
     expect(r.statusCode).toBe(200);
     await app.close();
   });
@@ -684,6 +772,7 @@ describe("POST /v1/hrms/contractor-bills/:billId/reject", () => {
       method: "POST", url: `/v1/hrms/contractor-bills/${BILL_ID}/reject`,
       headers: auth(CHECKER), payload: { approverRemarks: "Incomplete" },
     });
+    await drainF3();
     expect(r.statusCode).toBe(200);
     expect(r.json().status).toBe("rejected");
     await app.close();
@@ -696,6 +785,7 @@ describe("POST /v1/hrms/contractor-bills/:billId/reject", () => {
       method: "POST", url: `/v1/hrms/contractor-bills/${BILL_ID}/reject`,
       headers: auth(CHECKER), payload: {},
     });
+    await drainF3();
     expect(r.statusCode).toBe(200);
     expect(r.json().status).toBe("rejected");
     await app.close();
@@ -704,6 +794,7 @@ describe("POST /v1/hrms/contractor-bills/:billId/reject", () => {
   it("401 — no auth", async () => {
     const app = await buildApp();
     const r = await app.inject({ method: "POST", url: `/v1/hrms/contractor-bills/${BILL_ID}/reject`, payload: {} });
+    await drainF3();
     expect(r.statusCode).toBe(401);
     await app.close();
   });
@@ -714,6 +805,7 @@ describe("POST /v1/hrms/contractor-bills/:billId/reject", () => {
       method: "POST", url: `/v1/hrms/contractor-bills/${BILL_ID}/reject`,
       headers: auth(USER, ["employee"]), payload: {},
     });
+    await drainF3();
     expect(r.statusCode).toBe(403);
     await app.close();
   });
@@ -725,6 +817,7 @@ describe("POST /v1/hrms/contractor-bills/:billId/reject", () => {
       method: "POST", url: `/v1/hrms/contractor-bills/${BILL_ID}/reject`,
       headers: auth(CHECKER), payload: {},
     });
+    await drainF3();
     expect(r.statusCode).toBe(404);
     await app.close();
   });
@@ -736,6 +829,7 @@ describe("POST /v1/hrms/contractor-bills/:billId/reject", () => {
       method: "POST", url: `/v1/hrms/contractor-bills/${BILL_ID}/reject`,
       headers: auth(CHECKER), payload: {},
     });
+    await drainF3();
     expect(r.statusCode).toBe(409);
     expect(r.json().code).toBe("WRONG_STATE");
     await app.close();
@@ -750,6 +844,7 @@ describe("POST /v1/hrms/contractor-bills/:billId/mark-paid", () => {
       method: "POST", url: `/v1/hrms/contractor-bills/${BILL_ID}/mark-paid`,
       headers: auth(CHECKER), payload: { paymentRef: "UTR-123" },
     });
+    await drainF3();
     expect(r.statusCode).toBe(200);
     expect(r.json().status).toBe("paid");
     expect(r.json().paymentRef).toBe("UTR-123");
@@ -766,6 +861,7 @@ describe("POST /v1/hrms/contractor-bills/:billId/mark-paid", () => {
       method: "POST", url: `/v1/hrms/contractor-bills/${BILL_ID}/mark-paid`,
       headers: auth(CHECKER), payload: {},
     });
+    await drainF3();
     expect(r.statusCode).toBe(400);
     await app.close();
   });
@@ -773,6 +869,7 @@ describe("POST /v1/hrms/contractor-bills/:billId/mark-paid", () => {
   it("401 — no auth", async () => {
     const app = await buildApp();
     const r = await app.inject({ method: "POST", url: `/v1/hrms/contractor-bills/${BILL_ID}/mark-paid`, payload: { paymentRef: "X" } });
+    await drainF3();
     expect(r.statusCode).toBe(401);
     await app.close();
   });
@@ -783,6 +880,7 @@ describe("POST /v1/hrms/contractor-bills/:billId/mark-paid", () => {
       method: "POST", url: `/v1/hrms/contractor-bills/${BILL_ID}/mark-paid`,
       headers: auth(USER, ["employee"]), payload: { paymentRef: "X" },
     });
+    await drainF3();
     expect(r.statusCode).toBe(403);
     await app.close();
   });
@@ -794,6 +892,7 @@ describe("POST /v1/hrms/contractor-bills/:billId/mark-paid", () => {
       method: "POST", url: `/v1/hrms/contractor-bills/${BILL_ID}/mark-paid`,
       headers: auth(CHECKER), payload: { paymentRef: "X" },
     });
+    await drainF3();
     expect(r.statusCode).toBe(404);
     await app.close();
   });
@@ -805,6 +904,7 @@ describe("POST /v1/hrms/contractor-bills/:billId/mark-paid", () => {
       method: "POST", url: `/v1/hrms/contractor-bills/${BILL_ID}/mark-paid`,
       headers: auth(CHECKER), payload: { paymentRef: "X" },
     });
+    await drainF3();
     expect(r.statusCode).toBe(409);
     expect(r.json().code).toBe("WRONG_STATE");
     await app.close();
