@@ -4,6 +4,7 @@ import { queue } from "../src/shared/infra.js";
 import { registerF3_geo_attendance_Consumers } from "../src/modules/geo-attendance/f3-consumer.js";
 import type { FastifyInstance } from "fastify";
 import { createHmac } from "node:crypto";
+import { seedHrmsCoreFixtures } from "./fixtures/core-seed.js";
 
 // Office-location creation and every geo punch are async F3 writes: the route
 // publishes the write and answers 201 immediately, so without the consumer
@@ -39,7 +40,7 @@ const DELHI_LAT = 28.6139; const DELHI_LNG = 77.2090;
 const AUTH = { authorization: `Bearer ${mint()}` };
 const CT = { "content-type": "application/json" };
 
-beforeAll(async () => { app = await buildApp(); });
+beforeAll(async () => { await seedHrmsCoreFixtures(); app = await buildApp(); });
 
 // ═══════════════════════════════════════════════════════════
 // A. OFFICE LOCATIONS & GEO-FENCING

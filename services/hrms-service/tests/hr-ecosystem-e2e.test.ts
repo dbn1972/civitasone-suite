@@ -7,6 +7,7 @@ import { describe, it, expect, beforeAll } from "vitest";
 import { buildApp } from "../src/app.js";
 import type { FastifyInstance } from "fastify";
 import { createHmac } from "node:crypto";
+import { seedHrmsCoreFixtures } from "./fixtures/core-seed.js";
 
 let app: FastifyInstance;
 function mint(roles = ["super_admin","hr_admin","officer","employee","manager"]) {
@@ -25,7 +26,7 @@ const EMP1 = "eeeeeeee-0001-0000-0000-000000000005";
 const DEPT = "eeeeeeee-0001-0000-0000-000000000001";
 const DESIG = "eeeeeeee-0001-0000-0000-000000000003";
 
-beforeAll(async () => { app = await buildApp(); });
+beforeAll(async () => { await seedHrmsCoreFixtures(); app = await buildApp(); });
 
 // ═══════════════════════════════════════════════════════════
 // 1. RECRUITMENT: Vacancy → Interview → Offer
