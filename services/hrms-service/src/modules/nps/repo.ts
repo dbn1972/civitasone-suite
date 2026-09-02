@@ -18,6 +18,31 @@ export async function findAccountByEmployee(tenantId: string, employeeId: string
   return rows[0] ?? null;
 }
 
+/**
+ * Synchronous pre-check for the (tenant, pran) uniqueness the DB enforces via
+ * `hrms_nps_accounts_pran_uq`. Read-before-publish only — same residual TOCTOU
+ * race as everywhere else in this module; the DB constraint is the backstop.
+ */
+export async function findAccountByPran(tenantId: string, pran: string): Promise<NpsAccountRow | null> {
+  const rows = await scopedRead((tx) => tx.select().from(hrmsNpsAccounts)
+    .where(and(eq(hrmsNpsAccounts.tenantId, tenantId), eq(hrmsNpsAccounts.pran, pran))).limit(1));
+  return rows[0] ?? null;
+}
+
+/**
+ * Synchronous pre-check for the (tenant, account, period) uniqueness the DB
+ * enforces via the partial unique index hrms_nps_contrib_period_uq
+ * (entry_type = 'contribution'). Same residual TOCTOU caveat as above.
+ */
+export async function findContributionForPeriod(tenantId: string, accountId: string, period: string): Promise<NpsContribRow | null> {
+  const rows = await scopedRead((tx) => tx.select().from(hrmsNpsContributions)
+    .where(and(
+      eq(hrmsNpsContributions.tenantId, tenantId), eq(hrmsNpsContributions.accountId, accountId),
+      eq(hrmsNpsContributions.period, period), eq(hrmsNpsContributions.entryType, "contribution"),
+    )).limit(1));
+  return rows[0] ?? null;
+}
+
 export async function insertAccount(tx: Writer, row: NpsAccountInsert): Promise<void> {
   await tx.insert(hrmsNpsAccounts).values(row);
 }

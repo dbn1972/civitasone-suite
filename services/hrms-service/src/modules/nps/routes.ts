@@ -36,10 +36,6 @@ function jsonSafe(v: unknown): unknown {
   return v;
 }
 
-function isUniqueViolation(err: unknown): boolean {
-  return !!err && typeof err === "object" && (err as { code?: string }).code === "23505";
-}
-
 async function mustEmployee(tenantId: string, id: string) {
   const rows = await scopedRead((tx) => tx.select().from(hrmsEmployees)
     .where(and(eq(hrmsEmployees.id, id), eq(hrmsEmployees.tenantId, tenantId))).limit(1));
@@ -71,19 +67,28 @@ export async function npsRoutes(app: FastifyInstance): Promise<void> {
     if (emp.pensionScheme !== "NPS") {
       throw new HttpError(409, "NOT_NPS_SCHEME", `employee is on ${emp.pensionScheme}, not NPS`);
     }
+    // Synchronous pre-checks for both uniqueness constraints the DB enforces
+    // (hrms_nps_accounts_uq on employee_id, hrms_nps_accounts_pran_uq on pran).
+    // publishF3Write is fire-and-forget and NEVER rejects (see f3-publish.ts)
+    // — a try/catch around it for a 23505 was dead code. Residual TOCTOU race:
+    // two concurrent requests can both pass these reads before either
+    // publishes; the DB unique constraints are the real backstop for that rare
+    // case (the consumer's insert 23505s, logs "f3RouteWrite failed", and the
+    // write is dropped — silently, from this client's point of view, since
+    // fire-and-forget has no return channel). Closing that fully needs a
+    // different mechanism (e.g. a client-supplied idempotency key) — out of
+    // scope here.
     if (await repo.findAccountByEmployee(ctx.tenantId, id)) {
       throw new HttpError(409, "NPS_EXISTS", "NPS account already exists");
+    }
+    if (await repo.findAccountByPran(ctx.tenantId, body.pran)) {
+      throw new HttpError(409, "PRAN_TAKEN", "PRAN already allocated");
     }
 
     const acctId = randomUUID();
     const openEmp = BigInt(body.openingEmpMinor);
     const openEr = BigInt(body.openingErMinor);
-    try {
-      await publishF3Write(ctx, "nps_routes__0", acctId, { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
-    } catch (err) {
-      if (isUniqueViolation(err)) throw new HttpError(409, "PRAN_TAKEN", "PRAN already allocated") as any;
-      throw err;
-    }
+    await publishF3Write(ctx, "nps_routes__0", acctId, { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> });
     return reply.code(201).send(jsonSafe({ id: acctId, employeeId: id, pran: body.pran, tier: body.tier }));
   });
 
@@ -120,20 +125,26 @@ export async function npsRoutes(app: FastifyInstance): Promise<void> {
     const acct = await mustAccount(ctx.tenantId, id);
     const empAmt = BigInt(body.empAmountMinor);
     const erAmt = BigInt(body.erAmountMinor);
-    const ledgerId = randomUUID();
-    try {
-      const { prev, next } = await publishF3Write(ctx, "nps_routes__1", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
-      return reply.code(201).send(jsonSafe({
-        ledgerId, period: body.period, empAmountMinor: empAmt, erAmountMinor: erAmt,
-        previousBalanceMinor: prev.total, balanceMinor: next.total,
-        employeeBalanceMinor: next.emp, employerBalanceMinor: next.er,
-      })) as any;
-    } catch (err) {
-      if (isUniqueViolation(err)) {
-        throw new HttpError(409, "PERIOD_ALREADY_POSTED", `NPS contribution for ${body.period} already posted`);
-      }
-      throw err;
+    // Synchronous pre-check for the (account, period) uniqueness the DB
+    // enforces via the partial unique index hrms_nps_contrib_period_uq. Same
+    // fire-and-forget reasoning as the account-open pre-checks above.
+    if (await repo.findContributionForPeriod(ctx.tenantId, acct.id, body.period)) {
+      throw new HttpError(409, "PERIOD_ALREADY_POSTED", `NPS contribution for ${body.period} already posted`);
     }
+    await publishF3Write(ctx, "nps_routes__1", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> });
+    // No balance fields here: this crashed before (destructuring `{ prev, next }`
+    // off publishF3Write's placeholder `{ id, status, correlationId }` — neither
+    // field exists on it, see shared/f3-publish.ts). The real running balance
+    // depends on every prior contribution and is computed by the consumer under
+    // an advisory lock (repo.lockedBalance) specifically to serialize concurrent
+    // postings against this account — a route-side read here would race that
+    // lock. 202 + only what was actually validated, matching the GPF precedent
+    // (`gpf/routes.ts`) and the CPF fix in this same PR for the identical
+    // reason. Call GET /v1/hrms/employees/:id/nps for the authoritative balance.
+    return reply.code(202).send(jsonSafe({
+      employeeId: id, entryType: "contribution", period: body.period,
+      empAmountMinor: empAmt, erAmountMinor: erAmt,
+    })) as any;
   });
 
   app.post("/v1/hrms/employees/:id/nps/withdrawal", async (req, reply) => {
@@ -147,12 +158,26 @@ export async function npsRoutes(app: FastifyInstance): Promise<void> {
     }).parse(req.body);
     const acct = await mustAccount(ctx.tenantId, id);
     const amount = BigInt(body.amountMinor);
-    const ledgerId = randomUUID();
-    const { prev, next } = await publishF3Write(ctx, "nps_routes__2", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
-    return reply.code(201).send(jsonSafe({
-      ledgerId, entryType: "withdrawal", amountMinor: amount,
-      previousBalanceMinor: prev.total, balanceMinor: next.total,
-    })) as any;
+    // Synchronous pre-check mirroring the consumer's overdraft guard
+    // (nps_routes__2: `if (prevBal.total - amount < 0n) throw new HttpError(409,
+    // "INSUFFICIENT_BALANCE", ...)`). Unlike CPF's debit case, the NPS consumer
+    // DOES throw (not a silent no-op) — so a rare TOCTOU race here (two
+    // concurrent withdrawals both passing this same unlocked read) at least
+    // surfaces as a logged "f3RouteWrite failed" / DLQ entry, even though that
+    // failure still never reaches this client (fire-and-forget has no return
+    // channel). This pre-check closes the common case; the DLQ entry is the
+    // real backstop for the rare race, same residual-risk shape as the
+    // unique-constraint checks above.
+    const bal = await repo.currentBalance(ctx.tenantId, acct);
+    if (bal.total - amount < 0n) {
+      throw new HttpError(409, "INSUFFICIENT_BALANCE", `withdrawal of ${amount} exceeds the NPS corpus (${bal.total})`);
+    }
+    await publishF3Write(ctx, "nps_routes__2", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> });
+    // Same "cannot know the balance synchronously" reasoning as contribution
+    // above — this was the crash at nps/routes.ts:128 (destructuring `{ prev,
+    // next }` off the publishF3Write placeholder, then `next.total` throwing
+    // TypeError on undefined).
+    return reply.code(202).send(jsonSafe({ employeeId: id, entryType: "withdrawal", amountMinor: amount })) as any;
   });
 
   app.setErrorHandler((err, req, reply) => {

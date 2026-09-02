@@ -123,12 +123,21 @@ describe("CPF contributory provident fund", () => {
   });
 
   it("posts monthly subscription crediting both legs, idempotent per period", async () => {
+    // publishF3Write is fire-and-forget CQRS: it can never know the resulting
+    // balance (that's computed by the consumer under an advisory lock, to
+    // serialize concurrent postings — see cpf/repo.ts's lockedBalance). The
+    // route now answers 202 with only what it validated synchronously; the
+    // persisted balance is asserted via GET below, same as the full-ledger
+    // proof test further down.
     let res = await app.inject({ method: "POST", url: `/v1/hrms/employees/${empCpf}/cpf/subscription`, headers: HR,
       payload: { period: "2026-04", empAmountMinor: 56100, erAmountMinor: 56100 } });
     await drainF3();
-    expect(res.statusCode).toBe(201);
-    expect(res.json().balanceMinor).toBe("512200");
-    expect(res.json().employeeBalanceMinor).toBe("256100");
+    expect(res.statusCode).toBe(202);
+    expect(res.json().period).toBe("2026-04");
+    const get = await app.inject({ method: "GET", url: `/v1/hrms/employees/${empCpf}/cpf`, headers: HR });
+    await drainF3();
+    expect(get.json().runningBalanceMinor).toBe("512200");
+    expect(get.json().employeeBalanceMinor).toBe("256100");
 
     res = await app.inject({ method: "POST", url: `/v1/hrms/employees/${empCpf}/cpf/subscription`, headers: HR,
       payload: { period: "2026-04", empAmountMinor: 56100, erAmountMinor: 56100 } });
@@ -141,14 +150,19 @@ describe("CPF contributory provident fund", () => {
     let res = await app.inject({ method: "POST", url: `/v1/hrms/employees/${empCpf}/cpf/advance`, headers: HR,
       payload: { amountMinor: 100000, narrative: "house advance" } });
     await drainF3();
-    expect(res.statusCode).toBe(201);
-    expect(res.json().balanceMinor).toBe("412200");
+    expect(res.statusCode).toBe(202);
+    expect(res.json().amountMinor).toBe("100000");
+    let get = await app.inject({ method: "GET", url: `/v1/hrms/employees/${empCpf}/cpf`, headers: HR });
+    await drainF3();
+    expect(get.json().runningBalanceMinor).toBe("412200");
 
     res = await app.inject({ method: "POST", url: `/v1/hrms/employees/${empCpf}/cpf/refund`, headers: HR,
       payload: { amountMinor: 40000 } });
     await drainF3();
-    expect(res.statusCode).toBe(201);
-    expect(res.json().balanceMinor).toBe("452200");
+    expect(res.statusCode).toBe(202);
+    get = await app.inject({ method: "GET", url: `/v1/hrms/employees/${empCpf}/cpf`, headers: HR });
+    await drainF3();
+    expect(get.json().runningBalanceMinor).toBe("452200");
   });
 
   it("guards a withdrawal against overdraft", async () => {
@@ -166,10 +180,12 @@ describe("CPF contributory provident fund", () => {
     const res = await app.inject({ method: "POST", url: `/v1/hrms/employees/${empCpf}/cpf/interest`, headers: HR,
       payload: { months: 12, ratePctOverride: 10 } });
     await drainF3();
-    expect(res.statusCode).toBe(201);
+    expect(res.statusCode).toBe(202);
+    expect(res.json().ratePct).toBe(10);
+    const after = await app.inject({ method: "GET", url: `/v1/hrms/employees/${empCpf}/cpf`, headers: HR });
+    await drainF3();
     // 10% for 12 months on 452200 = 45220
-    expect(res.json().interestMinor).toBe("45220");
-    expect(BigInt(res.json().balanceMinor)).toBe(prevBal + 45220n);
+    expect(BigInt(after.json().runningBalanceMinor)).toBe(prevBal + 45220n);
   });
 
   it("statement lists every ledger entry in order", async () => {
@@ -186,11 +202,13 @@ describe("CPF contributory provident fund", () => {
    * inside the async consumer (`acct`, `empAmt`, `ratePct`, `ledgerId` … were
    * never declared) while the HTTP layer reported success, so the ledger stayed
    * empty. Assertions are made on the PERSISTED statement rather than on the
-   * POST responses: routes.ts still destructures a `{ next }` that
-   * publishF3Write does not return (subscription => 500) and answers 202
-   * "accepted" for the debit/refund/interest ops, so the response bodies cannot
-   * carry balances any more. That response-shape defect lives in routes.ts and
-   * is out of this batch's scope; the ledger below is what must be right.
+   * POST responses: routes.ts answers 202 "accepted" for subscription/
+   * debit/refund/interest and deliberately does not carry a balance in the
+   * response (the running balance depends on every prior entry and is only
+   * knowable inside the consumer's advisory-locked read — see the comments on
+   * each route). The ledger below is what must be right; the routes' own
+   * "202 + only what was validated" contract is asserted directly in
+   * cpf-account.test.ts's earlier cases.
    */
   it("consumer writes the full CPF ledger with correct running balances", async () => {
     const url = `/v1/hrms/employees/${empCpf3}/cpf`;

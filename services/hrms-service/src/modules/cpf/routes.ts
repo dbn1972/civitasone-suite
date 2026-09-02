@@ -37,10 +37,6 @@ function jsonSafe(v: unknown): unknown {
   return v;
 }
 
-function isUniqueViolation(err: unknown): boolean {
-  return !!err && typeof err === "object" && (err as { code?: string }).code === "23505";
-}
-
 async function mustEmployee(tenantId: string, id: string) {
   const rows = await scopedRead((tx) => tx.select().from(hrmsEmployees)
     .where(and(eq(hrmsEmployees.id, id), eq(hrmsEmployees.tenantId, tenantId))).limit(1));
@@ -71,26 +67,31 @@ export async function cpfRoutes(app: FastifyInstance): Promise<void> {
     if (emp.pensionScheme !== "CPF") {
       throw new HttpError(409, "NOT_CPF_SCHEME", `employee is on ${emp.pensionScheme}, not CPF`);
     }
+    // Synchronous pre-checks for both uniqueness constraints the DB enforces
+    // (hrms_cpf_accounts_uq on employee_id, hrms_cpf_accounts_cpf_number_uq on
+    // cpf_number). publishF3Write is fire-and-forget and NEVER rejects (see
+    // f3-publish.ts) — a try/catch around it for a 23505 is dead code, it can
+    // never run. These reads happen before publish so the common case gets a
+    // real 409 instead of a false-positive 201.
+    //
+    // Residual risk: two concurrent requests can both pass these reads before
+    // either publishes (classic TOCTOU). The DB unique constraints are the
+    // real backstop for that rare race — the consumer's insert will hit
+    // 23505, log "f3RouteWrite failed", and the write is dropped. That failure
+    // does not reach this client (fire-and-forget has no return channel), so
+    // under a true race the loser's request silently reports success with no
+    // account actually created for it. Closing that gap needs a different
+    // mechanism (e.g. a client-supplied idempotency key) — out of scope here.
     if (await repo.findAccountByEmployee(ctx.tenantId, id)) {
       throw new HttpError(409, "CPF_EXISTS", "CPF account already exists");
+    }
+    if (await repo.findAccountByCpfNumber(ctx.tenantId, body.cpfNumber)) {
+      throw new HttpError(409, "CPF_NUMBER_TAKEN", "CPF number already allocated");
     }
     const acctId = randomUUID();
     const openEmp = BigInt(body.openingEmpMinor);
     const openEr = BigInt(body.openingErMinor);
-    try {
-      await publishF3Write(ctx, "cpf_routes__0", acctId, { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
-    } catch (err) {
-      // A concurrent open (same employee, or a duplicate government CPF number) as any races
-      // past the pre-checks and surfaces as a 23505; map it to a clean 409 like NPS.
-      if (isUniqueViolation(err)) {
-        const constraint = (err as { constraint_name?: string }).constraint_name ?? "";
-        if (constraint === "hrms_cpf_accounts_cpf_number_uq") {
-          throw new HttpError(409, "CPF_NUMBER_TAKEN", "CPF number already allocated");
-        }
-        throw new HttpError(409, "CPF_EXISTS", "CPF account already exists");
-      }
-      throw err;
-    }
+    await publishF3Write(ctx, "cpf_routes__0", acctId, { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> });
     return reply.code(201).send(jsonSafe({ id: acctId, employeeId: id, cpfNumber: body.cpfNumber }));
   });
 
@@ -124,19 +125,28 @@ export async function cpfRoutes(app: FastifyInstance): Promise<void> {
     const acct = await mustAccount(ctx.tenantId, id);
     const empAmt = BigInt(body.empAmountMinor);
     const erAmt = BigInt(body.erAmountMinor);
-    const ledgerId = randomUUID();
-    try {
-      const { next } = await publishF3Write(ctx, "cpf_routes__1", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
-      return reply.code(201).send(jsonSafe({
-        ledgerId, period: body.period, empAmountMinor: empAmt, erAmountMinor: erAmt,
-        balanceMinor: next.total, employeeBalanceMinor: next.emp, employerBalanceMinor: next.er,
-      })) as any;
-    } catch (err) {
-      if (isUniqueViolation(err)) {
-        throw new HttpError(409, "PERIOD_ALREADY_POSTED", `CPF subscription for ${body.period} already posted`);
-      }
-      throw err;
+    // Synchronous pre-check for the (account, period) uniqueness the DB enforces
+    // via the partial unique index hrms_cpf_ledger_period_uq. Same fire-and-forget
+    // reasoning as the account-open pre-checks above — publishF3Write cannot
+    // reject, so this read is the only way the common case gets a real 409
+    // instead of a silently-dropped write. Residual TOCTOU race documented there
+    // applies here too, backstopped by the same DB constraint.
+    if (await repo.findSubscriptionForPeriod(ctx.tenantId, acct.id, body.period)) {
+      throw new HttpError(409, "PERIOD_ALREADY_POSTED", `CPF subscription for ${body.period} already posted`);
     }
+    await publishF3Write(ctx, "cpf_routes__1", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> });
+    // The resulting balance is NOT reported here: it depends on every prior
+    // ledger entry and is computed by the consumer under an advisory lock
+    // (repo.lockedBalance) specifically to serialize concurrent postings
+    // against this account (see cpf/repo.ts). A route-side read here would
+    // race that lock and could report a number that never matches what gets
+    // persisted. 202 + only what was actually validated, matching the GPF
+    // precedent (`gpf/routes.ts`) for the same architectural reason. Call
+    // GET /v1/hrms/employees/:id/cpf for the authoritative balance.
+    return reply.code(202).send(jsonSafe({
+      employeeId: id, entryType: "subscription", period: body.period,
+      empAmountMinor: empAmt, erAmountMinor: erAmt,
+    })) as any;
   });
 
   // debit ops: advance / withdrawal — CQRS publish (consumer draws employer leg first).
@@ -148,24 +158,41 @@ export async function cpfRoutes(app: FastifyInstance): Promise<void> {
       narrative: z.string().max(500).optional(),
       effectiveDate: z.string().optional(),
     }).parse(reqBody);
-    await mustAccount(ctx.tenantId, id);
-    return publishF3Write(ctx as any, "cpf_routes__debit", id, {
+    const acct = await mustAccount(ctx.tenantId, id);
+    // Synchronous pre-check mirroring the consumer's balance guard
+    // (cpf_routes__debit: `if (prev.total - amount < 0n) return;`). Unlike the
+    // uniqueness checks above, the consumer's backstop here is NOT a DB
+    // constraint — it is a silent no-op (no thrown error, no DLQ entry) under
+    // its own advisory-locked read. So a rare TOCTOU race (two concurrent
+    // debits both passing this same read) is a WEAKER residual gap than the
+    // unique-constraint cases: the loser's write silently vanishes with no
+    // trace at all, not even a logged failure. This pre-check closes the
+    // common case; it does not and cannot close that race — flagging it here
+    // rather than changing the consumer's error handling, which is a separate,
+    // more invasive change out of scope for this fix.
+    const amount = BigInt(body.amountMinor);
+    const bal = await repo.currentBalance(ctx.tenantId, acct);
+    if (bal.total - amount < 0n) {
+      throw new HttpError(409, "INSUFFICIENT_BALANCE", `${entryType} of ${amount} exceeds the CPF corpus (${bal.total})`);
+    }
+    await publishF3Write(ctx as any, "cpf_routes__debit", id, {
       body: { ...body, entryType },
       params: params as Record<string, unknown>,
       query: {},
     });
+    return { employeeId: id, entryType, amountMinor: amount };
   }
 
   app.post("/v1/hrms/employees/:id/cpf/advance", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, HR_ROLES);
-    return reply.code(202).send(await debit(ctx, req.body, req.params, "advance"));
+    return reply.code(202).send(jsonSafe(await debit(ctx, req.body, req.params, "advance")));
   });
 
   app.post("/v1/hrms/employees/:id/cpf/withdrawal", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, HR_ROLES);
-    return reply.code(202).send(await debit(ctx, req.body, req.params, "withdrawal"));
+    return reply.code(202).send(jsonSafe(await debit(ctx, req.body, req.params, "withdrawal")));
   });
 
   // refund of an advance: credit to the employee leg.
@@ -178,9 +205,11 @@ export async function cpfRoutes(app: FastifyInstance): Promise<void> {
       narrative: z.string().max(500).optional(),
     }).parse(req.body);
     await mustAccount(ctx.tenantId, id);
-    return reply.code(202).send(await publishF3Write(ctx, "cpf_routes__2", id, {
+    const amount = BigInt(body.amountMinor);
+    await publishF3Write(ctx, "cpf_routes__2", id, {
       body, params: req.params as Record<string, unknown>, query: {},
-    })) as any;
+    });
+    return reply.code(202).send(jsonSafe({ employeeId: id, entryType: "refund", amountMinor: amount })) as any;
   });
 
   // interest accrual on the TOTAL corpus, credited to the employee leg.
@@ -192,10 +221,17 @@ export async function cpfRoutes(app: FastifyInstance): Promise<void> {
       months: z.coerce.number().int().min(1).max(12).default(12),
       ratePctOverride: z.coerce.number().min(0).max(20).optional(),
     }).parse(req.body);
-    await mustAccount(ctx.tenantId, id);
-    return reply.code(202).send(await publishF3Write(ctx, "cpf_routes__3", id, {
+    const acct = await mustAccount(ctx.tenantId, id);
+    // The rate applied is genuinely known synchronously (the override, or the
+    // account's own configured rate — both already in hand). The resulting
+    // interestMinor is NOT: it is `corpus * rate * months`, and the corpus is
+    // the same lock-guarded, consumer-computed running balance as above — same
+    // race, same reasoning, same "call GET for the real number" answer.
+    const ratePct = body.ratePctOverride ?? Number(acct.interestRatePct);
+    await publishF3Write(ctx, "cpf_routes__3", id, {
       body, params: req.params as Record<string, unknown>, query: {},
-    })) as any;
+    });
+    return reply.code(202).send(jsonSafe({ employeeId: id, entryType: "interest", months: body.months, ratePct })) as any;
   });
 
   app.setErrorHandler((err, req, reply) => {

@@ -120,19 +120,30 @@ describe("NPS PRAN account", () => {
   });
 
   it("posts monthly contributions and carries a real running balance", async () => {
+    // publishF3Write is fire-and-forget CQRS and cannot know the resulting
+    // balance (computed by the consumer under an advisory lock — see
+    // nps/repo.ts's lockedBalance, comment (C1)). This used to crash (destructuring
+    // `{ prev, next }` off publishF3Write's placeholder) and now answers 202
+    // with only what was validated synchronously; the persisted balance is
+    // asserted via GET, same as the full-ledger proof test further down.
     let res = await app.inject({ method: "POST", url: `/v1/hrms/employees/${empNps}/nps/contribution`, headers: HR,
       payload: { period: "2026-04", empAmountMinor: 56100, erAmountMinor: 78540 } });
     await drainF3();
-    expect(res.statusCode).toBe(201);
-    expect(res.json().balanceMinor).toBe("374640"); // 240000 + 134640
+    expect(res.statusCode).toBe(202);
+    expect(res.json().period).toBe("2026-04");
+    let get = await app.inject({ method: "GET", url: `/v1/hrms/employees/${empNps}/nps`, headers: HR });
+    await drainF3();
+    expect(get.json().runningBalanceMinor).toBe("374640"); // 240000 + 134640
 
     res = await app.inject({ method: "POST", url: `/v1/hrms/employees/${empNps}/nps/contribution`, headers: HR,
       payload: { period: "2026-05", empAmountMinor: 56100, erAmountMinor: 78540 } });
     await drainF3();
-    expect(res.statusCode).toBe(201);
-    expect(res.json().balanceMinor).toBe("509280");
-    expect(res.json().employeeBalanceMinor).toBe("212200");
-    expect(res.json().employerBalanceMinor).toBe("297080");
+    expect(res.statusCode).toBe(202);
+    get = await app.inject({ method: "GET", url: `/v1/hrms/employees/${empNps}/nps`, headers: HR });
+    await drainF3();
+    expect(get.json().runningBalanceMinor).toBe("509280");
+    expect(get.json().employeeBalanceMinor).toBe("212200");
+    expect(get.json().employerBalanceMinor).toBe("297080");
   });
 
   it("is idempotent per period — re-posting the same month is rejected", async () => {
@@ -144,11 +155,17 @@ describe("NPS PRAN account", () => {
   });
 
   it("processes a withdrawal and guards against overdraft", async () => {
+    // This used to crash unconditionally at nps/routes.ts:128 (destructuring
+    // `{ prev, next }` off publishF3Write's placeholder `{ id, status,
+    // correlationId }`, then `next.total` throwing TypeError on undefined).
     let res = await app.inject({ method: "POST", url: `/v1/hrms/employees/${empNps}/nps/withdrawal`, headers: HR,
       payload: { amountMinor: 9280 } });
     await drainF3();
-    expect(res.statusCode).toBe(201);
-    expect(res.json().balanceMinor).toBe("500000");
+    expect(res.statusCode).toBe(202);
+    expect(res.json().amountMinor).toBe("9280");
+    const get = await app.inject({ method: "GET", url: `/v1/hrms/employees/${empNps}/nps`, headers: HR });
+    await drainF3();
+    expect(get.json().runningBalanceMinor).toBe("500000");
 
     res = await app.inject({ method: "POST", url: `/v1/hrms/employees/${empNps}/nps/withdrawal`, headers: HR,
       payload: { amountMinor: 999999999 } });
@@ -188,11 +205,12 @@ describe("NPS PRAN account", () => {
    * inside the async consumer (`acct`, `empAmt`, `amount`, `ledgerId` … were
    * never declared) while the HTTP layer reported success, so the contribution
    * ledger stayed empty. Assertions are made on the PERSISTED statement rather
-   * than on the POST responses: routes.ts still destructures a `{ prev, next }`
-   * that publishF3Write does not return, so contribution/withdrawal answer 500
-   * even though the write itself is queued and applied. That response-shape
-   * defect lives in routes.ts and is out of this batch's scope; the ledger
-   * below is what must be right.
+   * than on the POST responses: routes.ts answers 202 "accepted" for
+   * contribution/withdrawal and deliberately does not carry a balance in the
+   * response (only knowable inside the consumer's advisory-locked read — see
+   * the comments on each route). The ledger below is what must be right; the
+   * routes' own "202 + only what was validated" contract is asserted directly
+   * in nps-account.test.ts's earlier cases.
    */
   it("consumer writes the full NPS ledger with correct running balances", async () => {
     const url = `/v1/hrms/employees/${empNps2}/nps`;
