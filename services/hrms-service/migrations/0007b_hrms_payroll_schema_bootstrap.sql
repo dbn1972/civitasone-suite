@@ -1,0 +1,37 @@
+-- 0007b: Create the `hrms` and `payroll` schemas that later migrations in
+-- this service depend on, before their earliest consumer.
+--
+-- `hrms` is first written to by 0019 (device_trust), 0020 (ai_ml_tables),
+-- 0021 (ai_plugin_registry), 0032 (rls_completion_g1, ALTERs
+-- hrms.face_verification_log) and 0116 (pulse_goals_leaderboard), but no
+-- migration in this service creates it until 0117 (id_cards) — and 0117's
+-- own `CREATE SCHEMA IF NOT EXISTS hrms` there is itself only a re-assert.
+--
+-- `payroll` is first written to by 0008 (recruitment_payroll_gaps, which
+-- creates payroll.payroll_slip_templates) and is never created by any
+-- migration in this service at all — not even a later re-assert like `hrms`
+-- gets from 0117.
+--
+-- Neither ordering gap causes a failure via scripts/ci/bootstrap-postgres.sh
+-- today: infra/db/bootstrap/bootstrap_missing_schemas.sql already runs
+-- `\connect civitas_hrms` + `CREATE SCHEMA IF NOT EXISTS hrms/payroll
+-- AUTHORIZATION hrms_svc` before the per-service migration loop, so both
+-- schemas already exist by the time 0008/0019 run in that path (verified
+-- against a fresh postgres:16-alpine cluster: 0 hrms-service migration
+-- failures, `0117: NOTICE: schema "hrms" already exists, skipping`).
+--
+-- But that makes this service's own migration set NOT self-sufficient: it
+-- silently depends on a cross-service, repo-level bootstrap file to have
+-- run first. Anyone who applies services/hrms-service/migrations/*.sql
+-- directly against a bare database — a minimal local setup, a future
+-- per-service migration runner, or a refactor of the bootstrap ordering —
+-- hits `ERROR: schema "payroll" does not exist` at 0008 with no later
+-- migration to self-heal it the way 0117 does for `hrms`.
+--
+-- This migration closes that gap at its actual source: the earliest
+-- consumer (0008). Both statements are idempotent no-ops when the schemas
+-- already exist (e.g. under the standard bootstrap path, or when replayed
+-- against a database where 0117 has already run), so this is safe to apply
+-- unconditionally regardless of history.
+CREATE SCHEMA IF NOT EXISTS hrms;
+CREATE SCHEMA IF NOT EXISTS payroll;
