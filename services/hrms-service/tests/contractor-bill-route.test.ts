@@ -16,6 +16,7 @@ const BILL = "99999999-9999-4000-8000-000000000009";
 const H = vi.hoisted(() => ({
   findContractorMock: vi.fn(),
   findBillMock: vi.fn(),
+  findByNumberMock: vi.fn(),
   insertContractorMock: vi.fn(),
   insertBillMock: vi.fn(),
   updateBillMock: vi.fn(),
@@ -43,6 +44,7 @@ vi.mock("../src/modules/contractor-bill/repo.js", async (io) => ({
   listContractors: async () => [],
   insertBill: (...a: unknown[]) => H.insertBillMock(...a),
   findBill: (...a: unknown[]) => H.findBillMock(...a),
+  findBillByNumber: (...a: unknown[]) => H.findByNumberMock(...a),
   updateBill: (...a: unknown[]) => H.updateBillMock(...a),
   ytdApprovedGrossTx: (...a: unknown[]) => H.ytdMock(...a.slice(1)),
   lockContractorForBilling: async () => undefined,
@@ -86,6 +88,7 @@ function bill(over: Record<string, unknown> = {}) {
 beforeEach(() => {
   vi.clearAllMocks();
   H.findContractorMock.mockResolvedValue(contractor());
+  H.findByNumberMock.mockResolvedValue(null);
   H.ytdMock.mockResolvedValue(0n);
   H.updateBillMock.mockResolvedValue(undefined);
   H.enqueueMock.mockResolvedValue(undefined);

@@ -20,6 +20,22 @@ export async function findInvoice(tenantId: string, id: string): Promise<Consult
   return rows[0] ?? null;
 }
 
+/**
+ * Synchronous pre-check for the (tenant, consultant, invoice_no) uniqueness
+ * the DB enforces via `hrms_consultant_invoices_no_uq`. Read-before-publish
+ * only — a route calling this still has a residual TOCTOU race against a
+ * concurrent submit of the same invoice number; the DB constraint is the real
+ * backstop for that rare case.
+ */
+export async function findInvoiceByNumber(tenantId: string, consultantId: string, invoiceNo: string): Promise<ConsultantInvoiceRow | null> {
+  const rows = await scopedRead((tx) => tx.select().from(hrmsConsultantInvoices)
+    .where(and(
+      eq(hrmsConsultantInvoices.tenantId, tenantId), eq(hrmsConsultantInvoices.consultantId, consultantId),
+      eq(hrmsConsultantInvoices.invoiceNo, invoiceNo),
+    )).limit(1));
+  return rows[0] ?? null;
+}
+
 export async function listByConsultant(tenantId: string, consultantId: string, limit = 200): Promise<ConsultantInvoiceRow[]> {
   return scopedRead((tx) => tx.select().from(hrmsConsultantInvoices)
     .where(and(eq(hrmsConsultantInvoices.tenantId, tenantId), eq(hrmsConsultantInvoices.consultantId, consultantId)))

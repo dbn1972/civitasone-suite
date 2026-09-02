@@ -50,6 +50,22 @@ export async function findBill(tenantId: string, id: string): Promise<Contractor
   return rows[0] ?? null;
 }
 
+/**
+ * Synchronous pre-check for the (tenant, contractor, bill_no) uniqueness the
+ * DB enforces via `hrms_contractor_bills_no_uq`. Read-before-publish only — a
+ * route calling this still has a residual TOCTOU race against a concurrent
+ * submit of the same bill number; the DB constraint is the real backstop for
+ * that rare case.
+ */
+export async function findBillByNumber(tenantId: string, contractorId: string, billNo: string): Promise<ContractorBillRow | null> {
+  const rows = await scopedRead((tx) => tx.select().from(hrmsContractorBills)
+    .where(and(
+      eq(hrmsContractorBills.tenantId, tenantId), eq(hrmsContractorBills.contractorId, contractorId),
+      eq(hrmsContractorBills.billNo, billNo),
+    )).limit(1));
+  return rows[0] ?? null;
+}
+
 export async function listBillsByContractor(tenantId: string, contractorId: string, limit = 200): Promise<ContractorBillRow[]> {
   return scopedRead((tx) => tx.select().from(hrmsContractorBills)
     .where(and(eq(hrmsContractorBills.tenantId, tenantId), eq(hrmsContractorBills.contractorId, contractorId)))
