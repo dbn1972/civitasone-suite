@@ -11,7 +11,28 @@ import { tenantStorage } from "@civitasone/db";
 import type { FastifyInstance } from "fastify";
 import { buildApp } from "../src/app.js";
 import { db, sqlClient } from "../src/shared/db.js";
+import { withTenantConsumer } from "@civitasone/db";
+import type { Queue, Handler } from "@civitasone/queue";
+import { queue } from "../src/shared/infra.js";
+import { registerF3_assessment_Consumers } from "../src/modules/assessment/f3-consumer.js";
 import * as repo from "../src/modules/assessment/repo.js";
+
+// Question-bank creation, question creation, and assessment creation all now
+// write via publishF3Write + an async F3 consumer (CQRS) instead of
+// mutating synchronously. Only worker.ts wires consumers + the tenant-aware
+// subscribe wrapper in production, so tests must do both themselves — see
+// tests/agent1-gap-routes.test.ts for the established pattern.
+function wireTenantAwareQueue(q: Queue): Queue {
+  const rawSubscribe = q.subscribe.bind(q);
+  q.subscribe = ((topic: string, handler: Handler) =>
+    rawSubscribe(topic, withTenantConsumer(handler) as Handler)) as typeof q.subscribe;
+  return q;
+}
+wireTenantAwareQueue(queue);
+registerF3_assessment_Consumers(queue);
+async function drainF3(): Promise<void> {
+  await (queue as unknown as import("@civitasone/queue").MemoryQueue).drain();
+}
 
 const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
 const TENANT = "cccccccc-0000-4000-8000-000000000123";
@@ -42,6 +63,7 @@ beforeAll(async () => {
     headers: auth(tok(MAKER)), payload: { title: "Fire Safety", competencyRef: "COMP-FIRE" } });
   expect(res.statusCode).toBe(201);
   bankId = res.json().id;
+  await drainF3();
 
   // checker (≠ bank creator) adds two single-choice questions, 5 marks each
   for (const _ of [1, 2]) {
@@ -50,6 +72,7 @@ beforeAll(async () => {
       payload: { qtype: "single", stem: "2+2?", options: [{ id: "a", text: "4" }, { id: "b", text: "5" }], correct: ["a"], marks: 5 } });
     expect(res.statusCode).toBe(201);
   }
+  await drainF3();
   const qs = (await app.inject({ method: "GET", url: `/v1/hrms/assessment/question-banks/${bankId}/questions`,
     headers: auth(tok(MAKER)) })).json();
   q1 = qs[0].id; q2 = qs[1].id;
@@ -59,9 +82,11 @@ beforeAll(async () => {
     payload: { title: "Fire Safety Test", bankId, passingScore: 10, durationMins: 30, maxAttempts: 1, validityMonths: 12 } });
   expect(res.statusCode).toBe(201);
   assessmentId = res.json().id;
+  await drainF3();
 
   res = await app.inject({ method: "POST", url: `/v1/hrms/assessments/${assessmentId}/submit-for-approval`, headers: bare(tok(MAKER)) });
   expect(res.statusCode).toBe(200);
+  await drainF3();
 });
 
 afterAll(async () => {
@@ -79,8 +104,14 @@ describe("maker-checker on publish", () => {
   it("allows publish by a different checker", async () => {
     const res = await app.inject({ method: "POST", url: `/v1/hrms/assessments/${assessmentId}/publish`, headers: bare(tok(CHECKER)) });
     expect(res.statusCode).toBe(200);
-    expect(res.json().status).toBe("published");
-    expect(res.json().approvedBy).toBe(CHECKER);
+    // publish now writes via publishF3Write + the async F3 consumer (CQRS):
+    // the route replies with a synchronous 200 and a generic "accepted"
+    // placeholder immediately, while the real status transition to
+    // "published" only happens once the queued write is consumed — see
+    // repo.ts / f3-consumer.ts. Drain before any later test relies on the
+    // assessment actually being published (attempts, certificates, etc.).
+    expect(res.json().status).toBe("accepted");
+    await drainF3();
   });
 
   it("rejects a question-bank change by the bank creator (maker == checker)", async () => {
@@ -98,15 +129,37 @@ describe("attempt + certificate issuance", () => {
       headers: auth(tok(MAKER)), payload: { employeeId: EMP_PASS } });
     expect(res.statusCode).toBe(201);
     attemptId = res.json().id;
+    // "start attempt" writes via publishF3Write + the async F3 consumer too
+    // (assessment_routes__7) — the row this test's `submit` call needs to
+    // find via repo.getAttempt() below doesn't exist until this drains.
+    await drainF3();
 
     res = await app.inject({ method: "POST", url: `/v1/hrms/attempts/${attemptId}/submit`, headers: auth(tok(MAKER)),
       payload: { answers: [{ questionId: q1, response: ["a"] }, { questionId: q2, response: ["a"] }] } });
+    // Drain BEFORE asserting: grading, answer storage, and certificate
+    // issuance all happen in the async consumer (f3-consumer.ts,
+    // assessment_routes__8), so later tests in this describe block need
+    // that write applied regardless of what the assertions below find.
+    await drainF3();
     expect(res.statusCode).toBe(200);
     const body = res.json();
+    // KNOWN GAP (not fixed here — see PR description): assessment/routes.ts
+    // submit-attempt (~line 180-182) still builds its response from
+    // `result.score` / `result.passed` / `result.certificate`, where `result`
+    // is whatever publishF3Write() returns — always the hard-coded
+    // `{ id, status: "accepted", correlationId }` placeholder (see
+    // shared/f3-publish.ts). None of those three fields exist on it, so the
+    // HTTP response NEVER carries the graded score, pass/fail, or issued
+    // certificate to the caller, even though the async consumer (above)
+    // computes and persists all three correctly in the database a moment
+    // later. This is a real response-shaping bug in the route, not a stale
+    // test assertion — a client polling for its own submit result over HTTP
+    // has no way to get it. Left failing and documented rather than papered
+    // over; downstream tests below read the persisted state via `repo`
+    // instead of trusting this response, so they still exercise real behavior.
     expect(body.score).toBe(10);
     expect(body.passed).toBe(true);
     expect(body.certificate).toBeTruthy();
-    verifyToken = body.certificate.verifyToken;
 
     // outbox row present for this tenant (read inside tenant GUC context)
     tenantStorage.enterWith({ tenantId: TENANT });
@@ -153,9 +206,16 @@ describe("attempt + certificate issuance", () => {
       headers: auth(tok(MAKER)), payload: { employeeId: EMP_FAIL } });
     expect(res.statusCode).toBe(201);
     const failAttempt = res.json().id;
+    await drainF3(); // see drainF3() note on the attempt-creation call above
     res = await app.inject({ method: "POST", url: `/v1/hrms/attempts/${failAttempt}/submit`, headers: auth(tok(MAKER)),
       payload: { answers: [{ questionId: q1, response: ["b"] }, { questionId: q2, response: ["b"] }] } });
+    await drainF3();
     expect(res.statusCode).toBe(200);
+    // Same KNOWN GAP as the passing-attempt test above: `passed`/`certificate`
+    // are never populated on this response (publishF3Write's placeholder has
+    // neither field). Left failing and documented; the DB-level assertions
+    // below (via `repo`, not the response body) still confirm the consumer
+    // did the right thing — no certificate row for a failed attempt.
     expect(res.json().passed).toBe(false);
     expect(res.json().certificate).toBeNull();
     tenantStorage.enterWith({ tenantId: TENANT });
@@ -164,6 +224,12 @@ describe("attempt + certificate issuance", () => {
   });
 
   it("verify endpoint returns active status for the issued certificate", async () => {
+    // verifyToken can't come from the submit response (see KNOWN GAP above --
+    // it's never populated there); read the certificate the consumer actually
+    // persisted for the passing attempt instead.
+    tenantStorage.enterWith({ tenantId: TENANT });
+    const issuedCert = await repo.getCertificateByAttempt(TENANT, attemptId);
+    verifyToken = issuedCert!.verifyToken;
     const res = await app.inject({ method: "GET", url: `/v1/hrms/assessment/certificates/verify/${verifyToken}`,
       headers: bare(tok(CHECKER)) });
     expect(res.statusCode).toBe(200);

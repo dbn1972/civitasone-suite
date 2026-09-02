@@ -269,13 +269,13 @@ describe("POST /v1/hrms/rti/requests", () => {
     receivedDate: "2026-06-15",
   };
 
-  it("files a new RTI request (201)", async () => {
+  it("files a new RTI request (202 accepted)", async () => {
     const app = await buildApp();
     const r = await app.inject({ method: "POST", url: "/v1/hrms/rti/requests", headers: auth(), payload });
-    expect(r.statusCode).toBe(201);
+    expect(r.statusCode).toBe(202);
     const body = r.json();
     expect(body.id).toBeDefined();
-    expect(body.status).toBe("filed");
+    expect(body.status).toBe("accepted");
     expect(body.dueDate).toBe("2026-07-15"); // 30 days default SLA
     await app.close();
   });
@@ -283,7 +283,7 @@ describe("POST /v1/hrms/rti/requests", () => {
   it("computes custom SLA days", async () => {
     const app = await buildApp();
     const r = await app.inject({ method: "POST", url: "/v1/hrms/rti/requests", headers: auth(), payload: { ...payload, slaDays: 15 } });
-    expect(r.statusCode).toBe(201);
+    expect(r.statusCode).toBe(202);
     expect(r.json().dueDate).toBe("2026-06-30");
     await app.close();
   });
@@ -291,15 +291,15 @@ describe("POST /v1/hrms/rti/requests", () => {
   it("accepts optional applicantContact field", async () => {
     const app = await buildApp();
     const r = await app.inject({ method: "POST", url: "/v1/hrms/rti/requests", headers: auth(), payload: { ...payload, applicantContact: "sita@example.com" } });
-    expect(r.statusCode).toBe(201);
-    expect(r.json().status).toBe("filed");
+    expect(r.statusCode).toBe(202);
+    expect(r.json().status).toBe("accepted");
     await app.close();
   });
 
   it("computes SLA correctly for month boundary", async () => {
     const app = await buildApp();
     const r = await app.inject({ method: "POST", url: "/v1/hrms/rti/requests", headers: auth(), payload: { ...payload, receivedDate: "2026-01-31", slaDays: 30 } });
-    expect(r.statusCode).toBe(201);
+    expect(r.statusCode).toBe(202);
     // Jan 31 + 30 days = Mar 2 (non-leap year 2026)
     expect(r.json().dueDate).toBe("2026-03-02");
     await app.close();
@@ -308,7 +308,7 @@ describe("POST /v1/hrms/rti/requests", () => {
   it("handles slaDays = 1", async () => {
     const app = await buildApp();
     const r = await app.inject({ method: "POST", url: "/v1/hrms/rti/requests", headers: auth(), payload: { ...payload, receivedDate: "2026-06-15", slaDays: 1 } });
-    expect(r.statusCode).toBe(201);
+    expect(r.statusCode).toBe(202);
     expect(r.json().dueDate).toBe("2026-06-16");
     await app.close();
   });
@@ -366,11 +366,11 @@ describe("POST /v1/hrms/rti/requests", () => {
 
 // ═══════════════════ POST /v1/hrms/rti/requests/:id/assign ═══════════════════
 describe("POST /v1/hrms/rti/requests/:id/assign", () => {
-  it("assigns a PIO (200)", async () => {
+  it("assigns a PIO (202 accepted)", async () => {
     const app = await buildApp();
     const r = await app.inject({ method: "POST", url: `/v1/hrms/rti/requests/${RTI_ID}/assign`, headers: auth(), payload: { pioId: PIO_ID } });
-    expect(r.statusCode).toBe(200);
-    expect(r.json().status).toBe("assigned");
+    expect(r.statusCode).toBe(202);
+    expect(r.json().status).toBe("accepted");
     expect(r.json().pioId).toBe(PIO_ID);
     await app.close();
   });
@@ -397,7 +397,12 @@ describe("POST /v1/hrms/rti/requests/:id/assign", () => {
   });
 
   it("returns 409 when state is not filed", async () => {
-    H.transitionRti.mockResolvedValue(null);
+    // The 'filed' guard is now a synchronous pre-check against repo.getRti
+    // (see rti/routes.ts) — the write itself is queued via publishF3Write and
+    // repo.transitionRti only runs inside the async F3 consumer, which this
+    // no-op queue stub never drains. Simulate "not filed" via getRti, not the
+    // now-unreachable transitionRti mock.
+    H.getRti.mockResolvedValue(rtiRow({ status: "assigned" }));
     const app = await buildApp();
     const r = await app.inject({ method: "POST", url: `/v1/hrms/rti/requests/${RTI_ID}/assign`, headers: auth(), payload: { pioId: PIO_ID } });
     expect(r.statusCode).toBe(409);
@@ -410,11 +415,11 @@ describe("POST /v1/hrms/rti/requests/:id/assign", () => {
 describe("POST /v1/hrms/rti/requests/:id/respond", () => {
   const payload = { responseText: "Here is the requested information.", respondedDate: "2026-06-20" };
 
-  it("responds to an RTI request (200)", async () => {
+  it("responds to an RTI request (202 accepted)", async () => {
     const app = await buildApp();
     const r = await app.inject({ method: "POST", url: `/v1/hrms/rti/requests/${RTI_ID}/respond`, headers: auth(), payload });
-    expect(r.statusCode).toBe(200);
-    expect(r.json().status).toBe("responded");
+    expect(r.statusCode).toBe(202);
+    expect(r.json().status).toBe("accepted");
     await app.close();
   });
 
@@ -440,7 +445,8 @@ describe("POST /v1/hrms/rti/requests/:id/respond", () => {
   });
 
   it("returns 409 when state doesn't allow response", async () => {
-    H.transitionRti.mockResolvedValue(null);
+    // Same synchronous-guard-moved-to-getRti reasoning as the assign 409 test above.
+    H.getRti.mockResolvedValue(rtiRow({ status: "closed" }));
     const app = await buildApp();
     const r = await app.inject({ method: "POST", url: `/v1/hrms/rti/requests/${RTI_ID}/respond`, headers: auth(), payload });
     expect(r.statusCode).toBe(409);
@@ -453,11 +459,15 @@ describe("POST /v1/hrms/rti/requests/:id/respond", () => {
 describe("POST /v1/hrms/rti/requests/:id/appeal", () => {
   const payload = { appealText: "The response is incomplete.", appealDate: "2026-07-01" };
 
-  it("appeals a responded RTI request (200)", async () => {
+  it("appeals a responded RTI request (202 accepted)", async () => {
+    // appeal requires the request to currently be 'responded' (rti/routes.ts
+    // guard) — the default rtiRow() fixture is 'filed', so it must be
+    // overridden here for the happy path.
+    H.getRti.mockResolvedValue(rtiRow({ status: "responded" }));
     const app = await buildApp();
     const r = await app.inject({ method: "POST", url: `/v1/hrms/rti/requests/${RTI_ID}/appeal`, headers: auth(), payload });
-    expect(r.statusCode).toBe(200);
-    expect(r.json().status).toBe("appealed");
+    expect(r.statusCode).toBe(202);
+    expect(r.json().status).toBe("accepted");
     await app.close();
   });
 
@@ -496,11 +506,14 @@ describe("POST /v1/hrms/rti/requests/:id/appeal", () => {
 describe("POST /v1/hrms/rti/requests/:id/close", () => {
   const payload = { closedDate: "2026-07-10" };
 
-  it("closes a responded/appealed RTI request (200)", async () => {
+  it("closes a responded/appealed RTI request (202 accepted)", async () => {
+    // close requires 'responded' or 'appealed' (rti/routes.ts guard); default
+    // fixture is 'filed', so override for the happy path.
+    H.getRti.mockResolvedValue(rtiRow({ status: "responded" }));
     const app = await buildApp();
     const r = await app.inject({ method: "POST", url: `/v1/hrms/rti/requests/${RTI_ID}/close`, headers: auth(), payload });
-    expect(r.statusCode).toBe(200);
-    expect(r.json().status).toBe("closed");
+    expect(r.statusCode).toBe(202);
+    expect(r.json().status).toBe("accepted");
     await app.close();
   });
 
