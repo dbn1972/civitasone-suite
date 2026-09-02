@@ -179,12 +179,12 @@ describe("updateEmployeeBody — EM-11: sensitive field validation", () => {
 });
 
 describe("EMPLOYEE_STATUSES — status contract", () => {
-  it("declares exactly 8 statuses", () => {
-    expect(EMPLOYEE_STATUSES).toHaveLength(8);
+  it("declares exactly 9 statuses", () => {
+    expect(EMPLOYEE_STATUSES).toHaveLength(9);
   });
 
   it("contains all expected statuses", () => {
-    const expected = ["probation", "confirmed", "on_leave", "suspended", "deputation", "retired", "separated", "terminated"];
+    const expected = ["probation", "confirmed", "on_leave", "suspended", "deputation", "retired", "separated", "terminated", "no_show"];
     for (const s of expected) {
       expect(EMPLOYEE_STATUSES).toContain(s);
     }

@@ -2,7 +2,7 @@
  * TASK 1 — Employee status contract test (P1-5)
  *
  * Verifies:
- *  - All 8 canonical statuses are lowercase
+ *  - All 9 canonical statuses are lowercase
  *  - isEmployeeStatus() type-guard behaviour
  *  - SERVING_STATUSES exact membership
  *  - Zod enum parsing — valid vs. invalid values
@@ -29,10 +29,11 @@ describe("EMPLOYEE_STATUSES — canonical set", () => {
     "retired",
     "separated",
     "terminated",
+    "no_show",
   ] as const;
 
-  it("contains exactly 8 statuses", () => {
-    expect(EMPLOYEE_STATUSES).toHaveLength(8);
+  it("contains exactly 9 statuses", () => {
+    expect(EMPLOYEE_STATUSES).toHaveLength(9);
   });
 
   it("every status is lowercase (no uppercase, no spaces)", () => {
@@ -42,17 +43,17 @@ describe("EMPLOYEE_STATUSES — canonical set", () => {
     }
   });
 
-  it("contains all 8 expected values in the documented order", () => {
+  it("contains all 9 expected values in the documented order", () => {
     expect([...EMPLOYEE_STATUSES]).toEqual([...EXPECTED]);
   });
 });
 
 // ---------------------------------------------------------------------------
 describe("isEmployeeStatus() — type-guard", () => {
-  it("returns true for all 8 canonical statuses", () => {
+  it("returns true for all 9 canonical statuses", () => {
     const valid: string[] = [
       "probation", "confirmed", "on_leave", "suspended",
-      "deputation", "retired", "separated", "terminated",
+      "deputation", "retired", "separated", "terminated", "no_show",
     ];
     for (const s of valid) {
       expect(isEmployeeStatus(s), `expected true for "${s}"`).toBe(true);
@@ -126,10 +127,10 @@ describe("employeeStatusEnum (Zod) — parse contract", () => {
     expect(employeeStatusEnum.parse("probation")).toBe("probation");
   });
 
-  it("parses all 8 canonical values without throwing", () => {
+  it("parses all 9 canonical values without throwing", () => {
     const valid = [
       "probation", "confirmed", "on_leave", "suspended",
-      "deputation", "retired", "separated", "terminated",
+      "deputation", "retired", "separated", "terminated", "no_show",
     ];
     for (const v of valid) {
       expect(() => employeeStatusEnum.parse(v)).not.toThrow();
