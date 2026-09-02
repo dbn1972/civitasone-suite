@@ -25,7 +25,7 @@ export async function bgvPropertyPolicyRoutes(app: FastifyInstance): Promise<voi
       provider: z.string().max(64).optional(),
     }).parse(req.body);
     const bid = randomUUID();
-    await publishF3Write(ctx, "lifecycle_bgv_property_policy_routes__0", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    await publishF3Write(ctx, "lifecycle_bgv_property_policy_routes__0", bid, { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     return reply.code(201).send({ id: bid, status: "pending" }) as any;
   });
 
@@ -54,7 +54,7 @@ export async function bgvPropertyPolicyRoutes(app: FastifyInstance): Promise<voi
     const { id } = idParam.parse(req.params);
     const body = z.object({ itemDescription: z.string().min(1).max(500) }).parse(req.body);
     const pid = randomUUID();
-    await publishF3Write(ctx, "lifecycle_bgv_property_policy_routes__2", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    await publishF3Write(ctx, "lifecycle_bgv_property_policy_routes__2", pid, { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     return reply.code(201).send({ id: pid, returnStatus: "pending" }) as any;
   });
 
@@ -82,7 +82,7 @@ export async function bgvPropertyPolicyRoutes(app: FastifyInstance): Promise<voi
       required: z.boolean().default(true),
     }).parse(req.body);
     const mid = randomUUID();
-    await publishF3Write(ctx, "lifecycle_bgv_property_policy_routes__4", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    await publishF3Write(ctx, "lifecycle_bgv_property_policy_routes__4", mid, { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     return reply.code(201).send({ id: mid }) as any;
   });
 
@@ -102,7 +102,7 @@ export async function bgvPropertyPolicyRoutes(app: FastifyInstance): Promise<voi
       policyVersion: z.string().max(24).optional(),
     }).parse(req.body);
     const pid = randomUUID();
-    await publishF3Write(ctx, "lifecycle_bgv_property_policy_routes__5", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    await publishF3Write(ctx, "lifecycle_bgv_property_policy_routes__5", pid, { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     return reply.code(201).send({ id: pid, acknowledged: true }) as any;
   });
 

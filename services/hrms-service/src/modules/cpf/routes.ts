@@ -78,7 +78,7 @@ export async function cpfRoutes(app: FastifyInstance): Promise<void> {
     const openEmp = BigInt(body.openingEmpMinor);
     const openEr = BigInt(body.openingErMinor);
     try {
-      await publishF3Write(ctx, "cpf_routes__0", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+      await publishF3Write(ctx, "cpf_routes__0", acctId, { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     } catch (err) {
       // A concurrent open (same employee, or a duplicate government CPF number) as any races
       // past the pre-checks and surfaces as a 23505; map it to a clean 409 like NPS.

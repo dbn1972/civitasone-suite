@@ -31,7 +31,7 @@ export async function feedbackRoutes(app: FastifyInstance): Promise<void> {
       comments: z.string().max(5000).optional(),
     }).parse(req.body);
     const fid = randomUUID();
-    await publishF3Write(ctx, "appraisals_feedback_routes__0", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    await publishF3Write(ctx, "appraisals_feedback_routes__0", fid, { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     return reply.code(201).send({ id: fid, appraisalId: id }) as any;
   });
 
@@ -53,7 +53,7 @@ export async function feedbackRoutes(app: FastifyInstance): Promise<void> {
     const { id } = idParam.parse(req.params);
     const body = z.object({ employeeId: z.string().uuid() }).parse(req.body);
     const did = randomUUID();
-    await publishF3Write(ctx, "appraisals_feedback_routes__1", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    await publishF3Write(ctx, "appraisals_feedback_routes__1", did, { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     return reply.code(201).send({ id: did, appraisalId: id, disclosed: true }) as any;
   });
 
@@ -66,7 +66,7 @@ export async function feedbackRoutes(app: FastifyInstance): Promise<void> {
       pipLinked: z.boolean().default(false),
     }).parse(req.body);
     const aid = randomUUID();
-    await publishF3Write(ctx, "appraisals_feedback_routes__2", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    await publishF3Write(ctx, "appraisals_feedback_routes__2", aid, { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     return reply.code(201).send({ id: aid, appraisalId: id, status: "filed" }) as any;
   });
 

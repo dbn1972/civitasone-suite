@@ -50,7 +50,7 @@ export async function holdRoutes(app: FastifyInstance): Promise<void> {
     if (!emp[0]) throw new HttpError(404, "NOT_FOUND", "employee not found");
 
     const holdId = randomUUID();
-    await publishF3Write(ctx, "lifecycle_hold_routes__0", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    await publishF3Write(ctx, "lifecycle_hold_routes__0", holdId, { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
 
     return reply.code(201).send({
       data: { id: holdId, employeeId: id, holdType: body.holdType, status: "pending" },

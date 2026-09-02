@@ -77,7 +77,7 @@ export async function contractorBillRoutes(app: FastifyInstance): Promise<void> 
       contactPhone: z.string().max(20).optional(),
     }).parse(req.body);
     const id = randomUUID();
-    await publishF3Write(ctx, "contractor_bill_routes__0", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    await publishF3Write(ctx, "contractor_bill_routes__0", id, { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     return reply.code(201).send({ id, name: body.name, status: "active" }) as any;
   });
 
@@ -139,7 +139,7 @@ export async function contractorBillRoutes(app: FastifyInstance): Promise<void> 
 
     const billId = randomUUID();
     try {
-      await publishF3Write(ctx, "contractor_bill_routes__2", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+      await publishF3Write(ctx, "contractor_bill_routes__2", billId, { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     } catch (err) {
       if (String((err as { code?: string }).code) === "23505") {
         throw new HttpError(409, "DUPLICATE_BILL", `bill '${body.billNo}' already exists for this contractor`) as any;

@@ -49,7 +49,7 @@ export async function coiDeclarationRoutes(app: FastifyInstance): Promise<void> 
     if (!emp[0]) throw new HttpError(404, "NOT_FOUND", "employee not found");
 
     const declId = randomUUID();
-    await publishF3Write(ctx, "disciplinary_coi_routes__0", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    await publishF3Write(ctx, "disciplinary_coi_routes__0", declId, { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
 
     return reply.code(201).send({
       data: { id: declId, employeeId: id, declarationType: body.declarationType, status: "active" },

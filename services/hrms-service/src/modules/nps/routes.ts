@@ -79,7 +79,7 @@ export async function npsRoutes(app: FastifyInstance): Promise<void> {
     const openEmp = BigInt(body.openingEmpMinor);
     const openEr = BigInt(body.openingErMinor);
     try {
-      await publishF3Write(ctx, "nps_routes__0", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+      await publishF3Write(ctx, "nps_routes__0", acctId, { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     } catch (err) {
       if (isUniqueViolation(err)) throw new HttpError(409, "PRAN_TAKEN", "PRAN already allocated") as any;
       throw err;

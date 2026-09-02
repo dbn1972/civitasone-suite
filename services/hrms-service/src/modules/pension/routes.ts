@@ -96,7 +96,7 @@ export async function pensionRoutes(app: FastifyInstance): Promise<void> {
     let recordId: string | undefined;
     if (q.persist && result.definedBenefit) {
       recordId = randomUUID();
-      await publishF3Write(ctx, "pension_routes__0", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+      await publishF3Write(ctx, "pension_routes__0", recordId, { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     }
 
     return reply.send(

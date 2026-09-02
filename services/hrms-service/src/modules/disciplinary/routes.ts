@@ -91,7 +91,7 @@ export async function disciplinaryRoutes(app: FastifyInstance): Promise<void> {
     }).parse(req.body);
     await mustEmployee(ctx.tenantId, id);
     const caseId = randomUUID();
-    await publishF3Write(ctx, "disciplinary_routes__1", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    await publishF3Write(ctx, "disciplinary_routes__1", caseId, { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     return reply.code(201).send({ id: caseId, employeeId: id, status: "opened", caseNo: body.caseNo }) as any;
   });
 
