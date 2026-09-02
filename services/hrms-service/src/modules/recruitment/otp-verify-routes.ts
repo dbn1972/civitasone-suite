@@ -87,6 +87,12 @@ export async function otpVerifyRoutes(app: FastifyInstance): Promise<void> {
     // before the lock releases, forces a second concurrent request to block
     // on the lock, then observe `verified = true` once it acquires it and
     // fail with a normal `already_verified` 422 instead of also succeeding.
+    //
+    // This line is pinned in the KNOWN_INTENTIONAL_SYNC_WRITES allowlist in
+    // tests/f3-leftover-hrms-cqrs.test.ts (PR #912) — it is a deliberate
+    // exception to that guard test's sync-write scan, not an accidental F3
+    // leftover. Do not "fix" it back to an async publishF3Write; that would
+    // reopen the double-issuance race described above.
     const outcome = await db.transaction(async (tx) => {
       const challenge = await repo.lockLatestChallenge(tx, ctx.tenantId, id, body.channel);
       if (!challenge) return { kind: "no_challenge" as const };
