@@ -51,7 +51,7 @@
  * assertion actually fails against the pre-fix code.
  */
 import { describe, it, expect, beforeEach, afterAll } from "vitest";
-import { randomUUID } from "node:crypto";
+import { randomUUID, createHmac } from "node:crypto";
 import { eq } from "drizzle-orm";
 import { signToken } from "@civitasone/auth";
 import { runWithTenant, withRawTenantGuc } from "@civitasone/db";
@@ -126,6 +126,18 @@ async function seedIdCard(
       (${id}, ${tenantId}, 'RLS Fixture Holder', 'employee', ${cardNumber}, ${opts.employeeId ?? null}, '2030-01-01', ${status}, 'CVO1:fixture:fixture', ${ACTOR})
   `);
   return { id, cardNumber };
+}
+
+/** Mirrors routes.ts's computeQrHmac/generateQrPayload exactly, so tests can
+ * build a genuinely-signed `CVO1:<id>:<hmac>` payload for a card seeded
+ * directly via seedIdCard (whose own qr_payload column is just a
+ * placeholder, not a real signature) -- and, separately, a deliberately
+ * tampered one for the HMAC-forgery regression test below. */
+const QR_SECRET = process.env.ID_CARD_QR_SECRET ?? "civitasone-id-card-hmac-secret-change-in-prod";
+function signQrPayload(cardId: string, tenantId: string, cardNumber: string): string {
+  const data = `${cardId}:${tenantId}:${cardNumber}`;
+  const hmac = createHmac("sha256", QR_SECRET).update(data).digest("hex").slice(0, 16);
+  return `CVO1:${cardId}:${hmac}`;
 }
 
 async function rawCardRow(id: string, tenantId: string = TENANT): Promise<any> {
@@ -380,13 +392,12 @@ describe("POST /v1/hrms/id-cards/verify", () => {
 
   it("reports 'suspended'/'revoked' status correctly for a real card in that state", async () => {
     const { id, cardNumber } = await seedIdCard("suspended");
-    // Recompute the same HMAC-signed QR payload the route would have generated
-    // (CVO1:<id>:<hmac>) is internal to routes.ts; the route only needs a
-    // well-formed CVO1:<id>:<anything> payload since the HMAC segment is not
-    // re-validated against a signature in this handler (verifyQrPayload's own
-    // documented contract: "Full HMAC check done via DB lookup", i.e. by id).
-    const qrPayload = `CVO1:${id}:doesnotneedtomatch`;
-    void cardNumber;
+    // SECURITY FIX follow-up: verify now mandatorily recomputes and checks
+    // the HMAC segment (see routes.ts verifyCardHmac), so -- unlike before,
+    // when any well-formed CVO1:<id>:<anything> payload reached the status
+    // logic unchecked -- this must be a genuinely-signed payload to get past
+    // the HMAC check at all.
+    const qrPayload = signQrPayload(id, TENANT, cardNumber);
 
     const app = await buildApp();
     const res = await app.inject({
@@ -397,6 +408,75 @@ describe("POST /v1/hrms/id-cards/verify", () => {
 
     expect(res.statusCode).toBe(200);
     expect(res.json().result).toBe("suspended");
+  });
+
+  it("SECURITY: rejects a well-formed CVO1:<id>:<hmac> payload for a REAL, active card when the HMAC segment is wrong -- same 'unknown' shape as a nonexistent card, not a distinguishable error (regression: verifyQrPayload previously never checked the HMAC at all, so any card id with a garbage HMAC suffix was accepted identically to a genuine scan)", async () => {
+    const { id, cardNumber } = await seedIdCard("active");
+    const genuine = signQrPayload(id, TENANT, cardNumber);
+    const [prefix, cardId, genuineHmac] = genuine.split(":");
+    // Tamper with the HMAC segment only -- same card id, same format, wrong
+    // signature. Flip every hex char so this can't coincidentally collide.
+    const tamperedHmac = genuineHmac!.replace(/[0-9a-f]/gi, (c) => (c === "0" ? "1" : "0"));
+    const tampered = `${prefix}:${cardId}:${tamperedHmac}`;
+    expect(tampered).not.toBe(genuine);
+
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "POST", url: "/v1/hrms/id-cards/verify", headers: authHeader(),
+      payload: { qrPayload: tampered, location: "Forged Gate" },
+    });
+    await app.close();
+
+    // Same shape as the "card genuinely doesn't exist" case below --
+    // specifically NOT "valid", NOT a 4xx/5xx error, and NOT any response
+    // that would let a caller distinguish "wrong HMAC" from "no such card".
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ result: "unknown", message: "Card not found in system" });
+
+    // And the forged scan left no trace: no verification logged, no stat bump.
+    const row = await rawCardRow(id);
+    expect(row.verification_count).toBe(0);
+    expect(row.last_verified_by).toBeNull();
+    const verifications = await rawVerificationRows(id);
+    expect(verifications).toHaveLength(0);
+  });
+
+  it("SECURITY: a genuinely-signed payload for the same real card is still accepted (regression check: the HMAC fix must not reject legitimate scans)", async () => {
+    const { id, cardNumber } = await seedIdCard("active");
+    const genuine = signQrPayload(id, TENANT, cardNumber);
+
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "POST", url: "/v1/hrms/id-cards/verify", headers: authHeader(),
+      payload: { qrPayload: genuine, location: "Main Gate" },
+    });
+    await app.close();
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json().result).toBe("valid");
+
+    const row = await rawCardRow(id);
+    expect(row.verification_count).toBe(1);
+  });
+
+  it("returns 400 'Invalid QR code format' for a malformed payload (wrong prefix / wrong segment count) -- unchanged pre-existing behavior", async () => {
+    const app = await buildApp();
+
+    for (const qrPayload of [
+      "not-even-close-to-the-format",
+      `WRONGPREFIX:${randomUUID()}:abcdef0123456789`,
+      `CVO1:${randomUUID()}`, // only 2 segments
+      `CVO1:${randomUUID()}:abc:extra`, // 4 segments
+    ]) {
+      const res = await app.inject({
+        method: "POST", url: "/v1/hrms/id-cards/verify", headers: authHeader(),
+        payload: { qrPayload },
+      });
+      expect(res.statusCode).toBe(400);
+      expect(res.json()).toEqual({ result: "invalid", message: "Invalid QR code format" });
+    }
+
+    await app.close();
   });
 
   it("returns 'unknown' for a well-formed QR pointing at a card that genuinely doesn't exist (unchanged pre-existing behavior)", async () => {

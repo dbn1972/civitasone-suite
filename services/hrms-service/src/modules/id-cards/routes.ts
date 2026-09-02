@@ -1,6 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import { randomUUID } from "node:crypto";
-import { createHmac } from "node:crypto";
+import { createHmac, timingSafeEqual } from "node:crypto";
 import { z, ZodError } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { sqlPool, sqlClient } from "../../shared/db.js";
@@ -99,16 +99,49 @@ const verifySchema = z.object({
 // QR payload is HMAC-signed so it can't be forged
 const QR_SECRET = process.env.ID_CARD_QR_SECRET ?? "civitasone-id-card-hmac-secret-change-in-prod";
 
-function generateQrPayload(cardId: string, tenantId: string, cardNumber: string): string {
+function computeQrHmac(cardId: string, tenantId: string, cardNumber: string): string {
   const data = `${cardId}:${tenantId}:${cardNumber}`;
-  const hmac = createHmac("sha256", QR_SECRET).update(data).digest("hex").slice(0, 16);
+  return createHmac("sha256", QR_SECRET).update(data).digest("hex").slice(0, 16);
+}
+
+function generateQrPayload(cardId: string, tenantId: string, cardNumber: string): string {
+  const hmac = computeQrHmac(cardId, tenantId, cardNumber);
   return `CVO1:${cardId}:${hmac}`;
 }
 
-function verifyQrPayload(payload: string): { cardId: string; valid: boolean } {
+// Parses the `CVO1:<cardId>:<hmac>` shape only -- does NOT verify the HMAC.
+// SECURITY FIX: this used to be the *only* check performed on a scanned QR
+// payload (see verifyCardHmac below for why that was a real forgery gap).
+// The HMAC itself can only be verified once the card's own card_number is
+// known (it's one of the hashed inputs), which requires the DB lookup the
+// caller does with `cardId` from this function's result -- so this stays
+// format-only by design, and verifyCardHmac is a separate, mandatory step.
+function parseQrPayload(payload: string): { cardId: string; hmac: string; formatValid: boolean } {
   const parts = payload.split(":");
-  if (parts.length !== 3 || parts[0] !== "CVO1") return { cardId: "", valid: false };
-  return { cardId: parts[1] ?? "", valid: true }; // Full HMAC check done via DB lookup
+  if (parts.length !== 3 || parts[0] !== "CVO1") return { cardId: "", hmac: "", formatValid: false };
+  return { cardId: parts[1] ?? "", hmac: parts[2] ?? "", formatValid: true };
+}
+
+// SECURITY FIX: verifyQrPayload previously only validated the payload's
+// `CVO1:<id>:<hmac>` FORMAT and never actually recomputed/checked the HMAC
+// segment -- the comment here used to (incorrectly) claim "Full HMAC check
+// done via DB lookup", but the DB lookup below only ever checked whether
+// `cardId` existed for the tenant, not whether the HMAC was genuine. That
+// meant a forged payload carrying a REAL card's id with a random/garbage
+// HMAC suffix was accepted identically to a real, correctly-signed scan.
+//
+// This recomputes the expected HMAC from the exact same inputs
+// generateQrPayload hashed at issue time (cardId, tenantId, cardNumber --
+// cardNumber only becomes available after the DB lookup, which is why this
+// is a separate step from parseQrPayload rather than folded into it), and
+// compares it to the scanned HMAC with crypto.timingSafeEqual so the
+// comparison itself can't leak a byte-by-byte timing side-channel.
+function verifyCardHmac(cardId: string, tenantId: string, cardNumber: string, providedHmac: string): boolean {
+  const expected = computeQrHmac(cardId, tenantId, cardNumber);
+  const expectedBuf = Buffer.from(expected, "hex");
+  const providedBuf = Buffer.from(providedHmac, "hex");
+  if (expectedBuf.length === 0 || expectedBuf.length !== providedBuf.length) return false;
+  return timingSafeEqual(expectedBuf, providedBuf);
 }
 
 function generateCardNumber(tenantPrefix: string, seq: number): string {
@@ -320,8 +353,8 @@ export async function idCardRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     const body = verifySchema.parse(req.body);
 
-    const { cardId, valid } = verifyQrPayload(body.qrPayload);
-    if (!valid || !cardId) {
+    const { cardId, hmac: scannedHmac, formatValid } = parseQrPayload(body.qrPayload);
+    if (!formatValid || !cardId) {
       return reply.code(400).send({ result: "invalid", message: "Invalid QR code format" });
     }
 
@@ -348,6 +381,17 @@ export async function idCardRoutes(app: FastifyInstance): Promise<void> {
     }
 
     const c = card.rows[0];
+
+    // SECURITY FIX: mandatory HMAC check (see verifyCardHmac above). A
+    // mismatch gets the exact same "unknown"/"Card not found in system"
+    // response as a nonexistent card id -- returning any other shape here
+    // would let an attacker distinguish "this card id exists but the HMAC
+    // was wrong" from "no such card", which is itself information useful
+    // for forging a valid payload.
+    if (!verifyCardHmac(cardId, ctx.tenantId, c.card_number, scannedHmac)) {
+      return reply.send({ result: "unknown", message: "Card not found in system" });
+    }
+
     const today = new Date().toISOString().split("T")[0] ?? "";
     let result = "valid";
 
