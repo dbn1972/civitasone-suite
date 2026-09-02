@@ -72,6 +72,14 @@ function formatAmount(minor: number | bigint): string {
   return (Number(minor) / 100).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
+// Intentionally flat: this only ever does {{var}} substitution, no
+// Handlebars-style block helpers (#each/#if). There is no tenant-facing UI
+// or API to author custom slip templates — payroll.payroll_slip_templates
+// is populated exactly once, by a migration seed, and read-only from here
+// on (see hrms-client.ts's fetchDefaultSlipTemplate). So any looping a
+// template needs (earnings/deductions/pension rows) is pre-rendered to an
+// HTML string by the caller below and passed in as a plain flat var —
+// keep it that way rather than growing a template engine for one seed row.
 function renderTemplate(template: string, vars: Record<string, string>): string {
   return template.replace(/\{\{(\w+)\}\}/g, (_, key) => vars[key] ?? "");
 }
@@ -109,10 +117,12 @@ export async function payslipPdfRoutes(app: FastifyInstance): Promise<void> {
     // hrms-service is genuinely unreachable (HrmsUnavailableError) — a
     // missing payslip template should never block PDF generation.
     let template = DEFAULT_TEMPLATE;
+    let footerText = "";
     try {
       const tpl = await fetchDefaultSlipTemplate(ctx.tenantId);
       if (tpl?.templateHtml) {
         template = tpl.templateHtml;
+        footerText = tpl.footerText ?? "";
       }
     } catch (err) {
       if (err instanceof HrmsUnavailableError) {
@@ -221,6 +231,7 @@ export async function payslipPdfRoutes(app: FastifyInstance): Promise<void> {
       grossPay: formatAmount(slip.grossMinor),
       totalDeductions: formatAmount(slip.totalDeductionsMinor),
       netPay: formatAmount(slip.netPayMinor),
+      footerText,
     };
 
     const html = renderTemplate(template, vars);
