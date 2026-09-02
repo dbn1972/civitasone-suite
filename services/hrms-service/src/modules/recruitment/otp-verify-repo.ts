@@ -1,4 +1,4 @@
-import { eq, and, desc } from "drizzle-orm";
+import { eq, and, desc, sql } from "drizzle-orm";
 import { db, scopedRead } from "../../shared/db.js";
 import { hrmsCandidates, hrmsCandidateOtpChallenges, type OtpChallengeRow } from "./candidate-schema.js";
 
@@ -25,11 +25,79 @@ export async function findLatestChallenge(tenantId: string, candidateId: string,
   return rows[0] ?? null;
 }
 
-/** Increment attempts. */
-export async function incrementAttempts(tx: Writer, tenantId: string, id: string): Promise<void> {
-  await tx.update(hrmsCandidateOtpChallenges)
-    .set({ attempts: (await tx.select({ a: hrmsCandidateOtpChallenges.attempts }).from(hrmsCandidateOtpChallenges).where(eq(hrmsCandidateOtpChallenges.id, id)))[0]!.a + 1 })
-    .where(and(eq(hrmsCandidateOtpChallenges.tenantId, tenantId), eq(hrmsCandidateOtpChallenges.id, id)));
+/**
+ * The latest challenge for a candidate+channel, LOCKED for the duration of
+ * the caller's transaction (`SELECT ... FOR UPDATE`).
+ *
+ * SECURITY: pairs with `incrementAttempts` below to close a brute-force
+ * race on the OTP lockout gate. Before this, the verify routes read
+ * `attempts` via a plain (non-locking) read, checked it against
+ * MAX_ATTEMPTS, and — only on a wrong code — incremented the counter via a
+ * DEFERRED async publish. Concurrent verify requests against the SAME
+ * challenge could each read the pre-increment count and be admitted past
+ * the gate before an earlier failure's increment had landed (the async
+ * publish could lag arbitrarily under queue load). Acquiring the row lock
+ * HERE, before the MAX_ATTEMPTS check, forces concurrent requests against
+ * the same challenge to serialize: the 2nd waits for the 1st's transaction
+ * to commit (or roll back) before its own SELECT ... FOR UPDATE returns, so
+ * it always observes the 1st's already-committed attempts count. See
+ * `identity-service/modules/breakglass/repo.ts`'s `findByIdForUpdate` for
+ * the established pattern this mirrors.
+ */
+export async function lockLatestChallenge(tx: Writer, tenantId: string, candidateId: string, channel: string): Promise<OtpChallengeRow | null> {
+  const rows = await tx.select().from(hrmsCandidateOtpChallenges)
+    .where(and(
+      eq(hrmsCandidateOtpChallenges.tenantId, tenantId),
+      eq(hrmsCandidateOtpChallenges.candidateId, candidateId),
+      eq(hrmsCandidateOtpChallenges.channel, channel),
+    ))
+    .orderBy(desc(hrmsCandidateOtpChallenges.createdAt))
+    .limit(1)
+    .for("update");
+  return rows[0] ?? null;
+}
+
+/**
+ * Same as `lockLatestChallenge`, but for the public careers-portal route,
+ * which (per `candidate-public-auth-routes.ts`'s existing read) orders by
+ * `createdAt` ASCENDING rather than descending. Preserved verbatim here —
+ * changing challenge-selection order is a separate, unrelated behaviour
+ * change outside the scope of this race-condition fix.
+ */
+export async function lockOldestChallenge(tx: Writer, tenantId: string, candidateId: string, channel: string): Promise<OtpChallengeRow | null> {
+  const rows = await tx.select().from(hrmsCandidateOtpChallenges)
+    .where(and(
+      eq(hrmsCandidateOtpChallenges.tenantId, tenantId),
+      eq(hrmsCandidateOtpChallenges.candidateId, candidateId),
+      eq(hrmsCandidateOtpChallenges.channel, channel),
+    ))
+    .orderBy(hrmsCandidateOtpChallenges.createdAt)
+    .limit(1)
+    .for("update");
+  return rows[0] ?? null;
+}
+
+/**
+ * Atomically increment `attempts` by 1 and return the new count. A single
+ * `UPDATE ... SET attempts = attempts + 1` is atomic under Postgres's
+ * row-level locking regardless of caller — but callers on the failure path
+ * of otp-verify should invoke this from WITHIN the same transaction that
+ * already holds the row's `FOR UPDATE` lock (via `lockLatestChallenge` /
+ * `lockOldestChallenge` above), so the MAX_ATTEMPTS gate and the increment
+ * that feeds it can never observe two different snapshots of the row.
+ *
+ * Previously this read `attempts` via a separate SELECT and wrote back
+ * `select + 1`, which was itself a non-atomic read-then-write — safe only
+ * because every call site happened to already hold a lock or run
+ * single-threaded. Replaced with a single atomic statement so correctness
+ * no longer depends on that assumption.
+ */
+export async function incrementAttempts(tx: Writer, tenantId: string, id: string): Promise<number> {
+  const updated = await tx.update(hrmsCandidateOtpChallenges)
+    .set({ attempts: sql`${hrmsCandidateOtpChallenges.attempts} + 1` })
+    .where(and(eq(hrmsCandidateOtpChallenges.tenantId, tenantId), eq(hrmsCandidateOtpChallenges.id, id)))
+    .returning({ attempts: hrmsCandidateOtpChallenges.attempts });
+  return updated[0]?.attempts ?? 0;
 }
 
 /** Mark as verified + update candidate.emailVerified/mobileVerified. */

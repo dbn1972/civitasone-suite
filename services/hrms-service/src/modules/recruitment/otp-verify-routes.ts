@@ -62,13 +62,30 @@ export async function otpVerifyRoutes(app: FastifyInstance): Promise<void> {
       throw new HttpError(501, "OTP_NOT_ENABLED", "OTP verification is not enabled");
     }
 
-    const challenge = await repo.findLatestChallenge(ctx.tenantId, id, body.channel);
-    if (!challenge) throw new HttpError(404, "NO_CHALLENGE", "no OTP challenge found; trigger one first");
+    // SECURITY: the challenge row is read+checked+conditionally-incremented
+    // inside ONE transaction, with the row locked (`FOR UPDATE`) via
+    // repo.lockLatestChallenge. This closes a brute-force race where
+    // concurrent verify requests against the SAME challenge could each read
+    // a stale (pre-increment) `attempts` count and slip past the
+    // MAX_ATTEMPTS gate before an earlier failed attempt's increment had
+    // committed — previously that increment was a DEFERRED async publish
+    // (see `recruitment_otp_verify_routes__1` below, now unused), so the
+    // race window could be as wide as the queue's processing lag. A correct
+    // code still leaves `attempts` untouched, exactly as before.
+    const outcome = await db.transaction(async (tx) => {
+      const challenge = await repo.lockLatestChallenge(tx, ctx.tenantId, id, body.channel);
+      if (!challenge) return { kind: "no_challenge" as const };
+      const result = verifyOtp(challenge, body.code, Date.now());
+      if (!result.valid) {
+        await repo.incrementAttempts(tx, ctx.tenantId, challenge.id);
+        return { kind: "invalid" as const, reason: result.reason };
+      }
+      return { kind: "valid" as const };
+    });
 
-    const result = verifyOtp(challenge, body.code, Date.now());
-    if (!result.valid) {
-      await publishF3Write(ctx, "recruitment_otp_verify_routes__1", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
-      throw new HttpError(422, "OTP_INVALID", result.reason ?? "invalid code") as any;
+    if (outcome.kind === "no_challenge") throw new HttpError(404, "NO_CHALLENGE", "no OTP challenge found; trigger one first");
+    if (outcome.kind === "invalid") {
+      throw new HttpError(422, "OTP_INVALID", outcome.reason ?? "invalid code") as any;
     }
 
     await publishF3Write(ctx, "recruitment_otp_verify_routes__2", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
