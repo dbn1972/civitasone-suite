@@ -25,10 +25,16 @@ const H = vi.hoisted(() => ({
   listEvents: vi.fn(),
 }));
 
-vi.mock("../src/shared/db.js", async (io) => ({
-  ...(await io<Record<string, unknown>>()),
-  db: { transaction: async (cb: (tx: unknown) => Promise<void>) => cb({}), insert: () => ({ values: async () => undefined }) },
-}));
+vi.mock("../src/shared/db.js", async (io) => {
+  // markProcessed() in the F3 consumer runs
+  // insert(...).values(...).onConflictDoNothing().returning() on the tx, which a
+  // bare {} cannot answer — the consumer threw before reaching any case.
+  const stubTx = { insert: () => ({ values: () => ({ onConflictDoNothing: () => ({ returning: async () => [{ messageId: "stub" }] }) }) }) };
+  return {
+    ...(await io<Record<string, unknown>>()),
+    db: { transaction: async (cb: (tx: unknown) => Promise<unknown>) => cb(stubTx), insert: () => ({ values: async () => undefined }) },
+  };
+});
 vi.mock("../src/modules/recruitment/blueprint-repo.js", async (io) => ({
   ...(await io<Record<string, unknown>>()),
   findBlueprint: (...a: unknown[]) => H.findBlueprint(...a),
@@ -44,6 +50,29 @@ vi.mock("../src/modules/recruitment/blueprint-repo.js", async (io) => ({
 }));
 
 import { buildApp } from "../src/app.js";
+
+import { queue } from "../src/shared/infra.js";
+import { registerF3_recruitment_Consumers } from "../src/modules/recruitment/f3-consumer.js";
+
+// Blueprint/question create-activate-validate routes only PUBLISH; the row is
+// written by the recruitment F3 consumer (blueprint-repo's insertBlueprint /
+// updateBlueprint / insertQuestion / updateQuestion all live there, despite
+// this test file's "assessment" name) that f3-leftover-register.ts wires into
+// the worker. Register it here so the suite exercises the whole write path
+// instead of the HTTP layer alone — same pattern as tests/attempt-route.test.ts.
+registerF3_recruitment_Consumers(queue);
+/** Await the in-memory queue's fan-out so the consumer's write has happened. */
+async function drainF3(): Promise<void> {
+  await (queue as unknown as import("@civitasone/queue").MemoryQueue).drain();
+}
+type TestApp = { inject: (opts: never) => Promise<never> };
+/** inject() + drain, so an assertion never races the async F3 write. */
+async function injectF3(app: TestApp, opts: unknown): Promise<never> {
+  const res = await app.inject(opts as never);
+  await drainF3();
+  return res;
+}
+
 import { sqlClient } from "../src/shared/db.js";
 
 const tok = (sub: string) => `Bearer ${signToken({ sub, tid: TENANT, roles: ["hr_admin"], sid: "s" }, SECRET)}`;
@@ -80,7 +109,7 @@ afterAll(async () => { await sqlClient.end(); });
 describe("assessment blueprint routes", () => {
   it("creates a draft blueprint (201)", async () => {
     const app = await buildApp();
-    const r = await app.inject({ method: "POST", url: "/v1/hrms/assessments/blueprints", headers: authAuthor,
+    const r = await injectF3(app, { method: "POST", url: "/v1/hrms/assessments/blueprints", headers: authAuthor,
       payload: { code: "ASMT-1", title: "Officer Test", competencies: [{ key: "c1" }], allowedTypes: ["mcq"], durationMinutes: 60, scoringConfig: goodConfig } });
     expect(r.statusCode).toBe(201);
     expect(r.json().status).toBe("draft");
@@ -92,7 +121,7 @@ describe("assessment blueprint routes", () => {
   it("blocks the author from activating their own blueprint (403 SoD)", async () => {
     H.findBlueprint.mockResolvedValue(blueprint());
     const app = await buildApp();
-    const r = await app.inject({ method: "POST", url: `/v1/hrms/assessments/blueprints/${BP}/activate`, headers: authAuthor, payload: {} });
+    const r = await injectF3(app, { method: "POST", url: `/v1/hrms/assessments/blueprints/${BP}/activate`, headers: authAuthor, payload: {} });
     expect(r.statusCode).toBe(403);
     expect(r.json().code).toBe("SOD_VIOLATION");
     expect(H.updateBlueprint).not.toHaveBeenCalled();
@@ -102,7 +131,7 @@ describe("assessment blueprint routes", () => {
   it("rejects activation of an invalid scoring config (422)", async () => {
     H.findBlueprint.mockResolvedValue(blueprint({ scoringConfig: { sections: [] } }));
     const app = await buildApp();
-    const r = await app.inject({ method: "POST", url: `/v1/hrms/assessments/blueprints/${BP}/activate`, headers: authOther, payload: {} });
+    const r = await injectF3(app, { method: "POST", url: `/v1/hrms/assessments/blueprints/${BP}/activate`, headers: authOther, payload: {} });
     expect(r.statusCode).toBe(422);
     expect(r.json().code).toBe("INVALID_BLUEPRINT");
     expect(H.updateBlueprint).not.toHaveBeenCalled();
@@ -112,7 +141,7 @@ describe("assessment blueprint routes", () => {
   it("activates a valid blueprint by a different authorised user (200)", async () => {
     H.findBlueprint.mockResolvedValue(blueprint());
     const app = await buildApp();
-    const r = await app.inject({ method: "POST", url: `/v1/hrms/assessments/blueprints/${BP}/activate`, headers: authOther, payload: {} });
+    const r = await injectF3(app, { method: "POST", url: `/v1/hrms/assessments/blueprints/${BP}/activate`, headers: authOther, payload: {} });
     expect(r.statusCode).toBe(200);
     expect(r.json().status).toBe("active");
     expect(H.updateBlueprint).toHaveBeenCalledOnce();
@@ -124,7 +153,7 @@ describe("assessment blueprint routes", () => {
     // OTHER must not be able to activate their own edit.
     H.findBlueprint.mockResolvedValue(blueprint({ updatedBy: OTHER }));
     const app = await buildApp();
-    const r = await app.inject({ method: "POST", url: `/v1/hrms/assessments/blueprints/${BP}/activate`, headers: authOther, payload: {} });
+    const r = await injectF3(app, { method: "POST", url: `/v1/hrms/assessments/blueprints/${BP}/activate`, headers: authOther, payload: {} });
     expect(r.statusCode).toBe(403);
     expect(r.json().code).toBe("SOD_VIOLATION");
     expect(H.updateBlueprint).not.toHaveBeenCalled();
@@ -134,7 +163,7 @@ describe("assessment blueprint routes", () => {
   it("records the changed field set in the update audit event", async () => {
     H.findBlueprint.mockResolvedValue(blueprint());
     const app = await buildApp();
-    const r = await app.inject({ method: "PATCH", url: `/v1/hrms/assessments/blueprints/${BP}`, headers: authOther, payload: { title: "New", durationMinutes: 45 } });
+    const r = await injectF3(app, { method: "PATCH", url: `/v1/hrms/assessments/blueprints/${BP}`, headers: authOther, payload: { title: "New", durationMinutes: 45 } });
     expect(r.statusCode).toBe(200);
     // insertEvent(tx, ev) — the event object is the SECOND argument.
     const ev = H.insertEvent.mock.calls.find((c) => (c[1] as { action: string })?.action === "update")?.[1] as { detail: { changedFields: string[] } };
@@ -146,7 +175,7 @@ describe("assessment blueprint routes", () => {
   it("refuses to edit an active blueprint (409)", async () => {
     H.findBlueprint.mockResolvedValue(blueprint({ status: "active" }));
     const app = await buildApp();
-    const r = await app.inject({ method: "PATCH", url: `/v1/hrms/assessments/blueprints/${BP}`, headers: authOther, payload: { title: "New" } });
+    const r = await injectF3(app, { method: "PATCH", url: `/v1/hrms/assessments/blueprints/${BP}`, headers: authOther, payload: { title: "New" } });
     expect(r.statusCode).toBe(409);
     expect(r.json().code).toBe("BLUEPRINT_ACTIVE");
     await app.close();
@@ -154,7 +183,7 @@ describe("assessment blueprint routes", () => {
 
   it("creates a draft question (201)", async () => {
     const app = await buildApp();
-    const r = await app.inject({ method: "POST", url: "/v1/hrms/assessments/questions", headers: authAuthor,
+    const r = await injectF3(app, { method: "POST", url: "/v1/hrms/assessments/questions", headers: authAuthor,
       payload: { topic: "math", qtype: "mcq", stem: "2+2?", options: [{ id: "a", text: "3" }, { id: "b", text: "4" }], answerKey: { correct: ["b"] }, difficulty: "easy", marks: 1 } });
     expect(r.statusCode).toBe(201);
     expect(H.insertQuestion).toHaveBeenCalledOnce();
@@ -164,7 +193,7 @@ describe("assessment blueprint routes", () => {
   it("blocks the author from validating their own question (403 SoD)", async () => {
     H.findQuestion.mockResolvedValue(question());
     const app = await buildApp();
-    const r = await app.inject({ method: "POST", url: `/v1/hrms/assessments/questions/${QN}/validate`, headers: authAuthor, payload: {} });
+    const r = await injectF3(app, { method: "POST", url: `/v1/hrms/assessments/questions/${QN}/validate`, headers: authAuthor, payload: {} });
     expect(r.statusCode).toBe(403);
     expect(r.json().code).toBe("SOD_VIOLATION");
     expect(H.updateQuestion).not.toHaveBeenCalled();
@@ -174,7 +203,7 @@ describe("assessment blueprint routes", () => {
   it("blocks the LAST EDITOR from validating a question (403 SoD)", async () => {
     H.findQuestion.mockResolvedValue(question({ updatedBy: OTHER }));
     const app = await buildApp();
-    const r = await app.inject({ method: "POST", url: `/v1/hrms/assessments/questions/${QN}/validate`, headers: authOther, payload: {} });
+    const r = await injectF3(app, { method: "POST", url: `/v1/hrms/assessments/questions/${QN}/validate`, headers: authOther, payload: {} });
     expect(r.statusCode).toBe(403);
     expect(r.json().code).toBe("SOD_VIOLATION");
     expect(H.updateQuestion).not.toHaveBeenCalled();
@@ -184,7 +213,7 @@ describe("assessment blueprint routes", () => {
   it("rejects validation of an incomplete question (422)", async () => {
     H.findQuestion.mockResolvedValue(question({ answerKey: { correct: [] } }));
     const app = await buildApp();
-    const r = await app.inject({ method: "POST", url: `/v1/hrms/assessments/questions/${QN}/validate`, headers: authOther, payload: {} });
+    const r = await injectF3(app, { method: "POST", url: `/v1/hrms/assessments/questions/${QN}/validate`, headers: authOther, payload: {} });
     expect(r.statusCode).toBe(422);
     expect(r.json().code).toBe("INCOMPLETE_QUESTION");
     await app.close();
@@ -193,7 +222,7 @@ describe("assessment blueprint routes", () => {
   it("validates a complete question by a different authorised user (200)", async () => {
     H.findQuestion.mockResolvedValue(question());
     const app = await buildApp();
-    const r = await app.inject({ method: "POST", url: `/v1/hrms/assessments/questions/${QN}/validate`, headers: authOther, payload: {} });
+    const r = await injectF3(app, { method: "POST", url: `/v1/hrms/assessments/questions/${QN}/validate`, headers: authOther, payload: {} });
     expect(r.statusCode).toBe(200);
     expect(r.json().status).toBe("validated");
     expect(H.updateQuestion).toHaveBeenCalledOnce();
@@ -203,7 +232,7 @@ describe("assessment blueprint routes", () => {
   it("refuses to edit a validated question (409)", async () => {
     H.findQuestion.mockResolvedValue(question({ status: "validated" }));
     const app = await buildApp();
-    const r = await app.inject({ method: "PATCH", url: `/v1/hrms/assessments/questions/${QN}`, headers: authOther, payload: { stem: "changed" } });
+    const r = await injectF3(app, { method: "PATCH", url: `/v1/hrms/assessments/questions/${QN}`, headers: authOther, payload: { stem: "changed" } });
     expect(r.statusCode).toBe(409);
     expect(r.json().code).toBe("QUESTION_LOCKED");
     await app.close();
