@@ -151,12 +151,34 @@ export async function manpowerPlanningRoutes(app: FastifyInstance): Promise<void
 
     const vac = withVacancy(plan);
 
-    const result = await publishF3Write(ctx, "manpower_planning_routes__4", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    // CRASH FIX: this used to be `const result = await publishF3Write(...)`
+    // followed by `result.approved.status` / `result.approved.approvedBy` /
+    // `result.requisition`. publishF3Write only ever resolves the literal
+    // placeholder `{ id, status: "accepted", correlationId }` (see
+    // shared/f3-publish.ts) — it never returns the consumer's `{ approved,
+    // requisition }` object, because the actual approval + requisition
+    // generation happens later, asynchronously, in
+    // manpower-planning/f3-consumer.ts (case __4). `result.approved` was
+    // therefore always `undefined`, and `.status` on `undefined` threw a
+    // TypeError on every single call — this was an unconditional crash on
+    // every manpower-plan approval. The `if (!result)` guard just above was
+    // also dead: `canApprove(plan, ctx.actorId)` above already performs the
+    // real synchronous pre-check (maker-checker separation AND
+    // `status === 'pending_approval'`, mirroring repo.approvePlan's own SQL
+    // guard), so by the time we reach here the approval is known-valid and
+    // the placeholder is always truthy anyway.
+    //
+    // The consumer still mints its own requisition id / requisition number /
+    // job-opening id at write time (see f3-consumer.ts __4) — those genuinely
+    // cannot be known synchronously here, so unlike the crash-causing fields
+    // above, `requisition` is dropped from the response entirely rather than
+    // guessed. Callers that need the generated requisition should read it
+    // back via GET /v1/hrms/manpower/requisitions?planId=... once the write
+    // has landed.
+    await publishF3Write(ctx, "manpower_planning_routes__4", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
 
-    if (!result) throw new HttpError(409, "INVALID_STATE", "only a plan pending approval can be approved") as any;
-    return reply.send({
-      id, status: result.approved.status, approvedBy: result.approved.approvedBy,
-      requisition: result.requisition, vacancy: vac.vacancy,
+    return reply.code(202).send({
+      id, status: "approved", approvedBy: ctx.actorId, vacancy: vac.vacancy,
     });
   });
 
