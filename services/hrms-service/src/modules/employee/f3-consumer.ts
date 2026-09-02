@@ -112,7 +112,12 @@ export function registerF3_employee_Consumers(queue: Queue): void {
             const emp = rows[0];
             if (!emp) throw new HttpError(404, "NOT_FOUND", "employee not found");
             await tx.update(hrmsEmployees)
-                    .set({ status: "active", updatedBy: msg.actorId, updatedAt: new Date() })
+                    // migration 0025_employee_status_contract.sql retired "active" in
+                    // favor of "confirmed" (dropped from hrms_employees_status_check);
+                    // writing "active" here violates the CHECK constraint and rolls the
+                    // whole transaction back silently. See lifecycle/consumer.ts's
+                    // lifecycleReinstate fix (PR #893) for the identical bug.
+                    .set({ status: "confirmed", updatedBy: msg.actorId, updatedAt: new Date() })
                     .where(and(eq(hrmsEmployees.id, targetId), eq(hrmsEmployees.version, emp.version)));
             break;
           }
