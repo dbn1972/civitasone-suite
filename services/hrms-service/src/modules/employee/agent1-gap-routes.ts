@@ -132,8 +132,15 @@ export async function agent1GapRoutes(app: FastifyInstance): Promise<void> {
       throw new HttpError(409, "WRONG_STATE", `employee status is '${noShowEmp.status}', not 'no_show'`);
     }
 
-    const result = await publishF3Write(ctx, "employee_agent1_gap_routes__2", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
-    return reply.send({ data: result }) as any;
+    // publishF3Write only ever returns a generic { id, status: "accepted",
+    // correlationId } acknowledgement (see f3-publish.ts) -- it cannot know the
+    // post-write row state synchronously. Echoing that ack verbatim as `data`
+    // claimed status "accepted" instead of the reverted status the consumer
+    // (employee_agent1_gap_routes__2) actually writes. revertToStatus is
+    // already known and validated at this point, so report it directly --
+    // same fix already applied to 0175/0180 above.
+    await publishF3Write(ctx, "employee_agent1_gap_routes__2", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    return reply.send({ data: { id, status: body.revertToStatus } }) as any;
   });
 
   // ── 0227 + 0230: Assign functional/project managers (with cycle detection) ──
@@ -177,8 +184,13 @@ export async function agent1GapRoutes(app: FastifyInstance): Promise<void> {
       throw new HttpError(422, "CYCLE_DETECTED", `assigning ${cycle.field} '${cycle.managerId}' would create a circular reporting chain`);
     }
 
-    const result = await publishF3Write(ctx, "employee_agent1_gap_routes__3", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
-    return reply.send({ data: result }) as any;
+    // Same publishF3Write response-shape gap as reverse-no-show above: the
+    // generic { status: "accepted" } ack was echoed as `data`, so callers
+    // never saw the manager ids they had just assigned. The consumer
+    // (employee_agent1_gap_routes__3) returns { id: targetId, ...body } --
+    // mirror that with the already zod-validated `body` here.
+    await publishF3Write(ctx, "employee_agent1_gap_routes__3", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    return reply.send({ data: { id, ...body } }) as any;
   });
 
   // ── 0233: Span-of-control analytics endpoint ────────────────────────────────

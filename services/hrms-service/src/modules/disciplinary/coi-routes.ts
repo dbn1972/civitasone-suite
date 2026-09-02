@@ -91,6 +91,24 @@ export async function coiDeclarationRoutes(app: FastifyInstance): Promise<void> 
       reason: z.string().min(1).max(2000),
     }).parse(req.body);
 
+    // Synchronous pre-check (state-transition legality): the consumer's
+    // disciplinary_coi_routes__1 case already 404s on an unknown declaration
+    // and 409s ("WRONG_STATE") when it is not 'active', but only after the
+    // route has already replied 200 -- a caller revoking an already-revoked
+    // declaration saw a false-positive success while the write was silently
+    // dropped. Mirror the same check here, synchronously, before publishing
+    // -- same pattern as cpf/routes.ts and hold-routes.ts.
+    const declRows = await scopedRead((tx) =>
+      tx.select({ id: hrmsCoiDeclarations.id, status: hrmsCoiDeclarations.status }).from(hrmsCoiDeclarations)
+        .where(and(eq(hrmsCoiDeclarations.id, declId), eq(hrmsCoiDeclarations.tenantId, ctx.tenantId)))
+        .limit(1),
+    );
+    const decl = declRows[0];
+    if (!decl) throw new HttpError(404, "NOT_FOUND", "declaration not found");
+    if (decl.status !== "active") {
+      throw new HttpError(409, "WRONG_STATE", `declaration is '${decl.status}', cannot revoke`);
+    }
+
     await publishF3Write(ctx, "disciplinary_coi_routes__1", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
 
     return reply.send({ data: { id: declId, status: "revoked" } }) as any;
