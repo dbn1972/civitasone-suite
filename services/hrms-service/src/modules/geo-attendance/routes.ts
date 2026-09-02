@@ -44,7 +44,7 @@ export async function geoAttendanceRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, HR_ROLES);
     const body = z.object({ name: z.string().min(1), address: z.string().optional(), latitude: z.number(), longitude: z.number(), radiusMeters: z.number().int().min(50).max(5000).default(200) }).parse(req.body);
     const id = randomUUID();
-    await publishF3Write(ctx, "geo_attendance_routes__0", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    await publishF3Write(ctx, "geo_attendance_routes__0", id, { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     return reply.code(201).send({ id, name: body.name, radiusMeters: body.radiusMeters }) as any;
   });
 
@@ -86,7 +86,7 @@ export async function geoAttendanceRoutes(app: FastifyInstance): Promise<void> {
 
     // 4. Store geo-attendance record
     const id = randomUUID();
-    await publishF3Write(ctx, "geo_attendance_routes__1", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    await publishF3Write(ctx, "geo_attendance_routes__1", id, { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
 
     return reply.code(201).send({
       id, status: withinGeofence ? "within_geofence" : "outside_geofence",
@@ -118,7 +118,7 @@ export async function geoAttendanceRoutes(app: FastifyInstance): Promise<void> {
     }
 
     const id = randomUUID();
-    await publishF3Write(ctx, "geo_attendance_routes__2", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    await publishF3Write(ctx, "geo_attendance_routes__2", id, { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
 
     return reply.code(201).send({ id, status: "check_out_recorded", withinGeofence, distanceMeters: distance ? Math.round(distance) : null }) as any;
   });
