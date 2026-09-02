@@ -124,6 +124,17 @@ export class MemoryQueue implements Queue {
   private seen = new Set<string>();
   /** In-flight delivery promises, tracked so tests can await async fan-out. */
   private inflight = new Set<Promise<unknown>>();
+  /**
+   * Pending retry-backoff timers scheduled by deliver() (see retryDelay()),
+   * keyed by their setTimeout handle -> the resolve() that unblocks the
+   * awaiting deliver() call. stop() cancels every entry so a handler that is
+   * still backing off never fires after the queue has been stopped — without
+   * this, a timer left alive past stop() would resolve on its own later
+   * (potentially during a *different* test) and re-invoke a stale handler.
+   */
+  private retryTimers = new Map<ReturnType<typeof setTimeout>, () => void>();
+  /** Set by stop(); deliver() checks this after a (possibly force-resolved) backoff to bail instead of retrying. */
+  private stopped = false;
   readonly dlq: Array<{ topic: string; msg: CommandEnvelope; error: string }> = [];
   private maxAttempts: number;
 
@@ -174,7 +185,31 @@ export class MemoryQueue implements Queue {
   }
 
   async start(): Promise<void> { /* push-based */ }
-  async stop(): Promise<void> { this.handlers.clear(); }
+
+  async stop(): Promise<void> {
+    this.stopped = true;
+    // Cancel every pending retry-backoff timer and force its deliver() await
+    // to settle now (instead of leaving it suspended forever), so deliver()
+    // observes `stopped` on the very next line and returns without invoking
+    // the handler again. See retryTimers doc above.
+    for (const [timer, resolve] of this.retryTimers) {
+      clearTimeout(timer);
+      resolve();
+    }
+    this.retryTimers.clear();
+    this.handlers.clear();
+  }
+
+  /** Backoff wait for deliver()'s retry loop, cancellable from stop(). */
+  private retryDelay(ms: number): Promise<void> {
+    return new Promise((resolve) => {
+      const timer = setTimeout(() => {
+        this.retryTimers.delete(timer);
+        resolve();
+      }, ms);
+      this.retryTimers.set(timer, resolve);
+    });
+  }
 
   async healthCheck(): Promise<{ healthy: boolean; driver: QueueDriver }> {
     return { healthy: true, driver: "memory" };
@@ -201,7 +236,11 @@ export class MemoryQueue implements Queue {
           this.dlq.push({ topic, msg, error: err instanceof Error ? err.message : String(err) });
           return;
         }
-        await new Promise((r) => setTimeout(r, 2 ** attempt * 10));
+        await this.retryDelay(2 ** attempt * 10);
+        // stop() may have force-resolved the delay above to unblock this
+        // await; bail instead of retrying so a stopped queue never invokes a
+        // handler again (this is the fix — see retryTimers doc on the class).
+        if (this.stopped) return;
       }
     }
   }
