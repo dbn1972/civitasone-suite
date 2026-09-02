@@ -58,6 +58,12 @@ export async function manpowerPlanningRoutes(app: FastifyInstance): Promise<void
     const body = createPlanBody.parse(req.body);
     const id = randomUUID();
     try {
+      // Must reuse `id` here, not mint a second randomUUID(): op __0 is the
+      // ONLY publishF3Write call whose `id` param is actually used as a new
+      // row's primary key (repo.insertPlan in the F3 consumer). Passing a
+      // different id meant the row the consumer inserted was never the row
+      // this handler's 201 response pointed the client at — every immediate
+      // follow-up read/write against the returned id 404'd.
       await publishF3Write(ctx, "manpower_planning_routes__0", id, { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     } catch (err) {
       if (String((err as { code?: string }).code) === "23505") {

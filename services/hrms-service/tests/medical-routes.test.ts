@@ -54,6 +54,18 @@ vi.mock("../src/shared/db.js", () => {
   const sqlClientFn = (...args: unknown[]) => H.sqlClientQuery(...args);
   sqlClientFn.end = async () => {};
   sqlClientFn.unsafe = async () => [];
+  sqlClientFn.begin = async (fn: (tx: typeof sqlClientFn) => Promise<unknown>) => {
+    // withRawTenantGuc's first statement inside the transaction is always
+    // `tx`SELECT set_config('app.tenant_id', ...)`` — that internal
+    // bookkeeping call must not consume a mockReturnValueOnce() queued for
+    // the caller's own query, or every "Once"-based test shifts by one call.
+    const tx = ((...args: unknown[]) => {
+      const [strings] = args as [TemplateStringsArray];
+      if (strings?.[0]?.includes("set_config")) return Promise.resolve([]);
+      return H.sqlClientQuery(...args);
+    }) as typeof sqlClientFn;
+    return fn(tx);
+  };
   return {
     db: { transaction: async (cb: (tx: typeof mockTx) => Promise<unknown>) => cb(mockTx) },
     scopedRead: async (fn: (tx: typeof mockTx) => Promise<unknown>) => fn(mockTx),
@@ -99,7 +111,7 @@ const insuranceRow = (over: Record<string, unknown> = {}) => ({
 });
 
 beforeEach(() => {
-  vi.clearAllMocks();
+  vi.resetAllMocks();
   // Default: sqlClient tagged template returns empty array
   H.sqlClientQuery.mockReturnValue([]);
   H.selectFrom.mockResolvedValue([]);
@@ -116,14 +128,14 @@ afterAll(async () => {
 describe("POST /v1/hrms/medical/claims — submit medical claim", () => {
   const payload = {
     employeeId: EMP,
-    claimType: "OPD",
+    claimType: "outdoor",
     amountMinor: 50000,
     hospitalName: "AIIMS Delhi",
     hospitalId: HOSPITAL_ID,
     diagnosis: "Seasonal fever and viral infection",
     documents: ["https://docs.example.com/receipt.pdf"],
     dependantName: "Spouse",
-    dependantRelation: "wife",
+    dependantRelation: "spouse",
     remarks: "urgent treatment needed",
   };
 
@@ -226,7 +238,7 @@ describe("POST /v1/hrms/medical/claims — submit medical claim", () => {
   it("accepts optional fields being omitted (201)", async () => {
     const minimal = {
       employeeId: EMP,
-      claimType: "IPD",
+      claimType: "indoor",
       amountMinor: 100000,
       hospitalName: "Max Hospital",
       diagnosis: "Appendectomy",
@@ -238,16 +250,16 @@ describe("POST /v1/hrms/medical/claims — submit medical claim", () => {
     await app.close();
   });
 
-  it("accepts all claimType variants (dental)", async () => {
+  it("accepts all claimType variants (reimbursement)", async () => {
     const app = await buildApp();
-    const r = await app.inject({ method: "POST", url: "/v1/hrms/medical/claims", headers: auth(), payload: { ...payload, claimType: "dental" } });
+    const r = await app.inject({ method: "POST", url: "/v1/hrms/medical/claims", headers: auth(), payload: { ...payload, claimType: "reimbursement" } });
     expect(r.statusCode).toBe(201);
     await app.close();
   });
 
-  it("accepts all claimType variants (optical)", async () => {
+  it("accepts all claimType variants (advance)", async () => {
     const app = await buildApp();
-    const r = await app.inject({ method: "POST", url: "/v1/hrms/medical/claims", headers: auth(), payload: { ...payload, claimType: "optical" } });
+    const r = await app.inject({ method: "POST", url: "/v1/hrms/medical/claims", headers: auth(), payload: { ...payload, claimType: "advance" } });
     expect(r.statusCode).toBe(201);
     await app.close();
   });
