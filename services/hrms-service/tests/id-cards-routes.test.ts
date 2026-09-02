@@ -29,15 +29,45 @@ const H = vi.hoisted(() => ({
   publish: vi.fn(async () => undefined),
 }));
 
-vi.mock("../src/shared/db.js", () => ({
-  // buildApp() wires a blanket onRequest hook (createTenantTxHook(db), for
-  // RLS tenant scoping) that runs for every request regardless of which
-  // module's routes handle it, so `db.transaction` must exist and work even
-  // though the id-cards routes under test only ever use raw `sqlPool.query`.
-  db: { transaction: async (cb: (tx: unknown) => Promise<unknown>) => cb({}) },
-  sqlClient: { end: async () => {} },
-  sqlPool: { query: (...a: unknown[]) => H.poolQuery(...a) },
-}));
+vi.mock("../src/shared/db.js", () => {
+  // suspend/revoke/reactivate now run their UPDATE inside withRawTenantGuc
+  // (a real fix for the RLS-GUC gap: hrms.id_cards is RLS ENABLEd + FORCEd,
+  // and plain sqlPool.query never set app.tenant_id, so those UPDATEs always
+  // matched zero rows against a real DB — see routes.ts's top-of-file
+  // comment). withRawTenantGuc calls `sqlClient.begin()` then, as its very
+  // first statement, a tagged-template `set_config(...)` bookkeeping call
+  // before handing the transaction to the route's own `tx.unsafe(text,
+  // params)` query — both must be mocked so that internal call doesn't
+  // consume a mockResolvedValueOnce() queued for the route's real query.
+  // app.ts's onResponse hook fire-and-forgets shared/audit.ts's writeAuditLog
+  // for every mutating (non-GET) 2xx response via setImmediate — unawaited by
+  // the request handler, so it can still be in flight when the NEXT test's
+  // beforeEach queues its own mockResolvedValueOnce. writeAuditLog also calls
+  // `sqlClient.unsafe(...)` (an INSERT INTO audit.hr_action_log), which would
+  // otherwise silently steal a once-value queued for a real route query in a
+  // later test. Recognize and short-circuit it the same way set_config is
+  // short-circuited below, so it never touches H.poolQuery's queue.
+  const isAuditInsert = (text: unknown) => typeof text === "string" && text.includes("audit.hr_action_log");
+  const sqlClientFn = (...args: unknown[]) => {
+    const [strings] = args as [TemplateStringsArray];
+    if (strings?.[0]?.includes("set_config")) return Promise.resolve([]);
+    return H.poolQuery(...args);
+  };
+  sqlClientFn.end = async () => {};
+  sqlClientFn.unsafe = (...a: unknown[]) => (isAuditInsert(a[0]) ? Promise.resolve([]) : H.poolQuery(...a));
+  sqlClientFn.begin = async (fn: (tx: typeof sqlClientFn) => Promise<unknown>) => fn(sqlClientFn);
+  return {
+    // buildApp() wires a blanket onRequest hook (createTenantTxHook(db), for
+    // RLS tenant scoping) that runs for every request regardless of which
+    // module's routes handle it, so `db.transaction` must exist and work even
+    // though the id-cards routes under test only ever use raw `sqlPool.query`
+    // (issue/list/me/verify) or `sqlClient`+withRawTenantGuc (suspend/revoke/
+    // reactivate).
+    db: { transaction: async (cb: (tx: unknown) => Promise<unknown>) => cb({}) },
+    sqlClient: sqlClientFn,
+    sqlPool: { query: (...a: unknown[]) => H.poolQuery(...a) },
+  };
+});
 
 vi.mock("../src/shared/infra.js", () => ({
   // buildApp() also wires registerOpsRoutes(), which reads `cache` for its
@@ -60,7 +90,12 @@ const auth = (sub = USER, roles = ["hr_admin"]) => ({
 
 beforeEach(() => {
   vi.clearAllMocks();
-  H.poolQuery.mockResolvedValue({ rows: [], rowCount: 0 });
+  // Hybrid default: an empty array carrying both the `sqlPool.query` shape
+  // ({rows, rowCount}, for issue/list/me/verify) and the raw postgres.js
+  // `.unsafe()` shape (an array with a `.count`, for suspend/revoke/
+  // reactivate's withRawTenantGuc path) — every explicit test below queues
+  // its own mockResolvedValueOnce, so this only covers incidental extra calls.
+  H.poolQuery.mockResolvedValue(Object.assign([], { rows: [], rowCount: 0, count: 0 }));
 });
 
 afterAll(async () => {
@@ -129,7 +164,7 @@ describe("GET /v1/hrms/id-cards", () => {
 
 describe("PATCH /v1/hrms/id-cards/:id/suspend", () => {
   it("suspends an active card (200) and publishes idCardSuspend", async () => {
-    H.poolQuery.mockResolvedValueOnce({ rows: [], rowCount: 1 });
+    H.poolQuery.mockResolvedValueOnce(Object.assign([], { count: 1 })); // UPDATE via withRawTenantGuc/tx.unsafe
     const app = await buildApp();
     const r = await app.inject({ method: "PATCH", url: `/v1/hrms/id-cards/${CARD_ID}/suspend`, headers: auth(), payload: { reason: "lost" } });
     expect(r.statusCode).toBe(200);
@@ -141,7 +176,7 @@ describe("PATCH /v1/hrms/id-cards/:id/suspend", () => {
   });
 
   it("returns 404 when no active card matched (regression: previously replied 200 unconditionally)", async () => {
-    H.poolQuery.mockResolvedValueOnce({ rows: [], rowCount: 0 });
+    H.poolQuery.mockResolvedValueOnce(Object.assign([], { count: 0 })); // UPDATE via withRawTenantGuc/tx.unsafe
     const app = await buildApp();
     const r = await app.inject({ method: "PATCH", url: `/v1/hrms/id-cards/${CARD_ID}/suspend`, headers: auth(), payload: {} });
     expect(r.statusCode).toBe(404);
@@ -159,7 +194,7 @@ describe("PATCH /v1/hrms/id-cards/:id/suspend", () => {
 
 describe("PATCH /v1/hrms/id-cards/:id/revoke", () => {
   it("revokes an active/suspended card (200) and publishes idCardRevoke", async () => {
-    H.poolQuery.mockResolvedValueOnce({ rows: [], rowCount: 1 });
+    H.poolQuery.mockResolvedValueOnce(Object.assign([], { count: 1 })); // UPDATE via withRawTenantGuc/tx.unsafe
     const app = await buildApp();
     const r = await app.inject({ method: "PATCH", url: `/v1/hrms/id-cards/${CARD_ID}/revoke`, headers: auth(), payload: { reason: "terminated" } });
     expect(r.statusCode).toBe(200);
@@ -171,7 +206,7 @@ describe("PATCH /v1/hrms/id-cards/:id/revoke", () => {
   });
 
   it("returns 404 when no matching card (regression: previously replied 200 unconditionally)", async () => {
-    H.poolQuery.mockResolvedValueOnce({ rows: [], rowCount: 0 });
+    H.poolQuery.mockResolvedValueOnce(Object.assign([], { count: 0 })); // UPDATE via withRawTenantGuc/tx.unsafe
     const app = await buildApp();
     const r = await app.inject({ method: "PATCH", url: `/v1/hrms/id-cards/${CARD_ID}/revoke`, headers: auth(), payload: {} });
     expect(r.statusCode).toBe(404);
@@ -182,7 +217,7 @@ describe("PATCH /v1/hrms/id-cards/:id/revoke", () => {
 
 describe("PATCH /v1/hrms/id-cards/:id/reactivate", () => {
   it("reactivates a suspended card (200) and publishes idCardReactivate", async () => {
-    H.poolQuery.mockResolvedValueOnce({ rows: [], rowCount: 1 });
+    H.poolQuery.mockResolvedValueOnce(Object.assign([], { count: 1 })); // UPDATE via withRawTenantGuc/tx.unsafe
     const app = await buildApp();
     const r = await app.inject({ method: "PATCH", url: `/v1/hrms/id-cards/${CARD_ID}/reactivate`, headers: auth() });
     expect(r.statusCode).toBe(200);
@@ -194,7 +229,7 @@ describe("PATCH /v1/hrms/id-cards/:id/reactivate", () => {
   });
 
   it("returns 404 when no suspended card matched (regression: previously replied 200 unconditionally)", async () => {
-    H.poolQuery.mockResolvedValueOnce({ rows: [], rowCount: 0 });
+    H.poolQuery.mockResolvedValueOnce(Object.assign([], { count: 0 })); // UPDATE via withRawTenantGuc/tx.unsafe
     const app = await buildApp();
     const r = await app.inject({ method: "PATCH", url: `/v1/hrms/id-cards/${CARD_ID}/reactivate`, headers: auth() });
     expect(r.statusCode).toBe(404);

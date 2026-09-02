@@ -129,8 +129,15 @@ export function registerLifecycleConsumers(queue: Queue): void {
     };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
+      // hrms_employees_status_check (migrations/0025_employee_status_contract.sql,
+      // "P1-5: lock the employee status contract to one canonical lowercase enum")
+      // dropped "active" from the allowed set and normalises legacy "active" rows
+      // to "confirmed" — that migration's own comment names "confirmed" as the
+      // real serving status "active" was replaced by. Writing "active" here
+      // violates that CHECK constraint and the whole transaction (including the
+      // markProcessed insert above) rolls back silently.
       await tx.update(hrmsEmployees)
-        .set({ status: "active", updatedBy: msg.actorId })
+        .set({ status: "confirmed", updatedBy: msg.actorId })
         .where(and(eq(hrmsEmployees.id, p.employeeId), eq(hrmsEmployees.tenantId, p.tenantId)));
       await tx.insert(hrmsServiceBookEntries).values({
         tenantId: p.tenantId, employeeId: p.employeeId, entryType: "reinstatement",

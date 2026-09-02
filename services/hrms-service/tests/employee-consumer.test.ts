@@ -41,7 +41,11 @@ vi.mock("../src/shared/outbox.js", () => ({
   markProcessed: vi.fn(async () => true),
 }));
 vi.mock("../src/shared/infra.js", () => ({
-  cache: { invalidate: vi.fn(async () => undefined), makeKey: (...parts: string[]) => parts.join(":") },
+  cache: {
+    invalidate: vi.fn(async () => undefined),
+    invalidateResource: vi.fn(async () => undefined),
+    makeKey: (...parts: string[]) => parts.join(":"),
+  },
 }));
 vi.mock("../src/modules/employee/repo.js", () => ({
   insertEmployee: (...a: any[]) => insertEmployeeMock(...a),

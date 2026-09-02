@@ -35,6 +35,9 @@ const DEP_1   = "bbbbbbbb-1111-4000-8000-000000000088";
 // Service-book IDs
 const SB_1    = "cccccccc-1111-4000-8000-000000000088";
 
+// Lifecycle IDs
+const SEP_1   = "eeeeeeee-1111-4000-8000-000000000088";
+
 // Message IDs — deputation
 const MSG_DEP_CREATE  = "dd000001-0000-4000-8000-000000000088";
 const MSG_DEP_EXTEND  = "dd000002-0000-4000-8000-000000000088";
@@ -273,7 +276,7 @@ describe("Lifecycle consumers — coverage", () => {
       messageId: MSG_LC_SEPARATE, type: COMMANDS.lifecycleSeparate,
       tenantId: TENANT, actorId: ACTOR, correlationId: "corr-lc-2", schemaVersion: "1.0",
       payload: {
-        id: "lc-sep-001", tenantId: TENANT, employeeId: EMP_1,
+        id: SEP_1, tenantId: TENANT, employeeId: EMP_1,
         separationType: "retirement", effectiveDate: "2025-06-30",
         orderRef: "ORD/SEP/001", remarks: "Superannuation",
       },
