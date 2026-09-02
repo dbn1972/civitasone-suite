@@ -123,6 +123,26 @@ export async function holdRoutes(app: FastifyInstance): Promise<void> {
       reason: z.string().min(1).max(2000).optional(),
     }).parse(req.body ?? {});
 
+    // Synchronous pre-check (existence, state): the consumer's
+    // lifecycle_hold_routes__2 case already re-derives the hold and enforces
+    // both, but only AFTER the route has replied 200 (fire-and-forget publish)
+    // -- so a reject on a hold that is no longer 'pending' was told "success"
+    // while the write was silently rolled back in the consumer (WRONG_STATE),
+    // leaving the hold's real status untouched with no visible error. Mirror
+    // the same checks here, before publish, matching the pattern used for
+    // approve (see above) and employee/agent1-gap-routes.ts / cpf/routes.ts.
+    // No separation-of-duties check: the consumer has none for reject either.
+    const holdRows = await scopedRead((tx) =>
+      tx.select().from(hrmsEmployeeHolds)
+        .where(and(eq(hrmsEmployeeHolds.id, holdId), eq(hrmsEmployeeHolds.tenantId, ctx.tenantId)))
+        .limit(1),
+    );
+    const hold = holdRows[0];
+    if (!hold) throw new HttpError(404, "NOT_FOUND", "hold not found");
+    if (hold.status !== "pending") {
+      throw new HttpError(409, "WRONG_STATE", `hold is '${hold.status}', not 'pending'`);
+    }
+
     await publishF3Write(ctx, "lifecycle_hold_routes__2", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
 
     return reply.send({ data: { id: holdId, status: "rejected" } }) as any;
@@ -136,6 +156,27 @@ export async function holdRoutes(app: FastifyInstance): Promise<void> {
     const body = z.object({
       reason: z.string().min(1).max(2000),
     }).parse(req.body);
+
+    // Synchronous pre-check (existence, state): the consumer's
+    // lifecycle_hold_routes__3 case already re-derives the hold and enforces
+    // both, but only AFTER the route has replied 200 (fire-and-forget publish)
+    // -- so a release on a hold that is not 'active'/'approved' was told
+    // "success" while the write was silently rolled back in the consumer
+    // (WRONG_STATE), leaving the hold's real status untouched with no visible
+    // error. Mirror the same checks here, before publish, matching the pattern
+    // used for approve (see above) and employee/agent1-gap-routes.ts /
+    // cpf/routes.ts. No separation-of-duties check: the consumer has none for
+    // release either.
+    const holdRows = await scopedRead((tx) =>
+      tx.select().from(hrmsEmployeeHolds)
+        .where(and(eq(hrmsEmployeeHolds.id, holdId), eq(hrmsEmployeeHolds.tenantId, ctx.tenantId)))
+        .limit(1),
+    );
+    const hold = holdRows[0];
+    if (!hold) throw new HttpError(404, "NOT_FOUND", "hold not found");
+    if (hold.status !== "active" && hold.status !== "approved") {
+      throw new HttpError(409, "WRONG_STATE", `hold is '${hold.status}', must be 'active' or 'approved' to release`);
+    }
 
     await publishF3Write(ctx, "lifecycle_hold_routes__3", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
 
