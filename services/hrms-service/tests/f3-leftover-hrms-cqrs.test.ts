@@ -19,8 +19,37 @@ function routeFiles(): string[] {
 
 const SYNC_WRITE = /\b(?:db|tx)\.(?:insert|update|delete|execute)\s*\(|\bdb\.transaction\s*\(|await\s+repo\.(?:insert|update|delete|create|save|upsert|attest|transition)\w*\s*\(/;
 
+/**
+ * Sites that are DELIBERATELY exempt from the sync-write scan below because
+ * they are intentional, reviewed synchronous writes — not accidental F3
+ * leftovers. Each entry pins exactly one `<module-relative-path>:<line>` (not
+ * a whole file) so that a future refactor which moves the line re-triggers
+ * this test and forces a fresh look, instead of silently carrying a stale
+ * exemption forward. Add a new entry ONLY with a comment here explaining why
+ * an async `publishF3Write` conversion is unsafe at that exact site, and
+ * check the same reasoning is also written at the site itself.
+ *
+ * - recruitment/otp-verify-routes.ts:96 — `db.transaction(...)` wrapping the
+ *   `SELECT ... FOR UPDATE` read + conditional `repo.markVerified` write,
+ *   made synchronous by PR #912 to close a double-token-issuance race: two
+ *   concurrent requests submitting the same correct OTP code could both pass
+ *   `verifyOtp` before either write landed, and both get issued a "verified"
+ *   response. The fix locks the challenge row and writes `verified = true`
+ *   inside that same transaction, before the lock releases, so a second
+ *   concurrent request blocks on the lock and then observes `verified =
+ *   true` once it acquires it. Routing `markVerified` back through the
+ *   async `publishF3Write` queue would reopen exactly this gap — the decide
+ *   ("code is correct") and the durable write ("mark verified") would again
+ *   happen in two separate steps with a window between them, which is the
+ *   root cause PR #912 fixed. See the comment directly above the
+ *   `db.transaction` call in that file for the full writeup.
+ */
+const KNOWN_INTENTIONAL_SYNC_WRITES = new Set<string>([
+  "recruitment/otp-verify-routes.ts:96",
+]);
+
 describe("F3 leftover hrms CQRS route boundary", () => {
-  it("all module routes have zero sync Drizzle / repo writes", () => {
+  it("all module routes have zero sync Drizzle / repo writes (excluding disclosed exceptions above)", () => {
     const offenders: string[] = [];
     for (const file of routeFiles()) {
       const src = readFileSync(file, "utf8");
@@ -37,7 +66,14 @@ describe("F3 leftover hrms CQRS route boundary", () => {
         }
       }
     }
-    expect(offenders).toEqual([]);
+    const unexpected = offenders.filter((o) => !KNOWN_INTENTIONAL_SYNC_WRITES.has(o));
+    expect(unexpected).toEqual([]);
+
+    // Guard against a stale allowlist entry (e.g. the line moved after a
+    // refactor) silently hiding a *different* sync write that happens to
+    // land on the same file:line.
+    const stale = [...KNOWN_INTENTIONAL_SYNC_WRITES].filter((entry) => !offenders.includes(entry));
+    expect(stale).toEqual([]);
   });
 
   it("leave cancel publishes via sendAccepted", () => {
