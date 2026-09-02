@@ -1,6 +1,7 @@
 import { eq } from "drizzle-orm";
 import { cache } from "../../shared/infra.js";
 import { scopedRead } from "../../shared/db.js";
+import { maskValue } from "../../shared/pii-mask.js";
 import * as repo from "./repo.js";
 import { hrmsDepartments, hrmsDesignations } from "./schema.js";
 import type { EmployeeRow } from "./schema.js";
@@ -68,7 +69,17 @@ export async function getEmployeeDetail(id: string, tenantId: string): Promise<E
     joiningDate: emp.dateOfJoining,
     status: emp.status,
     ...(emp.email          ? { email: emp.email }                     : {}),
-    ...(emp.mobile         ? { phone: emp.mobile }                    : {}),
+    // SECURITY: pii-mask.ts declares that PII columns (including mobile)
+    // must never be returned in full in ANY API response. This endpoint is
+    // reachable by every READER_ROLES member (hr_admin, hr_officer,
+    // super_admin, manager) for ANY employee in the tenant, not just direct
+    // reports -- and self-service/routes.ts masks mobile even for an
+    // employee viewing their OWN record via maskPii(), so there is no
+    // existing precedent anywhere in this codebase for a role that sees it
+    // in full. Match that established convention: last 4 digits only.
+    // Non-null assertion is safe: emp.mobile is truthy here, and maskValue
+    // only returns undefined for a null/undefined/empty input.
+    ...(emp.mobile         ? { phone: maskValue(emp.mobile)! }        : {}),
     ...(desig?.payGrade    ? { grade: desig.payGrade }                : {}),
     ...(emp.station        ? { postingLocation: emp.station }         : {}),
     // HR-A deep-verify finding: confirmationDate is a real column already on

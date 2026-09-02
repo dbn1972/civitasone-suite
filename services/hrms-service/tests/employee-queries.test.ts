@@ -10,6 +10,17 @@
  * are actively rendered by the frontend (a "Service Confirmed" lifecycle
  * event; a "Reports To" field) -- so neither could ever appear. These tests
  * cover the fix.
+ *
+ * SECURITY/COMPLIANCE finding: getEmployeeDetail returned emp.mobile raw
+ * as phone, bypassing shared/pii-mask.ts's written policy that PII columns
+ * (pan, aadhaarRef, bankAccountNo, bankIfsc, mobile) must never be returned
+ * in full in any API response. This endpoint (GET /v1/hrms/employees/:id) is
+ * reachable by every READER_ROLES member (hr_admin, hr_officer, super_admin,
+ * manager) for any employee in the tenant. self-service/routes.ts already
+ * masks mobile via maskPii() even for an employee viewing their OWN record,
+ * so full masking here (last 4 digits only, matching maskValue's existing
+ * convention) has no role carve-out anywhere else in this codebase. These
+ * tests cover the fix.
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { randomUUID } from "node:crypto";
@@ -119,5 +130,27 @@ describe("getEmployeeDetail", () => {
     const result = await getEmployeeDetail(id, TENANT);
     expect(result?.reportingTo).toBeUndefined();
     expect(findByIdMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("SECURITY: masks the mobile number to last 4 digits in phone -- never returns it in full (regression: previously raw)", async () => {
+    const id = randomUUID();
+    findByIdMock.mockResolvedValueOnce(baseRow({ id, mobile: "9876543210" }));
+    rowsMock.mockResolvedValueOnce([{ name: "Finance" }]);
+    rowsMock.mockResolvedValueOnce([{ name: "Officer", payGrade: null }]);
+
+    const result = await getEmployeeDetail(id, TENANT);
+    expect(result?.phone).toBe("******3210");
+    expect(result?.phone).not.toBe("9876543210");
+    expect(result?.phone).not.toContain("987654");
+  });
+
+  it("omits phone when the row has no mobile number (no regression)", async () => {
+    const id = randomUUID();
+    findByIdMock.mockResolvedValueOnce(baseRow({ id, mobile: null }));
+    rowsMock.mockResolvedValueOnce([{ name: "Finance" }]);
+    rowsMock.mockResolvedValueOnce([{ name: "Officer", payGrade: null }]);
+
+    const result = await getEmployeeDetail(id, TENANT);
+    expect(result?.phone).toBeUndefined();
   });
 });
