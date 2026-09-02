@@ -570,11 +570,18 @@ export function registerF3_recruitment_Consumers(queue: Queue): void {
             break;
           }
           case "recruitment_candidate_public_auth_routes__2": {
-            // Restored: mark the OTP challenge verified + candidate.emailVerified.
-            // The route already validated the code and issued the signed
-            // cand_token synchronously; this write is the audit / replay-guard
-            // bookkeeping, mirroring `otpRepo.markVerified` used by the HR
-            // flow's `recruitment_otp_verify_routes__2` case.
+            // NOW UNUSED by the route (kept for in-flight messages published
+            // by a pre-fix instance during a rolling deploy — same as
+            // `recruitment_candidate_public_auth_routes__1` / the HR flow's
+            // `recruitment_otp_verify_routes__1` / `__2` going unused above).
+            // candidate-public-auth-routes.ts's otp-verify now calls
+            // `otpRepo.markVerified` SYNCHRONOUSLY, inside the same locked
+            // transaction as the challenge read, to close a double-token-
+            // issuance race: two concurrent requests submitting the same
+            // correct code against the same not-yet-verified challenge could
+            // each pass verification and each mint a token before this
+            // deferred write landed. Handler kept as-is (idempotent) so it
+            // remains safe to process any such in-flight message.
             const challengeId = p.challengeId as string;
             const candidateId = p.candidateId as string;
             if (!challengeId) return;
@@ -1079,7 +1086,16 @@ export function registerF3_recruitment_Consumers(queue: Queue): void {
             break;
           }
           case "recruitment_otp_verify_routes__2": {
-            // Restored: the latest challenge for this candidate + channel.
+            // NOW UNUSED by the route (kept for in-flight messages published
+            // by a pre-fix instance during a rolling deploy — same as `__1`
+            // above). otp-verify-routes.ts's otp/verify now calls
+            // `repo.markVerified` SYNCHRONOUSLY, inside the same locked
+            // transaction as the challenge read, to close a double-issuance
+            // race: two concurrent requests submitting the same correct code
+            // against the same not-yet-verified challenge could each pass
+            // verification before this deferred write landed. Handler kept
+            // as-is (idempotent) so it remains safe to process any such
+            // in-flight message.
             const challenge = await otpRepo.findLatestChallenge(p.tenantId, id, body.channel ?? "email");
             if (!challenge) throw new HttpError(404, "NO_CHALLENGE", "no OTP challenge found");
             await otpRepo.markVerified(tx, p.tenantId, challenge.id, id, body.channel ?? "email");

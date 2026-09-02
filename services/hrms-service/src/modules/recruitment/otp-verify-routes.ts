@@ -72,14 +72,38 @@ export async function otpVerifyRoutes(app: FastifyInstance): Promise<void> {
     // (see `recruitment_otp_verify_routes__1` below, now unused), so the
     // race window could be as wide as the queue's processing lag. A correct
     // code still leaves `attempts` untouched, exactly as before.
+    //
+    // SECURITY/CORRECTNESS: the same lock/transaction is now ALSO used to
+    // mark the challenge verified synchronously on the success path (see the
+    // `repo.markVerified` call below), instead of the DEFERRED async publish
+    // this route used previously (`recruitment_otp_verify_routes__2`, now
+    // unused — same pattern as `__1` above). Before this, two concurrent
+    // requests submitting the SAME correct code against the SAME
+    // not-yet-verified challenge could each pass `verifyOtp` (it only
+    // rejects an already-`verified` challenge) before either write landed —
+    // a double-issuance race on the "verified" response, mirroring the
+    // public careers-portal route's identical double-token-issuance race
+    // (see candidate-public-auth-routes.ts). Writing `verified = true` here,
+    // before the lock releases, forces a second concurrent request to block
+    // on the lock, then observe `verified = true` once it acquires it and
+    // fail with a normal `already_verified` 422 instead of also succeeding.
     const outcome = await db.transaction(async (tx) => {
       const challenge = await repo.lockLatestChallenge(tx, ctx.tenantId, id, body.channel);
       if (!challenge) return { kind: "no_challenge" as const };
       const result = verifyOtp(challenge, body.code, Date.now());
       if (!result.valid) {
-        await repo.incrementAttempts(tx, ctx.tenantId, challenge.id);
+        // Every reason except `already_verified` still counts against the
+        // lockout budget, matching existing behaviour — see
+        // candidate-public-auth-routes.ts's identical guard for the full
+        // reasoning (concurrent duplicate submissions of the CORRECT code
+        // now fail as `already_verified`, which must not itself burn an
+        // attempt).
+        if (result.reason !== "already_verified") {
+          await repo.incrementAttempts(tx, ctx.tenantId, challenge.id);
+        }
         return { kind: "invalid" as const, reason: result.reason };
       }
+      await repo.markVerified(tx, ctx.tenantId, challenge.id, id, body.channel);
       return { kind: "valid" as const };
     });
 
@@ -88,7 +112,6 @@ export async function otpVerifyRoutes(app: FastifyInstance): Promise<void> {
       throw new HttpError(422, "OTP_INVALID", outcome.reason ?? "invalid code") as any;
     }
 
-    await publishF3Write(ctx, "recruitment_otp_verify_routes__2", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     return reply.send({ candidateId: id, channel: body.channel, verified: true }) as any;
   });
 
