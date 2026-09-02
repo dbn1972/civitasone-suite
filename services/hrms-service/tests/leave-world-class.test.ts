@@ -2,9 +2,10 @@ import { describe, it, expect, beforeAll } from "vitest";
 import { buildApp } from "../src/app.js";
 import type { FastifyInstance } from "fastify";
 import { createHmac } from "node:crypto";
-import { seedHrmsCoreFixtures } from "./fixtures/core-seed.js";
+import { seedHrmsCoreFixtures, type HrmsLeaveTypeIds } from "./fixtures/core-seed.js";
 
 let app: FastifyInstance;
+let leaveTypeIds: HrmsLeaveTypeIds;
 
 function mint(roles: string[] = ["super_admin", "hr_admin"]) {
   const S = process.env.JWT_SECRET ?? "civitasone-dev-secret";
@@ -20,7 +21,7 @@ function mint(roles: string[] = ["super_admin", "hr_admin"]) {
 const AUTH = { authorization: `Bearer ${mint()}` };
 const CT = { "content-type": "application/json" };
 
-beforeAll(async () => { await seedHrmsCoreFixtures(); app = await buildApp(); });
+beforeAll(async () => { leaveTypeIds = await seedHrmsCoreFixtures(); app = await buildApp(); });
 
 // ═══════════════════════════════════════════════════════════════
 // SECTION 1: LEAVE POLICY CONFIGURATION (Admin CRUD)
@@ -198,7 +199,7 @@ describe("4. Leave Application (CQRS Write Flow)", () => {
     const r = await app.inject({
       method: "POST", url: "/v1/hrms/leave-applications",
       headers: { ...AUTH, ...CT },
-      payload: { employeeId: "eeeeeeee-0001-0000-0000-000000000005", leaveTypeId: "eeeeeeee-0001-0000-0000-000000000007", allocId: "eeeeeeee-0001-0000-0000-000000000009", fromDate: "2026-09-10", toDate: "2026-09-11", daysApplied: 2, reason: "E2E world-class test" },
+      payload: { employeeId: "eeeeeeee-0001-0000-0000-000000000005", leaveTypeId: leaveTypeIds.clLeaveTypeId, allocId: "eeeeeeee-0001-0000-0000-000000000009", fromDate: "2026-09-10", toDate: "2026-09-11", daysApplied: 2, reason: "E2E world-class test" },
     });
     expect(r.statusCode).toBe(202);
     expect(r.json()).toHaveProperty("id");

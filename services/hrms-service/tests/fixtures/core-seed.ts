@@ -48,9 +48,8 @@
  * re-inserts the CL/EL rows by fixed id (eeeeeeee-...-007 / ...-008) to get
  * predictable ids for its own leave_allocs — but
  * migrations/0005_configurable_leave_policies.sql already creates CL and EL
- * with exactly those same fixed ids (CL first, so CL=...-007, EL=...-008 on
- * a fresh cluster) AND seeds leave.hrms_leave_policy_rules rows keyed to
- * them (permanent/contractual/vendor_deputed/deputation policies, see
+ * per tenant AND seeds leave.hrms_leave_policy_rules rows keyed to them
+ * (permanent/contractual/vendor_deputed/deputation policies, see
  * leave-world-class.test.ts section 1). Re-running seed-all.mjs's delete
  * step here aborts with `violates foreign key constraint
  * hrms_leave_policy_rules_leave_type_id_fkey` on a freshly migrated,
@@ -60,10 +59,26 @@
  * a leave_type row now coded "EL", which breaks
  * leave-world-class.test.ts 1.3 ("contractual must not include EL"), a test
  * that passes today without this fixture at all. None of the four e2e
- * suites actually assert what CODE eeeeeeee-...-007 / ...-008 resolve to —
- * they only need the ids to exist and FK-resolve — so the fix is to leave
+ * suites actually assert what CODE a given leave_type_id resolves to — they
+ * only need the ids to exist and FK-resolve — so the fix is to leave
  * migration 0005's rows exactly as it created them and point this fixture's
- * leave_allocs / leave_apps at those same ids.
+ * leave_allocs / leave_apps at whatever ids CL/EL actually got.
+ *
+ * THAT LAST PART used to be hardcoded (eeeeeeee-...-007 for CL, ...-008 for
+ * EL) on the assumption that migration 0005 always assigns those two exact
+ * ids — true only the FIRST time it runs for a tenant that has no CL/EL row
+ * yet. Migration 0005 itself is insert-if-missing (see its header): when a
+ * CL/EL row for tenant T already exists — a long-lived, hand-seeded, or
+ * previously-migrated dev/CI Postgres, not a one-shot fresh cluster — it
+ * REUSES that row's actual id and never touches -007/-008 at all. Verified
+ * against this repo's own long-lived dev cluster: tenant T's CL/EL ids there
+ * are eeeeeeee-...-053 / ...-052, not -007 / -008, so every leave-
+ * application POST built around the hardcoded ids (geo-attendance-e2e.test.ts
+ * F1, hr-ecosystem-e2e.test.ts 4.3, leave-world-class.test.ts 4.1) 404'd with
+ * LEAVE_TYPE_NOT_FOUND — routes.ts's `types.find(t => t.id === body.leaveTypeId)`
+ * simply never matched. Fixed by resolving the tenant's ACTUAL CL/EL ids by
+ * code below (after migrations have created them) and handing them back to
+ * every caller instead of assuming a fixed id anywhere.
  */
 import postgres from "postgres";
 
@@ -82,15 +97,26 @@ const A = "00000000-0000-0000-0000-000000000099"; // actor (admin/system — als
 // meaningful as "some app-wide-unique bigint" — value itself is arbitrary.
 const SEED_LOCK_KEY = 918273645;
 
-let seededOnce: Promise<void> | undefined;
+/**
+ * Tenant T's actual CL/EL leave.hrms_leave_types ids, resolved by code
+ * (not assumed) after migration 0005 has created them — see the file
+ * header. Callers need these to build a leave-application payload whose
+ * leaveTypeId will actually match a row for this tenant/database.
+ */
+export interface HrmsLeaveTypeIds {
+  clLeaveTypeId: string;
+  elLeaveTypeId: string;
+}
+
+let seededOnce: Promise<HrmsLeaveTypeIds> | undefined;
 
 /** Idempotent. Safe to call from every suite's beforeAll — work happens once per test process. */
-export function seedHrmsCoreFixtures(): Promise<void> {
+export function seedHrmsCoreFixtures(): Promise<HrmsLeaveTypeIds> {
   if (!seededOnce) seededOnce = doSeed();
   return seededOnce;
 }
 
-async function doSeed(): Promise<void> {
+async function doSeed(): Promise<HrmsLeaveTypeIds> {
   const sql = postgres(DATABASE_URL, { max: 1 });
   try {
     // Serialize concurrent callers (separate Vitest worker processes each
@@ -128,16 +154,33 @@ VALUES
   ('eeeeeeee-0001-0000-0000-000000000005', '${T}', 'EMP001', 'Ravi Kumar',   'eeeeeeee-0001-0000-0000-000000000001', 'eeeeeeee-0001-0000-0000-000000000003', '2010-01-15', 'permanent', 'confirmed', 14400000, 'INR', now(), now(), '${A}', '${A}', 1),
   ('eeeeeeee-0001-0000-0000-000000000006', '${T}', 'EMP002', 'Priya Sharma', 'eeeeeeee-0001-0000-0000-000000000002', 'eeeeeeee-0001-0000-0000-000000000004', '2015-06-01', 'permanent', 'confirmed', 9000000,  'INR', now(), now(), '${A}', '${A}', 1)
 ON CONFLICT (id) DO UPDATE SET full_name = EXCLUDED.full_name, department_id = EXCLUDED.department_id, updated_at = now();
+`);
 
--- leave.hrms_leave_types is NOT touched here — migrations/0005 already
--- creates CL (eeeeeeee-...-007) and EL (eeeeeeee-...-008) on a fresh
--- cluster (see the file header). The leave_allocs/leave_apps rows below
--- reference those same ids as-is.
+      // leave.hrms_leave_types is NOT touched here — migrations/0005 creates
+      // CL/EL per tenant (see the file header for why their ids can't be
+      // assumed fixed). Resolve tenant T's ACTUAL CL/EL ids by code instead.
+      const clElRows = (await sql.unsafe(`
+SELECT
+  (SELECT id FROM leave.hrms_leave_types WHERE tenant_id = '${T}' AND code = 'CL' LIMIT 1) AS cl_id,
+  (SELECT id FROM leave.hrms_leave_types WHERE tenant_id = '${T}' AND code = 'EL' LIMIT 1) AS el_id
+`)) as unknown as { cl_id: string | null; el_id: string | null }[];
+      const clId = clElRows[0]?.cl_id;
+      const elId = clElRows[0]?.el_id;
+      if (!clId || !elId) {
+        throw new Error(
+          `core-seed: tenant ${T} has no CL/EL row in leave.hrms_leave_types ` +
+          `(cl_id=${clId ?? "null"}, el_id=${elId ?? "null"}). ` +
+          "migrations/0005_configurable_leave_policies.sql creates these per " +
+          "tenant on first run — apply hrms-service migrations " +
+          "(scripts/ci/bootstrap-postgres.sh) before seeding fixtures.",
+        );
+      }
 
+      await sql.unsafe(`
 INSERT INTO leave.hrms_leave_allocs (id, tenant_id, employee_id, leave_type_id, fy, total_days, balance_days, created_at, updated_at, created_by, updated_by, version)
 VALUES
-  ('eeeeeeee-0001-0000-0000-000000000009', '${T}', 'eeeeeeee-0001-0000-0000-000000000005', 'eeeeeeee-0001-0000-0000-000000000007', '2024-25', 30, 25, now(), now(), '${A}', '${A}', 1),
-  ('eeeeeeee-0001-0000-0000-000000000010', '${T}', 'eeeeeeee-0001-0000-0000-000000000006', 'eeeeeeee-0001-0000-0000-000000000008', '2024-25', 15, 13, now(), now(), '${A}', '${A}', 1)
+  ('eeeeeeee-0001-0000-0000-000000000009', '${T}', 'eeeeeeee-0001-0000-0000-000000000005', '${clId}', '2024-25', 30, 25, now(), now(), '${A}', '${A}', 1),
+  ('eeeeeeee-0001-0000-0000-000000000010', '${T}', 'eeeeeeee-0001-0000-0000-000000000006', '${elId}', '2024-25', 15, 13, now(), now(), '${A}', '${A}', 1)
 ON CONFLICT (id) DO NOTHING;
 
 -- created_by/updated_by on these two are the *applicant* employee, not the
@@ -153,8 +196,8 @@ ON CONFLICT (id) DO NOTHING;
 -- approver (a different actor) able to actually approve it.
 INSERT INTO leave.hrms_leave_apps (id, tenant_id, employee_id, leave_type_id, alloc_id, from_date, to_date, days_applied, reason, status, created_at, updated_at, created_by, updated_by, version)
 VALUES
-  ('eeeeeeee-0001-0000-0000-000000000011', '${T}', 'eeeeeeee-0001-0000-0000-000000000005', 'eeeeeeee-0001-0000-0000-000000000007', 'eeeeeeee-0001-0000-0000-000000000009', '2024-12-23', '2024-12-27', 5, 'Annual leave',  'approved', now(), now(), 'eeeeeeee-0001-0000-0000-000000000005', 'eeeeeeee-0001-0000-0000-000000000005', 1),
-  ('eeeeeeee-0001-0000-0000-000000000012', '${T}', 'eeeeeeee-0001-0000-0000-000000000006', 'eeeeeeee-0001-0000-0000-000000000008', 'eeeeeeee-0001-0000-0000-000000000010', '2024-12-30', '2024-12-31', 2, 'Personal work', 'pending',  now(), now(), 'eeeeeeee-0001-0000-0000-000000000006', 'eeeeeeee-0001-0000-0000-000000000006', 1)
+  ('eeeeeeee-0001-0000-0000-000000000011', '${T}', 'eeeeeeee-0001-0000-0000-000000000005', '${clId}', 'eeeeeeee-0001-0000-0000-000000000009', '2024-12-23', '2024-12-27', 5, 'Annual leave',  'approved', now(), now(), 'eeeeeeee-0001-0000-0000-000000000005', 'eeeeeeee-0001-0000-0000-000000000005', 1),
+  ('eeeeeeee-0001-0000-0000-000000000012', '${T}', 'eeeeeeee-0001-0000-0000-000000000006', '${elId}', 'eeeeeeee-0001-0000-0000-000000000010', '2024-12-30', '2024-12-31', 2, 'Personal work', 'pending',  now(), now(), 'eeeeeeee-0001-0000-0000-000000000006', 'eeeeeeee-0001-0000-0000-000000000006', 1)
 ON CONFLICT (id) DO NOTHING;
 
 INSERT INTO attendance.hrms_shifts (id, tenant_id, name, start_time, end_time, created_at, updated_at, created_by, updated_by, version)
@@ -197,6 +240,8 @@ VALUES
   ('eeeeeeee-0001-0000-0000-000000000024', '${T}', 'Digital Governance Workshop',   'Conference Room B', '2024-12-10', '2024-12-11', 'NIC Delhi',                  25, 'planned', now(), now(), '${A}', '${A}', 1)
 ON CONFLICT (id) DO NOTHING;
 `);
+
+      return { clLeaveTypeId: clId, elLeaveTypeId: elId };
     } finally {
       await sql.unsafe(`select pg_advisory_unlock(${SEED_LOCK_KEY})`);
     }

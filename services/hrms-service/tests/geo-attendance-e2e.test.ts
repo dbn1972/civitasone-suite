@@ -4,7 +4,7 @@ import { queue } from "../src/shared/infra.js";
 import { registerF3_geo_attendance_Consumers } from "../src/modules/geo-attendance/f3-consumer.js";
 import type { FastifyInstance } from "fastify";
 import { createHmac } from "node:crypto";
-import { seedHrmsCoreFixtures } from "./fixtures/core-seed.js";
+import { seedHrmsCoreFixtures, type HrmsLeaveTypeIds } from "./fixtures/core-seed.js";
 
 // Office-location creation and every geo punch are async F3 writes: the route
 // publishes the write and answers 201 immediately, so without the consumer
@@ -19,6 +19,7 @@ async function drainF3(): Promise<void> {
 }
 
 let app: FastifyInstance;
+let leaveTypeIds: HrmsLeaveTypeIds;
 
 function mint(sub = "00000000-0000-0000-0000-000000000099", roles = ["super_admin","hr_admin","officer","employee"]) {
   const S = process.env.JWT_SECRET ?? "civitasone-dev-secret";
@@ -40,7 +41,7 @@ const DELHI_LAT = 28.6139; const DELHI_LNG = 77.2090;
 const AUTH = { authorization: `Bearer ${mint()}` };
 const CT = { "content-type": "application/json" };
 
-beforeAll(async () => { await seedHrmsCoreFixtures(); app = await buildApp(); });
+beforeAll(async () => { leaveTypeIds = await seedHrmsCoreFixtures(); app = await buildApp(); });
 
 // ═══════════════════════════════════════════════════════════
 // A. OFFICE LOCATIONS & GEO-FENCING
@@ -236,7 +237,7 @@ describe("F. Leave Application with Reporting Officer", () => {
     const r = await app.inject({
       method: "POST", url: "/v1/hrms/leave-applications",
       headers: { ...AUTH, ...CT },
-      payload: { employeeId: EMP1, leaveTypeId: "eeeeeeee-0001-0000-0000-000000000007", allocId: "eeeeeeee-0001-0000-0000-000000000009", fromDate: "2026-10-01", toDate: "2026-10-03", daysApplied: 3, reason: "Personal work" },
+      payload: { employeeId: EMP1, leaveTypeId: leaveTypeIds.clLeaveTypeId, allocId: "eeeeeeee-0001-0000-0000-000000000009", fromDate: "2026-10-01", toDate: "2026-10-03", daysApplied: 3, reason: "Personal work" },
     });
     expect(r.statusCode).toBe(202);
     expect(r.json().id).toBeDefined();
