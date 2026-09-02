@@ -20,9 +20,26 @@ import { COMMANDS } from "../../topics.js";
  * RLS fails CLOSED rather than erroring. Confirmed empirically: a row inserted
  * with the GUC correctly set was invisible to a plain `hrms_svc` session with no
  * GUC, which is exactly why suspend/revoke/reactivate 404'd ("card not found")
- * against a card that genuinely existed. Only suspend/revoke/reactivate are
- * wrapped here (the three that were failing); issue/list/me/verify above have
- * the identical unscoped-RLS shape and are tracked separately for the same fix.
+ * against a card that genuinely existed.
+ *
+ * suspend/revoke/reactivate were fixed first (the three that were originally
+ * reported failing). This pass wraps the remaining four handlers with the
+ * identical unscoped-RLS shape: issue, list, me, verify. Two of them had a
+ * second, independent defect that was masking the RLS gap behind a different
+ * symptom, fixed alongside the GUC wrap (see inline comments at each site):
+ *   - issue's issuer-name lookup and me's employee lookup both queried
+ *     `employee.hrms_employees` (also RLS ENABLEd + FORCEd, migration
+ *     0026/0034) by columns that don't exist on that table (`user_id`,
+ *     `first_name`, `last_name` — the real columns are `user_ref` and
+ *     `full_name`, confirmed against src/modules/employee/schema.ts and the
+ *     live schema). That is a hard "column does not exist" error independent
+ *     of RLS, so both handlers 500'd before the missing-GUC gap could even
+ *     manifest. Fixing only the GUC would have left both handlers broken.
+ *   - issue's card-number sequence SELECT (`COUNT(*) FROM hrms.id_cards WHERE
+ *     tenant_id = $1`) silently returned 0 with no GUC set, so every card
+ *     issued in production so far got sequence 1 (e.g. always
+ *     "DIC/<year>/00001") instead of a real running count — a data-integrity
+ *     bug the GUC fix also resolves as a side effect.
  */
 function withTenantGuc<T>(
   tenantId: string,
@@ -120,27 +137,41 @@ export async function idCardRoutes(app: FastifyInstance): Promise<void> {
     const id = randomUUID();
     const now = new Date().toISOString();
 
-    // Generate sequential card number
-    const seqResult = await sqlPool.query(
+    // Generate sequential card number. hrms.id_cards is RLS FORCEd -- without
+    // the GUC this always saw 0 rows and returned seq=1 forever, so every
+    // card issued in production so far collided on "DIC/<year>/00001"
+    // (masked because nothing else exercised the unique constraint until a
+    // second concurrent issue).
+    const seqResult = await withTenantGuc(ctx.tenantId, (tx) => queryTx(
+      tx,
       `SELECT COUNT(*)::int + 1 AS seq FROM hrms.id_cards WHERE tenant_id = $1`,
       [ctx.tenantId],
-    );
+    ));
     const seq = seqResult.rows[0]?.seq ?? 1;
     const cardNumber = generateCardNumber("DIC", seq);
 
     // Generate QR payload (HMAC-signed)
     const qrPayload = generateQrPayload(id, ctx.tenantId, cardNumber);
 
-    // Get issuer name
-    const issuerRow = await sqlPool.query(
-      `SELECT first_name, last_name FROM employee.hrms_employees WHERE user_id = $1 AND tenant_id = $2`,
+    // Get issuer name. employee.hrms_employees is ALSO RLS ENABLEd + FORCEd
+    // (migration 0026/0034_rls_*.sql) -- needed the same GUC wrap. This query
+    // additionally referenced first_name/last_name/user_id, none of which
+    // exist on that table (real columns: full_name, user_ref -- confirmed
+    // against src/modules/employee/schema.ts and the live schema; user_ref is
+    // the same actorId-linkage column self-service/routes.ts and
+    // employee/actor-link.ts already key employee lookups on). That was a
+    // hard "column does not exist" error independent of RLS, so this query
+    // 500'd before the missing-GUC gap could even manifest -- fixed here too
+    // since the GUC wrap alone would not have made this endpoint work.
+    const issuerRow = await withTenantGuc(ctx.tenantId, (tx) => queryTx(
+      tx,
+      `SELECT full_name FROM employee.hrms_employees WHERE user_ref = $1 AND tenant_id = $2`,
       [ctx.actorId, ctx.tenantId],
-    );
-    const issuerName = issuerRow.rows[0]
-      ? `${issuerRow.rows[0].first_name} ${issuerRow.rows[0].last_name}`.trim()
-      : "Admin";
+    ));
+    const issuerName = issuerRow.rows[0]?.full_name ?? "Admin";
 
-    await sqlPool.query(
+    await withTenantGuc(ctx.tenantId, (tx) => queryTx(
+      tx,
       `INSERT INTO hrms.id_cards (id, tenant_id, holder_name, holder_photo_url, designation, department,
         employee_id, employee_code, card_type, card_number, vendor_id, vendor_name, project_id, project_name,
         contract_id, issued_date, valid_from, valid_until, status, access_zones, access_hours,
@@ -159,7 +190,7 @@ export async function idCardRoutes(app: FastifyInstance): Promise<void> {
         body.accessZones ?? [], body.accessHours ?? "09:00-18:00",
         qrPayload, ctx.actorId, issuerName, now,
       ],
-    );
+    ));
 
     // HR-A deep-verify finding: registerIdCardConsumers (../id-cards/consumer.ts,
     // registered in worker.ts) subscribes to COMMANDS.idCardIssue/Suspend/
@@ -224,14 +255,18 @@ export async function idCardRoutes(app: FastifyInstance): Promise<void> {
     if (status) { where += ` AND status = $${idx++}`; params.push(status); }
     if (search) { where += ` AND (holder_name ILIKE $${idx} OR card_number ILIKE $${idx} OR employee_code ILIKE $${idx})`; params.push(`%${search}%`); idx++; }
 
-    const rows = await sqlPool.query(
+    // hrms.id_cards is RLS FORCEd -- without the GUC this always matched 0
+    // rows (empty list), regardless of the `WHERE tenant_id = $1` filter
+    // above (RLS's own USING clause is evaluated first and fails closed).
+    const rows = await withTenantGuc(ctx.tenantId, (tx) => queryTx(
+      tx,
       `SELECT id, holder_name, holder_photo_url, designation, department, employee_code,
               card_type, card_number, vendor_name, project_name, valid_from, valid_until,
               status, access_zones, verification_count, last_verified_at, issued_by_name, created_at
        FROM hrms.id_cards ${where}
        ORDER BY created_at DESC LIMIT 100`,
       params,
-    );
+    ));
 
     return reply.send({ data: rows.rows });
   });
@@ -242,15 +277,26 @@ export async function idCardRoutes(app: FastifyInstance): Promise<void> {
   app.get("/v1/hrms/id-cards/me", async (req, reply) => {
     const ctx = resolveContext(req);
 
-    // Find employee ID for current user
-    const empRow = await sqlPool.query(
-      `SELECT id FROM employee.hrms_employees WHERE user_id = $1 AND tenant_id = $2 LIMIT 1`,
+    // Find employee ID for current user. employee.hrms_employees is RLS
+    // ENABLEd + FORCEd (migration 0026/0034), so this needed the GUC wrap
+    // too. It also referenced a `user_id` column that doesn't exist on this
+    // table (real column: user_ref -- same actorId-linkage column
+    // self-service/routes.ts and employee/actor-link.ts already key employee
+    // lookups on); that was a hard "column does not exist" error independent
+    // of RLS, fixed alongside the GUC wrap.
+    const empRow = await withTenantGuc(ctx.tenantId, (tx) => queryTx(
+      tx,
+      `SELECT id FROM employee.hrms_employees WHERE user_ref = $1 AND tenant_id = $2 LIMIT 1`,
       [ctx.actorId, ctx.tenantId],
-    );
+    ));
     const employeeId = empRow.rows[0]?.id;
     if (!employeeId) throw new HttpError(404, "NOT_FOUND", "Employee record not found");
 
-    const card = await sqlPool.query(
+    // hrms.id_cards is RLS FORCEd -- without the GUC this always matched 0
+    // rows, so every employee with a genuinely active card got "No active ID
+    // card found" (NO_CARD) instead of their card.
+    const card = await withTenantGuc(ctx.tenantId, (tx) => queryTx(
+      tx,
       `SELECT id, holder_name, holder_photo_url, designation, department, employee_code,
               card_type, card_number, valid_from, valid_until, status, access_zones, access_hours,
               qr_payload, verification_count, last_verified_at, issued_by_name, issued_date
@@ -258,7 +304,7 @@ export async function idCardRoutes(app: FastifyInstance): Promise<void> {
        WHERE tenant_id = $1 AND employee_id = $2 AND status = 'active'
        ORDER BY created_at DESC LIMIT 1`,
       [ctx.tenantId, employeeId],
-    );
+    ));
 
     if (card.rowCount === 0) {
       return reply.code(404).send({ code: "NO_CARD", message: "No active ID card found. Please contact HR." });
@@ -279,13 +325,23 @@ export async function idCardRoutes(app: FastifyInstance): Promise<void> {
       return reply.code(400).send({ result: "invalid", message: "Invalid QR code format" });
     }
 
-    // Lookup card
-    const card = await sqlPool.query(
+    // Lookup card. hrms.id_cards is RLS FORCEd -- without the GUC this
+    // always matched 0 rows, so a security guard scanning a genuine,
+    // currently-valid card's QR code got "Card not found in system" for
+    // every single scan (result: "unknown"), never reaching the status
+    // checks or the verification-log INSERT/stat UPDATE below at all. This
+    // is the same silent-fail-closed shape as suspend/revoke/reactivate
+    // before their fix, just surfacing at a security checkpoint instead of
+    // an HR admin action. WHAT is being verified (QR HMAC format, then
+    // card id/tenant/status lookup) is unchanged -- only that the lookup can
+    // now actually find the row it was always supposed to find.
+    const card = await withTenantGuc(ctx.tenantId, (tx) => queryTx(
+      tx,
       `SELECT id, holder_name, holder_photo_url, designation, department, employee_code,
               card_type, card_number, vendor_name, valid_from, valid_until, status, access_zones, access_hours
        FROM hrms.id_cards WHERE id = $1 AND tenant_id = $2`,
       [cardId, ctx.tenantId],
-    );
+    ));
 
     if (card.rowCount === 0) {
       return reply.send({ result: "unknown", message: "Card not found in system" });
@@ -299,19 +355,27 @@ export async function idCardRoutes(app: FastifyInstance): Promise<void> {
     else if (c.status === "suspended") result = "suspended";
     else if (c.status === "expired" || (c.valid_until && today > c.valid_until)) result = "expired";
 
-    // Log verification
-    await sqlPool.query(
+    // Log verification. hrms.id_card_verifications is RLS FORCEd
+    // (migration 0123) with a WITH CHECK clause, so an INSERT with no GUC
+    // set would hard-error (row-security violation) rather than silently
+    // no-op -- unlike the SELECT above, this failure mode was never actually
+    // reachable in production because the SELECT already returned 0 rows
+    // first and the handler returned before getting here.
+    await withTenantGuc(ctx.tenantId, (tx) => queryTx(
+      tx,
       `INSERT INTO hrms.id_card_verifications (tenant_id, card_id, verified_by, location, result, latitude, longitude)
        VALUES ($1, $2, $3, $4, $5, $6, $7)`,
       [ctx.tenantId, cardId, ctx.actorId, body.location ?? "", result, body.latitude ?? null, body.longitude ?? null],
-    );
+    ));
 
-    // Update card verification stats
-    await sqlPool.query(
+    // Update card verification stats. Same RLS/WITH CHECK shape as the
+    // INSERT above -- also unreachable in production until the SELECT fix.
+    await withTenantGuc(ctx.tenantId, (tx) => queryTx(
+      tx,
       `UPDATE hrms.id_cards SET verification_count = verification_count + 1, last_verified_at = NOW(), last_verified_by = $1, updated_at = NOW()
-       WHERE id = $2`,
-      [ctx.actorId, cardId],
-    );
+       WHERE id = $2 AND tenant_id = $3`,
+      [ctx.actorId, cardId, ctx.tenantId],
+    ));
 
     return reply.send({
       result,

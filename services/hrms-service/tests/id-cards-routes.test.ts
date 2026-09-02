@@ -59,10 +59,14 @@ vi.mock("../src/shared/db.js", () => {
   return {
     // buildApp() wires a blanket onRequest hook (createTenantTxHook(db), for
     // RLS tenant scoping) that runs for every request regardless of which
-    // module's routes handle it, so `db.transaction` must exist and work even
-    // though the id-cards routes under test only ever use raw `sqlPool.query`
-    // (issue/list/me/verify) or `sqlClient`+withRawTenantGuc (suspend/revoke/
-    // reactivate).
+    // module's routes handle it, so `db.transaction` must exist and work.
+    // Every mutating/read query in this module now goes through
+    // `sqlClient`+withTenantGuc/withRawTenantGuc (issue/list/suspend/revoke/
+    // reactivate all fixed; this file covers issue/list/suspend/revoke/
+    // reactivate — see tests/id-cards-rls-remaining.test.ts for real-DB
+    // end-to-end coverage of all seven handlers, including me/verify).
+    // `sqlPool` is kept mocked here only because shared/db.js still exports
+    // it for other modules that import from this same mocked module.
     db: { transaction: async (cb: (tx: unknown) => Promise<unknown>) => cb({}) },
     sqlClient: sqlClientFn,
     sqlPool: { query: (...a: unknown[]) => H.poolQuery(...a) },
@@ -111,9 +115,13 @@ describe("POST /v1/hrms/id-cards", () => {
   };
 
   it("issues a card for hr_admin (201) and publishes idCardIssue for the audit consumer", async () => {
-    H.poolQuery.mockResolvedValueOnce({ rows: [{ seq: 1 }], rowCount: 1 }); // seq lookup
-    H.poolQuery.mockResolvedValueOnce({ rows: [], rowCount: 0 }); // issuer name lookup
-    H.poolQuery.mockResolvedValueOnce({ rows: [], rowCount: 1 }); // insert
+    // issue now runs its seq lookup, issuer-name lookup and INSERT each
+    // inside withTenantGuc/tx.unsafe (the RLS-GUC fix), so each queues in the
+    // raw postgres.js `.unsafe()` shape (an array carrying a `.count`) rather
+    // than the old direct `sqlPool.query` `{rows, rowCount}` shape.
+    H.poolQuery.mockResolvedValueOnce(Object.assign([{ seq: 1 }], { count: 1 })); // seq lookup
+    H.poolQuery.mockResolvedValueOnce(Object.assign([], { count: 0 })); // issuer name lookup
+    H.poolQuery.mockResolvedValueOnce(Object.assign([], { count: 1 })); // insert
     const app = await buildApp();
     const r = await app.inject({ method: "POST", url: "/v1/hrms/id-cards", headers: auth(), payload });
     expect(r.statusCode).toBe(201);
@@ -153,7 +161,11 @@ describe("POST /v1/hrms/id-cards", () => {
 
 describe("GET /v1/hrms/id-cards", () => {
   it("lists cards (200)", async () => {
-    H.poolQuery.mockResolvedValueOnce({ rows: [{ id: CARD_ID, holder_name: "Test" }], rowCount: 1 });
+    // list now runs its SELECT inside withTenantGuc/tx.unsafe (the RLS-GUC
+    // fix), so this queues in the raw postgres.js `.unsafe()` shape (an array
+    // carrying a `.count`) rather than the old direct `sqlPool.query`
+    // `{rows, rowCount}` shape.
+    H.poolQuery.mockResolvedValueOnce(Object.assign([{ id: CARD_ID, holder_name: "Test" }], { count: 1 }));
     const app = await buildApp();
     const r = await app.inject({ method: "GET", url: "/v1/hrms/id-cards", headers: auth() });
     expect(r.statusCode).toBe(200);

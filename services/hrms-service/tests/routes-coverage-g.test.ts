@@ -9,6 +9,7 @@ import { db, sqlClient } from "../src/shared/db.js";
 import { runWithTenant, withRawTenantGuc } from "@civitasone/db";
 import { hrmsMedicalClaims } from "../src/modules/medical/schema.js";
 import { hrmsProfilePhotos } from "../src/modules/face-verification/schema.js";
+import { hrmsEmployees, hrmsDepartments, hrmsDesignations } from "../src/modules/employee/schema.js";
 import { randomUUID } from "node:crypto";
 
 const SECRET = "test_secret_for_civitasone_32chr";
@@ -31,16 +32,49 @@ afterAll(async () => { await sqlClient.end(); });
  * exact starting state the endpoint requires, tenant-scoped the same way the
  * production write path scopes it (RLS is FORCEd on every table touched here).
  */
-async function seedIdCard(status: "active" | "suspended"): Promise<string> {
+async function seedIdCard(status: "active" | "suspended", employeeId: string | null = null): Promise<string> {
   const id = randomUUID();
   const cardNumber = `TST/${Date.now()}/${Math.floor(Math.random() * 100000)}`;
   await withRawTenantGuc(sqlClient, TENANT, (tx) => tx`
     INSERT INTO hrms.id_cards
-      (id, tenant_id, holder_name, card_type, card_number, valid_until, status, qr_payload, issued_by)
+      (id, tenant_id, holder_name, card_type, card_number, employee_id, valid_until, status, qr_payload, issued_by)
     VALUES
-      (${id}, ${TENANT}, 'Route Coverage Fixture', 'employee', ${cardNumber}, '2030-01-01', ${status}, 'CVO1:fixture:fixture', ${UUID})
+      (${id}, ${TENANT}, 'Route Coverage Fixture', 'employee', ${cardNumber}, ${employeeId}, '2030-01-01', ${status}, 'CVO1:fixture:fixture', ${UUID})
   `);
   return id;
+}
+
+/**
+ * Seeds a department, designation and employee linked to `UUID` (this file's
+ * default token subject) via `userRef` — for GET /v1/hrms/id-cards/me below,
+ * which now that its RLS-GUC gap and nonexistent-`user_id`-column bug are
+ * both fixed (see src/modules/id-cards/routes.ts) correctly 404s
+ * ("Employee record not found") when no such row exists, instead of always
+ * 500ing regardless of the row's presence like the pre-fix code did.
+ */
+async function seedEmployeeForMe(): Promise<string> {
+  const employeeId = randomUUID();
+  await runWithTenant(TENANT, () =>
+    db.transaction(async (tx) => {
+      const deptId = randomUUID();
+      const designationId = randomUUID();
+      await tx.insert(hrmsDepartments).values({
+        id: deptId, tenantId: TENANT, code: `RCG-${employeeId.slice(0, 4)}`, name: "Route Coverage Dept",
+        isActive: true, createdBy: UUID, updatedBy: UUID, version: 1,
+      });
+      await tx.insert(hrmsDesignations).values({
+        id: designationId, tenantId: TENANT, code: `RCG-D-${employeeId.slice(0, 4)}`, name: "Route Coverage Officer",
+        level: 5, payGrade: "Grade-A", createdBy: UUID, updatedBy: UUID, version: 1,
+      });
+      await tx.insert(hrmsEmployees).values({
+        id: employeeId, tenantId: TENANT, employeeNo: `RCG-${employeeId.slice(0, 8)}`, fullName: "Route Coverage Fixture Employee",
+        departmentId: deptId, designationId, dateOfJoining: "2020-01-01",
+        employeeType: "permanent", status: "confirmed", userRef: UUID,
+        createdBy: UUID, updatedBy: UUID, version: 1,
+      });
+    }),
+  );
+  return employeeId;
 }
 
 async function seedMedicalClaim(): Promise<string> {
@@ -703,6 +737,19 @@ describe("HRMS routes — ID Cards & Visiting Cards", () => {
   });
 
   it("GET /v1/hrms/id-cards/me", async () => {
+    // Root cause: employee.hrms_employees is RLS ENABLEd + FORCEd, and this
+    // route (like suspend/revoke/reactivate before their PR #893 fix) had no
+    // app.tenant_id GUC set on its raw sqlPool query -- RLS fails CLOSED, so
+    // the employee lookup always matched zero rows. Independently, that same
+    // query selected `WHERE user_id = $1`, a column that doesn't exist on
+    // employee.hrms_employees (real column: user_ref) -- a hard DB error that
+    // fired before the RLS gap could even manifest, so this endpoint 500'd
+    // unconditionally regardless of whether a caller had a card. Both fixed
+    // in src/modules/id-cards/routes.ts. Seed a real employee (linked via
+    // userRef to this file's default token subject) and an active card for
+    // them, the state /me requires to answer with something other than 404.
+    const employeeId = await seedEmployeeForMe();
+    await seedIdCard("active", employeeId);
     const app = await buildApp();
     const r = await app.inject({ method: "GET", url: "/v1/hrms/id-cards/me", headers: { authorization: `Bearer ${token()}` } });
     await app.close();
