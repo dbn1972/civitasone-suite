@@ -115,7 +115,12 @@ describe("rejection notice + disclosure policy (R-RA-0118)", () => {
   });
 
   it("404 when setting the policy on a missing vacancy", async () => {
-    H.setDisclosure.mockResolvedValue(false);
+    // The route now checks existence, synchronously, via getDisclosurePolicy
+    // (returns null for a missing job opening) BEFORE publishing
+    // (rejection-notice-routes.ts __0 — the old `if (!ok) throw 404` read
+    // setDisclosurePolicy's return value, but publishF3Write's placeholder is
+    // always truthy, so that check never fired).
+    H.getDisclosure.mockResolvedValue(null);
     const app = await buildApp();
     const r = await injectF3(app, { method: "PATCH", url: `/v1/hrms/job-openings/${JOB}/rejection-policy`, headers: auth(["hr_admin"]), payload: { discloseReason: true } });
     expect(r.statusCode).toBe(404);

@@ -80,8 +80,22 @@ export async function interviewRecordingRoutes(app: FastifyInstance): Promise<vo
     const { id } = idParam.parse(req.params);
     const rec = await repo.findRecording(ctx.tenantId, id);
     if (!rec || rec.status !== "active") throw new HttpError(404, "NOT_FOUND", "active recording not found");
-    const ok = await publishF3Write(ctx, "recruitment_interview_recording_routes__1", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
-    if (!ok) throw new HttpError(409, "VERSION_CONFLICT", "the recording changed; reload and retry");
+    // `ok` used to be checked for truthiness to surface an optimistic-version
+    // conflict (interviewRecordingRepo.softDelete is guarded on `rec.version`
+    // — see f3-consumer.ts __1), but publishF3Write resolves the { id,
+    // status, correlationId } placeholder, which is always truthy — `if
+    // (!ok)` could never fire. Unlike the deterministic state-machine guards
+    // fixed elsewhere in this PR, a version conflict is inherently a
+    // write-time race: this route's pre-read of `rec` can't know whether a
+    // concurrent delete will win the race that happens later, inside the
+    // consumer's own transaction. The 404 above (existence + still-active)
+    // is the real, synchronous part of the original check and is preserved;
+    // a genuine concurrent-delete race is now a silent no-op in the consumer
+    // (logged there on failure) rather than a false 409 that never fired
+    // anyway — flagged as a follow-up if surfacing that race synchronously
+    // is wanted (would need a version stamp read back from the write, which
+    // this fire-and-forget architecture doesn't provide).
+    await publishF3Write(ctx, "recruitment_interview_recording_routes__1", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     await purgeObjectStub(rec.storageKey, req.log);
     // Honest status: the record is soft-deleted, but the object-store bytes are
     // only truly purged once the storage adapter is wired — reported as pending,

@@ -104,14 +104,21 @@ describe("maker-checker on publish", () => {
   it("allows publish by a different checker", async () => {
     const res = await app.inject({ method: "POST", url: `/v1/hrms/assessments/${assessmentId}/publish`, headers: bare(tok(CHECKER)) });
     expect(res.statusCode).toBe(200);
-    // publish now writes via publishF3Write + the async F3 consumer (CQRS):
-    // the route replies with a synchronous 200 and a generic "accepted"
-    // placeholder immediately, while the real status transition to
-    // "published" only happens once the queued write is consumed — see
-    // repo.ts / f3-consumer.ts. Drain before any later test relies on the
-    // assessment actually being published (attempts, certificates, etc.).
-    expect(res.json().status).toBe("accepted");
-    await drainF3();
+    // publish writes via publishF3Write + the async F3 consumer (CQRS): the
+    // route's synchronous pre-check (see assessment/routes.ts __5) already
+    // guarantees pending_approval → published is the only transition that
+    // can happen here, so the route now reports the real, deterministic
+    // "published" status directly, not the old publishF3Write placeholder's
+    // generic "accepted". The actual row update still only happens once the
+    // queued write is consumed — drain before any later test relies on the
+    // assessment actually being published (attempts, certificates, etc.),
+    // and do it in `finally` so a future assertion failure on this line
+    // can't skip the drain and cascade into every test after it.
+    try {
+      expect(res.json().status).toBe("published");
+    } finally {
+      await drainF3();
+    }
   });
 
   it("rejects a question-bank change by the bank creator (maker == checker)", async () => {

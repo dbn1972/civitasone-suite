@@ -97,8 +97,19 @@ export async function interviewPanelRoutes(app: FastifyInstance): Promise<void> 
     // No post-decision tampering: the panel composition record is frozen once an
     // outcome is recorded (mirrors the panel-constitution lock).
     if (interview.outcomeStatus !== "pending") throw new HttpError(409, "OUTCOME_RECORDED", "the panel cannot be changed after an outcome is recorded");
-    const n = await publishF3Write(ctx, "recruitment_panel_routes__1", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
-    if (n === 0) throw new HttpError(404, "NOT_FOUND", "panelist not found on this interview") as any;
+    // Synchronous pre-check: `n` used to be compared with `=== 0` to detect a
+    // missing panelist (panelRepo.recusePanelist returns an affected-row
+    // count), but publishF3Write resolves the { id, status, correlationId }
+    // placeholder, never a number — `n === 0` was therefore always false and
+    // this 404 could never fire, so recusing a memberId that was never on
+    // the panel silently no-op'd in the consumer while this route told the
+    // caller 200. There was no other existence check for the panelist
+    // anywhere in this handler. Mirror the check here, before publish.
+    const panelists = await repo.listPanelists(ctx.tenantId, id);
+    if (!panelists.some((p) => p.memberId === memberId)) {
+      throw new HttpError(404, "NOT_FOUND", "panelist not found on this interview");
+    }
+    await publishF3Write(ctx, "recruitment_panel_routes__1", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     return reply.send({ interviewId: id, memberId, recused: true });
   });
 
