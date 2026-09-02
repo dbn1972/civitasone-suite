@@ -87,6 +87,28 @@ export async function holdRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, HR_ROLES);
     const { holdId } = holdIdParam.parse(req.params);
 
+    // Synchronous pre-check (existence, state, separation-of-duties): the
+    // consumer's lifecycle_hold_routes__1 case already re-derives the hold and
+    // enforces all three, but only AFTER the route has replied 200 (fire-and-
+    // forget publish) — so a self-approval attempt was told "success" while the
+    // write was silently rolled back in the consumer (SOD_VIOLATION), leaving
+    // the hold stuck in 'pending' with no enforcement and no visible error.
+    // Mirror the same checks here, before publish, matching the pattern in
+    // employee/agent1-gap-routes.ts and cpf/routes.ts.
+    const holdRows = await scopedRead((tx) =>
+      tx.select().from(hrmsEmployeeHolds)
+        .where(and(eq(hrmsEmployeeHolds.id, holdId), eq(hrmsEmployeeHolds.tenantId, ctx.tenantId)))
+        .limit(1),
+    );
+    const hold = holdRows[0];
+    if (!hold) throw new HttpError(404, "NOT_FOUND", "hold not found");
+    if (hold.status !== "pending") {
+      throw new HttpError(409, "WRONG_STATE", `hold is '${hold.status}', not 'pending'`);
+    }
+    if (hold.requestedBy === ctx.actorId) {
+      throw new HttpError(403, "SOD_VIOLATION", "approver must not be the same person who requested the hold");
+    }
+
     await publishF3Write(ctx, "lifecycle_hold_routes__1", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
 
     return reply.send({ data: { id: holdId, status: "active" } }) as any;
