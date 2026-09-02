@@ -191,7 +191,7 @@ export async function candidatePublicAuthRoutes(app: FastifyInstance): Promise<v
 
     // SECURITY: the challenge row is read+checked+conditionally-incremented
     // inside ONE transaction, with the row locked (`FOR UPDATE`) via
-    // otpRepo.lockOldestChallenge. This closes a brute-force race on this
+    // otpRepo.lockLatestChallenge. This closes a brute-force race on this
     // PUBLIC, unauthenticated careers-portal endpoint: concurrent otp-verify
     // requests against the SAME challenge could each read a stale
     // (pre-increment) `attempts` count and slip past the MAX_ATTEMPTS gate
@@ -204,36 +204,80 @@ export async function candidatePublicAuthRoutes(app: FastifyInstance): Promise<v
     // most MAX_ATTEMPTS guesses can ever be admitted per challenge,
     // regardless of concurrency. A correct code on a fresh challenge still
     // succeeds exactly as before — `attempts` is left untouched on success.
+    //
+    // CORRECTNESS (not security): this used to select the OLDEST pending
+    // challenge (`lockOldestChallenge`), not the newest. otp-request never
+    // invalidates a candidate's prior challenge when it issues a new one —
+    // it only inserts a new row — so a candidate who requests a second code
+    // (e.g. hits "resend") has TWO non-expired, unverified challenges on
+    // file. "Oldest" matched the STALE code the candidate no longer has, so
+    // submitting the fresh code they actually received failed with a
+    // spurious `OTP_INVALID` (and burned one of their 5 attempts) instead of
+    // succeeding. Switched to `lockLatestChallenge` — same function the
+    // HR-authenticated sibling route already used — which matches the code
+    // that was actually delivered. See otp-verify-repo.ts's docstring for
+    // the full writeup.
+    //
+    // Also extends that same lock/transaction to the SUCCESS path: on a
+    // valid code, `otpRepo.markVerified` runs synchronously here too (see
+    // below), closing a second, independent race — see that call's comment.
     const outcome = await scopedWriteForTenant(tenantId, async (tx) => {
-      const challenge = await otpRepo.lockOldestChallenge(tx, tenantId, candidateId, "email");
+      const challenge = await otpRepo.lockLatestChallenge(tx, tenantId, candidateId, "email");
       if (!challenge) return { kind: "no_challenge" as const };
       if (challenge.attempts >= MAX_ATTEMPTS) return { kind: "locked" as const };
       const result = verifyOtp(challenge, body.code, Date.now());
       if (!result.valid) {
-        await otpRepo.incrementAttempts(tx, tenantId, challenge.id);
+        // Every wrong-code / already-locked-out / expired guess still counts
+        // against the lockout budget — matches existing behaviour (and
+        // otp-verify-route.test.ts's "rejects once the challenge has hit
+        // MAX_ATTEMPTS" case, which asserts incrementAttempts is STILL
+        // called on a repeat guess against an already-exhausted challenge).
+        // The ONE exception: `already_verified`. That reason means someone
+        // ELSE already won the race for this challenge (see markVerified
+        // below) — the current request never got a chance to guess right or
+        // wrong at all, so charging it an attempt would let concurrent
+        // duplicate submissions of the CORRECT code burn through
+        // MAX_ATTEMPTS and flip into a spurious 429 MAX_ATTEMPTS instead of
+        // a stable 422 already_verified — turning the double-issuance fix
+        // into a self-inflicted lockout under exactly the concurrency it was
+        // meant to make safe.
+        if (result.reason !== "already_verified") {
+          await otpRepo.incrementAttempts(tx, tenantId, challenge.id);
+        }
         return { kind: "invalid" as const, reason: result.reason, challengeId: challenge.id };
       }
+      // SECURITY/CORRECTNESS: mark verified SYNCHRONOUSLY, still holding the
+      // row's FOR UPDATE lock, instead of deferring it via a queued async
+      // write. Before this, two concurrent otp-verify requests submitting
+      // the SAME correct code against the SAME not-yet-verified challenge
+      // could each pass `verifyOtp` (it only rejects an already-`verified`
+      // challenge) before either write landed, and each independently mint
+      // a cand_token below — a double-token-issuance race. Writing
+      // `verified = true` here, before the lock releases, forces a second
+      // concurrent request to block on the lock, then observe
+      // `verified = true` once it acquires it and fail with a normal
+      // `already_verified` 422 instead of also succeeding. See
+      // otpRepo.markVerified's docstring for the full writeup.
+      await otpRepo.markVerified(tx, tenantId, challenge.id, candidateId, "email");
       return { kind: "valid" as const, challengeId: challenge.id };
     });
 
     if (outcome.kind === "no_challenge") throw new HttpError(404, "NO_CHALLENGE", "request an OTP first");
     if (outcome.kind === "locked") throw new HttpError(429, "MAX_ATTEMPTS", "too many incorrect attempts; request a new OTP");
 
-    const correlationId = (req.headers["x-correlation-id"] as string) ?? req.id;
     if (outcome.kind === "invalid") {
       throw new HttpError(422, "OTP_INVALID", outcome.reason ?? "invalid code");
     }
 
-    // Async write: mark the challenge verified + set candidate.emailVerified.
-    // The token below is computed independently (HMAC over candidateId/tenantId/
-    // email/exp — no DB read), so the caller gets a fully valid, usable token
-    // immediately; only the audit/replay-guard bookkeeping write is deferred.
-    // (Mirrors recruitment/otp-verify-routes.ts's identical `__2` case — see
-    // that file's f3-consumer.ts cases for the established precedent.)
-    await publishPublicF3Write(correlationId, "recruitment_candidate_public_auth_routes__2", randomUUID(), {
-      tenantId, candidateId, challengeId: outcome.challengeId,
-    });
-
+    // `challenge.verified` + `candidate.emailVerified` are now set
+    // synchronously above, inside the same locked transaction — no async
+    // publish needed for this write any more (see the `markVerified` call
+    // above). recruitment_candidate_public_auth_routes__2's f3-consumer
+    // case is kept (idempotent) for any in-flight messages published by a
+    // pre-fix instance during a rolling deploy, but this route no longer
+    // emits new ones — same precedent as
+    // recruitment_candidate_public_auth_routes__1 / otp_verify_routes__1
+    // going unused when their write became synchronous.
     const exp = Math.floor(Date.now() / 1000) + CAND_TOKEN_TTL;
     const token = signCandToken({ candidateId, tenantId, email, exp });
 
