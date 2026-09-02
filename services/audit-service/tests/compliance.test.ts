@@ -3,7 +3,9 @@
  *
  * Covers:
  *  - GET /v1/audit/compliance/pending, GET /v1/audit/compliance route auth (401/403/200)
- *  - checklist CRUD (direct-write routes): POST -> GET -> PATCH complete -> PATCH again (409)
+ *  - checklist lifecycle (async command routes): POST accepts (202) -> drain -> row lands;
+ *    GET reflects the row; PATCH complete accepts (202) -> drain -> row flips completed;
+ *    PATCH again hits the route's synchronous already-completed pre-check (409)
  *  - checklist auth (401/403) and validation (400)
  *  - consumer integration: COMMANDS.pendingRegisterCreate -> auditPendingRegister row
  *  - runAgeingSweep: pending row past dueDate flips to overdue
@@ -16,11 +18,27 @@ import { runWithTenant, withTenantConsumer } from "@civitasone/db";
 import type { FastifyInstance } from "fastify";
 import { buildApp } from "../src/app.js";
 import { db, sqlClient } from "../src/shared/db.js";
+import { queue } from "../src/shared/infra.js";
 import { auditPendingRegister, auditChecklists } from "../src/modules/compliance/schema.js";
 import { outboxMessages, processed } from "../src/shared/outbox.js";
 import { registerComplianceConsumers } from "../src/modules/compliance/consumer.js";
 import { runAgeingSweep } from "../src/modules/compliance/jobs.js";
 import { COMMANDS } from "../src/topics.js";
+
+// checklist-routes.ts publishes checklistCreate/checklistComplete onto the
+// real `queue` singleton from shared/infra.js and answers 202 as soon as the
+// command is queued (see checklist-routes.ts:34-87) — only worker.ts wires
+// registerComplianceConsumers() onto that singleton in production, so this
+// test file must subscribe it itself. Registered once at module scope
+// (mirrors hrms-service/tests/agent1-gap-routes.test.ts's
+// registerF3_employee_Consumers(queue) pattern) — MemoryQueue accumulates
+// handlers, so re-registering per test would process every command twice.
+registerComplianceConsumers(queue);
+
+/** Await the async checklist write published by the route just injected. */
+async function drainChecklist(): Promise<void> {
+  await (queue as unknown as MemoryQueue).drain();
+}
 
 const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
 function token(roles: string[], tenantId: string, actorId: string) {
@@ -204,8 +222,8 @@ describe("Compliance checklists — validation", () => {
   });
 });
 
-describe("Compliance checklists — CRUD (direct write)", () => {
-  it("POST creates a checklist — 201", async () => {
+describe("Compliance checklists — lifecycle (async command routes)", () => {
+  it("POST accepts (202) and, once the consumer drains, the row lands", async () => {
     const res = await app.inject({
       method: "POST", url: "/v1/audit/compliance/checklists",
       headers: { authorization: `Bearer ${officerToken}`, "content-type": "application/json" },
@@ -215,13 +233,24 @@ describe("Compliance checklists — CRUD (direct write)", () => {
         items: ["Verify PAN encryption", "Verify RLS on new tables", "Review pending register"],
       },
     });
-    expect(res.statusCode).toBe(201);
+    // checklist-routes.ts:34-56 replies 202 as soon as commands.createChecklist()
+    // has queued the command — the row does not exist synchronously.
+    expect(res.statusCode).toBe(202);
     const body = res.json();
     expect(body.data).toBeTruthy();
-    expect(body.data.title).toBe("Quarterly compliance checklist");
-    expect(body.data.items).toHaveLength(3);
+    expect(body.data.status).toBe("accepted");
     expect(body.data.completed).toBe(false);
     checklistId = body.data.id;
+    expect(checklistId).toBeDefined();
+
+    await drainChecklist();
+
+    const rows = await runWithTenant(TENANT, () =>
+      db.transaction((tx) => tx.select().from(auditChecklists).where(eq(auditChecklists.id, checklistId!))));
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.title).toBe("Quarterly compliance checklist");
+    expect(rows[0]?.items).toHaveLength(3);
+    expect(rows[0]?.completed).toBe(false);
   });
 
   it("GET lists checklists and includes the created one", async () => {
@@ -237,20 +266,32 @@ describe("Compliance checklists — CRUD (direct write)", () => {
     expect(body.total).toBeGreaterThanOrEqual(1);
   });
 
-  it("PATCH complete marks checklist completed with completedBy set", async () => {
+  it("PATCH complete accepts (202) and, once the consumer drains, the row is completed", async () => {
     expect(checklistId).toBeDefined();
     const res = await app.inject({
       method: "PATCH", url: `/v1/audit/compliance/checklists/${checklistId}/complete`,
       headers: { authorization: `Bearer ${officerToken}` },
     });
-    expect(res.statusCode).toBe(200);
-    const body = res.json();
-    expect(body.data.completed).toBe(true);
-    expect(body.data.completedBy).toBe(ACTOR);
-    expect(body.data.completedAt).toBeTruthy();
+    // checklist-routes.ts:69-87 replies 202 as soon as commands.completeChecklist()
+    // has queued the command — completedBy/completedAt are only set once the
+    // consumer applies the write (consumer.ts:47-70).
+    expect(res.statusCode).toBe(202);
+    expect(res.json().data.status).toBe("accepted");
+
+    await drainChecklist();
+
+    const rows = await runWithTenant(TENANT, () =>
+      db.transaction((tx) => tx.select().from(auditChecklists).where(eq(auditChecklists.id, checklistId!))));
+    expect(rows[0]?.completed).toBe(true);
+    expect(rows[0]?.completedBy).toBe(ACTOR);
+    expect(rows[0]?.completedAt).toBeTruthy();
   });
 
-  it("PATCH complete again on same id — 409 ALREADY_COMPLETED", async () => {
+  it("PATCH complete again on same id — 409 ALREADY_COMPLETED (synchronous pre-check)", async () => {
+    // checklist-routes.ts:74-76 reads current state inside a transaction and
+    // throws 409 synchronously *before* publishing another checklistComplete
+    // command — this pre-check already exists and does not need a drain to
+    // observe it, since the prior test's drain() left completed=true committed.
     const res = await app.inject({
       method: "PATCH", url: `/v1/audit/compliance/checklists/${checklistId}/complete`,
       headers: { authorization: `Bearer ${officerToken}` },
