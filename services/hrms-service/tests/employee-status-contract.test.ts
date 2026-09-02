@@ -6,10 +6,10 @@ import {
   isEmployeeStatus,
 } from "../src/modules/employee/status.js";
 
-// P1-5: locks the employee status contract end-to-end. The same 8 lowercase
+// P1-5: locks the employee status contract end-to-end. The same 9 lowercase
 // values are enforced by the DB CHECK constraint in migration 0025.
 describe("employee status contract (P1-5)", () => {
-  it("is exactly the 8 canonical lowercase values (matches the DB CHECK set)", () => {
+  it("is exactly the 9 canonical lowercase values (matches the DB CHECK set)", () => {
     expect([...EMPLOYEE_STATUSES]).toEqual([
       "probation",
       "confirmed",
@@ -19,6 +19,7 @@ describe("employee status contract (P1-5)", () => {
       "retired",
       "separated",
       "terminated",
+      "no_show",
     ]);
     // all lowercase, no synthetic "active"
     for (const s of EMPLOYEE_STATUSES) expect(s).toBe(s.toLowerCase());
