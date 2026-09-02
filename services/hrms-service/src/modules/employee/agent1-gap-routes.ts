@@ -62,7 +62,11 @@ export async function agent1GapRoutes(app: FastifyInstance): Promise<void> {
     );
     const emp = rows[0];
     if (!emp) throw new HttpError(404, "NOT_FOUND", "employee not found");
-    if (emp.status === "active") {
+    // migration 0025_employee_status_contract.sql retired "active" in favor of
+    // "confirmed" and migrated every existing row; comparing against "active"
+    // here made this guard permanently unreachable (no row can ever match),
+    // silently allowing repeat activation of an already-confirmed employee.
+    if (emp.status === "confirmed") {
       throw new HttpError(409, "ALREADY_ACTIVE", "employee is already active");
     }
 
@@ -88,11 +92,15 @@ export async function agent1GapRoutes(app: FastifyInstance): Promise<void> {
 
     // All conditions met — activate
     await publishF3Write(ctx, "employee_agent1_gap_routes__1", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
-    return reply.send({ data: { id, status: "active" } }) as any;
+    // "active" was retired by migration 0025_employee_status_contract.sql in
+    // favor of "confirmed" — the consumer now writes "confirmed" (see
+    // f3-consumer.ts's employee_agent1_gap_routes__1), so echo the same value
+    // here rather than reporting a status the row will never actually hold.
+    return reply.send({ data: { id, status: "confirmed" } }) as any;
   });
 
   // ── 0195: No-show reversal workflow ─────────────────────────────────────────
-  // An employee marked as "no_show" can be reversed back to probation/active
+  // An employee marked as "no_show" can be reversed back to probation/confirmed
   // if they report within the allowed window.
   app.post("/v1/hrms/employees/:id/reverse-no-show", async (req, reply) => {
     const ctx = resolveContext(req);
@@ -100,7 +108,12 @@ export async function agent1GapRoutes(app: FastifyInstance): Promise<void> {
     const { id } = idParam.parse(req.params);
     const body = z.object({
       reason: z.string().min(1).max(2000),
-      revertToStatus: z.enum(["probation", "active"]).default("probation"),
+      // "active" was retired by migration 0025_employee_status_contract.sql in
+      // favor of "confirmed" and is not in hrms_employees_status_check; the
+      // consumer (f3-consumer.ts, employee_agent1_gap_routes__2) writes this
+      // value verbatim, so allowing "active" here reproduces the same
+      // silent-rollback bug as the activate path (f3-consumer.ts:115).
+      revertToStatus: z.enum(["probation", "confirmed"]).default("probation"),
     }).parse(req.body);
 
     // Synchronous pre-check (state-transition legality): the consumer's

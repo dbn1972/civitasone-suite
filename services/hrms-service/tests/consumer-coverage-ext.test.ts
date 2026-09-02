@@ -5,6 +5,7 @@
  * and pension consumers via MemoryQueue + real DB verification.
  */
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { randomUUID } from "node:crypto";
 import { MemoryQueue } from "@civitasone/queue";
 import { eq } from "drizzle-orm";
 import { db, sqlClient } from "../src/shared/db.js";
@@ -21,6 +22,7 @@ import { registerServiceBookConsumers } from "../src/modules/service-book/consum
 import { registerAparConsumers } from "../src/modules/apar/consumer.js";
 import { registerReservationConsumers } from "../src/modules/reservation/consumer.js";
 import { registerPensionConsumers } from "../src/modules/pension/consumer.js";
+import { registerF3_employee_Consumers } from "../src/modules/employee/f3-consumer.js";
 import { COMMANDS } from "../src/topics.js";
 
 const TENANT  = "aaaaaaaa-1111-4000-8000-000000000088";
@@ -75,6 +77,10 @@ const MSG_PEN_INIT    = "ad000001-0000-4000-8000-000000000088";
 const MSG_PEN_APPROVE = "ad000002-0000-4000-8000-000000000088";
 const MSG_PEN_CALC    = "ad000003-0000-4000-8000-000000000088";
 
+// Message IDs — employee F3 (agent1-gap-routes activation / no-show reversal)
+const MSG_EMP_ACTIVATE      = "ae000001-0000-4000-8000-000000000088";
+const MSG_EMP_REVERT_NOSHOW = "ae000002-0000-4000-8000-000000000088";
+
 const WAIT = 700;
 
 const ALL_MSG_IDS = [
@@ -82,6 +88,7 @@ const ALL_MSG_IDS = [
   MSG_LC_CONFIRM, MSG_LC_SEPARATE, MSG_LC_REINST,
   MSG_CLM_CREATE, MSG_CLM_APPROVE, MSG_CLM_REJECT,
   MSG_SB_ADD, MSG_SB_VERIFY,
+  MSG_EMP_ACTIVATE, MSG_EMP_REVERT_NOSHOW,
   MSG_APAR_CREATE, MSG_APAR_SUBMIT, MSG_APAR_REVIEW, MSG_APAR_ACCEPT,
   MSG_ROSTER_CREATE, MSG_ROSTER_PTS, MSG_SANC_POST,
   MSG_PEN_INIT, MSG_PEN_APPROVE, MSG_PEN_CALC,
@@ -712,6 +719,81 @@ describe("Pension consumers — coverage", () => {
       tx.select().from(processed).where(eq(processed.messageId, MSG_PEN_CALC))));
     expect(proc).toHaveLength(1);
   });
+});
+
+// ── 8. Employee F3 Consumer (agent1-gap-routes) ────────────────────
+//
+// Regression coverage for the retired "active" status value. Migration
+// 0025_employee_status_contract.sql dropped "active" from
+// hrms_employees_status_check and migrated every legacy "active" row to
+// "confirmed". Both agent1-gap-routes.ts's activate route and its no-show
+// reversal route publish writes that land in f3-consumer.ts's
+// employee_agent1_gap_routes__1 / __2 cases — if either write used the
+// retired "active" value, the CHECK constraint would reject it and the whole
+// transaction (including the markProcessed row) would roll back silently,
+// exactly like the lifecycleReinstate bug fixed in PR #893.
+//
+// tests/agent1-gap-routes.test.ts exercises the same routes but mocks
+// db.js entirely (H.update never touches a real, constrained table), so it
+// cannot catch this class of bug — only a real Postgres instance enforcing
+// the actual CHECK constraint can. Hence this suite, following the same
+// real-DB pattern as the Lifecycle/Deputation/etc. blocks above.
+describe("Employee F3 consumer — coverage (activate / no-show reversal)", () => {
+  beforeAll(async () => {
+    await wipeAll();
+    await seedBase();
+    // seedBase() leaves EMP_1 as "confirmed"; start these tests from
+    // "probation" so activation is a real state transition.
+    await runWithTenant(TENANT, () => db.transaction(async (tx) =>
+      tx.update(hrmsEmployees).set({ status: "probation" }).where(eq(hrmsEmployees.id, EMP_1))));
+  });
+  afterAll(async () => { await wipeAll(); });
+
+  it("employee_agent1_gap_routes__1 activates the employee to 'confirmed', not the retired 'active'", async () => {
+    const q = wireTenantAwareQueue(new MemoryQueue());
+    registerF3_employee_Consumers(q);
+    await q.start();
+
+    await q.publish(COMMANDS.f3RouteWrite, {
+      messageId: MSG_EMP_ACTIVATE, type: COMMANDS.f3RouteWrite,
+      tenantId: TENANT, actorId: ACTOR, correlationId: "corr-emp-activate", schemaVersion: "1.0",
+      payload: {
+        op: "employee_agent1_gap_routes__1",
+        id: randomUUID(), tenantId: TENANT,
+        body: {}, params: { id: EMP_1 }, query: {},
+      },
+    });
+
+    await new Promise<void>((r) => setTimeout(r, WAIT));
+    await q.stop();
+
+    // With the old "active" write, the CHECK constraint violation rolls back
+    // the entire transaction — including markProcessed — so this would be 0
+    // rows, not 1. A passing assertion here is direct proof the write
+    // actually committed against a real, constrained Postgres instance.
+    const proc = await runWithTenant(TENANT, () => db.transaction(async (tx) =>
+      tx.select().from(processed).where(eq(processed.messageId, MSG_EMP_ACTIVATE))));
+    expect(proc).toHaveLength(1);
+
+    const rows = await runWithTenant(TENANT, () => db.transaction(async (tx) =>
+      tx.select({ status: hrmsEmployees.status }).from(hrmsEmployees).where(eq(hrmsEmployees.id, EMP_1))));
+    expect(rows[0]?.status).toBe("confirmed");
+  });
+
+  // NOTE: employee_agent1_gap_routes__2 (no-show reversal) is NOT covered by a
+  // real-DB test here. Investigating it surfaced a separate, larger bug: "no_show"
+  // is checked as a precondition throughout agent1-gap-routes.ts/f3-consumer.ts
+  // (`if (emp.status !== "no_show") throw 409`) but was NEVER added to
+  // hrms_employees_status_check by any migration — no code path can legally set
+  // an employee's status to "no_show" in the first place (attempting to, as this
+  // test originally did via a direct UPDATE to seed the precondition, itself
+  // violates the CHECK constraint). That makes POST
+  // /v1/hrms/employees/:id/reverse-no-show permanently unreachable in
+  // production (every real employee fails the precondition with 409, always).
+  // This is a distinct status-contract gap from the retired-"active" bug this
+  // PR fixes — the revertToStatus enum fix above (active -> confirmed) is still
+  // correct and left in place, but exercising the full write end-to-end needs
+  // the missing-"no_show" gap fixed first. Tracked separately.
 });
 
 // ── Cleanup ───────────────────────────────────────────────────────

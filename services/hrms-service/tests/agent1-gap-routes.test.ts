@@ -213,13 +213,19 @@ describe("0180 — POST /v1/hrms/employees/:id/activate", () => {
       headers: auth(),
     });
     expect(r.statusCode).toBe(200);
-    expect(r.json().data.status).toBe("active");
+    expect(r.json().data.status).toBe("confirmed");
     // Regression guard: the consumer's activation case referenced an undefined
     // `emp` (its optimistic-concurrency token) and threw AFTER this 200, so the
     // employee was reported active while their row never changed.
+    //
+    // NOTE: this mock does not enforce the real hrms_employees_status_check
+    // CHECK constraint, so it cannot by itself catch a write of the retired
+    // "active" value (that class of bug is covered by the real-DB test
+    // "employee_agent1_gap_routes__1 writes 'confirmed'..." in
+    // tests/consumer-coverage-ext.test.ts).
     await drainF3();
     expect(H.update).toHaveBeenCalledTimes(1);
-    expect(H.update.mock.calls[0]?.[0]).toMatchObject({ status: "active" });
+    expect(H.update.mock.calls[0]?.[0]).toMatchObject({ status: "confirmed" });
     await app.close();
   });
 
@@ -243,8 +249,12 @@ describe("0180 — POST /v1/hrms/employees/:id/activate", () => {
   });
 
   it("returns 409 if already active", async () => {
+    // "active" was retired by migration 0025_employee_status_contract.sql; a
+    // real employee row can only be in the already-activated state as
+    // "confirmed", so that's the value the guard now checks (see
+    // agent1-gap-routes.ts).
     H.selectFrom.mockResolvedValue([{
-      id: EMP_ID, tenantId: TENANT, fullName: "Test", status: "active",
+      id: EMP_ID, tenantId: TENANT, fullName: "Test", status: "confirmed",
       fitnessStatus: "fit", departmentId: "dept-1", designationId: "desig-1",
       dateOfJoining: "2026-01-15", bankAccountNo: "1234", pan: "PAN",
       employeeType: "permanent", version: 1,
@@ -288,7 +298,24 @@ describe("0195 — POST /v1/hrms/employees/:id/reverse-no-show", () => {
     await app.close();
   });
 
-  it("allows reverting to active status", async () => {
+  it("allows reverting to confirmed status", async () => {
+    // "active" was retired by migration 0025_employee_status_contract.sql and
+    // is no longer an accepted revertToStatus value (see agent1-gap-routes.ts);
+    // "confirmed" is the real serving status it was replaced by.
+    H.selectFrom.mockResolvedValue([{ id: EMP_ID, status: "no_show", version: 1 }]);
+    const app = await buildApp();
+    const r = await app.inject({
+      method: "POST",
+      url: `/v1/hrms/employees/${EMP_ID}/reverse-no-show`,
+      headers: auth(),
+      payload: { reason: "Clerical error", revertToStatus: "confirmed" },
+    });
+    expect(r.statusCode).toBe(200);
+    expect(r.json().data.status).toBe("confirmed");
+    await app.close();
+  });
+
+  it("rejects the retired 'active' revertToStatus value (400)", async () => {
     H.selectFrom.mockResolvedValue([{ id: EMP_ID, status: "no_show", version: 1 }]);
     const app = await buildApp();
     const r = await app.inject({
@@ -297,13 +324,12 @@ describe("0195 — POST /v1/hrms/employees/:id/reverse-no-show", () => {
       headers: auth(),
       payload: { reason: "Clerical error", revertToStatus: "active" },
     });
-    expect(r.statusCode).toBe(200);
-    expect(r.json().data.status).toBe("active");
+    expect(r.statusCode).toBe(400);
     await app.close();
   });
 
   it("returns 409 if employee is not in no_show status", async () => {
-    H.selectFrom.mockResolvedValue([{ id: EMP_ID, status: "active", version: 1 }]);
+    H.selectFrom.mockResolvedValue([{ id: EMP_ID, status: "confirmed", version: 1 }]);
     const app = await buildApp();
     const r = await app.inject({
       method: "POST",
