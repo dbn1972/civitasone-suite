@@ -7,9 +7,10 @@ import { describe, it, expect, beforeAll } from "vitest";
 import { buildApp } from "../src/app.js";
 import type { FastifyInstance } from "fastify";
 import { createHmac } from "node:crypto";
-import { seedHrmsCoreFixtures } from "./fixtures/core-seed.js";
+import { seedHrmsCoreFixtures, type HrmsLeaveTypeIds } from "./fixtures/core-seed.js";
 
 let app: FastifyInstance;
+let leaveTypeIds: HrmsLeaveTypeIds;
 function mint(roles = ["super_admin","hr_admin","officer","employee","manager"]) {
   const S = process.env.JWT_SECRET ?? "civitasone-dev-secret";
   const T = "00000000-0000-0000-0000-000000000001";
@@ -26,7 +27,7 @@ const EMP1 = "eeeeeeee-0001-0000-0000-000000000005";
 const DEPT = "eeeeeeee-0001-0000-0000-000000000001";
 const DESIG = "eeeeeeee-0001-0000-0000-000000000003";
 
-beforeAll(async () => { await seedHrmsCoreFixtures(); app = await buildApp(); });
+beforeAll(async () => { leaveTypeIds = await seedHrmsCoreFixtures(); app = await buildApp(); });
 
 // ═══════════════════════════════════════════════════════════
 // 1. RECRUITMENT: Vacancy → Interview → Offer
@@ -165,7 +166,7 @@ describe("4. Leave Management", () => {
 
   it("4.3 Apply for casual leave (CQRS)", async () => {
     const r = await app.inject({ method: "POST", url: "/v1/hrms/leave-applications", headers: { ...AUTH, ...CT },
-      payload: { employeeId: EMP1, leaveTypeId: "eeeeeeee-0001-0000-0000-000000000007", allocId: "eeeeeeee-0001-0000-0000-000000000009", fromDate: "2026-10-15", toDate: "2026-10-16", daysApplied: 2, reason: "Personal" } });
+      payload: { employeeId: EMP1, leaveTypeId: leaveTypeIds.clLeaveTypeId, allocId: "eeeeeeee-0001-0000-0000-000000000009", fromDate: "2026-10-15", toDate: "2026-10-16", daysApplied: 2, reason: "Personal" } });
     expect(r.statusCode).toBe(202);
   });
 
