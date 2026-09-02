@@ -108,14 +108,22 @@ describe("risk domain — riskBand boundaries (pure)", () => {
 const TENANT = randomUUID();
 const ACTOR = randomUUID();
 const RISK_1 = randomUUID();
+// Own id, not RISK_1: risk.audit_risks can no longer be wiped between
+// describe blocks (migration 0027), and the "riskCreate" describe below
+// already inserts RISK_1, so the "riskUpdate" describe seeds an
+// independent row instead of reusing/resetting RISK_1.
+const RISK_2 = randomUUID();
 const MSG_CREATE_1 = randomUUID();
 const MSG_UPDATE_1 = randomUUID();
 const MSG_DUP = randomUUID();
 
+// risk.audit_risks is a case-of-record table: migration 0027 added a BEFORE
+// DELETE OR TRUNCATE trigger that unconditionally rejects both, so it is
+// never wiped here. TENANT/RISK_* above are randomUUID()-scoped per test run
+// instead, so leftover rows across runs are harmless and never collide.
 async function wipe(): Promise<void> {
   await runWithTenant(TENANT, () => db.transaction(async (tx) => {
     await tx.delete(outboxMessages).where(eq(outboxMessages.tenantId, TENANT));
-    await tx.delete(auditRisks).where(eq(auditRisks.tenantId, TENANT));
     for (const id of [MSG_CREATE_1, MSG_UPDATE_1, MSG_DUP]) {
       await tx.delete(processed).where(eq(processed.messageId, id));
     }
@@ -236,7 +244,7 @@ describe("risk consumer — riskUpdate (integration)", () => {
 
   async function seedRiskForUpdate(): Promise<void> {
     await runWithTenant(TENANT, () => db.transaction((tx) => tx.insert(auditRisks).values({
-      id: RISK_1, tenantId: TENANT, riskCode: "RC-UPDATE-1", title: "Risk to be updated",
+      id: RISK_2, tenantId: TENANT, riskCode: "RC-UPDATE-1", title: "Risk to be updated",
       category: "financial", likelihood: "possible", impact: "moderate",
       riskScore: computeRiskScore("possible", "moderate"),
       status: "open", createdBy: ACTOR, updatedBy: ACTOR,
@@ -244,7 +252,7 @@ describe("risk consumer — riskUpdate (integration)", () => {
   }
 
   it("increments version and applies updated likelihood/impact/status", async () => {
-    const before = await runWithTenant(TENANT, () => db.transaction((tx) => tx.select().from(auditRisks).where(eq(auditRisks.id, RISK_1))));
+    const before = await runWithTenant(TENANT, () => db.transaction((tx) => tx.select().from(auditRisks).where(eq(auditRisks.id, RISK_2))));
     const beforeVersion = before[0]!.version;
 
     const q = wireTenantAwareQueue(new MemoryQueue());
@@ -263,14 +271,14 @@ describe("risk consumer — riskUpdate (integration)", () => {
         // a pre-existing schema/validator inconsistency outside this test's
         // scope; using a DB-valid status here keeps this test focused on the
         // consumer's version-increment + recompute behavior.
-        riskId: RISK_1, tenantId: TENANT, likelihood: "almost_certain", impact: "catastrophic",
+        riskId: RISK_2, tenantId: TENANT, likelihood: "almost_certain", impact: "catastrophic",
         status: "accepted", mitigationStatus: "in_progress",
       },
     });
     await new Promise<void>((r) => setTimeout(r, 300));
     await q.stop();
 
-    const after = await runWithTenant(TENANT, () => db.transaction((tx) => tx.select().from(auditRisks).where(eq(auditRisks.id, RISK_1))));
+    const after = await runWithTenant(TENANT, () => db.transaction((tx) => tx.select().from(auditRisks).where(eq(auditRisks.id, RISK_2))));
     const row = after[0]!;
     expect(row.version).toBe(beforeVersion + 1);
     expect(row.likelihood).toBe("almost_certain");
@@ -287,7 +295,10 @@ describe("risk consumer — idempotency", () => {
 
   beforeAll(async () => { await wipe(); });
   afterAll(async () => {
-    await runWithTenant(TENANT, () => db.transaction((tx) => tx.delete(auditRisks).where(eq(auditRisks.id, RISK_IDEMPOTENT))));
+    // RISK_IDEMPOTENT is not deleted here: risk.audit_risks is a
+    // case-of-record table guarded by migration 0027's BEFORE DELETE OR
+    // TRUNCATE trigger. It's randomUUID()-scoped per test run, so the
+    // leftover row is harmless and never collides with a later run.
     await wipe();
     await sqlClient.end();
   });

@@ -81,12 +81,16 @@ const HIGH_RISK_ID = randomUUID();
 const HIGH_CONTROL = randomUUID();
 const HIGH_ACCEPT = randomUUID();
 
+// risk.audit_risks and risk.risk_acceptances are case-of-record tables:
+// migration 0027 added BEFORE DELETE OR TRUNCATE triggers that
+// unconditionally reject both, so neither is wiped here (riskReviews and
+// riskControls are not guarded tables and are still cleaned up normally).
+// TENANT_A/TENANT_B and every entity id above are already randomUUID()
+// per test run, so leftover rows across runs are harmless and never collide.
 async function wipe(t: string): Promise<void> {
   await runWithTenant(t, () => db.transaction(async (tx) => {
     await tx.delete(riskReviews).where(eq(riskReviews.tenantId, t));
-    await tx.delete(riskAcceptances).where(eq(riskAcceptances.tenantId, t));
     await tx.delete(riskControls).where(eq(riskControls.tenantId, t));
-    await tx.delete(auditRisks).where(eq(auditRisks.tenantId, t));
   }));
 }
 

@@ -2,6 +2,7 @@
  * audit-service para state machine tests
  */
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { randomUUID } from "node:crypto";
 import { MemoryQueue, type Queue, type Handler } from "@civitasone/queue";
 import { eq } from "drizzle-orm";
 import { runWithTenant, withTenantConsumer } from "@civitasone/db";
@@ -14,9 +15,12 @@ import { assertCanTransition, assertBodyMutable, isValidTransition } from "../sr
 import { COMMANDS, EVENTS } from "../src/topics.js";
 import type { ParaStatus } from "../src/modules/para/schema.js";
 
-const ACTOR  = "00000000-aaaa-4000-8000-000000000010";
-const TENANT = "11111111-aaaa-4000-8000-000000000010";
-const PARA_1 = "22222222-bbbb-4000-8000-000000000010";
+// TENANT/PARA_1 are randomUUID()-scoped (not fixed literals) because
+// para.audit_paras is a case-of-record table guarded by migration 0027's
+// BEFORE DELETE OR TRUNCATE trigger — see wipe() below.
+const ACTOR  = randomUUID();
+const TENANT = randomUUID();
+const PARA_1 = randomUUID();
 const MSG_1  = "44444444-dddd-4000-8000-000000000010";
 const MSG_2  = "44444444-dddd-4000-8000-000000000011";
 const MSG_3  = "44444444-dddd-4000-8000-000000000012";
@@ -43,11 +47,14 @@ function wireTenantAwareQueue(q: Queue): Queue {
 // db.transaction() (or without an active runWithTenant scope) run with no
 // RLS GUC set. Wrap all direct DB access in runWithTenant(TENANT, () =>
 // db.transaction(...)).
+// para.audit_paras and para.audit_para_status_history are case-of-record
+// tables: migration 0027 added BEFORE DELETE OR TRUNCATE triggers that
+// unconditionally reject both, so neither is wiped here. TENANT/PARA_1 above
+// are randomUUID()-scoped per test run instead, so leftover rows across runs
+// are harmless and never collide.
 async function wipe() {
   await runWithTenant(TENANT, () => db.transaction(async (tx) => {
     await tx.delete(outboxMessages).where(eq(outboxMessages.tenantId, TENANT));
-    await tx.delete(auditParaStatusHistory).where(eq(auditParaStatusHistory.tenantId, TENANT));
-    await tx.delete(auditParas).where(eq(auditParas.tenantId, TENANT));
     for (const id of [MSG_1, MSG_2, MSG_3, MSG_4]) {
       await tx.delete(processed).where(eq(processed.messageId, id));
     }
@@ -149,9 +156,13 @@ describe("Para consumer — CQRS state machine (integration)", () => {
   });
 
   it("consumer rejects body update when status is issued", async () => {
-    await wipe();
+    // Own id, not PARA_1: para.audit_paras can no longer be wiped between
+    // tests (migration 0027), and PARA_1 already carries the prior test's
+    // "settled" row, so this test seeds an independent row instead of
+    // reusing/resetting PARA_1.
+    const paraId = randomUUID();
     await runWithTenant(TENANT, () => db.transaction((tx) => tx.insert(auditParas).values({
-      id: PARA_1, tenantId: TENANT, paraNo: "PARA-2026-002", deptRef: "dept:hr",
+      id: paraId, tenantId: TENANT, paraNo: "PARA-2026-002", deptRef: "dept:hr",
       body: "Original para body", category: "compliance", amountInvolvedMinor: 0n,
       status: "issued", issuedAt: new Date(), createdBy: ACTOR, updatedBy: ACTOR,
     })));
@@ -164,14 +175,14 @@ describe("Para consumer — CQRS state machine (integration)", () => {
       messageId: MSG_4, type: COMMANDS.paraDeptResponse,
       tenantId: TENANT, actorId: ACTOR, correlationId: "corr-para-4", schemaVersion: "1.0",
       payload: {
-        paraId: PARA_1, tenantId: TENANT, body: "tampered body",
+        paraId, tenantId: TENANT, body: "tampered body",
         responseBody: "Dept reply", respondedByRef: "dept:hr:head",
       },
     });
     await new Promise<void>((r) => setTimeout(r, 600));
     await q.stop();
 
-    const rows = await runWithTenant(TENANT, () => db.transaction((tx) => tx.select().from(auditParas).where(eq(auditParas.id, PARA_1))));
+    const rows = await runWithTenant(TENANT, () => db.transaction((tx) => tx.select().from(auditParas).where(eq(auditParas.id, paraId))));
     expect(rows[0]?.body).toBe("Original para body");
     expect(rows[0]?.status).toBe("issued");
   });

@@ -15,7 +15,6 @@
  */
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { randomUUID } from "node:crypto";
-import { eq } from "drizzle-orm";
 import { runWithTenant } from "@civitasone/db";
 import { signToken } from "@civitasone/auth";
 import type { FastifyInstance } from "fastify";
@@ -28,15 +27,21 @@ function token(roles: string[], tenantId: string, actorId: string) {
   return signToken({ sub: actorId, tid: tenantId, roles, sid: "sess-1" }, SECRET, 3600);
 }
 
-const ACTOR    = "00000000-aaaa-4000-8000-0000000000b1";
-const TENANT   = "11111111-aaaa-4000-8000-0000000000b1";
-const TENANT_2 = "11111111-aaaa-4000-8000-0000000000b2";
-const PARA_1   = "22222222-bbbb-4000-8000-0000000000b1";
-const PARA_2   = "22222222-bbbb-4000-8000-0000000000b2";
+// TENANT/TENANT_2/PARA_* are randomUUID()-scoped (not fixed literals)
+// because para.audit_paras is a case-of-record table guarded by migration
+// 0027's BEFORE DELETE OR TRUNCATE trigger — see wipe() below.
+const ACTOR    = randomUUID();
+const TENANT   = randomUUID();
+const TENANT_2 = randomUUID();
+const PARA_1   = randomUUID();
+const PARA_2   = randomUUID();
 
+// para.audit_paras is a case-of-record table: migration 0027 added a BEFORE
+// DELETE OR TRUNCATE trigger that unconditionally rejects both, so this is
+// now a no-op. TENANT/TENANT_2/PARA_* above are randomUUID()-scoped per test
+// run instead, so leftover rows across runs are harmless and never collide.
 async function wipe() {
-  await runWithTenant(TENANT, () => db.transaction((tx) => tx.delete(auditParas).where(eq(auditParas.tenantId, TENANT))));
-  await runWithTenant(TENANT_2, () => db.transaction((tx) => tx.delete(auditParas).where(eq(auditParas.tenantId, TENANT_2))));
+  /* no-op: see comment above */
 }
 
 async function seedPara(id: string, tenantId: string, overrides: Partial<{ status: string; deptRef: string; paraNo: string }> = {}): Promise<void> {

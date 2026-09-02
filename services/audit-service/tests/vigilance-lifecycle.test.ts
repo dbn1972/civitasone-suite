@@ -68,11 +68,15 @@ const ACTION_1 = randomUUID();
 const EV_1 = randomUUID();
 let app: FastifyInstance;
 
+// vigilance.vigilance_cases/vigilance_actions/vigilance_evidence are
+// case-of-record tables (the latter two may hold confidential
+// whistleblower-type material): migration 0027 added BEFORE DELETE OR
+// TRUNCATE triggers that unconditionally reject both, so none of the three
+// is wiped here. TENANT_A/TENANT_B and every entity id above are already
+// randomUUID() per test run, so leftover rows across runs are harmless and
+// never collide.
 async function wipe(t: string): Promise<void> {
   await runWithTenant(t, () => db.transaction(async (tx) => {
-    await tx.delete(vigilanceEvidence).where(eq(vigilanceEvidence.tenantId, t));
-    await tx.delete(vigilanceActions).where(eq(vigilanceActions.tenantId, t));
-    await tx.delete(vigilanceCases).where(eq(vigilanceCases.tenantId, t));
     await tx.delete(outboxMessages).where(eq(outboxMessages.tenantId, t));
   }));
 }
@@ -175,6 +179,15 @@ describe("vigilance lifecycle + restricted access + maker-checker", () => {
     const h = { authorization: `Bearer ${token(["vigilance_officer"], TENANT_A, IO)}`, "content-type": "application/json" };
     const ha = { authorization: `Bearer ${token(["vigilance_admin"], TENANT_A, AUTHORITY)}`, "content-type": "application/json" };
     const cid = randomUUID();
+    // screen/assign-io/evidence/findings/actions all call assertCaseOwnership
+    // (routes.ts) before accepting, which 404s for a case that doesn't exist
+    // for this tenant — unlike the plain intake POST below, cid needs a real
+    // row. No consumer is registered in this test (pure HTTP-layer 202
+    // coverage), so a direct insert stands in for one.
+    await runWithTenant(TENANT_A, () => db.transaction((tx) => tx.insert(vigilanceCases).values({
+      id: cid, tenantId: TENANT_A, caseNo: "VIG-R-SEED", officer: "O", charges: "c",
+      createdBy: IO, updatedBy: IO,
+    })));
     const post = (url: string, payload: unknown, headers = h) => app.inject({ method: "POST", url, headers, payload });
     const patch = (url: string, payload: unknown, headers = h) => app.inject({ method: "PATCH", url, headers, payload });
     expect((await post("/v1/audit/vigilance", { caseNo: "VIG-R-1", officer: "O", charges: "c" })).statusCode).toBe(202);
