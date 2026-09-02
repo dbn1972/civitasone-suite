@@ -17,6 +17,33 @@ export async function findAccountByEmployee(tenantId: string, employeeId: string
   return rows[0] ?? null;
 }
 
+/**
+ * Synchronous pre-check for the (tenant, cpf_number) uniqueness the DB enforces
+ * via `hrms_cpf_accounts_cpf_number_uq`. Read-before-publish only — a route
+ * calling this still has a residual TOCTOU race against a concurrent open with
+ * the same number; the DB constraint is the real backstop for that rare case.
+ */
+export async function findAccountByCpfNumber(tenantId: string, cpfNumber: string): Promise<CpfAccountRow | null> {
+  const rows = await scopedRead((tx) => tx.select().from(hrmsCpfAccounts)
+    .where(and(eq(hrmsCpfAccounts.tenantId, tenantId), eq(hrmsCpfAccounts.cpfNumber, cpfNumber))).limit(1));
+  return rows[0] ?? null;
+}
+
+/**
+ * Synchronous pre-check for the (tenant, account, period) subscription
+ * uniqueness the DB enforces via the partial unique index
+ * `hrms_cpf_ledger_period_uq` (entry_type = 'subscription'). Same residual
+ * TOCTOU caveat as findAccountByCpfNumber above.
+ */
+export async function findSubscriptionForPeriod(tenantId: string, accountId: string, period: string): Promise<CpfLedgerRow | null> {
+  const rows = await scopedRead((tx) => tx.select().from(hrmsCpfLedger)
+    .where(and(
+      eq(hrmsCpfLedger.tenantId, tenantId), eq(hrmsCpfLedger.accountId, accountId),
+      eq(hrmsCpfLedger.period, period), eq(hrmsCpfLedger.entryType, "subscription"),
+    )).limit(1));
+  return rows[0] ?? null;
+}
+
 export async function insertAccount(tx: Writer, row: CpfAccountInsert): Promise<void> {
   await tx.insert(hrmsCpfAccounts).values(row);
 }
