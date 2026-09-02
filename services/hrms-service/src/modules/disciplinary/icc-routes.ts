@@ -27,7 +27,7 @@ export async function iccRoutes(app: FastifyInstance): Promise<void> {
       summary: z.string().min(10).max(5000),
     }).parse(req.body);
     const id = randomUUID();
-    await publishF3Write(ctx, "disciplinary_icc_routes__0", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    await publishF3Write(ctx, "disciplinary_icc_routes__0", id, { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     return reply.code(201).send({ id, status: "filed", confidential: true }) as any;
   });
 
@@ -48,7 +48,7 @@ export async function iccRoutes(app: FastifyInstance): Promise<void> {
       finding: z.string().max(24).optional(),
     }).parse(req.body);
     const hid = randomUUID();
-    await publishF3Write(ctx, "disciplinary_icc_routes__1", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    await publishF3Write(ctx, "disciplinary_icc_routes__1", hid, { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     return reply.code(201).send({ id: hid, complaintId: id }) as any;
   });
 

@@ -31,7 +31,7 @@ export async function onboardingRoutes(app: FastifyInstance): Promise<void> {
       assignedTo: z.string().uuid().optional(),
     }).parse(req.body);
     const tid = randomUUID();
-    await publishF3Write(ctx, "lifecycle_onboarding_routes__0", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    await publishF3Write(ctx, "lifecycle_onboarding_routes__0", tid, { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     return reply.code(201).send({ id: tid, employeeId: id, status: "pending" }) as any;
   });
 
@@ -58,7 +58,7 @@ export async function onboardingRoutes(app: FastifyInstance): Promise<void> {
       role: z.enum(["buddy", "mentor"]).default("buddy"),
     }).parse(req.body);
     const bid = randomUUID();
-    await publishF3Write(ctx, "lifecycle_onboarding_routes__2", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    await publishF3Write(ctx, "lifecycle_onboarding_routes__2", bid, { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     return reply.code(201).send({ id: bid, employeeId: id, role: body.role }) as any;
   });
 

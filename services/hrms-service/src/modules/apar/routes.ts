@@ -128,7 +128,7 @@ export async function aparRoutes(app: FastifyInstance): Promise<void> {
         "reporting, reviewing and accepting officers must be three distinct people");
     }
     const id = randomUUID();
-    await publishF3Write(ctx, "apar_routes__0", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    await publishF3Write(ctx, "apar_routes__0", id, { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     return reply.code(201).send({ id, status: "self_pending" }) as any;
   });
 
