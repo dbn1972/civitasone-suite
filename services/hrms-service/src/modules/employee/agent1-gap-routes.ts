@@ -16,7 +16,7 @@ import { resolveContext, requireRole, HttpError } from "../../shared/context.js"
 import { db, scopedRead } from "../../shared/db.js";
 import { hrmsEmployees } from "./schema.js";
 import { checkMandatoryConditions } from "./activation-domain.js";
-import { wouldCreateCycle, type ManagerGraph } from "./manager-domain.js";
+import { validateManagerAssignment, type ManagerGraph } from "./manager-domain.js";
 
 const HR_ROLES = ["hr_admin", "hr_officer", "super_admin"];
 const READER_ROLES = [...HR_ROLES, "manager"];
@@ -33,6 +33,17 @@ export async function agent1GapRoutes(app: FastifyInstance): Promise<void> {
     const body = z.object({
       fitnessStatus: z.enum(FITNESS_VALUES),
     }).parse(req.body);
+
+    // Synchronous pre-check (existence): the consumer's employee_agent1_gap_routes__0
+    // case already 404s when the employee is missing, but only AFTER the route has
+    // replied 200 — the client would see a false-positive success while the write is
+    // silently dropped. Mirror the check here so an invalid id gets a real 404.
+    const existsRows = await scopedRead((tx) =>
+      tx.select({ id: hrmsEmployees.id }).from(hrmsEmployees)
+        .where(and(eq(hrmsEmployees.id, id), eq(hrmsEmployees.tenantId, ctx.tenantId)))
+        .limit(1),
+    );
+    if (!existsRows[0]) throw new HttpError(404, "NOT_FOUND", "employee not found");
 
     const result = await publishF3Write(ctx, "employee_agent1_gap_routes__0", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     return reply.send({ data: { id, fitnessStatus: body.fitnessStatus } }) as any;
@@ -92,6 +103,22 @@ export async function agent1GapRoutes(app: FastifyInstance): Promise<void> {
       revertToStatus: z.enum(["probation", "active"]).default("probation"),
     }).parse(req.body);
 
+    // Synchronous pre-check (state-transition legality): the consumer's
+    // employee_agent1_gap_routes__2 case rejects with 404/409 when the employee is
+    // missing or not in 'no_show' status, but only after the route has already
+    // replied 200. Lift the same check here so an illegal reversal gets a real
+    // 4xx instead of a silently dropped/DLQ'd write.
+    const noShowRows = await scopedRead((tx) =>
+      tx.select({ id: hrmsEmployees.id, status: hrmsEmployees.status }).from(hrmsEmployees)
+        .where(and(eq(hrmsEmployees.id, id), eq(hrmsEmployees.tenantId, ctx.tenantId)))
+        .limit(1),
+    );
+    const noShowEmp = noShowRows[0];
+    if (!noShowEmp) throw new HttpError(404, "NOT_FOUND", "employee not found");
+    if (noShowEmp.status !== "no_show") {
+      throw new HttpError(409, "WRONG_STATE", `employee status is '${noShowEmp.status}', not 'no_show'`);
+    }
+
     const result = await publishF3Write(ctx, "employee_agent1_gap_routes__2", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     return reply.send({ data: result }) as any;
   });
@@ -108,6 +135,34 @@ export async function agent1GapRoutes(app: FastifyInstance): Promise<void> {
     }).refine((b) => b.managerId !== undefined || b.functionalManagerId !== undefined || b.projectManagerId !== undefined, {
       message: "at least one manager field must be provided",
     }).parse(req.body);
+
+    const mgrRows = await scopedRead((tx) =>
+      tx.select({ id: hrmsEmployees.id }).from(hrmsEmployees)
+        .where(and(eq(hrmsEmployees.id, id), eq(hrmsEmployees.tenantId, ctx.tenantId)))
+        .limit(1),
+    );
+    if (!mgrRows[0]) throw new HttpError(404, "NOT_FOUND", "employee not found");
+
+    // Synchronous pre-check (0230, cycle detection): the consumer's
+    // employee_agent1_gap_routes__3 case builds the tenant's reporting graph and
+    // rejects a proposed manager that would create a circular chain with 422
+    // CYCLE_DETECTED, but only after the route has already replied 200 — the
+    // client sees a false-positive success while the write is silently dropped.
+    // Mirror the same check here, synchronously, before publishing the write.
+    const allEdges = await scopedRead((tx) =>
+      tx.select({ eid: hrmsEmployees.id, mgr: hrmsEmployees.managerId })
+        .from(hrmsEmployees)
+        .where(eq(hrmsEmployees.tenantId, ctx.tenantId)),
+    );
+    const graph: ManagerGraph = { edges: new Map(allEdges.map((e) => [e.eid, e.mgr])) };
+    const cycle = validateManagerAssignment(graph, id, {
+      managerId: body.managerId,
+      functionalManagerId: body.functionalManagerId,
+      projectManagerId: body.projectManagerId,
+    });
+    if (cycle) {
+      throw new HttpError(422, "CYCLE_DETECTED", `assigning ${cycle.field} '${cycle.managerId}' would create a circular reporting chain`);
+    }
 
     const result = await publishF3Write(ctx, "employee_agent1_gap_routes__3", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     return reply.send({ data: result }) as any;
