@@ -18,6 +18,7 @@ import {
   worstSeverity,
 } from "../src/modules/intelligence/domain.js";
 import type { RiskSignal, WhiteSpaceEntry } from "../src/modules/intelligence/schema.js";
+import { EVENTS } from "../src/topics.js";
 
 const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
 const TENANT = "aaaaaaaa-0001-4000-8000-000000000001";
@@ -674,7 +675,14 @@ describe("handleComputeIntelligence", () => {
     await handleComputeIntelligence(msg);
     expect(H.markProcessedMock).toHaveBeenCalledWith(expect.anything(), msg.messageId);
     expect(H.upsertMock).toHaveBeenCalledOnce();
-    expect(H.enqueueMock).toHaveBeenCalledOnce();
+    // Two enqueue() calls in the transaction: the business event, then a
+    // governance audit-trail emission (topic "audit.event.record").
+    expect(H.enqueueMock).toHaveBeenCalledTimes(2);
+    const [businessCall, auditCall] = H.enqueueMock.mock.calls as Array<
+      [unknown, { topic: string; eventType: string }]
+    >;
+    expect(businessCall?.[1]?.topic).toBe(EVENTS.intelligenceComputed);
+    expect(auditCall?.[1]?.topic).toBe("audit.event.record");
     expect(H.cacheInvalidateMock).toHaveBeenCalledOnce();
   });
 
