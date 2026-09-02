@@ -44,8 +44,19 @@ export async function rejectionNoticeRoutes(app: FastifyInstance): Promise<void>
     requireRole(ctx, ADMIN_ROLES);
     const { id } = idParam.parse(req.params);
     const body = z.object({ discloseReason: z.boolean() }).parse(req.body);
-    const ok = await publishF3Write(ctx, "recruitment_rejection_notice_routes__0", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
-    if (!ok) throw new HttpError(404, "NOT_FOUND", "job opening not found") as any;
+    // Synchronous pre-check: `ok` used to be checked for truthiness to detect
+    // a missing job opening (repo.setDisclosurePolicy returns `false` when
+    // its UPDATE affects zero rows), but publishF3Write resolves the { id,
+    // status, correlationId } placeholder, which is always truthy — `if
+    // (!ok)` could never fire, and the consumer itself has no existence
+    // guard for this op either (it calls setDisclosurePolicy unconditionally
+    // — see f3-consumer.ts __0), so a policy PATCH against a non-existent job
+    // opening silently no-op'd while this route told the caller 200.
+    // repo.getDisclosurePolicy reads the same row and returns `null` when it
+    // doesn't exist, so reuse it as the existence check.
+    const existingPolicy = await repo.getDisclosurePolicy(ctx.tenantId, id);
+    if (existingPolicy === null) throw new HttpError(404, "NOT_FOUND", "job opening not found");
+    await publishF3Write(ctx, "recruitment_rejection_notice_routes__0", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     return reply.send({ id, discloseRejectionReason: body.discloseReason });
   });
 

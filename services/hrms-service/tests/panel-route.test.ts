@@ -143,6 +143,11 @@ describe("interview panel governance routes", () => {
   });
 
   it("recuses a panelist (200)", async () => {
+    // The route now checks, synchronously, that the target memberId is
+    // actually on the panel before publishing (panel-routes.ts __1 — the old
+    // `if (n === 0) throw 404` was dead: publishF3Write's placeholder is
+    // never `0`), so the mocked panel must actually include COIP.
+    H.listPanelists.mockResolvedValue([panelist({ memberId: CHAIR, panelRole: "chair" }), panelist({ memberId: COIP })]);
     const app = await buildApp();
     const r = await injectF3(app, { method: "POST", url: `/v1/hrms/interviews/${IV}/panelists/${COIP}/recuse`, headers: auth, payload: {} });
     expect(r.statusCode).toBe(200);

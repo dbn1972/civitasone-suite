@@ -17,7 +17,7 @@ import type { FastifyInstance } from "fastify";
 import { z, ZodError } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { db } from "../../shared/db.js";
-import { validateResumeUpload, resumeKeyPrefix, RESUME_MIME_TYPES } from "./resume-domain.js";
+import { validateResumeUpload, resumeKeyPrefix, RESUME_MIME_TYPES, nextResumeVersion } from "./resume-domain.js";
 import { emitAudit } from "./audit-emit.js";
 import * as candidateRepo from "./candidate-repo.js";
 import * as repo from "./resume-repo.js";
@@ -46,9 +46,31 @@ export async function candidateResumeRoutes(app: FastifyInstance): Promise<void>
     if (errors.length > 0) throw new HttpError(422, "INVALID_RESUME", errors.join("; "));
 
     const rid = randomUUID();
-    const result = await publishF3Write(ctx, "recruitment_resume_routes__0", rid, { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    // publishF3Write only ever resolves { id, status, correlationId } — it
+    // never carries `versionNo`/`isActive` (those come back from
+    // resumeRepo.createResumeVersion, which only runs later, asynchronously,
+    // in the consumer), so `result.versionNo` / `result.isActive` were always
+    // `undefined`. Compute the same values synchronously here with the exact
+    // pure function (nextResumeVersion) and first-version rule the consumer
+    // uses, over the same existing-versions read it performs — this can
+    // still race a concurrent upload for the SAME candidate (the unique
+    // (tenant, candidate, version_no) constraint is the real guard). Unlike
+    // a synchronous 23505 elsewhere in this file, this particular race is
+    // NOT caught by the RESUME_CONFLICT handler below: the actual insert
+    // happens later, inside the async consumer's own transaction
+    // (resumeRepo.createResumeVersion, see f3-consumer.ts __0), well after
+    // this route has already replied 201 — that error handler only wraps
+    // errors thrown synchronously during THIS request. A losing concurrent
+    // upload is therefore a known, undecided-synchronously race (matching how
+    // interview-recording-routes.ts's version-conflict site discloses its
+    // own write-time race), not one that's caught or mitigated here;
+    // `versionNo`/`isActive` are otherwise exact, not a guess.
+    const existing = await repo.listResumes(ctx.tenantId, id);
+    const versionNo = nextResumeVersion(existing.map((r) => r.versionNo));
+    const isActive = Boolean(body.makeActive) || existing.length === 0;
+    await publishF3Write(ctx, "recruitment_resume_routes__0", rid, { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
 
-    return reply.code(201).send({ id: rid, candidateId: id, versionNo: result.versionNo, isActive: result.isActive }) as any;
+    return reply.code(201).send({ id: rid, candidateId: id, versionNo, isActive }) as any;
   });
 
   app.get("/v1/hrms/candidates/:id/resumes", async (req, reply) => {
@@ -75,8 +97,14 @@ export async function candidateResumeRoutes(app: FastifyInstance): Promise<void>
     await mustCandidate(ctx.tenantId, id);
     const resume = await repo.findResume(ctx.tenantId, id, resumeId);
     if (!resume) throw new HttpError(404, "NOT_FOUND", "resume version not found");
-    const n = await publishF3Write(ctx, "recruitment_resume_routes__1", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
-    if (n === 0) throw new HttpError(404, "NOT_FOUND", "resume version not found") as any;
+    // `n` used to be compared with `=== 0` to detect a missing target row
+    // (resumeRepo.activateResume returns an affected-row count), but
+    // publishF3Write resolves the { id, status, correlationId } placeholder,
+    // never a number — `n === 0` was therefore always false and this guard
+    // never fired. It's harmless dead code, not a data bug: existence is
+    // already enforced by the `if (!resume) throw 404` pre-check above,
+    // which is the real, synchronous equivalent.
+    await publishF3Write(ctx, "recruitment_resume_routes__1", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     return reply.send({ id: resumeId, candidateId: id, versionNo: resume.versionNo, isActive: true });
   });
 

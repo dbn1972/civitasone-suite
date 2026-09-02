@@ -84,6 +84,12 @@ afterAll(async () => { await sqlClient.end(); });
 
 describe("candidate resume-version routes (R-RA-0087)", () => {
   it("uploads a new resume version (201) and reports the version + active flag", async () => {
+    // The route now computes versionNo/isActive itself, synchronously, from a
+    // pre-publish repo.listResumes() read (publishF3Write's placeholder
+    // return never carried them — see resume-routes.ts __0), so this scenario
+    // must simulate the candidate having no prior versions, same as
+    // createResumeVersion's own first-version rule.
+    H.listResumes.mockResolvedValueOnce([]);
     const app = await buildApp();
     const r = await injectF3(app, { method: "POST", url: `/v1/hrms/candidates/${CID}/resumes`, headers: auth, payload: upload });
     expect(r.statusCode).toBe(201);
