@@ -171,19 +171,19 @@ describe("LTC claims", () => {
       familyMembers: 2, claimedFareMinor: 50000, entitlementMinor: 40000,
     };
 
-    it("submits an LTC claim (201)", async () => {
+    it("submits an LTC claim (202 accepted)", async () => {
       const app = await buildApp();
       const r = await app.inject({ method: "POST", url: `/v1/hrms/employees/${EMP}/ltc-claims`, headers: auth(), payload });
-      expect(r.statusCode).toBe(201);
-      expect(r.json().status).toBe("submitted");
+      expect(r.statusCode).toBe(202);
+      expect(r.json().status).toBe("accepted");
       expect(r.json().employeeId).toBe(EMP);
       await app.close();
     });
 
-    it("employees can submit their own claims (201)", async () => {
+    it("employees can submit their own claims (202 accepted)", async () => {
       const app = await buildApp();
       const r = await app.inject({ method: "POST", url: `/v1/hrms/employees/${EMP}/ltc-claims`, headers: auth(USER, ["employee"]), payload });
-      expect(r.statusCode).toBe(201);
+      expect(r.statusCode).toBe(202);
       await app.close();
     });
 
@@ -356,11 +356,11 @@ describe("CEA claims", () => {
       claimKind: "tuition", claimedAmountMinor: 30000, annualCapMinor: 50000,
     };
 
-    it("submits a CEA claim (201)", async () => {
+    it("submits a CEA claim (202 accepted)", async () => {
       const app = await buildApp();
       const r = await app.inject({ method: "POST", url: `/v1/hrms/employees/${EMP}/cea-claims`, headers: auth(), payload });
-      expect(r.statusCode).toBe(201);
-      expect(r.json().status).toBe("submitted");
+      expect(r.statusCode).toBe(202);
+      expect(r.json().status).toBe("accepted");
       expect(r.json().remainingCapMinor).toBe("20000");
       await app.close();
     });
