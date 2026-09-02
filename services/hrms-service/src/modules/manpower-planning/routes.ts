@@ -104,9 +104,34 @@ export async function manpowerPlanningRoutes(app: FastifyInstance): Promise<void
     const body = updatePlanBody.parse(req.body);
     const plan = await repo.getPlan(ctx.tenantId, id);
     if (!plan) throw new HttpError(404, "NOT_FOUND", "manpower plan not found");
-    const row = await publishF3Write(ctx, "manpower_planning_routes__1", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
-    if (!row) throw new HttpError(409, "INVALID_STATE", "only a draft plan can be edited") as any;
-    return reply.send({ data: { ...row, ...withVacancy(row) } });
+    // Synchronous pre-check, matching repo.updateDraftPlan's own `status =
+    // 'draft'` WHERE clause: publishF3Write is fire-and-forget, so a stale
+    // `if (!row) throw 409` after the call could never fire (`row` is always
+    // the { id, status, correlationId } placeholder, never the updated row,
+    // never falsy) — a patch against a non-draft plan silently no-op'd in the
+    // consumer while this route told the caller 200. Mirror the guard here,
+    // before publish, matching gpf/routes.ts and cpf/routes.ts.
+    if (plan.status !== "draft") {
+      throw new HttpError(409, "INVALID_STATE", "only a draft plan can be edited");
+    }
+    await publishF3Write(ctx, "manpower_planning_routes__1", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    // The actual update (and its resulting `version`/`updatedAt`) is applied
+    // later, asynchronously, by the consumer — this route cannot read it back
+    // synchronously. It used to destructure `{ ...row }` off publishF3Write's
+    // return value, which never carries the updated row (see f3-publish.ts).
+    // Report the merge of the already-known plan and the already-validated
+    // patch body instead — the same values the consumer will persist
+    // (updatePlanBody's fields are all `.optional()` without `.nullable()`,
+    // so a provided value is never `null` and `??` is equivalent to the
+    // consumer's `!== undefined` check).
+    const merged = {
+      ...plan,
+      requiredStrength: body.requiredStrength ?? plan.requiredStrength,
+      sanctionedStrength: body.sanctionedStrength ?? plan.sanctionedStrength,
+      filledStrength: body.filledStrength ?? plan.filledStrength,
+      remarks: body.remarks ?? plan.remarks,
+    };
+    return reply.send({ data: { ...merged, ...withVacancy(merged) } });
   });
 
   // ── Set category-wise roster inputs ─────────────────────────────
@@ -131,9 +156,18 @@ export async function manpowerPlanningRoutes(app: FastifyInstance): Promise<void
     const { id } = idParam.parse(req.params);
     const plan = await repo.getPlan(ctx.tenantId, id);
     if (!plan) throw new HttpError(404, "NOT_FOUND", "manpower plan not found");
-    const row = await publishF3Write(ctx, "manpower_planning_routes__3", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
-    if (!row) throw new HttpError(409, "INVALID_STATE", "only a draft plan can be submitted for approval") as any;
-    return reply.send({ id, status: row.status });
+    // Synchronous pre-check, matching repo.submitPlan's own `status = 'draft'`
+    // WHERE clause — see the __1 patch handler above for why the old
+    // `if (!row) throw 409` was always dead code.
+    if (plan.status !== "draft") {
+      throw new HttpError(409, "INVALID_STATE", "only a draft plan can be submitted for approval");
+    }
+    await publishF3Write(ctx, "manpower_planning_routes__3", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    // draft → pending_approval is the only transition submitPlan performs, and
+    // the pre-check above already guarantees the plan qualifies, so this is a
+    // deterministic outcome, not a guess — unlike the placeholder's `.status`
+    // ("accepted"), which was never the plan's real status.
+    return reply.send({ id, status: "pending_approval" });
   });
 
   // ── Approve (maker-checker) + generate & emit requisition ───────
@@ -192,9 +226,16 @@ export async function manpowerPlanningRoutes(app: FastifyInstance): Promise<void
     if (plan.createdBy === ctx.actorId) {
       throw new HttpError(409, "MAKER_CHECKER", "plan rejection requires a checker different from the plan creator");
     }
-    const row = await publishF3Write(ctx, "manpower_planning_routes__5", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
-    if (!row) throw new HttpError(409, "INVALID_STATE", "only a plan pending approval can be rejected") as any;
-    return reply.send({ id, status: row.status });
+    // Synchronous pre-check, matching repo.rejectPlan's own
+    // `status = 'pending_approval'` WHERE clause — see the __1/__3 handlers
+    // above for why the old `if (!row) throw 409` was always dead code.
+    if (plan.status !== "pending_approval") {
+      throw new HttpError(409, "INVALID_STATE", "only a plan pending approval can be rejected");
+    }
+    await publishF3Write(ctx, "manpower_planning_routes__5", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    // pending_approval → rejected is the only transition rejectPlan performs,
+    // and the pre-checks above already guarantee the plan qualifies.
+    return reply.send({ id, status: "rejected" });
   });
 
   // ── Requisitions list ───────────────────────────────────────────
@@ -213,9 +254,17 @@ export async function manpowerPlanningRoutes(app: FastifyInstance): Promise<void
     const body = advertiseRequisitionBody.parse(req.body);
     const existing = await repo.getRequisition(ctx.tenantId, id);
     if (!existing) throw new HttpError(404, "NOT_FOUND", "requisition not found");
-    const row = await publishF3Write(ctx, "manpower_planning_routes__6", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
-    if (!row) throw new HttpError(409, "INVALID_STATE", "could not attach advertisement") as any;
-    return reply.send({ id, status: row.status, advertisementRef: row.advertisementRef });
+    // No further pre-check needed: repo.markRequisitionAdvertised has no
+    // status guard in its WHERE clause (id + tenantId only), so the old
+    // `if (!row) throw 409 "could not attach advertisement"` never
+    // corresponded to a real failure mode in the consumer — it was dead
+    // because `row` (the publishF3Write placeholder) is always truthy.
+    await publishF3Write(ctx, "manpower_planning_routes__6", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    // `status: "advertised"` and `advertisementRef` are both deterministic —
+    // markRequisitionAdvertised unconditionally sets status to "advertised"
+    // and advertisementRef to the caller-supplied (already-validated) value;
+    // neither needs the async write to be read back.
+    return reply.send({ id, status: "advertised", advertisementRef: body.advertisementRef });
   });
 
   app.setErrorHandler((err, req, reply) => {
