@@ -3,7 +3,7 @@ import { publishF3Write } from "../../shared/f3-publish.js";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { resolveContext, requireRole } from "../../shared/context.js";
-import { db, scopedRead} from "../../shared/db.js";
+import { scopedRead } from "../../shared/db.js";
 import { hrmsDesignations, hrmsEmployees } from "../employee/schema.js";
 import { hrmsServiceBookEntries } from "../service-book/schema.js";
 import { eq, and } from "drizzle-orm";
@@ -41,6 +41,19 @@ function buildPayMatrix(): Record<number, number[]> {
 const PAY_MATRIX: Record<number, number[]> = buildPayMatrix();
 
 const READER_ROLES = ["hr_admin", "hr_officer", "super_admin", "payroll_admin", "finance_officer"];
+
+/** One employee's precomputed, exact increment decision — what the route
+ * decided synchronously and what the async consumer must apply VERBATIM,
+ * never recompute. See the long comment on the annual-increment route below. */
+interface IncrementPlanItem {
+  employeeId: string;
+  level: number;
+  fromCell: number;
+  toCell: number;
+  fromMinor: string;
+  toMinor: string;
+  description: string;
+}
 
 export async function payMatrixRoutes(app: FastifyInstance): Promise<void> {
   app.get("/v1/hrms/pay-matrix", async (req, reply) => {
@@ -85,6 +98,50 @@ export async function payMatrixRoutes(app: FastifyInstance): Promise<void> {
   // 7th CPC annual increment run (statutory 1 July). Advances each active
   // employee one cell within their pay level and records it in the service book.
   // Level is derived from the employee's designation; basic from hrmsEmployees.basicMinor.
+  //
+  // F3-converted (fix/hrms-paymatrix-async-conversion): the route now only
+  // READS and DECIDES — it never writes to Postgres itself. The actual write
+  // happens later in pay-matrix/f3-consumer.ts's `pay_matrix_routes__0` case.
+  //
+  // This module has TWO prior, reverted attempts at this exact conversion
+  // (see f3-consumer.ts's case and this file's git history), both of which
+  // would have double-applied a 7th-CPC pay increment — a real,
+  // hard-to-reverse payroll bug — because the consumer re-derived the pay
+  // level/cell independently instead of being told the exact decision. This
+  // attempt avoids that failure mode structurally:
+  //   - The route computes the EXACT plan per employee synchronously — level,
+  //     current cell, next cell, current basic, next basic — and publishes
+  //     that plan verbatim. The consumer applies `toMinor` exactly as given;
+  //     it never re-derives a level or re-walks the pay matrix.
+  //   - That closes the FIRST double-application mode (consumer guessing
+  //     independently), but not a SECOND one: the `alreadyIncremented`
+  //     pre-check below is a synchronous read, not a transactional guarantee.
+  //     Two genuinely concurrent requests for the same effectiveDate (e.g. an
+  //     admin double-clicking "Run Annual Increment") can both read
+  //     "not yet incremented" before either request's consumer has written,
+  //     and both would then publish a plan proposing the identical advance
+  //     for the same employee.
+  //   - That second race is closed at the DB layer, not in application logic:
+  //     migrations/0132_pay_matrix_increment_idempotency.sql adds a partial
+  //     unique index on hrms_service_book_entries
+  //     (tenant_id, employee_id, effective_date) WHERE entry_type='increment'.
+  //     The consumer inserts the service-book row FIRST, conflict-checked
+  //     against that index, and only applies the `basicMinor` update if its
+  //     insert actually won the index — so whichever of two racing plans is
+  //     processed first "wins" and the second is a safe no-op, no matter how
+  //     the two requests or their queued messages interleave. A
+  //     queue-message-id dedupe key (`markProcessed`) is also in place and
+  //     protects the ordinary case of the SAME message being redelivered
+  //     after a transient consumer failure — but it cannot protect against
+  //     two independently-published messages, which is why the DB-layer
+  //     constraint above is the one that actually carries this guarantee.
+  //
+  // Response shape: `dryRun: true` is a pure, synchronous preview (nothing is
+  // published, nothing is written) and still replies 200 with the predicted
+  // plan. A real run publishes the plan and replies 202 — the per-employee
+  // `results[].incremented` in that response reflects what the route
+  // DECIDED and QUEUED, not yet a confirmed durable write; poll GET
+  // /v1/hrms/employees/:id or the service book to observe the applied state.
   const HR_WRITE_ROLES = ["hr_admin", "super_admin"];
   app.post("/v1/hrms/pay-matrix/annual-increment", async (req, reply) => {
     const ctx = resolveContext(req);
@@ -100,7 +157,8 @@ export async function payMatrixRoutes(app: FastifyInstance): Promise<void> {
       eq(hrmsEmployees.status, "confirmed"),
     )));
 
-    // Idempotency guard: skip employees already incremented on this effectiveDate.
+    // Idempotency PRE-CHECK (fast path only — the hard guarantee is the DB
+    // constraint applied by the consumer; see the comment above).
     const priorRows = await scopedRead((tx) => tx.select({ employeeId: hrmsServiceBookEntries.employeeId })
       .from(hrmsServiceBookEntries)
       .where(and(
@@ -116,6 +174,7 @@ export async function payMatrixRoutes(app: FastifyInstance): Promise<void> {
     const designationLevelMap = new Map<string, number>(designations.map((d) => [d.id, d.level]));
 
     const results: Array<Record<string, unknown>> = [];
+    const plan: IncrementPlanItem[] = [];
     let skipped = 0;
 
     for (const emp of emps) {
@@ -139,36 +198,19 @@ export async function payMatrixRoutes(app: FastifyInstance): Promise<void> {
 
       const nextIdx = Math.min(currentIdx + 1, cells.length - 1);
       const nextBasic = cells[nextIdx] ?? currentBasicN;
+      const willIncrement = nextBasic > currentBasicN;
 
       if (!body.dryRun) {
-        // DELIBERATELY NOT F3-converted (see pay-matrix/f3-consumer.ts's
-        // `pay_matrix_routes__0` case for the full explanation): a previous
-        // attempt to move this write into the async consumer re-derived the
-        // pay level from `basicMinor` instead of the employee's designation
-        // and had no `nextBasic > currentBasicN` guard, so it would have
-        // double-applied every increment (once here, once in the consumer,
-        // off the already-incremented basic) plus written a duplicate
-        // service-book entry — a real, hard-to-reverse 7th-CPC payroll money
-        // bug. That case is kept as an intentional no-op and this route
-        // remains the single, synchronous writer for annual increments.
-        // Converting this safely (single writer, pre-computed idempotent
-        // plan passed to the consumer) is possible but needs a maintainer
-        // with full payroll-domain context and review — left as a disclosed
-        // gap rather than guessed at here.
-        if (nextBasic > currentBasicN) {
-          await db.update(hrmsEmployees)
-            .set({ basicMinor: BigInt(nextBasic), updatedBy: ctx.actorId, updatedAt: new Date() })
-            .where(and(eq(hrmsEmployees.tenantId, ctx.tenantId), eq(hrmsEmployees.id, emp.id)));
-        }
-        await db.insert(hrmsServiceBookEntries).values({
-          id: randomUUID(),
-          tenantId: ctx.tenantId,
+        // Exact plan, byte-identical to what results[] below reports — the
+        // consumer applies these fromMinor/toMinor values verbatim.
+        plan.push({
           employeeId: emp.id,
-          entryType: "increment",
-          effectiveDate,
+          level,
+          fromCell: currentIdx + 1,
+          toCell: nextIdx + 1,
+          fromMinor: currentBasicN.toString(),
+          toMinor: nextBasic.toString(),
           description: `Annual increment: Level ${level} Cell ${currentIdx + 1} → Cell ${nextIdx + 1}. Basic ₹${(currentBasicN / 100).toLocaleString("en-IN")} → ₹${(nextBasic / 100).toLocaleString("en-IN")}.`,
-          recordedBy: ctx.actorId,
-          attested: false,
         });
       }
 
@@ -181,15 +223,37 @@ export async function payMatrixRoutes(app: FastifyInstance): Promise<void> {
         toMinor: nextBasic.toString(),
         fromDisplay: `₹${(currentBasicN / 100).toLocaleString("en-IN")}`,
         toDisplay: `₹${(nextBasic / 100).toLocaleString("en-IN")}`,
-        incremented: nextBasic !== currentBasicN,
+        incremented: willIncrement,
       });
     }
 
-    await publishF3Write(ctx, "pay_matrix_routes__0", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> });
     const incremented = results.filter((r) => r.incremented === true).length;
-    req.log.info({ event: "pay.annual_increment.run", effectiveDate, dryRun: body.dryRun, employeesScanned: emps.length, incremented, skipped, actorId: ctx.actorId, tenantId: ctx.tenantId }, "annual increment run");
-    return reply.send({
-      effectiveDate, dryRun: body.dryRun,
+
+    if (body.dryRun) {
+      req.log.info({ event: "pay.annual_increment.preview", effectiveDate, dryRun: true, employeesScanned: emps.length, incremented, skipped, actorId: ctx.actorId, tenantId: ctx.tenantId }, "annual increment dry run");
+      return reply.send({
+        status: "preview",
+        effectiveDate, dryRun: true,
+        employeesScanned: emps.length,
+        incremented,
+        skippedAlreadyIncremented: skipped,
+        results,
+      });
+    }
+
+    const batchId = randomUUID();
+    await publishF3Write(ctx, "pay_matrix_routes__0", batchId, {
+      body: (req.body as Record<string, unknown>) ?? {},
+      params: req.params as Record<string, unknown>,
+      query: req.query as Record<string, unknown>,
+      effectiveDate,
+      plan,
+    });
+    req.log.info({ event: "pay.annual_increment.queued", effectiveDate, dryRun: false, employeesScanned: emps.length, incremented, skipped, actorId: ctx.actorId, tenantId: ctx.tenantId, batchId }, "annual increment run queued");
+    return reply.code(202).send({
+      status: "accepted",
+      id: batchId,
+      effectiveDate, dryRun: false,
       employeesScanned: emps.length,
       incremented,
       skippedAlreadyIncremented: skipped,

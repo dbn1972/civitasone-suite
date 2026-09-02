@@ -17,16 +17,18 @@
  */
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { randomUUID, createHmac } from "node:crypto";
-import { eq } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 import type { FastifyInstance } from "fastify";
 import { buildApp } from "../src/app.js";
 import { db, sqlClient } from "../src/shared/db.js";
 import { runWithTenant, withTenantConsumer } from "@civitasone/db";
 import type { Queue, Handler } from "@civitasone/queue";
 import { queue } from "../src/shared/infra.js";
+import { COMMANDS } from "../src/topics.js";
 import { registerLifecycleMutationConsumers } from "../src/modules/lifecycle/consumer.js";
 import { registerF3_service_book_Consumers } from "../src/modules/service-book/f3-consumer.js";
 import { registerF3_rti_Consumers } from "../src/modules/rti/f3-consumer.js";
+import { registerF3_pay_matrix_Consumers } from "../src/modules/pay-matrix/f3-consumer.js";
 import { registerTrainingConsumers } from "../src/modules/training/consumer.js";
 import { hrmsEmployees, hrmsDepartments, hrmsDesignations } from "../src/modules/employee/schema.js";
 import { hrmsServiceBookEntries } from "../src/modules/service-book/schema.js";
@@ -85,6 +87,7 @@ wireTenantAwareQueue(queue);
 registerLifecycleMutationConsumers(queue);
 registerF3_service_book_Consumers(queue);
 registerF3_rti_Consumers(queue);
+registerF3_pay_matrix_Consumers(queue);
 registerTrainingConsumers(queue);
 
 /** Await the async F3 write(s) published by the route(s) just injected. */
@@ -331,41 +334,146 @@ describe("CCS leave apply (CQRS) + approve authz", () => {
 });
 
 // ── 5. 7th CPC annual increment + pay-matrix lookup ──────────────────
-describe("7th CPC pay matrix + annual increment (idempotent)", () => {
+// Annual increment is F3-converted (fix/hrms-paymatrix-async-conversion):
+// routes.ts only reads + decides + publishes an exact per-employee plan;
+// pay-matrix/f3-consumer.ts applies it. 202 + drainF3() replaces the old
+// synchronous 200 assertions below. See routes.ts's and f3-consumer.ts's
+// comments for the two double-application failure modes this design closes:
+// (1) the consumer independently re-deriving the pay level/cell instead of
+// being told the exact decision, and (2) two genuinely concurrent requests
+// for the same effectiveDate both deciding to advance the same employee
+// before either has durably written. (1) is closed by forwarding an exact
+// plan; (2) is closed by a partial unique index — see migrations/
+// 0132_pay_matrix_increment_idempotency.sql — the "simulated concurrent
+// double-submit" test below proves it directly against real Postgres.
+describe("7th CPC pay matrix + annual increment (idempotent, async F3)", () => {
   it("pay-matrix lookup returns a cell value", async () => {
     const r = await app.inject({ method: "GET", url: "/v1/hrms/pay-matrix/lookup?level=10&cell=1", headers: HR });
     expect(r.statusCode).toBe(200);
     expect(r.json().basicMinor).toBe("5610000");
   });
-  // KNOWN GAP (not fixed here — see PR description): pay-matrix/routes.ts's
-  // annual-increment handler is deliberately still a SYNCHRONOUS writer (see
-  // the comment above its `db.update(hrmsEmployees)` call), but it calls bare
-  // `db.update()`/`db.insert()` directly instead of going through
-  // `scopedRead`/`req.tenantTx`/`tenantTransaction(db, ctx.tenantId, ...)`.
-  // Those bare calls never run `SET LOCAL app.tenant_id`, so under
-  // NOBYPASSRLS + FORCE ROW LEVEL SECURITY the INSERT into
-  // hrms_service_book_entries is rejected ("new row violates row-level
-  // security policy") whenever the request's tenant context comes only from
-  // the JWT `tid` claim (as it now does — no `x-tenant-id` header) rather
-  // than the legacy `x-tenant-id`-header-driven AsyncLocalStorage path. This
-  // is a real 500, not a stale status-code assertion; not fixed here.
+
   it("annual increment advances the isolated employee one cell + writes service-book", async () => {
     const before = (await runWithTenant(TENANT, () => db.transaction(async (tx) => tx.select().from(hrmsEmployees).where(eq(hrmsEmployees.id, empIncrement)))))[0].basicMinor;
     const r = await app.inject({ method: "POST", url: "/v1/hrms/pay-matrix/annual-increment", headers: { ...HR, ...CT },
       payload: { effectiveDate: "2024-07-01" } });
-    expect(r.statusCode).toBe(200);
-    const after = (await runWithTenant(TENANT, () => db.transaction(async (tx) => tx.select().from(hrmsEmployees).where(eq(hrmsEmployees.id, empIncrement)))))[0].basicMinor;
-    expect(after).toBeGreaterThan(before);
+    expect(r.statusCode).toBe(202);
+    expect(r.json().status).toBe("accepted");
+    const planned = r.json().results.find((x: { employeeId: string }) => x.employeeId === empIncrement);
+    expect(planned.incremented).toBe(true);
+
+    await drainF3();
+
+    const [emp] = await runWithTenant(TENANT, () => db.transaction(async (tx) => tx.select().from(hrmsEmployees).where(eq(hrmsEmployees.id, empIncrement))));
+    expect(emp.basicMinor).toBeGreaterThan(before);
+    // The route's synchronously-computed toMinor and what the consumer
+    // actually persisted are byte-identical — proves the consumer applied
+    // the plan verbatim rather than recomputing it.
+    expect(emp.basicMinor.toString()).toBe(planned.toMinor);
+    const sb = await runWithTenant(TENANT, () => db.transaction(async (tx) => tx.select().from(hrmsServiceBookEntries)
+      .where(and(eq(hrmsServiceBookEntries.employeeId, empIncrement), eq(hrmsServiceBookEntries.effectiveDate, "2024-07-01")))));
+    expect(sb.filter((e) => e.entryType === "increment")).toHaveLength(1);
   });
-  it("re-running for the SAME effectiveDate is idempotent (no second advance)", async () => {
+
+  it("re-running for the SAME effectiveDate (sequential) does not re-advance — the synchronous pre-check short-circuits it", async () => {
     const before = (await runWithTenant(TENANT, () => db.transaction(async (tx) => tx.select().from(hrmsEmployees).where(eq(hrmsEmployees.id, empIncrement)))))[0].basicMinor;
     const r = await app.inject({ method: "POST", url: "/v1/hrms/pay-matrix/annual-increment", headers: { ...HR, ...CT },
       payload: { effectiveDate: "2024-07-01" } });
-    expect(r.statusCode).toBe(200);
-    const after = (await runWithTenant(TENANT, () => db.transaction(async (tx) => tx.select().from(hrmsEmployees).where(eq(hrmsEmployees.id, empIncrement)))))[0].basicMinor;
-    expect(after).toBe(before); // unchanged — guarded
+    expect(r.statusCode).toBe(202);
+
+    await drainF3();
+
+    const [emp] = await runWithTenant(TENANT, () => db.transaction(async (tx) => tx.select().from(hrmsEmployees).where(eq(hrmsEmployees.id, empIncrement))));
+    expect(emp.basicMinor).toBe(before); // unchanged — guarded
     const body = r.json();
     expect(body.skippedAlreadyIncremented).toBeGreaterThan(0);
+    const sb = await runWithTenant(TENANT, () => db.transaction(async (tx) => tx.select().from(hrmsServiceBookEntries)
+      .where(and(eq(hrmsServiceBookEntries.employeeId, empIncrement), eq(hrmsServiceBookEntries.effectiveDate, "2024-07-01")))));
+    expect(sb.filter((e) => e.entryType === "increment")).toHaveLength(1); // still exactly one, not two
+  });
+
+  it("simulated queue redelivery: the SAME message processed twice does not double-apply (markProcessed)", async () => {
+    // Independent employee + effectiveDate so this test cannot interact with
+    // the two above.
+    const empRedelivery = randomUUID();
+    await seedEmployee(empRedelivery, { basicMinor: 5610000n });
+
+    const dry = await app.inject({ method: "POST", url: "/v1/hrms/pay-matrix/annual-increment", headers: { ...HR, ...CT },
+      payload: { effectiveDate: "2025-07-01", dryRun: true } });
+    const planned = dry.json().results.find((x: { employeeId: string }) => x.employeeId === empRedelivery);
+    expect(planned.incremented).toBe(true);
+
+    // Publish the SAME messageId twice directly — this is what a queue
+    // redelivery after a transient consumer failure looks like on the wire
+    // (publishF3Write itself mints a fresh messageId per HTTP call, so this
+    // scenario can only be simulated by publishing directly).
+    const messageId = randomUUID();
+    const publishOnce = () => queue.publish(COMMANDS.f3RouteWrite, {
+      messageId,
+      type: COMMANDS.f3RouteWrite,
+      tenantId: TENANT,
+      actorId: ACTOR,
+      correlationId: randomUUID(),
+      schemaVersion: "1.0",
+      payload: {
+        op: "pay_matrix_routes__0",
+        id: randomUUID(),
+        tenantId: TENANT,
+        effectiveDate: "2025-07-01",
+        plan: [{
+          employeeId: empRedelivery, level: planned.level,
+          fromCell: planned.fromCell, toCell: planned.toCell,
+          fromMinor: planned.fromMinor, toMinor: planned.toMinor,
+          description: "simulated redelivery",
+        }],
+      },
+    });
+
+    await publishOnce();
+    await drainF3();
+    await publishOnce(); // redelivery of the identical messageId
+    await drainF3();
+
+    const [emp] = await runWithTenant(TENANT, () => db.transaction(async (tx) => tx.select().from(hrmsEmployees).where(eq(hrmsEmployees.id, empRedelivery))));
+    expect(emp.basicMinor.toString()).toBe(planned.toMinor); // applied exactly once, not twice
+    const sb = await runWithTenant(TENANT, () => db.transaction(async (tx) => tx.select().from(hrmsServiceBookEntries)
+      .where(and(eq(hrmsServiceBookEntries.employeeId, empRedelivery), eq(hrmsServiceBookEntries.effectiveDate, "2025-07-01")))));
+    expect(sb.filter((e) => e.entryType === "increment")).toHaveLength(1);
+  });
+
+  it("simulated concurrent double-submit: two independent requests for the same employee+effectiveDate advance pay at most once", async () => {
+    const empRace = randomUUID();
+    await seedEmployee(empRace, { basicMinor: 5610000n });
+
+    // Two HTTP requests fired together, BEFORE either's consumer has run:
+    // both routes independently read "not yet incremented" and each
+    // publishes its own plan proposing the SAME advance for the same
+    // employee — this is the exact scenario the partial unique index in
+    // migrations/0132_pay_matrix_increment_idempotency.sql exists to close.
+    const [r1, r2] = await Promise.all([
+      app.inject({ method: "POST", url: "/v1/hrms/pay-matrix/annual-increment", headers: { ...HR, ...CT }, payload: { effectiveDate: "2026-07-01" } }),
+      app.inject({ method: "POST", url: "/v1/hrms/pay-matrix/annual-increment", headers: { ...HR, ...CT }, payload: { effectiveDate: "2026-07-01" } }),
+    ]);
+    expect(r1.statusCode).toBe(202);
+    expect(r2.statusCode).toBe(202);
+    const p1 = r1.json().results.find((x: { employeeId: string }) => x.employeeId === empRace);
+    const p2 = r2.json().results.find((x: { employeeId: string }) => x.employeeId === empRace);
+    // Both requests independently decided to increment this employee — proves
+    // the race actually happened (neither saw the other's not-yet-applied
+    // write), computing the identical target off the same pre-race basic.
+    expect(p1.incremented).toBe(true);
+    expect(p2.incremented).toBe(true);
+    expect(p1.toMinor).toBe(p2.toMinor);
+
+    await drainF3();
+
+    const [emp] = await runWithTenant(TENANT, () => db.transaction(async (tx) => tx.select().from(hrmsEmployees).where(eq(hrmsEmployees.id, empRace))));
+    // Advanced to the SAME single target both requests computed — not past it.
+    expect(emp.basicMinor.toString()).toBe(p1.toMinor);
+    const sb = await runWithTenant(TENANT, () => db.transaction(async (tx) => tx.select().from(hrmsServiceBookEntries)
+      .where(and(eq(hrmsServiceBookEntries.employeeId, empRace), eq(hrmsServiceBookEntries.effectiveDate, "2026-07-01")))));
+    // Exactly one service-book entry despite two independently published plans.
+    expect(sb.filter((e) => e.entryType === "increment")).toHaveLength(1);
   });
 });
 
