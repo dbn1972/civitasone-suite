@@ -118,6 +118,34 @@ async function enforceCcsLeaveRules(ctx: RequestContext, body: ReturnType<typeof
 }
 
 export async function leaveRoutes(app: FastifyInstance): Promise<void> {
+  // AUTH-ORDERING FIX: Fastify's default JSON body parser throws
+  // FST_ERR_CTP_EMPTY_JSON_BODY (400) for an empty body sent with
+  // Content-Type: application/json -- and that happens during Fastify's
+  // parsing lifecycle stage, which runs BEFORE preValidation/preHandler/the
+  // route handler. Every handler in this module already does
+  // resolveContext()+requireRole() as its first statements (auth before any
+  // body/param validation) -- but that ordering was moot for callers who
+  // send no body (e.g. PATCH .../approve with an empty payload): the 400
+  // fired before the handler, and thus before requireRole, ever ran, so an
+  // unauthorized caller learned "your body is empty" instead of "you are
+  // not allowed to do this." Same fix as gateway-service's app.ts: treat an
+  // empty JSON body as {} so parsing succeeds and control reaches the
+  // handler's auth check first; a genuinely malformed (non-empty, invalid)
+  // JSON body still surfaces as 400 via the caught SyntaxError below.
+  app.addContentTypeParser(
+    "application/json",
+    { parseAs: "string" },
+    (_req, body, done) => {
+      try {
+        done(null, body ? JSON.parse(body as string) : {});
+      } catch (err) {
+        const syntaxErr = err as Error & { statusCode?: number };
+        syntaxErr.statusCode = 400;
+        done(syntaxErr, undefined);
+      }
+    },
+  );
+
   app.post("/v1/hrms/leave-types", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, HR_ROLES);
