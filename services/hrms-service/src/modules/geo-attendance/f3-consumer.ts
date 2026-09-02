@@ -115,15 +115,13 @@ export function registerF3_geo_attendance_Consumers(queue: Queue): void {
             // always resolves against the tenant's first active office (routes.ts
             // does not honour body.officeLocationId on this path).
             //
-            // KNOWN BLOCKER, NOT FIXABLE FROM THIS FILE: with the locals restored
-            // this insert now reaches Postgres and fails there with
-            // 22001 "value too long for type character varying(8)" —
-            // attendance.hrms_geo_attendance.check_type is varchar(8) and
-            // "check_out" is 9 characters, so NO check-out row can ever be
-            // stored. ("check_in" is exactly 8, which is why check-in works.)
-            // Widening the column needs a migration plus a matching change to
-            // ./schema.ts, both outside this consumer. Left throwing loudly so
-            // the failure is visible in the logs/DLQ rather than silent.
+            // FIXED (migration 0127_widen_geo_attendance_check_type.sql): this
+            // insert used to fail at Postgres with 22001 "value too long for
+            // type character varying(8)" — attendance.hrms_geo_attendance.
+            // check_type was varchar(8) and "check_out" is 9 characters, so NO
+            // check-out row could ever be stored ("check_in" is exactly 8,
+            // which is why check-in always worked). The column (and the
+            // matching Drizzle declaration in ./schema.ts) is now varchar(16).
             const today = new Date().toISOString().slice(0, 10);
             const officeLoc = await resolveOfficeLoc(tx, p.tenantId, undefined);
             let withinGeofence = false;

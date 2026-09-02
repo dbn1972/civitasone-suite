@@ -8,7 +8,7 @@ export const hrmsGeoAttendance = attSchema.table("hrms_geo_attendance", {
   tenantId:               uuid("tenant_id").notNull(),
   employeeId:             uuid("employee_id").notNull(),
   attendanceDate:         date("attendance_date").notNull(),
-  checkType:              varchar("check_type", { length: 8 }).notNull(),
+  checkType:              varchar("check_type", { length: 16 }).notNull(),
   latitude:               doublePrecision("latitude").notNull(),
   longitude:              doublePrecision("longitude").notNull(),
   accuracyMeters:         doublePrecision("accuracy_meters"),
