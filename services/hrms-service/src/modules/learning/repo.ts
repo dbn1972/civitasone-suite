@@ -112,6 +112,22 @@ export async function upsertLessonProgress(tx: Writer, row: typeof lessonProgres
       set: { status: row.status ?? "completed", completedAt: row.completedAt ?? null },
     });
 }
+/**
+ * Non-tx (scopedRead) read of currently-completed lesson ids for an enrolment.
+ * Used by routes.ts to synchronously compute the post-write progress/status/
+ * resume-point BEFORE the async write is queued, so the response can echo
+ * real values instead of publishF3Write's placeholder. Mirrors
+ * completedLessonIdsTx below, minus the tx-visibility requirement — the route
+ * reads the state as it stands before this write, then toggles the one lesson
+ * this request affects (see learning/routes.ts, learning_routes__6).
+ */
+export async function completedLessonIds(tenantId: string, enrollmentId: string): Promise<string[]> {
+  const rows = await scopedRead((t) => t
+    .select({ l: lessonProgress.lessonId })
+    .from(lessonProgress)
+    .where(and(eq(lessonProgress.tenantId, tenantId), eq(lessonProgress.enrollmentId, enrollmentId), eq(lessonProgress.status, "completed"))));
+  return rows.map((r) => r.l);
+}
 // Tx-scoped reads — used inside the progress transaction so they SEE the
 // lesson-progress row just upserted in the same transaction (scopedRead opens a
 // separate transaction and would miss the uncommitted write).
