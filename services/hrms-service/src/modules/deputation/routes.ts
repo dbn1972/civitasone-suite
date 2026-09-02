@@ -81,7 +81,7 @@ export async function deputationRoutes(app: FastifyInstance): Promise<void> {
     if (existing) throw new HttpError(409, "ALREADY_DEPUTED", "employee already has an active deputation");
 
     const depId = randomUUID();
-    await publishF3Write(ctx, "deputation_routes__0", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    await publishF3Write(ctx, "deputation_routes__0", depId, { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
 
     return reply.code(201).send(jsonSafe({
       id: depId, employeeId: id, status: "active",
