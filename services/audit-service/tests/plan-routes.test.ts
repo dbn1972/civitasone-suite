@@ -16,7 +16,6 @@
  */
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { randomUUID } from "node:crypto";
-import { eq } from "drizzle-orm";
 import { runWithTenant } from "@civitasone/db";
 import { signToken } from "@civitasone/auth";
 import type { FastifyInstance } from "fastify";
@@ -54,8 +53,12 @@ async function seedPlan(): Promise<void> {
   })));
 }
 
+// plan.audit_plans is a case-of-record table: migration 0027 added a BEFORE
+// DELETE OR TRUNCATE trigger that unconditionally rejects both, so this is
+// now a no-op. TENANT/SEEDED_PLAN above are already randomUUID()-scoped per
+// test run, so leftover rows across runs are harmless and never collide.
 async function wipe(): Promise<void> {
-  await runWithTenant(TENANT, () => db.transaction((tx) => tx.delete(auditPlans).where(eq(auditPlans.tenantId, TENANT))));
+  /* no-op: see comment above */
 }
 
 let app: FastifyInstance;

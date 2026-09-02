@@ -29,11 +29,16 @@ function token(roles: string[], tenantId: string, actorId: string) {
   return signToken({ sub: actorId, tid: tenantId, roles, sid: "sess-1" }, SECRET, 3600);
 }
 
-const ACTOR  = "00000000-aaaa-4000-8000-0000000000a1";
-const TENANT = "11111111-aaaa-4000-8000-0000000000a1";
-const OBS_1  = "22222222-bbbb-4000-8000-0000000000a1";
-const OBS_2  = "22222222-bbbb-4000-8000-0000000000a2";
-const OBS_3  = "22222222-bbbb-4000-8000-0000000000a3";
+// TENANT/OBS_* are randomUUID()-scoped (not fixed literals) because
+// observation.audit_observations is a case-of-record table guarded by
+// migration 0027's BEFORE DELETE OR TRUNCATE trigger — see wipe() below.
+// A fresh id per test run means leftover rows from earlier runs never
+// collide with this run's inserts.
+const ACTOR  = randomUUID();
+const TENANT = randomUUID();
+const OBS_1  = randomUUID();
+const OBS_2  = randomUUID();
+const OBS_3  = randomUUID();
 const MSG_1  = "44444444-dddd-4000-8000-0000000000a1";
 const MSG_2  = "44444444-dddd-4000-8000-0000000000a2";
 const MSG_3  = "44444444-dddd-4000-8000-0000000000a3";
@@ -58,10 +63,15 @@ function wireTenantAwareQueue(q: Queue): Queue {
 
 const ALL_MSG_IDS = [MSG_1, MSG_2, MSG_3, MSG_4, MSG_5, MSG_DUP];
 
+// observation.audit_observations is a case-of-record table: migration 0027
+// added a BEFORE DELETE OR TRUNCATE trigger that unconditionally rejects
+// both, so it is never wiped here. TENANT/OBS_* above are randomUUID()-scoped
+// per test run instead, so leftover rows across runs are harmless and never
+// collide (matches the pattern already used for events.events in
+// tests/events-routes.test.ts).
 async function wipe() {
   await runWithTenant(TENANT, () => db.transaction(async (tx) => {
     await tx.delete(outboxMessages).where(eq(outboxMessages.tenantId, TENANT));
-    await tx.delete(auditObservations).where(eq(auditObservations.tenantId, TENANT));
     for (const id of ALL_MSG_IDS) {
       await tx.delete(processed).where(eq(processed.messageId, id));
     }

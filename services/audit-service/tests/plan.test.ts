@@ -38,11 +38,14 @@ function token(roles: string[], tenantId: string, actorId: string) {
   return signToken({ sub: actorId, tid: tenantId, roles, sid: "sess-1" }, SECRET, 3600);
 }
 
-const ACTOR  = "00000000-aaaa-4000-8000-000000000020";
-const TENANT = "11111111-aaaa-4000-8000-000000000020";
-const PLAN_1 = "22222222-bbbb-4000-8000-000000000020";
-const PLAN_2 = "22222222-bbbb-4000-8000-000000000021";
-const ITEM_1 = "33333333-cccc-4000-8000-000000000020";
+// TENANT/PLAN_*/ITEM_1 are randomUUID()-scoped (not fixed literals) because
+// plan.audit_plans is a case-of-record table guarded by migration 0027's
+// BEFORE DELETE OR TRUNCATE trigger — see wipe() below.
+const ACTOR  = randomUUID();
+const TENANT = randomUUID();
+const PLAN_1 = randomUUID();
+const PLAN_2 = randomUUID();
+const ITEM_1 = randomUUID();
 const MSG_1  = "44444444-dddd-4000-8000-000000000020";
 const MSG_2  = "44444444-dddd-4000-8000-000000000021";
 const MSG_3  = "44444444-dddd-4000-8000-000000000022";
@@ -70,11 +73,16 @@ function wireTenantAwareQueue(q: Queue): Queue {
 // db.transaction() (or without an active runWithTenant scope) run with no
 // RLS GUC set. Wrap all direct DB access in runWithTenant(TENANT, () =>
 // db.transaction(...)).
+// plan.audit_plans is a case-of-record table: migration 0027 added a BEFORE
+// DELETE OR TRUNCATE trigger that unconditionally rejects both, so it is
+// never wiped here (auditPlanItems is not a guarded table and is still
+// cleaned up normally). TENANT/PLAN_*/ITEM_1 above are randomUUID()-scoped
+// per test run instead, so leftover rows across runs are harmless and never
+// collide.
 async function wipe() {
   await runWithTenant(TENANT, () => db.transaction(async (tx) => {
     await tx.delete(outboxMessages).where(eq(outboxMessages.tenantId, TENANT));
     await tx.delete(auditPlanItems).where(eq(auditPlanItems.tenantId, TENANT));
-    await tx.delete(auditPlans).where(eq(auditPlans.tenantId, TENANT));
     for (const id of [MSG_1, MSG_2, MSG_3, MSG_4, MSG_5]) {
       await tx.delete(processed).where(eq(processed.messageId, id));
     }
