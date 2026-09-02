@@ -58,7 +58,7 @@ export async function manpowerPlanningRoutes(app: FastifyInstance): Promise<void
     const body = createPlanBody.parse(req.body);
     const id = randomUUID();
     try {
-      await publishF3Write(ctx, "manpower_planning_routes__0", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+      await publishF3Write(ctx, "manpower_planning_routes__0", id, { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     } catch (err) {
       if (String((err as { code?: string }).code) === "23505") {
         throw new HttpError(409, "DUPLICATE_PLAN", "a plan already exists for this unit, cadre and year") as any;

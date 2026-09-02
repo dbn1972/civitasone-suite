@@ -34,7 +34,7 @@ export async function assessmentRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, HR_ROLES);
     const body = createBankBody.parse(req.body);
     const id = randomUUID();
-    await publishF3Write(ctx, "assessment_routes__0", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    await publishF3Write(ctx, "assessment_routes__0", id, { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     return reply.code(201).send({ id, status: "active" }) as any;
   });
 
@@ -58,7 +58,7 @@ export async function assessmentRoutes(app: FastifyInstance): Promise<void> {
       throw new HttpError(409, "MAKER_CHECKER", "question-bank change requires a checker different from the bank creator");
     }
     const qid = randomUUID();
-    await publishF3Write(ctx, "assessment_routes__1", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    await publishF3Write(ctx, "assessment_routes__1", qid, { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     return reply.code(201).send({ id: qid }) as any;
   });
 
@@ -76,7 +76,7 @@ export async function assessmentRoutes(app: FastifyInstance): Promise<void> {
     const bank = await repo.getBank(ctx.tenantId, body.bankId);
     if (!bank) throw new HttpError(404, "NOT_FOUND", "question bank not found");
     const id = randomUUID();
-    await publishF3Write(ctx, "assessment_routes__2", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    await publishF3Write(ctx, "assessment_routes__2", id, { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     return reply.code(201).send({ id, status: "draft" }) as any;
   });
 
