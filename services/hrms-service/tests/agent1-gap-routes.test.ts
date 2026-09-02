@@ -604,8 +604,11 @@ describe("0314 — Employee hold/release", () => {
     await app.close();
   });
 
-  it("POST /v1/hrms/holds/:holdId/reject → 200", async () => {
+  it("POST /v1/hrms/holds/:holdId/reject → 200, write queued", async () => {
     H.selectFrom.mockResolvedValue([{ id: HOLD_ID, status: "pending", requestedBy: USER2, version: 1 }]);
+    // A reject on a pending hold must succeed AND actually reach the write
+    // pipeline -- not just answer 200 at the HTTP layer.
+    const publishSpy = vi.spyOn(queue, "publish");
     const app = await buildApp();
     const r = await app.inject({
       method: "POST",
@@ -615,11 +618,63 @@ describe("0314 — Employee hold/release", () => {
     });
     expect(r.statusCode).toBe(200);
     expect(r.json().data.status).toBe("rejected");
+    expect(publishSpy).toHaveBeenCalledTimes(1);
+    expect(publishSpy.mock.calls[0]?.[1]).toMatchObject({
+      actorId: USER,
+      payload: expect.objectContaining({ op: "lifecycle_hold_routes__2" }),
+    });
+    publishSpy.mockRestore();
     await app.close();
   });
 
-  it("POST /v1/hrms/holds/:holdId/release → 200", async () => {
+  it("POST reject returns 404 for unknown hold, no write queued", async () => {
+    H.selectFrom.mockResolvedValue([]);
+    const publishSpy = vi.spyOn(queue, "publish");
+    const app = await buildApp();
+    const r = await app.inject({
+      method: "POST",
+      url: `/v1/hrms/holds/${HOLD_ID}/reject`,
+      headers: auth(),
+      payload: { reason: "Not justified" },
+    });
+    expect(r.statusCode).toBe(404);
+    expect(r.json().code).toBe("NOT_FOUND");
+    expect(publishSpy).not.toHaveBeenCalled();
+    expect(H.update).not.toHaveBeenCalled();
+    expect(H.insert).not.toHaveBeenCalled();
+    publishSpy.mockRestore();
+    await app.close();
+  });
+
+  it("POST reject returns 409 for wrong state, no write queued", async () => {
+    // The bug this closes: the route previously had ZERO synchronous checks
+    // and always queued the write + replied 200, even though the async
+    // consumer (lifecycle_hold_routes__2) requires status === 'pending' and
+    // silently rolls back otherwise -- a fake success with no error surfaced.
+    H.selectFrom.mockResolvedValue([{ id: HOLD_ID, status: "rejected", requestedBy: USER2, version: 1 }]);
+    const publishSpy = vi.spyOn(queue, "publish");
+    const app = await buildApp();
+    const r = await app.inject({
+      method: "POST",
+      url: `/v1/hrms/holds/${HOLD_ID}/reject`,
+      headers: auth(),
+      payload: { reason: "Test" },
+    });
+    expect(r.statusCode).toBe(409);
+    expect(r.json().code).toBe("WRONG_STATE");
+    expect(publishSpy).not.toHaveBeenCalled();
+    // Belt-and-braces: no downstream row mutation happened either.
+    expect(H.update).not.toHaveBeenCalled();
+    expect(H.insert).not.toHaveBeenCalled();
+    publishSpy.mockRestore();
+    await app.close();
+  });
+
+  it("POST /v1/hrms/holds/:holdId/release → 200, write queued", async () => {
     H.selectFrom.mockResolvedValue([{ id: HOLD_ID, status: "active", version: 1 }]);
+    // A release on an active hold must succeed AND actually reach the write
+    // pipeline -- not just answer 200 at the HTTP layer.
+    const publishSpy = vi.spyOn(queue, "publish");
     const app = await buildApp();
     const r = await app.inject({
       method: "POST",
@@ -629,11 +684,59 @@ describe("0314 — Employee hold/release", () => {
     });
     expect(r.statusCode).toBe(200);
     expect(r.json().data.status).toBe("released");
+    expect(publishSpy).toHaveBeenCalledTimes(1);
+    expect(publishSpy.mock.calls[0]?.[1]).toMatchObject({
+      actorId: USER,
+      payload: expect.objectContaining({ op: "lifecycle_hold_routes__3" }),
+    });
+    publishSpy.mockRestore();
     await app.close();
   });
 
-  it("POST release returns 409 for wrong state", async () => {
+  it("POST /v1/hrms/holds/:holdId/release → 200, write queued (status 'approved' also eligible)", async () => {
+    H.selectFrom.mockResolvedValue([{ id: HOLD_ID, status: "approved", version: 1 }]);
+    const publishSpy = vi.spyOn(queue, "publish");
+    const app = await buildApp();
+    const r = await app.inject({
+      method: "POST",
+      url: `/v1/hrms/holds/${HOLD_ID}/release`,
+      headers: auth(),
+      payload: { reason: "Inquiry concluded, no action" },
+    });
+    expect(r.statusCode).toBe(200);
+    expect(publishSpy).toHaveBeenCalledTimes(1);
+    publishSpy.mockRestore();
+    await app.close();
+  });
+
+  it("POST release returns 404 for unknown hold, no write queued", async () => {
+    H.selectFrom.mockResolvedValue([]);
+    const publishSpy = vi.spyOn(queue, "publish");
+    const app = await buildApp();
+    const r = await app.inject({
+      method: "POST",
+      url: `/v1/hrms/holds/${HOLD_ID}/release`,
+      headers: auth(),
+      payload: { reason: "Test" },
+    });
+    expect(r.statusCode).toBe(404);
+    expect(r.json().code).toBe("NOT_FOUND");
+    expect(publishSpy).not.toHaveBeenCalled();
+    expect(H.update).not.toHaveBeenCalled();
+    expect(H.insert).not.toHaveBeenCalled();
+    publishSpy.mockRestore();
+    await app.close();
+  });
+
+  it("POST release returns 409 for wrong state, no write queued", async () => {
+    // The bug this closes: the route previously had ZERO synchronous checks
+    // and always queued the write + replied 200, even though the async
+    // consumer (lifecycle_hold_routes__3) requires status IN ('active',
+    // 'approved') and silently rolls back otherwise -- a fake success with no
+    // error surfaced. This is the "0314 release-wrong-state 409" case that
+    // was failing pre-fix.
     H.selectFrom.mockResolvedValue([{ id: HOLD_ID, status: "released", version: 1 }]);
+    const publishSpy = vi.spyOn(queue, "publish");
     const app = await buildApp();
     const r = await app.inject({
       method: "POST",
@@ -642,6 +745,12 @@ describe("0314 — Employee hold/release", () => {
       payload: { reason: "Test" },
     });
     expect(r.statusCode).toBe(409);
+    expect(r.json().code).toBe("WRONG_STATE");
+    expect(publishSpy).not.toHaveBeenCalled();
+    // Belt-and-braces: no downstream row mutation happened either.
+    expect(H.update).not.toHaveBeenCalled();
+    expect(H.insert).not.toHaveBeenCalled();
+    publishSpy.mockRestore();
     await app.close();
   });
 
