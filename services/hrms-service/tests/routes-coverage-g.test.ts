@@ -5,7 +5,10 @@
 import { describe, it, expect, afterAll } from "vitest";
 import { signToken } from "@civitasone/auth";
 import { buildApp } from "../src/app.js";
-import { sqlClient } from "../src/shared/db.js";
+import { db, sqlClient } from "../src/shared/db.js";
+import { runWithTenant, withRawTenantGuc } from "@civitasone/db";
+import { hrmsMedicalClaims } from "../src/modules/medical/schema.js";
+import { hrmsProfilePhotos } from "../src/modules/face-verification/schema.js";
 import { randomUUID } from "node:crypto";
 
 const SECRET = "test_secret_for_civitasone_32chr";
@@ -18,6 +21,43 @@ function token(roles = ["hr_admin", "super_admin", "admin", "hr_officer", "manag
 }
 
 afterAll(async () => { await sqlClient.end(); });
+
+/**
+ * Fixture helpers for the five "expected 404 not to be 404" cases below.
+ * All five call an endpoint that correctly 404s for a resource that does not
+ * exist (a genuine, intentional check — see the root-cause comments at each
+ * call site) — the original tests hit these with a bare `randomUUID()` and no
+ * seeded row, so they could never pass. Each helper inserts a real row in the
+ * exact starting state the endpoint requires, tenant-scoped the same way the
+ * production write path scopes it (RLS is FORCEd on every table touched here).
+ */
+async function seedIdCard(status: "active" | "suspended"): Promise<string> {
+  const id = randomUUID();
+  const cardNumber = `TST/${Date.now()}/${Math.floor(Math.random() * 100000)}`;
+  await withRawTenantGuc(sqlClient, TENANT, (tx) => tx`
+    INSERT INTO hrms.id_cards
+      (id, tenant_id, holder_name, card_type, card_number, valid_until, status, qr_payload, issued_by)
+    VALUES
+      (${id}, ${TENANT}, 'Route Coverage Fixture', 'employee', ${cardNumber}, '2030-01-01', ${status}, 'CVO1:fixture:fixture', ${UUID})
+  `);
+  return id;
+}
+
+async function seedMedicalClaim(): Promise<string> {
+  const id = randomUUID();
+  await runWithTenant(TENANT, () => db.transaction((tx) => tx.insert(hrmsMedicalClaims).values({
+    id, tenantId: TENANT, employeeId: randomUUID(), claimType: "outdoor",
+    amountMinor: 500000n, hospitalName: "AIIMS Delhi", diagnosis: "Routine checkup",
+    status: "pending", createdBy: UUID, updatedBy: UUID,
+  })));
+  return id;
+}
+
+async function seedProfilePhoto(employeeId: string): Promise<void> {
+  await runWithTenant(TENANT, () => db.transaction((tx) => tx.insert(hrmsProfilePhotos).values({
+    tenantId: TENANT, employeeId, photoKey: "photos/route-coverage-fixture.jpg",
+  })));
+}
 
 describe("HRMS POST routes — original set", () => {
   it("POST /v1/hrms/employees", async () => {
@@ -154,6 +194,14 @@ describe("HRMS POST routes — AI Fraud & Face Verification (0% coverage)", () =
   });
 
   it("GET /v1/hrms/employees/:id/profile-photo", async () => {
+    // Root cause: the POST above issues its write via publishF3Write (an async
+    // command consumed by registerFaceVerificationConsumers, which only runs in
+    // worker.ts — buildApp() here builds the HTTP app alone, so nothing ever
+    // consumes that command and no hrms_profile_photos row is created. GET was
+    // then always checking a FAKE id with no row behind it, for any id. Seed the
+    // row this endpoint actually reads directly instead of relying on the POST's
+    // (in this test process, never-delivered) async write.
+    await seedProfilePhoto(FAKE);
     const app = await buildApp();
     const r = await app.inject({ method: "GET", url: `/v1/hrms/employees/${FAKE}/profile-photo`, headers: { authorization: `Bearer ${token()}` } });
     await app.close();
@@ -311,8 +359,12 @@ describe("HRMS POST routes — Medical claims", () => {
   });
 
   it("PATCH /v1/hrms/medical/claims/:id/approve", async () => {
+    // Root cause: the handler correctly 404s ("medical claim not found") for a
+    // claim id with no matching row — FAKE was never a real claim. Seed one in
+    // 'pending' status (the only status the approve transition accepts).
+    const claimId = await seedMedicalClaim();
     const app = await buildApp();
-    const r = await app.inject({ method: "PATCH", url: `/v1/hrms/medical/claims/${FAKE}/approve`, headers: { authorization: `Bearer ${token()}` },
+    const r = await app.inject({ method: "PATCH", url: `/v1/hrms/medical/claims/${claimId}/approve`, headers: { authorization: `Bearer ${token()}` },
       payload: { status: "approved", approvedAmountMinor: 400000 } });
     await app.close();
     expect(r.statusCode).not.toBe(404);
@@ -666,24 +718,39 @@ describe("HRMS routes — ID Cards & Visiting Cards", () => {
   });
 
   it("PATCH /v1/hrms/id-cards/:id/suspend", async () => {
+    // Root cause: hrms.id_cards has RLS ENABLEd + FORCEd, and this route (like
+    // medical/routes.ts and workforce-planning/routes.ts before their fix)
+    // talked to the DB via a raw, unscoped sqlPool query with no app.tenant_id
+    // GUC set — RLS fails CLOSED, so the UPDATE always matched zero rows,
+    // 404ing even for a genuinely existing card. Fixed in
+    // src/modules/id-cards/routes.ts (suspend/revoke/reactivate now use
+    // withRawTenantGuc, mirroring the established pattern). FAKE was also never
+    // a real card row; seed one in 'active' status, the state suspend requires.
+    const cardId = await seedIdCard("active");
     const app = await buildApp();
-    const r = await app.inject({ method: "PATCH", url: `/v1/hrms/id-cards/${FAKE}/suspend`, headers: { authorization: `Bearer ${token()}` },
+    const r = await app.inject({ method: "PATCH", url: `/v1/hrms/id-cards/${cardId}/suspend`, headers: { authorization: `Bearer ${token()}` },
       payload: { reason: "Lost card" } });
     await app.close();
     expect(r.statusCode).not.toBe(404);
   });
 
   it("PATCH /v1/hrms/id-cards/:id/revoke", async () => {
+    // Same RLS-GUC root cause as suspend above, now fixed in routes.ts. Revoke
+    // accepts a card in 'active' or 'suspended' status; seed 'active'.
+    const cardId = await seedIdCard("active");
     const app = await buildApp();
-    const r = await app.inject({ method: "PATCH", url: `/v1/hrms/id-cards/${FAKE}/revoke`, headers: { authorization: `Bearer ${token()}` },
+    const r = await app.inject({ method: "PATCH", url: `/v1/hrms/id-cards/${cardId}/revoke`, headers: { authorization: `Bearer ${token()}` },
       payload: { reason: "Terminated" } });
     await app.close();
     expect(r.statusCode).not.toBe(404);
   });
 
   it("PATCH /v1/hrms/id-cards/:id/reactivate", async () => {
+    // Same RLS-GUC root cause as suspend above, now fixed in routes.ts.
+    // Reactivate requires a card currently 'suspended'.
+    const cardId = await seedIdCard("suspended");
     const app = await buildApp();
-    const r = await app.inject({ method: "PATCH", url: `/v1/hrms/id-cards/${FAKE}/reactivate`, headers: { authorization: `Bearer ${token()}` },
+    const r = await app.inject({ method: "PATCH", url: `/v1/hrms/id-cards/${cardId}/reactivate`, headers: { authorization: `Bearer ${token()}` },
       payload: {} });
     await app.close();
     expect(r.statusCode).not.toBe(404);

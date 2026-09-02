@@ -3,9 +3,44 @@ import { randomUUID } from "node:crypto";
 import { createHmac } from "node:crypto";
 import { z, ZodError } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { sqlPool as sqlClient } from "../../shared/db.js";
+import { sqlPool, sqlClient } from "../../shared/db.js";
+import { withRawTenantGuc } from "@civitasone/db";
 import { queue } from "../../shared/infra.js";
 import { COMMANDS } from "../../topics.js";
+
+/**
+ * hrms.id_cards has RLS ENABLEd and FORCEd (migration 0123_rls_completeness.sql),
+ * and — like medical/routes.ts and workforce-planning/routes.ts before this fix —
+ * this module talks to `sqlPool` (a thin node-postgres-style shim over the raw
+ * `sqlClient`, see shared/db.ts) directly, with no Drizzle schema attached and
+ * therefore no ORM transaction wrapper anywhere in the call path to trigger
+ * `wrapWithTenantGuc`. Every query below used to run with `app.tenant_id` unset,
+ * so the connecting role (`hrms_svc`, NOBYPASSRLS non-superuser) got a
+ * row-security violation on write / zero rows back on read — silently, since
+ * RLS fails CLOSED rather than erroring. Confirmed empirically: a row inserted
+ * with the GUC correctly set was invisible to a plain `hrms_svc` session with no
+ * GUC, which is exactly why suspend/revoke/reactivate 404'd ("card not found")
+ * against a card that genuinely existed. Only suspend/revoke/reactivate are
+ * wrapped here (the three that were failing); issue/list/me/verify above have
+ * the identical unscoped-RLS shape and are tracked separately for the same fix.
+ */
+function withTenantGuc<T>(
+  tenantId: string,
+  fn: (tx: typeof sqlClient) => Promise<T>,
+): Promise<T> {
+  return withRawTenantGuc(sqlClient, tenantId, fn);
+}
+
+async function queryTx<T = any>(
+  tx: typeof sqlClient,
+  text: string,
+  params: readonly unknown[] = [],
+): Promise<{ rows: T[]; rowCount: number }> {
+  const result = await tx.unsafe(text, params as unknown as never[]);
+  const rows = result as unknown as T[];
+  const rowCount = (result as unknown as { count?: number }).count ?? rows.length;
+  return { rows, rowCount };
+}
 
 /**
  * Digital ID Card Module — issue, view, verify, revoke.
@@ -86,7 +121,7 @@ export async function idCardRoutes(app: FastifyInstance): Promise<void> {
     const now = new Date().toISOString();
 
     // Generate sequential card number
-    const seqResult = await sqlClient.query(
+    const seqResult = await sqlPool.query(
       `SELECT COUNT(*)::int + 1 AS seq FROM hrms.id_cards WHERE tenant_id = $1`,
       [ctx.tenantId],
     );
@@ -97,7 +132,7 @@ export async function idCardRoutes(app: FastifyInstance): Promise<void> {
     const qrPayload = generateQrPayload(id, ctx.tenantId, cardNumber);
 
     // Get issuer name
-    const issuerRow = await sqlClient.query(
+    const issuerRow = await sqlPool.query(
       `SELECT first_name, last_name FROM employee.hrms_employees WHERE user_id = $1 AND tenant_id = $2`,
       [ctx.actorId, ctx.tenantId],
     );
@@ -105,7 +140,7 @@ export async function idCardRoutes(app: FastifyInstance): Promise<void> {
       ? `${issuerRow.rows[0].first_name} ${issuerRow.rows[0].last_name}`.trim()
       : "Admin";
 
-    await sqlClient.query(
+    await sqlPool.query(
       `INSERT INTO hrms.id_cards (id, tenant_id, holder_name, holder_photo_url, designation, department,
         employee_id, employee_code, card_type, card_number, vendor_id, vendor_name, project_id, project_name,
         contract_id, issued_date, valid_from, valid_until, status, access_zones, access_hours,
@@ -189,7 +224,7 @@ export async function idCardRoutes(app: FastifyInstance): Promise<void> {
     if (status) { where += ` AND status = $${idx++}`; params.push(status); }
     if (search) { where += ` AND (holder_name ILIKE $${idx} OR card_number ILIKE $${idx} OR employee_code ILIKE $${idx})`; params.push(`%${search}%`); idx++; }
 
-    const rows = await sqlClient.query(
+    const rows = await sqlPool.query(
       `SELECT id, holder_name, holder_photo_url, designation, department, employee_code,
               card_type, card_number, vendor_name, project_name, valid_from, valid_until,
               status, access_zones, verification_count, last_verified_at, issued_by_name, created_at
@@ -208,14 +243,14 @@ export async function idCardRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
 
     // Find employee ID for current user
-    const empRow = await sqlClient.query(
+    const empRow = await sqlPool.query(
       `SELECT id FROM employee.hrms_employees WHERE user_id = $1 AND tenant_id = $2 LIMIT 1`,
       [ctx.actorId, ctx.tenantId],
     );
     const employeeId = empRow.rows[0]?.id;
     if (!employeeId) throw new HttpError(404, "NOT_FOUND", "Employee record not found");
 
-    const card = await sqlClient.query(
+    const card = await sqlPool.query(
       `SELECT id, holder_name, holder_photo_url, designation, department, employee_code,
               card_type, card_number, valid_from, valid_until, status, access_zones, access_hours,
               qr_payload, verification_count, last_verified_at, issued_by_name, issued_date
@@ -245,7 +280,7 @@ export async function idCardRoutes(app: FastifyInstance): Promise<void> {
     }
 
     // Lookup card
-    const card = await sqlClient.query(
+    const card = await sqlPool.query(
       `SELECT id, holder_name, holder_photo_url, designation, department, employee_code,
               card_type, card_number, vendor_name, valid_from, valid_until, status, access_zones, access_hours
        FROM hrms.id_cards WHERE id = $1 AND tenant_id = $2`,
@@ -265,14 +300,14 @@ export async function idCardRoutes(app: FastifyInstance): Promise<void> {
     else if (c.status === "expired" || (c.valid_until && today > c.valid_until)) result = "expired";
 
     // Log verification
-    await sqlClient.query(
+    await sqlPool.query(
       `INSERT INTO hrms.id_card_verifications (tenant_id, card_id, verified_by, location, result, latitude, longitude)
        VALUES ($1, $2, $3, $4, $5, $6, $7)`,
       [ctx.tenantId, cardId, ctx.actorId, body.location ?? "", result, body.latitude ?? null, body.longitude ?? null],
     );
 
     // Update card verification stats
-    await sqlClient.query(
+    await sqlPool.query(
       `UPDATE hrms.id_cards SET verification_count = verification_count + 1, last_verified_at = NOW(), last_verified_by = $1, updated_at = NOW()
        WHERE id = $2`,
       [ctx.actorId, cardId],
@@ -305,11 +340,12 @@ export async function idCardRoutes(app: FastifyInstance): Promise<void> {
     const { id } = req.params as { id: string };
     const { reason } = (req.body as any) ?? {};
 
-    const result = await sqlClient.query(
+    const result = await withTenantGuc(ctx.tenantId, (tx) => queryTx(
+      tx,
       `UPDATE hrms.id_cards SET status = 'suspended', revoked_reason = $1, updated_at = NOW()
        WHERE id = $2 AND tenant_id = $3 AND status = 'active'`,
       [reason ?? "suspended by admin", id, ctx.tenantId],
-    );
+    ));
     // HR-A deep-verify finding: the UPDATE's WHERE clause silently matches
     // zero rows for an unknown id or a card that is not currently 'active'
     // (already suspended/revoked/expired) -- this used to still reply 200
@@ -334,11 +370,12 @@ export async function idCardRoutes(app: FastifyInstance): Promise<void> {
     const { id } = req.params as { id: string };
     const { reason } = (req.body as any) ?? {};
 
-    const result = await sqlClient.query(
+    const result = await withTenantGuc(ctx.tenantId, (tx) => queryTx(
+      tx,
       `UPDATE hrms.id_cards SET status = 'revoked', revoked_by = $1, revoked_reason = $2, revoked_at = NOW(), updated_at = NOW()
        WHERE id = $3 AND tenant_id = $4 AND status IN ('active', 'suspended')`,
       [ctx.actorId, reason ?? "revoked", id, ctx.tenantId],
-    );
+    ));
     if (result.rowCount === 0) {
       throw new HttpError(404, "NOT_FOUND", "active or suspended id card not found");
     }
@@ -358,11 +395,12 @@ export async function idCardRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, ["hr_admin", "security_admin", "super_admin"]);
     const { id } = req.params as { id: string };
 
-    const result = await sqlClient.query(
+    const result = await withTenantGuc(ctx.tenantId, (tx) => queryTx(
+      tx,
       `UPDATE hrms.id_cards SET status = 'active', revoked_reason = NULL, updated_at = NOW()
        WHERE id = $1 AND tenant_id = $2 AND status = 'suspended'`,
       [id, ctx.tenantId],
-    );
+    ));
     if (result.rowCount === 0) {
       throw new HttpError(404, "NOT_FOUND", "suspended id card not found");
     }
