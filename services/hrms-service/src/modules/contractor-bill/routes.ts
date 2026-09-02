@@ -137,15 +137,24 @@ export async function contractorBillRoutes(app: FastifyInstance): Promise<void> 
     const c = await mustContractor(ctx.tenantId, id);
     if (c.status === "blacklisted") throw new HttpError(409, "CONTRACTOR_BLACKLISTED", "contractor is blacklisted; no new bills accepted");
 
-    const billId = randomUUID();
-    try {
-      await publishF3Write(ctx, "contractor_bill_routes__2", billId, { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
-    } catch (err) {
-      if (String((err as { code?: string }).code) === "23505") {
-        throw new HttpError(409, "DUPLICATE_BILL", `bill '${body.billNo}' already exists for this contractor`) as any;
-      }
-      throw err;
+    // Synchronous pre-check for the (tenant, contractor, bill_no) uniqueness
+    // the DB enforces via hrms_contractor_bills_no_uq. publishF3Write is
+    // fire-and-forget and NEVER rejects (see shared/f3-publish.ts) — the
+    // try/catch this replaced, wrapping the publish call for a 23505, was dead
+    // code that could never run. Residual TOCTOU race: two concurrent submits
+    // of the same bill number can both pass this read before either
+    // publishes; the DB unique constraint is the real backstop for that rare
+    // case (the consumer's insert 23505s, logs "f3RouteWrite failed", and the
+    // write is dropped — silently, from this client's point of view, since
+    // fire-and-forget has no return channel). Closing that fully needs a
+    // different mechanism (e.g. a client-supplied idempotency key) — out of
+    // scope here.
+    if (await repo.findBillByNumber(ctx.tenantId, id, body.billNo)) {
+      throw new HttpError(409, "DUPLICATE_BILL", `bill '${body.billNo}' already exists for this contractor`);
     }
+
+    const billId = randomUUID();
+    await publishF3Write(ctx, "contractor_bill_routes__2", billId, { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> });
     return reply.code(201).send(jsonSafe({ id: billId, contractorId: id, billNo: body.billNo, grossMinor: BigInt(body.grossMinor), status: "submitted" }));
   });
 
@@ -211,7 +220,33 @@ export async function contractorBillRoutes(app: FastifyInstance): Promise<void> 
 
     const gstRateBps = body.gstRateBps ?? bill.gstRateBps;
     const fy = financialYearWindow(bill.billDate as unknown as string);
-    let tax = { gstMinor: 0n, tdsRateBps: 0, tdsMinor: 0n, netPayableMinor: bill.grossMinor, tdsApplied: false };
+    // Was a literal placeholder (`gstMinor: 0n, tdsRateBps: 0, ...`) — computeContractTax
+    // was imported but never called, so every approval reported zero tax
+    // regardless of what was actually withheld. Genuinely computable
+    // synchronously: this is the exact same pure function (computeContractTax)
+    // and the exact same YTD query (ytdApprovedGrossTx/ytdOn) the consumer
+    // uses to persist the real numbers (contractor-bill/f3-consumer.ts, op
+    // __4) — called here through `db` (unlocked) rather than the consumer's
+    // transaction-scoped `tx` (locked via lockContractorForBilling).
+    // `contractor.contractorKind` (the 194C rate driver) is already in hand
+    // from the CLRA gate checks above, so it's exactly the same value the
+    // consumer reads.
+    //
+    // Residual TOCTOU race: two concurrent approvals for the SAME contractor
+    // could each read a pre-threshold YTD total here and both report
+    // tdsApplied:false, while the consumer's advisory lock
+    // (lockContractorForBilling) guarantees the PERSISTED amounts are correct
+    // regardless — so a genuine race could make this response's numbers stale
+    // relative to what actually gets withheld. Same class of residual risk as
+    // documented for the CPF/NPS pre-checks and the consultant-invoice
+    // approve route in this PR; not guessing to close it further.
+    const ytd = await repo.ytdApprovedGrossTx(db, ctx.tenantId, bill.contractorId, fy.from, fy.to, billId);
+    const tax = computeContractTax({
+      grossMinor: bill.grossMinor, gstApplicable: bill.gstApplicable, gstRateBps,
+      contractorKind: contractor.contractorKind as ContractorKind,
+      singleThresholdMinor: TDS_194C_SINGLE_MINOR, annualThresholdMinor: TDS_194C_ANNUAL_MINOR,
+      ytdGrossMinor: ytd,
+    });
     await publishF3Write(ctx, "contractor_bill_routes__4", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     return reply.send(jsonSafe({
       id: billId, status: "approved",

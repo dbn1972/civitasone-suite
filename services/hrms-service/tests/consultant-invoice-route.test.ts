@@ -19,6 +19,7 @@ const INV = "77777777-7777-4000-8000-000000000007";
 const H = vi.hoisted(() => ({
   scopedReadMock: vi.fn(),
   findInvoiceMock: vi.fn(),
+  findByNumberMock: vi.fn(),
   insertInvoiceMock: vi.fn(),
   updateInvoiceMock: vi.fn(),
   ytdMock: vi.fn(),
@@ -46,6 +47,7 @@ vi.mock("../src/modules/consultant-invoice/repo.js", async (io) => ({
   ...(await io<Record<string, unknown>>()),
   insertInvoice: (...a: unknown[]) => H.insertInvoiceMock(...a),
   findInvoice: (...a: unknown[]) => H.findInvoiceMock(...a),
+  findInvoiceByNumber: (...a: unknown[]) => H.findByNumberMock(...a),
   updateInvoice: (...a: unknown[]) => H.updateInvoiceMock(...a),
   ytdApprovedGross: (...a: unknown[]) => H.ytdMock(...a),
   ytdApprovedGrossTx: (...a: unknown[]) => H.ytdMock(...a.slice(1)),
@@ -104,6 +106,7 @@ beforeEach(() => {
   H.updateInvoiceMock.mockResolvedValue(undefined);
   H.enqueueMock.mockResolvedValue(undefined);
   H.insertInvoiceMock.mockResolvedValue(undefined);
+  H.findByNumberMock.mockResolvedValue(null);
 });
 
 afterAll(async () => { await sqlClient.end(); });

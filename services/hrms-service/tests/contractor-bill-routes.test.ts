@@ -17,6 +17,7 @@ const BILL_ID = "dddddddd-2222-4000-8000-000000000002";
 const H = vi.hoisted(() => ({
   findContractorMock: vi.fn(),
   findBillMock: vi.fn(),
+  findByNumberMock: vi.fn(),
   insertContractorMock: vi.fn(),
   insertBillMock: vi.fn(),
   updateContractorMock: vi.fn(),
@@ -49,6 +50,7 @@ vi.mock("../src/modules/contractor-bill/repo.js", async (io) => ({
   listContractors: (...a: unknown[]) => H.listContractorsMock(...a),
   insertBill: (...a: unknown[]) => H.insertBillMock(...a),
   findBill: (...a: unknown[]) => H.findBillMock(...a),
+  findBillByNumber: (...a: unknown[]) => H.findByNumberMock(...a),
   updateBill: (...a: unknown[]) => H.updateBillMock(...a),
   ytdApprovedGrossTx: (...a: unknown[]) => H.ytdMock(...a.slice(1)),
   lockContractorForBilling: async () => undefined,
@@ -108,6 +110,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   H.findContractorMock.mockResolvedValue(contractor());
   H.findBillMock.mockResolvedValue(bill());
+  H.findByNumberMock.mockResolvedValue(null);
   H.insertContractorMock.mockResolvedValue(undefined);
   H.insertBillMock.mockResolvedValue(undefined);
   H.updateContractorMock.mockResolvedValue(undefined);
@@ -398,7 +401,12 @@ describe("POST /v1/hrms/contractors/:id/bills (submit bill)", () => {
   });
 
   it("409 — duplicate bill number", async () => {
-    H.insertBillMock.mockRejectedValue(Object.assign(new Error("dup"), { code: "23505" }));
+    // The route now pre-checks synchronously via repo.findBillByNumber
+    // (publishF3Write is fire-and-forget and never rejects, so a try/catch
+    // around it for a 23505 — what this test used to mock via
+    // insertBillMock, which only the async consumer ever calls — was dead
+    // code that could never run).
+    H.findByNumberMock.mockResolvedValue(bill({ billNo: "BILL-001" }));
     const app = await buildApp();
     const r = await app.inject({
       method: "POST", url: `/v1/hrms/contractors/${CTR_ID}/bills`,
@@ -407,6 +415,7 @@ describe("POST /v1/hrms/contractors/:id/bills (submit bill)", () => {
     await drainF3();
     expect(r.statusCode).toBe(409);
     expect(r.json().code).toBe("DUPLICATE_BILL");
+    expect(H.insertBillMock).not.toHaveBeenCalled();
     await app.close();
   });
 });

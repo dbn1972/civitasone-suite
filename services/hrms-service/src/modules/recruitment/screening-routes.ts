@@ -51,7 +51,28 @@ export async function screeningRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, HR_ROLES);
     const { id } = idParam.parse(req.params);
     const applications = await repo.listApplicationsForVacancy(ctx.tenantId, id);
+    // Was a literal `let screened = 0, skipped = 0;` that never got
+    // incremented — the actual classification loop only ran inside the async
+    // consumer (recruitment_screening_routes__0), which the route never saw
+    // the result of (fire-and-forget). This is genuinely computable
+    // synchronously: `applications` is the exact same list the consumer reads
+    // (repo.listApplicationsForVacancy), and this loop mirrors the consumer's
+    // classification EXACTLY (same `screeningDecision !== "pending"` check,
+    // same autoScreenDecision() call — the single shared pure function in
+    // screening.ts) without performing any writes; the consumer still does
+    // the actual writes independently. Residual risk: if an application's
+    // screeningDecision changes between this read and the consumer's
+    // independent read (a genuine concurrent decision on the same
+    // application), the counts reported here could diverge from what the
+    // consumer actually applies — same class of TOCTOU residual risk
+    // documented elsewhere in this PR, not a new one.
     let screened = 0, skipped = 0;
+    for (const a of applications) {
+      if (a.screeningDecision !== "pending") { skipped++; continue; }
+      const decision = autoScreenDecision(a.eligibilityResult as { eligible?: boolean } | null);
+      if (decision === "pending") { skipped++; continue; }
+      screened++;
+    }
     await publishF3Write(ctx, "recruitment_screening_routes__0", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     return reply.send({ jobOpeningId: id, screened, skipped, total: applications.length }) as any;
   });
@@ -105,7 +126,26 @@ export async function screeningRoutes(app: FastifyInstance): Promise<void> {
     const { id } = idParam.parse(req.params);
     const body = z.object({ applicationIds: z.array(z.string().uuid()).min(1).max(500) }).parse(req.body);
     const apps = await repo.findApplicationsByIds(ctx.tenantId, id, body.applicationIds);
+    // Was a literal `let shortlisted = 0, skipped = 0;` that never got
+    // incremented — same placeholder-counter bug as auto-screen above.
+    // Genuinely computable synchronously: `apps` is the exact same set the
+    // consumer reads (repo.findApplicationsByIds), and this loop mirrors the
+    // consumer's classification EXACTLY (frozen -> skip, then
+    // BULK_SHORTLIST_BLOCKED membership -> skip, else shortlist) without
+    // performing any writes. BULK_SHORTLIST_BLOCKED is duplicated verbatim
+    // here and in f3-consumer.ts (pre-existing pattern in this file, not
+    // introduced by this fix) rather than imported from one place — if that
+    // set is ever edited, it must be edited in both places or the route's
+    // reported counts and the consumer's actual writes will silently
+    // diverge. Same residual TOCTOU risk as auto-screen above (an
+    // application's decision changing between this read and the consumer's
+    // independent read).
     let shortlisted = 0, skipped = 0;
+    for (const a of apps) {
+      if (a.shortlistFrozen) { skipped++; continue; }
+      if (BULK_SHORTLIST_BLOCKED.has(a.screeningDecision)) { skipped++; continue; }
+      shortlisted++;
+    }
     await publishF3Write(ctx, "recruitment_screening_routes__2", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     return reply.send({ jobOpeningId: id, shortlisted, skipped, requested: body.applicationIds.length }) as any;
   });

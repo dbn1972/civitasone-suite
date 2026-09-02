@@ -93,19 +93,27 @@ export async function consultantInvoiceRoutes(app: FastifyInstance): Promise<voi
         `employee '${id}' is a payroll-eligible engagement type — salaried staff are paid via payroll, not consultant invoices`);
     }
 
-    const invId = randomUUID();
-    try {
-      // Wrap in a transaction so the tenant-GUC (app.tenant_id) is set for the
-      // INSERT — RLS uses the USING clause as the WITH CHECK and would reject an
-      // unscoped write. All the status-transition writes below do the same.
-      await publishF3Write(ctx, "consultant_invoice_routes__0", invId, { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
-    } catch (err) {
-      // Unique (tenant, consultant, invoice_no) — duplicate submission.
-      if (String((err as { code?: string }).code) === "23505") {
-        throw new HttpError(409, "DUPLICATE_INVOICE", `invoice '${body.invoiceNo}' already exists for this consultant`) as any;
-      }
-      throw err;
+    // Synchronous pre-check for the (tenant, consultant, invoice_no) uniqueness
+    // the DB enforces via hrms_consultant_invoices_no_uq. publishF3Write is
+    // fire-and-forget and NEVER rejects (see shared/f3-publish.ts) — the
+    // try/catch this replaced, wrapping the publish call for a 23505, was dead
+    // code that could never run. Residual TOCTOU race: two concurrent submits
+    // of the same invoice number can both pass this read before either
+    // publishes; the DB unique constraint is the real backstop for that rare
+    // case (the consumer's insert 23505s, logs "f3RouteWrite failed", and the
+    // write is dropped — silently, from this client's point of view, since
+    // fire-and-forget has no return channel). Closing that fully needs a
+    // different mechanism (e.g. a client-supplied idempotency key) — out of
+    // scope here.
+    if (await repo.findInvoiceByNumber(ctx.tenantId, id, body.invoiceNo)) {
+      throw new HttpError(409, "DUPLICATE_INVOICE", `invoice '${body.invoiceNo}' already exists for this consultant`);
     }
+
+    const invId = randomUUID();
+    // Wrap in a transaction so the tenant-GUC (app.tenant_id) is set for the
+    // INSERT — RLS uses the USING clause as the WITH CHECK and would reject an
+    // unscoped write. All the status-transition writes below do the same.
+    await publishF3Write(ctx, "consultant_invoice_routes__0", invId, { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> });
     return reply.code(201).send(jsonSafe({
       id: invId, consultantId: id, invoiceNo: body.invoiceNo,
       grossMinor: BigInt(body.grossMinor), status: "submitted",
@@ -167,7 +175,27 @@ export async function consultantInvoiceRoutes(app: FastifyInstance): Promise<voi
     const tdsRateBps = body.tdsRateBps ?? inv.tdsRateBps;
     const fy = financialYearWindow(inv.invoiceDate as unknown as string);
 
-    let tax = { gstMinor: 0n, tdsMinor: 0n, netPayableMinor: inv.grossMinor, tdsApplied: false };
+    // Was a literal placeholder (`gstMinor: 0n, tdsMinor: 0n, ...`) — computeInvoiceTax
+    // was imported but never called, so every approval reported zero tax
+    // regardless of what was actually withheld. Genuinely computable
+    // synchronously: this is the exact same pure function
+    // (computeInvoiceTax) and the exact same YTD query
+    // (ytdApprovedGrossTx/ytdOn) the consumer uses to persist the real
+    // numbers (consultant-invoice/f3-consumer.ts, op __2) — called here
+    // through `db` (unlocked) rather than the consumer's transaction-scoped
+    // `tx` (locked via lockConsultantForInvoicing). Residual TOCTOU race: two
+    // concurrent approvals for the SAME consultant could each read a
+    // pre-crossing YTD total here and both report tdsApplied:false, while the
+    // consumer's advisory lock (lockConsultantForInvoicing) guarantees the
+    // PERSISTED amounts are correct regardless — so a genuine race could make
+    // this response's numbers stale relative to what actually gets withheld.
+    // That is the same class of residual risk documented for the CPF/NPS
+    // pre-checks in this PR, not a new one; not guessing to close it further.
+    const ytd = await repo.ytdApprovedGrossTx(db, ctx.tenantId, inv.consultantId, fy.from, fy.to, invId);
+    const tax = computeInvoiceTax({
+      grossMinor: inv.grossMinor, gstApplicable: inv.gstApplicable, gstRateBps,
+      tdsRateBps, tdsThresholdMinor: TDS_194J_THRESHOLD_MINOR, ytdGrossMinor: ytd,
+    });
     await publishF3Write(ctx, "consultant_invoice_routes__2", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     return reply.send(jsonSafe({
       id: invId, status: "approved",
