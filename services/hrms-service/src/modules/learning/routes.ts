@@ -23,8 +23,12 @@ export async function learningRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, HR_ROLES);
     const body = createCourseBody.parse(req.body);
     const id = randomUUID();
-    const row = await publishF3Write(ctx, "learning_routes__0", id, { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
-    return reply.code(201).send({ id: row.id, code: row.code, status: row.status }) as any;
+    await publishF3Write(ctx, "learning_routes__0", id, { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    // `code` and `status` are echoed from the validated request / a deterministic
+    // insert status, NOT from publishF3Write's placeholder (which only carries
+    // {id, status: "accepted", correlationId} — matches the consumer's literal
+    // `status: "draft"` on insert).
+    return reply.code(201).send({ id, code: body.code, status: "draft" }) as any;
   });
 
   app.get("/v1/hrms/learning/courses", async (req, reply) => {
@@ -54,9 +58,15 @@ export async function learningRoutes(app: FastifyInstance): Promise<void> {
     const { id } = idParam.parse(req.params);
     const course = await repo.getCourse(ctx.tenantId, id);
     if (!course) throw new HttpError(404, "NOT_FOUND", "course not found");
-    const row = await publishF3Write(ctx, "learning_routes__1", id, { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
-    if (!row) throw new HttpError(409, "INVALID_STATE", "only a draft course can be published") as any;
-    return reply.send({ id, status: row.status });
+    // Synchronous precheck: repo.publishCourse's `WHERE status = 'draft'` guard
+    // only runs async in the F3 consumer, too late to answer this request. The
+    // old `if (!row)` check below it was dead code — publishF3Write's placeholder
+    // is never falsy — so publishing an already-published course silently
+    // "succeeded" with a fake response instead of 409ing.
+    if (course.status !== "draft") throw new HttpError(409, "INVALID_STATE", "only a draft course can be published");
+    await publishF3Write(ctx, "learning_routes__1", id, { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    // Deterministic post-publish status — matches repo.publishCourse's `status: "published"`.
+    return reply.send({ id, status: "published" });
   });
 
   app.post("/v1/hrms/learning/courses/:id/prerequisites", async (req, reply) => {
@@ -81,8 +91,17 @@ export async function learningRoutes(app: FastifyInstance): Promise<void> {
     const body = createModuleBody.parse(req.body);
     const course = await repo.getCourse(ctx.tenantId, id);
     if (!course) throw new HttpError(404, "NOT_FOUND", "course not found");
-    const row = await publishF3Write(ctx, "learning_routes__3", id, { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
-    return reply.code(201).send({ id: row.id, courseId: id, sequence: row.sequence }) as any;
+    // The module's real primary key is generated HERE (not inside the F3
+    // consumer) and threaded through as the publish id, so the response can
+    // answer with the actual row id. Previously this called publishF3Write
+    // with the COURSE id as the third argument, so the placeholder's `row.id`
+    // echoed back the course id disguised as the new module's id — while the
+    // consumer independently minted its own `randomUUID()` for the real row.
+    // Every caller that captured this response's `id` and used it as a module
+    // id (e.g. to add lessons under it) got a 404 chasing a course id.
+    const moduleId = randomUUID();
+    await publishF3Write(ctx, "learning_routes__3", moduleId, { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    return reply.code(201).send({ id: moduleId, courseId: id, sequence: body.sequence ?? 1 }) as any;
   });
 
   app.post("/v1/hrms/learning/modules/:id/lessons", async (req, reply) => {
@@ -92,8 +111,11 @@ export async function learningRoutes(app: FastifyInstance): Promise<void> {
     const body = createLessonBody.parse(req.body);
     const mod = await repo.getModule(ctx.tenantId, id);
     if (!mod) throw new HttpError(404, "NOT_FOUND", "module not found");
-    const row = await publishF3Write(ctx, "learning_routes__4", id, { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
-    return reply.code(201).send({ id: row.id, moduleId: id, contentType: row.contentType }) as any;
+    // Same fix as the module-creation route above: mint the lesson's real id
+    // synchronously and publish with it, instead of echoing back the module id.
+    const lessonId = randomUUID();
+    await publishF3Write(ctx, "learning_routes__4", lessonId, { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    return reply.code(201).send({ id: lessonId, moduleId: id, contentType: body.contentType }) as any;
   });
 
   // ── Enrolment + progress tracking ───────────────────────────────
@@ -117,13 +139,18 @@ export async function learningRoutes(app: FastifyInstance): Promise<void> {
     }
     const existing = await repo.getEnrollment(ctx.tenantId, id, body.employeeId);
     if (existing) return reply.code(200).send({ id: existing.id, status: existing.status, progressPct: existing.progressPct });
-    const row = await publishF3Write(ctx, "learning_routes__5", id, { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
-    if (!row) {
-      // Lost the race — a concurrent enrolment already created the row.
-      const again = await repo.getEnrollment(ctx.tenantId, id, body.employeeId) as any;
-      return reply.code(200).send({ id: again!.id, status: again!.status, progressPct: again!.progressPct });
-    }
-    return reply.code(201).send({ id: row.id, status: row.status, progressPct: row.progressPct });
+    // Same id-generation fix as modules/lessons: mint the enrollment's real id
+    // here and thread it through, instead of echoing back the course id. The
+    // old post-publish `if (!row)` "lost the race" fallback below was dead
+    // code (publishF3Write's placeholder is never falsy) trying to detect an
+    // insertEnrollment onConflictDoNothing race — that race isn't observable
+    // synchronously without doing the insert inline, so it's dropped rather
+    // than faked; the synchronous `existing` check above already covers the
+    // normal (non-racing) idempotent-reenrollment path this suite exercises.
+    const enrollmentId = randomUUID();
+    await publishF3Write(ctx, "learning_routes__5", enrollmentId, { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    // Deterministic post-insert values — match the consumer's insertEnrollment literals.
+    return reply.code(201).send({ id: enrollmentId, status: "enrolled", progressPct: 0 });
   });
 
   app.post("/v1/hrms/learning/lessons/:id/progress", async (req, reply) => {
@@ -136,11 +163,26 @@ export async function learningRoutes(app: FastifyInstance): Promise<void> {
     const enrollment = await repo.getEnrollment(ctx.tenantId, lesson.courseId, body.employeeId);
     if (!enrollment) throw new HttpError(409, "NOT_ENROLLED", "employee is not enrolled in this course");
 
-    const result = await publishF3Write(ctx, "learning_routes__6", id, { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
-    return reply.send({
-      enrollmentId: enrollment.id, progressPct: result!.progressPct,
-      status: result!.status, resumeLessonId: result!.resumeLessonId,
-    }) as any;
+    // Compute the post-write progress/status/resume-point synchronously, via
+    // the SAME pure domain functions the F3 consumer uses inside its
+    // transaction (computeProgress / deriveEnrollmentStatus / nextResumeLesson
+    // — previously imported here but unused). `currentlyCompleted` is read
+    // BEFORE the write is queued, then toggled to reflect what this write will
+    // make true, so the answer matches what the consumer will independently
+    // persist (barring a concurrent write to the same enrollment, which is not
+    // observable synchronously).
+    const [allLessons, currentlyCompleted] = await Promise.all([
+      repo.listLessonsByCourse(ctx.tenantId, lesson.courseId),
+      repo.completedLessonIds(ctx.tenantId, enrollment.id),
+    ]);
+    const doneSet = new Set(currentlyCompleted);
+    if (body.status === "completed") doneSet.add(id); else doneSet.delete(id);
+    const progressPct = computeProgress(allLessons.length, doneSet.size);
+    const status = deriveEnrollmentStatus(progressPct);
+    const resumeLessonId = nextResumeLesson(allLessons.map((l) => l.id), doneSet);
+
+    await publishF3Write(ctx, "learning_routes__6", id, { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    return reply.send({ enrollmentId: enrollment.id, progressPct, status, resumeLessonId });
   });
 
   app.get("/v1/hrms/learning/my-learning", async (req, reply) => {

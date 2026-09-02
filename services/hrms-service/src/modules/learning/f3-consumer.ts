@@ -25,9 +25,6 @@ const log = pino({ name: "hrms-f3-learning" });
  *    answering 200: progress, completion percentage, resume pointer and course-completion
  *    status were all silently never recorded.
  *
- * Unlike the other modules in this batch, routes.ts here publishes the real `:id` path
- * param as the message id, so the generated `id` local is correct and is left as-is.
- *
  * Zod `.default(...)` values from validators.ts are mirrored field-for-field below,
  * because `body` here is the raw pre-validation request body forwarded through the queue
  * (`creditHours`, `sequence`, `durationMins` and `category` are all NOT NULL columns that
@@ -36,6 +33,19 @@ const log = pino({ name: "hrms-f3-learning" });
  * The two lookups added here read inside `tx` rather than via the repo's scopedRead
  * helpers so they are read-your-own-writes consistent with the writes in the same
  * transaction (and match the existing `...Tx` helpers this file already uses).
+ *
+ * Fake-response-data fix (same bug class as gpf PR #882 / assessment-manpower-planning-
+ * training-admin-recruitment PRs #890-892): `learning_routes__3` (create module),
+ * `learning_routes__4` (create lesson) and `learning_routes__5` (create enrollment) used
+ * to receive the PARENT's id as the publish `id` (courseId, moduleId, courseId
+ * respectively) while independently minting their OWN `randomUUID()` for the real row
+ * here — so routes.ts's placeholder-echoing response handed callers back the wrong id
+ * entirely (a course id disguised as a module id, etc.), not just a placeholder status.
+ * routes.ts now mints the real row id itself and publishes with THAT id, so:
+ *   - `id` (this consumer's local var, from `p.id`) is now the REAL row id for __3/__4/__5
+ *     — used directly instead of `randomUUID()`.
+ *   - the PARENT id (previously read off `id`) is now read from `params.id` (the URL
+ *     param routes.ts always forwards), since `id` no longer holds it.
  */
 export function registerF3_learning_Consumers(queue: Queue): void {
   queue.subscribe(COMMANDS.f3RouteWrite, async (msg) => {
@@ -81,32 +91,41 @@ export function registerF3_learning_Consumers(queue: Queue): void {
             break;
           }
           case "learning_routes__3": {
+            // `id` is now the module's own real id (routes.ts mints it before
+            // publishing); the parent course id comes from the URL param.
+            const courseId = (params.id as string) || "";
             await repo.insertModule(tx, {
-                  id: randomUUID(), tenantId: p.tenantId, courseId: id, title: body.title,
+                  id, tenantId: p.tenantId, courseId, title: body.title,
                   sequence: body.sequence ?? 1,
                 });
             break;
           }
           case "learning_routes__4": {
-            // routes.ts: const mod = await repo.getModule(ctx.tenantId, id);
+            // `id` is now the lesson's own real id; the parent module id comes
+            // from the URL param (routes.ts: const mod = await repo.getModule(ctx.tenantId, id)
+            // where that `id` was the URL param, matching `moduleId` here).
+            const moduleId = (params.id as string) || "";
             const modRows = await tx.select().from(modules)
-              .where(and(eq(modules.tenantId, p.tenantId), eq(modules.id, id)))
+              .where(and(eq(modules.tenantId, p.tenantId), eq(modules.id, moduleId)))
               .limit(1);
             const mod = modRows[0];
             if (!mod) {
-              log.warn({ op, moduleId: id, messageId: msg.messageId }, "module disappeared before async lesson insert");
+              log.warn({ op, moduleId, messageId: msg.messageId }, "module disappeared before async lesson insert");
               return;
             }
             await repo.insertLesson(tx, {
-                  id: randomUUID(), tenantId: p.tenantId, moduleId: id, courseId: mod.courseId,
+                  id, tenantId: p.tenantId, moduleId, courseId: mod.courseId,
                   title: body.title, sequence: body.sequence ?? 1, contentType: body.contentType,
                   contentUri: body.contentUri ?? null, durationMins: body.durationMins ?? 0,
                 });
             break;
           }
           case "learning_routes__5": {
+            // `id` is now the enrollment's own real id; the parent course id
+            // comes from the URL param.
+            const courseId = (params.id as string) || "";
             await repo.insertEnrollment(tx, {
-                  id: randomUUID(), tenantId: p.tenantId, courseId: id, employeeId: body.employeeId, status: "enrolled", progressPct: 0,
+                  id, tenantId: p.tenantId, courseId, employeeId: body.employeeId, status: "enrolled", progressPct: 0,
                 });
             break;
           }
