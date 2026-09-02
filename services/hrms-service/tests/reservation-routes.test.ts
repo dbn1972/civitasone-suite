@@ -176,6 +176,9 @@ describe("POST /v1/hrms/reservation/rosters", () => {
       pctSc: "15.00", pctSt: "7.50", pctObc: "27.00", pctEws: "10.00", pctPwd: "4.00",
       cfSc: 0, cfSt: 0, cfObc: 0, cfEws: 0, cfUr: 0,
     }));
+    // The row must be stored under the SAME id the 201 handed the caller, otherwise a
+    // follow-up GET /rosters/:rid with that id 404s against a row that lives elsewhere.
+    expect(H.insert).toHaveBeenCalledWith(expect.objectContaining({ id: body.id }));
     await app.close();
   });
 
