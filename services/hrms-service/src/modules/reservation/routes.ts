@@ -79,7 +79,7 @@ export async function reservationRoutes(app: FastifyInstance): Promise<void> {
       cfUr: z.coerce.number().int().min(0).default(0),
     }).parse(req.body);
     const id = randomUUID();
-    await publishF3Write(ctx, "reservation_routes__0", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    await publishF3Write(ctx, "reservation_routes__0", id, { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     return reply.code(201).send({ id, cadre: body.cadre, rosterSize: body.rosterSize }) as any;
   });
 
@@ -166,7 +166,7 @@ export async function reservationRoutes(app: FastifyInstance): Promise<void> {
       remarks: z.string().max(2000).optional(),
     }).parse(req.body);
     const id = randomUUID();
-    await publishF3Write(ctx, "reservation_routes__2", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    await publishF3Write(ctx, "reservation_routes__2", id, { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     return reply.code(201).send({ id, cadre: body.cadre, sanctionedStrength: body.sanctionedStrength }) as any;
   });
 
