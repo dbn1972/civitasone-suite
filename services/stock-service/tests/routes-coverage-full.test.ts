@@ -469,9 +469,15 @@ describe("Valuation routes", () => {
 // ══════════════════════════════════════════════════════════════════════════════
 describe("Dashboard routes", () => {
   it("GET /v1/stock/dashboard → 200 with valid role", async () => {
+    // NOTE: "store_officer" is a real role elsewhere (procurement-service,
+    // inventory-service) but is not part of stock-service's own RBAC vocabulary
+    // (dashboard routes.ts allow-list: stock_manager, stock_admin, super_admin).
+    // This test used "store_officer" by copy/paste error; fixed to the
+    // service's own default authorized role, matching this file's authHeader()
+    // default token role.
     const res = await app.inject({
       method: "GET", url: "/v1/stock/dashboard",
-      headers: authHeader(["store_officer"]),
+      headers: authHeader(["stock_manager"]),
     });
     expect(res.statusCode).toBe(200);
   });
