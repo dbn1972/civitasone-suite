@@ -119,6 +119,50 @@ describe("manual roster + reject path", () => {
   });
 });
 
+// Regression test for the CRASH this PR fixes: every manpower-plan approval
+// used to throw a TypeError (`result.approved.status` on the publishF3Write
+// placeholder, which never carries `.approved`) — see manpower-planning/
+// routes.ts __4. Exercises create → submit → approve end-to-end against a
+// real, bootstrapped Postgres (via injectF3/drainF3, same as the rest of this
+// file), asserting the request completes without crashing and returns a
+// sensible, honestly-scoped response.
+describe("approve path (crash regression)", () => {
+  it("approves a plan with a recruitable vacancy without crashing, and emits a requisition", async () => {
+    const c = await injectF3(app, { method: "POST", url: "/v1/hrms/manpower/plans", headers: auth(tok(MAKER)),
+      payload: { planYear: 2032, unitId: UNIT, cadre: "Approval Crash Regression", requiredStrength: 10, sanctionedStrength: 8, filledStrength: 3 } });
+    expect(c.statusCode).toBe(201);
+    const planId = c.json().id;
+
+    await injectF3(app, { method: "POST", url: `/v1/hrms/manpower/plans/${planId}/submit`, headers: bare(tok(MAKER)) });
+
+    // The creator cannot approve their own plan (maker-checker) — also
+    // confirms this pre-check still runs BEFORE the crash site.
+    let res = await injectF3(app, { method: "POST", url: `/v1/hrms/manpower/plans/${planId}/approve`, headers: bare(tok(MAKER)) });
+    expect(res.statusCode).toBe(409);
+    expect(res.json().code).toBe("MAKER_CHECKER");
+
+    // A different checker approves it — this is the exact call that used to
+    // throw "Cannot read properties of undefined (reading 'status')" on
+    // every single invocation.
+    res = await injectF3(app, { method: "POST", url: `/v1/hrms/manpower/plans/${planId}/approve`, headers: bare(tok(CHECKER)) });
+    expect(res.statusCode).toBe(202);
+    expect(res.json()).toEqual({ id: planId, status: "approved", approvedBy: CHECKER, vacancy: 5 });
+
+    // Re-approving is rejected (no longer 'pending_approval') instead of
+    // crashing or silently re-running.
+    res = await injectF3(app, { method: "POST", url: `/v1/hrms/manpower/plans/${planId}/approve`, headers: bare(tok(CHECKER)) });
+    expect(res.statusCode).toBe(409);
+    expect(res.json().code).toBe("INVALID_STATE");
+
+    // The async consumer actually landed the approval + generated a
+    // requisition (confirms the route's honestly-scoped 202 wasn't a lie).
+    const detail = await injectF3(app, { method: "GET", url: `/v1/hrms/manpower/plans/${planId}`, headers: bare(tok(MAKER)) });
+    expect(detail.json().data.status).toBe("approved");
+    expect(detail.json().data.requisitions.length).toBe(1);
+    expect(detail.json().data.requisitions[0].requestedVacancies).toBe(5);
+  });
+});
+
 describe("error paths", () => {
   it("404s for an unknown plan and unknown requisition", async () => {
     const missing = randomUUID();
