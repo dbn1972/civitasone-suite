@@ -4,6 +4,7 @@ import { registerF3_apar_Consumers } from "./apar/f3-consumer.js";
 import { registerF3_appraisals_Consumers } from "./appraisals/f3-consumer.js";
 import { registerF3_apprentice_stipend_Consumers } from "./apprentice-stipend/f3-consumer.js";
 import { registerF3_assessment_Consumers } from "./assessment/f3-consumer.js";
+import { registerF3_attendance_Consumers } from "./attendance/f3-consumer.js";
 import { registerF3_board_intake_Consumers } from "./board-intake/f3-consumer.js";
 import { registerF3_claims_Consumers } from "./claims/f3-consumer.js";
 import { registerF3_competency_Consumers } from "./competency/f3-consumer.js";
@@ -36,6 +37,7 @@ export function registerF3LeftoverAll(queue: Queue): void {
   registerF3_appraisals_Consumers(queue);
   registerF3_apprentice_stipend_Consumers(queue);
   registerF3_assessment_Consumers(queue);
+  registerF3_attendance_Consumers(queue);
   registerF3_board_intake_Consumers(queue);
   registerF3_claims_Consumers(queue);
   registerF3_competency_Consumers(queue);

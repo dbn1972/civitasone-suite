@@ -1,19 +1,18 @@
+import { randomUUID } from "node:crypto";
 import type { FastifyInstance } from "fastify";
 import { ZodError, z } from "zod";
 import { acceptedResponseSchema, listQuerySchema } from "@civitasone/schemas/common";
 import { attendanceSummaryResponseSchema, AttendanceRegularisationListSchema, AttendanceSummaryListSchema } from "@civitasone/schemas/web";
 import {sendValidated, sendAccepted } from "@civitasone/schemas/validate";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { cache } from "../../shared/infra.js";
-import { enqueue } from "../../shared/outbox.js";
-import { EVENTS } from "../../topics.js";
+import { publishF3Write } from "../../shared/f3-publish.js";
 import { markAttendanceBody, regularisationCreateBody, periodLockBody } from "./validators.js";
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
 import * as repo from "./repo.js";
 import * as employeeRepo from "../employee/repo.js";
-import { db } from "../../shared/db.js";
-import { hrmsOvertimeRequests, hrmsWfhRequests, hrmsShiftChangeRequests } from "./schema.js";
+import { db, scopedRead } from "../../shared/db.js";
+import { hrmsOvertimeRequests, hrmsWfhRequests, hrmsShiftChangeRequests, hrmsAttendanceRegularisations } from "./schema.js";
 import { eq, and, desc } from "drizzle-orm";
 
 const HR_ROLES  = ["hr_admin", "hr_officer", "super_admin"];
@@ -110,60 +109,48 @@ export async function attendanceRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, HR_ROLES);
     const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
-    const { reason } = z.object({ reason: z.string().max(500).optional() }).parse(req.body ?? {});
-    const row = await db.transaction(async (tx) => {
-      const updated = await repo.updateRegularisationStatus(tx, ctx.tenantId, id, "approved", ctx.actorId, reason);
-      if (!updated) return null;
-      await enqueue(tx, {
-        topic: EVENTS.regularisationApproved,
-        eventType: EVENTS.regularisationApproved,
-        tenantId: ctx.tenantId,
-        actorId: ctx.actorId,
-        correlationId: ctx.correlationId,
-        payload: {
-          regularisationId: id,
-          employeeId: updated.employeeId,
-          actorId: ctx.actorId,
-          attendanceDate: updated.date,
-          outcome: "approved",
-          timestamp: new Date().toISOString(),
-        },
-      });
-      return updated;
-    });
-    if (!row) throw new HttpError(404, "NOT_FOUND", "regularisation not found or already decided");
-    await cache.invalidate(cache.listKey(ctx.tenantId, "attendance_reg", "list:100"));
-    return reply.send({ id, status: "approved" });
+    z.object({ reason: z.string().max(500).optional() }).parse(req.body ?? {});
+
+    // Synchronous pre-check: the old code atomically updated WHERE status='pending'
+    // and 404'd when the regularisation was missing or already decided. The async
+    // consumer applies the same guarded update, but that check must also run here —
+    // otherwise an invalid/duplicate approve would get a false-positive 202 while
+    // the write is silently skipped.
+    const existing = await scopedRead((tx) =>
+      tx.select({ id: hrmsAttendanceRegularisations.id, status: hrmsAttendanceRegularisations.status })
+        .from(hrmsAttendanceRegularisations)
+        .where(and(eq(hrmsAttendanceRegularisations.id, id), eq(hrmsAttendanceRegularisations.tenantId, ctx.tenantId)))
+        .limit(1),
+    );
+    if (!existing[0] || existing[0].status !== "pending") {
+      throw new HttpError(404, "NOT_FOUND", "regularisation not found or already decided");
+    }
+
+    await publishF3Write(ctx, "attendance_routes__0", id, { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> });
+    return reply.code(202).send({ id, status: "approved" }) as any;
   });
 
   app.post("/v1/hrms/attendance/regularisations/:id/reject", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, HR_ROLES);
     const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
-    const { reason } = z.object({ reason: z.string().min(1).max(500) }).parse(req.body ?? {});
-    const row = await db.transaction(async (tx) => {
-      const updated = await repo.updateRegularisationStatus(tx, ctx.tenantId, id, "rejected", ctx.actorId, reason);
-      if (!updated) return null;
-      await enqueue(tx, {
-        topic: EVENTS.regularisationRejected,
-        eventType: EVENTS.regularisationRejected,
-        tenantId: ctx.tenantId,
-        actorId: ctx.actorId,
-        correlationId: ctx.correlationId,
-        payload: {
-          regularisationId: id,
-          employeeId: updated.employeeId,
-          actorId: ctx.actorId,
-          attendanceDate: updated.date,
-          outcome: "rejected",
-          timestamp: new Date().toISOString(),
-        },
-      });
-      return updated;
-    });
-    if (!row) throw new HttpError(404, "NOT_FOUND", "regularisation not found or already decided");
-    await cache.invalidate(cache.listKey(ctx.tenantId, "attendance_reg", "list:100"));
-    return reply.send({ id, status: "rejected" });
+    z.object({ reason: z.string().min(1).max(500) }).parse(req.body ?? {});
+
+    // Synchronous pre-check — same reasoning as the approve route above: mirror
+    // the consumer's WHERE status='pending' guard so a bad/duplicate reject 404s
+    // synchronously instead of silently no-op'ing after a false 202.
+    const existing = await scopedRead((tx) =>
+      tx.select({ id: hrmsAttendanceRegularisations.id, status: hrmsAttendanceRegularisations.status })
+        .from(hrmsAttendanceRegularisations)
+        .where(and(eq(hrmsAttendanceRegularisations.id, id), eq(hrmsAttendanceRegularisations.tenantId, ctx.tenantId)))
+        .limit(1),
+    );
+    if (!existing[0] || existing[0].status !== "pending") {
+      throw new HttpError(404, "NOT_FOUND", "regularisation not found or already decided");
+    }
+
+    await publishF3Write(ctx, "attendance_routes__1", id, { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> });
+    return reply.code(202).send({ id, status: "rejected" }) as any;
   });
 
   // Shifts list (hrmsShifts table)
@@ -231,14 +218,9 @@ export async function attendanceRoutes(app: FastifyInstance): Promise<void> {
     if (!isHrActor && body.employeeId !== ctx.actorId) {
       throw new HttpError(403, "FORBIDDEN", "employees may only create overtime requests for themselves");
     }
-    const rows = await db.insert(hrmsOvertimeRequests).values({
-      tenantId: ctx.tenantId, employeeId: body.employeeId,
-      requestDate: body.requestDate, hoursRequested: String(body.hoursRequested),
-      reason: body.reason ?? null, createdBy: ctx.actorId, updatedBy: ctx.actorId,
-    }).returning();
-    const row = rows[0];
-    if (!row) throw new HttpError(500, "INSERT_FAILED", "overtime insert returned no row");
-    return reply.code(201).send({ id: row.id, status: row.status });
+    const id = randomUUID();
+    await publishF3Write(ctx, "attendance_routes__2", id, { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> });
+    return reply.code(202).send({ id, status: "pending" }) as any;
   });
 
   app.get("/v1/hrms/overtime-requests", async (req, reply) => {
@@ -262,27 +244,37 @@ export async function attendanceRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, HR_ROLES);
     const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
-    const [updated] = await db.update(hrmsOvertimeRequests)
-      .set({ status: "approved", approvedBy: ctx.actorId, approvedAt: new Date(),
-             updatedBy: ctx.actorId, updatedAt: new Date() })
-      .where(and(eq(hrmsOvertimeRequests.id, id), eq(hrmsOvertimeRequests.tenantId, ctx.tenantId)))
-      .returning({ id: hrmsOvertimeRequests.id });
-    if (!updated) return reply.code(404).send({ error: "Overtime request not found" });
-    return reply.send({ id, status: "approved" });
+
+    // Synchronous pre-check (existence): the old code's conditional UPDATE
+    // WHERE id+tenantId 404'd when no row matched. Mirror that here so an
+    // invalid id gets a real 404 instead of a silently dropped async write.
+    const existing = await scopedRead((tx) =>
+      tx.select({ id: hrmsOvertimeRequests.id }).from(hrmsOvertimeRequests)
+        .where(and(eq(hrmsOvertimeRequests.id, id), eq(hrmsOvertimeRequests.tenantId, ctx.tenantId)))
+        .limit(1),
+    );
+    if (!existing[0]) return reply.code(404).send({ error: "Overtime request not found" });
+
+    await publishF3Write(ctx, "attendance_routes__3", id, { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> });
+    return reply.code(202).send({ id, status: "approved" }) as any;
   });
 
   app.patch("/v1/hrms/overtime-requests/:id/reject", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, HR_ROLES);
     const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
-    const { reason } = z.object({ reason: z.string().max(500).optional() }).parse(req.body);
-    const [updated] = await db.update(hrmsOvertimeRequests)
-      .set({ status: "rejected", rejectionReason: reason ?? null,
-             updatedBy: ctx.actorId, updatedAt: new Date() })
-      .where(and(eq(hrmsOvertimeRequests.id, id), eq(hrmsOvertimeRequests.tenantId, ctx.tenantId)))
-      .returning({ id: hrmsOvertimeRequests.id });
-    if (!updated) return reply.code(404).send({ error: "Overtime request not found" });
-    return reply.send({ id, status: "rejected" });
+    z.object({ reason: z.string().max(500).optional() }).parse(req.body);
+
+    // Synchronous pre-check (existence) — same reasoning as the approve route.
+    const existing = await scopedRead((tx) =>
+      tx.select({ id: hrmsOvertimeRequests.id }).from(hrmsOvertimeRequests)
+        .where(and(eq(hrmsOvertimeRequests.id, id), eq(hrmsOvertimeRequests.tenantId, ctx.tenantId)))
+        .limit(1),
+    );
+    if (!existing[0]) return reply.code(404).send({ error: "Overtime request not found" });
+
+    await publishF3Write(ctx, "attendance_routes__4", id, { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> });
+    return reply.code(202).send({ id, status: "rejected" }) as any;
   });
 
   app.setErrorHandler(errorHandler);

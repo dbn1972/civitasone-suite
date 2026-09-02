@@ -49,6 +49,10 @@ export function registerF3_learning_Consumers(queue: Queue): void {
       "learning_routes__4",
       "learning_routes__5",
       "learning_routes__6",
+      "learning_routes__7",
+      "learning_routes__8",
+      "learning_routes__9",
+      "learning_routes__10",
     ]);
     if (!ops.has(op)) return;
     const body = p.body ?? {};
@@ -141,6 +145,61 @@ export function registerF3_learning_Consumers(queue: Queue): void {
                   const resumeLessonId = nextResumeLesson(allLessons.map((l) => l.id), doneSet);
                   const completedAt = status === "completed" ? new Date() : null;
                   await repo.updateEnrollmentProgress(tx, p.tenantId, enrollment.id, { progressPct, status, resumeLessonId, completedAt });
+            break;
+          }
+          case "learning_routes__7": {
+            // F3 leftover fix (batch 2, resweep): course metadata PATCH. The
+            // route already 404s synchronously if the course is missing (see
+            // routes.ts), so this is just the guarded field-by-field update
+            // that used to run inline.
+            const updateData: { title?: string; description?: string | null; category?: string; creditHours?: string } = {};
+            if (body.title !== undefined) updateData.title = body.title;
+            if (body.description !== undefined) updateData.description = body.description;
+            if (body.category !== undefined) updateData.category = body.category;
+            if (body.creditHours !== undefined) updateData.creditHours = body.creditHours;
+            await repo.updateCourse(tx, p.tenantId, id, updateData);
+            break;
+          }
+          case "learning_routes__8": {
+            // F3 leftover fix (batch 2, resweep): create a training plan.
+            await repo.insertTrainingPlan(tx, {
+                  id, tenantId: p.tenantId, title: body.title,
+                  planYear: body.planYear,
+                  departmentId: body.departmentId ?? null,
+                  roleCode: body.roleCode ?? null,
+                  status: "draft", createdBy: msg.actorId,
+                });
+            break;
+          }
+          case "learning_routes__9": {
+            // F3 leftover fix (batch 2, resweep): add a training-plan item.
+            // The route already 404s synchronously if the parent plan is
+            // missing (see routes.ts).
+            const planId = (params.id as string) || "";
+            await repo.insertTrainingPlanItem(tx, {
+                  id, tenantId: p.tenantId, planId,
+                  courseId: body.courseId ?? null, trainingId: body.trainingId ?? null,
+                  targetDate: body.targetDate ?? null, mandatory: body.mandatory ? 1 : 0,
+                });
+            break;
+          }
+          case "learning_routes__10": {
+            // F3 leftover fix (batch 2, resweep): enrollment progress PATCH by
+            // enrollment id (distinct from `learning_routes__6`, which updates
+            // progress by LESSON id and recomputes the aggregate). Restored:
+            // `existing` — routes.ts reads the enrollment first to preserve its
+            // current `resumeLessonId` (this endpoint doesn't set one).
+            const existing = await repo.getEnrollmentById(p.tenantId, id);
+            if (!existing) {
+              log.warn({ op, enrollmentId: id, messageId: msg.messageId }, "enrollment disappeared before async progress PATCH");
+              return;
+            }
+            const pct = Number(body.percentComplete);
+            const status = pct >= 100 ? "completed" : pct > 0 ? "in_progress" : "enrolled";
+            const completedAt = pct >= 100 ? new Date() : null;
+            await repo.updateEnrollmentProgress(tx, p.tenantId, id, {
+                  progressPct: pct, status, resumeLessonId: existing.resumeLessonId ?? null, completedAt,
+                });
             break;
           }
         }

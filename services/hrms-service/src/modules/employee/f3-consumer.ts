@@ -61,6 +61,10 @@ export function registerF3_employee_Consumers(queue: Queue): void {
       "employee_employee_types_routes__1",
       "employee_masters_routes__0",
       "employee_masters_routes__1",
+      "employee_masters_routes__2",
+      "employee_masters_routes__3",
+      "employee_masters_routes__4",
+      "employee_masters_routes__5",
       "employee_nominee_address_routes__0",
       "employee_nominee_address_routes__1",
     ]);
@@ -256,11 +260,10 @@ export function registerF3_employee_Consumers(queue: Queue): void {
             break;
           }
           case "employee_masters_routes__0": {
-            // NOTE: nothing publishes this op — masters-routes.ts writes
-            // departments inline and never calls publishF3Write. Kept as-is
-            // (unreachable) rather than reworked; do not wire a publisher to it
-            // without first removing the inline write, or departments would be
-            // inserted twice.
+            // F3 leftover fix (batch 2): masters-routes.ts now publishes this
+            // op (department create) instead of writing inline. This case was
+            // dead code before — the id below is the route-generated uuid
+            // (routes.ts now passes it explicitly so it can reply with it).
             await tx.insert(hrmsDepartments).values({
                   id, tenantId: p.tenantId, code: body.code, name: body.name,
                   parentId: body.parentId ?? null,
@@ -274,13 +277,55 @@ export function registerF3_employee_Consumers(queue: Queue): void {
             break;
           }
           case "employee_masters_routes__1": {
-            // NOTE: unreachable for the same reason as __0 (designations are
-            // written inline by masters-routes.ts).
+            // F3 leftover fix (batch 2): masters-routes.ts now publishes this
+            // op (designation create) instead of writing inline — same
+            // reasoning as __0.
             await tx.insert(hrmsDesignations).values({
                   id, tenantId: p.tenantId, code: body.code, name: body.name,
                   level: body.level ?? 0, payGrade: body.payGrade ?? null,
                   createdBy: msg.actorId, updatedBy: msg.actorId,
                 });
+            break;
+          }
+          case "employee_masters_routes__2": {
+            // Restored: department PATCH. routes.ts already 404s synchronously
+            // if `targetId` doesn't exist (see masters-routes.ts), so this is
+            // the guarded update that used to run inline in the route.
+            const deptPatch: Record<string, unknown> = {};
+            if (body.code !== undefined) deptPatch.code = body.code;
+            if (body.name !== undefined) deptPatch.name = body.name;
+            if (body.parentId !== undefined) deptPatch.parentId = body.parentId;
+            if (body.type !== undefined) deptPatch.type = body.type;
+            if (body.level !== undefined) deptPatch.level = body.level;
+            if (body.govtTier !== undefined) deptPatch.govtTier = body.govtTier;
+            if (body.locationId !== undefined) deptPatch.locationId = body.locationId;
+            if (body.headEmployeeId !== undefined) deptPatch.headEmployeeId = body.headEmployeeId;
+            await tx.update(hrmsDepartments)
+                  .set({ ...deptPatch, updatedBy: msg.actorId } as never)
+                  .where(eq(hrmsDepartments.id, targetId));
+            break;
+          }
+          case "employee_masters_routes__3": {
+            // Restored: department DELETE. Existence already checked
+            // synchronously by the route.
+            await tx.delete(hrmsDepartments).where(eq(hrmsDepartments.id, targetId));
+            break;
+          }
+          case "employee_masters_routes__4": {
+            // Restored: designation PATCH — same reasoning as __2.
+            const desigPatch: Record<string, unknown> = {};
+            if (body.code !== undefined) desigPatch.code = body.code;
+            if (body.name !== undefined) desigPatch.name = body.name;
+            if (body.level !== undefined) desigPatch.level = body.level;
+            if (body.payGrade !== undefined) desigPatch.payGrade = body.payGrade;
+            await tx.update(hrmsDesignations)
+                  .set({ ...desigPatch, updatedBy: msg.actorId } as never)
+                  .where(eq(hrmsDesignations.id, targetId));
+            break;
+          }
+          case "employee_masters_routes__5": {
+            // Restored: designation DELETE — same reasoning as __3.
+            await tx.delete(hrmsDesignations).where(eq(hrmsDesignations.id, targetId));
             break;
           }
           case "employee_nominee_address_routes__0": {

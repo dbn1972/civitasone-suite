@@ -3,7 +3,6 @@ import { publishF3Write } from "../../shared/f3-publish.js";
 import type { FastifyInstance } from "fastify";
 import { ZodError, z } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { db } from "../../shared/db.js";
 import {
   computeProgress, deriveEnrollmentStatus, nextResumeLesson, checkPrerequisites,
 } from "./domain.js";
@@ -186,10 +185,11 @@ export async function learningRoutes(app: FastifyInstance): Promise<void> {
     }).parse(req.body);
     const course = await repo.getCourse(ctx.tenantId, id);
     if (!course) throw new HttpError(404, "NOT_FOUND", "course not found");
-    const updateData = Object.fromEntries(Object.entries(body).filter(([, v]) => v !== undefined)) as Parameters<typeof repo.updateCourse>[3];
-    const updated = await db.transaction(async (tx) => repo.updateCourse(tx, ctx.tenantId, id, updateData));
-    if (!updated) throw new HttpError(409, "INVALID_STATE", "course could not be updated");
-    return reply.send({ id: updated.id, title: updated.title, status: updated.status });
+    await publishF3Write(ctx, "learning_routes__7", id, { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> });
+    // This is a metadata-only patch (title/description/category/creditHours) —
+    // it never changes `status`, so the pre-write course's status is still
+    // accurate to echo synchronously.
+    return reply.code(202).send({ id, title: body.title ?? course.title, status: course.status }) as any;
   });
 
   // ── Course completion report (HR admin) ─────────────────────────
@@ -227,16 +227,9 @@ export async function learningRoutes(app: FastifyInstance): Promise<void> {
       departmentId: z.string().uuid().optional(),
       roleCode:     z.string().max(64).optional(),
     }).parse(req.body);
-    const { randomUUID } = await import("node:crypto");
     const id = randomUUID();
-    const row = await db.transaction(async (tx) => repo.insertTrainingPlan(tx, {
-      id, tenantId: ctx.tenantId, title: body.title,
-      planYear: body.planYear,
-      departmentId: body.departmentId ?? null,
-      roleCode: body.roleCode ?? null,
-      status: "draft", createdBy: ctx.actorId,
-    }));
-    return reply.code(201).send({ id: row.id, status: row.status });
+    await publishF3Write(ctx, "learning_routes__8", id, { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> });
+    return reply.code(202).send({ id, status: "draft" }) as any;
   });
 
   app.get("/v1/hrms/learning/training-plans/:id", async (req, reply) => {
@@ -261,14 +254,9 @@ export async function learningRoutes(app: FastifyInstance): Promise<void> {
     }).parse(req.body);
     const plan = await repo.getTrainingPlan(ctx.tenantId, id);
     if (!plan) throw new HttpError(404, "NOT_FOUND", "training plan not found");
-    const { randomUUID } = await import("node:crypto");
     const itemId = randomUUID();
-    const row = await db.transaction(async (tx) => repo.insertTrainingPlanItem(tx, {
-      id: itemId, tenantId: ctx.tenantId, planId: id,
-      courseId: body.courseId ?? null, trainingId: body.trainingId ?? null,
-      targetDate: body.targetDate ?? null, mandatory: body.mandatory ? 1 : 0,
-    }));
-    return reply.code(201).send({ id: row.id, planId: id });
+    await publishF3Write(ctx, "learning_routes__9", itemId, { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> });
+    return reply.code(202).send({ id: itemId, planId: id }) as any;
   });
 
   // ── Enrollment direct access (HR admin + employee) ─────────────
@@ -293,14 +281,10 @@ export async function learningRoutes(app: FastifyInstance): Promise<void> {
     if (!existing) throw new HttpError(404, "NOT_FOUND", "enrollment not found");
     const pct = body.percentComplete;
     const status = pct >= 100 ? "completed" : pct > 0 ? "in_progress" : "enrolled";
-    const completedAt = pct >= 100 ? new Date() : null;
-    const updated = await db.transaction(async (tx) =>
-      repo.updateEnrollmentProgress(tx, ctx.tenantId, id, {
-        progressPct: pct, status, resumeLessonId: existing.resumeLessonId ?? null, completedAt,
-      }),
-    );
-    if (!updated) throw new HttpError(409, "INVALID_STATE", "enrollment could not be updated");
-    return reply.send({ id: updated.id, progressPct: updated.progressPct, status: updated.status });
+    await publishF3Write(ctx, "learning_routes__10", id, { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> });
+    // progressPct/status are computed above from the request body, independent
+    // of the (now-deferred) write, so they're safe to echo synchronously.
+    return reply.code(202).send({ id, progressPct: pct, status }) as any;
   });
 
   app.setErrorHandler(errorHandler);
