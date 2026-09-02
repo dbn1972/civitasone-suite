@@ -558,8 +558,12 @@ describe("0314 — Employee hold/release", () => {
     await app.close();
   });
 
-  it("POST /v1/hrms/holds/:holdId/approve → 200 (SoD enforced)", async () => {
+  it("POST /v1/hrms/holds/:holdId/approve → 200 (SoD enforced, different approver)", async () => {
     H.selectFrom.mockResolvedValue([{ id: HOLD_ID, status: "pending", requestedBy: USER2, version: 1 }]);
+    // A legitimate approver (different person from the requester) must still be
+    // able to approve, and the approval must actually be queued for the write
+    // pipeline — not just answered 200 at the HTTP layer.
+    const publishSpy = vi.spyOn(queue, "publish");
     const app = await buildApp();
     const r = await app.inject({
       method: "POST",
@@ -568,11 +572,22 @@ describe("0314 — Employee hold/release", () => {
     });
     expect(r.statusCode).toBe(200);
     expect(r.json().data.status).toBe("active");
+    expect(publishSpy).toHaveBeenCalledTimes(1);
+    expect(publishSpy.mock.calls[0]?.[1]).toMatchObject({
+      actorId: USER,
+      payload: expect.objectContaining({ op: "lifecycle_hold_routes__1" }),
+    });
+    publishSpy.mockRestore();
     await app.close();
   });
 
-  it("POST /v1/hrms/holds/:holdId/approve → 403 SoD violation (requester = approver)", async () => {
+  it("POST /v1/hrms/holds/:holdId/approve → 403 SoD violation (requester = approver), no write queued", async () => {
     H.selectFrom.mockResolvedValue([{ id: HOLD_ID, status: "pending", requestedBy: USER, version: 1 }]);
+    // The approver IS the requester on this hold — must be rejected before any
+    // write reaches the queue/consumer, not just answered 403 while the write
+    // still goes through underneath (the earlier bug: the route had no
+    // synchronous check at all and always queued+returned 200/active).
+    const publishSpy = vi.spyOn(queue, "publish");
     const app = await buildApp();
     const r = await app.inject({
       method: "POST",
@@ -581,6 +596,11 @@ describe("0314 — Employee hold/release", () => {
     });
     expect(r.statusCode).toBe(403);
     expect(r.json().code).toBe("SOD_VIOLATION");
+    expect(publishSpy).not.toHaveBeenCalled();
+    // Belt-and-braces: no downstream row mutation happened either.
+    expect(H.update).not.toHaveBeenCalled();
+    expect(H.insert).not.toHaveBeenCalled();
+    publishSpy.mockRestore();
     await app.close();
   });
 
