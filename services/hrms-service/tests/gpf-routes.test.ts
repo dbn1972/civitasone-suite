@@ -1,6 +1,25 @@
 /**
  * GPF (General Provident Fund) route-level tests.
  * Covers: happy path, 400, 401, 403, 404, 409 for all GPF endpoints.
+ *
+ * `subscription` / `advance` / `withdrawal` / `refund` / `interest` publish
+ * via `publishF3Write`, which is fire-and-forget: the actual ledger write
+ * (balance lock + INSUFFICIENT_BALANCE guard + insert) happens later, in the
+ * `gpf_routes__1` / `gpf_routes__2` consumer, inside its own transaction. The
+ * mocked `queue.publish` here is a no-op stub (see the `../src/shared/infra.js`
+ * mock below), so it never invokes that consumer — these route-level tests can
+ * therefore only assert what the ROUTE itself decides synchronously (status
+ * code, entryType, amount, ratePct/months) and CANNOT observe the resulting
+ * balance or the INSUFFICIENT_BALANCE guard. That coverage lives in
+ * `src/modules/gpf/f3-consumer.test.ts`, against the consumer directly.
+ *
+ * (This replaces route-level assertions that used to expect a synchronous
+ * `balanceMinor`/`interestMinor` in the response and a 409 on an
+ * over-large debit — those never actually happened: the route used to
+ * destructure `{ prev, next }` off `publishF3Write`'s return value, which
+ * only ever resolves `{ id, status, correlationId }`, so `balanceMinor` was
+ * always `undefined` and the balance guard was never evaluated
+ * synchronously. See routes.ts and f3-consumer.ts for the fix.)
  */
 import { describe, it, expect, beforeEach, afterAll, vi } from "vitest";
 import { signToken } from "@civitasone/auth";
@@ -213,14 +232,22 @@ describe("GPF — read account + ledger", () => {
 
 describe("GPF — subscription (credit)", () => {
   describe("POST /v1/hrms/employees/:id/gpf/subscription", () => {
-    it("posts a subscription credit (201)", async () => {
+    it("accepts a subscription credit for async posting (202)", async () => {
       H.findAccountByEmployee.mockResolvedValue(gpfAccount());
-      H.lockedBalance.mockResolvedValue(100000n);
       const app = await buildApp();
       const r = await app.inject({ method: "POST", url: `/v1/hrms/employees/${EMP}/gpf/subscription`, headers: auth(), payload: { amountMinor: 5000 } });
-      expect(r.statusCode).toBe(201);
+      // 202, not 201: the ledger row does not exist yet — it is written later
+      // by the consumer. See the INSUFFICIENT_BALANCE / correct-sign coverage
+      // in f3-consumer.test.ts for what actually lands.
+      expect(r.statusCode).toBe(202);
       expect(r.json().entryType).toBe("subscription");
-      expect(r.json().balanceMinor).toBe("105000");
+      expect(r.json().amountMinor).toBe("5000");
+      expect(r.json().status).toBe("accepted");
+      expect(r.json().ledgerId).toBeTruthy();
+      // publishF3Write only ever resolves { id, status, correlationId } — the
+      // route must not claim to know the resulting balance synchronously.
+      expect(r.json().balanceMinor).toBeUndefined();
+      expect(r.json().previousBalanceMinor).toBeUndefined();
       await app.close();
     });
 
@@ -243,24 +270,29 @@ describe("GPF — subscription (credit)", () => {
 
 describe("GPF — advance (debit)", () => {
   describe("POST /v1/hrms/employees/:id/gpf/advance", () => {
-    it("posts an advance debit (201)", async () => {
+    it("accepts an advance debit for async posting (202)", async () => {
       H.findAccountByEmployee.mockResolvedValue(gpfAccount());
-      H.lockedBalance.mockResolvedValue(100000n);
       const app = await buildApp();
       const r = await app.inject({ method: "POST", url: `/v1/hrms/employees/${EMP}/gpf/advance`, headers: auth(), payload: { amountMinor: 50000 } });
-      expect(r.statusCode).toBe(201);
+      expect(r.statusCode).toBe(202);
       expect(r.json().entryType).toBe("advance");
-      expect(r.json().balanceMinor).toBe("50000");
+      expect(r.json().amountMinor).toBe("50000");
+      expect(r.json().balanceMinor).toBeUndefined();
       await app.close();
     });
 
-    it("returns 409 when debit exceeds balance (INSUFFICIENT_BALANCE)", async () => {
+    // The INSUFFICIENT_BALANCE guard runs inside the consumer's locked
+    // transaction (C1), not synchronously in this route — two concurrent
+    // debits against the same account must serialise on the SAME lock to be
+    // guarded correctly, which a synchronous pre-check here could not do
+    // (see routes.ts). That guard is exercised directly against the consumer
+    // in f3-consumer.test.ts ("rejects a debit that would drive the balance
+    // negative"); this route always answers 202 regardless of balance.
+    it("still answers 202 for an oversized debit — the balance guard is async (see f3-consumer.test.ts)", async () => {
       H.findAccountByEmployee.mockResolvedValue(gpfAccount());
-      H.lockedBalance.mockResolvedValue(10000n);
       const app = await buildApp();
       const r = await app.inject({ method: "POST", url: `/v1/hrms/employees/${EMP}/gpf/advance`, headers: auth(), payload: { amountMinor: 99999 } });
-      expect(r.statusCode).toBe(409);
-      expect(r.json().code).toBe("INSUFFICIENT_BALANCE");
+      expect(r.statusCode).toBe(202);
       await app.close();
     });
   });
@@ -268,14 +300,13 @@ describe("GPF — advance (debit)", () => {
 
 describe("GPF — refund (credit)", () => {
   describe("POST /v1/hrms/employees/:id/gpf/refund", () => {
-    it("posts a refund credit (201)", async () => {
+    it("accepts a refund credit for async posting (202)", async () => {
       H.findAccountByEmployee.mockResolvedValue(gpfAccount());
-      H.lockedBalance.mockResolvedValue(50000n);
       const app = await buildApp();
       const r = await app.inject({ method: "POST", url: `/v1/hrms/employees/${EMP}/gpf/refund`, headers: auth(), payload: { amountMinor: 20000 } });
-      expect(r.statusCode).toBe(201);
+      expect(r.statusCode).toBe(202);
       expect(r.json().entryType).toBe("refund");
-      expect(r.json().balanceMinor).toBe("70000");
+      expect(r.json().amountMinor).toBe("20000");
       await app.close();
     });
   });
@@ -283,27 +314,27 @@ describe("GPF — refund (credit)", () => {
 
 describe("GPF — interest accrual", () => {
   describe("POST /v1/hrms/employees/:id/gpf/interest", () => {
-    it("accrues interest (201)", async () => {
+    it("accepts interest accrual for async posting (202)", async () => {
       H.findAccountByEmployee.mockResolvedValue(gpfAccount());
-      H.lockedBalance.mockResolvedValue(100000n);
       const app = await buildApp();
       const r = await app.inject({ method: "POST", url: `/v1/hrms/employees/${EMP}/gpf/interest`, headers: auth(), payload: { months: 12 } });
-      expect(r.statusCode).toBe(201);
-      // 100000 * 7.10% * 12/12 = 7100
-      expect(r.json().interestMinor).toBe("7100");
-      expect(r.json().balanceMinor).toBe("107100");
+      expect(r.statusCode).toBe(202);
+      expect(r.json().months).toBe(12);
       expect(r.json().ratePct).toBe(7.1);
+      expect(r.json().status).toBe("accepted");
+      // interestMinor/balanceMinor depend on the locked, serialised balance
+      // the consumer reads at write time (C1) — not known here. See
+      // f3-consumer.test.ts for the actual accrual math.
+      expect(r.json().interestMinor).toBeUndefined();
+      expect(r.json().balanceMinor).toBeUndefined();
       await app.close();
     });
 
-    it("uses ratePctOverride when provided (201)", async () => {
+    it("uses ratePctOverride when provided (202)", async () => {
       H.findAccountByEmployee.mockResolvedValue(gpfAccount());
-      H.lockedBalance.mockResolvedValue(200000n);
       const app = await buildApp();
       const r = await app.inject({ method: "POST", url: `/v1/hrms/employees/${EMP}/gpf/interest`, headers: auth(), payload: { months: 6, ratePctOverride: 10 } });
-      expect(r.statusCode).toBe(201);
-      // 200000 * 10% * 6/12 = 10000
-      expect(r.json().interestMinor).toBe("10000");
+      expect(r.statusCode).toBe(202);
       expect(r.json().ratePct).toBe(10);
       await app.close();
     });

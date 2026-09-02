@@ -1,7 +1,3 @@
-// @ts-nocheck — RETAINED ONLY for `gpf_routes__1`, whose missing locals cannot be
-// recovered from the queued payload (see the TODO(unresolved-f3-bug) on that case).
-// Everything else in this file is now reconstructed and type-consistent; remove
-// this banner as soon as the route-side fix described below lands.
 import { randomUUID } from "node:crypto";
 import type { Queue } from "@civitasone/queue";
 import { pino } from "pino";
@@ -20,29 +16,42 @@ const log = pino({ name: "hrms-f3-gpf" });
  * ── Bug class fixed here (same shape as `leave_policy_admin_routes__0`) ──
  * The generator that stubbed these routes down to a bare `publishF3Write(...)`
  * dropped the "fetch the account + compute the derived money values" preamble.
- * All three cases closed over locals that exist only in the route file and are
+ * All three cases closed over locals that exist only in the route file and were
  * NEVER defined here (`acctId`, `opening`, `acct`, `amount`, `delta`,
  * `entryType`, `ledgerId`, `ratePct`), so each threw
- * `ReferenceError: <x> is not defined`. Because the routes answer 201 as soon as
- * the message is queued, every GPF account opening, ledger posting and interest
- * accrual was a fake success: the caller saw 201 while nothing was written.
+ * `ReferenceError: <x> is not defined`. Because the routes answer 2xx as soon
+ * as the message is queued, every GPF account opening, ledger posting and
+ * interest accrual was a fake success: the caller saw success while nothing
+ * was written.
  *
  * ── Reconstruction rules used below ──
  *  - `id` (i.e. `p.id`) is the queued entity id, used as the PRIMARY KEY of the
  *    row a case inserts (the contract `disciplinary_routes__3` follows).
  *  - The employee is identified by the ROUTE PATH PARAM `params.id`; the
- *    generated `const id = p.id || params.id` above always resolves to `p.id`,
- *    which the stubbed routes fill with a throwaway `randomUUID()`.
+ *    generated `const id = p.id || params.id` above always resolves to `p.id`.
  *  - `body` is the RAW pre-Zod request payload, so the route schema's
  *    `.default(...)` values are reapplied explicitly.
  *
- * KNOWN REMAINING DEFECT (route-side, out of scope for this file): the create
- * routes mint their own uuid, return it to the caller, then publish an unrelated
- * `randomUUID()`, so the id the caller receives is not the id persisted here.
- * Separately, `post()` and the interest route destructure balances off
- * `publishF3Write`'s return value, which only ever yields
- * `{ id, status, correlationId }` — so those responses report `undefined`
- * balances regardless of what this consumer computes.
+ * ── `gpf_routes__1` (subscription / advance / withdrawal / refund) ──
+ * This was the one case that genuinely could NOT be reconstructed from the
+ * queued payload alone: all four routes shared this op via the
+ * `post(req, reply, entryType, sign)` helper in routes.ts and published it
+ * with byte-identical `{ body, params, query }`, so nothing in the message
+ * said which of the four routes produced it, or which credit/debit direction
+ * to apply. Guessing was not acceptable — picking the wrong sign would
+ * silently corrupt a statutory provident-fund ledger. That has now been fixed
+ * on the route side: `routes.ts` forwards `entryType` and `sign` explicitly
+ * instead of leaving the consumer to guess, so this case is reconstructed
+ * like the other two below (and the `@ts-nocheck` this file used to carry
+ * solely for this case has been removed).
+ *
+ * `post()` and the interest route in routes.ts no longer destructure balances
+ * off `publishF3Write`'s return value either — that call only ever resolves
+ * `{ id, status, correlationId }` (see shared/f3-publish.ts), never
+ * `prev`/`next`/`interest`. Since the actual write happens here, later and
+ * asynchronously, those routes cannot know the resulting balance
+ * synchronously and now respond 202 Accepted without it; callers read
+ * GET /gpf for the posted amount and resulting balance once the write lands.
  */
 export function registerF3_gpf_Consumers(queue: Queue): void {
   queue.subscribe(COMMANDS.f3RouteWrite, async (msg) => {
@@ -86,55 +95,30 @@ export function registerF3_gpf_Consumers(queue: Queue): void {
             break;
           }
           case "gpf_routes__1": {
-            // TODO(unresolved-f3-bug): DELIBERATELY NOT RECONSTRUCTED — DO NOT GUESS.
-            //
-            // This single op is published by FOUR different routes that share the
-            // `post(req, reply, entryType, sign)` helper in routes.ts:
-            //     POST /v1/hrms/employees/:id/gpf/subscription  (entryType "subscription", sign +1)
-            //     POST /v1/hrms/employees/:id/gpf/advance       (entryType "advance",      sign -1)
-            //     POST /v1/hrms/employees/:id/gpf/withdrawal    (entryType "withdrawal",   sign -1)
-            //     POST /v1/hrms/employees/:id/gpf/refund        (entryType "refund",       sign +1)
-            //
-            // `entryType` and `sign` are ARGUMENTS to that helper, not request
-            // data. The generated publish call forwards only { body, params,
-            // query }, all four of which are byte-identical across the four
-            // routes, so the queued message carries NO information about which
-            // route produced it. `entryType` and the credit/debit sign are
-            // therefore unrecoverable inside this consumer.
-            //
-            // Guessing is not acceptable here: picking the wrong sign would
-            // CREDIT a member's GPF where the request was a withdrawal (or debit
-            // a subscription), silently corrupting a statutory provident-fund
-            // ledger and its running balance. Leaving the ReferenceError in place
-            // keeps this op loudly broken instead of quietly wrong.
-            //
-            // FIX (route-side, one line in gpf/routes.ts — outside this batch's
-            // scope): forward the discriminator, e.g.
-            //     await publishF3Write(ctx, "gpf_routes__1", ledgerId, {
-            //       body: ..., params: ..., query: ..., entryType, sign,
-            //     });
-            // then this case becomes:
-            //     const employeeId = String(params.id ?? "");
-            //     const acct = await repo.findAccountByEmployee(p.tenantId, employeeId);
-            //     if (!acct) throw new HttpError(404, "NO_GPF_ACCOUNT", "employee has no GPF account");
-            //     const entryType = String(p.entryType);
-            //     const amount = BigInt(body.amountMinor);
-            //     const delta = p.sign === 1 ? amount : -amount;
-            //     const ledgerId = id;
-            //     ...existing body below...
+            // Subscription / advance / withdrawal / refund all share this op via
+            // the `post(req, reply, entryType, sign)` helper in routes.ts. The
+            // route now forwards `entryType` and `sign` explicitly, so this case
+            // no longer has to guess the credit/debit direction.
+            const employeeId = String(params.id ?? "");
+            const acct = await repo.findAccountByEmployee(p.tenantId, employeeId);
+            if (!acct) throw new HttpError(404, "NO_GPF_ACCOUNT", "employee has no GPF account");
+            const entryType = String(p.entryType);
+            const amount = BigInt(body.amountMinor);
+            const sign = p.sign === 1 ? 1 : -1;
+            const delta = sign === 1 ? amount : -amount;
+            const ledgerId = id;
             const prevBal = await repo.lockedBalance(tx, p.tenantId, acct);
-                  const nextBal = prevBal + delta;
-                  if (nextBal < 0n) throw new HttpError(409, "INSUFFICIENT_BALANCE", "debit exceeds available GPF balance");
-                  await repo.insertLedger(tx, {
-                    id: ledgerId, tenantId: p.tenantId, accountId: acct.id, employeeId: id,
-                    entryType, amountMinor: amount, deltaMinor: delta, balanceMinor: nextBal,
-                    ...(body.narrative !== undefined ? { narrative: body.narrative } : {}),
-                    ...(body.effectiveDate !== undefined ? { effectiveDate: body.effectiveDate } : {}),
-                    createdBy: msg.actorId,
-                  });
-                  // L4: bump the account optimistic-lock version on every ledger mutation.
-                  await repo.bumpAccountVersion(tx, p.tenantId, acct.id, msg.actorId, acct.version);
-                  return { prev: prevBal, next: nextBal };
+            const nextBal = prevBal + delta;
+            if (nextBal < 0n) throw new HttpError(409, "INSUFFICIENT_BALANCE", "debit exceeds available GPF balance");
+            await repo.insertLedger(tx, {
+              id: ledgerId, tenantId: p.tenantId, accountId: acct.id, employeeId,
+              entryType, amountMinor: amount, deltaMinor: delta, balanceMinor: nextBal,
+              ...(body.narrative !== undefined ? { narrative: body.narrative } : {}),
+              ...(body.effectiveDate !== undefined ? { effectiveDate: body.effectiveDate } : {}),
+              createdBy: msg.actorId,
+            });
+            // L4: bump the account optimistic-lock version on every ledger mutation.
+            await repo.bumpAccountVersion(tx, p.tenantId, acct.id, msg.actorId, acct.version);
             break;
           }
           case "gpf_routes__2": {

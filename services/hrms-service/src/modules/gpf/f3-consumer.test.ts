@@ -7,13 +7,16 @@
  * account and computed the derived money values, so all three cases referenced
  * undefined names (`acctId`, `opening`, `acct`, `amount`, `delta`, `entryType`,
  * `ledgerId`, `ratePct`) and threw a ReferenceError. Because the routes answer
- * 201 as soon as the message is queued, every GPF account opening, ledger
+ * 2xx as soon as the message is queued, every GPF account opening, ledger
  * posting and interest accrual was a fake success.
  *
- * `gpf_routes__0` (open account) and `gpf_routes__2` (interest accrual) are
- * fixed and asserted below. `gpf_routes__1` is DELIBERATELY still broken and is
- * asserted as such — see the test at the bottom and the
- * TODO(unresolved-f3-bug) comment on that case in f3-consumer.ts.
+ * All three ops are now fixed and asserted below. `gpf_routes__1` (subscription
+ * / advance / withdrawal / refund) used to be DELIBERATELY left broken because
+ * the four routes that share it published byte-identical payloads with no way
+ * to tell which op — or which credit/debit direction — the message represented.
+ * routes.ts now forwards `entryType`/`sign` explicitly, so this file covers all
+ * four entry types and asserts the correct sign lands for each, plus the
+ * INSUFFICIENT_BALANCE guard.
  *
  * Follows the MemoryQueue + mocked db.transaction pattern of
  * ../leave/f3-consumer.test.ts.
@@ -172,28 +175,108 @@ describe("gpf_routes__2 (interest accrual)", () => {
   });
 });
 
-describe("gpf_routes__1 (subscription / advance / withdrawal / refund) — KNOWN UNRESOLVED", () => {
+describe("gpf_routes__1 (subscription / advance / withdrawal / refund)", () => {
   /**
-   * This op is intentionally still broken. Four routes share the
-   * `post(req, reply, entryType, sign)` helper in routes.ts and all publish
-   * `gpf_routes__1` with byte-identical { body, params, query }, so the queued
-   * message carries nothing that says whether the posting is a credit or a
-   * debit. Reconstructing it would mean GUESSING the sign on a statutory
-   * provident-fund ledger, which could credit a member where they requested a
-   * withdrawal. Leaving it loudly broken is the safer failure mode.
-   *
-   * This test pins the current state so the defect cannot be forgotten: it will
-   * start failing the moment someone changes this case, forcing them to make
-   * the route forward `entryType`/`sign` and to replace this test with real
-   * coverage.
+   * routes.ts now forwards `entryType` and `sign` explicitly (previously
+   * omitted, so this case could not tell the four routes apart without
+   * guessing the credit/debit direction on a statutory PF ledger — see the
+   * file-header comment and the prior version of this test file for the
+   * "KNOWN UNRESOLVED" state this replaces).
    */
-  it("still throws instead of writing a possibly wrong-signed ledger entry", async () => {
+  it.each([
+    ["subscription", 1],
+    ["refund", 1],
+    ["advance", -1],
+    ["withdrawal", -1],
+  ] as const)("posts a %s using the route-forwarded sign (%d)", async (entryType, sign) => {
     R.lockedBalance.mockResolvedValue(100000n);
-    const q = await run({ op: "gpf_routes__1", id: randomUUID(), params: { id: EMP }, body: { amountMinor: 5000 } });
+    const ledgerId = randomUUID();
+    const q = await run({
+      op: "gpf_routes__1", id: ledgerId, params: { id: EMP },
+      body: { amountMinor: 5000 }, entryType, sign,
+    });
+    expect(q.dlq).toEqual([]);
+    expect(R.findAccountByEmployee).toHaveBeenCalledWith(TENANT, EMP);
+    expect(R.insertLedger).toHaveBeenCalledOnce();
+    const expectedDelta = sign === 1 ? 5000n : -5000n;
+    const expectedBalance = 100000n + expectedDelta;
+    expect(R.insertLedger.mock.calls[0]![1]).toMatchObject({
+      id: ledgerId, tenantId: TENANT, accountId: ACCT, employeeId: EMP,
+      entryType, amountMinor: 5000n, deltaMinor: expectedDelta, balanceMinor: expectedBalance,
+      createdBy: ACTOR,
+    });
+    // L4: the account's optimistic-lock version is bumped on every posting.
+    expect(R.bumpAccountVersion).toHaveBeenCalledWith(mockTx, TENANT, ACCT, ACTOR, 4);
+    await q.stop();
+  });
+
+  it("forwards narrative and effectiveDate onto the ledger row when present", async () => {
+    R.lockedBalance.mockResolvedValue(0n);
+    const ledgerId = randomUUID();
+    const q = await run({
+      op: "gpf_routes__1", id: ledgerId, params: { id: EMP },
+      body: { amountMinor: 2000, narrative: "monthly sub", effectiveDate: "2026-09-01" },
+      entryType: "subscription", sign: 1,
+    });
+    expect(q.dlq).toEqual([]);
+    expect(R.insertLedger.mock.calls[0]![1]).toMatchObject({
+      narrative: "monthly sub", effectiveDate: "2026-09-01",
+    });
+    await q.stop();
+  });
+
+  it("omits narrative/effectiveDate from the ledger row when absent (no undefined leaks in)", async () => {
+    R.lockedBalance.mockResolvedValue(0n);
+    const q = await run({
+      op: "gpf_routes__1", id: randomUUID(), params: { id: EMP },
+      body: { amountMinor: 2000 }, entryType: "subscription", sign: 1,
+    });
+    expect(q.dlq).toEqual([]);
+    const row = R.insertLedger.mock.calls[0]![1] as Record<string, unknown>;
+    expect("narrative" in row).toBe(false);
+    expect("effectiveDate" in row).toBe(false);
+    await q.stop();
+  });
+
+  it("rejects a debit that would drive the balance negative (INSUFFICIENT_BALANCE) without writing", async () => {
+    R.lockedBalance.mockResolvedValue(3000n);
+    const q = await run({
+      op: "gpf_routes__1", id: randomUUID(), params: { id: EMP },
+      body: { amountMinor: 5000 }, entryType: "advance", sign: -1,
+    });
     expect(R.insertLedger).not.toHaveBeenCalled();
     expect(R.bumpAccountVersion).not.toHaveBeenCalled();
     expect(q.dlq).toHaveLength(1);
-    expect(q.dlq[0]!.error).toMatch(/acct is not defined|is not defined/);
+    expect(q.dlq[0]!.error).toContain("exceeds available GPF balance");
+    await q.stop();
+  });
+
+  it("a same-size refund after an advance nets back to the original balance", async () => {
+    // advance: 100000 -> 95000
+    R.lockedBalance.mockResolvedValue(100000n);
+    await run({
+      op: "gpf_routes__1", id: randomUUID(), params: { id: EMP },
+      body: { amountMinor: 5000 }, entryType: "advance", sign: -1,
+    });
+    expect(R.insertLedger.mock.calls[0]![1]).toMatchObject({ deltaMinor: -5000n, balanceMinor: 95000n });
+    // refund: locked balance now reflects the advance (95000) -> back to 100000
+    R.lockedBalance.mockResolvedValue(95000n);
+    await run({
+      op: "gpf_routes__1", id: randomUUID(), params: { id: EMP },
+      body: { amountMinor: 5000 }, entryType: "refund", sign: 1,
+    });
+    expect(R.insertLedger.mock.calls[1]![1]).toMatchObject({ deltaMinor: 5000n, balanceMinor: 100000n });
+  });
+
+  it("fails loudly rather than writing when the employee has no GPF account", async () => {
+    R.findAccountByEmployee.mockResolvedValue(null);
+    const q = await run({
+      op: "gpf_routes__1", id: randomUUID(), params: { id: EMP },
+      body: { amountMinor: 5000 }, entryType: "advance", sign: -1,
+    });
+    expect(R.insertLedger).not.toHaveBeenCalled();
+    expect(q.dlq).toHaveLength(1);
+    expect(q.dlq[0]!.error).toContain("GPF account");
     await q.stop();
   });
 });

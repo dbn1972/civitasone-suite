@@ -100,15 +100,31 @@ export async function gpfRoutes(app: FastifyInstance): Promise<void> {
       narrative: z.string().max(500).optional(),
       effectiveDate: z.string().optional(),
     }).parse(req.body);
-    const acct = await mustAccount(ctx.tenantId, id);
+    // Synchronous pre-check (existence), same pattern as employee/agent1-gap-routes.ts:
+    // the consumer 404s on a missing account too, but only AFTER this route would
+    // otherwise have already replied — so mirror the check here.
+    await mustAccount(ctx.tenantId, id);
     const amount = BigInt(body.amountMinor);
-    const delta = sign === 1 ? amount : -amount;
     const ledgerId = randomUUID();
-    // Lock the account, read the balance, guard and insert — all in one tx so
-    // two concurrent debits cannot both pass the INSUFFICIENT_BALANCE check. (C1)
-    const { prev, next } = await publishF3Write(ctx, "gpf_routes__1", ledgerId, { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
-    return reply.code(201).send(jsonSafe({
-      ledgerId, entryType, amountMinor: amount, previousBalanceMinor: prev, balanceMinor: next,
+    // publishF3Write is fire-and-forget: the actual ledger write (lock the
+    // account, read the balance, guard INSUFFICIENT_BALANCE, insert) happens
+    // later in the consumer inside its own transaction (C1), so this route
+    // cannot know the resulting previous/next balance synchronously — it
+    // used to destructure `{ prev, next }` off publishF3Write's return value,
+    // but that call only ever resolves `{ id, status, correlationId }`, so
+    // both were always `undefined`. Forward `entryType` and `sign` instead:
+    // all four routes that share this helper publish the same op with
+    // otherwise byte-identical payloads, so without them the consumer cannot
+    // tell a subscription from a withdrawal and must refuse to guess the
+    // credit/debit sign on a statutory PF ledger.
+    await publishF3Write(ctx, "gpf_routes__1", ledgerId, {
+      body: (req.body as Record<string, unknown>) ?? {},
+      params: req.params as Record<string, unknown>,
+      query: req.query as Record<string, unknown>,
+      entryType, sign,
+    });
+    return reply.code(202).send(jsonSafe({
+      ledgerId, entryType, amountMinor: amount, status: "accepted",
     })) as any;
   }
 
@@ -129,12 +145,22 @@ export async function gpfRoutes(app: FastifyInstance): Promise<void> {
     const acct = await mustAccount(ctx.tenantId, id);
     const ratePct = body.ratePctOverride ?? Number(acct.interestRatePct);
     const ledgerId = randomUUID();
-    // Read the locked balance inside the tx so interest accrues on the true,
-    // serialised balance (not a stale pre-tx read). (C1)
-    const { prev, interest, next } = await publishF3Write(ctx, "gpf_routes__2", ledgerId, { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
-    return reply.code(201).send(jsonSafe({
-      ledgerId, ratePct, months: body.months, interestMinor: interest,
-      previousBalanceMinor: prev, balanceMinor: next,
+    // Same reasoning as post() above: the consumer reads the locked balance
+    // inside its own transaction so interest accrues on the true, serialised
+    // balance rather than a stale pre-tx read (C1), which means the actual
+    // interestMinor/previous/next balance genuinely cannot be known here,
+    // synchronously — it used to destructure `{ prev, interest, next }` off
+    // publishF3Write's return value, which never carries them. Report only
+    // what this route itself decided (rate, months, ledger id); the caller
+    // reads GET /gpf for the posted amount and resulting balance once the
+    // write lands.
+    await publishF3Write(ctx, "gpf_routes__2", ledgerId, {
+      body: (req.body as Record<string, unknown>) ?? {},
+      params: req.params as Record<string, unknown>,
+      query: req.query as Record<string, unknown>,
+    });
+    return reply.code(202).send(jsonSafe({
+      ledgerId, ratePct, months: body.months, status: "accepted",
     })) as any;
   });
 
