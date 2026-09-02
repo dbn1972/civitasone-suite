@@ -22,11 +22,11 @@ const log = pino({ name: "hrms-f3-appraisals" });
  * against. `appraisalId` must come from the `:id` path param, otherwise these inserts
  * carry a dangling appraisal reference. Each case resolves `params.id` explicitly.
  *
- * NOTE: the row ids generated here cannot match the `fid`/`did`/`aid` the route already
- * returned to the client (the route's UUIDs are not carried in the queue payload). The
- * write is now correct and durable; reconciling the returned id with the stored id needs
- * the route to publish its own UUID as the message id — see the report accompanying this
- * change. `pipLinked` mirrors the route's Zod `.default(false)`.
+ * UPDATE: feedback-routes.ts now publishes its own `fid`/`did`/`aid` as the message id
+ * (fix/hrms-idfix1-create-id) instead of a second, unrelated `randomUUID()` — so `id`
+ * above is exactly the row id the route already returned to the client. `fid`/`did`/`aid`
+ * are now assigned from `id`, not re-minted, closing the id-mismatch loop end-to-end.
+ * `pipLinked` mirrors the route's Zod `.default(false)`.
  */
 export function registerF3_appraisals_Consumers(queue: Queue): void {
   queue.subscribe(COMMANDS.f3RouteWrite, async (msg) => {
@@ -48,7 +48,7 @@ export function registerF3_appraisals_Consumers(queue: Queue): void {
         if (!(await markProcessed(tx, msg.messageId))) return;
         switch (op) {
           case "appraisals_feedback_routes__0": {
-            const fid = randomUUID();
+            const fid = id;
             await tx.insert(hrms360Feedback).values({
                   id: fid, tenantId: p.tenantId, appraisalId,
                   reviewerId: body.reviewerId, relationship: body.relationship,
@@ -58,14 +58,14 @@ export function registerF3_appraisals_Consumers(queue: Queue): void {
             break;
           }
           case "appraisals_feedback_routes__1": {
-            const did = randomUUID();
+            const did = id;
             await tx.insert(hrmsAparDisclosures).values({
                   id: did, tenantId: p.tenantId, appraisalId, employeeId: body.employeeId,
                 });
             break;
           }
           case "appraisals_feedback_routes__2": {
-            const aid = randomUUID();
+            const aid = id;
             await tx.insert(hrmsRatingAppeals).values({
                   id: aid, tenantId: p.tenantId, appraisalId,
                   employeeId: body.employeeId, appealReason: body.appealReason,
