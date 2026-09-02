@@ -172,6 +172,19 @@ const PII_ENC_KEY = (() => {
   return "civitasone-hrms-pii-dev-key-not-for-prod";
 })();
 
+// -- ID-card QR HMAC secret (SEC, anti-forgery) -------------------------------
+// hrms-service signs/verifies ID-card QR codes with this HMAC-SHA256 key
+// (modules/id-cards/routes.ts, #903). Previously this var was never wired
+// into any deploy config at all -- the app silently ran on the source-visible
+// hardcoded fallback in routes.ts with no way to override it in production.
+// Same injection contract as DEVICE_TRUST_SECRET: env var from the secret
+// manager in production, fail closed if missing; a fixed non-secret dev value
+// outside production. routes.ts itself also fails closed in prod as defense
+// in depth, in case that module is ever started outside this file.
+const ID_CARD_QR_SECRET = IS_PROD
+  ? requireSecret("ID_CARD_QR_SECRET")
+  : (process.env.ID_CARD_QR_SECRET ?? "civitasone-id-card-hmac-secret-change-in-prod");
+
 // -- MFA at-rest encryption key (P0-3) ----------------------------------------
 // identity-service stores TOTP secrets AES-256-GCM-encrypted at rest. The
 // 32-byte key is derived from this secret. Same injection contract as
@@ -374,7 +387,7 @@ module.exports = {
     // ── Establishment & physical assets ───────────────────────────────────────
     svc("estab",        3010, "estab_svc",         "civitas_estab"),
     svc("stock",        3011, "stock_svc",         "civitas_stock"),
-    svc("hrms",         3012, "hrms_svc",          "civitas_hrms", { PII_ENC_KEY }),
+    svc("hrms",         3012, "hrms_svc",          "civitas_hrms", { PII_ENC_KEY, ID_CARD_QR_SECRET }),
     svc("payroll",      3013, "payroll_svc",       "civitas_payroll"),
     svc("project",      3014, "project_svc",       "civitas_project"),
     svc("asset",        3015, "asset_svc",         "civitas_asset"),

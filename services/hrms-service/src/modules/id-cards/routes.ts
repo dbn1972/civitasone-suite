@@ -96,8 +96,32 @@ const verifySchema = z.object({
   longitude: z.number().optional(),
 });
 
-// QR payload is HMAC-signed so it can't be forged
-const QR_SECRET = process.env.ID_CARD_QR_SECRET ?? "civitasone-id-card-hmac-secret-change-in-prod";
+// QR payload is HMAC-signed so it can't be forged.
+//
+// SEC: ID_CARD_QR_SECRET must be injected from the secret manager in
+// production (see ecosystem.config.js's ID_CARD_QR_SECRET / requireSecret()).
+// The string below is a source-visible dev-only fallback -- anyone who can
+// read this open-source-visible repo could otherwise forge a valid ID-card
+// QR code. Fail closed (throw at startup) rather than silently falling back,
+// mirroring resolveAlgorithm()/isProduction() in packages/auth/src/index.ts
+// and requireSecret() in ecosystem.config.js. NODE_ENV=test (CI) and
+// NODE_ENV=development (local/this host) are unaffected -- only a process
+// actually started with NODE_ENV=production and no secret injected refuses
+// to boot.
+function resolveQrSecret(): string {
+  const configured = process.env.ID_CARD_QR_SECRET;
+  if (process.env.NODE_ENV === "production" && (!configured || configured.length === 0)) {
+    throw new Error(
+      "SEC: ID_CARD_QR_SECRET is required in production. Inject it from the secret " +
+        "manager (do not hardcode). Refusing to start -- the hardcoded fallback is " +
+        "source-visible and would let anyone who can read this repo forge a valid " +
+        "ID-card QR code.",
+    );
+  }
+  return configured ?? "civitasone-id-card-hmac-secret-change-in-prod";
+}
+
+const QR_SECRET = resolveQrSecret();
 
 function computeQrHmac(cardId: string, tenantId: string, cardNumber: string): string {
   const data = `${cardId}:${tenantId}:${cardNumber}`;
