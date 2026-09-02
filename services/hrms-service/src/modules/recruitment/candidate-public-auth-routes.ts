@@ -22,8 +22,9 @@ import { HttpError } from "../../shared/context.js";
 import { scopedRead } from "../../shared/db.js";
 import { queue } from "../../shared/infra.js";
 import { COMMANDS } from "../../topics.js";
-import { hrmsCandidates, hrmsCandidateOtpChallenges } from "./candidate-schema.js";
+import { hrmsCandidates } from "./candidate-schema.js";
 import { generateOtp, verifyOtp, OTP_TTL_SECONDS, MAX_ATTEMPTS } from "./otp-verify.js";
+import * as otpRepo from "./otp-verify-repo.js";
 
 /**
  * PRE-EXISTING bug fixed in passing (found while adding the F3 verification
@@ -45,6 +46,18 @@ import { generateOtp, verifyOtp, OTP_TTL_SECONDS, MAX_ATTEMPTS } from "./otp-ver
  * `createPublicApplication`), via this helper.
  */
 async function scopedReadForTenant<T>(tenantId: string, fn: Parameters<typeof scopedRead<T>>[0]): Promise<T> {
+  return runWithTenant(tenantId, () => scopedRead(fn));
+}
+
+/**
+ * Same ambient-tenant-context problem as `scopedReadForTenant` above, for a
+ * WRITE. `db.transaction` (what `scopedRead` wraps) sets the `app.tenant_id`
+ * GUC from AsyncLocalStorage — on this public, unauthenticated route that
+ * context is never populated by `authPlugin`, so it must be established
+ * explicitly from the request's own `tenantId` before opening the
+ * transaction, exactly as the read path does.
+ */
+async function scopedWriteForTenant<T>(tenantId: string, fn: Parameters<typeof scopedRead<T>>[0]): Promise<T> {
   return runWithTenant(tenantId, () => scopedRead(fn));
 }
 
@@ -176,33 +189,39 @@ export async function candidatePublicAuthRoutes(app: FastifyInstance): Promise<v
     if (candidates.length === 0) throw new HttpError(404, "NOT_FOUND", "no account found for this email");
     const { id: candidateId, fullName } = candidates[0]!;
 
-    const challenges = await scopedReadForTenant(tenantId, (tx) =>
-      tx.select()
-        .from(hrmsCandidateOtpChallenges)
-        .where(and(
-          eq(hrmsCandidateOtpChallenges.tenantId, tenantId),
-          eq(hrmsCandidateOtpChallenges.candidateId, candidateId),
-          eq(hrmsCandidateOtpChallenges.channel, "email"),
-        ))
-        .orderBy(hrmsCandidateOtpChallenges.createdAt)
-        .limit(1)
-    );
-    if (challenges.length === 0) throw new HttpError(404, "NO_CHALLENGE", "request an OTP first");
-    const challenge = challenges[0]!;
+    // SECURITY: the challenge row is read+checked+conditionally-incremented
+    // inside ONE transaction, with the row locked (`FOR UPDATE`) via
+    // otpRepo.lockOldestChallenge. This closes a brute-force race on this
+    // PUBLIC, unauthenticated careers-portal endpoint: concurrent otp-verify
+    // requests against the SAME challenge could each read a stale
+    // (pre-increment) `attempts` count and slip past the MAX_ATTEMPTS gate
+    // before an earlier failed attempt's increment had landed — the
+    // increment used to be a DEFERRED async publish (queue-processed), so
+    // the race window could be as wide as the queue's processing lag under
+    // load, and trivially widened further by firing many concurrent guesses.
+    // Locking the row here forces concurrent requests to serialize: each
+    // sees the previous request's already-committed attempts count, so at
+    // most MAX_ATTEMPTS guesses can ever be admitted per challenge,
+    // regardless of concurrency. A correct code on a fresh challenge still
+    // succeeds exactly as before — `attempts` is left untouched on success.
+    const outcome = await scopedWriteForTenant(tenantId, async (tx) => {
+      const challenge = await otpRepo.lockOldestChallenge(tx, tenantId, candidateId, "email");
+      if (!challenge) return { kind: "no_challenge" as const };
+      if (challenge.attempts >= MAX_ATTEMPTS) return { kind: "locked" as const };
+      const result = verifyOtp(challenge, body.code, Date.now());
+      if (!result.valid) {
+        await otpRepo.incrementAttempts(tx, tenantId, challenge.id);
+        return { kind: "invalid" as const, reason: result.reason, challengeId: challenge.id };
+      }
+      return { kind: "valid" as const, challengeId: challenge.id };
+    });
 
-    if (challenge.attempts >= MAX_ATTEMPTS) throw new HttpError(429, "MAX_ATTEMPTS", "too many incorrect attempts; request a new OTP");
+    if (outcome.kind === "no_challenge") throw new HttpError(404, "NO_CHALLENGE", "request an OTP first");
+    if (outcome.kind === "locked") throw new HttpError(429, "MAX_ATTEMPTS", "too many incorrect attempts; request a new OTP");
 
     const correlationId = (req.headers["x-correlation-id"] as string) ?? req.id;
-    const result = verifyOtp(challenge, body.code, Date.now());
-    if (!result.valid) {
-      // Async write: increment the attempt counter. The route has already
-      // decided synchronously (via `challenge` read above) that this attempt
-      // is rejected — the write is bookkeeping for the NEXT attempt's
-      // MAX_ATTEMPTS check, so it can safely trail the 422 the caller gets now.
-      await publishPublicF3Write(correlationId, "recruitment_candidate_public_auth_routes__1", randomUUID(), {
-        tenantId, candidateId, challengeId: challenge.id,
-      });
-      throw new HttpError(422, "OTP_INVALID", result.reason ?? "invalid code");
+    if (outcome.kind === "invalid") {
+      throw new HttpError(422, "OTP_INVALID", outcome.reason ?? "invalid code");
     }
 
     // Async write: mark the challenge verified + set candidate.emailVerified.
@@ -212,7 +231,7 @@ export async function candidatePublicAuthRoutes(app: FastifyInstance): Promise<v
     // (Mirrors recruitment/otp-verify-routes.ts's identical `__2` case — see
     // that file's f3-consumer.ts cases for the established precedent.)
     await publishPublicF3Write(correlationId, "recruitment_candidate_public_auth_routes__2", randomUUID(), {
-      tenantId, candidateId, challengeId: challenge.id,
+      tenantId, candidateId, challengeId: outcome.challengeId,
     });
 
     const exp = Math.floor(Date.now() / 1000) + CAND_TOKEN_TTL;

@@ -10,7 +10,7 @@ const USER = "aaaaaaaa-7777-4000-8000-000000000003";
 const CID = "dddddddd-0003-4000-8000-00000000d003";
 
 const H = vi.hoisted(() => ({
-  findCandidate: vi.fn(), insertChallenge: vi.fn(), findLatestChallenge: vi.fn(),
+  findCandidate: vi.fn(), insertChallenge: vi.fn(), lockLatestChallenge: vi.fn(), findLatestChallenge: vi.fn(),
   incrementAttempts: vi.fn(), markVerified: vi.fn(), updateCandidate: vi.fn(),
 }));
 
@@ -32,9 +32,22 @@ vi.mock("../src/modules/recruitment/candidate-repo.js", async (io) => ({
 vi.mock("../src/modules/recruitment/otp-verify-repo.js", async (io) => ({
   ...(await io<Record<string, unknown>>()),
   insertChallenge: (...a: unknown[]) => H.insertChallenge(...a),
-  findLatestChallenge: (...a: unknown[]) => H.findLatestChallenge(...a),
+  // otp/verify now reads+locks the challenge (`SELECT ... FOR UPDATE`) and,
+  // on a wrong code, increments its attempt counter SYNCHRONOUSLY inside the
+  // SAME db.transaction — closing a race where concurrent verify requests
+  // against one challenge could each observe a stale pre-increment
+  // `attempts` count via the old separate async-increment path. The mocked
+  // db.transaction above just invokes its callback with stubTx, so this
+  // mock only needs to answer with the same shape findLatestChallenge used to.
+  lockLatestChallenge: (...a: unknown[]) => H.lockLatestChallenge(...a),
   incrementAttempts: (...a: unknown[]) => H.incrementAttempts(...a),
   markVerified: (...a: unknown[]) => H.markVerified(...a),
+  // Still used, unmodified, by f3-consumer.ts's `recruitment_otp_verify_routes__2`
+  // case (mark-verified bookkeeping) — that path is untouched by this fix.
+  // stubTx only implements `.insert`, so leaving this real (unmocked) would
+  // throw `tx.select is not a function` inside the async consumer and swallow
+  // markVerified entirely.
+  findLatestChallenge: (...a: unknown[]) => H.findLatestChallenge(...a),
 }));
 
 import { buildApp } from "../src/app.js";
@@ -69,8 +82,9 @@ beforeEach(() => {
   process.env.NODE_ENV = "test";
   H.findCandidate.mockResolvedValue({ id: CID, tenantId: TENANT, email: "c@x.in", status: "draft", emailVerified: false, version: 1 });
   H.insertChallenge.mockResolvedValue(undefined);
+  H.lockLatestChallenge.mockResolvedValue({ id: "ch-1", code: "123456", expiresAt: new Date(Date.now() + 60_000), attempts: 0, verified: false });
   H.findLatestChallenge.mockResolvedValue({ id: "ch-1", code: "123456", expiresAt: new Date(Date.now() + 60_000), attempts: 0, verified: false });
-  H.incrementAttempts.mockResolvedValue(undefined);
+  H.incrementAttempts.mockResolvedValue(1);
   H.markVerified.mockResolvedValue(undefined);
   H.updateCandidate.mockResolvedValue(undefined);
 });
@@ -106,6 +120,21 @@ describe("OTP verification (DEF-RC-003)", () => {
   it("rejects a wrong OTP (422)", async () => {
     const app = await buildApp();
     const r = await injectF3(app, { method: "POST", url: `/v1/hrms/candidates/${CID}/otp/verify`, headers: auth(), payload: { code: "000000" } });
+    expect(r.statusCode).toBe(422);
+    expect(r.json().code).toBe("OTP_INVALID");
+    expect(H.incrementAttempts).toHaveBeenCalledOnce();
+    await app.close();
+  });
+
+  it("rejects once the challenge has hit MAX_ATTEMPTS, without a fresh lookup race (422)", async () => {
+    // Same lockLatestChallenge + incrementAttempts single-transaction path as
+    // the wrong-OTP case above, just starting from an already-exhausted
+    // challenge — proves the route still honours verifyOtp's own
+    // max_attempts_exceeded gate now that the read+check+increment happens
+    // inside one locked transaction instead of a stale read + deferred write.
+    H.lockLatestChallenge.mockResolvedValue({ id: "ch-1", code: "123456", expiresAt: new Date(Date.now() + 60_000), attempts: 5, verified: false });
+    const app = await buildApp();
+    const r = await injectF3(app, { method: "POST", url: `/v1/hrms/candidates/${CID}/otp/verify`, headers: auth(), payload: { code: "123456" } });
     expect(r.statusCode).toBe(422);
     expect(r.json().code).toBe("OTP_INVALID");
     expect(H.incrementAttempts).toHaveBeenCalledOnce();
