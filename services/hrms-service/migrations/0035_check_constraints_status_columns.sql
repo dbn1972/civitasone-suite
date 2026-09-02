@@ -51,6 +51,28 @@ DO $$ BEGIN
     NOT VALID;
 EXCEPTION WHEN duplicate_object THEN NULL;
 END $$;
+-- NOTE (investigated post-hoc, see fix/hrms-employee-status-drift PR): the block
+-- above never took effect. Migration 0025 already created a constraint named
+-- hrms_employees_status_check with a DIFFERENT 8-value list (probation,
+-- confirmed, on_leave, suspended, deputation, retired, separated, terminated),
+-- so this ADD CONSTRAINT hit the EXCEPTION WHEN duplicate_object handler above
+-- and silently no-op'd -- 'resigned'/'deceased' were never enforced or usable.
+-- Investigation found zero references to employee status 'resigned' or
+-- 'deceased' anywhere in the app (routes, validators, apps/web, BRD/docs); the
+-- only string hits elsewhere are unrelated domains (meeting-service committee
+-- membership, animal-service registration, court-service case parties).
+-- Conversely, on_leave/deputation/separated (this block's omissions) are load-
+-- bearing: employee/status.ts's canonical EMPLOYEE_STATUSES + SERVING_STATUSES,
+-- dashboard/queries.ts, ai-predictions/routes.ts, workforce-planning/routes.ts,
+-- seniority/routes.ts, orgchart/queries.ts, reservation/routes.ts,
+-- scheduler/tick.ts, and employee/consumer.ts + lifecycle/consumer.ts (which
+-- WRITE status='separated') all depend on them, with dedicated contract tests
+-- (status.test.ts, employee-status-contract.test.ts, employee-validators.test.ts,
+-- status-contract.test.ts) asserting they are valid. Migration 0025's list --
+-- now with 'no_show' added by migration 0130 (PR #898/#902) -- is the
+-- authoritative, actually-enforced contract. Do not attempt to re-apply this
+-- block's list; it was superseded before it ever ran.
+-- ============================================================================
 
 -- ============================================================================
 -- employee.hrms_employees.employee_type
