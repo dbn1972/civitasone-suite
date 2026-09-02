@@ -42,6 +42,7 @@ import { schema as manpowerModule }     from "../modules/manpower-planning/schem
 import { schema as consultantInvoiceModule } from "../modules/consultant-invoice/schema.js";
 import { schema as contractorBillModule } from "../modules/contractor-bill/schema.js";
 import { schema as apprenticeStipendModule } from "../modules/apprentice-stipend/schema.js";
+import { schema as payrollConfigModule } from "../modules/payroll-config/schema.js";
 import { outboxSchema }                from "./outbox.js";
 
 const SCHEMA = {
@@ -82,6 +83,7 @@ const SCHEMA = {
   ...consultantInvoiceModule,
   ...contractorBillModule,
   ...apprenticeStipendModule,
+  ...payrollConfigModule,
   ...outboxSchema,
 };
 

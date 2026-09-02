@@ -135,3 +135,48 @@ export async function verifyEmployeeExists(tenantId: string, employeeId: string)
   const body = await res.json() as { exists: boolean };
   return body.exists;
 }
+
+export type PayrollSlipTemplate = {
+  templateHtml: string;
+  isDefault: boolean;
+  name?: string;
+  footerText?: string | null;
+};
+
+/**
+ * payroll.payroll_slip_templates physically lives in hrms-service's
+ * database (civitas_hrms), not payroll-service's own (civitas_payroll) —
+ * there is no dblink/postgres_fdw between the two, so payroll-service can
+ * never query that table directly (see payslip-pdf/routes.ts, which used to
+ * try). Fetches the tenant's active default template over hrms-service's
+ * internal API instead, same pattern as fetchPayrollInput/verifyEmployeeExists
+ * above.
+ *
+ * Returns `null` (not an error) when hrms-service is reachable but the
+ * tenant genuinely has no default template configured — that is a
+ * legitimate "not configured" state the caller should treat as "use the
+ * built-in default", not a degraded-service condition. Only network/
+ * timeout/non-2xx-non-404 failures throw HrmsUnavailableError, mirroring
+ * the fail-closed-on-unreachability contract of the other functions here
+ * (the caller decides whether "unreachable" also falls back to the default
+ * template — see payslip-pdf/routes.ts).
+ */
+export async function fetchDefaultSlipTemplate(tenantId: string): Promise<PayrollSlipTemplate | null> {
+  const url = `${HRMS_URL}/v1/hrms/internal/payroll/slip-templates/default`;
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      headers: {
+        "x-internal": "1",
+        "x-service-secret": process.env.INTERNAL_SERVICE_SECRET ?? "",
+        "x-tenant-id": tenantId,
+      },
+      signal: AbortSignal.timeout(5000),
+    });
+  } catch (err) {
+    throw new HrmsUnavailableError(`hrms slip-template fetch unreachable: ${(err as Error).message}`);
+  }
+  if (res.status === 404) return null;
+  if (!res.ok) throw new HrmsUnavailableError(`hrms slip-template fetch failed: ${res.status}`);
+  return res.json() as Promise<PayrollSlipTemplate>;
+}

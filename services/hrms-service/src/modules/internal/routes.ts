@@ -153,4 +153,44 @@ export async function internalRoutes(app: FastifyInstance): Promise<void> {
     const emp = await employeeRepo.findById(id, ctx.tenantId);
     return reply.send({ exists: emp !== null });
   });
+
+  // payroll-service cross-database gap fix: payroll.payroll_slip_templates
+  // physically lives in this service's database (civitas_hrms — created by
+  // migrations/0008_recruitment_payroll_gaps.sql) but payroll-service
+  // connects to a separate civitas_payroll database with no dblink/
+  // postgres_fdw link between them, so it can never query this table
+  // directly. Serves the tenant's active default template over the internal
+  // API instead, mirroring payroll-input/employee-summaries above. Returns
+  // 404 when the tenant has no default template configured — a legitimate
+  // "not configured" state, distinct from HRMS being unreachable, so the
+  // caller (hrms-client.ts's fetchDefaultSlipTemplate) can tell the two
+  // apart and only treat unreachability as a fall-back-worthy failure.
+  app.get("/v1/hrms/internal/payroll/slip-templates/default", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, INTERNAL_ROLES);
+    const { scopedRead } = await import("../../shared/db.js");
+    const { payrollSlipTemplates } = await import("../payroll-config/schema.js");
+    const { eq, and, desc } = await import("drizzle-orm");
+    const rows = await scopedRead((tx) =>
+      tx.select({
+        id: payrollSlipTemplates.id,
+        name: payrollSlipTemplates.name,
+        templateHtml: payrollSlipTemplates.templateHtml,
+        isDefault: payrollSlipTemplates.isDefault,
+        footerText: payrollSlipTemplates.footerText,
+      })
+        .from(payrollSlipTemplates)
+        .where(and(
+          eq(payrollSlipTemplates.tenantId, ctx.tenantId),
+          eq(payrollSlipTemplates.isDefault, true),
+        ))
+        .orderBy(desc(payrollSlipTemplates.createdAt))
+        .limit(1),
+    );
+    const tpl = rows[0];
+    if (!tpl) {
+      return reply.code(404).send({ code: "NOT_FOUND", message: "no default payslip template configured for tenant" });
+    }
+    return reply.send(tpl);
+  });
 }
