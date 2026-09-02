@@ -2,9 +2,9 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { resolveContext, requireRole, HttpError, enforceEmployeeOwnership } from "../../shared/context.js";
 import { eq, and } from "drizzle-orm";
-import { db, scopedRead } from "../../shared/db.js";
+import { scopedRead } from "../../shared/db.js";
 import { payrollSlips, payrollRuns } from "../payroll/schema.js";
-import { fetchPayrollInput, fetchEmployeeSummaries, HrmsUnavailableError } from "../../shared/hrms-client.js";
+import { fetchPayrollInput, fetchEmployeeSummaries, fetchDefaultSlipTemplate, HrmsUnavailableError } from "../../shared/hrms-client.js";
 
 const READER_ROLES = ["payroll_admin", "payroll_officer", "super_admin", "hr_admin", "finance_officer", "employee"];
 
@@ -100,32 +100,28 @@ export async function payslipPdfRoutes(app: FastifyInstance): Promise<void> {
       .limit(1));
     const run = runRows[0];
 
-    // Try to load custom template from payroll.payroll_slip_templates
+    // Load the tenant's custom template from hrms-service, which owns
+    // payroll.payroll_slip_templates (it physically lives in hrms-service's
+    // own database, civitas_hrms — payroll-service has no DB-level access
+    // to it; see hrms-client.ts's fetchDefaultSlipTemplate for why). Falls
+    // back to DEFAULT_TEMPLATE both when the tenant has no template
+    // configured (fetchDefaultSlipTemplate resolves null) and when
+    // hrms-service is genuinely unreachable (HrmsUnavailableError) — a
+    // missing payslip template should never block PDF generation.
     let template = DEFAULT_TEMPLATE;
     try {
-      const { sqlClient } = await import("../../shared/db.js");
-      // NOTE: payroll.payroll_slip_templates is created by hrms-service's
-      // migration (services/hrms-service/migrations/0008_recruitment_payroll_gaps.sql)
-      // and physically lives in the civitas_hrms database. payroll-service's
-      // own DATABASE_URL points at civitas_payroll (a SEPARATE Postgres
-      // database, no dblink/postgres_fdw configured between them), so this
-      // query can only ever succeed if payroll_slip_templates also exists in
-      // payroll-service's own database. See PR description for the
-      // cross-database architecture gap — this fixes the column mismatch
-      // (real columns: template_html, is_default, created_at — there is no
-      // `body` or `status` column) but does not by itself resolve that
-      // deeper reachability issue.
-      const tplRows = await sqlClient`
-        SELECT template_html FROM payroll.payroll_slip_templates
-        WHERE tenant_id = ${ctx.tenantId} AND is_default = true
-        ORDER BY created_at DESC LIMIT 1
-      `;
-      const first = tplRows[0] as { template_html?: string } | undefined;
-      if (first?.template_html) {
-        template = first.template_html;
+      const tpl = await fetchDefaultSlipTemplate(ctx.tenantId);
+      if (tpl?.templateHtml) {
+        template = tpl.templateHtml;
       }
-    } catch {
-      // Table may not exist yet — use default template
+    } catch (err) {
+      if (err instanceof HrmsUnavailableError) {
+        req.log.warn({ err: err.message, tenantId: ctx.tenantId },
+          "payslip-pdf: HRMS unavailable — using default payslip template");
+      } else {
+        req.log.warn({ err, tenantId: ctx.tenantId },
+          "payslip-pdf: unexpected error fetching payslip template — using default");
+      }
     }
 
     // Hydrate employee identity fields from HRMS.
