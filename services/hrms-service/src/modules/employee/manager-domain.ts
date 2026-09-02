@@ -48,9 +48,9 @@ export function validateManagerAssignment(
   graph: ManagerGraph,
   employeeId: string,
   managers: {
-    managerId?: string | null;
-    functionalManagerId?: string | null;
-    projectManagerId?: string | null;
+    managerId?: string | null | undefined;
+    functionalManagerId?: string | null | undefined;
+    projectManagerId?: string | null | undefined;
   },
 ): { field: string; managerId: string } | null {
   for (const [field, mgr] of Object.entries(managers)) {
