@@ -25,10 +25,28 @@
  * re-running it (including against a dev DB already seeded by
  * scripts/dev/seed-all.mjs) reproduces the exact same rows.
  *
+ * PARALLEL-SUITE SAFETY: Vitest (and CI's `pnpm turbo test`) runs test
+ * files in separate worker processes by default, and 3 files
+ * (hr-ecosystem-e2e, geo-attendance-e2e, leave-world-class) each call this
+ * from their own beforeAll. `seededOnce` below only memoizes within a
+ * single worker, so on a genuinely fresh DB all 3 workers can race straight
+ * into the DELETE-then-INSERT block concurrently. Concurrent callers can
+ * each pass the DELETE (nothing to see yet) and then collide on the
+ * fixed-id INSERTs before any of them has committed, which surfaces as a
+ * `duplicate key value violates unique constraint
+ * hrms_departments_tenant_id_code_key` even though every writer targets the
+ * same fixed ids — the ON CONFLICT (id) target can't save a row that
+ * conflicts on a *different* unique index while its conflicting sibling
+ * transaction is still in flight and uncommitted. A session-level
+ * `pg_advisory_lock` around the whole seed serializes concurrent callers
+ * (they queue instead of racing); the redundant re-run this causes for the
+ * 2nd/3rd caller is harmless since every statement is idempotent by design
+ * (see above).
+ *
  * DELIBERATELY DOES NOT TOUCH leave.hrms_leave_types, unlike
- * scripts/dev/seed-all.mjs's hrms block. That script unconditionally
- * deletes and re-inserts the CL/EL rows by fixed id (eeeeeeee-...-007 /
- * ...-008) to get predictable ids for its own leave_allocs — but
+ * scripts/dev/seed-all.mjs. That script unconditionally deletes and
+ * re-inserts the CL/EL rows by fixed id (eeeeeeee-...-007 / ...-008) to get
+ * predictable ids for its own leave_allocs — but
  * migrations/0005_configurable_leave_policies.sql already creates CL and EL
  * with exactly those same fixed ids (CL first, so CL=...-007, EL=...-008 on
  * a fresh cluster) AND seeds leave.hrms_leave_policy_rules rows keyed to
@@ -54,7 +72,15 @@ const DATABASE_URL =
   "postgres://hrms_svc:hrms_dev_pw@localhost:5435/civitas_hrms";
 
 const T = "00000000-0000-0000-0000-000000000001"; // tenant_id (demo-tenant)
-const A = "00000000-0000-0000-0000-000000000099"; // actor
+const A = "00000000-0000-0000-0000-000000000099"; // actor (admin/system — also the
+  // default JWT `sub` minted by the e2e suites' own `mint()` helpers, so it
+  // must NOT be used as `created_by` on any row a test later tries to
+  // approve/act-on as that same actor — see EMP1/EMP2 below for the leave
+  // applications specifically.)
+
+// Fixed advisory-lock key for this fixture's seed critical section. Only
+// meaningful as "some app-wide-unique bigint" — value itself is arbitrary.
+const SEED_LOCK_KEY = 918273645;
 
 let seededOnce: Promise<void> | undefined;
 
@@ -67,13 +93,21 @@ export function seedHrmsCoreFixtures(): Promise<void> {
 async function doSeed(): Promise<void> {
   const sql = postgres(DATABASE_URL, { max: 1 });
   try {
-    // Every hrms-service table this fixture writes to has FORCE ROW LEVEL
-    // SECURITY (migrations 0026/0034), so even hrms_svc — which owns these
-    // tables — cannot write without app.tenant_id set for the session. Set
-    // it once; `max: 1` keeps every statement below on this one connection.
-    await sql.unsafe(`select set_config('app.tenant_id', '${T}', false)`);
+    // Serialize concurrent callers (separate Vitest worker processes each
+    // running their own doSeed()) so they queue instead of racing on the
+    // DELETE-then-INSERT block below. Session-level (not xact-level)
+    // because `max: 1` keeps this whole function on one dedicated
+    // connection/session throughout — released explicitly in `finally`,
+    // and automatically by Postgres if the process dies mid-seed anyway.
+    await sql.unsafe(`select pg_advisory_lock(${SEED_LOCK_KEY})`);
+    try {
+      // Every hrms-service table this fixture writes to has FORCE ROW LEVEL
+      // SECURITY (migrations 0026/0034), so even hrms_svc — which owns these
+      // tables — cannot write without app.tenant_id set for the session. Set
+      // it once; `max: 1` keeps every statement below on this one connection.
+      await sql.unsafe(`select set_config('app.tenant_id', '${T}', false)`);
 
-    await sql.unsafe(`
+      await sql.unsafe(`
 DELETE FROM employee.hrms_departments WHERE tenant_id = '${T}' AND code IN ('FIN', 'PWD');
 DELETE FROM employee.hrms_designations WHERE tenant_id = '${T}' AND code IN ('IAS', 'STO');
 
@@ -106,10 +140,21 @@ VALUES
   ('eeeeeeee-0001-0000-0000-000000000010', '${T}', 'eeeeeeee-0001-0000-0000-000000000006', 'eeeeeeee-0001-0000-0000-000000000008', '2024-25', 15, 13, now(), now(), '${A}', '${A}', 1)
 ON CONFLICT (id) DO NOTHING;
 
+-- created_by/updated_by on these two are the *applicant* employee, not the
+-- generic admin/system actor A. A is exactly the default JWT sub the e2e
+-- suites' mint() helpers use, so seeding these as A made every seeded leave
+-- application self-authored by whichever actor a test later approves as —
+-- e.g. geo-attendance-e2e.test.ts "F3. RO approves leave" minted an
+-- approver with sub=A, fetched this fixture's pending application (row
+-- ...012, created_by=A), and hit routes.ts's SELF_APPROVAL_FORBIDDEN guard
+-- (leaveApp.createdBy === ctx.actorId) as a false 403 — not a genuine
+-- segregation-of-duties case. Using the applicant's own employee id here
+-- reflects reality (an employee applies for their own leave) and keeps the
+-- approver (a different actor) able to actually approve it.
 INSERT INTO leave.hrms_leave_apps (id, tenant_id, employee_id, leave_type_id, alloc_id, from_date, to_date, days_applied, reason, status, created_at, updated_at, created_by, updated_by, version)
 VALUES
-  ('eeeeeeee-0001-0000-0000-000000000011', '${T}', 'eeeeeeee-0001-0000-0000-000000000005', 'eeeeeeee-0001-0000-0000-000000000007', 'eeeeeeee-0001-0000-0000-000000000009', '2024-12-23', '2024-12-27', 5, 'Annual leave',  'approved', now(), now(), '${A}', '${A}', 1),
-  ('eeeeeeee-0001-0000-0000-000000000012', '${T}', 'eeeeeeee-0001-0000-0000-000000000006', 'eeeeeeee-0001-0000-0000-000000000008', 'eeeeeeee-0001-0000-0000-000000000010', '2024-12-30', '2024-12-31', 2, 'Personal work', 'pending',  now(), now(), '${A}', '${A}', 1)
+  ('eeeeeeee-0001-0000-0000-000000000011', '${T}', 'eeeeeeee-0001-0000-0000-000000000005', 'eeeeeeee-0001-0000-0000-000000000007', 'eeeeeeee-0001-0000-0000-000000000009', '2024-12-23', '2024-12-27', 5, 'Annual leave',  'approved', now(), now(), 'eeeeeeee-0001-0000-0000-000000000005', 'eeeeeeee-0001-0000-0000-000000000005', 1),
+  ('eeeeeeee-0001-0000-0000-000000000012', '${T}', 'eeeeeeee-0001-0000-0000-000000000006', 'eeeeeeee-0001-0000-0000-000000000008', 'eeeeeeee-0001-0000-0000-000000000010', '2024-12-30', '2024-12-31', 2, 'Personal work', 'pending',  now(), now(), 'eeeeeeee-0001-0000-0000-000000000006', 'eeeeeeee-0001-0000-0000-000000000006', 1)
 ON CONFLICT (id) DO NOTHING;
 
 INSERT INTO attendance.hrms_shifts (id, tenant_id, name, start_time, end_time, created_at, updated_at, created_by, updated_by, version)
@@ -152,6 +197,9 @@ VALUES
   ('eeeeeeee-0001-0000-0000-000000000024', '${T}', 'Digital Governance Workshop',   'Conference Room B', '2024-12-10', '2024-12-11', 'NIC Delhi',                  25, 'planned', now(), now(), '${A}', '${A}', 1)
 ON CONFLICT (id) DO NOTHING;
 `);
+    } finally {
+      await sql.unsafe(`select pg_advisory_unlock(${SEED_LOCK_KEY})`);
+    }
   } finally {
     await sql.end({ timeout: 5 });
   }
