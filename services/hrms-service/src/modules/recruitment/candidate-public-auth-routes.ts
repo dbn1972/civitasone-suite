@@ -17,10 +17,36 @@ import { randomUUID, randomBytes, createHmac, timingSafeEqual } from "node:crypt
 import type { FastifyInstance } from "fastify";
 import { z, ZodError } from "zod";
 import { eq, and } from "drizzle-orm";
+import { runWithTenant } from "@civitasone/db";
 import { HttpError } from "../../shared/context.js";
-import { db, scopedRead } from "../../shared/db.js";
+import { scopedRead } from "../../shared/db.js";
+import { queue } from "../../shared/infra.js";
+import { COMMANDS } from "../../topics.js";
 import { hrmsCandidates, hrmsCandidateOtpChallenges } from "./candidate-schema.js";
 import { generateOtp, verifyOtp, OTP_TTL_SECONDS, MAX_ATTEMPTS } from "./otp-verify.js";
+
+/**
+ * PRE-EXISTING bug fixed in passing (found while adding the F3 verification
+ * smoke test for this file, not part of the sync-write conversion itself):
+ * these routes are `config: { public: true }` — no authenticated session, so
+ * app.ts's tenant-context hooks (which read `req.ctx.tenantId`, populated by
+ * authPlugin) never run and `scopedRead()`'s ambient app.tenant_id GUC stays
+ * unset. Against candidate.hrms_candidates / hrms_candidate_otp_challenges
+ * (FORCE ROW LEVEL SECURITY, policy `tenant_id = current_setting('app.tenant_id',
+ * true)::uuid`), that made EVERY scopedRead() call in this file throw
+ * `invalid input syntax for type uuid: ""` as soon as the table held any row
+ * at all (empty-table scans never evaluate the RLS predicate, so this was
+ * invisible until a second candidate/request hit it) — i.e. the entire
+ * careers-portal OTP login was broken against a real RLS-enforcing Postgres
+ * from the second candidate onward, in both the old synchronous code and the
+ * new async one. Fixed by explicitly establishing the ambient tenant context
+ * from the request's OWN `tenantId` (there is no session to source it from —
+ * same reasoning as `publishPublicF3Write` below and `commands.ts`'s
+ * `createPublicApplication`), via this helper.
+ */
+async function scopedReadForTenant<T>(tenantId: string, fn: Parameters<typeof scopedRead<T>>[0]): Promise<T> {
+  return runWithTenant(tenantId, () => scopedRead(fn));
+}
 
 const SYSTEM_ACTOR = "00000000-0000-0000-0000-000000000000";
 const CAND_TOKEN_TTL = 7 * 24 * 60 * 60; // 7 days in seconds
@@ -55,6 +81,29 @@ function normalizeEmail(email: string): string {
   return email.trim().toLowerCase();
 }
 
+/**
+ * These routes are public (`config: { public: true }`) — there is no
+ * `resolveContext(req)`/`RequestContext` to hand `publishF3Write`, the same
+ * way `recruitment/commands.ts`'s `createPublicApplication` bypasses it for
+ * the (also unauthenticated) public job-application submission. Mirror that
+ * precedent: publish the `f3RouteWrite` envelope directly with the SYSTEM
+ * actor, using the request's correlation header (falling back to the
+ * Fastify request id) as `correlationId`.
+ */
+async function publishPublicF3Write(
+  correlationId: string, op: string, id: string, payload: Record<string, unknown>,
+): Promise<void> {
+  await queue.publish(COMMANDS.f3RouteWrite, {
+    messageId: randomUUID(),
+    type: COMMANDS.f3RouteWrite,
+    tenantId: payload.tenantId as string,
+    actorId: SYSTEM_ACTOR,
+    correlationId,
+    schemaVersion: "1.0",
+    payload: { op, id, ...payload },
+  });
+}
+
 export async function candidatePublicAuthRoutes(app: FastifyInstance): Promise<void> {
   // POST /v1/careers/auth/otp-request
   // Accepts { email, tenantId }. Finds or creates the candidate, issues a 6-digit OTP.
@@ -70,49 +119,39 @@ export async function candidatePublicAuthRoutes(app: FastifyInstance): Promise<v
     const tenantId = body.tenantId;
 
     // Find or create candidate by normalized email.
-    const existing = await scopedRead((tx) =>
+    const existing = await scopedReadForTenant(tenantId, (tx) =>
       tx.select({ id: hrmsCandidates.id, fullName: hrmsCandidates.fullName })
         .from(hrmsCandidates)
         .where(and(eq(hrmsCandidates.tenantId, tenantId), eq(hrmsCandidates.normalizedEmail, email)))
         .limit(1)
     );
 
-    let candidateId: string;
-    if (existing.length > 0) {
-      candidateId = existing[0]!.id;
-    } else {
-      candidateId = randomUUID();
-      await scopedRead((tx) =>
-        tx.insert(hrmsCandidates).values({
-          id: candidateId, tenantId,
-          email, normalizedEmail: email,
-          status: "draft",
-          createdBy: SYSTEM_ACTOR, updatedBy: SYSTEM_ACTOR,
-        })
-      );
-    }
+    const isNewCandidate = existing.length === 0;
+    const candidateId = isNewCandidate ? randomUUID() : existing[0]!.id;
 
     const code = generateOtp(randomBytes);
     const expiresAt = new Date(Date.now() + OTP_TTL_SECONDS * 1000);
     const challengeId = randomUUID();
 
-    await scopedRead((tx) =>
-      tx.insert(hrmsCandidateOtpChallenges).values({
-        id: challengeId, tenantId, candidateId,
-        channel: "email", code, expiresAt, attempts: 0, verified: false,
-      })
-    );
+    // Async write: create-candidate-if-new + insert the OTP challenge. The
+    // code/expiry are generated here (synchronously, so they can be echoed
+    // in dev mode below) and forwarded on the payload — the consumer must
+    // persist the SAME code that was (or will be) delivered, not a new one.
+    const correlationId = (req.headers["x-correlation-id"] as string) ?? req.id;
+    await publishPublicF3Write(correlationId, "recruitment_candidate_public_auth_routes__0", challengeId, {
+      tenantId, candidateId, isNewCandidate, email, code, expiresAt: expiresAt.toISOString(),
+    });
 
     // NOTE: In production, publish a notification event here to email the code.
     // For now, we echo it in non-production environments only.
     const isDev = process.env.NODE_ENV !== "production";
-    return reply.code(200).send({
+    return reply.code(202).send({
       challengeId,
       candidateId,
       channel: "email",
       expiresIn: OTP_TTL_SECONDS,
       ...(isDev ? { devCode: code } : {}),
-    });
+    }) as any;
   });
 
   // POST /v1/careers/auth/otp-verify
@@ -128,7 +167,7 @@ export async function candidatePublicAuthRoutes(app: FastifyInstance): Promise<v
     const email = normalizeEmail(body.email);
     const tenantId = body.tenantId;
 
-    const candidates = await scopedRead((tx) =>
+    const candidates = await scopedReadForTenant(tenantId, (tx) =>
       tx.select({ id: hrmsCandidates.id, fullName: hrmsCandidates.fullName })
         .from(hrmsCandidates)
         .where(and(eq(hrmsCandidates.tenantId, tenantId), eq(hrmsCandidates.normalizedEmail, email)))
@@ -137,7 +176,7 @@ export async function candidatePublicAuthRoutes(app: FastifyInstance): Promise<v
     if (candidates.length === 0) throw new HttpError(404, "NOT_FOUND", "no account found for this email");
     const { id: candidateId, fullName } = candidates[0]!;
 
-    const challenges = await scopedRead((tx) =>
+    const challenges = await scopedReadForTenant(tenantId, (tx) =>
       tx.select()
         .from(hrmsCandidateOtpChallenges)
         .where(and(
@@ -153,22 +192,27 @@ export async function candidatePublicAuthRoutes(app: FastifyInstance): Promise<v
 
     if (challenge.attempts >= MAX_ATTEMPTS) throw new HttpError(429, "MAX_ATTEMPTS", "too many incorrect attempts; request a new OTP");
 
+    const correlationId = (req.headers["x-correlation-id"] as string) ?? req.id;
     const result = verifyOtp(challenge, body.code, Date.now());
     if (!result.valid) {
-      await db.transaction(async (tx) => {
-        await tx.update(hrmsCandidateOtpChallenges)
-          .set({ attempts: challenge.attempts + 1 })
-          .where(eq(hrmsCandidateOtpChallenges.id, challenge.id));
+      // Async write: increment the attempt counter. The route has already
+      // decided synchronously (via `challenge` read above) that this attempt
+      // is rejected — the write is bookkeeping for the NEXT attempt's
+      // MAX_ATTEMPTS check, so it can safely trail the 422 the caller gets now.
+      await publishPublicF3Write(correlationId, "recruitment_candidate_public_auth_routes__1", randomUUID(), {
+        tenantId, candidateId, challengeId: challenge.id,
       });
       throw new HttpError(422, "OTP_INVALID", result.reason ?? "invalid code");
     }
 
-    // Mark verified, update emailVerified flag on candidate.
-    await db.transaction(async (tx) => {
-      await tx.update(hrmsCandidateOtpChallenges).set({ verified: true })
-        .where(eq(hrmsCandidateOtpChallenges.id, challenge.id));
-      await tx.update(hrmsCandidates).set({ emailVerified: true, updatedAt: new Date() })
-        .where(eq(hrmsCandidates.id, candidateId));
+    // Async write: mark the challenge verified + set candidate.emailVerified.
+    // The token below is computed independently (HMAC over candidateId/tenantId/
+    // email/exp — no DB read), so the caller gets a fully valid, usable token
+    // immediately; only the audit/replay-guard bookkeeping write is deferred.
+    // (Mirrors recruitment/otp-verify-routes.ts's identical `__2` case — see
+    // that file's f3-consumer.ts cases for the established precedent.)
+    await publishPublicF3Write(correlationId, "recruitment_candidate_public_auth_routes__2", randomUUID(), {
+      tenantId, candidateId, challengeId: challenge.id,
     });
 
     const exp = Math.floor(Date.now() / 1000) + CAND_TOKEN_TTL;

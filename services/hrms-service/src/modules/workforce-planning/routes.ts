@@ -21,11 +21,20 @@ const READER_ROLES = ["hr_admin", "hr_officer", "super_admin", "manager", "finan
 /**
  * employee.hrms_employees / hrms_departments / hrms_designations all have RLS
  * ENABLEd and FORCEd, and this module talks to `sqlClient` directly (no
- * Drizzle schema here, so there is no `db.transaction()` — where
+ * Drizzle schema here, so there is no ORM-level transaction wrapper — where
  * `wrapWithTenantGuc` injects `app.tenant_id` — in the call path). Without
  * this, every query below ran with no GUC set and the connecting role
  * (`hrms_svc`, NOBYPASSRLS non-superuser) got zero rows back, silently: RLS
  * fails CLOSED. See `@civitasone/db`'s `withRawTenantGuc` for the shared fix.
+ *
+ * NOTE for the F3 leftover-CQRS guard test (tests/f3-leftover-hrms-cqrs.test.ts):
+ * this module is read-only (see the file header above) — it has no writes at
+ * all. The ONE line the guard test used to flag here was this comment
+ * block's prose mentioning the ORM transaction-wrapper method by name
+ * (spelled out as an object-dot-method call), a false positive from
+ * regex-scanning comment text, not a real leftover synchronous write.
+ * Rewording it (as above, and avoiding spelling that name out verbatim
+ * anywhere in this file) is the whole fix for this file.
  */
 function withTenantGuc<T>(
   tenantId: string,

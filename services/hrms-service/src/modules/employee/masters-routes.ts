@@ -2,11 +2,13 @@
  * Department + Designation master CRUD — needed for first-time tenant setup
  * so employees can be properly classified.
  */
+import { randomUUID } from "node:crypto";
 import type { FastifyInstance } from "fastify";
 import { z, ZodError } from "zod";
 import { eq } from "drizzle-orm";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { db, scopedRead } from "../../shared/db.js";
+import { scopedRead } from "../../shared/db.js";
+import { publishF3Write } from "../../shared/f3-publish.js";
 import { hrmsDepartments, hrmsDesignations } from "./schema.js";
 
 const HR_READ_ROLES = [
@@ -65,43 +67,39 @@ export async function mastersRoutes(app: FastifyInstance): Promise<void> {
         });
       }
     }
-    const [deptRow] = await scopedRead((tx) => tx.insert(hrmsDepartments).values({
-      tenantId: ctx.tenantId, code: body.code, name: body.name,
-      parentId: body.parentId ?? null, type: body.type ?? null, level: body.level ?? null,
-      govtTier: body.govtTier ?? null, locationId: body.locationId ?? null, headEmployeeId: body.headEmployeeId ?? null,
-      createdBy: ctx.actorId, updatedBy: ctx.actorId,
-    }).returning({ id: hrmsDepartments.id }));
-    const id = deptRow!.id;
-    return reply.code(201).send({ id, status: "created" }) as any;
+    const id = randomUUID();
+    await publishF3Write(ctx, "employee_masters_routes__0", id, { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> });
+    return reply.code(202).send({ id, status: "created" }) as any;
   });
   app.patch("/v1/hrms/departments/:id", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, HR_ROLES);
     const { id } = req.params as { id: string };
-    const body = createDeptBody.partial().parse(req.body);
-    const patch = Object.fromEntries(Object.entries(body).filter(([, v]) => v !== undefined));
-    const [updated] = await scopedRead((tx) =>
-      tx.update(hrmsDepartments)
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        .set({ ...patch, updatedBy: ctx.actorId } as any)
-        .where(eq(hrmsDepartments.id, id))
-        .returning({ id: hrmsDepartments.id })
-    );
-    if (!updated) return reply.code(404).send({ code: "NOT_FOUND", message: "Department not found" });
-    return reply.send({ id, status: "updated" });
+    createDeptBody.partial().parse(req.body);
+
+    // Synchronous pre-check (existence): the old conditional UPDATE WHERE id
+    // 404'd when no row matched. Mirror that here — note (unchanged from the
+    // original) this lookup is NOT tenant-scoped, matching the pre-existing
+    // behaviour of the code being converted; not something this F3 fix set
+    // out to change.
+    const existing = await scopedRead((tx) => tx.select({ id: hrmsDepartments.id }).from(hrmsDepartments).where(eq(hrmsDepartments.id, id)).limit(1));
+    if (!existing[0]) return reply.code(404).send({ code: "NOT_FOUND", message: "Department not found" });
+
+    await publishF3Write(ctx, "employee_masters_routes__2", id, { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> });
+    return reply.code(202).send({ id, status: "updated" }) as any;
   });
 
   app.delete("/v1/hrms/departments/:id", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, HR_ROLES);
     const { id } = req.params as { id: string };
-    const [deleted] = await scopedRead((tx) =>
-      tx.delete(hrmsDepartments)
-        .where(eq(hrmsDepartments.id, id))
-        .returning({ id: hrmsDepartments.id })
-    );
-    if (!deleted) return reply.code(404).send({ code: "NOT_FOUND", message: "Department not found" });
-    return reply.code(204).send();
+
+    // Synchronous pre-check (existence) — same reasoning as PATCH above.
+    const existing = await scopedRead((tx) => tx.select({ id: hrmsDepartments.id }).from(hrmsDepartments).where(eq(hrmsDepartments.id, id)).limit(1));
+    if (!existing[0]) return reply.code(404).send({ code: "NOT_FOUND", message: "Department not found" });
+
+    await publishF3Write(ctx, "employee_masters_routes__3", id, { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> });
+    return reply.code(202).send();
   });
 
 
@@ -117,42 +115,36 @@ export async function mastersRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, HR_ROLES);
     const body = createDesignationBody.parse(req.body);
-    const [desigRow] = await scopedRead((tx) => tx.insert(hrmsDesignations).values({
-      tenantId: ctx.tenantId, code: body.code, name: body.name,
-      level: body.level ?? 0, payGrade: body.payGrade ?? null,
-      createdBy: ctx.actorId, updatedBy: ctx.actorId,
-    }).returning({ id: hrmsDesignations.id }));
-    const id = desigRow!.id;
-    return reply.code(201).send({ id, status: "created" }) as any;
+    const id = randomUUID();
+    await publishF3Write(ctx, "employee_masters_routes__1", id, { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> });
+    return reply.code(202).send({ id, status: "created" }) as any;
   });
   app.patch("/v1/hrms/designations/:id", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, HR_ROLES);
     const { id } = req.params as { id: string };
-    const body = createDesignationBody.partial().parse(req.body);
-    const patch = Object.fromEntries(Object.entries(body).filter(([, v]) => v !== undefined));
-    const [updated] = await scopedRead((tx) =>
-      tx.update(hrmsDesignations)
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        .set({ ...patch, updatedBy: ctx.actorId } as any)
-        .where(eq(hrmsDesignations.id, id))
-        .returning({ id: hrmsDesignations.id })
-    );
-    if (!updated) return reply.code(404).send({ code: "NOT_FOUND", message: "Designation not found" });
-    return reply.send({ id, status: "updated" });
+    createDesignationBody.partial().parse(req.body);
+
+    // Synchronous pre-check (existence) — same reasoning as departments PATCH
+    // above (also not tenant-scoped in the original code being converted).
+    const existing = await scopedRead((tx) => tx.select({ id: hrmsDesignations.id }).from(hrmsDesignations).where(eq(hrmsDesignations.id, id)).limit(1));
+    if (!existing[0]) return reply.code(404).send({ code: "NOT_FOUND", message: "Designation not found" });
+
+    await publishF3Write(ctx, "employee_masters_routes__4", id, { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> });
+    return reply.code(202).send({ id, status: "updated" }) as any;
   });
 
   app.delete("/v1/hrms/designations/:id", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, HR_ROLES);
     const { id } = req.params as { id: string };
-    const [deleted] = await scopedRead((tx) =>
-      tx.delete(hrmsDesignations)
-        .where(eq(hrmsDesignations.id, id))
-        .returning({ id: hrmsDesignations.id })
-    );
-    if (!deleted) return reply.code(404).send({ code: "NOT_FOUND", message: "Designation not found" });
-    return reply.code(204).send();
+
+    // Synchronous pre-check (existence) — same reasoning as above.
+    const existing = await scopedRead((tx) => tx.select({ id: hrmsDesignations.id }).from(hrmsDesignations).where(eq(hrmsDesignations.id, id)).limit(1));
+    if (!existing[0]) return reply.code(404).send({ code: "NOT_FOUND", message: "Designation not found" });
+
+    await publishF3Write(ctx, "employee_masters_routes__5", id, { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> });
+    return reply.code(202).send();
   });
 
 

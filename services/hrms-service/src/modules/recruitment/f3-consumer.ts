@@ -178,6 +178,9 @@ export function registerF3_recruitment_Consumers(queue: Queue): void {
       "recruitment_blueprint_routes__5",
       "recruitment_blueprint_routes__6",
       "recruitment_blueprint_routes__7",
+      "recruitment_candidate_public_auth_routes__0",
+      "recruitment_candidate_public_auth_routes__1",
+      "recruitment_candidate_public_auth_routes__2",
       "recruitment_candidate_routes__0",
       "recruitment_candidate_routes__1",
       "recruitment_candidate_routes__2",
@@ -531,6 +534,51 @@ export function registerF3_recruitment_Consumers(queue: Queue): void {
             if (!q) throw new HttpError(404, "NOT_FOUND", "question not found");
             await blueprintRepo.updateQuestion(tx, p.tenantId, id, { status: "retired", updatedBy: msg.actorId } as never, q.version);
                   await blueprintRepo.insertEvent(tx, { tenantId: p.tenantId, entityType: "question", entityId: id, action: "retire", detail: { reason: body.reason ?? null }, actorId: msg.actorId });
+            break;
+          }
+          case "recruitment_candidate_public_auth_routes__0": {
+            // Restored: the public careers-portal OTP request. Unlike the HR
+            // `recruitment_otp_verify_routes__0` case (single existing
+            // candidate, id from the route path), this route ALSO creates the
+            // candidate row on first login (`isNewCandidate`), so both writes
+            // are restored here together, exactly as routes.ts did them
+            // sequentially before F3.
+            const candidateId = p.candidateId as string;
+            if (p.isNewCandidate) {
+              await candidateRepo.insertCandidate(tx, {
+                    id: candidateId, tenantId: p.tenantId, email: p.email, normalizedEmail: p.email,
+                    status: "draft", createdBy: msg.actorId, updatedBy: msg.actorId,
+                  } as never);
+            }
+            const code = p.code as string | undefined;
+            if (!code) throw new HttpError(422, "MISSING_OTP", "the generated OTP code is missing from the payload");
+            const expiresAt = p.expiresAt ? new Date(p.expiresAt as string) : new Date(Date.now() + OTP_TTL_SECONDS * 1000);
+            await otpRepo.insertChallenge(tx, {
+                  id, tenantId: p.tenantId, candidateId, channel: "email", code, expiresAt,
+                });
+            break;
+          }
+          case "recruitment_candidate_public_auth_routes__1": {
+            // Restored: increment the OTP challenge's attempt counter after a
+            // failed careers-portal login. The route already rejected the
+            // request with 422 synchronously (see candidate-public-auth-routes.ts);
+            // this is the same bookkeeping write `otpRepo.incrementAttempts`
+            // performs for the HR flow's `recruitment_otp_verify_routes__1`.
+            const challengeId = p.challengeId as string;
+            if (!challengeId) return;
+            await otpRepo.incrementAttempts(tx, p.tenantId, challengeId);
+            break;
+          }
+          case "recruitment_candidate_public_auth_routes__2": {
+            // Restored: mark the OTP challenge verified + candidate.emailVerified.
+            // The route already validated the code and issued the signed
+            // cand_token synchronously; this write is the audit / replay-guard
+            // bookkeeping, mirroring `otpRepo.markVerified` used by the HR
+            // flow's `recruitment_otp_verify_routes__2` case.
+            const challengeId = p.challengeId as string;
+            const candidateId = p.candidateId as string;
+            if (!challengeId) return;
+            await otpRepo.markVerified(tx, p.tenantId, challengeId, candidateId, "email");
             break;
           }
           case "recruitment_candidate_routes__0": {

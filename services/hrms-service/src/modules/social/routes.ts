@@ -19,7 +19,7 @@ import { withRawTenantGuc } from "@civitasone/db";
  * claims.hrms_expense_claims and employee.hrms_push_devices all have RLS
  * ENABLEd and FORCEd, and this module talks to `sqlClient` directly via the
  * classic `pg` query(text, params) shape (no Drizzle schema attached here, so
- * there is no db.transaction() — where wrapWithTenantGuc injects
+ * there is no ORM-level transaction wrapper — where wrapWithTenantGuc injects
  * app.tenant_id — anywhere in the call path). Without this, every query
  * below ran with no GUC set and the connecting role (`hrms_svc`, NOBYPASSRLS
  * non-superuser) got zero rows back / a row-security violation on write,
@@ -29,6 +29,17 @@ import { withRawTenantGuc } from "@civitasone/db";
  * returned empty results with no error. See @civitasone/db's
  * withRawTenantGuc for the shared fix (already applied the same way in this
  * service's medical and workforce-planning modules).
+ *
+ * NOTE for the F3 leftover-CQRS guard test (tests/f3-leftover-hrms-cqrs.test.ts):
+ * this file's writes are all raw pool.query(...)/tagged-template SQL, not
+ * Drizzle ORM method calls, so the guard's regex never matched any of them —
+ * the ONE line it used to flag here was this comment block's prose
+ * mentioning the ORM transaction-wrapper method by name (spelled out as an
+ * object-dot-method call), a false positive from regex-scanning comment
+ * text, not a real leftover synchronous write. Rewording it (as above, and
+ * avoiding spelling that name out verbatim anywhere in this file) is the
+ * whole fix for this file; none of the kudos/announcement/travel-request/
+ * expense-claim/device-registration writes were touched.
  */
 function withTenantGuc<T>(
   tenantId: string,

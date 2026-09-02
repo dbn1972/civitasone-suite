@@ -141,6 +141,20 @@ export async function payMatrixRoutes(app: FastifyInstance): Promise<void> {
       const nextBasic = cells[nextIdx] ?? currentBasicN;
 
       if (!body.dryRun) {
+        // DELIBERATELY NOT F3-converted (see pay-matrix/f3-consumer.ts's
+        // `pay_matrix_routes__0` case for the full explanation): a previous
+        // attempt to move this write into the async consumer re-derived the
+        // pay level from `basicMinor` instead of the employee's designation
+        // and had no `nextBasic > currentBasicN` guard, so it would have
+        // double-applied every increment (once here, once in the consumer,
+        // off the already-incremented basic) plus written a duplicate
+        // service-book entry — a real, hard-to-reverse 7th-CPC payroll money
+        // bug. That case is kept as an intentional no-op and this route
+        // remains the single, synchronous writer for annual increments.
+        // Converting this safely (single writer, pre-computed idempotent
+        // plan passed to the consumer) is possible but needs a maintainer
+        // with full payroll-domain context and review — left as a disclosed
+        // gap rather than guessed at here.
         if (nextBasic > currentBasicN) {
           await db.update(hrmsEmployees)
             .set({ basicMinor: BigInt(nextBasic), updatedBy: ctx.actorId, updatedAt: new Date() })

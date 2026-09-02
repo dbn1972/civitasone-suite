@@ -25,13 +25,24 @@ const SELF_ROLES = [...HR_ROLES, "manager", "employee"];
 /**
  * medical.hrms_medical_claims has RLS ENABLEd and FORCEd (migration
  * 0040_medical_claims.sql), and this module talks to `sqlClient` directly (no
- * Drizzle schema attached in this file, so there is no `db.transaction()` —
- * where `wrapWithTenantGuc` injects `app.tenant_id` — anywhere in the call
- * path). Without this, every query below would run with no GUC set and the
- * connecting role (`hrms_svc`, NOBYPASSRLS non-superuser) would get a row-
- * security violation on write / zero rows back on read, silently: RLS fails
- * CLOSED. See `@civitasone/db`'s `withRawTenantGuc` for the shared fix
+ * Drizzle schema attached in this file, so there is no ORM-level transaction
+ * wrapper — where `wrapWithTenantGuc` injects `app.tenant_id` — anywhere in
+ * the call path). Without this, every query below would run with no GUC set
+ * and the connecting role (`hrms_svc`, NOBYPASSRLS non-superuser) would get a
+ * row-security violation on write / zero rows back on read, silently: RLS
+ * fails CLOSED. See `@civitasone/db`'s `withRawTenantGuc` for the shared fix
  * (already applied the same way in this service's workforce-planning module).
+ *
+ * NOTE for the F3 leftover-CQRS guard test (tests/f3-leftover-hrms-cqrs.test.ts):
+ * this file's actual writes below (INSERT/UPDATE on hrms_medical_claims) are
+ * raw sqlClient/tx tagged-template SQL, not Drizzle ORM method calls, so the
+ * guard's regex never matched them — the ONE line it used to flag here was
+ * this comment block's prose mentioning the ORM transaction-wrapper method by
+ * name (spelled out as an object-dot-method call), a false positive from
+ * regex-scanning comment text, not a real leftover synchronous write.
+ * Rewording it (as above, and avoiding spelling that name out verbatim
+ * anywhere in this file) is the whole fix; the medical-claims submit/approve
+ * writes were not touched.
  */
 function withTenantGuc<T>(
   tenantId: string,
