@@ -98,7 +98,7 @@ export async function consultantInvoiceRoutes(app: FastifyInstance): Promise<voi
       // Wrap in a transaction so the tenant-GUC (app.tenant_id) is set for the
       // INSERT — RLS uses the USING clause as the WITH CHECK and would reject an
       // unscoped write. All the status-transition writes below do the same.
-      await publishF3Write(ctx, "consultant_invoice_routes__0", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+      await publishF3Write(ctx, "consultant_invoice_routes__0", invId, { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     } catch (err) {
       // Unique (tenant, consultant, invoice_no) — duplicate submission.
       if (String((err as { code?: string }).code) === "23505") {

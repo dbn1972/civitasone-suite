@@ -79,7 +79,7 @@ export async function apprenticeStipendRoutes(app: FastifyInstance): Promise<voi
     }
 
     const id = randomUUID();
-    await publishF3Write(ctx, "apprentice_stipend_routes__0", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    await publishF3Write(ctx, "apprentice_stipend_routes__0", id, { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     return reply.code(201).send({ id, apprenticeId: body.apprenticeId, status: "active" }) as any;
   });
 
@@ -133,7 +133,7 @@ export async function apprenticeStipendRoutes(app: FastifyInstance): Promise<voi
 
     const stipendId = randomUUID();
     try {
-      await publishF3Write(ctx, "apprentice_stipend_routes__2", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+      await publishF3Write(ctx, "apprentice_stipend_routes__2", stipendId, { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     } catch (err) {
       if (String((err as { code?: string }).code) === "23505") {
         throw new HttpError(409, "DUPLICATE_STIPEND", `a stipend run for '${body.month}' already exists for this apprentice`) as any;
