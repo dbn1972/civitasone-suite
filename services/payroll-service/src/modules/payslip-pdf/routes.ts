@@ -104,14 +104,25 @@ export async function payslipPdfRoutes(app: FastifyInstance): Promise<void> {
     let template = DEFAULT_TEMPLATE;
     try {
       const { sqlClient } = await import("../../shared/db.js");
+      // NOTE: payroll.payroll_slip_templates is created by hrms-service's
+      // migration (services/hrms-service/migrations/0008_recruitment_payroll_gaps.sql)
+      // and physically lives in the civitas_hrms database. payroll-service's
+      // own DATABASE_URL points at civitas_payroll (a SEPARATE Postgres
+      // database, no dblink/postgres_fdw configured between them), so this
+      // query can only ever succeed if payroll_slip_templates also exists in
+      // payroll-service's own database. See PR description for the
+      // cross-database architecture gap — this fixes the column mismatch
+      // (real columns: template_html, is_default, created_at — there is no
+      // `body` or `status` column) but does not by itself resolve that
+      // deeper reachability issue.
       const tplRows = await sqlClient`
-        SELECT body FROM payroll.payroll_slip_templates
-        WHERE tenant_id = ${ctx.tenantId} AND status = 'active'
+        SELECT template_html FROM payroll.payroll_slip_templates
+        WHERE tenant_id = ${ctx.tenantId} AND is_default = true
         ORDER BY created_at DESC LIMIT 1
       `;
-      const first = tplRows[0] as { body?: string } | undefined;
-      if (first?.body) {
-        template = first.body;
+      const first = tplRows[0] as { template_html?: string } | undefined;
+      if (first?.template_html) {
+        template = first.template_html;
       }
     } catch {
       // Table may not exist yet — use default template
