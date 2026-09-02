@@ -31,6 +31,7 @@ const {
   findLeaveAppByIdMock,
   insertLeaveAppMock,
   updateLeaveAppMock,
+  approveLeaveAppMock,
   debitLeaveBalanceMock,
 } = vi.hoisted(() => {
   const _mockTx = {
@@ -60,6 +61,10 @@ const {
   const _findLeaveAppByIdMock = vi.fn(async () => null as any);
   const _insertLeaveAppMock = vi.fn(async () => undefined as any);
   const _updateLeaveAppMock = vi.fn(async () => undefined as any);
+  // approveLeaveApp is the race-safe approve path (repo.ts) — distinct from
+  // updateLeaveApp, which is still used for reject. It returns rowsAffected;
+  // default to 1 (success) so the "already processed" guard doesn't trip.
+  const _approveLeaveAppMock = vi.fn(async () => 1 as any);
   const _debitLeaveBalanceMock = vi.fn(async () => undefined as any);
   return {
     mockTx: _mockTx,
@@ -70,6 +75,7 @@ const {
     findLeaveAppByIdMock: _findLeaveAppByIdMock as any,
     insertLeaveAppMock: _insertLeaveAppMock as any,
     updateLeaveAppMock: _updateLeaveAppMock as any,
+    approveLeaveAppMock: _approveLeaveAppMock as any,
     debitLeaveBalanceMock: _debitLeaveBalanceMock as any,
   };
 });
@@ -93,6 +99,7 @@ vi.mock("./repo.js", () => ({
   findLeaveAppById: (...args: any[]) => findLeaveAppByIdMock(...args),
   insertLeaveApp:   (...args: any[]) => insertLeaveAppMock(...args),
   updateLeaveApp:   (...args: any[]) => updateLeaveAppMock(...args),
+  approveLeaveApp:  (...args: any[]) => approveLeaveAppMock(...args),
   debitLeaveBalance: (...args: any[]) => debitLeaveBalanceMock(...args),
   // stubs for type-checker
   insertLeaveType:  vi.fn(async () => undefined),
@@ -287,8 +294,8 @@ describe("leaveApprove command", () => {
       makeMsg(COMMANDS.leaveApprove, { id: "app-1", tenantId: TENANT, approvedBy: ACTOR }),
     );
     await settle();
-    expect(updateLeaveAppMock).toHaveBeenCalledOnce();
-    const patch = updateLeaveAppMock.mock.calls[0]![2] as Record<string, unknown>;
+    expect(approveLeaveAppMock).toHaveBeenCalledOnce();
+    const patch = approveLeaveAppMock.mock.calls[0]![2] as Record<string, unknown>;
     expect(patch.status).toBe("approved");
     await q.stop();
   });
