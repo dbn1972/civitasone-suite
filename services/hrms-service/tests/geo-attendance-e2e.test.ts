@@ -137,14 +137,36 @@ describe("B. Geo-Fenced Attendance — Check-In", () => {
 
 describe("C. Geo-Fenced Attendance — Check-Out", () => {
   it("C1. Check-out records successfully", async () => {
+    // Regression guard for the check_type column-width bug: "check_out" is 9
+    // characters and attendance.hrms_geo_attendance.check_type used to be
+    // VARCHAR(8), so the F3 consumer's insert failed at the DB layer with
+    // 22001 "value too long for type character varying(8)" (see migration
+    // 0127 and the now-resolved KNOWN BLOCKER note in f3-consumer.ts).
+    //
+    // Note this route is fire-and-forget CQRS: routes.ts answers 201
+    // immediately after publishing to F3, and the actual insert only runs
+    // later in the consumer (drained below). That means the pre-fix bug did
+    // NOT surface as an HTTP 500 here — the request always got 201 while the
+    // consumer silently dropped the row (confirmed empirically: querying
+    // attendance.hrms_geo_attendance directly after this exact sequence
+    // against the unfixed varchar(8) column returned zero rows, with
+    // "f3RouteWrite failed" / 22001 in the consumer logs). So asserting only
+    // r.statusCode here would NOT catch the regression — the real guard is
+    // the geo-history read-back below, which fails to find the check_out
+    // entry if the consumer's insert silently failed.
     const r = await app.inject({
       method: "POST", url: "/v1/hrms/attendance/geo-check-out",
       headers: { ...AUTH, ...CT },
       payload: { employeeId: EMP1, latitude: DELHI_LAT + 0.0002, longitude: DELHI_LNG - 0.0001, selfieFileKey: "video/emp1-checkout.mp4" },
     });
     await drainF3();
-    expect([201, 500].includes(r.statusCode)).toBe(true);
+    expect(r.statusCode).toBe(201);
     expect(r.json().status).toBe("check_out_recorded");
+
+    const hist = await app.inject({ method: "GET", url: `/v1/hrms/attendance/geo-history?employeeId=${EMP1}`, headers: AUTH });
+    expect(hist.statusCode).toBe(200);
+    const checkOutRows = hist.json().data.filter((row: any) => row.checkType === "check_out");
+    expect(checkOutRows.length).toBeGreaterThan(0);
   });
 });
 
