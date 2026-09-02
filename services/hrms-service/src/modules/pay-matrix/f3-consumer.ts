@@ -1,10 +1,28 @@
+import { randomUUID } from "node:crypto";
 import type { Queue } from "@civitasone/queue";
 import { pino } from "pino";
-import { and, eq, desc, asc, sql, inArray, isNull, isNotNull, ne, or, gt, lt, gte, lte } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { db } from "../../shared/db.js";
-import { enqueue, markProcessed } from "../../shared/outbox.js";
+import { markProcessed } from "../../shared/outbox.js";
 import { COMMANDS } from "../../topics.js";
+import { hrmsEmployees } from "../employee/schema.js";
+import { hrmsServiceBookEntries } from "../service-book/schema.js";
+
 const log = pino({ name: "hrms-f3-pay-matrix" });
+
+/** Mirrors routes.ts's IncrementPlanItem — the exact, precomputed decision
+ * the route made synchronously. This consumer applies these fields verbatim
+ * and never re-derives a pay level or re-walks the pay matrix itself. */
+interface IncrementPlanItem {
+  employeeId: string;
+  level: number;
+  fromCell: number;
+  toCell: number;
+  fromMinor: string;
+  toMinor: string;
+  description: string;
+}
+
 export function registerF3_pay_matrix_Consumers(queue: Queue): void {
   queue.subscribe(COMMANDS.f3RouteWrite, async (msg) => {
     const p = msg.payload as Record<string, any>;
@@ -13,35 +31,77 @@ export function registerF3_pay_matrix_Consumers(queue: Queue): void {
       "pay_matrix_routes__0",
     ]);
     if (!ops.has(op)) return;
-    const body = p.body ?? {};
-    const params = p.params ?? {};
-    const id = (p.id as string) || (params.id as string);
     try {
       await db.transaction(async (tx) => {
         if (!(await markProcessed(tx, msg.messageId))) return;
         switch (op) {
           case "pay_matrix_routes__0": {
-            // DELIBERATE NO-OP — do not "repair" this case by re-declaring the
-            // missing locals.
-            //
-            // Unlike the other F3 leftovers, POST /v1/hrms/pay-matrix/annual-increment
-            // was never actually stubbed out: routes.ts still runs the whole
-            // annual-increment inline (db.update on hrmsEmployees.basicMinor +
-            // db.insert into hrmsServiceBookEntries, see routes.ts) and only
-            // *afterwards* calls publishF3Write. The generated body that used to
-            // live here was a copy of an OLDER revision of that loop — it derived
-            // the pay level from basicMinor via ENTRY_PAY_PAISE instead of from the
-            // employee's designation, and it had no `nextBasic > currentBasicN`
-            // guard. Restoring it would have made every increment run apply TWICE:
-            // once synchronously in the route and once again here, off the
-            // already-incremented basic, plus a second duplicate service-book
-            // entry per employee. On a 7th-CPC payroll that is a real,
-            // hard-to-reverse money bug, so the correct fix is to drop the stale
-            // duplicate rather than reconstruct it.
-            //
-            // The op is kept in `ops` (rather than deleted) so the queued message
-            // is still consumed and marked processed instead of being retried
-            // forever. routes.ts remains the single writer for annual increments.
+            // 7th CPC annual increment — applies the EXACT plan routes.ts
+            // computed synchronously (see its long comment on the
+            // annual-increment route). This case deliberately does NOT
+            // re-derive a pay level or re-walk PAY_MATRIX: two earlier
+            // attempts at this conversion (see git history) did exactly
+            // that, independently, and would have double-applied every
+            // increment. Applying a precomputed, exact `toMinor` here
+            // removes that failure mode structurally — there is nothing
+            // left for this consumer to get wrong about WHAT to write, only
+            // WHETHER to write it (below).
+            const effectiveDate = String(p.effectiveDate ?? "");
+            const plan = Array.isArray(p.plan) ? (p.plan as IncrementPlanItem[]) : [];
+            const tenantId = String(p.tenantId ?? "");
+            if (!effectiveDate || !tenantId) break;
+
+            for (const item of plan) {
+              const employeeId = String(item.employeeId ?? "");
+              const fromMinor = Number(item.fromMinor);
+              const toMinor = Number(item.toMinor);
+              // Defensive validation of the queued payload — never trust it
+              // enough to move pay backwards or off a malformed value.
+              if (!employeeId || !Number.isFinite(fromMinor) || !Number.isFinite(toMinor) || toMinor < fromMinor) {
+                log.warn({ messageId: msg.messageId, employeeId, fromMinor, toMinor }, "pay-matrix increment: skipping malformed plan item");
+                continue;
+              }
+
+              // Idempotency against a genuine concurrent double-submit (two
+              // independently published messages for the same
+              // employee+effectiveDate — markProcessed above only dedupes
+              // REDELIVERY of this SAME message, not that): insert the
+              // service-book row first, conflict-checked against the
+              // partial unique index from
+              // migrations/0132_pay_matrix_increment_idempotency.sql. Only
+              // the first of two racing plans to have its insert land here
+              // gets zero-rows-back protection lifted; the loser sees an
+              // empty `inserted` and skips the pay write entirely below.
+              const inserted = await tx.insert(hrmsServiceBookEntries).values({
+                id: randomUUID(),
+                tenantId,
+                employeeId,
+                entryType: "increment",
+                effectiveDate,
+                description: String(item.description ?? ""),
+                recordedBy: msg.actorId,
+                attested: false,
+              }).onConflictDoNothing({
+                target: [hrmsServiceBookEntries.tenantId, hrmsServiceBookEntries.employeeId, hrmsServiceBookEntries.effectiveDate],
+                where: sql`entry_type = 'increment'`,
+              }).returning({ id: hrmsServiceBookEntries.id });
+
+              if (inserted.length === 0) {
+                log.info({ messageId: msg.messageId, employeeId, effectiveDate }, "pay-matrix increment: duplicate for employee+effectiveDate, skipped");
+                continue;
+              }
+
+              // toMinor === fromMinor happens when the employee was already
+              // at the top cell of their level (routes.ts still records the
+              // service-book entry above for audit continuity, matching the
+              // pre-conversion behaviour, but there is no pay change to
+              // apply).
+              if (toMinor > fromMinor) {
+                await tx.update(hrmsEmployees)
+                  .set({ basicMinor: BigInt(toMinor), updatedBy: msg.actorId, updatedAt: new Date() })
+                  .where(and(eq(hrmsEmployees.tenantId, tenantId), eq(hrmsEmployees.id, employeeId)));
+              }
+            }
             break;
           }
         }

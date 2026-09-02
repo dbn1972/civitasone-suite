@@ -68,4 +68,36 @@ describe("F3 leftover hrms CQRS route boundary", () => {
     const rti = readFileSync(join(MODULES, "rti/routes.ts"), "utf8");
     expect(rti).not.toMatch(/repo\.transitionRti/);
   });
+
+  /**
+   * pay-matrix annual-increment (fix/hrms-paymatrix-async-conversion): the
+   * last 2 sites this guard test used to flag are now genuinely converted,
+   * not just disclosed. routes.ts computes the exact per-employee increment
+   * plan synchronously and forwards it verbatim via `pay_matrix_routes__0`;
+   * f3-consumer.ts applies that plan exactly (never re-deriving a pay level
+   * or re-walking PAY_MATRIX — that independent re-derivation is what made
+   * the two earlier, reverted attempts at this conversion double-apply a
+   * 7th-CPC increment). The double-submit race that a plain publish+consume
+   * conversion would reopen (two concurrent requests both deciding to
+   * increment the same employee before either consumer has written) is
+   * closed at the DB layer by a partial unique index — see
+   * migrations/0132_pay_matrix_increment_idempotency.sql and the
+   * insert-first/conflict-checked write in f3-consumer.ts.
+   */
+  it("pay-matrix annual-increment forwards an exact plan; consumer applies it without re-deriving anything", () => {
+    const routes = readFileSync(join(MODULES, "pay-matrix/routes.ts"), "utf8");
+    expect(routes).toContain("pay_matrix_routes__0");
+    expect(routes).toContain("plan");
+    expect(routes).not.toMatch(SYNC_WRITE);
+
+    const consumer = readFileSync(join(MODULES, "pay-matrix/f3-consumer.ts"), "utf8");
+    expect(consumer).toContain("pay_matrix_routes__0");
+    // Applies the precomputed toMinor verbatim...
+    expect(consumer).toContain("BigInt(toMinor)");
+    // ...and never re-derives a level from ENTRY_PAY_PAISE/basicMinor, which
+    // is exactly what made the earlier reverted attempts double-apply.
+    expect(consumer).not.toMatch(/ENTRY_PAY_PAISE/);
+    // DB-layer idempotency: insert is conflict-checked before any pay write.
+    expect(consumer).toContain("onConflictDoNothing");
+  });
 });
