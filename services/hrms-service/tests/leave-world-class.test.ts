@@ -2,6 +2,7 @@ import { describe, it, expect, beforeAll } from "vitest";
 import { buildApp } from "../src/app.js";
 import type { FastifyInstance } from "fastify";
 import { createHmac } from "node:crypto";
+import { seedHrmsCoreFixtures } from "./fixtures/core-seed.js";
 
 let app: FastifyInstance;
 
@@ -19,7 +20,7 @@ function mint(roles: string[] = ["super_admin", "hr_admin"]) {
 const AUTH = { authorization: `Bearer ${mint()}` };
 const CT = { "content-type": "application/json" };
 
-beforeAll(async () => { app = await buildApp(); });
+beforeAll(async () => { await seedHrmsCoreFixtures(); app = await buildApp(); });
 
 // ═══════════════════════════════════════════════════════════════
 // SECTION 1: LEAVE POLICY CONFIGURATION (Admin CRUD)
