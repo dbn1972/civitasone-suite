@@ -36,6 +36,25 @@ export async function findControlTx(tx: Tx, tenantId: string, id: string) {
   const rows = await tx.select().from(complianceControls).where(and(eq(complianceControls.tenantId, tenantId), eq(complianceControls.id, id))).limit(1);
   return rows[0];
 }
+/**
+ * Look up a control by its (tenant, framework, controlKey) triple — the same
+ * key the DB unique index `uq_compliance_controls_key` enforces (migration
+ * 0023). Used synchronously by the create-control route so a duplicate is
+ * rejected with a real 409 instead of being accepted with 202 and then
+ * failing the async insert on the unique-index violation (which the
+ * fire-and-forget publish has no way to report back to the caller).
+ */
+export function findControlByKey(tenantId: string, framework: string, controlKey: string) {
+  return scopedRead(async (tx) => {
+    const rows = await tx.select().from(complianceControls)
+      .where(and(
+        eq(complianceControls.tenantId, tenantId),
+        eq(complianceControls.framework, framework),
+        eq(complianceControls.controlKey, controlKey),
+      )).limit(1);
+    return rows[0];
+  });
+}
 export function evidenceFor(tenantId: string, controlId: string) {
   return scopedRead((tx) => tx.select().from(controlEvidence).where(and(eq(controlEvidence.tenantId, tenantId), eq(controlEvidence.controlId, controlId))).orderBy(desc(controlEvidence.collectedAt)));
 }

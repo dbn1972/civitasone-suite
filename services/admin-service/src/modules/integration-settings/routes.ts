@@ -12,6 +12,20 @@
  *   POST    :provider/:env/test       → real connection probe → status/last_error
  *   DELETE  :provider/:env            → disable + clear secret (version++) + audit
  *   GET     (list / one)              → masked reads (secrets NEVER returned)
+ *
+ * SYNCHRONOUS PRE-ACCEPT VALIDATION: PUT/approve/reject/DELETE are F3 routes —
+ * they accept a write with a 202 before the mutation actually runs (applied
+ * later by f3-consumer.ts / f3-apply.ts from the outbox). publishAdminCommand
+ * is fire-and-forget and cannot reject, so the maker-checker + optimistic-lock
+ * guards below are lifted synchronously — read-only — from the EXACT same
+ * checks apply_integration_settings_0/1/2/4 run in f3-apply.ts, so the
+ * synchronous and async paths agree. In particular the maker-checker
+ * segregation check (assertApproverDistinct) now runs before "approve" is
+ * accepted at all, instead of only after the fact inside the consumer — a
+ * self-approval attempt gets a real 409 instead of a false-positive 202. A
+ * TOCTOU race remains between these reads and the consumer's write (same
+ * residual risk documented in hrms-service's cpf routes / uploads doc-routes
+ * here); the consumer's own checks (and the DB) are the backstop for that.
  */
 import { randomUUID } from "node:crypto";
 import { publishAdminCommand } from "../../shared/f3-publish.js";
@@ -19,7 +33,7 @@ import { COMMANDS } from "../../topics.js";
 import type { FastifyInstance } from "fastify";
 import { z, ZodError } from "zod";
 import { resolveContext, requireRole, HttpError, TENANT_ADMIN_ROLES } from "../../shared/context.js";
-import { db } from "../../shared/db.js";
+import { db, scopedRead } from "../../shared/db.js";
 import { enqueue } from "../../shared/outbox.js";
 import * as repo from "./repo.js";
 import {
@@ -167,6 +181,12 @@ export async function integrationSettingsRoutes(app: FastifyInstance): Promise<v
     const { ciphertext } = sealSecrets(secrets);
     const last4 = primaryLast4(provider, secrets);
 
+    // Same optimistic-lock guard apply_integration_settings_0 runs: a
+    // proposal against a stale expectedVersion is rejected up front instead
+    // of being accepted and silently dropped by the consumer.
+    const live = await repo.findSetting(ctx.tenantId, provider, env);
+    if (live) assertVersionMatch(body.expectedVersion, live.version);
+
     const __f3Id = randomUUID();
     await publishAdminCommand(ctx, COMMANDS.f3RouteWrite, __f3Id, {
       op: 'integration_settings_op_0',
@@ -184,6 +204,20 @@ export async function integrationSettingsRoutes(app: FastifyInstance): Promise<v
     const ctx = resolveContext(req);
     requireRole(ctx, ROLES);
     const { provider, env } = parseTarget(req.params);
+
+    // Same guards apply_integration_settings_1 runs, in the same order,
+    // lifted synchronously: a pending change must exist (404
+    // NO_PENDING_CHANGE), it must still be pending (409 NOT_PENDING), the
+    // approver must differ from the proposer (409 MAKER_CHECKER_VIOLATION —
+    // the segregation-of-duties guard this maker-checker flow exists for),
+    // and the live row must not have moved since the change was proposed
+    // (409 VERSION_CONFLICT).
+    const change = await scopedRead((tx) => repo.findLatestPendingTx(tx, ctx.tenantId, provider, env));
+    if (!change) throw new HttpError(404, "NO_PENDING_CHANGE", "no pending change to approve");
+    assertPending(change.status);
+    assertApproverDistinct(change.proposedBy, ctx.actorId);
+    const live = await repo.findSetting(ctx.tenantId, provider, env);
+    assertVersionMatch(change.baseVersion, live?.version ?? 0);
 
     const __f3Id = randomUUID();
     await publishAdminCommand(ctx, COMMANDS.f3RouteWrite, __f3Id, {
@@ -203,6 +237,11 @@ export async function integrationSettingsRoutes(app: FastifyInstance): Promise<v
     requireRole(ctx, ROLES);
     const { provider, env } = parseTarget(req.params);
     const body = rejectBody.parse(req.body ?? {});
+
+    // Same guards apply_integration_settings_2 runs, lifted synchronously.
+    const change = await scopedRead((tx) => repo.findLatestPendingTx(tx, ctx.tenantId, provider, env));
+    if (!change) throw new HttpError(404, "NO_PENDING_CHANGE", "no pending change to reject");
+    assertPending(change.status);
 
     const __f3Id = randomUUID();
     await publishAdminCommand(ctx, COMMANDS.f3RouteWrite, __f3Id, {
@@ -251,6 +290,11 @@ export async function integrationSettingsRoutes(app: FastifyInstance): Promise<v
     const ctx = resolveContext(req);
     requireRole(ctx, ROLES);
     const { provider, env } = parseTarget(req.params);
+
+    // Same existence guard apply_integration_settings_4 runs (404 NOT_FOUND),
+    // lifted synchronously.
+    const live = await repo.findSetting(ctx.tenantId, provider, env);
+    if (!live) throw new HttpError(404, "NOT_FOUND", "integration not configured for this env");
 
     const __f3Id = randomUUID();
     await publishAdminCommand(ctx, COMMANDS.f3RouteWrite, __f3Id, {
