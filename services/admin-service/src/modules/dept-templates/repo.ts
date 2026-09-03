@@ -87,6 +87,19 @@ export async function findInstantiationByKeyTx(
   return rows[0];
 }
 
+/**
+ * Non-transactional read used by the route's synchronous pre-check (mirrors
+ * findTemplate/findTemplateTx). A matching idempotencyKey means the call is a
+ * retry the consumer will replay without a second write, so the route must
+ * check this BEFORE the department-code uniqueness check below — otherwise a
+ * legitimate retry would be rejected as a false DEPARTMENT_EXISTS clash.
+ */
+export async function findInstantiationByKey(
+  tenantId: string, templateId: string, idempotencyKey: string,
+): Promise<DepartmentInstantiationRow | undefined> {
+  return scopedRead((tx) => findInstantiationByKeyTx(tx as Writer, tenantId, templateId, idempotencyKey));
+}
+
 export async function findInstantiationByCodeTx(
   tx: Writer, tenantId: string, departmentCode: string,
 ): Promise<DepartmentInstantiationRow | undefined> {
@@ -96,6 +109,13 @@ export async function findInstantiationByCodeTx(
       eq(departmentInstantiations.departmentCode, departmentCode),
     )).limit(1);
   return rows[0];
+}
+
+/** Non-transactional read used by the route's synchronous pre-check. */
+export async function findInstantiationByCode(
+  tenantId: string, departmentCode: string,
+): Promise<DepartmentInstantiationRow | undefined> {
+  return scopedRead((tx) => findInstantiationByCodeTx(tx as Writer, tenantId, departmentCode));
 }
 
 export async function insertInstantiation(
