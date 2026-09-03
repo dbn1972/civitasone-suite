@@ -147,6 +147,14 @@ export async function permitRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, OFFICER_ROLES);
     const body = noticeBody.parse(req.body);
+    // Every other write route here does a synchronous pre-accept existence
+    // check before returning 202 (see /permits/:id/suspend|cancel|restore and
+    // POST /renewals above) — this route was the one exception. permit_actions
+    // has no FK on permit_id (migration 0001), so without this check a bogus
+    // permitId silently produced an orphaned notice action + a noticeIssued
+    // event for a permit that never existed, with the 202 caller never told.
+    const permit = await repo.findById(body.permitId, ctx.tenantId);
+    if (!permit) throw new HttpError(404, "PERMIT_NOT_FOUND", "Permit not found");
     return reply.code(202).send(await commands.issueNotice(ctx, body.permitId, body.noticeDetails));
   });
 }
