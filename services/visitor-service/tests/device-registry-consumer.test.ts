@@ -148,8 +148,8 @@ describe("deviceRegister", () => {
     expect(markProcessedMock).toHaveBeenCalledTimes(1);
     // insert device + audit log
     expect(fakeTx.insert).toHaveBeenCalledTimes(2);
-    // enqueue: deviceRegistered
-    expect(enqueueMock).toHaveBeenCalledTimes(1);
+    // enqueue: deviceRegistered event + CERT-In audit event
+    expect(enqueueMock).toHaveBeenCalledTimes(2);
   });
 
   it("does not process on idempotent replay", async () => {
@@ -169,7 +169,8 @@ describe("deviceRegister", () => {
     });
 
     expect(fakeTx.insert).toHaveBeenCalledTimes(2);
-    expect(enqueueMock).toHaveBeenCalledTimes(1);
+    // enqueue: deviceRegistered event + CERT-In audit event
+    expect(enqueueMock).toHaveBeenCalledTimes(2);
   });
 });
 
@@ -182,9 +183,9 @@ describe("deviceActivate", () => {
 
     expect(markProcessedMock).toHaveBeenCalledTimes(1);
     expect(versionedUpdateMock).toHaveBeenCalledTimes(1);
-    // insert audit log + enqueue deviceActivated
+    // insert audit log + enqueue deviceActivated event + CERT-In audit event
     expect(fakeTx.insert).toHaveBeenCalledTimes(1);
-    expect(enqueueMock).toHaveBeenCalledTimes(1);
+    expect(enqueueMock).toHaveBeenCalledTimes(2);
   });
 
   it("does not process on idempotent replay", async () => {
@@ -217,7 +218,8 @@ describe("deviceActivate", () => {
     await publishAndFlush(queue, COMMANDS.deviceActivate, activatePayload);
 
     expect(versionedUpdateMock).toHaveBeenCalledTimes(1);
-    expect(enqueueMock).toHaveBeenCalledTimes(1);
+    // enqueue: deviceActivated event + CERT-In audit event
+    expect(enqueueMock).toHaveBeenCalledTimes(2);
   });
 });
 
@@ -232,7 +234,8 @@ describe("deviceSuspend", () => {
     expect(markProcessedMock).toHaveBeenCalledTimes(1);
     expect(versionedUpdateMock).toHaveBeenCalledTimes(1);
     expect(fakeTx.insert).toHaveBeenCalledTimes(1); // audit log
-    expect(enqueueMock).toHaveBeenCalledTimes(1);
+    // enqueue: deviceSuspended event + CERT-In audit event
+    expect(enqueueMock).toHaveBeenCalledTimes(2);
   });
 
   it("does not process on idempotent replay", async () => {
@@ -271,7 +274,8 @@ describe("deviceDeregister", () => {
     expect(markProcessedMock).toHaveBeenCalledTimes(1);
     expect(versionedUpdateMock).toHaveBeenCalledTimes(1);
     expect(fakeTx.insert).toHaveBeenCalledTimes(1); // audit log
-    expect(enqueueMock).toHaveBeenCalledTimes(1);
+    // enqueue: deviceDeregistered event + CERT-In audit event
+    expect(enqueueMock).toHaveBeenCalledTimes(2);
   });
 
   it("does not process on idempotent replay", async () => {
@@ -309,7 +313,8 @@ describe("deviceRotateCredential", () => {
     expect(markProcessedMock).toHaveBeenCalledTimes(1);
     expect(versionedUpdateMock).toHaveBeenCalledTimes(1);
     expect(fakeTx.insert).toHaveBeenCalledTimes(1); // audit log
-    expect(enqueueMock).toHaveBeenCalledTimes(1);
+    // enqueue: deviceCredentialRotated event + CERT-In audit event
+    expect(enqueueMock).toHaveBeenCalledTimes(2);
   });
 
   it("does not process on idempotent replay", async () => {
@@ -344,7 +349,8 @@ describe("deviceConfigPush", () => {
     // insert deviceConfigs + audit log
     expect(fakeTx.insert).toHaveBeenCalledTimes(2);
     expect(versionedUpdateMock).toHaveBeenCalledTimes(1);
-    expect(enqueueMock).toHaveBeenCalledTimes(1);
+    // enqueue: deviceConfigDelivered event + CERT-In audit event
+    expect(enqueueMock).toHaveBeenCalledTimes(2);
   });
 
   it("does not process on idempotent replay", async () => {
