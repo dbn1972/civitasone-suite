@@ -8,6 +8,12 @@ export default defineConfig({
       DATABASE_URL:
         process.env.DATABASE_URL ??
         "postgres://admin_svc:admin_dev_pw@localhost:5435/civitas_admin",
+      // Cross-tenant sftp lead-ingestion discovery reads through the
+      // BYPASSRLS scanner role (migration 0030) — see
+      // src/shared/scanner-db.ts and src/modules/lead-ingestion/scheduler.ts.
+      ADMIN_SCANNER_DATABASE_URL:
+        process.env.ADMIN_SCANNER_DATABASE_URL ??
+        "postgres://admin_scanner:admin_scanner_dev_pw@localhost:5435/civitas_admin",
       QUEUE_DRIVER: "memory",
       CACHE_DRIVER: "memory",
     },
