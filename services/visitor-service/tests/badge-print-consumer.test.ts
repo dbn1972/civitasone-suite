@@ -185,8 +185,8 @@ describe("printJobCreate", () => {
 
     expect(markProcessedMock).toHaveBeenCalledTimes(1);
     expect(fakeTx.insert).toHaveBeenCalledTimes(1);
-    // enqueue: printJobCreated
-    expect(enqueueMock).toHaveBeenCalledTimes(1);
+    // enqueue: printJobCreated event + CERT-In audit event
+    expect(enqueueMock).toHaveBeenCalledTimes(2);
   });
 
   it("does not process on idempotent replay", async () => {
@@ -239,7 +239,8 @@ describe("printJobAcknowledge", () => {
 
     expect(markProcessedMock).toHaveBeenCalledTimes(1);
     expect(versionedUpdateMock).toHaveBeenCalledTimes(1);
-    expect(enqueueMock).toHaveBeenCalledTimes(1);
+    // enqueue: printJobCompleted event + CERT-In audit event
+    expect(enqueueMock).toHaveBeenCalledTimes(2);
   });
 
   it("does not process on idempotent replay", async () => {
@@ -279,8 +280,8 @@ describe("printJobFail", () => {
 
     expect(markProcessedMock).toHaveBeenCalledTimes(1);
     expect(versionedUpdateMock).toHaveBeenCalledTimes(1);
-    // enqueue: printJobFailed event only (no notification when retrying)
-    expect(enqueueMock).toHaveBeenCalledTimes(1);
+    // enqueue: printJobFailed event + CERT-In audit event (no notification when retrying)
+    expect(enqueueMock).toHaveBeenCalledTimes(2);
   });
 
   it("marks as failed and notifies when max retries reached", async () => {
@@ -294,8 +295,8 @@ describe("printJobFail", () => {
 
     expect(markProcessedMock).toHaveBeenCalledTimes(1);
     expect(versionedUpdateMock).toHaveBeenCalledTimes(1);
-    // enqueue: notification + printJobFailed event
-    expect(enqueueMock).toHaveBeenCalledTimes(2);
+    // enqueue: notification + printJobFailed event + CERT-In audit event
+    expect(enqueueMock).toHaveBeenCalledTimes(3);
   });
 
   it("does not process on idempotent replay", async () => {
@@ -320,7 +321,8 @@ describe("printJobRetry", () => {
 
     expect(markProcessedMock).toHaveBeenCalledTimes(1);
     expect(versionedUpdateMock).toHaveBeenCalledTimes(1);
-    expect(enqueueMock).toHaveBeenCalledTimes(1);
+    // enqueue: printJobCreated event + CERT-In audit event
+    expect(enqueueMock).toHaveBeenCalledTimes(2);
   });
 
   it("does not process on idempotent replay", async () => {
@@ -350,7 +352,8 @@ describe("printJobRequeue", () => {
 
     expect(markProcessedMock).toHaveBeenCalledTimes(1);
     expect(versionedUpdateMock).toHaveBeenCalledTimes(1);
-    expect(enqueueMock).toHaveBeenCalledTimes(1);
+    // enqueue: printJobCreated event + CERT-In audit event
+    expect(enqueueMock).toHaveBeenCalledTimes(2);
   });
 
   it("does not process on idempotent replay", async () => {
@@ -380,7 +383,8 @@ describe("badgeTemplateCreate", () => {
 
     expect(markProcessedMock).toHaveBeenCalledTimes(1);
     expect(fakeTx.insert).toHaveBeenCalledTimes(1);
-    expect(enqueueMock).toHaveBeenCalledTimes(1);
+    // enqueue: badgeTemplateCreated event + CERT-In audit event
+    expect(enqueueMock).toHaveBeenCalledTimes(2);
   });
 
   it("does not process on idempotent replay", async () => {
@@ -425,7 +429,8 @@ describe("badgeTemplateUpdate", () => {
     // insert new version + versionedUpdate to archive old
     expect(fakeTx.insert).toHaveBeenCalledTimes(1);
     expect(versionedUpdateMock).toHaveBeenCalledTimes(1);
-    expect(enqueueMock).toHaveBeenCalledTimes(1);
+    // enqueue: badgeTemplateUpdated event + CERT-In audit event
+    expect(enqueueMock).toHaveBeenCalledTimes(2);
   });
 
   it("does not process on idempotent replay", async () => {
