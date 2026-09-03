@@ -47,6 +47,15 @@ export async function findSandboxByCodeTx(
   return rows[0];
 }
 
+/**
+ * Read-only counterpart of `findSandboxByCodeTx`, for the synchronous
+ * pre-accept 409 SANDBOX_EXISTS check in the route handler (F3: the route
+ * itself never opens a write transaction, only `scopedRead`).
+ */
+export async function findSandboxByCode(tenantId: string, code: string): Promise<SandboxEnvironmentRow | undefined> {
+  return scopedRead((tx) => findSandboxByCodeTx(tx as Writer, tenantId, code));
+}
+
 export async function findSandboxTx(tx: Writer, tenantId: string, id: string): Promise<SandboxEnvironmentRow | undefined> {
   const rows = await tx.select().from(sandboxEnvironments)
     .where(and(eq(sandboxEnvironments.id, id), eq(sandboxEnvironments.tenantId, tenantId))).limit(1);
