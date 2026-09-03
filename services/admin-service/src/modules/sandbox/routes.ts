@@ -240,7 +240,7 @@ export async function sandboxRoutes(app: FastifyInstance): Promise<void> {
       preId: ((req.params as any)?.id as string) || __f3Id,
     });
     const result = { id: __f3Id, status: 'accepted', correlationId: ctx.correlationId } as never;
-    return reply.code(202).send({ id: __f3Id, status: "accepted", correlationId: ctx.correlationId });
+    return reply.code(202).send({ id: __f3Id, status: "accepted", correlationId: ctx.correlationId, data: { id: __f3Id } });
   });
 
   // ── list refresh jobs ─────────────────────────────────────────────────────
@@ -270,7 +270,7 @@ export async function sandboxRoutes(app: FastifyInstance): Promise<void> {
       preId: ((req.params as any)?.id as string) || __f3Id,
     });
     const result = { id: __f3Id, status: 'accepted', correlationId: ctx.correlationId } as never;
-    return reply.code(202).send({ id: __f3Id, status: "accepted", correlationId: ctx.correlationId });
+    return reply.code(202).send({ id: __f3Id, status: "accepted", correlationId: ctx.correlationId, data: { id: __f3Id } });
   });
 
   // ── reject a refresh ─────────────────────────────────────────────────────
@@ -289,7 +289,7 @@ export async function sandboxRoutes(app: FastifyInstance): Promise<void> {
       preId: ((req.params as any)?.id as string) || __f3Id,
     });
     const result = { id: __f3Id, status: 'accepted', correlationId: ctx.correlationId } as never;
-    return reply.code(202).send({ id: __f3Id, status: "accepted", correlationId: ctx.correlationId });
+    return reply.code(202).send({ id: __f3Id, status: "accepted", correlationId: ctx.correlationId, data: { id: __f3Id } });
   });
 
   // ── what was masked for a completed refresh ───────────────────────────────

@@ -37,6 +37,11 @@ export const acceptedResponseSchema = z.object({
   id: z.string(),
   status: z.literal("accepted"),
   correlationId: z.string(),
+  // Nested envelope for the created/affected resource, standardized across all
+  // F3 async-write routes (fix/admin-f3-response-envelope). Optional so routes
+  // that predate the standardization (still returning the flat shape) keep
+  // validating without a breaking schema change.
+  data: z.object({ id: z.string() }).passthrough().optional(),
 });
 
 export type AcceptedResponse = z.infer<typeof acceptedResponseSchema>;

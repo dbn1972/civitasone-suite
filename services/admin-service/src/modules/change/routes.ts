@@ -88,7 +88,7 @@ export async function changeRoutes(app: FastifyInstance): Promise<void> {
       query: req.query as Record<string, unknown>,
       preId: ((req.params as any)?.id as string) || __f3Id,
     });
-    return reply.code(202).send({ id: __f3Id, status: 'accepted', correlationId: ctx.correlationId });
+    return reply.code(202).send({ id: __f3Id, status: 'accepted', correlationId: ctx.correlationId, data: { id: __f3Id } });
   });
 
   app.get("/v1/admin/change/requests/:id", async (req, reply) => {
@@ -258,7 +258,7 @@ export async function changeRoutes(app: FastifyInstance): Promise<void> {
       query: req.query as Record<string, unknown>,
       preId: ((req.params as any)?.id as string) || __f3Id,
     });
-    return reply.code(202).send({ id: __f3Id, status: 'accepted', correlationId: ctx.correlationId });
+    return reply.code(202).send({ id: __f3Id, status: 'accepted', correlationId: ctx.correlationId, data: { id: __f3Id } });
   });
 
   app.setErrorHandler((err, req, reply) => {

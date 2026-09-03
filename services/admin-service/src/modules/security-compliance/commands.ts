@@ -3,7 +3,7 @@ import type { RequestContext } from "@civitasone/types";
 import { queue } from "../../shared/infra.js";
 import { COMMANDS } from "../../topics.js";
 
-export type Accepted = { id: string; status: string; correlationId: string };
+export type Accepted = { id: string; status: string; correlationId: string; data: { id: string } };
 
 async function pub(ctx: RequestContext, type: string, id: string, payload: Record<string, unknown>): Promise<Accepted> {
   await queue.publish(type, {
@@ -11,7 +11,7 @@ async function pub(ctx: RequestContext, type: string, id: string, payload: Recor
     correlationId: ctx.correlationId, schemaVersion: "1.0",
     payload: { ...payload, id, tenantId: ctx.tenantId },
   });
-  return { id, status: "accepted", correlationId: ctx.correlationId };
+  return { id, status: "accepted", correlationId: ctx.correlationId, data: { id } };
 }
 
 export const ingestVaptReport = (ctx: RequestContext, body: Record<string, unknown>) =>
