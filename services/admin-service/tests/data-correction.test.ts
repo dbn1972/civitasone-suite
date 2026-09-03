@@ -7,6 +7,9 @@ import { signToken } from "@civitasone/auth";
 import type { FastifyInstance } from "fastify";
 import { buildApp } from "../src/app.js";
 import { sqlClient } from "../src/shared/db.js";
+import { queue } from "../src/shared/infra.js";
+import { tenantScoped } from "../src/shared/tenant-queue.js";
+import { registerF3_support_Consumers } from "../src/modules/support/f3-consumer.js";
 
 const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
 const TENANT = "eeeeeeee-aaaa-4000-8000-0000000000a1";
@@ -46,15 +49,27 @@ async function wipe(): Promise<void> {
   }
 }
 
-beforeAll(async () => { app = await buildApp(); await wipe(); });
-afterAll(async () => { await wipe(); await app.close(); await sqlClient.end(); });
+beforeAll(async () => {
+  // propose/approve/reject were converted to F3 async (202); the consumer that
+  // applies them only runs in src/worker.ts in production, so register it here
+  // against the real queue singleton buildApp() wires the routes through.
+  registerF3_support_Consumers(tenantScoped(queue));
+  await queue.start();
+  app = await buildApp();
+  await wipe();
+});
+afterAll(async () => { await wipe(); await app.close(); await queue.stop(); await sqlClient.end(); });
 async function propose(actor = PROPOSER, tenantId = TENANT): Promise<string> {
   const res = await app.inject({
     method: "POST", url: "/v1/admin/support/data-corrections", headers: auth(actor, ["tenant_admin"], tenantId),
     payload: { targetTable: "citizen.profiles", targetId: "abc-123", justification: "Correcting a mistyped surname per ticket", proposedChange: { surname: "Nayak" } },
   });
-  expect(res.statusCode).toBe(201);
-  return res.json().id as string;
+  expect(res.statusCode).toBe(202);
+  const id = res.json().id as string;
+  // Land the propose before the caller's next step (approve/reject/list-by-id)
+  // needs the row to exist.
+  await (queue as any).drain?.();
+  return id;
 }
 
 describe("data-correction governance", () => {
@@ -64,6 +79,13 @@ describe("data-correction governance", () => {
     expect(res.statusCode).toBe(400);
   });
 
+  // GAP (not a stale-status-code issue, left unfixed — see beforeAll comment):
+  // support/routes.ts' approve endpoint lacks the synchronous pre-accept
+  // maker-checker check that PR #920 added to integration-settings and other
+  // F3-converted modules, so a self-approval is accepted (202) here and only
+  // silently rejected later inside the async consumer — the caller has no way
+  // to observe the 409 MAKER_CHECKER_VIOLATION the pre-conversion route used
+  // to return synchronously.
   it("blocks the proposer from approving their own correction", async () => {
     const id = await propose();
     const res = await app.inject({ method: "POST", url: `/v1/admin/support/data-corrections/${id}/approve`, headers: auth(PROPOSER), payload: {} });
@@ -74,13 +96,18 @@ describe("data-correction governance", () => {
   it("a distinct approver approves and emits a delegation event", async () => {
     const id = await propose();
     const res = await app.inject({ method: "POST", url: `/v1/admin/support/data-corrections/${id}/approve`, headers: auth(APPROVER), payload: {} });
-    expect(res.statusCode).toBe(200);
+    expect(res.statusCode).toBe(202);
+    await (queue as any).drain?.();
     const events = await readAsTenant(TENANT, (sql) => sql<Array<{ topic: string; payload: string }>>`
       SELECT topic, payload FROM _outbox.messages WHERE tenant_id = ${TENANT} AND topic = 'admin.data_correction.approved'`);
     const mine = events.map((e) => (typeof e.payload === "string" ? JSON.parse(e.payload) : e.payload)).filter((p) => p.id === id);
     expect(mine.length).toBe(1);
     expect(mine[0].targetTable).toBe("citizen.profiles");
 
+    // GAP (not a stale-status-code issue, left unfixed — see beforeAll comment):
+    // re-approving an already-approved correction is accepted (202) here too —
+    // the NOT_PENDING conflict is only enforced inside the async consumer, same
+    // missing-synchronous-pre-validation gap as the self-approval test above.
     const again = await app.inject({ method: "POST", url: `/v1/admin/support/data-corrections/${id}/approve`, headers: auth(APPROVER), payload: {} });
     expect(again.statusCode).toBe(409);
     expect(again.json().code).toBe("NOT_PENDING");
@@ -89,7 +116,8 @@ describe("data-correction governance", () => {
   it("rejects a correction with a reason", async () => {
     const id = await propose();
     const res = await app.inject({ method: "POST", url: `/v1/admin/support/data-corrections/${id}/reject`, headers: auth(APPROVER), payload: { reason: "not warranted" } });
-    expect(res.statusCode).toBe(200);
+    expect(res.statusCode).toBe(202);
+    await (queue as any).drain?.();
     const list = await app.inject({ method: "GET", url: "/v1/admin/support/data-corrections?status=rejected", headers: auth(APPROVER) });
     expect((list.json().data as Array<{ id: string }>).some((r) => r.id === id)).toBe(true);
   });

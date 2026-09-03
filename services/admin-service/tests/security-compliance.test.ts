@@ -89,11 +89,18 @@ describe("control library (integration)", () => {
 
   it("seeds a baseline catalogue as not_tested", async () => {
     const res = await app.inject({ method: "POST", url: "/v1/admin/security/compliance/controls/seed", headers: auth() });
-    expect(res.statusCode).toBe(201);
-    expect(res.json().data.seeded).toBeGreaterThan(0);
-    // re-seed is idempotent (no duplicates)
+    expect(res.statusCode).toBe(202);
+    const seeded = await waitForControlsSeeded(auth());
+    expect(seeded.json().data.length).toBeGreaterThan(0);
+    const seededCount = seeded.json().data.length;
+
+    // re-seed is idempotent (no duplicates) — count is unchanged once both
+    // async seed commands have landed.
     const again = await app.inject({ method: "POST", url: "/v1/admin/security/compliance/controls/seed", headers: auth() });
-    expect(again.json().data.seeded).toBe(0);
+    expect(again.statusCode).toBe(202);
+    await (queue as any).drain?.();
+    const after = await app.inject({ method: "GET", url: "/v1/admin/security/compliance/controls", headers: auth() });
+    expect(after.json().data.length).toBe(seededCount);
   });
 
   it("lists controls and filters by framework; soc2 view serves real data", async () => {
@@ -119,8 +126,8 @@ describe("control library (integration)", () => {
       method: "PATCH", url: `/v1/admin/security/compliance/controls/${controlId}`,
       headers: auth(), payload: { status: "pass", owner: "ciso@gov.in" },
     });
-    expect(patch.statusCode).toBe(200);
-    const res = await app.inject({ method: "GET", url: "/v1/admin/security/posture", headers: auth() });
+    expect(patch.statusCode).toBe(202);
+    const res = await waitForPosture(auth(), (d) => d.passed >= 1);
     expect(res.json().data.overallScore).toBe(100); // 1 pass / 1 tested
     expect(res.json().data.passed).toBe(1);
   });
@@ -139,7 +146,8 @@ describe("control library (integration)", () => {
       method: "POST", url: `/v1/admin/security/compliance/controls/${controlId}/evidence`,
       headers: auth(), payload: { kind: "audit_event", reference: "evt-123", note: "RLS enforcement verified" },
     });
-    expect(add.statusCode).toBe(201);
+    expect(add.statusCode).toBe(202);
+    await (queue as any).drain?.();
     const list = await app.inject({ method: "GET", url: `/v1/admin/security/compliance/controls/${controlId}/evidence`, headers: auth() });
     expect(list.json().data.length).toBe(1);
     expect(list.json().data[0].kind).toBe("audit_event");
@@ -160,12 +168,14 @@ describe("VAPT ingestion (integration)", () => {
       method: "POST", url: "/v1/admin/security/vapt/reports", headers: auth(),
       payload: { targetServices: ["finance-service"], scanType: "full", critical: 1, high: 2, medium: 3, low: 4 },
     });
-    expect(res.statusCode).toBe(201);
-    expect(res.json().data.findingsCount).toBe(10);
+    expect(res.statusCode).toBe(202);
+    const id = res.json().data.id as string;
+    await (queue as any).drain?.();
     const list = await app.inject({ method: "GET", url: "/v1/admin/security/vapt/reports", headers: auth() });
     expect(list.json().data.length).toBeGreaterThan(0);
-    const one = await app.inject({ method: "GET", url: `/v1/admin/security/vapt/reports/${res.json().data.id}`, headers: auth() });
+    const one = await app.inject({ method: "GET", url: `/v1/admin/security/vapt/reports/${id}`, headers: auth() });
     expect(one.json().data.critical).toBe(1);
+    expect(one.json().data.findingsCount).toBe(10);
   });
 });
 
@@ -188,24 +198,30 @@ describe("posture openIncidents reflects live sec_incidents", () => {
       method: "POST", url: "/v1/admin/security-incidents", headers: auth(),
       payload: { title: "posture open incident", severity: "high" },
     });
-    expect(create.statusCode).toBe(201);
+    expect(create.statusCode).toBe(202);
     const incidentId = create.json().data.id;
+    await (queue as any).drain?.();
 
     expect(await openCount()).toBe(before + 1);
 
-    // walk to resolved, then a different admin closes it (maker-checker)
+    // walk to resolved, then a different admin closes it (maker-checker).
+    // Each transition's route re-reads the incident's current status
+    // synchronously before accepting, so the previous step's write must have
+    // landed first — drain after every step.
     for (const toStatus of ["triaged", "contained", "resolved"]) {
       const t = await app.inject({
         method: "POST", url: `/v1/admin/security-incidents/${incidentId}/transition`,
         headers: auth(), payload: { toStatus },
       });
-      expect(t.statusCode).toBe(200);
+      expect(t.statusCode).toBe(202);
+      await (queue as any).drain?.();
     }
     const close = await app.inject({
       method: "POST", url: `/v1/admin/security-incidents/${incidentId}/close`,
       headers: authAs(CHECKER), payload: { note: "closed" },
     });
-    expect(close.statusCode).toBe(200);
+    expect(close.statusCode).toBe(202);
+    await (queue as any).drain?.();
 
     expect(await openCount()).toBe(before);
   });

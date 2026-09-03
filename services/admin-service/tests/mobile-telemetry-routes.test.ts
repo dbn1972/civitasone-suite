@@ -12,6 +12,9 @@ import type { FastifyInstance } from "fastify";
 
 const { buildApp } = await import("../src/app.js");
 const { sqlClient } = await import("../src/shared/db.js");
+const { queue } = await import("../src/shared/infra.js");
+const { tenantScoped } = await import("../src/shared/tenant-queue.js");
+const { registerMobileTelemetryConsumers } = await import("../src/modules/health/mobile-consumer.js");
 
 const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
 
@@ -41,8 +44,23 @@ async function wipe(): Promise<void> {
 }
 
 let app: FastifyInstance;
-beforeAll(async () => { app = await buildApp(); await wipe(); });
-afterAll(async () => { await wipe(); await app.close(); await sqlClient.end(); });
+beforeAll(async () => {
+  // POST /v1/admin/mobile-telemetry was converted to F3 async (202 accepted):
+  // the route validates synchronously (zod + the semantic checks below) and
+  // then publishes admin.mobile_telemetry.record; the actual event/screen-render
+  // insert only happens in registerMobileTelemetryConsumers, which is normally
+  // wired only in src/worker.ts (a process this test never runs). Register it
+  // here against the real in-memory test Queue singleton buildApp() wires the
+  // routes through, tenantScoped like worker.ts does — the consumer itself
+  // does not call runWithTenant, so FORCE RLS tables need the tenant GUC set
+  // by the wrapper (see tests/helpers/register-all-f3-consumers.ts and
+  // tests/central-config.test.ts for the same pattern).
+  registerMobileTelemetryConsumers(tenantScoped(queue));
+  await queue.start();
+  app = await buildApp();
+  await wipe();
+});
+afterAll(async () => { await wipe(); await app.close(); await queue.stop(); await sqlClient.end(); });
 
 interface SingleBody<T> { data: T }
 interface ListBody<T> { data: T[]; meta: { page: number; pageSize: number; total: number } }
@@ -56,6 +74,14 @@ interface Bucket {
 }
 interface ScreenBucket { screen: string; observations: number; sampleCount: number; renderP50Ms: number; renderP95Ms: number; renderMaxMs: number }
 interface Event { id: string; appVersion: string; platform: string; coldStartMs: number; recordedAt: string | null; warmStartMs: number | null }
+/**
+ * What the now-async ingest route actually echoes synchronously in its 202
+ * body's `data` (see mobile-routes.ts: `data: { id, recordedAt }`) — NOT the
+ * full row. The row itself (appVersion/platform/coldStartMs/etc.) only exists
+ * once the consumer applies the write, and every test that needs those reads
+ * them back via a GET below rather than off the ingest response.
+ */
+interface IngestedEvent { id: string; recordedAt: string }
 
 const AT = (offsetMs = 0): string => new Date(Date.now() + offsetMs).toISOString();
 
@@ -75,12 +101,18 @@ function batch(over: Record<string, unknown> = {}): Record<string, unknown> {
   };
 }
 
-async function ingest(over: Record<string, unknown> = {}, roles = ["employee"], tenantId = T_MAIN): Promise<Event> {
+async function ingest(over: Record<string, unknown> = {}, roles = ["employee"], tenantId = T_MAIN): Promise<IngestedEvent> {
   const res = await app.inject({
     method: "POST", url: "/v1/admin/mobile-telemetry", headers: auth(roles, tenantId), payload: batch(over),
   });
-  expect(res.statusCode).toBe(201);
-  return (res.json() as SingleBody<Event>).data;
+  expect(res.statusCode).toBe(202);
+  // Land the write before the caller reads it back (directly via DB, or via
+  // a follow-up GET) — mobile-consumer.ts DOES forward the route-generated id
+  // (`repo.insertTelemetry(w, { id: p.id, ... })`), so unlike the sandbox and
+  // central-config modules there is no id-mismatch bug here: the id echoed
+  // below is the real persisted id once this drain completes.
+  await (queue as any).drain?.();
+  return (res.json() as SingleBody<IngestedEvent>).data;
 }
 
 async function expectIngestStatus(over: Record<string, unknown>, status: number, code?: string): Promise<void> {
@@ -122,7 +154,7 @@ describe("mobile telemetry — authentication and authorisation", () => {
       const res = await app.inject({
         method: "POST", url: "/v1/admin/mobile-telemetry", headers: auth([role]), payload: batch(),
       });
-      expect(res.statusCode).toBe(201);
+      expect(res.statusCode).toBe(202);
     }
   });
 

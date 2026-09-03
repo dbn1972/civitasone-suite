@@ -16,6 +16,9 @@ import type { FastifyInstance } from "fastify";
 
 const { buildApp } = await import("../src/app.js");
 const { sqlClient } = await import("../src/shared/db.js");
+const { queue } = await import("../src/shared/infra.js");
+const { tenantScoped } = await import("../src/shared/tenant-queue.js");
+const { registerF3_sandbox_Consumers } = await import("../src/modules/sandbox/f3-consumer.js");
 const { handleSandboxRefreshExecute } = await import("../src/modules/sandbox/consumer.js");
 
 const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
@@ -44,8 +47,25 @@ async function wipe(): Promise<void> {
 }
 
 let app: FastifyInstance;
-beforeAll(async () => { app = await buildApp(); await wipe(); });
-afterAll(async () => { await wipe(); await app.close(); await sqlClient.end(); });
+beforeAll(async () => {
+  // WC-009's register/masking-rule/refresh/approve/reject routes were all
+  // converted to F3 async (202 accepted) — the apply_sandbox_N functions
+  // that actually write are only ever invoked by the consumer registered in
+  // src/worker.ts (a process this test never runs). Without registering it
+  // here, every write returns 202 and is NEVER applied. Registered against
+  // the real in-memory test Queue singleton buildApp() wires the routes
+  // through, tenantScoped like worker.ts does (see
+  // tests/helpers/register-all-f3-consumers.ts) — same pattern as
+  // tests/central-config.test.ts. This is a SEPARATE consumer from
+  // handleSandboxRefreshExecute below: that one is invoked directly in this
+  // file's tests, so registerSandboxConsumers (the bare-queue subscriber for
+  // admin.sandbox_refresh.execute) is deliberately NOT registered here.
+  registerF3_sandbox_Consumers(tenantScoped(queue));
+  await queue.start();
+  app = await buildApp();
+  await wipe();
+});
+afterAll(async () => { await wipe(); await app.close(); await queue.stop(); await sqlClient.end(); });
 
 interface SingleBody<T> { data: T }
 interface Sandbox { id: string; status: string; version: number }
@@ -53,40 +73,95 @@ interface Job { id: string; version: number; status: string }
 
 let seq = 0;
 
+/**
+ * Registers a sandbox via the (now async) route, lands the write, and
+ * returns the REAL persisted row.
+ *
+ * sandbox/f3-apply.ts's apply_sandbox_0 never forwards the route-generated
+ * id into repo.insertSandbox() — the DB assigns its own id (schema default),
+ * so the id echoed in the 202 response does NOT match the persisted row.
+ * Same class of bug already documented in tests/central-config.test.ts and
+ * tests/integration-ops.test.ts for other modules (real, pre-existing, out
+ * of this batch's scope) — worked around the same way: look the real row up
+ * by its unique business key (`code`) instead of trusting the echoed id.
+ */
+async function registerSandbox(code: string, name: string, sourceEnvironment: string): Promise<Sandbox> {
+  const res = await app.inject({
+    method: "POST", url: "/v1/admin/sandboxes", headers: auth(MAKER),
+    payload: { code, name, sourceEnvironment },
+  });
+  expect(res.statusCode).toBe(202);
+  await (queue as any).drain?.();
+  const rows = await asTenant((sql) => sql<Sandbox[]>`
+    SELECT id, status, version FROM sandbox.sandbox_environments
+    WHERE tenant_id = ${TENANT} AND code = ${code}`);
+  const found = rows[0];
+  if (!found) throw new Error(`sandbox with code '${code}' never landed`);
+  return found;
+}
+
+/**
+ * Requests a masked refresh via the (now async) route, lands the write, and
+ * returns the REAL persisted job row.
+ *
+ * apply_sandbox_2 (insertRefreshJob) has the same id-forwarding bug as
+ * apply_sandbox_0 above — look the real job up by sandboxId instead of
+ * trusting the echoed id. The newest row for this sandbox is unambiguous
+ * because each caller here creates exactly one refresh job per sandbox.
+ */
+async function requestRefresh(
+  sandboxId: string,
+  fields: Array<{ tableName: string; fieldName: string }>,
+): Promise<Job> {
+  const res = await app.inject({
+    method: "POST", url: `/v1/admin/sandboxes/${sandboxId}/refreshes`, headers: auth(MAKER),
+    payload: { requestedFields: fields },
+  });
+  expect(res.statusCode).toBe(202);
+  await (queue as any).drain?.();
+  const rows = await asTenant((sql) => sql<Job[]>`
+    SELECT id, status, version FROM sandbox.refresh_jobs
+    WHERE tenant_id = ${TENANT} AND sandbox_id = ${sandboxId}
+    ORDER BY created_at DESC LIMIT 1`);
+  const found = rows[0];
+  if (!found) throw new Error(`refresh job for sandbox '${sandboxId}' never landed`);
+  return found;
+}
+
 /** Register a sandbox, add rules, request a refresh and approve it → queued. */
 async function queuedJob(
   rules: Array<[string, string, string, string]>,
   fields: Array<{ tableName: string; fieldName: string }>,
 ): Promise<{ sandbox: Sandbox; job: Job }> {
   seq += 1;
-  const reg = await app.inject({
-    method: "POST", url: "/v1/admin/sandboxes", headers: auth(MAKER),
-    payload: { code: `csm-${seq}`, name: `Consumer ${seq}`, sourceEnvironment: "production" },
-  });
-  expect(reg.statusCode).toBe(201);
-  const sandbox = (reg.json() as SingleBody<Sandbox>).data;
+  const sandbox = await registerSandbox(`csm-${seq}`, `Consumer ${seq}`, "production");
 
   for (const [tableName, fieldName, strategy, justification] of rules) {
     const r = await app.inject({
       method: "POST", url: `/v1/admin/sandboxes/${sandbox.id}/masking-rules`, headers: auth(MAKER),
       payload: { tableName, fieldName, strategy, justification },
     });
-    expect(r.statusCode).toBe(201);
+    expect(r.statusCode).toBe(202);
   }
+  if (rules.length > 0) await (queue as any).drain?.();
 
-  const req = await app.inject({
-    method: "POST", url: `/v1/admin/sandboxes/${sandbox.id}/refreshes`, headers: auth(MAKER),
-    payload: { requestedFields: fields },
-  });
-  expect(req.statusCode).toBe(201);
-  const job = (req.json() as SingleBody<Job>).data;
+  const job = await requestRefresh(sandbox.id, fields);
 
   const app2 = await app.inject({
     method: "POST", url: `/v1/admin/sandbox-refreshes/${job.id}/approve`, headers: auth(CHECKER),
     payload: { expectedVersion: job.version },
   });
   expect(app2.statusCode).toBe(202);
-  return { sandbox, job: { ...job, version: job.version + 1, status: "queued" } };
+  await (queue as any).drain?.();
+  // apply_sandbox_3 (approve) updates the EXISTING job row in place — it
+  // looks the row up by the id already in the URL and never inserts a new
+  // one, so it does NOT have the id-forwarding bug above. Re-reading the row
+  // gives the true post-approve state instead of hand-computing
+  // version + 1 / status "queued" client-side against a write that, now
+  // async, may not have landed yet.
+  const after = await jobRow(job.id);
+  if (!after) throw new Error(`approved refresh job '${job.id}' vanished`);
+  return { sandbox, job: { id: job.id, version: after.version, status: after.status } };
 }
 
 function message(jobId: string, sandboxId: string, messageId = randomUUID()): {
@@ -268,16 +343,8 @@ describe("sandbox refresh consumer — skip and failure paths", () => {
 
   it("skips a job that is not queued (still awaiting approval)", async () => {
     seq += 1;
-    const reg = await app.inject({
-      method: "POST", url: "/v1/admin/sandboxes", headers: auth(MAKER),
-      payload: { code: `csm-pending-${seq}`, name: "Pending", sourceEnvironment: "dev" },
-    });
-    const sandbox = (reg.json() as SingleBody<Sandbox>).data;
-    const req = await app.inject({
-      method: "POST", url: `/v1/admin/sandboxes/${sandbox.id}/refreshes`, headers: auth(MAKER),
-      payload: { requestedFields: [{ tableName: "t", fieldName: "f" }] },
-    });
-    const job = (req.json() as SingleBody<Job>).data;
+    const sandbox = await registerSandbox(`csm-pending-${seq}`, "Pending", "dev");
+    const job = await requestRefresh(sandbox.id, [{ tableName: "t", fieldName: "f" }]);
 
     await handleSandboxRefreshExecute(message(job.id, sandbox.id));
 
@@ -316,11 +383,7 @@ describe("sandbox refresh consumer — skip and failure paths", () => {
 
   it("plans zero fields when the job requested none, and still completes", async () => {
     seq += 1;
-    const reg = await app.inject({
-      method: "POST", url: "/v1/admin/sandboxes", headers: auth(MAKER),
-      payload: { code: `csm-zero-${seq}`, name: "Zero", sourceEnvironment: "dev" },
-    });
-    const sandbox = (reg.json() as SingleBody<Sandbox>).data;
+    const sandbox = await registerSandbox(`csm-zero-${seq}`, "Zero", "dev");
     // The route enforces >= 1 requested field, so an empty list can only arrive
     // on a row written before that rule existed. Simulate that legacy row.
     const inserted = await asTenant((sql) => sql<Array<{ id: string }>>`

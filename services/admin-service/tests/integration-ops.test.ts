@@ -109,44 +109,80 @@ describe("CAP-060 dead-letter routes", () => {
     expect(res.statusCode).toBe(403);
   });
 
+  // The initial POST /dead-letters is F3 async (202); the id it echoes back in
+  // `data.id` is a fresh randomUUID() minted by commands.recordDeadLetterCmd
+  // (src/modules/integration-ops/commands.ts), NOT the id the consumer actually
+  // persists — src/modules/integration-ops/consumer.ts's deadLetterRecord
+  // handler calls repo.upsertDeadLetter() without forwarding payload.id, so the
+  // DB assigns its own id (schema.ts: id uuid().defaultRandom()). This is a
+  // real, separate application bug (documented, out of this batch's scope —
+  // see waitForTopicCount() above); every test below sources the real id from
+  // a GET list-by-topic (which the "bulk-requeues" test further down already
+  // relies on for the same reason) instead of the create response's echo.
+  async function landOneAndGetId(topic: string): Promise<string> {
+    await waitForTopicCount(topic, 1);
+    const list = await app.inject({
+      method: "GET",
+      url: `/v1/admin/integration-ops/dead-letters?status=pending&topic=${topic}`,
+      headers: h(token()),
+    });
+    const rows = list.json().data as Array<{ id: string }>;
+    expect(rows.length).toBeGreaterThanOrEqual(1);
+    return rows[0]!.id;
+  }
+
   it("records a dead letter idempotently by (topic,messageId)", async () => {
     const messageId = randomUUID();
+    const topic = "orders.settlement.failed";
     const payload = { orderId: "OD-42", amount: 100 };
     const first = await app.inject({
       method: "POST",
       url: "/v1/admin/integration-ops/dead-letters",
       headers: h(token()),
-      payload: { topic: "orders.settlement.failed", messageId, sourceService: "billing", payload, error: "handler threw" },
+      payload: { topic, messageId, sourceService: "billing", payload, error: "handler threw" },
     });
-    expect(first.statusCode).toBe(201);
-    expect(first.json().data.status).toBe("pending");
-    const id = first.json().data.id;
+    expect(first.statusCode).toBe(202);
 
     // same (topic,messageId) again → bumps retry_count, no duplicate row
     const again = await app.inject({
       method: "POST",
       url: "/v1/admin/integration-ops/dead-letters",
       headers: h(token()),
-      payload: { topic: "orders.settlement.failed", messageId, payload, error: "handler threw again" },
+      payload: { topic, messageId, payload, error: "handler threw again" },
     });
-    expect(again.json().data.id).toBe(id);
-    expect(again.json().data.retryCount).toBe(1);
+    expect(again.statusCode).toBe(202);
+
+    // Both creates are F3 async — drain so the second one's onConflictDoUpdate
+    // (which bumps retry_count) has actually landed, not just the first insert.
+    await (queue as any).drain?.();
+    await waitForTopicCount(topic, 1);
+    const list = await app.inject({
+      method: "GET",
+      url: `/v1/admin/integration-ops/dead-letters?status=pending&topic=${topic}`,
+      headers: h(token()),
+    });
+    const rows = list.json().data as Array<{ status: string; retryCount: number }>;
+    expect(rows).toHaveLength(1); // idempotent — one persisted row, not two
+    expect(rows[0]!.status).toBe("pending");
+    expect(rows[0]!.retryCount).toBe(1);
   });
 
   it("requeues a dead letter — republishing it to its topic on the bus", async () => {
     const messageId = randomUUID();
+    const topic = "billing.invoice.retry";
     const payload = { invoiceId: "INV-9" };
     const rec = await app.inject({
       method: "POST",
       url: "/v1/admin/integration-ops/dead-letters",
       headers: h(token()),
-      payload: { topic: "billing.invoice.retry", messageId, payload },
+      payload: { topic, messageId, payload },
     });
-    const id = rec.json().data.id;
+    expect(rec.statusCode).toBe(202);
+    const id = await landOneAndGetId(topic);
 
     // Observe the real republish on the shared memory bus.
     const received: any[] = [];
-    queue.subscribe("billing.invoice.retry", async (msg) => {
+    queue.subscribe(topic, async (msg) => {
       received.push(msg);
     });
 
@@ -184,17 +220,19 @@ describe("CAP-060 dead-letter routes", () => {
 
   it("two concurrent requeues of the same dead-letter publish exactly once (claim-before-publish)", async () => {
     const messageId = randomUUID();
+    const topic = "race.requeue.topic";
     const rec = await app.inject({
       method: "POST",
       url: "/v1/admin/integration-ops/dead-letters",
       headers: h(token()),
-      payload: { topic: "race.requeue.topic", messageId, payload: { race: true } },
+      payload: { topic, messageId, payload: { race: true } },
     });
-    const id = rec.json().data.id;
+    expect(rec.statusCode).toBe(202);
+    const id = await landOneAndGetId(topic);
 
     // Observe every republish on the shared memory bus.
     const received: any[] = [];
-    queue.subscribe("race.requeue.topic", async (msg) => {
+    queue.subscribe(topic, async (msg) => {
       received.push(msg);
     });
 
@@ -227,13 +265,16 @@ describe("CAP-060 dead-letter routes", () => {
   });
 
   it("discards a dead letter", async () => {
+    const topic = "noise.topic";
     const rec = await app.inject({
       method: "POST",
       url: "/v1/admin/integration-ops/dead-letters",
       headers: h(token()),
-      payload: { topic: "noise.topic", messageId: randomUUID(), payload: {} },
+      payload: { topic, messageId: randomUUID(), payload: {} },
     });
-    const id = rec.json().data.id;
+    expect(rec.statusCode).toBe(202);
+    const id = await landOneAndGetId(topic);
+
     const dc = await app.inject({
       method: "POST",
       url: `/v1/admin/integration-ops/dead-letters/${id}/discard`,
