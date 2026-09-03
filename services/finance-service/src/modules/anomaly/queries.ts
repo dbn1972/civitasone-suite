@@ -21,7 +21,7 @@ export interface AnomalyRecord {
   factors: unknown;
   vendorId: string | null;
   categoryId: string | null;
-  amountPaise: string | null;
+  amountMinor: bigint | null;
   dismissedBy: string | null;
   dismissReason: string | null;
   dismissedAt: Date | null;

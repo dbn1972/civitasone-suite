@@ -72,6 +72,12 @@ vi.mock("../src/modules/anomaly/queries.js", () => ({
 }));
 vi.mock("../src/modules/anomaly/commands.js", () => ({
   createAnomalyFlag: vi.fn(async () => undefined),
+  // registerAnomalyConsumers' mlAnomalyDetected handler runs inside its own
+  // db.transaction and calls the tx-scoped variant (so markProcessed + the
+  // anomaly insert commit atomically) — see anomaly/consumer.ts and the
+  // createAnomalyFlagTx docstring. Without this the mocked module has no
+  // such export and the handler throws inside the transaction.
+  createAnomalyFlagTx: vi.fn(async () => "gen-anomaly-id-001"),
 }));
 vi.mock("../src/modules/anomaly/domain.js", () => ({
   scoreTransactionZScore: vi.fn(() => null),
@@ -296,8 +302,8 @@ describe("Anomaly consumers — coverage", () => {
     }));
     await settle();
 
-    const { createAnomalyFlag } = await import("../src/modules/anomaly/commands.js");
-    expect(createAnomalyFlag).toHaveBeenCalled();
+    const { createAnomalyFlagTx } = await import("../src/modules/anomaly/commands.js");
+    expect(createAnomalyFlagTx).toHaveBeenCalled();
     await q.stop();
   });
 

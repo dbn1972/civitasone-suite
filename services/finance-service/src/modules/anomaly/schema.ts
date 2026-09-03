@@ -15,6 +15,7 @@ import {
   boolean,
   integer,
   numeric,
+  bigint,
   index,
 } from "drizzle-orm/pg-core";
 
@@ -38,8 +39,10 @@ export const financeAnomalies = pgTable(
     vendorId: text("vendor_id"),
     /** Category ID associated with the transaction */
     categoryId: text("category_id"),
-    /** Transaction amount in paise */
-    amountPaise: text("amount_paise"),
+    /** Transaction amount in minor units (paise). Renamed from amount_paise (text)
+     *  to amount_minor (bigint) by migration 0059_fix_anomaly_amount_type.sql —
+     *  canonical *Minor naming used by every other money column in this service. */
+    amountMinor: bigint("amount_minor", { mode: "bigint" }),
     /** Dismissed by (user ID) */
     dismissedBy: uuid("dismissed_by"),
     /** Dismissal reason */
