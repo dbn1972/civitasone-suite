@@ -63,7 +63,7 @@ describe('OrgTreeNode', () => {
         onToggle={toggle}
       />
     )
-    const btn = screen.getByRole('button')
+    const btn = screen.getByRole('treeitem')
     expect(btn).toBeInTheDocument()
     expect(btn).toHaveAttribute('aria-expanded', 'false')
     fireEvent.click(btn)
@@ -127,7 +127,7 @@ describe('OrgTreeNode', () => {
         onToggle={toggle}
       />
     )
-    const btn = screen.getByRole('button')
+    const btn = screen.getByRole('treeitem')
     fireEvent.keyDown(btn, { key: 'Enter' })
     expect(toggle).toHaveBeenCalledWith('div-1')
   })
@@ -143,7 +143,7 @@ describe('OrgTreeNode', () => {
         onToggle={toggle}
       />
     )
-    const btn = screen.getByRole('button')
+    const btn = screen.getByRole('treeitem')
     fireEvent.keyDown(btn, { key: 'ArrowRight' })
     expect(toggle).toHaveBeenCalledWith('div-1')
   })
@@ -159,7 +159,8 @@ describe('OrgTreeNode', () => {
         onToggle={toggle}
       />
     )
-    const btn = screen.getByRole('button')
+    // Expanded, so children render as treeitems too — scope to the parent by name.
+    const btn = screen.getByRole('treeitem', { name: /Rajiv Kumar/i })
     fireEvent.keyDown(btn, { key: 'ArrowLeft' })
     expect(toggle).toHaveBeenCalledWith('div-1')
   })
@@ -175,7 +176,7 @@ describe('OrgTreeNode', () => {
         onToggle={toggle}
       />
     )
-    const btn = screen.getByRole('button')
+    const btn = screen.getByRole('treeitem')
     expect(btn.getAttribute('aria-label')).toContain('Rajiv Kumar')
     expect(btn.getAttribute('aria-label')).toContain('Deputy Secretary')
   })

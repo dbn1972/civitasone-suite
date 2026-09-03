@@ -15,7 +15,9 @@ describe("OvertimeNewPage", () => {
 
   it("renders CCS Rules reference in subtitle", () => {
     render(<OvertimeNewPage />);
-    expect(screen.getByText(/CCS Rules/i)).toBeInTheDocument();
+    // The form's policy note also mentions "CCS Rules" — match the subtitle's
+    // specific wording so this only asserts on the PageHeader subtitle.
+    expect(screen.getByText(/CCS Rules apply/i)).toBeInTheDocument();
   });
 
   it("embeds the OvertimeClaimForm", () => {

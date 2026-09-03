@@ -8,9 +8,12 @@ vi.mock("@/app/_data/apiClient", () => ({
 
 import InternsPage from "./page";
 
+// Row-shaped fixtures: fetchJson is mocked wholesale (bypassing the real mapInterns()
+// transform in page.tsx), so these must already look like the post-map Row type — not
+// the raw ApiEmployee payload (employmentType/stipend-as-number/raw ISO dates).
 const MOCK_EMPLOYEES = [
-  { id: "i1", name: "Ananya Sharma", institution: "IIT Delhi", department: "R&D", projectAssigned: "AI Integration", stipend: 10000, periodFrom: "2026-06-01", periodTo: "2026-11-30", mentor: "Dr. Mehta", employmentType: "intern", status: "active" },
-  { id: "i2", name: "Rahul Bose", institution: "NIT Trichy", department: "IT", projectAssigned: "Cloud Migration", stipend: 8000, periodFrom: "2026-07-01", periodTo: "2026-12-31", mentor: "Ms. Kapoor", employmentType: "apprentice", status: "active" },
+  { id: "i1", name: "Ananya Sharma", institution: "IIT Delhi", department: "R&D", projectAssigned: "AI Integration", stipend: "₹10,000", periodFrom: "01/06/2026", periodTo: "30/11/2026", mentor: "Dr. Mehta", type: "Intern", status: "active" },
+  { id: "i2", name: "Rahul Bose", institution: "NIT Trichy", department: "IT", projectAssigned: "Cloud Migration", stipend: "₹8,000", periodFrom: "01/07/2026", periodTo: "31/12/2026", mentor: "Ms. Kapoor", type: "Apprentice", status: "active" },
 ];
 
 describe("InternsPage", () => {
