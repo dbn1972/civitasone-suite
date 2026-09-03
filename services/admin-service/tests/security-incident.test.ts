@@ -185,9 +185,16 @@ describe("breach notification (integration)", () => {
       method: "POST", url: `/v1/admin/security-incidents/${incidentId}/breach-notifications`,
       headers: auth(REPORTER), payload: { authority: "data_protection_board", affectedCount: 5000, windowHours: 72 },
     });
-    expect(notif.statusCode).toBe(201);
-    expect(notif.json().data.authority).toBe("data_protection_board");
-    expect(new Date(notif.json().data.deadlineAt).getTime()).toBeGreaterThan(Date.now());
+    // The create endpoint is an async F3 write (CLAUDE.md rule #3): it only ever
+    // returns 202 + { id }. authority/deadlineAt are computed and persisted by
+    // the consumer, so they must be read back from the real GET, not the 202
+    // body — see waitForBreachNotification() above.
+    expect(notif.statusCode).toBe(202);
+    const nid = await waitForBreachNotification(TENANT, incidentId);
+    const detail = await app.inject({ method: "GET", url: `/v1/admin/security-incidents/${incidentId}`, headers: auth(REPORTER) });
+    const persisted = detail.json().data.breachNotifications.find((n: { id: string }) => n.id === nid);
+    expect(persisted.authority).toBe("data_protection_board");
+    expect(new Date(persisted.deadlineAt).getTime()).toBeGreaterThan(Date.now());
   });
 
   it("marks the notification submitted with an authority reference", async () => {
@@ -234,8 +241,11 @@ describe("breach deadline is hard-capped at DPDP §8(6) 72h", () => {
       method: "POST", url: `/v1/admin/security-incidents/${id}/breach-notifications`,
       headers: auth(REPORTER), payload: { authority: "data_protection_board", affectedCount: 10 },
     });
-    expect(notif.statusCode).toBe(201);
-    const gap = new Date(notif.json().data.deadlineAt).getTime() - new Date(detectedAt).getTime();
+    expect(notif.statusCode).toBe(202);
+    const nid = await waitForBreachNotification(TENANT, id);
+    const detail = await app.inject({ method: "GET", url: `/v1/admin/security-incidents/${id}`, headers: auth(REPORTER) });
+    const persisted = detail.json().data.breachNotifications.find((n: { id: string }) => n.id === nid);
+    const gap = new Date(persisted.deadlineAt).getTime() - new Date(detectedAt).getTime();
     expect(gap).toBe(HOURS_72_MS);
   });
 
@@ -246,12 +256,14 @@ describe("breach deadline is hard-capped at DPDP §8(6) 72h", () => {
       // 720h (30 days) attempt — the extra key is stripped and the window stays 72h.
       headers: auth(REPORTER), payload: { authority: "data_protection_board", affectedCount: 10, windowHours: 720 },
     });
-    expect(notif.statusCode).toBe(201);
-    const gap = new Date(notif.json().data.deadlineAt).getTime() - new Date(detectedAt).getTime();
+    expect(notif.statusCode).toBe(202);
+    const nid = await waitForBreachNotification(TENANT, id);
+    const detail = await app.inject({ method: "GET", url: `/v1/admin/security-incidents/${id}`, headers: auth(REPORTER) });
+    const persisted = detail.json().data.breachNotifications.find((n: { id: string }) => n.id === nid);
+    const gap = new Date(persisted.deadlineAt).getTime() - new Date(detectedAt).getTime();
     expect(gap).toBe(HOURS_72_MS);
     // and it is persisted as 72h, not 720h
-    const detail = await app.inject({ method: "GET", url: `/v1/admin/security-incidents/${id}`, headers: auth(REPORTER) });
-    expect(detail.json().data.breachNotifications[0].windowHours).toBe(72);
+    expect(persisted.windowHours).toBe(72);
   });
 });
 
