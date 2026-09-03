@@ -26,6 +26,7 @@ export function registerIntegrationOpsConsumers(queue: Queue): void {
       await db.transaction(async (tx) => {
         if (!(await markProcessed(tx, msg.messageId))) return;
         await repo.upsertDeadLetter(tx, {
+          id: p.id,
           tenantId: p.tenantId,
           topic: p.topic,
           ...(p.messageId ? { messageId: p.messageId } : {}),
