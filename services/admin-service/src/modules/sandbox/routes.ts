@@ -35,6 +35,7 @@ import {
   assertVersionMatch,
   assertSandboxRefreshable,
   type MaskingRule,
+  type MaskingPlan,
 } from "./domain.js";
 import type { SandboxEnvironmentRow, MaskingRuleRow, RefreshJobRow, RefreshMaskedFieldRow } from "./schema.js";
 
@@ -111,7 +112,7 @@ function serializeRule(row: MaskingRuleRow): Record<string, unknown> {
   };
 }
 
-function serializeJob(row: RefreshJobRow): Record<string, unknown> {
+function serializeJob(row: RefreshJobRow, plan?: MaskingPlan): Record<string, unknown> {
   return {
     id: row.id,
     sandboxId: row.sandboxId,
@@ -130,7 +131,27 @@ function serializeJob(row: RefreshJobRow): Record<string, unknown> {
     failureReason: row.failureReason,
     createdAt: iso(row.createdAt),
     version: row.version,
+    plan,
   };
+}
+
+/**
+ * Recompute the fail-closed masking plan for a job, read-only, from its
+ * stored `requestedFields` against the sandbox's CURRENT masking rules.
+ *
+ * GAP this closes: apply_sandbox_2 (the F3 consumer) already computes this
+ * plan via buildMaskingPlan, purely so the requester can see the fail-closed
+ * outcome before a second actor approves it — but its return type is
+ * `Promise<void>` (F3 conversion discards the result) and the plan is never
+ * persisted, so there was no way for a caller to see it at all. Recomputing
+ * on read avoids a schema change and stays consistent with the documented
+ * semantics ("the authoritative plan is recomputed ... from the rules as
+ * they stand then") — buildMaskingPlan/toDomainRules were already imported
+ * here but unused before this fix.
+ */
+async function jobPlan(tenantId: string, job: RefreshJobRow): Promise<MaskingPlan> {
+  const { rows } = await repo.listMaskingRules(tenantId, job.sandboxId, 500, 0);
+  return buildMaskingPlan(job.requestedFields, toDomainRules(rows));
 }
 
 function serializeMaskedField(row: RefreshMaskedFieldRow): Record<string, unknown> {
@@ -163,6 +184,12 @@ export async function sandboxRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, SANDBOX_ROLES);
     const body = parseOrThrow(registerBody, req.body);
+
+    // Synchronous pre-accept check mirroring apply_sandbox_0's
+    // findSandboxByCodeTx guard — a duplicate code must fail fast as 409
+    // rather than get a false-positive 202 and DLQ on the unique violation.
+    const clash = await repo.findSandboxByCode(ctx.tenantId, body.code);
+    if (clash) throw new HttpError(409, "SANDBOX_EXISTS", `a sandbox with code '${body.code}' already exists`);
 
     const __f3Id = randomUUID();
     await publishAdminCommand(ctx, COMMANDS.f3RouteWrite, __f3Id, {
@@ -201,6 +228,12 @@ export async function sandboxRoutes(app: FastifyInstance): Promise<void> {
     const body = parseOrThrow(ruleBody, req.body);
     assertPreserveJustified(body.strategy, body.justification);
 
+    // Synchronous pre-accept check mirroring apply_sandbox_1's
+    // findSandboxTx guard — an unknown (or cross-tenant) sandbox id must
+    // fail fast as 404 rather than get a false-positive 202.
+    const sandbox = await repo.findSandbox(ctx.tenantId, id);
+    if (!sandbox) throw new HttpError(404, "NOT_FOUND", "sandbox not found");
+
     const __f3Id = randomUUID();
     await publishAdminCommand(ctx, COMMANDS.f3RouteWrite, __f3Id, {
       op: 'sandbox_op_1',
@@ -231,6 +264,14 @@ export async function sandboxRoutes(app: FastifyInstance): Promise<void> {
     const { id } = parseOrThrow(idParam, req.params);
     const body = parseOrThrow(refreshBody, req.body);
 
+    // Synchronous pre-accept checks mirroring apply_sandbox_2's
+    // findSandboxTx + assertSandboxRefreshable guards — unknown sandbox,
+    // disabled sandbox, and a refresh already in progress must all fail
+    // fast instead of getting a false-positive 202.
+    const sandbox = await repo.findSandbox(ctx.tenantId, id);
+    if (!sandbox) throw new HttpError(404, "NOT_FOUND", "sandbox not found");
+    assertSandboxRefreshable(sandbox.status);
+
     const __f3Id = randomUUID();
     await publishAdminCommand(ctx, COMMANDS.f3RouteWrite, __f3Id, {
       op: 'sandbox_op_2',
@@ -251,7 +292,8 @@ export async function sandboxRoutes(app: FastifyInstance): Promise<void> {
     const { rows, total } = await repo.listRefreshJobs(
       ctx.tenantId, q.limit, (q.page - 1) * q.limit, q.status, q.sandboxId,
     );
-    return reply.send(listEnvelope(rows.map(serializeJob), { page: q.page, pageSize: q.limit, total }));
+    const jobs = await Promise.all(rows.map(async (row) => serializeJob(row, await jobPlan(ctx.tenantId, row))));
+    return reply.send(listEnvelope(jobs, { page: q.page, pageSize: q.limit, total }));
   });
 
   // ── approve a refresh (CHECKER half — queues the stubbed execution) ───────
@@ -260,6 +302,16 @@ export async function sandboxRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, SANDBOX_ROLES);
     const { id } = parseOrThrow(idParam, req.params);
     const body = parseOrThrow(decideBody, req.body);
+
+    // Synchronous pre-accept checks mirroring apply_sandbox_3's guards —
+    // unknown job, a job not awaiting approval, self-approval, and a stale
+    // expectedVersion must all fail fast instead of getting a
+    // false-positive 202.
+    const job = await repo.findRefreshJob(ctx.tenantId, id);
+    if (!job) throw new HttpError(404, "NOT_FOUND", "refresh job not found");
+    assertAwaitingApproval(job.status);
+    assertApproverDistinct(job.requestedBy, ctx.actorId);
+    assertVersionMatch(job.version, body.expectedVersion);
 
     const __f3Id = randomUUID();
     await publishAdminCommand(ctx, COMMANDS.f3RouteWrite, __f3Id, {
@@ -279,6 +331,14 @@ export async function sandboxRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, SANDBOX_ROLES);
     const { id } = parseOrThrow(idParam, req.params);
     const body = parseOrThrow(rejectBody, req.body);
+
+    // Synchronous pre-accept checks mirroring apply_sandbox_4's guards —
+    // same set as approve above.
+    const job = await repo.findRefreshJob(ctx.tenantId, id);
+    if (!job) throw new HttpError(404, "NOT_FOUND", "refresh job not found");
+    assertAwaitingApproval(job.status);
+    assertApproverDistinct(job.requestedBy, ctx.actorId);
+    assertVersionMatch(job.version, body.expectedVersion);
 
     const __f3Id = randomUUID();
     await publishAdminCommand(ctx, COMMANDS.f3RouteWrite, __f3Id, {
@@ -310,7 +370,7 @@ export async function sandboxRoutes(app: FastifyInstance): Promise<void> {
     const { id } = parseOrThrow(idParam, req.params);
     const job = await repo.findRefreshJob(ctx.tenantId, id);
     if (!job) throw new HttpError(404, "NOT_FOUND", "refresh job not found");
-    return reply.send(singleEnvelope(serializeJob(job)));
+    return reply.send(singleEnvelope(serializeJob(job, await jobPlan(ctx.tenantId, job))));
   });
 
   registerEnvelopeErrorHandler(app);

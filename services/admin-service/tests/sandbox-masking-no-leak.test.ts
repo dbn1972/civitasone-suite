@@ -270,11 +270,21 @@ describe("WC-009 masking surface — carries names and strategies, never values"
     const body = jobRes.json() as { data: Record<string, unknown> };
     // A value-bearing key would have to be introduced deliberately; assert the
     // known key set so an addition is caught by review, not by an incident.
+    //
+    // "plan" (added when the missing-sync-validation fix started recomputing
+    // the fail-closed masking plan on read, see routes.ts's jobPlan()) is
+    // reviewed and allowed here: its fields carry only tableName, fieldName,
+    // strategy and ruleSource — the same names-and-strategies-never-values
+    // shape asserted for masking rules below, never a field VALUE.
     expect(Object.keys(body.data).sort()).toEqual([
       "approvedAt", "approvedBy", "completedAt", "createdAt", "dataMovement",
-      "failureReason", "id", "maskedFieldCount", "preservedFieldCount",
+      "failureReason", "id", "maskedFieldCount", "plan", "preservedFieldCount",
       "rejectedReason", "requestedBy", "requestedFields", "sandboxId",
       "sourceEnvironment", "startedAt", "status", "version",
     ]);
+    const plan = body.data.plan as { fields: Array<Record<string, unknown>> };
+    for (const field of plan.fields) {
+      expect(Object.keys(field).sort()).toEqual(["fieldName", "masked", "ruleSource", "strategy", "tableName"]);
+    }
   });
 });
