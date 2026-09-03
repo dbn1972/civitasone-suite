@@ -2,6 +2,7 @@ import type { Queue } from "@civitasone/queue";
 import { db } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
+import { HttpError } from "../../shared/context.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
 import * as lifecycleRepo from "../lifecycle/repo.js";
@@ -251,7 +252,24 @@ export function registerEmployeeConsumers(rawQueue: Queue): void {
       if (p.napsId      !== undefined) { patch.napsId      = p.napsId; changedFields.push("napsId"); }
       if (p.payStructureId !== undefined) { patch.payStructureId = p.payStructureId; changedFields.push("payStructureId"); }
       if (p.managerId    !== undefined) { patch.managerId    = p.managerId; changedFields.push("managerId"); }
-      await repo.updateEmployee(tx, p.id, patch);
+      if (patch.basicMinor !== undefined) {
+        // Concurrency guard: this generic profile-update path lets an HR
+        // admin edit basicMinor directly (PATCH /v1/hrms/employees/:id),
+        // which can race the pay-matrix annual increment, the direct
+        // promotion route, or the eOffice-approved promotion path — all
+        // independent, asynchronous writers of the same field. Read the
+        // row's current version fresh, inside this transaction, and use it
+        // as an optimistic-concurrency precondition so this write can never
+        // silently clobber (or be silently clobbered by) one of those. Every
+        // other field on this path keeps the existing blind-overwrite
+        // behaviour — only basicMinor needs this. See employee/repo.ts
+        // updateEmployeeVersioned.
+        const emp = await repo.findVersionForUpdate(tx, p.id, p.tenantId);
+        if (!emp) throw new HttpError(404, "NOT_FOUND", `employee ${p.id} not found`);
+        await repo.updateEmployeeVersioned(tx, p.id, p.tenantId, emp.version, patch, msg.actorId);
+      } else {
+        await repo.updateEmployee(tx, p.id, patch);
+      }
       await enqueue(tx, {
         topic: EVENTS.employeeUpdated, eventType: EVENTS.employeeUpdated,
         tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,

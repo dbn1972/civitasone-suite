@@ -1,11 +1,12 @@
 import { randomUUID } from "node:crypto";
 import type { Queue } from "@civitasone/queue";
 import { pino } from "pino";
-import { and, eq, sql } from "drizzle-orm";
+import { sql } from "drizzle-orm";
 import { db } from "../../shared/db.js";
 import { markProcessed } from "../../shared/outbox.js";
+import { HttpError } from "../../shared/context.js";
 import { COMMANDS } from "../../topics.js";
-import { hrmsEmployees } from "../employee/schema.js";
+import * as employeeRepo from "../employee/repo.js";
 import { hrmsServiceBookEntries } from "../service-book/schema.js";
 
 const log = pino({ name: "hrms-f3-pay-matrix" });
@@ -97,9 +98,34 @@ export function registerF3_pay_matrix_Consumers(queue: Queue): void {
               // pre-conversion behaviour, but there is no pay change to
               // apply).
               if (toMinor > fromMinor) {
-                await tx.update(hrmsEmployees)
-                  .set({ basicMinor: BigInt(toMinor), updatedBy: msg.actorId, updatedAt: new Date() })
-                  .where(and(eq(hrmsEmployees.tenantId, tenantId), eq(hrmsEmployees.id, employeeId)));
+                // Concurrency guard: `fromMinor` was baked into this plan
+                // when the route ran, synchronously, possibly long before
+                // this consumer executes. Re-read the employee's CURRENT
+                // basicMinor/version now, inside this transaction, rather
+                // than trusting the queued fromMinor. Other consumers
+                // (promotion, generic employee-update) can also write
+                // basicMinor — if one of them landed since this plan was
+                // computed, applying `toMinor` verbatim would silently
+                // clobber that other pay change with a now-stale plan.
+                const emp = await employeeRepo.findVersionForUpdate(tx, employeeId, tenantId);
+                if (!emp) {
+                  log.warn({ messageId: msg.messageId, employeeId }, "pay-matrix increment: employee not found at write time, skipping");
+                  continue;
+                }
+                if (emp.basicMinor !== BigInt(fromMinor)) {
+                  log.error(
+                    { messageId: msg.messageId, employeeId, planFromMinor: fromMinor, actualBasicMinor: emp.basicMinor.toString(), toMinor },
+                    "pay-matrix increment: employee's basicMinor no longer matches this plan's starting point — another consumer (promotion/update) changed it first; refusing to apply a stale increment",
+                  );
+                  throw new HttpError(
+                    409,
+                    "STALE_INCREMENT_PLAN",
+                    `employee ${employeeId} basicMinor changed since the increment plan was computed (expected ${fromMinor}, found ${emp.basicMinor})`,
+                  );
+                }
+                await employeeRepo.updateEmployeeVersioned(
+                  tx, employeeId, tenantId, emp.version, { basicMinor: BigInt(toMinor) }, msg.actorId,
+                );
               }
             }
             break;

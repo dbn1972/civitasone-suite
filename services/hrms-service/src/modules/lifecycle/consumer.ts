@@ -4,11 +4,13 @@ import { NOTIFICATION_SEND, buildNotificationPayload } from "@civitasone/events"
 import { db } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
+import { HttpError } from "../../shared/context.js";
 import { COMMANDS } from "../../topics.js";
 import { and, eq } from "drizzle-orm";
 import { hrmsServiceBookEntries } from "../service-book/schema.js";
 import { hrmsEmployees } from "../employee/schema.js";
 import * as repo from "./repo.js";
+import * as employeeRepo from "../employee/repo.js";
 
 const log = pino({ name: "lifecycle-consumer" });
 const AUDIT = "audit.event.record";
@@ -188,10 +190,18 @@ export function registerLifecycleMutationConsumers(q: Queue): void {
         effectiveDate: p.effectiveDate, orderRef: p.orderRef ?? null,
         newBasicMinor: p.newBasicMinor !== undefined && p.newBasicMinor !== null ? BigInt(p.newBasicMinor) : null,
       });
-      const promoSet: Record<string, unknown> = { designationId: p.toDesigId, updatedBy: msg.actorId };
+      // Concurrency guard: basicMinor is also written by the pay-matrix
+      // annual-increment consumer, the eOffice-approved promotion path, and
+      // the generic employee-update command. Read the row's current version
+      // fresh, inside this transaction, and use it as an optimistic-
+      // concurrency precondition so a promotion landing close together with
+      // one of those other writes can never silently clobber it (or be
+      // silently clobbered by it) — see employee/repo.ts updateEmployeeVersioned.
+      const emp = await employeeRepo.findVersionForUpdate(tx, p.employeeId, p.tenantId);
+      if (!emp) throw new HttpError(404, "NOT_FOUND", `employee ${p.employeeId} not found`);
+      const promoSet: Record<string, unknown> = { designationId: p.toDesigId };
       if (p.newBasicMinor !== undefined && p.newBasicMinor !== null) promoSet.basicMinor = BigInt(p.newBasicMinor);
-      await tx.update(hrmsEmployees).set(promoSet)
-        .where(and(eq(hrmsEmployees.id, p.employeeId), eq(hrmsEmployees.tenantId, p.tenantId)));
+      await employeeRepo.updateEmployeeVersioned(tx, p.employeeId, p.tenantId, emp.version, promoSet, msg.actorId);
       await tx.insert(hrmsServiceBookEntries).values({
         tenantId: p.tenantId, employeeId: p.employeeId, entryType: "promotion",
         effectiveDate: p.effectiveDate,
