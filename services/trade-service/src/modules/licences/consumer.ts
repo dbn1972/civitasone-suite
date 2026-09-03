@@ -5,6 +5,7 @@ import { db } from "../../shared/db.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { writeAudit } from "../../shared/audit.js";
 import { tenantScoped } from "../../shared/tenant-queue.js";
+import { cache } from "../../shared/infra.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
 import { generateLicenceNumber, generateVerificationCode, calculateValidUntil } from "./domain.js";
@@ -29,6 +30,9 @@ export function registerLicenceConsumers(rawQueue: Queue): void {
       await repo.insertLicence(tx, {
         id: p.id, tenantId: msg.tenantId, applicationId: p.applicationId, licenceNumber, status: "active", tradeCategory: p.tradeCategory, issuedAt: now, validFrom: now, validUntil, verificationCode, createdBy: msg.actorId, updatedBy: msg.actorId,
       });
+      await repo.insertDirectoryEntry(tx, {
+        verificationCode, tenantId: msg.tenantId, licenceId: p.id, licenceNumber, tradeCategory: p.tradeCategory, status: "active", issuedAt: now, validFrom: now, validUntil,
+      });
       await enqueue(tx, { topic: EVENTS.licenceIssued, eventType: EVENTS.licenceIssued, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { licenceId: p.id, licenceNumber, applicationId: p.applicationId, tradeCategory: p.tradeCategory, validFrom: now.toISOString(), validUntil: validUntil.toISOString(), verificationCode } });
       await writeAudit(tx, ctxOf(msg), { action: "licence.issue", resourceType: "trade_licence", resourceId: p.id });
     });
@@ -41,6 +45,7 @@ export function registerLicenceConsumers(rawQueue: Queue): void {
       if (!(await markProcessed(tx, msg.messageId))) return;
       await repo.updateLicenceStatus(tx, p.licenceId, msg.tenantId, "suspended", { suspendedAt: new Date(), suspensionReason: p.reason }, msg.actorId);
       await repo.insertAction(tx, { id: randomUUID(), tenantId: msg.tenantId, licenceId: p.licenceId, actionType: "suspension", reason: p.reason, effectiveFrom: new Date(), performedBy: msg.actorId });
+      await cache.invalidateResourceAfterCommit(tx, msg.tenantId, "licence");
       await enqueue(tx, { topic: EVENTS.licenceSuspended, eventType: EVENTS.licenceSuspended, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { licenceId: p.licenceId, reason: p.reason } });
       await writeAudit(tx, ctxOf(msg), { action: "licence.suspend", resourceType: "trade_licence", resourceId: p.licenceId });
     });
@@ -52,6 +57,7 @@ export function registerLicenceConsumers(rawQueue: Queue): void {
       if (!(await markProcessed(tx, msg.messageId))) return;
       await repo.updateLicenceStatus(tx, p.licenceId, msg.tenantId, "cancelled", { cancelledAt: new Date(), cancellationReason: p.reason }, msg.actorId);
       await repo.insertAction(tx, { id: randomUUID(), tenantId: msg.tenantId, licenceId: p.licenceId, actionType: "cancellation", reason: p.reason, effectiveFrom: new Date(), performedBy: msg.actorId });
+      await cache.invalidateResourceAfterCommit(tx, msg.tenantId, "licence");
       await enqueue(tx, { topic: EVENTS.licenceCancelled, eventType: EVENTS.licenceCancelled, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { licenceId: p.licenceId, reason: p.reason } });
       await writeAudit(tx, ctxOf(msg), { action: "licence.cancel", resourceType: "trade_licence", resourceId: p.licenceId });
     });
@@ -63,6 +69,7 @@ export function registerLicenceConsumers(rawQueue: Queue): void {
       if (!(await markProcessed(tx, msg.messageId))) return;
       await repo.updateLicenceStatus(tx, p.licenceId, msg.tenantId, "active", { suspendedAt: null, suspensionReason: null }, msg.actorId);
       await repo.insertAction(tx, { id: randomUUID(), tenantId: msg.tenantId, licenceId: p.licenceId, actionType: "restoration", reason: p.reason, effectiveFrom: new Date(), performedBy: msg.actorId });
+      await cache.invalidateResourceAfterCommit(tx, msg.tenantId, "licence");
       await enqueue(tx, { topic: EVENTS.licenceRestored, eventType: EVENTS.licenceRestored, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { licenceId: p.licenceId, reason: p.reason } });
       await writeAudit(tx, ctxOf(msg), { action: "licence.restore", resourceType: "trade_licence", resourceId: p.licenceId });
     });
