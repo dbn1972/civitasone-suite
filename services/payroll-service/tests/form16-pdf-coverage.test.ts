@@ -7,14 +7,28 @@
  * - GET /v1/payroll/tax/form16/bulk-status (happy path, 400, 401, 403, 404)
  * - GET /v1/payroll/tax/form16/bulk-download (happy path, 400, 401, 403, 404)
  */
-import { describe, it, expect, afterAll } from "vitest";
+import { describe, it, expect, afterAll, beforeAll, vi } from "vitest";
 import { signToken } from "@civitasone/auth";
 import { buildApp } from "../src/app.js";
 import { randomUUID } from "node:crypto";
+import { db } from "../src/shared/db.js";
+import { runWithTenant } from "@civitasone/db";
+import { payrollStructures, payrollRuns, payrollSlips } from "../src/modules/payroll/schema.js";
+import { queue } from "../src/shared/infra.js";
+import { registerForm16BulkConsumers } from "../src/modules/form16-pdf/bulk-consumer.js";
+import { registerTaxConfig } from "../src/modules/tax/engine.js";
 
 const SECRET = "test_secret_for_civitasone_32chr";
 const TENANT = "aaaaaaaa-1111-4000-8000-000000000099";
 const ACTOR = "aaaaaaaa-bbbb-4000-8000-000000000001";
+
+// Fixture IDs for a minimal disbursed run + slip (see beforeAll below).
+// Distinct from tests/form16-bulk-routes.test.ts's own fixture IDs (same
+// tenant, different file/module graph) to avoid cross-file collisions.
+const STRUCT_ID = "77777777-0001-4000-8000-000000000002";
+const RUN_ID = "77777777-0002-4000-8000-000000000002";
+const SLIP_ID = "77777777-0004-4000-8000-000000000002";
+const SEEDED_EMP_ID = "77777777-0003-4000-8000-000000000002";
 
 function adminToken(roles = ["payroll_admin", "super_admin"]) {
   return signToken({ sub: ACTOR, tid: TENANT, roles, sid: "s1" }, SECRET);
@@ -28,6 +42,107 @@ function employeeToken(sub = ACTOR) {
 function citizenToken() {
   return signToken({ sub: ACTOR, tid: TENANT, roles: ["citizen"], sid: "s1" }, SECRET);
 }
+
+/**
+ * The form16_bulk_jobs row is only ever created by registerForm16BulkConsumers's
+ * handler (src/modules/form16-pdf/bulk-consumer.ts), wired up in production by
+ * src/worker.ts — a separate process that these HTTP-only buildApp() tests
+ * never run. With zero employees to process, that consumer's job goes
+ * pending -> processing -> completed in well under 100ms once the DB
+ * connection pool is warm, too narrow a window to race reliably. The
+ * fetchPayrollInput mock below adds an artificial ~150ms delay per employee
+ * so the seeded job below stays "processing" for a comfortable, deterministic
+ * window instead — this wait just needs to land inside that window.
+ */
+function waitForConsumer(ms = 80) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+// See tests/form16-bulk-routes.test.ts for the full rationale on these mocks
+// (HRMS/render/storage) — same approach, reused here for this file's own
+// "409 conflict" bulk-generate test.
+vi.mock("../src/shared/hrms-client.js", () => ({
+  fetchPayrollInput: vi.fn(async () => {
+    await new Promise((r) => setTimeout(r, 150));
+    return { month: "2024-03", employees: [], lopDays: {} };
+  }),
+  HrmsUnavailableError: class HrmsUnavailableError extends Error {
+    readonly code = "HRMS_UNAVAILABLE";
+  },
+}));
+
+vi.mock("@civitasone/render", () => ({
+  renderPdf: vi.fn(async () => ({
+    buffer: Buffer.from("%PDF-1.7 mock pdf content"),
+    pages: 1,
+    mode: "playwright",
+    signed: false,
+  })),
+  signPdfWithDsc: vi.fn(async () => ({
+    buffer: Buffer.from("%PDF-1.7 signed mock pdf content"),
+    signerCN: "Test Signer CN",
+    signedAt: new Date().toISOString(),
+    serialNumber: "0A1B2C3D",
+    sha256Fingerprint: "abcdef1234567890",
+  })),
+  DscValidationError: class DscValidationError extends Error {
+    readonly code = "DSC_VALIDATION_FAILED";
+  },
+  validateDscCertificate: vi.fn(),
+}));
+
+vi.mock("@civitasone/storage", () => ({
+  putObject: vi.fn(async () => undefined),
+  getObject: vi.fn(async () => Buffer.from("mock-data")),
+  deleteObject: vi.fn(async () => undefined),
+  presignedGetUrl: vi.fn(async () => "https://example.invalid/mock-signed-url"),
+}));
+
+beforeAll(async () => {
+  // Seed a minimal disbursed run + slip so the bulk-generate consumer
+  // actually has one employee to process (see mocks above) instead of
+  // racing its near-instant zero-employee completion path.
+  await runWithTenant(TENANT, () => db.transaction(async (tx) => {
+    await tx.insert(payrollStructures).values({
+      id: STRUCT_ID, tenantId: TENANT, name: "Form16 Coverage Test Structure",
+      createdBy: ACTOR, updatedBy: ACTOR,
+    }).onConflictDoNothing();
+    await tx.insert(payrollRuns).values({
+      id: RUN_ID, tenantId: TENANT, runNo: "RUN-F16-COVERAGE-TEST", month: "2024-03",
+      structureId: STRUCT_ID, status: "disbursed", createdBy: ACTOR, updatedBy: ACTOR,
+    }).onConflictDoNothing();
+    await tx.insert(payrollSlips).values({
+      id: SLIP_ID, tenantId: TENANT, runId: RUN_ID, employeeId: SEEDED_EMP_ID,
+      employeeNo: "F16COVTEST01", grossMinor: 5000000n, netPayMinor: 4500000n,
+      createdBy: ACTOR, updatedBy: ACTOR,
+    }).onConflictDoNothing();
+  }));
+
+  // tests/setup-tax-config.ts (global vitest setupFiles) only registers FY
+  // 2024-26; this file's "409 conflict" test uses FY 2017-18 (deliberately
+  // distinct from every FY tests/form16-bulk-routes.test.ts uses, since both
+  // files share this tenant and vitest runs test files in parallel by
+  // default — reusing an FY across files would let one file's job trip the
+  // other's duplicate-job check).
+  const MINIMAL_TAX_CONFIG = {
+    slabs: [{ from: 0, to: Infinity, rate: 0.1 }],
+    stdDeduction: 50000,
+    rebateIncomeCap: 500000,
+    rebateMax: 12500,
+    surchargeBands: [],
+  };
+  registerTaxConfig("new", 2017, MINIMAL_TAX_CONFIG);
+  registerTaxConfig("old", 2017, MINIMAL_TAX_CONFIG);
+
+  // Wire the real bulk-generate consumer onto the app's `queue` singleton (the
+  // same instance src/modules/form16-pdf/routes.ts publishes to) so that
+  // POST /bulk-generate's queue.publish() actually gets consumed here, the way
+  // it would in production via src/worker.ts. createQueue() (see
+  // shared/infra.ts) already wraps every handler in withTenantConsumer, so no
+  // extra tenant-context wrapping is needed on top of this registration.
+  registerForm16BulkConsumers(queue);
+  await queue.start();
+});
 
 afterAll(async () => { /* pool closed by other test teardown */ });
 
@@ -170,10 +285,14 @@ describe("POST /v1/payroll/tax/form16/bulk-generate — happy path", () => {
     // 202 if no prior job exists, 409 if a pending job exists from prior test runs, 500 if DB issue
     expect([202, 409, 500]).toContain(res.statusCode);
     if (res.statusCode === 202) {
+      // sendAccepted() sends the accepted-response schema FLAT — {id, status,
+      // correlationId} — no `data` wrapper (see packages/schemas/src/validate.ts
+      // and acceptedResponseSchema in packages/schemas/src/common.ts). Same
+      // convention as every other F3-converted route in this service (e.g.
+      // tests/payroll-core-routes.test.ts asserts res.json().id).
       const body = res.json();
-      expect(body.data.jobId).toBeDefined();
-      expect(body.data.message).toContain("bulk");
-      expect(body.data.fy).toBe("2025-26");
+      expect(body.id).toBeDefined();
+      expect(body.status).toBe("accepted");
     }
   });
 
@@ -287,16 +406,23 @@ describe("POST /v1/payroll/tax/form16/bulk-generate — 409 conflict", () => {
       method: "POST",
       url: "/v1/payroll/tax/form16/bulk-generate",
       headers: { authorization: `Bearer ${adminToken()}` },
-      payload: { fy: "2023-24" },
+      payload: { fy: "2017-18" },
     });
 
     if (res1.statusCode === 202) {
+      // Give the consumer a moment to land the form16_bulk_jobs row (status
+      // "pending"/"processing") before the duplicate-job check runs —
+      // without this the row doesn't exist yet and the second request also
+      // gets 202. See tests/form16-bulk-routes.test.ts for the full
+      // rationale.
+      await waitForConsumer();
+
       // Second request with same FY — should be 409
       const res2 = await app.inject({
         method: "POST",
         url: "/v1/payroll/tax/form16/bulk-generate",
         headers: { authorization: `Bearer ${adminToken()}` },
-        payload: { fy: "2023-24" },
+        payload: { fy: "2017-18" },
       });
       expect([409, 500]).toContain(res2.statusCode);
     }
