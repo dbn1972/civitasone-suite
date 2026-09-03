@@ -55,10 +55,14 @@ export const initiateEftBody = z.object({
   mode:        z.enum(["NEFT", "RTGS", "IMPS", "DBT", "PFMS", "cheque"]),
   // C3 FIX: use string-encoded bigint to avoid 2^53 precision loss.
   // The consumer validates amountMinor === bill.netMinor (conservation invariant).
-  amountMinor: z.union([
-    z.number().int().positive(),
-    z.string().regex(/^\d+$/, "amountMinor must be a positive integer string"),
-  ]),
+  // BUG FIX: was a hand-rolled z.union([z.number().int().positive(), z.string()...])
+  // with NO safe-integer bound on the number branch, so an already-precision-lost
+  // JSON number above 2^53 was silently accepted on this bank-transfer initiation
+  // route. Reuse moneyMinorField (the canonical zMoneyMinor decoder, already used
+  // by every other amountMinor field in this file) instead. consumer.ts's
+  // paymentInitiate schema union was extended to accept the resulting bigint
+  // payload (it previously only allowed string|number, matching this old shape).
+  amountMinor: moneyMinorField,
   currency:    z.string().length(3).default("INR"),
   eftRef:      z.string().optional(),
   bankAccountId: z.string().uuid().optional(),
