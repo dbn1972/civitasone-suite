@@ -3,6 +3,7 @@ import { parseDecisionCallback } from "@civitasone/eoffice-sdk";
 import { db } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
+import { HttpError } from "../../shared/context.js";
 import { CONSUMED_EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
 import * as employeeRepo from "../employee/repo.js";
@@ -50,11 +51,21 @@ export function registerPromotionEOfficeConsumers(queue: Queue): void {
         }, tx);
         if (!promotion) return; // not ours / already decided
         affectedEmployeeId = promotion.employeeId;
-        const patch: Parameters<typeof employeeRepo.updateEmployee>[2] = {
-          designationId: promotion.toDesigId, updatedBy: cb.decidedBy,
+        // Concurrency guard: this eOffice-approved promotion can carry a
+        // basicMinor change that lands close together with the direct
+        // promotion route, the pay-matrix annual increment, or a generic
+        // employee-update — all independent, asynchronous writers of the
+        // same field. Read the row's current version fresh, inside this
+        // transaction, and use it as an optimistic-concurrency precondition
+        // so this write can never silently clobber (or be silently
+        // clobbered by) one of those. See employee/repo.ts updateEmployeeVersioned.
+        const emp = await employeeRepo.findVersionForUpdate(tx, promotion.employeeId, msg.tenantId);
+        if (!emp) throw new HttpError(404, "NOT_FOUND", `employee ${promotion.employeeId} not found`);
+        const patch: Parameters<typeof employeeRepo.updateEmployeeVersioned>[4] = {
+          designationId: promotion.toDesigId,
         };
         if (promotion.newBasicMinor !== null) patch.basicMinor = promotion.newBasicMinor;
-        await employeeRepo.updateEmployee(tx, promotion.employeeId, patch);
+        await employeeRepo.updateEmployeeVersioned(tx, promotion.employeeId, msg.tenantId, emp.version, patch, cb.decidedBy);
         await audit(tx, msg, "eoffice_approved", cb.refId, {
           fileNo: cb.fileNo, employeeId: promotion.employeeId,
           toDesigId: promotion.toDesigId, dscHash: cb.dscHash ?? null,

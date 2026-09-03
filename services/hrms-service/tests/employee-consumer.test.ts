@@ -12,6 +12,7 @@ const {
   mockTx, dbTransactionFn, enqueuedMessages,
   insertEmployeeMock, updateEmployeeMock, findByIdMock,
   insertTransferMock, insertSeparationMock, insertPromotionMock,
+  findVersionForUpdateMock, updateEmployeeVersionedMock,
 } = vi.hoisted(() => {
   const _mockTx = {
     insert: vi.fn().mockReturnValue({ values: vi.fn().mockResolvedValue(undefined) }),
@@ -30,6 +31,13 @@ const {
     insertTransferMock: vi.fn(async () => undefined as any),
     insertSeparationMock: vi.fn(async () => undefined as any),
     insertPromotionMock: vi.fn(async () => undefined as any),
+    // basicMinor optimistic-concurrency guard (employee/repo.ts): every
+    // employeeUpdate that touches basicMinor now reads {version, basicMinor}
+    // fresh via findVersionForUpdate, then writes via updateEmployeeVersioned
+    // instead of the blind-overwrite updateEmployee — see the "updates
+    // employee fields" test below.
+    findVersionForUpdateMock: vi.fn(async () => ({ version: 1, basicMinor: 5000000n })),
+    updateEmployeeVersionedMock: vi.fn(async () => undefined as any),
   };
 });
 
@@ -51,6 +59,8 @@ vi.mock("../src/modules/employee/repo.js", () => ({
   insertEmployee: (...a: any[]) => insertEmployeeMock(...a),
   updateEmployee: (...a: any[]) => updateEmployeeMock(...a),
   findById: (...a: any[]) => findByIdMock(...a),
+  findVersionForUpdate: (...a: any[]) => findVersionForUpdateMock(...a),
+  updateEmployeeVersioned: (...a: any[]) => updateEmployeeVersionedMock(...a),
 }));
 vi.mock("../src/modules/lifecycle/repo.js", () => ({
   insertTransfer: (...a: any[]) => insertTransferMock(...a),
@@ -259,7 +269,35 @@ describe("employeeSeparate command", () => {
 });
 
 describe("employeeUpdate command", () => {
-  it("updates employee fields", async () => {
+  it("updates non-pay fields via the plain blind-overwrite path", async () => {
+    const q = await buildQueue();
+    const empId = randomUUID();
+    await q.publish(COMMANDS.employeeUpdate, makeMsg(COMMANDS.employeeUpdate, {
+      id: empId, tenantId: TENANT,
+      mobile: "9876543210", email: "test@gov.in",
+      bankAccountNo: "12345678901234", bankIfsc: "SBIN0001234",
+    }));
+    await settle();
+    // No basicMinor in this payload: the optimistic-concurrency guard is not
+    // engaged, and this keeps going through the plain updateEmployee path.
+    expect(updateEmployeeMock).toHaveBeenCalledOnce();
+    expect(findVersionForUpdateMock).not.toHaveBeenCalled();
+    expect(updateEmployeeVersionedMock).not.toHaveBeenCalled();
+    const [, id, patch] = updateEmployeeMock.mock.calls[0]! as [unknown, string, Record<string, unknown>];
+    expect(id).toBe(empId);
+    expect(patch.mobile).toBe("9876543210");
+    expect(patch.email).toBe("test@gov.in");
+    await q.stop();
+  });
+
+  it("routes a basicMinor change through the optimistic-concurrency guard", async () => {
+    // Guards against the basicMinor race this consumer shares with the
+    // pay-matrix annual-increment consumer and both promotion consumers
+    // (direct + eOffice-approved): see employee/repo.ts
+    // updateEmployeeVersioned. A basicMinor-touching employeeUpdate must
+    // read the row's current version fresh (findVersionForUpdate) and write
+    // through the version-guarded path (updateEmployeeVersioned), never the
+    // blind-overwrite updateEmployee.
     const q = await buildQueue();
     const empId = randomUUID();
     await q.publish(COMMANDS.employeeUpdate, makeMsg(COMMANDS.employeeUpdate, {
@@ -269,12 +307,49 @@ describe("employeeUpdate command", () => {
       basicMinor: "6000000",
     }));
     await settle();
-    expect(updateEmployeeMock).toHaveBeenCalledOnce();
-    const [, id, patch] = updateEmployeeMock.mock.calls[0]! as [unknown, string, Record<string, unknown>];
+    expect(updateEmployeeMock).not.toHaveBeenCalled();
+    expect(findVersionForUpdateMock).toHaveBeenCalledOnce();
+    expect(findVersionForUpdateMock).toHaveBeenCalledWith(expect.anything(), empId, TENANT);
+    expect(updateEmployeeVersionedMock).toHaveBeenCalledOnce();
+    const [, id, tenantId, expectedVersion, patch] = updateEmployeeVersionedMock.mock.calls[0]! as
+      [unknown, string, string, number, Record<string, unknown>, string];
     expect(id).toBe(empId);
+    expect(tenantId).toBe(TENANT);
+    expect(expectedVersion).toBe(1); // from findVersionForUpdateMock's default resolved value
     expect(patch.mobile).toBe("9876543210");
     expect(patch.email).toBe("test@gov.in");
     expect(patch.basicMinor).toBe(6000000n);
+    await q.stop();
+  });
+
+  it("does not apply the write when the version has changed (lost race)", async () => {
+    // The concurrent-race case: another writer (e.g. a promotion) changed
+    // this employee between the route publishing the command and this
+    // consumer processing it. findVersionForUpdate still returns a row (the
+    // employee exists), but updateEmployeeVersioned's own WHERE-version
+    // guard is what would reject a stale write in the real repo — here we
+    // simulate that rejection (on every attempt, since a stale read never
+    // resolves itself on retry within this mocked scenario) to confirm the
+    // consumer does NOT swallow it and report success; the queue's own
+    // bounded retry + DLQ handling takes over instead.
+    updateEmployeeVersionedMock.mockRejectedValue(
+      Object.assign(new Error("employee was modified by another writer"), { status: 409, code: "EMPLOYEE_VERSION_CONFLICT" }),
+    );
+    const q = await buildQueue();
+    const empId = randomUUID();
+    await q.publish(COMMANDS.employeeUpdate, makeMsg(COMMANDS.employeeUpdate, {
+      id: empId, tenantId: TENANT, basicMinor: "7000000",
+    }));
+    // MemoryQueue retries a failing handler up to 5 times with exponential
+    // backoff (20/40/80/160/320ms ≈ 620ms total) before dead-lettering — the
+    // usual 100ms `settle()` isn't enough to observe the final DLQ outcome.
+    await new Promise((r) => setTimeout(r, 900));
+    expect(updateEmployeeVersionedMock.mock.calls.length).toBeGreaterThanOrEqual(1);
+    // The write is never silently treated as applied: no success event is
+    // enqueued, and the message ends up in the queue's dead-letter queue
+    // for manual review rather than being dropped.
+    expect(enqueuedMessages.some((m) => m.payload && (m.payload as any).employeeId === empId)).toBe(false);
+    expect(q.dlq.some((d) => d.msg.payload && (d.msg.payload as any).id === empId)).toBe(true);
     await q.stop();
   });
 });
