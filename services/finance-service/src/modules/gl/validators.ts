@@ -1,9 +1,11 @@
 import { z } from "zod";
+import { zMoneyMinor as zMoneyMinorBase } from "@civitasone/schemas/money";
 
-const zMoneyMinor = z.union([
-  z.string().regex(/^\d+$/).transform((s) => BigInt(s)),
-  z.bigint().nonnegative(),
-]).pipe(z.bigint().nonnegative());
+// FIX: was a hand-rolled union missing a z.number() branch, so a plain
+// JSON-number debitMinor/creditMinor (the common case) 400'd. zMoneyMinorBase
+// is the canonical @civitasone/schemas/money decoder — accepts
+// string | safe-integer number | bigint.
+const zMoneyMinor = zMoneyMinorBase.pipe(z.bigint().nonnegative());
 
 const journalLine = z.object({
   accountCode: z.string().min(1),

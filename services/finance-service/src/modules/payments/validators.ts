@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { zMoneyMinor as zMoneyMinorBase } from "@civitasone/schemas/money";
 import { PFMS_DDO_REGEX, PFMS_HOA_REGEX, PFMS_AGENCY_REGEX, PFMS_SCHEME_REGEX } from "../../shared/pfms.js";
 
 const ddoCodeField = z.string().regex(PFMS_DDO_REGEX, "DDO code must be 6–12 alphanumeric characters (PFMS format)");
@@ -9,15 +10,13 @@ const ddoCodeField = z.string().regex(PFMS_DDO_REGEX, "DDO code must be 6–12 a
 // sees it, and z.number().int() still accepts the (already wrong) rounded
 // result since it's still an integer, just not the one that was sent.
 // Two variants preserve each field's original positive-vs-nonnegative bound.
-const moneyMinorField = z.union([
-  z.string().regex(/^\d+$/, "must be a positive integer string").transform((s) => BigInt(s)),
-  z.bigint().positive(),
-]).pipe(z.bigint().positive());
-
-const moneyMinorFieldNonNeg = z.union([
-  z.string().regex(/^\d+$/, "must be a non-negative integer string").transform((s) => BigInt(s)),
-  z.bigint().nonnegative(),
-]).pipe(z.bigint().nonnegative());
+// FIX: was a hand-rolled union missing a z.number() branch, so any plain
+// JSON-number payload (the common case) 400'd. zMoneyMinorBase is the
+// canonical @civitasone/schemas/money decoder — accepts string | safe-integer
+// number | bigint and rejects unsafe (>2^53) numbers, forcing those onto the
+// string path instead of silently losing precision.
+const moneyMinorField = zMoneyMinorBase.pipe(z.bigint().positive());
+const moneyMinorFieldNonNeg = zMoneyMinorBase.pipe(z.bigint().nonnegative());
 
 const deduction = z.object({
   type:        z.string().min(1),
@@ -36,10 +35,7 @@ export const createBillBody = z.object({
   sanctionRef: z.string().uuid().optional(),
   // M2: accept string-encoded bigint to avoid 2^53 JSON precision loss on large
   // government bill amounts. Legacy number payloads still accepted via union.
-  grossMinor:  z.union([
-    z.string().regex(/^\d+$/, "grossMinor must be a positive integer string").transform(s => BigInt(s)),
-    z.bigint().positive(),
-  ]).pipe(z.bigint().positive()),
+  grossMinor:  moneyMinorField,
   currency:    z.string().length(3).default("INR"),
   deductions:  z.array(deduction).default([]),
   poRef:       z.string().optional(),

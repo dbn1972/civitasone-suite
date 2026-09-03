@@ -1,12 +1,17 @@
 import { z } from "zod";
+import { zMoneyMinor as zMoneyMinorBase } from "@civitasone/schemas/money";
 
-/** Monetary amount in paise (minor units). Accepts digit-string or bigint; outputs bigint. */
-const zMoneyMinor = z
-  .union([
-    z.string().regex(/^\d+$/, "amount must be whole number in paise"),
-    z.bigint().nonnegative(),
-  ])
-  .pipe(z.bigint().nonnegative());
+// FIX: was a hand-rolled union missing a z.number() branch, so a plain
+// JSON-number `amount` (the common case) 400'd. zMoneyMinorBase is the
+// canonical @civitasone/schemas/money decoder — accepts
+// string | safe-integer number | bigint.
+// FIX: a recorded transaction amount of zero is not a valid income/expense/
+// payment (tests/simplified-accounting.test.ts's "rejects invalid amount
+// (zero) with 400" expects this) -- .positive(), not .nonnegative(). Was
+// previously masked by the missing-z.number()-branch bug: *every* plain-number
+// payload 400'd, coincidentally including zero, for the wrong reason.
+/** Monetary amount in paise (minor units). Accepts digit-string, safe-integer number, or bigint; outputs bigint. Must be > 0. */
+const zMoneyMinor = zMoneyMinorBase.pipe(z.bigint().positive());
 
 /** GST rate as a percentage (0, 5, 12, 18, 28). */
 const gstRate = z.number().int().min(0).max(28).default(0);

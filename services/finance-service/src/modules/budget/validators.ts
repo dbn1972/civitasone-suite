@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { zMoneyMinor as zMoneyMinorBase } from "@civitasone/schemas/money";
 import { PFMS_HOA_REGEX } from "../../shared/pfms.js";
 
 export const updateHeadHoABody = z.object({
@@ -12,15 +13,13 @@ export type UpdateHeadHoABody = z.infer<typeof updateHeadHoABody>;
 // 1 paisa off from what was sent — z.number() loses precision above 2^53 at
 // the JSON.parse boundary, before Zod ever runs, and z.number().int() still
 // accepts the (already wrong) rounded result since it's still an integer.
-const moneyMinorField = z.union([
-  z.string().regex(/^\d+$/, "must be a positive integer string").transform((s) => BigInt(s)),
-  z.bigint().positive(),
-]).pipe(z.bigint().positive());
-
-const moneyMinorFieldNonNeg = z.union([
-  z.string().regex(/^\d+$/, "must be a non-negative integer string").transform((s) => BigInt(s)),
-  z.bigint().nonnegative(),
-]).pipe(z.bigint().nonnegative());
+// FIX: was a hand-rolled union missing a z.number() branch, so any plain
+// JSON-number payload (the common case) 400'd. zMoneyMinorBase is the
+// canonical @civitasone/schemas/money decoder — accepts string | safe-integer
+// number | bigint and rejects unsafe (>2^53) numbers, forcing those onto the
+// string path instead of silently losing precision.
+const moneyMinorField = zMoneyMinorBase.pipe(z.bigint().positive());
+const moneyMinorFieldNonNeg = zMoneyMinorBase.pipe(z.bigint().nonnegative());
 
 export const createBudgetBody = z.object({
   headId:   z.string().uuid(),
