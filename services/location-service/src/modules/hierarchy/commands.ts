@@ -41,7 +41,7 @@ export async function unitCreate(ctx: RequestContext, body: CreateUnitBody): Pro
 
 export async function unitUpdate(ctx: RequestContext, id: string, body: UpdateUnitBody): Promise<Accepted> {
   await queue.publish(COMMANDS.unitUpdate, {
-    messageId: `${id}-${Date.now()}`,
+    messageId: randomUUID(),
     type: COMMANDS.unitUpdate,
     tenantId: ctx.tenantId,
     actorId: ctx.actorId,

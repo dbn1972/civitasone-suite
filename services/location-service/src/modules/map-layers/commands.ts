@@ -54,7 +54,7 @@ export async function mapLayerCreate(ctx: RequestContext, body: CreateMapLayerBo
 
 export async function mapLayerUpdate(ctx: RequestContext, id: string, body: UpdateMapLayerBody): Promise<Accepted> {
   await queue.publish(COMMANDS.mapLayerUpdate, {
-    messageId: `${id}-${Date.now()}`,
+    messageId: randomUUID(),
     type: COMMANDS.mapLayerUpdate,
     tenantId: ctx.tenantId,
     actorId: ctx.actorId,
@@ -68,7 +68,7 @@ export async function mapLayerUpdate(ctx: RequestContext, id: string, body: Upda
 
 export async function mapLayerDelete(ctx: RequestContext, id: string): Promise<Accepted> {
   await queue.publish(COMMANDS.mapLayerDelete, {
-    messageId: `${id}-delete-${Date.now()}`,
+    messageId: randomUUID(),
     type: COMMANDS.mapLayerDelete,
     tenantId: ctx.tenantId,
     actorId: ctx.actorId,

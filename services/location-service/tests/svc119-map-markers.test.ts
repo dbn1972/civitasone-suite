@@ -48,7 +48,8 @@ describePostGIS("SVC-119 geo-points registry + markers feed", () => {
 
   it("registers a geo-point (HTTP) and it appears in the feed", async () => {
     const res = await post("/v1/locations/geo-points", TENANT_A, { domain: "sensor", refId, lat: 28.61, lng: 77.21, label: "AQ sensor", status: "alert" });
-    expect(res.statusCode).toBe(201);
+    expect(res.statusCode).toBe(202);
+    expect(res.json().status).toBe("accepted");
     await drain();
     const feed = await get("/v1/locations/map-markers", TENANT_A);
     expect(feed.statusCode).toBe(200);

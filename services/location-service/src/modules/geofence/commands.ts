@@ -43,7 +43,7 @@ export async function geofenceCreate(ctx: RequestContext, body: CreateGeofenceBo
 
 export async function geofenceUpdate(ctx: RequestContext, id: string, body: UpdateGeofenceBody): Promise<Accepted> {
   await queue.publish(COMMANDS.geofenceUpdate, {
-    messageId: `${id}-${Date.now()}`,
+    messageId: randomUUID(),
     type: COMMANDS.geofenceUpdate,
     tenantId: ctx.tenantId,
     actorId: ctx.actorId,
