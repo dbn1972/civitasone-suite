@@ -18,8 +18,21 @@ let areaRows: Record<string, unknown>[] = [];
 function makeSelectChain(rows: Record<string, unknown>[]) {
   return {
     from: () => ({
+      // Real Drizzle query builders are thenable straight off `.where()` —
+      // `.limit()` is optional. consumer.ts's own queries always chain
+      // `.limit(1)`, but digital-pass/repo.ts#listRevocablePassIdsByVisitRequest
+      // and vehicle-pass/commands.ts#releaseParkingIfAllocated (invoked from
+      // the cancel handler's post-commit revoke cascade via scopedRead) await
+      // `.where(...)` directly with no `.limit()`. A `.where()` result that
+      // only exposed `.limit` was not itself awaitable, so `await`-ing it
+      // resolved to the chain object rather than `rows`, and the subsequent
+      // `.map()` on that object threw — an uncaught rejection the queue's
+      // retry/backoff then replayed into a LATER test's assertion window.
+      // Exposing `then` here makes `.where(...)` awaitable on its own, same
+      // as the real query builder.
       where: () => ({
         limit: async () => rows,
+        then: (resolve: (value: Record<string, unknown>[]) => void) => resolve(rows),
       }),
     }),
   };
@@ -41,6 +54,16 @@ vi.mock("../src/shared/db.js", () => ({
   db: {
     transaction: async (fn: (tx: unknown) => unknown) => fn(fakeTx),
   },
+  // scopedRead is a thin wrapper around db.transaction (see shared/db.ts) used
+  // by the cancel handler's post-commit pass-revoke/parking-release cascade
+  // (digital-pass/repo.ts#listRevocablePassIdsByVisitRequest,
+  // vehicle-pass/commands.ts#releaseParkingIfAllocated). Without this export
+  // those calls throw "scopedRead is not a function", which the queue's
+  // retry/backoff (services/queue-service/src/bus.ts#deliver) silently
+  // retries a ~20ms later — landing the handler's re-run (and its extra
+  // versionedUpdate/enqueue calls) inside a LATER test's assertion window
+  // instead of this one's.
+  scopedRead: async (fn: (tx: unknown) => unknown) => fn(fakeTx),
 }));
 
 vi.mock("../src/shared/outbox.js", () => ({
@@ -155,8 +178,8 @@ describe("visitRequestCreate", () => {
 
     expect(markProcessedMock).toHaveBeenCalledTimes(1);
     expect(fakeTx.insert).toHaveBeenCalledTimes(1);
-    // Should enqueue: visitRequestCreated + 2 notification events (push + in_app)
-    expect(enqueueMock).toHaveBeenCalledTimes(3);
+    // Should enqueue: visitRequestCreated + 2 notification events (push + in_app) + CERT-In audit event
+    expect(enqueueMock).toHaveBeenCalledTimes(4);
   });
 
   it("does not process on idempotent replay", async () => {
@@ -216,8 +239,10 @@ describe("visitRequestApprove", () => {
 
     expect(markProcessedMock).toHaveBeenCalledTimes(1);
     expect(versionedUpdateMock).toHaveBeenCalledTimes(1);
-    // enqueue: visitRequestApproved + sms notification + email notification
-    expect(enqueueMock).toHaveBeenCalledTimes(3);
+    // enqueue: visitRequestApproved + sms notification + email notification + CERT-In audit event
+    // (audit enqueue is emitted inside the `if (request.visitorEmail)` branch, after the email
+    // notification, so it only fires here because the default fixture has a visitorEmail)
+    expect(enqueueMock).toHaveBeenCalledTimes(4);
     // Post-commit: triggers passGenerate
     expect(publishMock).toHaveBeenCalledTimes(1);
   });
@@ -307,7 +332,8 @@ describe("visitRequestApprove", () => {
     const queue = freshQueue();
     await publishAndFlush(queue, COMMANDS.visitRequestApprove, approvePayload);
 
-    // Should only have visitRequestApproved + sms (no email)
+    // Should only have visitRequestApproved + sms (no email, and the CERT-In audit enqueue
+    // is nested inside the `if (request.visitorEmail)` branch so it is skipped here too)
     expect(enqueueMock).toHaveBeenCalledTimes(2);
   });
 });
@@ -321,8 +347,9 @@ describe("visitRequestReject", () => {
 
     expect(markProcessedMock).toHaveBeenCalledTimes(1);
     expect(versionedUpdateMock).toHaveBeenCalledTimes(1);
-    // enqueue: visitRequestRejected + sms + email
-    expect(enqueueMock).toHaveBeenCalledTimes(3);
+    // enqueue: visitRequestRejected + sms + email + CERT-In audit event (audit fires inside
+    // the `if (request.visitorEmail)` branch, after the email notification)
+    expect(enqueueMock).toHaveBeenCalledTimes(4);
   });
 
   it("does not process on idempotent replay", async () => {
@@ -360,8 +387,9 @@ describe("visitRequestCancel", () => {
 
     expect(markProcessedMock).toHaveBeenCalledTimes(1);
     expect(versionedUpdateMock).toHaveBeenCalledTimes(1);
-    // enqueue: visitRequestCancelled
-    expect(enqueueMock).toHaveBeenCalledTimes(1);
+    // enqueue: visitRequestCancelled + CERT-In audit event (unconditional, always follows
+    // the cancelled event)
+    expect(enqueueMock).toHaveBeenCalledTimes(2);
   });
 
   it("cancels an approved request", async () => {
@@ -370,7 +398,8 @@ describe("visitRequestCancel", () => {
     await publishAndFlush(queue, COMMANDS.visitRequestCancel, cancelPayload);
 
     expect(versionedUpdateMock).toHaveBeenCalledTimes(1);
-    expect(enqueueMock).toHaveBeenCalledTimes(1);
+    // enqueue: visitRequestCancelled + CERT-In audit event
+    expect(enqueueMock).toHaveBeenCalledTimes(2);
   });
 
   it("does not process on idempotent replay", async () => {
@@ -399,8 +428,9 @@ describe("visitRequestAutoReject", () => {
 
     expect(markProcessedMock).toHaveBeenCalledTimes(1);
     expect(versionedUpdateMock).toHaveBeenCalledTimes(1);
-    // enqueue: visitRequestAutoRejected + sms + email
-    expect(enqueueMock).toHaveBeenCalledTimes(3);
+    // enqueue: visitRequestAutoRejected + sms + email + CERT-In audit event (audit fires
+    // inside the `if (request.visitorEmail)` branch, after the email notification)
+    expect(enqueueMock).toHaveBeenCalledTimes(4);
   });
 
   it("does not process on idempotent replay", async () => {
@@ -425,8 +455,10 @@ describe("visitRequestAutoReject", () => {
     const queue = freshQueue();
     await publishAndFlush(queue, COMMANDS.visitRequestAutoReject, autoRejectPayload);
 
-    // Only visitRequestAutoRejected + email (no sms)
-    expect(enqueueMock).toHaveBeenCalledTimes(2);
+    // Only visitRequestAutoRejected + email + CERT-In audit event (no sms; audit still
+    // fires because it's nested inside the `if (request.visitorEmail)` branch, which the
+    // default fixture's visitorEmail satisfies)
+    expect(enqueueMock).toHaveBeenCalledTimes(3);
   });
 
   it("skips email when no email", async () => {
@@ -434,7 +466,8 @@ describe("visitRequestAutoReject", () => {
     const queue = freshQueue();
     await publishAndFlush(queue, COMMANDS.visitRequestAutoReject, autoRejectPayload);
 
-    // Only visitRequestAutoRejected + sms (no email)
+    // Only visitRequestAutoRejected + sms (no email, and the audit enqueue is nested
+    // inside the `if (request.visitorEmail)` branch so it is skipped here too)
     expect(enqueueMock).toHaveBeenCalledTimes(2);
   });
 });
@@ -522,8 +555,9 @@ describe("workflowInstanceRejected", () => {
 
     expect(markProcessedMock).toHaveBeenCalledTimes(1);
     expect(versionedUpdateMock).toHaveBeenCalledTimes(1);
-    // enqueue: visitRequestRejected + sms + email notifications
-    expect(enqueueMock).toHaveBeenCalledTimes(3);
+    // enqueue: visitRequestRejected + sms + email notifications + CERT-In audit event
+    // (audit fires inside the `if (request.visitorEmail)` branch, after the email notification)
+    expect(enqueueMock).toHaveBeenCalledTimes(4);
   });
 
   it("skips messages without refId", async () => {
