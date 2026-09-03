@@ -25,6 +25,7 @@ const H = vi.hoisted(() => ({
   listApprenticeships: vi.fn(),
   insertStipend: vi.fn(),
   findStipend: vi.fn(),
+  findStipendByMonth: vi.fn(),
   updateStipend: vi.fn(),
   listStipendsByApprenticeship: vi.fn(),
   listStipendsByStatus: vi.fn(),
@@ -91,6 +92,7 @@ vi.mock("../src/modules/apprentice-stipend/repo.js", () => ({
   listApprenticeships: (...a: unknown[]) => H.listApprenticeships(...a),
   insertStipend: (...a: unknown[]) => H.insertStipend(...a),
   findStipend: (...a: unknown[]) => H.findStipend(...a),
+  findStipendByMonth: (...a: unknown[]) => H.findStipendByMonth(...a),
   updateStipend: (...a: unknown[]) => H.updateStipend(...a),
   listStipendsByApprenticeship: (...a: unknown[]) =>
     H.listStipendsByApprenticeship(...a),
@@ -176,6 +178,7 @@ beforeEach(() => {
   H.listApprenticeships.mockResolvedValue([appr()]);
   H.insertStipend.mockResolvedValue(undefined);
   H.findStipend.mockResolvedValue(stipend());
+  H.findStipendByMonth.mockResolvedValue(null);
   H.updateStipend.mockResolvedValue(undefined);
   H.listStipendsByApprenticeship.mockResolvedValue([]);
   H.listStipendsByStatus.mockResolvedValue([]);
@@ -401,7 +404,15 @@ describe("POST /v1/hrms/apprenticeships/:id/stipends", () => {
   });
 
   it("returns 409 on duplicate stipend run (23505)", async () => {
-    H.insertStipend.mockRejectedValue({ code: "23505" });
+    // The route now guards this with a synchronous pre-check
+    // (repo.findStipendByMonth) rather than hoping to catch a 23505 out of
+    // publishF3Write — publishF3Write is fire-and-forget, so the actual
+    // insert (and any real unique-constraint violation) happens later, in
+    // the async F3 consumer, well after this handler has already responded.
+    // Mocking insertStipend to reject can no longer be observed by the
+    // route at all; simulate the duplicate the way the route actually
+    // detects it.
+    H.findStipendByMonth.mockResolvedValue(stipend({ month: payload.month }));
     const app = await buildApp();
     const r = await app.inject({ method: "POST", url: `/v1/hrms/apprenticeships/${APR_ID}/stipends`, headers: auth(), payload });
     expect(r.statusCode).toBe(409);

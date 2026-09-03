@@ -150,23 +150,30 @@ describe("attempt + certificate issuance", () => {
     await drainF3();
     expect(res.statusCode).toBe(200);
     const body = res.json();
-    // KNOWN GAP (not fixed here — see PR description): assessment/routes.ts
-    // submit-attempt (~line 180-182) still builds its response from
-    // `result.score` / `result.passed` / `result.certificate`, where `result`
-    // is whatever publishF3Write() returns — always the hard-coded
-    // `{ id, status: "accepted", correlationId }` placeholder (see
-    // shared/f3-publish.ts). None of those three fields exist on it, so the
-    // HTTP response NEVER carries the graded score, pass/fail, or issued
-    // certificate to the caller, even though the async consumer (above)
-    // computes and persists all three correctly in the database a moment
-    // later. This is a real response-shaping bug in the route, not a stale
-    // test assertion — a client polling for its own submit result over HTTP
-    // has no way to get it. Left failing and documented rather than papered
-    // over; downstream tests below read the persisted state via `repo`
-    // instead of trusting this response, so they still exercise real behavior.
+    // The response-shaping bug this comment used to describe (score/passed
+    // never populated because publishF3Write() only ever resolves the generic
+    // `{ id, status, correlationId }` placeholder) has since been fixed in
+    // assessment/routes.ts submit-attempt: `graded`/`passed` are now
+    // recomputed synchronously from the same question rows + submitted
+    // answers the async consumer (f3-consumer.ts __8) independently persists,
+    // so they're safe to report immediately and this assertion now reflects
+    // real behavior, not a placeholder.
     expect(body.score).toBe(10);
     expect(body.passed).toBe(true);
-    expect(body.certificate).toBeTruthy();
+    // `certificate` is deliberately NOT part of this response (see the route's
+    // own comment on assessment_routes__8): it can only be known once the
+    // async consumer's insert lands, and even then a uniqueness race could
+    // still lose it — so the route documents "read it back via GET
+    // /v1/hrms/attempts/:id" instead of promising it synchronously here.
+    // This test was still asserting against the OLD contract where
+    // `certificate` was expected inline; assert the documented contract
+    // instead — it's absent from the submit response, and present via the
+    // GET endpoint (which surfaces repo.getCertificateByAttempt) once the
+    // consumer's write has landed (already drained above).
+    expect(body.certificate).toBeUndefined();
+    const attemptDetail = await app.inject({ method: "GET", url: `/v1/hrms/attempts/${attemptId}`, headers: bare(tok(MAKER)) });
+    expect(attemptDetail.statusCode).toBe(200);
+    expect(attemptDetail.json().certificate).toBeTruthy();
 
     // outbox row present for this tenant (read inside tenant GUC context)
     tenantStorage.enterWith({ tenantId: TENANT });
@@ -218,13 +225,14 @@ describe("attempt + certificate issuance", () => {
       payload: { answers: [{ questionId: q1, response: ["b"] }, { questionId: q2, response: ["b"] }] } });
     await drainF3();
     expect(res.statusCode).toBe(200);
-    // Same KNOWN GAP as the passing-attempt test above: `passed`/`certificate`
-    // are never populated on this response (publishF3Write's placeholder has
-    // neither field). Left failing and documented; the DB-level assertions
-    // below (via `repo`, not the response body) still confirm the consumer
-    // did the right thing — no certificate row for a failed attempt.
+    // `passed` is now recomputed synchronously (see the passing-attempt test
+    // above) so this reflects real behavior. `certificate` is deliberately
+    // absent from the submit response altogether (not `null` — just not a
+    // key on the object at all), same documented contract as above; the
+    // DB-level assertion below (via `repo`, not the response body) is what
+    // actually confirms no certificate row was created for a failed attempt.
     expect(res.json().passed).toBe(false);
-    expect(res.json().certificate).toBeNull();
+    expect(res.json().certificate).toBeUndefined();
     tenantStorage.enterWith({ tenantId: TENANT });
     const cert = await repo.getCertificateByAttempt(TENANT, failAttempt);
     expect(cert).toBeUndefined();

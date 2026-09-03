@@ -131,15 +131,23 @@ export async function apprenticeStipendRoutes(app: FastifyInstance): Promise<voi
     const a = await mustApprenticeship(ctx.tenantId, id);
     if (a.status !== "active") throw new HttpError(409, "APPRENTICESHIP_INACTIVE", `apprenticeship is '${a.status}', not active`);
 
-    const stipendId = randomUUID();
-    try {
-      await publishF3Write(ctx, "apprentice_stipend_routes__2", stipendId, { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
-    } catch (err) {
-      if (String((err as { code?: string }).code) === "23505") {
-        throw new HttpError(409, "DUPLICATE_STIPEND", `a stipend run for '${body.month}' already exists for this apprentice`) as any;
-      }
-      throw err;
+    // Synchronous pre-check, mirroring the table's own UNIQUE(tenant_id,
+    // apprenticeship_id, month) constraint (hrms_apprentice_stipends_month_uq):
+    // publishF3Write is fire-and-forget (queue.publish() always defers
+    // delivery — MemoryQueue via setTimeout(0), Redis Streams similarly), so
+    // the try/catch this replaced — wrapped around publishF3Write itself,
+    // hoping to catch a `23505` from the consumer's later insertStipend call
+    // — was dead code: the actual insert (and any real constraint violation)
+    // only happens well after this handler has already sent its response.
+    // Every duplicate resubmit silently returned 201. Same class of fix as
+    // the synchronous pre-checks throughout manpower-planning/routes.ts.
+    const existing = await repo.findStipendByMonth(ctx.tenantId, id, body.month);
+    if (existing) {
+      throw new HttpError(409, "DUPLICATE_STIPEND", `a stipend run for '${body.month}' already exists for this apprentice`);
     }
+
+    const stipendId = randomUUID();
+    await publishF3Write(ctx, "apprentice_stipend_routes__2", stipendId, { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     return reply.code(201).send(jsonSafe({ id: stipendId, apprenticeshipId: id, month: body.month, status: "submitted" }));
   });
 

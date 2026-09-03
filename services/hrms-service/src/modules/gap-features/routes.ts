@@ -376,9 +376,14 @@ export async function hrmsGapRoutes(app: FastifyInstance): Promise<void> {
   // ── Gap: Staffing Plan (manpower vacancy analysis) ─────────────────────────
   app.get("/v1/hrms/staffing-plan", async (req, reply) => {
     const ctx = resolveContext(req); requireRole(ctx, HR_ROLES);
-    // manpower.current_tenant_id() requires app.tenant_id; use a transaction with SET LOCAL
+    // manpower.current_tenant_id() requires app.tenant_id; use a transaction with SET LOCAL.
+    // NOTE: `SET LOCAL x = $1` is not valid Postgres syntax — SET does not accept a bind
+    // parameter (always failed with "syntax error at or near \"$1\"", a 500 on every call).
+    // set_config() is a regular function call and DOES accept one; the same
+    // technique wrapWithTenantGuc() (packages/db/src/wrap-tenant-db.ts)
+    // already uses to inject the GUC into a Drizzle transaction.
     const rows = await sqlClient.begin(async (sql) => {
-      await sql.unsafe('SET LOCAL app.tenant_id = $1', [ctx.tenantId]);
+      await sql.unsafe("SELECT set_config('app.tenant_id', $1, true)", [ctx.tenantId]);
       return sql.unsafe(`
         SELECT p.id, COALESCE(d.name, p.cadre) AS department, p.cadre,
                p.sanctioned_strength AS "sanctionedPosts", p.filled_strength AS filled,

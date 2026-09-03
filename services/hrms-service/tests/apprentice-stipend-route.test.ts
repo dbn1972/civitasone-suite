@@ -18,6 +18,7 @@ const H = vi.hoisted(() => ({
   scopedReadMock: vi.fn(),
   findApprMock: vi.fn(),
   findStipendMock: vi.fn(),
+  findStipendByMonthMock: vi.fn(),
   insertApprMock: vi.fn(),
   insertStipendMock: vi.fn(),
   updateStipendMock: vi.fn(),
@@ -51,6 +52,14 @@ vi.mock("../src/modules/apprentice-stipend/repo.js", async (io) => ({
   listApprenticeships: async () => [],
   insertStipend: (...a: unknown[]) => H.insertStipendMock(...a),
   findStipend: (...a: unknown[]) => H.findStipendMock(...a),
+  // Without this override, findStipendByMonth (the route's synchronous
+  // duplicate pre-check — see apprentice-stipend/routes.ts) falls through to
+  // the REAL repo.js implementation via the `...(await io(...))` spread
+  // above, which calls the globally-mocked `scopedRead` (see the db.js mock
+  // above). That mock always resolves to the canned employee-type-check row
+  // regardless of which query is actually asking, so the pre-check saw a
+  // truthy "existing row" on the very first submission and always 409'd.
+  findStipendByMonth: (...a: unknown[]) => H.findStipendByMonthMock(...a),
   updateStipend: (...a: unknown[]) => H.updateStipendMock(...a),
   listStipendsByApprenticeship: async () => [],
   listStipendsByStatus: async () => [],
@@ -108,6 +117,7 @@ beforeEach(() => {
   H.enqueueMock.mockResolvedValue(undefined);
   H.insertApprMock.mockResolvedValue(undefined);
   H.insertStipendMock.mockResolvedValue(undefined);
+  H.findStipendByMonthMock.mockResolvedValue(null);
 });
 
 afterAll(async () => { await sqlClient.end(); });

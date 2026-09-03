@@ -79,22 +79,29 @@ async function seedEmployee(id: string): Promise<void> {
 }
 
 async function readEmployee(id: string): Promise<{ basicMinor: bigint; version: number; designationId: string }> {
-  const rows = await runWithTenant(TENANT, () => db.select({
+  // NOTE: must go through db.transaction() — wrapWithTenantGuc() (packages/db)
+  // only sets the `app.tenant_id` GUC that hrms_employees' FORCE ROW LEVEL
+  // SECURITY policy checks when the query runs inside db.transaction(). A bare
+  // db.select() never gets the GUC set, so RLS silently hides every row and
+  // this always threw a false "not found" — not a real consumer bug. Same
+  // transaction-wrapped-read pattern already used throughout write-paths.test.ts.
+  const rows = await runWithTenant(TENANT, () => db.transaction((tx) => tx.select({
     basicMinor: hrmsEmployees.basicMinor, version: hrmsEmployees.version, designationId: hrmsEmployees.designationId,
-  }).from(hrmsEmployees).where(and(eq(hrmsEmployees.id, id), eq(hrmsEmployees.tenantId, TENANT))).limit(1));
+  }).from(hrmsEmployees).where(and(eq(hrmsEmployees.id, id), eq(hrmsEmployees.tenantId, TENANT))).limit(1)));
   const row = rows[0];
   if (!row) throw new Error(`employee ${id} not found`);
   return row;
 }
 
 async function hasIncrementServiceBookEntry(employeeId: string, effectiveDate: string): Promise<boolean> {
-  const rows = await runWithTenant(TENANT, () => db.select({ id: hrmsServiceBookEntries.id }).from(hrmsServiceBookEntries)
+  // Same GUC-requires-a-transaction reasoning as readEmployee() above.
+  const rows = await runWithTenant(TENANT, () => db.transaction((tx) => tx.select({ id: hrmsServiceBookEntries.id }).from(hrmsServiceBookEntries)
     .where(and(
       eq(hrmsServiceBookEntries.tenantId, TENANT),
       eq(hrmsServiceBookEntries.employeeId, employeeId),
       eq(hrmsServiceBookEntries.effectiveDate, effectiveDate),
       eq(hrmsServiceBookEntries.entryType, "increment"),
-    )));
+    ))));
   return rows.length > 0;
 }
 
@@ -251,8 +258,8 @@ describe("hrms_employees.basicMinor — optimistic concurrency across independen
     // INVARIANT 3: the promotion itself is durably recorded (its own audit
     // trail — hrms_promotions — never depends on winning or losing the
     // basicMinor race; only the basicMinor write does).
-    const promoRows = await runWithTenant(TENANT, () => db.select({ id: hrmsPromotions.id }).from(hrmsPromotions)
-      .where(and(eq(hrmsPromotions.tenantId, TENANT), eq(hrmsPromotions.employeeId, empId))));
+    const promoRows = await runWithTenant(TENANT, () => db.transaction((tx) => tx.select({ id: hrmsPromotions.id }).from(hrmsPromotions)
+      .where(and(eq(hrmsPromotions.tenantId, TENANT), eq(hrmsPromotions.employeeId, empId)))));
     expect(promoRows.length).toBe(1);
   });
 });
