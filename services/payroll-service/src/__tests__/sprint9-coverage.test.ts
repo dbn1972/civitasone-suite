@@ -109,42 +109,48 @@ describe("DSC Config routes", () => {
 
 // ================================================================
 // Sponsor Config Routes  — src/modules/sponsor-config/routes.ts
+//
+// STALE-URL FIX (sprint9-coverage-urls): "/v1/payroll/sponsor-config" never
+// existed in this repo's history except in the commit that introduced this
+// test file (git log --all -S over the literal path turns up nothing else).
+// The real routes are GET/PUT "/v1/payroll/sponsor-bank-config" — there is
+// no POST; the writer verb is PUT, and it is F3-async (202, not 200/201).
 // ================================================================
 describe("Sponsor Config routes", () => {
-  it("GET /v1/payroll/sponsor-config — 200 or 404 admin", async () => {
+  it("GET /v1/payroll/sponsor-bank-config — 200 or 404 admin", async () => {
     const app = await buildApp();
     const r = await app.inject({
       method: "GET",
-      url: "/v1/payroll/sponsor-config",
+      url: "/v1/payroll/sponsor-bank-config",
       headers: { authorization: "Bearer " + adminTok },
     });
     await app.close();
     expect([200, 404]).toContain(r.statusCode);
   });
 
-  it("GET /v1/payroll/sponsor-config — 401", async () => {
+  it("GET /v1/payroll/sponsor-bank-config — 401", async () => {
     const app = await buildApp();
-    const r = await app.inject({ method: "GET", url: "/v1/payroll/sponsor-config" });
+    const r = await app.inject({ method: "GET", url: "/v1/payroll/sponsor-bank-config" });
     await app.close();
     expect(r.statusCode).toBe(401);
   });
 
-  it("GET /v1/payroll/sponsor-config — 403 citizen", async () => {
+  it("GET /v1/payroll/sponsor-bank-config — 403 citizen", async () => {
     const app = await buildApp();
     const r = await app.inject({
       method: "GET",
-      url: "/v1/payroll/sponsor-config",
+      url: "/v1/payroll/sponsor-bank-config",
       headers: { authorization: "Bearer " + citizenTok },
     });
     await app.close();
     expect(r.statusCode).toBe(403);
   });
 
-  it("POST /v1/payroll/sponsor-config — 400 missing fields", async () => {
+  it("PUT /v1/payroll/sponsor-bank-config — 400 missing fields", async () => {
     const app = await buildApp();
     const r = await app.inject({
-      method: "POST",
-      url: "/v1/payroll/sponsor-config",
+      method: "PUT",
+      url: "/v1/payroll/sponsor-bank-config",
       headers: { authorization: "Bearer " + adminTok, "content-type": "application/json" },
       payload: {},
     });
@@ -152,16 +158,38 @@ describe("Sponsor Config routes", () => {
     expect(r.statusCode).toBe(400);
   });
 
-  it("POST /v1/payroll/sponsor-config — 401", async () => {
+  it("PUT /v1/payroll/sponsor-bank-config — 401", async () => {
     const app = await buildApp();
     const r = await app.inject({
-      method: "POST",
-      url: "/v1/payroll/sponsor-config",
+      method: "PUT",
+      url: "/v1/payroll/sponsor-bank-config",
       headers: { "content-type": "application/json" },
       payload: {},
     });
     await app.close();
     expect(r.statusCode).toBe(401);
+  });
+
+  it("PUT /v1/payroll/sponsor-bank-config — 202 accepted admin", async () => {
+    const app = await buildApp();
+    const r = await app.inject({
+      method: "PUT",
+      url: "/v1/payroll/sponsor-bank-config",
+      headers: { authorization: "Bearer " + adminTok, "content-type": "application/json" },
+      payload: {
+        sponsorCode: "HDFC",
+        sponsorIfsc: "HDFC0001234",
+        sponsorAccount: "123456789012",
+        settlementOffsetDays: 1,
+        nachEnabled: true,
+        apbsEnabled: false,
+        maxRecordsPerFile: 100000,
+        maxAmountPerFileMinor: "1000000000",
+      },
+    });
+    await app.close();
+    // F3 command route: sendAccepted() always replies 202, never 200/201.
+    expect(r.statusCode).toBe(202);
   });
 });
 
@@ -236,6 +264,18 @@ describe("Loans routes", () => {
 
 // ================================================================
 // Statutory ECR Routes  — src/modules/statutory/ecr-routes.ts
+//
+// STALE-URL FIX: "POST /v1/payroll/statutory/ecr/generate" never existed
+// (git log --all -S confirms it only ever appeared in this test file's own
+// introducing commit). Reading the whole of ecr-routes.ts confirms there is
+// truly no generate-style mutation route in this module — ECR is exported
+// synchronously off the single GET, keyed by ?month=. Rather than invent a
+// fake test for a route that was never built (or silently build one — out
+// of scope for a test-fix), the two POST .../generate cases below are
+// retargeted onto the real GET's own validation branches: a well-formed
+// admin request with no `month` query param 400s exactly like the old
+// "missing period" case intended, and a well-formed-but-unmatched month
+// exercises the 404 branch this module never got coverage on.
 // ================================================================
 describe("Statutory ECR routes", () => {
   it("GET /v1/payroll/statutory/ecr — 200 or 400 admin", async () => {
@@ -267,28 +307,26 @@ describe("Statutory ECR routes", () => {
     expect(r.statusCode).toBe(403);
   });
 
-  it("POST /v1/payroll/statutory/ecr/generate — 400 missing period", async () => {
+  it("GET /v1/payroll/statutory/ecr — 400 missing month admin", async () => {
     const app = await buildApp();
     const r = await app.inject({
-      method: "POST",
-      url: "/v1/payroll/statutory/ecr/generate",
-      headers: { authorization: "Bearer " + adminTok, "content-type": "application/json" },
-      payload: {},
+      method: "GET",
+      url: "/v1/payroll/statutory/ecr",
+      headers: { authorization: "Bearer " + adminTok },
     });
     await app.close();
     expect(r.statusCode).toBe(400);
   });
 
-  it("POST /v1/payroll/statutory/ecr/generate — 401", async () => {
+  it("GET /v1/payroll/statutory/ecr?month=1999-01 — 404 no records admin", async () => {
     const app = await buildApp();
     const r = await app.inject({
-      method: "POST",
-      url: "/v1/payroll/statutory/ecr/generate",
-      headers: { "content-type": "application/json" },
-      payload: {},
+      method: "GET",
+      url: "/v1/payroll/statutory/ecr?month=1999-01",
+      headers: { authorization: "Bearer " + adminTok },
     });
     await app.close();
-    expect(r.statusCode).toBe(401);
+    expect(r.statusCode).toBe(404);
   });
 });
 
@@ -374,53 +412,68 @@ describe("Statutory challan routes", () => {
 
 // ================================================================
 // Statutory Returns Routes  — src/modules/statutory-returns/routes.ts
+//
+// STALE-URL FIX: there is no generic "/v1/payroll/statutory/returns"
+// collection (git log --all -S confirms it, like the ECR /generate path
+// above, only ever appeared in this file's own introducing commit). The
+// real module registers separate per-form-type endpoints instead — this
+// block is retargeted onto Form 24Q (GET + the confirmed POST
+// .../force-file — the one real mutation route in this module, replacing
+// the fictional "/:id/file"), which is the closest real analogue of the
+// original 401/403/400/200-or-404 shape. The fictional "/:id" and
+// "/:id/download" GETs have no real analogue at all (no return in this
+// module is addressed by id), so they're replaced with real auth-smoke
+// coverage of form12ba and form26q instead of being deleted outright.
 // ================================================================
 describe("Statutory Returns routes", () => {
-  it("GET /v1/payroll/statutory/returns — 200 or 400 admin", async () => {
+  it("GET /v1/payroll/statutory/form24q?fy=2026-27&quarter=Q1 — 200 or 400 admin", async () => {
     const app = await buildApp();
     const r = await app.inject({
       method: "GET",
-      url: "/v1/payroll/statutory/returns",
+      url: "/v1/payroll/statutory/form24q?fy=2026-27&quarter=Q1",
       headers: { authorization: "Bearer " + adminTok },
     });
     await app.close();
-    expect([200, 400, 404]).toContain(r.statusCode);
+    // 502 covers HRMS-unreachable in this test environment (buildForm24Q
+    // always calls fetchPayrollInput for the deductee master, even when
+    // there are zero deductees); 409 covers an unreconciled-quarter block.
+    expect([200, 400, 404, 409, 502]).toContain(r.statusCode);
   });
 
-  it("GET /v1/payroll/statutory/returns — 401", async () => {
+  it("GET /v1/payroll/statutory/form24q — 401", async () => {
     const app = await buildApp();
-    const r = await app.inject({ method: "GET", url: "/v1/payroll/statutory/returns" });
+    const r = await app.inject({ method: "GET", url: "/v1/payroll/statutory/form24q" });
     await app.close();
     expect(r.statusCode).toBe(401);
   });
 
-  it("GET /v1/payroll/statutory/returns — 403 citizen", async () => {
+  it("GET /v1/payroll/statutory/form24q — 403 citizen", async () => {
     const app = await buildApp();
     const r = await app.inject({
       method: "GET",
-      url: "/v1/payroll/statutory/returns",
+      url: "/v1/payroll/statutory/form24q",
       headers: { authorization: "Bearer " + citizenTok },
     });
     await app.close();
     expect(r.statusCode).toBe(403);
   });
 
-  it("GET /v1/payroll/statutory/returns/:id — 404", async () => {
+  it("GET /v1/payroll/statutory/form24q — 400 missing fy/quarter admin", async () => {
     const app = await buildApp();
     const r = await app.inject({
       method: "GET",
-      url: "/v1/payroll/statutory/returns/" + FAKE_ID,
+      url: "/v1/payroll/statutory/form24q",
       headers: { authorization: "Bearer " + adminTok },
     });
     await app.close();
-    expect([200, 404]).toContain(r.statusCode);
+    expect(r.statusCode).toBe(400);
   });
 
-  it("POST /v1/payroll/statutory/returns — 400 missing period", async () => {
+  it("POST /v1/payroll/statutory/form24q/force-file — 400 missing fields", async () => {
     const app = await buildApp();
     const r = await app.inject({
       method: "POST",
-      url: "/v1/payroll/statutory/returns",
+      url: "/v1/payroll/statutory/form24q/force-file",
       headers: { authorization: "Bearer " + adminTok, "content-type": "application/json" },
       payload: {},
     });
@@ -428,27 +481,30 @@ describe("Statutory Returns routes", () => {
     expect(r.statusCode).toBe(400);
   });
 
-  it("POST /v1/payroll/statutory/returns/:id/file — 404 unknown", async () => {
+  it("POST /v1/payroll/statutory/form24q/force-file — 401", async () => {
     const app = await buildApp();
     const r = await app.inject({
       method: "POST",
-      url: "/v1/payroll/statutory/returns/" + FAKE_ID + "/file",
-      headers: { authorization: "Bearer " + adminTok, "content-type": "application/json" },
+      url: "/v1/payroll/statutory/form24q/force-file",
+      headers: { "content-type": "application/json" },
       payload: {},
     });
     await app.close();
-    expect([400, 404]).toContain(r.statusCode);
+    expect(r.statusCode).toBe(401);
   });
 
-  it("GET /v1/payroll/statutory/returns/:id/download — 404", async () => {
+  it("GET /v1/payroll/statutory/form12ba — 401", async () => {
     const app = await buildApp();
-    const r = await app.inject({
-      method: "GET",
-      url: "/v1/payroll/statutory/returns/" + FAKE_ID + "/download",
-      headers: { authorization: "Bearer " + adminTok },
-    });
+    const r = await app.inject({ method: "GET", url: "/v1/payroll/statutory/form12ba" });
     await app.close();
-    expect([200, 404]).toContain(r.statusCode);
+    expect(r.statusCode).toBe(401);
+  });
+
+  it("GET /v1/payroll/statutory/form26q — 401", async () => {
+    const app = await buildApp();
+    const r = await app.inject({ method: "GET", url: "/v1/payroll/statutory/form26q" });
+    await app.close();
+    expect(r.statusCode).toBe(401);
   });
 });
 
@@ -564,53 +620,64 @@ describe("World-class payroll routes", () => {
 
 // ================================================================
 // Tax Routes  — src/modules/tax/routes.ts
+//
+// STALE-URL FIX: "/v1/payroll/tax/declarations" (with a slash) and
+// "/v1/payroll/tax/regimes" never existed — git log --all -S over both
+// literal paths turns up nothing outside this test file's own introducing
+// commit. The real path is hyphenated: GET/POST "/v1/payroll/tax-declarations"
+// (no ":id"/":id/submit" — declarations are looked up by employeeId+fy query,
+// not a row id, and there is no separate "submit" step; POST itself is the
+// submission). "tax/regimes" has no real analogue anywhere in this file —
+// the closest real per-regime endpoint is GET "/v1/payroll/tax/computation",
+// which computes tax for one employee under a given ?regime=, so the two
+// regimes cases are retargeted onto that instead of being deleted.
 // ================================================================
 describe("Tax routes", () => {
-  it("GET /v1/payroll/tax/declarations — 200 or 400 admin", async () => {
+  it("GET /v1/payroll/tax-declarations?employeeId=..&fy=2026-27 — 200 or 400 admin", async () => {
     const app = await buildApp();
     const r = await app.inject({
       method: "GET",
-      url: "/v1/payroll/tax/declarations",
+      url: "/v1/payroll/tax-declarations?employeeId=" + FAKE_ID + "&fy=2026-27",
       headers: { authorization: "Bearer " + adminTok },
     });
     await app.close();
     expect([200, 400, 404]).toContain(r.statusCode);
   });
 
-  it("GET /v1/payroll/tax/declarations — 401", async () => {
+  it("GET /v1/payroll/tax-declarations — 401", async () => {
     const app = await buildApp();
-    const r = await app.inject({ method: "GET", url: "/v1/payroll/tax/declarations" });
+    const r = await app.inject({ method: "GET", url: "/v1/payroll/tax-declarations" });
     await app.close();
     expect(r.statusCode).toBe(401);
   });
 
-  it("GET /v1/payroll/tax/declarations — 403 citizen", async () => {
+  it("GET /v1/payroll/tax-declarations — 403 citizen", async () => {
     const app = await buildApp();
     const r = await app.inject({
       method: "GET",
-      url: "/v1/payroll/tax/declarations",
+      url: "/v1/payroll/tax-declarations",
       headers: { authorization: "Bearer " + citizenTok },
     });
     await app.close();
     expect(r.statusCode).toBe(403);
   });
 
-  it("GET /v1/payroll/tax/declarations/:id — 404", async () => {
+  it("GET /v1/payroll/tax-declarations?employeeId=.. — 400 missing fy admin", async () => {
     const app = await buildApp();
     const r = await app.inject({
       method: "GET",
-      url: "/v1/payroll/tax/declarations/" + FAKE_ID,
+      url: "/v1/payroll/tax-declarations?employeeId=" + FAKE_ID,
       headers: { authorization: "Bearer " + adminTok },
     });
     await app.close();
-    expect([200, 404]).toContain(r.statusCode);
+    expect(r.statusCode).toBe(400);
   });
 
-  it("POST /v1/payroll/tax/declarations — 400 missing fields", async () => {
+  it("POST /v1/payroll/tax-declarations — 400 missing fields", async () => {
     const app = await buildApp();
     const r = await app.inject({
       method: "POST",
-      url: "/v1/payroll/tax/declarations",
+      url: "/v1/payroll/tax-declarations",
       headers: { authorization: "Bearer " + adminTok, "content-type": "application/json" },
       payload: {},
     });
@@ -618,87 +685,11 @@ describe("Tax routes", () => {
     expect(r.statusCode).toBe(400);
   });
 
-  it("POST /v1/payroll/tax/declarations/:id/submit — 404 unknown", async () => {
+  it("POST /v1/payroll/tax-declarations — 401", async () => {
     const app = await buildApp();
     const r = await app.inject({
       method: "POST",
-      url: "/v1/payroll/tax/declarations/" + FAKE_ID + "/submit",
-      headers: { authorization: "Bearer " + adminTok, "content-type": "application/json" },
-      payload: {},
-    });
-    await app.close();
-    expect([400, 404]).toContain(r.statusCode);
-  });
-
-  it("GET /v1/payroll/tax/regimes — 200 or 404 admin", async () => {
-    const app = await buildApp();
-    const r = await app.inject({
-      method: "GET",
-      url: "/v1/payroll/tax/regimes",
-      headers: { authorization: "Bearer " + adminTok },
-    });
-    await app.close();
-    expect([200, 400, 404]).toContain(r.statusCode);
-  });
-
-  it("GET /v1/payroll/tax/regimes — 401", async () => {
-    const app = await buildApp();
-    const r = await app.inject({ method: "GET", url: "/v1/payroll/tax/regimes" });
-    await app.close();
-    expect(r.statusCode).toBe(401);
-  });
-});
-
-// ================================================================
-// Form-16 PDF Routes  — src/modules/form16-pdf/routes.ts
-// ================================================================
-describe("Form-16 PDF routes", () => {
-  it("GET /v1/payroll/form16 — 200 or 400 admin", async () => {
-    const app = await buildApp();
-    const r = await app.inject({
-      method: "GET",
-      url: "/v1/payroll/form16",
-      headers: { authorization: "Bearer " + adminTok },
-    });
-    await app.close();
-    expect([200, 400, 404]).toContain(r.statusCode);
-  });
-
-  it("GET /v1/payroll/form16 — 401", async () => {
-    const app = await buildApp();
-    const r = await app.inject({ method: "GET", url: "/v1/payroll/form16" });
-    await app.close();
-    expect(r.statusCode).toBe(401);
-  });
-
-  it("GET /v1/payroll/form16 — 403 citizen", async () => {
-    const app = await buildApp();
-    const r = await app.inject({
-      method: "GET",
-      url: "/v1/payroll/form16",
-      headers: { authorization: "Bearer " + citizenTok },
-    });
-    await app.close();
-    expect(r.statusCode).toBe(403);
-  });
-
-  it("POST /v1/payroll/form16/generate — 400 missing period", async () => {
-    const app = await buildApp();
-    const r = await app.inject({
-      method: "POST",
-      url: "/v1/payroll/form16/generate",
-      headers: { authorization: "Bearer " + adminTok, "content-type": "application/json" },
-      payload: {},
-    });
-    await app.close();
-    expect(r.statusCode).toBe(400);
-  });
-
-  it("POST /v1/payroll/form16/generate — 401", async () => {
-    const app = await buildApp();
-    const r = await app.inject({
-      method: "POST",
-      url: "/v1/payroll/form16/generate",
+      url: "/v1/payroll/tax-declarations",
       headers: { "content-type": "application/json" },
       payload: {},
     });
@@ -706,38 +697,127 @@ describe("Form-16 PDF routes", () => {
     expect(r.statusCode).toBe(401);
   });
 
-  it("GET /v1/payroll/form16/:id — 404 unknown", async () => {
+  it("GET /v1/payroll/tax/computation?employeeId=..&fy=2026-27&regime=new — 200 or 400 admin", async () => {
     const app = await buildApp();
     const r = await app.inject({
       method: "GET",
-      url: "/v1/payroll/form16/" + FAKE_ID,
+      url: "/v1/payroll/tax/computation?employeeId=" + FAKE_ID + "&fy=2026-27&regime=new",
       headers: { authorization: "Bearer " + adminTok },
     });
     await app.close();
-    expect([200, 404]).toContain(r.statusCode);
+    expect([200, 400, 404, 422]).toContain(r.statusCode);
   });
 
-  it("POST /v1/payroll/form16/:id/send — 404 or 400 unknown", async () => {
+  it("GET /v1/payroll/tax/computation — 401", async () => {
+    const app = await buildApp();
+    const r = await app.inject({ method: "GET", url: "/v1/payroll/tax/computation" });
+    await app.close();
+    expect(r.statusCode).toBe(401);
+  });
+});
+
+// ================================================================
+// Form-16 PDF Routes  — src/modules/form16-pdf/routes.ts,
+//                       src/modules/form16-verify/routes.ts,
+//                       src/modules/tax/routes.ts (GET .../tax/form16)
+//
+// STALE-URL FIX: "/v1/payroll/form16" and "/v1/payroll/form16/generate" (and
+// the "/:id" family under them) never existed — git log --all -S over both
+// literal paths turns up nothing outside this test file's own introducing
+// commit. Form 16 is actually spread across three real routes: a plain JSON
+// read at GET "/v1/payroll/tax/form16" (tax/routes.ts), the admin-only bulk
+// PDF pipeline under "/v1/payroll/tax/form16/bulk-*" (form16-pdf/routes.ts,
+// no ":id" — bulk jobs are looked up by fy, not id), the single-employee PDF
+// at GET "/v1/payroll/tax/form16/:employeeId/pdf", and signature verification
+// at POST "/v1/payroll/tax/form16/verify" (form16-verify/routes.ts — NOTE:
+// that route has no role gate beyond authentication, so it has no 403 case).
+// ================================================================
+describe("Form-16 PDF routes", () => {
+  it("GET /v1/payroll/tax/form16?employeeId=..&fy=2026-27 — 200 or 400 admin", async () => {
+    const app = await buildApp();
+    const r = await app.inject({
+      method: "GET",
+      url: "/v1/payroll/tax/form16?employeeId=" + FAKE_ID + "&fy=2026-27",
+      headers: { authorization: "Bearer " + adminTok },
+    });
+    await app.close();
+    expect([200, 400, 404, 422, 502]).toContain(r.statusCode);
+  });
+
+  it("GET /v1/payroll/tax/form16 — 401", async () => {
+    const app = await buildApp();
+    const r = await app.inject({ method: "GET", url: "/v1/payroll/tax/form16" });
+    await app.close();
+    expect(r.statusCode).toBe(401);
+  });
+
+  it("GET /v1/payroll/tax/form16 — 403 citizen", async () => {
+    const app = await buildApp();
+    const r = await app.inject({
+      method: "GET",
+      url: "/v1/payroll/tax/form16",
+      headers: { authorization: "Bearer " + citizenTok },
+    });
+    await app.close();
+    expect(r.statusCode).toBe(403);
+  });
+
+  it("POST /v1/payroll/tax/form16/bulk-generate — 400 missing fy", async () => {
     const app = await buildApp();
     const r = await app.inject({
       method: "POST",
-      url: "/v1/payroll/form16/" + FAKE_ID + "/send",
+      url: "/v1/payroll/tax/form16/bulk-generate",
       headers: { authorization: "Bearer " + adminTok, "content-type": "application/json" },
       payload: {},
     });
     await app.close();
-    expect([400, 404]).toContain(r.statusCode);
+    expect(r.statusCode).toBe(400);
   });
 
-  it("GET /v1/payroll/form16/:id/download — 404", async () => {
+  it("POST /v1/payroll/tax/form16/bulk-generate — 401", async () => {
+    const app = await buildApp();
+    const r = await app.inject({
+      method: "POST",
+      url: "/v1/payroll/tax/form16/bulk-generate",
+      headers: { "content-type": "application/json" },
+      payload: {},
+    });
+    await app.close();
+    expect(r.statusCode).toBe(401);
+  });
+
+  it("GET /v1/payroll/tax/form16/:employeeId/pdf?fy=2026-27 — unknown employee admin", async () => {
     const app = await buildApp();
     const r = await app.inject({
       method: "GET",
-      url: "/v1/payroll/form16/" + FAKE_ID + "/download",
+      url: "/v1/payroll/tax/form16/" + FAKE_ID + "/pdf?fy=2026-27",
       headers: { authorization: "Bearer " + adminTok },
     });
     await app.close();
-    expect([200, 404]).toContain(r.statusCode);
+    expect([200, 400, 404, 422, 502, 503]).toContain(r.statusCode);
+  });
+
+  it("POST /v1/payroll/tax/form16/verify — 400 invalid/missing PDF body", async () => {
+    const app = await buildApp();
+    const r = await app.inject({
+      method: "POST",
+      url: "/v1/payroll/tax/form16/verify",
+      headers: { authorization: "Bearer " + adminTok, "content-type": "application/json" },
+      payload: {},
+    });
+    await app.close();
+    expect(r.statusCode).toBe(400);
+  });
+
+  it("GET /v1/payroll/tax/form16/bulk-status?fy=2026-27 — 404 no job admin", async () => {
+    const app = await buildApp();
+    const r = await app.inject({
+      method: "GET",
+      url: "/v1/payroll/tax/form16/bulk-status?fy=2026-27",
+      headers: { authorization: "Bearer " + adminTok },
+    });
+    await app.close();
+    expect(r.statusCode).toBe(404);
   });
 });
 
