@@ -66,6 +66,15 @@ async function waitForIncident(tenantId: string, id: string, tries = 40): Promis
   }
   throw new Error(`incident ${id} never landed — F3 consumer not draining`);
 }
+/** Waits until the given incident's persisted status matches. */
+async function waitForStatus(id: string, toStatus: string, tries = 40): Promise<void> {
+  for (let i = 0; i < tries; i++) {
+    const res = await app.inject({ method: "GET", url: `/v1/admin/security-incidents/${id}`, headers: auth(REPORTER) });
+    if (res.json()?.data?.status === toStatus) return;
+    await settle();
+  }
+  throw new Error(`incident ${id} never reached status ${toStatus} — F3 consumer not draining`);
+}
 async function waitForBreachNotification(tenantId: string, incidentId: string, tries = 40): Promise<string> {
   for (let i = 0; i < tries; i++) {
     const res = await app.inject({ method: "GET", url: `/v1/admin/security-incidents/${incidentId}`, headers: auth(REPORTER, tenantId) });
@@ -151,9 +160,13 @@ describe("incident lifecycle (integration)", () => {
       method: "POST", url: "/v1/admin/security-incidents", headers: auth(REPORTER),
       payload: { title: "Suspicious data export", severity: "high", category: "data_exfiltration", affectedDataPrincipals: 1200 },
     });
-    expect(res.statusCode).toBe(201);
+    expect(res.statusCode).toBe(202);
     incidentId = res.json().data.id;
-    expect(res.json().data.status).toBe("detected");
+    // 202 command-acknowledgement envelope — "detected" is the persisted
+    // incident's own status, not this response's; land the write first.
+    await waitForIncident(TENANT, incidentId);
+    const detail = await app.inject({ method: "GET", url: `/v1/admin/security-incidents/${incidentId}`, headers: auth(REPORTER) });
+    expect(detail.json().data.status).toBe("detected");
   });
 
   it("rejects an illegal skip transition", async () => {
@@ -171,8 +184,11 @@ describe("incident lifecycle (integration)", () => {
         method: "POST", url: `/v1/admin/security-incidents/${incidentId}/transition`,
         headers: auth(REPORTER), payload: { toStatus, note: `moved to ${toStatus}` },
       });
-      expect(res.statusCode).toBe(200);
-      expect(res.json().data.status).toBe(toStatus);
+      expect(res.statusCode).toBe(202);
+      // Each step's route re-reads the incident's current status
+      // synchronously before accepting the next transition, so this step's
+      // write must land before the next one is requested.
+      await waitForStatus(incidentId, toStatus);
     }
     const detail = await app.inject({ method: "GET", url: `/v1/admin/security-incidents/${incidentId}`, headers: auth(REPORTER) });
     expect(detail.json().data.status).toBe("resolved");
@@ -194,8 +210,10 @@ describe("incident lifecycle (integration)", () => {
       method: "POST", url: `/v1/admin/security-incidents/${incidentId}/close`,
       headers: auth(CHECKER), payload: { note: "reviewed and closed" },
     });
-    expect(res.statusCode).toBe(200);
-    expect(res.json().data.status).toBe("closed");
+    expect(res.statusCode).toBe(202);
+    await (queue as any).drain?.();
+    const detail = await app.inject({ method: "GET", url: `/v1/admin/security-incidents/${incidentId}`, headers: auth(REPORTER) });
+    expect(detail.json().data.status).toBe("closed");
   });
 });
 
@@ -233,9 +251,15 @@ describe("breach notification (integration)", () => {
       method: "POST", url: `/v1/admin/security-incidents/${incidentId}/breach-notifications/${nid}/submit`,
       headers: auth(CHECKER), payload: { reference: "DPB/2026/00042" },
     });
-    expect(submit.statusCode).toBe(200);
-    expect(submit.json().data.status).toBe("submitted");
-    expect(submit.json().data.onTime).toBe(true);
+    expect(submit.statusCode).toBe(202);
+    await (queue as any).drain?.();
+    const after = await app.inject({ method: "GET", url: `/v1/admin/security-incidents/${incidentId}`, headers: auth(REPORTER) });
+    const n = (after.json().data.breachNotifications as Array<{ id: string; status: string; submittedAt: string; deadlineAt: string }>).find((x) => x.id === nid);
+    expect(n?.status).toBe("submitted");
+    // onTime itself is never persisted (only emitted on the internal
+    // security.breach.notification_submitted event) — derive the same
+    // semantics from the persisted submittedAt/deadlineAt.
+    expect(new Date(n!.submittedAt).getTime()).toBeLessThanOrEqual(new Date(n!.deadlineAt).getTime());
   });
 
   it("lists overdue breach notifications endpoint", async () => {

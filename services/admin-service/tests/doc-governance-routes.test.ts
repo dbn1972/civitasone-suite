@@ -12,7 +12,8 @@ import type { FastifyInstance } from "fastify";
 const { buildApp } = await import("../src/app.js");
 const { sqlClient } = await import("../src/shared/db.js");
 const { queue } = await import("../src/shared/infra.js");
-const { registerAllF3Consumers } = await import("./helpers/register-all-f3-consumers.js");
+const { tenantScoped } = await import("../src/shared/tenant-queue.js");
+const { registerF3_uploads_Consumers } = await import("../src/modules/uploads/doc-f3-consumer.js");
 
 const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
 
@@ -49,13 +50,38 @@ async function wipe(): Promise<void> {
 let app: FastifyInstance;
 beforeAll(async () => {
   // F3 CONSUMER WIRING — this suite's app comes from src/app.ts alone; the
-  // uploads/doc-governance F3 consumer (and the rest of worker.ts's set) is
-  // never registered against this test's in-memory Queue singleton, so
-  // every write here (createType, register, approve, expiry-scan) publishes
-  // a command that nothing ever applies. Registering the full worker.ts
-  // consumer set here so writes actually land — same pattern as
-  // tests/integration-settings-ssrf.test.ts / tests/security-incident.test.ts.
-  registerAllF3Consumers(queue);
+  // uploads/doc-governance F3 consumer is never registered against this
+  // test's in-memory Queue singleton, so every write here (createType,
+  // register, requirement upsert, expiry-scan) publishes a command that
+  // nothing ever applies unless we wire the consumer ourselves.
+  //
+  // Deliberately NOT using tests/helpers/register-all-f3-consumers.ts here
+  // (unlike security-incident.test.ts / security-compliance.test.ts, whose
+  // modules each publish to their OWN dedicated topic). uploads and several
+  // other F3-converted modules (change, sandbox, central-config, config,
+  // dept-templates, integration-settings, support) all publish to the SAME
+  // generic shared topic, COMMANDS.f3RouteWrite ('admin.f3.route_write'),
+  // differentiated only by an `op` field inside the payload. MemoryQueue's
+  // delivery dedup (`seen`, keyed by `topic:messageId` only — see
+  // services/queue-service/src/bus.ts's deliver()) is per-MESSAGE, not per
+  // (message, handler): when N handlers are subscribed to the same topic,
+  // the first one invoked marks the key "seen" synchronously before ever
+  // awaiting, so every other handler for that same message sees `seen` already
+  // set and returns immediately without running. Empirically verified (ad
+  // hoc script, not committed): with all 8 shared-topic F3 consumers wired
+  // via registerAllF3Consumers, only the FIRST-registered one (change) ever
+  // actually receives 'admin.f3.route_write' messages — uploads (7th in that
+  // helper's registration order) never fires, every write here silently
+  // never lands, and neither the DLQ nor any log records it (deliver()'s
+  // early "already seen" return isn't an error path). This is a real,
+  // separate bug in either the shared MemoryQueue driver or in
+  // register-all-f3-consumers.ts's use of it for multiple same-topic
+  // consumers at once — NOT fixed here (out of this batch's scope; flagged
+  // in the final report). central-config.test.ts's beforeAll independently
+  // arrived at the same workaround: register only the ONE F3 consumer this
+  // suite actually needs, so it is the sole subscriber on the shared topic
+  // within this test file's process.
+  registerF3_uploads_Consumers(tenantScoped(queue));
   await queue.start();
   app = await buildApp();
   await wipe();
@@ -90,25 +116,103 @@ function nextCode(prefix: string): string {
 }
 const AT = (offsetMs: number): string => new Date(Date.now() + offsetMs).toISOString();
 
+// F3 CONVERSION — document-type create, requirement upsert and document
+// register are all now async 202 writes: the route only echoes
+// `{ id, status: 'accepted', correlationId, data: { id } }` (see
+// doc-routes.ts), the real row is applied later by doc-f3-consumer.ts. Worse,
+// none of apply_uploads_0 / apply_uploads_2 / apply_uploads_3
+// (doc-f3-apply.ts) forwards the route-generated id into its insert call —
+// repo.insertType / repo.upsertRequirement(on first insert) / repo.insertDocument
+// all omit `id:`, so the DB assigns its OWN random id (doc-schema.ts:
+// id uuid().defaultRandom()) instead of the id the route told the caller to
+// use. This is the same "id-mismatch" application bug already flagged for
+// integration-ops (tests/integration-ops.test.ts, search "id-mismatch") —
+// real, separate, out of this batch's scope, not fixed here. Every helper
+// below drains the queue after posting, then sources the REAL id (and every
+// other server-computed field) from a follow-up GET keyed on a natural,
+// caller-supplied field (code / storageKey / contextType+contextKey) instead
+// of trusting the create response's echoed id.
+async function drainQueue(): Promise<void> {
+  await (queue as any).drain?.();
+}
+
+async function findTypeByCode(code: string, tenantId = T_MAIN): Promise<DocType> {
+  const res = await app.inject({
+    method: "GET", url: "/v1/admin/document-types?limit=200", headers: auth(["tenant_admin"], tenantId),
+  });
+  const found = (res.json() as ListBody<DocType>).data.find((r) => r.code === code);
+  if (!found) throw new Error(`document type '${code}' never landed — F3 consumer not draining`);
+  return found;
+}
+
 async function createType(over: Record<string, unknown> = {}, tenantId = T_MAIN): Promise<DocType> {
+  const code = (over.code as string | undefined) ?? nextCode("type");
   const res = await app.inject({
     method: "POST", url: "/v1/admin/document-types", headers: auth(["tenant_admin"], tenantId),
-    payload: { code: nextCode("type"), name: "A Type", ...over },
+    payload: { name: "A Type", ...over, code },
   });
-  expect(res.statusCode).toBe(201);
-  return (res.json() as SingleBody<DocType>).data;
+  expect(res.statusCode).toBe(202);
+  expect((res.json() as { status: string }).status).toBe("accepted");
+  await drainQueue();
+  return findTypeByCode(code, tenantId);
+}
+
+async function findDocumentByStorageKey(storageKey: string, tenantId = T_MAIN): Promise<Doc> {
+  const res = await app.inject({
+    method: "GET", url: "/v1/admin/documents?limit=200", headers: auth(["tenant_admin"], tenantId),
+  });
+  const found = (res.json() as ListBody<Doc>).data.find((d) => d.storageKey === storageKey);
+  if (!found) throw new Error(`document '${storageKey}' never landed — F3 consumer not draining`);
+  return found;
 }
 
 async function registerDoc(over: Record<string, unknown>, tenantId = T_MAIN, roles = ["tenant_admin"]): Promise<Doc> {
+  // A unique storageKey per call (unless the caller overrides it) is what
+  // makes the post-drain GET lookup unambiguous — most call sites below
+  // reuse the same default contextType/contextKey across many tests, so a
+  // fixed default storageKey would collide across rows once we can no
+  // longer read the created row straight off the (now id-mismatched, 202)
+  // response.
+  const storageKey = (over.storageKey as string | undefined) ?? `tenant/${tenantId}/file-${nextCode("doc")}.pdf`;
   const res = await app.inject({
     method: "POST", url: "/v1/admin/documents", headers: auth(roles, tenantId),
     payload: {
       contextType: "employee_onboarding", contextKey: "emp-1",
-      storageKey: `tenant/${tenantId}/file.pdf`, ...over,
+      ...over, storageKey,
     },
   });
-  expect(res.statusCode).toBe(201);
-  return (res.json() as SingleBody<Doc>).data;
+  expect(res.statusCode).toBe(202);
+  expect((res.json() as { status: string }).status).toBe("accepted");
+  await drainQueue();
+  return findDocumentByStorageKey(storageKey, tenantId);
+}
+
+async function findRequirement(
+  contextType: string, contextKey: string, documentTypeCode: string, tenantId = T_MAIN,
+): Promise<Requirement> {
+  const res = await app.inject({
+    method: "GET",
+    url: `/v1/admin/document-requirements?limit=50&contextType=${contextType}&contextKey=${contextKey}`,
+    headers: auth(["tenant_admin"], tenantId),
+  });
+  const found = (res.json() as ListBody<Requirement>).data.find((r) => r.documentTypeCode === documentTypeCode);
+  if (!found) {
+    throw new Error(`requirement ${contextType}/${contextKey}/${documentTypeCode} never landed — F3 consumer not draining`);
+  }
+  return found;
+}
+
+async function upsertRequirement(
+  body: { contextType: string; contextKey: string; documentTypeCode: string; mandatory?: boolean },
+  tenantId = T_MAIN,
+): Promise<Requirement> {
+  const res = await app.inject({
+    method: "POST", url: "/v1/admin/document-requirements", headers: auth(["tenant_admin"], tenantId), payload: body,
+  });
+  expect(res.statusCode).toBe(202);
+  expect((res.json() as { status: string }).status).toBe("accepted");
+  await drainQueue();
+  return findRequirement(body.contextType, body.contextKey, body.documentTypeCode, tenantId);
 }
 
 // ── auth ────────────────────────────────────────────────────────────────────
@@ -199,12 +303,16 @@ describe("document types", () => {
       method: "POST", url: "/v1/admin/document-types", headers: auth(["tenant_admin"], T_MAIN),
       payload: { code, name: "Main" },
     });
-    expect(a.statusCode).toBe(201);
+    expect(a.statusCode).toBe(202);
     const b = await app.inject({
       method: "POST", url: "/v1/admin/document-types", headers: auth(["tenant_admin"], T_ALT),
       payload: { code, name: "Alt" },
     });
-    expect(b.statusCode).toBe(201);
+    expect(b.statusCode).toBe(202);
+    await drainQueue();
+    const main = await findTypeByCode(code, T_MAIN);
+    const alt = await findTypeByCode(code, T_ALT);
+    expect(main.id).not.toBe(alt.id);
   });
 
   it("400 for an unknown category", async () => {
@@ -260,13 +368,19 @@ describe("document types", () => {
   });
 
   it("patches a type under an optimistic lock", async () => {
+    // PATCH is F3 async too: the 200 body is just `{ data: { id, status:
+    // 'accepted', correlationId } }` (doc-routes.ts uploads_op_1) — no
+    // `version` field synchronously. Unlike create, the consumer's update
+    // targets the URL `id` directly (no insert, so no id-mismatch bug here);
+    // land the write, then re-read the real row by that same id.
     const t = await createType();
     const res = await app.inject({
       method: "PATCH", url: `/v1/admin/document-types/${t.id}`, headers: auth(),
       payload: { expectedVersion: t.version, name: "Renamed", expiryWarnDays: 60 },
     });
     expect(res.statusCode).toBe(200);
-    expect((res.json() as SingleBody<{ version: number }>).data.version).toBe(2);
+    expect((res.json() as SingleBody<{ status: string }>).data.status).toBe("accepted");
+    await drainQueue();
 
     const list = await app.inject({ method: "GET", url: "/v1/admin/document-types?limit=200", headers: auth() });
     const found = (list.json() as ListBody<DocType>).data.find((r) => r.id === t.id);
@@ -274,6 +388,8 @@ describe("document types", () => {
   });
 
   it("409 VERSION_CONFLICT on a stale patch", async () => {
+    // Sync guard (assertVersionMatch runs against a scopedRead before
+    // publish) — still a genuine 409, not a stale-status-code case.
     const t = await createType();
     const res = await app.inject({
       method: "PATCH", url: `/v1/admin/document-types/${t.id}`, headers: auth(),
@@ -289,6 +405,11 @@ describe("document types", () => {
       method: "PATCH", url: `/v1/admin/document-types/${t.id}`, headers: auth(),
       payload: { expectedVersion: 1, name: "One" },
     });
+    // The first PATCH must actually land (bumping the DB version to 2)
+    // before the sync VERSION_CONFLICT guard on the second PATCH can see it
+    // and reject the replayed expectedVersion: 1 — otherwise both patches
+    // race the still-unapplied version 1 and the second would wrongly 200.
+    await drainQueue();
     const again = await app.inject({
       method: "PATCH", url: `/v1/admin/document-types/${t.id}`, headers: auth(),
       payload: { expectedVersion: 1, name: "Two" },
@@ -325,25 +446,18 @@ describe("document types", () => {
 describe("document requirements", () => {
   it("marks a type mandatory for a context", async () => {
     const t = await createType();
-    const res = await app.inject({
-      method: "POST", url: "/v1/admin/document-requirements", headers: auth(),
-      payload: { contextType: "employee_onboarding", contextKey: "grade-a", documentTypeCode: t.code },
-    });
-    expect(res.statusCode).toBe(201);
-    expect((res.json() as SingleBody<Requirement>).data).toMatchObject({ mandatory: true, version: 1 });
+    const r = await upsertRequirement({ contextType: "employee_onboarding", contextKey: "grade-a", documentTypeCode: t.code });
+    expect(r).toMatchObject({ mandatory: true, version: 1 });
   });
 
   it("upserts on (contextType, contextKey, typeCode), bumping the version", async () => {
     const t = await createType();
     const body = { contextType: "vendor_kyc", contextKey: "tier-1", documentTypeCode: t.code };
-    const first = await app.inject({ method: "POST", url: "/v1/admin/document-requirements", headers: auth(), payload: body });
-    const second = await app.inject({
-      method: "POST", url: "/v1/admin/document-requirements", headers: auth(),
-      payload: { ...body, mandatory: false },
-    });
-    expect(second.statusCode).toBe(201);
-    const a = (first.json() as SingleBody<Requirement>).data;
-    const b = (second.json() as SingleBody<Requirement>).data;
+    // Each upsertRequirement() call drains before returning, so the second
+    // request's onConflictDoUpdate sees the first request's committed row
+    // (same natural key: tenantId/contextType/contextKey/documentTypeCode).
+    const a = await upsertRequirement(body);
+    const b = await upsertRequirement({ ...body, mandatory: false });
     expect(b.id).toBe(a.id);
     expect(b.mandatory).toBe(false);
     expect(b.version).toBe(2);
@@ -364,6 +478,9 @@ describe("document requirements", () => {
       method: "PATCH", url: `/v1/admin/document-types/${t.id}`, headers: auth(),
       payload: { expectedVersion: t.version, status: "retired" },
     });
+    // The retire must land before the sync guard on the requirement POST
+    // (a scopedRead of the type's current status) can see it as retired.
+    await drainQueue();
     const res = await app.inject({
       method: "POST", url: "/v1/admin/document-requirements", headers: auth(),
       payload: { contextType: "ctx_b", contextKey: "k", documentTypeCode: t.code },
@@ -392,10 +509,7 @@ describe("document requirements", () => {
 
   it("lists requirements filtered by context", async () => {
     const t = await createType();
-    await app.inject({
-      method: "POST", url: "/v1/admin/document-requirements", headers: auth(),
-      payload: { contextType: "listing_ctx", contextKey: "only", documentTypeCode: t.code },
-    });
+    await upsertRequirement({ contextType: "listing_ctx", contextKey: "only", documentTypeCode: t.code });
     const res = await app.inject({
       method: "GET", url: "/v1/admin/document-requirements?limit=50&contextType=listing_ctx&contextKey=only",
       headers: auth(),
@@ -476,6 +590,9 @@ describe("documents", () => {
       method: "PATCH", url: `/v1/admin/document-types/${t.id}`, headers: auth(),
       payload: { expectedVersion: t.version, status: "retired" },
     });
+    // The retire must land before the sync guard on the document POST (a
+    // scopedRead of the type's current status) can see it as retired.
+    await drainQueue();
     const res = await app.inject({
       method: "POST", url: "/v1/admin/documents", headers: auth(),
       payload: { documentTypeCode: t.code, contextType: "ctx_y", contextKey: "k", storageKey: "a/b.pdf" },
@@ -612,10 +729,7 @@ describe("GET /v1/admin/documents/compliance", () => {
 
   it("reports a mandatory requirement with no document as missing and not compliant", async () => {
     const t = await createType();
-    await app.inject({
-      method: "POST", url: "/v1/admin/document-requirements", headers: auth(),
-      payload: { contextType: "comp_missing", contextKey: "k", documentTypeCode: t.code },
-    });
+    await upsertRequirement({ contextType: "comp_missing", contextKey: "k", documentTypeCode: t.code });
     const res = await app.inject({
       method: "GET", url: "/v1/admin/documents/compliance?limit=50&contextType=comp_missing&contextKey=k",
       headers: auth(),
@@ -629,10 +743,7 @@ describe("GET /v1/admin/documents/compliance", () => {
 
   it("reports compliant once the mandatory document is held", async () => {
     const t = await createType();
-    await app.inject({
-      method: "POST", url: "/v1/admin/document-requirements", headers: auth(),
-      payload: { contextType: "comp_ok", contextKey: "k", documentTypeCode: t.code },
-    });
+    await upsertRequirement({ contextType: "comp_ok", contextKey: "k", documentTypeCode: t.code });
     await registerDoc({ documentTypeCode: t.code, contextType: "comp_ok", contextKey: "k" });
     const res = await app.inject({
       method: "GET", url: "/v1/admin/documents/compliance?limit=50&contextType=comp_ok&contextKey=k", headers: auth(),
@@ -644,10 +755,7 @@ describe("GET /v1/admin/documents/compliance", () => {
 
   it("an expiring mandatory document is compliant but flagged", async () => {
     const t = await createType({ expiryWarnDays: 30 });
-    await app.inject({
-      method: "POST", url: "/v1/admin/document-requirements", headers: auth(),
-      payload: { contextType: "comp_expiring", contextKey: "k", documentTypeCode: t.code },
-    });
+    await upsertRequirement({ contextType: "comp_expiring", contextKey: "k", documentTypeCode: t.code });
     await registerDoc({
       documentTypeCode: t.code, contextType: "comp_expiring", contextKey: "k", expiresAt: AT(10 * DAY),
     });
@@ -663,10 +771,7 @@ describe("GET /v1/admin/documents/compliance", () => {
 
   it("an expired mandatory document breaks compliance", async () => {
     const t = await createType({ expiryWarnDays: 30 });
-    await app.inject({
-      method: "POST", url: "/v1/admin/document-requirements", headers: auth(),
-      payload: { contextType: "comp_expired", contextKey: "k", documentTypeCode: t.code },
-    });
+    await upsertRequirement({ contextType: "comp_expired", contextKey: "k", documentTypeCode: t.code });
     await registerDoc({
       documentTypeCode: t.code, contextType: "comp_expired", contextKey: "k", expiresAt: AT(-5 * DAY),
     });
@@ -681,10 +786,7 @@ describe("GET /v1/admin/documents/compliance", () => {
 
   it("scopes the report to one subject when subjectId is supplied", async () => {
     const t = await createType();
-    await app.inject({
-      method: "POST", url: "/v1/admin/document-requirements", headers: auth(),
-      payload: { contextType: "comp_subject", contextKey: "k", documentTypeCode: t.code },
-    });
+    await upsertRequirement({ contextType: "comp_subject", contextKey: "k", documentTypeCode: t.code });
     await registerDoc({ documentTypeCode: t.code, contextType: "comp_subject", contextKey: "k", subjectId: "has-it" });
 
     const held = await app.inject({
@@ -704,10 +806,7 @@ describe("GET /v1/admin/documents/compliance", () => {
 
   it("an optional requirement left unmet does not break compliance", async () => {
     const t = await createType();
-    await app.inject({
-      method: "POST", url: "/v1/admin/document-requirements", headers: auth(),
-      payload: { contextType: "comp_optional", contextKey: "k", documentTypeCode: t.code, mandatory: false },
-    });
+    await upsertRequirement({ contextType: "comp_optional", contextKey: "k", documentTypeCode: t.code, mandatory: false });
     const res = await app.inject({
       method: "GET", url: "/v1/admin/documents/compliance?limit=50&contextType=comp_optional&contextKey=k",
       headers: auth(),
@@ -736,12 +835,24 @@ describe("POST /v1/admin/documents/expiry-scan", () => {
     return auth(["tenant_admin"], T_SCAN);
   }
 
-  async function scan(payload: Record<string, unknown> = {}): Promise<ScanResult> {
+  // The scan route is F3 async too (doc-routes.ts uploads_op_4): the 200
+  // body is now just `{ data: { id, status: 'accepted', correlationId } }`
+  // — none of scanned/expiring/expired/unchanged/horizon are echoed
+  // synchronously any more (see apply_uploads_4 in doc-f3-apply.ts, which
+  // computes and applies them entirely inside the async consumer). scan()
+  // below only confirms acceptance and lands the write; every test sources
+  // the real counters from lastScanStats() (the 'document.expiry_scan'
+  // audit-outbox record apply_uploads_4 writes in the SAME transaction as
+  // its updates — see auditEvent() call at the end of that function) or
+  // from direct row/event-count reads (docRow / eventCount below, already
+  // DB-backed and unaffected by the 202 conversion).
+  async function scan(payload: Record<string, unknown> = {}): Promise<void> {
     const res = await app.inject({
       method: "POST", url: "/v1/admin/documents/expiry-scan", headers: scanAuth(), payload,
     });
     expect(res.statusCode).toBe(200);
-    return (res.json() as SingleBody<ScanResult>).data;
+    expect((res.json() as SingleBody<{ status: string }>).data.status).toBe("accepted");
+    await drainQueue();
   }
 
   function docRow(id: string): Promise<{ status: string; version: number; last_alert_at: Date | string | null } | undefined> {
@@ -761,10 +872,38 @@ describe("POST /v1/admin/documents/expiry-scan", () => {
     });
   }
 
+  /**
+   * Sources scanned/expiring/expired/unchanged from the most recent
+   * `document.expiry_scan` audit record instead of the (no-longer-present)
+   * synchronous response body. `horizon` has no equivalent: apply_uploads_4
+   * computes it purely in-memory and never persists it anywhere readable, so
+   * it genuinely cannot be observed post-202 — dropped, not worked around
+   * (see the "zero report" test below).
+   */
+  function lastScanStats(): Promise<{ scanned: number; expiring: number; expired: number; unchanged: number }> {
+    return asTenant(T_SCAN, async (sql) => {
+      const rows = await sql<Array<{ payload: Record<string, unknown> }>>`
+        SELECT payload FROM _outbox.messages
+        WHERE topic = 'audit.event.record' AND payload->>'action' = 'document.expiry_scan'
+        ORDER BY created_at DESC LIMIT 1`;
+      const p = rows[0]?.payload ?? {};
+      return {
+        scanned: Number(p.scanned ?? 0),
+        expiring: Number(p.expiring ?? 0),
+        expired: Number(p.expired ?? 0),
+        unchanged: Number(p.unchanged ?? 0),
+      };
+    });
+  }
+
   it("returns a zero report when the tenant holds nothing to scan", async () => {
-    const result = await scan();
-    expect(result).toMatchObject({ scanned: 0, expiring: 0, expired: 0, unchanged: 0 });
-    expect(typeof result.horizon).toBe("string");
+    await scan();
+    const stats = await lastScanStats();
+    expect(stats).toMatchObject({ scanned: 0, expiring: 0, expired: 0, unchanged: 0 });
+    // GAP (not a stale-status-code issue, left unfixed): `horizon` was only
+    // ever present in the old synchronous response body and is not
+    // persisted anywhere the async path can be re-read from — see the
+    // lastScanStats() comment above.
   });
 
   it("moves an active document into `expiring` and publishes documentExpiring once", async () => {
@@ -775,16 +914,19 @@ describe("POST /v1/admin/documents/expiry-scan", () => {
     }, T_SCAN);
     expect(doc.status).toBe("active");
 
-    // ...then widening it makes the same document due for an alert.
+    // ...then widening it makes the same document due for an alert. The
+    // widen must land (drain) before the scan reads the type's warn-days.
     const widened = await app.inject({
       method: "PATCH", url: `/v1/admin/document-types/${type.id}`, headers: scanAuth(),
       payload: { expectedVersion: type.version, expiryWarnDays: 30 },
     });
     expect(widened.statusCode).toBe(200);
+    await drainQueue();
 
-    const first = await scan();
-    expect(first.expiring).toBe(1);
-    expect(first.scanned).toBeGreaterThanOrEqual(1);
+    await scan();
+    const stats = await lastScanStats();
+    expect(stats.expiring).toBe(1);
+    expect(stats.scanned).toBeGreaterThanOrEqual(1);
     const after = await docRow(doc.id);
     expect(after?.status).toBe("expiring");
     expect(after?.version).toBe(doc.version + 1);
@@ -797,18 +939,21 @@ describe("POST /v1/admin/documents/expiry-scan", () => {
     const doc = await registerDoc({
       documentTypeCode: type.code, contextType: "scan_idem", contextKey: "k", expiresAt: AT(9 * DAY),
     }, T_SCAN);
-    await app.inject({
+    const widen = await app.inject({
       method: "PATCH", url: `/v1/admin/document-types/${type.id}`, headers: scanAuth(),
       payload: { expectedVersion: type.version, expiryWarnDays: 30 },
     });
+    expect(widen.statusCode).toBe(200);
+    await drainQueue();
 
     await scan();
     const afterFirst = await docRow(doc.id);
     expect(afterFirst?.status).toBe("expiring");
     expect(await eventCount("admin.document.expiring", doc.id)).toBe(1);
 
-    const second = await scan();
-    expect(second.unchanged).toBeGreaterThanOrEqual(1);
+    await scan();
+    const stats = await lastScanStats();
+    expect(stats.unchanged).toBeGreaterThanOrEqual(1);
     const afterSecond = await docRow(doc.id);
     expect(afterSecond?.version).toBe(afterFirst?.version);
     expect(await eventCount("admin.document.expiring", doc.id)).toBe(1);
@@ -825,8 +970,9 @@ describe("POST /v1/admin/documents/expiry-scan", () => {
     await asTenant(T_SCAN, (sql) => sql`
       UPDATE uploads.documents SET expires_at = now() - interval '2 days' WHERE id = ${doc.id}`);
 
-    const result = await scan();
-    expect(result.expired).toBeGreaterThanOrEqual(1);
+    await scan();
+    const stats = await lastScanStats();
+    expect(stats.expired).toBeGreaterThanOrEqual(1);
     expect((await docRow(doc.id))?.status).toBe("expired");
     expect(await eventCount("admin.document.expired", doc.id)).toBe(1);
     expect(await eventCount("admin.document.expiring", doc.id)).toBe(0);
@@ -869,8 +1015,9 @@ describe("POST /v1/admin/documents/expiry-scan", () => {
   });
 
   it("honours the scan limit", async () => {
-    const result = await scan({ limit: 1 });
-    expect(result.scanned).toBeLessThanOrEqual(1);
+    await scan({ limit: 1 });
+    const stats = await lastScanStats();
+    expect(stats.scanned).toBeLessThanOrEqual(1);
   });
 
   it("400 for a limit above the ceiling", async () => {

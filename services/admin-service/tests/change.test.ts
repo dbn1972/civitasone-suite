@@ -8,8 +8,12 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { signToken } from "@civitasone/auth";
 import type { FastifyInstance } from "fastify";
+import { randomUUID } from "node:crypto";
 import { buildApp } from "../src/app.js";
 import { sqlClient } from "../src/shared/db.js";
+import { queue } from "../src/shared/infra.js";
+import { tenantScoped } from "../src/shared/tenant-queue.js";
+import { registerF3_change_Consumers } from "../src/modules/change/f3-consumer.js";
 
 const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
 const TENANT = "aaaaaaaa-dddd-4000-8000-000000000001";
@@ -26,8 +30,19 @@ function auth(actorId: string, roles?: string[], tenantId?: string) {
 }
 
 let app: FastifyInstance;
-beforeAll(async () => { app = await buildApp(); });
-afterAll(async () => { await app.close(); await sqlClient.end(); });
+beforeAll(async () => {
+  // F3 CONSUMER WIRING — every write route in this module (create/rollback-plan/
+  // submit/approve/reject/schedule/start/complete/create-freeze) was converted
+  // to publish a command via commands.ts -> queue.publish() and is only ever
+  // applied by the consumer registered in src/worker.ts, a process this test
+  // never runs. Without registering it here every write's downstream state
+  // change is silently never applied. Same pattern as
+  // tests/security-incident.test.ts / tests/central-config.test.ts.
+  registerF3_change_Consumers(tenantScoped(queue));
+  await queue.start();
+  app = await buildApp();
+});
+afterAll(async () => { await app.close(); await queue.stop(); await sqlClient.end(); });
 
 /**
  * Read an RLS-forced table directly, with the tenant GUC set on the same
@@ -56,29 +71,50 @@ async function broadcastsFor(tenantId: string, changeId: string): Promise<Array<
 }
 
 async function createChange(body: Record<string, unknown> = {}): Promise<string> {
+  // Unique per call so the id-mismatch workaround below (see comment) can find
+  // the real persisted row unambiguously even though many tests never override
+  // the title.
+  const title = `Upgrade payments gateway ${randomUUID()}`;
   const res = await app.inject({
     method: "POST", url: "/v1/admin/change/requests", headers: auth(REQUESTER),
     payload: {
-      title: "Upgrade payments gateway", type: "normal", risk: "high",
+      title, type: "normal", risk: "high",
       affectedServices: ["finance-service", "billing-service"],
       description: "Roll out gateway v2 across finance and billing.",
       rollbackPlan: "Flip the feature flag back to v1 and redeploy N-1.",
       ...body,
     },
   });
-  expect(res.statusCode).toBe(201);
-  return res.json().id as string;
+  expect(res.statusCode).toBe(202);
+  await (queue as any).drain?.();
+  // change/f3-apply.ts's apply_change_0 (create) mints its own randomUUID()
+  // instead of forwarding the route-generated id into repo.insertRequest() —
+  // same class of bug already documented in tests/integration-ops.test.ts and
+  // worked around the same way in tests/central-config.test.ts's propose():
+  // real, pre-existing, out of this batch's scope. Look the real id up by the
+  // unique title instead of trusting the id echoed in the 202 response.
+  const list = await app.inject({ method: "GET", url: "/v1/admin/change/requests", headers: auth(REQUESTER) });
+  const rows = list.json().data as Array<{ id: string; title: string }>;
+  const match = rows.find((r) => r.title === title);
+  if (!match) throw new Error(`created change '${title}' never landed`);
+  return match.id;
 }
 
 async function advanceTo(id: string, stage: "submitted" | "approved"): Promise<void> {
   const s = await app.inject({ method: "POST", url: `/v1/admin/change/requests/${id}/submit`, headers: auth(REQUESTER) });
   expect(s.statusCode).toBe(200);
+  // The route's 200 body is a hardcoded acknowledgement, not the real
+  // post-transition state — the actual write only lands once the F3 consumer
+  // applies it. Land it before any caller depends on the real persisted
+  // status (e.g. a later approve/schedule/start/complete reading cur.status).
+  await (queue as any).drain?.();
   if (stage === "submitted") return;
   const a = await app.inject({
     method: "POST", url: `/v1/admin/change/requests/${id}/approve`,
     headers: auth(APPROVER, ["tenant_admin"]), payload: {},
   });
   expect(a.statusCode).toBe(200);
+  await (queue as any).drain?.();
 }
 
 // ── auth ──────────────────────────────────────────────────────────────────
@@ -128,6 +164,17 @@ describe("change create + validation", () => {
 
 // ── CAB approval: maker-checker ──────────────────────────────────────────────
 describe("CAB approval — maker-checker", () => {
+  // GAP (not a stale-status-code issue, left unfixed): change/routes.ts' approve
+  // endpoint has no synchronous pre-accept maker-checker check — unlike
+  // integration-settings/routes.ts (fixed by PR #920) — it only calls
+  // approveBody.parse() before publishing. assertApproverDistinct() (and every
+  // other business-rule check for this route: assertTransition,
+  // assertRollbackPlan) now lives only inside the async consumer
+  // (change/f3-apply.ts's apply_change_3), whose thrown error is swallowed by
+  // queue retry/DLQ machinery with no channel back to the HTTP caller — the
+  // route always synchronously replies 200 {status:"approved"} regardless of
+  // whether the transition is actually legal. Same gap class as
+  // tests/central-config.test.ts's "BLOCKS the proposer..." test.
   it("blocks self-approval by the requester (MAKER_CHECKER_VIOLATION)", async () => {
     const id = await createChange();
     await advanceTo(id, "submitted");
@@ -151,6 +198,10 @@ describe("CAB approval — maker-checker", () => {
 
 // ── rollback-plan guard ──────────────────────────────────────────────────────
 describe("rollback-plan guard", () => {
+  // GAP (not a stale-status-code issue, left unfixed): same as the
+  // maker-checker gap above — assertRollbackPlan() only runs inside the async
+  // consumer (apply_change_3), so a missing rollback plan is silently
+  // accepted (200) by the route instead of the old synchronous 422.
   it("blocks approval when no rollback plan is present (ROLLBACK_REQUIRED)", async () => {
     const id = await createChange({ rollbackPlan: undefined });
     await advanceTo(id, "submitted");
@@ -178,6 +229,11 @@ describe("rollback-plan guard", () => {
 
 // ── invalid transitions ──────────────────────────────────────────────────────
 describe("state machine enforcement", () => {
+  // GAP (not a stale-status-code issue, left unfixed): assertTransition() also
+  // only runs inside the async consumer now (apply_change_3/_6), so an
+  // out-of-order transition is silently accepted (200) by the route instead
+  // of the old synchronous 409 INVALID_TRANSITION. Same gap class as the
+  // maker-checker/rollback-plan gaps above.
   it("cannot approve a draft (must be submitted first)", async () => {
     const id = await createChange();
     const res = await app.inject({
@@ -196,6 +252,14 @@ describe("state machine enforcement", () => {
 
 // ── freeze conflict ──────────────────────────────────────────────────────────
 describe("release window — freeze conflict", () => {
+  // GAP (not a stale-status-code issue, left unfixed): assertNoFreezeConflict()
+  // only runs inside the async consumer (apply_change_5) — routes.ts only
+  // synchronously checks assertValidWindow (start < end), not freeze overlap —
+  // so a schedule into a frozen window is silently accepted (200) by the route
+  // instead of the old synchronous 409 FREEZE_CONFLICT. Same gap class as the
+  // maker-checker/rollback-plan/state-machine gaps above. (The freeze-creation
+  // status code below IS fixed — 201→202 — since that one's a genuine
+  // stale-status-code issue, not this gap.)
   it("rejects scheduling into a change-freeze window (FREEZE_CONFLICT)", async () => {
     // register a freeze
     const freeze = await app.inject({
@@ -205,7 +269,7 @@ describe("release window — freeze conflict", () => {
         startsAt: "2026-09-01T00:00:00.000Z", endsAt: "2026-09-10T00:00:00.000Z",
       },
     });
-    expect(freeze.statusCode).toBe(201);
+    expect(freeze.statusCode).toBe(202);
 
     const id = await createChange();
     await advanceTo(id, "approved");
@@ -223,7 +287,12 @@ describe("release window — freeze conflict", () => {
       method: "POST", url: "/v1/admin/change/freezes", headers: auth(REQUESTER),
       payload: { name, reason: "listing probe", startsAt: "2027-01-01T00:00:00.000Z", endsAt: "2027-01-05T00:00:00.000Z" },
     });
-    expect(create.statusCode).toBe(201);
+    expect(create.statusCode).toBe(202);
+    // change/f3-apply.ts's apply_change_8 (create freeze) also mints its own
+    // id rather than forwarding the route-generated one, but this test only
+    // needs the row to exist (matched by name below), not its id — land the
+    // write before listing.
+    await (queue as any).drain?.();
     const list = await app.inject({ method: "GET", url: "/v1/admin/change/freezes", headers: auth(REQUESTER) });
     expect(list.statusCode).toBe(200);
     const data = list.json().data as Array<{ name: string; startsAt: string }>;
@@ -274,8 +343,12 @@ describe("full lifecycle: PIR + release-notes broadcast outbox", () => {
       payload: { windowStart: "2026-11-01T02:00:00.000Z", windowEnd: "2026-11-01T04:00:00.000Z" },
     });
     expect(sch.statusCode).toBe(200);
+    // Route responses below are hardcoded acknowledgements — the real state
+    // (read via broadcastsFor/GET below) only exists once each write lands.
+    await (queue as any).drain?.();
     const start = await app.inject({ method: "POST", url: `/v1/admin/change/requests/${id}/start`, headers: auth(REQUESTER) });
     expect(start.statusCode).toBe(200);
+    await (queue as any).drain?.();
 
     const complete = await app.inject({
       method: "POST", url: `/v1/admin/change/requests/${id}/complete`, headers: auth(REQUESTER),
@@ -283,6 +356,7 @@ describe("full lifecycle: PIR + release-notes broadcast outbox", () => {
     });
     expect(complete.statusCode).toBe(200);
     expect(complete.json().status).toBe("completed");
+    await (queue as any).drain?.();
 
     // A release-notes broadcast must be sitting in the transactional outbox.
     const broadcasts = await broadcastsFor(TENANT, id);
@@ -305,13 +379,16 @@ describe("full lifecycle: PIR + release-notes broadcast outbox", () => {
       method: "POST", url: `/v1/admin/change/requests/${id}/schedule`, headers: auth(REQUESTER),
       payload: { windowStart: "2026-11-02T02:00:00.000Z", windowEnd: "2026-11-02T04:00:00.000Z" },
     });
+    await (queue as any).drain?.();
     await app.inject({ method: "POST", url: `/v1/admin/change/requests/${id}/start`, headers: auth(REQUESTER) });
+    await (queue as any).drain?.();
     const complete = await app.inject({
       method: "POST", url: `/v1/admin/change/requests/${id}/complete`, headers: auth(REQUESTER),
       payload: { outcome: "rolled_back", notes: "Latency regression; rolled back." },
     });
     expect(complete.statusCode).toBe(200);
     expect(complete.json().status).toBe("rolled_back");
+    await (queue as any).drain?.();
     // A rolled-back release emits no user-communication broadcast.
     const broadcasts = await broadcastsFor(TENANT, id);
     expect(broadcasts.length).toBe(0);

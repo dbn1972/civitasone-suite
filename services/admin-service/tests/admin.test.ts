@@ -10,6 +10,9 @@ import { adminApiKeys } from "../src/modules/api-keys/schema.js";
 import { processed, outboxMessages } from "../src/shared/outbox.js";
 import { registerTenantConsumers } from "../src/modules/tenants/consumer.js";
 import { registerSupportConsumers, sweepExpiredBreakGlass } from "../src/modules/support/consumer.js";
+import { queue } from "../src/shared/infra.js";
+import { tenantScoped } from "../src/shared/tenant-queue.js";
+import { registerApiKeyConsumers } from "../src/modules/api-keys/consumer.js";
 import { resolveFeatureFlag } from "../src/modules/config/domain.js";
 import { aggregateHealth } from "../src/modules/health/domain.js";
 import { redactLogLine } from "../src/modules/health/operations.js";
@@ -31,6 +34,12 @@ function wireTenantAwareQueue(q: Queue): Queue {
     rawSubscribe(topic, withTenantConsumer(handler) as Handler)) as typeof q.subscribe;
   return q;
 }
+
+// api-keys routes were converted to F3 async-write (202); the consumer that
+// applies create/rotate/revoke only runs in src/worker.ts in production, so
+// register it here against the real queue singleton the app uses, same
+// pattern as tests/helpers/register-all-f3-consumers.ts.
+registerApiKeyConsumers(tenantScoped(queue));
 
 const ACTOR = "00000000-aaaa-4000-8000-000000000001";
 const T1_ID = "11111111-aaaa-4000-8000-000000000001";
@@ -305,7 +314,7 @@ describe("admin-service api-keys — scope escalation rejected (inject)", () => 
       method: "POST", url: "/v1/admin/api-keys", headers: bearer(["super_admin"], T1_ID),
       payload: { keyName: "good", scopes: ["config:read"] },
     });
-    expect(created.statusCode).toBe(201);
+    expect(created.statusCode).toBe(202);
     const body = JSON.parse(created.body) as { id: string; key: string };
     expect(body.key).toMatch(/^civ_/);
 
@@ -646,18 +655,28 @@ describe("admin-service api-keys — rotate/revoke lifecycle (inject)", () => {
       method: "POST", url: "/v1/admin/api-keys", headers: hdr,
       payload: { keyName: "lifecycle", scopes: ["config:read"] },
     });
-    expect(created.statusCode).toBe(201);
+    expect(created.statusCode).toBe(202);
     const { id, key: firstKey, keyPrefix: firstPrefix } = JSON.parse(created.body) as { id: string; key: string; keyPrefix: string };
+    // Land the create before rotate's repo.findById(id) needs to see the row.
+    await queue.drain();
 
     const rotated = await app.inject({ method: "PATCH", url: `/v1/admin/api-keys/${id}/rotate`, headers: hdr });
-    expect(rotated.statusCode).toBe(200);
+    expect(rotated.statusCode).toBe(202);
     const { key: secondKey, keyPrefix: secondPrefix } = JSON.parse(rotated.body) as { key: string; keyPrefix: string };
     expect(secondKey).not.toBe(firstKey);
     expect(secondPrefix).not.toBe(firstPrefix);
+    await queue.drain();
 
     const revoked = await app.inject({ method: "PATCH", url: `/v1/admin/api-keys/${id}/revoke`, headers: hdr });
-    expect(revoked.statusCode).toBe(200);
-    expect(JSON.parse(revoked.body).status).toBe("revoked");
+    expect(revoked.statusCode).toBe(202);
+    // acceptedResponseSchema's `status` is the command-envelope literal
+    // "accepted", not the resource's new status — assert the real persisted
+    // status directly once the consumer has applied it.
+    expect(JSON.parse(revoked.body).status).toBe("accepted");
+    await queue.drain();
+    const revokedRow = await runWithTenant(T1_ID, () =>
+      db.transaction((tx) => tx.select().from(adminApiKeys).where(eq(adminApiKeys.id, id))));
+    expect(revokedRow[0]?.status).toBe("revoked");
 
     const reRotate = await app.inject({ method: "PATCH", url: `/v1/admin/api-keys/${id}/rotate`, headers: hdr });
     expect(reRotate.statusCode).toBe(409);

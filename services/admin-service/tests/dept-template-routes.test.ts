@@ -11,6 +11,9 @@ import type { FastifyInstance } from "fastify";
 
 const { buildApp } = await import("../src/app.js");
 const { sqlClient } = await import("../src/shared/db.js");
+const { queue } = await import("../src/shared/infra.js");
+const { tenantScoped } = await import("../src/shared/tenant-queue.js");
+const { registerF3_dept_templates_Consumers } = await import("../src/modules/dept-templates/f3-consumer.js");
 
 const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
 
@@ -41,8 +44,17 @@ async function wipe(): Promise<void> {
 }
 
 let app: FastifyInstance;
-beforeAll(async () => { app = await buildApp(); await wipe(); });
-afterAll(async () => { await wipe(); await app.close(); await sqlClient.end(); });
+beforeAll(async () => {
+  // create/patch were converted to F3 async (202); the consumer that applies
+  // them only runs in src/worker.ts in production, so register it here
+  // against the real queue singleton buildApp() wires the routes through —
+  // same pattern as tests/central-config.test.ts.
+  registerF3_dept_templates_Consumers(tenantScoped(queue));
+  await queue.start();
+  app = await buildApp();
+  await wipe();
+});
+afterAll(async () => { await wipe(); await app.close(); await queue.stop(); await sqlClient.end(); });
 
 interface SingleBody<T> { data: T }
 interface ListBody<T> { data: T[]; meta: { page: number; pageSize: number; total: number } }
@@ -74,13 +86,39 @@ async function createTemplate(
     method: "POST", url: "/v1/admin/department-templates", headers: auth(["tenant_admin"], tenantId),
     payload: { code, name: `Template ${code}`, config },
   });
-  expect(res.statusCode).toBe(201);
-  return (res.json() as SingleBody<Template>).data;
+  expect(res.statusCode).toBe(202);
+  // foreignTenantRefs is computed synchronously in the route (before publish)
+  // and echoed straight into the 202 body — it is not a persisted column, so
+  // it has to be captured here; a later GET can never recover it.
+  const foreignTenantRefs = (res.json() as SingleBody<{ foreignTenantRefs: string[] }>).data.foreignTenantRefs;
+  await (queue as any).drain?.();
+  // dept-templates/f3-apply.ts's apply_dept_templates_0 (create) never forwards
+  // the route-generated id into repo.insertTemplate() — the DB assigns its own
+  // id (schema default), so the id echoed in the 202 response does NOT match
+  // the persisted row. Same class of bug documented in tests/central-config.test.ts
+  // and tests/integration-ops.test.ts (real, pre-existing, out of this batch's
+  // scope) — worked around the same way: look the real row up by its unique
+  // `code` instead of trusting the echoed id.
+  const list = await app.inject({
+    method: "GET", url: "/v1/admin/department-templates?limit=200", headers: auth(["tenant_admin"], tenantId),
+  });
+  const rows = (list.json() as ListBody<Template>).data;
+  const match = rows.find((r) => r.code === code);
+  if (!match) throw new Error(`created template with code '${code}' never landed`);
+  return { ...match, foreignTenantRefs };
 }
 
 // ── auth ────────────────────────────────────────────────────────────────────
 
 describe("department templates — authentication and authorisation", () => {
+  // GAP (left unfixed, out of this batch's scope — see the instantiate describe
+  // block below): POST .../:id/instantiate has no registered route handler at
+  // all in src/modules/dept-templates/routes.ts (it was dropped by the F3
+  // sync->async conversion commit, even though the apply function and consumer
+  // wiring for it both still exist). The 401 case below still passes because
+  // authPlugin's hook runs globally, ahead of route matching, but the 403 case
+  // fails: with no route to run requireRole(), Fastify's own 404-not-found
+  // handler answers instead of the route ever getting a chance to return 403.
   const cases: Array<[string, string, Record<string, unknown> | undefined]> = [
     ["GET", "/v1/admin/department-templates?limit=10", undefined],
     ["POST", "/v1/admin/department-templates", { code: "abc", name: "A", config: { a: 1 } }],
@@ -145,15 +183,23 @@ describe("POST /v1/admin/department-templates — clone", () => {
   });
 
   it("records an optional sourceDepartmentId", async () => {
+    const code = nextCode("src");
     const res = await app.inject({
       method: "POST", url: "/v1/admin/department-templates", headers: auth(),
       payload: {
-        code: nextCode("src"), name: "With source",
+        code, name: "With source",
         sourceDepartmentId: "07bbbbbb-0000-4000-8000-0000000000bb", config: { keep: 1 },
       },
     });
-    expect(res.statusCode).toBe(201);
-    expect((res.json() as SingleBody<Template>).data.sourceDepartmentId).toBe("07bbbbbb-0000-4000-8000-0000000000bb");
+    expect(res.statusCode).toBe(202);
+    await (queue as any).drain?.();
+    // Same route-generated-id-not-forwarded bug as createTemplate() above —
+    // look the persisted row up by its unique code instead of the echoed id.
+    const list = await app.inject({
+      method: "GET", url: "/v1/admin/department-templates?limit=200", headers: auth(),
+    });
+    const row = (list.json() as ListBody<Template>).data.find((r) => r.code === code);
+    expect(row?.sourceDepartmentId).toBe("07bbbbbb-0000-4000-8000-0000000000bb");
   });
 
   it("409 TEMPLATE_EXISTS on a duplicate code in the same tenant", async () => {
@@ -163,6 +209,13 @@ describe("POST /v1/admin/department-templates — clone", () => {
       method: "POST", url: "/v1/admin/department-templates", headers: auth(),
       payload: { code, name: "Second", config: { a: 1 } },
     });
+    // GAP (not a stale-status-code issue, left unfixed): dept-templates/routes.ts'
+    // create route has no synchronous pre-accept duplicate-code check — unlike
+    // integration-settings/routes.ts (fixed by PR #920) — so a duplicate code is
+    // accepted (202) here and only silently rejected later inside the async
+    // consumer (dept-templates/f3-apply.ts's apply_dept_templates_0). The caller
+    // has no way to observe the 409 TEMPLATE_EXISTS the pre-conversion route
+    // used to return synchronously.
     expect(res.statusCode).toBe(409);
     expect((res.json() as ErrBody).error.code).toBe("TEMPLATE_EXISTS");
   });
@@ -281,11 +334,15 @@ describe("department templates — list, read, update", () => {
       method: "PATCH", url: `/v1/admin/department-templates/${t.id}`, headers: auth(),
       payload: { expectedVersion: t.version, name: "Renamed" },
     });
-    expect(res.statusCode).toBe(200);
-    expect((res.json() as SingleBody<{ version: number }>).data.version).toBe(t.version + 1);
+    expect(res.statusCode).toBe(202);
+    await (queue as any).drain?.();
+    // PATCH doesn't mint a new entity id (it targets the already-known t.id),
+    // so unlike create/instantiate there is no id-mismatch bug to work around
+    // here — just land the write and re-read.
 
     const after = await app.inject({ method: "GET", url: `/v1/admin/department-templates/${t.id}`, headers: auth() });
     expect((after.json() as SingleBody<Template>).data.name).toBe("Renamed");
+    expect((after.json() as SingleBody<Template>).data.version).toBe(t.version + 1);
   });
 
   it("409 VERSION_CONFLICT on a stale expectedVersion", async () => {
@@ -294,6 +351,12 @@ describe("department templates — list, read, update", () => {
       method: "PATCH", url: `/v1/admin/department-templates/${t.id}`, headers: auth(),
       payload: { expectedVersion: t.version + 4, name: "Nope" },
     });
+    // GAP (not a stale-status-code issue, left unfixed): dept-templates/routes.ts'
+    // PATCH route has no synchronous pre-accept optimistic-lock check — the
+    // expectedVersion match (assertVersionMatch) is only enforced inside the
+    // async consumer (dept-templates/f3-apply.ts's apply_dept_templates_2), so
+    // a stale version is accepted (202) here and the conflict only surfaces as
+    // a silently-dropped write, never as an HTTP error back to the caller.
     expect(res.statusCode).toBe(409);
     expect((res.json() as ErrBody).error.code).toBe("VERSION_CONFLICT");
   });
@@ -304,11 +367,15 @@ describe("department templates — list, read, update", () => {
       method: "PATCH", url: `/v1/admin/department-templates/${t.id}`, headers: auth(),
       payload: { expectedVersion: t.version, name: "One" },
     });
-    expect(first.statusCode).toBe(200);
+    expect(first.statusCode).toBe(202);
+    await (queue as any).drain?.();
     const second = await app.inject({
       method: "PATCH", url: `/v1/admin/department-templates/${t.id}`, headers: auth(),
       payload: { expectedVersion: t.version, name: "Two" },
     });
+    // GAP (not a stale-status-code issue, left unfixed — see the VERSION_CONFLICT
+    // test above): the now-stale second PATCH is accepted (202) too, for the
+    // same missing-synchronous-optimistic-lock-check reason.
     expect(second.statusCode).toBe(409);
   });
 
@@ -345,6 +412,11 @@ describe("department templates — list, read, update", () => {
       method: "PATCH", url: `/v1/admin/department-templates/${MISSING_ID}`, headers: auth(),
       payload: { expectedVersion: 1, name: "X" },
     });
+    // GAP (not a stale-status-code issue, left unfixed — see the VERSION_CONFLICT
+    // test above): dept-templates/routes.ts' PATCH route has no synchronous
+    // existence check either — repo.findTemplateTx only runs inside the async
+    // consumer, so patching an unknown id is accepted (202) instead of
+    // returning 404 synchronously.
     expect(res.statusCode).toBe(404);
   });
 
@@ -359,6 +431,33 @@ describe("department templates — list, read, update", () => {
 
 // ── instantiate ─────────────────────────────────────────────────────────────
 
+// GAP — BLOCKING, out of this batch's scope (do not force-fix; flag loudly):
+// POST /v1/admin/department-templates/:id/instantiate has NO route handler
+// registered anywhere in src/modules/dept-templates/routes.ts. The F3
+// sync->async conversion commit (f113de54, "convert P0 F3 leftover sync route
+// writes to 202") deleted the old synchronous `app.post(".../instantiate", ...)`
+// handler and never replaced it with an async equivalent — even though the
+// apply function (f3-apply.ts's apply_dept_templates_1, op
+// 'dept_templates_op_1') and the consumer dispatch for it
+// (f3-consumer.ts's registerF3_dept_templates_Consumers) both still exist and
+// are wired up. `grep -n 'app\.\(get\|post\|patch\)' routes.ts` shows only 5
+// routes: create, list, get-instantiations, patch, get-one — instantiate is
+// simply missing.
+//
+// Every request in this block therefore hits Fastify's default not-found
+// handler (a plain 404), regardless of anything a test does. This is NOT the
+// batch-3 "stale status code" pattern and NOT the batch-3 "missing
+// synchronous validation" pattern (point 6) — those both assume the route
+// exists and returns 202. Here there is no synchronous OR asynchronous path
+// to reach the write at all via HTTP. No test-only workaround (draining the
+// queue, polling, looking up by content instead of the echoed id) can make
+// any of these tests pass; the fix is restoring the route registration in
+// application code, which is out of this batch's scope. Every assertion below
+// is therefore left exactly as originally written (still expecting the
+// pre-conversion synchronous contract) and will keep failing until that route
+// is restored — except "404 when instantiating an unknown template", which
+// passes today by coincidence (Fastify's own not-found response also happens
+// to be a 404, matching what the test expects for an unrelated reason).
 describe("POST /v1/admin/department-templates/:id/instantiate", () => {
   it("creates a department instantiation carrying the sanitised config", async () => {
     const t = await createTemplate(nextCode("inst"), { roles: ["clerk"], sla: { hours: 4 } });
@@ -487,7 +586,11 @@ describe("POST /v1/admin/department-templates/:id/instantiate", () => {
       method: "PATCH", url: `/v1/admin/department-templates/${t.id}`, headers: auth(),
       payload: { expectedVersion: t.version, status: "archived" },
     });
-    expect(patched.statusCode).toBe(200);
+    // PATCH is async too (see the list/read/update describe block above) —
+    // fixed here independently of the instantiate-route gap below, so this
+    // setup step actually archives the template before the instantiate call.
+    expect(patched.statusCode).toBe(202);
+    await (queue as any).drain?.();
     const res = await app.inject({
       method: "POST", url: `/v1/admin/department-templates/${t.id}/instantiate`, headers: auth(),
       payload: { departmentCode: nextCode("dept"), departmentName: "X", idempotencyKey: "idem-archived-001" },

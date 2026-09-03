@@ -15,6 +15,9 @@ process.env.CONFIG_ENC_KEY = "0123456789abcdef0123456789abcdef0123456789abcdef01
 
 const { buildApp } = await import("../src/app.js");
 const { sqlClient } = await import("../src/shared/db.js");
+const { queue } = await import("../src/shared/infra.js");
+const { tenantScoped } = await import("../src/shared/tenant-queue.js");
+const { registerF3_integration_settings_Consumers } = await import("../src/modules/integration-settings/f3-consumer.js");
 
 import { randomUUID } from "node:crypto";
 const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
@@ -33,8 +36,19 @@ function auth(actorId: string, roles?: string[], tenantId?: string) {
 }
 
 let app: FastifyInstance;
-beforeAll(async () => { app = await buildApp(); });
-afterAll(async () => { await app.close(); await sqlClient.end(); });
+beforeAll(async () => {
+  // propose(PUT)/approve/reject/disable were converted to F3 async; the
+  // consumer that applies them only runs in src/worker.ts in production, so
+  // register it here against the real queue singleton buildApp() wires the
+  // routes through. Unlike central-config/data-correction, this module's
+  // routes already carry synchronous pre-accept validation (PR #920) and key
+  // everything off the (provider, envScope) tuple rather than a synthetic id,
+  // so there's no id-echo/persisted-id mismatch to work around here.
+  registerF3_integration_settings_Consumers(tenantScoped(queue));
+  await queue.start();
+  app = await buildApp();
+});
+afterAll(async () => { await app.close(); await queue.stop(); await sqlClient.end(); });
 
 function readAsTenant<T>(tenantId: string, run: (sql: typeof sqlClient) => Promise<T>): Promise<T> {
   return sqlClient.begin(async (sql) => {
@@ -46,13 +60,19 @@ function readAsTenant<T>(tenantId: string, run: (sql: typeof sqlClient) => Promi
 async function propose(
   provider: string, env: string, body: Record<string, unknown>, actor = PROPOSER, tenantId = TENANT,
 ): Promise<import("light-my-request").Response> {
-  return app.inject({
+  const res = await app.inject({
     method: "PUT", url: `/v1/admin/integrations/${provider}/${env}`,
     headers: auth(actor, ["tenant_admin"], tenantId), payload: body,
   });
+  // F3 async — land the write before the caller's next step (approve/reject/
+  // a version-conflict check against the live row) depends on it.
+  await (queue as any).drain?.();
+  return res;
 }
-function approve(provider: string, env: string, actor = APPROVER, tenantId = TENANT) {
-  return app.inject({ method: "POST", url: `/v1/admin/integrations/${provider}/${env}/approve`, headers: auth(actor, ["tenant_admin"], tenantId), payload: {} });
+async function approve(provider: string, env: string, actor = APPROVER, tenantId = TENANT) {
+  const res = await app.inject({ method: "POST", url: `/v1/admin/integrations/${provider}/${env}/approve`, headers: auth(actor, ["tenant_admin"], tenantId), payload: {} });
+  await (queue as any).drain?.();
+  return res;
 }
 
 describe("integration-settings — auth + catalog", () => {
@@ -96,8 +116,10 @@ describe("integration-settings — per-provider schema validation", () => {
 describe("integration-settings — propose + maker-checker approve", () => {
   it("proposes an upsert (status pending) and shows it as the pending change", async () => {
     const res = await propose("ai_anthropic", "dev", { config: { apiKey: "sk-ant-SECRETKEY123", model: "claude-3-5-sonnet-latest" }, note: "prod key" });
-    expect(res.statusCode).toBe(201);
-    expect(res.json().status).toBe("pending");
+    expect(res.statusCode).toBe(202);
+    // 202 command-acknowledgement envelope — "pending" is the persisted
+    // change's own status, not this response's; verified below via GET.
+    expect(res.json().status).toBe("accepted");
 
     const one = await app.inject({ method: "GET", url: "/v1/admin/integrations/ai_anthropic/dev", headers: auth(APPROVER) });
     expect(one.json().pendingChange?.status).toBe("pending");
@@ -114,8 +136,10 @@ describe("integration-settings — propose + maker-checker approve", () => {
 
   it("a distinct approver applies the config and versions it", async () => {
     const res = await approve("ai_anthropic", "dev", APPROVER);
-    expect(res.statusCode).toBe(200);
-    expect(res.json()).toMatchObject({ status: "approved", version: 1 });
+    expect(res.statusCode).toBe(202);
+    // 202 command-acknowledgement envelope — "approved"/version only exist
+    // once the async consumer applies the write; verified below via GET.
+    expect(res.json().status).toBe("accepted");
 
     const one = await app.inject({ method: "GET", url: "/v1/admin/integrations/ai_anthropic/dev", headers: auth(APPROVER) });
     const d = one.json().data;
@@ -161,7 +185,8 @@ describe("integration-settings — reject", () => {
   it("rejects a pending change and blocks a re-decision", async () => {
     await propose("email_smtp", "dev", { config: { host: "smtp.example.com", port: 587, user: "u", password: "pw_reject_me", from: "a@b.com" } });
     const rej = await app.inject({ method: "POST", url: "/v1/admin/integrations/email_smtp/dev/reject", headers: auth(APPROVER), payload: { reason: "wrong host" } });
-    expect(rej.statusCode).toBe(200);
+    expect(rej.statusCode).toBe(200); // reject sends a bare 200, unlike propose/approve
+    await (queue as any).drain?.(); // land the rejection before the re-decision guard re-reads it
     const again = await approve("email_smtp", "dev", APPROVER);
     expect(again.statusCode).toBe(404);
     expect(again.json().code).toBe("NO_PENDING_CHANGE");
@@ -196,7 +221,8 @@ describe("integration-settings — disable", () => {
     const before = await app.inject({ method: "GET", url: "/v1/admin/integrations/whatsapp_meta/staging", headers: auth(APPROVER) });
     const v = before.json().data.version as number;
     const del = await app.inject({ method: "DELETE", url: "/v1/admin/integrations/whatsapp_meta/staging", headers: auth(APPROVER) });
-    expect(del.statusCode).toBe(200);
+    expect(del.statusCode).toBe(200); // disable sends a bare 200, unlike propose/approve
+    await (queue as any).drain?.(); // land the disable before reading the row back
     const after = await app.inject({ method: "GET", url: "/v1/admin/integrations/whatsapp_meta/staging", headers: auth(APPROVER) });
     expect(after.json().data.enabled).toBe(false);
     expect(after.json().data.hasSecret).toBe(false);

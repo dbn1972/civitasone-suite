@@ -921,12 +921,16 @@ describe("POST /v1/admin/api-keys", () => {
       headers: authHeader(["super_admin"]),
       payload: { keyName: "coverage-test-key", scopes: ["config:read"] },
     });
-    expect(res.statusCode).toBe(201);
+    expect(res.statusCode).toBe(202);
     const body = res.json();
     expect(body.id).toBeDefined();
     expect(body.key).toMatch(/^civ_/);
     expect(body.keyPrefix).toBeDefined();
-    expect(body.status).toBe("active");
+    // 202 command-acknowledgement envelope — the persisted key row's own
+    // 'active' status is only set once the async consumer applies the write
+    // (not exercised by this route-coverage sweep; see tests/admin.test.ts
+    // for the full create->rotate->revoke lifecycle against real persistence).
+    expect(body.status).toBe("accepted");
   });
 
   it("returns 201 with no scopes (empty array)", async () => {
@@ -935,7 +939,7 @@ describe("POST /v1/admin/api-keys", () => {
       headers: authHeader(["super_admin"]),
       payload: { keyName: "no-scopes-key" },
     });
-    expect(res.statusCode).toBe(201);
+    expect(res.statusCode).toBe(202);
   });
 
   it("returns 201 with expiresAt", async () => {
@@ -945,7 +949,7 @@ describe("POST /v1/admin/api-keys", () => {
       headers: authHeader(["super_admin"]),
       payload: { keyName: "expiring-key", scopes: [], expiresAt: future },
     });
-    expect(res.statusCode).toBe(201);
+    expect(res.statusCode).toBe(202);
   });
 
   it("returns 400 with missing keyName", async () => {
@@ -981,7 +985,7 @@ describe("POST /v1/admin/api-keys", () => {
       headers: authHeader(["tenant_admin"]),
       payload: { keyName: "allowed-scope-key", scopes: ["config:read"] },
     });
-    expect(res.statusCode).toBe(201);
+    expect(res.statusCode).toBe(202);
   });
 
   it("returns 403 for employee role", async () => {
