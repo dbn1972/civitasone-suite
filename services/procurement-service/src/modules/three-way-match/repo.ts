@@ -14,6 +14,10 @@ export interface DerivedMatch {
   matchStatus: string;
   invoiceId?: string | null;
   invoiceAmountMinor?: bigint;
+  /** Computed variance percentage for this match (persisted alongside match_status). */
+  variancePct?: number | null;
+  /** True for every row this system-derived upsert writes (no manual-entry path exists yet). */
+  autoMatched?: boolean;
 }
 
 /**
@@ -24,11 +28,11 @@ export interface DerivedMatch {
 export async function upsertDerivedMatch(tx: Writer, m: DerivedMatch): Promise<void> {
   await (tx as typeof db).execute(sql`
     INSERT INTO procurement.three_way_match
-      (id, tenant_id, po_id, grn_id, invoice_id, po_amount_minor, grn_amount_minor, invoice_amount_minor, match_status)
+      (id, tenant_id, po_id, grn_id, invoice_id, po_amount_minor, grn_amount_minor, invoice_amount_minor, match_status, variance_pct, auto_matched)
     VALUES (
       ${m.id}::uuid, ${m.tenantId}::uuid, ${m.poId}::uuid, ${m.grnId}::uuid,
       ${m.invoiceId ?? null}, ${m.poAmountMinor.toString()}::bigint, ${m.grnAmountMinor.toString()}::bigint,
-      ${(m.invoiceAmountMinor ?? 0n).toString()}::bigint, ${m.matchStatus}
+      ${(m.invoiceAmountMinor ?? 0n).toString()}::bigint, ${m.matchStatus}, ${m.variancePct ?? null}, ${m.autoMatched ?? true}
     )
     ON CONFLICT (tenant_id, po_id, grn_id) DO UPDATE SET
       po_amount_minor      = EXCLUDED.po_amount_minor,
@@ -37,7 +41,9 @@ export async function upsertDerivedMatch(tx: Writer, m: DerivedMatch): Promise<v
       invoice_amount_minor = CASE WHEN EXCLUDED.invoice_id IS NOT NULL
                                   THEN EXCLUDED.invoice_amount_minor
                                   ELSE procurement.three_way_match.invoice_amount_minor END,
-      match_status         = EXCLUDED.match_status
+      match_status         = EXCLUDED.match_status,
+      variance_pct         = EXCLUDED.variance_pct,
+      auto_matched         = EXCLUDED.auto_matched
   `);
 }
 

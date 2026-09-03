@@ -67,6 +67,8 @@ export function registerThreeWayMatchConsumers(queue: Queue): void {
         matchStatus,
         invoiceId: p.invoiceId ?? null,
         invoiceAmountMinor,
+        variancePct,
+        autoMatched: true,
       });
 
       await enqueue(tx, {

@@ -84,9 +84,25 @@ async function wipeTenant(t: string) {
   }));
 }
 
-/** Run the queue until all in-flight handlers settle, then stop. */
+/**
+ * Run the queue until all in-flight handlers settle, then stop.
+ *
+ * Uses MemoryQueue.drain() (waits on the tracked in-flight promise set,
+ * including retry backoffs) rather than a fixed sleep. This test is the only
+ * one in the fleet-wide 'sleep(400) + stop()' pattern that fires THREE truly
+ * concurrent publishes (three bid-submit commands with no per-publish await)
+ * against the SAME tender: the bid-submit consumer allocates a gapless doc
+ * number per bid via a row-locked counter (packages/numbering
+ * allocateGaplessSeq), so the second and third concurrent transactions block
+ * on that lock and can exceed a fixed 400ms window under host load. A fixed
+ * sleep + stop() then force-cancels any handler still in its retry backoff
+ * (see MemoryQueue.stop() in services/queue-service/src/bus.ts) with no DLQ
+ * entry and no error logged — the bid silently never lands. q.drain()
+ * blocks on actual completion instead of a guessed duration, so it is
+ * correct regardless of contention/backoff timing.
+ */
 async function drain(q: MemoryQueue) {
-  await new Promise<void>((r) => setTimeout(r, 400));
+  await q.drain();
   await q.stop();
 }
 
