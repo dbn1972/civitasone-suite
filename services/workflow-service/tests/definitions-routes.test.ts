@@ -1,6 +1,11 @@
 /**
  * Coverage tests for definitions/routes.ts (23.71% → target: 80%+).
  * Tests CRUD + deploy + template clone.
+ *
+ * F3 CQRS: create/deploy/clone are async (202 Accepted) — the actual write
+ * happens in registerDefinitionConsumers, which this file registers against
+ * the shared `queue` singleton so app.inject() writes are actually applied
+ * in tests (mirrors tests/comments-routes.test.ts).
  */
 import { describe, it, expect, afterAll, afterEach } from "vitest";
 import { randomUUID } from "node:crypto";
@@ -8,6 +13,8 @@ import { sql } from "drizzle-orm";
 import { signToken } from "@civitasone/auth";
 import { buildApp } from "../src/app.js";
 import { db, sqlClient } from "../src/shared/db.js";
+import { queue } from "../src/shared/infra.js";
+import { registerDefinitionConsumers } from "../src/modules/definitions/consumer.js";
 import { seedDefinition, cleanup } from "./helpers/engine-harness.js";
 
 const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
@@ -20,6 +27,19 @@ function adminToken() {
 }
 function userToken() {
   return signToken({ sub: "bbbbbbbb-3333-4000-8000-ccc000000002", tid: TENANT, roles: ["workflow_user"], sid: "sess-001" }, SECRET);
+}
+
+registerDefinitionConsumers(queue);
+await queue.start();
+
+async function waitFor<T>(fn: () => Promise<T | null | undefined>, ms = 3000): Promise<T> {
+  const start = Date.now();
+  while (Date.now() - start < ms) {
+    const v = await fn();
+    if (v) return v;
+    await new Promise((r) => setTimeout(r, 25));
+  }
+  throw new Error("waitFor timeout");
 }
 
 afterEach(async () => { await cleanup(TENANT); });
@@ -43,12 +63,17 @@ describe("POST /v1/workflow/definitions", () => {
         edges: [{ fromNode: "s1", toNode: "s2" }],
       },
     });
+    expect(res.statusCode).toBe(202);
+    const id = res.json().id as string;
+
+    const created = await waitFor(async () => {
+      const g = await app.inject({ method: "GET", url: `/v1/workflow/definitions/${id}`, headers: { authorization: `Bearer ${adminToken()}` } });
+      return g.statusCode === 200 ? g.json().data : null;
+    });
     await app.close();
-    expect(res.statusCode).toBe(201);
-    const body = res.json();
-    expect(body.data.code).toBe(code);
-    expect(body.data.status).toBe("draft");
-    expect(body.data.version).toBe(1);
+    expect(created.code).toBe(code);
+    expect(created.status).toBe("draft");
+    expect(created.version).toBe(1);
   });
 
   it("creates a minimal definition (no graph)", async () => {
@@ -60,7 +85,7 @@ describe("POST /v1/workflow/definitions", () => {
       payload: { code: `min_${randomUUID().slice(0, 8)}`, name: "Min" },
     });
     await app.close();
-    expect(res.statusCode).toBe(201);
+    expect(res.statusCode).toBe(202);
   });
 
   it("returns 400 for invalid graph (dangling edge)", async () => {
@@ -96,20 +121,33 @@ describe("POST /v1/workflow/definitions", () => {
   it("auto-increments version for same code", async () => {
     const app = await buildApp();
     const code = `ver_${randomUUID().slice(0, 8)}`;
-    await app.inject({
+    const res1 = await app.inject({
       method: "POST",
       url: "/v1/workflow/definitions",
       headers: { authorization: `Bearer ${adminToken()}` },
       payload: { code, name: "V1" },
     });
+    const id1 = res1.json().id as string;
+    // wait for v1 to land so its version is visible to the v2 create's
+    // "latest version for this code" lookup in the consumer.
+    await waitFor(async () => {
+      const g = await app.inject({ method: "GET", url: `/v1/workflow/definitions/${id1}`, headers: { authorization: `Bearer ${adminToken()}` } });
+      return g.statusCode === 200 ? g.json().data : null;
+    });
+
     const res2 = await app.inject({
       method: "POST",
       url: "/v1/workflow/definitions",
       headers: { authorization: `Bearer ${adminToken()}` },
       payload: { code, name: "V2" },
     });
+    const id2 = res2.json().id as string;
+    const v2 = await waitFor(async () => {
+      const g = await app.inject({ method: "GET", url: `/v1/workflow/definitions/${id2}`, headers: { authorization: `Bearer ${adminToken()}` } });
+      return g.statusCode === 200 ? g.json().data : null;
+    });
     await app.close();
-    expect(res2.json().data.version).toBe(2);
+    expect(v2.version).toBe(2);
   });
 });
 
@@ -173,9 +211,15 @@ describe("POST /v1/workflow/definitions/:id/deploy", () => {
       url: `/v1/workflow/definitions/${def.id}/deploy`,
       headers: { authorization: `Bearer ${adminToken()}` },
     });
+    expect(res.statusCode).toBe(202);
+
+    const activated = await waitFor(async () => {
+      const g = await app.inject({ method: "GET", url: `/v1/workflow/definitions/${def.id}`, headers: { authorization: `Bearer ${adminToken()}` } });
+      const data = g.json().data;
+      return data?.status === "active" ? data : null;
+    });
     await app.close();
-    expect(res.statusCode).toBe(200);
-    expect(res.json().data.status).toBe("active");
+    expect(activated.status).toBe("active");
   });
 
   it("returns 409 for already-active definition", async () => {
@@ -239,10 +283,21 @@ describe("POST /v1/workflow/templates/:id/clone", () => {
       headers: { authorization: `Bearer ${adminToken()}` },
       payload: { name: "My Clone" },
     });
+    expect(res.statusCode).toBe(202);
+    const cloneId = res.json().id as string;
+
+    const cloned = await waitFor(async () => {
+      const g = await app.inject({ method: "GET", url: `/v1/workflow/definitions/${cloneId}`, headers: { authorization: `Bearer ${adminToken()}` } });
+      return g.statusCode === 200 ? g.json().data : null;
+    });
+    expect(cloned.status).toBe("draft");
+    // The consumer clones from the template but does not persist a
+    // "clonedFrom" lineage column — nodes/edges are what prove the clone
+    // actually happened (see src/modules/definitions/consumer.ts cloneDefinitionTemplate).
+    expect(cloned.name).toBe("My Clone");
+    expect(cloned.nodes.length).toBe(2);
+    expect(cloned.edges.length).toBe(1);
     await app.close();
-    expect(res.statusCode).toBe(201);
-    expect(res.json().data.status).toBe("draft");
-    expect(res.json().data.clonedFrom).toBe(tpl.id);
   });
 
   it("returns 404 for non-template id", async () => {

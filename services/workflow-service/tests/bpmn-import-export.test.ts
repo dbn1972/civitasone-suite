@@ -3,13 +3,19 @@
  *
  * Covers: POST /v1/workflow/definitions/import, GET /v1/workflow/definitions/:id/bpmn.
  * Validates auth, role gates, validation, import parsing, and export generation.
+ *
+ * F3 CQRS: import delegates to definitionCommands.importBpmnDefinition, which
+ * publishes COMMANDS.importBpmnDefinition — handled by the *definitions*
+ * consumer (there is no bpmn-specific consumer; see src/modules/bpmn/routes.ts
+ * and src/modules/definitions/consumer.ts). Register it here so app.inject()
+ * writes are actually applied in tests (mirrors tests/comments-routes.test.ts).
  */
 import { describe, it, expect, afterAll, afterEach } from "vitest";
 import { signToken } from "@civitasone/auth";
 import { buildApp } from "../src/app.js";
-import { sqlClient, db } from "../src/shared/db.js";
-import { sql } from "drizzle-orm";
-import { randomUUID } from "node:crypto";
+import { sqlClient } from "../src/shared/db.js";
+import { queue } from "../src/shared/infra.js";
+import { registerDefinitionConsumers } from "../src/modules/definitions/consumer.js";
 import { seedDefinition, cleanup } from "./helpers/engine-harness.js";
 
 const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
@@ -42,13 +48,26 @@ const SAMPLE_BPMN = `<?xml version="1.0" encoding="UTF-8"?>
 const tenants: string[] = [];
 function trackTenant(t: string) { tenants.push(t); return t; }
 
+registerDefinitionConsumers(queue);
+await queue.start();
+
+async function waitFor<T>(fn: () => Promise<T | null | undefined>, ms = 3000): Promise<T> {
+  const start = Date.now();
+  while (Date.now() - start < ms) {
+    const v = await fn();
+    if (v) return v;
+    await new Promise((r) => setTimeout(r, 25));
+  }
+  throw new Error("waitFor timeout");
+}
+
 afterEach(async () => { if (tenants.length) { await cleanup(...tenants); tenants.length = 0; } });
 afterAll(async () => { await sqlClient.end(); });
 
 // ── POST /v1/workflow/definitions/import ─────────────────────────────────────
 
 describe("POST /v1/workflow/definitions/import", () => {
-  it("imports valid BPMN XML and creates a draft definition", async () => {
+  it("imports valid BPMN XML and creates a draft definition (202, applied async)", async () => {
     trackTenant(TENANT);
     const app = await buildApp();
     const res = await app.inject({
@@ -57,14 +76,19 @@ describe("POST /v1/workflow/definitions/import", () => {
       headers: { authorization: `Bearer ${makeToken(["workflow_admin"])}` },
       payload: { xml: SAMPLE_BPMN, name: "My Leave Flow" },
     });
+    expect(res.statusCode).toBe(202);
+    const id = res.json().id as string;
+
+    const imported = await waitFor(async () => {
+      const g = await app.inject({ method: "GET", url: `/v1/workflow/definitions/${id}`, headers: { authorization: `Bearer ${makeToken(["workflow_admin"])}` } });
+      return g.statusCode === 200 ? g.json().data : null;
+    });
     await app.close();
-    expect(res.statusCode).toBe(201);
-    const body = res.json();
-    expect(body.data.status).toBe("draft");
-    expect(body.data.name).toBe("My Leave Flow");
-    expect(body.data.nodeCount).toBe(6); // start, 2 tasks, gateway, 2 tasks, end = 6
-    expect(body.data.edgeCount).toBe(6);
-    expect(body.data.version).toBe(1);
+    expect(imported.status).toBe("draft");
+    expect(imported.name).toBe("My Leave Flow");
+    expect(imported.nodes.length).toBe(6); // start, 2 tasks, gateway, 2 tasks, end = 6
+    expect(imported.edges.length).toBe(6);
+    expect(imported.version).toBe(1);
   });
 
   it("uses process name from XML when no name provided", async () => {
@@ -76,9 +100,15 @@ describe("POST /v1/workflow/definitions/import", () => {
       headers: { authorization: `Bearer ${makeToken(["workflow_admin"])}` },
       payload: { xml: SAMPLE_BPMN },
     });
+    expect(res.statusCode).toBe(202);
+    const id = res.json().id as string;
+
+    const imported = await waitFor(async () => {
+      const g = await app.inject({ method: "GET", url: `/v1/workflow/definitions/${id}`, headers: { authorization: `Bearer ${makeToken(["workflow_admin"])}` } });
+      return g.statusCode === 200 ? g.json().data : null;
+    });
     await app.close();
-    expect(res.statusCode).toBe(201);
-    expect(res.json().data.name).toBe("Leave Approval");
+    expect(imported.name).toBe("Leave Approval");
   });
 
   it("returns 400 for empty/invalid BPMN XML (no process elements)", async () => {
