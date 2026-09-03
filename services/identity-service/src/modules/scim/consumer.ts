@@ -7,6 +7,15 @@ import { users } from "../users/schema.js";
 
 const AUDIT = "audit.event.record";
 
+// Real bug fix: createdBy/updatedBy here used to be the literal string "scim"
+// instead of msg.actorId. users.created_by/updated_by and
+// _outbox.messages.actor_id are `uuid NOT NULL` columns, so every SCIM
+// create/replace/patch/delete has always failed inside this transaction with
+// `invalid input syntax for type uuid: "scim"` — silently since the F3 async
+// conversion moved the write off the request path (see scim/commands.ts,
+// which now publishes a real UUID system-actor sentinel as actorId instead
+// of that same literal).
+
 export function registerScimConsumers(q: Queue): void {
   q.subscribe<{ id: string; tenantId: string; email: string; name: string; status: string }>(
     COMMANDS.scimUserCreate,
@@ -20,8 +29,8 @@ export function registerScimConsumers(q: Queue): void {
           email: p.email,
           name: p.name,
           status: p.status,
-          createdBy: "scim",
-          updatedBy: "scim",
+          createdBy: msg.actorId,
+          updatedBy: msg.actorId,
         });
         await enqueue(tx as Parameters<typeof enqueue>[0], {
           topic: EVENTS.userCreated,
@@ -57,7 +66,7 @@ export function registerScimConsumers(q: Queue): void {
         const p = msg.payload;
         await tx
           .update(users)
-          .set({ ...p.patch, updatedBy: "scim", updatedAt: new Date() })
+          .set({ ...p.patch, updatedBy: msg.actorId, updatedAt: new Date() })
           .where(and(eq(users.id, p.id), eq(users.tenantId, p.tenantId)));
         await enqueue(tx as Parameters<typeof enqueue>[0], {
           topic: EVENTS.userUpdated,
@@ -79,7 +88,7 @@ export function registerScimConsumers(q: Queue): void {
         const p = msg.payload;
         await tx
           .update(users)
-          .set({ ...p.patch, updatedBy: "scim", updatedAt: new Date() })
+          .set({ ...p.patch, updatedBy: msg.actorId, updatedAt: new Date() })
           .where(and(eq(users.id, p.id), eq(users.tenantId, p.tenantId)));
         await enqueue(tx as Parameters<typeof enqueue>[0], {
           topic: EVENTS.userUpdated,
@@ -99,7 +108,7 @@ export function registerScimConsumers(q: Queue): void {
       const p = msg.payload;
       await tx
         .update(users)
-        .set({ status: "disabled", updatedBy: "scim", updatedAt: new Date() })
+        .set({ status: "disabled", updatedBy: msg.actorId, updatedAt: new Date() })
         .where(and(eq(users.id, p.id), eq(users.tenantId, p.tenantId)));
       await enqueue(tx as Parameters<typeof enqueue>[0], {
         topic: EVENTS.userDeactivated,

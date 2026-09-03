@@ -1,5 +1,7 @@
 import { eq, and, lte, sql, desc } from "drizzle-orm";
+import { runWithTenant } from "@civitasone/db";
 import { db, scopedRead} from "../../shared/db.js";
+import { scannerDb } from "../../shared/scanner-db.js";
 import { enqueue } from "../../shared/outbox.js";
 import { grants, type GrantRow, type GrantInsert } from "./schema.js";
 import type { GrantView, GrantStatus } from "./domain.js";
@@ -63,17 +65,46 @@ export async function listByTenant(tenantId: string, status: string | undefined,
 /**
  * TTL sweep: flip any still-"active" grant past its expiry to "expired".
  * Tenant-agnostic housekeeping run by the worker. Returns the count swept.
- * Runs inside a transaction so the tenant GUC (when called via runWithTenant)
- * is properly set for RLS enforcement.
+ *
+ * RLS fix: identity_svc (the primary `db` connection) is NOBYPASSRLS and
+ * breakglass.grants is FORCE ROW LEVEL SECURITY. worker.ts invokes this from
+ * a bare setInterval with no app.tenant_id GUC set (it is NOT wrapped in
+ * runWithTenant — only per-message queue consumers get that), so
+ * `tenant_id = current_tenant_id()` compared against NULL matched zero rows,
+ * for every tenant, every time. Discover candidates via the identity_scanner
+ * BYPASSRLS role (read-only, migration 0020), then perform the actual write
+ * per-tenant on the primary connection inside runWithTenant(tenantId, ...) so
+ * RLS still governs the mutation. Mirrors helpdesk-service's
+ * tickets/sweeper.ts pattern and sessions/repo.ts#reapExpiredSessions above.
  */
-export async function sweepExpiredGrants(): Promise<number> {
-  const rows = await db.transaction(async (tx) =>
-    tx.update(grants)
-      .set({ status: "expired", updatedAt: new Date() })
-      .where(and(eq(grants.status, "active"), lte(grants.expiresAt, sql`now()`)))
-      .returning({ id: grants.id }),
-  );
-  return rows.length;
+export async function sweepExpiredGrants(batch = 500): Promise<number> {
+  const candidates = await scannerDb.select({ id: grants.id, tenantId: grants.tenantId })
+    .from(grants)
+    .where(and(eq(grants.status, "active"), lte(grants.expiresAt, sql`now()`)))
+    .limit(batch);
+
+  const byTenant = new Map<string, string[]>();
+  for (const c of candidates) {
+    const ids = byTenant.get(c.tenantId) ?? [];
+    ids.push(c.id);
+    byTenant.set(c.tenantId, ids);
+  }
+
+  let expired = 0;
+  for (const [tenantId] of byTenant) {
+    expired += await runWithTenant(tenantId, async () => db.transaction(async (tx) => {
+      const rows = await tx.update(grants)
+        .set({ status: "expired", updatedAt: new Date() })
+        .where(and(
+          eq(grants.tenantId, tenantId),
+          eq(grants.status, "active"),
+          lte(grants.expiresAt, sql`now()`),
+        ))
+        .returning({ id: grants.id });
+      return rows.length;
+    }));
+  }
+  return expired;
 }
 
 export async function emitAudit(

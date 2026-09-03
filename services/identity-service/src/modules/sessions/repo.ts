@@ -1,5 +1,7 @@
 import { eq, and, lte, sql } from "drizzle-orm";
+import { runWithTenant } from "@civitasone/db";
 import { db, scopedRead} from "../../shared/db.js";
+import { scannerDb } from "../../shared/scanner-db.js";
 import { sessions, type SessionRow, type SessionInsert } from "./schema.js";
 import type { SessionView } from "./domain.js";
 
@@ -73,10 +75,46 @@ export async function revokeAllForUser(tx: Writer, tenantId: string, userId: str
 // P1-2: expired-session reaper. Flip any still-"active" row whose expiry has
 // passed to "expired". Tenant-agnostic by design (a global housekeeping sweep
 // run by the worker). Returns the number of rows transitioned.
-export async function reapExpiredSessions(): Promise<number> {
-  const rows = await db.update(sessions)
-    .set({ status: "expired", updatedAt: new Date() })
+//
+// RLS fix: identity_svc (the primary `db` connection) is NOBYPASSRLS and
+// sessions.sessions is FORCE ROW LEVEL SECURITY, so a bare cross-tenant
+// db.update() with no app.tenant_id GUC set — which is exactly how worker.ts's
+// setInterval invoked this — matched zero rows for every tenant, forever.
+// Discover candidates via the identity_scanner BYPASSRLS role (read-only,
+// migration 0020), then perform the actual write per-tenant on the primary
+// connection inside runWithTenant(tenantId, ...) so RLS still governs the
+// mutation. Mirrors helpdesk-service's tickets/sweeper.ts pattern.
+export async function reapExpiredSessions(batch = 500): Promise<number> {
+  const candidates = await scannerDb.select({ id: sessions.id, tenantId: sessions.tenantId })
+    .from(sessions)
     .where(and(eq(sessions.status, "active"), lte(sessions.expiresAt, sql`now()`)))
-    .returning({ id: sessions.id });
-  return rows.length;
+    .limit(batch);
+
+  const byTenant = new Map<string, string[]>();
+  for (const c of candidates) {
+    const ids = byTenant.get(c.tenantId) ?? [];
+    ids.push(c.id);
+    byTenant.set(c.tenantId, ids);
+  }
+
+  let reaped = 0;
+  for (const [tenantId, ids] of byTenant) {
+    // Must go through db.transaction(): wrapWithTenantGuc only intercepts
+    // transaction(), not a bare db.update() — the exact same class of bug this
+    // function exists to fix, reproduced one level down. A bare db.update()
+    // here would silently affect zero rows again, just via a different code
+    // path (no GUC set, so the WITH CHECK / USING clause never matches).
+    reaped += await runWithTenant(tenantId, () => db.transaction(async (tx) => {
+      const rows = await tx.update(sessions)
+        .set({ status: "expired", updatedAt: new Date() })
+        .where(and(
+          eq(sessions.tenantId, tenantId),
+          eq(sessions.status, "active"),
+          lte(sessions.expiresAt, sql`now()`),
+        ))
+        .returning({ id: sessions.id });
+      return rows.length;
+    }));
+  }
+  return reaped;
 }
