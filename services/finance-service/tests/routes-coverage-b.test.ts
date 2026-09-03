@@ -231,7 +231,12 @@ describe("GET /v1/finance/vendor-tds", () => {
 describe("GET /v1/finance/simplified/summary", () => {
   it("returns 200", async () => {
     const app = await buildApp();
-    const r = await app.inject({ method: "GET", url: "/v1/finance/simplified/summary", headers: { authorization: `Bearer ${token()}` } });
+    // Simplified/MSME routes are edition-gated (requireMsmeEdition in
+    // simplified/routes.ts) — every other simplified-route test
+    // (tests/simplified-accounting.test.ts) sends this header; it was
+    // missing here, which is why the request was rejected before ever
+    // reaching the handler.
+    const r = await app.inject({ method: "GET", url: "/v1/finance/simplified/summary", headers: { authorization: `Bearer ${token()}`, "x-tenant-edition": "small_office" } });
     await app.close();
     expect(r.statusCode).toBe(200);
   });
@@ -240,7 +245,7 @@ describe("GET /v1/finance/simplified/summary", () => {
 describe("GET /v1/finance/simplified/income", () => {
   it("returns 200", async () => {
     const app = await buildApp();
-    const r = await app.inject({ method: "GET", url: "/v1/finance/simplified/income", headers: { authorization: `Bearer ${token()}` } });
+    const r = await app.inject({ method: "GET", url: "/v1/finance/simplified/income", headers: { authorization: `Bearer ${token()}`, "x-tenant-edition": "small_office" } });
     await app.close();
     expect(r.statusCode).toBe(200);
   });
