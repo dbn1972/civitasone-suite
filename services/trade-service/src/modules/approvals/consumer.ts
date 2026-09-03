@@ -4,6 +4,7 @@ import { db } from "../../shared/db.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { writeAudit } from "../../shared/audit.js";
 import { tenantScoped } from "../../shared/tenant-queue.js";
+import { cache } from "../../shared/infra.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
 import * as appRepo from "../applications/repo.js";
@@ -26,6 +27,9 @@ export function registerApprovalConsumers(rawQueue: Queue): void {
         id: p.id, tenantId: msg.tenantId, applicationId: p.applicationId, scrutinyType: p.scrutinyType, officerId: p.officerId, status: "pending", createdBy: msg.actorId, updatedBy: msg.actorId,
       });
       await appRepo.updateStatus(tx, p.applicationId, msg.tenantId, "under_scrutiny", msg.actorId);
+      // See applications/consumer.ts's header comment: GET /applications/:id is
+      // cached and this write (via a DIFFERENT module) mutates that same row.
+      await cache.invalidateResourceAfterCommit(tx, msg.tenantId, "application");
       await enqueue(tx, { topic: EVENTS.scrutinyInitiated, eventType: EVENTS.scrutinyInitiated, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { scrutinyId: p.id, applicationId: p.applicationId, scrutinyType: p.scrutinyType, officerId: p.officerId } });
       await writeAudit(tx, ctxOf(msg), { action: "scrutiny.initiate", resourceType: "trade_scrutiny_record", resourceId: p.id });
     });
@@ -51,6 +55,7 @@ export function registerApprovalConsumers(rawQueue: Queue): void {
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       await appRepo.updateStatus(tx, p.applicationId, msg.tenantId, p.decision, msg.actorId);
+      await cache.invalidateResourceAfterCommit(tx, msg.tenantId, "application");
       await enqueue(tx, { topic: EVENTS.applicationDecided, eventType: EVENTS.applicationDecided, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { applicationId: p.applicationId, decision: p.decision, reason: p.reason, decidedBy: msg.actorId } });
       await writeAudit(tx, ctxOf(msg), { action: `application.${p.decision}`, resourceType: "trade_application", resourceId: p.applicationId });
     });

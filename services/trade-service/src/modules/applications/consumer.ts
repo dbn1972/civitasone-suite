@@ -4,9 +4,22 @@ import { db } from "../../shared/db.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { writeAudit } from "../../shared/audit.js";
 import { tenantScoped } from "../../shared/tenant-queue.js";
+import { cache } from "../../shared/infra.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
 import { calculateFeeMinor, generateApplicationNumber } from "./domain.js";
+
+/**
+ * BUG (found live while writing this module's smoke tests): GET
+ * /v1/trade/applications/:id serves `cache.getOrLoad("trade:<tenant>:application:<id>", ...)`
+ * (routes.ts), but nothing ever called cache.invalidate*() after a write — every
+ * consumer below mutated the row and left the OLD response cached for the full
+ * CACHE_TTL (default 60s). Reproduced: create → GET (caches "draft") → submit →
+ * scrutiny-initiate → GET again → still "draft" for up to a minute. Fixed by
+ * invalidating the "application" cache resource for this tenant right after each
+ * write commits (see @civitasone/cache's invalidateResourceAfterCommit — same
+ * pattern already used by services/admin-service's F3 consumers).
+ */
 
 const log = pino({ name: "trade.applications.consumer" });
 
@@ -77,6 +90,7 @@ export function registerApplicationConsumers(rawQueue: Queue): void {
       if (!(await markProcessed(tx, msg.messageId))) return;
       const ok = await repo.updateStatus(tx, p.id, msg.tenantId, "submitted", msg.actorId);
       if (!ok) return;
+      await cache.invalidateResourceAfterCommit(tx, msg.tenantId, "application");
       await enqueue(tx, { topic: EVENTS.applicationSubmitted, eventType: EVENTS.applicationSubmitted, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { applicationId: p.id } });
       await writeAudit(tx, ctxOf(msg), { action: "application.submit", resourceType: "trade_application", resourceId: p.id });
     });
@@ -88,6 +102,7 @@ export function registerApplicationConsumers(rawQueue: Queue): void {
       if (!(await markProcessed(tx, msg.messageId))) return;
       const ok = await repo.updateStatus(tx, p.id, msg.tenantId, "withdrawn", msg.actorId);
       if (!ok) return;
+      await cache.invalidateResourceAfterCommit(tx, msg.tenantId, "application");
       await enqueue(tx, { topic: EVENTS.applicationWithdrawn, eventType: EVENTS.applicationWithdrawn, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { applicationId: p.id } });
       await writeAudit(tx, ctxOf(msg), { action: "application.withdraw", resourceType: "trade_application", resourceId: p.id });
     });
@@ -99,6 +114,7 @@ export function registerApplicationConsumers(rawQueue: Queue): void {
       if (!(await markProcessed(tx, msg.messageId))) return;
       const ok = await repo.updateFeePayment(tx, p.id, msg.tenantId, p.transactionId, msg.actorId);
       if (!ok) return;
+      await cache.invalidateResourceAfterCommit(tx, msg.tenantId, "application");
       await enqueue(tx, { topic: EVENTS.feePaymentRecorded, eventType: EVENTS.feePaymentRecorded, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { applicationId: p.id, transactionId: p.transactionId } });
       await writeAudit(tx, ctxOf(msg), { action: "application.fee_payment", resourceType: "trade_application", resourceId: p.id });
     });
