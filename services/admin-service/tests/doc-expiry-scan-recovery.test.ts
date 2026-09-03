@@ -24,6 +24,9 @@ import type { FastifyInstance } from "fastify";
 const { buildApp } = await import("../src/app.js");
 const { db, sqlClient } = await import("../src/shared/db.js");
 const { outboxMessages } = await import("../src/shared/outbox.js");
+const { queue } = await import("../src/shared/infra.js");
+const { tenantScoped } = await import("../src/shared/tenant-queue.js");
+const { registerF3_uploads_Consumers } = await import("../src/modules/uploads/doc-f3-consumer.js");
 
 const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
 
@@ -55,14 +58,73 @@ async function wipe(): Promise<void> {
 
 let app: FastifyInstance;
 beforeAll(async () => {
+  // Same F3 wiring + "one consumer per shared-topic test file" workaround as
+  // tests/doc-governance-routes.test.ts / tests/central-config.test.ts (see
+  // those files' beforeAll comments for the full writeup of the shared
+  // admin.f3.route_write topic + MemoryQueue per-message dedup issue).
+  registerF3_uploads_Consumers(tenantScoped(queue));
+  await queue.start();
   app = await buildApp();
   await wipe();
 });
 afterAll(async () => {
   await wipe();
   await app.close();
+  await queue.stop();
   await sqlClient.end();
 });
+
+async function drainQueue(): Promise<void> {
+  await (queue as any).drain?.();
+}
+
+interface DocType { id: string; code: string; version: number }
+interface Doc { id: string; status: string; storageKey: string }
+interface ListBody<T> { data: T[] }
+
+async function findTypeByCode(code: string): Promise<DocType> {
+  const res = await app.inject({ method: "GET", url: "/v1/admin/document-types?limit=200", headers: auth() });
+  const found = (res.json() as ListBody<DocType>).data.find((r) => r.code === code);
+  if (!found) throw new Error(`document type '${code}' never landed — F3 consumer not draining`);
+  return found;
+}
+
+/**
+ * document-types create is F3 async (202) — doc-f3-apply.ts's create op
+ * mints its own id inside the consumer rather than forwarding the
+ * route-generated one (same class of bug documented in
+ * tests/doc-governance-routes.test.ts's createType() and
+ * tests/integration-ops.test.ts / tests/central-config.test.ts). Look the
+ * real row up by its (caller-supplied, unique) code instead of trusting the
+ * id echoed in the 202 response.
+ */
+async function createType(over: Record<string, unknown>): Promise<DocType> {
+  const res = await app.inject({
+    method: "POST", url: "/v1/admin/document-types", headers: auth(),
+    payload: { name: "Narrowing window", ...over },
+  });
+  expect(res.statusCode).toBe(202);
+  await drainQueue();
+  return findTypeByCode(over.code as string);
+}
+
+async function findDocumentByStorageKey(storageKey: string): Promise<Doc> {
+  const res = await app.inject({ method: "GET", url: "/v1/admin/documents?limit=200", headers: auth() });
+  const found = (res.json() as ListBody<Doc>).data.find((d) => d.storageKey === storageKey);
+  if (!found) throw new Error(`document '${storageKey}' never landed — F3 consumer not draining`);
+  return found;
+}
+
+/** Same async + id-mismatch pattern as createType() above. */
+async function registerDoc(over: Record<string, unknown>): Promise<Doc> {
+  const res = await app.inject({
+    method: "POST", url: "/v1/admin/documents", headers: auth(),
+    payload: { contextType: "employee_onboarding", contextKey: "emp-desc-1", ...over },
+  });
+  expect(res.statusCode).toBe(202);
+  await drainQueue();
+  return findDocumentByStorageKey(over.storageKey as string);
+}
 
 interface ScanResult {
   scanned: number; expiring: number; expired: number; unchanged: number; recovered: number;
@@ -75,50 +137,69 @@ async function outboxTopics(): Promise<string[]> {
   return rows.map((r) => r.topic);
 }
 
+/**
+ * The scan route is F3 async too (doc-routes.ts's expiry-scan op): the 200
+ * response body is now just `{ data: { id, status: 'accepted', ... } }` —
+ * none of scanned/expiring/expired/unchanged/recovered are echoed
+ * synchronously any more (apply_uploads_4 in doc-f3-apply.ts computes and
+ * applies them entirely inside the async consumer). Source the real counters
+ * from the 'document.expiry_scan' audit-outbox record the consumer writes in
+ * the SAME transaction as its updates — same technique as
+ * tests/doc-governance-routes.test.ts's lastScanStats(), extended here with
+ * `recovered` (which this file, unlike that one, needs).
+ */
+async function scan(): Promise<ScanResult> {
+  const res = await app.inject({
+    method: "POST", url: "/v1/admin/documents/expiry-scan", headers: auth(), payload: { limit: 200 },
+  });
+  expect(res.statusCode).toBe(200);
+  await drainQueue();
+  const rows = await asTenant((sql) => sql<Array<{ payload: Record<string, unknown> }>>`
+    SELECT payload FROM _outbox.messages
+    WHERE topic = 'audit.event.record' AND payload->>'action' = 'document.expiry_scan'
+    ORDER BY created_at DESC LIMIT 1`);
+  const p = rows[0]?.payload ?? {};
+  return {
+    scanned: Number(p.scanned ?? 0),
+    expiring: Number(p.expiring ?? 0),
+    expired: Number(p.expired ?? 0),
+    unchanged: Number(p.unchanged ?? 0),
+    recovered: Number(p.recovered ?? 0),
+  };
+}
+
 describe("DM-002 expiry scan — de-escalation when the warning window narrows", () => {
   let typeId = "";
   let docId = "";
 
   beforeAll(async () => {
-    const type = await app.inject({
-      method: "POST", url: "/v1/admin/document-types", headers: auth(),
-      payload: { code: "desc-licence", name: "Narrowing window", expiryWarnDays: 30 },
-    });
-    expect(type.statusCode).toBe(201);
-    typeId = (type.json() as { data: { id: string } }).data.id;
+    const type = await createType({ code: "desc-licence", expiryWarnDays: 30 });
+    typeId = type.id;
 
     // 10 days out with a 30-day window ⇒ registers as `expiring` immediately.
-    const doc = await app.inject({
-      method: "POST", url: "/v1/admin/documents", headers: auth(),
-      payload: {
-        documentTypeCode: "desc-licence",
-        contextType: "employee_onboarding", contextKey: "emp-desc-1",
-        storageKey: "uploads/desc/licence.pdf",
-        expiresAt: new Date(Date.now() + 10 * 86_400_000).toISOString(),
-      },
+    const doc = await registerDoc({
+      documentTypeCode: "desc-licence",
+      storageKey: "uploads/desc/licence.pdf",
+      expiresAt: new Date(Date.now() + 10 * 86_400_000).toISOString(),
     });
-    expect(doc.statusCode).toBe(201);
-    const created = (doc.json() as { data: { id: string; status: string } }).data;
-    expect(created.status).toBe("expiring");
-    docId = created.id;
+    expect(doc.status).toBe("expiring");
+    docId = doc.id;
 
-    // Narrow the window to 1 day — the document is no longer within it.
+    // Narrow the window to 1 day — the document is no longer within it. PATCH
+    // is F3 async too (200 body is just the accepted envelope) — land it
+    // before the scan below reads the type's warn-days.
     const patched = await app.inject({
       method: "PATCH", url: `/v1/admin/document-types/${typeId}`, headers: auth(),
-      payload: { expectedVersion: 1, expiryWarnDays: 1 },
+      payload: { expectedVersion: type.version, expiryWarnDays: 1 },
     });
     expect(patched.statusCode).toBe(200);
+    await drainQueue();
   });
 
   it("re-classifies the document back to active", async () => {
     const before = await outboxTopics();
 
-    const res = await app.inject({
-      method: "POST", url: "/v1/admin/documents/expiry-scan", headers: auth(), payload: { limit: 200 },
-    });
-    expect(res.statusCode).toBe(200);
-    const result = (res.json() as { data: ScanResult }).data;
-
+    const result = await scan();
     expect(result.scanned).toBe(1);
     expect(result.expiring).toBe(0);
     expect(result.expired).toBe(0);
@@ -142,10 +223,7 @@ describe("DM-002 expiry scan — de-escalation when the warning window narrows",
       await sql`UPDATE uploads.documents SET status = 'expiring', version = version + 1 WHERE id = ${docId}`;
     });
 
-    const res = await app.inject({
-      method: "POST", url: "/v1/admin/documents/expiry-scan", headers: auth(), payload: { limit: 200 },
-    });
-    const result = (res.json() as { data: ScanResult }).data;
+    const result = await scan();
 
     // Every scanned document must be attributable to exactly one outcome,
     // otherwise the scan's own report hides work it did.
@@ -154,10 +232,7 @@ describe("DM-002 expiry scan — de-escalation when the warning window narrows",
   });
 
   it("is idempotent once the document has settled back to active", async () => {
-    const res = await app.inject({
-      method: "POST", url: "/v1/admin/documents/expiry-scan", headers: auth(), payload: { limit: 200 },
-    });
-    const result = (res.json() as { data: ScanResult }).data;
+    const result = await scan();
     expect(result.unchanged).toBe(1);
     expect(result.recovered).toBe(0);
     expect(result.expiring).toBe(0);
