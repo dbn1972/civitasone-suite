@@ -610,11 +610,14 @@ describe("POST /v1/payroll/statutory/perquisite-components — happy path", () =
       },
     });
     await app.close();
-    expect([201, 500]).toContain(res.statusCode);
-    if (res.statusCode === 201) {
+    // F3 CQRS: publishes perquisiteComponentUpsert and returns 202 — the
+    // 12BA line is persisted later by the tax module's consumer.
+    expect([202, 500]).toContain(res.statusCode);
+    if (res.statusCode === 202) {
       const body = res.json();
-      expect(body.message).toContain("perquisite component saved");
-      expect(body.nature).toBe("accommodation");
+      expect(body.id).toBeDefined();
+      expect(body.status).toBe("accepted");
+      expect(body.correlationId).toBeDefined();
     }
   });
 });
@@ -841,11 +844,14 @@ describe("POST /v1/payroll/statutory/challans — happy path", () => {
       },
     });
     await app.close();
-    expect([200, 201, 500]).toContain(res.statusCode);
-    if (res.statusCode === 201 || res.statusCode === 200) {
+    // F3 CQRS: publishes challanIngest and returns 202 — the challan row is
+    // persisted later by the statutory-returns consumer.
+    expect([202, 500]).toContain(res.statusCode);
+    if (res.statusCode === 202) {
       const body = res.json();
-      expect(body.cin).toBeDefined();
-      expect(body.period).toBe("2025-06");
+      expect(body.id).toBeDefined();
+      expect(body.status).toBe("accepted");
+      expect(body.correlationId).toBeDefined();
     }
   });
 

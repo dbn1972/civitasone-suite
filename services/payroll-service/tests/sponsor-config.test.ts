@@ -11,6 +11,8 @@ import { runWithTenant } from "@civitasone/db";
 import { buildApp } from "../src/app.js";
 import { db, sqlClient } from "../src/shared/db.js";
 import { sponsorBankConfig } from "../src/modules/sponsor-config/schema.js";
+import { queue } from "../src/shared/infra.js";
+import { registerSponsorConfigConsumers } from "../src/modules/sponsor-config/consumer.js";
 
 const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
 const TENANT = "aaaaaaaa-3333-4000-8000-000000000033";
@@ -18,6 +20,12 @@ const TENANT = "aaaaaaaa-3333-4000-8000-000000000033";
 function makeToken(roles: string[] = ["payroll_admin"]) {
   return signToken({ sub: "00000000-0000-4000-8000-000000000099", tid: TENANT, roles, sid: "sess-sponsor-001" }, SECRET);
 }
+
+// PUT was converted to F3 async-write (202); the consumer that applies the
+// upsert only runs in src/worker.ts in production, so register it here
+// against the real queue singleton the app uses (same pattern as
+// admin-service's tests/admin.test.ts).
+registerSponsorConfigConsumers(queue);
 
 afterAll(async () => { await sqlClient.end(); });
 
@@ -89,8 +97,11 @@ describe("PUT /v1/payroll/sponsor-bank-config", () => {
       headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
       payload: validBody,
     });
-    expect(putRes.statusCode).toBe(200);
-    expect(putRes.json().status).toBe("ok");
+    // F3 CQRS: publishes sponsorConfigUpsert and returns 202 — drain the
+    // queue so the consumer's real DB write lands before we GET it back.
+    expect(putRes.statusCode).toBe(202);
+    expect(putRes.json().status).toBe("accepted");
+    await queue.drain();
 
     const getRes = await app.inject({
       method: "GET",
@@ -181,6 +192,6 @@ describe("PUT /v1/payroll/sponsor-bank-config", () => {
       payload: validBody,
     });
     await app.close();
-    expect(res.statusCode).toBe(200);
+    expect(res.statusCode).toBe(202);
   });
 });
