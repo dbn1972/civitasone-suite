@@ -49,6 +49,27 @@ async function seedTemplate(channel = "email"): Promise<void> {
     ON CONFLICT (id) DO UPDATE SET channel = ${channel}`);
 }
 
+/**
+ * G8 DLT (TRAI) gate — added in PR #417 (77888af) AFTER this file was written,
+ * and unconditional for every sms/whatsapp send regardless of transactional vs
+ * marketing intent (see `requiresDlt`/`checkDlt` in ../src/modules/dlt/guard.ts).
+ * Every send() in this file goes through `templates.templates` (seeded above
+ * with the literal body 'Body', no `{#var#}` placeholders), so a single active
+ * DLT template row whose `template_body` exactly matches 'Body' is enough for
+ * `validateDltTemplate`'s exact-match branch to pass the gate for every test
+ * that sends through TEMPLATE. Fixture values (entity/template/header id,
+ * content type) mirror the real registration shapes exercised in
+ * dlt-validation.test.ts; contentType 'transactional' matches the traffic this
+ * describe block is about.
+ */
+async function seedDltTemplate(channel: string, templateBody: string): Promise<void> {
+  await sqlAsTenant((sql) => sql`
+    INSERT INTO dlt.dlt_templates
+      (id, tenant_id, entity_id, template_id, header_id, content_type, template_body, channel, status, created_by, updated_by)
+    VALUES (${randomUUID()}, ${TENANT}, '1001234567890', '1107169999999999', 'MYAPP', 'transactional',
+            ${templateBody}, ${channel}, 'active', ${SYSTEM}, ${SYSTEM})`);
+}
+
 async function suppress(recipient: string): Promise<void> {
   await sqlAsTenant((sql) => sql`
     INSERT INTO bounces.suppression_list
@@ -105,6 +126,7 @@ async function cleanup(): Promise<void> {
     await sql`DELETE FROM dnd.held_notifications WHERE tenant_id = ${TENANT}`;
     await sql`DELETE FROM templates.prefs WHERE tenant_id = ${TENANT}`;
     await sql`DELETE FROM templates.templates WHERE tenant_id = ${TENANT}`;
+    await sql`DELETE FROM dlt.dlt_templates WHERE tenant_id = ${TENANT}`;
     await sql`DELETE FROM bulk.campaign_recipients WHERE tenant_id = ${TENANT}`;
     await sql`DELETE FROM bulk.campaigns WHERE tenant_id = ${TENANT}`;
   });
@@ -352,8 +374,13 @@ describe("R1 gate — TRANSACTIONAL sms/whatsapp must not require a marketing op
   // a failed adapter falls back to email — which would mask the very routing
   // decision under test. Stand in for a configured provider so these assertions
   // are about the GATE's channel selection and nothing else.
-  beforeEach(() => {
+  beforeEach(async () => {
     smsSpy.mockResolvedValue({ ok: true });
+    // G8 DLT gate fixture: without a registered template matching the seeded
+    // body ('Body', no placeholders), checkDlt() rejects every sms/whatsapp
+    // send in this block with DLT_TEMPLATE_NOT_REGISTERED before the adapter
+    // is ever reached.
+    await seedDltTemplate("sms", "Body");
   });
 
   it("a transactional sms to a phone-number recipient with NO pref row is delivered on sms", async () => {
