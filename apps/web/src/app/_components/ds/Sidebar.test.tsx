@@ -71,7 +71,10 @@ describe("Sidebar", () => {
   });
 
   it("renders user avatar in footer", () => {
-    render(<Sidebar />);
+    // userName/userRole are wired from the JWT via AppShell (C-03); the component
+    // itself only supplies generic "User"/"Staff" fallbacks, so exercise it with
+    // explicit props the way real callers do.
+    render(<Sidebar userName="D. Nayak" userRole="Admin" />);
     expect(screen.getByText("D. Nayak")).toBeInTheDocument();
     expect(screen.getByText("Admin")).toBeInTheDocument();
   });

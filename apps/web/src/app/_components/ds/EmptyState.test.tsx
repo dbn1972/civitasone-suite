@@ -25,9 +25,11 @@ describe("EmptyState", () => {
     expect(iconEl?.textContent).toBe("📋");
   });
 
-  it("does not render icon div when icon is undefined", () => {
+  it("renders default SVG illustration when icon is undefined", () => {
     const { container } = render(<EmptyState title="Empty" />);
-    expect(container.querySelector(".ic")).not.toBeInTheDocument();
+    const iconEl = container.querySelector(".ic");
+    expect(iconEl).toBeInTheDocument();
+    expect(iconEl?.querySelector("svg")).toBeInTheDocument();
   });
 
   it("renders action node when provided", () => {

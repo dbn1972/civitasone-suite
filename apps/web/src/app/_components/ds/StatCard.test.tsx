@@ -25,15 +25,17 @@ describe("StatCard", () => {
   it("renders delta with up indicator when up is true", () => {
     render(<StatCard icon="📈" label="Growth" value="12%" delta="+5%" up />);
     expect(screen.getByText(/\+5%/)).toBeInTheDocument();
-    const deltaEl = screen.getByText(/▲/).closest(".delta");
-    expect(deltaEl).toHaveClass("up");
+    // C-06: the glyph itself is aria-hidden (↑, not ▲); the accessible name lives
+    // on the wrapper's aria-label instead.
+    const deltaEl = screen.getByLabelText("Increase of +5%");
+    expect(deltaEl).toHaveClass("delta", "up");
   });
 
   it("renders delta with down indicator when up is false", () => {
     render(<StatCard icon="📉" label="Decline" value="8%" delta="-3%" up={false} />);
     expect(screen.getByText(/-3%/)).toBeInTheDocument();
-    const deltaEl = screen.getByText(/▼/).closest(".delta");
-    expect(deltaEl).toHaveClass("down");
+    const deltaEl = screen.getByLabelText("Decrease of -3%");
+    expect(deltaEl).toHaveClass("delta", "down");
   });
 
   it("does not render delta when not provided", () => {
