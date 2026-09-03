@@ -80,10 +80,22 @@ describe("SVC-081 versioned catalogue maker-checker publish", () => {
         servicePattern: "certificate",
         feeModel: "flat",
         hoaCode: "4201",
+        // FN-10/FN-25/FN-26 — submit is gated on a passing sandbox run (below),
+        // which walks the full pipeline (form/eligibility/workflow/SLA lanes/
+        // doc-verification lanes/fee/certificate). All of these must be filled
+        // in on create or the sandbox run fails and submit stays 409.
+        feeScheduleId: "aaaaaaaa-0001-4000-8000-000000000016",
+        formId: "aaaaaaaa-0002-4000-8000-000000000016",
+        eligibilityRuleSetId: "aaaaaaaa-0003-4000-8000-000000000016",
+        workflowDefinitionId: "aaaaaaaa-0004-4000-8000-000000000016",
+        issuanceType: "certificate",
+        laneBindings: [
+          { key: "review", name: "Review", slaDays: 5, escalationDesignationId: "dsg-superior" },
+        ],
         ownerDepartment: "Municipal Licensing", channels: ["portal", "counter"],
         requiredDocuments: [
-          { docType: "id_proof", label: "ID proof", mandatory: true },
-          { docType: "address_proof", label: "Address proof", mandatory: true },
+          { docType: "id_proof", label: "ID proof", mandatory: true, verifiedAtLane: "review" },
+          { docType: "address_proof", label: "Address proof", mandatory: true, verifiedAtLane: "review" },
         ],
         slaDays: 15,
       },
@@ -123,6 +135,12 @@ describe("SVC-081 versioned catalogue maker-checker publish", () => {
   });
 
   it("submit records the maker", async () => {
+    // FN-10 — submit is gated on the latest sandbox run having passed.
+    const sandbox = await app.inject({
+      method: "POST", url: `/v1/citizen/catalogue/services/${defId}/sandbox-test/run`, headers: hdr(tok(TENANT_A, MAKER)), payload: {},
+    });
+    expect(sandbox.statusCode).toBe(200);
+    expect(sandbox.json().passed).toBe(true);
     const res = await app.inject({ method: "POST", url: `/v1/citizen/catalogue/services/${defId}/submit`, headers: hdr(tok(TENANT_A, MAKER)), payload: {} });
     expect(res.statusCode).toBe(202);
     await waitFor(async () => {
@@ -154,11 +172,20 @@ describe("SVC-081 versioned catalogue maker-checker publish", () => {
   });
 
   it("a revision is a NEW row at the next version (versioned)", async () => {
+    // POST /catalogue/services is F3 async (202 + poll) — the route only ever
+    // returns {id, status, correlationId}; the version is assigned by the
+    // consumer, so it has to be read back via GET, not off the 202 body.
     const res = await app.inject({
       method: "POST", url: "/v1/citizen/catalogue/services", headers: hdr(tok(TENANT_A, MAKER)),
       payload: { serviceKey: SERVICE_KEY, name: "Trade Licence v2", channels: ["portal"], requiredDocuments: [] },
     });
-    expect(res.json().version).toBe(v1 + 1);
+    expect(res.statusCode).toBe(202);
+    const newId = res.json().id;
+    const def = await waitFor(async () => {
+      const g = await app.inject({ method: "GET", url: `/v1/citizen/catalogue/services/${newId}`, headers: hdr(tok(TENANT_A, MAKER)) });
+      return g.statusCode === 200 ? g.json() : null;
+    });
+    expect(def.version).toBe(v1 + 1);
   });
 
   it("citizen-facing browse returns only published + lookup by key", async () => {
@@ -328,7 +355,9 @@ describe("SVC-084 upload/DigiLocker-gated/checklist/deficiency/resubmit", () => 
       payload: { source: "upload" },
     });
     expect(res.statusCode).toBe(202);
-    expect(res.json().supersedes).toBe(docId);
+    // `supersedes` travels inside the F3 `data` envelope — a bare top-level
+    // field is silently stripped by acceptedResponseSchema (see commands.ts).
+    expect(res.json().data.supersedes).toBe(docId);
     await waitFor(async () => {
       const g = await app.inject({ method: "GET", url: `/v1/citizen/documents/${docId}`, headers: hdr(tok(TENANT_A, CHECKER)) });
       return g.json().status === "superseded" ? g.json() : null;
@@ -406,7 +435,16 @@ describe("SVC-089 appeal filing-window + order maker-checker + remand", () => {
     });
     const hearing = await app.inject({ method: "POST", url: `/v1/citizen/appeals/${appealId}/hearings`, headers: hdr(tok(TENANT_A, CHECKER)), payload: { mode: "video" } });
     expect(hearing.statusCode).toBe(202);
-    const hearingId = hearing.json().hearingId;
+    // `hearingId` travels inside the F3 `data` envelope — a bare top-level
+    // field is silently stripped by acceptedResponseSchema (see commands.ts).
+    const hearingId = hearing.json().data.hearingId;
+    // The schedule-hearing consumer inserts the hearing row asynchronously;
+    // record's synchronous pre-check reads it back via repo.listHearings, so
+    // wait for it to land (status flips to "hearing") or record 404s.
+    await waitFor(async () => {
+      const g = await app.inject({ method: "GET", url: `/v1/citizen/appeals/${appealId}`, headers: hdr(tok(TENANT_A, CHECKER)) });
+      return g.json().status === "hearing" ? g.json() : null;
+    });
     const record = await app.inject({
       method: "POST", url: `/v1/citizen/appeals/${appealId}/hearings/record`, headers: hdr(tok(TENANT_A, CHECKER)),
       payload: { hearingId, record: "both parties heard" },
@@ -461,11 +499,21 @@ describe("SVC-089 appeal filing-window + order maker-checker + remand", () => {
       payload: { orderType: "remanded", orderNote: "reconsider" },
     });
     expect(noTarget.statusCode).toBe(422);
-    await app.inject({
+    const prepare = await app.inject({
       method: "POST", url: `/v1/citizen/appeals/${id}/order/prepare`, headers: hdr(tok(TENANT_A, MAKER)),
       payload: { orderType: "remanded", orderNote: "reconsider", remandTo: "88888888-0000-4000-8000-000000000016" },
     });
-    await app.inject({ method: "POST", url: `/v1/citizen/appeals/${id}/order/issue`, headers: hdr(tok(TENANT_A, CHECKER)), payload: {} });
+    expect(prepare.statusCode).toBe(202);
+    // The maker's prepare is F3 async — issue's synchronous pre-check reads
+    // preparedBy/orderType from the DB, so it must wait for the prepare
+    // consumer to land before issuing (otherwise issue silently no-ops on a
+    // still-unprepared appeal and the appeal never reaches "remanded").
+    await waitFor(async () => {
+      const g = await app.inject({ method: "GET", url: `/v1/citizen/appeals/${id}`, headers: hdr(tok(TENANT_A, CHECKER)) });
+      return g.json().preparedBy ? g.json() : null;
+    });
+    const issue = await app.inject({ method: "POST", url: `/v1/citizen/appeals/${id}/order/issue`, headers: hdr(tok(TENANT_A, CHECKER)), payload: {} });
+    expect(issue.statusCode).toBe(202);
     const remanded = await waitFor(async () => {
       const g = await app.inject({ method: "GET", url: `/v1/citizen/appeals/${id}`, headers: hdr(tok(TENANT_A, CHECKER)) });
       return g.json().status === "remanded" ? g.json() : null;
