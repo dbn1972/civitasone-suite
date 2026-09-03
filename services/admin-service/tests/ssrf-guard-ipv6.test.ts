@@ -107,16 +107,17 @@ describe("SSRF guard — isBlockedHost: non-canonical IPv6 spellings (raw-string
   it("does not crash on malformed/garbage input and fails closed where ambiguous", async () => {
     await expect(isBlockedHost("")).resolves.toBe(true);
     await expect(isBlockedHost("   ")).resolves.toBe(true);
-    // Contains a colon, so it takes the synchronous IP-literal branch rather
-    // than the fail-closed DNS-resolve branch; it isn't a valid IPv6 literal
-    // (net.isIP === 0) so isPrivateIp() sensibly returns false. This is not
-    // an SSRF exposure: net.connect()/tls.connect() would themselves reject
-    // this string as neither a valid IP nor a resolvable hostname before any
-    // socket could be opened. Documented here as the deliberate, sensible,
-    // non-crashing behavior for this shape of input, per this function's
-    // callers (tcpGreeting() / sftp-ingest.ts), which only branch on the
-    // boolean and never inspect the reason.
-    await expect(isBlockedHost(":::::not-an-ip:::::")).resolves.toBe(false);
+    // Contains colons but is not any recognizable IP-literal spelling
+    // (net.isIP === 0, no "%" zone suffix, not obfuscated-IPv4-shaped), so
+    // the PR #923 round-3 routing fix sends it to the DNS-resolve branch
+    // instead of assuming it's "just not private" — resolve4/resolve6 both
+    // fail for this garbage string, and the resolve branch fails CLOSED
+    // (allIps.length === 0 → blocked). This is a deliberate behavior change
+    // from the previous round (which returned false here via the
+    // then-narrower `/^[\d.]+$/.test(h) || h.includes(":")` routing
+    // predicate reaching isPrivateIp() directly) — stricter is safe here,
+    // since this input was never a legitimate host either way.
+    await expect(isBlockedHost(":::::not-an-ip:::::")).resolves.toBe(true);
     await expect(isBlockedHost("not a valid host at all !!")).resolves.toBe(true);
     // @ts-expect-error — exercising the runtime null/undefined guard
     await expect(isBlockedHost(null)).resolves.toBe(true);
@@ -152,5 +153,94 @@ describe("SSRF guard — isBlockedHost: obfuscated IPv4 literals (raw-string pat
   it("still allows a normal, already-canonical public IPv4 literal", async () => {
     expect(await isBlockedHost("8.8.8.8")).toBe(false);
     expect(await isBlockedHost("1.2.3.4")).toBe(false);
+  });
+});
+
+describe("SSRF guard — Finding 1 (CRITICAL, PR #923 round 3): IPv6 zone-ID bypass", () => {
+  // The independent reviewer's confirmed, real-socket-level bypass:
+  // net.isIP() (and therefore net.connect()/tls.connect(), which use the
+  // same parser) accepts a "%zone" suffix on an IPv6 literal, but WHATWG
+  // URL does not — `new URL("http://[" + h + "]/")` THROWS for these. The
+  // pre-fix code silently fell back to matching the un-canonicalized,
+  // zone-suffixed string against strictly end-anchored ("$") regexes, which
+  // can never match because of the trailing "%zone" content — so the
+  // address sailed through as "not private". Fixed two ways: (1) an
+  // explicit "%" check that rejects any zone-ID-suffixed IPv6 literal
+  // outright, and (2) fail-CLOSED (not fail-open) on any canonicalization
+  // exception for a confirmed IPv6 literal, as defense in depth.
+  it("isPrivateIp blocks zone-ID-suffixed loopback and metadata literals directly", () => {
+    expect(isPrivateIp("::ffff:127.0.0.1%lo")).toBe(true);
+    expect(isPrivateIp("::ffff:169.254.169.254%eth0")).toBe(true);
+    expect(isPrivateIp("fe80::1%eth0")).toBe(true);
+  });
+
+  it("isBlockedHost blocks every zone-ID payload the reviewer proved exploitable at the socket layer", async () => {
+    // Interface-name zone IDs.
+    expect(await isBlockedHost("::ffff:169.254.169.254%eth0")).toBe(true);
+    expect(await isBlockedHost("::ffff:169.254.169.254%ens5")).toBe(true);
+    expect(await isBlockedHost("::ffff:169.254.169.254%en0")).toBe(true);
+    expect(await isBlockedHost("::ffff:127.0.0.1%lo")).toBe(true);
+    // Plain numeric zone indices — no per-host recon needed, work
+    // everywhere.
+    expect(await isBlockedHost("::ffff:127.0.0.1%1")).toBe(true);
+    expect(await isBlockedHost("::ffff:127.0.0.1%2")).toBe(true);
+    expect(await isBlockedHost("::ffff:127.0.0.1%0")).toBe(true);
+    expect(await isBlockedHost("fe80::1%1")).toBe(true);
+    expect(await isBlockedHost("fe80::1%0")).toBe(true);
+  });
+
+  it("does not regress a zone-free legitimate global IPv6 literal", async () => {
+    expect(await isBlockedHost("2606:4700:4700::1111")).toBe(false);
+  });
+});
+
+describe("SSRF guard — Finding 2 (MEDIUM, PR #923 round 3): hex-form IPv4 routing gap", () => {
+  // isBlockedHost()'s routing predicate previously only sent digit-dot-only
+  // (`/^[\d.]+$/`) or colon-containing strings through isPrivateIp()'s
+  // deterministic literal-parsing path; hex-form IPv4 ("0x7f000001",
+  // "0x7f.0.0.1" — contains hex letters/"x", no colon) fell through to a
+  // resolve4/resolve6 DNS-resolve branch instead, which — unlike
+  // dns.lookup() (what net.connect()/tls.connect() actually use) — behaves
+  // differently across DNS environments and only happened to fail closed on
+  // the original test host by accident (ENOTFOUND), masking the gap. Fixed
+  // by routing ANY recognizable IP-literal spelling (including hex-form
+  // IPv4) through isPrivateIp() first, and only falling through to DNS
+  // resolution for input that isn't IP-literal-shaped at all.
+  it("blocks hex-form IPv4 loopback via the isPrivateIp path, not as an accident of DNS failure", async () => {
+    expect(await isBlockedHost("0x7f000001")).toBe(true); // 32-bit hex loopback
+    expect(await isBlockedHost("0x7f.0.0.1")).toBe(true); // per-octet hex loopback
+  });
+
+  it("blocks hex-form IPv4 metadata address in both 32-bit and per-octet spellings", async () => {
+    expect(await isBlockedHost("0xa9fea9fe")).toBe(true);         // 32-bit hex 169.254.169.254
+    expect(await isBlockedHost("0xa9.0xfe.0xa9.0xfe")).toBe(true); // per-octet hex 169.254.169.254
+  });
+
+  it("still allows a normal hostname (proves the routing widening didn't start swallowing real hostnames)", async () => {
+    expect(await isBlockedHost("smtp.gmail.com")).toBe(false);
+    expect(await isBlockedHost("example.com")).toBe(false);
+  });
+});
+
+describe("SSRF guard — defensive extras: other encoding tricks in the same family", () => {
+  // Not independently reported, but the same class of bug (a case, padding,
+  // or grouping variant net.isIP()/getaddrinfo accepts but our matching
+  // didn't) — checked defensively alongside the two confirmed findings.
+  it("blocks uppercase-hex IPv6 spellings (normalized lowercases before matching)", () => {
+    expect(isPrivateIp("::FFFF:169.254.169.254")).toBe(true);
+    expect(isPrivateIp("::FFFF:A9FE:A9FE")).toBe(true);
+    expect(isPrivateIp("FE80::1")).toBe(true);
+  });
+
+  it("blocks an IPv4-mapped hex form combined with a zone ID", async () => {
+    expect(await isBlockedHost("::ffff:a9fe:a9fe%eth0")).toBe(true);
+  });
+
+  it("blocks uppercase 0X-prefixed hex IPv4", async () => {
+    expect(await isBlockedHost("0X7f000001")).toBe(true);
+  });
+
+  it("blocks unusual leading-zero IPv4 octet grouping", async () => {
+    expect(await isBlockedHost("127.000.000.1")).toBe(true);
   });
 });
