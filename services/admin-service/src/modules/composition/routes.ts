@@ -141,12 +141,24 @@ export async function compositionRoutes(app: FastifyInstance): Promise<void> {
   // entitlements). The gateway MUST treat configured:false as "fail open"
   // (allow all) — never as an empty allow-list — so turning enforcement on can
   // never black-hole a tenant that predates composition onboarding.
+  //
+  // Defense-in-depth (follow-up to gateway-service#986): a valid shared secret
+  // ALONE is not a reliable "this is a genuine machine caller" signal — the
+  // secret can end up attached to ordinary client-forwarded traffic (as the
+  // gateway's proxyHandler briefly did). We therefore also require the
+  // explicit `x-internal: "1"` flag, mirroring the pattern already used
+  // correctly by policy-service (`evaluate/routes.ts`) and crm-service
+  // (`contacts/routes.ts`) — a proxy would never set this flag on an ordinary
+  // forwarded client request. Secret-only or flag-only requests fall through
+  // to the normal role-based auth path below, they are never auto-rejected.
   app.get("/v1/admin/composition/internal/:tenantId/modules", async (req, reply) => {
     const secret = req.headers["x-internal-secret"] as string | undefined;
+    const hasInternalFlag = req.headers["x-internal"] === "1";
     const expected = process.env.INTERNAL_SERVICE_SECRET;
     const secretNotConfigured = typeof expected !== "string" || expected.length === 0;
     const validInternal =
       !secretNotConfigured &&
+      hasInternalFlag &&
       typeof secret === "string" &&
       secret.length === expected.length &&
       timingSafeEqual(Buffer.from(secret, "utf8"), Buffer.from(expected, "utf8"));
