@@ -87,9 +87,18 @@ const FY_START = (() => {
 
 beforeAll(async () => {
   await scoped(SEED_TENANT, async (tx) => {
-    // Seed only the heads that don't already exist in the dev DB (2100, 3100, 4100).
-    // Heads 1200, 1250, 5100 already exist with the dddddddd-... UUIDs above.
+    // Seed every head this file's ledger/journal rows reference. The dddddddd-...
+    // UUIDs for 1200/1250/5100 are NOT pre-seeded by any migration or fixture in
+    // this repo (verified: no other file references them) — on a freshly
+    // bootstrapped DB those finance_heads rows don't exist, so the heads-driven
+    // JOIN in loadTrialBalance() (financial-statements/routes.ts) silently drops
+    // every ledger line posted against them, which is what broke the trial
+    // balance / balance sheet / fixed-asset invariants. onConflictDoNothing
+    // keeps this safe on a DB where they *do* already exist.
     await tx.insert(financeHeads).values([
+      { id: HEAD_ASSET_ID, tenantId: SEED_TENANT, code: "1200", name: "Fixed Assets", level: 1, classification: "asset", createdBy: ACTOR, updatedBy: ACTOR },
+      { id: HEAD_ACCUM_ID, tenantId: SEED_TENANT, code: "1250", name: "Accumulated Depreciation", level: 1, classification: "asset", createdBy: ACTOR, updatedBy: ACTOR },
+      { id: HEAD_EXPENSE_ID, tenantId: SEED_TENANT, code: "5100", name: "Depreciation Expense", level: 1, classification: "expense", createdBy: ACTOR, updatedBy: ACTOR },
       { id: HEAD_INCOME_ID, tenantId: SEED_TENANT, code: "4100", name: "Revenue Income", level: 1, classification: "revenue", createdBy: ACTOR, updatedBy: ACTOR },
       { id: HEAD_LIABILITY_ID, tenantId: SEED_TENANT, code: "2100", name: "Current Liabilities", level: 1, classification: "liability", createdBy: ACTOR, updatedBy: ACTOR },
       { id: HEAD_EQUITY_ID, tenantId: SEED_TENANT, code: "3100", name: "General Fund", level: 1, classification: "equity", createdBy: ACTOR, updatedBy: ACTOR },
