@@ -10,6 +10,7 @@ import { verifyEmployeeExists, HrmsUnavailableError } from "../../shared/hrms-cl
 import type {
   CreateStructureBody, CreateRunBody, CreateDdoBody, CreatePensionerBody,
   CreateArrearBody, ComputeBonusBody, CreateReimbursementBody,
+  CreateSalaryRevisionBody, UpdateSettingsBody,
 } from "./validators.js";
 
 export type Accepted = { id: string; status: string; correlationId: string };
@@ -218,6 +219,40 @@ export async function createReimbursement(ctx: RequestContext, body: CreateReimb
     payload: { id, tenantId: ctx.tenantId, ...body },
   });
   return { id, status: "accepted", correlationId: ctx.correlationId };
+}
+
+/**
+ * F3 leftover CQRS: salary revision create. world-class-routes.ts POST
+ * /v1/payroll/salary-revisions used to INSERT synchronously in the request
+ * path (marked "// ─── Gap:" — added after the rest of this file's F3
+ * conversion and missed it). Same shape as createArrear/createReimbursement
+ * above: publish + let the consumer persist idempotently.
+ */
+export async function createSalaryRevision(ctx: RequestContext, body: CreateSalaryRevisionBody): Promise<Accepted> {
+  const id = randomUUID();
+  await queue.publish(COMMANDS.salaryRevisionCreate, {
+    messageId: id, type: COMMANDS.salaryRevisionCreate,
+    tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
+    payload: { id, tenantId: ctx.tenantId, ...body },
+  });
+  return { id, status: "accepted", correlationId: ctx.correlationId };
+}
+
+/**
+ * F3 leftover CQRS: payroll settings upsert. world-class-routes.ts PUT
+ * /v1/payroll/settings used to upsert synchronously in the request path
+ * (same "// ─── Gap:" follow-up addition as salary revisions above).
+ * payroll_settings has no surrogate id (tenant_id is the natural key, one
+ * row per tenant), so the accepted envelope's `id` is the tenantId —
+ * mirrors upsertDdo/upsertStateRules returning their natural key below.
+ */
+export async function updateSettings(ctx: RequestContext, body: UpdateSettingsBody): Promise<Accepted> {
+  await queue.publish(COMMANDS.settingsUpdate, {
+    messageId: randomUUID(), type: COMMANDS.settingsUpdate,
+    tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
+    payload: { tenantId: ctx.tenantId, ...body },
+  });
+  return { id: ctx.tenantId, status: "accepted", correlationId: ctx.correlationId };
 }
 
 // ─── CQRS lift T1-03 (payroll/gap-routes.ts) ────────────────────────────────

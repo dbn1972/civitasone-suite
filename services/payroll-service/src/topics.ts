@@ -22,6 +22,8 @@ export const COMMANDS = {
   arrearCreate:           "payroll.arrear.create",
   bonusCompute:           "payroll.bonus.compute",
   reimbursementCreate:    "payroll.reimbursement.create",
+  salaryRevisionCreate:   "payroll.salary_revision.create",
+  settingsUpdate:         "payroll.settings.update",
   // CQRS lift T1-03 (payroll/gap-routes.ts) — 8 mutating routes moved to
   // publish + idempotent consumer; mirrors ddo/pensioner/arrear/bonus/
   // reimbursement above.
@@ -58,6 +60,8 @@ export const EVENTS = {
   arrearCreated:          "payroll.arrear.created",
   bonusComputed:          "payroll.bonus.computed",
   reimbursementCreated:   "payroll.reimbursement.created",
+  salaryRevisionCreated:  "payroll.salary_revision.created",
+  settingsUpdated:        "payroll.settings.updated",
   correctionCreated:      "payroll.correction.created",
   payGroupCreated:        "payroll.paygroup.created",
   flexPlanCreated:        "payroll.flex_plan.created",

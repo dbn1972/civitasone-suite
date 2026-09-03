@@ -4,11 +4,13 @@ import { sql } from "drizzle-orm";
 import { acceptedResponseSchema } from "@civitasone/schemas/common";
 import { sendAccepted } from "@civitasone/schemas/validate";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { scopedRead, db } from "../../shared/db.js";
+import { scopedRead } from "../../shared/db.js";
 import * as repo from "./repo.js";
 import * as commands from "./commands.js";
-import { createArrearBody, computeBonusBody, createReimbursementBody } from "./validators.js";
-import { randomUUID } from "node:crypto";
+import {
+  createArrearBody, computeBonusBody, createReimbursementBody,
+  createSalaryRevisionBody, updateSettingsBody,
+} from "./validators.js";
 
 const ROLES = ["payroll_admin","payroll_officer","super_admin","hr_admin"];
 
@@ -217,34 +219,15 @@ export async function worldClassPayrollRoutes(app: FastifyInstance): Promise<voi
   });
 
   // ─── Gap: salary revision create ─────────────────────────────────────────
+  // CQRS lift (F3 leftover): was a synchronous DB write in the request path;
+  // now publishes payroll.salary_revision.create and returns 202 — the
+  // salaryRevisionCreate consumer (payroll/consumer.js) persists it
+  // asynchronously, mirroring arrears/bonus/reimbursements above.
   app.post("/v1/payroll/salary-revisions", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ["payroll_admin", "payroll_officer", "super_admin"]);
-    const body = z.object({
-      employeeId:    z.string().uuid(),
-      effectiveDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-      oldBasicMinor: z.number().int().nonnegative(),
-      newBasicMinor: z.number().int().positive(),
-      oldGrossMinor: z.number().int().nonnegative(),
-      newGrossMinor: z.number().int().positive(),
-      revisionType:  z.enum(["annual_increment", "promotion", "correction", "fitment"]).default("annual_increment"),
-      orderNo:       z.string().max(64).optional(),
-    }).parse(req.body);
-
-    const id = randomUUID();
-    await db.transaction(async (tx) => {
-      await tx.execute(sql`
-        INSERT INTO payroll.payroll_salary_revisions
-          (id, tenant_id, employee_id, effective_date, old_basic_minor, new_basic_minor,
-           old_gross_minor, new_gross_minor, revision_type, order_no, approved_by, created_at)
-        VALUES
-          (${id}::uuid, ${ctx.tenantId}::uuid, ${body.employeeId}::uuid,
-           ${body.effectiveDate}::date, ${body.oldBasicMinor}, ${body.newBasicMinor},
-           ${body.oldGrossMinor}, ${body.newGrossMinor}, ${body.revisionType},
-           ${body.orderNo ?? null}, ${ctx.actorId}::uuid, NOW())
-      `);
-    });
-    return reply.code(201).send({ id, status: "created", correlationId: ctx.correlationId });
+    const body = createSalaryRevisionBody.parse(req.body);
+    return sendAccepted(reply, acceptedResponseSchema, await commands.createSalaryRevision(ctx, body));
   });
 
   // ─── Gap: payroll settings ───────────────────────────────────────────────
@@ -264,22 +247,14 @@ export async function worldClassPayrollRoutes(app: FastifyInstance): Promise<voi
     });
   });
 
+  // CQRS lift (F3 leftover): was a synchronous upsert in the request path;
+  // now publishes payroll.settings.update and returns 202 — the
+  // settingsUpdate consumer (payroll/consumer.js) persists it asynchronously.
   app.put("/v1/payroll/settings", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ["payroll_admin", "super_admin"]);
-    const body = z.object({
-      protectedNetFloorMinor: z.number().int().nonnegative(),
-    }).parse(req.body);
-    await db.transaction(async (tx) => {
-      await tx.execute(sql`
-        INSERT INTO payroll.payroll_settings (tenant_id, protected_net_floor_minor, created_at, updated_at)
-        VALUES (${ctx.tenantId}::uuid, ${body.protectedNetFloorMinor}, NOW(), NOW())
-        ON CONFLICT (tenant_id) DO UPDATE
-          SET protected_net_floor_minor = EXCLUDED.protected_net_floor_minor,
-              updated_at = NOW()
-      `);
-    });
-    return reply.send({ protectedNetFloorMinor: body.protectedNetFloorMinor, updatedAt: new Date().toISOString() });
+    const body = updateSettingsBody.parse(req.body);
+    return sendAccepted(reply, acceptedResponseSchema, await commands.updateSettings(ctx, body));
   });
 
   app.setErrorHandler((err, req, reply) => {

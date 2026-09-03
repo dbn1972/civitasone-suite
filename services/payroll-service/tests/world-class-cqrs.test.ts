@@ -53,6 +53,27 @@ describe("Route: arrears/bonus/reimbursement CQRS handlers use sendAccepted (202
     expect(m![0]).toContain("commands.createReimbursement");
     expect(m![0]).not.toMatch(/reply\.code\(201\)/);
   });
+
+  // F3 leftover: these two endpoints were added after the rest of this file's
+  // F3 conversion (marked "// ─── Gap:") and kept a synchronous db.transaction
+  // write + 201/200 reply — asserting the same static shape as arrears/bonus/
+  // reimbursements above now that they've been lifted onto the CQRS pattern.
+  it("POST /v1/payroll/salary-revisions calls sendAccepted(...) with commands.createSalaryRevision", () => {
+    const m = /app\.post\("\/v1\/payroll\/salary-revisions",\s*async[\s\S]{0,400}?\}\);/.exec(src);
+    expect(m).not.toBeNull();
+    expect(m![0]).toContain("sendAccepted");
+    expect(m![0]).toContain("commands.createSalaryRevision");
+    expect(m![0]).not.toMatch(/reply\.code\(201\)/);
+    expect(m![0]).not.toMatch(/db\.transaction/);
+  });
+
+  it("PUT /v1/payroll/settings calls sendAccepted(...) with commands.updateSettings", () => {
+    const m = /app\.put\("\/v1\/payroll\/settings",\s*async[\s\S]{0,400}?\}\);/.exec(src);
+    expect(m).not.toBeNull();
+    expect(m![0]).toContain("sendAccepted");
+    expect(m![0]).toContain("commands.updateSettings");
+    expect(m![0]).not.toMatch(/db\.transaction/);
+  });
 });
 
 // ─── publisher topic + consumer persistence (mocked) ────────────────────────
@@ -289,6 +310,129 @@ describe("Reimbursement CQRS", () => {
     await handlers[COMMANDS.reimbursementCreate]({
       ...baseMsg, messageId: "m-reimb-dup",
       payload: { id: "reimb-dup", tenantId: TENANT, employeeId: EMPLOYEE, category: "medical", amountMinor: 1, period: "2026-07" },
+    });
+
+    expect(executedQueries).toHaveLength(0);
+    expect(mockEnqueued).toHaveLength(0);
+  });
+});
+
+describe("Salary revision CQRS (F3 leftover)", () => {
+  it("createSalaryRevision publishes to COMMANDS.salaryRevisionCreate", async () => {
+    const { createSalaryRevision } = await import("../src/modules/payroll/commands.js");
+    const { COMMANDS } = await import("../src/topics.js");
+
+    const result = await createSalaryRevision(baseCtx, {
+      employeeId: EMPLOYEE, effectiveDate: "2026-04-01",
+      oldBasicMinor: 5000000, newBasicMinor: 5500000,
+      oldGrossMinor: 8000000, newGrossMinor: 8700000,
+      revisionType: "annual_increment", orderNo: "ORD-95",
+    } as any);
+
+    expect(mockPublish).toHaveBeenCalledTimes(1);
+    const [topic, msg] = mockPublish.mock.calls[0];
+    expect(topic).toBe(COMMANDS.salaryRevisionCreate);
+    expect(msg.payload.employeeId).toBe(EMPLOYEE);
+    expect(msg.payload.newBasicMinor).toBe(5500000);
+    expect(result.status).toBe("accepted");
+  });
+
+  it("consumer persists the salary revision row and fires salaryRevisionCreated", async () => {
+    const { registerPayrollConsumers } = await import("../src/modules/payroll/consumer.js");
+    const { COMMANDS, EVENTS } = await import("../src/topics.js");
+
+    const handlers: Record<string, (msg: unknown) => Promise<void>> = {};
+    const q = { subscribe: (t: string, fn: (msg: unknown) => Promise<void>) => { handlers[t] = fn; } } as any;
+    registerPayrollConsumers(q);
+
+    await handlers[COMMANDS.salaryRevisionCreate]({
+      ...baseMsg, messageId: "m-salrev-1",
+      payload: {
+        id: "salrev-1", tenantId: TENANT, employeeId: EMPLOYEE, effectiveDate: "2026-04-01",
+        oldBasicMinor: 5000000, newBasicMinor: 5500000, oldGrossMinor: 8000000, newGrossMinor: 8700000,
+        revisionType: "annual_increment", orderNo: "ORD-95",
+      },
+    });
+
+    expect(executedQueries).toHaveLength(1);
+    const params = paramsOf(executedQueries[0]);
+    expect(params).toContain(EMPLOYEE);
+    expect(params).toContain(5500000);
+
+    expect(mockEnqueued.some((e) => e.topic === EVENTS.salaryRevisionCreated)).toBe(true);
+  });
+
+  it("is idempotent on redelivery (markProcessed returns false)", async () => {
+    mockMarkResult = false;
+    const { registerPayrollConsumers } = await import("../src/modules/payroll/consumer.js");
+    const { COMMANDS } = await import("../src/topics.js");
+
+    const handlers: Record<string, (msg: unknown) => Promise<void>> = {};
+    const q = { subscribe: (t: string, fn: (msg: unknown) => Promise<void>) => { handlers[t] = fn; } } as any;
+    registerPayrollConsumers(q);
+
+    await handlers[COMMANDS.salaryRevisionCreate]({
+      ...baseMsg, messageId: "m-salrev-dup",
+      payload: {
+        id: "salrev-dup", tenantId: TENANT, employeeId: EMPLOYEE, effectiveDate: "2026-04-01",
+        oldBasicMinor: 1, newBasicMinor: 2, oldGrossMinor: 1, newGrossMinor: 2,
+        revisionType: "correction",
+      },
+    });
+
+    expect(executedQueries).toHaveLength(0);
+    expect(mockEnqueued).toHaveLength(0);
+  });
+});
+
+describe("Settings update CQRS (F3 leftover)", () => {
+  it("updateSettings publishes to COMMANDS.settingsUpdate and returns the tenantId as id", async () => {
+    const { updateSettings } = await import("../src/modules/payroll/commands.js");
+    const { COMMANDS } = await import("../src/topics.js");
+
+    const result = await updateSettings(baseCtx, { protectedNetFloorMinor: 1000000 });
+
+    expect(mockPublish).toHaveBeenCalledTimes(1);
+    const [topic, msg] = mockPublish.mock.calls[0];
+    expect(topic).toBe(COMMANDS.settingsUpdate);
+    expect(msg.payload.protectedNetFloorMinor).toBe(1000000);
+    expect(msg.payload.tenantId).toBe(TENANT);
+    expect(result.status).toBe("accepted");
+    expect(result.id).toBe(TENANT);
+  });
+
+  it("consumer upserts the settings row and fires settingsUpdated", async () => {
+    const { registerPayrollConsumers } = await import("../src/modules/payroll/consumer.js");
+    const { COMMANDS, EVENTS } = await import("../src/topics.js");
+
+    const handlers: Record<string, (msg: unknown) => Promise<void>> = {};
+    const q = { subscribe: (t: string, fn: (msg: unknown) => Promise<void>) => { handlers[t] = fn; } } as any;
+    registerPayrollConsumers(q);
+
+    await handlers[COMMANDS.settingsUpdate]({
+      ...baseMsg, messageId: "m-settings-1",
+      payload: { tenantId: TENANT, protectedNetFloorMinor: 1000000 },
+    });
+
+    expect(executedQueries).toHaveLength(1);
+    const params = paramsOf(executedQueries[0]);
+    expect(params).toContain(1000000);
+
+    expect(mockEnqueued.some((e) => e.topic === EVENTS.settingsUpdated)).toBe(true);
+  });
+
+  it("is idempotent on redelivery (markProcessed returns false)", async () => {
+    mockMarkResult = false;
+    const { registerPayrollConsumers } = await import("../src/modules/payroll/consumer.js");
+    const { COMMANDS } = await import("../src/topics.js");
+
+    const handlers: Record<string, (msg: unknown) => Promise<void>> = {};
+    const q = { subscribe: (t: string, fn: (msg: unknown) => Promise<void>) => { handlers[t] = fn; } } as any;
+    registerPayrollConsumers(q);
+
+    await handlers[COMMANDS.settingsUpdate]({
+      ...baseMsg, messageId: "m-settings-dup",
+      payload: { tenantId: TENANT, protectedNetFloorMinor: 1 },
     });
 
     expect(executedQueries).toHaveLength(0);
