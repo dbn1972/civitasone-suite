@@ -16,22 +16,53 @@
  */
 import { resolve4, resolve6 } from "node:dns/promises";
 
+// Shared IPv4-octet check used both for plain IPv4 literals and for the IPv4
+// address embedded in an IPv4-mapped IPv6 literal (::ffff:a.b.c.d). Only the
+// first two octets are needed by any of the existing ranges.
+function isPrivateIpv4Octets(a: number, b: number): boolean {
+  if (a === 10) return true;                           // 10.0.0.0/8
+  if (a === 172 && b >= 16 && b <= 31) return true;     // 172.16.0.0/12
+  if (a === 192 && b === 168) return true;              // 192.168.0.0/16
+  if (a === 169 && b === 254) return true;              // link-local (incl. cloud metadata)
+  if (a === 127) return true;                           // loopback
+  if (a === 0) return true;                             // 0.0.0.0/8
+  return false;
+}
+
 export function isPrivateIp(ip: string): boolean {
+  // Defensive normalization: strip a URL-hostname's IPv6 brackets (e.g.
+  // "[fe80::1]" from `new URL(...).hostname`) and lowercase, so this function
+  // is safe to call with either bracketed or bare IPv6 literals regardless of
+  // whether the caller already normalized.
+  const normalized = String(ip ?? "").trim().toLowerCase().replace(/^\[|\]$/g, "");
+
   // IPv4 checks
-  const ipv4 = ip.match(/^(\d+)\.(\d+)\.(\d+)\.(\d+)$/);
+  const ipv4 = normalized.match(/^(\d+)\.(\d+)\.(\d+)\.(\d+)$/);
   if (ipv4) {
     const [, a, b] = ipv4.map(Number);
-    if (a === 10) return true;                            // 10.0.0.0/8
-    if (a === 172 && b! >= 16 && b! <= 31) return true;  // 172.16.0.0/12
-    if (a === 192 && b === 168) return true;              // 192.168.0.0/16
-    if (a === 169 && b === 254) return true;              // link-local
-    if (a === 127) return true;                           // loopback
-    if (a === 0) return true;                             // 0.0.0.0/8
+    if (isPrivateIpv4Octets(a!, b!)) return true;
   }
   // IPv6 checks
-  if (ip === "::1" || ip === "::") return true;
-  if (ip.startsWith("fe80:")) return true;  // link-local
-  if (ip.startsWith("fc") || ip.startsWith("fd")) return true; // unique local
+  if (normalized === "::1" || normalized === "::") return true;
+  if (normalized.startsWith("fe80:")) return true;  // link-local
+  if (normalized.startsWith("fc") || normalized.startsWith("fd")) return true; // unique local
+
+  // IPv4-mapped IPv6 (RFC 4291 §2.5.5.2): ::ffff:a.b.c.d dotted form, or its
+  // pure-hex form ::ffff:xxxx:xxxx where the two hextets encode the same
+  // 32-bit IPv4 address. A private/loopback/link-local/metadata IPv4 address
+  // wrapped in either form must be blocked exactly like the bare IPv4 form.
+  const mappedDotted = normalized.match(/^::ffff:(\d+)\.(\d+)\.(\d+)\.(\d+)$/);
+  if (mappedDotted) {
+    const [, a, b] = mappedDotted.map(Number);
+    if (isPrivateIpv4Octets(a!, b!)) return true;
+  }
+  const mappedHex = normalized.match(/^::ffff:([0-9a-f]{1,4}):[0-9a-f]{1,4}$/);
+  if (mappedHex) {
+    const hi = parseInt(mappedHex[1]!, 16);
+    const a = (hi >> 8) & 0xff;
+    const b = hi & 0xff;
+    if (isPrivateIpv4Octets(a, b)) return true;
+  }
   return false;
 }
 

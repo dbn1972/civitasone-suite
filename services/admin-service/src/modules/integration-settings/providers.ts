@@ -57,26 +57,49 @@ export interface ProviderDef {
 
 // ── small network helpers (all with hard timeouts, fail-closed) ──────────────
 
-async function httpProbe(url: string, opts: { headers?: Record<string, string>; method?: string; timeoutMs?: number }): Promise<TestResult> {
+// Bounded so a redirect chain can't be used to stall the probe or loop
+// forever; matches common browser/client defaults (5) while staying small.
+const MAX_HTTP_PROBE_REDIRECTS = 5;
+
+// Exported (in addition to being used internally by the registry below)
+// solely so tests can exercise the redirect-guard loop directly with a
+// mocked fetch, without needing a live network target for every hop.
+export async function httpProbe(url: string, opts: { headers?: Record<string, string>; method?: string; timeoutMs?: number }): Promise<TestResult> {
   const ctrl = new AbortController();
   const t = setTimeout(() => ctrl.abort(), opts.timeoutMs ?? 8000);
   try {
-    // SSRF guard: only http(s) schemes, and reject destinations that resolve
-    // to private/loopback/link-local/metadata addresses (incl. post-DNS
-    // re-check to defeat rebinding). Fixed error string — never echoes the
-    // upstream body or any secret.
-    if (await isBlockedAfterResolve(url)) {
-      clearTimeout(t);
-      return { status: "failed", ok: false, error: "SSRF_BLOCKED: destination not allowed" };
+    let target = url;
+    for (let hop = 0; ; hop++) {
+      // SSRF guard: only http(s) schemes, and reject destinations that resolve
+      // to private/loopback/link-local/metadata addresses (incl. post-DNS
+      // re-check to defeat rebinding). Re-run on EVERY hop — including each
+      // redirect target — so a public URL that 3xx-redirects to a blocked
+      // destination can't smuggle the request past the guard. Fixed error
+      // string — never echoes the upstream body or any secret.
+      if (await isBlockedAfterResolve(target)) {
+        return { status: "failed", ok: false, error: "SSRF_BLOCKED: destination not allowed" };
+      }
+      // redirect: "manual" — never let fetch auto-follow a redirect, since
+      // that would dial the Location target without ever passing it through
+      // the guard above. We inspect the 3xx ourselves and only continue the
+      // loop (re-running the guard first) if a Location header is present.
+      const init: RequestInit = { method: opts.method ?? "GET", signal: ctrl.signal, redirect: "manual" };
+      if (opts.headers) init.headers = opts.headers;
+      const res = await fetch(target, init);
+      const location = res.status >= 300 && res.status < 400 ? res.headers.get("location") : null;
+      if (location) {
+        if (hop >= MAX_HTTP_PROBE_REDIRECTS) {
+          return { status: "failed", ok: false, error: "SSRF_BLOCKED: too many redirects" };
+        }
+        target = new URL(location, target).toString();
+        continue;
+      }
+      if (res.ok) return { status: "connected", ok: true, detail: `HTTP ${res.status}` };
+      // 401/403 means we reached the endpoint but auth failed → real failure.
+      let body = "";
+      try { body = (await res.text()).slice(0, 200); } catch { /* ignore */ }
+      return { status: "failed", ok: false, error: `HTTP ${res.status}${body ? `: ${body}` : ""}` };
     }
-    const init: RequestInit = { method: opts.method ?? "GET", signal: ctrl.signal };
-    if (opts.headers) init.headers = opts.headers;
-    const res = await fetch(url, init);
-    if (res.ok) return { status: "connected", ok: true, detail: `HTTP ${res.status}` };
-    // 401/403 means we reached the endpoint but auth failed → real failure.
-    let body = "";
-    try { body = (await res.text()).slice(0, 200); } catch { /* ignore */ }
-    return { status: "failed", ok: false, error: `HTTP ${res.status}${body ? `: ${body}` : ""}` };
   } catch (err) {
     return { status: "failed", ok: false, error: `unreachable: ${(err as Error).message}` };
   } finally {
