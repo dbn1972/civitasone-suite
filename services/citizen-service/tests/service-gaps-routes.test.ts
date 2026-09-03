@@ -101,6 +101,13 @@ describe("SVC-083 eligibility rule-set maker-checker + evaluate", () => {
   it("submit records the maker", async () => {
     const res = await app.inject({ method: "POST", url: `/v1/citizen/eligibility/rule-sets/${ruleSetId}/submit`, headers: hdr(tok(TENANT_A, MAKER)), payload: {} });
     expect(res.statusCode).toBe(202);
+    // Submit is applied async by the consumer (submittedBy lands later) — wait
+    // for it to actually land before the publish tests rely on that state,
+    // otherwise the synchronous maker-checker precheck races the consumer.
+    await waitFor(async () => {
+      const g = await app.inject({ method: "GET", url: `/v1/citizen/eligibility/rule-sets/${ruleSetId}`, headers: hdr(tok(TENANT_A, MAKER)) });
+      return g.statusCode === 200 && g.json().submittedBy ? g.json() : null;
+    });
   });
 
   it("MAKER-CHECKER: publish by the submitter is rejected 403", async () => {
@@ -461,6 +468,13 @@ describe("SVC-090 consent-gated proactive discovery", () => {
       payload: { citizenId: CITIZEN },
     });
     expect(grant.statusCode).toBe(202);
+    // Consent grant is applied async by the consumer — wait for it to actually
+    // land before calling run, otherwise run's synchronous consent precheck
+    // races the consumer and sees stale (not-yet-granted) state.
+    await waitFor(async () => {
+      const g = await app.inject({ method: "GET", url: `/v1/citizen/discovery/consent?citizenId=${CITIZEN}`, headers: hdr(tok(TENANT_A, CHECKER)) });
+      return g.statusCode === 200 && g.json().active ? g.json() : null;
+    });
 
     const run = await app.inject({
       method: "POST", url: "/v1/citizen/discovery/run", headers: hdr(tok(TENANT_A, CHECKER)),
@@ -485,13 +499,24 @@ describe("SVC-090 consent-gated proactive discovery", () => {
       payload: { serviceType: "pension" },
     });
     expect(enrol.statusCode).toBe(202);
-    expect(enrol.json().applicationId).toBeTruthy();
+    // applicationId travels inside the F3 `data` envelope — a bare top-level
+    // field is stripped by the response schema (see service-gaps-partial-routes.test.ts
+    // for the same pattern with `supersedes`/`hearingId`).
+    expect(enrol.json().data.applicationId).toBeTruthy();
   });
 
   it("revoke consent then run → 403 again", async () => {
-    await app.inject({
+    const revoke = await app.inject({
       method: "POST", url: "/v1/citizen/discovery/consent/revoke", headers: hdr(tok(TENANT_A, CHECKER)),
       payload: { citizenId: CITIZEN },
+    });
+    expect(revoke.statusCode).toBe(202);
+    // Revoke is applied async by the consumer — wait for it to actually land
+    // before calling run, otherwise run's synchronous consent precheck races
+    // the consumer and still sees the (not-yet-revoked) active consent.
+    await waitFor(async () => {
+      const g = await app.inject({ method: "GET", url: `/v1/citizen/discovery/consent?citizenId=${CITIZEN}`, headers: hdr(tok(TENANT_A, CHECKER)) });
+      return g.statusCode === 200 && !g.json().active ? g.json() : null;
     });
     const res = await app.inject({
       method: "POST", url: "/v1/citizen/discovery/run", headers: hdr(tok(TENANT_A, CHECKER)),

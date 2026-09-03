@@ -57,7 +57,7 @@ export async function runDiscovery(ctx: RequestContext, body: RunDiscoveryBody):
 /** Assisted enrolment — pre-fill and submit an application for a discovered service. */
 export async function assistedEnrol(
   ctx: RequestContext, matchId: string, body: EnrolBody,
-): Promise<Accepted & { applicationId: string }> {
+): Promise<Accepted & { applicationId: string; data: { id: string; applicationId: string } }> {
   const match = await repo.findMatchById(matchId, ctx.tenantId);
   if (!match) throw new HttpError(404, "NOT_FOUND", "match not found");
   const consent = await repo.findActiveConsent(ctx.tenantId, match.citizenId, "benefit_discovery");
@@ -68,5 +68,7 @@ export async function assistedEnrol(
     matchId, applicationId, serviceType: body.serviceType ?? "assisted-enrolment",
   });
   await cache.invalidate(cache.makeKey(ctx.tenantId, "discovery-match", matchId));
-  return { ...accepted, applicationId };
+  // applicationId travels inside the F3 `data` envelope — a bare top-level
+  // field is stripped by acceptedResponseSchema.parse() in sendAccepted().
+  return { ...accepted, applicationId, data: { id: accepted.id, applicationId } };
 }
