@@ -88,7 +88,7 @@ describe("service-to-service auth headers", () => {
     expect(opts.headers["x-service-secret"]).toBe("s3cr3t");
   });
 
-  it("legacy mode keeps the modules-list URL + x-internal-secret header", async () => {
+  it("legacy mode keeps the modules-list URL + x-internal-secret header, plus the explicit x-internal flag", async () => {
     vi.stubEnv("INTERNAL_SERVICE_SECRET", "s3cr3t");
     const fetchSpy = vi.fn(async () => ({ ok: true, status: 200, json: async () => ({ data: [{ name: "finance" }] }) }));
     vi.stubGlobal("fetch", fetchSpy);
@@ -96,6 +96,10 @@ describe("service-to-service auth headers", () => {
     const [url, opts] = fetchSpy.mock.calls[0] as [string, { headers: Record<string, string> }];
     expect(url).toContain(`/v1/admin/tenants/${TID}/modules-list`);
     expect(opts.headers["x-internal-secret"]).toBe("s3cr3t");
-    expect(opts.headers["x-internal"]).toBeUndefined();
+    // admin-service#defense-in-depth: the route now requires the explicit
+    // x-internal:"1" flag IN ADDITION to the shared secret before treating the
+    // caller as a genuine internal machine caller (secret-presence alone is not
+    // a reliable signal — see gateway-service#986). This caller must set it.
+    expect(opts.headers["x-internal"]).toBe("1");
   });
 });

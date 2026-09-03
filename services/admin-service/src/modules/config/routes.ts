@@ -85,12 +85,23 @@ export async function configRoutes(app: FastifyInstance): Promise<void> {
   // Internal endpoint for gateway module enforcement (service-to-service).
   // Authenticates via INTERNAL_SERVICE_SECRET header — no user JWT required.
   // Falls back to super-admin auth if internal secret not provided.
+  //
+  // Defense-in-depth (follow-up to gateway-service#986): a valid shared secret
+  // ALONE is not a reliable "this is a genuine machine caller" signal — the
+  // secret can end up attached to ordinary client-forwarded traffic (as the
+  // gateway's proxyHandler briefly did). We therefore also require the
+  // explicit `x-internal: "1"` flag, mirroring the pattern already used
+  // correctly by policy-service (`evaluate/routes.ts`) and crm-service
+  // (`contacts/routes.ts`) — a proxy would never set this flag on an ordinary
+  // forwarded client request. Secret-only or flag-only requests fall through
+  // to the normal role-based auth path below, they are never auto-rejected.
   app.get("/v1/admin/tenants/:id/modules-list", async (req, reply) => {
     const secret = req.headers["x-internal-secret"] as string | undefined;
+    const hasInternalFlag = req.headers["x-internal"] === "1";
     const expected = process.env.INTERNAL_SERVICE_SECRET;
     // If INTERNAL_SERVICE_SECRET is not configured, treat as internal (dev/test mode)
     const secretNotConfigured = typeof expected !== "string" || expected.length === 0;
-    const isValidInternal = !secretNotConfigured &&
+    const isValidInternal = !secretNotConfigured && hasInternalFlag &&
       typeof secret === "string" && secret.length === expected.length &&
       timingSafeEqual(Buffer.from(secret, "utf8"), Buffer.from(expected, "utf8"));
     if (!isValidInternal && !secretNotConfigured) {
