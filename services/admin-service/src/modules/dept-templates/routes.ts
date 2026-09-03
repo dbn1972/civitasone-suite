@@ -133,6 +133,13 @@ export async function departmentTemplateRoutes(app: FastifyInstance): Promise<vo
     const { config, droppedRefs } = sanitizeTemplateConfig(body.config, ctx.tenantId);
     assertConfigNotEmpty(config);
 
+    // Synchronous pre-check lifted from apply_dept_templates_0 (f3-apply.ts):
+    // publishAdminCommand is fire-and-forget, so the duplicate-code rejection
+    // the consumer would raise later must be caught here or the 202 lies about
+    // acceptance.
+    const clash = await repo.findTemplateByCode(ctx.tenantId, body.code);
+    if (clash) throw new HttpError(409, "TEMPLATE_EXISTS", `a template with code '${body.code}' already exists`);
+
     const __f3Id = randomUUID();
     await publishAdminCommand(ctx, COMMANDS.f3RouteWrite, __f3Id, {
       op: 'dept_templates_op_0',
@@ -175,13 +182,22 @@ export async function departmentTemplateRoutes(app: FastifyInstance): Promise<vo
     // replay without a second write (see module doc: IDEMPOTENCY). Check this
     // FIRST — otherwise a legitimate retry could be rejected below as a false
     // DEPARTMENT_EXISTS clash against the instantiation it is itself replaying.
+    //
+    // Unlike the other pre-checks in this route, a matched idempotency key is
+    // not a rejection — it's a synchronous REPLAY: the module doc promises "a
+    // repeat call with the same key returns 200 with the FIRST result... it
+    // does not insert a second department and does not re-publish the event".
+    // A fire-and-forget 202 here would silently break that contract (the
+    // consumer never re-publishes for a duplicate key either, so the caller
+    // would get an empty-looking accept for a write that never happens).
     const existingByKey = await repo.findInstantiationByKey(ctx.tenantId, id, body.idempotencyKey);
-    if (!existingByKey) {
-      const codeClash = await repo.findInstantiationByCode(ctx.tenantId, body.departmentCode);
-      if (codeClash) {
-        throw new HttpError(409, "DEPARTMENT_EXISTS",
-          `a department with code '${body.departmentCode}' was already instantiated`);
-      }
+    if (existingByKey) {
+      return reply.code(200).send(singleEnvelope({ ...serializeInstantiation(existingByKey), idempotent: true }));
+    }
+    const codeClash = await repo.findInstantiationByCode(ctx.tenantId, body.departmentCode);
+    if (codeClash) {
+      throw new HttpError(409, "DEPARTMENT_EXISTS",
+        `a department with code '${body.departmentCode}' was already instantiated`);
     }
 
     const __f3Id = randomUUID();
@@ -193,7 +209,7 @@ export async function departmentTemplateRoutes(app: FastifyInstance): Promise<vo
       preId: ((req.params as any)?.id as string) || __f3Id,
     });
     const result = { id: __f3Id, status: 'accepted', correlationId: ctx.correlationId } as never;
-    return reply.code(202).send({ id: __f3Id, status: "accepted", correlationId: ctx.correlationId });
+    return reply.code(202).send({ id: __f3Id, status: "accepted", correlationId: ctx.correlationId, data: { id: __f3Id } });
   });
 
   app.get("/v1/admin/department-templates/:id/instantiations", async (req, reply) => {
@@ -216,6 +232,14 @@ export async function departmentTemplateRoutes(app: FastifyInstance): Promise<vo
     if (body.name === undefined && body.status === undefined) {
       throw new HttpError(400, "EMPTY_PATCH", "provide at least one of: name, status");
     }
+
+    // Synchronous pre-checks lifted from apply_dept_templates_2 (f3-apply.ts):
+    // publishAdminCommand is fire-and-forget, so the existence/optimistic-lock
+    // failures the consumer would raise later must be caught here or the 202
+    // lies about acceptance.
+    const template = await repo.findTemplate(ctx.tenantId, id);
+    if (!template) throw new HttpError(404, "NOT_FOUND", "department template not found");
+    assertVersionMatch(template.version, body.expectedVersion);
 
     const __f3Id = randomUUID();
     await publishAdminCommand(ctx, COMMANDS.f3RouteWrite, __f3Id, {

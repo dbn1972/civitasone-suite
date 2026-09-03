@@ -111,14 +111,10 @@ async function createTemplate(
 // ── auth ────────────────────────────────────────────────────────────────────
 
 describe("department templates — authentication and authorisation", () => {
-  // GAP (left unfixed, out of this batch's scope — see the instantiate describe
-  // block below): POST .../:id/instantiate has no registered route handler at
-  // all in src/modules/dept-templates/routes.ts (it was dropped by the F3
-  // sync->async conversion commit, even though the apply function and consumer
-  // wiring for it both still exist). The 401 case below still passes because
-  // authPlugin's hook runs globally, ahead of route matching, but the 403 case
-  // fails: with no route to run requireRole(), Fastify's own 404-not-found
-  // handler answers instead of the route ever getting a chance to return 403.
+  // POST .../:id/instantiate is registered (PR #929 restored it after the F3
+  // sync->async conversion commit had dropped it) and carries synchronous
+  // pre-accept validation same as every other mutating route here, so both
+  // the 401 and 403 cases below exercise the real route handler.
   const cases: Array<[string, string, Record<string, unknown> | undefined]> = [
     ["GET", "/v1/admin/department-templates?limit=10", undefined],
     ["POST", "/v1/admin/department-templates", { code: "abc", name: "A", config: { a: 1 } }],
@@ -209,13 +205,10 @@ describe("POST /v1/admin/department-templates — clone", () => {
       method: "POST", url: "/v1/admin/department-templates", headers: auth(),
       payload: { code, name: "Second", config: { a: 1 } },
     });
-    // GAP (not a stale-status-code issue, left unfixed): dept-templates/routes.ts'
-    // create route has no synchronous pre-accept duplicate-code check — unlike
-    // integration-settings/routes.ts (fixed by PR #920) — so a duplicate code is
-    // accepted (202) here and only silently rejected later inside the async
-    // consumer (dept-templates/f3-apply.ts's apply_dept_templates_0). The caller
-    // has no way to observe the 409 TEMPLATE_EXISTS the pre-conversion route
-    // used to return synchronously.
+    // Synchronous pre-accept duplicate-code check, lifted from the async
+    // consumer (dept-templates/f3-apply.ts's apply_dept_templates_0) into the
+    // route itself — matching the pattern PR #920 established for
+    // integration-settings/routes.ts.
     expect(res.statusCode).toBe(409);
     expect((res.json() as ErrBody).error.code).toBe("TEMPLATE_EXISTS");
   });
@@ -351,12 +344,9 @@ describe("department templates — list, read, update", () => {
       method: "PATCH", url: `/v1/admin/department-templates/${t.id}`, headers: auth(),
       payload: { expectedVersion: t.version + 4, name: "Nope" },
     });
-    // GAP (not a stale-status-code issue, left unfixed): dept-templates/routes.ts'
-    // PATCH route has no synchronous pre-accept optimistic-lock check — the
-    // expectedVersion match (assertVersionMatch) is only enforced inside the
-    // async consumer (dept-templates/f3-apply.ts's apply_dept_templates_2), so
-    // a stale version is accepted (202) here and the conflict only surfaces as
-    // a silently-dropped write, never as an HTTP error back to the caller.
+    // Synchronous pre-accept optimistic-lock check (assertVersionMatch),
+    // lifted from the async consumer (dept-templates/f3-apply.ts's
+    // apply_dept_templates_2) into the route itself.
     expect(res.statusCode).toBe(409);
     expect((res.json() as ErrBody).error.code).toBe("VERSION_CONFLICT");
   });
@@ -373,9 +363,6 @@ describe("department templates — list, read, update", () => {
       method: "PATCH", url: `/v1/admin/department-templates/${t.id}`, headers: auth(),
       payload: { expectedVersion: t.version, name: "Two" },
     });
-    // GAP (not a stale-status-code issue, left unfixed — see the VERSION_CONFLICT
-    // test above): the now-stale second PATCH is accepted (202) too, for the
-    // same missing-synchronous-optimistic-lock-check reason.
     expect(second.statusCode).toBe(409);
   });
 
@@ -412,11 +399,8 @@ describe("department templates — list, read, update", () => {
       method: "PATCH", url: `/v1/admin/department-templates/${MISSING_ID}`, headers: auth(),
       payload: { expectedVersion: 1, name: "X" },
     });
-    // GAP (not a stale-status-code issue, left unfixed — see the VERSION_CONFLICT
-    // test above): dept-templates/routes.ts' PATCH route has no synchronous
-    // existence check either — repo.findTemplateTx only runs inside the async
-    // consumer, so patching an unknown id is accepted (202) instead of
-    // returning 404 synchronously.
+    // Synchronous pre-accept existence check, lifted from the async consumer
+    // into the route itself.
     expect(res.statusCode).toBe(404);
   });
 
@@ -431,45 +415,47 @@ describe("department templates — list, read, update", () => {
 
 // ── instantiate ─────────────────────────────────────────────────────────────
 
-// GAP — BLOCKING, out of this batch's scope (do not force-fix; flag loudly):
-// POST /v1/admin/department-templates/:id/instantiate has NO route handler
-// registered anywhere in src/modules/dept-templates/routes.ts. The F3
-// sync->async conversion commit (f113de54, "convert P0 F3 leftover sync route
-// writes to 202") deleted the old synchronous `app.post(".../instantiate", ...)`
-// handler and never replaced it with an async equivalent — even though the
-// apply function (f3-apply.ts's apply_dept_templates_1, op
-// 'dept_templates_op_1') and the consumer dispatch for it
-// (f3-consumer.ts's registerF3_dept_templates_Consumers) both still exist and
-// are wired up. `grep -n 'app\.\(get\|post\|patch\)' routes.ts` shows only 5
-// routes: create, list, get-instantiations, patch, get-one — instantiate is
-// simply missing.
-//
-// Every request in this block therefore hits Fastify's default not-found
-// handler (a plain 404), regardless of anything a test does. This is NOT the
-// batch-3 "stale status code" pattern and NOT the batch-3 "missing
-// synchronous validation" pattern (point 6) — those both assume the route
-// exists and returns 202. Here there is no synchronous OR asynchronous path
-// to reach the write at all via HTTP. No test-only workaround (draining the
-// queue, polling, looking up by content instead of the echoed id) can make
-// any of these tests pass; the fix is restoring the route registration in
-// application code, which is out of this batch's scope. Every assertion below
-// is therefore left exactly as originally written (still expecting the
-// pre-conversion synchronous contract) and will keep failing until that route
-// is restored — except "404 when instantiating an unknown template", which
-// passes today by coincidence (Fastify's own not-found response also happens
-// to be a 404, matching what the test expects for an unrelated reason).
+// POST /v1/admin/department-templates/:id/instantiate is registered (PR #929
+// restored the route after the F3 sync->async conversion had dropped it) and
+// now carries synchronous pre-accept validation, lifted from the async
+// consumer (f3-apply.ts's apply_dept_templates_1), matching every other route
+// in this file:
+//   - unknown template            → 404 NOT_FOUND
+//   - archived template           → 422 TEMPLATE_NOT_ACTIVE
+//   - department-code clash       → 409 DEPARTMENT_EXISTS (checked against
+//                                    every instantiation in the tenant, so it
+//                                    also catches a clash against a code used
+//                                    from a DIFFERENT template)
+//   - matching idempotencyKey     → 200 with the FIRST persisted result,
+//                                    synchronously, and no second write/event
+//   - otherwise                   → 202 accepted (the actual insert still
+//                                    happens asynchronously in the consumer)
+// A 202 accept therefore does not yet know the DB-assigned id/config the way
+// a synchronous 201 once did (the route mints its own __f3Id for the command
+// envelope, but f3-apply.ts's apply_dept_templates_1 never forwards it into
+// repo.insertInstantiation — the DB assigns its own id, same class of gap
+// documented for create()'s id above). Tests that need the persisted row
+// therefore drain the queue and either read it back via the idempotent-replay
+// 200 (which IS synchronous and always echoes the real row) or via GET
+// .../instantiations, the same workaround createTemplate() uses for create.
 describe("POST /v1/admin/department-templates/:id/instantiate", () => {
   it("creates a department instantiation carrying the sanitised config", async () => {
     const t = await createTemplate(nextCode("inst"), { roles: ["clerk"], sla: { hours: 4 } });
+    const code = nextCode("dept");
     const res = await app.inject({
       method: "POST", url: `/v1/admin/department-templates/${t.id}/instantiate`, headers: auth(),
-      payload: { departmentCode: nextCode("dept"), departmentName: "Revenue Wing", idempotencyKey: "idem-instant-001" },
+      payload: { departmentCode: code, departmentName: "Revenue Wing", idempotencyKey: "idem-instant-001" },
     });
-    expect(res.statusCode).toBe(201);
-    const row = (res.json() as SingleBody<Instantiation>).data;
-    expect(row.idempotent).toBe(false);
-    expect(row.templateVersion).toBe(t.version);
-    expect(row.config).toEqual({ roles: ["clerk"], sla: { hours: 4 } });
+    expect(res.statusCode).toBe(202);
+    await (queue as any).drain?.();
+
+    const list = await app.inject({
+      method: "GET", url: `/v1/admin/department-templates/${t.id}/instantiations?limit=50`, headers: auth(),
+    });
+    const row = (list.json() as ListBody<Instantiation>).data.find((r) => r.departmentCode === code);
+    expect(row).toBeDefined();
+    expect(row?.templateVersion).toBe(t.version);
+    expect(row?.config).toEqual({ roles: ["clerk"], sla: { hours: 4 } });
   });
 
   it("re-sanitises at instantiate time so a legacy template cannot emit a foreign ref", async () => {
@@ -479,14 +465,21 @@ describe("POST /v1/admin/department-templates/:id/instantiate", () => {
       UPDATE dept_template.department_templates
       SET config = ${sql.json({ keep: 1, tenantId: FOREIGN_TENANT })}
       WHERE id = ${t.id}`);
+    const code = nextCode("dept");
     const res = await app.inject({
       method: "POST", url: `/v1/admin/department-templates/${t.id}/instantiate`, headers: auth(),
-      payload: { departmentCode: nextCode("dept"), departmentName: "Legacy", idempotencyKey: "idem-legacy-001" },
+      payload: { departmentCode: code, departmentName: "Legacy", idempotencyKey: "idem-legacy-001" },
     });
-    expect(res.statusCode).toBe(201);
-    const row = (res.json() as SingleBody<Instantiation>).data;
-    expect(JSON.stringify(row.config)).not.toContain(FOREIGN_TENANT);
-    expect(row.config).toEqual({ keep: 1 });
+    expect(res.statusCode).toBe(202);
+    await (queue as any).drain?.();
+
+    const list = await app.inject({
+      method: "GET", url: `/v1/admin/department-templates/${t.id}/instantiations?limit=50`, headers: auth(),
+    });
+    const row = (list.json() as ListBody<Instantiation>).data.find((r) => r.departmentCode === code);
+    expect(row).toBeDefined();
+    expect(JSON.stringify(row?.config)).not.toContain(FOREIGN_TENANT);
+    expect(row?.config).toEqual({ keep: 1 });
   });
 
   it("a repeat call with the same idempotencyKey returns 200 with the FIRST result and writes nothing", async () => {
@@ -497,8 +490,8 @@ describe("POST /v1/admin/department-templates/:id/instantiate", () => {
       method: "POST", url: `/v1/admin/department-templates/${t.id}/instantiate`, headers: auth(),
       payload: { departmentCode: code, departmentName: "First", idempotencyKey: key },
     });
-    expect(first.statusCode).toBe(201);
-    const firstRow = (first.json() as SingleBody<Instantiation>).data;
+    expect(first.statusCode).toBe(202);
+    await (queue as any).drain?.();
 
     const again = await app.inject({
       method: "POST", url: `/v1/admin/department-templates/${t.id}/instantiate`, headers: auth(),
@@ -506,7 +499,7 @@ describe("POST /v1/admin/department-templates/:id/instantiate", () => {
     });
     expect(again.statusCode).toBe(200);
     const againRow = (again.json() as SingleBody<Instantiation>).data;
-    expect(againRow.id).toBe(firstRow.id);
+    expect(againRow.departmentCode).toBe(code);
     expect(againRow.idempotent).toBe(true);
     expect(againRow.departmentName).toBe("First");
 
@@ -523,11 +516,16 @@ describe("POST /v1/admin/department-templates/:id/instantiate", () => {
       method: "POST", url: `/v1/admin/department-templates/${t.id}/instantiate`, headers: auth(),
       payload: { departmentCode: nextCode("dept"), departmentName: "Once", idempotencyKey: key },
     });
-    const id = (first.json() as SingleBody<Instantiation>).data.id;
-    await app.inject({
+    expect(first.statusCode).toBe(202);
+    await (queue as any).drain?.();
+
+    const again = await app.inject({
       method: "POST", url: `/v1/admin/department-templates/${t.id}/instantiate`, headers: auth(),
       payload: { departmentCode: nextCode("dept"), departmentName: "Once", idempotencyKey: key },
     });
+    expect(again.statusCode).toBe(200);
+    const id = (again.json() as SingleBody<Instantiation>).data.id;
+
     const rows = await asTenant(T_MAIN, (sql) => sql<Array<{ n: number }>>`
       SELECT count(*)::int AS n FROM _outbox.messages
       WHERE topic = 'admin.department.instantiated' AND payload->>'instantiationId' = ${id}`);
@@ -537,10 +535,13 @@ describe("POST /v1/admin/department-templates/:id/instantiate", () => {
   it("409 DEPARTMENT_EXISTS when the department code collides with an earlier instantiation", async () => {
     const t = await createTemplate(nextCode("collide"));
     const code = nextCode("dept");
-    await app.inject({
+    const created = await app.inject({
       method: "POST", url: `/v1/admin/department-templates/${t.id}/instantiate`, headers: auth(),
       payload: { departmentCode: code, departmentName: "First", idempotencyKey: "idem-collide-0001" },
     });
+    expect(created.statusCode).toBe(202);
+    await (queue as any).drain?.();
+
     const clash = await app.inject({
       method: "POST", url: `/v1/admin/department-templates/${t.id}/instantiate`, headers: auth(),
       payload: { departmentCode: code, departmentName: "Second", idempotencyKey: "idem-collide-0002" },
@@ -553,15 +554,19 @@ describe("POST /v1/admin/department-templates/:id/instantiate", () => {
     const a = await createTemplate(nextCode("ca"));
     const b = await createTemplate(nextCode("cb"));
     const code = nextCode("dept");
-    await app.inject({
+    const created = await app.inject({
       method: "POST", url: `/v1/admin/department-templates/${a.id}/instantiate`, headers: auth(),
       payload: { departmentCode: code, departmentName: "From A", idempotencyKey: "idem-xtmpl-0001" },
     });
+    expect(created.statusCode).toBe(202);
+    await (queue as any).drain?.();
+
     const res = await app.inject({
       method: "POST", url: `/v1/admin/department-templates/${b.id}/instantiate`, headers: auth(),
       payload: { departmentCode: code, departmentName: "From B", idempotencyKey: "idem-xtmpl-0002" },
     });
     expect(res.statusCode).toBe(409);
+    expect((res.json() as ErrBody).error.code).toBe("DEPARTMENT_EXISTS");
   });
 
   it("the same department code is allowed in a different tenant", async () => {
@@ -572,12 +577,12 @@ describe("POST /v1/admin/department-templates/:id/instantiate", () => {
       method: "POST", url: `/v1/admin/department-templates/${a.id}/instantiate`, headers: auth(["tenant_admin"], T_MAIN),
       payload: { departmentCode: code, departmentName: "Main", idempotencyKey: "idem-tenant-0001" },
     });
-    expect(first.statusCode).toBe(201);
+    expect(first.statusCode).toBe(202);
     const second = await app.inject({
       method: "POST", url: `/v1/admin/department-templates/${b.id}/instantiate`, headers: auth(["tenant_admin"], T_ALT),
       payload: { departmentCode: code, departmentName: "Alt", idempotencyKey: "idem-tenant-0002" },
     });
-    expect(second.statusCode).toBe(201);
+    expect(second.statusCode).toBe(202);
   });
 
   it("422 TEMPLATE_NOT_ACTIVE for an archived template", async () => {
@@ -637,10 +642,12 @@ describe("POST /v1/admin/department-templates/:id/instantiate", () => {
 
   it("lists instantiations for a template, 404 for an unknown template", async () => {
     const t = await createTemplate(nextCode("instlist"));
-    await app.inject({
+    const created = await app.inject({
       method: "POST", url: `/v1/admin/department-templates/${t.id}/instantiate`, headers: auth(),
       payload: { departmentCode: nextCode("dept"), departmentName: "One", idempotencyKey: "idem-list-000001" },
     });
+    expect(created.statusCode).toBe(202);
+    await (queue as any).drain?.();
     const res = await app.inject({
       method: "GET", url: `/v1/admin/department-templates/${t.id}/instantiations?limit=50`, headers: auth(),
     });
