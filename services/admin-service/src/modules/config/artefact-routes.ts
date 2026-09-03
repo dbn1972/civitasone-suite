@@ -16,6 +16,19 @@
  *
  * Optimistic locking: every mutating decision takes `expectedVersion` and the
  * UPDATE carries `WHERE version = $expected`; a mismatch is 409 VERSION_CONFLICT.
+ *
+ * SYNCHRONOUS PRE-ACCEPT VALIDATION: every mutating route here is F3 -- it
+ * accepts a write with a 202 before the mutation actually runs (applied later
+ * by artefact-f3-consumer.ts / artefact-f3-apply.ts from the outbox).
+ * publishAdminCommand is fire-and-forget and cannot reject, so the
+ * existence/uniqueness/state/maker-checker/optimistic-lock guards below are
+ * lifted synchronously -- read-only, via the repo's scopedRead-backed
+ * lookups -- from the EXACT same checks apply_config_0..4 run in
+ * artefact-f3-apply.ts, in the same order, so the synchronous and async
+ * paths agree. A TOCTOU race remains between these reads and the consumer's
+ * write (same residual risk documented in uploads/doc-routes.ts and
+ * integration-settings/routes.ts); the consumer's own checks (and the DB's
+ * optimistic-lock WHERE clauses) are the backstop for that.
  */
 import { randomUUID } from "node:crypto";
 import { publishAdminCommand } from "../../shared/f3-publish.js";
@@ -174,6 +187,17 @@ export async function configArtefactRoutes(app: FastifyInstance): Promise<void> 
     }
     const checksum = checksumOf(entries);
 
+    // Same guard apply_config_0 runs (409 ARTEFACT_UNCHANGED when the new set
+    // is byte-identical to the current head), lifted synchronously.
+    const currentMax = await repo.maxArtefactVersion(ctx.tenantId, body.setKey);
+    if (currentMax !== null) {
+      const latest = await repo.findArtefactByVersion(ctx.tenantId, body.setKey, currentMax);
+      if (latest?.checksum === checksum) {
+        throw new HttpError(409, "ARTEFACT_UNCHANGED",
+          `config set is identical to version ${currentMax}; nothing to snapshot`);
+      }
+    }
+
     const __f3Id = randomUUID();
     await publishAdminCommand(ctx, COMMANDS.f3RouteWrite, __f3Id, {
       op: 'config_op_0',
@@ -230,6 +254,11 @@ export async function configArtefactRoutes(app: FastifyInstance): Promise<void> 
     requireRole(ctx, ARTEFACT_ROLES);
     const body = parseOrThrow(promoteBody, req.body);
 
+    // Same existence guard apply_config_1 runs (404 NOT_FOUND when the
+    // referenced artefact version does not exist), lifted synchronously.
+    const artefact = await repo.findArtefactByVersion(ctx.tenantId, body.setKey, body.artefactVersion);
+    if (!artefact) throw new HttpError(404, "NOT_FOUND", "config artefact version not found");
+
     const __f3Id = randomUUID();
     await publishAdminCommand(ctx, COMMANDS.f3RouteWrite, __f3Id, {
       op: 'config_op_1',
@@ -249,6 +278,18 @@ export async function configArtefactRoutes(app: FastifyInstance): Promise<void> 
     const { id } = parseOrThrow(idParam, req.params);
     const body = parseOrThrow(decideBody, req.body);
 
+    // Same guards apply_config_2 runs, in the same order, lifted
+    // synchronously: the promotion must exist (404 NOT_FOUND), still be
+    // pending (409 NOT_PENDING), the approver must differ from the requester
+    // (409 MAKER_CHECKER_VIOLATION -- checked before the optimistic lock so a
+    // maker trying to self-approve always gets the SoD answer, never a
+    // version answer), and expectedVersion must match (409 VERSION_CONFLICT).
+    const promotion = await repo.findPromotionById(ctx.tenantId, id);
+    if (!promotion) throw new HttpError(404, "NOT_FOUND", "promotion not found");
+    assertPendingPromotion(promotion.status);
+    assertApproverDistinct(promotion.requestedBy, ctx.actorId);
+    assertVersionMatch(promotion.version, body.expectedVersion);
+
     const __f3Id = randomUUID();
     await publishAdminCommand(ctx, COMMANDS.f3RouteWrite, __f3Id, {
       op: 'config_op_2',
@@ -267,6 +308,14 @@ export async function configArtefactRoutes(app: FastifyInstance): Promise<void> 
     requireRole(ctx, ARTEFACT_ROLES);
     const { id } = parseOrThrow(idParam, req.params);
     const body = parseOrThrow(rejectBody, req.body);
+
+    // Same guards apply_config_3 runs, in the same order, lifted
+    // synchronously (see the approve route above for the rationale).
+    const promotion = await repo.findPromotionById(ctx.tenantId, id);
+    if (!promotion) throw new HttpError(404, "NOT_FOUND", "promotion not found");
+    assertPendingPromotion(promotion.status);
+    assertApproverDistinct(promotion.requestedBy, ctx.actorId);
+    assertVersionMatch(promotion.version, body.expectedVersion);
 
     const __f3Id = randomUUID();
     await publishAdminCommand(ctx, COMMANDS.f3RouteWrite, __f3Id, {
@@ -305,6 +354,22 @@ export async function configArtefactRoutes(app: FastifyInstance): Promise<void> 
     requireSuperAdmin(ctx);
     const { env } = parseOrThrow(envParam, req.params);
     const body = parseOrThrow(rollbackBody, req.body);
+
+    // Same guards apply_config_4 runs, in the same order, lifted
+    // synchronously: an artefact must be live in this environment for the
+    // set (404 NOT_FOUND), the env-state expectedVersion must match (409
+    // VERSION_CONFLICT), the rollback target version must exist (404
+    // NOT_FOUND), it must be strictly earlier than the live version (422
+    // NOT_A_ROLLBACK), and it must have been previously promoted to this
+    // environment (422 ROLLBACK_TARGET_NOT_PROMOTED).
+    const state = await repo.findEnvState(ctx.tenantId, body.setKey, env);
+    if (!state) throw new HttpError(404, "NOT_FOUND", "no config artefact is live in this environment for that set");
+    assertVersionMatch(state.version, body.expectedVersion);
+    const target = await repo.findArtefactByVersion(ctx.tenantId, body.setKey, body.toVersion);
+    if (!target) throw new HttpError(404, "NOT_FOUND", "rollback target artefact version not found");
+    assertRollbackIsBackwards(state.artefactVersion, body.toVersion);
+    const promoted = await repo.promotedVersions(ctx.tenantId, body.setKey, env);
+    assertRollbackTargetPreviouslyPromoted(promoted, body.toVersion);
 
     const __f3Id = randomUUID();
     await publishAdminCommand(ctx, COMMANDS.f3RouteWrite, __f3Id, {
