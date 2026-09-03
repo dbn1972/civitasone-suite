@@ -8,6 +8,8 @@ import { sql } from "drizzle-orm";
 import { signToken } from "@civitasone/auth";
 import { buildApp } from "../src/app.js";
 import { db, sqlClient } from "../src/shared/db.js";
+import { queue } from "../src/shared/infra.js";
+import { registerAdminConsumers } from "../src/modules/admin/consumer.js";
 import { sqlAsTenant, asTenant } from "./helpers/engine-harness.js";
 
 const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
@@ -19,6 +21,19 @@ function adminToken() {
 }
 function userToken() {
   return signToken({ sub: "bbbbbbbb-4444-4000-8000-bbb000000002", tid: TENANT, roles: ["workflow_user"], sid: "sess-001" }, SECRET);
+}
+
+registerAdminConsumers(queue);
+await queue.start();
+
+async function waitFor<T>(fn: () => Promise<T | null | undefined>, ms = 3000): Promise<T> {
+  const start = Date.now();
+  while (Date.now() - start < ms) {
+    const v = await fn();
+    if (v) return v;
+    await new Promise((r) => setTimeout(r, 25));
+  }
+  throw new Error("waitFor timeout");
 }
 
 afterEach(async () => {
@@ -165,10 +180,19 @@ describe("PUT /v1/workflow/role-members", () => {
       headers: { authorization: `Bearer ${adminToken()}` },
       payload: { roleRef: "reviewer", userId },
     });
+    expect(res.statusCode).toBe(202);
+    const created = await waitFor(async () => {
+      const g = await app.inject({
+        method: "GET",
+        url: "/v1/workflow/role-members?roleRef=reviewer",
+        headers: { authorization: `Bearer ${adminToken()}` },
+      });
+      const rows = g.json().data as Array<{ roleRef: string; userId: string }>;
+      return rows.find((r) => r.userId === userId) ?? null;
+    });
     await app.close();
-    expect(res.statusCode).toBe(201);
-    expect(res.json().data.roleRef).toBe("reviewer");
-    expect(res.json().data.userId).toBe(userId);
+    expect(created.roleRef).toBe("reviewer");
+    expect(created.userId).toBe(userId);
   });
 
   it("upserts an existing role-member (idempotent)", async () => {
@@ -176,11 +200,21 @@ describe("PUT /v1/workflow/role-members", () => {
     const userId = randomUUID();
     const reportsTo = randomUUID();
     // Create
-    await app.inject({
+    const createRes = await app.inject({
       method: "PUT",
       url: "/v1/workflow/role-members",
       headers: { authorization: `Bearer ${adminToken()}` },
       payload: { roleRef: "reviewer", userId },
+    });
+    expect(createRes.statusCode).toBe(202);
+    await waitFor(async () => {
+      const g = await app.inject({
+        method: "GET",
+        url: "/v1/workflow/role-members?roleRef=reviewer",
+        headers: { authorization: `Bearer ${adminToken()}` },
+      });
+      const rows = g.json().data as Array<{ userId: string }>;
+      return rows.find((r) => r.userId === userId) ?? null;
     });
     // Upsert with reportsTo
     const res = await app.inject({
@@ -189,8 +223,19 @@ describe("PUT /v1/workflow/role-members", () => {
       headers: { authorization: `Bearer ${adminToken()}` },
       payload: { roleRef: "reviewer", userId, reportsTo, active: true },
     });
+    expect(res.statusCode).toBe(202);
+    const updated = await waitFor(async () => {
+      const g = await app.inject({
+        method: "GET",
+        url: "/v1/workflow/role-members?roleRef=reviewer",
+        headers: { authorization: `Bearer ${adminToken()}` },
+      });
+      const rows = g.json().data as Array<{ userId: string; reportsTo: string | null }>;
+      const row = rows.find((r) => r.userId === userId);
+      return row?.reportsTo === reportsTo ? row : null;
+    });
     await app.close();
-    expect(res.statusCode).toBe(201);
+    expect(updated.reportsTo).toBe(reportsTo);
   });
 
   it("returns 403 for non-admin", async () => {
@@ -210,39 +255,46 @@ describe("GET /v1/workflow/role-members", () => {
   it("lists role members for tenant", async () => {
     const app = await buildApp();
     const userId = randomUUID();
-    await app.inject({
+    const putRes = await app.inject({
       method: "PUT",
       url: "/v1/workflow/role-members",
       headers: { authorization: `Bearer ${adminToken()}` },
       payload: { roleRef: "approver", userId },
     });
-    const res = await app.inject({
-      method: "GET",
-      url: "/v1/workflow/role-members",
-      headers: { authorization: `Bearer ${adminToken()}` },
+    expect(putRes.statusCode).toBe(202);
+    const data = await waitFor(async () => {
+      const g = await app.inject({
+        method: "GET",
+        url: "/v1/workflow/role-members",
+        headers: { authorization: `Bearer ${adminToken()}` },
+      });
+      const rows = g.json().data as Array<{ userId: string }>;
+      return rows.some((r) => r.userId === userId) ? rows : null;
     });
     await app.close();
-    expect(res.statusCode).toBe(200);
-    expect(res.json().data.length).toBeGreaterThanOrEqual(1);
+    expect(data.length).toBeGreaterThanOrEqual(1);
   });
 
   it("filters by roleRef query param", async () => {
     const app = await buildApp();
     const userId = randomUUID();
-    await app.inject({
+    const putRes = await app.inject({
       method: "PUT",
       url: "/v1/workflow/role-members",
       headers: { authorization: `Bearer ${adminToken()}` },
       payload: { roleRef: "unique_role_test", userId },
     });
-    const res = await app.inject({
-      method: "GET",
-      url: "/v1/workflow/role-members?roleRef=unique_role_test",
-      headers: { authorization: `Bearer ${adminToken()}` },
+    expect(putRes.statusCode).toBe(202);
+    const data = await waitFor(async () => {
+      const g = await app.inject({
+        method: "GET",
+        url: "/v1/workflow/role-members?roleRef=unique_role_test",
+        headers: { authorization: `Bearer ${adminToken()}` },
+      });
+      const rows = g.json().data as Array<{ roleRef: string; userId: string }>;
+      return rows.length > 0 ? rows : null;
     });
     await app.close();
-    expect(res.statusCode).toBe(200);
-    const data = res.json().data;
     expect(data.length).toBe(1);
     expect(data[0].roleRef).toBe("unique_role_test");
   });

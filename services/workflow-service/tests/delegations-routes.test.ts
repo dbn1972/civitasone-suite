@@ -8,6 +8,8 @@ import { sql } from "drizzle-orm";
 import { signToken } from "@civitasone/auth";
 import { buildApp } from "../src/app.js";
 import { db, sqlClient } from "../src/shared/db.js";
+import { queue } from "../src/shared/infra.js";
+import { registerDelegationConsumers } from "../src/modules/delegations/consumer.js";
 import { sqlAsTenant, asTenant } from "./helpers/engine-harness.js";
 
 const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
@@ -16,6 +18,19 @@ const ACTOR_ID = "aaaaaaaa-2222-4000-8000-aaa000000001";
 
 function makeToken(roles: string[] = ["workflow_user"], actorId = ACTOR_ID) {
   return signToken({ sub: actorId, tid: TENANT, roles, sid: "sess-001" }, SECRET);
+}
+
+registerDelegationConsumers(queue);
+await queue.start();
+
+async function waitFor<T>(fn: () => Promise<T | null | undefined>, ms = 3000): Promise<T> {
+  const start = Date.now();
+  while (Date.now() - start < ms) {
+    const v = await fn();
+    if (v) return v;
+    await new Promise((r) => setTimeout(r, 25));
+  }
+  throw new Error("waitFor timeout");
 }
 
 afterEach(async () => {
@@ -38,14 +53,22 @@ describe("POST /v1/workflow/delegations", () => {
         reason: "on leave",
       },
     });
+    expect(res.statusCode).toBe(202);
+    const created = await waitFor(async () => {
+      const g = await app.inject({
+        method: "GET",
+        url: "/v1/workflow/delegations",
+        headers: { authorization: `Bearer ${makeToken()}` },
+      });
+      const rows = g.json().data as Array<{ delegateId: string }>;
+      return rows.find((r) => r.delegateId === delegateId) ?? null;
+    });
     await app.close();
-    expect(res.statusCode).toBe(201);
-    const body = res.json();
-    expect(body.data.delegateId).toBe(delegateId);
-    expect(body.data.delegatorId).toBe(ACTOR_ID);
-    expect(body.data.fromDate).toBe("2025-01-01");
-    expect(body.data.toDate).toBe("2025-12-31");
-    expect(body.data.isActive).toBe(true);
+    expect(created.delegateId).toBe(delegateId);
+    expect(created.delegatorId).toBe(ACTOR_ID);
+    expect(created.fromDate).toBe("2025-01-01");
+    expect(created.toDate).toBe("2025-12-31");
+    expect(created.isActive).toBe(true);
   });
 
   it("creates a delegation with no toDate (open-ended)", async () => {
@@ -60,9 +83,18 @@ describe("POST /v1/workflow/delegations", () => {
         fromDate: "2025-06-01",
       },
     });
+    expect(res.statusCode).toBe(202);
+    const created = await waitFor(async () => {
+      const g = await app.inject({
+        method: "GET",
+        url: "/v1/workflow/delegations",
+        headers: { authorization: `Bearer ${makeToken()}` },
+      });
+      const rows = g.json().data as Array<{ delegateId: string; toDate: string | null }>;
+      return rows.find((r) => r.delegateId === delegateId) ?? null;
+    });
     await app.close();
-    expect(res.statusCode).toBe(201);
-    expect(res.json().data.toDate).toBeNull();
+    expect(created.toDate).toBeNull();
   });
 
   it("returns 400 for invalid date format", async () => {
@@ -113,23 +145,31 @@ describe("GET /v1/workflow/delegations", () => {
   it("returns delegations with pagination", async () => {
     const app = await buildApp();
     // Create two delegations using the same app instance
+    const delegateIds: string[] = [];
     for (let i = 0; i < 2; i++) {
-      await app.inject({
+      const delegateId = randomUUID();
+      delegateIds.push(delegateId);
+      const created = await app.inject({
         method: "POST",
         url: "/v1/workflow/delegations",
         headers: { authorization: `Bearer ${makeToken()}` },
-        payload: { delegateId: randomUUID(), fromDate: "2025-01-01" },
+        payload: { delegateId, fromDate: "2025-01-01" },
       });
+      expect(created.statusCode).toBe(202);
     }
-    const res = await app.inject({
-      method: "GET",
-      url: "/v1/workflow/delegations?limit=10&offset=0",
-      headers: { authorization: `Bearer ${makeToken()}` },
+    const data = await waitFor(async () => {
+      const g = await app.inject({
+        method: "GET",
+        url: "/v1/workflow/delegations?limit=10&offset=0",
+        headers: { authorization: `Bearer ${makeToken()}` },
+      });
+      const body = g.json();
+      const rows = body.data as Array<{ delegateId: string }>;
+      return delegateIds.every((id) => rows.some((r) => r.delegateId === id)) ? body : null;
     });
     await app.close();
-    expect(res.statusCode).toBe(200);
-    expect(res.json().data.length).toBe(2);
-    expect(res.json().total).toBe(2);
+    expect(data.data.length).toBe(2);
+    expect(data.total).toBe(2);
   });
 });
 
@@ -143,17 +183,36 @@ describe("DELETE /v1/workflow/delegations/:id", () => {
       headers: { authorization: `Bearer ${makeToken()}` },
       payload: { delegateId, fromDate: "2025-01-01" },
     });
-    expect(createRes.statusCode).toBe(201);
-    const id = createRes.json().data.id;
+    expect(createRes.statusCode).toBe(202);
+    const created = await waitFor(async () => {
+      const g = await app.inject({
+        method: "GET",
+        url: "/v1/workflow/delegations",
+        headers: { authorization: `Bearer ${makeToken()}` },
+      });
+      const rows = g.json().data as Array<{ id: string; delegateId: string }>;
+      return rows.find((r) => r.delegateId === delegateId) ?? null;
+    });
+    const id = created.id;
 
     const delRes = await app.inject({
       method: "DELETE",
       url: `/v1/workflow/delegations/${id}`,
       headers: { authorization: `Bearer ${makeToken()}` },
     });
+    expect(delRes.statusCode).toBe(202);
+    const revoked = await waitFor(async () => {
+      const g = await app.inject({
+        method: "GET",
+        url: "/v1/workflow/delegations",
+        headers: { authorization: `Bearer ${makeToken()}` },
+      });
+      const rows = g.json().data as Array<{ id: string; isActive: boolean }>;
+      const row = rows.find((r) => r.id === id);
+      return row && row.isActive === false ? row : null;
+    });
     await app.close();
-    expect(delRes.statusCode).toBe(200);
-    expect(delRes.json().data.isActive).toBe(false);
+    expect(revoked.isActive).toBe(false);
   });
 
   it("returns 404 for non-existent delegation", async () => {

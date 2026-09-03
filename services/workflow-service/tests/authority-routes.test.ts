@@ -5,6 +5,8 @@ import { sql } from "drizzle-orm";
 import { signToken } from "@civitasone/auth";
 import { buildApp } from "../src/app.js";
 import { db, sqlClient } from "../src/shared/db.js";
+import { queue } from "../src/shared/infra.js";
+import { registerAuthorityConsumers } from "../src/modules/authority/consumer.js";
 import { sqlAsTenant } from "./helpers/engine-harness.js";
 
 const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
@@ -15,6 +17,32 @@ const CHECKER = "a5000000-2222-4000-8000-000000000002";
 
 function token(actorId: string, tid = TENANT, roles = ["workflow_admin"]) {
   return signToken({ sub: actorId, tid, roles, sid: "s" }, SECRET);
+}
+
+registerAuthorityConsumers(queue);
+await queue.start();
+
+async function waitFor<T>(fn: () => Promise<T | null | undefined>, ms = 3000): Promise<T> {
+  const start = Date.now();
+  while (Date.now() - start < ms) {
+    const v = await fn();
+    if (v) return v;
+    await new Promise((r) => setTimeout(r, 25));
+  }
+  throw new Error("waitFor timeout");
+}
+
+type LimitView = { id: string; scopeRef: string; status: string; approvedBy: string | null };
+
+async function findLimit(app: Awaited<ReturnType<typeof buildApp>>, actor: string, scopeRef: string): Promise<LimitView> {
+  return waitFor(async () => {
+    const g = await app.inject({
+      method: "GET", url: "/v1/workflow/authority/limits",
+      headers: { authorization: `Bearer ${token(actor)}` },
+    });
+    const rows = g.json().data as LimitView[];
+    return rows.find((r) => r.scopeRef === scopeRef) ?? null;
+  });
 }
 
 afterEach(async () => {
@@ -42,9 +70,10 @@ describe("CAP-025 authority maker-checker", () => {
       maxAmount: 100000, effectiveFrom: "2025-01-01",
       escalateToScopeType: "role", escalateToRef: "director",
     });
-    expect(res.statusCode).toBe(201);
-    expect(res.json().data.status).toBe("draft");
-    const id = res.json().data.id;
+    expect(res.statusCode).toBe(202);
+    const draft = await findLimit(app, MAKER, "officer");
+    expect(draft.status).toBe("draft");
+    const id = draft.id;
 
     const self = await app.inject({
       method: "POST", url: `/v1/workflow/authority/limits/${id}/approve`,
@@ -56,10 +85,19 @@ describe("CAP-025 authority maker-checker", () => {
       method: "POST", url: `/v1/workflow/authority/limits/${id}/approve`,
       headers: { authorization: `Bearer ${token(CHECKER)}` },
     });
+    expect(ok.statusCode).toBe(202);
+    const active = await waitFor(async () => {
+      const g = await app.inject({
+        method: "GET", url: "/v1/workflow/authority/limits",
+        headers: { authorization: `Bearer ${token(MAKER)}` },
+      });
+      const rows = g.json().data as LimitView[];
+      const row = rows.find((r) => r.id === id);
+      return row && row.status === "active" ? row : null;
+    });
     await app.close();
-    expect(ok.statusCode).toBe(200);
-    expect(ok.json().data.status).toBe("active");
-    expect(ok.json().data.approvedBy).toBe(CHECKER);
+    expect(active.status).toBe("active");
+    expect(active.approvedBy).toBe(CHECKER);
   });
 });
 
@@ -72,9 +110,21 @@ describe("CAP-025 authority check (limit-exceed escalation)", () => {
         scopeType: "role", scopeRef: ref, maxAmount: amt, effectiveFrom: "2025-01-01",
         ...(escRef ? { escalateToScopeType: "role", escalateToRef: escRef } : {}),
       });
-      await app.inject({
-        method: "POST", url: `/v1/workflow/authority/limits/${c.json().data.id}/approve`,
+      expect(c.statusCode).toBe(202);
+      const draft = await findLimit(app, MAKER, ref);
+      const appr = await app.inject({
+        method: "POST", url: `/v1/workflow/authority/limits/${draft.id}/approve`,
         headers: { authorization: `Bearer ${token(CHECKER)}` },
+      });
+      expect(appr.statusCode).toBe(202);
+      await waitFor(async () => {
+        const g = await app.inject({
+          method: "GET", url: "/v1/workflow/authority/limits",
+          headers: { authorization: `Bearer ${token(MAKER)}` },
+        });
+        const rows = g.json().data as LimitView[];
+        const row = rows.find((r) => r.id === draft.id);
+        return row && row.status === "active" ? row : null;
       });
     }
     const res = await app.inject({
