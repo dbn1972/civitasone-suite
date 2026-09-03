@@ -46,6 +46,39 @@ export function minorString(value: bigint | number | string): string {
 }
 
 /**
+ * BUG FIX: `parseMinor`/`minorString` `throw` a raw `RangeError` for an
+ * unsafe-integer plain number. Inside a Zod `.transform()`, an uncaught throw
+ * escapes `.parse()`/`.safeParse()` entirely instead of becoming a normal
+ * ZodError — every route using these schemas turned an out-of-range amount
+ * into an unhandled-exception 500 instead of a clean 400. These two wrappers
+ * catch that throw and report it as a proper Zod issue via `ctx.addIssue`,
+ * returning `z.NEVER` so `.parse()` fails the normal, catchable way.
+ */
+function toMinorStringIssue(value: string | number, ctx: z.RefinementCtx): string {
+  try {
+    return minorString(value);
+  } catch (err) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: err instanceof Error ? err.message : "invalid money minor value",
+    });
+    return z.NEVER;
+  }
+}
+
+function toMinorBigintIssue(value: string | number | bigint, ctx: z.RefinementCtx): bigint {
+  try {
+    return parseMinor(value);
+  } catch (err) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: err instanceof Error ? err.message : "invalid money minor value",
+    });
+    return z.NEVER;
+  }
+}
+
+/**
  * Zod field for money minor units in COMMAND/EVENT payloads. Accepts a JSON
  * number (safe integer) or a decimal string, and normalises to a canonical
  * base-10 STRING so the value crosses the boundary without precision loss.
@@ -53,14 +86,14 @@ export function minorString(value: bigint | number | string): string {
  */
 export const zMoneyMinorString = z
   .union([z.string().regex(DIGITS_RE, "must be a base-10 integer"), z.number().int()])
-  .transform((v) => minorString(v));
+  .transform(toMinorStringIssue);
 
 /** Like `zMoneyMinorString` but rejects negative amounts (the common case). */
 export const zMoneyMinorStringNonNeg = z
   .union([z.string().regex(/^\d+$/, "must be a non-negative base-10 integer"), z.number().int().nonnegative()])
-  .transform((v) => minorString(v));
+  .transform(toMinorStringIssue);
 
 /** Zod field that decodes money minor units straight to a bigint. */
 export const zMoneyMinor = z
   .union([z.string().regex(DIGITS_RE), z.number().int(), z.bigint()])
-  .transform((v) => parseMinor(v));
+  .transform(toMinorBigintIssue);

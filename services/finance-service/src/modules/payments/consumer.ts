@@ -333,14 +333,18 @@ export function registerPaymentsConsumers(queue: Queue): void {
         billId: z.string().uuid(),
         ddoCode: z.string().min(1),
         mode: z.string().min(1),
-        amountMinor: z.union([z.string(), z.number()]),
+        // BUG FIX: initiateEftBody now validates amountMinor via the file's
+        // bigint-safe moneyMinorField (see validators.ts) instead of a raw
+        // z.number() with no safe-integer bound -- accept the resulting bigint
+        // payload here too, matching billCreate's schema just above.
+        amountMinor: z.union([z.string(), z.number(), z.bigint()]),
       });
       const _v = schema.safeParse(msg.payload);
       if (!_v.success) throw new NonRetryableError(`[finance/payments] paymentInitiate SCHEMA_VIOLATION: ${_v.error.message}`);
     }
     const p = msg.payload as {
       id: string; tenantId: string; billId: string; ddoCode: string; mode: string;
-      amountMinor: number | string; currency?: string; eftRef?: string; bankAccountId?: string;
+      amountMinor: number | string | bigint; currency?: string; eftRef?: string; bankAccountId?: string;
     };
     assertValidDdoCode(p.ddoCode);
     const paymentAmount = BigInt(p.amountMinor);
