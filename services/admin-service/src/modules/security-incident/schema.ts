@@ -50,6 +50,7 @@ export const secBreachNotifications = adminSchema.table("sec_breach_notification
   affectedCount:  integer("affected_count").notNull().default(0),
   reference:      varchar("reference", { length: 128 }),
   submittedAt:    timestamp("submitted_at", { withTimezone: true }),
+  isOnTime:       boolean("is_on_time"),
   acknowledgedAt: timestamp("acknowledged_at", { withTimezone: true }),
   createdAt:      timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   createdBy:      uuid("created_by").notNull(),

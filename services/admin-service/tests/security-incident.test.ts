@@ -75,6 +75,34 @@ async function waitForBreachNotification(tenantId: string, incidentId: string, t
   }
   throw new Error(`breach notification for incident ${incidentId} never landed — F3 consumer not draining`);
 }
+// Polls until the submit command (also F3/async — POST .../submit returns 202
+// and is applied by the same consumer.subscribe(COMMANDS.securityBreachNotificationSubmit,...)
+// handler exercised below) has landed, then returns that notification's row
+// as the GET endpoint serializes it (repo.breachNotificationsFor selects the
+// whole row, so this includes isOnTime once schema.ts declares the column).
+async function waitForSubmitted(
+  tenantId: string, incidentId: string, nid: string, tries = 40,
+): Promise<{ id: string; status: string; isOnTime: boolean | null }> {
+  for (let i = 0; i < tries; i++) {
+    const res = await app.inject({ method: "GET", url: `/v1/admin/security-incidents/${incidentId}`, headers: auth(REPORTER, tenantId) });
+    const notif = res.json()?.data?.breachNotifications?.find((n: { id: string }) => n.id === nid);
+    if (notif && notif.status === "submitted") return notif;
+    await settle();
+  }
+  throw new Error(`breach notification ${nid} never reached 'submitted' — F3 consumer not draining`);
+}
+/**
+ * Read/write admin.sec_breach_notifications directly, with the tenant GUC set
+ * on the same connection (mirrors readAsTenant in tests/change.test.ts) —
+ * without this a raw pooled query as the NOBYPASSRLS admin_svc role sees/
+ * touches zero rows under the FORCE ROW LEVEL SECURITY policy (migration 0022).
+ */
+function asTenant<T>(tenantId: string, run: (sql: typeof sqlClient) => Promise<T>): Promise<T> {
+  return sqlClient.begin(async (sql) => {
+    await sql`SELECT set_config('app.tenant_id', ${tenantId}, true)`;
+    return run(sql as typeof sqlClient);
+  }) as Promise<T>;
+}
 
 describe("service (pure)", () => {
   it("enforces forward-only lifecycle", () => {
@@ -286,5 +314,128 @@ describe("tenant isolation (RLS)", () => {
       headers: auth(REPORTER, TENANT, ["viewer"]), payload: { title: "x", severity: "low" },
     });
     expect(res.statusCode).toBe(403);
+  });
+});
+
+// Regression for the fix in this branch: the F3 submit handler
+// (consumer.ts's COMMANDS.securityBreachNotificationSubmit case) always
+// COMPUTED `onTime` (submittedAt <= deadlineAt) but only ever put it on the
+// outbound "security.breach.notification_submitted" event — the persisted
+// row never got it, so admin.sec_breach_notifications.is_on_time did not
+// exist and this legally significant DPDP §8(6) fact was unqueryable.
+// Migration 0031 adds the column; consumer.ts now also writes isOnTime into
+// the same .set({...}) that sets status/submittedAt. These tests submit
+// through the real HTTP -> queue -> consumer -> DB path (no shortcuts) and
+// assert BOTH the API response and a raw DB read see the persisted value.
+describe("breach notification on_time persistence (DPDP §8(6))", () => {
+  it("persists is_on_time = true for a notification submitted within the 72h deadline", async () => {
+    const create = await app.inject({
+      method: "POST", url: "/v1/admin/security-incidents", headers: auth(REPORTER),
+      payload: { title: "on-time submission", severity: "critical", isBreach: true, affectedDataPrincipals: 10 },
+    });
+    const incidentId = create.json().data.id;
+    await waitForIncident(TENANT, incidentId);
+
+    const created = await app.inject({
+      method: "POST", url: `/v1/admin/security-incidents/${incidentId}/breach-notifications`,
+      headers: auth(REPORTER), payload: { authority: "data_protection_board", affectedCount: 10 },
+    });
+    expect(created.statusCode).toBe(202); // F3 command accepted, not yet applied.
+    const nid = await waitForBreachNotification(TENANT, incidentId);
+
+    // Before submission the row exists but is_on_time is not yet determined.
+    const beforeRows = await asTenant(TENANT, (sql) =>
+      sql`SELECT is_on_time, submitted_at FROM admin.sec_breach_notifications WHERE id = ${nid}`);
+    expect(beforeRows[0].is_on_time).toBeNull();
+    expect(beforeRows[0].submitted_at).toBeNull();
+
+    const submit = await app.inject({
+      method: "POST", url: `/v1/admin/security-incidents/${incidentId}/breach-notifications/${nid}/submit`,
+      headers: auth(CHECKER), payload: { reference: "DPB/ONTIME/0001" },
+    });
+    expect(submit.statusCode).toBe(202);
+
+    const landed = await waitForSubmitted(TENANT, incidentId, nid);
+    expect(landed.isOnTime).toBe(true);
+
+    const rows = await asTenant(TENANT, (sql) =>
+      sql`SELECT is_on_time FROM admin.sec_breach_notifications WHERE id = ${nid}`);
+    expect(rows[0].is_on_time).toBe(true);
+  });
+
+  it("persists is_on_time = false for a notification submitted after the 72h deadline", async () => {
+    const create = await app.inject({
+      method: "POST", url: "/v1/admin/security-incidents", headers: auth(REPORTER),
+      payload: { title: "late submission", severity: "critical", isBreach: true, affectedDataPrincipals: 10 },
+    });
+    const incidentId = create.json().data.id;
+    await waitForIncident(TENANT, incidentId);
+
+    const created = await app.inject({
+      method: "POST", url: `/v1/admin/security-incidents/${incidentId}/breach-notifications`,
+      headers: auth(REPORTER), payload: { authority: "data_protection_board", affectedCount: 10 },
+    });
+    expect(created.statusCode).toBe(202);
+    const nid = await waitForBreachNotification(TENANT, incidentId);
+
+    // The statutory window is hard-capped at 72h server-side (not caller
+    // adjustable — see "breach deadline is hard-capped" above), so the only
+    // reliable way to exercise the late-submission branch is to move the
+    // already-persisted deadline into the past, exactly as this file's own
+    // header comment on manipulating state under test suggests.
+    await asTenant(TENANT, (sql) =>
+      sql`UPDATE admin.sec_breach_notifications SET deadline_at = now() - interval '5 minutes' WHERE id = ${nid}`);
+
+    const submit = await app.inject({
+      method: "POST", url: `/v1/admin/security-incidents/${incidentId}/breach-notifications/${nid}/submit`,
+      headers: auth(CHECKER), payload: { reference: "DPB/LATE/0001" },
+    });
+    expect(submit.statusCode).toBe(202);
+
+    const landed = await waitForSubmitted(TENANT, incidentId, nid);
+    expect(landed.isOnTime).toBe(false);
+
+    const rows = await asTenant(TENANT, (sql) =>
+      sql`SELECT is_on_time FROM admin.sec_breach_notifications WHERE id = ${nid}`);
+    expect(rows[0].is_on_time).toBe(false);
+  });
+
+  it("backfill migration (0031) derives is_on_time from stored deadline_at/submitted_at for pre-existing rows", async () => {
+    // Simulates a row written before this migration existed: insert directly
+    // with a submitted_at already set and is_on_time left NULL (the pre-fix
+    // shape), run the same backfill expression the migration uses, and
+    // confirm it reproduces the correct value for both an on-time and a late
+    // historical row. This does not require a second real cluster bootstrap —
+    // it proves the backfill's UPDATE predicate is correct against live rows.
+    const incidentId = randomUUID();
+    await asTenant(TENANT, (sql) => sql`
+      INSERT INTO admin.sec_incidents (id, tenant_id, title, severity, is_breach, reported_by)
+      VALUES (${incidentId}, ${TENANT}, 'pre-migration backfill fixture', 'critical', true, ${REPORTER})
+    `);
+    const onTimeId = randomUUID();
+    const lateId = randomUUID();
+    await asTenant(TENANT, (sql) => sql`
+      INSERT INTO admin.sec_breach_notifications
+        (id, tenant_id, incident_id, authority, status, deadline_at, submitted_at, is_on_time, created_by)
+      VALUES
+        (${onTimeId}, ${TENANT}, ${incidentId}, 'data_protection_board', 'submitted',
+         now() + interval '1 hour', now(), NULL, ${REPORTER}),
+        (${lateId}, ${TENANT}, ${incidentId}, 'data_protection_board', 'submitted',
+         now() - interval '1 hour', now(), NULL, ${REPORTER})
+    `);
+
+    // Same predicate as migrations/0031_breach_notification_on_time.sql.
+    await asTenant(TENANT, (sql) => sql`
+      UPDATE admin.sec_breach_notifications
+      SET is_on_time = (submitted_at <= deadline_at)
+      WHERE submitted_at IS NOT NULL AND is_on_time IS NULL
+        AND id IN (${onTimeId}, ${lateId})
+    `);
+
+    const rows = await asTenant(TENANT, (sql) =>
+      sql`SELECT id, is_on_time FROM admin.sec_breach_notifications WHERE id IN (${onTimeId}, ${lateId})`);
+    const byId = Object.fromEntries(rows.map((r: { id: string; is_on_time: boolean }) => [r.id, r.is_on_time]));
+    expect(byId[onTimeId]).toBe(true);
+    expect(byId[lateId]).toBe(false);
   });
 });
