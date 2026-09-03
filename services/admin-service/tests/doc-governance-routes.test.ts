@@ -11,6 +11,8 @@ import type { FastifyInstance } from "fastify";
 
 const { buildApp } = await import("../src/app.js");
 const { sqlClient } = await import("../src/shared/db.js");
+const { queue } = await import("../src/shared/infra.js");
+const { registerAllF3Consumers } = await import("./helpers/register-all-f3-consumers.js");
 
 const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
 
@@ -45,8 +47,20 @@ async function wipe(): Promise<void> {
 }
 
 let app: FastifyInstance;
-beforeAll(async () => { app = await buildApp(); await wipe(); });
-afterAll(async () => { await wipe(); await app.close(); await sqlClient.end(); });
+beforeAll(async () => {
+  // F3 CONSUMER WIRING — this suite's app comes from src/app.ts alone; the
+  // uploads/doc-governance F3 consumer (and the rest of worker.ts's set) is
+  // never registered against this test's in-memory Queue singleton, so
+  // every write here (createType, register, approve, expiry-scan) publishes
+  // a command that nothing ever applies. Registering the full worker.ts
+  // consumer set here so writes actually land — same pattern as
+  // tests/integration-settings-ssrf.test.ts / tests/security-incident.test.ts.
+  registerAllF3Consumers(queue);
+  await queue.start();
+  app = await buildApp();
+  await wipe();
+});
+afterAll(async () => { await wipe(); await app.close(); await queue.stop(); await sqlClient.end(); });
 
 interface SingleBody<T> { data: T }
 interface ListBody<T> { data: T[]; meta: { page: number; pageSize: number; total: number } }

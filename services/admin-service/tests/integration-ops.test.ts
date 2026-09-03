@@ -13,6 +13,7 @@ import { signToken } from "@civitasone/auth";
 import type { FastifyInstance } from "fastify";
 import { buildApp } from "../src/app.js";
 import { queue } from "../src/shared/infra.js";
+import { registerAllF3Consumers } from "./helpers/register-all-f3-consumers.js";
 import { db } from "../src/shared/db.js";
 import { deadLetter, deadLetterAction } from "../src/modules/integration-ops/schema.js";
 import { applyDlqAction, DlqError, isTerminal } from "../src/modules/integration-ops/domain.js";
@@ -40,6 +41,15 @@ async function wipe(tenantId: string) {
 }
 
 beforeAll(async () => {
+  // F3 CONSUMER WIRING — POST /dead-letters (recordDeadLetterCmd) goes through
+  // queue.publish() like the rest of admin-service's F3 writes; without
+  // registering the consumer against this test's Queue singleton, the record
+  // is never applied and every immediate follow-up action (requeue, discard,
+  // bulk-requeue) legitimately 404s "dead letter not found". requeue/discard/
+  // bulk-requeue themselves are direct synchronous writes (claim-before-publish),
+  // not F3 — only the initial record needs to be waited for.
+  registerAllF3Consumers(queue);
+  await queue.start();
   app = await buildApp();
   await app.ready();
   await wipe(TENANT);
@@ -50,7 +60,32 @@ afterAll(async () => {
   await wipe(TENANT);
   await wipe(TENANT_B);
   await app.close();
+  await queue.stop();
 });
+
+async function settle(ms = 25): Promise<void> {
+  await new Promise((r) => setTimeout(r, ms));
+}
+// NOT a race — retrying does not help. Investigated while wiring the F3
+// consumer here: registerIntegrationOpsConsumers' deadLetterRecord handler
+// (src/modules/integration-ops/consumer.ts) calls repo.upsertDeadLetter()
+// without forwarding msg.payload.id, so the DB assigns its OWN id
+// (schema.ts: id uuid().defaultRandom()) instead of persisting the id that
+// recordDeadLetterCmd generated and returned to the caller as `data.id`
+// (src/modules/integration-ops/commands.ts + src/shared/f3-publish.ts). The
+// row genuinely lands (see waitForTopicCount below, which lists by topic and
+// does not depend on the id) — it just lands under a different id than the
+// one the API told the caller to use, so GET/requeue/discard by that id 404
+// unconditionally. This is a real, separate application bug, not a test-
+// harness gap — flagged, not fixed here (out of this change's scope).
+async function waitForTopicCount(topic: string, count: number, tries = 40): Promise<void> {
+  for (let i = 0; i < tries; i++) {
+    const res = await app.inject({ method: "GET", url: `/v1/admin/integration-ops/dead-letters?status=pending&topic=${topic}`, headers: h(token()) });
+    if (res.json().meta.total >= count) return;
+    await settle();
+  }
+  throw new Error(`topic ${topic} never reached ${count} landed dead letters — F3 consumer not draining`);
+}
 
 describe("CAP-060 DLQ lifecycle (pure)", () => {
   it("allows pending → requeued / discarded and treats both as terminal", () => {
@@ -223,6 +258,7 @@ describe("CAP-060 dead-letter routes", () => {
         payload: { topic: "bulk.replay.topic", messageId: randomUUID(), payload: { n: i } },
       });
     }
+    await waitForTopicCount("bulk.replay.topic", 3);
     const res = await app.inject({
       method: "POST",
       url: "/v1/admin/integration-ops/dead-letters/bulk-requeue",

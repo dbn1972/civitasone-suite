@@ -9,6 +9,8 @@ import { signToken } from "@civitasone/auth";
 import type { FastifyInstance } from "fastify";
 import { buildApp } from "../src/app.js";
 import { sqlClient } from "../src/shared/db.js";
+import { queue } from "../src/shared/infra.js";
+import { registerAllF3Consumers } from "./helpers/register-all-f3-consumers.js";
 import { computePosture } from "../src/modules/security-compliance/posture.js";
 
 const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
@@ -27,8 +29,39 @@ function auth(tenantId?: string, roles?: string[]) {
 }
 
 let app: FastifyInstance;
-beforeAll(async () => { app = await buildApp(); });
-afterAll(async () => { await app.close(); await sqlClient.end(); });
+beforeAll(async () => {
+  // F3 CONSUMER WIRING — same gap as tests/security-incident.test.ts and
+  // tests/doc-governance-routes.test.ts: this suite's app comes from
+  // src/app.ts alone, so every write here (seed, control PATCH, evidence,
+  // VAPT ingest) publishes a command that nothing ever applies without this.
+  registerAllF3Consumers(queue);
+  await queue.start();
+  app = await buildApp();
+});
+afterAll(async () => { await app.close(); await queue.stop(); await sqlClient.end(); });
+
+// The F3 consumer applies writes asynchronously — poll after a write instead
+// of assuming it has landed by the time the next request is injected. Mirrors
+// the pattern in tests/security-incident.test.ts / integration-settings-ssrf.test.ts.
+async function settle(ms = 25): Promise<void> {
+  await new Promise((r) => setTimeout(r, ms));
+}
+async function waitForControlsSeeded(headers: Record<string, string>, tries = 40) {
+  for (let i = 0; i < tries; i++) {
+    const res = await app.inject({ method: "GET", url: "/v1/admin/security/compliance/controls", headers });
+    if (res.json().data.length > 0) return res;
+    await settle();
+  }
+  throw new Error("compliance controls never landed — F3 consumer not draining");
+}
+async function waitForPosture(headers: Record<string, string>, predicate: (data: { overallScore: number | null; passed: number; failed: number }) => boolean, tries = 40) {
+  for (let i = 0; i < tries; i++) {
+    const res = await app.inject({ method: "GET", url: "/v1/admin/security/posture", headers });
+    if (predicate(res.json().data)) return res;
+    await settle();
+  }
+  throw new Error("posture never reflected the expected write — F3 consumer not draining");
+}
 
 describe("posture (pure)", () => {
   it("returns null score when nothing is testable", () => {
@@ -64,7 +97,7 @@ describe("control library (integration)", () => {
   });
 
   it("lists controls and filters by framework; soc2 view serves real data", async () => {
-    const all = await app.inject({ method: "GET", url: "/v1/admin/security/compliance/controls", headers: auth() });
+    const all = await waitForControlsSeeded(auth());
     expect(all.statusCode).toBe(200);
     expect(all.json().data.length).toBeGreaterThan(0);
     const dpdp = await app.inject({ method: "GET", url: "/v1/admin/security/compliance/controls?framework=DPDP", headers: auth() });
@@ -93,10 +126,11 @@ describe("control library (integration)", () => {
   });
 
   it("recording a fail lowers the computed score", async () => {
+    await waitForControlsSeeded(auth());
     const all = await app.inject({ method: "GET", url: "/v1/admin/security/compliance/controls?framework=SOC2", headers: auth() });
     const other = all.json().data.find((c: { id: string }) => c.id !== controlId).id;
     await app.inject({ method: "PATCH", url: `/v1/admin/security/compliance/controls/${other}`, headers: auth(), payload: { status: "fail" } });
-    const res = await app.inject({ method: "GET", url: "/v1/admin/security/posture", headers: auth() });
+    const res = await waitForPosture(auth(), (d) => d.failed >= 1);
     expect(res.json().data.overallScore).toBe(50); // 1 pass / 2 tested
   });
 
