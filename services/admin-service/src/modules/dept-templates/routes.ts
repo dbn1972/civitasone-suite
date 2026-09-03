@@ -157,6 +157,45 @@ export async function departmentTemplateRoutes(app: FastifyInstance): Promise<vo
     return reply.send(listEnvelope(rows.map(serializeTemplate), { page: q.page, pageSize: q.limit, total }));
   });
 
+  // ── instantiate (idempotent-safe) ───────────────────────────────────────────────
+  app.post("/v1/admin/department-templates/:id/instantiate", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, TEMPLATE_ROLES);
+    const { id } = parseOrThrow(idParam, req.params);
+    const body = parseOrThrow(instantiateBody, req.body);
+
+    // Synchronous pre-checks lifted from apply_dept_templates_1 (f3-apply.ts):
+    // publishAdminCommand is fire-and-forget, so any failure the consumer would
+    // raise later must be caught here or the 202 lies about acceptance.
+    const template = await repo.findTemplate(ctx.tenantId, id);
+    if (!template) throw new HttpError(404, "NOT_FOUND", "department template not found");
+    assertTemplateActive(template.status);
+
+    // A matching idempotencyKey means this call is a retry the consumer will
+    // replay without a second write (see module doc: IDEMPOTENCY). Check this
+    // FIRST — otherwise a legitimate retry could be rejected below as a false
+    // DEPARTMENT_EXISTS clash against the instantiation it is itself replaying.
+    const existingByKey = await repo.findInstantiationByKey(ctx.tenantId, id, body.idempotencyKey);
+    if (!existingByKey) {
+      const codeClash = await repo.findInstantiationByCode(ctx.tenantId, body.departmentCode);
+      if (codeClash) {
+        throw new HttpError(409, "DEPARTMENT_EXISTS",
+          `a department with code '${body.departmentCode}' was already instantiated`);
+      }
+    }
+
+    const __f3Id = randomUUID();
+    await publishAdminCommand(ctx, COMMANDS.f3RouteWrite, __f3Id, {
+      op: 'dept_templates_op_1',
+      body: (typeof body !== 'undefined' ? body : (req.body as Record<string, unknown>)),
+      params: req.params as Record<string, unknown>,
+      query: req.query as Record<string, unknown>,
+      preId: ((req.params as any)?.id as string) || __f3Id,
+    });
+    const result = { id: __f3Id, status: 'accepted', correlationId: ctx.correlationId } as never;
+    return reply.code(202).send({ id: __f3Id, status: "accepted", correlationId: ctx.correlationId });
+  });
+
   app.get("/v1/admin/department-templates/:id/instantiations", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, TEMPLATE_ROLES);
