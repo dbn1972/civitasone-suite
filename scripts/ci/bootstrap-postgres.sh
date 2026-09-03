@@ -98,6 +98,13 @@ run_bootstrap "$ROOT/infra/db/bootstrap/bootstrap_missing_schemas.sql"
 # batches. Without this, all 6 services' migrations fail in CI with
 # "database does not exist" before the migration loop ever reaches them.
 run_bootstrap "$ROOT/infra/db/bootstrap/bootstrap_sec5_batch3.sql"
+# swm-service (solid waste management) was routed in the gateway registry
+# (prefix /api/v1/swm) with 5 real Drizzle table definitions across 4
+# modules, but no role/database was ever created for it in any bootstrap
+# file -- the same "declared but never provisioned" gap as the batches above.
+# Without this, swm-service's migrations fail with "database civitas_swm does
+# not exist" before the migration loop below ever reaches them.
+run_bootstrap "$ROOT/infra/db/bootstrap/bootstrap_swm.sql"
 
 # Every migration that fails is recorded here and reconciled against a committed
 # allow-list at the end of this script. Before that reconciliation existed, a
@@ -169,6 +176,10 @@ declare -A SERVICE_DBS=(
   [catalogue-service]="catalogue_svc:civitas_catalogue"
   [loyalty-service]="loyalty_svc:civitas_loyalty"
   [journey-service]="journey_svc:civitas_journey"
+  # swm-service: role/database created by bootstrap_swm.sql above (see that
+  # file for the "declared in the gateway registry but never provisioned"
+  # backstory). Migrations live at services/swm-service/migrations/.
+  [swm-service]="swm_svc:civitas_swm"
 )
 
 # ── Role-creating migrations must run as the bootstrapping SUPERUSER ─────────
