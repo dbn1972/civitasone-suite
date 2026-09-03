@@ -207,7 +207,12 @@ export async function configArtefactRoutes(app: FastifyInstance): Promise<void> 
     if (!from) throw new HttpError(404, "NOT_FOUND", `artefact version ${q.fromVersion} not found for this set`);
     if (!to) throw new HttpError(404, "NOT_FOUND", `artefact version ${q.toVersion} not found for this set`);
     const diff = diffConfig(from.entries, to.entries);
-    return reply.code(202).send({ id: randomUUID(), status: "accepted", correlationId: ctx.correlationId });
+    return reply.send(singleEnvelope({
+      setKey: q.setKey,
+      fromVersion: from.artefactVersion,
+      toVersion: to.artefactVersion,
+      ...diff,
+    }));
   });
 
   // ── list promotions (maker-checker queue) ─────────────────────────────────
