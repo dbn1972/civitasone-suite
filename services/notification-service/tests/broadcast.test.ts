@@ -77,7 +77,7 @@ describe("LOOP 2 — release-notes broadcast consumer (notification.broadcast.se
     await q.publish(CONSUMED_EVENTS.notificationBroadcastSend, broadcastEnvelope());
     await new Promise((r) => setTimeout(r, 40));
 
-    expect(outboxMock.__enqueuedMessages).toHaveLength(1);
+    expect(outboxMock.__enqueuedMessages).toHaveLength(2);  // notification.send + the CERT-In audit event (df2f9eeb) -- see [0] for the notification
     const msg = outboxMock.__enqueuedMessages[0]!;
     expect(msg.topic).toBe("notification.send");
     const payload = msg.payload as { recipient: string; recipientId: string; eventType: string; variables: Record<string, string> };
@@ -94,11 +94,11 @@ describe("LOOP 2 — release-notes broadcast consumer (notification.broadcast.se
     const env = broadcastEnvelope();
     await q.publish(CONSUMED_EVENTS.notificationBroadcastSend, env);
     await new Promise((r) => setTimeout(r, 40));
-    expect(outboxMock.__enqueuedMessages).toHaveLength(1);
+    expect(outboxMock.__enqueuedMessages).toHaveLength(2);  // notification.send + the CERT-In audit event (df2f9eeb)
 
     // same messageId → markProcessed rejects the duplicate
     await q.publish(CONSUMED_EVENTS.notificationBroadcastSend, env);
     await new Promise((r) => setTimeout(r, 40));
-    expect(outboxMock.__enqueuedMessages).toHaveLength(1);
+    expect(outboxMock.__enqueuedMessages).toHaveLength(2);  // still 2 (no NEW messages) -- duplicate rejected by markProcessed
   });
 });
