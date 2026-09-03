@@ -11,15 +11,18 @@
  * tested); this file is only the DB plumbing around it.
  *
  * Cross-tenant discovery: escalation_rules is FORCE-RLS, so a background job
- * running as the (non-superuser) service role sees nothing without a tenant GUC.
- * `crm.list_escalation_tenants()` is SECURITY DEFINER (owned by the superuser that
- * ran the migration) so it can enumerate the tenants that have enabled rules;
- * each tenant's data is then read under its own RLS scope via `runWithTenant`.
+ * running as the (non-superuser) service role sees nothing without BYPASSRLS.
+ * `crm.list_escalation_tenants()` is SECURITY DEFINER, owned by the dedicated
+ * `crm_scanner` BYPASSRLS role (migrations/0089_crm_scanner_role.sql,
+ * 0090_crm_scanner_function_ownership.sql) — see scanner-db.ts. Tenant
+ * discovery MUST run on `scannerSqlClient`; each tenant's actual data is then
+ * read under its own RLS scope via `runWithTenant`, exactly as before.
  */
 import { pino } from "pino";
 import { randomUUID } from "node:crypto";
 import { runWithTenant } from "@civitasone/db";
-import { db, sqlClient } from "../../shared/db.js";
+import { db } from "../../shared/db.js";
+import { scannerSqlClient } from "../../shared/scanner-db.js";
 import { enqueue } from "../../shared/outbox.js";
 import { EVENTS } from "../../topics.js";
 import { findOverdue } from "./escalation-domain.js";
@@ -106,7 +109,7 @@ export async function runTenantEscalation(tenantId: string, now: Date = new Date
 
 /** One full cycle across every tenant with enabled escalation rules. */
 export async function runEscalationCycle(now: Date = new Date()): Promise<number> {
-  const rows = (await sqlClient`SELECT tenant_id FROM crm.list_escalation_tenants()`) as unknown as Array<{ tenant_id: string }>;
+  const rows = (await scannerSqlClient`SELECT tenant_id FROM crm.list_escalation_tenants()`) as unknown as Array<{ tenant_id: string }>;
   let total = 0;
   for (const r of rows) {
     try {

@@ -12,6 +12,7 @@ import { randomUUID } from "node:crypto";
 import { signToken } from "@civitasone/auth";
 import { buildApp } from "../src/app.js";
 import { sqlClient } from "../src/shared/db.js";
+import { scannerSqlClient } from "../src/shared/scanner-db.js";
 import { queue } from "../src/shared/infra.js";
 import { registerAllConsumers } from "../src/consumers.js";
 import { drainQueue } from "./consumer-harness.js";
@@ -244,6 +245,39 @@ describe("escalation cycle (AS-004)", () => {
     await seedContact(TENANT, { ownerId: randomUUID(), assignedAt: new Date().toISOString() }); // just assigned
     const escalated = await runEscalationCycle(new Date());
     expect(escalated).toBe(0);
+  });
+
+  it("list_escalation_tenants() discovers tenants across the WHOLE table, not just one (BYPASSRLS scanner)", async () => {
+    // A fresh-lead cycle (above) proves runEscalationCycle runs without error for a
+    // single tenant, but a single-tenant fixture cannot distinguish real cross-tenant
+    // BYPASSRLS discovery from a query that only happens to see rows because the
+    // session's own app.tenant_id GUC still matches the one tenant seeded so far —
+    // exactly the false-pass the crm-service document-alert scanner had before
+    // 0090_crm_scanner_function_ownership.sql. Two independent tenants, each with
+    // their own overdue lead, proves the discovery function itself (not merely the
+    // scheduler wrapper) really scans every tenant.
+    await cleanup();
+    await call("POST", "/v1/crm/escalation-rules", {
+      headers: headers(["crm_admin"], TENANT),
+      payload: { name: "esc-cross-a", trigger: "unaccepted", thresholdMinutes: 30 },
+    });
+    await call("POST", "/v1/crm/escalation-rules", {
+      headers: headers(["crm_admin"], OTHER),
+      payload: { name: "esc-cross-b", trigger: "unaccepted", thresholdMinutes: 30 },
+    });
+    const staleAssignedAt = new Date(Date.now() - 60 * 60_000).toISOString();
+    await seedContact(TENANT, { ownerId: randomUUID(), assignedAt: staleAssignedAt });
+    await seedContact(OTHER, { ownerId: randomUUID(), assignedAt: staleAssignedAt });
+
+    // The raw discovery function itself must name BOTH tenants.
+    const discovered = (await scannerSqlClient`SELECT tenant_id FROM crm.list_escalation_tenants()`) as unknown as Array<{ tenant_id: string }>;
+    const discoveredIds = discovered.map((r) => r.tenant_id);
+    expect(discoveredIds).toEqual(expect.arrayContaining([TENANT, OTHER]));
+
+    // And the full cycle actually escalates both tenants' overdue leads, not just
+    // whichever one a NOBYPASSRLS query would have coincidentally been scoped to.
+    const escalated = await runEscalationCycle(new Date());
+    expect(escalated).toBeGreaterThanOrEqual(2);
   });
 
   it("unattended trigger escalates a stale-since-last-activity lead", async () => {
