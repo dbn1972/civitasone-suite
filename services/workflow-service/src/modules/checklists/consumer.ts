@@ -70,7 +70,13 @@ export function registerChecklistConsumers(queue: Queue): void {
     try {
       await db.transaction(async (tx) => {
         if (!(await markProcessed(tx, msg.messageId))) return;
-        const inst = await repo.findInstance(p.tenantId, p.instanceId);
+        // Row-locked read (see findInstanceForUpdate doc): without this lock,
+        // two toggle commands for the same instance delivered close together
+        // each read the same stale items array and the second saveItems()
+        // overwrote the first toggle -- a silent lost update. Locking here
+        // serializes them so the second toggle always builds on the first
+        // toggle's already-committed items.
+        const inst = await repo.findInstanceForUpdate(p.tenantId, p.instanceId, tx);
         if (!inst) return;
         const res = toggleItem(inst.items as ChecklistItem[], p.key, p.checked, msg.actorId, new Date().toISOString());
         if (!res.found) return;

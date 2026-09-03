@@ -5,9 +5,15 @@ import { acceptedResponseSchema } from "@civitasone/schemas/common";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import * as repo from "./repo.js";
 import * as commands from "./commands.js";
-import { planSplit, planMerge, type LinkType } from "./domain.js";
+import { planSplit, planMerge, validateLink, type LinkType } from "./domain.js";
 
 const ADMIN = ["super_admin", "workflow_admin", "case_manager", "tenant_admin"];
+
+// Guard errors that can be decided from a read-only snapshot of the tenant's
+// current links (cycle/duplicate detection) map to 409 CONFLICT; structural
+// input errors (self-link, unknown type) map to 400. Kept here rather than in
+// domain.ts because the HTTP status is a route concern, not a domain one.
+const CONFLICT_ERRORS = new Set(["CYCLE_DETECTED", "DUPLICATE_LINK"]);
 
 export async function caseLinksRoutes(app: FastifyInstance): Promise<void> {
   app.get("/v1/workflow/cases/:id/links", async (req, reply) => {
@@ -29,6 +35,23 @@ export async function caseLinksRoutes(app: FastifyInstance): Promise<void> {
     if (!(await repo.caseExists(ctx.tenantId, id))) throw new HttpError(404, "NOT_FOUND", "from case not found");
     if (!(await repo.caseExists(ctx.tenantId, body.toCaseId))) throw new HttpError(404, "NOT_FOUND", "to case not found");
 
+    // Synchronous pre-check (PR #169 regression guard): the actual insert now
+    // happens in the async consumer, but cycle/duplicate detection is a pure,
+    // read-only function of the tenant's CURRENTLY COMMITTED links, so we can
+    // still reject a doomed request before ever enqueueing it -- matching the
+    // route's pre-CQRS behavior for the common (non-racing) case. This is a
+    // best-effort check, not a substitute for the consumer's own lock-and-
+    // recheck: two requests racing the same pair can both pass this read and
+    // both get enqueued, in which case the consumer's row-locked
+    // createLinkChecked is still the sole source of truth for which one
+    // actually persists.
+    const existing = await repo.allLinks(ctx.tenantId);
+    const guard = validateLink({ fromCaseId: id, toCaseId: body.toCaseId, type: body.linkType as LinkType, existing });
+    if (!guard.allowed) {
+      const status = guard.errors.some((e) => CONFLICT_ERRORS.has(e)) ? 409 : 400;
+      throw new HttpError(status, guard.errors[0]!, `link rejected: ${guard.errors.join(", ")}`);
+    }
+
     return sendAccepted(reply, acceptedResponseSchema, await commands.createCaseLink(ctx, {
       fromCaseId: id,
       toCaseId: body.toCaseId,
@@ -49,9 +72,14 @@ export async function caseLinksRoutes(app: FastifyInstance): Promise<void> {
       })).min(2).max(20),
     }).parse(req.body);
 
-    if (!(await repo.caseExists(ctx.tenantId, id))) throw new HttpError(404, "NOT_FOUND", "case not found");
+    const status = await repo.caseStatus(ctx.tenantId, id);
+    if (status === undefined) throw new HttpError(404, "NOT_FOUND", "case not found");
     const plan = planSplit(body.children);
     if (!plan.allowed) throw new HttpError(400, "SPLIT_REJECTED", `split rejected: ${plan.errors.join(", ")}`);
+    // Synchronous pre-check mirroring persistSplit's own guard (see repo.ts):
+    // best-effort, the consumer's FOR UPDATE lock is still the sole source of
+    // truth for a request that races a concurrent split of the same parent.
+    if (status !== "open") throw new HttpError(409, "CASE_NOT_OPEN", `case not open for split (status=${status})`);
 
     return sendAccepted(reply, acceptedResponseSchema, await commands.splitCase(ctx, {
       parentCaseId: id,
@@ -69,7 +97,20 @@ export async function caseLinksRoutes(app: FastifyInstance): Promise<void> {
 
     const plan = planMerge(body.sourceIds, body.targetId);
     if (!plan.allowed) throw new HttpError(400, "MERGE_REJECTED", `merge rejected: ${plan.errors.join(", ")}`);
-    if (!(await repo.caseExists(ctx.tenantId, body.targetId))) throw new HttpError(404, "NOT_FOUND", "target case not found");
+    const targetStatus = await repo.caseStatus(ctx.tenantId, body.targetId);
+    if (targetStatus === undefined) throw new HttpError(404, "NOT_FOUND", "target case not found");
+    // Synchronous pre-check mirroring persistMerge's own guard (see repo.ts):
+    // best-effort, the consumer's FOR UPDATE lock is still the sole source of
+    // truth for a request that races a concurrent split/merge of a source.
+    // Non-existent sources are tolerated here too (persistMerge skips them).
+    if (targetStatus !== "open") throw new HttpError(409, "CASE_NOT_OPEN", `target case not open for merge (status=${targetStatus})`);
+    for (const sourceId of body.sourceIds) {
+      if (sourceId === body.targetId) continue;
+      const sourceStatus = await repo.caseStatus(ctx.tenantId, sourceId);
+      if (sourceStatus !== undefined && sourceStatus !== "open") {
+        throw new HttpError(409, "CASE_NOT_OPEN", `source case not open for merge (id=${sourceId}, status=${sourceStatus})`);
+      }
+    }
 
     return sendAccepted(reply, acceptedResponseSchema, await commands.mergeCases(ctx, body));
   });
