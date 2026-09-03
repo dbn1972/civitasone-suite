@@ -44,6 +44,16 @@ export async function maxArtefactVersionTx(tx: Writer, tenantId: string, setKey:
   return rows[0]?.v ?? null;
 }
 
+/**
+ * Non-transactional (scopedRead) counterpart of maxArtefactVersionTx, used by
+ * the snapshot route to synchronously check for a byte-identical head before
+ * accepting a new version — see the ARTEFACT_UNCHANGED guard in
+ * artefact-routes.ts, mirroring apply_config_0 exactly.
+ */
+export async function maxArtefactVersion(tenantId: string, setKey: string): Promise<number | null> {
+  return scopedRead((tx) => maxArtefactVersionTx(tx, tenantId, setKey));
+}
+
 export async function listArtefacts(
   tenantId: string,
   limit: number,
@@ -111,6 +121,16 @@ export async function findPromotionByIdTx(tx: Writer, tenantId: string, id: stri
   return rows[0];
 }
 
+/**
+ * Non-transactional (scopedRead) counterpart of findPromotionByIdTx, used by
+ * the approve/reject routes to synchronously check existence, pending state,
+ * maker-checker separation and the optimistic lock before accepting the
+ * write — mirrors apply_config_2/apply_config_3 exactly.
+ */
+export async function findPromotionById(tenantId: string, id: string): Promise<ConfigPromotionRow | undefined> {
+  return scopedRead((tx) => findPromotionByIdTx(tx, tenantId, id));
+}
+
 export async function listPromotions(
   tenantId: string,
   limit: number,
@@ -166,6 +186,19 @@ export async function promotedVersionsTx(
   return rows.map((r) => r.v);
 }
 
+/**
+ * Non-transactional (scopedRead) counterpart of promotedVersionsTx, used by
+ * the rollback route to synchronously check that the target version was
+ * previously promoted to this environment — mirrors apply_config_4 exactly.
+ */
+export async function promotedVersions(
+  tenantId: string,
+  setKey: string,
+  environment: string,
+): Promise<number[]> {
+  return scopedRead((tx) => promotedVersionsTx(tx, tenantId, setKey, environment));
+}
+
 // ── environment state ───────────────────────────────────────────────────────
 
 export async function findEnvStateTx(
@@ -181,6 +214,19 @@ export async function findEnvStateTx(
       eq(configEnvState.environment, environment),
     )).limit(1);
   return rows[0];
+}
+
+/**
+ * Non-transactional (scopedRead) counterpart of findEnvStateTx, used by the
+ * rollback route to synchronously check existence and the optimistic lock
+ * before accepting the write — mirrors apply_config_4 exactly.
+ */
+export async function findEnvState(
+  tenantId: string,
+  setKey: string,
+  environment: string,
+): Promise<ConfigEnvStateRow | undefined> {
+  return scopedRead((tx) => findEnvStateTx(tx, tenantId, setKey, environment));
 }
 
 export async function insertEnvState(tx: Writer, row: ConfigEnvStateInsert): Promise<ConfigEnvStateRow> {
