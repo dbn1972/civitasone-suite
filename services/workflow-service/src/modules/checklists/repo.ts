@@ -38,6 +38,26 @@ export async function findInstance(tenantId: string, id: string): Promise<Checkl
     .where(and(eq(checklistInstances.tenantId, tenantId), eq(checklistInstances.id, id))).limit(1));
   return rows[0];
 }
+
+/**
+ * Same lookup as findInstance, but row-locked (SELECT ... FOR UPDATE) inside a
+ * caller-supplied transaction. Two toggle commands for the same instance,
+ * delivered close together (e.g. a user quickly checking two boxes), used to
+ * each do their own unlocked findInstance() read, mutate the *whole* items
+ * array in memory, then saveItems() a full replace -- a textbook lost update:
+ * whichever write committed second clobbered the other's change with its own
+ * stale copy of the array. Locking the row here serializes concurrent
+ * toggles on the same instance so the second one reads the first one's
+ * committed result instead of a stale snapshot.
+ */
+export async function findInstanceForUpdate(tenantId: string, id: string, tx: Tx): Promise<ChecklistInstanceRow | undefined> {
+  const rows = await tx.select().from(checklistInstances)
+    .where(and(eq(checklistInstances.tenantId, tenantId), eq(checklistInstances.id, id)))
+    .limit(1)
+    .for("update");
+  return rows[0];
+}
+
 export async function listInstancesForEntity(tenantId: string, entityType: string, entityId: string): Promise<ChecklistInstanceRow[]> {
   return scopedRead((tx) => tx.select().from(checklistInstances)
     .where(and(eq(checklistInstances.tenantId, tenantId), eq(checklistInstances.entityType, entityType), eq(checklistInstances.entityId, entityId)))

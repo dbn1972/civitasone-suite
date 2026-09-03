@@ -37,6 +37,21 @@ export async function caseExists(tenantId: string, caseId: string): Promise<bool
   return rows.length > 0;
 }
 
+/**
+ * Read-only status lookup used for synchronous pre-checks in routes.ts (split
+ * / merge). The real, race-safe enforcement still happens in the consumer
+ * (persistSplit / persistMerge lock the row FOR UPDATE before asserting
+ * status='open'); this is a best-effort early-reject so the common,
+ * non-racing "case is already split/merged" request gets an immediate 409
+ * instead of a silently-dropped async write.
+ */
+export async function caseStatus(tenantId: string, caseId: string): Promise<string | undefined> {
+  const rows = await scopedRead((tx) =>
+    tx.select({ status: cases.status }).from(cases).where(and(eq(cases.tenantId, tenantId), eq(cases.id, caseId))).limit(1),
+  );
+  return rows[0]?.status;
+}
+
 export interface CreateLinkInput {
   tenantId: string;
   fromCaseId: string;
