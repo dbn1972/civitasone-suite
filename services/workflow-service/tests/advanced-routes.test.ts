@@ -12,6 +12,9 @@ import { signToken } from "@civitasone/auth";
 import type { FastifyInstance } from "fastify";
 import { buildApp } from "../src/app.js";
 import { sqlClient } from "../src/shared/db.js";
+import { queue } from "../src/shared/infra.js";
+import { registerDecisionConsumers } from "../src/modules/decisions/consumer.js";
+import { registerAssignmentConsumers } from "../src/modules/assignment/consumer.js";
 import { sqlAsTenant, asTenant } from "./helpers/engine-harness.js";
 
 const SECRET = "test_secret_for_civitasone_32chr";
@@ -27,6 +30,20 @@ function token(roles: string[] = ["workflow_user"], tenantId = TENANT): string {
 
 function authHeader(roles?: string[], tenantId?: string) {
   return { authorization: `Bearer ${token(roles, tenantId)}` };
+}
+
+registerDecisionConsumers(queue);
+registerAssignmentConsumers(queue);
+await queue.start();
+
+async function waitFor<T>(fn: () => Promise<T | null | undefined>, ms = 3000): Promise<T> {
+  const start = Date.now();
+  while (Date.now() - start < ms) {
+    const v = await fn();
+    if (v) return v;
+    await new Promise((r) => setTimeout(r, 25));
+  }
+  throw new Error("waitFor timeout");
 }
 
 let app: FastifyInstance;
@@ -213,9 +230,19 @@ describe("Task 14.8: POST /v1/workflow/decisions — create", () => {
         rules: [{ inputs: { amount: "> 1000" }, outputs: { discount: 10 } }],
       },
     });
-    expect(res.statusCode).toBe(201);
-    expect(res.json().data.code).toBe(uniqueCode);
-    expect(res.json().data.id).toBeDefined();
+    expect(res.statusCode).toBe(202);
+    const { id } = res.json();
+    expect(id).toBeDefined();
+    const created = await waitFor(async () => {
+      const g = await app.inject({
+        method: "GET",
+        url: "/v1/workflow/decisions",
+        headers: authHeader(["workflow_admin"]),
+      });
+      const rows = g.json().data as Array<{ id: string; code: string }>;
+      return rows.find((r) => r.id === id) ?? null;
+    });
+    expect(created.code).toBe(uniqueCode);
   });
 
   it("returns 400 with empty body", async () => {
@@ -337,8 +364,19 @@ describe("Task 14.8: POST /v1/workflow/assignment/matrix — create", () => {
         conditionExpr: "amount > 10000",
       },
     });
-    expect(res.statusCode).toBe(201);
-    expect(res.json().data).toBeDefined();
+    expect(res.statusCode).toBe(202);
+    const { id } = res.json();
+    expect(id).toBeDefined();
+    const created = await waitFor(async () => {
+      const g = await app.inject({
+        method: "GET",
+        url: "/v1/workflow/assignment/matrix?roleRef=approver_level_1",
+        headers: authHeader(["workflow_admin"]),
+      });
+      const rows = g.json().data as Array<{ id: string }>;
+      return rows.find((r) => r.id === id) ?? null;
+    });
+    expect(created).toBeDefined();
   });
 
   it("returns 400 with invalid body (missing roleRef)", async () => {
@@ -439,8 +477,19 @@ describe("Task 14.8: POST /v1/workflow/assignment/substitutions — create", () 
         reason: "On leave",
       },
     });
-    expect(res.statusCode).toBe(201);
-    expect(res.json().data).toBeDefined();
+    expect(res.statusCode).toBe(202);
+    const { id } = res.json();
+    expect(id).toBeDefined();
+    const created = await waitFor(async () => {
+      const g = await app.inject({
+        method: "GET",
+        url: "/v1/workflow/assignment/substitutions",
+        headers: authHeader(["workflow_admin"]),
+      });
+      const rows = g.json().data as Array<{ id: string }>;
+      return rows.find((r) => r.id === id) ?? null;
+    });
+    expect(created).toBeDefined();
   });
 
   it("returns 400 with invalid date format", async () => {
