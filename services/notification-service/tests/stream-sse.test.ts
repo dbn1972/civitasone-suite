@@ -47,7 +47,7 @@ afterAll(async () => {
 function connectSSE(port: number, authToken: string, durationMs = 300): Promise<{ status: number; headers: http.IncomingHttpHeaders; body: string }> {
   return new Promise((resolve, reject) => {
     const req = http.get(
-      `http://127.0.0.1:${port}/v1/notifications/stream`,
+      `http://127.0.0.1:${port}/notifications/stream`,
       { headers: { authorization: `Bearer ${authToken}` } },
       (res) => {
         let body = "";
@@ -70,7 +70,7 @@ function connectSSE(port: number, authToken: string, durationMs = 300): Promise<
   });
 }
 
-describe("GET /v1/notifications/stream — SSE endpoint", () => {
+describe("GET /notifications/stream — SSE endpoint", () => {
   it("returns 200 with SSE content-type for authenticated user", async () => {
     const app = await buildApp();
     const address = await app.listen({ port: 0, host: "127.0.0.1" });
@@ -108,7 +108,7 @@ describe("GET /v1/notifications/stream — SSE endpoint", () => {
     try {
       const res = await new Promise<{ status: number }>((resolve, reject) => {
         const req = http.get(
-          `http://127.0.0.1:${port}/v1/notifications/stream`,
+          `http://127.0.0.1:${port}/notifications/stream`,
           (res) => {
             let body = "";
             res.on("data", (chunk) => { body += chunk.toString(); });
@@ -124,12 +124,12 @@ describe("GET /v1/notifications/stream — SSE endpoint", () => {
   });
 });
 
-describe("POST /v1/notifications/publish — notification persistence and pub/sub", () => {
+describe("POST /notifications/publish — notification persistence and pub/sub", () => {
   it("returns 202 and persists notification", async () => {
     const app = await buildApp();
     const res = await app.inject({
       method: "POST",
-      url: "/v1/notifications/publish",
+      url: "/notifications/publish",
       headers: {
         authorization: `Bearer ${token()}`,
         "content-type": "application/json",
@@ -153,7 +153,7 @@ describe("POST /v1/notifications/publish — notification persistence and pub/su
     const app = await buildApp();
     const res = await app.inject({
       method: "POST",
-      url: "/v1/notifications/publish",
+      url: "/notifications/publish",
       headers: {
         authorization: `Bearer ${token()}`,
         "content-type": "application/json",
@@ -168,7 +168,7 @@ describe("POST /v1/notifications/publish — notification persistence and pub/su
     const app = await buildApp();
     const res = await app.inject({
       method: "POST",
-      url: "/v1/notifications/publish",
+      url: "/notifications/publish",
       headers: { "content-type": "application/json" },
       payload: {
         userId: USER_A,
@@ -181,12 +181,12 @@ describe("POST /v1/notifications/publish — notification persistence and pub/su
   });
 });
 
-describe("POST /v1/notifications/stream/mark-read", () => {
+describe("POST /notifications/stream/mark-read", () => {
   it("returns 200 when marking all as read", async () => {
     const app = await buildApp();
     const res = await app.inject({
       method: "POST",
-      url: "/v1/notifications/stream/mark-read",
+      url: "/notifications/stream/mark-read",
       headers: {
         authorization: `Bearer ${token()}`,
         "content-type": "application/json",
@@ -202,7 +202,7 @@ describe("POST /v1/notifications/stream/mark-read", () => {
     const app = await buildApp();
     const res = await app.inject({
       method: "POST",
-      url: "/v1/notifications/stream/mark-read",
+      url: "/notifications/stream/mark-read",
       headers: {
         authorization: `Bearer ${token()}`,
         "content-type": "application/json",
@@ -217,7 +217,7 @@ describe("POST /v1/notifications/stream/mark-read", () => {
     const app = await buildApp();
     const res = await app.inject({
       method: "POST",
-      url: "/v1/notifications/stream/mark-read",
+      url: "/notifications/stream/mark-read",
       headers: {
         authorization: `Bearer ${token()}`,
         "content-type": "application/json",
@@ -232,7 +232,7 @@ describe("POST /v1/notifications/stream/mark-read", () => {
     const app = await buildApp();
     const res = await app.inject({
       method: "POST",
-      url: "/v1/notifications/stream/mark-read",
+      url: "/notifications/stream/mark-read",
       headers: { "content-type": "application/json" },
       payload: { all: true },
     });
@@ -251,7 +251,7 @@ describe("Tenant isolation — notifications are scoped to tenant+user", () => {
       // Publish notification for User A in Tenant A
       await app.inject({
         method: "POST",
-        url: "/v1/notifications/publish",
+        url: "/notifications/publish",
         headers: {
           authorization: `Bearer ${token(TENANT_A, USER_A)}`,
           "content-type": "application/json",
@@ -281,7 +281,7 @@ describe("Tenant isolation — notifications are scoped to tenant+user", () => {
       // Publish notification for User A in Tenant A
       await app.inject({
         method: "POST",
-        url: "/v1/notifications/publish",
+        url: "/notifications/publish",
         headers: {
           authorization: `Bearer ${token(TENANT_A, USER_A)}`,
           "content-type": "application/json",
@@ -313,7 +313,7 @@ describe("Offline persistence — notifications persist for offline recipients",
       // Publish notification (user is offline — no active SSE connection)
       const publishRes = await app.inject({
         method: "POST",
-        url: "/v1/notifications/publish",
+        url: "/notifications/publish",
         headers: {
           authorization: `Bearer ${token(TENANT_A, USER_A)}`,
           "content-type": "application/json",
@@ -347,7 +347,7 @@ describe("Offline persistence — notifications persist for offline recipients",
       // Publish notification
       const publishRes = await app.inject({
         method: "POST",
-        url: "/v1/notifications/publish",
+        url: "/notifications/publish",
         headers: {
           authorization: `Bearer ${token(TENANT_A, USER_A)}`,
           "content-type": "application/json",
@@ -363,7 +363,7 @@ describe("Offline persistence — notifications persist for offline recipients",
       // Mark as read
       const markRes = await app.inject({
         method: "POST",
-        url: "/v1/notifications/stream/mark-read",
+        url: "/notifications/stream/mark-read",
         headers: {
           authorization: `Bearer ${token(TENANT_A, USER_A)}`,
           "content-type": "application/json",

@@ -19,7 +19,7 @@ export async function streamRoutes(app: FastifyInstance): Promise<void> {
    * On connect: sends unread persisted notifications, then streams new ones via Redis pub/sub.
    * Auto-closes after 30min idle.
    */
-  app.get("/v1/notifications/stream", async (req: FastifyRequest, reply: FastifyReply) => {
+  app.get("/notifications/stream", async (req: FastifyRequest, reply: FastifyReply) => {
     const ctx = resolveContext(req);
     const { tenantId, actorId } = ctx;
     const channel = `notifications:${tenantId}:${actorId}`;
@@ -128,7 +128,7 @@ export async function streamRoutes(app: FastifyInstance): Promise<void> {
    * Used internally by consumers to push notifications in real-time.
    * Persists notification for offline delivery and publishes via Redis pub/sub.
    */
-  app.post("/v1/notifications/publish", async (req: FastifyRequest, reply: FastifyReply) => {
+  app.post("/notifications/publish", async (req: FastifyRequest, reply: FastifyReply) => {
     const ctx = resolveContext(req);
     const body = req.body as {
       userId: string;
@@ -174,7 +174,7 @@ export async function streamRoutes(app: FastifyInstance): Promise<void> {
   /**
    * POST /v1/notifications/stream/mark-read — Mark notification(s) as read.
    */
-  app.post("/v1/notifications/stream/mark-read", async (req: FastifyRequest, reply: FastifyReply) => {
+  app.post("/notifications/stream/mark-read", async (req: FastifyRequest, reply: FastifyReply) => {
     const ctx = resolveContext(req);
     const body = req.body as { notificationId?: string; all?: boolean };
 
@@ -198,7 +198,7 @@ export async function streamRoutes(app: FastifyInstance): Promise<void> {
    * GET /notifications/stream/unread — list recent unread notifications for the bell dropdown.
    * Supports ?limit=N (default 20, max 50).
    */
-  app.get("/v1/notifications/stream/unread", async (req: FastifyRequest, reply: FastifyReply) => {
+  app.get("/notifications/stream/unread", async (req: FastifyRequest, reply: FastifyReply) => {
     const ctx = resolveContext(req);
     const { tenantId, actorId } = ctx;
     const query = (req.query as Record<string, string | undefined>);
