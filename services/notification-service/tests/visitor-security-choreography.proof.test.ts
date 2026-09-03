@@ -87,7 +87,7 @@ describe("LIVE PROOF — visitor security choreography wiring", () => {
     await q.publish(CONSUMED_EVENTS.visitorSecurityIncidentCreated, envelope);
     await new Promise((r) => setTimeout(r, 30));
 
-    expect(outboxMock.__enqueuedMessages).toHaveLength(1);
+    expect(outboxMock.__enqueuedMessages).toHaveLength(2);  // notification.send + the CERT-In audit event (df2f9eeb) -- see [0] for the notification
     const msg = outboxMock.__enqueuedMessages[0]!;
     expect(msg.topic).toBe("notification.send");
     const payload = msg.payload as {
@@ -120,7 +120,7 @@ describe("LIVE PROOF — visitor security choreography wiring", () => {
     await q.publish(CONSUMED_EVENTS.visitorEmergencyUnlockTriggered, envelope);
     await new Promise((r) => setTimeout(r, 30));
 
-    expect(outboxMock.__enqueuedMessages).toHaveLength(1);
+    expect(outboxMock.__enqueuedMessages).toHaveLength(2);  // notification.send + the CERT-In audit event (df2f9eeb) -- see [0] for the notification
     const payload = outboxMock.__enqueuedMessages[0]!.payload as {
       recipient: string;
       variables: Record<string, string>;

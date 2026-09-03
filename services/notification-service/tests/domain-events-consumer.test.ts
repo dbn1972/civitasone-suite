@@ -156,7 +156,7 @@ describe("domain-events consumer", () => {
     await q.publish(CONSUMED_EVENTS.hrmsLeaveApproved, envelope);
     await new Promise((r) => setTimeout(r, 30));
 
-    expect(outboxMock.__enqueuedMessages).toHaveLength(1);
+    expect(outboxMock.__enqueuedMessages).toHaveLength(2);  // notification.send + the CERT-In audit event (df2f9eeb) -- see [0] for the notification
     const msg = outboxMock.__enqueuedMessages[0]!;
     expect(msg.topic).toBe("notification.send");
     const payload = msg.payload as { recipient: string; recipientId: string; eventType: string; variables: Record<string, string> };
@@ -182,7 +182,7 @@ describe("domain-events consumer", () => {
     await q.publish(CONSUMED_EVENTS.hrmsLeaveApplied, envelope);
     await new Promise((r) => setTimeout(r, 30));
 
-    expect(outboxMock.__enqueuedMessages).toHaveLength(1);
+    expect(outboxMock.__enqueuedMessages).toHaveLength(2);  // notification.send + the CERT-In audit event (df2f9eeb) -- see [0] for the notification
     const payload = outboxMock.__enqueuedMessages[0]!.payload as { recipientId: string; variables: Record<string, string> };
     expect(payload.recipientId).toBe("officer-50");
     expect(payload.variables?.employeeName).toBe("Amit Singh");
@@ -200,7 +200,7 @@ describe("domain-events consumer", () => {
     await q.publish(CONSUMED_EVENTS.financeSanctionApproved, envelope);
     await new Promise((r) => setTimeout(r, 30));
 
-    expect(outboxMock.__enqueuedMessages).toHaveLength(1);
+    expect(outboxMock.__enqueuedMessages).toHaveLength(2);  // notification.send + the CERT-In audit event (df2f9eeb) -- see [0] for the notification
     const payload = outboxMock.__enqueuedMessages[0]!.payload as { recipientId: string; variables: Record<string, string> };
     expect(payload.recipientId).toBe("ddo-10");
     expect(payload.variables?.sanctionNo).toBe("SAN/2024/001");
@@ -218,7 +218,7 @@ describe("domain-events consumer", () => {
     await q.publish(CONSUMED_EVENTS.financePaymentMade, envelope);
     await new Promise((r) => setTimeout(r, 30));
 
-    expect(outboxMock.__enqueuedMessages).toHaveLength(1);
+    expect(outboxMock.__enqueuedMessages).toHaveLength(2);  // notification.send + the CERT-In audit event (df2f9eeb) -- see [0] for the notification
     const payload = outboxMock.__enqueuedMessages[0]!.payload as { recipientId: string; variables: Record<string, string> };
     expect(payload.recipientId).toBe("vendor-20");
     expect(payload.variables?.amount).toBe("250000");
@@ -236,7 +236,7 @@ describe("domain-events consumer", () => {
     await q.publish(CONSUMED_EVENTS.financeBillPassed, envelope);
     await new Promise((r) => setTimeout(r, 30));
 
-    expect(outboxMock.__enqueuedMessages).toHaveLength(1);
+    expect(outboxMock.__enqueuedMessages).toHaveLength(2);  // notification.send + the CERT-In audit event (df2f9eeb) -- see [0] for the notification
     const payload = outboxMock.__enqueuedMessages[0]!.payload as { recipientId: string; variables: Record<string, string> };
     expect(payload.recipientId).toBe("user-30");
     expect(payload.variables?.billNo).toBe("BILL/2024/055");
@@ -254,7 +254,7 @@ describe("domain-events consumer", () => {
     await q.publish(CONSUMED_EVENTS.procurementGrnAccepted, envelope);
     await new Promise((r) => setTimeout(r, 30));
 
-    expect(outboxMock.__enqueuedMessages).toHaveLength(1);
+    expect(outboxMock.__enqueuedMessages).toHaveLength(2);  // notification.send + the CERT-In audit event (df2f9eeb) -- see [0] for the notification
     const payload = outboxMock.__enqueuedMessages[0]!.payload as { recipientId: string; variables: Record<string, string> };
     expect(payload.recipientId).toBe("user-40");
     expect(payload.variables?.grnNo).toBe("GRN/2024/010");
@@ -274,7 +274,7 @@ describe("domain-events consumer", () => {
     await q.publish(CONSUMED_EVENTS.helpdeskTicketCreated, envelope);
     await new Promise((r) => setTimeout(r, 30));
 
-    expect(outboxMock.__enqueuedMessages).toHaveLength(1);
+    expect(outboxMock.__enqueuedMessages).toHaveLength(2);  // notification.send + the CERT-In audit event (df2f9eeb) -- see [0] for the notification
     const payload = outboxMock.__enqueuedMessages[0]!.payload as { recipientId: string; variables: Record<string, string> };
     expect(payload.recipientId).toBe("agent-5");
     expect(payload.variables?.subject).toBe("Printer not working");
@@ -296,7 +296,7 @@ describe("domain-events consumer", () => {
     await q.publish(CONSUMED_EVENTS.helpdeskTicketEscalated, envelope);
     await new Promise((r) => setTimeout(r, 30));
 
-    expect(outboxMock.__enqueuedMessages).toHaveLength(1);
+    expect(outboxMock.__enqueuedMessages).toHaveLength(2);  // notification.send + the CERT-In audit event (df2f9eeb) -- see [0] for the notification
     const payload = outboxMock.__enqueuedMessages[0]!.payload as { recipientId: string; variables: Record<string, string> };
     expect(payload.recipientId).toBe("mgr-3");
     expect(payload.variables?.escalationReason).toBe("SLA breach — 4 hours overdue");
@@ -316,7 +316,7 @@ describe("domain-events consumer", () => {
     await q.publish(CONSUMED_EVENTS.citizenRequestCreated, envelope);
     await new Promise((r) => setTimeout(r, 30));
 
-    expect(outboxMock.__enqueuedMessages).toHaveLength(1);
+    expect(outboxMock.__enqueuedMessages).toHaveLength(2);  // notification.send + the CERT-In audit event (df2f9eeb) -- see [0] for the notification
     const payload = outboxMock.__enqueuedMessages[0]!.payload as { recipientId: string; variables: Record<string, string> };
     expect(payload.recipientId).toBe("citizen-99");
     expect(payload.variables?.requestNo).toBe("CIT/2024/1001");
@@ -337,7 +337,7 @@ describe("domain-events consumer", () => {
     await q.publish(CONSUMED_EVENTS.auditParaIssued, envelope);
     await new Promise((r) => setTimeout(r, 30));
 
-    expect(outboxMock.__enqueuedMessages).toHaveLength(1);
+    expect(outboxMock.__enqueuedMessages).toHaveLength(2);  // notification.send + the CERT-In audit event (df2f9eeb) -- see [0] for the notification
     const payload = outboxMock.__enqueuedMessages[0]!.payload as { recipientId: string; variables: Record<string, string> };
     expect(payload.recipientId).toBe("head-12");
     expect(payload.variables?.paraNo).toBe("AP/2024/007");
@@ -370,15 +370,15 @@ describe("domain-events consumer", () => {
     await q.publish(CONSUMED_EVENTS.hrmsLeaveApproved, envelope);
     await new Promise((r) => setTimeout(r, 30));
 
-    // First processing should produce exactly 1 notification
-    expect(outboxMock.__enqueuedMessages).toHaveLength(1);
+    // First processing should produce exactly 2 messages: notification.send + the CERT-In audit event (df2f9eeb)
+    expect(outboxMock.__enqueuedMessages).toHaveLength(2);
 
     // Publish same messageId again (simulating redelivery)
     await q.publish(CONSUMED_EVENTS.hrmsLeaveApproved, envelope);
     await new Promise((r) => setTimeout(r, 30));
 
-    // Should still be 1 — duplicate was rejected by markProcessed
-    expect(outboxMock.__enqueuedMessages).toHaveLength(1);
+    // Should still be 2 (no NEW messages) — duplicate was rejected by markProcessed
+    expect(outboxMock.__enqueuedMessages).toHaveLength(2);
   });
 
   // ── Graceful handling of unknown event types ──────────────────────────────
