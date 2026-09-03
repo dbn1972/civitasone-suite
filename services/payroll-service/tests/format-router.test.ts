@@ -10,9 +10,11 @@ import { buildApp } from "../src/app.js";
 import { db } from "../src/shared/db.js";
 import { sqlClient } from "../src/shared/db.js";
 import { sql } from "drizzle-orm";
-import { runWithTenant } from "@civitasone/db";
+import { runWithTenant, withTenantConsumer } from "@civitasone/db";
 import { randomUUID } from "node:crypto";
 import type { FastifyInstance } from "fastify";
+import { queue } from "../src/shared/infra.js";
+import { registerSponsorConfigConsumers } from "../src/modules/sponsor-config/consumer.js";
 
 const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
 const TENANT = "aaaaaaaa-6666-4000-8000-000000000066";
@@ -31,6 +33,17 @@ let app: FastifyInstance;
 
 beforeAll(async () => {
   app = await buildApp();
+
+  // Wire the real sponsor-config consumer onto the same queue singleton the
+  // app's routes publish to (src/shared/infra.js), mirroring src/worker.ts's
+  // global tenant-context wrap so the PUT /v1/payroll/sponsor-bank-config
+  // route (F3 async: 202 + later DB upsert via consumer) actually completes
+  // end-to-end within this HTTP-only test.
+  const rawSubscribe = queue.subscribe.bind(queue);
+  queue.subscribe = ((topic: string, handler: unknown) =>
+    rawSubscribe(topic, withTenantConsumer(handler as (msg: { tenantId: string }) => Promise<void>) as typeof handler)) as typeof queue.subscribe;
+  registerSponsorConfigConsumers(queue);
+  await queue.start();
 
   await runWithTenant(TENANT, () => db.transaction(async (tx) => {
     // Seed a pay structure (required FK for payroll_runs.structure_id)
@@ -117,6 +130,11 @@ async function seedSponsorConfig(overrides: Record<string, unknown> = {}) {
     headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
     payload: body,
   });
+
+  // PUT is an F3 async route (202 + real DB upsert happens later, in the
+  // consumer wired in beforeAll). Wait for the consumer to process before
+  // returning so callers can rely on the config actually being persisted.
+  await new Promise<void>((r) => setTimeout(r, 600));
 }
 
 async function removeSponsorConfig() {
