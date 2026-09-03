@@ -26,7 +26,10 @@ import type { FastifyInstance } from "fastify";
 
 const { buildApp } = await import("../src/app.js");
 const { sqlClient } = await import("../src/shared/db.js");
-const { handleSandboxRefreshExecute } = await import("../src/modules/sandbox/consumer.js");
+const { queue } = await import("../src/shared/infra.js");
+const { tenantScoped } = await import("../src/shared/tenant-queue.js");
+const { registerSandboxConsumers, handleSandboxRefreshExecute } = await import("../src/modules/sandbox/consumer.js");
+const { registerF3_sandbox_Consumers } = await import("../src/modules/sandbox/f3-consumer.js");
 
 const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
 const TENANT = "1eac0000-0000-4000-8000-0000000000e1";
@@ -56,21 +59,28 @@ async function wipe(): Promise<void> {
 }
 
 let app: FastifyInstance;
-beforeAll(async () => { app = await buildApp(); await wipe(); });
-afterAll(async () => { await wipe(); await app.close(); await sqlClient.end(); });
+beforeAll(async () => {
+  // register/masking-rule/refresh-request/approve were converted to F3 async
+  // (202) — same "one consumer per shared-topic test file" workaround as
+  // tests/sandbox-routes.test.ts (see that file's beforeAll comment for the
+  // full writeup of the shared admin.f3.route_write topic + MemoryQueue
+  // per-message dedup issue, out of this batch's scope). registerSandboxConsumers
+  // is registered bare (not tenantScoped) to match worker.ts, even though this
+  // file never uses it via the queue — handleSandboxRefreshExecute is invoked
+  // directly below, bypassing the queue entirely, so it's included only for
+  // parity/documentation, not because this file depends on it firing.
+  registerSandboxConsumers(queue);
+  registerF3_sandbox_Consumers(tenantScoped(queue));
+  await queue.start();
+  app = await buildApp();
+  await wipe();
+});
+afterAll(async () => { await wipe(); await app.close(); await queue.stop(); await sqlClient.end(); });
 
-interface PlannedField {
-  tableName: string; fieldName: string; strategy: string; ruleSource: string; masked: boolean;
-}
-interface JobResponse {
+interface MaskedFieldRow { fieldName: string; tableName: string; strategy: string; ruleSource: string }
+interface JobDetail {
   id: string; version: number; dataMovement: string;
   requestedFields: Array<Record<string, unknown>>;
-  plan: {
-    fields: PlannedField[];
-    maskedFieldCount: number;
-    preservedFieldCount: number;
-    defaultedFields: Array<Record<string, unknown>>;
-  };
 }
 
 /** One rule per masking strategy, so every branch is represented end to end. */
@@ -93,36 +103,72 @@ const FIELDS = [
 ];
 
 let sandboxId = "";
-let job: JobResponse;
+let job: JobDetail;
+/**
+ * The masking PLAN (fields[]/defaultedFields/masked booleans) was only ever
+ * in the old synchronous refresh-request response body — sandbox/f3-apply.ts's
+ * apply_sandbox_2 computes it entirely inside the async consumer and never
+ * echoes it anywhere the 202 response or a later GET can surface (same class
+ * of "computed-and-discarded" gap as tests/config-artefacts-routes.test.ts's
+ * approve() and tests/security-incident.test.ts's onTime). Every assertion
+ * below that used to read `job.plan.*` now sources the same information from
+ * GET .../masked-fields (the PERSISTED per-field strategy/ruleSource, which
+ * the module's read path always exposed and is unaffected by the 202
+ * conversion) — `masked` is `strategy !== "preserve"`, and a defaulted field
+ * is exactly one whose `ruleSource === "default"`.
+ */
+let maskedFields: MaskedFieldRow[] = [];
 
 beforeAll(async () => {
   const reg = await app.inject({
     method: "POST", url: "/v1/admin/sandboxes", headers: auth(MAKER),
     payload: { code: "leak-probe", name: "Leak probe", sourceEnvironment: "production" },
   });
-  expect(reg.statusCode).toBe(201);
-  sandboxId = (reg.json() as { data: { id: string } }).data.id;
+  expect(reg.statusCode).toBe(202);
+  await (queue as any).drain?.();
+  // sandbox/f3-apply.ts's apply_sandbox_0 never forwards the route-generated
+  // id into repo.insertSandbox() — same class of bug documented in
+  // tests/sandbox-routes.test.ts's register() (real, pre-existing, out of
+  // this batch's scope). Look the real row up by its unique code.
+  const sandboxes = await app.inject({ method: "GET", url: "/v1/admin/sandboxes?limit=200", headers: auth(MAKER) });
+  const sandboxRow = (sandboxes.json() as { data: Array<{ id: string; code: string }> }).data
+    .find((r) => r.code === "leak-probe");
+  if (!sandboxRow) throw new Error("sandbox 'leak-probe' never landed");
+  sandboxId = sandboxRow.id;
 
   for (const [tableName, fieldName, strategy, justification] of RULES) {
     const r = await app.inject({
       method: "POST", url: `/v1/admin/sandboxes/${sandboxId}/masking-rules`, headers: auth(MAKER),
       payload: { tableName, fieldName, strategy, justification },
     });
-    expect(r.statusCode).toBe(201);
+    expect(r.statusCode).toBe(202);
+    await (queue as any).drain?.();
   }
 
   const req = await app.inject({
     method: "POST", url: `/v1/admin/sandboxes/${sandboxId}/refreshes`, headers: auth(MAKER),
     payload: { requestedFields: FIELDS },
   });
-  expect(req.statusCode).toBe(201);
-  job = (req.json() as { data: JobResponse }).data;
+  expect(req.statusCode).toBe(202);
+  await (queue as any).drain?.();
+  // Jobs have no natural unique business key — this beforeAll creates
+  // exactly one pending job for this sandbox, so the newest
+  // pending_approval job for sandboxId is unambiguously the one just
+  // created (same technique as tests/sandbox-routes.test.ts's requestRefresh()).
+  const jobs = await app.inject({
+    method: "GET", url: `/v1/admin/sandbox-refreshes?limit=1&status=pending_approval&sandboxId=${sandboxId}`,
+    headers: auth(MAKER),
+  });
+  const jobRow = (jobs.json() as { data: JobDetail[] }).data[0];
+  if (!jobRow) throw new Error(`refresh request for sandbox ${sandboxId} never landed`);
+  job = jobRow;
 
   const approved = await app.inject({
     method: "POST", url: `/v1/admin/sandbox-refreshes/${job.id}/approve`, headers: auth(CHECKER),
     payload: { expectedVersion: job.version },
   });
   expect(approved.statusCode).toBe(202);
+  await (queue as any).drain?.();
 
   await handleSandboxRefreshExecute({
     messageId: randomUUID(),
@@ -131,13 +177,18 @@ beforeAll(async () => {
     correlationId: "corr-leak",
     payload: { jobId: job.id, sandboxId, tenantId: TENANT },
   });
+
+  const maskedFieldsRes = await app.inject({
+    method: "GET", url: `/v1/admin/sandbox-refreshes/${job.id}/masked-fields?limit=200`, headers: auth(CHECKER),
+  });
+  maskedFields = (maskedFieldsRes.json() as { data: MaskedFieldRow[] }).data;
 });
 
 describe("WC-009 masking surface — carries names and strategies, never values", () => {
   it("the planned field shape has exactly the value-free key set", () => {
-    for (const field of job.plan.fields) {
+    for (const field of maskedFields) {
       expect(Object.keys(field).sort()).toEqual(
-        ["fieldName", "masked", "ruleSource", "strategy", "tableName"],
+        ["fieldName", "ruleSource", "strategy", "tableName"],
       );
     }
   });
@@ -149,7 +200,10 @@ describe("WC-009 masking surface — carries names and strategies, never values"
   });
 
   it("defaultedFields identify the unconfigured field by name only", () => {
-    expect(job.plan.defaultedFields).toEqual([{ tableName: "citizens", fieldName: "pan" }]);
+    const defaulted = maskedFields
+      .filter((f) => f.ruleSource === "default")
+      .map((f) => ({ tableName: f.tableName, fieldName: f.fieldName }));
+    expect(defaulted).toEqual([{ tableName: "citizens", fieldName: "pan" }]);
   });
 
   it("the persisted masked-field record has no value column populated", async () => {
