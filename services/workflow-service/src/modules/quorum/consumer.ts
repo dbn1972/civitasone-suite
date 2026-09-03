@@ -21,8 +21,11 @@ export function registerQuorumConsumers(queue: Queue): void {
         if (!(await markProcessed(tx, msg.messageId))) return;
         // repo.createDecision opens its own tx; keep markProcessed durable first then write.
         // To keep atomicity, perform insert here via repo only if we nest — use direct path:
+        // id: p.id -- the accepted-response id (see repo.createDecision doc): without
+        // forwarding it here the row got a fresh defaultRandom() id instead, and the
+        // id returned to the HTTP caller never matched anything in the database.
         await repo.createDecision({
-          tenantId: p.tenantId, instanceId: p.instanceId, taskId: p.taskId, nodeKey: p.nodeKey,
+          id: p.id, tenantId: p.tenantId, instanceId: p.instanceId, taskId: p.taskId, nodeKey: p.nodeKey,
           subject: p.subject, rule: p.rule, threshold: p.threshold, totalMembers: p.totalMembers,
           createdBy: msg.actorId,
         });

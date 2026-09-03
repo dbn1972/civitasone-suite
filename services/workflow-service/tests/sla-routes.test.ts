@@ -4,8 +4,10 @@ import { randomUUID } from "node:crypto";
 import { sql } from "drizzle-orm";
 import { signToken } from "@civitasone/auth";
 import { buildApp } from "../src/app.js";
-import { db, sqlClient } from "../src/shared/db.js";
-import { sqlAsTenant, asTenant } from "./helpers/engine-harness.js";
+import { sqlClient } from "../src/shared/db.js";
+import { queue } from "../src/shared/infra.js";
+import { registerSlaConsumers } from "../src/modules/sla/consumer.js";
+import { sqlAsTenant } from "./helpers/engine-harness.js";
 
 const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
 const TENANT = "a7000000-1111-4000-8000-000000000001";
@@ -13,6 +15,9 @@ const TENANT = "a7000000-1111-4000-8000-000000000001";
 function token(roles = ["workflow_admin"]) {
   return signToken({ sub: randomUUID(), tid: TENANT, roles, sid: "s" }, SECRET);
 }
+
+registerSlaConsumers(queue);
+await queue.start();
 
 async function seedPastDueTask(): Promise<string> {
   const instId = randomUUID();
@@ -33,6 +38,16 @@ afterEach(async () => {
 });
 afterAll(async () => { await sqlClient.end(); });
 
+async function waitFor<T>(fn: () => Promise<T | null | undefined>, ms = 3000): Promise<T> {
+  const start = Date.now();
+  while (Date.now() - start < ms) {
+    const v = await fn();
+    if (v) return v;
+    await new Promise((r) => setTimeout(r, 25));
+  }
+  throw new Error("waitFor timeout");
+}
+
 describe("CAP-027 working calendar + due-date preview", () => {
   it("computes a due date over a business calendar (weekend-aware)", async () => {
     const app = await buildApp();
@@ -42,7 +57,12 @@ describe("CAP-027 working calendar + due-date preview", () => {
       headers: { authorization: `Bearer ${token()}` },
       payload: { code, name: "Std", workweek: [1, 2, 3, 4, 5], holidays: [], workStartMinute: 540, workEndMinute: 1020 },
     });
-    expect(create.statusCode).toBe(201);
+    expect(create.statusCode).toBe(202);
+    await waitFor(async () => {
+      const g = await app.inject({ method: "GET", url: "/v1/workflow/calendars", headers: { authorization: `Bearer ${token()}` } });
+      const rows = g.json().data as Array<{ code: string }>;
+      return rows?.some((r) => r.code === code) ? rows : null;
+    });
     // Fri 2025-01-03 16:00Z + 120 working min → Mon 2025-01-06 10:00Z
     const preview = await app.inject({
       method: "POST", url: "/v1/workflow/sla/preview",
@@ -77,15 +97,30 @@ describe("CAP-027 SLA pause/resume", () => {
     const dueBefore = new Date((before as unknown as Array<{ due_at: string }>)[0]!.due_at).getTime();
 
     const p1 = await app.inject({ method: "POST", url: `/v1/workflow/tasks/${taskId}/sla/pause`, headers: { authorization: `Bearer ${token()}` }, payload: { reason: "waiting on citizen" } });
-    expect(p1.statusCode).toBe(201);
+    expect(p1.statusCode).toBe(202);
+    // The second pause's ALREADY_PAUSED pre-check reads currently-committed
+    // pause rows, so the first pause must actually be persisted first.
+    await waitFor(async () => {
+      const rows = await sqlAsTenant<{ n: string }>(TENANT, sql`SELECT count(*)::text AS n FROM workflow.task_sla_pauses WHERE tenant_id = ${TENANT} AND task_id = ${taskId} AND resumed_at IS NULL`);
+      return rows[0]!.n === "1" ? rows : null;
+    });
     const p2 = await app.inject({ method: "POST", url: `/v1/workflow/tasks/${taskId}/sla/pause`, headers: { authorization: `Bearer ${token()}` }, payload: {} });
     expect(p2.statusCode).toBe(409); // already paused
 
     const resume = await app.inject({ method: "POST", url: `/v1/workflow/tasks/${taskId}/sla/resume`, headers: { authorization: `Bearer ${token()}` } });
-    expect(resume.statusCode).toBe(200);
-    expect(resume.json().data.pausedMinutes).toBeGreaterThanOrEqual(0);
+    expect(resume.statusCode).toBe(202);
+    const pauseRow = await waitFor(async () => {
+      const rows = await sqlAsTenant<{ resumed_at: string | null; paused_at: string }>(TENANT, sql`SELECT paused_at, resumed_at FROM workflow.task_sla_pauses WHERE tenant_id = ${TENANT} AND task_id = ${taskId}`);
+      return rows[0]?.resumed_at ? rows[0] : null;
+    });
+    const pausedMinutes = Math.round((new Date(pauseRow.resumed_at!).getTime() - new Date(pauseRow.paused_at).getTime()) / 60000);
+    expect(pausedMinutes).toBeGreaterThanOrEqual(0);
 
-    const after = await sqlAsTenant(TENANT, sql`SELECT due_at FROM workflow.tasks WHERE id = ${taskId}`);
+    const after = await waitFor(async () => {
+      const rows = await sqlAsTenant<{ due_at: string }>(TENANT, sql`SELECT due_at FROM workflow.tasks WHERE id = ${taskId}`);
+      const dueAfter = new Date(rows[0]!.due_at).getTime();
+      return dueAfter >= dueBefore ? rows : null;
+    });
     const dueAfter = new Date((after as unknown as Array<{ due_at: string }>)[0]!.due_at).getTime();
     await app.close();
     expect(dueAfter).toBeGreaterThanOrEqual(dueBefore); // clock shifted forward (or equal for a ~0s pause)

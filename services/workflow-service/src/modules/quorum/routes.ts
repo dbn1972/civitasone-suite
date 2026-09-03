@@ -33,6 +33,20 @@ export async function quorumRoutes(app: FastifyInstance): Promise<void> {
     const body = z.object({ vote: z.enum(["approve", "reject", "abstain"]), reason: z.string().max(512).nullable().optional() }).parse(req.body);
     const existing = await repo.findDecision(id, ctx.tenantId);
     if (!existing) throw new HttpError(404, "NOT_FOUND", "committee decision not found");
+    // Synchronous pre-check: a repeat vote from the same actor is a pure
+    // read-only no-op (repo.castVote's own idempotency guard would just
+    // report `duplicate: true` without writing), so there is no reason to
+    // round-trip it through the queue -- answer it immediately with the
+    // CURRENT tally, exactly like the pre-CQRS synchronous response did.
+    const votes = await repo.listVotes(id, ctx.tenantId);
+    const alreadyVoted = votes.some((v) => v.voterId === ctx.actorId);
+    if (alreadyVoted) {
+      const tally = tallyQuorum({
+        rule: existing.rule as QuorumRule, totalMembers: existing.totalMembers, threshold: existing.threshold,
+        votes: votes.map((v) => v.vote as VoteChoice),
+      });
+      return reply.code(200).send({ message: "already voted", data: { tally, decision: existing, duplicate: true } });
+    }
     return sendAccepted(reply, acceptedResponseSchema, await commands.castCommitteeVote(ctx, id, {
       vote: body.vote, reason: body.reason ?? null,
     }));

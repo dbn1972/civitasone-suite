@@ -7,6 +7,16 @@ import { committeeDecisions, committeeVotes, type CommitteeDecisionRow, type Com
 import { tallyQuorum, type QuorumRule, type VoteChoice, type QuorumTally } from "./domain.js";
 
 export interface CreateDecisionInput {
+  /**
+   * The accepted-response id handed back to the HTTP caller (see
+   * commands.ts's createCommitteeDecision). MUST be used as the row's
+   * primary key -- omitting it (as this used to) left `id` on
+   * committeeDecisions.defaultRandom(), so the id returned by POST
+   * /committee-decisions never matched the row the consumer actually
+   * created and callers had no reliable way to address the decision they
+   * had just been told was "accepted".
+   */
+  id: string;
   tenantId: string;
   instanceId: string | null;
   taskId: string | null;
@@ -21,6 +31,7 @@ export interface CreateDecisionInput {
 export async function createDecision(input: CreateDecisionInput): Promise<CommitteeDecisionRow> {
   const rows = await db.transaction((tx) =>
     tx.insert(committeeDecisions).values({
+      id: input.id,
       tenantId: input.tenantId,
       instanceId: input.instanceId,
       taskId: input.taskId,

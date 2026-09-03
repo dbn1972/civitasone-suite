@@ -21,6 +21,15 @@ export async function finalizationRoutes(app: FastifyInstance): Promise<void> {
   app.post("/v1/workflow/instances/:id/finalize", async (req, reply) => {
     const ctx = resolveContext(req); requireRole(ctx, ADMIN_ROLES);
     const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
+    // Synchronous pre-check: the consumer silently no-ops a finalize for an
+    // instance that already has a finalization row (unique(instance_id) is
+    // the backstop), which used to be a synchronous 409 to the caller before
+    // the async conversion. A read-only lookup of the currently-committed
+    // row lets the common "already finalized" request still 409 immediately;
+    // a request racing a concurrent finalize is still resolved correctly (as
+    // a silent no-op) by the consumer's own existence check.
+    const existing = await repo.findByInstance(id, ctx.tenantId);
+    if (existing) throw new HttpError(409, "ALREADY_FINALIZED", "instance is already finalized");
     return sendAccepted(reply, acceptedResponseSchema, await commands.finalizeInstance(ctx, id));
   });
 

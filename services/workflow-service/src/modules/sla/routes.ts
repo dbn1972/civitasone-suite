@@ -49,6 +49,14 @@ export async function slaRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req); requireRole(ctx, ROLES);
     const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
     const body = z.object({ reason: z.string().max(256).nullable().optional() }).parse(req.body ?? {});
+    // Synchronous pre-check: repo.pauseTask() is idempotent per task (a
+    // partial unique index blocks a second open pause) but that enforcement
+    // now runs deep in the async consumer with no channel back to the HTTP
+    // caller. A read-only lookup of the currently-committed open pause lets
+    // the common "already paused" request still 409 immediately; the
+    // consumer's own row-locked check remains the actual source of truth for
+    // a request that races a concurrent pause of the same task.
+    if (await repo.openPause(ctx.tenantId, id)) throw new HttpError(409, "ALREADY_PAUSED", "task SLA is already paused");
     return sendAccepted(reply, acceptedResponseSchema, await commands.pauseTaskSla(ctx, id, { reason: body.reason ?? null }));
   });
   app.post("/v1/workflow/tasks/:id/sla/resume", async (req, reply) => {
