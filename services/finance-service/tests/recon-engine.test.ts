@@ -18,7 +18,8 @@ import { db } from "../src/shared/db.js";
 import { scoped } from "./_tenant.js";
 import { reconRun, reconBreak } from "../src/modules/recon/schema.js";
 import { registerProvider, getProvider, listProviders } from "../src/modules/recon/providers.js";
-import { financePayments } from "../src/modules/payments/schema.js";
+import { financeBills, financePayments } from "../src/modules/payments/schema.js";
+import { financeHeads } from "../src/modules/budget/schema.js";
 import { bankStatement, bankStatementLines } from "../src/modules/bank-recon/schema.js";
 
 const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
@@ -42,6 +43,8 @@ async function wipe(tenantId: string) {
     await tx.delete(bankStatementLines).where(eq(bankStatementLines.tenantId, tenantId));
     await tx.delete(bankStatement).where(eq(bankStatement.tenantId, tenantId));
     await tx.delete(financePayments).where(eq(financePayments.tenantId, tenantId));
+    await tx.delete(financeBills).where(eq(financeBills.tenantId, tenantId));
+    await tx.delete(financeHeads).where(eq(financeHeads.tenantId, tenantId));
   });
 }
 
@@ -206,7 +209,21 @@ describe("CAP-059 reconciliation runs + exceptions", () => {
 
   it("real book-vs-bank provider: a seeded book payment with no bank line is a break", async () => {
     const stmtId = randomUUID();
+    const headId = randomUUID();
+    const vendorId = randomUUID();
+    const billMatchId = randomUUID();
+    const billOrphanId = randomUUID();
     await scoped(TENANT, async (tx: any) => {
+      // fk_fbills_head / fk_fpayments_bill (migrations/0055_add_foreign_keys.sql)
+      // require real parent finance_heads / finance_bills rows before
+      // finance_payments can reference a bill_id.
+      await tx.insert(financeHeads).values({
+        id: headId, tenantId: TENANT, code: "4700-RECON", name: "Recon Engine Head", level: 2, createdBy: ACTOR, updatedBy: ACTOR,
+      }).onConflictDoNothing();
+      await tx.insert(financeBills).values([
+        { id: billMatchId, tenantId: TENANT, billNo: "BILL-RECON-MATCH", vendorId, headId, grossMinor: 5000n, netMinor: 5000n, createdBy: ACTOR, updatedBy: ACTOR },
+        { id: billOrphanId, tenantId: TENANT, billNo: "BILL-RECON-ORPHAN", vendorId, headId, grossMinor: 9999n, netMinor: 9999n, createdBy: ACTOR, updatedBy: ACTOR },
+      ]).onConflictDoNothing();
       await tx.insert(bankStatement).values({
         id: stmtId,
         tenantId: TENANT,
@@ -227,11 +244,11 @@ describe("CAP-059 reconciliation runs + exceptions", () => {
       // Book payment matching that line (5000) + an extra payment with no bank line
       await tx.insert(financePayments).values([
         {
-          tenantId: TENANT, billId: randomUUID(), mode: "NEFT",
+          tenantId: TENANT, billId: billMatchId, mode: "NEFT",
           amountMinor: 5000n, utr: "UTR-MATCH", createdBy: ACTOR, updatedBy: ACTOR,
         },
         {
-          tenantId: TENANT, billId: randomUUID(), mode: "NEFT",
+          tenantId: TENANT, billId: billOrphanId, mode: "NEFT",
           amountMinor: 9999n, utr: "UTR-ORPHAN", createdBy: ACTOR, updatedBy: ACTOR,
         },
       ]);
