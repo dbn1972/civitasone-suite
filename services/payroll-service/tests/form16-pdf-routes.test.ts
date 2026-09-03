@@ -344,10 +344,14 @@ describe("POST /v1/payroll/tax/form16/bulk-generate — happy path", () => {
     // or 202 (no existing job) depending on mock shape
     expect([202, 409, 500]).toContain(res.statusCode);
     if (res.statusCode === 202) {
+      // sendAccepted() sends the accepted-response schema FLAT — {id, status,
+      // correlationId} — no `data` wrapper (see packages/schemas/src/validate.ts
+      // and acceptedResponseSchema in packages/schemas/src/common.ts). Same
+      // convention as every other F3-converted route in this service (e.g.
+      // tests/payroll-core-routes.test.ts asserts res.json().id).
       const body = res.json();
-      expect(body.data.jobId).toBeDefined();
-      expect(body.data.fy).toBe("2025-26");
-      expect(body.data.message).toContain("bulk");
+      expect(body.id).toBeDefined();
+      expect(body.status).toBe("accepted");
     }
   });
 
