@@ -98,8 +98,14 @@ vi.mock("../src/modules/budget/repo.js", () => ({
   findHeadByCodeTx: (...args: any[]) => findHeadByCodeTxMock(...args),
   findHeadByIdTx: vi.fn(async () => ({ id: "head-uuid", code: "0000", name: "Head" })),
 }));
-vi.mock("../src/modules/period-close/routes.js", () => ({
-  getPeriodStatus: vi.fn(async () => "open"),
+// gl/consumer.ts's postJournal() imports getPeriodStatusTx from
+// period-close/repo.js (a tx-scoped read), NOT getPeriodStatus from
+// period-close/routes.js. Mocking routes.js here mocked a module the
+// production code path never touches, so the real getPeriodStatusTx ran
+// against mockTx (which only implements .execute, no .select) and threw
+// "tx.select is not a function" before insertJournal was ever reached.
+vi.mock("../src/modules/period-close/repo.js", () => ({
+  getPeriodStatusTx: vi.fn(async () => "open"),
 }));
 vi.mock("../src/modules/hoa/voucher.js", () => ({
   nextVoucherNo: vi.fn(async () => "AUTO/0001"),

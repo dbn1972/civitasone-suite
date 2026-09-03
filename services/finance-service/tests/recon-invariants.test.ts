@@ -416,8 +416,16 @@ vi.mock("../src/modules/budget/repo.js", () => ({
   incrementSanctionUtilisedGuarded: vi.fn(async () => true),
 }));
 
-vi.mock("../src/modules/period-close/routes.js", () => ({
-  getPeriodStatus: (...a: any[]) => mockGetPeriodStatus(...a),
+// gl/consumer.ts's postJournal() reads period status via getPeriodStatusTx
+// from period-close/repo.js (tx-scoped, serialised with the write) — not
+// getPeriodStatus from period-close/routes.js. That made this mock target a
+// module the production code path never calls: the real getPeriodStatusTx
+// ran instead, against mockTx.select()...limit() which always resolves to
+// [] here, so status was unconditionally "open" and the hard/soft-close
+// guards in postJournal never tripped. Route mockGetPeriodStatus through the
+// function actually consulted.
+vi.mock("../src/modules/period-close/repo.js", () => ({
+  getPeriodStatusTx: (...a: any[]) => mockGetPeriodStatus(...a),
 }));
 
 vi.mock("../src/modules/hoa/voucher.js", () => ({
