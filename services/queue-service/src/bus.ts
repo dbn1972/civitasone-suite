@@ -120,7 +120,24 @@ function envelope<T>(input: PublishInput<T>): CommandEnvelope<T> {
 }
 
 export class MemoryQueue implements Queue {
-  private handlers = new Map<string, Handler[]>();
+  // BUS-DEDUP: each entry is one subscriber's registration, carrying a
+  // subscriberId unique within this MemoryQueue instance. deliver() dedupes
+  // per (topic, messageId, subscriberId) — see seen below — so two distinct
+  // subscribers on the SAME topic are two distinct deliveries, not one.
+  private handlers = new Map<string, Array<{ subscriberId: number; handler: Handler }>>();
+  private nextSubscriberId = 0;
+  /**
+   * Idempotent-redelivery guard, keyed by `topic:messageId:subscriberId`.
+   * MUST include subscriberId: this only stops a SINGLE subscriber from
+   * reprocessing a message it already handled (the intended use case — e.g.
+   * a handler that cascades another publish() for the same message, or a
+   * retry loop that re-enters deliver() for that same subscriber). Keying by
+   * `topic:messageId` alone previously meant the first subscriber to reach
+   * `seen.add()` (synchronously, before its own `await handler(msg)`)
+   * silently suppressed delivery to every OTHER subscriber on that topic —
+   * so with 2+ independent subscribers on one topic, only the
+   * first-registered one ever actually ran per message.
+   */
   private seen = new Set<string>();
   /** In-flight delivery promises, tracked so tests can await async fan-out. */
   private inflight = new Set<Promise<unknown>>();
@@ -151,7 +168,9 @@ export class MemoryQueue implements Queue {
     // rejects — it captures errors to the DLQ internally.
     const settled = new Promise<void>((resolve) => {
       setTimeout(() => {
-        void Promise.allSettled(handlers.map((h) => this.deliver(topic, h, msg))).then(() => resolve());
+        void Promise.allSettled(
+          handlers.map((h) => this.deliver(topic, h.handler, msg, h.subscriberId)),
+        ).then(() => resolve());
       }, 0);
     });
     this.track(settled);
@@ -180,7 +199,7 @@ export class MemoryQueue implements Queue {
 
   subscribe<T>(topic: string, handler: Handler<T>, _options?: SubscribeOptions): void {
     const list = this.handlers.get(topic) ?? [];
-    list.push(handler as Handler);
+    list.push({ subscriberId: this.nextSubscriberId++, handler: handler as Handler });
     this.handlers.set(topic, list);
   }
 
@@ -215,8 +234,13 @@ export class MemoryQueue implements Queue {
     return { healthy: true, driver: "memory" };
   }
 
-  private async deliver(topic: string, handler: Handler, msg: CommandEnvelope): Promise<void> {
-    const key = `${topic}:${msg.messageId}`;
+  private async deliver(
+    topic: string,
+    handler: Handler,
+    msg: CommandEnvelope,
+    subscriberId: number,
+  ): Promise<void> {
+    const key = `${topic}:${msg.messageId}:${subscriberId}`;
     if (this.seen.has(key)) return;
     // 04-T3: validate the envelope before any handler runs. An invalid envelope
     // is rejected straight to the DLQ and handlers are never invoked.
