@@ -187,10 +187,22 @@ async function proxyHandler(
 
   // Inject gateway-identity headers AFTER stripping so a client cannot forge them.
   // x-gateway-request is in STRIP_HEADERS above — any inbound value is already discarded.
+  //
+  // x-internal-secret is deliberately NOT set here. This handler forwards requests on
+  // behalf of an external client (that only got this far by presenting a valid Bearer
+  // token / passing the public-prefix allow-list) — it never originates a genuine
+  // service-to-service call. Setting the real INTERNAL_SERVICE_SECRET on every proxied
+  // request used to hand every authenticated caller (any role, any tenant) a working
+  // internal-trust credential for free: at least two admin-service routes
+  // (GET /v1/admin/tenants/:id/modules-list and
+  // GET /v1/admin/composition/internal/:tenantId/modules) treat a valid x-internal-secret
+  // as sufficient to skip their super-admin / ADMIN_ROLES check entirely, so any signed-in
+  // user could read (or, via composition, believe) another tenant's module entitlements
+  // by hitting those paths through this generic proxy. Genuine gateway-originated internal
+  // calls (module-guard.ts, policy-check.ts, screen-manifest.ts, api-key-auth.ts) build
+  // their own fetch() with their own headers and do not go through this function, so they
+  // are unaffected by removing it here.
   headers["x-gateway-request"] = "1";
-  if (process.env.INTERNAL_SERVICE_SECRET) {
-    headers["x-internal-secret"] = process.env.INTERNAL_SERVICE_SECRET;
-  }
 
   const hasBody = req.method !== "GET" && req.method !== "HEAD";
   const body = hasBody ? JSON.stringify(req.body ?? {}) : null;

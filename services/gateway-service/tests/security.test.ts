@@ -78,6 +78,31 @@ describe("FIX-00: x-internal auth bypass", () => {
     expect(lastUpstreamHeaders["x-service-secret"]).toBeUndefined();
   });
 
+  it("does not self-attach x-internal-secret to an ordinary proxied client request (no spoof attempt)", async () => {
+    // Regression for the gap FIX-00 was meant to close but didn't: the gateway used to
+    // set headers["x-internal-secret"] = INTERNAL_SERVICE_SECRET on EVERY proxied request,
+    // unconditionally — not just when the client tried to spoof it. That handed every
+    // authenticated caller (any role, any tenant) a working internal-trust credential for
+    // free, which at least two admin-service routes (modules-list,
+    // composition/internal/:tenantId/modules) accept as sufficient to skip their
+    // super-admin / ADMIN_ROLES check. No client-supplied x-internal* header is sent here
+    // at all — this isolates the gateway's OWN over-eager injection from the
+    // spoof-stripping already covered above.
+    const app = await buildApp();
+    await app.inject({
+      method: "GET",
+      url: "/api/v1/finance/bills",
+      headers: {
+        authorization: `Bearer ${VALID_TOKEN}`,
+        "x-tenant-id": "00000000-0000-0000-0000-000000000001",
+      },
+    });
+    expect(lastUpstreamHeaders["x-internal-secret"]).toBeUndefined();
+    expect(lastUpstreamHeaders["x-internal-caller"]).toBeUndefined();
+    expect(lastUpstreamHeaders["x-internal"]).toBeUndefined();
+    expect(lastUpstreamHeaders["x-service-secret"]).toBeUndefined();
+  });
+
   it("does forward safe headers — correlation-id passes through", async () => {
     const app = await buildApp();
     await app.inject({
