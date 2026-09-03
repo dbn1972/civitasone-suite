@@ -19,7 +19,18 @@ import { runWithTenant } from "@civitasone/db";
 import { buildApp } from "../src/app.js";
 import { db, sqlClient } from "../src/shared/db.js";
 import { projectProjects } from "../src/modules/project/schema.js";
+import { queue } from "../src/shared/infra.js";
+import { registerF3ProjectConsumers } from "../src/modules/project/f3-consumer.js";
 import type { FastifyInstance } from "fastify";
+
+// World-class routes are F3 async (queue-first): risk/EVM/RA-bill/time-ext/
+// penalty writes only land in the DB once this consumer processes them.
+// Without registering it here, every create returns 202 but the row never
+// appears, so a same-test read-back (or a later SoD/state-guard check that
+// depends on the row already existing) fails. Mirrors the pattern in
+// tests/scheduling.test.ts.
+registerF3ProjectConsumers(queue);
+await queue.start();
 
 const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
 
@@ -100,15 +111,20 @@ describe("parent-tenant isolation", () => {
     expect(res.json().code).toBe("NOT_FOUND");
   });
 
-  it("creating a risk under own-tenant project → 201", async () => {
+  it("creating a risk under own-tenant project → 202 (F3 async accept)", async () => {
     const res = await app.inject({
       method: "POST",
       url: `/v1/projects/${PROJECT_A}/risks`,
       headers: { authorization: `Bearer ${token({ sub: USER_1, tid: TENANT_A })}` },
       payload: { title: "real risk", category: "financial", probability: "high", impact: "high" },
     });
-    expect(res.statusCode).toBe(201);
+    expect(res.statusCode).toBe(202);
     expect(res.json().id).toBeDefined();
+    // MemoryQueue.publish() is fire-and-forget (setTimeout(0) delivery) —
+    // await queue.publish() resolving does NOT mean the F3 consumer has run
+    // yet. Land the write before the "risk register" describe block below
+    // reads it back.
+    await queue.drain();
   });
 });
 
@@ -149,7 +165,7 @@ describe("EVM compute", () => {
         budgetAtCompletionMinor: 1_000_000,
       },
     });
-    expect(res.statusCode).toBe(201);
+    expect(res.statusCode).toBe(202);
     const body = res.json();
     expect(body.cpi).toBeCloseTo(1.25, 6);
     expect(body.spi).toBeCloseTo(0.5, 6);
@@ -164,7 +180,7 @@ describe("EVM compute", () => {
 describe("RA-bill approval — SoD + state guard", () => {
   let billId: string;
 
-  it("USER_1 submits an RA-bill → 201", async () => {
+  it("USER_1 submits an RA-bill → 202 (F3 async accept)", async () => {
     const res = await app.inject({
       method: "POST",
       url: `/v1/projects/${PROJECT_A}/ra-bills`,
@@ -179,9 +195,12 @@ describe("RA-bill approval — SoD + state guard", () => {
         cumulativeMinor: 950_000,
       },
     });
-    expect(res.statusCode).toBe(201);
+    expect(res.statusCode).toBe(202);
     billId = res.json().id;
     expect(billId).toBeDefined();
+    // Land the F3 write before the approve tests below rely on the row
+    // already existing (see the risk-create drain() above for why).
+    await queue.drain();
   });
 
   it("submitter (USER_1) approving own bill → 403 SOD_VIOLATION", async () => {
@@ -194,13 +213,16 @@ describe("RA-bill approval — SoD + state guard", () => {
     expect(res.json().code).toBe("SOD_VIOLATION");
   });
 
-  it("different approver (USER_2) approving → 200", async () => {
+  it("different approver (USER_2) approving → 202 (F3 async accept)", async () => {
     const res = await app.inject({
       method: "POST",
       url: `/v1/projects/${PROJECT_A}/ra-bills/${billId}/approve`,
       headers: { authorization: `Bearer ${token({ sub: USER_2, tid: TENANT_A })}` },
     });
-    expect(res.statusCode).toBe(200);
+    expect(res.statusCode).toBe(202);
+    // Land the approve write before the re-approve test below depends on
+    // status already being "approved".
+    await queue.drain();
   });
 
   it("re-approving an already-approved bill → 409 CONFLICT (state guard)", async () => {
@@ -228,7 +250,7 @@ describe("RA-bill approval — SoD + state guard", () => {
 describe("time-extension approval — SoD + state guard", () => {
   let extId: string;
 
-  it("USER_1 requests a time extension → 201", async () => {
+  it("USER_1 requests a time extension → 202 (F3 async accept)", async () => {
     const res = await app.inject({
       method: "POST",
       url: `/v1/projects/${PROJECT_A}/time-extensions`,
@@ -241,8 +263,11 @@ describe("time-extension approval — SoD + state guard", () => {
         penaltyApplicable: false,
       },
     });
-    expect(res.statusCode).toBe(201);
+    expect(res.statusCode).toBe(202);
     extId = res.json().id;
+    // Land the F3 write before the approve tests below rely on the row
+    // already existing.
+    await queue.drain();
   });
 
   it("requester (USER_1) approving own extension → 403 SOD_VIOLATION", async () => {
@@ -255,13 +280,16 @@ describe("time-extension approval — SoD + state guard", () => {
     expect(res.json().code).toBe("SOD_VIOLATION");
   });
 
-  it("different approver (USER_2) approving → 200, then re-approve → 409", async () => {
+  it("different approver (USER_2) approving → 202 (F3 async accept), then re-approve → 409", async () => {
     const ok = await app.inject({
       method: "POST",
       url: `/v1/projects/${PROJECT_A}/time-extensions/${extId}/approve`,
       headers: { authorization: `Bearer ${token({ sub: USER_2, tid: TENANT_A })}` },
     });
-    expect(ok.statusCode).toBe(200);
+    expect(ok.statusCode).toBe(202);
+    // Land the approve write before the re-approve request below depends on
+    // status already being "approved".
+    await queue.drain();
 
     const again = await app.inject({
       method: "POST",
@@ -289,7 +317,7 @@ describe("penalties", () => {
         ratePerDayMinor: 1234,
       },
     });
-    expect(res.statusCode).toBe(201);
+    expect(res.statusCode).toBe(202);
     expect(res.json().totalMinor).toBe("37020");
   });
 });

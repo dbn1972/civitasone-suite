@@ -254,6 +254,10 @@ vi.mock("../src/modules/scheduling/repo.js", () => ({
   }),
   listDependencies: async () => ({ data: mockState.queryResult, meta: { page: 1, pageSize: 50, total: mockState.countResult } }),
   deleteDependency: async () => mockState.queryResult.length > 0,
+  // Synchronous pre-accept existence check used by commands.deleteDependency
+  // before it queues the delete (F3 async). Gated on queryResult, matching
+  // the exists/[] toggling already used by the DELETE describe block below.
+  dependencyExists: async () => mockState.queryResult.length > 0,
 }));
 
 vi.mock("../src/modules/scheduling/evm.js", () => ({
@@ -868,8 +872,10 @@ describe("Evidence Routes", () => {
         headers: { authorization: `Bearer ${ADMIN_TOKEN()}` },
         payload: { fileName: "report.pdf", fileUrl: "https://s3.example.com/report.pdf", fileType: "pdf" },
       });
-      expect(res.statusCode).toBe(201);
-      expect(res.json().data).toBeDefined();
+      // F3 async write: attachEvidence queues the write and returns
+      // { id, status: "accepted", correlationId } — not the old sync 201/data body.
+      expect(res.statusCode).toBe(202);
+      expect(res.json().id).toBeDefined();
     });
 
     it("returns 401 without auth", async () => {
@@ -975,8 +981,12 @@ describe("Board Intake Routes", () => {
         headers: { authorization: `Bearer ${ADMIN_TOKEN()}` },
         payload: { note: "Accepted for action" },
       });
-      expect(res.statusCode).toBe(200);
+      // F3 async write: acceptIntake queues the write and returns the
+      // generic { id, status: "accepted", correlationId } accept-envelope
+      // (HTTP-accepted, not the business outcome) — not the old sync 200.
+      expect(res.statusCode).toBe(202);
       expect(res.json().status).toBe("accepted");
+      expect(res.json().id).toBe(INTAKE_ID);
     });
 
     it("returns 404 when item not found", async () => {
@@ -1016,8 +1026,11 @@ describe("Board Intake Routes", () => {
         headers: { authorization: `Bearer ${ADMIN_TOKEN()}` },
         payload: { note: "Not relevant to this department" },
       });
-      expect(res.statusCode).toBe(200);
-      expect(res.json().status).toBe("rejected");
+      // F3 async write: rejectIntake queues the write and returns the
+      // generic { id, status: "accepted", correlationId } accept-envelope
+      // (HTTP-accepted, not the business outcome) — not the old sync 200.
+      expect(res.statusCode).toBe(202);
+      expect(res.json().status).toBe("accepted");
     });
 
     it("returns 400 for missing note (required for reject)", async () => {
@@ -1081,14 +1094,14 @@ describe("World-Class Project Routes", () => {
   });
 
   describe("POST /v1/projects/:id/risks", () => {
-    it("returns 201 for valid risk", async () => {
+    it("returns 202 for valid risk (F3 async accept)", async () => {
       mockState.queryResult = [{ id: RISK_ID }];
       const res = await app.inject({
         method: "POST", url: `/v1/projects/${PROJECT_ID}/risks`,
         headers: { authorization: `Bearer ${ADMIN_TOKEN()}` },
         payload: { title: "Flooding risk", probability: "high", impact: "medium" },
       });
-      expect(res.statusCode).toBe(201);
+      expect(res.statusCode).toBe(202);
     });
 
     it("returns 400 for missing title", async () => {
@@ -1131,14 +1144,14 @@ describe("World-Class Project Routes", () => {
   });
 
   describe("POST /v1/projects/:id/evm/compute", () => {
-    it("returns 201 for valid evm compute", async () => {
+    it("returns 202 for valid evm compute (F3 async accept)", async () => {
       mockState.queryResult = [SEED_PROJECT];
       const res = await app.inject({
         method: "POST", url: `/v1/projects/${PROJECT_ID}/evm/compute`,
         headers: { authorization: `Bearer ${ADMIN_TOKEN()}` },
         payload: { period: "2026-Q1", plannedValueMinor: 1000000, earnedValueMinor: 900000, actualCostMinor: 950000 },
       });
-      expect(res.statusCode).toBe(201);
+      expect(res.statusCode).toBe(202);
     });
 
     it("returns 400 for missing period", async () => {
@@ -1165,7 +1178,7 @@ describe("World-Class Project Routes", () => {
   });
 
   describe("POST /v1/projects/:id/ra-bills", () => {
-    it("returns 201 for valid ra bill", async () => {
+    it("returns 202 for valid ra bill (F3 async accept)", async () => {
       mockState.queryResult = [{ id: BILL_ID }];
       const res = await app.inject({
         method: "POST", url: `/v1/projects/${PROJECT_ID}/ra-bills`,
@@ -1175,7 +1188,7 @@ describe("World-Class Project Routes", () => {
           grossAmountMinor: 500000, deductionsMinor: 50000, netAmountMinor: 450000, cumulativeMinor: 450000,
         },
       });
-      expect(res.statusCode).toBe(201);
+      expect(res.statusCode).toBe(202);
     });
 
     it("returns 400 for missing billNo", async () => {
@@ -1211,13 +1224,13 @@ describe("Scheduling Routes", () => {
   });
 
   describe("POST /v1/projects/:projectId/dependencies", () => {
-    it("returns 201 for valid dependency", async () => {
+    it("returns 202 for valid dependency (F3 async accept)", async () => {
       const res = await app.inject({
         method: "POST", url: `/v1/projects/${PROJECT_ID}/dependencies`,
         headers: { authorization: `Bearer ${ADMIN_TOKEN()}` },
         payload: { fromTaskId: TASK_ID, toTaskId: MILESTONE_ID, depType: "FS", lagMs: 0 },
       });
-      expect(res.statusCode).toBe(201);
+      expect(res.statusCode).toBe(202);
     });
 
     it("returns 401 without auth", async () => {
@@ -1266,13 +1279,13 @@ describe("Scheduling Routes", () => {
   });
 
   describe("DELETE /v1/projects/:projectId/dependencies/:id", () => {
-    it("returns 204 when dependency exists", async () => {
+    it("returns 202 when dependency exists (F3 async accept)", async () => {
       mockState.queryResult = [{ id: DEP_ID }];
       const res = await app.inject({
         method: "DELETE", url: `/v1/projects/${PROJECT_ID}/dependencies/${DEP_ID}`,
         headers: { authorization: `Bearer ${ADMIN_TOKEN()}` },
       });
-      expect(res.statusCode).toBe(204);
+      expect(res.statusCode).toBe(202);
     });
 
     it("returns 404 when dependency not found", async () => {
@@ -1316,14 +1329,14 @@ describe("Baseline Routes", () => {
   });
 
   describe("POST /v1/projects/:id/baselines", () => {
-    it("returns 201 for valid baseline", async () => {
+    it("returns 202 for valid baseline (F3 async accept)", async () => {
       mockState.countResult = 0;
       const res = await app.inject({
         method: "POST", url: `/v1/projects/${PROJECT_ID}/baselines`,
         headers: { authorization: `Bearer ${ADMIN_TOKEN()}` },
         payload: { label: "Baseline v1", snapshotData: { tasks: [] } },
       });
-      expect(res.statusCode).toBe(201);
+      expect(res.statusCode).toBe(202);
     });
 
     it("returns 401 without auth", async () => {

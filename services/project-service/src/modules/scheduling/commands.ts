@@ -52,6 +52,13 @@ export async function createDependency(
 export async function deleteDependency(
   ctx: RequestContext, projectId: string, id: string,
 ): Promise<Accepted> {
+  // Synchronous pre-accept existence check — without this, DELETE for a
+  // nonexistent dependency id was silently accepted (202) and queued, then
+  // no-oped in the async consumer with no channel back to the caller.
+  const exists = await tenantTransaction(db, ctx.tenantId, (tx) =>
+    repo.dependencyExists(tx as typeof db, id, projectId, ctx.tenantId));
+  if (!exists) throw new HttpError(404, "NOT_FOUND", "dependency not found");
+
   await queue.publish(COMMANDS.dependencyDelete, {
     messageId: randomUUID(),
     type: COMMANDS.dependencyDelete,
