@@ -3,7 +3,7 @@ import type { RequestContext } from "@civitasone/types";
 import { queue } from "../../shared/infra.js";
 import { COMMANDS } from "../../topics.js";
 
-export type Accepted = { id: string; status: string; correlationId: string };
+export type Accepted = { id: string; status: string; correlationId: string; data: { id: string } };
 
 export interface CreateIncidentInput {
   title: string;
@@ -27,7 +27,7 @@ export async function createIncident(ctx: RequestContext, body: CreateIncidentIn
     schemaVersion: "1.0",
     payload: { id, tenantId: ctx.tenantId, ...body },
   });
-  return { id, status: "accepted", correlationId: ctx.correlationId };
+  return { id, status: "accepted", correlationId: ctx.correlationId, data: { id } };
 }
 
 export async function transitionIncident(
@@ -50,7 +50,7 @@ export async function transitionIncident(
     schemaVersion: "1.0",
     payload: { id, tenantId: ctx.tenantId, ...body },
   });
-  return { id, status: "accepted", correlationId: ctx.correlationId };
+  return { id, status: "accepted", correlationId: ctx.correlationId, data: { id } };
 }
 
 export async function closeIncident(
@@ -68,7 +68,7 @@ export async function closeIncident(
     schemaVersion: "1.0",
     payload: { id, tenantId: ctx.tenantId, note: body.note },
   });
-  return { id, status: "accepted", correlationId: ctx.correlationId };
+  return { id, status: "accepted", correlationId: ctx.correlationId, data: { id } };
 }
 
 export async function createBreachNotification(
@@ -86,7 +86,7 @@ export async function createBreachNotification(
     schemaVersion: "1.0",
     payload: { id, incidentId, tenantId: ctx.tenantId, ...body },
   });
-  return { id, status: "accepted", correlationId: ctx.correlationId };
+  return { id, status: "accepted", correlationId: ctx.correlationId, data: { id } };
 }
 
 export async function submitBreachNotification(
@@ -105,5 +105,5 @@ export async function submitBreachNotification(
     schemaVersion: "1.0",
     payload: { id: nid, incidentId, tenantId: ctx.tenantId, reference: body.reference },
   });
-  return { id: nid, status: "accepted", correlationId: ctx.correlationId };
+  return { id: nid, status: "accepted", correlationId: ctx.correlationId, data: { id: nid } };
 }

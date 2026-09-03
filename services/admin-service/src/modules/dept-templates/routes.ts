@@ -187,7 +187,7 @@ export async function departmentTemplateRoutes(app: FastifyInstance): Promise<vo
       preId: ((req.params as any)?.id as string) || __f3Id,
     });
     const result = { id: __f3Id, status: 'accepted', correlationId: ctx.correlationId } as never;
-    return reply.code(202).send({ id: __f3Id, status: "accepted", correlationId: ctx.correlationId });
+    return reply.code(202).send({ id: __f3Id, status: "accepted", correlationId: ctx.correlationId, data: { id: __f3Id } });
   });
 
   app.get("/v1/admin/department-templates/:id", async (req, reply) => {

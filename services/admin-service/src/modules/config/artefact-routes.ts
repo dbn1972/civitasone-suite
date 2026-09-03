@@ -253,7 +253,7 @@ export async function configArtefactRoutes(app: FastifyInstance): Promise<void> 
       preId: ((req.params as any)?.id as string) || __f3Id,
     });
     const result = { id: __f3Id, status: 'accepted', correlationId: ctx.correlationId } as never;
-    return reply.code(202).send({ id: __f3Id, status: "accepted", correlationId: ctx.correlationId });
+    return reply.code(202).send({ id: __f3Id, status: "accepted", correlationId: ctx.correlationId, data: { id: __f3Id } });
   });
 
   // ── reject a promotion ───────────────────────────────────────────────────
@@ -272,7 +272,7 @@ export async function configArtefactRoutes(app: FastifyInstance): Promise<void> 
       preId: ((req.params as any)?.id as string) || __f3Id,
     });
     const result = { id: __f3Id, status: 'accepted', correlationId: ctx.correlationId } as never;
-    return reply.code(202).send({ id: __f3Id, status: "accepted", correlationId: ctx.correlationId });
+    return reply.code(202).send({ id: __f3Id, status: "accepted", correlationId: ctx.correlationId, data: { id: __f3Id } });
   });
 
   // ── what is live in each environment ─────────────────────────────────────
@@ -310,7 +310,7 @@ export async function configArtefactRoutes(app: FastifyInstance): Promise<void> 
       preId: ((req.params as any)?.id as string) || __f3Id,
     });
     const result = { id: __f3Id, status: 'accepted', correlationId: ctx.correlationId } as never;
-    return reply.code(202).send({ id: __f3Id, status: "accepted", correlationId: ctx.correlationId });
+    return reply.code(202).send({ id: __f3Id, status: "accepted", correlationId: ctx.correlationId, data: { id: __f3Id } });
   });
 
   // ── single artefact (registered last: static siblings win in the router) ──

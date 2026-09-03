@@ -176,7 +176,7 @@ export async function integrationSettingsRoutes(app: FastifyInstance): Promise<v
       preId: ((req.params as any)?.id as string) || __f3Id,
     });
     const change = { id: __f3Id, status: 'accepted', correlationId: ctx.correlationId } as never;
-    return reply.code(202).send({ id: __f3Id, status: 'accepted', correlationId: ctx.correlationId });
+    return reply.code(202).send({ id: __f3Id, status: 'accepted', correlationId: ctx.correlationId, data: { id: __f3Id } });
   });
 
   // ── approve latest pending → apply (maker-checker + version++) ─────────────
@@ -194,7 +194,7 @@ export async function integrationSettingsRoutes(app: FastifyInstance): Promise<v
       preId: ((req.params as any)?.id as string) || __f3Id,
     });
     const result = { id: __f3Id, status: 'accepted', correlationId: ctx.correlationId } as never;
-    return reply.code(202).send({ id: __f3Id, status: "accepted", correlationId: ctx.correlationId });
+    return reply.code(202).send({ id: __f3Id, status: "accepted", correlationId: ctx.correlationId, data: { id: __f3Id } });
   });
 
   // ── reject latest pending ──────────────────────────────────────────────────

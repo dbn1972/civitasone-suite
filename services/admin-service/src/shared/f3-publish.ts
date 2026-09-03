@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import type { RequestContext } from "@civitasone/types";
 import { queue } from "./infra.js";
 
-export type Accepted = { id: string; status: string; correlationId: string };
+export type Accepted = { id: string; status: string; correlationId: string; data: { id: string } };
 
 export async function publishAdminCommand(
   ctx: RequestContext,
@@ -20,5 +20,5 @@ export async function publishAdminCommand(
     schemaVersion: "1.0",
     payload: { ...payload, id, tenantId: ctx.tenantId },
   });
-  return { id, status: "accepted", correlationId: ctx.correlationId };
+  return { id, status: "accepted", correlationId: ctx.correlationId, data: { id } };
 }
