@@ -5,7 +5,7 @@
  * verifying handler code paths (200/400/404/500). Also tests auth
  * rejection (403) for citizen role on key routes.
  */
-import { describe, it, expect, afterAll } from "vitest";
+import { describe, it, expect, vi, afterAll } from "vitest";
 import { signToken } from "@civitasone/auth";
 import { buildApp } from "../src/app.js";
 import { sqlClient } from "../src/shared/db.js";
@@ -15,6 +15,18 @@ const SECRET = "test_secret_for_civitasone_32chr";
 const TENANT = "aaaaaaaa-1111-4000-8000-000000000099";
 const UUID = "aaaaaaaa-bbbb-4000-8000-000000000001";
 const FAKE = randomUUID();
+
+// External HRMS is not running in this service's isolated integration-test
+// env. commands.ts's assertEmployeeExists() (round2 employee-existence
+// review fix, commit 488e418e) does a real synchronous HTTP existence check
+// before publishing any arrear/bonus/reimbursement command, so without this
+// stub every such request 502s (HRMS_UNAVAILABLE) before it ever reaches the
+// route's own logic. Only this one external-network boundary is stubbed —
+// DB, queue, and outbox stay real, per this file's stated convention.
+vi.mock("../src/shared/hrms-client.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../src/shared/hrms-client.js")>();
+  return { ...actual, verifyEmployeeExists: async () => true };
+});
 
 function token(roles = ["payroll_admin", "super_admin", "hr_admin", "finance_officer"]) {
   return signToken({ sub: UUID, tid: TENANT, roles, sid: "s1" }, SECRET);

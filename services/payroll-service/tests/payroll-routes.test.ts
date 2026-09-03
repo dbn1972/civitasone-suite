@@ -36,6 +36,18 @@ const authHeader = (roles?: string[], sub?: string) => ({
 import { buildApp } from "../src/app.js";
 import { sqlClient } from "../src/shared/db.js";
 
+// External HRMS is not running in this service's isolated integration-test
+// env. commands.ts's assertEmployeeExists() (round2 employee-existence
+// review fix, commit 488e418e) does a real synchronous HTTP existence check
+// before publishing any arrear/bonus/reimbursement command, so without this
+// stub every such request 502s (HRMS_UNAVAILABLE) before it ever reaches the
+// route's own logic. Only this one external-network boundary is stubbed —
+// DB, queue, and outbox stay real.
+vi.mock("../src/shared/hrms-client.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../src/shared/hrms-client.js")>();
+  return { ...actual, verifyEmployeeExists: async () => true };
+});
+
 afterAll(async () => { await sqlClient.end(); });
 
 // ═══════════════════════════════════════════════════════════════════════════════
