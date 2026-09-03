@@ -36,6 +36,14 @@ vi.mock("@civitasone/db", () => ({
   // sets the app.tenant_id GUC; in this unit test it just runs the handler.
   runWithTenant: async <T>(_tenantId: string, fn: () => T | Promise<T>) => fn(),
   setTenantGuc: vi.fn(async () => undefined),
+  // FIX: tenant-queue.ts's tenantScoped() wraps every subscribed consumer
+  // handler in withTenantConsumer() (imported from @civitasone/db). This mock
+  // replaces the whole module, so without this export registerBudgetConsumers
+  // throws "No withTenantConsumer export is defined on the mock" before any
+  // handler runs. runWithTenant above is already an identity passthrough for
+  // this test, so withTenantConsumer only needs to be too (matches the
+  // convention already used in tests/consumer-coverage-ext.test.ts).
+  withTenantConsumer: vi.fn((handler: any) => handler),
 }));
 vi.mock("../src/shared/outbox.js", () => ({
   enqueue: vi.fn(async (_tx: unknown, msg: { topic: string; payload: unknown }) => { enqueuedMessages.push({ topic: msg.topic, payload: msg.payload }); }),
@@ -158,8 +166,21 @@ describe("sanctionApprove command", () => {
 
 describe("sanctionReject command", () => {
   it("cancels the sanction", async () => {
-    const q = new MemoryQueue(); registerBudgetConsumers(q); await q.start();
     const id = randomUUID();
+    // FIX: missing mock setup -- findSanctionByIdTxMock defaults to null (see
+    // beforeEach above), so the consumer's `if (!sanction ...) throw
+    // NonRetryableError(...)` fired before ever reaching updateSanction,
+    // silently landing in the queue's internal DLQ (MemoryQueue.publish() is
+    // fire-and-forget and never surfaces a handler's thrown error to the
+    // caller). createdBy must differ from the rejecting actor (default ACTOR
+    // from makeMsg) -- sanctionReject enforces the same maker-checker rule as
+    // sanctionApprove (assertSanctionApproverDistinct) -- so use CHECKER,
+    // matching the "different officer" pattern in sanctionApprove above.
+    findSanctionByIdTxMock.mockResolvedValue({
+      id, tenantId: TENANT, status: "pending_approval",
+      createdBy: CHECKER, headId: randomUUID(), amountMinor: 50000000n,
+    });
+    const q = new MemoryQueue(); registerBudgetConsumers(q); await q.start();
     await q.publish(COMMANDS.sanctionReject, makeMsg(COMMANDS.sanctionReject, {
       id, tenantId: TENANT, reason: "insufficient justification",
     }));
