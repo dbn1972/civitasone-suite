@@ -70,7 +70,13 @@ describe("FN-09 pack export / FN-29 statutory import ack", () => {
         workflowDefinitionId: "eeeeeeee-0003-4000-8000-000000000001",
         feeScheduleId: "eeeeeeee-0004-4000-8000-000000000001",
         issuanceType: "certificate",
-        requiredDocuments: [{ docType: "id_proof", label: "ID proof", mandatory: true }],
+        // FN-25/26 — the sandbox pipeline also requires an SLA-tracked lane
+        // (with an escalation designation) and every mandatory document bound
+        // to a verifying lane, or the run reports passed:false below.
+        laneBindings: [
+          { key: "review", name: "Review", slaDays: 5, escalationDesignationId: "dsg-superior" },
+        ],
+        requiredDocuments: [{ docType: "id_proof", label: "ID proof", mandatory: true, verifiedAtLane: "review" }],
         statutoryReferences: [{ act: "Municipal Premises Rules", section: "4" }],
         forms: [{
           formDesign: {

@@ -76,7 +76,9 @@ export async function verify(ctx: RequestContext, id: string, body: VerifyBody):
 }
 
 /** Resubmission cycle — a new submission that supersedes a deficient one. */
-export async function resubmit(ctx: RequestContext, id: string, body: ResubmitBody): Promise<Accepted & { supersedes: string }> {
+export async function resubmit(
+  ctx: RequestContext, id: string, body: ResubmitBody,
+): Promise<Accepted & { supersedes: string; data: { id: string; supersedes: string } }> {
   const prior = await repo.findSubmissionById(id, ctx.tenantId);
   if (!prior) throw new HttpError(404, "NOT_FOUND", "document submission not found");
   if (prior.status !== "deficient" && prior.status !== "rejected") {
@@ -99,5 +101,10 @@ export async function resubmit(ctx: RequestContext, id: string, body: ResubmitBo
     authenticity: result?.authenticity ?? (isDigi ? "unverified" : "self_attested"),
   });
   await cache.invalidate(cache.makeKey(ctx.tenantId, "document", id));
-  return { ...accepted, supersedes: id };
+  // `acceptedResponseSchema` (packages/schemas/common.ts) only declares
+  // {id, status, correlationId, data:{id}.passthrough()} — any OTHER top-level
+  // field silently gets stripped by sendAccepted()'s schema.parse(). `supersedes`
+  // has to travel inside `data` (passthrough) to survive onto the wire; see
+  // commit 62ed6fd4 (admin F3 envelope fix) for the same bug in another service.
+  return { ...accepted, supersedes: id, data: { id: accepted.id, supersedes: id } };
 }

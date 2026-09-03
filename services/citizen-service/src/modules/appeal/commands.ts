@@ -79,7 +79,7 @@ export async function transferRecords(ctx: RequestContext, id: string): Promise<
 /** Schedule a hearing (assigned → hearing). */
 export async function scheduleHearing(
   ctx: RequestContext, id: string, body: ScheduleHearingBody,
-): Promise<Accepted & { hearingId: string }> {
+): Promise<Accepted & { hearingId: string; data: { id: string; hearingId: string } }> {
   const ap = await repo.findAppealById(id, ctx.tenantId);
   if (!ap) throw new HttpError(404, "NOT_FOUND", "appeal not found");
   if (ap.status !== "assigned" && ap.status !== "hearing") {
@@ -88,7 +88,12 @@ export async function scheduleHearing(
   const hearingId = randomUUID();
   const accepted = await publish(ctx, COMMANDS.appealScheduleHearing, hearingId, { id, hearingId, ...body });
   await cache.invalidate(cache.makeKey(ctx.tenantId, "appeal", id));
-  return { ...accepted, id, hearingId };
+  // `acceptedResponseSchema` only declares {id, status, correlationId,
+  // data:{id}.passthrough()} — a bare top-level `hearingId` gets silently
+  // stripped by sendAccepted()'s schema.parse(). It has to travel inside
+  // `data` (passthrough) to reach the caller; see commit 62ed6fd4 (admin F3
+  // envelope fix) for the identical bug in another service.
+  return { ...accepted, id, hearingId, data: { id, hearingId } };
 }
 
 /** Record the outcome/minutes of a held hearing. */
