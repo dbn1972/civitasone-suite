@@ -124,13 +124,17 @@ describe("API Keys routes — auth boundary", () => {
 });
 
 describe("API Keys routes — happy paths", () => {
-  it("POST /identity/api-keys → 201 with valid body (tenant_admin)", async () => {
+  it("POST /identity/api-keys → 202 accepted with valid body (tenant_admin)", async () => {
     const res = await app.inject({
       method: "POST", url: "/identity/api-keys",
       headers: headers(["tenant_admin"]),
       payload: { name: "coverage-key", scopes: ["users:read", "rbac:*"] },
     });
-    expect(res.statusCode).toBe(201);
+    // F3 async: the plaintext key/keyPrefix are real (minted in-process
+    // before enqueue, so they can be returned exactly once), but the row is
+    // written by the consumer — 202 has been the status since the async
+    // conversion, not 201.
+    expect(res.statusCode).toBe(202);
     const body = res.json();
     expect(body.id).toBeDefined();
     expect(body.key).toBeDefined();

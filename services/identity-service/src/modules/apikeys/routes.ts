@@ -39,6 +39,17 @@ export async function apiKeyRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, ADMIN);
     const { id } = apiKeyIdParam.parse(req.params);
+    // Real bug (found while fixing test debt, not a test-only issue):
+    // rotate/revoke unconditionally published a command for any :id, with no
+    // existence check — unlike the GET-by-id route right above, which
+    // correctly 404s. rotateApiKey's consumer silently no-ops when the row
+    // doesn't exist (assertTransition fails or findByIdForUpdate returns
+    // null — see apikeys/consumer.ts), so a caller rotating/revoking a typo'd
+    // or already-deleted key id got a false-positive 202 "accepted" with no
+    // channel back to learn nothing happened. Restore the synchronous
+    // pre-accept existence check the old (pre-F3) synchronous handler had.
+    const existing = await queries.getApiKey(ctx.tenantId, id);
+    if (!existing) throw new HttpError(404, "NOT_FOUND", "api key not found");
     const body = rotateApiKeyBody.parse(req.body ?? {});
     const result = await commands.rotateApiKey(ctx, id, body.reason);
     return reply.code(202).send(result);
@@ -48,6 +59,10 @@ export async function apiKeyRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, ADMIN);
     const { id } = apiKeyIdParam.parse(req.params);
+    // See the matching comment on the rotate route above — same missing
+    // pre-accept existence check, same fix.
+    const existing = await queries.getApiKey(ctx.tenantId, id);
+    if (!existing) throw new HttpError(404, "NOT_FOUND", "api key not found");
     const body = revokeApiKeyBody.parse(req.body ?? {});
     return reply.code(202).send(await commands.revokeApiKey(ctx, id, body.reason));
   });
