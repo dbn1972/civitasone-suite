@@ -20,6 +20,18 @@
  * The scan is an idempotent classifier: a document already in the right status
  * is left alone and no duplicate alert is emitted, so it is safe to run on a
  * schedule or by hand.
+ *
+ * SYNCHRONOUS PRE-ACCEPT VALIDATION: F3 routes accept a write with a 202/200
+ * before the actual mutation runs (it is applied later by doc-f3-consumer.ts /
+ * doc-f3-apply.ts against the outbox). publishAdminCommand is fire-and-forget
+ * and cannot reject, so any existence/uniqueness/state check that only lived
+ * in the consumer meant an invalid request got a false-positive "accepted"
+ * while the write silently failed (or DLQ'd) downstream. The checks below are
+ * lifted synchronously — read-only, via scopedRead — from the EXACT same
+ * guards apply_uploads_0..3 run in doc-f3-apply.ts, so the synchronous and
+ * async paths agree. A TOCTOU race remains between this read and the
+ * consumer's write (same residual risk documented in hrms-service's cpf
+ * routes); the DB's own constraints are the backstop for that rare race.
  */
 import { randomUUID } from "node:crypto";
 import { publishAdminCommand } from "../../shared/f3-publish.js";
@@ -27,7 +39,7 @@ import { COMMANDS } from "../../topics.js";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { resolveContext, requireRole, HttpError, TENANT_ADMIN_ROLES } from "../../shared/context.js";
-import { db } from "../../shared/db.js";
+import { db, scopedRead } from "../../shared/db.js";
 import { auditEvent, domainEvent, type OutboxCtx } from "../../shared/audit.js";
 import { listEnvelope, singleEnvelope, parseOrThrow, registerEnvelopeErrorHandler } from "../../shared/envelope.js";
 import { EVENTS } from "../../topics.js";
@@ -180,6 +192,12 @@ export async function documentGovernanceRoutes(app: FastifyInstance): Promise<vo
     requireRole(ctx, ADMIN_ONLY);
     const body = parseOrThrow(typeBody, req.body);
 
+    // Same uniqueness guard apply_uploads_0 runs in doc-f3-apply.ts (409
+    // TYPE_EXISTS), lifted synchronously so a duplicate code is rejected here
+    // instead of silently being accepted and dropped by the consumer.
+    const clash = await scopedRead((tx) => repo.findTypeByCodeTx(tx, ctx.tenantId, body.code));
+    if (clash) throw new HttpError(409, "TYPE_EXISTS", `document type '${body.code}' already exists`);
+
     const __f3Id = randomUUID();
     await publishAdminCommand(ctx, COMMANDS.f3RouteWrite, __f3Id, {
       op: 'uploads_op_0',
@@ -211,6 +229,14 @@ export async function documentGovernanceRoutes(app: FastifyInstance): Promise<vo
       throw new HttpError(400, "EMPTY_PATCH", "provide at least one field to update");
     }
 
+    // Same existence + optimistic-lock guards apply_uploads_1 runs (404
+    // NOT_FOUND, 409 VERSION_CONFLICT via assertVersionMatch), lifted
+    // synchronously. The consumer's own CAS update is the backstop for the
+    // residual TOCTOU race between this read and the async apply.
+    const existing = await scopedRead((tx) => repo.findTypeTx(tx, ctx.tenantId, id));
+    if (!existing) throw new HttpError(404, "NOT_FOUND", "document type not found");
+    assertVersionMatch(existing.version, body.expectedVersion);
+
     const __f3Id = randomUUID();
     await publishAdminCommand(ctx, COMMANDS.f3RouteWrite, __f3Id, {
       op: 'uploads_op_1',
@@ -228,6 +254,13 @@ export async function documentGovernanceRoutes(app: FastifyInstance): Promise<vo
     const ctx = resolveContext(req);
     requireRole(ctx, ADMIN_ONLY);
     const body = parseOrThrow(requirementBody, req.body);
+
+    // Same guards apply_uploads_2 runs (404 NOT_FOUND when the referenced
+    // document type does not exist, 422 DOCUMENT_TYPE_RETIRED when it is
+    // retired), lifted synchronously.
+    const type = await scopedRead((tx) => repo.findTypeByCodeTx(tx, ctx.tenantId, body.documentTypeCode));
+    if (!type) throw new HttpError(404, "NOT_FOUND", `document type '${body.documentTypeCode}' not found`);
+    assertTypeActive(type.status);
 
     const __f3Id = randomUUID();
     await publishAdminCommand(ctx, COMMANDS.f3RouteWrite, __f3Id, {
@@ -256,6 +289,17 @@ export async function documentGovernanceRoutes(app: FastifyInstance): Promise<vo
     const ctx = resolveContext(req);
     requireRole(ctx, DOC_ROLES);
     const body = parseOrThrow(documentBody, req.body);
+
+    // Same guards apply_uploads_3 runs, in the same order, lifted
+    // synchronously: 404 when the document type does not exist, then the
+    // domain guards (422 DOCUMENT_TYPE_RETIRED / EXPIRY_REQUIRED /
+    // INVALID_EXPIRY / EXTENSION_NOT_ALLOWED) against the fetched type row.
+    const type = await scopedRead((tx) => repo.findTypeByCodeTx(tx, ctx.tenantId, body.documentTypeCode));
+    if (!type) throw new HttpError(404, "NOT_FOUND", `document type '${body.documentTypeCode}' not found`);
+    assertTypeActive(type.status);
+    assertExpiryPresentWhenRequired(type.expiryRequired, body.expiresAt);
+    assertExpiryAfterIssue(body.issuedAt, body.expiresAt);
+    assertExtensionAllowed(body.storageKey, type.allowedExtensions);
 
     const __f3Id = randomUUID();
     await publishAdminCommand(ctx, COMMANDS.f3RouteWrite, __f3Id, {
@@ -310,6 +354,10 @@ export async function documentGovernanceRoutes(app: FastifyInstance): Promise<vo
    * Expiry scan: re-classify documents whose expiry is inside the widest warning
    * window and publish an alert event for each status TRANSITION. Publishing —
    * not sending — is deliberate: notification-service consumes these events.
+   *
+   * No synchronous pre-check applies here: the scan has no existence,
+   * uniqueness or state-transition precondition to gate on — it is an
+   * idempotent classifier over whatever documents currently exist.
    */
   app.post("/v1/admin/documents/expiry-scan", async (req, reply) => {
     const ctx = resolveContext(req);

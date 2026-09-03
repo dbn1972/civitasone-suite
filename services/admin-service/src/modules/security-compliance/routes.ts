@@ -85,6 +85,16 @@ export async function securityComplianceRoutes(app: FastifyInstance): Promise<vo
         owner: z.string().max(128).optional(),
       })
       .parse(req.body);
+    // Same uniqueness the DB unique index uq_compliance_controls_key
+    // (tenant_id, framework, control_key — migration 0023) enforces. The
+    // consumer's insert has no application-level dedup for this command (only
+    // the seed command dedupes), so without this pre-check a duplicate
+    // silently gets a 202 "accepted" and then fails the async insert on the
+    // unique-index violation, with no channel back to the caller.
+    const clash = await repo.findControlByKey(ctx.tenantId, body.framework, body.controlKey);
+    if (clash) {
+      throw new HttpError(409, "CONTROL_KEY_EXISTS", `control '${body.framework}:${body.controlKey}' already exists`);
+    }
     return sendAccepted(
       reply,
       acceptedResponseSchema,
