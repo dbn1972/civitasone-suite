@@ -2,12 +2,20 @@
  * SVC-117 — KML/GeoJSON spatial exchange: import a GeoJSON FeatureCollection and
  * a KML document, then export the dataset back out as GeoJSON and KML. Proves
  * round-trip persistence and tenant isolation.
+ *
+ * Import is F3 async (202 accepted, applied by the spatial-exchange consumer
+ * after drain()) — export reads remain synchronous. Malformed-payload
+ * rejection (400) stays synchronous too: request parsing happens in the route
+ * before anything is published.
  */
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { randomUUID } from "node:crypto";
 import { signToken } from "@civitasone/auth";
+import type { MemoryQueue } from "@civitasone/queue";
 import { buildApp } from "../src/app.js";
+import { queue } from "../src/shared/infra.js";
 import { sqlClient } from "../src/shared/db.js";
+import { registerSpatialExchangeConsumers } from "../src/modules/spatial-exchange/consumer.js";
 import { isPostGISAvailable } from "./setup.js";
 
 const HAS_POSTGIS = await isPostGISAvailable();
@@ -21,7 +29,12 @@ const ACTOR = randomUUID();
 const tok = (tid: string) => signToken({ sub: ACTOR, tid, roles: ["location_admin", "gis_admin"], sid: "s" }, SECRET, 3600);
 
 let app: FastifyInstance;
-beforeAll(async () => { app = await buildApp(); });
+const drain = () => (queue as unknown as MemoryQueue).drain();
+
+beforeAll(async () => {
+  registerSpatialExchangeConsumers(queue);
+  app = await buildApp();
+});
 afterAll(async () => { await app.close(); await sqlClient.end(); });
 
 const post = (url: string, tid: string, payload: unknown) =>
@@ -40,10 +53,11 @@ const FC = {
 describePostGIS("SVC-117 GeoJSON round-trip", () => {
   const dataset = `gj-${Date.now()}`;
 
-  it("imports a FeatureCollection", async () => {
+  it("imports a FeatureCollection (202 accepted, persisted after drain)", async () => {
     const res = await post("/v1/locations/spatial-exchange/import", TENANT_A, { dataset, format: "geojson", data: FC });
-    expect(res.statusCode).toBe(201);
-    expect(res.json().data.imported).toBe(3);
+    expect(res.statusCode).toBe(202);
+    expect(res.json().status).toBe("accepted");
+    await drain();
   });
 
   it("exports the dataset back as GeoJSON with the same geometries", async () => {
@@ -83,10 +97,11 @@ describePostGIS("SVC-117 KML import", () => {
     <Placemark><name>line-a</name><LineString><coordinates>77.0,28.0 77.2,28.2</coordinates></LineString></Placemark>
   </Document></kml>`;
 
-  it("imports KML placemarks and exports them as GeoJSON", async () => {
+  it("imports KML placemarks and exports them as GeoJSON (202 accepted, persisted after drain)", async () => {
     const imp = await post("/v1/locations/spatial-exchange/import", TENANT_A, { dataset, format: "kml", data: KML });
-    expect(imp.statusCode).toBe(201);
-    expect(imp.json().data.imported).toBe(2);
+    expect(imp.statusCode).toBe(202);
+    expect(imp.json().status).toBe("accepted");
+    await drain();
     const exp = await get(`/v1/locations/spatial-exchange/export?dataset=${dataset}&format=geojson`, TENANT_A);
     expect(exp.json().features).toHaveLength(2);
     const pt = exp.json().features.find((f: { geometry: { type: string } }) => f.geometry.type === "Point");

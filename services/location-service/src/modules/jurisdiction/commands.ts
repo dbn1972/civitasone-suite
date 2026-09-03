@@ -36,7 +36,7 @@ export async function jurisdictionAssign(ctx: RequestContext, body: AssignJurisd
 
 export async function jurisdictionRevoke(ctx: RequestContext, id: string): Promise<Accepted> {
   await queue.publish(COMMANDS.jurisdictionRevoke, {
-    messageId: `${id}-revoke-${Date.now()}`,
+    messageId: randomUUID(),
     type: COMMANDS.jurisdictionRevoke,
     tenantId: ctx.tenantId,
     actorId: ctx.actorId,
