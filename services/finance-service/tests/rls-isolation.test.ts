@@ -12,8 +12,11 @@
  */
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { signToken } from "@civitasone/auth";
+import { eq, and } from "drizzle-orm";
 import { buildApp } from "../src/app.js";
 import { sqlClient } from "../src/shared/db.js";
+import { scoped } from "./_tenant.js";
+import { financeVendors } from "../src/modules/masters/schema.js";
 import type { FastifyInstance } from "fastify";
 
 const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
@@ -160,6 +163,20 @@ describe("Finance — Cross-Tenant RLS Isolation", () => {
 // through the actual route+repo+DB does.
 describe("Finance — Vendor Master RLS Isolation", () => {
   let createdVendorId: string | undefined;
+
+  // finance_vendors has a UNIQUE(tenant_id, pan) constraint (see finance.test.ts's
+  // beforeAll for the same gotcha). This test's PAN is a fixed literal — required by
+  // chk_vendor_pan's exact-format regex, which leaves no room for a Date.now() suffix
+  // the way the sanction test above disambiguates itself — so a vendor left over from
+  // a prior run against a non-freshly-bootstrapped database (e.g. re-running locally
+  // without recreating the container) makes the create below 409 instead of 201. CI
+  // always starts from a fresh bootstrap so this never fired there, but delete any
+  // leftover row first so the test is idempotent when run repeatedly against the same DB.
+  beforeAll(async () => {
+    await scoped(TENANT_A, (tx) => tx.delete(financeVendors).where(
+      and(eq(financeVendors.tenantId, TENANT_A), eq(financeVendors.pan, "ABCDE1234F")),
+    ));
+  });
 
   it("Tenant A creates a vendor (round-trip through the real POST route + repo + DB)", async () => {
     const res = await app.inject({
