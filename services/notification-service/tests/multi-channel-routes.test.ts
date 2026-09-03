@@ -413,9 +413,40 @@ describe("GET /v1/dnd", () => {
 
 describe("PATCH /v1/dnd/:id", () => {
   it("returns 202 with valid update", async () => {
+    // The IDOR fix in src/modules/dnd/routes.ts made PATCH synchronously
+    // look up the window (existence + ownership) before accepting, so a
+    // bare randomUUID() now correctly 404s instead of the 202 this test used
+    // to assert. registerDndConsumers() normally only runs in src/worker.ts
+    // (a separate process), so this HTTP-only test app never processes the
+    // async setDndWindow command on its own — wire the consumer onto the
+    // shared in-memory queue (dynamic import to keep this self-contained to
+    // this test), create a real window via POST, drain the queue so the
+    // insert lands, then read the real id back via the synchronous GET
+    // before PATCHing it.
+    const { queue } = await import("../src/shared/infra.js");
+    const { registerDndConsumers } = await import("../src/modules/dnd/consumer.js");
+    registerDndConsumers(queue);
+
     const app = await buildApp();
+    const userId = randomUUID();
+    const createRes = await app.inject({
+      method: "POST", url: "/v1/dnd",
+      headers: { authorization: `Bearer ${adminToken}` },
+      payload: { userId, startTime: "22:00", endTime: "06:00", timezone: "Asia/Kolkata", days: ["mon", "tue", "wed"] },
+    });
+    expect(createRes.statusCode).toBe(202);
+    await queue.drain();
+
+    const listRes = await app.inject({
+      method: "GET", url: `/v1/dnd?userId=${userId}`,
+      headers: { authorization: `Bearer ${adminToken}` },
+    });
+    expect(listRes.statusCode).toBe(200);
+    const id = (listRes.json().data as Array<{ id: string }>)[0]?.id;
+    expect(id).toBeDefined();
+
     const res = await app.inject({
-      method: "PATCH", url: `/v1/dnd/${randomUUID()}`,
+      method: "PATCH", url: `/v1/dnd/${id}`,
       headers: { authorization: `Bearer ${adminToken}` },
       payload: { startTime: "23:00" },
     });
@@ -426,9 +457,33 @@ describe("PATCH /v1/dnd/:id", () => {
 
 describe("DELETE /v1/dnd/:id", () => {
   it("returns 202 (soft-disable)", async () => {
+    // Same story as the PATCH test above: the IDOR fix requires the window
+    // to actually exist, so wire up the DND consumer, create one via POST,
+    // drain the queue, and read its real id back before DELETEing it.
+    const { queue } = await import("../src/shared/infra.js");
+    const { registerDndConsumers } = await import("../src/modules/dnd/consumer.js");
+    registerDndConsumers(queue);
+
     const app = await buildApp();
+    const userId = randomUUID();
+    const createRes = await app.inject({
+      method: "POST", url: "/v1/dnd",
+      headers: { authorization: `Bearer ${adminToken}` },
+      payload: { userId, startTime: "22:00", endTime: "06:00", timezone: "Asia/Kolkata", days: ["mon", "tue", "wed"] },
+    });
+    expect(createRes.statusCode).toBe(202);
+    await queue.drain();
+
+    const listRes = await app.inject({
+      method: "GET", url: `/v1/dnd?userId=${userId}`,
+      headers: { authorization: `Bearer ${adminToken}` },
+    });
+    expect(listRes.statusCode).toBe(200);
+    const id = (listRes.json().data as Array<{ id: string }>)[0]?.id;
+    expect(id).toBeDefined();
+
     const res = await app.inject({
-      method: "DELETE", url: `/v1/dnd/${randomUUID()}`,
+      method: "DELETE", url: `/v1/dnd/${id}`,
       headers: { authorization: `Bearer ${adminToken}` },
     });
     await app.close();
