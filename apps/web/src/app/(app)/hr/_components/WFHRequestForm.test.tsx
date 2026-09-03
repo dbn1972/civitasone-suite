@@ -51,7 +51,7 @@ describe("WFHRequestForm", () => {
       fireEvent.change(screen.getByLabelText(/to date/i), { target: { value: "2026-08-15" } });
     });
     await act(async () => {
-      fireEvent.submit(screen.getByRole("form", { name: /work-from-home request form/i }));
+      fireEvent.submit(screen.getByRole("form", { name: /work from home request form/i }));
     });
     const alerts = screen.getAllByRole("alert");
     const dateErr = alerts.find(el => /cannot be before/i.test(el.textContent ?? ""));

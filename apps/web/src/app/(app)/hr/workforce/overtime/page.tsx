@@ -53,7 +53,7 @@ export default async function OvertimePage() {
         subtitle="Review and approve overtime claims. CCS Rules: OT compensated as cash or comp-off leave."
         back="/hr/workforce"
         actions={
-          <Link href="/hr/workforce/overtime/new" className="btn primary" aria-label="Submit new overtime request">
+          <Link href="/hr/workforce/overtime/new" className="btn primary">
             + New Request
           </Link>
         }

@@ -53,9 +53,13 @@ describe("OvertimeClaimForm", () => {
 
   it("shows error when hours is 0 on submit", async () => {
     render(<OvertimeClaimForm />);
-    // Leave hours empty (defaults to ""), handler checks Number("") === 0 → false > 0
     fireEvent.change(screen.getByLabelText(/hours worked ot/i), { target: { value: "0" } });
-    fireEvent.click(screen.getByRole("button", { name: /submit claim/i }));
+    // Dispatch `submit` on the form directly rather than clicking the submit
+    // button: the Hours field's `min="0.5"` and the other `required` fields
+    // being empty would otherwise trip the browser's own constraint
+    // validation on a real click and the submit handler (where the hours<=0
+    // check actually lives) would never run.
+    fireEvent.submit(screen.getByRole("form", { name: /overtime claim form/i }));
     expect(await screen.findByRole("alert")).toBeInTheDocument();
   });
 

@@ -30,7 +30,10 @@ describe("WFHPage", () => {
     fetchJsonMock.mockResolvedValue({ data: [], source: "api" });
     render(await WFHPage());
     expect(screen.getByRole("heading", { name: /work from home/i })).toBeInTheDocument();
-    expect(screen.getByText(/DoPT/i)).toBeInTheDocument();
+    // "DoPT" also appears in the empty-state table message and the embedded
+    // form's policy note; match the subtitle's specific wording to scope this
+    // assertion to the page subtitle.
+    expect(screen.getByText(/DoPT policy/i)).toBeInTheDocument();
   });
 
   it("renders stat cards for approved and pending counts", async () => {

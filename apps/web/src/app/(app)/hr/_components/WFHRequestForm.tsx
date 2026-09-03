@@ -91,7 +91,7 @@ export function WFHRequestForm({
   return (
     <form
       onSubmit={handleSubmit}
-      aria-label="Work-From-Home request form"
+      aria-label="Work From Home request form"
       style={{ display: "flex", flexDirection: "column", gap: 18, padding: "20px 24px" }}
     >
       {/* DoPT OM 2022 eligibility banners */}

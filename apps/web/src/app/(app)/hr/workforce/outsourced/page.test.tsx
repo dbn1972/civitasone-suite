@@ -8,9 +8,12 @@ vi.mock("@/app/_data/apiClient", () => ({
 
 import OutsourcedPage from "./page";
 
+// Row-shaped fixtures: fetchJson is mocked wholesale (bypassing the real mapOutsourced()
+// transform in page.tsx), so these must already look like the post-map Row type — with
+// `vendor` (not the raw `agency` field) and no employmentType/type.
 const MOCK_EMPLOYEES = [
-  { id: "o1", agency: "SecureGuard Ltd", department: "Security", service: "Security Services", deploymentLocation: "HQ Block A", headcount: 12, contractEnd: "2027-03-31", employmentType: "outsourced", status: "active" },
-  { id: "o2", agency: "CleanServ", department: "Facilities", service: "Housekeeping", deploymentLocation: "Annexe Building", headcount: 8, contractEnd: "2026-12-31", employmentType: "vendor", status: "active" },
+  { id: "o1", vendor: "SecureGuard Ltd", department: "Security", service: "Security Services", deploymentLocation: "HQ Block A", headcount: "12", contractEnd: "2027-03-31", status: "active" },
+  { id: "o2", vendor: "CleanServ", department: "Facilities", service: "Housekeeping", deploymentLocation: "Annexe Building", headcount: "8", contractEnd: "2026-12-31", status: "active" },
 ];
 
 describe("OutsourcedPage", () => {
@@ -39,8 +42,13 @@ describe("OutsourcedPage", () => {
   it("renders vendors stat count", async () => {
     fetchJsonMock.mockResolvedValue({ data: MOCK_EMPLOYEES, source: "api" });
     render(await OutsourcedPage());
-    expect(screen.getByText("Vendors")).toBeInTheDocument();
-    expect(screen.getByText("2")).toBeInTheDocument();
+    // Both fixture rows are active vendors, so "Active Contracts" and
+    // "Total Records" also read "2" — scope the assertion to the Vendors
+    // stat card specifically rather than a bare getByText("2").
+    const vendorsLabel = screen.getByText("Vendors");
+    const vendorsCard = vendorsLabel.closest(".stat");
+    expect(vendorsCard).not.toBeNull();
+    expect(vendorsCard!.querySelector(".val")).toHaveTextContent("2");
   });
 
   it("renders empty state for no outsourced staff", async () => {
