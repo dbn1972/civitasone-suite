@@ -11,7 +11,7 @@ import { sqlClient } from "../src/shared/db.js";
 import { queue } from "../src/shared/infra.js";
 import { registerBudgetConsumers } from "../src/modules/budget/consumer.js";
 import { scoped } from "./_tenant.js";
-import { financeBudgets } from "../src/modules/budget/schema.js";
+import { financeBudgets, financeHeads } from "../src/modules/budget/schema.js";
 import { financeSupplementaryDemands } from "../src/modules/budget/supplementary-schema.js";
 import { outboxMessages } from "../src/shared/outbox.js";
 
@@ -38,6 +38,11 @@ async function seedBudget() {
   await scoped(TENANT_A, (tx) => tx.delete(financeSupplementaryDemands).where(eq(financeSupplementaryDemands.fy, FY)));
   await scoped(TENANT_B, (tx) => tx.delete(financeSupplementaryDemands).where(eq(financeSupplementaryDemands.fy, FY)));
   await scoped(TENANT_A, (tx) => tx.delete(financeBudgets).where(eq(financeBudgets.id, BUDGET)));
+  // fk_fbudgets_head (migrations/0055_add_foreign_keys.sql) requires a parent
+  // finance_heads row before finance_budgets can reference it.
+  await scoped(TENANT_A, (tx) => tx.insert(financeHeads).values({
+    id: HEAD, tenantId: TENANT_A, code: "4500-SUPP", name: "Supplementary Demand Head", level: 2, createdBy: MAKER, updatedBy: MAKER,
+  }).onConflictDoNothing());
   await scoped(TENANT_A, (tx) => tx.insert(financeBudgets).values({
     id: BUDGET, tenantId: TENANT_A, headId: HEAD, fy: FY,
     beMinor: 1000000000n, reMinor: 1000000000n, allocatedMinor: 0n, utilisedMinor: 200000000n,

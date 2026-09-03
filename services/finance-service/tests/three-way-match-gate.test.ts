@@ -15,6 +15,7 @@ import { eq } from "drizzle-orm";
 import { db, sqlClient } from "../src/shared/db.js";
 import { scoped } from "./_tenant.js";
 import { financeBills, financeGrnMatch } from "../src/modules/payments/schema.js";
+import { financeHeads } from "../src/modules/budget/schema.js";
 import { outboxMessages, processed } from "../src/shared/outbox.js";
 import { registerPaymentsConsumers } from "../src/modules/payments/consumer.js";
 import { COMMANDS } from "../src/topics.js";
@@ -47,6 +48,14 @@ async function clean() {
   await scoped(TENANT, (tx) => tx.delete(financeGrnMatch).where(eq(financeGrnMatch.tenantId, TENANT)));
 }
 
+async function seedHead() {
+  // fk_fbills_head (migrations/0055_add_foreign_keys.sql) requires a parent
+  // finance_heads row before finance_bills can reference it.
+  await scoped(TENANT, (tx) => tx.insert(financeHeads).values({
+    id: HEAD, tenantId: TENANT, code: "4600-TWM", name: "Three-Way-Match Head", level: 2, createdBy: MAKER, updatedBy: MAKER,
+  }).onConflictDoNothing());
+}
+
 function seedBill(id: string, grossMinor: bigint, withSnapshot: boolean) {
   return scoped(TENANT, (tx) => tx.insert(financeBills).values({
     id, tenantId: TENANT, billNo: `BILL-${id.slice(0, 8)}`, vendorId: VENDOR, headId: HEAD,
@@ -67,6 +76,7 @@ async function waitFor(fn: () => Promise<boolean>, ms = 3000): Promise<void> {
 
 beforeEach(async () => {
   await clean();
+  await seedHead();
   // AP read-model: PO 100000, GRN(accepted) 100000.
   await scoped(TENANT, (tx) => tx.insert(financeGrnMatch).values({
     tenantId: TENANT, grnRef: GRN_REF, poRef: PO_REF, vendorId: VENDOR,

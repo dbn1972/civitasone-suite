@@ -12,7 +12,7 @@ import { MemoryQueue } from "@civitasone/queue";
 import { eq } from "drizzle-orm";
 import { db, sqlClient } from "../src/shared/db.js";
 import { scoped } from "./_tenant.js";
-import { financeBudgets } from "../src/modules/budget/schema.js";
+import { financeBudgets, financeHeads } from "../src/modules/budget/schema.js";
 import { outboxMessages, processed } from "../src/shared/outbox.js";
 import { registerBudgetConsumers } from "../src/modules/budget/consumer.js";
 import { COMMANDS } from "../src/topics.js";
@@ -37,6 +37,12 @@ async function seed(srcRe: bigint, srcUtil: bigint, tgtRe: bigint, tgtUtil: bigi
   await db.delete(processed).where(eq(processed.messageId, BAD_MSG));
   await scoped(TENANT, (tx) => tx.delete(financeBudgets).where(eq(financeBudgets.id, SRC_ID)));
   await scoped(TENANT, (tx) => tx.delete(financeBudgets).where(eq(financeBudgets.id, TGT_ID)));
+  // fk_fbudgets_head (migrations/0055_add_foreign_keys.sql) requires a parent
+  // finance_heads row before finance_budgets can reference it.
+  await scoped(TENANT, (tx) => tx.insert(financeHeads).values([
+    { id: HEAD_A, tenantId: TENANT, code: "4400-A", name: "Reappropriation Head A", level: 2, createdBy: ACTOR, updatedBy: ACTOR },
+    { id: HEAD_B, tenantId: TENANT, code: "4400-B", name: "Reappropriation Head B", level: 2, createdBy: ACTOR, updatedBy: ACTOR },
+  ]).onConflictDoNothing());
   await scoped(TENANT, (tx) => tx.insert(financeBudgets).values([
     { id: SRC_ID, tenantId: TENANT, headId: HEAD_A, fy: "2025-26", beMinor: srcRe, reMinor: srcRe, allocatedMinor: 0n, utilisedMinor: srcUtil, currency: "INR", createdBy: ACTOR, updatedBy: ACTOR },
     { id: TGT_ID, tenantId: TENANT, headId: HEAD_B, fy: "2025-26", beMinor: tgtRe, reMinor: tgtRe, allocatedMinor: 0n, utilisedMinor: tgtUtil, currency: "INR", createdBy: ACTOR, updatedBy: ACTOR },
