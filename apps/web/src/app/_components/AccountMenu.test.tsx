@@ -36,13 +36,16 @@ describe("AccountMenu", () => {
   it("shows sign out button in menu", () => {
     render(<AccountMenu />);
     fireEvent.click(screen.getByRole("button", { name: "Account menu" }));
-    expect(screen.getByRole("menuitem")).toHaveTextContent("Sign out");
+    // Preferences (Appearance, Language) also render as menuitems; scope to Sign out.
+    expect(screen.getByRole("menuitem", { name: "Sign out" })).toBeInTheDocument();
   });
 
   it("uses default name when not provided", () => {
     render(<AccountMenu />);
     fireEvent.click(screen.getByRole("button", { name: "Account menu" }));
-    expect(screen.getByText("D Nayak")).toBeInTheDocument();
+    // Default fallback is the generic "User", not a hardcoded person — real callers
+    // (TopBar) pass the actual signed-in userName from the session/JWT.
+    expect(screen.getByText("User")).toBeInTheDocument();
   });
 
   it("closes menu on second click", () => {

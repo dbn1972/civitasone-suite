@@ -30,9 +30,11 @@ describe("TopBar", () => {
     expect(screen.getByText("Finance / Bills")).toBeInTheDocument();
   });
 
-  it("renders search input", () => {
+  it("renders search trigger button", () => {
+    // C-01: the readOnly input trap was replaced with a semantic button that
+    // opens the GlobalSearch modal (Ctrl+K), so query for that button.
     render(<TopBar />);
-    expect(screen.getByLabelText("Search")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Open search" })).toBeInTheDocument();
   });
 
   it("renders actions area with sub-components", () => {
