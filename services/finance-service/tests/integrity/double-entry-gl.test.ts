@@ -18,13 +18,29 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { signToken } from "@civitasone/auth";
 import { createSqlClient } from "@civitasone/db";
+import type { MemoryQueue } from "@civitasone/queue";
+import { eq } from "drizzle-orm";
 import { buildApp } from "../../src/app.js";
 import { sqlClient } from "../../src/shared/db.js";
+import { queue } from "../../src/shared/infra.js";
+import { registerGlConsumers } from "../../src/modules/gl/consumer.js";
+import { financeHeads } from "../../src/modules/budget/schema.js";
+import { scoped } from "../_tenant.js";
 import type { FastifyInstance } from "fastify";
 
 const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
 const TENANT = "aaaaaaaa-0000-4000-8000-000000000001";
 const ACTOR = "aaaaaaaa-0000-4000-8000-aaaaaaaaaaaa";
+// The journal's two lines post against these head codes (see the "accepts a
+// BALANCED journal" test below). journalPost's consumer resolves accountCode
+// -> head via a tenant-scoped lookup (UNKNOWN_ACCOUNT_CODE if missing) —
+// discovered while fixing this file: the POST was accepted (202) and drained
+// clean, but the consumer's write then silently failed that lookup and landed
+// in the DLQ, so the DB-wide audit saw zero journals. This tenant has no
+// pre-seeded chart of accounts (unlike finance-core.test.ts's SEED_TENANT),
+// so seed the two heads the test actually posts against.
+const HEAD_1200 = "aaaaaaaa-0000-4000-8000-0000000001c1";
+const HEAD_2100 = "aaaaaaaa-0000-4000-8000-0000000002c1";
 
 // CI bootstrap sets civitas_admin from PGPASSWORD/POSTGRES_ADMIN_PASSWORD
 // (civitas_test). Local compose defaults to civitas_dev_pw. Hardcoding the
@@ -52,12 +68,34 @@ function token(): string {
 let app: FastifyInstance;
 const admin = createSqlClient(ADMIN_DSN, { max: 2, prepare: false });
 
+async function drain() {
+  await (queue as MemoryQueue).drain();
+}
+
+async function seedHeads() {
+  await scoped(TENANT, (tx) => tx.insert(financeHeads).values([
+    { id: HEAD_1200, tenantId: TENANT, code: "1200", name: "Fixed Assets (test)", level: 1, createdBy: ACTOR, updatedBy: ACTOR },
+    { id: HEAD_2100, tenantId: TENANT, code: "2100", name: "Current Liabilities (test)", level: 1, createdBy: ACTOR, updatedBy: ACTOR },
+  ]).onConflictDoNothing());
+}
+
 beforeAll(async () => {
+  // F3 CQRS: POST /v1/finance/journals publishes a command and returns 202
+  // immediately (queue.publish is fire-and-forget — see
+  // @civitasone/queue-service's bus.ts). Without registering the GL consumer
+  // here, the "real POST balance guard" test's balanced journal below never
+  // actually lands, so the DB-wide audit that follows sees zero journals and
+  // its own empty-pass guard fails. Mirrors the pattern in
+  // supplementary-routes.test.ts / formulation-routes.test.ts.
+  registerGlConsumers(queue);
+  await seedHeads();
   app = await buildApp();
 });
 
 afterAll(async () => {
   await app.close();
+  await scoped(TENANT, (tx) => tx.delete(financeHeads).where(eq(financeHeads.id, HEAD_1200))).catch(() => {});
+  await scoped(TENANT, (tx) => tx.delete(financeHeads).where(eq(financeHeads.id, HEAD_2100))).catch(() => {});
   await admin.end().catch(() => {});
   await sqlClient.end();
 });
@@ -79,6 +117,11 @@ describe("Check #1 — Double-entry GL: real POST balance guard", () => {
       },
     });
     expect(res.statusCode).toBe(202);
+    // F3 CQRS: the 202 only means the command was accepted onto the queue —
+    // MemoryQueue.publish is fire-and-forget (schedules delivery via
+    // setTimeout(0) and returns before any handler runs). Drain so the
+    // journal has actually landed before the DB-wide audit below reads it.
+    await drain();
   });
 
   it("REJECTS an UNBALANCED journal (debit != credit) with 400", async () => {
@@ -101,6 +144,38 @@ describe("Check #1 — Double-entry GL: real POST balance guard", () => {
   });
 });
 
+// FLAGGED (see PR description): this describe block's premise — "read as
+// admin to bypass RLS and audit ALL tenants' vouchers" — does not hold in
+// this codebase. `civitas_admin` (the role behind ADMIN_DATABASE_URL / the
+// `admin` client below) is deliberately created NOBYPASSRLS — see
+// infra/db/bootstrap/bootstrap_admin_role.sql: "It is deliberately NOT a
+// superuser and NOT BYPASSRLS — the L3 lane asserts no `%_svc` role holds
+// BYPASSRLS, and civitas_admin must not become a hole in that." A plain
+// `admin.unsafe(...)` query (no transaction, no app.tenant_id GUC) against
+// gl.finance_journals — a FORCE RLS table — therefore always returns ZERO
+// rows, for every tenant, regardless of how much data actually exists.
+//
+// This was NOT the bug the registerGlConsumers()/drain() gap this file was
+// fixed for: that fix is real and correct — verified independently (a
+// temporary in-transaction COUNT(*) immediately after postJournal's insert,
+// using the transaction's own connection, showed the row present and
+// committed). The "at least one voucher inspected" guard test below is
+// therefore doing exactly its documented job — catching that the audit query
+// is blind — just for a different underlying reason (RLS-blocked read
+// privilege, not "no journals exist"). The FIRST test in this block
+// ("every persisted voucher balances") is a false-positive pass for the same
+// reason: an always-empty result set trivially satisfies `dr <> cr` having
+// no rows.
+//
+// The only role in this codebase with BYPASSRLS is finance_scanner
+// (migrations/0052_finance_scanner_role.sql), but it is granted SELECT only
+// on _outbox.messages / _inbox.processed, not gl.finance_journals — so it
+// cannot be swapped in as-is either. A real fix needs a deliberate choice
+// (grant civitas_admin a narrow BYPASSRLS-equivalent for read-only audit
+// tooling, provision a new dedicated audit role, or restructure this check to
+// loop per known tenant with the GUC set) — left as a follow-up rather than
+// guessed at here, per this task's standing instruction to flag rather than
+// silently build anything requiring a real design/security decision.
 describe("Check #1 — Double-entry GL: DB-wide audit of existing vouchers", () => {
   it("every persisted gl.finance_journals voucher balances (debit == credit)", async () => {
     // Read as admin to bypass RLS and audit ALL tenants' vouchers.

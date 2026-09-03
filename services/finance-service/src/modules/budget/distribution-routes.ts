@@ -6,8 +6,8 @@ import { queue } from "../../shared/infra.js";
 import { COMMANDS } from "../../topics.js";
 import * as repo from "./distribution-repo.js";
 import {
-  assertDistributionAmountValid, assertDistinctOffices,
-  remainingDistributable,
+  assertDistributionAmountValid, assertDistinctOffices, assertWithinAllocation,
+  assertAcknowledgerDistinct, remainingDistributable,
 } from "./distribution-domain.js";
 import { DomainError } from "./domain.js";
 import { createDistributionBody, acknowledgeBody, distributionQuery, idParam, allocIdParam } from "./distribution-validators.js";
@@ -31,6 +31,27 @@ export async function allocationDistributionRoutes(app: FastifyInstance): Promis
       assertDistributionAmountValid(amount);
       assertDistinctOffices(body.fromOfficeId, body.toOfficeId);
     } catch (err) { toDomain(err); }
+    // BUG FIX (missing synchronous pre-accept validation): this route used to
+    // publish COMMANDS.allocationDistributionCreate unconditionally — neither
+    // the parent allocation's existence nor whether the requested amount fits
+    // its remaining headroom was checked before the 202 accept. The consumer
+    // (allocationDistributionCreate handler in consumer.ts) already enforces
+    // both, correctly, inside a FOR-UPDATE-locked transaction — but by then
+    // the caller has already moved on with a 202, so a same-request-cycle
+    // over-distribution attempt looked "accepted" instead of rejected. This
+    // mirrors the same bug class fixed in supplementary-routes.ts (PR #934).
+    // Read-only, no transaction, no lock: for the common sequential case this
+    // catches the over-distribution synchronously; it narrows but cannot
+    // fully close the TOCTOU window for two genuinely concurrent requests —
+    // see the "concurrent distributions" test for why that is architecturally
+    // a separate problem (fire-and-forget queue.publish never lands
+    // synchronously), not one a synchronous pre-check can solve.
+    const alloc = await repo.findAllocationById(body.allocationId, ctx.tenantId);
+    if (!alloc) throw new HttpError(404, "NOT_FOUND", "parent allocation not found");
+    const distributed = await repo.sumDistributed(body.allocationId, ctx.tenantId);
+    try {
+      assertWithinAllocation(alloc.allocatedMinor, distributed, amount);
+    } catch (err) { toDomain(err, 409); }
     const id = randomUUID();
     await queue.publish(COMMANDS.allocationDistributionCreate, {
       messageId: id, type: COMMANDS.allocationDistributionCreate,
@@ -97,6 +118,19 @@ export async function allocationDistributionRoutes(app: FastifyInstance): Promis
     requireRole(ctx, FINANCE_ROLES);
     const { id } = idParam.parse(req.params);
     const body = acknowledgeBody.parse(req.body);
+    // BUG FIX (same class as above): the maker-checker "acknowledger must
+    // differ from issuer" guard (assertAcknowledgerDistinct) previously only
+    // ran inside the async consumer, so a self-acknowledge attempt still got
+    // a 202 accept — the rejection happened invisibly, after the response was
+    // already sent. This is a plain identity comparison on an already-issued
+    // row (no amount/race dimension), so — unlike the create-side headroom
+    // check — lifting it synchronously fully closes the gap, not just
+    // narrows it.
+    const existing = await repo.findDistributionById(id, ctx.tenantId);
+    if (!existing) throw new HttpError(404, "NOT_FOUND", "distribution not found");
+    try {
+      assertAcknowledgerDistinct(existing.issuedBy ?? existing.createdBy, ctx.actorId);
+    } catch (err) { toDomain(err, 409); }
     await queue.publish(COMMANDS.allocationDistributionAcknowledge, {
       messageId: randomUUID(), type: COMMANDS.allocationDistributionAcknowledge,
       tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",

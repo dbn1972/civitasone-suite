@@ -12,6 +12,62 @@ import { tenantScoped } from "../../shared/tenant-queue.js";
 
 const AUDIT_TOPIC = "audit.event.record";
 
+export type AllocationDistributionCreatePayload = {
+  id: string; tenantId: string; allocationId: string; fromOfficeId: string; toOfficeId: string;
+  amountMinor: number; currency: string; conditions?: string | null; effectiveFrom?: string;
+};
+
+/**
+ * Distribution-create consumer logic, pulled out of registerBudgetConsumers's
+ * inline sub() callback and exported so tests/distribution-lock-race.test.ts
+ * can invoke the EXACT production code path directly and concurrently --
+ * bypassing the HTTP layer and MemoryQueue's fire-and-forget setTimeout(0)
+ * delivery (see @civitasone/queue-service's bus.ts), whose scheduling and I/O
+ * jitter made the previous end-to-end race test only reproduce the race ~12%
+ * of runs (see distribution-routes.test.ts's "concurrent distributions"
+ * test). Calling this directly under a real Promise.all lets a test force
+ * two invocations to race lockAllocationByIdTx's SELECT ... FOR UPDATE for
+ * real, every run.
+ *
+ * `hooks.afterSumRead` is a test-only seam: production callers never pass it
+ * (defaults to a no-op), so behaviour here is byte-for-byte identical to what
+ * `sub(COMMANDS.allocationDistributionCreate, ...)` registered before this
+ * refactor. A test uses it to pause the transaction right after `distributed`
+ * has been captured (the value that becomes stale if a racing transaction
+ * commits before this one resumes) and BEFORE assertWithinAllocation/insert
+ * consume it -- i.e. exactly the TOCTOU gap the row lock exists to close.
+ * Pausing any earlier (e.g. right after the lock call, before the sum read)
+ * would NOT reproduce the bug: on resume this transaction would simply read
+ * the now-current sum and correctly reject itself. Pausing here with a
+ * STALE `distributed` already in hand is what lets a second, unlocked
+ * transaction's insert land invisibly and both transactions jointly overdraw.
+ */
+export async function handleAllocationDistributionCreate(
+  msg: CommandEnvelope<AllocationDistributionCreatePayload>,
+  hooks: { afterSumRead?: () => Promise<void> } = {},
+): Promise<void> {
+  const repo = await import("./distribution-repo.js");
+  const { assertWithinAllocation } = await import("./distribution-domain.js");
+  const { DomainError } = await import("./domain.js");
+  const p = msg.payload;
+  await db.transaction(async (tx) => {
+    if (!(await markProcessed(tx, msg.messageId))) return;
+    const alloc = await repo.lockAllocationByIdTx(tx, p.allocationId, p.tenantId);
+    if (!alloc) throw new DomainError("NOT_FOUND", "parent allocation not found");
+    const distributed = await repo.sumDistributedTx(tx, p.allocationId, p.tenantId);
+    await hooks.afterSumRead?.();
+    assertWithinAllocation(alloc.allocatedMinor, distributed, BigInt(p.amountMinor));
+    await repo.insertDistribution(tx, {
+      id: p.id, tenantId: p.tenantId, allocationId: p.allocationId, fy: alloc.fy, headId: alloc.headId,
+      fromOfficeId: p.fromOfficeId, toOfficeId: p.toOfficeId, amountMinor: BigInt(p.amountMinor),
+      currency: p.currency, conditions: p.conditions ?? null, status: "draft",
+      effectiveFrom: p.effectiveFrom ?? new Date().toISOString().slice(0, 10),
+      createdBy: msg.actorId, updatedBy: msg.actorId,
+    });
+    await audit(tx, msg, "create", "allocation_distribution", p.id);
+  });
+}
+
 export function registerBudgetConsumers(rawQueue: Queue): void {
   const queue = tenantScoped(rawQueue);
   // Tenant context: every command carries tenantId in its envelope. Wrap each
@@ -195,30 +251,7 @@ export function registerBudgetConsumers(rawQueue: Queue): void {
     });
   });
 
-  sub(COMMANDS.allocationDistributionCreate, async (msg) => {
-    const repo = await import("./distribution-repo.js");
-    const { assertWithinAllocation } = await import("./distribution-domain.js");
-    const { DomainError } = await import("./domain.js");
-    const p = msg.payload as {
-      id: string; tenantId: string; allocationId: string; fromOfficeId: string; toOfficeId: string;
-      amountMinor: number; currency: string; conditions?: string | null; effectiveFrom?: string;
-    };
-    await db.transaction(async (tx) => {
-      if (!(await markProcessed(tx, msg.messageId))) return;
-      const alloc = await repo.lockAllocationByIdTx(tx, p.allocationId, p.tenantId);
-      if (!alloc) throw new DomainError("NOT_FOUND", "parent allocation not found");
-      const distributed = await repo.sumDistributedTx(tx, p.allocationId, p.tenantId);
-      assertWithinAllocation(alloc.allocatedMinor, distributed, BigInt(p.amountMinor));
-      await repo.insertDistribution(tx, {
-        id: p.id, tenantId: p.tenantId, allocationId: p.allocationId, fy: alloc.fy, headId: alloc.headId,
-        fromOfficeId: p.fromOfficeId, toOfficeId: p.toOfficeId, amountMinor: BigInt(p.amountMinor),
-        currency: p.currency, conditions: p.conditions ?? null, status: "draft",
-        effectiveFrom: p.effectiveFrom ?? new Date().toISOString().slice(0, 10),
-        createdBy: msg.actorId, updatedBy: msg.actorId,
-      });
-      await audit(tx, msg, "create", "allocation_distribution", p.id);
-    });
-  });
+  sub(COMMANDS.allocationDistributionCreate, handleAllocationDistributionCreate);
 
   sub(COMMANDS.allocationDistributionIssue, async (msg) => {
     const repo = await import("./distribution-repo.js");

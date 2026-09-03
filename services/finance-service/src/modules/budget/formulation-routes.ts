@@ -6,6 +6,7 @@ import { COMMANDS } from "../../topics.js";
 import * as repo from "./formulation-repo.js";
 import {
   assertProposalValid, consolidateProposals, ceilingBreachMinor,
+  assertProposalApproverDistinct,
 } from "./formulation-domain.js";
 import { DomainError } from "./domain.js";
 import {
@@ -123,6 +124,21 @@ export async function budgetFormulationRoutes(app: FastifyInstance): Promise<voi
     const ctx = resolveContext(req);
     requireRole(ctx, APPROVER_ROLES);
     const { id } = idParam.parse(req.params);
+    // BUG FIX (missing synchronous pre-accept validation): maker-checker on
+    // approval (assertProposalApproverDistinct) previously ran only inside
+    // the async consumer, so a self-approve attempt still got a 202 accept —
+    // the rejection happened invisibly, after the response was already sent,
+    // and the queue's fire-and-forget delivery (see MemoryQueue.publish) never
+    // surfaces that failure back to the caller. This is a plain identity
+    // comparison against the proposal's already-persisted createdBy (no
+    // amount/race dimension like the distribution headroom check), so lifting
+    // it synchronously fully closes the gap rather than just narrowing it.
+    // Same bug class as the distribution-routes.ts fix in this same change.
+    const existing = await repo.findProposalById(id, ctx.tenantId);
+    if (!existing) throw new HttpError(404, "NOT_FOUND", "proposal not found");
+    try {
+      assertProposalApproverDistinct(existing.createdBy, ctx.actorId);
+    } catch (err) { toDomain(err, 409); }
     await queue.publish(COMMANDS.budgetProposalApprove, {
       messageId: randomUUID(), type: COMMANDS.budgetProposalApprove,
       tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
