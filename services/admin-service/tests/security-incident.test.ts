@@ -10,6 +10,8 @@ import { signToken } from "@civitasone/auth";
 import type { FastifyInstance } from "fastify";
 import { buildApp } from "../src/app.js";
 import { sqlClient } from "../src/shared/db.js";
+import { queue } from "../src/shared/infra.js";
+import { registerAllF3Consumers } from "./helpers/register-all-f3-consumers.js";
 import {
   canTransition, checkCloseSegregation, computeBreachDeadline, eventTopicForStatus,
   hoursUntilDeadline, isBreachOverdue, timestampColumnFor,
@@ -30,8 +32,49 @@ function auth(actorId: string, tenantId?: string, roles?: string[]) {
 }
 
 let app: FastifyInstance;
-beforeAll(async () => { app = await buildApp(); });
-afterAll(async () => { await app.close(); await sqlClient.end(); });
+beforeAll(async () => {
+  // F3 CONSUMER WIRING — this test's app comes from src/app.ts, but every
+  // write in this module (create/transition/close/breach-notification
+  // create+submit) goes through commands.ts -> queue.publish() and is only
+  // ever applied by the consumer registered in src/worker.ts, a process
+  // this test never runs. Without registering it here, every write returns
+  // 202 accepted and then is NEVER applied — repo reads afterwards
+  // (including the breach-notification deadline persisted to the DB) see
+  // nothing. Registers the full worker.ts consumer set (see helper) against
+  // the real in-memory test Queue singleton, same pattern as
+  // tests/integration-settings-ssrf.test.ts and
+  // tests/feature-flags-rollout.test.ts.
+  registerAllF3Consumers(queue);
+  await queue.start();
+  app = await buildApp();
+});
+afterAll(async () => { await app.close(); await queue.stop(); await sqlClient.end(); });
+
+// The F3 consumer applies writes asynchronously (queue.publish() does not
+// block until the subscriber finishes) — poll after a write instead of
+// assuming it has landed by the time the next request is injected. Mirrors
+// waitForFlag() in tests/feature-flags-rollout.test.ts and
+// proposeAndWait()/approveAndWait() in tests/integration-settings-ssrf.test.ts.
+async function settle(ms = 25): Promise<void> {
+  await new Promise((r) => setTimeout(r, ms));
+}
+async function waitForIncident(tenantId: string, id: string, tries = 40): Promise<void> {
+  for (let i = 0; i < tries; i++) {
+    const res = await app.inject({ method: "GET", url: `/v1/admin/security-incidents/${id}`, headers: auth(REPORTER, tenantId) });
+    if (res.statusCode === 200) return;
+    await settle();
+  }
+  throw new Error(`incident ${id} never landed — F3 consumer not draining`);
+}
+async function waitForBreachNotification(tenantId: string, incidentId: string, tries = 40): Promise<string> {
+  for (let i = 0; i < tries; i++) {
+    const res = await app.inject({ method: "GET", url: `/v1/admin/security-incidents/${incidentId}`, headers: auth(REPORTER, tenantId) });
+    const notifs = res.json()?.data?.breachNotifications;
+    if (Array.isArray(notifs) && notifs.length > 0) return notifs[0].id;
+    await settle();
+  }
+  throw new Error(`breach notification for incident ${incidentId} never landed — F3 consumer not draining`);
+}
 
 describe("service (pure)", () => {
   it("enforces forward-only lifecycle", () => {
@@ -137,6 +180,7 @@ describe("breach notification (integration)", () => {
       payload: { title: "PII disclosure", severity: "critical", isBreach: true, affectedDataPrincipals: 5000 },
     });
     incidentId = create.json().data.id;
+    await waitForIncident(TENANT, incidentId);
     const notif = await app.inject({
       method: "POST", url: `/v1/admin/security-incidents/${incidentId}/breach-notifications`,
       headers: auth(REPORTER), payload: { authority: "data_protection_board", affectedCount: 5000, windowHours: 72 },
@@ -147,6 +191,7 @@ describe("breach notification (integration)", () => {
   });
 
   it("marks the notification submitted with an authority reference", async () => {
+    await waitForBreachNotification(TENANT, incidentId);
     const detail = await app.inject({ method: "GET", url: `/v1/admin/security-incidents/${incidentId}`, headers: auth(REPORTER) });
     const nid = detail.json().data.breachNotifications[0].id;
     const submit = await app.inject({
@@ -178,6 +223,7 @@ describe("breach deadline is hard-capped at DPDP §8(6) 72h", () => {
       payload: { title: "statutory window incident", severity: "critical", isBreach: true },
     });
     const id = create.json().data.id;
+    await waitForIncident(TENANT, id);
     const detail = await app.inject({ method: "GET", url: `/v1/admin/security-incidents/${id}`, headers: auth(REPORTER) });
     return { id, detectedAt: detail.json().data.detectedAt };
   }
