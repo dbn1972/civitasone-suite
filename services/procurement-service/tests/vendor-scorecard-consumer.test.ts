@@ -33,7 +33,16 @@ function wire(q: Queue): Queue {
   q.subscribe = ((t: string, h: Handler) => raw(t, withTenantConsumer(h) as Handler)) as typeof q.subscribe;
   return q;
 }
-async function drain(q: MemoryQueue) { await new Promise<void>((r) => setTimeout(r, 400)); await q.stop(); }
+// Uses MemoryQueue.drain() (waits on tracked in-flight promises, including
+// retry backoffs) rather than a fixed sleep. This suite fires many events
+// against the SAME vendor scorecard row with no per-publish await (8 GRN
+// accepted + 2 rejected + 1 contract-terminated in one test); each write is
+// an optimistic-locked read-modify-write, so concurrent deliveries collide on
+// version and must retry — a fixed 400ms window can be shorter than that
+// retry chain under host load, and q.stop() then force-cancels any handler
+// still backing off with no DLQ entry and no error logged. q.drain() blocks
+// on actual completion instead of a guessed duration.
+async function drain(q: MemoryQueue) { await q.drain(); await q.stop(); }
 
 async function wipe(): Promise<void> {
   await runWithTenant(TENANT, () => db.transaction(async (tx) => {
