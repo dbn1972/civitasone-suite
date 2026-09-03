@@ -1,4 +1,5 @@
 import { describe, it, expect } from "vitest";
+import { randomUUID } from "node:crypto";
 import { MemoryQueue } from "../src/bus.js";
 
 /**
@@ -63,6 +64,10 @@ describe("MemoryQueue — cross-subscriber delivery dedup (regression)", () => {
       calls++;
     });
 
+    // Generated once per run (not a static literal) so this test never writes
+    // the same messageId into a real idempotency ledger across CI runs; both
+    // publishes below reuse this single value, which is what the test needs
+    // to exercise the same-id-twice redelivery path.
     const shared = {
       type: "redelivery.topic",
       tenantId: "t",
@@ -70,7 +75,7 @@ describe("MemoryQueue — cross-subscriber delivery dedup (regression)", () => {
       correlationId: "c",
       schemaVersion: "1.0",
       payload: {},
-      messageId: "11111111-1111-4111-8111-111111111111",
+      messageId: randomUUID(),
     };
 
     await q.publish("redelivery.topic", shared);
