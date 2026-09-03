@@ -107,6 +107,13 @@ export async function projectRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, PROJ_ROLES);
     const { id } = idParam.parse(req.params);
     const body = updateProjectBody.parse(req.body);
+    // Synchronous pre-accept existence/tenant check — without this, a PATCH
+    // for a nonexistent or cross-tenant project id was silently accepted
+    // (202) and queued, then no-oped in the async consumer with no channel
+    // back to the caller. Mirrors the findProjectById guard used by GET
+    // /gantt above.
+    const existing = await repo.findProjectById(id, ctx.tenantId);
+    if (!existing) throw new HttpError(404, "NOT_FOUND", "project not found");
     return sendAccepted(reply, acceptedResponseSchema, await commands.updateProject(ctx, id, body));
   });
 

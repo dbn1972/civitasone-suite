@@ -83,6 +83,26 @@ export async function insertDependency(dbOrTx: DbLike, input: {
 }
 
 /**
+ * Existence check for a dependency (pre-accept validation for the async
+ * DELETE route — without this, deleting a nonexistent dependency id was
+ * silently accepted (202) and the delete consumer no-oped with no channel
+ * back to the caller).
+ */
+export async function dependencyExists(dbOrTx: DbLike, id: string, projectId: string, tenantId: string): Promise<boolean> {
+  const [result] = await dbOrTx
+    .select({ cnt: count() })
+    .from(taskDependencies)
+    .where(
+      and(
+        eq(taskDependencies.id, id),
+        eq(taskDependencies.projectId, projectId),
+        eq(taskDependencies.tenantId, tenantId),
+      ),
+    );
+  return (result?.cnt ?? 0) > 0;
+}
+
+/**
  * Delete a dependency by ID within a transaction.
  */
 export async function deleteDependency(dbOrTx: DbLike, id: string, projectId: string, tenantId: string): Promise<boolean> {

@@ -63,9 +63,14 @@ export function registerF3ProjectConsumers(queue: Queue): void {
             break;
           }
           case "ra_bill_create": {
+            // id must be forwarded from the route (RETURNING id previously
+            // let Postgres mint a fresh gen_random_uuid() instead) — the
+            // 202 response already handed the caller `p.id` as the bill id,
+            // so a mismatched persisted id made every follow-up
+            // approve/lookup 404 forever.
             const rows = await tx.execute(sql`
-              INSERT INTO project.project_ra_bills (tenant_id, project_id, contractor_id, contractor_name, bill_no, bill_date, work_description, gross_amount_minor, deductions_minor, net_amount_minor, cumulative_minor, status, created_by)
-              VALUES (${p.tenantId}, ${p.projectId}, ${p.contractorId}, ${p.contractorName ?? null}, ${p.billNo}, ${p.billDate}, ${p.workDescription ?? null}, ${p.gross}, ${p.deductions}, ${p.net}, ${p.cumulative}, ${"submitted"}, ${msg.actorId})
+              INSERT INTO project.project_ra_bills (id, tenant_id, project_id, contractor_id, contractor_name, bill_no, bill_date, work_description, gross_amount_minor, deductions_minor, net_amount_minor, cumulative_minor, status, created_by)
+              VALUES (${p.id}, ${p.tenantId}, ${p.projectId}, ${p.contractorId}, ${p.contractorName ?? null}, ${p.billNo}, ${p.billDate}, ${p.workDescription ?? null}, ${p.gross}, ${p.deductions}, ${p.net}, ${p.cumulative}, ${"submitted"}, ${msg.actorId})
               RETURNING id
             `);
             const rid = (rows[0] as { id: string }).id;
@@ -85,9 +90,12 @@ export function registerF3ProjectConsumers(queue: Queue): void {
             break;
           }
           case "time_ext_create": {
+            // Same id-forwarding fix as ra_bill_create above — without an
+            // explicit id, Postgres minted a new one and the id returned in
+            // the 202 response could never be approved or found again.
             const rows = await tx.execute(sql`
-              INSERT INTO project.project_time_extensions (tenant_id, project_id, original_end_date, extended_end_date, extension_days, reason, penalty_applicable, penalty_per_day_minor, status, created_by)
-              VALUES (${p.tenantId}, ${p.projectId}, ${p.originalEndDate}, ${p.extendedEndDate}, ${p.extensionDays}, ${p.reason}, ${p.penaltyApplicable}, ${p.penaltyPerDay}, ${"requested"}, ${msg.actorId})
+              INSERT INTO project.project_time_extensions (id, tenant_id, project_id, original_end_date, extended_end_date, extension_days, reason, penalty_applicable, penalty_per_day_minor, status, created_by)
+              VALUES (${p.id}, ${p.tenantId}, ${p.projectId}, ${p.originalEndDate}, ${p.extendedEndDate}, ${p.extensionDays}, ${p.reason}, ${p.penaltyApplicable}, ${p.penaltyPerDay}, ${"requested"}, ${msg.actorId})
               RETURNING id
             `);
             const rid = (rows[0] as { id: string }).id;
@@ -107,9 +115,10 @@ export function registerF3ProjectConsumers(queue: Queue): void {
             break;
           }
           case "penalty_create": {
+            // Same id-forwarding fix as ra_bill_create above.
             const rows = await tx.execute(sql`
-              INSERT INTO project.project_penalties (tenant_id, project_id, contractor_id, penalty_type, from_date, to_date, days, rate_per_day_minor, total_minor, recovered, recovered_from, created_by)
-              VALUES (${p.tenantId}, ${p.projectId}, ${p.contractorId ?? null}, ${p.penaltyType}, ${p.fromDate}, ${p.toDate}, ${p.days}, ${p.ratePerDay}, ${p.total}, ${false}, ${p.recoveredFrom ?? null}, ${msg.actorId})
+              INSERT INTO project.project_penalties (id, tenant_id, project_id, contractor_id, penalty_type, from_date, to_date, days, rate_per_day_minor, total_minor, recovered, recovered_from, created_by)
+              VALUES (${p.id}, ${p.tenantId}, ${p.projectId}, ${p.contractorId ?? null}, ${p.penaltyType}, ${p.fromDate}, ${p.toDate}, ${p.days}, ${p.ratePerDay}, ${p.total}, ${false}, ${p.recoveredFrom ?? null}, ${msg.actorId})
               RETURNING id
             `);
             const rid = (rows[0] as { id: string }).id;
@@ -117,9 +126,10 @@ export function registerF3ProjectConsumers(queue: Queue): void {
             break;
           }
           case "resource_allocate": {
+            // Same id-forwarding fix as ra_bill_create above.
             const rows = await tx.execute(sql`
-              INSERT INTO project.project_resources (tenant_id, project_id, task_id, resource_type, resource_id, resource_name, allocated_hours, daily_rate_minor, from_date, to_date, status, created_by)
-              VALUES (${p.tenantId}, ${p.projectId}, ${p.taskId ?? null}, ${p.resourceType}, ${p.resourceId ?? null}, ${p.resourceName}, ${p.allocatedHours ?? null}, ${p.dailyRate}, ${p.fromDate ?? null}, ${p.toDate ?? null}, ${"allocated"}, ${msg.actorId})
+              INSERT INTO project.project_resources (id, tenant_id, project_id, task_id, resource_type, resource_id, resource_name, allocated_hours, daily_rate_minor, from_date, to_date, status, created_by)
+              VALUES (${p.id}, ${p.tenantId}, ${p.projectId}, ${p.taskId ?? null}, ${p.resourceType}, ${p.resourceId ?? null}, ${p.resourceName}, ${p.allocatedHours ?? null}, ${p.dailyRate}, ${p.fromDate ?? null}, ${p.toDate ?? null}, ${"allocated"}, ${msg.actorId})
               RETURNING id
             `);
             const rid = (rows[0] as { id: string }).id;
