@@ -98,6 +98,13 @@ run_bootstrap "$ROOT/infra/db/bootstrap/bootstrap_missing_schemas.sql"
 # batches. Without this, all 6 services' migrations fail in CI with
 # "database does not exist" before the migration loop ever reaches them.
 run_bootstrap "$ROOT/infra/db/bootstrap/bootstrap_sec5_batch3.sql"
+# shop-service (Sec5 batch 2: parks/refund/roadcut/shop/trade) had a role/db
+# in local dev tooling (scripts/dev/provision-sec5-batch2-roles.sql) but no
+# bootstrap file here ever created shop_svc/civitas_shop, and it was never
+# added to the SERVICE_DBS map below — its migrations never ran in CI. See
+# bootstrap_shop.sql for the full story (same gap bootstrap_refund.sql fixed
+# for refund-service in the same batch).
+run_bootstrap "$ROOT/infra/db/bootstrap/bootstrap_shop.sql"
 # sewerage-service had NO bootstrap entry at all (no role, no database) and
 # also had no migrations directory until this pass added one -- see
 # services/sewerage-service/migrations/0001_initial.sql and the SERVICE_DBS
@@ -178,6 +185,12 @@ declare -A SERVICE_DBS=(
   [catalogue-service]="catalogue_svc:civitas_catalogue"
   [loyalty-service]="loyalty_svc:civitas_loyalty"
   [journey-service]="journey_svc:civitas_journey"
+  # shop-service: migrations directory has existed since the service was
+  # scaffolded, but (like refund-service before bootstrap_refund.sql, and
+  # cdp/catalogue/loyalty/journey above) it was never added here, so its
+  # migrations never ran in CI. bootstrap_shop.sql (added above) now creates
+  # shop_svc/civitas_shop so this entry is no longer a no-op.
+  [shop-service]="shop_svc:civitas_shop"
 )
 
 # ── Role-creating migrations must run as the bootstrapping SUPERUSER ─────────
