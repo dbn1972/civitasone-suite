@@ -4,6 +4,7 @@ import { db } from "../../shared/db.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { writeAudit } from "../../shared/audit.js";
 import { tenantScoped } from "../../shared/tenant-queue.js";
+import { cache } from "../../shared/infra.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
 import * as licenceRepo from "../licences/repo.js";
@@ -45,9 +46,13 @@ export function registerLifecycleConsumers(rawQueue: Queue): void {
       await repo.updateDecision(tx, p.id, msg.tenantId, p.decision, msg.actorId, p.reason ?? null, newValidUntil);
       if (p.decision === "approved" && renewal.renewalType === "renewal" && newValidUntil) {
         await licenceRepo.updateValidUntil(tx, renewal.licenceId, msg.tenantId, newValidUntil, msg.actorId);
+        // See applications/consumer.ts's header comment: GET /licences/:id is
+        // cached and this write (via a DIFFERENT module) mutates that row.
+        await cache.invalidateResourceAfterCommit(tx, msg.tenantId, "licence");
       }
       if (p.decision === "approved" && renewal.renewalType === "surrender") {
         await licenceRepo.updateLicenceStatus(tx, renewal.licenceId, msg.tenantId, "cancelled", { cancelledAt: new Date(), cancellationReason: "Surrendered by holder" }, msg.actorId);
+        await cache.invalidateResourceAfterCommit(tx, msg.tenantId, "licence");
       }
       await enqueue(tx, { topic: EVENTS.renewalDecided, eventType: EVENTS.renewalDecided, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { renewalId: p.id, licenceId: renewal.licenceId, renewalType: renewal.renewalType, decision: p.decision, reason: p.reason, newValidUntil: newValidUntil?.toISOString() } });
       await writeAudit(tx, ctxOf(msg), { action: `renewal.${p.decision}`, resourceType: "trade_renewal", resourceId: p.id });

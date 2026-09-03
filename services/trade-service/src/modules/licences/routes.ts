@@ -51,9 +51,21 @@ export async function licenceRoutes(app: FastifyInstance): Promise<void> {
     return reply.send({ data: actions, meta: { page: 1, pageSize: actions.length, total: actions.length } });
   });
 
-  app.get("/v1/trade/licences/verify", async (req, reply) => {
+  // PUBLIC — no resolveContext/requireRole: a citizen verifies a licence via QR
+  // code / verification code with no login and no tenant context. Two bugs
+  // stacked here, both fixed together:
+  //  1. { config: { public: true } } was missing, so @civitasone/auth's global
+  //     onRequest hook (packages/auth/src/plugin.ts) 401'd every request before
+  //     the handler ever ran — confirmed live (no Authorization header → 401).
+  //  2. Even authenticated, the handler read the tenant-scoped trade_licences
+  //     table; createTenantTxHook only derives app.tenant_id from an x-tenant-id
+  //     header, which a caller verifying an UNKNOWN business's licence has no way
+  //     to supply. With no GUC set, FORCE ROW LEVEL SECURITY silently returns zero
+  //     rows for every code, forever. Fixed by reading the non-RLS public
+  //     directory instead — see repo.findPublicByVerificationCode.
+  app.get("/v1/trade/licences/verify", { config: { public: true } }, async (req, reply) => {
     const q = verifyQuery.parse(req.query);
-    const licence = await repo.findByVerificationCode(q.code);
+    const licence = await repo.findPublicByVerificationCode(q.code);
     if (!licence) throw new HttpError(404, "LICENCE_NOT_FOUND", "No licence found for this verification code");
     return reply.send({ data: { licenceNumber: licence.licenceNumber, tradeCategory: licence.tradeCategory, status: licence.status, issuedAt: licence.issuedAt, validFrom: licence.validFrom, validUntil: licence.validUntil } });
   });
@@ -108,6 +120,11 @@ export async function licenceRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, OFFICER_ROLES);
     const body = noticeBody.parse(req.body);
+    // Every other write route in this file pre-checks the target exists before
+    // accepting the command (202); this one didn't — an officer could get a 202
+    // for a notice against a licenceId that will never resolve to anything.
+    const licence = await repo.findById(body.licenceId, ctx.tenantId);
+    if (!licence) throw new HttpError(404, "LICENCE_NOT_FOUND", "Licence not found");
     return reply.code(202).send(await commands.issueNotice(ctx, body.licenceId, body.noticeDetails));
   });
 }

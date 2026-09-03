@@ -37,9 +37,31 @@ export const licenceActions = tradeSchema.table("licence_actions", {
   version: integer("version").notNull().default(1),
 });
 
+// Public, cross-tenant verification directory (migration 0002). Deliberately
+// NOT declared under `trade.trade_licences`'s FORCE RLS: GET /v1/trade/licences/verify
+// is unauthenticated (a citizen looks up a licence with no tenant context), and a
+// read against the FORCE-RLS table with no app.tenant_id GUC silently returns zero
+// rows for every code, forever — see the migration header for the full story and
+// services/court-service/src/modules/public-lookup for the established pattern this
+// mirrors. Carries ONLY already-public licence facts; no owner/PII columns.
+export const tradeLicenceDirectory = tradeSchema.table("trade_licence_directory", {
+  verificationCode: varchar("verification_code", { length: 64 }).primaryKey(),
+  tenantId: uuid("tenant_id").notNull(),
+  licenceId: uuid("licence_id").notNull(),
+  licenceNumber: varchar("licence_number", { length: 64 }).notNull(),
+  tradeCategory: varchar("trade_category", { length: 64 }).notNull(),
+  status: varchar("status", { length: 32 }).notNull(),
+  issuedAt: timestamp("issued_at", { withTimezone: true }),
+  validFrom: timestamp("valid_from", { withTimezone: true }),
+  validUntil: timestamp("valid_until", { withTimezone: true }),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
 export type TradeLicenceRow = typeof tradeLicences.$inferSelect;
 export type TradeLicenceInsert = typeof tradeLicences.$inferInsert;
 export type LicenceActionRow = typeof licenceActions.$inferSelect;
 export type LicenceActionInsert = typeof licenceActions.$inferInsert;
+export type TradeLicenceDirectoryRow = typeof tradeLicenceDirectory.$inferSelect;
+export type TradeLicenceDirectoryInsert = typeof tradeLicenceDirectory.$inferInsert;
 
-export const schema = { tradeLicences, licenceActions };
+export const schema = { tradeLicences, licenceActions, tradeLicenceDirectory };
