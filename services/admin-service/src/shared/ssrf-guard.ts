@@ -15,6 +15,7 @@
  * Behavior must remain identical for the webhook guard.
  */
 import { resolve4, resolve6 } from "node:dns/promises";
+import net from "node:net";
 
 // Shared IPv4-octet check used both for plain IPv4 literals and for the IPv4
 // address embedded in an IPv4-mapped IPv6 literal (::ffff:a.b.c.d). Only the
@@ -29,12 +30,72 @@ function isPrivateIpv4Octets(a: number, b: number): boolean {
   return false;
 }
 
+// A raw string is a candidate for the obfuscated-IPv4-literal canonicalizer
+// below only if it's built entirely from digits, hex letters, "x" (for a
+// "0x…" prefix) and dots, and contains at least one digit. This deliberately
+// excludes ordinary hostnames (which contain letters like g/o/m/etc. outside
+// [0-9a-fx.]) so the round-trip below only ever fires on genuinely
+// numeric-shaped input.
+const IPV4_OBFUSCATION_CANDIDATE = /^[0-9a-fx.]+$/i;
+
 export function isPrivateIp(ip: string): boolean {
   // Defensive normalization: strip a URL-hostname's IPv6 brackets (e.g.
   // "[fe80::1]" from `new URL(...).hostname`) and lowercase, so this function
   // is safe to call with either bracketed or bare IPv6 literals regardless of
   // whether the caller already normalized.
-  const normalized = String(ip ?? "").trim().toLowerCase().replace(/^\[|\]$/g, "");
+  let normalized = String(ip ?? "").trim().toLowerCase().replace(/^\[|\]$/g, "");
+
+  // --- Canonicalize non-canonical IPv6 literals ---------------------------
+  // net.isIP() (and therefore net.connect()/tls.connect(), which use the
+  // same underlying parser) accepts many non-canonical spellings of the same
+  // IPv6 address — fully-expanded zero groups, "::" collapsing a different
+  // run of zeros, mixed padding, etc. — that the regexes below only
+  // recognize in their single canonical, maximally-compressed spelling
+  // (e.g. "::ffff:a9fe:a9fe"). "0:0:0:0:0:ffff:169.254.169.254",
+  // "0000:0000:0000:0000:0000:ffff:169.254.169.254" and
+  // "0:0::ffff:169.254.169.254" are all the SAME address as
+  // "::ffff:169.254.169.254" but would silently fall through every check
+  // below without this step. Route any genuine IPv6 literal through Node's
+  // URL host-parser — the same canonicalizer `isBlockedUrl` already gets for
+  // free via `new URL(url).hostname` — to fold it down to one canonical
+  // form before matching. Guarded by `net.isIP(...) === 6` so this only ever
+  // runs on strings Node itself already recognizes as valid IPv6 literals;
+  // the try/catch is defensive belt-and-braces, not an expected path.
+  if (net.isIP(normalized) === 6) {
+    try {
+      normalized = new URL(`http://[${normalized}]/`).hostname.replace(/^\[|\]$/g, "");
+    } catch {
+      // Fall through with the original (already-valid) literal.
+    }
+  } else if (
+    IPV4_OBFUSCATION_CANDIDATE.test(normalized) &&
+    /\d/.test(normalized) &&
+    net.isIP(normalized) !== 4
+  ) {
+    // --- Canonicalize obfuscated IPv4 literals -----------------------------
+    // Same class of problem, one level down. Octal ("0177.0.0.1"), pure
+    // 32-bit decimal ("2130706433"), hex ("0x7f.0.0.1") and shorthand
+    // ("127.1") spellings of an IPv4 address are all accepted by glibc's
+    // getaddrinfo — and therefore by net.connect()'s DNS-lookup path — but
+    // are NOT recognized by net.isIP() and are NOT matched by the plain
+    // dotted-decimal regex below (verified: dns.lookup() resolves every one
+    // of these to the plain address on this host). `new URL('http://' + h +
+    // '/').hostname` implements the same WHATWG "IPv4 parser" algorithm
+    // (explicitly modeled on inet_aton) and folds all of these down to a
+    // canonical a.b.c.d string — verified to agree with dns.lookup()'s
+    // resolution for every obfuscated form tested. Only strings net.isIP()
+    // does NOT already recognize as a clean IPv4 literal take this path, so
+    // already-canonical addresses are untouched.
+    try {
+      const candidate = new URL(`http://${normalized}/`).hostname;
+      if (/^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(candidate)) {
+        normalized = candidate;
+      }
+    } catch {
+      // Not actually a numeric-host shape (e.g. malformed) — leave
+      // `normalized` as-is; the checks below will simply not match it.
+    }
+  }
 
   // IPv4 checks
   const ipv4 = normalized.match(/^(\d+)\.(\d+)\.(\d+)\.(\d+)$/);
@@ -131,7 +192,10 @@ export async function isBlockedHost(host: string): Promise<boolean> {
   if (!h) return true;
   if (h === "localhost") return true;
   if (h === "metadata.google.internal") return true;
-  // IP literal → check directly.
+  // IP literal → check directly. isPrivateIp() itself canonicalizes
+  // non-canonical IPv6 spellings and obfuscated (octal/decimal/hex/
+  // shorthand) IPv4 spellings before matching, so this raw-string path gets
+  // the same protection isBlockedUrl() gets for free from `new URL()`.
   if (/^[\d.]+$/.test(h) || h.includes(":")) return isPrivateIp(h);
   try {
     const [ipv4s, ipv6s] = await Promise.allSettled([resolve4(h), resolve6(h)]);
