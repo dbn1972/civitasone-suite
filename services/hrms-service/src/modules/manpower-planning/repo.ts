@@ -27,6 +27,21 @@ export async function getPlan(tenantId: string, id: string): Promise<ManpowerPla
   return rows[0] ?? null;
 }
 
+/** Existence check backing the (tenant_id, unit_id, cadre, plan_year) unique constraint. */
+export async function findPlanByUnitCadreYear(
+  tenantId: string, unitId: string, cadre: string, planYear: number,
+): Promise<ManpowerPlanRow | null> {
+  const rows = await scopedRead((tx) => tx.select().from(manpowerPlans)
+    .where(and(
+      eq(manpowerPlans.tenantId, tenantId),
+      eq(manpowerPlans.unitId, unitId),
+      eq(manpowerPlans.cadre, cadre),
+      eq(manpowerPlans.planYear, planYear),
+    ))
+    .limit(1));
+  return rows[0] ?? null;
+}
+
 export async function getPlanTx(tx: Writer, tenantId: string, id: string): Promise<ManpowerPlanRow | null> {
   const rows = await (tx as typeof db).select().from(manpowerPlans)
     .where(and(eq(manpowerPlans.id, id), eq(manpowerPlans.tenantId, tenantId)))

@@ -27,6 +27,10 @@ export type EmployeeDetailShape = {
   status: string;
   reportingTo?: string;
   postingLocation?: string;
+  bankAccountNo: string | null;
+  bankIfsc: string | null;
+  pan: string | null;
+  managerId?: string;
 };
 
 /** Returns a shaped response matching EmployeeDetailSchema (web). */
@@ -80,6 +84,20 @@ export async function getEmployeeDetail(id: string, tenantId: string): Promise<E
     // Non-null assertion is safe: emp.mobile is truthy here, and maskValue
     // only returns undefined for a null/undefined/empty input.
     ...(emp.mobile         ? { phone: maskValue(emp.mobile)! }        : {}),
+    // Same PII-masking convention as `phone` above (shared/pii-mask.ts:
+    // pan/bankAccountNo/bankIfsc must never be returned in full to a
+    // READER_ROLES caller viewing an arbitrary employee's record). These
+    // columns exist on `emp` already (no extra query) but were never
+    // surfaced here at all — not missing masking, just entirely absent from
+    // the response shape, even though the frontend's employee-detail page's
+    // bank + PAN section expects them. Unlike `phone`/`grade` above, these
+    // are unconditionally present (masked when set, null when not) rather
+    // than omitted on a falsy value: they're part of the documented detail
+    // contract regardless of whether a given employee has bank/PAN on file
+    // yet (e.g. a fresh hire before onboarding paperwork is complete).
+    bankAccountNo: emp.bankAccountNo ? maskValue(emp.bankAccountNo)! : null,
+    bankIfsc: emp.bankIfsc ? maskValue(emp.bankIfsc)! : null,
+    pan: emp.pan ? maskValue(emp.pan)! : null,
     ...(desig?.payGrade    ? { grade: desig.payGrade }                : {}),
     ...(emp.station        ? { postingLocation: emp.station }         : {}),
     // HR-A deep-verify finding: confirmationDate is a real column already on
@@ -88,6 +106,13 @@ export async function getEmployeeDetail(id: string, tenantId: string): Promise<E
     // never included here, so that event could never appear for anyone.
     ...(emp.confirmationDate ? { confirmationDate: emp.confirmationDate } : {}),
     ...(manager?.fullName  ? { reportingTo: manager.fullName }        : {}),
+    // managerId is the real FK backing "reporting officer" (hrms_employees.
+    // manager_id — see schema.ts) — distinct from `reportingTo` above, which
+    // only ever resolved to the manager's DISPLAY NAME. A caller that needs
+    // the actual employee id of the reporting officer (e.g. to route a leave
+    // approval, or geo-attendance-e2e.test.ts's "F4. Employee's reporting
+    // officer is assigned") had no field to read it from at all.
+    ...(emp.managerId      ? { managerId: emp.managerId }             : {}),
   };
 }
 

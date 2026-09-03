@@ -805,6 +805,16 @@ export const EmployeeDetailSchema = z.object({
   status: z.string(),
   reportingTo: z.string().optional(),
   postingLocation: z.string().optional(),
+  // Masked at the source (shared/pii-mask.ts) before this ever leaves
+  // hrms-service — always present (null when not on file yet), not omitted
+  // like the optional fields above; see hrms-service's
+  // modules/employee/queries.ts getEmployeeDetail.
+  bankAccountNo: z.string().nullable(),
+  bankIfsc: z.string().nullable(),
+  pan: z.string().nullable(),
+  // Real FK (hrms_employees.manager_id) backing "reporting officer" —
+  // distinct from reportingTo above, which only carries the manager's name.
+  managerId: z.string().optional(),
 });
 
 type OrgChartNodeType = {

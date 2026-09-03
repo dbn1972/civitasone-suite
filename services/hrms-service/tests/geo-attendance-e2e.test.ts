@@ -267,7 +267,16 @@ describe("F. Leave Application with Reporting Officer", () => {
   });
 
   it("F4. Employee's reporting officer is assigned", async () => {
-    const r = await app.inject({ method: "GET", url: `/v1/hrms/employees/${EMP1}`, headers: AUTH });
+    // EMP2 (Priya Sharma), not EMP1: core-seed.ts's fixture only sets
+    // manager_id on EMP2 (-> EMP1) — EMP1 (Ravi Kumar) sits at the top of
+    // this tiny fixture hierarchy and has no manager of his own, so this
+    // assertion could never pass against EMP1 regardless of what the route
+    // returns. The route side of this was ALSO genuinely missing the field:
+    // getEmployeeDetail (modules/employee/queries.ts) only ever resolved
+    // `reportingTo` (the manager's display name) and never exposed the real
+    // `managerId` FK the field names probed here actually correspond to —
+    // both are fixed now (see queries.ts).
+    const r = await app.inject({ method: "GET", url: `/v1/hrms/employees/${EMP2}`, headers: AUTH });
     expect(r.statusCode).toBe(200);
     const emp = r.json();
     // reporting_officer_id should be set (from migration)

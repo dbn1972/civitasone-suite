@@ -57,6 +57,22 @@ export async function manpowerPlanningRoutes(app: FastifyInstance): Promise<void
     requireRole(ctx, HR_ROLES);
     const body = createPlanBody.parse(req.body);
     const id = randomUUID();
+
+    // Synchronous pre-check against the (tenant_id, unit_id, cadre, plan_year)
+    // unique constraint (migrations/0062_manpower_planning.sql): publishF3Write
+    // is fire-and-forget (MemoryQueue.publish() resolves before its consumer
+    // ever runs — see f3-publish.ts), so the `catch` below could only ever
+    // observe a 23505 that was thrown SYNCHRONOUSLY out of publish() itself,
+    // which never happens — the real constraint violation is thrown later,
+    // inside the async consumer's repo.insertPlan, long after this route
+    // already replied 201. A duplicate create was therefore always told
+    // "201 created" while the write silently retried-then-DLQ'd. Mirror the
+    // read-then-guard pattern used by rti/routes.ts and lifecycle/hold-routes.ts.
+    const existing = await repo.findPlanByUnitCadreYear(ctx.tenantId, body.unitId, body.cadre, body.planYear);
+    if (existing) {
+      throw new HttpError(409, "DUPLICATE_PLAN", "a plan already exists for this unit, cadre and year");
+    }
+
     try {
       // Must reuse `id` here, not mint a second randomUUID(): op __0 is the
       // ONLY publishF3Write call whose `id` param is actually used as a new
@@ -66,6 +82,10 @@ export async function manpowerPlanningRoutes(app: FastifyInstance): Promise<void
       // follow-up read/write against the returned id 404'd.
       await publishF3Write(ctx, "manpower_planning_routes__0", id, { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     } catch (err) {
+      // Belt-and-braces: a genuine concurrent create racing the pre-check
+      // above would still surface as a 23505 inside the consumer (silently
+      // DLQ'd, per the fire-and-forget note above) rather than here, but this
+      // keeps the mapping in place for anything that does throw synchronously.
       if (String((err as { code?: string }).code) === "23505") {
         throw new HttpError(409, "DUPLICATE_PLAN", "a plan already exists for this unit, cadre and year") as any;
       }
@@ -145,7 +165,15 @@ export async function manpowerPlanningRoutes(app: FastifyInstance): Promise<void
     if (plan.status !== "draft" && plan.status !== "pending_approval") {
       throw new HttpError(409, "INVALID_STATE", "roster can only be set before approval");
     }
-    await publishF3Write(ctx, "manpower_planning_routes__2", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    // Routing this through the fire-and-forget async F3 queue (publishF3Write)
+    // then immediately reading `listRoster` back was a stale read every time:
+    // MemoryQueue.publish() resolves before the consumer's repo.replaceRoster
+    // ever runs (see f3-publish.ts), so this always returned the PRE-write
+    // roster (empty, on a first call) rather than what was just submitted.
+    // replaceRoster has no version guard to preserve (unlike reschedule/
+    // approve elsewhere in this campaign) — it's a plain delete+insert — so
+    // just perform it directly and read back the real, committed rows.
+    await db.transaction(async (tx) => repo.replaceRoster(tx, ctx.tenantId, id, body.entries));
     return reply.send({ data: await repo.listRoster(ctx.tenantId, id) }) as any;
   });
 

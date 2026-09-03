@@ -10,6 +10,7 @@ import { runWithTenant, withRawTenantGuc } from "@civitasone/db";
 import { hrmsMedicalClaims } from "../src/modules/medical/schema.js";
 import { hrmsProfilePhotos } from "../src/modules/face-verification/schema.js";
 import { hrmsEmployees, hrmsDepartments, hrmsDesignations } from "../src/modules/employee/schema.js";
+import { hrmsTransfers } from "../src/modules/lifecycle/schema.js";
 import { randomUUID } from "node:crypto";
 
 const SECRET = "test_secret_for_civitasone_32chr";
@@ -24,13 +25,23 @@ function token(roles = ["hr_admin", "super_admin", "admin", "hr_officer", "manag
 afterAll(async () => { await sqlClient.end(); });
 
 /**
- * Fixture helpers for the five "expected 404 not to be 404" cases below.
- * All five call an endpoint that correctly 404s for a resource that does not
+ * Fixture helpers for the "expected 404 not to be 404" cases below. All of
+ * them call an endpoint that correctly 404s for a resource that does not
  * exist (a genuine, intentional check — see the root-cause comments at each
  * call site) — the original tests hit these with a bare `randomUUID()` and no
  * seeded row, so they could never pass. Each helper inserts a real row in the
  * exact starting state the endpoint requires, tenant-scoped the same way the
  * production write path scopes it (RLS is FORCEd on every table touched here).
+ *
+ * relieve/join (see seedTransfer below) joined this list once
+ * lifecycle/routes.ts gained a synchronous existence + state pre-check
+ * (fix/hrms-tail-mechanical — closing a fake-success gap where relieving/
+ * joining a transfer that doesn't exist, or isn't in the right status, used
+ * to be told "202 accepted" while nothing happened). Before that fix these
+ * two always returned 202 unconditionally regardless of FAKE's validity, so
+ * "not 404" happened to hold vacuously; now that they validate for real, a
+ * bare FAKE id correctly 404s and needs a seeded transfer in the right
+ * starting state instead.
  */
 async function seedIdCard(status: "active" | "suspended", employeeId: string | null = null): Promise<string> {
   const id = randomUUID();
@@ -91,6 +102,26 @@ async function seedProfilePhoto(employeeId: string): Promise<void> {
   await runWithTenant(TENANT, () => db.transaction((tx) => tx.insert(hrmsProfilePhotos).values({
     tenantId: TENANT, employeeId, photoKey: "photos/route-coverage-fixture.jpg",
   })));
+}
+
+/**
+ * Seeds a transfer order in the given starting status, with a real employee
+ * (lifecycle.hrms_transfers.employee_id carries a real FK to
+ * employee.hrms_employees — from_dept_id/to_dept_id do not, so plain
+ * randomUUID()s are fine there). "ordered" is what /relieve requires;
+ * "relieved" is what /join requires — see lifecycle/routes.ts.
+ */
+async function seedTransfer(status: "ordered" | "relieved"): Promise<string> {
+  const employeeId = await seedEmployeeForMe();
+  const id = randomUUID();
+  await runWithTenant(TENANT, () => db.transaction((tx) => tx.insert(hrmsTransfers).values({
+    id, tenantId: TENANT, employeeId, fromDeptId: randomUUID(), toDeptId: randomUUID(),
+    effectiveDate: "2026-05-01", status,
+    orderNo: "TO/2026/001", orderDate: "2026-05-01",
+    ...(status === "relieved" ? { relievedDate: "2026-05-10" } : {}),
+    createdBy: UUID, updatedBy: UUID,
+  })));
+  return id;
 }
 
 describe("HRMS POST routes — original set", () => {
@@ -346,16 +377,18 @@ describe("HRMS POST routes — Lifecycle (low coverage)", () => {
   });
 
   it("POST /v1/hrms/lifecycle/transfers/:id/relieve", async () => {
+    const transferId = await seedTransfer("ordered");
     const app = await buildApp();
-    const r = await app.inject({ method: "POST", url: `/v1/hrms/lifecycle/transfers/${FAKE}/relieve`, headers: { authorization: `Bearer ${token()}` },
+    const r = await app.inject({ method: "POST", url: `/v1/hrms/lifecycle/transfers/${transferId}/relieve`, headers: { authorization: `Bearer ${token()}` },
       payload: { relievedDate: "2026-05-15" } });
     await app.close();
     expect(r.statusCode).not.toBe(404);
   });
 
   it("POST /v1/hrms/lifecycle/transfers/:id/join", async () => {
+    const transferId = await seedTransfer("relieved");
     const app = await buildApp();
-    const r = await app.inject({ method: "POST", url: `/v1/hrms/lifecycle/transfers/${FAKE}/join`, headers: { authorization: `Bearer ${token()}` },
+    const r = await app.inject({ method: "POST", url: `/v1/hrms/lifecycle/transfers/${transferId}/join`, headers: { authorization: `Bearer ${token()}` },
       payload: { joinedDate: "2026-05-20" } });
     await app.close();
     expect(r.statusCode).not.toBe(404);

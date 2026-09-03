@@ -89,8 +89,24 @@ export async function interviewResponseRoutes(app: FastifyInstance): Promise<voi
     if (!iv) throw new HttpError(404, "NOT_FOUND", "interview not found");
     if (!canCommunicate(iv.status)) throw new HttpError(409, "INTERVIEW_NOT_COMMABLE", `the interview is '${iv.status}'; it cannot be rescheduled`);
 
+    // Approve applies the requester's preferred slot under an optimistic-
+    // version guard on the interview (ivRepo.rescheduleInterview) and on the
+    // request itself (setResponseStatus). Routing this through the
+    // fire-and-forget async F3 queue (publishF3Write) cannot surface a
+    // conflict: MemoryQueue.publish() resolves before the consumer (which
+    // re-reads `iv.version` and calls rescheduleInterview) ever runs, so the
+    // 200 below was always sent first and a version conflict discovered later
+    // just silently DLQ'd. Perform the guarded write directly instead (mirrors
+    // f3-consumer.ts's now-dead "recruitment_interview_response_routes__1"
+    // case) so the conflict maps to a real 409 before the response is sent.
     try {
-      await publishF3Write(ctx, "recruitment_interview_response_routes__1", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+      await db.transaction(async (tx) => {
+        const ok = await ivRepo.rescheduleInterview(tx, ctx.tenantId, r.interviewId, preferredDate, r.preferredTime!, ctx.actorId, iv.version);
+        if (!ok) throw new Error("VERSION_CONFLICT");
+        await repo.setResponseStatus(tx, ctx.tenantId, reqId, {
+          status: "approved", decidedBy: ctx.actorId, decidedAt: new Date(), decisionNote: body.note ?? null,
+        }, r.version);
+      });
     } catch (err) {
       if ((err as Error).message === "VERSION_CONFLICT") throw new HttpError(409, "VERSION_CONFLICT", "the interview or request changed; reload and retry");
       throw err;

@@ -6,19 +6,29 @@
  */
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { randomUUID } from "node:crypto";
+import { eq } from "drizzle-orm";
 import { signToken } from "@civitasone/auth";
+import { runWithTenant } from "@civitasone/db";
 import type { FastifyInstance } from "fastify";
 import { buildApp } from "../src/app.js";
+import { db } from "../src/shared/db.js";
+import { hrmsDepartments, hrmsDesignations, hrmsEmployees } from "../src/modules/employee/schema.js";
 
 const SECRET = "test_secret_for_civitasone_32chr";
 const TENANT = randomUUID();
 
 // ─── PERSONAS ────────────────────────────────────────────────────────────
 const PRIYA  = { id: randomUUID(), roles: ["hr_admin", "super_admin"] };     // HR Director
-const SURESH = { id: randomUUID(), roles: ["payroll_admin"] };               // Payroll Officer  
+const SURESH = { id: randomUUID(), roles: ["payroll_admin"] };               // Payroll Officer
 const DEEPAK = { id: randomUUID(), roles: ["manager"] };                     // Eng Manager
 const MEERA  = { id: randomUUID(), roles: ["employee"] };                    // Employee
 const ARJUN  = { id: randomUUID(), roles: ["employee"] };                    // New hire (post-recruitment)
+
+// Department/designation seeded directly (real DB, real FKs) so Phase 1's job
+// opening and Phase 7's disciplinary/suspension calls against MEERA have valid
+// references to point at — see beforeAll below.
+const DEPT_ID = randomUUID();
+const DESIG_ID = randomUUID();
 
 function tok(p: { id: string; roles: string[] }) {
   return signToken({ sub: p.id, tid: TENANT, roles: p.roles, sid: `s-${p.id.slice(0,6)}` }, SECRET, 7200);
@@ -28,8 +38,34 @@ function h(p: { id: string; roles: string[] }) {
 }
 
 let app: FastifyInstance;
-beforeAll(async () => { app = await buildApp(); await app.ready(); });
-afterAll(async () => { await app.close(); });
+beforeAll(async () => {
+  app = await buildApp();
+  await app.ready();
+  await runWithTenant(TENANT, () => db.transaction(async (tx) => {
+    await tx.insert(hrmsDepartments).values({ id: DEPT_ID, tenantId: TENANT, code: "ENG", name: "Engineering", createdBy: PRIYA.id, updatedBy: PRIYA.id });
+    await tx.insert(hrmsDesignations).values({ id: DESIG_ID, tenantId: TENANT, code: "SSE", name: "Senior Software Engineer", level: 11, createdBy: PRIYA.id, updatedBy: PRIYA.id });
+    // Phase 7 (Disciplinary) opens a case + suspension against MEERA as an
+    // EXISTING employee (mustEmployee() in disciplinary/routes.ts 404s
+    // otherwise). Phase 2's own "HR registers new employee" step is
+    // deliberately permissive ([202, 400] — its payload doesn't even use real
+    // departmentId/designationId) and never captures a real id, so it cannot
+    // be relied on to have created her — seed her directly instead, matching
+    // the pattern tests/write-paths.test.ts uses for its employee fixtures.
+    await tx.insert(hrmsEmployees).values({
+      id: MEERA.id, tenantId: TENANT, employeeNo: "DIC-ENG-100", fullName: "Meera Krishnan",
+      departmentId: DEPT_ID, designationId: DESIG_ID, dateOfJoining: "2020-01-01",
+      status: "confirmed", employeeType: "permanent", createdBy: PRIYA.id, updatedBy: PRIYA.id,
+    });
+  }));
+});
+afterAll(async () => {
+  await runWithTenant(TENANT, () => db.transaction(async (tx) => {
+    await tx.delete(hrmsEmployees).where(eq(hrmsEmployees.tenantId, TENANT));
+    await tx.delete(hrmsDesignations).where(eq(hrmsDesignations.tenantId, TENANT));
+    await tx.delete(hrmsDepartments).where(eq(hrmsDepartments.tenantId, TENANT));
+  }));
+  await app.close();
+});
 
 // Shared state across phases
 const state: Record<string, string> = {};
@@ -39,10 +75,17 @@ const state: Record<string, string> = {};
 // ═══════════════════════════════════════════════════════════════════════
 describe("Phase 1: Recruitment", () => {
   it("1.1 HR creates job opening", async () => {
+    // Field names/types below now match createJobOpeningBody
+    // (src/modules/recruitment/validators.ts) — the previous payload
+    // (jobTitle/department/salaryRange/applicationDeadline, and isPublished as
+    // a STRING "true" instead of a boolean) 400'd against every real field in
+    // that schema (refNo required and missing; departmentId a uuid, not a
+    // department NAME; isPublished a boolean). Not an async-timing issue —
+    // the payload just never matched the route's actual contract.
     const r = await app.inject({ method: "POST", url: "/v1/hrms/job-openings", headers: h(PRIYA), payload: {
-      jobTitle: "Senior Software Engineer", department: "Engineering", vacancies: 3,
-      qualifications: "B.Tech CS, 5+ years", salaryRange: "Level 11 ₹67,700–₹2,08,700",
-      applicationDeadline: "2025-12-31", vacancyType: "regular", isPublished: "true",
+      refNo: `DIC/JOB/${randomUUID().slice(0, 8)}`, title: "Senior Software Engineer", departmentId: DEPT_ID, vacancies: 3,
+      qualification: "B.Tech CS, 5+ years", payRange: "Level 11 ₹67,700–₹2,08,700",
+      closesAt: "2025-12-31", vacancyType: "regular", isPublished: true,
     }});
     expect([202, 201]).toContain(r.statusCode);
     const body = r.json();
