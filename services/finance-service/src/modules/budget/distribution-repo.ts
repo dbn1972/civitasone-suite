@@ -52,6 +52,20 @@ export async function findAllocationByIdTx(tx: Writer, id: string, tenantId: str
 }
 
 /**
+ * Parent allocation lookup by id (tenant-scoped), read-only, no transaction.
+ * Mirrors the findAllocationByIdTx/findAllocationById and sumDistributedTx/
+ * sumDistributed naming split used elsewhere in this file: the Tx-suffixed
+ * variant takes a caller-supplied transaction/writer, this plain variant runs
+ * its own scopedRead. Used for a synchronous pre-accept existence check on
+ * POST /allocation-distributions — see distribution-routes.ts.
+ */
+export async function findAllocationById(id: string, tenantId: string): Promise<BudgetAllocationRow | null> {
+  const rows = await scopedRead((tx) => tx.select().from(financeBudgetAllocation)
+    .where(and(eq(financeBudgetAllocation.id, id), eq(financeBudgetAllocation.tenantId, tenantId))).limit(1));
+  return rows[0] ?? null;
+}
+
+/**
  * Parent allocation lookup that takes a FOR UPDATE row lock on the allocation
  * (tenant-scoped). Closes the over-distribution TOCTOU race: concurrent
  * POST /allocation-distributions requests must each acquire this same row lock
