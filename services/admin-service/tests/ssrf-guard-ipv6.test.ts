@@ -244,3 +244,27 @@ describe("SSRF guard — defensive extras: other encoding tricks in the same fam
     expect(await isBlockedHost("127.000.000.1")).toBe(true);
   });
 });
+
+describe("SSRF guard — Finding (round-3 review): redundant/harmful bare-\"%\" special-case removed", () => {
+  // isRecognizableIpLiteral() previously had `if (normalized.includes("%"))
+  // return true;` in addition to the `net.isIP(normalized) !== 0` check
+  // above it. That extra line was redundant (every genuine zone-ID IPv6
+  // literal is already caught by net.isIP()) AND harmful: it made
+  // isRecognizableIpLiteral() return true for ANY string merely containing
+  // a stray "%" — including malformed non-IP garbage like
+  // "169.254.169.254%eth0" (not a valid IP literal, just the metadata IP
+  // with junk appended) or "0x7f000001%lo". Those then got routed to
+  // isPrivateIp(), which doesn't recognize them as any known pattern (the
+  // trailing junk breaks every regex) and defaults to `false` — so
+  // isBlockedHost() incorrectly returned false (NOT BLOCKED) for these,
+  // instead of falling through to the DNS-resolve fallback, which fails
+  // closed. Removing the redundant line lets this malformed input fall
+  // through to canonicalizeObfuscatedIpv4() (returns null — not
+  // obfuscated-IPv4-shaped due to the trailing junk) and then to the
+  // DNS-resolve branch, which fails closed since resolve4/resolve6 both
+  // reject this input.
+  it("fails closed for malformed IP-plus-stray-%-junk strings that were previously let through", async () => {
+    expect(await isBlockedHost("169.254.169.254%eth0")).toBe(true);
+    expect(await isBlockedHost("0x7f000001%lo")).toBe(true);
+  });
+});

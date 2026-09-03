@@ -62,10 +62,16 @@ function canonicalizeObfuscatedIpv4(normalized: string): string | null {
 
 // Returns true if `normalized` is confidently recognizable as SOME spelling
 // of an IP literal: canonical or non-canonical IPv6 (net.isIP() accepts
-// both), a zone-ID-suffixed IPv6 literal (net.isIP() accepts these too —
-// checked explicitly as well, for defense in depth independent of Node's
-// parser behavior), or an obfuscated (octal/decimal/hex/shorthand) IPv4
-// literal. Used to decide whether a bare host string should be routed
+// both, including zone-ID-suffixed forms like "fe80::1%eth0" — no separate
+// "%" check is needed here since net.isIP() already covers every genuine
+// zone-ID literal; a bare "%" check would ALSO wrongly match malformed
+// non-IP garbage that merely contains a stray "%", e.g.
+// "169.254.169.254%eth0" or "0x7f000001%lo" — routing those to
+// isPrivateIp() only for it to fail to match any pattern and default to
+// "not private", instead of correctly falling through to the DNS-resolve
+// fallback below, which fails closed), or an obfuscated
+// (octal/decimal/hex/shorthand) IPv4 literal. Used to decide whether a bare
+// host string should be routed
 // through isPrivateIp()'s deterministic literal-parsing path or treated as
 // a genuine hostname requiring DNS resolution — DNS resolution must only
 // ever be attempted for input that is NOT some spelling of an IP address,
@@ -74,7 +80,6 @@ function canonicalizeObfuscatedIpv4(normalized: string): string | null {
 // input depending on the resolver.
 function isRecognizableIpLiteral(normalized: string): boolean {
   if (net.isIP(normalized) !== 0) return true;
-  if (normalized.includes("%")) return true; // zone-ID suffix — see isPrivateIp
   return canonicalizeObfuscatedIpv4(normalized) !== null;
 }
 
