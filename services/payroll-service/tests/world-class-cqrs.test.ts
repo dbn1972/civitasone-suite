@@ -57,6 +57,16 @@ describe("Route: arrears/bonus/reimbursement CQRS handlers use sendAccepted (202
 
 // ─── publisher topic + consumer persistence (mocked) ────────────────────────
 const mockPublish = vi.fn().mockResolvedValue(undefined);
+// External HRMS is unreachable in this service's isolated test env (no
+// hrms-service running). commands.ts's assertEmployeeExists() (added by the
+// round2 employee-existence review fix, commit 488e418e) now does a real
+// synchronous HTTP existence check before publishing any arrear/bonus/
+// reimbursement command, so without this stub every call here throws
+// HrmsUnavailableError (502) before mockPublish is ever invoked.
+vi.mock("../src/shared/hrms-client.js", () => ({
+  verifyEmployeeExists: vi.fn(async () => true),
+}));
+
 vi.mock("../src/shared/infra.js", () => ({
   queue: { publish: mockPublish, subscribe: vi.fn(), start: vi.fn(), stop: vi.fn() },
   cache: {

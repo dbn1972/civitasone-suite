@@ -5,7 +5,7 @@
  * Tests: 200/201/202, 400, 401, 403, 404 for each endpoint.
  * Follows the established pattern from payroll-routes.test.ts (real DB, no mocks).
  */
-import { describe, it, expect, afterAll } from "vitest";
+import { describe, it, expect, vi, afterAll } from "vitest";
 import { signToken } from "@civitasone/auth";
 import { buildApp } from "../src/app.js";
 import { sqlClient } from "../src/shared/db.js";
@@ -22,6 +22,18 @@ function makeToken(roles: string[] = ["payroll_admin"], sub = ACTOR) {
 
 const auth = (roles?: string[], sub?: string) => ({
   authorization: `Bearer ${makeToken(roles, sub)}`,
+});
+
+// External HRMS is not running in this service's isolated integration-test
+// env. commands.ts's assertEmployeeExists() (round2 employee-existence
+// review fix, commit 488e418e) does a real synchronous HTTP existence check
+// before publishing any arrear/bonus/reimbursement command, so without this
+// stub every such request 502s (HRMS_UNAVAILABLE) before it ever reaches the
+// route's own logic. Only this one external-network boundary is stubbed —
+// DB, queue, and outbox stay real, per this file's stated convention.
+vi.mock("../src/shared/hrms-client.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../src/shared/hrms-client.js")>();
+  return { ...actual, verifyEmployeeExists: async () => true };
 });
 
 afterAll(async () => { await sqlClient.end(); });
