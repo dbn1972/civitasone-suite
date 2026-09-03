@@ -41,6 +41,16 @@ export async function findTemplateByCodeTx(tx: Writer, tenantId: string, code: s
   return rows[0];
 }
 
+/**
+ * Non-transactional read used by the route's synchronous pre-check (mirrors
+ * findTemplate/findTemplateTx). Backs the create route's duplicate-code
+ * rejection — the consumer's own findTemplateByCodeTx check only runs
+ * asynchronously, so a stale-status-code 202 would otherwise mask it.
+ */
+export async function findTemplateByCode(tenantId: string, code: string): Promise<DepartmentTemplateRow | undefined> {
+  return scopedRead((tx) => findTemplateByCodeTx(tx as Writer, tenantId, code));
+}
+
 export async function listTemplates(
   tenantId: string, limit: number, offset: number, status?: string,
 ): Promise<{ rows: DepartmentTemplateRow[]; total: number }> {

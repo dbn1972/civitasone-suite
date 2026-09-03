@@ -614,7 +614,9 @@ describe("ORG-07 department template clone — cross-tenant isolation", () => {
   // instantiation to seed first.
   it("tenant B cannot list tenant A's instantiations", async () => {
     const made = await instantiate(templateA.id, "iso-dept-a", "iso-key-000a", A());
-    expect(made.statusCode).toBe(201);
+    // instantiate is F3 async: a successful accept is 202, not a synchronous 201
+    // (see tests/dept-template-routes.test.ts's instantiate describe block).
+    expect(made.statusCode).toBe(202);
 
     const res = await app.inject({
       method: "GET", url: `/v1/admin/department-templates/${templateA.id}/instantiations?limit=200`, headers: B(),
@@ -640,8 +642,10 @@ describe("ORG-07 department template clone — cross-tenant isolation", () => {
 
     const inA = await instantiate(templateA.id, "iso-shared-a", "iso-shared-key-1", A());
     const inB = await instantiate(tplB.id, "iso-shared-b", "iso-shared-key-1", B());
-    expect(inA.statusCode).toBe(201);
-    expect(inB.statusCode).toBe(201);
+    // instantiate is F3 async: a successful accept is 202, not a synchronous 201
+    // (see tests/dept-template-routes.test.ts's instantiate describe block).
+    expect(inA.statusCode).toBe(202);
+    expect(inB.statusCode).toBe(202);
     expect((inA.body as SingleBody<Instantiation>).data.id).not.toBe((inB.body as SingleBody<Instantiation>).data.id);
   });
 });
