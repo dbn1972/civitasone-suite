@@ -12,6 +12,8 @@ import { sql } from "drizzle-orm";
 import { signToken } from "@civitasone/auth";
 import { buildApp } from "../src/app.js";
 import { db, sqlClient } from "../src/shared/db.js";
+import { queue } from "../src/shared/infra.js";
+import { registerAuthorityConsumers } from "../src/modules/authority/consumer.js";
 import * as repo from "../src/modules/authority/repo.js";
 import { evaluateAuthority } from "../src/modules/authority/domain.js";
 import { asTenant } from "./helpers/engine-harness.js";
@@ -26,6 +28,19 @@ const ABOVE_2_53 = 9_007_199_254_740_993n;
 
 function token(actorId = MAKER, roles = ["workflow_admin"]) {
   return signToken({ sub: actorId, tid: TENANT, roles, sid: "s" }, SECRET);
+}
+
+registerAuthorityConsumers(queue);
+await queue.start();
+
+async function waitFor<T>(fn: () => Promise<T | null | undefined>, ms = 3000): Promise<T> {
+  const start = Date.now();
+  while (Date.now() - start < ms) {
+    const v = await fn();
+    if (v) return v;
+    await new Promise((r) => setTimeout(r, 25));
+  }
+  throw new Error("waitFor timeout");
 }
 
 afterAll(async () => {
@@ -105,27 +120,40 @@ describe("authority_limits.max_amount — exact bigint round-trip (HTTP layer)",
         maxAmount: ABOVE_2_53.toString(), effectiveFrom: "2025-01-01",
       },
     });
-    expect(create.statusCode).toBe(201);
+    expect(create.statusCode).toBe(202);
+    const { id } = create.json();
+
+    const draft = await waitFor(async () => {
+      const g = await app.inject({
+        method: "GET", url: "/v1/workflow/authority/limits",
+        headers: { authorization: `Bearer ${token()}` },
+      });
+      const rows = g.json().data as Array<{ id: string; maxAmount: string }>;
+      return rows.find((l) => l.id === id) ?? null;
+    });
     // A base-10 string on the wire, not a JS number (JSON.parse would corrupt
-    // a number literal above 2^53; the body is deliberately parsed as text
-    // first to prove the raw wire representation is a string).
-    expect(create.body).toContain(`"maxAmount":"${ABOVE_2_53.toString()}"`);
-    const { id } = create.json().data;
+    // a number literal above 2^53; the maxAmount is read back off the GET
+    // response and compared as a string to prove the raw wire representation
+    // is a string, not a corrupted float).
+    expect(draft.maxAmount).toBe(ABOVE_2_53.toString());
 
     const approve = await app.inject({
       method: "POST", url: `/v1/workflow/authority/limits/${id}/approve`,
       headers: { authorization: `Bearer ${token("b5000000-2222-4000-8000-000000000003")}` },
     });
-    expect(approve.statusCode).toBe(200);
-    expect(approve.json().data.maxAmount).toBe(ABOVE_2_53.toString());
+    expect(approve.statusCode).toBe(202);
 
-    const list = await app.inject({
-      method: "GET", url: "/v1/workflow/authority/limits",
-      headers: { authorization: `Bearer ${token()}` },
+    const found = await waitFor(async () => {
+      const g = await app.inject({
+        method: "GET", url: "/v1/workflow/authority/limits",
+        headers: { authorization: `Bearer ${token()}` },
+      });
+      const rows = g.json().data as Array<{ id: string; status: string; maxAmount: string }>;
+      const row = rows.find((l) => l.id === id);
+      return row && row.status === "active" ? row : null;
     });
     await app.close();
-    const found = (list.json().data as Array<{ id: string; maxAmount: string }>).find((l) => l.id === id);
-    expect(found?.maxAmount).toBe(ABOVE_2_53.toString());
+    expect(found.maxAmount).toBe(ABOVE_2_53.toString());
   });
 
   it("the /check endpoint accepts a string paise amount and compares it exactly", async () => {
@@ -138,9 +166,30 @@ describe("authority_limits.max_amount — exact bigint round-trip (HTTP layer)",
         maxAmount: ABOVE_2_53.toString(), effectiveFrom: "2025-01-01",
       },
     });
-    await app.inject({
-      method: "POST", url: `/v1/workflow/authority/limits/${create.json().data.id}/approve`,
+    expect(create.statusCode).toBe(202);
+    const { id } = create.json();
+    await waitFor(async () => {
+      const g = await app.inject({
+        method: "GET", url: "/v1/workflow/authority/limits",
+        headers: { authorization: `Bearer ${token()}` },
+      });
+      const rows = g.json().data as Array<{ id: string }>;
+      return rows.find((l) => l.id === id) ?? null;
+    });
+
+    const approve = await app.inject({
+      method: "POST", url: `/v1/workflow/authority/limits/${id}/approve`,
       headers: { authorization: `Bearer ${token("b5000000-2222-4000-8000-000000000004")}` },
+    });
+    expect(approve.statusCode).toBe(202);
+    await waitFor(async () => {
+      const g = await app.inject({
+        method: "GET", url: "/v1/workflow/authority/limits",
+        headers: { authorization: `Bearer ${token()}` },
+      });
+      const rows = g.json().data as Array<{ id: string; status: string }>;
+      const row = rows.find((l) => l.id === id);
+      return row && row.status === "active" ? row : null;
     });
 
     const check = await app.inject({
