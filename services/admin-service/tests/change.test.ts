@@ -220,6 +220,12 @@ describe("rollback-plan guard", () => {
       payload: { rollbackPlan: "Restore prior release and re-run smoke tests." },
     });
     expect(rb.statusCode).toBe(200);
+    // The rollback-plan write above is applied asynchronously by the F3
+    // consumer (apply_change_1) — drain it so the row approve reads via its
+    // new synchronous pre-accept ROLLBACK_REQUIRED check reflects the
+    // just-set plan. Same drain-after-async-write convention used throughout
+    // this file (see advanceTo/createChange above).
+    await (queue as any).drain?.();
     const res = await app.inject({
       method: "POST", url: `/v1/admin/change/requests/${id}/approve`, headers: auth(APPROVER), payload: {},
     });

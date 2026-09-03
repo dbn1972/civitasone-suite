@@ -116,6 +116,10 @@ export async function changeRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, CHANGE_ROLES);
     const { id } = idParam.parse(req.params);
     const body = rollbackPlanBody.parse(req.body);
+    // Synchronous pre-accept existence check — mirrors apply_change_1's guard,
+    // matching PR #920's fix pattern for F3-converted routes.
+    const cur = await repo.findRequestById(id, ctx.tenantId);
+    if (!cur) throw new HttpError(404, "NOT_FOUND", "change request not found");
     const __f3Id = randomUUID();
     await publishAdminCommand(ctx, COMMANDS.f3RouteWrite, __f3Id, {
       op: "change_op_1",
@@ -131,6 +135,12 @@ export async function changeRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, CHANGE_ROLES);
     const { id } = idParam.parse(req.params);
+    // Synchronous pre-accept existence + state-machine check — mirrors
+    // apply_change_2's guard (also closes the cross-tenant RLS gap: a
+    // nonexistent/other-tenant id now 404s instead of a blind 200).
+    const cur = await repo.findRequestById(id, ctx.tenantId);
+    if (!cur) throw new HttpError(404, "NOT_FOUND", "change request not found");
+    assertTransition(cur.status as ChangeStatus, "submitted");
     const __f3Id = randomUUID();
     await publishAdminCommand(ctx, COMMANDS.f3RouteWrite, __f3Id, {
       op: "change_op_2",
@@ -147,6 +157,14 @@ export async function changeRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, CHANGE_ROLES);
     const { id } = idParam.parse(req.params);
     const body = approveBody.parse(req.body ?? {});
+    // Synchronous pre-accept checks — mirrors apply_change_3's guards exactly
+    // (existence, state machine, CAB maker-checker, rollback-plan mandate),
+    // same order as the consumer so the first violation reported matches.
+    const cur = await repo.findRequestById(id, ctx.tenantId);
+    if (!cur) throw new HttpError(404, "NOT_FOUND", "change request not found");
+    assertTransition(cur.status as ChangeStatus, "approved");
+    assertApproverDistinct(cur.requestedBy, ctx.actorId);
+    assertRollbackPlan(cur.rollbackPlan);
     const __f3Id = randomUUID();
     await publishAdminCommand(ctx, COMMANDS.f3RouteWrite, __f3Id, {
       op: "change_op_3",
@@ -163,6 +181,14 @@ export async function changeRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, CHANGE_ROLES);
     const { id } = idParam.parse(req.params);
     const body = rejectBody.parse(req.body);
+    // Synchronous pre-accept checks — mirrors apply_change_4's guards
+    // (existence, state machine, CAB maker-checker — a requester cannot
+    // reject their own change either, same segregation-of-duties rule as
+    // approve). Same gap class as approve above, fixed for consistency.
+    const cur = await repo.findRequestById(id, ctx.tenantId);
+    if (!cur) throw new HttpError(404, "NOT_FOUND", "change request not found");
+    assertTransition(cur.status as ChangeStatus, "rejected");
+    assertApproverDistinct(cur.requestedBy, ctx.actorId);
     const __f3Id = randomUUID();
     await publishAdminCommand(ctx, COMMANDS.f3RouteWrite, __f3Id, {
       op: "change_op_4",
@@ -182,6 +208,18 @@ export async function changeRoutes(app: FastifyInstance): Promise<void> {
     const start = new Date(body.windowStart);
     const end = new Date(body.windowEnd);
     assertValidWindow(start, end);
+    // Synchronous pre-accept checks — mirrors apply_change_5's guards
+    // (existence, state machine, and the change-freeze conflict check) so a
+    // schedule into a frozen window 409s at accept-time instead of silently
+    // failing deep inside the async consumer.
+    const cur = await repo.findRequestById(id, ctx.tenantId);
+    if (!cur) throw new HttpError(404, "NOT_FOUND", "change request not found");
+    assertTransition(cur.status as ChangeStatus, "scheduled");
+    const freezes = await repo.listFreezes(ctx.tenantId);
+    const windows: FreezeWindow[] = freezes.map((f) => ({
+      id: f.id, name: f.name, startsAt: f.startsAt, endsAt: f.endsAt,
+    }));
+    assertNoFreezeConflict(start, end, windows);
     const __f3Id = randomUUID();
     await publishAdminCommand(ctx, COMMANDS.f3RouteWrite, __f3Id, {
       op: "change_op_5",
@@ -197,6 +235,11 @@ export async function changeRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, CHANGE_ROLES);
     const { id } = idParam.parse(req.params);
+    // Synchronous pre-accept existence + state-machine check — mirrors
+    // apply_change_6's guard (only a scheduled change can start).
+    const cur = await repo.findRequestById(id, ctx.tenantId);
+    if (!cur) throw new HttpError(404, "NOT_FOUND", "change request not found");
+    assertTransition(cur.status as ChangeStatus, "in_progress");
     const __f3Id = randomUUID();
     await publishAdminCommand(ctx, COMMANDS.f3RouteWrite, __f3Id, {
       op: "change_op_6",
@@ -215,6 +258,11 @@ export async function changeRoutes(app: FastifyInstance): Promise<void> {
     const { id } = idParam.parse(req.params);
     const body = completeBody.parse(req.body);
     const target = statusForPir(body.outcome);
+    // Synchronous pre-accept existence + state-machine check — mirrors
+    // apply_change_7's guard (only an in-progress change can be completed).
+    const cur = await repo.findRequestById(id, ctx.tenantId);
+    if (!cur) throw new HttpError(404, "NOT_FOUND", "change request not found");
+    assertTransition(cur.status as ChangeStatus, target);
     const __f3Id = randomUUID();
     await publishAdminCommand(ctx, COMMANDS.f3RouteWrite, __f3Id, {
       op: "change_op_7",
