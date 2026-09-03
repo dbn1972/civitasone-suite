@@ -716,6 +716,11 @@ describe("experiment consumer", () => {
 
   it("concludes with no winner when the sample is too small", async () => {
     await seedExperiment("running", 10);
+    // P2-9 winner-approval gate: conclude only accepts experiments already at
+    // pending_approval, so the flow must pass through requestWinnerApproval first.
+    await deliver(COMMANDS.requestWinnerApproval, "eeee3333-1111-4000-8000-0000000030a1", {
+      id: EXP, tenantId: TENANT,
+    });
     await deliver(COMMANDS.concludeExperiment, "eeee3333-1111-4000-8000-000000000309", {
       id: EXP, tenantId: TENANT,
     });
@@ -724,7 +729,9 @@ describe("experiment consumer", () => {
     expect(exps[0]?.winnerVariantId).toBeNull();
     expect(exps[0]?.winnerMarginPct).toBeNull();
     expect(exps[0]?.concludedAt).not.toBeNull();
-    expect(exps[0]?.version).toBe(2);
+    // requestWinnerApproval (setStatus) and concludeExperiment (setWinner) each
+    // independently bump version by 1 off the version they read: 1 -> 2 -> 3.
+    expect(exps[0]?.version).toBe(3);
     const concluded = outbox.find((m) => m.eventType === EVENTS.experimentConcluded);
     expect((concluded?.payload as { decided?: boolean }).decided).toBe(false);
   });
@@ -744,6 +751,11 @@ describe("experiment consumer", () => {
         linkPosition: 1, createdBy: ACTOR, updatedBy: ACTOR, version: 1,
       })));
     }
+    // P2-9 winner-approval gate: conclude only accepts experiments already at
+    // pending_approval, so the flow must pass through requestWinnerApproval first.
+    await deliver(COMMANDS.requestWinnerApproval, "eeee3333-1111-4000-8000-0000000030a2", {
+      id: EXP, tenantId: TENANT,
+    });
     await deliver(COMMANDS.concludeExperiment, "eeee3333-1111-4000-8000-000000000310", {
       id: EXP, tenantId: TENANT,
     });
@@ -762,6 +774,11 @@ describe("experiment consumer", () => {
 
   it("concluding twice with the same messageId does not bump the version twice", async () => {
     await seedExperiment("running", 10);
+    // P2-9 winner-approval gate: conclude only accepts experiments already at
+    // pending_approval, so the flow must pass through requestWinnerApproval first.
+    await deliver(COMMANDS.requestWinnerApproval, "eeee3333-1111-4000-8000-0000000030a3", {
+      id: EXP, tenantId: TENANT,
+    });
     const MSG = "eeee3333-1111-4000-8000-000000000312";
     await deliver(COMMANDS.concludeExperiment, MSG, { id: EXP, tenantId: TENANT });
     const first = await rows();
