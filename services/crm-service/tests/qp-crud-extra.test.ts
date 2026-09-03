@@ -147,12 +147,20 @@ describe("QP-002 price-book patch / delete / item delete", () => {
       await drainQueue();
 
       // Real DB state — proves the consumer actually persisted crm.price_book_items,
-      // not just that the command was accepted.
+      // not just that the command was accepted. Compared order-independently: both
+      // rows are upserted sequentially inside the SAME transaction, and Postgres's
+      // now() (== transaction_timestamp()) is fixed for the whole transaction, so
+      // `created_at` cannot distinguish insertion order between them — nothing in the
+      // domain promises price-book entries preserve insertion order either.
       const items = await scoped((tx) => tx<Array<{ productId: string; priceMinor: string }>>`
         SELECT product_id AS "productId", price_minor::text AS "priceMinor" FROM crm.price_book_items
-        WHERE tenant_id = ${TENANT} AND price_book_id = ${bookId} ORDER BY created_at ASC
+        WHERE tenant_id = ${TENANT} AND price_book_id = ${bookId}
       `);
-      expect(items).toEqual([{ productId: id1, priceMinor: "90" }, { productId: id2, priceMinor: "190" }]);
+      expect(items).toEqual(expect.arrayContaining([
+        { productId: id1, priceMinor: "90" },
+        { productId: id2, priceMinor: "190" },
+      ]));
+      expect(items.length).toBe(2);
 
       // "Reload" — the actual HTTP surface the frontend uses after a save (load()).
       const getOne = await app.inject({ method: "GET", url: `/v1/crm/price-books/${bookId}`, headers: headers(["crm_user"]) });

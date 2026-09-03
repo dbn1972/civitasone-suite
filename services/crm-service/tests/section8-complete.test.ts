@@ -61,13 +61,19 @@ async function seedData(): Promise<void> {
       ON CONFLICT (id) DO NOTHING
     `;
 
-    // Activities with various types
+    // Activities with various types. OWNER_A's three rows are deliberately offset by
+    // HOURS, not days: the activity-metrics endpoint groups by date_trunc('month',
+    // created_at), and offsets of 1/2/3 DAYS can straddle a month boundary (e.g. on
+    // the 1st-3rd of a month, "3 days ago" lands in the previous month), silently
+    // splitting one owner's activities into two period rows. Hour offsets keep all
+    // three in the same calendar day - and therefore the same month - no matter when
+    // the suite runs.
     await tx`
       INSERT INTO crm.activities (id, tenant_id, actor_name, text, contact_id, type, created_by, updated_by, created_at)
       VALUES
-        (gen_random_uuid(), ${TENANT}, 'Agent A', 'Called lead', ${CONTACT_A}, 'call', ${OWNER_A}, ${OWNER_A}, now() - interval '1 day'),
-        (gen_random_uuid(), ${TENANT}, 'Agent A', 'Sent email', ${CONTACT_A}, 'email', ${OWNER_A}, ${OWNER_A}, now() - interval '2 days'),
-        (gen_random_uuid(), ${TENANT}, 'Agent A', 'Meeting held', ${CONTACT_A}, 'meeting', ${OWNER_A}, ${OWNER_A}, now() - interval '3 days'),
+        (gen_random_uuid(), ${TENANT}, 'Agent A', 'Called lead', ${CONTACT_A}, 'call', ${OWNER_A}, ${OWNER_A}, now() - interval '1 hour'),
+        (gen_random_uuid(), ${TENANT}, 'Agent A', 'Sent email', ${CONTACT_A}, 'email', ${OWNER_A}, ${OWNER_A}, now() - interval '2 hours'),
+        (gen_random_uuid(), ${TENANT}, 'Agent A', 'Meeting held', ${CONTACT_A}, 'meeting', ${OWNER_A}, ${OWNER_A}, now() - interval '3 hours'),
         (gen_random_uuid(), ${TENANT}, 'Agent B', 'Follow-up call', ${CONTACT_B}, 'call', ${OWNER_B}, ${OWNER_B}, now() - interval '1 day'),
         (gen_random_uuid(), ${TENANT}, 'Agent B', 'Task done', ${CONTACT_B}, 'task', ${OWNER_B}, ${OWNER_B}, now() - interval '2 days')
       ON CONFLICT (id) DO NOTHING

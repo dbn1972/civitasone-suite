@@ -10,13 +10,16 @@
  *
  * The overdue decision is the pure `findOverdueTasks` (unit tested); this file is
  * the DB plumbing. Cross-tenant discovery uses `crm.list_task_escalation_tenants()`
- * (SECURITY DEFINER) exactly like the lead-escalation scheduler.
+ * (SECURITY DEFINER, owned by the BYPASSRLS `crm_scanner` role — see
+ * 0090_crm_scanner_function_ownership.sql and scanner-db.ts) via
+ * `scannerSqlClient`, exactly like the lead-escalation scheduler.
  */
 import { pino } from "pino";
 import { randomUUID } from "node:crypto";
 import { sql } from "drizzle-orm";
 import { runWithTenant } from "@civitasone/db";
-import { db, sqlClient } from "../../shared/db.js";
+import { db } from "../../shared/db.js";
+import { scannerSqlClient } from "../../shared/scanner-db.js";
 import { enqueue } from "../../shared/outbox.js";
 import { EVENTS } from "../../topics.js";
 import { findOverdueTasks, type TaskEscalationRuleLike, type OverdueTaskLike } from "./task-escalation-domain.js";
@@ -122,7 +125,7 @@ export async function runTenantTaskEscalation(tenantId: string, now: Date = new 
 
 /** One full cycle across every tenant with enabled task-escalation rules. */
 export async function runTaskEscalationCycle(now: Date = new Date()): Promise<number> {
-  const rows = (await sqlClient`SELECT tenant_id FROM crm.list_task_escalation_tenants()`) as unknown as Array<{ tenant_id: string }>;
+  const rows = (await scannerSqlClient`SELECT tenant_id FROM crm.list_task_escalation_tenants()`) as unknown as Array<{ tenant_id: string }>;
   let total = 0;
   for (const r of rows) {
     try {
