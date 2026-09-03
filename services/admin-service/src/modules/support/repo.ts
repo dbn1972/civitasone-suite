@@ -114,6 +114,16 @@ export async function findCorrectionByIdTx(tx: Writer, id: string, tenantId: str
   return rows[0];
 }
 
+// Read-only (non-tx) lookup for the route layer's synchronous pre-accept
+// checks (existence, status, maker-checker) — mirrors findCorrectionByIdTx
+// but outside a transaction, since the route only needs to read before
+// publishing the F3 command, never to write.
+export async function findCorrectionById(id: string, tenantId: string): Promise<AdminDataCorrectionRow | undefined> {
+  const rows = await scopedRead((tx) => tx.select().from(adminDataCorrections)
+    .where(and(eq(adminDataCorrections.id, id), eq(adminDataCorrections.tenantId, tenantId))).limit(1));
+  return rows[0];
+}
+
 export async function updateCorrection(tx: Writer, id: string, tenantId: string, patch: Partial<AdminDataCorrectionInsert>): Promise<void> {
   await tx.update(adminDataCorrections)
     .set({ ...patch, updatedAt: new Date() })
