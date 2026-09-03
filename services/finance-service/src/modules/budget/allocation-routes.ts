@@ -1,6 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { randomUUID } from "node:crypto";
+import { zMoneyMinor as zMoneyMinorBase } from "@civitasone/schemas/money";
 import { resolveContext, requireRole, HttpError, financeErrorHandler } from "../../shared/context.js";
 import { queue } from "../../shared/infra.js";
 import { COMMANDS } from "../../topics.js";
@@ -13,15 +14,14 @@ const READER_ROLES = [...FINANCE_ROLES, "audit_officer"];
 // BUG FIX: bigint-safe money fields, matching payments/validators.ts's
 // createBillBody.grossMinor pattern — a plain z.number() silently loses
 // precision above 2^53 at the JSON.parse boundary, before Zod ever runs.
-const moneyMinorFieldNonNeg = z.union([
-  z.string().regex(/^\d+$/, "must be a non-negative integer string").transform((s) => BigInt(s)),
-  z.bigint().nonnegative(),
-]).pipe(z.bigint().nonnegative());
-
-const moneyMinorField = z.union([
-  z.string().regex(/^\d+$/, "must be a positive integer string").transform((s) => BigInt(s)),
-  z.bigint().positive(),
-]).pipe(z.bigint().positive());
+// FIX: was a hand-rolled union missing a z.number() branch, so any plain
+// JSON-number payload (the common case, e.g. allocatedMinor: 1000000000)
+// 400'd. zMoneyMinorBase is the canonical @civitasone/schemas/money decoder —
+// accepts string | safe-integer number | bigint and rejects unsafe (>2^53)
+// numbers, forcing those onto the string path instead of silently losing
+// precision.
+const moneyMinorFieldNonNeg = zMoneyMinorBase.pipe(z.bigint().nonnegative());
+const moneyMinorField = zMoneyMinorBase.pipe(z.bigint().positive());
 
 // BUG FIX (misleading dead flag): `enforce` used to be accepted here (and
 // threaded through to the guarded UPDATE in allocation-repo.ts), but the
