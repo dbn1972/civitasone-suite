@@ -97,6 +97,7 @@ vi.mock("../src/modules/dsc-config/repo.js", () => ({
 
 import { buildApp } from "../src/app.js";
 import { sqlClient } from "../src/shared/db.js";
+import { queue } from "../src/shared/infra.js";
 
 afterAll(async () => { await sqlClient.end(); });
 
@@ -113,7 +114,10 @@ beforeEach(() => {
 // ═══════════════════════════════════════════════════════════════════
 
 describe("PUT /v1/payroll/dsc-config — valid upload", () => {
-  it("returns 200 with cert metadata for valid P12", async () => {
+  // F3 CQRS: the route validates + uploads to S3, then publishes
+  // dscConfigUpsert and returns 202 — the actual DB write happens later in
+  // the dsc-config consumer, not synchronously via repo.upsert.
+  it("returns 202 accepted envelope for valid P12", async () => {
     H.mockValidateDsc.mockReturnValue({
       subjectCN: "Test Signer",
       serialNumber: "0A1B2C",
@@ -134,15 +138,14 @@ describe("PUT /v1/payroll/dsc-config — valid upload", () => {
     });
     await app.close();
 
-    expect(res.statusCode).toBe(200);
+    expect(res.statusCode).toBe(202);
     const body = res.json();
-    expect(body.data.subjectCn).toBe("Test Signer");
-    expect(body.data.serialNumber).toBe("0A1B2C");
-    expect(body.data.sha256Fingerprint).toBeDefined();
-    expect(body.data.notAfter).toBeDefined();
+    expect(body.id).toBeDefined();
+    expect(body.status).toBe("accepted");
+    expect(body.correlationId).toBeDefined();
   });
 
-  it("calls upsert with correct tenant and cert metadata", async () => {
+  it("publishes dscConfigUpsert with correct tenant and cert metadata", async () => {
     H.mockValidateDsc.mockReturnValue({
       subjectCN: "Test Signer 2",
       serialNumber: "AABBCC",
@@ -163,13 +166,22 @@ describe("PUT /v1/payroll/dsc-config — valid upload", () => {
     });
     await app.close();
 
-    expect(res.statusCode).toBe(200);
-    expect(mockUpsert).toHaveBeenCalledOnce();
-    expect(mockUpsert).toHaveBeenCalledWith(TENANT, expect.objectContaining({
-      tenantId: TENANT,
-      subjectCn: "Test Signer 2",
-      serialNumber: "AABBCC",
-    }));
+    expect(res.statusCode).toBe(202);
+    // repo.upsert is only ever called by the async consumer, not the route —
+    // verify the route published the correct command payload instead.
+    expect(mockUpsert).not.toHaveBeenCalled();
+    expect(queue.publish).toHaveBeenCalledOnce();
+    expect(queue.publish).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({
+        tenantId: TENANT,
+        payload: expect.objectContaining({
+          tenantId: TENANT,
+          subjectCn: "Test Signer 2",
+          serialNumber: "AABBCC",
+        }),
+      }),
+    );
   });
 });
 
@@ -459,10 +471,16 @@ describe("DELETE /v1/payroll/dsc-config", () => {
     });
     await app.close();
 
-    expect(res.statusCode).toBe(200);
+    // F3 CQRS: DELETE publishes dscConfigRemove and returns 202 — repo.remove
+    // is only invoked later by the consumer, not synchronously by the route.
+    expect(res.statusCode).toBe(202);
     const body = res.json();
-    expect(body.status).toBe("ok");
-    expect(mockRemove).toHaveBeenCalledWith(TENANT);
+    expect(body.status).toBe("accepted");
+    expect(mockRemove).not.toHaveBeenCalled();
+    expect(queue.publish).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({ tenantId: TENANT }),
+    );
   });
 
   it("returns 403 for employee role", async () => {
@@ -618,7 +636,7 @@ describe("PUT /v1/payroll/dsc-config — role-based access", () => {
     });
     await app.close();
 
-    expect(res.statusCode).toBe(200);
+    expect(res.statusCode).toBe(202);
   });
 
   it("allows super_admin role on PUT", async () => {
@@ -641,6 +659,6 @@ describe("PUT /v1/payroll/dsc-config — role-based access", () => {
     });
     await app.close();
 
-    expect(res.statusCode).toBe(200);
+    expect(res.statusCode).toBe(202);
   });
 });
