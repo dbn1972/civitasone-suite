@@ -162,6 +162,17 @@ export async function centralConfigRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, CONFIG_ROLES);
     const { id } = idParam.parse(req.params);
 
+    // Synchronous pre-accept validation: the consumer (f3-apply.ts's
+    // apply_central_config_1) already performs this existence/status/
+    // maker-checker check, but only after the route has returned 202 —
+    // giving the caller no channel to observe a rejection. Lift an
+    // equivalent, read-only check here so an invalid approve is rejected
+    // before the command is even published (same pattern as PR #920).
+    const change = await repo.findChangeById(id, ctx.tenantId);
+    if (!change) throw new HttpError(404, "NOT_FOUND", "change request not found");
+    assertPending(change.status);
+    assertApproverDistinct(change.proposedBy, ctx.actorId);
+
     const __f3Id = randomUUID();
     await publishAdminCommand(ctx, COMMANDS.f3RouteWrite, __f3Id, {
       op: 'central_config_op_1',
@@ -180,6 +191,13 @@ export async function centralConfigRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, CONFIG_ROLES);
     const { id } = idParam.parse(req.params);
     const body = rejectBody.parse(req.body);
+
+    // Same lifted check as approve above (equivalent to f3-apply.ts's
+    // apply_central_config_2): a change must exist and still be pending to
+    // be rejected.
+    const change = await repo.findChangeById(id, ctx.tenantId);
+    if (!change) throw new HttpError(404, "NOT_FOUND", "change request not found");
+    assertPending(change.status);
 
     const __f3Id = randomUUID();
     await publishAdminCommand(ctx, COMMANDS.f3RouteWrite, __f3Id, {

@@ -87,6 +87,17 @@ export async function findChangeByIdTx(tx: Writer, id: string, tenantId: string)
   return rows[0];
 }
 
+// Read-only (non-tx) lookup for the route layer's synchronous pre-accept
+// checks (existence, status, maker-checker) — mirrors findChangeByIdTx but
+// outside a transaction, since the route only needs to read before publishing
+// the F3 command, never to write.
+export async function findChangeById(id: string, tenantId: string): Promise<ConfigChangeRow | undefined> {
+  const rows = await scopedRead((tx) => tx.select().from(configChangeRequests)
+    .where(and(eq(configChangeRequests.id, id), eq(configChangeRequests.tenantId, tenantId)))
+    .limit(1));
+  return rows[0];
+}
+
 export async function updateChange(tx: Writer, id: string, tenantId: string, patch: Partial<ConfigChangeInsert>): Promise<void> {
   await tx.update(configChangeRequests)
     .set({ ...patch, updatedAt: new Date() })

@@ -9,6 +9,8 @@ import { resolveContext, requireSuperAdmin, requireRole, HttpError, TENANT_ADMIN
 import {
   DataCorrectionError,
   assertJustification,
+  assertCorrectionApproverDistinct,
+  assertCorrectionPending,
 } from "./domain.js";
 import { breakGlassBody, closeParam, breakGlassListQuery } from "./validators.js";
 import * as commands from "./commands.js";
@@ -71,6 +73,18 @@ export async function supportRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, CORRECTION_ROLES);
     const { id } = correctionIdParam.parse(req.params);
+
+    // Synchronous pre-accept validation: the consumer (f3-consumer.ts's
+    // support_op_1 handler) already performs this existence/status/
+    // maker-checker check, but only after the route has returned 202 —
+    // giving the caller no channel to observe a rejection. Lift an
+    // equivalent, read-only check here so an invalid approve is rejected
+    // before the command is even published (same pattern as PR #920).
+    const correction = await repo.findCorrectionById(id, ctx.tenantId);
+    if (!correction) throw new HttpError(404, "NOT_FOUND", "data correction not found");
+    assertCorrectionPending(correction.status);
+    assertCorrectionApproverDistinct(correction.proposedBy, ctx.actorId);
+
     await publishAdminCommand(ctx, COMMANDS.f3RouteWrite, id, {
       op: "support_op_1",
       body: {},
@@ -85,6 +99,14 @@ export async function supportRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, CORRECTION_ROLES);
     const { id } = correctionIdParam.parse(req.params);
     const body = rejectCorrectionBody.parse(req.body);
+
+    // Same lifted check as approve above (equivalent to f3-consumer.ts's
+    // support_op_2 handler): a correction must exist and still be pending to
+    // be rejected.
+    const correction = await repo.findCorrectionById(id, ctx.tenantId);
+    if (!correction) throw new HttpError(404, "NOT_FOUND", "data correction not found");
+    assertCorrectionPending(correction.status);
+
     await publishAdminCommand(ctx, COMMANDS.f3RouteWrite, id, {
       op: "support_op_2",
       body,
