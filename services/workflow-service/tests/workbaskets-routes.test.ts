@@ -5,11 +5,26 @@ import { sql } from "drizzle-orm";
 import { signToken } from "@civitasone/auth";
 import { buildApp } from "../src/app.js";
 import { sqlClient } from "../src/shared/db.js";
+import { queue } from "../src/shared/infra.js";
+import { registerWorkbasketConsumers } from "../src/modules/workbaskets/consumer.js";
 import { sqlAsTenant } from "./helpers/engine-harness.js";
 
 const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
 const TENANT = "c1050000-0000-4000-8000-000000000035";
 const tok = (roles = ["case_manager"]) => signToken({ sub: randomUUID(), tid: TENANT, roles, sid: "s" }, SECRET);
+
+registerWorkbasketConsumers(queue);
+await queue.start();
+
+async function waitFor<T>(fn: () => Promise<T | null | undefined>, ms = 3000): Promise<T> {
+  const start = Date.now();
+  while (Date.now() - start < ms) {
+    const v = await fn();
+    if (v) return v;
+    await new Promise((r) => setTimeout(r, 25));
+  }
+  throw new Error("waitFor timeout");
+}
 
 async function seedTask(status: string, instanceId: string): Promise<void> {
   const id = randomUUID(); const actor = randomUUID();
@@ -35,8 +50,11 @@ describe("CAP-035 workbaskets", () => {
     await seedTask("completed", inst);
     const h = { authorization: `Bearer ${tok()}` };
     const put = await app.inject({ method: "PUT", url: "/v1/workflow/workbaskets/pending-queue", headers: h, payload: { name: "Pending", filter: { status: ["pending"] } } });
-    expect(put.statusCode).toBe(201);
-    const resolved = await app.inject({ method: "GET", url: "/v1/workflow/workbaskets/pending-queue/tasks", headers: h });
+    expect(put.statusCode).toBe(202);
+    const resolved = await waitFor(async () => {
+      const g = await app.inject({ method: "GET", url: "/v1/workflow/workbaskets/pending-queue/tasks", headers: h });
+      return g.statusCode === 200 ? g : null;
+    });
     expect(resolved.json().meta.total).toBe(2);
     await app.close();
   });
