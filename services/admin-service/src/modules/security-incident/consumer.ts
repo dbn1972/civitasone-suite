@@ -275,7 +275,7 @@ export function registerSecurityIncidentConsumers(q: Queue): void {
           const onTime = now.getTime() <= new Date(notif.deadlineAt).getTime();
           await tx
             .update(secBreachNotifications)
-            .set({ status: "submitted", submittedAt: now, reference: p.reference })
+            .set({ status: "submitted", submittedAt: now, isOnTime: onTime, reference: p.reference })
             .where(and(eq(secBreachNotifications.tenantId, p.tenantId), eq(secBreachNotifications.id, p.id)));
           await enqueue(tx, {
             topic: "security.breach.notification_submitted",
