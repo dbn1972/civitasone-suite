@@ -50,6 +50,9 @@ function run<T>(name: string, mode: IDBTransactionMode, fn: (s: IDBObjectStore) 
 }
 
 export async function readCache<T>(key: string): Promise<{ value: T; cachedAt: string } | null> {
+  // IndexedDB can genuinely be unavailable (SSR-adjacent contexts, older browsers,
+  // some private-browsing modes, jsdom in tests) — no-op rather than throw.
+  if (typeof indexedDB === "undefined") return null;
   const ns = await resolveNamespace();
   const row = await run<CacheRow | undefined>(dbName(ns), "readonly", (s) => s.get(key));
   if (!row) return null;
@@ -61,6 +64,7 @@ export async function readCache<T>(key: string): Promise<{ value: T; cachedAt: s
 }
 
 export async function writeCache(key: string, value: unknown): Promise<void> {
+  if (typeof indexedDB === "undefined") return;
   const ns = await resolveNamespace();
   const row: CacheRow = { key, value: await encryptJson(value), cachedAt: new Date().toISOString() };
   await run(dbName(ns), "readwrite", (s) => s.put(row));
