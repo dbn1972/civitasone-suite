@@ -8,6 +8,24 @@ import { buildApp } from "../src/app.js";
 import type { FastifyInstance } from "fastify";
 import { createHmac } from "node:crypto";
 import { seedHrmsCoreFixtures, type HrmsLeaveTypeIds } from "./fixtures/core-seed.js";
+import { queue } from "../src/shared/infra.js";
+import { registerF3_geo_attendance_Consumers } from "../src/modules/geo-attendance/f3-consumer.js";
+
+// geo-check-in/geo-check-out only PUBLISH (see geo-attendance/routes.ts); the
+// hrms_geo_attendance row is written by this async F3 consumer. Register it
+// so "3.5 RO views reportees attendance" (which reads that same table back)
+// isn't racing an unregistered/undrained write — same pattern as
+// tests/interview-comms-route.test.ts etc.
+registerF3_geo_attendance_Consumers(queue);
+async function drainF3(): Promise<void> {
+  await (queue as unknown as import("@civitasone/queue").MemoryQueue).drain();
+}
+type TestApp = { inject: (opts: never) => Promise<never> };
+async function injectF3(app: TestApp, opts: unknown): Promise<never> {
+  const res = await app.inject(opts as never);
+  await drainF3();
+  return res;
+}
 
 let app: FastifyInstance;
 let leaveTypeIds: HrmsLeaveTypeIds;
@@ -111,14 +129,14 @@ describe("2. Employee Onboarding", () => {
 // ═══════════════════════════════════════════════════════════
 describe("3. Attendance Management", () => {
   it("3.1 Employee checks in within geo-fence", async () => {
-    const r = await app.inject({ method: "POST", url: "/v1/hrms/attendance/geo-check-in", headers: { ...AUTH, ...CT },
+    const r = await injectF3(app, { method: "POST", url: "/v1/hrms/attendance/geo-check-in", headers: { ...AUTH, ...CT },
       payload: { employeeId: EMP1, latitude: 28.6140, longitude: 77.2091, accuracyMeters: 5, selfieFileKey: "video/vikram-checkin.mp4", deviceId: "phone-001", officeLocationId: "aaaaaaaa-0001-0000-0000-000000000001" } });
     expect(r.statusCode).toBe(201);
     expect(r.json().status).toBe("within_geofence");
   });
 
   it("3.2 Employee checks out at end of day", async () => {
-    const r = await app.inject({ method: "POST", url: "/v1/hrms/attendance/geo-check-out", headers: { ...AUTH, ...CT },
+    const r = await injectF3(app, { method: "POST", url: "/v1/hrms/attendance/geo-check-out", headers: { ...AUTH, ...CT },
       payload: { employeeId: EMP1, latitude: 28.6138, longitude: 77.2089, selfieFileKey: "video/vikram-checkout.mp4" } });
     expect(r.statusCode).toBe(201);
   });

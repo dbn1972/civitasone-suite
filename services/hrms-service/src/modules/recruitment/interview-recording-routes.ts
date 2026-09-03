@@ -61,7 +61,24 @@ export async function interviewRecordingRoutes(app: FastifyInstance): Promise<vo
 
     const rid = randomUUID();
     const retentionUntil = computeRetentionUntil(Date.now(), body.retentionDays ?? DEFAULT_RETENTION_DAYS);
-    await publishF3Write(ctx, "recruitment_interview_recording_routes__0", rid, { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    // A duplicate active storageKey (partial unique index) must map to 409, not
+    // 500 — the error handler below already does that translation for a 23505
+    // thrown synchronously. Routing this insert through the fire-and-forget
+    // async F3 queue (publishF3Write) defeats that: the 201 below was always
+    // sent before the consumer's insertRecording (which raises the 23505) ever
+    // ran, so the duplicate silently DLQ'd and the client was told "201"
+    // regardless. Perform the insert directly instead (mirrors f3-consumer.ts's
+    // now-dead "recruitment_interview_recording_routes__0" case) so the
+    // constraint violation reaches this route's error handler synchronously.
+    await db.transaction(async (tx) => {
+      await repo.insertRecording(tx, {
+        id: rid, tenantId: ctx.tenantId, interviewId: id, applicationId: iv.applicationId,
+        kind: body.kind, storageKey: body.storageKey,
+        consentGiven: body.consentGiven, consentReference: body.consentReference ?? null,
+        consentBy: ctx.actorId, consentAt: new Date(),
+        retentionUntil, status: "active", createdBy: ctx.actorId,
+      });
+    });
     return reply.code(201).send({ id: rid, interviewId: id, kind: body.kind, retentionUntil, status: "active" }) as any;
   });
 

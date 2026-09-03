@@ -68,6 +68,54 @@ export async function interviewCommsRoutes(app: FastifyInstance): Promise<void> 
     });
     const commId = randomUUID();
 
+    // reschedule/cancel carry an optimistic-version guard (see
+    // interview-comms-repo.ts's rescheduleInterview/cancelInterview) that only
+    // means something if its result reaches the HTTP response. Routing them
+    // through the fire-and-forget async F3 queue (publishF3Write) cannot do
+    // that: MemoryQueue.publish() schedules delivery on a macrotask and
+    // resolves immediately, so the 201 below was always sent BEFORE the
+    // consumer (which re-reads `iv.version` and calls rescheduleInterview/
+    // cancelInterview) ever ran — a version conflict discovered there just
+    // silently DLQ'd, and the client was told "201 accepted" regardless. That
+    // is the same fake-success shape already fixed elsewhere in this codebase
+    // (lifecycle transfers, hold approve/reject/release) by moving the guard
+    // synchronous. Do the same here: perform the guarded write directly
+    // (mirrors f3-consumer.ts's now-dead "recruitment_interview_comms_routes__0"
+    // reschedule/cancel branch) instead of publishing, so a version conflict
+    // maps to a real 409 before the response is sent. invite/reminder have no
+    // such guard and keep the existing async path unchanged.
+    if (body.type === "reschedule" || body.type === "cancel") {
+      try {
+        await db.transaction(async (tx) => {
+          const ok = body.type === "reschedule"
+            ? await repo.rescheduleInterview(tx, ctx.tenantId, id, body.newDate!, body.newTime!, ctx.actorId, iv.version)
+            : await repo.cancelInterview(tx, ctx.tenantId, id, iv.version);
+          if (!ok) throw new Error("VERSION_CONFLICT");
+          await repo.insertComm(tx, {
+            id: commId, tenantId: ctx.tenantId, interviewId: id, applicationId: iv.applicationId,
+            commType: body.type, channel, status, message,
+            scheduledFor: body.type === "reschedule" ? new Date(`${body.newDate!}T${body.newTime!}:00Z`) : null,
+            idempotencyKey: idempotencyKey ?? null,
+            createdBy: ctx.actorId,
+          });
+          if (status === "queued") {
+            await enqueue(tx, {
+              topic: EVENTS.interviewCommDispatch, eventType: EVENTS.interviewCommDispatch,
+              tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId,
+              payload: { commId, interviewId: id, applicationId: iv.applicationId, type: body.type, channel },
+            });
+          }
+        });
+      } catch (err) {
+        if ((err as Error).message === "VERSION_CONFLICT") throw new HttpError(409, "VERSION_CONFLICT", "the interview changed; reload and retry");
+        if (String((err as { code?: string }).code) === "23505") {
+          throw new HttpError(409, "DUPLICATE_REQUEST", "a communication with this idempotency key is already being processed");
+        }
+        throw err;
+      }
+      return reply.code(201).send({ id: commId, interviewId: id, type: body.type, channel, status });
+    }
+
     try {
       await publishF3Write(ctx, "recruitment_interview_comms_routes__0", commId, { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown>, idempotencyKey: idempotencyKey ?? null })
     } catch (err) {

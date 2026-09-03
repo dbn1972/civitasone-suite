@@ -217,16 +217,14 @@ describe("Transfer-order lifecycle: requested -> ordered -> relieved -> joined",
     expect(emp.departmentId).toBe(deptId); // unchanged at request time
   });
 
-  // KNOWN GAP (not fixed here — see PR description): lifecycle/commands.ts's
-  // relieveTransfer publishes unconditionally with no synchronous pre-check
-  // (unlike rti/routes.ts and service-book/routes.ts, which check current
-  // state via a repo read BEFORE publishing). The invalid-state guard now
-  // lives only inside the async consumer's repo.transitionTransfer, which
-  // silently no-ops (0 rows matched `from`) instead of surfacing an error —
-  // so this now returns 202 "accepted" even though nothing is applied. That
-  // is a fake-success gap of the same shape already fixed for hold
-  // reject/release in #883/#884, just not yet applied to lifecycle transfers.
-  // Left failing and documented per task scope rather than papered over.
+  // FIXED: lifecycle/routes.ts's relieve handler now does a synchronous
+  // pre-check (read the transfer, verify status === "ordered") BEFORE
+  // publishing, mirroring rti/routes.ts and lifecycle/hold-routes.ts. It used
+  // to publish unconditionally and rely solely on the async consumer's
+  // repo.transitionTransfer guard, which silently no-ops (0 rows matched
+  // `from`) instead of surfacing an error — a fake-success gap of the same
+  // shape already fixed for hold reject/release in #883/#884, now applied
+  // here too.
   it("cannot relieve before order is issued (409 INVALID_STATE)", async () => {
     const r = await app.inject({ method: "POST", url: `/v1/hrms/lifecycle/transfers/${transferId}/relieve`, headers: { ...HR, ...CT },
       payload: { relievedDate: "2024-05-10" } });
@@ -265,8 +263,9 @@ describe("Transfer-order lifecycle: requested -> ordered -> relieved -> joined",
     expect(sb.some((e) => e.entryType === "transfer")).toBe(true);
   });
 
-  // KNOWN GAP — same missing-synchronous-pre-check issue as "cannot relieve
-  // before order is issued" above. Left failing and documented, not fixed here.
+  // FIXED — same synchronous pre-check added to the join handler, guarding
+  // status === "relieved" before publish. See "cannot relieve before order
+  // is issued" above for the full explanation.
   it("cannot double-join (joined -> joined blocked, 409)", async () => {
     const r = await app.inject({ method: "POST", url: `/v1/hrms/lifecycle/transfers/${transferId}/join`, headers: { ...HR, ...CT },
       payload: { joinedDate: "2024-05-12" } });
