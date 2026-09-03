@@ -22,9 +22,25 @@ CREATE TABLE IF NOT EXISTS citizen.citizen_escalations (
   level INT NOT NULL DEFAULT 1
 );
 
+-- citizen.citizen_sla_config is FORCE ROW LEVEL SECURITY (tenant_isolation_policy:
+-- tenant_id = portal.current_tenant_id(), which reads current_setting('app.tenant_id')).
+-- This service's migrations run as citizen_svc (NOBYPASSRLS), so the seed INSERT
+-- below fails closed with 'new row violates row-level security policy' unless
+-- app.tenant_id is set first. SET LOCAL inside an explicit transaction, not a
+-- session-scoped SET -- see packages/db/src/raw-tenant-guc.ts and
+-- services/workflow-service/migrations/0038_repair_standard_definitions_seed_gap.sql,
+-- which documents real prior production incidents (helpdesk/crm/estab/hrms/
+-- payroll-service) from a session-scoped tenant GUC leaking onto a pooled
+-- connection reused by the next statement.
+BEGIN;
+SET LOCAL lock_timeout = '5s';
+SET LOCAL app.tenant_id = '00000000-0000-0000-0000-000000000001';
+
 INSERT INTO citizen.citizen_sla_config (tenant_id, ticket_type, priority, response_hours, resolution_hours, escalation_after_hours)
 VALUES
   ('00000000-0000-0000-0000-000000000001','grievance','high',4,24,8),
   ('00000000-0000-0000-0000-000000000001','grievance','normal',12,72,48),
   ('00000000-0000-0000-0000-000000000001','rti','normal',24,720,168)
 ON CONFLICT DO NOTHING;
+
+COMMIT;
