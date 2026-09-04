@@ -68,9 +68,18 @@ export async function permitRoutes(app: FastifyInstance): Promise<void> {
     });
   });
 
-  app.get("/v1/shop/permits/verify", async (req, reply) => {
+  // Deliberately public (config.public — see @civitasone/auth/plugin): a
+  // citizen looks up a permit via a QR code / verification code with no
+  // login and no tenant known. Reads the non-RLS public directory, not
+  // shop.permits directly — without config.public this 401'd before the
+  // handler ever ran, and even authenticated, an RLS-scoped read with no
+  // matching app.tenant_id GUC (the caller has no way to supply the target
+  // permit's tenant) silently returns zero rows for every code, forever.
+  // See migrations/0003_permits_public_directory.sql and
+  // repo.findPublicByVerificationCode.
+  app.get("/v1/shop/permits/verify", { config: { public: true } }, async (req, reply) => {
     const q = verifyQuery.parse(req.query);
-    const permit = await repo.findByVerificationCode(q.code);
+    const permit = await repo.findPublicByVerificationCode(q.code);
     if (!permit) throw new HttpError(404, "PERMIT_NOT_FOUND", "No permit found for this verification code");
     return reply.send({
       data: {

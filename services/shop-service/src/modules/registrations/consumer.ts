@@ -40,10 +40,18 @@ export function registerRegistrationConsumers(rawQueue: Queue): void {
       employeeCount: p.employeeCount,
       areaSqft: p.capacityDetails?.areaSqft,
     });
-    const applicationNumber = generateApplicationNumber("ULB", Date.now() % 999999);
+    let applicationNumber = "";
 
-    await db.transaction(async (tx) => {
-      if (!(await markProcessed(tx, msg.messageId))) return;
+    // The transaction reports back whether it actually inserted the
+    // application, so the trailing log below can't claim success on a
+    // silently-skipped duplicate (markProcessed no-op) — same reasoning as
+    // permits/consumer.ts's issuePermit.
+    const applied = await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return false;
+      // `Date.now() % 999999` (periodic on ~16.7 minutes) replaced with a
+      // real Postgres SEQUENCE reserved inside this same transaction — see
+      // repo.ts's nextApplicationNumber for the full rationale.
+      applicationNumber = generateApplicationNumber("ULB", await repo.nextApplicationNumber(tx));
       await repo.insertApplication(tx, {
         id: p.id,
         tenantId: msg.tenantId,
@@ -86,8 +94,9 @@ export function registerRegistrationConsumers(rawQueue: Queue): void {
         resourceType: "shop_application",
         resourceId: p.id,
       });
+      return true;
     });
-    log.info({ id: p.id, applicationNumber }, "shop application created");
+    if (applied) log.info({ id: p.id, applicationNumber }, "shop application created");
   });
 
   queue.subscribe(COMMANDS.submitApplication, async (msg) => {
