@@ -7,6 +7,23 @@ import * as commands from "./commands.js";
 
 const TRADE_ROLES = ["trade_user", "trade_admin", "super_admin"];
 
+// areaInSqft and employeeCount are stored in plain `integer` columns
+// (migrations/0001_initial.sql: area_in_sqft integer, employee_count
+// integer) with no upper bound in the zod schema, so an oversized value
+// would sail past validation and hit domain.ts's calculateFeeMinor — its
+// BigInt arithmetic never overflows, but an absurd input (e.g. Number.
+// MAX_SAFE_INTEGER) either overflows Postgres's int4 range at insert time
+// (a raw "integer out of range" error surfacing as an unhandled 500 deep in
+// the async consumer's transaction) or produces a fee_minor nowhere near
+// any real premises. The ceilings below are generous real-world business
+// ceilings, not the column's raw int4 limit (~2.1 billion) — comparable in
+// spirit to the world's largest retail/industrial complexes and largest
+// single-site employers — chosen well inside both int4 and the BigInt
+// fee-math's safe range (+-~9.2e18), mirroring the proposedFloors bound in
+// services/building-service/src/modules/applications/routes.ts.
+const MAX_AREA_IN_SQFT = 10_000_000; // integer column; world's largest malls run ~5-6M sqft
+const MAX_EMPLOYEE_COUNT = 200_000; // integer column; larger than the biggest single-site private employers
+
 const createBody = z.object({
   businessName: z.string().min(1).max(256),
   tradeCategory: z.string().min(1).max(64),
@@ -20,8 +37,8 @@ const createBody = z.object({
     ward: z.string().optional(),
     zone: z.string().optional(),
   }),
-  areaInSqft: z.number().int().nonnegative().optional(),
-  employeeCount: z.number().int().nonnegative().optional(),
+  areaInSqft: z.number().int().nonnegative().max(MAX_AREA_IN_SQFT).optional(),
+  employeeCount: z.number().int().nonnegative().max(MAX_EMPLOYEE_COUNT).optional(),
   documents: z.array(z.object({
     docType: z.string(),
     fileId: z.string().uuid(),
