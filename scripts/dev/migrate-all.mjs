@@ -103,10 +103,11 @@ const SERVICES = [
   { name: "fire-service",        db: "civitas_fire" },
   { name: "market-service",      db: "civitas_market" },
   { name: "parking-service",     db: "civitas_parking" },
-  // building-service: no migrations/ directory yet (added in a separate,
-  // parallel change) -- registered now so local dev tooling picks it up the
-  // moment that migration lands, without a second edit. existsSync guard
-  // above makes this a no-op until then.
+  // building-service: migrations/0001_init.sql now exists (fixes RLS-on-
+  // outbox, missing indexes, permit uniqueness, and the RLS predicate
+  // pattern vs. the held branch it was ported from) and bootstrap_building.sql
+  // creates building_svc/civitas_building, so this entry is no longer a
+  // no-op.
   { name: "building-service",    db: "civitas_building" },
   // sewerage-service, swm-service: pre-existing gap found while wiring the
   // municipal batch-4 services above -- both shipped real migrations
