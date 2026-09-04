@@ -2,7 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import * as repo from "./repo.js";
-import { validateCollectionTransition, type CollectionStatus } from "./domain.js";
+import { validateCollectionTransition, type CollectionStatus, validateTaskTransition, type FieldTaskStatus } from "./domain.js";
 import * as commands from "./commands.js";
 
 const ROLES = ["swm_user", "swm_admin", "super_admin"];
@@ -143,6 +143,14 @@ export async function collectionRoutes(app: FastifyInstance): Promise<void> {
     const body = completeTaskBody.parse(req.body);
     const existing = await repo.findTaskById(id, ctx.tenantId);
     if (!existing) throw new HttpError(404, "NOT_FOUND", "field task not found");
+    // BUG FIX: this route was missing the synchronous pre-accept transition
+    // check that every other F3 write route in this service performs (see
+    // assign/resolve/close, suspend, schedule/complete/cancel, resolve
+    // above). Without it, a task could be "completed" straight from
+    // "assigned" — skipping "in_progress" — because the async consumer only
+    // enforces the optimistic-lock version, never the domain transition.
+    const err = validateTaskTransition(existing.status as FieldTaskStatus, "completed");
+    if (err) throw new HttpError(422, "TRANSITION_INVALID", err);
     if (body.version !== existing.version) throw new HttpError(409, "VERSION_CONFLICT", "retry with current version");
     return reply.code(202).send(await commands.completeFieldTask(ctx, id, body.notes ?? null, body.photos ?? null, body.version));
   });
