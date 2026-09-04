@@ -9,6 +9,8 @@ import { COMMANDS, EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
 import * as appRepo from "../applications/repo.js";
 import { validateScrutinyComplete, type ScrutinyFinding } from "./domain.js";
+import { emitMunicipalNotification } from "../../shared/cross-events.js";
+import { MUNICIPAL_EVENT_TYPES, municipalDecisionNotificationEventType } from "@civitasone/events";
 
 const log = pino({ name: "trade.approvals.consumer" });
 
@@ -52,11 +54,28 @@ export function registerApprovalConsumers(rawQueue: Queue): void {
 
   queue.subscribe(COMMANDS.decideApplication, async (msg) => {
     const p = msg.payload as { applicationId: string; tenantId: string; decision: string; reason?: string };
+    // Wave 3 cross-service wiring: approved/rejected is exactly the moment a
+    // citizen who submitted a trade application would want to be told — read
+    // before the tx for the same reason applications/consumer.ts's
+    // submitApplication does (the write below doesn't return the row).
+    const application = await appRepo.findById(p.applicationId, msg.tenantId);
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       await appRepo.updateStatus(tx, p.applicationId, msg.tenantId, p.decision, msg.actorId);
       await cache.invalidateResourceAfterCommit(tx, msg.tenantId, "application");
       await enqueue(tx, { topic: EVENTS.applicationDecided, eventType: EVENTS.applicationDecided, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { applicationId: p.applicationId, decision: p.decision, reason: p.reason, decidedBy: msg.actorId } });
+      if (p.decision === "approved" || p.decision === "rejected") {
+        await emitMunicipalNotification(tx, ctxOf(msg), {
+          // "approved" resolves to the citizen.application.approved template
+          // (a real, non-default template); "rejected" falls back to the
+          // generic municipal.status.changed template — see
+          // municipalDecisionNotificationEventType's doc comment.
+          eventType: municipalDecisionNotificationEventType(MUNICIPAL_EVENT_TYPES.statusChanged, p.decision),
+          recipient: application?.businessName ?? "Applicant",
+          ...(application?.createdBy ? { recipientId: application.createdBy } : {}),
+          variables: { applicationId: p.applicationId, applicationNumber: application?.applicationNumber ?? "", decision: p.decision, serviceName: "trade" },
+        });
+      }
       await writeAudit(tx, ctxOf(msg), { action: `application.${p.decision}`, resourceType: "trade_application", resourceId: p.applicationId });
     });
     log.info({ applicationId: p.applicationId, decision: p.decision }, "trade application decided");
