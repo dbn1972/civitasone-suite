@@ -117,6 +117,17 @@ run_bootstrap "$ROOT/infra/db/bootstrap/bootstrap_shop.sql"
 # services/sewerage-service/migrations/0001_initial.sql and the SERVICE_DBS
 # entry below.
 run_bootstrap "$ROOT/infra/db/bootstrap/bootstrap_sewerage.sql"
+# ai-agent-service has real migrations (services/ai-agent-service/migrations/
+# 0001_ai_agent_foundation.sql, 0002_ai_agent_sprint2.sql,
+# 0003_ai_agent_chat_handoff.sql) and is already wired into
+# scripts/dev/provision-platform-roles.mjs (role ai_agent_svc, db
+# civitas_ai_agent) and ecosystem.config.js, but no bootstrap file here ever
+# created ai_agent_svc/civitas_ai_agent, and ai-agent-service was never added
+# to the SERVICE_DBS map below -- so on a fresh CI Postgres its migrations
+# fail to even authenticate and its tests can never run against a real
+# database in CI. Same class of gap bootstrap_shop.sql/bootstrap_sewerage.sql
+# fixed for their services. See bootstrap_ai_agent.sql for the full story.
+run_bootstrap "$ROOT/infra/db/bootstrap/bootstrap_ai_agent.sql"
 
 # Every migration that fails is recorded here and reconciled against a committed
 # allow-list at the end of this script. Before that reconciliation existed, a
@@ -202,6 +213,11 @@ declare -A SERVICE_DBS=(
   # migrations never ran in CI. bootstrap_shop.sql (added above) now creates
   # shop_svc/civitas_shop so this entry is no longer a no-op.
   [shop-service]="shop_svc:civitas_shop"
+  # ai-agent-service: same gap as shop/sewerage above -- real migrations
+  # exist but were never registered here, so its role/database never
+  # existed in CI. bootstrap_ai_agent.sql (added above) now creates
+  # ai_agent_svc/civitas_ai_agent.
+  [ai-agent-service]="ai_agent_svc:civitas_ai_agent"
 )
 
 # ── Role-creating migrations must run as the bootstrapping SUPERUSER ─────────
