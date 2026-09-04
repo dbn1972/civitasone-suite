@@ -52,6 +52,21 @@ export async function insertApplication(tx: ScopedTx, row: ApplicationInsert): P
 }
 
 /**
+ * Replaces `Date.now() % 999999` (see registrations/consumer.ts's
+ * createApplication handler) with a real Postgres SEQUENCE reserved inside
+ * the same transaction as the insert. Same fix shape as vendor-service's
+ * nextRegistrationNumber (migrations/0002_number_sequences.sql there;
+ * migrations/0004_number_sequences.sql here) — see that migration's header
+ * comment for the full rationale.
+ */
+export async function nextApplicationNumber(tx: ScopedTx): Promise<number> {
+  const [row] = (await tx.execute(
+    sql`SELECT nextval('"shop"."application_number_seq"')::bigint AS seq`,
+  )) as Array<{ seq: number }>;
+  return Number(row!.seq);
+}
+
+/**
  * fromStatuses: the set of application statuses this write is valid from
  * (the same set the caller's canTransition/canDecide check already
  * validated against). Folding it into the WHERE clause makes the write an

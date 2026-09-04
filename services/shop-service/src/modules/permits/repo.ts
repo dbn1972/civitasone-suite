@@ -1,9 +1,10 @@
 import { eq, and, sql, desc, inArray } from "drizzle-orm";
-import { scopedRead, type ScopedTx } from "../../shared/db.js";
+import { db, scopedRead, type ScopedTx } from "../../shared/db.js";
 import {
-  permits, permitActions,
+  permits, permitActions, permitDirectory,
   type PermitRow, type PermitInsert,
   type PermitActionRow, type PermitActionInsert,
+  type PermitDirectoryInsert,
 } from "./schema.js";
 
 export async function findById(id: string, tenantId: string): Promise<PermitRow | null> {
@@ -15,12 +16,26 @@ export async function findById(id: string, tenantId: string): Promise<PermitRow 
   return rows[0] ?? null;
 }
 
-export async function findByVerificationCode(code: string): Promise<PermitRow | null> {
+/** Tenant-scoped lookup (RLS-protected). Not used by the public verify route — see findPublicByVerificationCode. */
+export async function findByVerificationCode(code: string, tenantId: string): Promise<PermitRow | null> {
   const rows = await scopedRead((tx) =>
     tx.select().from(permits)
-      .where(eq(permits.verificationCode, code))
+      .where(and(eq(permits.verificationCode, code), eq(permits.tenantId, tenantId)))
       .limit(1),
   );
+  return rows[0] ?? null;
+}
+
+/**
+ * Public verification lookup (NO tenant, NO auth — see schema.ts's
+ * permitDirectory doc comment). Deliberately plain `db.select()`, not
+ * `scopedRead`: the directory table carries no RLS, so there is no GUC to set
+ * and wrapping it in a tenant-scoped transaction would be misleading.
+ */
+export async function findPublicByVerificationCode(code: string) {
+  const rows = await db.select().from(permitDirectory)
+    .where(eq(permitDirectory.verificationCode, code))
+    .limit(1);
   return rows[0] ?? null;
 }
 
@@ -62,6 +77,31 @@ export async function insertPermit(tx: ScopedTx, row: PermitInsert): Promise<voi
 }
 
 /**
+ * Insert the public-directory mirror of a freshly issued permit, in the SAME
+ * transaction as insertPermit — see schema.ts's permitDirectory comment.
+ * onConflictDoNothing on the PK makes this safe against a consumer redelivery
+ * of the same issuePermit message.
+ */
+export async function insertDirectoryEntry(tx: ScopedTx, row: PermitDirectoryInsert): Promise<void> {
+  await tx.insert(permitDirectory).values(row).onConflictDoNothing({ target: permitDirectory.verificationCode });
+}
+
+/**
+ * Replaces `Date.now() % 999999` (see permits/consumer.ts's issuePermit
+ * handler) with a real Postgres SEQUENCE reserved inside the same
+ * transaction as the insert. Same fix shape as vendor-service's
+ * nextLicenceNumber (migrations/0002_number_sequences.sql there;
+ * migrations/0004_number_sequences.sql here) — see that migration's header
+ * comment for the full rationale.
+ */
+export async function nextPermitNumber(tx: ScopedTx): Promise<number> {
+  const [row] = (await tx.execute(
+    sql`SELECT nextval('"shop"."permit_number_seq"')::bigint AS seq`,
+  )) as Array<{ seq: number }>;
+  return Number(row!.seq);
+}
+
+/**
  * fromStatuses: the set of permitStatus values this write is valid from (the
  * same set the caller's domain-layer check — e.g. canPerformAction — already
  * validated against). Folding it into the WHERE clause makes the write an
@@ -93,6 +133,13 @@ export async function updatePermitStatus(
       inArray(permits.permitStatus, fromStatuses),
     ))
     .returning({ id: permits.id });
+  if (result.length > 0) {
+    // Keep the public directory's status in lockstep with the RLS-protected
+    // row it mirrors — same transaction, so the two can never drift.
+    await tx.update(permitDirectory)
+      .set({ permitStatus: status, updatedAt: new Date() })
+      .where(eq(permitDirectory.permitId, id));
+  }
   return result.length > 0;
 }
 
@@ -130,5 +177,10 @@ export async function updateValidUntil(
       inArray(permits.permitStatus, fromStatuses),
     ))
     .returning({ id: permits.id });
+  if (result.length > 0) {
+    await tx.update(permitDirectory)
+      .set({ validUntil, updatedAt: new Date() })
+      .where(eq(permitDirectory.permitId, id));
+  }
   return result.length > 0;
 }

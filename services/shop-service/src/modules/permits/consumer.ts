@@ -41,9 +41,9 @@ export function registerPermitConsumers(rawQueue: Queue): void {
       return;
     }
     const now = new Date();
-    const permitNumber = generatePermitNumber("ULB", Date.now() % 999999);
     const verificationCode = generateVerificationCode();
     const validUntil = calculateValidUntil(now, p.validityMonths);
+    let permitNumber = "";
 
     // The transaction reports back whether it actually inserted the permit, so
     // the "permit issued" log below can't fire on a silently-skipped duplicate
@@ -52,6 +52,10 @@ export function registerPermitConsumers(rawQueue: Queue): void {
     // just shifted from data into logs.
     const applied = await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return false;
+      // `Date.now() % 999999` (periodic on ~16.7 minutes) replaced with a
+      // real Postgres SEQUENCE reserved inside this same transaction — see
+      // repo.ts's nextPermitNumber for the full rationale.
+      permitNumber = generatePermitNumber("ULB", await repo.nextPermitNumber(tx));
       try {
         await repo.insertPermit(tx, {
           id: p.id,
@@ -66,6 +70,17 @@ export function registerPermitConsumers(rawQueue: Queue): void {
           verificationCode,
           createdBy: msg.actorId,
           updatedBy: msg.actorId,
+        });
+        await repo.insertDirectoryEntry(tx, {
+          verificationCode,
+          tenantId: msg.tenantId,
+          permitId: p.id,
+          permitNumber,
+          establishmentName: p.establishmentName,
+          permitStatus: "active",
+          issuedAt: now,
+          validFrom: now,
+          validUntil,
         });
       } catch (err) {
         const pgErr = err as { code?: string; constraint_name?: string };

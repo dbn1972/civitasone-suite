@@ -12,6 +12,25 @@ const SHOP_ROLES = ["shop_user", "shop_admin", "super_admin"];
 // the approvals, permits, and lifecycle modules, which each define and use their
 // own narrower OFFICER_ROLES.
 
+// employeeCount / capacityDetails.areaSqft feed unbounded into
+// domain.ts's calculateFeeMinor (`BigInt(input.employeeCount - 20)`,
+// `BigInt(Math.floor((input.areaSqft - 500) / 100))`) before landing in
+// shop.applications.employee_count (migrations/0001_initial.sql: plain
+// `integer` — int4, max 2_147_483_647) and .capacity_details (jsonb, no
+// fixed numeric precision). Previously validated only as
+// nonnegative/int, with no upper bound — a value that clears Zod (a JS
+// number can represent integers far past int4) but exceeds int4 range
+// sails past validation and hits the DB inside the async consumer's
+// transaction as a raw "integer out of range" 500 far from the request,
+// after the 202 has already been returned. The .max() ceilings below are
+// generous real-world limits for a shop/establishment permit (the
+// largest Indian malls/factories run to a few million sqft and a few
+// thousand staff, not billions) — comfortably inside employee_count's
+// int4 range and nowhere near overflowing fee_amount_minor's bigint
+// (+-~9.2e18) through calculateFeeMinor's arithmetic.
+const MAX_EMPLOYEE_COUNT = 50_000;
+const MAX_AREA_SQFT = 10_000_000;
+
 const createBody = z.object({
   establishmentName: z.string().min(1).max(256),
   establishmentType: z.string().min(1).max(64),
@@ -28,10 +47,10 @@ const createBody = z.object({
   premisesPropertyId: z.string().uuid().optional(),
   activityDescription: z.string().optional(),
   activityCategory: z.string().min(1).max(64),
-  employeeCount: z.number().int().nonnegative().optional(),
+  employeeCount: z.number().int().nonnegative().max(MAX_EMPLOYEE_COUNT).optional(),
   capacityDetails: z.object({
     seating: z.number().int().nonnegative().optional(),
-    areaSqft: z.number().nonnegative().optional(),
+    areaSqft: z.number().nonnegative().max(MAX_AREA_SQFT).optional(),
     floors: z.number().int().nonnegative().optional(),
   }).optional(),
   documents: z.array(z.object({
