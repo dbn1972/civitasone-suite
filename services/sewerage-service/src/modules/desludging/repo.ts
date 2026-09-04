@@ -7,7 +7,13 @@ export function toView(r: BookingRow) {
     id: r.id, tenantId: r.tenantId, bookingNumber: r.bookingNumber, requestedBy: r.requestedBy,
     address: r.address, tankCapacityLitres: r.tankCapacityLitres,
     requestedDate: r.requestedDate, requestedSlot: r.requestedSlot,
-    status: r.status, vehicleId: r.vehicleId, feeMinor: r.feeMinor, feePaid: r.feePaid,
+    status: r.status, vehicleId: r.vehicleId,
+    // feeMinor is a native JS bigint (drizzle bigint mode) or null — see
+    // billing/repo.ts's toView amountMinor comment for why this must never
+    // be sent as a raw bigint. `!= null` (not truthy) so a genuine fee of
+    // 0n still serializes as "0", not null.
+    feeMinor: r.feeMinor != null ? r.feeMinor.toString() : null,
+    feePaid: r.feePaid,
     createdAt: r.createdAt.toISOString(), updatedAt: r.updatedAt.toISOString(), version: r.version,
   };
 }
@@ -43,4 +49,14 @@ export async function update(tx: ScopedTx, id: string, tenantId: string, patch: 
     .where(and(eq(sewerageDesludgingBookings.id, id), eq(sewerageDesludgingBookings.tenantId, tenantId), eq(sewerageDesludgingBookings.version, currentVersion)))
     .returning({ id: sewerageDesludgingBookings.id });
   return result.length > 0;
+}
+
+// Reserves the next booking number from the DB sequence (migrations/
+// 0003_number_sequences.sql), inside the same transaction as the insert.
+// Replaces the old `SEWD-${Date.now()}` scheme.
+export async function nextBookingNumber(tx: ScopedTx): Promise<number> {
+  const [row] = (await tx.execute(
+    sql`SELECT nextval('"civitas_sewerage"."booking_number_seq"')::bigint AS seq`,
+  )) as unknown as Array<{ seq: number }>;
+  return Number(row!.seq);
 }

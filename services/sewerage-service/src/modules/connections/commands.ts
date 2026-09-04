@@ -14,8 +14,13 @@ export interface ApplyInput {
 
 export async function applyConnection(ctx: RequestContext, body: ApplyInput): Promise<Accepted> {
   const id = randomUUID();
-  const applicationNumber = `SEW-${Date.now()}`;
-  return publishCommand(ctx, COMMANDS.connectionApply, id, { id, applicationNumber, ...body });
+  // applicationNumber is no longer generated here: it used to be a bare
+  // `SEW-${Date.now()}` computed synchronously in this command handler,
+  // which could collide under concurrent load (two requests in the same
+  // millisecond). It is now reserved from a real Postgres sequence inside
+  // the consumer's own transaction (see repo.ts's nextApplicationNumber) —
+  // see migrations/0003_number_sequences.sql.
+  return publishCommand(ctx, COMMANDS.connectionApply, id, { id, ...body });
 }
 
 export async function updateConnectionStatus(ctx: RequestContext, id: string, status: string, version: number): Promise<Accepted> {
@@ -24,6 +29,8 @@ export async function updateConnectionStatus(ctx: RequestContext, id: string, st
 
 export async function activateConnection(ctx: RequestContext, applicationId: string, version: number): Promise<Accepted> {
   const connectionId = randomUUID();
-  const connectionNumber = `SEWC-${Date.now()}`;
-  return publishCommand(ctx, COMMANDS.connectionActivate, connectionId, { connectionId, connectionNumber, applicationId, version });
+  // connectionNumber reserved inside the consumer's transaction (see
+  // repo.ts's nextConnectionNumber) — replaces the old
+  // `SEWC-${Date.now()}` scheme, same rationale as applyConnection above.
+  return publishCommand(ctx, COMMANDS.connectionActivate, connectionId, { connectionId, applicationId, version });
 }

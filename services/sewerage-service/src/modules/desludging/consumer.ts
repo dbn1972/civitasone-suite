@@ -5,6 +5,7 @@ import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { writeAudit } from "../../shared/audit.js";
 import { tenantScoped } from "../../shared/tenant-queue.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
+import { formatBookingNumber } from "./domain.js";
 import * as repo from "./repo.js";
 
 const log = pino({ name: "sewerage.desludging.consumer" });
@@ -18,23 +19,31 @@ export function registerDesludgingConsumers(rawQueue: Queue): void {
 
   queue.subscribe(COMMANDS.desludgingBook, async (msg) => {
     const p = msg.payload as any;
+    let applied = false;
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
+      // Reserved inside this transaction (see repo.nextBookingNumber) —
+      // replaces the old `SEWD-${Date.now()}` scheme.
+      const bookingNumber = formatBookingNumber(await repo.nextBookingNumber(tx));
       await repo.insert(tx, {
-        id: p.id, tenantId: msg.tenantId, bookingNumber: p.bookingNumber,
+        id: p.id, tenantId: msg.tenantId, bookingNumber,
         requestedBy: p.requestedBy, address: p.address,
         tankCapacityLitres: p.tankCapacityLitres, requestedDate: p.requestedDate,
         requestedSlot: p.requestedSlot, status: "requested",
-        feeMinor: p.feeMinor, createdBy: msg.actorId, updatedBy: msg.actorId,
+        // p.feeMinor is a canonical minor-unit string or null — `!= null`
+        // (not truthy) so a deliberate fee of "0" doesn't collapse to null.
+        feeMinor: p.feeMinor != null ? BigInt(p.feeMinor) : null,
+        createdBy: msg.actorId, updatedBy: msg.actorId,
       });
+      applied = true;
       await enqueue(tx, {
         topic: EVENTS.desludgingBooked, eventType: EVENTS.desludgingBooked,
         tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
-        payload: { bookingId: p.id, bookingNumber: p.bookingNumber },
+        payload: { bookingId: p.id, bookingNumber },
       });
       await writeAudit(tx, ctxOf(msg), { action: "desludging.book", resourceType: "sewerage_desludging_booking", resourceId: p.id });
     });
-    log.info({ id: p.id }, "desludging booked");
+    if (applied) log.info({ id: p.id }, "desludging booked");
   });
 
   queue.subscribe(COMMANDS.desludgingSchedule, async (msg) => {

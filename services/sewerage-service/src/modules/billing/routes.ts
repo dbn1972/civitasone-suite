@@ -1,8 +1,10 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
+import { zMoneyMinorStringNonNeg } from "@civitasone/schemas";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import * as repo from "./repo.js";
 import * as commands from "./commands.js";
+import * as connectionsRepo from "../connections/repo.js";
 
 const ROLES = ["sewerage_user", "sewerage_admin", "super_admin"];
 const ADMIN_ROLES = ["sewerage_admin", "super_admin"];
@@ -16,7 +18,16 @@ const listQuery = z.object({
 const generateBody = z.object({
   connectionId: z.string().uuid(),
   billingPeriod: z.string().min(1).max(24),
-  amountMinor: z.number().int().positive(),
+  // R7 money codec: JSON number OR base-10 string in, canonical bounded
+  // STRING out (zMoneyMinorStringNonNeg — packages/schemas/src/money.ts).
+  // The old `z.number().int().positive()` had no `.max()`, so
+  // Number.isInteger happily passed values already beyond
+  // Number.MAX_SAFE_INTEGER straight through to the consumer's insert. The
+  // codec rejects an unsafe-integer number outright and requires a string
+  // instead, so the value is never round-tripped through a JS `number` at
+  // all. `.refine` preserves the original `.positive()` semantics (a bill
+  // for zero is not meaningful) on top of the codec's own nonnegative check.
+  amountMinor: zMoneyMinorStringNonNeg.refine((v) => v !== "0", "amountMinor must be positive"),
   dueDate: z.string(),
 });
 
@@ -30,6 +41,26 @@ export async function billingRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, ADMIN_ROLES);
     const body = generateBody.parse(req.body);
+
+    // Pre-accept check 1: the connection must exist (in this tenant) and be
+    // active — previously this route published billGenerate for ANY
+    // UUID-shaped connectionId with no existence or state check at all, so
+    // a bill could be generated against a connection that was never
+    // activated, already disconnected, or simply never existed.
+    const connection = await connectionsRepo.findConnectionById(body.connectionId, ctx.tenantId);
+    if (!connection) throw new HttpError(404, "CONNECTION_NOT_FOUND", "sewerage connection not found");
+    if (connection.status !== "active") throw new HttpError(422, "CONNECTION_NOT_ACTIVE", `connection is ${connection.status}, not active`);
+
+    // Pre-accept check 2: reject a duplicate bill for the same connection +
+    // billing period. Previously nothing stopped a retried or double-clicked
+    // request (or a genuine operator mistake) from generating two bills for
+    // the same connection/period — there was no uniqueness check anywhere
+    // in this path.
+    const existingBill = await repo.findByConnectionAndPeriod(body.connectionId, ctx.tenantId, body.billingPeriod);
+    if (existingBill) {
+      throw new HttpError(409, "DUPLICATE_BILL", `a bill for billing period '${body.billingPeriod}' already exists for this connection`);
+    }
+
     return reply.code(202).send(await commands.generateBill(ctx, body.connectionId, body.billingPeriod, body.amountMinor, body.dueDate));
   });
 

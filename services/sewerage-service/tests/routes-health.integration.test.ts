@@ -5,6 +5,14 @@
  * persisted, that unknown ids 404, and that role checks are enforced.
  * Complaints has its own dedicated file (complaints-flow.integration.test.ts)
  * because that's where the real bug was found and fixed.
+ *
+ * UPDATED (Wave 2 hardening pass): POST /v1/sewerage/bills now pre-accept
+ * validates that connectionId references a real, active connection (see
+ * billing/routes.ts) — the billing tests below now create and activate a
+ * real connection first via createActiveConnection() instead of a bare
+ * randomUUID(), which the route would now correctly reject with 404.
+ * Dedicated negative-path/money-precision/RLS/number-sequence coverage for
+ * this pass lives in tests/hardening.integration.test.ts.
  */
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { randomUUID } from "node:crypto";
@@ -45,6 +53,57 @@ beforeAll(async () => {
 afterAll(async () => {
   await app.close();
 });
+
+// Walks a fresh connection application all the way to an ACTIVE connection
+// and returns its id — billing's pre-accept check (billing/routes.ts) now
+// requires a real, active connectionId, so every billing test needs one of
+// these instead of a bare randomUUID().
+async function createActiveConnection(): Promise<string> {
+  const applyRes = await app.inject({
+    method: "POST", url: "/v1/sewerage/connections/apply", headers: userAuth,
+    payload: { connectionClass: "domestic", propertyRef: `PROP-${randomUUID()}` },
+  });
+  const applied = applyRes.json() as { id: string };
+  await queue.drain();
+
+  let current = (await app.inject({ method: "GET", url: `/v1/sewerage/connections/applications/${applied.id}`, headers: userAuth })).json().data;
+  for (const next of ["feasibility_check", "estimate_issued", "payment_pending", "work_ordered"]) {
+    await app.inject({
+      method: "POST", url: `/v1/sewerage/connections/applications/${applied.id}/status`, headers: adminAuth,
+      payload: { status: next, version: current.version },
+    });
+    await queue.drain();
+    current = (await app.inject({ method: "GET", url: `/v1/sewerage/connections/applications/${applied.id}`, headers: userAuth })).json().data;
+  }
+
+  const activateRes = await app.inject({
+    method: "POST", url: `/v1/sewerage/connections/applications/${applied.id}/activate`, headers: adminAuth,
+    payload: { version: current.version },
+  });
+  await queue.drain();
+  const finalApp = (await app.inject({ method: "GET", url: `/v1/sewerage/connections/applications/${applied.id}`, headers: userAuth })).json().data;
+  expect(activateRes.statusCode).toBe(202);
+  expect(finalApp.status).toBe("activated");
+
+  const list = (await app.inject({ method: "GET", url: "/v1/sewerage/connections/applications?status=activated", headers: userAuth })).json();
+  expect(list.data.length).toBeGreaterThan(0);
+
+  // The connection row's own id isn't exposed by any GET route (only the
+  // application is), so pull it straight from the DB the same way
+  // tests/hardening.integration.test.ts does for its RLS/number-sequence
+  // checks. Kept local to avoid a cross-file import between test files.
+  const { sqlClient } = await import("../src/shared/db.js");
+  const [row] = await sqlClient.begin(async (tx) => {
+    await tx`SELECT set_config('app.tenant_id', ${TENANT}, true)`;
+    return tx/* sql */`
+      SELECT id FROM civitas_sewerage.sewerage_connections
+      WHERE application_id = ${applied.id} AND tenant_id = ${TENANT}
+      LIMIT 1
+    `;
+  });
+  if (!row) throw new Error("connection row not found after activation");
+  return row.id as string;
+}
 
 describe("connections — application lifecycle round trip", () => {
   it("apply → status walk to work_ordered → activate persists a connection", async () => {
@@ -134,7 +193,7 @@ describe("connections — application lifecycle round trip", () => {
 
 describe("billing — generate → pay round trip", () => {
   it("generates a bill and pays it", async () => {
-    const connectionId = randomUUID();
+    const connectionId = await createActiveConnection();
     const genRes = await app.inject({
       method: "POST",
       url: "/v1/sewerage/bills",
@@ -148,6 +207,7 @@ describe("billing — generate → pay round trip", () => {
     let current = (await app.inject({ method: "GET", url: `/v1/sewerage/bills/${bill.id}`, headers: userAuth })).json().data;
     expect(current.status).toBe("generated");
     expect(current.connectionId).toBe(connectionId);
+    expect(current.amountMinor).toBe("45000");
 
     const payRes = await app.inject({
       method: "POST",
@@ -164,7 +224,7 @@ describe("billing — generate → pay round trip", () => {
   });
 
   it("rejects paying an already-paid bill", async () => {
-    const connectionId = randomUUID();
+    const connectionId = await createActiveConnection();
     const genRes = await app.inject({
       method: "POST", url: "/v1/sewerage/bills", headers: adminAuth,
       payload: { connectionId, billingPeriod: "2026-09", amountMinor: 1000, dueDate: "2026-10-31" },

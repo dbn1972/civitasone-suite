@@ -31,3 +31,10 @@ export function validateComplaintTransition(from: ComplaintStatus, to: Complaint
 }
 
 export const VALID_COMPLAINT_TYPES: ComplaintType[] = ["blockage", "overflow", "manhole_damage", "odour", "backflow"];
+
+// Format helper for the sequence-reserved complaint number (see repo.ts's
+// nextComplaintNumber and migrations/0003_number_sequences.sql) — replaces
+// the old `SEWC-${Date.now()}` scheme.
+export function formatComplaintNumber(n: number): string {
+  return `SEWC-${n}`;
+}
