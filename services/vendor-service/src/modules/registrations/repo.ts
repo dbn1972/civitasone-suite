@@ -92,3 +92,18 @@ export async function allocateZone(
     .returning({ id: vendorRegistrations.id });
   return result.length > 0;
 }
+
+/**
+ * Replaces `Date.now() % 999999` (see registrations/consumer.ts's
+ * createRegistration handler) with a real Postgres SEQUENCE reserved
+ * inside the same transaction as the insert. Same fix shape as
+ * animal-service's nextRegistrationNumber (migrations/
+ * 0002_number_sequences.sql there; migrations/0002_number_sequences.sql
+ * here) — see that migration's header comment for the full rationale.
+ */
+export async function nextRegistrationNumber(tx: ScopedTx): Promise<number> {
+  const [row] = (await tx.execute(
+    sql`SELECT nextval('"vendor"."registration_number_seq"')::bigint AS seq`,
+  )) as Array<{ seq: number }>;
+  return Number(row!.seq);
+}

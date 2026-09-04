@@ -1,4 +1,4 @@
-import { pgSchema, uuid, varchar, integer, timestamp, jsonb, text } from "drizzle-orm/pg-core";
+import { pgSchema, uuid, varchar, integer, timestamp, jsonb, text, boolean } from "drizzle-orm/pg-core";
 
 export const vendorSchema = pgSchema("vendor");
 
@@ -14,6 +14,8 @@ export const vendorLicences = vendorSchema.table("vendor_licences", {
   zone: text("zone"),
   spotNumber: text("spot_number"),
   verificationCode: varchar("verification_code", { length: 64 }).notNull().unique(),
+  feePaid: boolean("fee_paid").notNull().default(false),
+  feeTransactionId: varchar("fee_transaction_id", { length: 128 }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   createdBy: uuid("created_by").notNull(),

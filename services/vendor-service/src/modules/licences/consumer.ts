@@ -28,11 +28,15 @@ export function registerLicenceConsumers(rawQueue: Queue): void {
       validFrom: string;
       validUntil: string;
     };
-    const licenceNumber = generateLicenceNumber("ULB", Date.now() % 999999);
     const verificationCode = generateVerificationCode();
+    let licenceNumber = "";
 
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
+      // `Date.now() % 999999` (periodic on ~16.7 minutes) replaced with a
+      // real Postgres SEQUENCE reserved inside this same transaction — see
+      // repo.ts's nextLicenceNumber for the full rationale.
+      licenceNumber = generateLicenceNumber("ULB", await repo.nextLicenceNumber(tx));
       await repo.insertLicence(tx, {
         id: p.id,
         tenantId: msg.tenantId,
@@ -125,8 +129,18 @@ export function registerLicenceConsumers(rawQueue: Queue): void {
 
   queue.subscribe(COMMANDS.recordLicenceFee, async (msg) => {
     const p = msg.payload as { id: string; tenantId: string; transactionId: string };
+    let applied = false;
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
+      // Previously this handler persisted NOTHING — it only published an
+      // event and wrote an audit row, for a table (vendor_licences) that
+      // had no fee_paid column to update in the first place. See
+      // migrations/0003_licence_fee_paid.sql + routes.ts's fee-payment
+      // idempotency guard (existing.feePaid -> 409), which depends on this
+      // actually persisting.
+      const ok = await repo.updateFeePayment(tx, p.id, msg.tenantId, p.transactionId, msg.actorId);
+      if (!ok) return;
+      applied = true;
       await enqueue(tx, {
         topic: EVENTS.licenceFeeRecorded,
         eventType: EVENTS.licenceFeeRecorded,
@@ -141,5 +155,6 @@ export function registerLicenceConsumers(rawQueue: Queue): void {
         resourceId: p.id,
       });
     });
+    if (applied) await cache.invalidate(cache.makeKey(msg.tenantId, "licence", p.id));
   });
 }
