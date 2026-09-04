@@ -12,14 +12,16 @@ export interface CreateFacilityInput {
   ward?: string | undefined;
   totalSpaces: number;
   operatingHours?: { open: string; close: string; days?: string[] | undefined } | undefined;
-  // Numbers, not bigint: these go straight into a queue.publish() payload that
-  // gets JSON.stringify'd on the real SQS/RabbitMQ drivers. A native bigint
-  // throws there ("Do not know how to serialize a BigInt") — the consumer
-  // converts to BigInt itself right before the Drizzle insert/update.
-  tariffPerHourMinor?: number | undefined;
-  tariffPerDayMinor?: number | undefined;
-  monthlyPassMinor?: number | undefined;
-  annualPassMinor?: number | undefined;
+  // Canonical minor-unit STRINGS (see zMoneyMinorStringNonNeg in
+  // facilities/routes.ts), not bigint and not a raw number: a bigint isn't
+  // JSON-serializable on the real SQS/RabbitMQ queue.publish() drivers, and a
+  // plain number can silently lose precision above 2^53 before it ever
+  // reaches BigInt(). The consumer rebuilds the exact bigint with
+  // BigInt(string) right before the Drizzle insert/update.
+  tariffPerHourMinor?: string | undefined;
+  tariffPerDayMinor?: string | undefined;
+  monthlyPassMinor?: string | undefined;
+  annualPassMinor?: string | undefined;
   contactPerson?: string | undefined;
 }
 
@@ -33,14 +35,11 @@ export interface UpdateFacilityInput {
   totalSpaces?: number | undefined;
   availableSpaces?: number | undefined;
   operatingHours?: { open: string; close: string; days?: string[] | undefined } | undefined;
-  // Numbers, not bigint: these go straight into a queue.publish() payload that
-  // gets JSON.stringify'd on the real SQS/RabbitMQ drivers. A native bigint
-  // throws there ("Do not know how to serialize a BigInt") — the consumer
-  // converts to BigInt itself right before the Drizzle insert/update.
-  tariffPerHourMinor?: number | undefined;
-  tariffPerDayMinor?: number | undefined;
-  monthlyPassMinor?: number | undefined;
-  annualPassMinor?: number | undefined;
+  // Same canonical minor-unit STRING contract as CreateFacilityInput above.
+  tariffPerHourMinor?: string | undefined;
+  tariffPerDayMinor?: string | undefined;
+  monthlyPassMinor?: string | undefined;
+  annualPassMinor?: string | undefined;
   status?: string | undefined;
   contactPerson?: string | undefined;
 }

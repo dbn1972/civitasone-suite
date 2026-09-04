@@ -26,10 +26,13 @@ export function registerFacilityConsumers(rawQueue: Queue): void {
       ward?: string;
       totalSpaces: number;
       operatingHours?: { open: string; close: string; days?: string[] };
-      tariffPerHourMinor?: number;
-      tariffPerDayMinor?: number;
-      monthlyPassMinor?: number;
-      annualPassMinor?: number;
+      // Canonical minor-unit strings (zMoneyMinorStringNonNeg at the route
+      // boundary) — never a raw number, so no value here can already have lost
+      // precision. BigInt(string) below rebuilds the exact integer.
+      tariffPerHourMinor?: string;
+      tariffPerDayMinor?: string;
+      monthlyPassMinor?: string;
+      annualPassMinor?: string;
       contactPerson?: string;
     };
 
@@ -45,10 +48,13 @@ export function registerFacilityConsumers(rawQueue: Queue): void {
         totalSpaces: p.totalSpaces,
         availableSpaces: p.totalSpaces,
         operatingHours: p.operatingHours ?? null,
-        tariffPerHourMinor: p.tariffPerHourMinor ? BigInt(p.tariffPerHourMinor) : null,
-        tariffPerDayMinor: p.tariffPerDayMinor ? BigInt(p.tariffPerDayMinor) : null,
-        monthlyPassMinor: p.monthlyPassMinor ? BigInt(p.monthlyPassMinor) : null,
-        annualPassMinor: p.annualPassMinor ? BigInt(p.annualPassMinor) : null,
+        // `!= null` (not truthy) on purpose: a string tariff of "0" (free
+        // parking) is a real, valid configured value and must not collapse to
+        // null the way a falsy check would.
+        tariffPerHourMinor: p.tariffPerHourMinor != null ? BigInt(p.tariffPerHourMinor) : null,
+        tariffPerDayMinor: p.tariffPerDayMinor != null ? BigInt(p.tariffPerDayMinor) : null,
+        monthlyPassMinor: p.monthlyPassMinor != null ? BigInt(p.monthlyPassMinor) : null,
+        annualPassMinor: p.annualPassMinor != null ? BigInt(p.annualPassMinor) : null,
         currency: "INR",
         status: "active",
         contactPerson: p.contactPerson ?? null,
@@ -81,7 +87,10 @@ export function registerFacilityConsumers(rawQueue: Queue): void {
         if (p[key] !== undefined) data[key] = p[key];
       }
       for (const key of ["tariffPerHourMinor", "tariffPerDayMinor", "monthlyPassMinor", "annualPassMinor"]) {
-        if (p[key] !== undefined) data[key] = BigInt(p[key] as number);
+        // p[key] is a canonical minor-unit string (zMoneyMinorStringNonNeg at
+        // the route boundary) — BigInt(string) rebuilds the exact integer with
+        // no intermediate JS `number` in the path.
+        if (p[key] !== undefined) data[key] = BigInt(p[key] as string);
       }
       const ok = await repo.updateFacility(tx, p.id, msg.tenantId, data as never, msg.actorId);
       if (!ok) return;

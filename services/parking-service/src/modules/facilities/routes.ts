@@ -1,5 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
+import { zMoneyMinorStringNonNeg } from "@civitasone/schemas";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { cache } from "../../shared/infra.js";
 import * as repo from "./repo.js";
@@ -25,10 +26,19 @@ const createBody = z.object({
     close: z.string(),
     days: z.array(z.string()).optional(),
   }).optional(),
-  tariffPerHourMinor: z.number().int().nonnegative().optional(),
-  tariffPerDayMinor: z.number().int().nonnegative().optional(),
-  monthlyPassMinor: z.number().int().nonnegative().optional(),
-  annualPassMinor: z.number().int().nonnegative().optional(),
+  // R7 money codec: JSON number OR base-10 string in, canonical bounded STRING
+  // out (zMoneyMinorStringNonNeg — packages/schemas/src/money.ts). A plain
+  // `z.number().int().nonnegative()` here had no `.max()`, so `Number.isInteger`
+  // happily passed values like 1e21; that number then flowed into
+  // `BigInt(...)` in facilities/consumer.ts and silently lost precision for
+  // anything in the 2^53-2^63 range (same bug class already closed for
+  // revenue-service and the municipal cross-events contract). The codec
+  // rejects an unsafe-integer number outright and requires a string instead,
+  // so the value is never round-tripped through a JS `number` at all.
+  tariffPerHourMinor: zMoneyMinorStringNonNeg.optional(),
+  tariffPerDayMinor: zMoneyMinorStringNonNeg.optional(),
+  monthlyPassMinor: zMoneyMinorStringNonNeg.optional(),
+  annualPassMinor: zMoneyMinorStringNonNeg.optional(),
   contactPerson: z.string().optional(),
 });
 
@@ -41,10 +51,11 @@ const updateBody = z.object({
     close: z.string(),
     days: z.array(z.string()).optional(),
   }).optional(),
-  tariffPerHourMinor: z.number().int().nonnegative().optional(),
-  tariffPerDayMinor: z.number().int().nonnegative().optional(),
-  monthlyPassMinor: z.number().int().nonnegative().optional(),
-  annualPassMinor: z.number().int().nonnegative().optional(),
+  // Same money codec as createBody above — see the comment there.
+  tariffPerHourMinor: zMoneyMinorStringNonNeg.optional(),
+  tariffPerDayMinor: zMoneyMinorStringNonNeg.optional(),
+  monthlyPassMinor: zMoneyMinorStringNonNeg.optional(),
+  annualPassMinor: zMoneyMinorStringNonNeg.optional(),
   status: z.enum(["active", "full", "closed", "under_maintenance"]).optional(),
   contactPerson: z.string().optional(),
 });
@@ -62,16 +73,13 @@ export async function facilityRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, ADMIN_ROLES);
     const body = createBody.parse(req.body);
-    // Was: BigInt(...) here, then publishCommand -> queue.publish() ->
-    // JSON.stringify(msg) on the real SQS/RabbitMQ drivers (MemoryQueue, used in
-    // tests, never serializes, which is why this went unnoticed). Native BigInt
-    // throws "Do not know how to serialize a BigInt" — every create/update with
-    // any tariff field set would fail on a real deployment, meaning there was no
-    // way via this API to ever populate the tariff fields the booking/pass fee
-    // fix now depends on. facilities/consumer.ts already expects these as
-    // strings (see its payload type) — routes.ts was the one side of the pipe
-    // not following that contract. Pass the Zod-validated numbers straight
-    // through; the consumer converts to BigInt right before the Drizzle insert.
+    // Tariff fields are now canonical minor-unit STRINGS (zMoneyMinorStringNonNeg
+    // above), not raw numbers: that avoids the earlier BigInt/JSON.stringify
+    // crash on real SQS/RabbitMQ drivers (a native bigint isn't serializable)
+    // AND the number precision-loss bug (a JS number can silently lose
+    // precision above 2^53 before it ever reaches BigInt()). Pass the
+    // Zod-validated strings straight through; the consumer rebuilds the exact
+    // bigint with BigInt(string) right before the Drizzle insert.
     return reply.code(202).send(await commands.createFacility(ctx, body));
   });
 
@@ -103,7 +111,7 @@ export async function facilityRoutes(app: FastifyInstance): Promise<void> {
     const body = updateBody.parse(req.body);
     const existing = await repo.findById(id, ctx.tenantId);
     if (!existing) throw new HttpError(404, "FACILITY_NOT_FOUND", "Facility not found");
-    // See the note in POST above — same BigInt/JSON.stringify crash fix.
+    // See the note in POST above — same money-codec fix.
     return reply.code(202).send(await commands.updateFacility(ctx, id, body));
   });
 }
