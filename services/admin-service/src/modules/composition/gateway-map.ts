@@ -48,6 +48,26 @@ export const COMPOSITION_TO_GATEWAY_KEYS: Record<string, string[]> = {
   inspection: ["inspection"],
   // insight
   analytics: ["analytics", "reports"],
+  // municipal Sec5 (17 services) - gateway route name == module key for all of
+  // them (services/gateway-service/src/registry.ts), so this is a direct
+  // self-mapping, same shape as citizen/crm/legal above.
+  shop: ["shop"],
+  trade: ["trade"],
+  building: ["building"],
+  fire: ["fire"],
+  advertisement: ["advertisement"],
+  vendor: ["vendor"],
+  roadcut: ["roadcut"],
+  event: ["event"],
+  refund: ["refund"],
+  sewerage: ["sewerage"],
+  swm: ["swm"],
+  drainage: ["drainage"],
+  parks: ["parks"],
+  animal: ["animal"],
+  crematorium: ["crematorium"],
+  parking: ["parking"],
+  market: ["market"],
 };
 
 /** Project a set of composition module ids to distinct, sorted gateway route-keys. */
