@@ -34,6 +34,22 @@
  * input — and only ever grants SELECT; every table's INSERT/UPDATE/DELETE
  * policies are untouched and still strictly tenant-scoped.
  *
+ * connect() sets the GUC the same way admin-service's scopedPlatformRead()
+ * and audit-service's equivalent do: via `SELECT set_config(..., true)`
+ * INSIDE a transaction (the third argument makes it SET LOCAL-equivalent —
+ * transaction-scoped, auto-reset at COMMIT/ROLLBACK). It deliberately does
+ * NOT set it as a postgres.js `connection` StartupMessage parameter, which
+ * would be SESSION-scoped (persists for the life of the physical
+ * connection, across transactions) — safe here only because this suite
+ * talks to Postgres directly on its own private pool, but this codebase
+ * runs PgBouncer in `transaction` pool mode in production with no
+ * reset-query configured (see infra/docker-compose.prod.yml,
+ * infra/onprem/helm/civitasone/templates/pgbouncer.yaml), so a
+ * session-scoped GUC on a connection returned to a pool could in principle
+ * leak into a different client's later transaction. Mirroring the safe
+ * pattern here means this file is not a template for an unsafe one
+ * elsewhere.
+ *
  * Tests report the authored check AND any hits found.  Dev data is sparse;
  * 0-row results are expected for most checks — the value is the authored
  * query that will catch regressions once data volume grows.
@@ -55,22 +71,53 @@ const ADMIN_PW =
 const HOST = process.env.PGHOST ?? "localhost";
 const PORT = Number(process.env.PGPORT ?? "5435");
 
+// SECURITY: this is the read-only, hardcoded-credential evidence suite
+// itself — never a path any client input reaches. Rather than setting
+// app.platform_bypass as a postgres.js `connection` StartupMessage
+// parameter (SESSION-scoped — persists for the physical connection's whole
+// life, across transactions, and can leak across pooled clients under a
+// transaction-mode pooler), every wrapped call transparently runs inside its
+// own `sql.begin()` transaction that first does
+// `SELECT set_config('app.platform_bypass', 'true', true)` — the same
+// mechanism as admin-service's scopedPlatformRead() / audit-service's
+// equivalent (see services/admin-service/src/shared/db.ts). The `true` third
+// argument makes it SET LOCAL-equivalent: transaction-scoped, reset
+// automatically at COMMIT/ROLLBACK, never able to bleed into a later
+// transaction on a connection handed back to a pool. Each SELECT-only
+// platform_bypass_read_policy this suite depends on (one migration per
+// service — see file header) grants access only because this GUC is set;
+// the underlying tables' write policies are unaffected and still enforce
+// strict per-tenant scoping.
+//
+// Extracted to its own function (rather than inlined in connect()) so the
+// regression suite at the bottom of this file can exercise this exact code
+// path — not a re-implementation of it — against a deterministic max:1 pool,
+// to prove the underlying pooled connection is never left with
+// app.platform_bypass set once a wrapped query returns.
+//
+// This wraps the tagged-template call itself (via Proxy's `apply` trap) so
+// every `sql\`...\`` call site below is unchanged — each one still looks
+// like (and, from the outside, behaves as) a single ad hoc query against a
+// shared client. `.end()` and every other client method/property pass
+// through to the real client untouched.
+function platformBypassSql(client: ReturnType<typeof postgres>) {
+  return new Proxy(client, {
+    apply(target, _thisArg, args: [TemplateStringsArray, ...unknown[]]) {
+      return target.begin(async (tx) => {
+        await tx`SELECT set_config('app.platform_bypass', 'true', true)`;
+        return (tx as unknown as (...a: typeof args) => unknown)(...args);
+      });
+    },
+  });
+}
+
 function connect(db: string) {
-  return postgres({
+  const client = postgres({
     host: HOST, port: PORT, database: db,
     username: "civitas_admin", password: ADMIN_PW,
     max: 3, idle_timeout: 5,
-    // SECURITY: this is the read-only, hardcoded-credential evidence suite
-    // itself — never a path any client input reaches. postgres.js sends
-    // `connection` entries as run-time parameters in the StartupMessage, so
-    // this sets app.platform_bypass for every physical connection this pool
-    // opens (equivalent to `SET app.platform_bypass = 'true'` at session
-    // start). Each SELECT-only platform_bypass_read_policy this suite
-    // depends on (one migration per service — see file header) grants
-    // access only because this GUC is set; the underlying tables' write
-    // policies are unaffected and still enforce strict per-tenant scoping.
-    connection: { "app.platform_bypass": "true" },
   });
+  return platformBypassSql(client);
 }
 
 // ── INVENTORY ──────────────────────────────────────────────────────────────
@@ -500,5 +547,102 @@ describe("DQ — finance-service", () => {
     `;
     console.info(`DQ-FIN-03 test rows in GL ledger: ${testRows.length} rows (${testRows[0]?.voucher_no ?? 'none'})`);
     expect(testRows, `test/bigint overflow rows in production ledger: ${testRows.length} rows`).toHaveLength(0);
+  });
+});
+
+// ── PLATFORM_BYPASS GUC SCOPING (regression) ────────────────────────────────
+//
+// Proves connect()'s fix: app.platform_bypass must be transaction-scoped
+// (SET LOCAL-equivalent via `set_config(..., true)`), not session-scoped.
+// The old implementation set it as a postgres.js `connection` StartupMessage
+// parameter, which persists for the physical connection's whole life —
+// including into any later, unrelated transaction that happens to reuse the
+// same pooled connection (exactly what a PgBouncer transaction-mode pool
+// with no reset-query would hand back to a different client). This suite
+// forces that reuse deterministically with a dedicated `max: 1` pool, so the
+// second query below is guaranteed to run on the identical physical
+// connection the first transaction used.
+describe("DQ — platform_bypass GUC scoping (regression)", () => {
+  let raw: ReturnType<typeof postgres>;
+  beforeAll(() => {
+    raw = postgres({
+      host: HOST, port: PORT, database: "civitas_inventory",
+      username: "civitas_admin", password: ADMIN_PW,
+      max: 1, idle_timeout: 5,
+    });
+  });
+  afterAll(async () => { await raw.end(); });
+
+  // Every assertion below reads back `current_setting('app.platform_bypass',
+  // true) = 'true'` — the EXACT predicate every platform_bypass_read_policy
+  // USING clause evaluates (see e.g. services/inventory-service/migrations/
+  // 0018_platform_bypass_read_policy.sql) — rather than asserting on the raw
+  // current_setting() value. That matters: Postgres treats
+  // "app.platform_bypass" as a custom/placeholder GUC, and once a backend has
+  // referenced it at all (even inside a since-committed transaction via
+  // set_config), current_setting(..., true) on that same backend reads back
+  // '' (empty string) rather than NULL from then on — NULL only describes a
+  // backend that has never touched the setting. Asserting `=== 'true'`
+  // sidesteps that NULL-vs-'' distinction entirely and checks the one thing
+  // that is actually security-relevant: whether the bypass RLS policy would
+  // grant access.
+  it("app.platform_bypass is not active before any bypass transaction runs", async () => {
+    const [{ bypass_active }] = await raw`
+      SELECT (COALESCE(current_setting('app.platform_bypass', true) = 'true', false)) AS bypass_active
+    `;
+    expect(bypass_active, "bypass policy should not be active on a fresh connection").toBe(false);
+  });
+
+  it("set_config(..., true) activates the bypass policy for the duration of its own transaction", async () => {
+    const [{ bypass_active }] = await raw.begin(async (tx) => {
+      await tx`SELECT set_config('app.platform_bypass', 'true', true)`;
+      return tx`SELECT (COALESCE(current_setting('app.platform_bypass', true) = 'true', false)) AS bypass_active`;
+    });
+    expect(bypass_active, "bypass policy should be active inside the transaction that set it").toBe(true);
+  });
+
+  it("app.platform_bypass does NOT leak into a later transaction on the same reused connection", async () => {
+    // `max: 1` guarantees this query runs on the exact physical connection
+    // the previous test's transaction used — the scenario a transaction-mode
+    // pooler creates in production. With the fix (SET LOCAL-equivalent via
+    // set_config(..., true)), the GUC resets at COMMIT and the bypass policy
+    // must be inactive here. Before the fix (connection-level StartupMessage
+    // parameter), this would read back active=true — proving the leak the
+    // reviewer flagged.
+    const [{ bypass_active }] = await raw`
+      SELECT (COALESCE(current_setting('app.platform_bypass', true) = 'true', false)) AS bypass_active
+    `;
+    expect(bypass_active, "bypass policy must be inactive after its transaction commits, even on a reused connection").toBe(false);
+  });
+
+  it("platformBypassSql() (the exact helper connect() uses) does not leak the GUC onto the underlying connection", async () => {
+    // Exercises the real production code path — platformBypassSql(), the
+    // same function connect() calls — rather than re-implementing its
+    // mechanism. `max: 1` on this dedicated client guarantees the plain
+    // query below reuses the identical physical connection the wrapped
+    // query just used, deterministically reproducing what a transaction-mode
+    // pooler does across two different clients/requests in production.
+    const client = postgres({
+      host: HOST, port: PORT, database: "civitas_inventory",
+      username: "civitas_admin", password: ADMIN_PW,
+      max: 1, idle_timeout: 5,
+    });
+    try {
+      const wrapped = platformBypassSql(client);
+      // A normal call site, unchanged from every other check in this file —
+      // internally this now runs inside its own set_config(..., true) tx.
+      await wrapped`SELECT count(*)::int AS cnt FROM inventory.items`;
+      // Same underlying connection, queried directly (no wrapper, no
+      // transaction) immediately after. Before the fix this would read back
+      // active=true (session-scoped GUC surviving the wrapped call's commit
+      // and bleeding into this unrelated query); with the fix it must be
+      // inactive.
+      const [{ bypass_active }] = await client`
+        SELECT (COALESCE(current_setting('app.platform_bypass', true) = 'true', false)) AS bypass_active
+      `;
+      expect(bypass_active, "platformBypassSql() must not leave the bypass policy active on the underlying connection after it returns").toBe(false);
+    } finally {
+      await client.end();
+    }
   });
 });
