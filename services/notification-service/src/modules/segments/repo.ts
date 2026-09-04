@@ -44,6 +44,27 @@ export async function findSegmentById(
   return rows[0] ?? null;
 }
 
+/**
+ * Same lookup as `findSegmentById`, but reads through an ALREADY-OPEN
+ * transaction instead of opening a second one via `scopedRead`.
+ * `resolveSegment`'s consumer handler calls this from inside its own
+ * `db.transaction` -- the same nested-transaction-on-the-same-pool shape as
+ * `checkQuota`/`checkDlt` in `deliveries/consumer.ts` (see
+ * `channels/quota-guard.ts`) and `findVariantInTx` in `i18n/repo.ts`, which
+ * deadlocks the pool once enough concurrent commands are in-flight.
+ */
+export async function findSegmentByIdInTx(
+  tx: Writer, tenantId: string, id: string,
+): Promise<typeof recipientSegments.$inferSelect | null> {
+  const rows = await tx.select().from(recipientSegments)
+    .where(and(
+      eq(recipientSegments.tenantId, tenantId),
+      eq(recipientSegments.id, id),
+    ))
+    .limit(1);
+  return rows[0] ?? null;
+}
+
 /** List all segments for a tenant. */
 export async function listSegments(
   tenantId: string,
