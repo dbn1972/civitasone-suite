@@ -155,6 +155,53 @@ describe("POST /v1/building/permits — pre-accept validation (fix for the accep
   });
 });
 
+describe("permits repo — reissuing after cancellation is allowed (partial unique index, not a plain UNIQUE)", () => {
+  it("a cancelled permit does not block a fresh permit for the same application", async () => {
+    const applicationId = await seedApplication("approved");
+
+    const first = await app.inject({ method: "POST", url: "/v1/building/permits", headers: officerAuth, payload: { applicationId } });
+    expect(first.statusCode).toBe(202);
+    const { id: firstId } = first.json() as { id: string };
+    await drain();
+
+    const cancel = await app.inject({
+      method: "POST",
+      url: `/v1/building/permits/${firstId}/cancel`,
+      headers: officerAuth,
+      payload: { reason: "issued in error, applicant needs to reschedule" },
+    });
+    expect(cancel.statusCode).toBe(202);
+    await drain();
+    const cancelled = await app.inject({ method: "GET", url: `/v1/building/permits/${firstId}`, headers: officerAuth });
+    expect(cancelled.json().data.status).toBe("cancelled");
+
+    // The application-level PERMIT_ALREADY_EXISTS pre-check must not treat
+    // the now-cancelled permit as blocking, and the DB write must not hit
+    // the (now-partial) building_permits_application_active_unique index
+    // either.
+    const second = await app.inject({ method: "POST", url: "/v1/building/permits", headers: officerAuth, payload: { applicationId } });
+    expect(second.statusCode).toBe(202);
+    const { id: secondId } = second.json() as { id: string };
+    expect(secondId).not.toBe(firstId);
+    await drain();
+
+    const reissued = await app.inject({ method: "GET", url: `/v1/building/permits/${secondId}`, headers: officerAuth });
+    expect(reissued.statusCode).toBe(200);
+    expect(reissued.json().data.status).toBe("active");
+  });
+
+  it("still blocks a duplicate against an ACTIVE (non-cancelled) permit for the same application", async () => {
+    const applicationId = await seedApplication("approved");
+    const first = await app.inject({ method: "POST", url: "/v1/building/permits", headers: officerAuth, payload: { applicationId } });
+    expect(first.statusCode).toBe(202);
+    await drain();
+
+    const second = await app.inject({ method: "POST", url: "/v1/building/permits", headers: officerAuth, payload: { applicationId } });
+    expect(second.statusCode).toBe(409);
+    expect(second.json().code).toBe("PERMIT_ALREADY_EXISTS");
+  });
+});
+
 describe("permit lifecycle — persisted-state + cache invalidation", () => {
   it("suspend actually flips status and the read-through cache does not keep serving 'active'", async () => {
     const applicationId = await seedApplication("approved");
