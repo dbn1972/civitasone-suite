@@ -612,12 +612,46 @@ describe("PATCH /v1/tenant/:tenantId/quotas", () => {
   // hence the cast) waits for the in-flight delivery from publish() to
   // fully settle before we read persisted state back via GET.
   describe("→ 202 (queue-first) + real persisted outcome", () => {
+    // TENANT is a fictional id used by every other test in this file, which
+    // only ever asserted the 202 response status and never persisted state.
+    // Now that consumer.ts's tenantQuotaUpsert correctly rejects quota
+    // writes for a tenant that doesn't exist, these two tests need a real
+    // row to upsert against, or the write silently no-ops and the follow-up
+    // GET reads back schema defaults instead of the patched values. Seeded
+    // and torn down the same way the "GET /v1/tenants/:tenantId" regression
+    // test above does.
     beforeAll(async () => {
+      const { runWithTenant } = await import("@civitasone/db");
+      const { db } = await import("../src/shared/db.js");
+      const repo = await import("../src/modules/tenant/repo.js");
+      await runWithTenant(TENANT, () =>
+        db.transaction((tx) =>
+          repo.insert(tx as unknown as repo.Writer, {
+            id: TENANT,
+            tenantId: TENANT,
+            name: "Quotas Test Tenant",
+            domain: `quotas-test-${TENANT}.example.gov`,
+            edition: "govt",
+            region: "IN-DL",
+            residency: "IN",
+            createdBy: ACTOR,
+            updatedBy: ACTOR,
+          }),
+        ),
+      );
       registerTenantConsumers(queue);
       await queue.start();
     });
     afterAll(async () => {
       await queue.stop();
+      // Clean up so this doesn't linger in the shared dev database (see the
+      // same rationale on the GET /v1/tenants/:tenantId regression test).
+      const { runWithTenant } = await import("@civitasone/db");
+      const { db } = await import("../src/shared/db.js");
+      const { sql } = await import("drizzle-orm");
+      await runWithTenant(TENANT, () =>
+        db.transaction((tx) => (tx as unknown as typeof db).execute(sql`DELETE FROM tenant.tenants WHERE id = ${TENANT}`)),
+      ).catch(() => undefined);
     });
 
     it("→ 202 with super_admin, persists maxEmployees", async () => {
