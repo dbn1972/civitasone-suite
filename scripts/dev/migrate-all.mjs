@@ -103,6 +103,19 @@ const SERVICES = [
   { name: "fire-service",        db: "civitas_fire" },
   { name: "market-service",      db: "civitas_market" },
   { name: "parking-service",     db: "civitas_parking" },
+  // building-service: no migrations/ directory yet (added in a separate,
+  // parallel change) -- registered now so local dev tooling picks it up the
+  // moment that migration lands, without a second edit. existsSync guard
+  // above makes this a no-op until then.
+  { name: "building-service",    db: "civitas_building" },
+  // sewerage-service, swm-service: pre-existing gap found while wiring the
+  // municipal batch-4 services above -- both shipped real migrations
+  // tonight (PRs #988/#989) and are correctly registered in
+  // scripts/ci/bootstrap-postgres.sh's SERVICE_DBS map, but neither was
+  // ever added here, so tests/ops/migrate-all-inventory.test.ts (the
+  // Architecture Guard CI gate) failed on main before this fix.
+  { name: "sewerage-service",     db: "civitas_sewerage" },
+  { name: "swm-service",          db: "civitas_swm" },
 ];
 
 let applied = 0;
