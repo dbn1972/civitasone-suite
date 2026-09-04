@@ -1,7 +1,10 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { signToken } from "@civitasone/auth";
 import type { FastifyInstance } from "fastify";
+import type { MemoryQueue } from "@civitasone/queue";
 import { buildApp } from "../src/app.js";
+import { queue } from "../src/shared/infra.js";
+import { registerTenantConsumers } from "../src/modules/tenant/consumer.js";
 
 const ACTOR = "00000000-aaaa-4000-8000-000000000099";
 const TENANT = "11111111-aaaa-4000-8000-000000000099";
@@ -598,27 +601,65 @@ describe("GET /v1/tenant/:tenantId/quotas", () => {
 // PATCH /v1/tenant/:tenantId/quotas — Update Quotas
 // ══════════════════════════════════════════════════════════════════════════════
 describe("PATCH /v1/tenant/:tenantId/quotas", () => {
-  it("→ 200 with super_admin", async () => {
-    const res = await app.inject({
-      method: "PATCH", url: `/v1/tenant/${TENANT}/quotas`,
-      headers: authHeader(["super_admin"]),
-      payload: { maxEmployees: 1000 },
+  // The route was converted to the F3 async pattern (queue-first, 202 +
+  // upsertTenantQuotas consumer applies the write — see
+  // src/modules/tenant/routes.ts and f3-p0-msme-quotas-cqrs.test.ts's
+  // "tenant quotas PATCH is queue-first" lock) some time after these two
+  // tests were written expecting a synchronous 200 with the updated row
+  // echoed straight back. Scoped registration (not global — see
+  // consumer.integration.test.ts for the same pattern) so only these two
+  // tests pay for real consumer delivery; queue.drain() (MemoryQueue-only,
+  // hence the cast) waits for the in-flight delivery from publish() to
+  // fully settle before we read persisted state back via GET.
+  describe("→ 202 (queue-first) + real persisted outcome", () => {
+    beforeAll(async () => {
+      registerTenantConsumers(queue);
+      await queue.start();
     });
-    expect(res.statusCode).toBe(200);
-    expect(res.json().maxEmployees).toBe(1000);
-  });
+    afterAll(async () => {
+      await queue.stop();
+    });
 
-  it("→ 200 update multiple fields", async () => {
-    const res = await app.inject({
-      method: "PATCH", url: `/v1/tenant/${TENANT}/quotas`,
-      headers: authHeader(["super_admin"]),
-      payload: { maxFiles: 50000, maxStorageGb: 100, maxUsers: 5000 },
+    it("→ 202 with super_admin, persists maxEmployees", async () => {
+      const res = await app.inject({
+        method: "PATCH", url: `/v1/tenant/${TENANT}/quotas`,
+        headers: authHeader(["super_admin"]),
+        payload: { maxEmployees: 1000 },
+      });
+      expect(res.statusCode).toBe(202);
+      expect(res.json().status).toBe("accepted");
+
+      await (queue as unknown as MemoryQueue).drain();
+
+      const getRes = await app.inject({
+        method: "GET", url: `/v1/tenant/${TENANT}/quotas`,
+        headers: authHeader(["super_admin"]),
+      });
+      expect(getRes.statusCode).toBe(200);
+      expect(getRes.json().maxEmployees).toBe(1000);
     });
-    expect(res.statusCode).toBe(200);
-    const json = res.json();
-    expect(json.maxFiles).toBe(50000);
-    expect(json.maxStorageGb).toBe(100);
-    expect(json.maxUsers).toBe(5000);
+
+    it("→ 202 update multiple fields, persists all three", async () => {
+      const res = await app.inject({
+        method: "PATCH", url: `/v1/tenant/${TENANT}/quotas`,
+        headers: authHeader(["super_admin"]),
+        payload: { maxFiles: 50000, maxStorageGb: 100, maxUsers: 5000 },
+      });
+      expect(res.statusCode).toBe(202);
+      expect(res.json().status).toBe("accepted");
+
+      await (queue as unknown as MemoryQueue).drain();
+
+      const getRes = await app.inject({
+        method: "GET", url: `/v1/tenant/${TENANT}/quotas`,
+        headers: authHeader(["super_admin"]),
+      });
+      expect(getRes.statusCode).toBe(200);
+      const json = getRes.json();
+      expect(json.maxFiles).toBe(50000);
+      expect(json.maxStorageGb).toBe(100);
+      expect(json.maxUsers).toBe(5000);
+    });
   });
 
   it("→ 403 with platform_admin (requires super_admin)", async () => {

@@ -168,6 +168,18 @@ export function registerTenantConsumers(rawQueue: Queue): void {
     let applied = false;
     await runWithTenant(tenantId, async () => db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
+      // Every sibling command (updateTenant, suspendTenant, setIsolation,
+      // onboardTenant above) verifies the tenant row exists before applying —
+      // this one didn't, so a nonexistent/typo'd tenantId silently created an
+      // orphan tenant.tenant_quotas row via repo.upsertQuotas's INSERT-if-missing
+      // branch, with no 404 and no error anywhere in the pipeline (PATCH
+      // /v1/tenant/:tenantId/quotas returns 202 regardless). Matches the
+      // existing sibling pattern exactly: throw inside the transaction so it
+      // rolls back (including the markProcessed row, so a corrected retry can
+      // still succeed), the message is retried per MemoryQueue's backoff, and
+      // lands in the DLQ as a loud failure instead of a silent no-op.
+      const cur = await repo.findByIdTx(tx, tenantId);
+      if (!cur) throw new Error(`tenant ${tenantId} not found`);
       applied = true;
       await emit(tx, msg, EVENTS.quotaSet, { tenantId }, "upsert_tenant_quotas", tenantId);
     }));
