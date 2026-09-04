@@ -35,13 +35,17 @@ export function registerRegistrationConsumers(rawQueue: Queue): void {
       vaccinationRecords?: Array<{ vaccine: string; date: string; nextDue?: string; vet?: string }>;
       photo?: string;
     };
-    const registrationNumber = generateRegistrationNumber("ULB", Date.now() % 999999);
     const feeMinor = calculateRegistrationFee(p.animalType);
     const validUntil = new Date();
     validUntil.setFullYear(validUntil.getFullYear() + 1);
 
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
+      // Sequence number reserved inside this transaction (see
+      // repo.nextRegistrationNumber) -- replaces the old
+      // `Date.now() % 999999` scheme; see complaints/consumer.ts for the
+      // full rationale (identical bug, identical fix).
+      const registrationNumber = generateRegistrationNumber("ULB", await repo.nextRegistrationNumber(tx));
       await repo.insertRegistration(tx, {
         id: p.id,
         tenantId: msg.tenantId,
@@ -79,7 +83,7 @@ export function registerRegistrationConsumers(rawQueue: Queue): void {
         resourceId: p.id,
       });
     });
-    log.info({ id: p.id, registrationNumber }, "animal registered");
+    log.info({ id: p.id }, "animal registered");
   });
 
   queue.subscribe(COMMANDS.renewRegistration, async (msg) => {
@@ -87,7 +91,9 @@ export function registerRegistrationConsumers(rawQueue: Queue): void {
     let applied = false;
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
-      const ok = await repo.updateStatus(tx, p.id, msg.tenantId, "active", msg.actorId);
+      // Matches routes.ts's /renew pre-check: renewal is valid from either
+      // "active" (early renewal) or "expired" (lapsed renewal).
+      const ok = await repo.updateStatus(tx, p.id, msg.tenantId, "active", msg.actorId, ["active", "expired"]);
       if (!ok) return;
       applied = true;
       await enqueue(tx, {
@@ -114,7 +120,8 @@ export function registerRegistrationConsumers(rawQueue: Queue): void {
     let applied = false;
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
-      const ok = await repo.updateStatus(tx, p.id, msg.tenantId, "transferred", msg.actorId);
+      // Matches routes.ts's /transfer pre-check: transfer is valid from "active" only.
+      const ok = await repo.updateStatus(tx, p.id, msg.tenantId, "transferred", msg.actorId, ["active"]);
       if (!ok) return;
       applied = true;
       await enqueue(tx, {

@@ -4,6 +4,7 @@ import { resolveContext, requireRole, HttpError } from "../../shared/context.js"
 import { cache } from "../../shared/infra.js";
 import * as repo from "./repo.js";
 import * as commands from "./commands.js";
+import { canTransition } from "./domain.js";
 
 const USER_ROLES = ["animal_user", "animal_admin", "super_admin"];
 const ADMIN_ROLES = ["animal_admin", "super_admin"];
@@ -70,6 +71,10 @@ export async function complaintRoutes(app: FastifyInstance): Promise<void> {
     return reply.send({ data: row });
   });
 
+  // reported -> assigned -> dispatched -> action_taken -> closed (see
+  // domain.ts's VALID_TRANSITIONS, the single source of truth this route
+  // group now actually enforces via canTransition, rather than hardcoding
+  // status literals that could silently drift from it again).
   app.post("/v1/animal/complaints/:id/assign", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ADMIN_ROLES);
@@ -77,7 +82,7 @@ export async function complaintRoutes(app: FastifyInstance): Promise<void> {
     const body = assignBody.parse(req.body);
     const existing = await repo.findById(id, ctx.tenantId);
     if (!existing) throw new HttpError(404, "COMPLAINT_NOT_FOUND", "Complaint not found");
-    if (existing.status !== "reported") {
+    if (!canTransition(existing.status, "assigned")) {
       throw new HttpError(422, "INVALID_STATUS", `Cannot assign complaint in status '${existing.status}'`);
     }
     return reply.code(202).send(await commands.assignComplaint(ctx, id, body.assignedTo, body.assignedTeam));
@@ -89,10 +94,29 @@ export async function complaintRoutes(app: FastifyInstance): Promise<void> {
     const { id } = idParam.parse(req.params);
     const existing = await repo.findById(id, ctx.tenantId);
     if (!existing) throw new HttpError(404, "COMPLAINT_NOT_FOUND", "Complaint not found");
-    if (existing.status !== "assigned") {
+    if (!canTransition(existing.status, "dispatched")) {
       throw new HttpError(422, "INVALID_STATUS", `Cannot dispatch for complaint in status '${existing.status}'`);
     }
     return reply.code(202).send(await commands.dispatchTeam(ctx, id));
+  });
+
+  // NEW: previously action_taken was defined in VALID_TRANSITIONS but no
+  // route or command ever produced it, so it was permanently dead, and
+  // close() let a complaint jump straight from "dispatched" to "closed" in
+  // direct contradiction of the domain table (dispatched -> action_taken ->
+  // closed only). This route closes both gaps: it's the only way into
+  // "action_taken", and close() below now only accepts a transition
+  // canTransition() actually allows.
+  app.post("/v1/animal/complaints/:id/action-taken", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, ADMIN_ROLES);
+    const { id } = idParam.parse(req.params);
+    const existing = await repo.findById(id, ctx.tenantId);
+    if (!existing) throw new HttpError(404, "COMPLAINT_NOT_FOUND", "Complaint not found");
+    if (!canTransition(existing.status, "action_taken")) {
+      throw new HttpError(422, "INVALID_STATUS", `Cannot record action taken for complaint in status '${existing.status}'`);
+    }
+    return reply.code(202).send(await commands.markActionTaken(ctx, id));
   });
 
   app.post("/v1/animal/complaints/:id/close", async (req, reply) => {
@@ -102,7 +126,7 @@ export async function complaintRoutes(app: FastifyInstance): Promise<void> {
     const body = closeBody.parse(req.body);
     const existing = await repo.findById(id, ctx.tenantId);
     if (!existing) throw new HttpError(404, "COMPLAINT_NOT_FOUND", "Complaint not found");
-    if (!["dispatched", "action_taken"].includes(existing.status)) {
+    if (!canTransition(existing.status, "closed")) {
       throw new HttpError(422, "INVALID_STATUS", `Cannot close complaint in status '${existing.status}'`);
     }
     return reply.code(202).send(await commands.closeComplaint(ctx, id, body.resolution));

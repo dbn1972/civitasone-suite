@@ -32,6 +32,10 @@ export async function dispatchTeam(ctx: RequestContext, id: string): Promise<Acc
   return publishCommand(ctx, COMMANDS.dispatchTeam, id, { id });
 }
 
+export async function markActionTaken(ctx: RequestContext, id: string): Promise<Accepted> {
+  return publishCommand(ctx, COMMANDS.markActionTaken, id, { id });
+}
+
 export async function closeComplaint(
   ctx: RequestContext,
   id: string,

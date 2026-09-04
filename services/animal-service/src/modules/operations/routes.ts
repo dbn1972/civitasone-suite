@@ -3,6 +3,7 @@ import { z } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import * as repo from "./repo.js";
 import * as commands from "./commands.js";
+import * as complaintsRepo from "../complaints/repo.js";
 
 const ADMIN_ROLES = ["animal_admin", "super_admin"];
 
@@ -29,6 +30,14 @@ export async function operationRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, ADMIN_ROLES);
     const body = recordBody.parse(req.body);
+    // Previously this accepted any UUID-shaped complaintId with no existence
+    // check, letting an operation row reference a complaint that doesn't
+    // exist (or belongs to a different tenant) -- an orphan row that would
+    // never surface through GET /v1/animal/complaints/:complaintId/operations
+    // for a real complaint, and that no FK enforces (animal_operations.
+    // complaint_id has no REFERENCES constraint; see migrations/0001_initial.sql).
+    const complaint = await complaintsRepo.findById(body.complaintId, ctx.tenantId);
+    if (!complaint) throw new HttpError(404, "COMPLAINT_NOT_FOUND", "Complaint not found");
     return reply.code(202).send(await commands.recordOperation(ctx, body));
   });
 
