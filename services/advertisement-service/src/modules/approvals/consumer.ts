@@ -5,6 +5,7 @@ import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { writeAudit } from "../../shared/audit.js";
 import { cache } from "../../shared/infra.js";
 import { tenantScoped } from "../../shared/tenant-queue.js";
+import { emitMunicipalNotification, municipalDecisionNotificationEventType } from "../../shared/cross-events.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
 import * as appRepo from "../applications/repo.js";
@@ -18,6 +19,12 @@ function ctxOf(msg: { tenantId: string; actorId: string; correlationId: string }
 export function registerApprovalConsumers(rawQueue: Queue): void {
   const queue = tenantScoped(rawQueue);
 
+  // NOTE (scoping): initiateScrutiny/completeScrutiny below are deliberately
+  // left unwired to cross-events — pure officer workflow with no
+  // citizen-visible state change of its own (the application stays
+  // "under_review" throughout both). The eventual citizen-facing outcome,
+  // decideApplication below, is wired. Mirrors the same scoping call already
+  // made for trade-service's scrutiny module in this wave (PR #1022).
   queue.subscribe(COMMANDS.initiateScrutiny, async (msg) => {
     const p = msg.payload as {
       id: string;
@@ -78,6 +85,11 @@ export function registerApprovalConsumers(rawQueue: Queue): void {
 
   queue.subscribe(COMMANDS.decideApplication, async (msg) => {
     const p = msg.payload as { applicationId: string; tenantId: string; decision: string; reason?: string };
+    // Read before the tx, not nested inside it: the citizen notification
+    // needs the application's advertiser identity, which this command's
+    // payload doesn't carry. Same deadlock-avoidance reasoning as
+    // applications/consumer.ts's submitApplication (PR #1028).
+    const application = await appRepo.findById(p.applicationId, msg.tenantId);
     let applied = false;
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
@@ -85,6 +97,21 @@ export function registerApprovalConsumers(rawQueue: Queue): void {
       if (!ok) return;
       applied = true;
       await enqueue(tx, { topic: EVENTS.applicationDecided, eventType: EVENTS.applicationDecided, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { applicationId: p.applicationId, decision: p.decision, reason: p.reason } });
+      // Citizen-meaningful transition: the application has been decided
+      // (approved or rejected). municipalDecisionNotificationEventType
+      // resolves "approved" to the real citizen.application.approved
+      // template; any other decision (e.g. "rejected") falls back to this
+      // service's own applicationDecided event type.
+      await emitMunicipalNotification(tx, ctxOf(msg), {
+        eventType: municipalDecisionNotificationEventType(EVENTS.applicationDecided, p.decision),
+        recipient: application?.advertiserName ?? "Applicant",
+        recipientId: application?.createdBy ?? msg.actorId,
+        variables: {
+          applicationId: p.applicationId,
+          decision: p.decision,
+          ...(p.reason ? { reason: p.reason } : {}),
+        },
+      });
       await writeAudit(tx, ctxOf(msg), { action: "application.decide", resourceType: "adv_application", resourceId: p.applicationId, details: { decision: p.decision } });
     });
     if (applied) await cache.invalidate(cache.makeKey(msg.tenantId, "application", p.applicationId));

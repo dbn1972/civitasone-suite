@@ -5,8 +5,12 @@ import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { writeAudit } from "../../shared/audit.js";
 import { cache } from "../../shared/infra.js";
 import { tenantScoped } from "../../shared/tenant-queue.js";
+import { emitMunicipalFeeChallan, emitMunicipalNotification, MUNICIPAL_EVENT_TYPES } from "../../shared/cross-events.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
+import * as permitRepo from "../permits/repo.js";
+import * as appRepo from "../applications/repo.js";
+import type { AdvApplicationRow } from "../applications/schema.js";
 import { calculatePenaltyMinor, generateViolationNumber } from "./domain.js";
 
 const log = pino({ name: "advertisement.enforcement.consumer" });
@@ -15,9 +19,34 @@ function ctxOf(msg: { tenantId: string; actorId: string; correlationId: string }
   return { tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId };
 }
 
+/**
+ * A violation only optionally carries a permitId (an unauthorized/unpermitted
+ * hoarding may have no permit at all), and the permit in turn only carries
+ * applicationId, not an advertiser reference directly — resolve the full
+ * chain here, before any write transaction, so issueNotice/imposePenalty
+ * below can notify/challan the actual advertiser responsible when one is
+ * identifiable. Mirrors permits/consumer.ts's findApplicationForPermit and
+ * trade-service's findApplicationForLicence (PR #1022) for the same
+ * two-hop-optional-reference shape.
+ */
+async function findApplicationForViolation(permitId: string | null, tenantId: string): Promise<AdvApplicationRow | null> {
+  if (!permitId) return null;
+  const permit = await permitRepo.findById(permitId, tenantId);
+  if (!permit) return null;
+  return appRepo.findById(permit.applicationId, tenantId);
+}
+
 export function registerEnforcementConsumers(rawQueue: Queue): void {
   const queue = tenantScoped(rawQueue);
 
+  // NOTE (scoping): reportViolation below is deliberately left unwired to
+  // cross-events — it is an officer-initiated observation, often before any
+  // responsible advertiser has even been identified (permitId is optional
+  // and frequently absent for an unauthorized hoarding at report time). The
+  // first genuinely citizen(violator)-facing step in this workflow is
+  // issueNotice, which is wired below — same "internal step vs. actual
+  // outward communication" distinction already drawn for the scrutiny
+  // module in approvals/consumer.ts.
   queue.subscribe(COMMANDS.reportViolation, async (msg) => {
     const p = msg.payload as {
       id: string;
@@ -63,6 +92,13 @@ export function registerEnforcementConsumers(rawQueue: Queue): void {
 
   queue.subscribe(COMMANDS.issueNotice, async (msg) => {
     const p = msg.payload as { violationId: string; noticeDetails: Record<string, unknown> };
+    // Resolved before the tx, not nested inside it (PR #1028 deadlock
+    // class): a formal notice is the single most citizen-critical
+    // enforcement step — a permit holder who never hears about it could
+    // miss a response deadline (same reasoning as trade-service's
+    // issueNotice correction, PR #1022).
+    const violation = await repo.findById(p.violationId, msg.tenantId);
+    const application = await findApplicationForViolation(violation?.permitId ?? null, msg.tenantId);
     let applied = false;
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
@@ -74,6 +110,12 @@ export function registerEnforcementConsumers(rawQueue: Queue): void {
       if (!ok) return;
       applied = true;
       await enqueue(tx, { topic: EVENTS.noticeIssued, eventType: EVENTS.noticeIssued, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { violationId: p.violationId } });
+      await emitMunicipalNotification(tx, ctxOf(msg), {
+        eventType: MUNICIPAL_EVENT_TYPES.statusChanged,
+        recipient: application?.advertiserName ?? "Permit holder",
+        recipientId: application?.createdBy ?? msg.actorId,
+        variables: { violationId: p.violationId, status: "notice_issued" },
+      });
       await writeAudit(tx, ctxOf(msg), { action: "violation.issue_notice", resourceType: "adv_violation", resourceId: p.violationId });
     });
     // GET /v1/advertisement/violations/:id reads through a cache that only
@@ -84,6 +126,10 @@ export function registerEnforcementConsumers(rawQueue: Queue): void {
   queue.subscribe(COMMANDS.imposePenalty, async (msg) => {
     const p = msg.payload as { violationId: string; penaltyMinor?: string };
     const violation = await repo.findById(p.violationId, msg.tenantId);
+    // Resolved before the tx, not nested inside it (PR #1028 deadlock
+    // class): the penalty fee challan and the citizen notification both
+    // need the responsible advertiser's identity.
+    const application = await findApplicationForViolation(violation?.permitId ?? null, msg.tenantId);
     // BUG FIX (money field): p.penaltyMinor is now validated + normalized to
     // a canonical base-10 digit string by zMoneyMinorStringNonNeg at the
     // route (enforcement/routes.ts penaltyBody) before the command is ever
@@ -103,6 +149,22 @@ export function registerEnforcementConsumers(rawQueue: Queue): void {
       if (!ok) return;
       applied = true;
       await enqueue(tx, { topic: EVENTS.penaltyImposed, eventType: EVENTS.penaltyImposed, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { violationId: p.violationId, penaltyMinor: String(penaltyMinor) } });
+      // Cross-service wiring: the penalty is now genuinely due — raise the
+      // challan atomically with the status transition that creates the
+      // obligation. emitMunicipalFeeChallan no-ops for amountMinor <= 0n
+      // (never the case here — calculatePenaltyMinor's floor is a nonzero
+      // base penalty) and enforces its own defensive ceiling.
+      await emitMunicipalFeeChallan(tx, ctxOf(msg), {
+        sourceRef: p.violationId,
+        depositor: application?.advertiserName ?? p.violationId,
+        amountMinor: penaltyMinor,
+      });
+      await emitMunicipalNotification(tx, ctxOf(msg), {
+        eventType: MUNICIPAL_EVENT_TYPES.feeDue,
+        recipient: application?.advertiserName ?? "Permit holder",
+        recipientId: application?.createdBy ?? msg.actorId,
+        variables: { violationId: p.violationId, penaltyMinor: String(penaltyMinor) },
+      });
       await writeAudit(tx, ctxOf(msg), { action: "violation.impose_penalty", resourceType: "adv_violation", resourceId: p.violationId });
     });
     if (applied) await cache.invalidate(cache.makeKey(msg.tenantId, "violation", p.violationId));

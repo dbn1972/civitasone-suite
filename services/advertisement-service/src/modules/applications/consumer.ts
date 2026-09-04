@@ -5,6 +5,7 @@ import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { writeAudit } from "../../shared/audit.js";
 import { cache } from "../../shared/infra.js";
 import { tenantScoped } from "../../shared/tenant-queue.js";
+import { emitMunicipalFeeChallan, emitMunicipalNotification, MUNICIPAL_EVENT_TYPES } from "../../shared/cross-events.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
 import { calculateFeeMinor, generateApplicationNumber } from "./domain.js";
@@ -74,6 +75,13 @@ export function registerApplicationConsumers(rawQueue: Queue): void {
         correlationId: msg.correlationId,
         payload: { applicationId: p.id, applicationNumber, advertiserName: p.advertiserName, feeMinor: String(feeMinor), currency: "INR" },
       });
+      // No cross-service wiring here: a "draft" application hasn't been
+      // formally filed and can still be edited or withdrawn without ever
+      // being submitted (see VALID_TRANSITIONS in domain.ts). The fee is
+      // computed and stored on the row now, but does not genuinely become
+      // payable until the applicant actually submits — see
+      // COMMANDS.submitApplication below, which is where the fee challan
+      // and the citizen notification are both raised.
       await writeAudit(tx, ctxOf(msg), { action: "application.create", resourceType: "adv_application", resourceId: p.id });
     });
     log.info({ id: p.id, applicationNumber }, "advertisement application created");
@@ -81,6 +89,14 @@ export function registerApplicationConsumers(rawQueue: Queue): void {
 
   queue.subscribe(COMMANDS.submitApplication, async (msg) => {
     const p = msg.payload as { id: string; tenantId: string };
+    // Read before the tx, not nested inside it: the fee challan and the
+    // citizen notification both need the row's fee/advertiser details, which
+    // repo.updateStatus's own return value doesn't carry. repo.findById goes
+    // through scopedRead (its own db.transaction), so calling it from INSIDE
+    // this handler's write transaction would hold the outer connection while
+    // requesting a second one from the same pool — the exact deadlock class
+    // closed in notification-service tonight (PR #1028).
+    const application = await repo.findById(p.id, msg.tenantId);
     let applied = false;
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
@@ -88,6 +104,31 @@ export function registerApplicationConsumers(rawQueue: Queue): void {
       if (!ok) return;
       applied = true;
       await enqueue(tx, { topic: EVENTS.applicationSubmitted, eventType: EVENTS.applicationSubmitted, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { applicationId: p.id } });
+      // Cross-service wiring (municipal-sec5 event contract, Wave 3): the
+      // application is now formally filed, which is the point the assessed
+      // fee actually becomes payable — raise the challan atomically with the
+      // status transition that creates the obligation. emitMunicipalFeeChallan
+      // no-ops for amountMinor <= 0n, so no separate guard is needed here.
+      if (application?.feeMinor) {
+        await emitMunicipalFeeChallan(tx, ctxOf(msg), {
+          sourceRef: application.applicationNumber,
+          depositor: application.advertiserName,
+          amountMinor: application.feeMinor,
+          currency: application.currency,
+        });
+      }
+      // Citizen-meaningful transition: the applicant's application was
+      // successfully submitted.
+      await emitMunicipalNotification(tx, ctxOf(msg), {
+        eventType: MUNICIPAL_EVENT_TYPES.applicationSubmitted,
+        recipient: application?.advertiserName ?? "Applicant",
+        recipientId: application?.createdBy ?? msg.actorId,
+        variables: {
+          applicationId: p.id,
+          applicationNumber: application?.applicationNumber ?? "",
+          feeMinor: application?.feeMinor ? String(application.feeMinor) : "0",
+        },
+      });
       await writeAudit(tx, ctxOf(msg), { action: "application.submit", resourceType: "adv_application", resourceId: p.id });
     });
     // GET /v1/advertisement/applications/:id (applications/routes.ts) reads
