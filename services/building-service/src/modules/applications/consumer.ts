@@ -1,4 +1,5 @@
 import { pino } from "pino";
+import { randomInt } from "node:crypto";
 import type { Queue } from "@civitasone/queue";
 import { db } from "../../shared/db.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
@@ -28,7 +29,10 @@ export function registerApplicationConsumers(rawQueue: Queue): void {
       drawings?: Array<{ drawingType: string; fileId: string; versionNumber: number; uploadedAt: string }>;
     };
     const feeMinor = calculateFeeMinor({ plotArea: p.plotArea, builtUpArea: p.builtUpArea, proposedFloors: p.proposedFloors });
-    const applicationNumber = generateApplicationNumber("ULB", Date.now() % 999999);
+    // See services/building-service/src/modules/permits/consumer.ts for why
+    // Date.now() % N is a deterministic-collision hazard on a UNIQUE column,
+    // not a source of randomness — same fix applied here for applicationNumber.
+    const applicationNumber = generateApplicationNumber("ULB", randomInt(1, 999999));
     const farComputed = (p.builtUpArea && p.plotArea) ? computeFAR(p.builtUpArea, p.plotArea) : undefined;
 
     await db.transaction(async (tx) => {

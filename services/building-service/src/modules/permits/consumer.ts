@@ -1,4 +1,5 @@
 import { pino } from "pino";
+import { randomInt } from "node:crypto";
 import type { Queue } from "@civitasone/queue";
 import { db } from "../../shared/db.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
@@ -21,7 +22,16 @@ export function registerPermitConsumers(rawQueue: Queue): void {
   queue.subscribe(COMMANDS.issuePermit, async (msg) => {
     const p = msg.payload as { id: string; tenantId: string; applicationId: string; conditions?: Array<{ condition: string; category: string }>; validityMonths: number };
     const now = new Date();
-    const permitNumber = generatePermitNumber("ULB", Date.now() % 999999);
+    // Date.now() % 999999 is deterministic in wall-clock time, not random —
+    // it repeats every ~999999ms (~16.7 min), so any two permits issued
+    // exactly one cycle apart (or, under load, two consumers racing within
+    // the same tenant) collide on permitNumber, which is UNIQUE-constrained
+    // (migrations/0001_init.sql). A collision throws an unhandled DB
+    // constraint violation deep in this transaction, outside any request/
+    // response cycle. crypto.randomInt draws uniformly from the full range
+    // instead of a function of time, cutting collision probability to the
+    // keyspace's birthday bound rather than a near-certainty over time.
+    const permitNumber = generatePermitNumber("ULB", randomInt(1, 999999));
     const verificationCode = generateVerificationCode();
     const validUntil = calculateValidUntil(now, p.validityMonths);
     await db.transaction(async (tx) => {
