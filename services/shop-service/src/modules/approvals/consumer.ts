@@ -5,6 +5,7 @@ import { cache } from "../../shared/infra.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { writeAudit } from "../../shared/audit.js";
 import { tenantScoped } from "../../shared/tenant-queue.js";
+import { emitMunicipalNotification, municipalDecisionNotificationEventType } from "../../shared/cross-events.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
 import * as appRepo from "../registrations/repo.js";
@@ -171,6 +172,21 @@ export function registerApprovalConsumers(rawQueue: Queue): void {
           decision: p.decision,
           reason: p.reason,
           decidedBy: msg.actorId,
+        },
+      });
+      // Citizen-meaningful transition: an approved/rejected decision. Maps to
+      // the shared "citizen.application.approved" template on approval, or
+      // falls back to this service's own domain event type otherwise (see
+      // municipalDecisionNotificationEventType).
+      await emitMunicipalNotification(tx, ctxOf(msg), {
+        eventType: municipalDecisionNotificationEventType(EVENTS.applicationDecided, p.decision),
+        recipient: current.ownerName,
+        recipientId: current.applicantId,
+        variables: {
+          applicationId: p.applicationId,
+          applicationNumber: current.applicationNumber,
+          decision: p.decision,
+          ...(p.reason ? { reason: p.reason } : {}),
         },
       });
       await writeAudit(tx, ctxOf(msg), {

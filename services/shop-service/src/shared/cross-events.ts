@@ -8,13 +8,17 @@
  * level (see packages/events/src/municipal-cross.ts header) — this file is
  * otherwise a near-drop-in for all 17 municipal services.
  *
- * NOT wired into this service's command/consumer call sites here (Wave 3
- * scope, per-service integration) except where a specific PR says so.
+ * Wave 3: wired into registrations/consumer.ts (fee challan at application
+ * creation, status notification at submission), approvals/consumer.ts
+ * (decision notification), permits/consumer.ts (issue/suspend/cancel/restore
+ * notifications) and lifecycle/consumer.ts (renewal fee challan + decision
+ * notification) — see those files for call sites.
  */
 import { randomUUID } from "node:crypto";
 import {
   FINANCE_CHALLAN_CREATE,
   NOTIFICATION_SEND,
+  MUNICIPAL_EVENT_TYPES,
   buildMunicipalFeeChallanPayload,
   buildMunicipalStatusNotification,
   municipalDecisionNotificationEventType,
@@ -29,6 +33,20 @@ export type CrossEventCtx = {
   correlationId: string;
 };
 
+/**
+ * Defensive ceiling on amountMinor, mirroring registrations/routes.ts's
+ * fee-math bounds (PR #1013's MAX_EMPLOYEE_COUNT / MAX_AREA_SQFT): with those
+ * input ceilings, the largest fee either of this service's fee calculators
+ * (registrations/domain.ts's calculateFeeMinor, lifecycle/domain.ts's
+ * calculateRenewalFeeMinor) can actually produce is a few lakh rupees —
+ * comfortably under this ceiling. A value that clears it here means an
+ * upstream bound was weakened without a matching update in this file; fail
+ * loudly instead of silently emitting a fee challan for an unbounded or
+ * corrupted amount (the same "no fake success" reasoning applied throughout
+ * this service's consumers).
+ */
+export const MAX_FEE_CHALLAN_AMOUNT_MINOR = 100_000_000_00n; // Rs 1,00,00,000 (1 crore) in paise
+
 /** Enqueue finance.challan.create when a licensing fee is assessed (fee > 0). */
 export async function emitMunicipalFeeChallan(
   tx: ScopedTx,
@@ -42,6 +60,12 @@ export async function emitMunicipalFeeChallan(
   },
 ): Promise<void> {
   if (opts.amountMinor <= 0n) return;
+  if (opts.amountMinor > MAX_FEE_CHALLAN_AMOUNT_MINOR) {
+    throw new RangeError(
+      `emitMunicipalFeeChallan: amountMinor ${opts.amountMinor} exceeds the defensive ceiling ` +
+        `(${MAX_FEE_CHALLAN_AMOUNT_MINOR}); refusing to enqueue finance.challan.create for sourceRef=${opts.sourceRef}`,
+    );
+  }
   const payloadInput: Parameters<typeof buildMunicipalFeeChallanPayload>[0] = {
     id: randomUUID(),
     tenantId: ctx.tenantId,
@@ -83,4 +107,4 @@ export async function emitMunicipalNotification(
   });
 }
 
-export { municipalDecisionNotificationEventType };
+export { municipalDecisionNotificationEventType, MUNICIPAL_EVENT_TYPES };
