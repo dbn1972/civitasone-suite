@@ -63,6 +63,16 @@ export async function lifecycleRoutes(app: FastifyInstance): Promise<void> {
     const body = cancellationBody.parse(req.body);
     const lic = await licRepo.findById(body.licenceId, ctx.tenantId);
     if (!lic) throw new HttpError(404, "LICENCE_NOT_FOUND", "Licence not found");
+    // Pre-accept status guard (previously missing here — see PR description):
+    // renewal/zone-transfer above both already reject a non-"active" licence
+    // before publishing a command; cancellation and surrender below loaded
+    // `lic` (so the 404 existed) but never checked its status, so a request
+    // to cancel an already-cancelled/suspended/expired licence was silently
+    // accepted (202) and queued a vendor_renewals row that could never
+    // usefully be decided. Mirrors the sibling routes' exact pattern.
+    if (lic.status !== "active") {
+      throw new HttpError(422, "INVALID_STATUS", `Cannot request cancellation for licence in status '${lic.status}'`);
+    }
     return reply.code(202).send(await commands.requestCancellation(ctx, body.licenceId, body.reason));
   });
 
@@ -72,6 +82,10 @@ export async function lifecycleRoutes(app: FastifyInstance): Promise<void> {
     const body = surrenderBody.parse(req.body);
     const lic = await licRepo.findById(body.licenceId, ctx.tenantId);
     if (!lic) throw new HttpError(404, "LICENCE_NOT_FOUND", "Licence not found");
+    // Same pre-accept status guard as cancellation above — see that comment.
+    if (lic.status !== "active") {
+      throw new HttpError(422, "INVALID_STATUS", `Cannot request surrender for licence in status '${lic.status}'`);
+    }
     return reply.code(202).send(await commands.requestSurrender(ctx, body.licenceId, body.reason));
   });
 

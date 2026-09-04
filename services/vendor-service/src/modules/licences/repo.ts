@@ -69,3 +69,45 @@ export async function updateStatus(
     .returning({ id: vendorLicences.id });
   return result.length > 0;
 }
+
+/**
+ * Idempotency guard's persistence half — see licences/routes.ts's
+ * fee-payment route for the pre-accept half (existing.feePaid -> 409).
+ * Mirrors trade-service/applications/repo.ts's updateFeePayment exactly
+ * (same column shape: fee_paid boolean + fee_transaction_id varchar(128)).
+ */
+export async function updateFeePayment(
+  tx: ScopedTx,
+  id: string,
+  tenantId: string,
+  transactionId: string,
+  updatedBy: string,
+): Promise<boolean> {
+  const result = await tx.update(vendorLicences)
+    .set({
+      feePaid: true,
+      feeTransactionId: transactionId,
+      updatedBy,
+      updatedAt: new Date(),
+      version: sql`${vendorLicences.version} + 1`,
+    })
+    .where(and(eq(vendorLicences.id, id), eq(vendorLicences.tenantId, tenantId)))
+    .returning({ id: vendorLicences.id });
+  return result.length > 0;
+}
+
+/**
+ * Replaces `Date.now() % 999999` (see licences/consumer.ts's issueLicence
+ * handler) with a real Postgres SEQUENCE reserved inside the same
+ * transaction as the insert — guaranteed unique across concurrent callers,
+ * independent of wall-clock time. Same fix shape as animal-service's
+ * nextComplaintNumber/nextRegistrationNumber (migrations/
+ * 0002_number_sequences.sql there; migrations/0002_number_sequences.sql
+ * here).
+ */
+export async function nextLicenceNumber(tx: ScopedTx): Promise<number> {
+  const [row] = (await tx.execute(
+    sql`SELECT nextval('"vendor"."licence_number_seq"')::bigint AS seq`,
+  )) as Array<{ seq: number }>;
+  return Number(row!.seq);
+}

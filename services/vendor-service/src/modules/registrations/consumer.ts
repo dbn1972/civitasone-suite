@@ -31,10 +31,16 @@ export function registerRegistrationConsumers(rawQueue: Queue): void {
       documents?: Array<{ docType: string; fileId: string; uploadedAt: string }>;
     };
     const feeMinor = calculateFeeMinor({ category: p.category });
-    const registrationNumber = generateRegistrationNumber("ULB", Date.now() % 999999);
+    let registrationNumber = "";
 
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
+      // `Date.now() % 999999` (periodic on ~16.7 minutes -- a real collision
+      // under load against a UNIQUE-constrained column) replaced with a real
+      // Postgres SEQUENCE reserved inside this same transaction. See
+      // repo.ts's nextRegistrationNumber and migrations/
+      // 0002_number_sequences.sql for the full rationale.
+      registrationNumber = generateRegistrationNumber("ULB", await repo.nextRegistrationNumber(tx));
       await repo.insertRegistration(tx, {
         id: p.id,
         tenantId: msg.tenantId,
