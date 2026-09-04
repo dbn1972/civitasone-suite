@@ -15,7 +15,24 @@
  *   - asset depreciation math (SLM/WDV accumulated-dep vs posted entries)
  *
  * All queries are SELECT-only — no writes, no migrations, no truncate/drop.
- * Requires civitas_admin superuser (bypasses RLS).
+ *
+ * civitas_admin is deliberately NOSUPERUSER NOBYPASSRLS (see
+ * infra/db/bootstrap/bootstrap_admin_role.sql) — it does NOT bypass RLS, and
+ * every table these checks read has FORCE ROW LEVEL SECURITY keyed on
+ * current_tenant_id(). Without app.tenant_id set, that GUC is NULL and the
+ * strict tenant-match policy silently returns zero rows to every query,
+ * regardless of what is actually in the table (confirmed via a live
+ * sabotage test: bad rows inserted as the real superuser stayed invisible
+ * to civitas_admin's queries here). connect() below sets app.platform_bypass
+ * instead, which each read table now grants an ADDITIONAL permissive
+ * SELECT-only RLS policy for — see e.g.
+ * services/asset-service/migrations/0022_platform_bypass_read_policy.sql,
+ * mirroring admin-service's migration 0011 / audit-service's migration 0021
+ * (the scopedPlatformRead pattern used elsewhere in this codebase for
+ * legitimate cross-tenant reads). That GUC is only ever set here, by
+ * hardcoded, no-user-input test/CI code — never derived from any client
+ * input — and only ever grants SELECT; every table's INSERT/UPDATE/DELETE
+ * policies are untouched and still strictly tenant-scoped.
  *
  * Tests report the authored check AND any hits found.  Dev data is sparse;
  * 0-row results are expected for most checks — the value is the authored
@@ -43,6 +60,16 @@ function connect(db: string) {
     host: HOST, port: PORT, database: db,
     username: "civitas_admin", password: ADMIN_PW,
     max: 3, idle_timeout: 5,
+    // SECURITY: this is the read-only, hardcoded-credential evidence suite
+    // itself — never a path any client input reaches. postgres.js sends
+    // `connection` entries as run-time parameters in the StartupMessage, so
+    // this sets app.platform_bypass for every physical connection this pool
+    // opens (equivalent to `SET app.platform_bypass = 'true'` at session
+    // start). Each SELECT-only platform_bypass_read_policy this suite
+    // depends on (one migration per service — see file header) grants
+    // access only because this GUC is set; the underlying tables' write
+    // policies are unaffected and still enforce strict per-tenant scoping.
+    connection: { "app.platform_bypass": "true" },
   });
 }
 
