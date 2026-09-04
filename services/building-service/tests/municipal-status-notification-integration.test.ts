@@ -72,18 +72,16 @@ afterAll(async () => {
   await notification.sqlClient.end();
 });
 
-// QUARANTINED: fails deterministically due to a confirmed pre-existing,
-// unrelated notification-service bug -- deliveries/consumer.ts's checkQuota()/
-// checkDlt() call scopedRead(), which opens a SECOND, nested db.transaction()
-// on the same connection pool as the outer send transaction. Once concurrent
-// sends reach pool.max (10), every outer transaction deadlocks waiting for a
-// connection its own nested checkQuota call will never free. Reproduced
-// independently, confirmed present on origin/main before this PR, has
-// nothing to do with building-service's cross-events wiring (verified
-// correct separately via the fee-challan integration test in this same PR).
-// Tracked: task_477fafd4 (fix: route checkQuota/checkDlt onto the passed-in
-// tx instead of scopedRead's nested transaction). Un-skip once that lands.
-describe.skip("building-service -> notification-service applicant status notification -- real DB, no mocks", () => {
+// Was QUARANTINED (task_477fafd4): deliveries/consumer.ts's checkQuota()/
+// checkDlt() used to call scopedRead(), which opened a SECOND, nested
+// db.transaction() on the same connection pool as the outer send
+// transaction -- once concurrent sends reached pool.max (10), every outer
+// transaction deadlocked waiting for a connection its own nested checkQuota
+// call would never free. Fixed by routing checkQuota/checkDlt onto the
+// already-open outer `tx` (see notification-service's channels/quota-guard.ts
+// and dlt/guard.ts); un-skipped now that the fix has landed and this test
+// passes end-to-end against the fixed notification-service.
+describe("building-service -> notification-service applicant status notification -- real DB, no mocks", () => {
   it("submitApplication relays into a real notification-service delivery row on the correct resolved template", async () => {
     const { relayOnce } = await import("@civitasone/outbox");
     const applicationId = randomUUID();
@@ -99,18 +97,31 @@ describe.skip("building-service -> notification-service applicant status notific
     await building.queue.publish("building.application.submit", makeMsg("building.application.submit", { id: applicationId, tenantId: TENANT }));
     await building.queue.drain();
 
-    // building's REAL outbox now holds the notification.send message
-    // emitMunicipalNotification wrote, in the SAME transaction as the
-    // status update -- relay it exactly like the production relay would.
+    // building's REAL outbox now holds TWO pending notification.send messages
+    // for this applicationId: createApplication's earlier municipal.fee.due
+    // notification (never relayed above -- only building.application.create's
+    // COMMAND was drained, not its OUTBOX row) and submitApplication's
+    // municipal.application.submitted notification written just now, both in
+    // the SAME transaction as their respective status writes -- relay them
+    // exactly like the production relay would, in one batch, exactly like a
+    // real relay cycle picking up whatever is pending would.
     const relayed = await relayOnce(building.db as never, building.queue, 100, "building-service");
-    expect(relayed, "building's outbox must have a pending notification.send message").toBeGreaterThan(0);
+    expect(relayed, "building's outbox must have pending notification.send messages").toBeGreaterThan(0);
     await building.queue.drain();
 
+    // Both notifications share recipientId = applicationId, so select by
+    // template rather than trusting deliveries[0] -- the two sends race each
+    // other through notification-service's consumer (relayOnce fans them out
+    // concurrently), so which one lands the later `createdAt` is not
+    // deterministic. Selecting the specific template under test is what
+    // proves the applicant-submitted wiring, independent of that race.
     const deliveries = await notification.findByRecipient(TENANT, applicationId, 5);
-    expect(deliveries.length, "notification-service's real deliveries consumer must have written a delivery row").toBeGreaterThan(0);
-    const delivery = deliveries[0]!;
+    expect(deliveries.length, "notification-service's real deliveries consumer must have written delivery rows").toBeGreaterThan(0);
+    const delivery = deliveries.find(
+      (d: { templateId: string }) => d.templateId === SYSTEM_TEMPLATE_IDS.municipalApplicationSubmitted,
+    );
+    expect(delivery, "must have a delivery resolved to the municipal.application.submitted template").toBeTruthy();
     expect(delivery.recipient).toBe(ACTOR); // building_applications.createdBy, resolved by the consumer's repo.findById lookup
-    expect(delivery.templateId).toBe(SYSTEM_TEMPLATE_IDS.municipalApplicationSubmitted);
     expect(delivery.templateId).not.toBe(SYSTEM_TEMPLATE_IDS.default);
   });
 });

@@ -19,8 +19,11 @@ export function registerI18nConsumers(q: Queue): void {
       if (!(await markProcessed(tx, msg.messageId))) return;
       const p = msg.payload;
 
-      // Check for duplicate (template + locale)
-      const existing = await repo.findVariant(p.tenantId, p.templateId, p.locale);
+      // Check for duplicate (template + locale). Reads through the already-open
+      // `tx` (not `repo.findVariant`'s `scopedRead`) to avoid opening a second,
+      // nested transaction on this same connection-pool deadlock shape -- see
+      // `findVariantInTx` in `./repo.ts`.
+      const existing = await repo.findVariantInTx(tx, p.tenantId, p.templateId, p.locale);
       if (existing) return; // idempotent — already exists
 
       await repo.insertVariant(tx, {

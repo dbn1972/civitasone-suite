@@ -20,6 +20,27 @@ export async function findVariant(
   return rows[0] ?? null;
 }
 
+/**
+ * Same lookup as `findVariant`, but reads through an ALREADY-OPEN transaction
+ * instead of opening a second one via `scopedRead`. `createLocaleVariant`'s
+ * consumer handler calls this from inside its own `db.transaction` -- the
+ * same nested-transaction-on-the-same-pool shape as `checkQuota`/`checkDlt`
+ * in `deliveries/consumer.ts` (see `channels/quota-guard.ts`), which
+ * deadlocks the pool once enough sends are concurrently in-flight.
+ */
+export async function findVariantInTx(
+  tx: Writer, tenantId: string, templateId: string, locale: string,
+): Promise<typeof localeVariants.$inferSelect | null> {
+  const rows = await tx.select().from(localeVariants)
+    .where(and(
+      eq(localeVariants.tenantId, tenantId),
+      eq(localeVariants.templateId, templateId),
+      eq(localeVariants.locale, locale),
+    ))
+    .limit(1);
+  return rows[0] ?? null;
+}
+
 /** List all locale variants for a template within a tenant. */
 export async function listVariants(
   tenantId: string, templateId: string,

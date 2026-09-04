@@ -166,8 +166,12 @@ describe("Quota routes", () => {
 describe("checkQuota — guard logic", () => {
   it("passes when no quota is configured", async () => {
     const { checkQuota } = await import("../src/modules/channels/quota-guard.js");
-    // Non-existent tenant → no quota row → allowed
-    const result = await checkQuota("00000000-0000-4000-8000-999999999999", "email");
+    const { db } = await import("../src/shared/db.js");
+    // Non-existent tenant → no quota row → allowed. checkQuota now reads
+    // through the caller's already-open tx (see task_477fafd4 -- routes
+    // checkQuota/checkDlt onto the outer tx instead of scopedRead's own
+    // nested transaction, which used to deadlock the pool).
+    const result = await db.transaction((tx) => checkQuota(tx, "00000000-0000-4000-8000-999999999999", "email"));
     expect(result.passed).toBe(true);
   });
 });
@@ -287,8 +291,12 @@ describe("checkQuota — unlimited status always passes", () => {
     await app.close();
     expect(res.statusCode).toBe(200);
 
-    // checkQuota uses scopedRead, which needs tenant context
-    const result = await runWithTenant(TENANT, () => checkQuota(TENANT, "push")) as Awaited<ReturnType<typeof checkQuota>>;
+    const { db } = await import("../src/shared/db.js");
+    // checkQuota now reads through the caller's tx (task_477fafd4), which
+    // still needs to run inside tenant context for RLS.
+    const result = await runWithTenant(TENANT, () =>
+      db.transaction((tx) => checkQuota(tx, TENANT, "push")),
+    ) as Awaited<ReturnType<typeof checkQuota>>;
     // Unlimited → always passes regardless of usage
     expect(result.passed).toBe(true);
   });
@@ -333,8 +341,11 @@ describe("checkQuota — exhausted when used >= limit", () => {
       }),
     );
 
-    // checkQuota uses scopedRead, which needs tenant context
-    const result = await runWithTenant(TENANT, () => checkQuota(TENANT, "whatsapp")) as Awaited<ReturnType<typeof checkQuota>>;
+    // checkQuota now reads through the caller's tx (task_477fafd4), which
+    // still needs to run inside tenant context for RLS.
+    const result = await runWithTenant(TENANT, () =>
+      db.transaction((tx) => checkQuota(tx, TENANT, "whatsapp")),
+    ) as Awaited<ReturnType<typeof checkQuota>>;
     expect(result.passed).toBe(false);
     expect(result.used).toBe(BigInt(100));
     expect(result.limit).toBe(BigInt(100));

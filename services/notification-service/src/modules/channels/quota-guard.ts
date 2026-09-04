@@ -7,6 +7,7 @@
  * If status is 'unlimited' → always allow.
  */
 import * as quotaRepo from "./quota-repo.js";
+import type { db } from "../../shared/db.js";
 
 export interface QuotaCheckResult {
   passed: boolean;
@@ -18,13 +19,22 @@ export interface QuotaCheckResult {
  * Check whether the tenant's channel quota allows one more send.
  * Returns { passed: true } if allowed (or no quota configured or unlimited),
  * { passed: false } if exhausted.
+ *
+ * Takes the caller's ALREADY-OPEN transaction (`processSend`'s outer send
+ * transaction) and reads through it directly instead of opening a second,
+ * nested transaction. Opening a second transaction here (the previous
+ * `quotaRepo.findCurrentQuota`, which uses `scopedRead`) acquired a SECOND
+ * connection from the same pool as the outer send -- with `pool.max = 10`,
+ * once 10 sends were concurrently in-flight the pool was exhausted and
+ * every one of them deadlocked waiting on its own nested quota check.
  */
 export async function checkQuota(
+  tx: Parameters<Parameters<typeof db.transaction>[0]>[0],
   tenantId: string,
   channel: string,
 ): Promise<QuotaCheckResult> {
   const today = new Date().toISOString().slice(0, 10);
-  const quota = await quotaRepo.findCurrentQuota(tenantId, channel, today);
+  const quota = await quotaRepo.findCurrentQuotaInTx(tx, tenantId, channel, today);
 
   // No quota configured for this period — allow
   if (!quota) return { passed: true };

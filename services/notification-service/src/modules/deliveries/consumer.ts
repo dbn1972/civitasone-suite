@@ -239,7 +239,7 @@ async function processSend(msg: CommandEnvelope<SendPayload>): Promise<void> {
     // G8: DLT validation — reject SMS/WhatsApp without a matching registered template
     const sendChannel = consentedChannels[0] ?? preferred;
     if (requiresDlt(sendChannel)) {
-      const dltResult = await checkDlt(msg.tenantId, sendChannel, body);
+      const dltResult = await checkDlt(tx, msg.tenantId, sendChannel, body);
       if (!dltResult.passed) {
         await repo.updateDeliveryStatus(tx, deliveryId, "failed", msg.actorId, retryCount + 1, undefined, "DLT_TEMPLATE_NOT_REGISTERED", "DLT_TEMPLATE_NOT_REGISTERED");
         await mirrorCampaignOutcome(tx, msg, recipientId, "failed", deliveryId);
@@ -256,7 +256,7 @@ async function processSend(msg: CommandEnvelope<SendPayload>): Promise<void> {
     }
 
     // G7: Quota enforcement — reject if tenant's channel quota is exhausted
-    const quotaResult = await checkQuota(msg.tenantId, sendChannel);
+    const quotaResult = await checkQuota(tx, msg.tenantId, sendChannel);
     if (!quotaResult.passed) {
       await repo.updateDeliveryStatus(tx, deliveryId, "failed", msg.actorId, retryCount + 1, undefined, "CHANNEL_QUOTA_EXHAUSTED", "CHANNEL_QUOTA_EXHAUSTED");
       await mirrorCampaignOutcome(tx, msg, recipientId, "failed", deliveryId);

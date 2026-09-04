@@ -7,6 +7,7 @@
  */
 import * as repo from "./repo.js";
 import { validateDltTemplate } from "./validate.js";
+import type { db } from "../../shared/db.js";
 
 export interface DltCheckResult {
   passed: boolean;
@@ -25,13 +26,19 @@ export function requiresDlt(channel: string): boolean {
 /**
  * Check if the message body matches any active DLT template for this tenant + channel.
  * Returns { passed: true, matchedTemplateId } on success, { passed: false } on failure.
+ *
+ * Takes the caller's ALREADY-OPEN transaction and reads through it directly
+ * instead of opening a second, nested one -- see `quota-guard.ts`'s
+ * `checkQuota` for the pool-exhaustion deadlock this avoids (`checkDlt` is
+ * called from the exact same `processSend` send transaction).
  */
 export async function checkDlt(
+  tx: Parameters<Parameters<typeof db.transaction>[0]>[0],
   tenantId: string,
   channel: string,
   messageBody: string,
 ): Promise<DltCheckResult> {
-  const templates = await repo.findActiveByChannel(tenantId, channel);
+  const templates = await repo.findActiveByChannelInTx(tx, tenantId, channel);
 
   for (const t of templates) {
     if (validateDltTemplate(messageBody, t.templateBody)) {

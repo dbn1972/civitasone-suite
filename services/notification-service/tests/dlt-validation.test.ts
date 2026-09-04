@@ -10,7 +10,7 @@ import { describe, it, expect, afterAll, vi } from "vitest";
 import { signToken } from "@civitasone/auth";
 import { validateDltTemplate } from "../src/modules/dlt/validate.js";
 import { buildApp } from "../src/app.js";
-import { sqlClient } from "../src/shared/db.js";
+import { sqlClient, db } from "../src/shared/db.js";
 import { randomUUID } from "node:crypto";
 
 const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
@@ -306,8 +306,10 @@ describe("DLT guard — expired template handling", () => {
     await app.close();
     expect(res.statusCode).toBe(201);
 
-    // checkDlt only finds 'active' templates, so expired ones won't match
-    const result = await checkDlt(TENANT, "whatsapp", "Expired template XYZ test");
+    // checkDlt only finds 'active' templates, so expired ones won't match.
+    // Reads through the caller's tx now (task_477fafd4) instead of opening
+    // a second, nested transaction via scopedRead -- see dlt/guard.ts.
+    const result = await db.transaction((tx) => checkDlt(tx, TENANT, "whatsapp", "Expired template XYZ test"));
     expect(result.passed).toBe(false);
   });
 });
