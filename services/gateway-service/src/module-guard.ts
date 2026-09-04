@@ -120,11 +120,14 @@ async function getEnabledModules(tenantId: string): Promise<Set<string> | null> 
     const secret = process.env.INTERNAL_SERVICE_SECRET ?? "";
     // The composition endpoint sits behind admin's global auth hook, whose
     // service-to-service contract is x-internal:1 + x-tenant-id + x-service-secret
-    // (packages/auth/plugin.ts). The legacy modules-list path keeps its existing
-    // header untouched so its (fail-open) behaviour is unchanged when the flag is off.
+    // (packages/auth/plugin.ts). The legacy modules-list route now requires the
+    // same explicit `x-internal: "1"` machine-caller flag IN ADDITION to
+    // x-internal-secret (admin-service#defense-in-depth follow-up to gateway#986)
+    // — a bare shared secret is no longer treated as sufficient proof of a
+    // genuine internal caller, so this caller must set the flag to keep working.
     const headers: Record<string, string> = useComposition
       ? { "x-internal": "1", "x-tenant-id": tenantId, "x-service-secret": secret, "x-internal-caller": "gateway-module-guard" }
-      : { "x-internal-secret": secret };
+      : { "x-internal": "1", "x-internal-secret": secret, "x-internal-caller": "gateway-module-guard" };
 
     const body = await moduleGuardBreaker.call(async () => {
       const res = await fetch(url, { headers, signal: AbortSignal.timeout(2000) });
