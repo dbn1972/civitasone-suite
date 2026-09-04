@@ -335,3 +335,88 @@ describe("trade-service — pre-accept validation gap fixed on the notices route
     await app.close();
   });
 });
+
+describe("trade-service — pre-accept validation on POST /v1/trade/licences (issue)", () => {
+  it("applicationId that does not exist → 404, not 202", async () => {
+    const { buildApp } = await import("../src/app.js");
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "POST", url: "/v1/trade/licences", headers: bearer(),
+      payload: { applicationId: randomUUID(), tradeCategory: "retail" },
+    });
+    expect(res.statusCode).toBe(404);
+    const body = JSON.parse(res.body) as { code: string };
+    expect(body.code).toBe("APPLICATION_NOT_FOUND");
+    await app.close();
+  });
+
+  it("application exists but is still 'draft' (never approved) → 422, not 202", async () => {
+    const { buildApp } = await import("../src/app.js");
+    const app = await buildApp();
+    const hdr = bearer();
+
+    const created = await app.inject({ method: "POST", url: "/v1/trade/applications", headers: hdr, payload: validApplicationBody });
+    expect(created.statusCode).toBe(202);
+    const { id: appId } = JSON.parse(created.body) as { id: string };
+    await drain();
+
+    // Deliberately never submitted/scrutinised/approved — still 'draft'.
+    const res = await app.inject({
+      method: "POST", url: "/v1/trade/licences", headers: hdr,
+      payload: { applicationId: appId, tradeCategory: "retail" },
+    });
+    expect(res.statusCode).toBe(422);
+    const body = JSON.parse(res.body) as { code: string };
+    expect(body.code).toBe("APPLICATION_NOT_APPROVED");
+    await app.close();
+  });
+
+  it("a second issue attempt against an application that already has a licence → 409, not another licence", async () => {
+    const { buildApp } = await import("../src/app.js");
+    const app = await buildApp();
+    const hdr = bearer();
+
+    // Drive an application all the way to 'approved'.
+    const created = await app.inject({ method: "POST", url: "/v1/trade/applications", headers: hdr, payload: validApplicationBody });
+    const { id: appId } = JSON.parse(created.body) as { id: string };
+    await drain();
+    await app.inject({ method: "POST", url: `/v1/trade/applications/${appId}/submit`, headers: hdr });
+    await drain();
+    const scrutinyInit = await app.inject({
+      method: "POST", url: "/v1/trade/approvals/scrutiny", headers: hdr,
+      payload: { applicationId: appId, scrutinyType: "document_check", officerId: ACTOR },
+    });
+    const { id: scrutinyId } = JSON.parse(scrutinyInit.body) as { id: string };
+    await drain();
+    await app.inject({
+      method: "POST", url: `/v1/trade/approvals/scrutiny/${scrutinyId}/complete`, headers: hdr,
+      payload: { findings: { items: [{ checkItem: "premises_check", result: "pass" }] } },
+    });
+    await drain();
+    await app.inject({
+      method: "POST", url: "/v1/trade/approvals/decide", headers: hdr,
+      payload: { applicationId: appId, decision: "approved" },
+    });
+    await drain();
+
+    // First issue succeeds.
+    const firstIssue = await app.inject({
+      method: "POST", url: "/v1/trade/licences", headers: hdr,
+      payload: { applicationId: appId, tradeCategory: "retail" },
+    });
+    expect(firstIssue.statusCode).toBe(202);
+    await drain();
+
+    // Retry / double-click / concurrent request against the same application
+    // must be rejected cleanly, not silently issue a second licence row.
+    const secondIssue = await app.inject({
+      method: "POST", url: "/v1/trade/licences", headers: hdr,
+      payload: { applicationId: appId, tradeCategory: "retail" },
+    });
+    expect(secondIssue.statusCode).toBe(409);
+    const body = JSON.parse(secondIssue.body) as { code: string };
+    expect(body.code).toBe("LICENCE_ALREADY_EXISTS");
+
+    await app.close();
+  });
+});

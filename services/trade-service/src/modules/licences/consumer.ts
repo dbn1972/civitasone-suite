@@ -1,6 +1,6 @@
 import { pino } from "pino";
 import type { Queue } from "@civitasone/queue";
-import { randomUUID } from "node:crypto";
+import { randomUUID, randomInt } from "node:crypto";
 import { db } from "../../shared/db.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { writeAudit } from "../../shared/audit.js";
@@ -22,7 +22,17 @@ export function registerLicenceConsumers(rawQueue: Queue): void {
   queue.subscribe(COMMANDS.issueLicence, async (msg) => {
     const p = msg.payload as { id: string; tenantId: string; applicationId: string; tradeCategory: string; validityMonths: number };
     const now = new Date();
-    const licenceNumber = generateLicenceNumber("ULB", Date.now() % 999999);
+    // Date.now() % N is deterministic in wall-clock time, not random: it
+    // repeats every ~999999ms (~16.7 min), so any two licences issued
+    // exactly one cycle apart (or two consumers racing within the same
+    // tenant) collide on licenceNumber, which is UNIQUE-constrained
+    // (migrations/0001_initial.sql). A collision throws an unhandled DB
+    // constraint violation deep in this transaction, outside any request/
+    // response cycle. crypto.randomInt draws uniformly from the full range
+    // instead of a function of time, cutting collision probability to the
+    // keyspace's birthday bound rather than a near-certainty over time.
+    // Same fix applied in applications/consumer.ts for applicationNumber.
+    const licenceNumber = generateLicenceNumber("ULB", randomInt(1, 999999));
     const verificationCode = generateVerificationCode();
     const validUntil = calculateValidUntil(now, p.validityMonths);
     await db.transaction(async (tx) => {
