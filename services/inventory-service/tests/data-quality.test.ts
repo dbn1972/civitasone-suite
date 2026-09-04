@@ -178,8 +178,14 @@ describe("DQ — asset-service", () => {
     expect(bad.length).toBeGreaterThanOrEqual(0);
   });
 
-  // KNOWN dirty dev data — tracked as DQ ticket in erp-assessment/TICKETS-FOR-KIRO.md; flip back to it() once cleaned
-  it.fails("DQ-ASSET-05 dep_method in asset register matches dep_schedules (no SLM/WDV mismatch)", async () => {
+  // Was it.fails() pending a Kiro data-cleanup ticket (erp-assessment/TICKETS-FOR-KIRO.md)
+  // that assumed a shared, ad-hoc dev database with a known SLM/WDV mismatch.
+  // Verified against a fresh full-schema bootstrap (scripts/ci/bootstrap-postgres.sh,
+  // which is what CI runs every job — no seed step ever creates that mismatch): the
+  // check returns 0 rows. it.fails() was unconditionally failing CI because there is
+  // no code path that seeds the "known dirty" row it was waiting to stop finding.
+  // Flipped to it() per the original comment's own instruction, now that it's verified clean.
+  it("DQ-ASSET-05 dep_method in asset register matches dep_schedules (no SLM/WDV mismatch)", async () => {
     const mismatch = await sql`
       SELECT a.id, a.name, a.dep_method AS register_method, s.method AS schedule_method
       FROM register.asset_assets a
@@ -321,8 +327,12 @@ describe("DQ — payroll-service", () => {
     expect(bad, `payroll math broken: ${JSON.stringify(bad)}`).toHaveLength(0);
   });
 
-  // KNOWN dirty dev data — DQ-PAY ticket; flip back to it() once cleaned
-  it.fails("DQ-PAY-05 payroll_run.total_gross matches SUM of its slips", async () => {
+  // Was it.fails() pending a Kiro data-cleanup ticket (erp-assessment/TICKETS-FOR-KIRO.md)
+  // that assumed a shared, ad-hoc dev database with a known run/slip total drift.
+  // Verified against a fresh full-schema bootstrap: the check returns 0 rows — CI never
+  // seeds that drift, so it.fails() was unconditionally failing every CI run.
+  // Flipped to it() per the original comment's own instruction, now that it's verified clean.
+  it("DQ-PAY-05 payroll_run.total_gross matches SUM of its slips", async () => {
     const mismatches = await sql`
       SELECT r.id, r.month,
              r.total_gross_minor AS run_total,
@@ -402,8 +412,12 @@ describe("DQ — contract-service", () => {
     expect(cnt).toBeGreaterThanOrEqual(0);
   });
 
-  // KNOWN dirty dev data — DQ ticket; flip back to it() once cleaned
-  it.fails("DQ-CONTRACT-03 no orphan milestones (contract_id missing from contracts table)", async () => {
+  // Was it.fails() pending a Kiro data-cleanup ticket (erp-assessment/TICKETS-FOR-KIRO.md)
+  // that assumed a shared, ad-hoc dev database with known orphan milestones.
+  // Verified against a fresh full-schema bootstrap: the check returns 0 rows — CI never
+  // seeds an orphan row, so it.fails() was unconditionally failing every CI run.
+  // Flipped to it() per the original comment's own instruction, now that it's verified clean.
+  it("DQ-CONTRACT-03 no orphan milestones (contract_id missing from contracts table)", async () => {
     const [{ cnt }] = await sql`
       SELECT count(*)::int AS cnt
       FROM contracts.contract_milestones m
@@ -443,8 +457,15 @@ describe("DQ — finance-service", () => {
     expect(cnt, "orphan journal lines").toBe(0);
   });
 
-  // KNOWN dirty dev data — DQ-FIN ticket (BIGINT-TEST-V001 rows); flip back to it() once cleaned
-  it.fails("DQ-FIN-03 no test/seed rows polluting GL ledger (bigint overflow test rows)", async () => {
+  // Was it.fails() pending a Kiro data-cleanup ticket (erp-assessment/TICKETS-FOR-KIRO.md)
+  // that assumed a shared, ad-hoc dev database carrying leftover BIGINT-TEST-V001 rows
+  // (finance-service/tests/bigint-precision.test.ts inserts+cleans its own rows via
+  // afterAll; the residue documented in the ticket was from an interrupted run on some
+  // long-lived dev cluster, not anything CI or a fresh bootstrap ever produces).
+  // Verified against a fresh full-schema bootstrap: the check returns 0 rows, so
+  // it.fails() was unconditionally failing every CI run. Flipped to it() per the
+  // original comment's own instruction, now that it's verified clean.
+  it("DQ-FIN-03 no test/seed rows polluting GL ledger (bigint overflow test rows)", async () => {
     const testRows = await sql`
       SELECT voucher_no, posting_date, debit_minor
       FROM gl.finance_ledger
