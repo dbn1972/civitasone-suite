@@ -47,6 +47,21 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
+  // Ultimate safety net, independent of the sabotage test's own transaction
+  // and try/finally below: if this file (now or after some future edit)
+  // ever leaves building_applications with RLS off, restore it before the
+  // connection closes rather than let a disabled table survive the run.
+  // Idempotent — a no-op whenever the test's own restore already worked.
+  const [state] = await sqlClient<{ relrowsecurity: boolean; relforcerowsecurity: boolean }[]>`
+    SELECT relrowsecurity, relforcerowsecurity
+    FROM pg_class
+    WHERE oid = 'building.building_applications'::regclass
+  `;
+  if (state && (!state.relrowsecurity || !state.relforcerowsecurity)) {
+    await sqlClient`ALTER TABLE building.building_applications ENABLE ROW LEVEL SECURITY`;
+    await sqlClient`ALTER TABLE building.building_applications FORCE ROW LEVEL SECURITY`;
+  }
+
   await app.close();
   await sqlClient.end();
 });
@@ -160,14 +175,47 @@ describe("Building — Cross-Tenant RLS Isolation", () => {
     `;
     expect(withRlsForced.length).toBe(0);
 
-    await sqlClient`ALTER TABLE building.building_applications DISABLE ROW LEVEL SECURITY`;
+    // The DISABLE / verify-leak / ENABLE / FORCE sequence runs inside ONE
+    // explicit DB transaction instead of four separate auto-committed
+    // statements. That matters because plain auto-committed statements make
+    // the DISABLE durable the instant it completes: if the process were torn
+    // down anywhere after that point but before the matching ENABLE+FORCE
+    // committed (e.g. a fork killed after a vitest test-timeout, which does
+    // NOT cancel an in-flight query — it just stops waiting), the table is
+    // left RLS-disabled for every other session, permanently, until someone
+    // notices. Inside one transaction, the DISABLE is only ever visible to
+    // this transaction until COMMIT — no other session can observe
+    // building_applications with RLS off — and if anything errors or the
+    // process dies mid-sequence, Postgres rolls the whole thing back and the
+    // DISABLE simply never happened. `lock_timeout` bounds how long we wait
+    // for the ACCESS EXCLUSIVE lock the ALTER TABLEs need, so a lock queued
+    // behind another test file's open transaction fails fast (and rolls
+    // back cleanly) instead of hanging indefinitely — belt-and-braces on top
+    // of `fileParallelism: false` (vitest.config.ts), which is the primary
+    // fix and should mean this table has no concurrent claimants at all.
     try {
-      const withRlsDisabled = await sqlClient`
-        SELECT id FROM building.building_applications WHERE id = ${applicationId}
-      `;
-      expect(withRlsDisabled.length).toBe(1);
-      expect(withRlsDisabled[0]!.id).toBe(applicationId);
+      await sqlClient.begin(async (sql) => {
+        await sql`SET LOCAL lock_timeout = '5s'`;
+        await sql`ALTER TABLE building.building_applications DISABLE ROW LEVEL SECURITY`;
+
+        const withRlsDisabled = await sql`
+          SELECT id FROM building.building_applications WHERE id = ${applicationId}
+        `;
+        expect(withRlsDisabled.length).toBe(1);
+        expect(withRlsDisabled[0]!.id).toBe(applicationId);
+
+        await sql`ALTER TABLE building.building_applications ENABLE ROW LEVEL SECURITY`;
+        await sql`ALTER TABLE building.building_applications FORCE ROW LEVEL SECURITY`;
+      });
     } finally {
+      // Fast-path safety net on top of the transaction's own all-or-nothing
+      // guarantee: unconditionally re-assert the enabled+forced state
+      // outside any transaction. Idempotent (a no-op if already
+      // enabled+forced), so this costs nothing on the happy path — by the
+      // time we get here the transaction above has already committed or
+      // rolled back, so there is no lock contention left for these to wait
+      // on. A second, suite-level safety net (querying pg_class directly)
+      // also runs in this file's afterAll below.
       await sqlClient`ALTER TABLE building.building_applications ENABLE ROW LEVEL SECURITY`;
       await sqlClient`ALTER TABLE building.building_applications FORCE ROW LEVEL SECURITY`;
     }
