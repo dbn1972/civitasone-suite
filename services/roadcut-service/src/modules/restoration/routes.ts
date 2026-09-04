@@ -1,5 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
+import { zMoneyMinorStringNonNeg } from "@civitasone/schemas";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import * as repo from "./repo.js";
 import * as commands from "./commands.js";
@@ -20,12 +21,27 @@ const completeBody = z.object({
 });
 
 // refundMinor is money (bigint minor units) supplied as a string. It must be
-// a plain non-negative integer — an unparseable value (e.g. "abc") would
+// a plain non-negative integer -- an unparseable value (e.g. "abc") would
 // previously reach `BigInt(p.refundMinor)` unchecked in the consumer and
 // throw, the same poison-pill shape found in the applications module.
+//
+// CODEC FIX: this used to be a hand-rolled `z.string().regex(/^\d+$/, ...)`
+// duplicating exactly what @civitasone/schemas' money codec (R7) already
+// centralises for every other money field crossing an HTTP/queue boundary
+// fleet-wide. The hand-rolled version happened not to be an active
+// corruption bug here -- the value is never round-tripped through a JS
+// `number` on the way to the bigint column (confirmed by reading
+// restoration/consumer.ts: `p.refundMinor ? BigInt(p.refundMinor) : 0n`,
+// string straight to BigInt) -- but it's a real deviation from the
+// canonical codec for no reason, and any future edit to this field's
+// validation would silently miss whatever R7 gains next (e.g. the
+// z.NEVER/ctx.addIssue safe-error handling money.ts documents). Swapping to
+// zMoneyMinorStringNonNeg for fleet consistency; behaviourally equivalent
+// for this field (both reject non-digit-string and negative input) since
+// the field stays optional here regardless of codec.
 const refundBody = z.object({
   decision: z.enum(["full_refund", "partial_refund", "forfeited"]),
-  refundMinor: z.string().regex(/^\d+$/, "must be a non-negative integer (minor units)").optional(),
+  refundMinor: zMoneyMinorStringNonNeg.optional(),
 });
 
 const idParam = z.object({ id: z.string().uuid() });

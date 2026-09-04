@@ -36,6 +36,16 @@ export async function completeInspection(
   restorationQuality: string | null,
   updatedBy: string,
 ): Promise<boolean> {
+  // BUG FIX (race): the route's canComplete() pre-check ("status must be
+  // 'scheduled'") and this write happen in two separate steps (route ->
+  // queue -> consumer) with no lock held in between — two concurrent
+  // /complete calls for the same inspection can both pass the route's check
+  // before either command is applied, and without a status re-check here the
+  // second racer would silently overwrite the first assessment's findings.
+  // Re-asserting `status = 'scheduled'` in the WHERE clause (not just
+  // id+tenantId) makes the second of two racing commands a genuine no-op,
+  // the same pattern already used in this service for permits/restoration
+  // (restoration/repo.ts's completeRestoration and updateDepositRefund).
   const result = await tx.update(roadcutInspections)
     .set({
       status,
@@ -46,7 +56,11 @@ export async function completeInspection(
       updatedBy,
       updatedAt: new Date(),
     })
-    .where(and(eq(roadcutInspections.id, id), eq(roadcutInspections.tenantId, tenantId)))
+    .where(and(
+      eq(roadcutInspections.id, id),
+      eq(roadcutInspections.tenantId, tenantId),
+      eq(roadcutInspections.status, "scheduled"),
+    ))
     .returning({ id: roadcutInspections.id });
   return result.length > 0;
 }
