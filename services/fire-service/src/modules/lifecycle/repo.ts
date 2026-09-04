@@ -55,6 +55,11 @@ export async function updateDecision(
   fromStatuses: readonly string[],
   actorId: string,
 ) {
+  // BUG FIX: drizzle's inArray() throws on an empty array instead of
+  // compiling to an always-false predicate. Same guard as applications/
+  // repo.ts and animal-service's repo.ts (PR #1007).
+  if (fromStatuses.length === 0) return null;
+
   const rows = await tx
     .update(fireRenewalsTable)
     .set({
