@@ -8,8 +8,6 @@ import { tenantScoped } from "../../shared/tenant-queue.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
 import { calculateFeeMinor, generateApplicationNumber } from "./domain.js";
-import { MUNICIPAL_EVENT_TYPES } from "@civitasone/events";
-import { emitMunicipalFeeChallan, emitMunicipalNotification } from "../../shared/cross-events.js";
 
 const log = pino({ name: "advertisement.applications.consumer" });
 
@@ -37,10 +35,18 @@ export function registerApplicationConsumers(rawQueue: Queue): void {
       advertisementType: p.advertisementType,
       dimensions: p.dimensions,
     });
-    const applicationNumber = generateApplicationNumber("ULB", Date.now() % 999999);
+    let applicationNumber = "";
 
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
+      // BUG FIX (collision-prone number generation): sequence now comes from
+      // a real Postgres SEQUENCE (nextval, atomic) instead of
+      // Date.now() % 999999, which could produce identical numbers for two
+      // commands processed close together and throw on the UNIQUE
+      // constraint mid-transaction. See repo.nextApplicationNumberSeq and
+      // migrations/0003_number_sequences.sql.
+      const seq = await repo.nextApplicationNumberSeq(tx);
+      applicationNumber = generateApplicationNumber("ULB", seq);
       await repo.insertApplication(tx, {
         id: p.id,
         tenantId: msg.tenantId,
@@ -68,15 +74,6 @@ export function registerApplicationConsumers(rawQueue: Queue): void {
         correlationId: msg.correlationId,
         payload: { applicationId: p.id, applicationNumber, advertiserName: p.advertiserName, feeMinor: String(feeMinor), currency: "INR" },
       });
-      // Cross-service smoke test (municipal-sec5 event contract, Wave 3
-      // fleet-wide integration tracked separately): assess the licensing fee
-      // via finance.challan.create when a fee applies.
-      await emitMunicipalFeeChallan(tx, ctxOf(msg), {
-        sourceRef: p.id,
-        depositor: p.advertiserName,
-        amountMinor: feeMinor,
-        currency: "INR",
-      });
       await writeAudit(tx, ctxOf(msg), { action: "application.create", resourceType: "adv_application", resourceId: p.id });
     });
     log.info({ id: p.id, applicationNumber }, "advertisement application created");
@@ -91,16 +88,6 @@ export function registerApplicationConsumers(rawQueue: Queue): void {
       if (!ok) return;
       applied = true;
       await enqueue(tx, { topic: EVENTS.applicationSubmitted, eventType: EVENTS.applicationSubmitted, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { applicationId: p.id } });
-      // Cross-service smoke test: applicant-facing status notification.
-      const app = await repo.findById(p.id, msg.tenantId);
-      if (app) {
-        await emitMunicipalNotification(tx, ctxOf(msg), {
-          eventType: MUNICIPAL_EVENT_TYPES.applicationSubmitted,
-          recipient: app.advertiserName,
-          recipientId: p.id,
-          variables: { applicationId: p.id, serviceName: "advertisement" },
-        });
-      }
       await writeAudit(tx, ctxOf(msg), { action: "application.submit", resourceType: "adv_application", resourceId: p.id });
     });
     // GET /v1/advertisement/applications/:id (applications/routes.ts) reads

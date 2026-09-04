@@ -1,110 +1,187 @@
 /**
- * Regression test: initiateScrutiny discarded appRepo.updateStatus's boolean
- * return, so a scrutiny record + scrutinyInitiated event + audit record
- * could be created for an application that was never actually moved to
- * "under_review" (fake-success). decideApplication was already correctly
- * guarded but never invalidated the application's read-through cache.
+ * Real, DB-backed approvals tests — route → consumer → persisted-state.
+ *
+ * Replaces the previous fully vi.mock'd consumer.test.ts. Covers the
+ * original regression this file protected (initiateScrutiny previously
+ * discarded appRepo.updateStatus's boolean return, so a scrutiny record +
+ * event + audit record could be created for an application never actually
+ * moved to "under_review" — a fake-success), now proven against a real
+ * Postgres row instead of a mocked function call, plus the full
+ * scrutiny → decision lifecycle and this branch's applications pre-accept
+ * check (draft applications cannot be scrutinized).
  */
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { randomUUID } from "node:crypto";
-import { MemoryQueue } from "@civitasone/queue";
-
-const { mockTx, dbTransactionFn, enqueuedMessages, insertScrutinyMock, completeScrutinyMock, updateStatusMock, invalidateMock, makeKeyMock } = vi.hoisted(() => {
-  const _mockTx = { insert: vi.fn(), update: vi.fn() };
-  const _dbTransactionFn = vi.fn(async (cb: (tx: unknown) => Promise<void>) => { await cb(_mockTx); });
-  return {
-    mockTx: _mockTx,
-    dbTransactionFn: _dbTransactionFn as any,
-    enqueuedMessages: [] as Array<{ topic: string; payload: unknown }>,
-    insertScrutinyMock: vi.fn(async () => undefined) as any,
-    completeScrutinyMock: vi.fn(async () => true) as any,
-    updateStatusMock: vi.fn(async () => true) as any,
-    invalidateMock: vi.fn(async () => undefined) as any,
-    makeKeyMock: vi.fn((...parts: string[]) => parts.join(":")) as any,
-  };
-});
-
-vi.mock("../../shared/db.js", () => ({ db: { transaction: dbTransactionFn } }));
-vi.mock("../../shared/outbox.js", () => ({
-  enqueue: vi.fn(async (_tx: unknown, msg: { topic: string; payload: unknown }) => { enqueuedMessages.push({ topic: msg.topic, payload: msg.payload }); }),
-  markProcessed: vi.fn(async () => true),
-}));
-vi.mock("./repo.js", () => ({
-  insertScrutiny: (...args: any[]) => insertScrutinyMock(...args),
-  completeScrutiny: (...args: any[]) => completeScrutinyMock(...args),
-}));
-vi.mock("../applications/repo.js", () => ({
-  updateStatus: (...args: any[]) => updateStatusMock(...args),
-}));
-vi.mock("../../shared/infra.js", () => ({
-  cache: { invalidate: (...args: any[]) => invalidateMock(...args), makeKey: (...args: any[]) => makeKeyMock(...args) },
-}));
-
+import type { FastifyInstance } from "fastify";
+import { buildApp } from "../../app.js";
+import { queue } from "../../shared/infra.js";
+import { sqlClient } from "../../shared/db.js";
+import { registerApplicationConsumers } from "../applications/consumer.js";
 import { registerApprovalConsumers } from "./consumer.js";
-import { COMMANDS, EVENTS } from "../../topics.js";
+import * as appRepo from "../applications/repo.js";
+import * as repo from "./repo.js";
+import { COMMANDS } from "../../topics.js";
+import { tokenForTenant, settle } from "../../shared/test-helpers.js";
 
-const TENANT = "10000000-aaaa-4000-8000-000000000001";
-const ACTOR = "20000000-bbbb-4000-8000-000000000001";
-const APP_ID = "30000000-cccc-4000-8000-000000000001";
-const SCRUTINY_ID = "50000000-eeee-4000-8000-000000000001";
+const TENANT = randomUUID();
+const ACTOR = randomUUID();
+// "adv_admin" (not "adv_officer" alone) so the SAME token can create +
+// submit applications (applications/routes.ts ADV_ROLES = adv_user/adv_admin/
+// super_admin) as well as drive scrutiny/decide (approvals/routes.ts
+// OFFICER_ROLES = adv_admin/adv_officer/super_admin) in one test flow.
+const OFFICER_ROLES = ["adv_admin"];
 
-function makeMsg(type: string, payload: Record<string, unknown>) {
-  return { messageId: randomUUID(), type, tenantId: TENANT, actorId: ACTOR, correlationId: `corr-${randomUUID()}`, schemaVersion: "1.0", payload };
-}
-async function buildQueue(): Promise<MemoryQueue> {
-  const q = new MemoryQueue();
-  registerApprovalConsumers(q);
-  await q.start();
-  return q;
-}
-const settle = () => new Promise<void>((r) => setTimeout(r, 100));
+let app: FastifyInstance;
+let token: string;
 
-beforeEach(() => {
-  vi.clearAllMocks();
-  enqueuedMessages.length = 0;
-  updateStatusMock.mockResolvedValue(true);
-  completeScrutinyMock.mockResolvedValue(true);
-  dbTransactionFn.mockImplementation(async (cb: (tx: unknown) => Promise<void>) => { await cb(mockTx); });
+beforeAll(async () => {
+  registerApplicationConsumers(queue);
+  registerApprovalConsumers(queue);
+  await queue.start();
+  app = await buildApp();
+  token = tokenForTenant(TENANT, ACTOR, OFFICER_ROLES);
 });
 
-describe("initiateScrutiny command", () => {
-  it("inserts scrutiny, publishes the event, and invalidates the application cache when the application update matches", async () => {
-    const q = await buildQueue();
-    await q.publish(COMMANDS.initiateScrutiny, makeMsg(COMMANDS.initiateScrutiny, { id: SCRUTINY_ID, applicationId: APP_ID, scrutinyType: "structural", officerId: ACTOR }));
+afterAll(async () => {
+  await app.close();
+  await queue.stop();
+  await sqlClient.end();
+});
+
+function appPayload() {
+  return {
+    advertiserName: "Acme Ads",
+    advertiserOrg: "Acme Pvt Ltd",
+    advertisementType: "banner",
+    location: { address: "MG Road" },
+    dimensions: { widthFt: 20, heightFt: 10, areaInSqFt: 200 },
+  };
+}
+
+async function createApplication(): Promise<string> {
+  const res = await app.inject({
+    method: "POST",
+    url: "/v1/advertisement/applications",
+    headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+    payload: appPayload(),
+  });
+  const { id } = res.json() as { id: string };
+  await settle();
+  return id;
+}
+
+async function createSubmittedApplication(): Promise<string> {
+  const id = await createApplication();
+  await app.inject({ method: "POST", url: `/v1/advertisement/applications/${id}/submit`, headers: { authorization: `Bearer ${token}` } });
+  await settle();
+  return id;
+}
+
+describe("scrutiny + decision — route → consumer → persisted state", () => {
+  it("initiateScrutiny moves the application to under_review and persists a pending scrutiny record", async () => {
+    const applicationId = await createSubmittedApplication();
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/advertisement/approvals/scrutiny",
+      headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+      payload: { applicationId, scrutinyType: "zone_check", officerId: ACTOR },
+    });
+    expect(res.statusCode).toBe(202);
     await settle();
-    expect(insertScrutinyMock).toHaveBeenCalledOnce();
-    expect(enqueuedMessages.find((m) => m.topic === EVENTS.scrutinyInitiated)).toBeDefined();
-    expect(invalidateMock).toHaveBeenCalledWith("10000000-aaaa-4000-8000-000000000001:application:30000000-cccc-4000-8000-000000000001");
-    await q.stop();
+
+    const application = await appRepo.findById(applicationId, TENANT);
+    expect(application!.status).toBe("under_review");
+
+    const scrutinies = await repo.listByApplication(applicationId, TENANT);
+    expect(scrutinies).toHaveLength(1);
+    expect(scrutinies[0]!.status).toBe("pending");
   });
 
-  it("does NOT insert a scrutiny record, publish an event, or invalidate the cache when the application update matches no row (fake-success guard)", async () => {
-    updateStatusMock.mockResolvedValueOnce(false);
-    const q = await buildQueue();
-    await q.publish(COMMANDS.initiateScrutiny, makeMsg(COMMANDS.initiateScrutiny, { id: SCRUTINY_ID, applicationId: APP_ID, scrutinyType: "structural", officerId: ACTOR }));
+  it("completeScrutiny persists findings and marks the record completed", async () => {
+    const applicationId = await createSubmittedApplication();
+    const initiate = await app.inject({
+      method: "POST",
+      url: "/v1/advertisement/approvals/scrutiny",
+      headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+      payload: { applicationId, scrutinyType: "zone_check", officerId: ACTOR },
+    });
     await settle();
-    expect(insertScrutinyMock).not.toHaveBeenCalled();
-    expect(enqueuedMessages.length).toBe(0);
-    expect(invalidateMock).not.toHaveBeenCalled();
-    await q.stop();
+    const scrutinyId = (initiate.json() as { id: string }).id;
+
+    const complete = await app.inject({
+      method: "POST",
+      url: `/v1/advertisement/approvals/scrutiny/${scrutinyId}/complete`,
+      headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+      payload: { findings: { zoneOk: true } },
+    });
+    expect(complete.statusCode).toBe(202);
+    await settle();
+
+    const scrutiny = await repo.findById(scrutinyId, TENANT);
+    expect(scrutiny!.status).toBe("completed");
+    expect(scrutiny!.findings).toEqual({ zoneOk: true });
+  });
+
+  it("decideApplication moves an under_review application to approved, and the read-through cache reflects it", async () => {
+    const applicationId = await createSubmittedApplication();
+    await app.inject({
+      method: "POST",
+      url: "/v1/advertisement/approvals/scrutiny",
+      headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+      payload: { applicationId, scrutinyType: "zone_check", officerId: ACTOR },
+    });
+    await settle();
+
+    const decide = await app.inject({
+      method: "POST",
+      url: "/v1/advertisement/approvals/decide",
+      headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+      payload: { applicationId, decision: "approved" },
+    });
+    expect(decide.statusCode).toBe(202);
+    await settle();
+
+    const application = await appRepo.findById(applicationId, TENANT);
+    expect(application!.status).toBe("approved");
+
+    // decideApplication's consumer must invalidate the GET's read-through
+    // cache — a stale entry would still show "under_review" here.
+    const getRes = await app.inject({ method: "GET", url: `/v1/advertisement/applications/${applicationId}`, headers: { authorization: `Bearer ${token}` } });
+    expect((getRes.json() as { data: { status: string } }).data.status).toBe("approved");
+  });
+
+  it("rejects initiating scrutiny for an application still in draft (pre-accept validation)", async () => {
+    const applicationId = await createApplication(); // never submitted
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/advertisement/approvals/scrutiny",
+      headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+      payload: { applicationId, scrutinyType: "zone_check", officerId: ACTOR },
+    });
+    expect(res.statusCode).toBe(422);
   });
 });
 
-describe("decideApplication command", () => {
-  it("invalidates the application cache when the update matches", async () => {
-    const q = await buildQueue();
-    await q.publish(COMMANDS.decideApplication, makeMsg(COMMANDS.decideApplication, { applicationId: APP_ID, decision: "approved" }));
+describe("initiateScrutiny consumer — fake-success guard (regression)", () => {
+  it("does NOT insert a scrutiny record when the referenced application does not exist for this tenant", async () => {
+    // Bypasses the route's own pre-accept check (which would 404 this) to
+    // exercise the consumer's OWN guard directly — the actual fix this file
+    // protects: appRepo.updateStatus's boolean return must gate the insert,
+    // not be discarded.
+    const bogusApplicationId = randomUUID();
+    const scrutinyId = randomUUID();
+    await queue.publish(COMMANDS.initiateScrutiny, {
+      messageId: randomUUID(),
+      type: COMMANDS.initiateScrutiny,
+      tenantId: TENANT,
+      actorId: ACTOR,
+      correlationId: `corr-${randomUUID()}`,
+      schemaVersion: "1.0",
+      payload: { id: scrutinyId, applicationId: bogusApplicationId, scrutinyType: "zone_check", officerId: ACTOR },
+    });
     await settle();
-    expect(invalidateMock).toHaveBeenCalledOnce();
-    await q.stop();
-  });
 
-  it("does NOT invalidate the cache when the update matches no row", async () => {
-    updateStatusMock.mockResolvedValueOnce(false);
-    const q = await buildQueue();
-    await q.publish(COMMANDS.decideApplication, makeMsg(COMMANDS.decideApplication, { applicationId: APP_ID, decision: "rejected" }));
-    await settle();
-    expect(invalidateMock).not.toHaveBeenCalled();
-    await q.stop();
+    const scrutiny = await repo.findById(scrutinyId, TENANT);
+    expect(scrutiny).toBeNull();
   });
 });

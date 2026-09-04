@@ -26,10 +26,15 @@ export function registerEnforcementConsumers(rawQueue: Queue): void {
       description: string;
       location: Record<string, unknown>;
     };
-    const violationNumber = generateViolationNumber("ULB", Date.now() % 999999);
+    let violationNumber = "";
 
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
+      // BUG FIX (collision-prone number generation): see
+      // applications/repo.ts's nextApplicationNumberSeq for the full
+      // rationale — same fix, same shape, for violation_number.
+      const seq = await repo.nextViolationNumberSeq(tx);
+      violationNumber = generateViolationNumber("ULB", seq);
       await repo.insertViolation(tx, {
         id: p.id,
         tenantId: msg.tenantId,
@@ -79,6 +84,12 @@ export function registerEnforcementConsumers(rawQueue: Queue): void {
   queue.subscribe(COMMANDS.imposePenalty, async (msg) => {
     const p = msg.payload as { violationId: string; penaltyMinor?: string };
     const violation = await repo.findById(p.violationId, msg.tenantId);
+    // BUG FIX (money field): p.penaltyMinor is now validated + normalized to
+    // a canonical base-10 digit string by zMoneyMinorStringNonNeg at the
+    // route (enforcement/routes.ts penaltyBody) before the command is ever
+    // published, so BigInt() here can no longer throw on malformed input
+    // inside the write transaction (previously a bare z.string() let any
+    // non-numeric string reach this BigInt() call post-202).
     const penaltyMinor = p.penaltyMinor ? BigInt(p.penaltyMinor) : calculatePenaltyMinor(violation?.violationType ?? "unauthorized_hoarding");
     let applied = false;
     await db.transaction(async (tx) => {
