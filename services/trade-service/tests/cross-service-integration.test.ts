@@ -23,9 +23,20 @@
  * immediately before that import — each service's shared/db.ts binds its
  * Drizzle client from DATABASE_URL exactly once, at first import, so this is
  * how one vitest worker can host three services' DB singletons at once
- * without editing any of the three services' source. Restored to
- * trade-service's own DSN afterward for hygiene (trade's own db.ts already
- * bound correctly at this file's static-import time, before any of this runs).
+ * without editing any of the three services' source. Restored to the
+ * ACTUALLY-CAPTURED original DATABASE_URL afterward (not a hardcoded
+ * literal — trade-service's own db.ts already bound correctly at this
+ * file's static-import time, before any of this runs, from whatever
+ * DATABASE_URL the test run itself was started with).
+ *
+ * DSN handling mirrors services/shop-service/tests/cross-events-integration.test.ts
+ * (PR #1021, merged) exactly: env-overridable via TRADE_TEST_*_DATABASE_URL,
+ * falling back to a default that matches CI's actual convention — one
+ * Postgres instance on port 5435 (.github/workflows/ci.yml, PGPORT), with
+ * per-service databases/roles created by scripts/ci/bootstrap-postgres.sh.
+ * The fallback literals below are copied byte-for-byte from finance-service's
+ * and notification-service's own vitest.config.ts DATABASE_URL defaults —
+ * the same values those services' own CI-passing test runs already rely on.
  */
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { randomUUID } from "node:crypto";
@@ -40,6 +51,7 @@ import { tenantScoped } from "../src/shared/tenant-queue.js";
 import { registerApplicationConsumers } from "../src/modules/applications/consumer.js";
 import { registerApprovalConsumers } from "../src/modules/approvals/consumer.js";
 import { registerLicenceConsumers } from "../src/modules/licences/consumer.js";
+import { registerLifecycleConsumers } from "../src/modules/lifecycle/consumer.js";
 import { COMMANDS } from "../src/topics.js";
 import { calculateFeeMinor } from "../src/modules/applications/domain.js";
 
@@ -62,21 +74,31 @@ let registerTreasuryConsumers: (q: unknown) => void, registerGlConsumers: (q: un
 let notificationSqlClient: any, findByRecipient: (tenantId: string, recipientId: string, limit?: number) => Promise<Array<Record<string, unknown>>>;
 let registerDeliveryConsumers: (q: unknown) => void;
 
-const TRADE_DSN = "postgres://trade_svc:trade_dev_pw@localhost:5440/civitas_trade";
-const FINANCE_DSN = "postgres://finance_svc:finance_dev_pw@localhost:5440/civitas_finance";
-const NOTIFICATION_DSN = "postgres://notification_svc:notification_dev_pw@localhost:5440/civitas_notification";
+// Env-overridable, CI-matching defaults — see file header. Not read as a
+// single "TRADE_TEST_DATABASE_URL" for trade's own DB: trade's db.ts binds
+// from whatever DATABASE_URL the test run itself already supplies (vitest
+// config / process env), captured and restored below instead of re-pointed.
+const FINANCE_URL = process.env.TRADE_TEST_FINANCE_DATABASE_URL
+  ?? "postgres://finance_svc:finance_dev_pw@localhost:5435/civitas_finance";
+const NOTIFICATION_URL = process.env.TRADE_TEST_NOTIFICATION_DATABASE_URL
+  ?? "postgres://notification_svc:notification_dev_pw@localhost:5435/civitas_notification";
 
 let q: MemoryQueue;
 
 beforeAll(async () => {
+  // Captured BEFORE any swapping — this is the real value to restore to,
+  // not a hardcoded literal that may not match how this file's own test run
+  // was actually started (vitest.config.ts env, CI, or a developer's shell).
+  const originalUrl = process.env.DATABASE_URL;
+
   // ── finance-service: bind its own db.ts singleton against civitas_finance,
   // then load its consumers/schema — all via relative cross-service imports
   // (same pattern already used by services/inventory-service/tests/
   // consolidation-proof.test.ts and services/revenue-service/tests/
   // e2e-revenue-flow.test.ts).
-  process.env.DATABASE_URL = FINANCE_DSN;
-  process.env.DB_URL = FINANCE_DSN;
-  process.env.PII_ENC_KEY = "test_pii_enc_key_for_finance_32c";
+  process.env.DATABASE_URL = FINANCE_URL;
+  process.env.DB_URL = FINANCE_URL;
+  process.env.PII_ENC_KEY = process.env.PII_ENC_KEY ?? "test_pii_enc_key_for_finance_32c";
   const financeDbMod = await import("../../finance-service/src/shared/db.js");
   financeDb = financeDbMod.db;
   financeSqlClient = financeDbMod.sqlClient;
@@ -88,24 +110,23 @@ beforeAll(async () => {
   ({ deterministicId } = await import("../../finance-service/src/modules/gl/spine.js"));
 
   // ── notification-service: same technique against civitas_notification.
-  process.env.DATABASE_URL = NOTIFICATION_DSN;
-  process.env.DB_URL = NOTIFICATION_DSN;
-  process.env.NOTIFICATION_PII_KEY = "test_notification_pii_key_32chars";
-  process.env.NOTIFICATION_PII_SALT = "civitas-notification-pii-test";
-  process.env.NOTIFICATION_EMAIL_DRIVER = "stub";
-  process.env.NOTIFICATION_IN_APP_DRIVER = "memory";
-  process.env.NOTIFICATION_SMS_DRIVER = "stub";
-  process.env.NOTIFICATION_WHATSAPP_DRIVER = "stub";
+  process.env.DATABASE_URL = NOTIFICATION_URL;
+  process.env.NOTIFICATION_PII_KEY = process.env.NOTIFICATION_PII_KEY ?? "test_notification_pii_key_32chars";
+  process.env.NOTIFICATION_PII_SALT = process.env.NOTIFICATION_PII_SALT ?? "civitas-notification-pii-test";
+  process.env.NOTIFICATION_EMAIL_DRIVER = process.env.NOTIFICATION_EMAIL_DRIVER ?? "stub";
+  process.env.NOTIFICATION_IN_APP_DRIVER = process.env.NOTIFICATION_IN_APP_DRIVER ?? "memory";
+  process.env.NOTIFICATION_SMS_DRIVER = process.env.NOTIFICATION_SMS_DRIVER ?? "stub";
+  process.env.NOTIFICATION_WHATSAPP_DRIVER = process.env.NOTIFICATION_WHATSAPP_DRIVER ?? "stub";
   const notificationDbMod = await import("../../notification-service/src/shared/db.js");
   notificationSqlClient = notificationDbMod.sqlClient;
   ({ registerDeliveryConsumers } = await import("../../notification-service/src/modules/deliveries/consumer.js"));
   ({ findByRecipient } = await import("../../notification-service/src/modules/deliveries/repo.js"));
 
-  // Restore trade-service's own DSN (trade's db.ts already bound correctly
-  // before this file's beforeAll ran — this is just hygiene for anything
-  // that re-reads process.env.DATABASE_URL later in the same worker).
-  process.env.DATABASE_URL = TRADE_DSN;
-  process.env.DB_URL = TRADE_DSN;
+  // Restore the ACTUAL captured original — see file header. trade's own
+  // db.ts already bound correctly before this file's beforeAll ran; this is
+  // just hygiene for anything that re-reads process.env.DATABASE_URL later
+  // in the same worker.
+  process.env.DATABASE_URL = originalUrl;
 
   // Fixture: the BANK_CODE control head isn't seeded by any migration for
   // this tenant (same gap the finance reference test documents) — the
@@ -129,6 +150,7 @@ beforeAll(async () => {
   registerApplicationConsumers(q);
   registerApprovalConsumers(q);
   registerLicenceConsumers(q);
+  registerLifecycleConsumers(q); // needed for the decideRenewal notification tests below
   registerTreasuryConsumers(tenantScoped(q));
   registerGlConsumers(tenantScoped(q));
   registerDeliveryConsumers(tenantScoped(q));
@@ -141,6 +163,53 @@ afterAll(async () => {
   await notificationSqlClient.end({ timeout: 5 });
   await tradeSqlClient.end({ timeout: 5 });
 });
+
+/**
+ * Drives an application all the way through to an issued licence (create ->
+ * submit -> scrutiny initiate/complete -> decide approved -> issue licence),
+ * exactly the flow the existing "issueLicence" describe block below already
+ * uses. Shared by the restoreLicence / issueNotice / decideRenewal
+ * notification tests, which all need a real active licence to act on.
+ */
+async function createAndIssueLicence(businessName: string, tradeCategory = "retail"): Promise<{ applicationId: string; licenceId: string }> {
+  const applicationId = randomUUID();
+  await q.publish(COMMANDS.createApplication, makeMsg(COMMANDS.createApplication, {
+    id: applicationId,
+    businessName,
+    tradeCategory,
+    ownerName: `${businessName} Owner`,
+    premisesAddress: { line1: "1 Test Rd", city: "Kanpur", pin: "208001" },
+  }));
+  await q.drain();
+  await q.publish(COMMANDS.submitApplication, makeMsg(COMMANDS.submitApplication, { id: applicationId }));
+  await q.drain();
+
+  const scrutinyId = randomUUID();
+  await q.publish(COMMANDS.initiateScrutiny, makeMsg(COMMANDS.initiateScrutiny, {
+    id: scrutinyId, applicationId, scrutinyType: "document_check", officerId: ACTOR,
+  }));
+  await q.drain();
+  await q.publish(COMMANDS.completeScrutiny, makeMsg(COMMANDS.completeScrutiny, {
+    id: scrutinyId, findings: { items: [{ checkItem: "documents", result: "pass" }] },
+  }));
+  await q.drain();
+  await q.publish(COMMANDS.decideApplication, makeMsg(COMMANDS.decideApplication, { applicationId, decision: "approved" }));
+  await q.drain();
+
+  const licenceId = randomUUID();
+  await q.publish(COMMANDS.issueLicence, makeMsg(COMMANDS.issueLicence, {
+    id: licenceId, applicationId, tradeCategory, validityMonths: 12,
+  }));
+  await q.drain();
+
+  // Drain the outbox this setup accumulated (fee challan + submitted +
+  // permit-issued notifications) so each test's own assertions only see the
+  // delivery row(s) produced by the action under test.
+  await relayOnce(tradeDb as never, q, 100, "trade-service");
+  await q.drain();
+
+  return { applicationId, licenceId };
+}
 
 describe("trade-service cross-service wiring — submitApplication -> finance.challan.create -> finance.gl.post (real DB, no mocks)", () => {
   it("raises a real finance challan + GL journal for the application's licence fee, back-linked to the trade application", async () => {
@@ -272,5 +341,97 @@ describe("trade-service cross-service wiring — issueLicence -> notification.se
     expect(delivery, "issueLicence must have emitted a municipal.permit.issued notification").toBeTruthy();
     expect(delivery!.templateId).not.toBe(SYSTEM_TEMPLATE_IDS.default);
     expect(delivery!.recipient).toBe("Kanpur Hardware Traders");
+  });
+});
+
+describe("trade-service cross-service wiring — the 3 newly-wired citizen-meaningful transitions (real DB, no mocks)", () => {
+  it("restoreLicence notifies the licensee (their licence becomes usable again), resolved to the municipal.status.changed template", async () => {
+    const { licenceId } = await createAndIssueLicence("Kanpur Restore Test Traders");
+
+    await q.publish(COMMANDS.suspendLicence, makeMsg(COMMANDS.suspendLicence, { licenceId, reason: "Routine inspection hold" }));
+    await q.drain();
+    await relayOnce(tradeDb as never, q, 100, "trade-service");
+    await q.drain();
+    const beforeRestore = await findByRecipient(TENANT, ACTOR, 100);
+
+    await q.publish(COMMANDS.restoreLicence, makeMsg(COMMANDS.restoreLicence, { licenceId, reason: "Inspection cleared" }));
+    await q.drain();
+    const relayed = await relayOnce(tradeDb as never, q, 100, "trade-service");
+    expect(relayed, "restoreLicence must have an unpublished notification.send row to relay").toBeGreaterThanOrEqual(1);
+    await q.drain();
+
+    const afterRestore = await findByRecipient(TENANT, ACTOR, 100);
+    expect(afterRestore.length, "restoreLicence must have written a NEW delivery row, not reused an existing one").toBe(beforeRestore.length + 1);
+    const delivery = afterRestore[0]!; // findByRecipient orders desc by createdAt — the newest row is restoreLicence's.
+    expect(delivery.templateId, "must resolve to the real municipal.status.changed template, not the generic default").toBe(SYSTEM_TEMPLATE_IDS.municipalStatusChanged);
+    expect(delivery.templateId).not.toBe(SYSTEM_TEMPLATE_IDS.default);
+    expect(delivery.recipient).toBe("Kanpur Restore Test Traders");
+  });
+
+  it("issueNotice notifies the licensee of a formal compliance notice, resolved to the municipal.status.changed template", async () => {
+    const { licenceId } = await createAndIssueLicence("Kanpur Notice Test Traders");
+    const before = await findByRecipient(TENANT, ACTOR, 100);
+
+    const noticeId = randomUUID();
+    await q.publish(COMMANDS.issueNotice, makeMsg(COMMANDS.issueNotice, {
+      id: noticeId,
+      licenceId,
+      noticeDetails: { description: "Overdue fire-safety re-certification", severity: "high", responseDeadlineDays: 15 },
+    }));
+    await q.drain();
+    const relayed = await relayOnce(tradeDb as never, q, 100, "trade-service");
+    expect(relayed, "issueNotice must have an unpublished notification.send row to relay").toBeGreaterThanOrEqual(1);
+    await q.drain();
+
+    const after = await findByRecipient(TENANT, ACTOR, 100);
+    expect(after.length, "issueNotice must have written a NEW delivery row, not reused an existing one").toBe(before.length + 1);
+    const delivery = after[0]!;
+    expect(delivery.templateId, "must resolve to the real municipal.status.changed template, not the generic default").toBe(SYSTEM_TEMPLATE_IDS.municipalStatusChanged);
+    expect(delivery.templateId).not.toBe(SYSTEM_TEMPLATE_IDS.default);
+    expect(delivery.recipient).toBe("Kanpur Notice Test Traders");
+  });
+
+  it("decideRenewal(rejected) notifies the licensee, resolved to the municipal.status.changed template", async () => {
+    const { licenceId } = await createAndIssueLicence("Kanpur Renewal Reject Test Traders");
+    const renewalId = randomUUID();
+    await q.publish(COMMANDS.requestRenewal, makeMsg(COMMANDS.requestRenewal, { id: renewalId, licenceId, renewalType: "renewal" }));
+    await q.drain();
+    await relayOnce(tradeDb as never, q, 100, "trade-service"); // drain the (fee-only) renewal-request outbox noise
+    await q.drain();
+    const before = await findByRecipient(TENANT, ACTOR, 100);
+
+    await q.publish(COMMANDS.decideRenewal, makeMsg(COMMANDS.decideRenewal, { id: renewalId, decision: "rejected", reason: "Outstanding property tax dues" }));
+    await q.drain();
+    const relayed = await relayOnce(tradeDb as never, q, 100, "trade-service");
+    expect(relayed, "decideRenewal(rejected) must have an unpublished notification.send row to relay").toBeGreaterThanOrEqual(1);
+    await q.drain();
+
+    const after = await findByRecipient(TENANT, ACTOR, 100);
+    expect(after.length, "decideRenewal(rejected) must have written a NEW delivery row").toBe(before.length + 1);
+    const delivery = after[0]!;
+    expect(delivery.templateId, "must resolve to the real municipal.status.changed template, not the generic default").toBe(SYSTEM_TEMPLATE_IDS.municipalStatusChanged);
+    expect(delivery.templateId).not.toBe(SYSTEM_TEMPLATE_IDS.default);
+    expect(delivery.recipient).toBe("Kanpur Renewal Reject Test Traders");
+  });
+
+  it("decideRenewal(approved, surrender) notifies the licensee and cancels the licence, resolved to the municipal.status.changed template", async () => {
+    const { licenceId } = await createAndIssueLicence("Kanpur Renewal Surrender Test Traders");
+    const renewalId = randomUUID();
+    await q.publish(COMMANDS.requestRenewal, makeMsg(COMMANDS.requestRenewal, { id: renewalId, licenceId, renewalType: "surrender" }));
+    await q.drain();
+    const before = await findByRecipient(TENANT, ACTOR, 100);
+
+    await q.publish(COMMANDS.decideRenewal, makeMsg(COMMANDS.decideRenewal, { id: renewalId, decision: "approved" }));
+    await q.drain();
+    const relayed = await relayOnce(tradeDb as never, q, 100, "trade-service");
+    expect(relayed, "decideRenewal(approved, surrender) must have an unpublished notification.send row to relay").toBeGreaterThanOrEqual(1);
+    await q.drain();
+
+    const after = await findByRecipient(TENANT, ACTOR, 100);
+    expect(after.length, "decideRenewal(approved, surrender) must have written a NEW delivery row").toBe(before.length + 1);
+    const delivery = after[0]!;
+    expect(delivery.templateId, "must resolve to the real municipal.status.changed template, not the generic default").toBe(SYSTEM_TEMPLATE_IDS.municipalStatusChanged);
+    expect(delivery.templateId).not.toBe(SYSTEM_TEMPLATE_IDS.default);
+    expect(delivery.recipient).toBe("Kanpur Renewal Surrender Test Traders");
   });
 });

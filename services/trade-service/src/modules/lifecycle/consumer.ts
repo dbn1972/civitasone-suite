@@ -44,11 +44,16 @@ export function registerLifecycleConsumers(rawQueue: Queue): void {
     const newValidUntil = p.decision === "approved" && renewal.renewalType === "renewal"
       ? calculateNewValidUntil(renewal.previousValidUntil)
       : null;
-    // Wave 3 cross-service wiring: a successful renewal (approved, type
-    // "renewal") is citizen-meaningful — resolve the applicant behind the
-    // licence before the tx, same pattern as licences/consumer.ts.
-    const isRenewed = p.decision === "approved" && renewal.renewalType === "renewal" && newValidUntil;
-    const licence = isRenewed ? await licenceRepo.findById(renewal.licenceId, msg.tenantId) : null;
+    // Wave 3 cross-service wiring: a renewal decision is citizen-meaningful
+    // whenever it changes what the licence-holder can rely on — a successful
+    // renewal (approved, type "renewal"), a successful surrender (approved,
+    // type "surrender" — the licence goes to cancelled), or any rejection
+    // (asymmetric to leave unwired, given approvals/consumer.ts's
+    // decideApplication already notifies both its approved AND rejected
+    // paths). Resolve the applicant behind the licence before the tx for all
+    // three, same pattern as licences/consumer.ts.
+    const notifiable = p.decision === "approved" || p.decision === "rejected";
+    const licence = notifiable ? await licenceRepo.findById(renewal.licenceId, msg.tenantId) : null;
     const application = licence ? await applicationsRepo.findById(licence.applicationId, msg.tenantId) : null;
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
@@ -68,6 +73,20 @@ export function registerLifecycleConsumers(rawQueue: Queue): void {
       if (p.decision === "approved" && renewal.renewalType === "surrender") {
         await licenceRepo.updateLicenceStatus(tx, renewal.licenceId, msg.tenantId, "cancelled", { cancelledAt: new Date(), cancellationReason: "Surrendered by holder" }, msg.actorId);
         await cache.invalidateResourceAfterCommit(tx, msg.tenantId, "licence");
+        await emitMunicipalNotification(tx, ctxOf(msg), {
+          eventType: MUNICIPAL_EVENT_TYPES.statusChanged,
+          recipient: application?.businessName ?? "Licensee",
+          ...(application?.createdBy ? { recipientId: application.createdBy } : {}),
+          variables: { licenceId: renewal.licenceId, renewalId: p.id, status: "surrendered", serviceName: "trade" },
+        });
+      }
+      if (p.decision === "rejected") {
+        await emitMunicipalNotification(tx, ctxOf(msg), {
+          eventType: MUNICIPAL_EVENT_TYPES.statusChanged,
+          recipient: application?.businessName ?? "Licensee",
+          ...(application?.createdBy ? { recipientId: application.createdBy } : {}),
+          variables: { licenceId: renewal.licenceId, renewalId: p.id, status: "rejected", reason: p.reason ?? "", serviceName: "trade" },
+        });
       }
       await enqueue(tx, { topic: EVENTS.renewalDecided, eventType: EVENTS.renewalDecided, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { renewalId: p.id, licenceId: renewal.licenceId, renewalType: renewal.renewalType, decision: p.decision, reason: p.reason, newValidUntil: newValidUntil?.toISOString() } });
       await writeAudit(tx, ctxOf(msg), { action: `renewal.${p.decision}`, resourceType: "trade_renewal", resourceId: p.id });

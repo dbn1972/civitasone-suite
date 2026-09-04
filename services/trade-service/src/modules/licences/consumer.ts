@@ -118,22 +118,42 @@ export function registerLicenceConsumers(rawQueue: Queue): void {
 
   queue.subscribe(COMMANDS.restoreLicence, async (msg) => {
     const p = msg.payload as { licenceId: string; tenantId: string; reason: string };
+    // Wave 3 cross-service wiring: restoration is exactly as citizen-meaningful
+    // as suspend/cancel above (their licence becomes usable again) — same
+    // structural gate (canPerformAction) as those two, so it gets the same
+    // notification treatment.
+    const application = await findApplicationForLicence(p.licenceId, msg.tenantId);
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       await repo.updateLicenceStatus(tx, p.licenceId, msg.tenantId, "active", { suspendedAt: null, suspensionReason: null }, msg.actorId);
       await repo.insertAction(tx, { id: randomUUID(), tenantId: msg.tenantId, licenceId: p.licenceId, actionType: "restoration", reason: p.reason, effectiveFrom: new Date(), performedBy: msg.actorId });
       await cache.invalidateResourceAfterCommit(tx, msg.tenantId, "licence");
       await enqueue(tx, { topic: EVENTS.licenceRestored, eventType: EVENTS.licenceRestored, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { licenceId: p.licenceId, reason: p.reason } });
+      await emitMunicipalNotification(tx, ctxOf(msg), {
+        eventType: MUNICIPAL_EVENT_TYPES.statusChanged,
+        ...applicantNotification(application),
+        variables: { licenceId: p.licenceId, status: "active", reason: p.reason, serviceName: "trade" },
+      });
       await writeAudit(tx, ctxOf(msg), { action: "licence.restore", resourceType: "trade_licence", resourceId: p.licenceId });
     });
   });
 
   queue.subscribe(COMMANDS.issueNotice, async (msg) => {
     const p = msg.payload as { id: string; licenceId: string; tenantId: string; noticeDetails: Record<string, unknown> };
+    // Wave 3 cross-service wiring: a formal compliance/enforcement notice
+    // against this licensee is citizen-critical — a business owner who never
+    // hears about it could miss a response deadline. Resolved before the tx,
+    // same pattern as suspend/cancel/restore above.
+    const application = await findApplicationForLicence(p.licenceId, msg.tenantId);
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       await repo.insertAction(tx, { id: p.id, tenantId: msg.tenantId, licenceId: p.licenceId, actionType: "notice", noticeDetails: p.noticeDetails, effectiveFrom: new Date(), performedBy: msg.actorId });
       await enqueue(tx, { topic: EVENTS.noticeIssued, eventType: EVENTS.noticeIssued, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { noticeId: p.id, licenceId: p.licenceId } });
+      await emitMunicipalNotification(tx, ctxOf(msg), {
+        eventType: MUNICIPAL_EVENT_TYPES.statusChanged,
+        ...applicantNotification(application),
+        variables: { licenceId: p.licenceId, noticeId: p.id, status: "notice_issued", serviceName: "trade" },
+      });
       await writeAudit(tx, ctxOf(msg), { action: "licence.notice", resourceType: "trade_licence_action", resourceId: p.id });
     });
   });
