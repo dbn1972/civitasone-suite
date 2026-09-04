@@ -4,6 +4,7 @@ import { db } from "../../shared/db.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { writeAudit } from "../../shared/audit.js";
 import { tenantScoped } from "../../shared/tenant-queue.js";
+import { cache } from "../../shared/infra.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
 import { generatePermitNumber, generateVerificationCode } from "./domain.js";
@@ -26,11 +27,19 @@ export function registerPermitConsumers(rawQueue: Queue): void {
       workEndDate: string;
       conditions?: Record<string, unknown>;
     };
-    const permitNumber = generatePermitNumber("ULB", Date.now() % 999999);
     const verificationCode = generateVerificationCode();
+    let permitNumber = "";
 
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
+      // BUG FIX: permitNumber previously came from Date.now() % 999999
+      // (periodic, not random -- two commands processed in the same
+      // millisecond collide deterministically against permit_number's
+      // UNIQUE constraint). nextval() on a real Postgres SEQUENCE, called
+      // inside this same transaction, makes every value distinct by
+      // construction. See migrations/0003_number_sequences.sql and
+      // repo.nextPermitNumber.
+      permitNumber = generatePermitNumber("ULB", await repo.nextPermitNumber(tx));
       await repo.insertPermit(tx, {
         id: p.id,
         tenantId: msg.tenantId,
@@ -70,9 +79,11 @@ export function registerPermitConsumers(rawQueue: Queue): void {
 
   queue.subscribe(COMMANDS.extendPermit, async (msg) => {
     const p = msg.payload as { id: string; tenantId: string; extendedUntil: string };
+    let applied = false;
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
-      await repo.extendPermit(tx, p.id, msg.tenantId, p.extendedUntil, msg.actorId);
+      applied = await repo.extendPermit(tx, p.id, msg.tenantId, p.extendedUntil, msg.actorId);
+      if (!applied) return;
       await enqueue(tx, {
         topic: EVENTS.permitExtended,
         eventType: EVENTS.permitExtended,
@@ -87,13 +98,22 @@ export function registerPermitConsumers(rawQueue: Queue): void {
         resourceId: p.id,
       });
     });
+    // BUG FIX: the GET-by-id read-through cache (permits/routes.ts) was
+    // never invalidated after a status-changing write, so a citizen/officer
+    // would keep seeing pre-write state for up to the cache's TTL after
+    // every extend/complete/cancel — same bug class fire-service's
+    // hardening pass found and fixed (PR #1011, matching building-service's
+    // consumer.ts).
+    if (applied) await cache.invalidate(cache.makeKey(msg.tenantId, "permit", p.id));
   });
 
   queue.subscribe(COMMANDS.completePermit, async (msg) => {
     const p = msg.payload as { id: string; tenantId: string };
+    let applied = false;
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
-      await repo.updateStatus(tx, p.id, msg.tenantId, "completed", msg.actorId);
+      applied = await repo.updateStatus(tx, p.id, msg.tenantId, "completed", msg.actorId);
+      if (!applied) return;
       await enqueue(tx, {
         topic: EVENTS.permitCompleted,
         eventType: EVENTS.permitCompleted,
@@ -108,13 +128,16 @@ export function registerPermitConsumers(rawQueue: Queue): void {
         resourceId: p.id,
       });
     });
+    if (applied) await cache.invalidate(cache.makeKey(msg.tenantId, "permit", p.id));
   });
 
   queue.subscribe(COMMANDS.cancelPermit, async (msg) => {
     const p = msg.payload as { id: string; tenantId: string; reason: string };
+    let applied = false;
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
-      await repo.updateStatus(tx, p.id, msg.tenantId, "cancelled", msg.actorId);
+      applied = await repo.updateStatus(tx, p.id, msg.tenantId, "cancelled", msg.actorId);
+      if (!applied) return;
       await enqueue(tx, {
         topic: EVENTS.permitCancelled,
         eventType: EVENTS.permitCancelled,
@@ -129,5 +152,6 @@ export function registerPermitConsumers(rawQueue: Queue): void {
         resourceId: p.id,
       });
     });
+    if (applied) await cache.invalidate(cache.makeKey(msg.tenantId, "permit", p.id));
   });
 }

@@ -1,4 +1,4 @@
-import { eq, and, sql, desc } from "drizzle-orm";
+import { eq, and, ne, sql, desc } from "drizzle-orm";
 import { scopedRead, type ScopedTx } from "../../shared/db.js";
 import { roadcutPermits, type RoadcutPermitRow, type RoadcutPermitInsert } from "./schema.js";
 
@@ -11,10 +11,27 @@ export async function findById(id: string, tenantId: string): Promise<RoadcutPer
   return rows[0] ?? null;
 }
 
+// BUG FIX: this used to match ANY permit for the application regardless of
+// status, so permits/routes.ts's PERMIT_ALREADY_EXISTS pre-accept check
+// (this function's only caller) permanently blocked re-issuance after a
+// permit was cancelled -- contradicting both the migration comment on
+// this table (schema.ts: "a cancelled permit must not block a legitimate
+// re-issuance for the same application") and the actual DB-level
+// constraint enforcing it (migrations/0002_permit_restoration_unique_
+// constraints.sql's partial unique index, `WHERE status != 'cancelled'`).
+// Confirmed live via the test suite: issuing, cancelling, then re-issuing
+// a permit for the same application returned 409 PERMIT_ALREADY_EXISTS
+// even though the DB itself would have allowed the insert. Excluding
+// 'cancelled' here makes the application-level pre-check agree with the
+// constraint it exists to pre-empt.
 export async function findByApplication(applicationId: string, tenantId: string): Promise<RoadcutPermitRow | null> {
   const rows = await scopedRead((tx) =>
     tx.select().from(roadcutPermits)
-      .where(and(eq(roadcutPermits.applicationId, applicationId), eq(roadcutPermits.tenantId, tenantId)))
+      .where(and(
+        eq(roadcutPermits.applicationId, applicationId),
+        eq(roadcutPermits.tenantId, tenantId),
+        ne(roadcutPermits.status, "cancelled"),
+      ))
       .limit(1),
   );
   return rows[0] ?? null;
@@ -49,6 +66,21 @@ export async function list(
 
 export async function insertPermit(tx: ScopedTx, row: RoadcutPermitInsert): Promise<void> {
   await tx.insert(roadcutPermits).values(row);
+}
+
+// BUG FIX: the consumer previously derived the permit_number's trailing
+// digits from `Date.now() % 999999` -- periodic, not random, so two commands
+// processed in the same millisecond collide deterministically against
+// permit_number's UNIQUE constraint, poison-pilling the consumer transaction
+// (it never commits, so the outbox message is stuck). A real Postgres
+// SEQUENCE (migrations/0003_number_sequences.sql) makes every value
+// distinct by construction. Mirrors fire-service's identical fix
+// (nextApplicationNumber, PR #1011) and animal-service's (PR #1007).
+export async function nextPermitNumber(tx: ScopedTx): Promise<number> {
+  const [row] = (await tx.execute(
+    sql`SELECT nextval('"roadcut"."permit_number_seq"')::bigint AS seq`,
+  )) as Array<{ seq: number }>;
+  return Number(row!.seq);
 }
 
 export async function updateStatus(

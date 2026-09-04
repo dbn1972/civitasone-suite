@@ -51,6 +51,21 @@ export async function insertApplication(tx: ScopedTx, row: RoadcutApplicationIns
   await tx.insert(roadcutApplications).values(row);
 }
 
+// BUG FIX: the consumer previously derived the application_number's trailing
+// digits from `Date.now() % 999999` -- periodic, not random, so two commands
+// processed in the same millisecond collide deterministically against
+// application_number's UNIQUE constraint, poison-pilling the consumer
+// transaction (it never commits, so the outbox message is stuck). A real
+// Postgres SEQUENCE (migrations/0003_number_sequences.sql) makes every
+// value distinct by construction. Mirrors fire-service's identical fix
+// (nextApplicationNumber, PR #1011) and animal-service's (PR #1007).
+export async function nextApplicationNumber(tx: ScopedTx): Promise<number> {
+  const [row] = (await tx.execute(
+    sql`SELECT nextval('"roadcut"."application_number_seq"')::bigint AS seq`,
+  )) as Array<{ seq: number }>;
+  return Number(row!.seq);
+}
+
 export async function updateStatus(
   tx: ScopedTx,
   id: string,

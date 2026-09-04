@@ -69,12 +69,19 @@ export function registerInspectionConsumers(rawQueue: Queue): void {
       photos?: Array<{ fileId: string; caption?: string }>;
       restorationQuality?: string;
     };
+    let applied = false;
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
-      await repo.completeInspection(
+      // repo.completeInspection now only applies while status is still
+      // "scheduled" (see repo.ts) — a losing racer against a concurrent
+      // /complete call returns false here and must not publish a completed
+      // event or audit entry for a write that didn't happen.
+      const ok = await repo.completeInspection(
         tx, p.id, msg.tenantId, p.status, p.findings,
         p.photos ?? null, p.restorationQuality ?? null, msg.actorId,
       );
+      if (!ok) return;
+      applied = true;
       await enqueue(tx, {
         topic: EVENTS.inspectionCompleted,
         eventType: EVENTS.inspectionCompleted,
@@ -93,5 +100,6 @@ export function registerInspectionConsumers(rawQueue: Queue): void {
         resourceId: p.id,
       });
     });
+    if (applied) log.info({ id: p.id, status: p.status }, "inspection completed");
   });
 }
