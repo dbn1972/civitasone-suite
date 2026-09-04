@@ -3,6 +3,7 @@ import type { Queue } from "@civitasone/queue";
 import { db } from "../../shared/db.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { writeAudit } from "../../shared/audit.js";
+import { cache } from "../../shared/infra.js";
 import { tenantScoped } from "../../shared/tenant-queue.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
@@ -46,6 +47,7 @@ export function registerInspectionConsumers(rawQueue: Queue): void {
 
   queue.subscribe(COMMANDS.completeInspection, async (msg) => {
     const p = msg.payload as { inspectionId: string; recommendation: string; deficiencies?: unknown[] };
+    let applied = false;
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       // fromStatuses=["scheduled"]: previously no status guard at all existed
@@ -56,6 +58,7 @@ export function registerInspectionConsumers(rawQueue: Queue): void {
         inspectedAt: new Date(),
       }, ["scheduled"], msg.actorId);
       if (!row) return;
+      applied = true;
       await enqueue(tx, {
         topic: EVENTS.inspectionCompleted,
         eventType: EVENTS.inspectionCompleted,
@@ -66,6 +69,10 @@ export function registerInspectionConsumers(rawQueue: Queue): void {
       });
       await writeAudit(tx, ctxOf(msg), { action: "inspection.complete", resourceType: "fire_inspection", resourceId: p.inspectionId });
     });
+    // BUG FIX: same cache-invalidation gap as applications/consumer.ts (see
+    // that file's comment) -- GET /v1/fire/inspections/:id is read-through
+    // cached and nothing invalidated it on write.
+    if (applied) await cache.invalidate(cache.makeKey(msg.tenantId, "inspection", p.inspectionId));
   });
 
   queue.subscribe(COMMANDS.recordFindings, async (msg) => {
@@ -88,12 +95,14 @@ export function registerInspectionConsumers(rawQueue: Queue): void {
       log.error({ inspectionId: p.inspectionId }, "invalid findings shape; refusing to record");
       return;
     }
+    let applied = false;
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       const row = await repo.updateStatus(tx, msg.tenantId, p.inspectionId, "scheduled", {
         findings: p.findings,
       }, ["scheduled"], msg.actorId);
       if (!row) return;
+      applied = true;
       await enqueue(tx, {
         topic: EVENTS.findingsRecorded,
         eventType: EVENTS.findingsRecorded,
@@ -104,5 +113,6 @@ export function registerInspectionConsumers(rawQueue: Queue): void {
       });
       await writeAudit(tx, ctxOf(msg), { action: "inspection.record_findings", resourceType: "fire_inspection", resourceId: p.inspectionId });
     });
+    if (applied) await cache.invalidate(cache.makeKey(msg.tenantId, "inspection", p.inspectionId));
   });
 }

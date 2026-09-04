@@ -45,6 +45,21 @@ export async function insert(tx: ScopedTx, data: FireApplicationInsert) {
   return rows[0]!;
 }
 
+/**
+ * Fleet-wide fix (see migrations/0002_number_sequences.sql): replaces
+ * consumer.ts's previous randomInt(1, 999999) draw, which was a real
+ * collision risk against application_number's UNIQUE constraint at
+ * moderate volume. Called from inside the same transaction that inserts the
+ * row, mirroring animal-service's repo.nextComplaintNumber
+ * (services/animal-service/src/modules/complaints/repo.ts, PR #1007).
+ */
+export async function nextApplicationNumber(tx: ScopedTx): Promise<number> {
+  const [row] = (await tx.execute(
+    sql`SELECT nextval('"fire_applications"."application_number_seq"')::bigint AS seq`,
+  )) as Array<{ seq: number }>;
+  return Number(row!.seq);
+}
+
 export async function updateStatus(
   tx: ScopedTx,
   tenantId: string,
@@ -53,6 +68,17 @@ export async function updateStatus(
   fromStatuses: readonly string[],
   actorId: string,
 ) {
+  // BUG FIX: drizzle's inArray() THROWS ("inArray requires at least one
+  // value") on an empty array rather than compiling to an always-false
+  // predicate -- an empty fromStatuses (meaning "no source status is ever
+  // valid") must reject the CAS, not crash the consumer. Same guard as
+  // animal-service's repo.ts (PR #1007), found the same way: writing the
+  // CAS test suite. No current caller passes [] (fromStatusesFor's only
+  // call sites are "submitted"/"withdrawn", both of which have real
+  // predecessors), but the guard is what fromStatusesFor's own contract —
+  // and callers built on top of this exported function — actually promise.
+  if (fromStatuses.length === 0) return null;
+
   const now = new Date();
   const extra: Record<string, unknown> = { updatedAt: now, updatedBy: actorId };
   if (status === "submitted") extra.submittedAt = now;

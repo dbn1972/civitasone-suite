@@ -48,9 +48,25 @@ export async function nocRoutes(app: FastifyInstance): Promise<void> {
     return reply.send({ data: row });
   });
 
-  app.get("/v1/fire/nocs/verify", async (req, reply) => {
+  // BUG FIX (see migrations/0003_noc_public_directory.sql for the full
+  // mechanism): this route is deliberately public -- no resolveContext/
+  // requireRole call, by design, since it's a citizen/other-department
+  // lookup with no login. Two things were missing:
+  //  1. `{ config: { public: true } }` -- without it, @civitasone/auth's
+  //     global onRequest hook 401'd every request before this handler ever
+  //     ran (see packages/auth/src/plugin.ts). The route was unreachable.
+  //  2. repo.findByVerificationCode queried the RLS-protected table
+  //     directly with no tenant predicate, relying entirely on the GUC --
+  //     which is never set for an unauthenticated request, so FORCE ROW
+  //     LEVEL SECURITY blocked every row unconditionally (NULL tenant_id
+  //     comparison never matches). Fixed by reading the non-RLS public
+  //     directory table instead — see repo.findPublicByVerificationCode.
+  // Same bug shape already fixed for trade-service
+  // (services/trade-service/src/modules/licences/routes.ts) and flagged as
+  // unfixed follow-up work for advertisement/shop/building in PR #999.
+  app.get("/v1/fire/nocs/verify", { config: { public: true } }, async (req, reply) => {
     const q = verifyQuery.parse(req.query);
-    const noc = await repo.findByVerificationCode(q.code);
+    const noc = await repo.findPublicByVerificationCode(q.code);
     if (!noc) throw new HttpError(404, "NOC_NOT_FOUND", "No NOC found for this verification code");
     return reply.send({
       data: {

@@ -3,8 +3,8 @@ import type { Queue } from "@civitasone/queue";
 import { db } from "../../shared/db.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { writeAudit } from "../../shared/audit.js";
+import { cache } from "../../shared/infra.js";
 import { tenantScoped } from "../../shared/tenant-queue.js";
-import { randomInt } from "node:crypto";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
 import { calculateFeeMinor, generateApplicationNumber, fromStatusesFor } from "./domain.js";
@@ -45,13 +45,20 @@ export function registerApplicationConsumers(rawQueue: Queue): void {
       }
     }
     const feeMinor = calculateFeeMinor(p.occupancyType as never, builtUpAreaSqft);
-    // Mitigation, not a full fix — Date.now() % 999999 collides across ALL
-    // tenants against a globally-unique column; see the PR description for
-    // the full mechanism (same pattern flagged fleet-wide in this pass).
-    const applicationNumber = generateApplicationNumber("ULB", new Date().getUTCFullYear(), randomInt(1, 999999));
 
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
+      // Fleet-wide fix (see migrations/0002_number_sequences.sql): a real
+      // Postgres SEQUENCE, replacing the previous randomInt(1, 999999) draw
+      // -- a collision risk against application_number's UNIQUE constraint
+      // at moderate volume. nextval() called inside the same transaction
+      // that inserts the row (mirrors animal-service's
+      // repo.nextComplaintNumber, PR #1007).
+      const applicationNumber = generateApplicationNumber(
+        "ULB",
+        new Date().getUTCFullYear(),
+        await repo.nextApplicationNumber(tx),
+      );
       await repo.insert(tx, {
         id: p.id,
         tenantId: msg.tenantId,
@@ -80,29 +87,46 @@ export function registerApplicationConsumers(rawQueue: Queue): void {
         payload: { applicationId: p.id, applicationNumber, buildingName: p.buildingName, feeMinor: String(feeMinor) },
       });
       await writeAudit(tx, ctxOf(msg), { action: "application.create", resourceType: "fire_application", resourceId: p.id });
+      log.info({ id: p.id, applicationNumber }, "fire application created");
     });
-    log.info({ id: p.id, applicationNumber }, "fire application created");
   });
 
   queue.subscribe(COMMANDS.submitApplication, async (msg) => {
     const p = msg.payload as { applicationId: string };
+    let applied = false;
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       const row = await repo.updateStatus(tx, msg.tenantId, p.applicationId, "submitted", fromStatusesFor("submitted"), msg.actorId);
       if (!row) return;
+      applied = true;
       await enqueue(tx, { topic: EVENTS.applicationSubmitted, eventType: EVENTS.applicationSubmitted, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { applicationId: p.applicationId } });
       await writeAudit(tx, ctxOf(msg), { action: "application.submit", resourceType: "fire_application", resourceId: p.applicationId });
     });
+    // BUG FIX: GET /v1/fire/applications/:id is read-through cached
+    // (routes.ts's cache.getOrLoad) and NOTHING previously invalidated it on
+    // write, in violation of CLAUDE.md §6 ("every query handler consults the
+    // cache before Postgres; writes never touch the read path -- the
+    // consumer invalidates here"). A citizen/officer polling that endpoint
+    // right after submit would keep seeing "draft" for up to the cache's
+    // default 60s TTL. Fixed to match the established fleet pattern -- see
+    // e.g. services/building-service/src/modules/applications/consumer.ts.
+    // Invalidated AFTER the transaction commits, not inside it (this DB
+    // layer has no commit-hook), so a rolled-back write never evicts a still
+    // valid cache entry.
+    if (applied) await cache.invalidate(cache.makeKey(msg.tenantId, "application", p.applicationId));
   });
 
   queue.subscribe(COMMANDS.withdrawApplication, async (msg) => {
     const p = msg.payload as { applicationId: string };
+    let applied = false;
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       const row = await repo.updateStatus(tx, msg.tenantId, p.applicationId, "withdrawn", fromStatusesFor("withdrawn"), msg.actorId);
       if (!row) return;
+      applied = true;
       await enqueue(tx, { topic: EVENTS.applicationWithdrawn, eventType: EVENTS.applicationWithdrawn, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { applicationId: p.applicationId } });
       await writeAudit(tx, ctxOf(msg), { action: "application.withdraw", resourceType: "fire_application", resourceId: p.applicationId });
     });
+    if (applied) await cache.invalidate(cache.makeKey(msg.tenantId, "application", p.applicationId));
   });
 }
