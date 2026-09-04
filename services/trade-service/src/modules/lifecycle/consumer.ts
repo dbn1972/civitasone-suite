@@ -8,7 +8,10 @@ import { cache } from "../../shared/infra.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
 import * as licenceRepo from "../licences/repo.js";
+import * as applicationsRepo from "../applications/repo.js";
 import { calculateRenewalFeeMinor, calculateNewValidUntil } from "./domain.js";
+import { emitMunicipalNotification } from "../../shared/cross-events.js";
+import { MUNICIPAL_EVENT_TYPES } from "@civitasone/events";
 
 const log = pino({ name: "trade.lifecycle.consumer" });
 
@@ -41,6 +44,12 @@ export function registerLifecycleConsumers(rawQueue: Queue): void {
     const newValidUntil = p.decision === "approved" && renewal.renewalType === "renewal"
       ? calculateNewValidUntil(renewal.previousValidUntil)
       : null;
+    // Wave 3 cross-service wiring: a successful renewal (approved, type
+    // "renewal") is citizen-meaningful — resolve the applicant behind the
+    // licence before the tx, same pattern as licences/consumer.ts.
+    const isRenewed = p.decision === "approved" && renewal.renewalType === "renewal" && newValidUntil;
+    const licence = isRenewed ? await licenceRepo.findById(renewal.licenceId, msg.tenantId) : null;
+    const application = licence ? await applicationsRepo.findById(licence.applicationId, msg.tenantId) : null;
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       await repo.updateDecision(tx, p.id, msg.tenantId, p.decision, msg.actorId, p.reason ?? null, newValidUntil);
@@ -49,6 +58,12 @@ export function registerLifecycleConsumers(rawQueue: Queue): void {
         // See applications/consumer.ts's header comment: GET /licences/:id is
         // cached and this write (via a DIFFERENT module) mutates that row.
         await cache.invalidateResourceAfterCommit(tx, msg.tenantId, "licence");
+        await emitMunicipalNotification(tx, ctxOf(msg), {
+          eventType: MUNICIPAL_EVENT_TYPES.statusChanged,
+          recipient: application?.businessName ?? "Licensee",
+          ...(application?.createdBy ? { recipientId: application.createdBy } : {}),
+          variables: { licenceId: renewal.licenceId, renewalId: p.id, status: "renewed", validUntil: newValidUntil.toISOString(), serviceName: "trade" },
+        });
       }
       if (p.decision === "approved" && renewal.renewalType === "surrender") {
         await licenceRepo.updateLicenceStatus(tx, renewal.licenceId, msg.tenantId, "cancelled", { cancelledAt: new Date(), cancellationReason: "Surrendered by holder" }, msg.actorId);

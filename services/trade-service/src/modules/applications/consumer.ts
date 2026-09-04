@@ -9,6 +9,8 @@ import { cache } from "../../shared/infra.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
 import { calculateFeeMinor, generateApplicationNumber } from "./domain.js";
+import { emitMunicipalFeeChallan, emitMunicipalNotification } from "../../shared/cross-events.js";
+import { MUNICIPAL_EVENT_TYPES } from "@civitasone/events";
 
 /**
  * BUG (found live while writing this module's smoke tests): GET
@@ -20,6 +22,18 @@ import { calculateFeeMinor, generateApplicationNumber } from "./domain.js";
  * invalidating the "application" cache resource for this tenant right after each
  * write commits (see @civitasone/cache's invalidateResourceAfterCommit — same
  * pattern already used by services/admin-service's F3 consumers).
+ *
+ * Wave 3 (cross-service wiring, see shared/cross-events.ts): submitApplication
+ * is where the licence fee (calculateFeeMinor, computed and stored on the row
+ * at create time) actually becomes payable — a citizen submitting a trade
+ * application is committing to pay before scrutiny proceeds. That's the one
+ * point in this module's lifecycle where a real financial obligation begins,
+ * so it's the point a finance.challan.create is raised (feeMinor stays a
+ * bigint end-to-end into emitMunicipalFeeChallan — never coerced through a
+ * JS number — the same precision discipline PR #1012 already applied to this
+ * module's fee inputs). recordFeePayment (below) exists purely to mark that
+ * challan paid once the citizen settles it; nothing before this wiring ever
+ * actually produced the challan the citizen was meant to pay.
  */
 
 const log = pino({ name: "trade.applications.consumer" });
@@ -91,12 +105,29 @@ export function registerApplicationConsumers(rawQueue: Queue): void {
 
   queue.subscribe(COMMANDS.submitApplication, async (msg) => {
     const p = msg.payload as { id: string; tenantId: string };
+    // Read before the tx (same pattern as lifecycle/consumer.ts's
+    // decideRenewal): the fee challan and the citizen notification both need
+    // the row's fee/owner details, which the write below never returns.
+    const application = await repo.findById(p.id, msg.tenantId);
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       const ok = await repo.updateStatus(tx, p.id, msg.tenantId, "submitted", msg.actorId);
       if (!ok) return;
       await cache.invalidateResourceAfterCommit(tx, msg.tenantId, "application");
       await enqueue(tx, { topic: EVENTS.applicationSubmitted, eventType: EVENTS.applicationSubmitted, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { applicationId: p.id } });
+      if (application && application.feeMinor && application.feeMinor > 0n) {
+        await emitMunicipalFeeChallan(tx, ctxOf(msg), {
+          sourceRef: p.id,
+          depositor: application.businessName,
+          amountMinor: application.feeMinor,
+        });
+      }
+      await emitMunicipalNotification(tx, ctxOf(msg), {
+        eventType: MUNICIPAL_EVENT_TYPES.applicationSubmitted,
+        recipient: application?.businessName ?? "Applicant",
+        ...(application?.createdBy ? { recipientId: application.createdBy } : {}),
+        variables: { applicationId: p.id, applicationNumber: application?.applicationNumber ?? "", serviceName: "trade" },
+      });
       await writeAudit(tx, ctxOf(msg), { action: "application.submit", resourceType: "trade_application", resourceId: p.id });
     });
   });
