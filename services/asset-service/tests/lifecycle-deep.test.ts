@@ -27,6 +27,11 @@ describe("assertAssetTransferable", () => {
   it("throws for impaired", () => {
     expect(() => assertAssetTransferable("impaired")).toThrow("ASSET_NOT_TRANSFERABLE");
   });
+  it("throws ASSET_NOT_TRANSFERABLE for under_maintenance", () => {
+    // An asset being serviced is physically unavailable for handover; it must
+    // not be transferable until it is back to "active".
+    expect(() => assertAssetTransferable("under_maintenance")).toThrow("ASSET_NOT_TRANSFERABLE");
+  });
   it("throws for draft", () => {
     expect(() => assertAssetTransferable("draft")).toThrow(DomainError);
   });
