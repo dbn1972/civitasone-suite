@@ -1,6 +1,6 @@
 import Fastify, { type FastifyInstance } from "fastify";
 import { registerOpsRoutes, dbPing } from "@civitasone/observability";
-import { createTenantTxHook } from "@civitasone/db";
+import { createTenantTxHook, tenantStorage } from "@civitasone/db";
 import { cache, queue } from "./shared/infra.js";
 import { db, sqlClient } from "./shared/db.js";
 import { registerSchemaErrorHandler } from "@civitasone/schemas/plugin";
@@ -23,6 +23,18 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(authPlugin);
 
   app.addHook("onRequest", createTenantTxHook(db));
+
+  // G2: RLS enforcement — source the RLS tenant from the AUTHENTICATED token
+  // (req.ctx, populated by authPlugin's earlier onRequest hook), not just the
+  // client-supplied x-tenant-id header. createTenantTxHook only enters
+  // AsyncLocalStorage when x-tenant-id is present; a spoofed header would
+  // otherwise let an authenticated caller read/write another tenant's rows.
+  // Header remains the fallback; the verified JWT tenant wins when present.
+  // Mirrors admin-service / hrms-service / payroll-service.
+  app.addHook("onRequest", async (req) => {
+    const tid = (req as { ctx?: { tenantId?: string } }).ctx?.tenantId;
+    if (tid) tenantStorage.enterWith({ tenantId: tid });
+  });
 
   registerOpsRoutes(app, {
     service: "parking-service",
