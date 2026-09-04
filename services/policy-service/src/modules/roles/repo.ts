@@ -49,3 +49,9 @@ export async function findRoleByIdTx(tx: Writer, id: string, tenantId: string): 
     .where(and(eq(roles.id, id), eq(roles.tenantId, tenantId))).limit(1);
   return rows[0] ? toRoleView(rows[0]) : null;
 }
+
+export async function findRoleByNameTx(tx: Writer, tenantId: string, name: string): Promise<RoleView | null> {
+  const rows = await tx.select().from(roles)
+    .where(and(eq(roles.tenantId, tenantId), eq(roles.name, name))).limit(1);
+  return rows[0] ? toRoleView(rows[0]) : null;
+}

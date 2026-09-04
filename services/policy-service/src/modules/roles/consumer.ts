@@ -4,6 +4,7 @@ import { cache } from "../../shared/infra.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS, RESOURCE } from "../../topics.js";
 import * as repo from "./repo.js";
+import { provisionMunicipalRolesForTenant } from "./municipal-provision.js";
 import { tenantScoped } from "../../shared/tenant-queue.js";
 
 const AUDIT_TOPIC = "audit.event.record";
@@ -46,6 +47,44 @@ export function registerRoleConsumers(q: Queue): void {
       });
     }
   );
+
+  // NOTE: deliberately does NOT call emitAudit() / declare an
+  // EVENTS.municipalRolesProvisioned topic. A held branch this was ported
+  // from published a domain-specific "policy.municipal_roles.provisioned"
+  // event with zero consumers anywhere in the fleet — an orphan event that
+  // would have tripped tests/contract/cross-service-events.contract.test.ts's
+  // ratchet (no NEW orphan events allowed). Its sibling events in this same
+  // file (policy.role.created/updated, policy.permission.added) are already
+  // pre-existing tracked orphans in tests/contract/known-defects.json, and
+  // neither of cross-service-events.allowlist.ts's two valid
+  // PRODUCER_ONLY_ALLOWLIST categories (INFRASTRUCTURE SINK, EXTERNAL
+  // CONSUMER) honestly applies — nothing generic or external consumes this
+  // topic. Rather than mint a fourth orphan under a stretched justification,
+  // this only writes the generic audit-trail record (AUDIT_TOPIC), which is
+  // the real "audit log entry" a role-provisioning action needs and which
+  // audit-service already consumes.
+  q.subscribe<{ tenantId: string }>(COMMANDS.provisionMunicipalRoles, async (msg) => {
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+      const result = await provisionMunicipalRolesForTenant(tx, msg.tenantId, msg.actorId);
+      await enqueue(tx, {
+        topic: AUDIT_TOPIC,
+        eventType: AUDIT_TOPIC,
+        tenantId: msg.tenantId,
+        actorId: msg.actorId,
+        correlationId: msg.correlationId,
+        payload: {
+          service: "policy",
+          action: "provision_municipal_roles",
+          resourceType: "tenant",
+          resourceId: msg.tenantId,
+          outcome: "success",
+          ...result,
+        },
+      });
+    });
+    await cache.invalidate(cache.makeKey(msg.tenantId, RESOURCE.role, msg.tenantId));
+  });
 }
 
 async function emitAudit(tx: unknown, msg: CommandEnvelope, eventType: string, payload: Record<string, unknown>, action: string, resourceId: string): Promise<void> {

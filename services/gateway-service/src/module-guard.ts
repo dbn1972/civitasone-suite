@@ -56,6 +56,25 @@ const ROUTE_TO_MODULE: Record<string, string> = {
   estab: "establishment",
   establishment: "establishment",
   contract: "contracts",
+  // Municipal Sec5 (17 services) - route name matches gateway registry.ts
+  // "name" field exactly for each; module key mirrors that 1:1.
+  shop: "shop",
+  trade: "trade",
+  building: "building",
+  fire: "fire",
+  advertisement: "advertisement",
+  vendor: "vendor",
+  roadcut: "roadcut",
+  event: "event",
+  refund: "refund",
+  sewerage: "sewerage",
+  swm: "swm",
+  drainage: "drainage",
+  parks: "parks",
+  animal: "animal",
+  crematorium: "crematorium",
+  parking: "parking",
+  market: "market",
 };
 
 // Platform routes (always available, not module-gated)
