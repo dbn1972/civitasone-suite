@@ -2,10 +2,10 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { EmptyState, PageHeader, StatusPill } from "@/app/_components/ds";
 import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
-import { CitizenServiceLinks } from "../../_components/CitizenServiceLinks";
-import { RecordDetailPanel } from "../../_components/RecordDetailPanel";
-import { getMunicipalService, officerApplicationsHref } from "../../_data/services";
-import { fetchMunicipalDetail } from "../../_data/municipalApi";
+import { CitizenServiceLinks } from "../../../_components/CitizenServiceLinks";
+import { RecordDetailPanel } from "../../../_components/RecordDetailPanel";
+import { getMunicipalService, officerApplicationsHref } from "../../../_data/services";
+import { fetchMunicipalDetail } from "../../../_data/municipalApi";
 
 export const dynamic = "force-dynamic";
 
