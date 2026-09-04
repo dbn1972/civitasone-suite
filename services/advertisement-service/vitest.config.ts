@@ -21,8 +21,27 @@ import { defineConfig } from "vitest/config";
 // so the now-real, DB-backed consumer tests connect the same way in CI and
 // locally (`process.env.DATABASE_URL` still wins when set, e.g. against an
 // isolated throwaway container during manual verification).
+//
+// fileParallelism: false (added alongside tests/cross-service-integration.test.ts,
+// Wave 3): vitest's default fileParallelism runs test FILES concurrently in
+// separate workers, but every *.test.ts file in this service shares the SAME
+// physical civitas_advertisement Postgres database and, once cross-events.ts
+// is actually wired into a command/consumer, the SAME outbox_messages table.
+// Reproduced under bare `vitest run` (no override flags — how real CI invokes
+// it): tests/cross-service-integration.test.ts's relayOnce() calls raced
+// against permits/consumer.test.ts and enforcement/consumer.test.ts's own
+// concurrently-running writes to that shared outbox table (those files now
+// also enqueue finance.challan.create/notification.send via the same
+// cross-events.ts helpers this change wires in), intermittently starving a
+// relay of the specific row a test expected or letting a later test observe
+// a notification recipient produced by a still-in-flight earlier test.
+// Exactly the same class of cross-file DB-table race independently hit and
+// fixed this way in trade-service (PR #1022) and parking-service (PR #1026)
+// tonight. Serializing file execution trades some wall-clock time for a
+// deterministic, CI-matching result.
 export default defineConfig({
   test: {
+    fileParallelism: false,
     env: {
       JWT_ALGORITHM: "HS256",
       JWT_SECRET: "test_secret_for_civitasone_32chr",
