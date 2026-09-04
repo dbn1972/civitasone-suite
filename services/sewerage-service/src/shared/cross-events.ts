@@ -59,6 +59,18 @@ export type CrossEventCtx = {
  * input here, not a sign of corruption, and tests/hardening.integration.
  * test.ts's money-precision regression test deliberately exercises a value
  * at the very top of the bigint range end to end through this exact path.
+ *
+ * That "no ceiling needed" reasoning holds only because BOTH amountMinor
+ * and feeMinor are, in practice, admin/officer-set: billing/routes.ts's
+ * POST /v1/sewerage/bills is ADMIN_ROLES-only outright, and
+ * desludging/routes.ts's POST /v1/sewerage/desludging — reachable by a
+ * plain citizen — additionally requires ADMIN_ROLES specifically to supply
+ * a non-empty feeMinor (a citizen may only request desludging with no fee).
+ * Without that gate a citizen could dictate their own municipal fee
+ * challan up to the bigint ceiling with zero server-side derivation, since
+ * desludging has no tariff schedule anywhere in this service's schema to
+ * validate a citizen-supplied amount against. Do not relax that gate to
+ * "fix" this comment's symmetry — the asymmetry is the point.
  * A RangeError thrown from inside billGenerate's/desludgingBook's
  * transaction would abort the underlying bill/booking write too — adding an
  * invented ceiling here would silently break legitimate large bills in

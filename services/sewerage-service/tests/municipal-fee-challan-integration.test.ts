@@ -43,6 +43,8 @@ import { db as sewerageDb, sqlClient as sewerageSqlClient } from "../src/shared/
 import { outboxMessages as sewerageOutboxMessages } from "../src/shared/outbox.js";
 import { sewerageBills } from "../src/modules/billing/schema.js";
 import { registerBillingConsumers } from "../src/modules/billing/consumer.js";
+import { sewerageDesludgingBookings } from "../src/modules/desludging/schema.js";
+import { registerDesludgingConsumers } from "../src/modules/desludging/consumer.js";
 import { COMMANDS as SEWERAGE_COMMANDS } from "../src/topics.js";
 
 // Platform default tenant — the same tenant finance-service's migration 0070
@@ -112,6 +114,7 @@ const FINANCE_URL =
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let finance: any;
 const registeredBillIds: string[] = [];
+const registeredBookingIds: string[] = [];
 
 async function importFinance() {
   const originalUrl = process.env.DATABASE_URL;
@@ -157,6 +160,15 @@ afterAll(async () => {
       sewerageDb.transaction(async (tx) => {
         for (const id of registeredBillIds) {
           await tx.delete(sewerageBills).where(and(eq(sewerageBills.id, id), eq(sewerageBills.tenantId, TENANT)));
+        }
+      }),
+    );
+  }
+  if (registeredBookingIds.length) {
+    await runWithTenant(TENANT, () =>
+      sewerageDb.transaction(async (tx) => {
+        for (const id of registeredBookingIds) {
+          await tx.delete(sewerageDesludgingBookings).where(and(eq(sewerageDesludgingBookings.id, id), eq(sewerageDesludgingBookings.tenantId, TENANT)));
         }
       }),
     );
@@ -255,6 +267,98 @@ describe("sewerage-service cross-events wiring — fee challan, real DB, no mock
     const debitLine = journalRow.lines.find((l: any) => l.debitMinor !== "0");
     expect(creditLine.creditMinor).toBe(LARGE_AMOUNT_MINOR);
     expect(debitLine.debitMinor).toBe(LARGE_AMOUNT_MINOR);
+    expect(creditLine.accountCode).toBe(seededHead.id);
+
+    await q.stop();
+  });
+
+  it("desludgingBook (with an officer/admin-assessed feeMinor) raises a fee challan that lands as a real finance GL journal, back-linked to the booking", async () => {
+    // Companion to the billGenerate test above, added alongside the fix for
+    // the PR #1029 review gap (desludging/routes.ts now requires
+    // ADMIN_ROLES to set feeMinor at all — see hardening.integration.
+    // test.ts's "desludging feeMinor — citizen-set fee gap" block for the
+    // HTTP-layer rejection). This test drives the command layer directly
+    // (bypassing HTTP role checks, like billGenerate above) purely to prove
+    // the cross-event wiring itself — desludgingBook -> emitMunicipalFeeChallan
+    // -> a real finance GL journal — still works end to end for a
+    // legitimate, officer-assessed fee once that gate is in place.
+    await importFinance();
+
+    const q = tenantWrappedQueue();
+    registerDesludgingConsumers(q);
+    finance.registerTreasuryConsumers(q);
+    finance.registerGlConsumers(q);
+    await q.start();
+
+    const bookingId = randomUUID();
+    registeredBookingIds.push(bookingId);
+    // A plausible tariff amount an inspecting officer would assess for a
+    // mid-size tank (Rs 600), not a trivial single-digit value — exercises
+    // the real string->bigint codec path the same way the billing test does.
+    const assessedFeeMinor = "60000";
+    await q.publish(
+      SEWERAGE_COMMANDS.desludgingBook,
+      makeMsg(SEWERAGE_COMMANDS.desludgingBook, {
+        id: bookingId,
+        requestedBy: ACTOR,
+        address: null,
+        tankCapacityLitres: 1000,
+        requestedDate: null,
+        requestedSlot: null,
+        feeMinor: assessedFeeMinor,
+      }),
+    );
+    await q.drain();
+
+    const [bookingRow] = await runWithTenant(TENANT, () =>
+      sewerageDb.transaction((tx) =>
+        tx.select().from(sewerageDesludgingBookings).where(eq(sewerageDesludgingBookings.id, bookingId)).limit(1),
+      ),
+    );
+    expect(bookingRow, "sewerage desludging booking row must exist").toBeTruthy();
+    expect(bookingRow!.status).toBe("requested");
+    expect(bookingRow!.feeMinor).toBe(BigInt(assessedFeeMinor));
+    const bookingNumber = bookingRow!.bookingNumber;
+
+    const relayed1 = await drainOutbox(sewerageDb, q, "sewerage-service");
+    expect(relayed1, "sewerage-service must have an unpublished finance.challan.create row to relay").toBeGreaterThan(0);
+    await q.drain();
+
+    await drainOutbox(finance.db, q, "finance-service");
+    await q.drain();
+
+    const [seededHead] = await withTenantScope(finance.db as never, TENANT, (tx: any) =>
+      tx.select().from(finance.financeHeads)
+        .where(and(eq(finance.financeHeads.tenantId, TENANT), eq(finance.financeHeads.code, MUNICIPAL_FEE_RECEIPT_HEAD_CODE)))
+        .limit(1),
+    );
+    expect(seededHead, "migration 0070 must have seeded the 0075 municipal-fee receipt head").toBeTruthy();
+
+    // ── back-link: sourceService="sewerage", sourceRef=bookingNumber ──
+    const [challanRow] = await withTenantScope(finance.db as never, TENANT, (tx: any) =>
+      tx.select().from(finance.financeChallans)
+        .where(and(eq(finance.financeChallans.sourceService, "sewerage"), eq(finance.financeChallans.sourceRef, bookingNumber)))
+        .limit(1),
+    );
+    expect(challanRow, "finance-service must have created a challan row back-linked to the desludging booking").toBeTruthy();
+    expect(challanRow.receiptHeadId).toBe(seededHead.id);
+    expect(challanRow.amountMinor).toBe(BigInt(assessedFeeMinor));
+    expect(challanRow.amountMinor.toString()).toBe(assessedFeeMinor);
+    expect(challanRow.depositor).toBe(bookingNumber);
+
+    // ── real GL journal row, correct amount, no precision loss ──
+    const journalId = finance.deterministicId(`challan:${challanRow.id}`);
+    const [journalRow] = await withTenantScope(finance.db as never, TENANT, (tx: any) =>
+      tx.select().from(finance.financeJournals).where(eq(finance.financeJournals.id, journalId)).limit(1),
+    );
+    expect(journalRow, "GL journal row must have been posted by the second hop (finance.gl.post)").toBeTruthy();
+    expect(journalRow.lines).toHaveLength(2);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const creditLine = journalRow.lines.find((l: any) => l.creditMinor !== "0");
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const debitLine = journalRow.lines.find((l: any) => l.debitMinor !== "0");
+    expect(creditLine.creditMinor).toBe(assessedFeeMinor);
+    expect(debitLine.debitMinor).toBe(assessedFeeMinor);
     expect(creditLine.accountCode).toBe(seededHead.id);
 
     await q.stop();

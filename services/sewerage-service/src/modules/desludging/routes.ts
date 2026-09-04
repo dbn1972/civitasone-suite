@@ -23,6 +23,12 @@ const bookBody = z.object({
   // R7 money codec — see billing/routes.ts's amountMinor comment for the
   // full rationale (same fix, same bug class: the old
   // `z.number().int().nonnegative()` had no `.max()`).
+  //
+  // The codec itself is bounded only by Postgres bigint range (by design —
+  // see shared/cross-events.ts's no-ceiling rationale). Structurally this
+  // field stays optional in the body schema for BOTH roles, but the handler
+  // below additionally requires ADMIN_ROLES to actually supply a value —
+  // see the comment there for why.
   feeMinor: zMoneyMinorStringNonNeg.optional(),
 });
 
@@ -34,6 +40,28 @@ export async function desludgingRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, ROLES);
     const body = bookBody.parse(req.body);
+    // SECURITY: unlike billing/routes.ts's POST /v1/sewerage/bills (already
+    // ADMIN_ROLES-only end to end), this route is reachable by a plain
+    // citizen (ROLES includes sewerage_user) — and, unlike shop-service's
+    // calculateFeeMinor, nothing here derives feeMinor server-side from a
+    // bounded input; it is the raw request-body value, checked only by the
+    // zMoneyMinorStringNonNeg codec (non-negative, Postgres-bigint-range).
+    // Since desludging/consumer.ts's desludgingBook turns a non-null
+    // feeMinor straight into a real emitMunicipalFeeChallan → finance GL
+    // journal entry, letting a citizen set it would let them dictate their
+    // own municipal fee, unbounded, back-linked to their own booking.
+    //
+    // In real desludging/septage-management practice the fee is fixed by
+    // the ULB's tariff (per tanker-load / tank capacity) and confirmed by
+    // the inspecting/dispatching officer, never citizen-declared — this
+    // service has no tariff schedule anywhere in its schema to validate a
+    // citizen-supplied amount against, so the correct fix mirrors billing's
+    // own boundary rather than inventing an arbitrary ceiling: a citizen
+    // may only REQUEST desludging (feeMinor omitted); only an officer/admin
+    // may set it — e.g. a dispatcher pre-quoting the tariff amount when
+    // booking on a citizen's behalf, or amending a citizen's own request
+    // before it is scheduled.
+    if (body.feeMinor !== undefined) requireRole(ctx, ADMIN_ROLES);
     return reply.code(202).send(await commands.bookDesludging(ctx, {
       address: body.address ?? null, tankCapacityLitres: body.tankCapacityLitres ?? null,
       requestedDate: body.requestedDate ?? null, requestedSlot: body.requestedSlot ?? null,
