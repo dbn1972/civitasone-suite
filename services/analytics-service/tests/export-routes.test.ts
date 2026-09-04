@@ -227,7 +227,11 @@ describe("GET /v1/analytics/exports/:id", () => {
 
   it("returns 409 with EXPORT_IN_PROGRESS when status is pending", async () => {
     const exportId = randomUUID();
-    await seedExportJob(exportId, "queued");
+    // "pending" is the actual first-state value: analytics.export_jobs_status_check
+    // (migrations/0010_export_jobs_enhancement.sql) only allows
+    // pending|processing|completed|failed. "queued" is leftover pre-migration
+    // vocabulary and violates that CHECK constraint outright.
+    await seedExportJob(exportId, "pending");
 
     const res = await app.inject({
       method: "GET",
