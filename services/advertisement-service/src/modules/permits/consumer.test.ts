@@ -155,6 +155,40 @@ describe("POST /v1/advertisement/permits — pre-accept validation + persisted s
   });
 });
 
+describe("permits repo — reissuing after cancellation is allowed (partial unique index, not a plain UNIQUE)", () => {
+  it("a cancelled permit does not block a fresh permit for the same application", async () => {
+    const applicationId = await createApprovedApplication();
+    const firstId = await issuePermitFor(applicationId);
+
+    const cancel = await app.inject({ method: "POST", url: `/v1/advertisement/permits/${firstId}/cancel`, headers: authed, payload: { reason: "issued in error, applicant needs to reschedule" } });
+    expect(cancel.statusCode).toBe(202);
+    await settle();
+    const cancelled = await repo.findById(firstId, TENANT);
+    expect(cancelled!.status).toBe("cancelled");
+
+    // adv_permits_application_active_unique (migrations/0004) and
+    // findByApplication's app-level pre-check must both treat the
+    // cancelled permit as non-blocking.
+    const second = await app.inject({ method: "POST", url: "/v1/advertisement/permits", headers: authed, payload: issuePayload(applicationId) });
+    expect(second.statusCode).toBe(202);
+    const { id: secondId } = second.json() as { id: string };
+    expect(secondId).not.toBe(firstId);
+    await settle();
+
+    const reissued = await repo.findById(secondId, TENANT);
+    expect(reissued).not.toBeNull();
+    expect(reissued!.status).toBe("active");
+  });
+
+  it("still blocks a duplicate against an ACTIVE (non-cancelled) permit for the same application", async () => {
+    const applicationId = await createApprovedApplication();
+    await issuePermitFor(applicationId);
+
+    const second = await app.inject({ method: "POST", url: "/v1/advertisement/permits", headers: authed, payload: issuePayload(applicationId) });
+    expect(second.statusCode).toBe(409);
+  });
+});
+
 describe("POST /v1/advertisement/permits/:id/renew — money field + pre-accept validation", () => {
   it("400s on a non-numeric feeMinor, before 202 (money field regression)", async () => {
     const applicationId = await createApprovedApplication();

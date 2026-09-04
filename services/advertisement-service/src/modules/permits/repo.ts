@@ -1,4 +1,4 @@
-import { eq, and, sql, desc } from "drizzle-orm";
+import { eq, and, ne, sql, desc } from "drizzle-orm";
 import { scopedRead, type ScopedTx } from "../../shared/db.js";
 import { advPermits, advRenewals, type AdvPermitRow, type AdvPermitInsert, type AdvRenewalInsert } from "./schema.js";
 
@@ -23,12 +23,27 @@ export async function findByVerificationCode(code: string): Promise<AdvPermitRow
 // Added for the POST /v1/advertisement/permits pre-accept check (mirrors
 // roadcut-service's permits/routes.ts PERMIT_ALREADY_EXISTS guard): without
 // this, a permit could be issued more than once against the same
-// application, since adv_permits has no unique/FK constraint on
-// application_id.
+// application. adv_permits previously had no unique/FK constraint on
+// application_id at all -- migrations/0004_permit_reissuance_unique_constraint.sql
+// now adds one, as a partial index excluding 'cancelled' and 'expired' so
+// this query and the DB constraint agree.
+//
+// Both 'cancelled' and 'expired' are excluded, not just 'cancelled':
+// domain.ts's canRenew() explicitly treats them the same way -- neither can
+// go through POST /v1/advertisement/permits/:id/renew ("a cancelled or
+// expired permit could be 'renewed' ... suspended/expired/cancelled must be
+// excluded"). Since renewal (extending validity) is unavailable for both,
+// the only way forward for either is a fresh permit issuance under the same
+// application -- exactly what this duplicate check must not block.
 export async function findByApplication(applicationId: string, tenantId: string): Promise<AdvPermitRow | null> {
   const rows = await scopedRead((tx) =>
     tx.select().from(advPermits)
-      .where(and(eq(advPermits.applicationId, applicationId), eq(advPermits.tenantId, tenantId)))
+      .where(and(
+        eq(advPermits.applicationId, applicationId),
+        eq(advPermits.tenantId, tenantId),
+        ne(advPermits.status, "cancelled"),
+        ne(advPermits.status, "expired"),
+      ))
       .limit(1),
   );
   return rows[0] ?? null;
