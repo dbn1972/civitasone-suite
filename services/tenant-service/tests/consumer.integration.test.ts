@@ -9,15 +9,20 @@
  * Test 2 — idempotency: a second delivery of the same messageId (via a fresh
  *   MemoryQueue instance, bypassing queue-level dedup) is stopped by _inbox.processed,
  *   leaving exactly one row in tenant.tenants.
+ *
+ * Test 3 — quotas pre-accept validation: tenant.tenant_quota.upsert for a tenantId
+ *   that doesn't exist is rejected (retried, then DLQ'd), not silently applied as an
+ *   orphan tenant.tenant_quotas row. See consumer.ts's tenantQuotaUpsert handler.
  */
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { MemoryQueue } from "@civitasone/queue";
 import { runWithTenant } from "@civitasone/db";
 import { eq } from "drizzle-orm";
 import { db, sqlClient } from "../src/shared/db.js";
-import { tenants } from "../src/modules/tenant/schema.js";
+import { tenants, tenantQuotas } from "../src/modules/tenant/schema.js";
 import { processed, outboxMessages } from "../src/shared/outbox.js";
 import { registerTenantConsumers } from "../src/modules/tenant/consumer.js";
+import { COMMANDS } from "../src/topics.js";
 
 // RLS on tenant.tenants/tenant.tenant_quotas/_outbox.messages/_inbox.processed enforces
 // `tenant_id = current_tenant_id()`. Bare db.select()/db.delete() outside a tenant-scoped
@@ -34,6 +39,12 @@ const T1_ID   = "11111111-aaaa-4000-8000-000000000001";
 const T2_ID   = "22222222-aaaa-4000-8000-000000000002";
 const MSG_1   = "aaaaaaaa-1111-4000-8000-000000000001";
 const MSG_2   = "bbbbbbbb-2222-4000-8000-000000000002";
+// A tenantId that is never created in this suite — used to prove the quotas
+// consumer rejects writes for tenants that don't exist.
+const GHOST_TENANT_ID = "99999999-aaaa-4000-8000-000000000009";
+const MSG_3            = "cccccccc-3333-4000-8000-000000000003";
+// Dedicated row for the tenants_status_check CHECK-constraint test (0024).
+const CHECK_TENANT_ID = "88888888-aaaa-4000-8000-000000000008";
 
 function payload(tenantId: string, domain: string) {
   return {
@@ -54,6 +65,7 @@ async function wipe(tenantId: string, messageId: string) {
   await tenantSelect(tenantId, async (tx) => {
     await tx.delete(outboxMessages).where(eq(outboxMessages.tenantId, tenantId));
     await tx.delete(tenants).where(eq(tenants.id, tenantId));
+    await tx.delete(tenantQuotas).where(eq(tenantQuotas.tenantId, tenantId));
     await tx.delete(processed).where(eq(processed.messageId, messageId));
   });
 }
@@ -62,11 +74,15 @@ describe("tenant consumer — integration (real Postgres)", () => {
   beforeAll(async () => {
     await wipe(T1_ID, MSG_1);
     await wipe(T2_ID, MSG_2);
+    await wipe(GHOST_TENANT_ID, MSG_3);
+    await wipe(CHECK_TENANT_ID, CHECK_TENANT_ID);
   });
 
   afterAll(async () => {
     await wipe(T1_ID, MSG_1);
     await wipe(T2_ID, MSG_2);
+    await wipe(GHOST_TENANT_ID, MSG_3);
+    await wipe(CHECK_TENANT_ID, CHECK_TENANT_ID);
     await sqlClient.end();
   });
 
@@ -161,4 +177,80 @@ describe("tenant consumer — integration (real Postgres)", () => {
     const inboxRows = await db.select().from(processed).where(eq(processed.messageId, MSG_2));
     expect(inboxRows).toHaveLength(1);
   });
+
+  it("tenantQuotaUpsert for a nonexistent tenant is rejected (DLQ), not silently applied as an orphan row", async () => {
+    const queue = new MemoryQueue();
+    registerTenantConsumers(queue);
+    await queue.start();
+
+    await queue.publish(COMMANDS.tenantQuotaUpsert, {
+      messageId: MSG_3,
+      type: COMMANDS.tenantQuotaUpsert,
+      tenantId: GHOST_TENANT_ID,
+      actorId: ACTOR,
+      correlationId: "corr-integ-ghost-quota",
+      schemaVersion: "1.0",
+      payload: { id: MSG_3, tenantId: GHOST_TENANT_ID, maxEmployees: 1000 },
+    });
+
+    // drain() (MemoryQueue-only — see bus.ts) awaits every in-flight delivery
+    // including retry backoffs, so this is deterministic unlike a fixed sleep.
+    await queue.drain();
+    await queue.stop();
+
+    // No orphan tenant.tenant_quotas row for a tenant that was never created.
+    const rows = await tenantSelect(GHOST_TENANT_ID, (tx) =>
+      tx.select().from(tenantQuotas).where(eq(tenantQuotas.tenantId, GHOST_TENANT_ID)),
+    );
+    expect(rows).toHaveLength(0);
+
+    // _inbox.processed was never durably marked — the whole transaction (including
+    // markProcessed) rolled back when the existence check threw, so a corrected
+    // retry of the same messageId could still succeed later.
+    const inboxRows = await db.select().from(processed).where(eq(processed.messageId, MSG_3));
+    expect(inboxRows).toHaveLength(0);
+
+    // The rejection is loud (DLQ'd after retries), not a silent no-op.
+    expect(
+      queue.dlq.some((d) => d.topic === COMMANDS.tenantQuotaUpsert && d.msg.messageId === MSG_3),
+    ).toBe(true);
+  }, 15_000);
+
+  it("tenants_status_check (migration 0024) allows the full six-state domain machine, not just draft/active/suspended", async () => {
+    await tenantSelect(CHECK_TENANT_ID, (tx) =>
+      tx.insert(tenants).values({
+        id: CHECK_TENANT_ID,
+        tenantId: CHECK_TENANT_ID,
+        name: "CHECK Constraint Test Tenant",
+        domain: `check-constraint-${CHECK_TENANT_ID}.test.example`,
+        edition: "govt",
+        status: "draft",
+        region: "ap-south-1",
+        residency: "IN",
+        createdBy: ACTOR,
+        updatedBy: ACTOR,
+      }),
+    );
+
+    // Every domain-legal non-initial status (domain.ts's ALLOWED transitions) must
+    // round-trip through the DB — before 0024, 'restricted'/'offboarding'/'archived'
+    // all violated tenants_status_check even though canTransition() approved them.
+    for (const status of ["restricted", "offboarding", "archived"] as const) {
+      await tenantSelect(CHECK_TENANT_ID, (tx) =>
+        tx.update(tenants).set({ status }).where(eq(tenants.id, CHECK_TENANT_ID)),
+      );
+      const [row] = await tenantSelect(CHECK_TENANT_ID, (tx) =>
+        tx.select().from(tenants).where(eq(tenants.id, CHECK_TENANT_ID)),
+      );
+      expect(row?.status).toBe(status);
+    }
+
+    // The stale pre-rename value must now be rejected — proves it was actually
+    // removed from the constraint, not just supplemented alongside the real ones.
+    await expect(
+      tenantSelect(CHECK_TENANT_ID, (tx) =>
+        tx.update(tenants).set({ status: "decommissioned" }).where(eq(tenants.id, CHECK_TENANT_ID)),
+      ),
+    ).rejects.toThrow(/tenants_status_check/);
+  }, 15_000);
 });

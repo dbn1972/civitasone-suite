@@ -1,7 +1,10 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { signToken } from "@civitasone/auth";
 import type { FastifyInstance } from "fastify";
+import type { MemoryQueue } from "@civitasone/queue";
 import { buildApp } from "../src/app.js";
+import { queue } from "../src/shared/infra.js";
+import { registerTenantConsumers } from "../src/modules/tenant/consumer.js";
 
 const ACTOR = "00000000-aaaa-4000-8000-000000000099";
 const TENANT = "11111111-aaaa-4000-8000-000000000099";
@@ -598,27 +601,99 @@ describe("GET /v1/tenant/:tenantId/quotas", () => {
 // PATCH /v1/tenant/:tenantId/quotas — Update Quotas
 // ══════════════════════════════════════════════════════════════════════════════
 describe("PATCH /v1/tenant/:tenantId/quotas", () => {
-  it("→ 200 with super_admin", async () => {
-    const res = await app.inject({
-      method: "PATCH", url: `/v1/tenant/${TENANT}/quotas`,
-      headers: authHeader(["super_admin"]),
-      payload: { maxEmployees: 1000 },
+  // The route was converted to the F3 async pattern (queue-first, 202 +
+  // upsertTenantQuotas consumer applies the write — see
+  // src/modules/tenant/routes.ts and f3-p0-msme-quotas-cqrs.test.ts's
+  // "tenant quotas PATCH is queue-first" lock) some time after these two
+  // tests were written expecting a synchronous 200 with the updated row
+  // echoed straight back. Scoped registration (not global — see
+  // consumer.integration.test.ts for the same pattern) so only these two
+  // tests pay for real consumer delivery; queue.drain() (MemoryQueue-only,
+  // hence the cast) waits for the in-flight delivery from publish() to
+  // fully settle before we read persisted state back via GET.
+  describe("→ 202 (queue-first) + real persisted outcome", () => {
+    // TENANT is a fictional id used by every other test in this file, which
+    // only ever asserted the 202 response status and never persisted state.
+    // Now that consumer.ts's tenantQuotaUpsert correctly rejects quota
+    // writes for a tenant that doesn't exist, these two tests need a real
+    // row to upsert against, or the write silently no-ops and the follow-up
+    // GET reads back schema defaults instead of the patched values. Seeded
+    // and torn down the same way the "GET /v1/tenants/:tenantId" regression
+    // test above does.
+    beforeAll(async () => {
+      const { runWithTenant } = await import("@civitasone/db");
+      const { db } = await import("../src/shared/db.js");
+      const repo = await import("../src/modules/tenant/repo.js");
+      await runWithTenant(TENANT, () =>
+        db.transaction((tx) =>
+          repo.insert(tx as unknown as repo.Writer, {
+            id: TENANT,
+            tenantId: TENANT,
+            name: "Quotas Test Tenant",
+            domain: `quotas-test-${TENANT}.example.gov`,
+            edition: "govt",
+            region: "IN-DL",
+            residency: "IN",
+            createdBy: ACTOR,
+            updatedBy: ACTOR,
+          }),
+        ),
+      );
+      registerTenantConsumers(queue);
+      await queue.start();
     });
-    expect(res.statusCode).toBe(200);
-    expect(res.json().maxEmployees).toBe(1000);
-  });
+    afterAll(async () => {
+      await queue.stop();
+      // Clean up so this doesn't linger in the shared dev database (see the
+      // same rationale on the GET /v1/tenants/:tenantId regression test).
+      const { runWithTenant } = await import("@civitasone/db");
+      const { db } = await import("../src/shared/db.js");
+      const { sql } = await import("drizzle-orm");
+      await runWithTenant(TENANT, () =>
+        db.transaction((tx) => (tx as unknown as typeof db).execute(sql`DELETE FROM tenant.tenants WHERE id = ${TENANT}`)),
+      ).catch(() => undefined);
+    });
 
-  it("→ 200 update multiple fields", async () => {
-    const res = await app.inject({
-      method: "PATCH", url: `/v1/tenant/${TENANT}/quotas`,
-      headers: authHeader(["super_admin"]),
-      payload: { maxFiles: 50000, maxStorageGb: 100, maxUsers: 5000 },
+    it("→ 202 with super_admin, persists maxEmployees", async () => {
+      const res = await app.inject({
+        method: "PATCH", url: `/v1/tenant/${TENANT}/quotas`,
+        headers: authHeader(["super_admin"]),
+        payload: { maxEmployees: 1000 },
+      });
+      expect(res.statusCode).toBe(202);
+      expect(res.json().status).toBe("accepted");
+
+      await (queue as unknown as MemoryQueue).drain();
+
+      const getRes = await app.inject({
+        method: "GET", url: `/v1/tenant/${TENANT}/quotas`,
+        headers: authHeader(["super_admin"]),
+      });
+      expect(getRes.statusCode).toBe(200);
+      expect(getRes.json().maxEmployees).toBe(1000);
     });
-    expect(res.statusCode).toBe(200);
-    const json = res.json();
-    expect(json.maxFiles).toBe(50000);
-    expect(json.maxStorageGb).toBe(100);
-    expect(json.maxUsers).toBe(5000);
+
+    it("→ 202 update multiple fields, persists all three", async () => {
+      const res = await app.inject({
+        method: "PATCH", url: `/v1/tenant/${TENANT}/quotas`,
+        headers: authHeader(["super_admin"]),
+        payload: { maxFiles: 50000, maxStorageGb: 100, maxUsers: 5000 },
+      });
+      expect(res.statusCode).toBe(202);
+      expect(res.json().status).toBe("accepted");
+
+      await (queue as unknown as MemoryQueue).drain();
+
+      const getRes = await app.inject({
+        method: "GET", url: `/v1/tenant/${TENANT}/quotas`,
+        headers: authHeader(["super_admin"]),
+      });
+      expect(getRes.statusCode).toBe(200);
+      const json = getRes.json();
+      expect(json.maxFiles).toBe(50000);
+      expect(json.maxStorageGb).toBe(100);
+      expect(json.maxUsers).toBe(5000);
+    });
   });
 
   it("→ 403 with platform_admin (requires super_admin)", async () => {
