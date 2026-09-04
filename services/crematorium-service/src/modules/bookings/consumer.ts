@@ -1,5 +1,4 @@
 import { pino } from "pino";
-import { randomInt } from "node:crypto";
 import type { Queue } from "@civitasone/queue";
 import { db } from "../../shared/db.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
@@ -35,18 +34,22 @@ export function registerBookingConsumers(rawQueue: Queue): void {
       requestedDate: string;
       requestedSlot?: string;
     };
-    // Mitigation: was `Date.now() % 999999`, a deterministic sequence that repeats
-    // every ~16.7 minutes and collides across ALL tenants (the column is globally
-    // .unique(), not tenant-scoped) — any two bookings landing on the same modulo
-    // value throw a unique-violation inside this transaction, after the caller
-    // already got 202 Accepted. A cryptographically random 6-digit value make
-    // collisions far less likely without a schema change; a real fix would replace
-    // this with a per-tenant DB sequence (tracked as a follow-up, not done here).
-    const bookingNumber = generateBookingNumber("ULB", randomInt(1, 999999));
     const feeMinor = calculateFeeMinor(p.serviceType);
+    let bookingNumber = "";
 
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
+      // Sequence number reserved inside this transaction (see
+      // repo.nextBookingNumber) - replaces the old randomInt(1, 999999)
+      // scheme, which was cryptographically random but not guaranteed
+      // unique: a real birthday-paradox collision risk against
+      // booking_number's UNIQUE constraint at moderate volume (any
+      // collision would throw a unique-violation inside this transaction,
+      // after the caller already received 202 Accepted). Mirrors
+      // animal-service's nextComplaintNumber / vendor-service's
+      // nextLicenceNumber (same fix shape, see migrations/
+      // 0002_number_sequences.sql).
+      bookingNumber = generateBookingNumber("ULB", await repo.nextBookingNumber(tx));
       await repo.insertBooking(tx, {
         id: p.id,
         tenantId: msg.tenantId,
@@ -118,7 +121,7 @@ export function registerBookingConsumers(rawQueue: Queue): void {
     // GET .../bookings/:id doesn't keep serving the pre-confirm row for up to the
     // cache's TTL. Correction: @civitasone/cache also exposes invalidate() /
     // invalidateAfterCommit() (packages/cache/src/index.ts), the more common
-    // convention elsewhere in this monorepo (e.g. admin-service) — an earlier
+    // convention elsewhere in this monorepo (e.g. admin-service) -- an earlier
     // version of this comment incorrectly claimed no such method exists.
     // put() is used deliberately here instead, since the fresh row is already
     // in hand from .returning(), sparing the next GET a DB round-trip that a

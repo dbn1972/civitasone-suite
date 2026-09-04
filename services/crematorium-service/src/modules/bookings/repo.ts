@@ -48,6 +48,26 @@ export async function insertBooking(tx: ScopedTx, row: BookingInsert): Promise<v
 }
 
 /**
+ * Reserves the next human-facing booking number from a real Postgres SEQUENCE
+ * (crematorium.booking_number_seq, see migrations/0002_number_sequences.sql).
+ * Replaces the previous `randomInt(1, 999999)` scheme (bookings/consumer.ts),
+ * which was cryptographically random but not guaranteed unique — a real
+ * birthday-paradox collision risk against booking_number's UNIQUE constraint
+ * at moderate volume. Must be called from inside the same transaction that
+ * inserts the row (nextval() is guaranteed unique across concurrent callers
+ * regardless of transaction outcome, which is what matters here — it is not
+ * rolled back if the surrounding transaction aborts, but that only "burns" a
+ * number, it never hands out a duplicate). Same fix shape as
+ * animal-service's nextComplaintNumber / vendor-service's nextLicenceNumber.
+ */
+export async function nextBookingNumber(tx: ScopedTx): Promise<number> {
+  const [row] = (await tx.execute(
+    sql`SELECT nextval('"crematorium"."booking_number_seq"')::bigint AS seq`,
+  )) as Array<{ seq: number }>;
+  return Number(row!.seq);
+}
+
+/**
  * Update a booking's status, atomically guarded by `fromStatuses`: the UPDATE only
  * matches a row whose CURRENT status is still one of `fromStatuses`. This makes the
  * state-machine transition check race-free — unlike a check-then-act pattern (read
@@ -69,6 +89,18 @@ export async function updateStatus(
   updatedBy: string,
   extra?: { slotNumber?: string; completedAt?: Date; paymentRef?: string; feePaid?: boolean },
 ): Promise<BookingRow | null> {
+  // Guard found while writing this service's test suite: drizzle-orm's
+  // inArray() throws ("inArray requires at least one value") for an empty
+  // array rather than compiling to a condition that simply matches nothing.
+  // Every real call site derives fromStatuses from domain.ts's
+  // fromStatusesFor(status), which is only ever non-empty for the statuses
+  // consumers actually transition TO (confirmed/completed/cancelled), so
+  // this was not reachable in practice — but a CAS guard whose contract is
+  // "no fromStatuses means nothing can ever match" should fail closed by
+  // returning null, not by throwing an unhandled error out of an async
+  // queue consumer (see bookings/consumer.ts) for any future caller that
+  // hits it.
+  if (fromStatuses.length === 0) return null;
   const result = await tx.update(crematoriumBookings)
     .set({
       status,

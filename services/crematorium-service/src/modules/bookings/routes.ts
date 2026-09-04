@@ -69,6 +69,17 @@ export async function bookingRoutes(app: FastifyInstance): Promise<void> {
     // carries no FK) one belonging to a different tenant entirely.
     const facility = await facilitiesRepo.findById(body.facilityId, ctx.tenantId);
     if (!facility) throw new HttpError(404, "FACILITY_NOT_FOUND", "Facility not found");
+    // Pre-accept validation gap found while hardening this route: nothing
+    // previously checked the facility's operational status here, so a
+    // booking could be requested against a facility already set to
+    // "under_maintenance" or "closed" (facilities/routes.ts PATCH lets an
+    // admin set either) -- accepted with 202 and only ever surfacing as a
+    // downstream operational problem when staff try to actually use it.
+    // Same bug class as asset-service's "under_maintenance assets must not
+    // be transferable" fix.
+    if (facility.status !== "active") {
+      throw new HttpError(422, "FACILITY_NOT_ACTIVE", `Facility is ${facility.status}, not accepting bookings`);
+    }
     return reply.code(202).send(await commands.requestBooking(ctx, body));
   });
 
