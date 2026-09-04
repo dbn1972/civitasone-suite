@@ -1,10 +1,12 @@
 import { pino } from "pino";
 import type { Queue } from "@civitasone/queue";
+import { MUNICIPAL_EVENT_TYPES } from "@civitasone/events";
 import { db } from "../../shared/db.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { writeAudit } from "../../shared/audit.js";
 import { cache } from "../../shared/infra.js";
 import { tenantScoped } from "../../shared/tenant-queue.js";
+import { emitMunicipalNotification, municipalDecisionNotificationEventType } from "../../shared/cross-events.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
 import * as appRepo from "../applications/repo.js";
@@ -24,14 +26,6 @@ export function registerScrutinyConsumers(rawQueue: Queue): void {
     let applied = false;
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
-      // updateStatus reports (via its boolean return) whether the target
-      // application actually matched (right tenant + existing id). This was
-      // previously discarded, so a scrutiny record could get inserted, and a
-      // scrutinyInitiated event + audit record published, for an application
-      // that was never actually moved to "under_scrutiny" — the same
-      // fake-success pattern already fixed in permits/consumer.ts. Check the
-      // application update FIRST so a failed precondition creates no orphaned
-      // scrutiny record at all.
       const ok = await appRepo.updateStatus(tx, p.applicationId, msg.tenantId, "under_scrutiny", msg.actorId);
       if (!ok) return;
       applied = true;
@@ -39,8 +33,6 @@ export function registerScrutinyConsumers(rawQueue: Queue): void {
       await enqueue(tx, { topic: EVENTS.scrutinyInitiated, eventType: EVENTS.scrutinyInitiated, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { scrutinyId: p.id, applicationId: p.applicationId, discipline: p.discipline, officerId: p.officerId } });
       await writeAudit(tx, ctxOf(msg), { action: "scrutiny.initiate", resourceType: "building_scrutiny", resourceId: p.id });
     });
-    // The application's GET-by-id read-through cache (applications/routes.ts)
-    // must not keep serving pre-scrutiny state (CLAUDE.md §6).
     if (applied) await cache.invalidate(cache.makeKey(msg.tenantId, "application", p.applicationId));
     if (applied) log.info({ id: p.id, applicationId: p.applicationId, discipline: p.discipline }, "building scrutiny initiated");
   });
@@ -69,6 +61,15 @@ export function registerScrutinyConsumers(rawQueue: Queue): void {
       if (!ok) return;
       applied = true;
       await enqueue(tx, { topic: EVENTS.applicationDecided, eventType: EVENTS.applicationDecided, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { applicationId: p.applicationId, decision: p.decision, reason: p.reason, decidedBy: msg.actorId } });
+      const app = await appRepo.findById(p.applicationId, msg.tenantId);
+      if (app) {
+        await emitMunicipalNotification(tx, ctxOf(msg), {
+          eventType: municipalDecisionNotificationEventType(MUNICIPAL_EVENT_TYPES.statusChanged, p.decision),
+          recipient: app.createdBy,
+          recipientId: p.applicationId,
+          variables: { applicationId: p.applicationId, applicationNumber: app.applicationNumber, decision: p.decision },
+        });
+      }
       await writeAudit(tx, ctxOf(msg), { action: `application.${p.decision}`, resourceType: "building_application", resourceId: p.applicationId });
     });
     if (applied) await cache.invalidate(cache.makeKey(msg.tenantId, "application", p.applicationId));

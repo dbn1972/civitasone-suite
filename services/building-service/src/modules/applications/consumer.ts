@@ -1,16 +1,29 @@
 import { pino } from "pino";
 import { randomInt } from "node:crypto";
 import type { Queue } from "@civitasone/queue";
+import { MUNICIPAL_EVENT_TYPES } from "@civitasone/events";
 import { db } from "../../shared/db.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { writeAudit } from "../../shared/audit.js";
 import { cache } from "../../shared/infra.js";
 import { tenantScoped } from "../../shared/tenant-queue.js";
+import { emitMunicipalFeeChallan, emitMunicipalNotification } from "../../shared/cross-events.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
 import { calculateFeeMinor, generateApplicationNumber, computeFAR } from "./domain.js";
 
 const log = pino({ name: "building.applications.consumer" });
+
+// Defense-in-depth mirroring PR #1006's money/precision bounds fix
+// (this module's routes.ts): that PR bounds plotArea/builtUpArea/
+// proposedFloors/fsiRequested at the HTTP layer so calculateFeeMinor's
+// BigInt arithmetic never sees an out-of-range input on the normal request
+// path. This consumer trusts its queue payload rather than re-deriving it
+// from HTTP, so the same ceiling is re-asserted here, directly on the
+// amount crossing into finance-service via emitMunicipalFeeChallan — a
+// malformed or replayed command must not reach another service's ledger
+// carrying an unbounded amount.
+const MAX_FEE_MINOR = 10_000_000_00n; // Rs 1,00,00,000 (1 crore) in paise — generous vs. calculateFeeMinor's real-world range
 
 function ctxOf(msg: { tenantId: string; actorId: string; correlationId: string }) {
   return { tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId };
@@ -29,6 +42,10 @@ export function registerApplicationConsumers(rawQueue: Queue): void {
       drawings?: Array<{ drawingType: string; fileId: string; versionNumber: number; uploadedAt: string }>;
     };
     const feeMinor = calculateFeeMinor({ plotArea: p.plotArea, builtUpArea: p.builtUpArea, proposedFloors: p.proposedFloors });
+    if (feeMinor > MAX_FEE_MINOR) {
+      log.error({ id: p.id, feeMinor: feeMinor.toString() }, "computed application fee exceeds sanity ceiling — refusing to create application or raise a challan");
+      throw new Error(`building application fee ${feeMinor.toString()} exceeds MAX_FEE_MINOR ceiling`);
+    }
     // See services/building-service/src/modules/permits/consumer.ts for why
     // Date.now() % N is a deterministic-collision hazard on a UNIQUE column,
     // not a source of randomness — same fix applied here for applicationNumber.
@@ -54,6 +71,23 @@ export function registerApplicationConsumers(rawQueue: Queue): void {
         createdBy: msg.actorId, updatedBy: msg.actorId,
       });
       await enqueue(tx, { topic: EVENTS.applicationCreated, eventType: EVENTS.applicationCreated, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { applicationId: p.id, applicationNumber, feeMinor: String(feeMinor), feeCurrency: "INR" } });
+      // Cross-service wiring (municipal-sec5 event contract, Wave 3):
+      // assess the building-permit fee via finance.challan.create, and tell
+      // the applicant it's due, in the same transaction as the application
+      // row and its own domain event — all-or-nothing with the write that
+      // created the obligation in the first place.
+      await emitMunicipalFeeChallan(tx, ctxOf(msg), {
+        sourceRef: p.id,
+        depositor: msg.actorId,
+        amountMinor: feeMinor,
+        currency: "INR",
+      });
+      await emitMunicipalNotification(tx, ctxOf(msg), {
+        eventType: MUNICIPAL_EVENT_TYPES.feeDue,
+        recipient: msg.actorId,
+        recipientId: p.id,
+        variables: { applicationId: p.id, applicationNumber, feeMinor: String(feeMinor) },
+      });
       await writeAudit(tx, ctxOf(msg), { action: "application.create", resourceType: "building_application", resourceId: p.id });
     });
     log.info({ id: p.id, applicationNumber }, "building application created");
@@ -68,6 +102,19 @@ export function registerApplicationConsumers(rawQueue: Queue): void {
       if (!ok) return;
       applied = true;
       await enqueue(tx, { topic: EVENTS.applicationSubmitted, eventType: EVENTS.applicationSubmitted, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { applicationId: p.id } });
+      // Cross-service wiring: applicant-facing status notification. The
+      // schema has no separate applicant-name/contact field (unlike e.g.
+      // advertisement-service's advertiserName), so the citizen identity we
+      // notify is the application's own createdBy — the actor who raised it.
+      const app = await repo.findById(p.id, msg.tenantId);
+      if (app) {
+        await emitMunicipalNotification(tx, ctxOf(msg), {
+          eventType: MUNICIPAL_EVENT_TYPES.applicationSubmitted,
+          recipient: app.createdBy,
+          recipientId: p.id,
+          variables: { applicationId: p.id, applicationNumber: app.applicationNumber },
+        });
+      }
       await writeAudit(tx, ctxOf(msg), { action: "application.submit", resourceType: "building_application", resourceId: p.id });
     });
     // Read-through GET-by-id cache must not keep serving pre-submit state
