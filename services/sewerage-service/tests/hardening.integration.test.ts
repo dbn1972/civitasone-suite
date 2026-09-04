@@ -256,9 +256,12 @@ describe("money-precision regression — end to end (route -> consumer -> Postgr
     expect(current.amountMinor).toBe(bigAmount);
   });
 
-  it('a desludging feeMinor of "0" (waived fee) persists as "0", not null (guards the truthy-check pitfall)', async () => {
+  it('a desludging feeMinor of "0" (waived fee), set by an officer/admin, persists as "0", not null (guards the truthy-check pitfall)', async () => {
+    // feeMinor is now ADMIN_ROLES-gated (desludging/routes.ts) — see the
+    // "desludging feeMinor — citizen-set fee gap" describe block below for
+    // the security regression this schema/persistence test is paired with.
     const bookRes = await app.inject({
-      method: "POST", url: "/v1/sewerage/desludging", headers: userAuth,
+      method: "POST", url: "/v1/sewerage/desludging", headers: adminAuth,
       payload: { tankCapacityLitres: 500, feeMinor: 0 },
     });
     expect(bookRes.statusCode).toBe(202);
@@ -269,16 +272,107 @@ describe("money-precision regression — end to end (route -> consumer -> Postgr
     expect(current.feeMinor).toBe("0");
   });
 
-  it("an ordinary desludging fee sent as a plain JSON number persists correctly (normal path unaffected)", async () => {
+  it("an ordinary desludging fee, set by an officer/admin and sent as a plain JSON number, persists correctly (normal path unaffected)", async () => {
     const bookRes = await app.inject({
-      method: "POST", url: "/v1/sewerage/desludging", headers: userAuth,
+      method: "POST", url: "/v1/sewerage/desludging", headers: adminAuth,
       payload: { tankCapacityLitres: 2000, feeMinor: 75000 },
     });
+    expect(bookRes.statusCode).toBe(202);
     const booking = bookRes.json() as { id: string };
     await queue.drain();
 
     const current = (await app.inject({ method: "GET", url: `/v1/sewerage/desludging/${booking.id}`, headers: userAuth })).json().data;
     expect(current.feeMinor).toBe("75000");
+  });
+});
+
+describe("desludging feeMinor — citizen-set fee gap (PR #1029 review fix)", () => {
+  // Verifies the fix in desludging/routes.ts: unlike billing's
+  // POST /v1/sewerage/bills (ADMIN_ROLES-only outright), POST
+  // /v1/sewerage/desludging is reachable by a plain citizen (ROLES includes
+  // sewerage_user), and — before this fix — accepted feeMinor straight
+  // through from the request body with no server-side derivation or bound
+  // beyond the shared zMoneyMinorStringNonNeg codec (Postgres bigint
+  // range). desludging/consumer.ts's desludgingBook turns a non-null
+  // feeMinor directly into emitMunicipalFeeChallan -> a real finance GL
+  // journal entry back-linked to the citizen's own booking, so an
+  // unbounded, citizen-declared feeMinor was a real financial-integrity
+  // gap, not merely a validation nicety.
+
+  it("MALICIOUS: a citizen (sewerage_user) submitting an extreme feeMinor is rejected with 403, never reaching the consumer or a GL journal", async () => {
+    const maliciousAmount = "9223372036854775807"; // 2^63 - 1, top of bigint range
+    const res = await app.inject({
+      method: "POST", url: "/v1/sewerage/desludging", headers: userAuth,
+      payload: { tankCapacityLitres: 1000, feeMinor: maliciousAmount },
+    });
+    expect(res.statusCode).toBe(403);
+    expect(res.json().code).toBe("FORBIDDEN");
+    await queue.drain();
+    // Nothing was ever queued/booked for this attempt at all — the 403 is
+    // thrown before commands.bookDesludging is even called, so there is no
+    // booking id to look up and no feeMinor of any kind reached the DB.
+  });
+
+  it("MALICIOUS: a citizen submitting a merely large-but-plausible feeMinor is rejected the same way (not just absurd values)", async () => {
+    const res = await app.inject({
+      method: "POST", url: "/v1/sewerage/desludging", headers: userAuth,
+      payload: { tankCapacityLitres: 1000, feeMinor: 500000 }, // Rs 5,000 — a real citizen shouldn't be able to set even this
+    });
+    expect(res.statusCode).toBe(403);
+    expect(res.json().code).toBe("FORBIDDEN");
+  });
+
+  it("a citizen booking desludging with NO feeMinor at all still succeeds (the legitimate self-service path is unaffected)", async () => {
+    const res = await app.inject({
+      method: "POST", url: "/v1/sewerage/desludging", headers: userAuth,
+      payload: { tankCapacityLitres: 1000, requestedSlot: "morning" },
+    });
+    expect(res.statusCode).toBe(202);
+    const booking = res.json() as { id: string };
+    await queue.drain();
+
+    const current = (await app.inject({ method: "GET", url: `/v1/sewerage/desludging/${booking.id}`, headers: userAuth })).json().data;
+    expect(current.feeMinor).toBeNull();
+  });
+
+  it("LEGITIMATE: an officer/admin booking desludging WITH a tariff-assessed feeMinor still succeeds and assesses the fee (feePaid flips true on completion)", async () => {
+    const legitimateFeeMinor = 60000; // Rs 600 — a plausible tariff amount for a 1000L tank
+    const bookRes = await app.inject({
+      method: "POST", url: "/v1/sewerage/desludging", headers: adminAuth,
+      payload: { tankCapacityLitres: 1000, feeMinor: legitimateFeeMinor },
+    });
+    expect(bookRes.statusCode).toBe(202);
+    const booking = bookRes.json() as { id: string };
+    await queue.drain();
+
+    let current = (await app.inject({ method: "GET", url: `/v1/sewerage/desludging/${booking.id}`, headers: userAuth })).json().data;
+    expect(current.feeMinor).toBe(String(legitimateFeeMinor));
+    expect(current.feePaid).toBe(false);
+
+    await app.inject({
+      method: "POST", url: `/v1/sewerage/desludging/${booking.id}/schedule`, headers: adminAuth,
+      payload: { vehicleId: "VEH-FEE-1", version: current.version },
+    });
+    await queue.drain();
+    current = (await app.inject({ method: "GET", url: `/v1/sewerage/desludging/${booking.id}`, headers: userAuth })).json().data;
+
+    await app.inject({
+      method: "POST", url: `/v1/sewerage/desludging/${booking.id}/dispatch`, headers: adminAuth,
+      payload: { version: current.version },
+    });
+    await queue.drain();
+    current = (await app.inject({ method: "GET", url: `/v1/sewerage/desludging/${booking.id}`, headers: userAuth })).json().data;
+
+    const completeRes = await app.inject({
+      method: "POST", url: `/v1/sewerage/desludging/${booking.id}/complete`, headers: adminAuth,
+      payload: { version: current.version },
+    });
+    expect(completeRes.statusCode).toBe(202);
+    await queue.drain();
+    current = (await app.inject({ method: "GET", url: `/v1/sewerage/desludging/${booking.id}`, headers: userAuth })).json().data;
+    expect(current.status).toBe("completed");
+    expect(current.feePaid).toBe(true);
+    expect(current.feeMinor).toBe(String(legitimateFeeMinor));
   });
 });
 
