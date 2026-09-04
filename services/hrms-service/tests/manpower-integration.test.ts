@@ -15,14 +15,46 @@ import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { randomUUID } from "node:crypto";
 import { sql } from "drizzle-orm";
 import { signToken } from "@civitasone/auth";
-import { tenantStorage } from "@civitasone/db";
+import { tenantStorage, withTenantConsumer } from "@civitasone/db";
 import { MemoryQueue } from "@civitasone/queue";
+import type { Queue, Handler } from "@civitasone/queue";
 import type { FastifyInstance } from "fastify";
 import { buildApp } from "../src/app.js";
 import { db, sqlClient } from "../src/shared/db.js";
+import { queue } from "../src/shared/infra.js";
 import { registerManpowerConsumers } from "../src/modules/manpower-planning/consumer.js";
+import { registerF3_manpower_planning_Consumers } from "../src/modules/manpower-planning/f3-consumer.js";
 import * as repo from "../src/modules/manpower-planning/repo.js";
 import { EVENTS } from "../src/topics.js";
+
+// Every write in manpower-planning/routes.ts goes through publishF3Write + an
+// async F3 consumer (CQRS) — only worker.ts wires the real consumer + the
+// tenant-aware subscribe wrapper in production, so this test must do both
+// itself and drain before any follow-up call that depends on the write
+// actually being persisted. Same established pattern as
+// assessment-integration.test.ts / basicminor-concurrency.test.ts.
+//
+// NOTE: `registerManpowerConsumers` (consumer.ts, imported above) only wires
+// the fill-loop's *inbound* hrms.recruitment.position_filled subscriber — it
+// has nothing to do with the plans/requisitions CRUD writes this beforeAll
+// and most tests below depend on. Those go through the generic
+// COMMANDS.f3RouteWrite topic and are handled by
+// `registerF3_manpower_planning_Consumers` (f3-consumer.ts), the actual
+// counterpart to registerF3_assessment_Consumers /
+// registerF3_pay_matrix_Consumers used elsewhere in this campaign — this file
+// was never registering it, so every plan/requisition write published here
+// went nowhere and every synchronous pre-check on the next call 404'd.
+function wireTenantAwareQueue(q: Queue): Queue {
+  const rawSubscribe = q.subscribe.bind(q);
+  q.subscribe = ((topic: string, handler: Handler) =>
+    rawSubscribe(topic, withTenantConsumer(handler) as Handler)) as typeof q.subscribe;
+  return q;
+}
+wireTenantAwareQueue(queue);
+registerF3_manpower_planning_Consumers(queue);
+async function drainF3(): Promise<void> {
+  await (queue as unknown as MemoryQueue).drain();
+}
 
 const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
 // Randomised per run so the suite is idempotent (the plan carries a UNIQUE
@@ -53,11 +85,20 @@ beforeAll(async () => {
       requiredStrength: 30, sanctionedStrength: 20, filledStrength: 0 } });
   expect(res.statusCode).toBe(201);
   planId = res.json().id;
+  // The row this beforeAll (and every test below) depends on doesn't exist
+  // until the async consumer applies it — drain before the very next call,
+  // submit's own repo.getPlan() pre-check, ever looks for it.
+  await drainF3();
 
   // Submit for approval.
   res = await app.inject({ method: "POST", url: `/v1/hrms/manpower/plans/${planId}/submit`, headers: bare(tok(MAKER)) });
   expect(res.statusCode).toBe(200);
   expect(res.json().status).toBe("pending_approval");
+  // submit's response status is a deterministic synchronous report (see the
+  // route's own comment), but the actual draft -> pending_approval write
+  // still only lands once this drains — every test below relies on the
+  // plan's real persisted status already being pending_approval.
+  await drainF3();
 });
 
 afterAll(async () => {
@@ -85,15 +126,28 @@ describe("maker-checker on approval + requisition emission", () => {
   it("approves via a different checker, generates a requisition and emits hrms.job.create", async () => {
     const res = await app.inject({ method: "POST", url: `/v1/hrms/manpower/plans/${planId}/approve`,
       headers: auth(tok(CHECKER)), payload: { title: "JE Recruitment 2027" } });
-    expect(res.statusCode).toBe(200);
+    // The route sends 202 (accepted-async), not 200 — approve's requisition
+    // generation happens later, in the async consumer.
+    expect(res.statusCode).toBe(202);
     const body = res.json();
     expect(body.status).toBe("approved");
     expect(body.approvedBy).toBe(CHECKER);
     expect(body.vacancy).toBe(20);
-    expect(body.requisition).toBeTruthy();
-    expect(body.requisition.requestedVacancies).toBe(20);
-    requisitionId = body.requisition.id;
-    jobOpeningId = body.requisition.jobOpeningId;
+    // `requisition` is deliberately NOT part of this response (see the
+    // route's own comment on manpower_planning_routes__4): the consumer
+    // mints the requisition id/number/job-opening id at write time, which
+    // genuinely can't be known synchronously here. Drain, then read it back
+    // via GET /v1/hrms/manpower/requisitions?planId=... exactly as the route
+    // documents callers should.
+    expect(body.requisition).toBeUndefined();
+    await drainF3();
+    const reqList = await app.inject({ method: "GET", url: `/v1/hrms/manpower/requisitions?planId=${planId}`, headers: bare(tok(CHECKER)) });
+    expect(reqList.statusCode).toBe(200);
+    const requisition = reqList.json().data[0];
+    expect(requisition).toBeTruthy();
+    expect(requisition.requestedVacancies).toBe(20);
+    requisitionId = requisition.id;
+    jobOpeningId = requisition.jobOpeningId;
 
     // The job-create command was written to the outbox for the recruitment flow.
     // (payload is stored as a JSON-string scalar in the jsonb column.)

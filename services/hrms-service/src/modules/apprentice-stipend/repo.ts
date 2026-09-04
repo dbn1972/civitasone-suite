@@ -48,6 +48,22 @@ export async function findStipend(tenantId: string, id: string): Promise<Stipend
   return rows[0] ?? null;
 }
 
+// Mirrors the table's own UNIQUE(tenant_id, apprenticeship_id, month) index
+// (hrms_apprentice_stipends_month_uq) — used for a synchronous duplicate
+// pre-check before publishing the async stipend-submit write (see
+// routes.ts): publishF3Write is fire-and-forget, so a 23505 from the
+// consumer's later insertStipend call can never be observed by the route
+// that already sent its response.
+export async function findStipendByMonth(tenantId: string, apprenticeshipId: string, month: string): Promise<StipendRow | null> {
+  const rows = await scopedRead((tx) => tx.select().from(hrmsApprenticeStipends)
+    .where(and(
+      eq(hrmsApprenticeStipends.tenantId, tenantId),
+      eq(hrmsApprenticeStipends.apprenticeshipId, apprenticeshipId),
+      eq(hrmsApprenticeStipends.month, month),
+    )).limit(1));
+  return rows[0] ?? null;
+}
+
 export async function listStipendsByApprenticeship(tenantId: string, apprenticeshipId: string, limit = 200): Promise<StipendRow[]> {
   return scopedRead((tx) => tx.select().from(hrmsApprenticeStipends)
     .where(and(eq(hrmsApprenticeStipends.tenantId, tenantId), eq(hrmsApprenticeStipends.apprenticeshipId, apprenticeshipId)))
