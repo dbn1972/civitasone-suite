@@ -8,7 +8,7 @@ import {
   Banknote, Receipt, FileText,
   Users, ShoppingCart, BarChart2, Gift, Building2, HardHat, Package,
   GraduationCap, BookOpen, CalendarDays, Target, ClipboardList, BadgeCheck,
-  Handshake, Headphones, FolderOpen, Landmark, Puzzle, ShieldCheck, Scale, CalendarCheck, Search, Telescope,
+  Handshake, Headphones, FolderOpen, Landmark, Puzzle, ShieldCheck, Scale, CalendarCheck, Search, Telescope, Castle,
   MapPin, Map, Satellite,
   ScanSearch, Gavel,
   Bot, Truck, Star, Archive, Dna, Compass, Sparkles,
@@ -68,6 +68,12 @@ const NAV: NavGroup[] = [
       { icon: Target, label: "Competencies", href: "/learning/competency", moduleKey: "hrms" },
       { icon: ClipboardList, label: "Assessments", href: "/learning/assessments", moduleKey: "hrms" },
       { icon: BadgeCheck, label: "Verify Certificate", href: "/learning/assessments/verify", moduleKey: "hrms" },
+    ],
+  },
+  {
+    group: "MUNICIPAL",
+    items: [
+      { icon: Castle, label: "Municipal Services", href: "/municipal", moduleKey: null },
     ],
   },
   {
