@@ -5,6 +5,7 @@ import { cache } from "../../shared/infra.js";
 import * as repo from "./repo.js";
 import * as commands from "./commands.js";
 import { canPerformAction } from "./domain.js";
+import * as applicationsRepo from "../applications/repo.js";
 
 const BUILDING_ROLES = ["building_user", "building_admin", "super_admin"];
 const OFFICER_ROLES = ["building_admin", "building_officer", "super_admin"];
@@ -45,6 +46,31 @@ export async function permitRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, OFFICER_ROLES);
     const body = issueBody.parse(req.body);
+
+    // A permit is a legal document issued against a specific, approved
+    // application. Previously nothing checked the application even existed,
+    // that it was in an 'approved' state, or pre-empted the
+    // building_permits_application_id_key unique index added in PR #1001 — a
+    // duplicate issue attempt (retry, double-click, concurrent request)
+    // surfaced as a raw, unhandled DB constraint violation (500) instead of a
+    // clean 409. Mirrors roadcut-service/src/modules/permits/routes.ts
+    // (existence -> state -> duplicate, all derived server-side).
+    const application = await applicationsRepo.findById(body.applicationId, ctx.tenantId);
+    if (!application) {
+      throw new HttpError(404, "APPLICATION_NOT_FOUND", "Referenced application not found");
+    }
+    if (application.status !== "approved") {
+      throw new HttpError(
+        422,
+        "APPLICATION_NOT_APPROVED",
+        `Cannot issue a permit for application in status '${application.status}'; it must be 'approved'`,
+      );
+    }
+    const existingPermit = await repo.findByApplicationId(body.applicationId, ctx.tenantId);
+    if (existingPermit) {
+      throw new HttpError(409, "PERMIT_ALREADY_EXISTS", "A permit has already been issued for this application");
+    }
+
     return reply.code(202).send(await commands.issuePermit(ctx, body.applicationId, body.conditions, body.validityMonths));
   });
 

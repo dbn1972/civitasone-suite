@@ -1,154 +1,211 @@
 /**
- * Regression test for two bugs found in building-service's permits consumer:
+ * Real-DB integration test for building-service's permits module.
  *
- * 1. Fake-success / false audit trail: suspendPermit/cancelPermit/restorePermit
- *    called repo.updatePermitStatus (which returns `Promise<boolean>`, false
- *    when zero rows matched — e.g. wrong tenant, already-deleted, stale
- *    duplicate command) but discarded the return value. The handler then
- *    unconditionally published the permitSuspended/Cancelled/Restored EVENT
- *    and wrote an audit-log entry claiming the action happened, even when the
- *    underlying row update affected nothing. This is the same class of bug as
- *    the sibling `applications` module already guards against.
+ * Replaces the previous vi.mock("../../shared/db.js") version, which mocked
+ * the entire DB layer and so proved nothing about real Postgres/RLS
+ * behaviour (no schema, no unique constraint, no cache TTL was ever
+ * exercised). This file drives the actual Fastify app + the actual
+ * consumer against a real, migrated Postgres database.
  *
- * 2. Missing read-through cache invalidation: GET /v1/building/permits/:id
- *    serves through `cache.getOrLoad` (shared/infra.ts, TTL 60s); no consumer
- *    invalidated that entry after a real status change. Per @civitasone/cache's
- *    own header comment (CLAUDE.md §6): "writes never touch the read path —
- *    the consumer invalidates here."
+ * Covers:
+ *  1. The pre-accept validation gap fixed in permits/routes.ts: POST
+ *     /v1/building/permits now 404s on a non-existent application, 422s on
+ *     a non-'approved' application, and 409s on a second issue attempt for
+ *     the same application (application-layer guard ahead of the
+ *     building_permits_application_id_key unique index from PR #1001 — a
+ *     raw constraint violation would otherwise surface as an unhandled 500).
+ *  2. Route -> consumer -> persisted-state: a 202 alone proves nothing in
+ *     this async CQRS pattern — every assertion below re-reads the row.
+ *  3. Read-through cache invalidation (shared/infra.ts, TTL 60s): GET is
+ *     called BEFORE and AFTER each status-changing consumer runs, in the
+ *     same test process/run (well under the 60s TTL) — if the consumer
+ *     stopped invalidating cache.makeKey(tenantId, "permit", id), the
+ *     "after" read would return the stale cached value and the assertion
+ *     would fail for real, not just by inspecting mock calls.
+ *  4. The fake-success guard (suspend/cancel/restore ignoring
+ *     repo.updatePermitStatus's boolean "did a row actually match" return):
+ *     a raw command published directly to the queue for a permitId that
+ *     does not exist must not write an outbox event or audit row — checked
+ *     directly against _outbox.messages, not by inspecting a mock.
  */
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { randomUUID } from "node:crypto";
-import { MemoryQueue } from "@civitasone/queue";
-
-const { mockTx, dbTransactionFn, enqueuedMessages, updatePermitStatusMock, invalidateMock, makeKeyMock } = vi.hoisted(() => {
-  const _mockTx = {
-    insert: vi.fn().mockReturnValue({ values: vi.fn().mockResolvedValue(undefined) }),
-    update: vi.fn().mockReturnValue({ set: vi.fn().mockReturnValue({ where: vi.fn().mockResolvedValue(undefined) }) }),
-  };
-  const _dbTransactionFn = vi.fn(async (cb: (tx: unknown) => Promise<void>) => {
-    await cb(_mockTx);
-  });
-  const _enqueuedMessages: Array<{ topic: string; payload: unknown }> = [];
-  const _updatePermitStatusMock = vi.fn(async () => true);
-  const _invalidateMock = vi.fn(async () => undefined);
-  const _makeKeyMock = vi.fn((...parts: string[]) => parts.join(":"));
-  return {
-    mockTx: _mockTx,
-    dbTransactionFn: _dbTransactionFn as any,
-    enqueuedMessages: _enqueuedMessages,
-    updatePermitStatusMock: _updatePermitStatusMock as any,
-    invalidateMock: _invalidateMock as any,
-    makeKeyMock: _makeKeyMock as any,
-  };
-});
-
-vi.mock("../../shared/db.js", () => ({ db: { transaction: dbTransactionFn } }));
-
-vi.mock("../../shared/outbox.js", () => ({
-  enqueue: vi.fn(async (_tx: unknown, msg: { topic: string; payload: unknown }) => {
-    enqueuedMessages.push({ topic: msg.topic, payload: msg.payload });
-  }),
-  markProcessed: vi.fn(async () => true),
-}));
-
-vi.mock("./repo.js", () => ({
-  insertPermit: vi.fn(async () => undefined),
-  updatePermitStatus: (...args: any[]) => updatePermitStatusMock(...args),
-}));
-
-vi.mock("../../shared/infra.js", () => ({
-  cache: { invalidate: (...args: any[]) => invalidateMock(...args), makeKey: (...args: any[]) => makeKeyMock(...args) },
-}));
-
+import type { FastifyInstance } from "fastify";
+import { signToken } from "@civitasone/auth";
+import { runWithTenant } from "@civitasone/db";
+import { buildApp } from "../../app.js";
+import { queue } from "../../shared/infra.js";
+import { db, sqlClient } from "../../shared/db.js";
 import { registerPermitConsumers } from "./consumer.js";
-import { COMMANDS, EVENTS } from "../../topics.js";
+import { registerApplicationConsumers } from "../applications/consumer.js";
+import * as applicationsRepo from "../applications/repo.js";
+import { COMMANDS } from "../../topics.js";
 
+// `drain()` is a test-aid method on the concrete Bus implementation
+// (services/queue-service/src/bus.ts) that resolves once every in-flight
+// delivery (including retry backoffs and any cascaded publishes) has
+// settled — it lets a test await async fan-out deterministically instead of
+// racing a fixed sleep. It is intentionally not part of the public `Queue`
+// interface (production consumers are push-based and never need it), so it
+// is accessed through a narrow local cast rather than widening the shared
+// `Queue` type fleet-wide for a test-only concern.
+async function drain(): Promise<void> {
+  await (queue as unknown as { drain(): Promise<void> }).drain();
+}
+
+const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
 const TENANT = "10000000-aaaa-4000-8000-000000000001";
 const ACTOR = "20000000-bbbb-4000-8000-000000000001";
-const PERMIT_ID = "40000000-dddd-4000-8000-000000000001";
 
-function makeMsg(type: string, payload: Record<string, unknown>) {
-  return { messageId: randomUUID(), type, tenantId: TENANT, actorId: ACTOR, correlationId: `corr-${randomUUID()}`, schemaVersion: "1.0", payload };
+function token(sub: string, roles: string[]) {
+  return signToken({ sub, tid: TENANT, roles, sid: "test-session" }, SECRET, 3600);
 }
 
-async function buildQueue(): Promise<MemoryQueue> {
-  const q = new MemoryQueue();
-  registerPermitConsumers(q);
-  await q.start();
-  return q;
+const officerAuth = { authorization: `Bearer ${token(ACTOR, ["building_admin"])}` };
+
+let app: FastifyInstance;
+
+async function seedApplication(status: "approved" | "draft" | "submitted"): Promise<string> {
+  const id = randomUUID();
+  await runWithTenant(TENANT, async () => {
+    await db.transaction(async (tx) => {
+      await applicationsRepo.insertApplication(tx, {
+        id,
+        tenantId: TENANT,
+        applicationNumber: `BLDG/TEST/${randomUUID().slice(0, 8)}`,
+        status,
+        siteAddress: { line1: "1 Test Street", city: "Test City", pin: "560001" },
+        feeMinor: 500000n,
+        feeCurrency: "INR",
+        feePaid: true,
+        createdBy: ACTOR,
+        updatedBy: ACTOR,
+      });
+    });
+  });
+  return id;
 }
 
-const settle = () => new Promise<void>((r) => setTimeout(r, 100));
+beforeAll(async () => {
+  app = await buildApp();
+  await app.ready();
+  registerPermitConsumers(queue);
+  registerApplicationConsumers(queue);
+});
 
-beforeEach(() => {
-  vi.clearAllMocks();
-  enqueuedMessages.length = 0;
-  updatePermitStatusMock.mockResolvedValue(true);
-  dbTransactionFn.mockImplementation(async (cb: (tx: unknown) => Promise<void>) => {
-    await cb(mockTx);
+afterAll(async () => {
+  await app.close();
+  await sqlClient.end();
+});
+
+describe("POST /v1/building/permits — pre-accept validation (fix for the accept-anything gap)", () => {
+  it("404s when the referenced application does not exist", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/building/permits",
+      headers: officerAuth,
+      payload: { applicationId: randomUUID() },
+    });
+    expect(res.statusCode).toBe(404);
+    expect(res.json().code).toBe("APPLICATION_NOT_FOUND");
+  });
+
+  it("422s when the application exists but is not 'approved'", async () => {
+    const applicationId = await seedApplication("submitted");
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/building/permits",
+      headers: officerAuth,
+      payload: { applicationId },
+    });
+    expect(res.statusCode).toBe(422);
+    expect(res.json().code).toBe("APPLICATION_NOT_APPROVED");
+  });
+
+  it("issues a permit for an approved application, and the write is really persisted", async () => {
+    const applicationId = await seedApplication("approved");
+    const issueRes = await app.inject({
+      method: "POST",
+      url: "/v1/building/permits",
+      headers: officerAuth,
+      payload: { applicationId, validityMonths: 12 },
+    });
+    expect(issueRes.statusCode).toBe(202);
+    const { id: permitId } = issueRes.json() as { id: string };
+    await drain();
+
+    const getRes = await app.inject({ method: "GET", url: `/v1/building/permits/${permitId}`, headers: officerAuth });
+    expect(getRes.statusCode).toBe(200);
+    const permit = getRes.json().data;
+    expect(permit.id).toBe(permitId);
+    expect(permit.applicationId).toBe(applicationId);
+    expect(permit.status).toBe("active");
+    expect(permit.permitNumber).toMatch(/^PERM\/BLDG\/ULB\/\d{4}\/\d{6}$/);
+  });
+
+  it("409s a second issue attempt for the same (now-permitted) application — the application-layer duplicate guard", async () => {
+    const applicationId = await seedApplication("approved");
+    const first = await app.inject({ method: "POST", url: "/v1/building/permits", headers: officerAuth, payload: { applicationId } });
+    expect(first.statusCode).toBe(202);
+    await drain();
+
+    const second = await app.inject({ method: "POST", url: "/v1/building/permits", headers: officerAuth, payload: { applicationId } });
+    expect(second.statusCode).toBe(409);
+    expect(second.json().code).toBe("PERMIT_ALREADY_EXISTS");
   });
 });
 
-describe("suspendPermit command", () => {
-  it("publishes permitSuspended and invalidates the cache when the update actually matched a row", async () => {
-    const q = await buildQueue();
-    await q.publish(COMMANDS.suspendPermit, makeMsg(COMMANDS.suspendPermit, { permitId: PERMIT_ID, tenantId: TENANT, reason: "Structural violation" }));
-    await settle();
-    expect(enqueuedMessages.find((m) => m.topic === EVENTS.permitSuspended)).toBeDefined();
-    expect(invalidateMock).toHaveBeenCalledOnce();
-    expect(makeKeyMock).toHaveBeenCalledWith(TENANT, "permit", PERMIT_ID);
-    await q.stop();
-  });
+describe("permit lifecycle — persisted-state + cache invalidation", () => {
+  it("suspend actually flips status and the read-through cache does not keep serving 'active'", async () => {
+    const applicationId = await seedApplication("approved");
+    const issueRes = await app.inject({ method: "POST", url: "/v1/building/permits", headers: officerAuth, payload: { applicationId } });
+    const { id: permitId } = issueRes.json() as { id: string };
+    await drain();
 
-  it("does NOT publish permitSuspended or invalidate the cache when the update matched no row (fake-success guard)", async () => {
-    updatePermitStatusMock.mockResolvedValueOnce(false);
-    const q = await buildQueue();
-    await q.publish(COMMANDS.suspendPermit, makeMsg(COMMANDS.suspendPermit, { permitId: PERMIT_ID, tenantId: TENANT, reason: "Structural violation" }));
-    await settle();
-    expect(enqueuedMessages.find((m) => m.topic === EVENTS.permitSuspended)).toBeUndefined();
-    expect(invalidateMock).not.toHaveBeenCalled();
-    await q.stop();
-  });
-});
+    // Populate the read-through cache with the pre-suspend value.
+    const before = await app.inject({ method: "GET", url: `/v1/building/permits/${permitId}`, headers: officerAuth });
+    expect(before.json().data.status).toBe("active");
 
-describe("cancelPermit command", () => {
-  it("publishes permitCancelled and invalidates the cache when the update actually matched a row", async () => {
-    const q = await buildQueue();
-    await q.publish(COMMANDS.cancelPermit, makeMsg(COMMANDS.cancelPermit, { permitId: PERMIT_ID, tenantId: TENANT, reason: "Applicant request" }));
-    await settle();
-    expect(enqueuedMessages.find((m) => m.topic === EVENTS.permitCancelled)).toBeDefined();
-    expect(invalidateMock).toHaveBeenCalledOnce();
-    await q.stop();
-  });
+    const suspendRes = await app.inject({
+      method: "POST",
+      url: `/v1/building/permits/${permitId}/suspend`,
+      headers: officerAuth,
+      payload: { reason: "Structural violation found on site inspection" },
+    });
+    expect(suspendRes.statusCode).toBe(202);
+    await drain();
 
-  it("does NOT publish permitCancelled when the update matched no row", async () => {
-    updatePermitStatusMock.mockResolvedValueOnce(false);
-    const q = await buildQueue();
-    await q.publish(COMMANDS.cancelPermit, makeMsg(COMMANDS.cancelPermit, { permitId: PERMIT_ID, tenantId: TENANT, reason: "Applicant request" }));
-    await settle();
-    expect(enqueuedMessages.find((m) => m.topic === EVENTS.permitCancelled)).toBeUndefined();
-    expect(invalidateMock).not.toHaveBeenCalled();
-    await q.stop();
+    const after = await app.inject({ method: "GET", url: `/v1/building/permits/${permitId}`, headers: officerAuth });
+    expect(after.json().data.status).toBe("suspended");
+    expect(after.json().data.suspensionReason).toContain("Structural violation");
   });
 });
 
-describe("restorePermit command", () => {
-  it("publishes permitRestored and invalidates the cache when the update actually matched a row", async () => {
-    const q = await buildQueue();
-    await q.publish(COMMANDS.restorePermit, makeMsg(COMMANDS.restorePermit, { permitId: PERMIT_ID, tenantId: TENANT, reason: "Compliance restored" }));
-    await settle();
-    expect(enqueuedMessages.find((m) => m.topic === EVENTS.permitRestored)).toBeDefined();
-    expect(invalidateMock).toHaveBeenCalledOnce();
-    await q.stop();
-  });
+describe("fake-success guard — a stale/mismatched suspend command must not fabricate success", () => {
+  it("a suspendPermit command for a permitId that does not exist writes no outbox event and no audit row", async () => {
+    const bogusPermitId = randomUUID();
+    const messageId = randomUUID();
+    await queue.publish(COMMANDS.suspendPermit, {
+      messageId,
+      type: COMMANDS.suspendPermit,
+      tenantId: TENANT,
+      actorId: ACTOR,
+      correlationId: `corr-${randomUUID()}`,
+      schemaVersion: "1.0",
+      payload: { permitId: bogusPermitId, tenantId: TENANT, reason: "should never apply" },
+    });
+    await drain();
 
-  it("does NOT publish permitRestored when the update matched no row", async () => {
-    updatePermitStatusMock.mockResolvedValueOnce(false);
-    const q = await buildQueue();
-    await q.publish(COMMANDS.restorePermit, makeMsg(COMMANDS.restorePermit, { permitId: PERMIT_ID, tenantId: TENANT, reason: "Compliance restored" }));
-    await settle();
-    expect(enqueuedMessages.find((m) => m.topic === EVENTS.permitRestored)).toBeUndefined();
-    expect(invalidateMock).not.toHaveBeenCalled();
-    await q.stop();
+    // repo.updatePermitStatus's WHERE clause matches zero rows for a
+    // nonexistent id, so `ok` is false and the consumer must return before
+    // enqueueing permitSuspended or the audit record — both go through the
+    // same _outbox.messages table (no RLS on it, per PR #1001 fix #1), so a
+    // direct query is a real, DB-level proof the guard held (not just that
+    // a mock wasn't called).
+    const rows = await sqlClient`
+      SELECT id FROM _outbox.messages
+      WHERE payload->>'permitId' = ${bogusPermitId}
+    `;
+    expect(rows.length).toBe(0);
   });
 });

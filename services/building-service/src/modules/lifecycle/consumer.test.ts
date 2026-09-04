@@ -1,136 +1,231 @@
 /**
- * Regression test for lifecycle/consumer.ts's decideRenewal: it called
- * repo.updateRenewalDecision and permitRepo.updateValidUntil (both
- * Promise<boolean>, false when zero rows matched) without checking either
- * result — so a stale/mismatched command still published renewalDecided and
- * wrote an audit record, and an approved renewal never invalidated the
- * permit's read-through cache even when validUntil genuinely changed.
+ * Real-DB integration test for building-service's lifecycle module
+ * (certificates + renewals).
+ *
+ * Replaces the previous vi.mock("../../shared/db.js") version. Drives the
+ * real Fastify app + real consumers (applications, permits, lifecycle)
+ * against a real, migrated Postgres database and asserts on persisted rows.
+ *
+ * Covers:
+ *  1. Route -> consumer -> persisted state for
+ *     issue permit -> issue certificate -> request renewal -> decide renewal
+ *     (approved), including the permit's validUntil actually being extended.
+ *  2. Read-through cache invalidation on the permit's GET-by-id cache after
+ *     an approved renewal decision (shared/infra.ts, TTL 60s).
+ *  3. The fake-success guard on decideRenewal (repo.updateRenewalDecision
+ *     AND permitRepo.updateValidUntil, both boolean "did a row actually
+ *     match" returns): a decide command for a renewal id that does not
+ *     exist must write no outbox event / audit row.
  */
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { randomUUID } from "node:crypto";
-import { MemoryQueue } from "@civitasone/queue";
-
-const {
-  mockTx, dbTransactionFn, enqueuedMessages,
-  findRenewalByIdMock, updateRenewalDecisionMock, updateValidUntilMock,
-  invalidateMock, makeKeyMock,
-} = vi.hoisted(() => {
-  const _mockTx = { insert: vi.fn(), update: vi.fn() };
-  const _dbTransactionFn = vi.fn(async (cb: (tx: unknown) => Promise<void>) => { await cb(_mockTx); });
-  const _enqueuedMessages: Array<{ topic: string; payload: unknown }> = [];
-  return {
-    mockTx: _mockTx,
-    dbTransactionFn: _dbTransactionFn as any,
-    enqueuedMessages: _enqueuedMessages,
-    findRenewalByIdMock: vi.fn() as any,
-    updateRenewalDecisionMock: vi.fn(async () => true) as any,
-    updateValidUntilMock: vi.fn(async () => true) as any,
-    invalidateMock: vi.fn(async () => undefined) as any,
-    makeKeyMock: vi.fn((...parts: string[]) => parts.join(":")) as any,
-  };
-});
-
-vi.mock("../../shared/db.js", () => ({ db: { transaction: dbTransactionFn } }));
-vi.mock("../../shared/outbox.js", () => ({
-  enqueue: vi.fn(async (_tx: unknown, msg: { topic: string; payload: unknown }) => { enqueuedMessages.push({ topic: msg.topic, payload: msg.payload }); }),
-  markProcessed: vi.fn(async () => true),
-}));
-vi.mock("./repo.js", () => ({
-  insertRenewal: vi.fn(async () => undefined),
-  insertCertificate: vi.fn(async () => undefined),
-  findRenewalById: (...args: any[]) => findRenewalByIdMock(...args),
-  updateRenewalDecision: (...args: any[]) => updateRenewalDecisionMock(...args),
-}));
-vi.mock("../permits/repo.js", () => ({
-  findById: vi.fn(async () => null),
-  updateValidUntil: (...args: any[]) => updateValidUntilMock(...args),
-}));
-vi.mock("../../shared/infra.js", () => ({
-  cache: { invalidate: (...args: any[]) => invalidateMock(...args), makeKey: (...args: any[]) => makeKeyMock(...args) },
-}));
-vi.mock("./domain.js", () => ({
-  calculateRenewalFeeMinor: vi.fn(() => 50000n),
-  calculateNewValidUntil: vi.fn(() => new Date("2027-01-01T00:00:00Z")),
-  generateCertificateVerificationCode: vi.fn(() => "VERIFY-1"),
-}));
-
+import type { FastifyInstance } from "fastify";
+import { signToken } from "@civitasone/auth";
+import { runWithTenant } from "@civitasone/db";
+import { buildApp } from "../../app.js";
+import { queue } from "../../shared/infra.js";
+import { db, sqlClient } from "../../shared/db.js";
+import { registerApplicationConsumers } from "../applications/consumer.js";
+import { registerPermitConsumers } from "../permits/consumer.js";
 import { registerLifecycleConsumers } from "./consumer.js";
-import { COMMANDS, EVENTS } from "../../topics.js";
+import * as applicationsRepo from "../applications/repo.js";
+import { COMMANDS } from "../../topics.js";
 
-const TENANT = "10000000-aaaa-4000-8000-000000000001";
-const ACTOR = "20000000-bbbb-4000-8000-000000000001";
-const RENEWAL_ID = "60000000-ffff-4000-8000-000000000001";
-const PERMIT_ID = "40000000-dddd-4000-8000-000000000001";
-
-const RENEWAL_ROW = {
-  id: RENEWAL_ID, tenantId: TENANT, permitId: PERMIT_ID, renewalType: "renewal",
-  previousValidUntil: new Date("2026-01-01T00:00:00Z"),
-};
-
-function makeMsg(type: string, payload: Record<string, unknown>) {
-  return { messageId: randomUUID(), type, tenantId: TENANT, actorId: ACTOR, correlationId: `corr-${randomUUID()}`, schemaVersion: "1.0", payload };
+// `drain()` is a test-aid method on the concrete Bus implementation
+// (services/queue-service/src/bus.ts) that resolves once every in-flight
+// delivery (including retry backoffs and any cascaded publishes) has
+// settled — it lets a test await async fan-out deterministically instead of
+// racing a fixed sleep. It is intentionally not part of the public `Queue`
+// interface (production consumers are push-based and never need it), so it
+// is accessed through a narrow local cast rather than widening the shared
+// `Queue` type fleet-wide for a test-only concern.
+async function drain(): Promise<void> {
+  await (queue as unknown as { drain(): Promise<void> }).drain();
 }
-async function buildQueue(): Promise<MemoryQueue> {
-  const q = new MemoryQueue();
-  registerLifecycleConsumers(q);
-  await q.start();
-  return q;
-}
-const settle = () => new Promise<void>((r) => setTimeout(r, 100));
 
-beforeEach(() => {
-  vi.clearAllMocks();
-  enqueuedMessages.length = 0;
-  findRenewalByIdMock.mockResolvedValue({ ...RENEWAL_ROW });
-  updateRenewalDecisionMock.mockResolvedValue(true);
-  updateValidUntilMock.mockResolvedValue(true);
-  dbTransactionFn.mockImplementation(async (cb: (tx: unknown) => Promise<void>) => { await cb(mockTx); });
+const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
+const TENANT = "10000000-aaaa-4000-8000-000000000004";
+const ACTOR = "20000000-bbbb-4000-8000-000000000004";
+
+function token(sub: string, roles: string[]) {
+  return signToken({ sub, tid: TENANT, roles, sid: "test-session" }, SECRET, 3600);
+}
+
+const userAuth = { authorization: `Bearer ${token(ACTOR, ["building_user"])}` };
+const officerAuth = { authorization: `Bearer ${token(ACTOR, ["building_admin"])}` };
+
+let app: FastifyInstance;
+
+beforeAll(async () => {
+  app = await buildApp();
+  await app.ready();
+  registerApplicationConsumers(queue);
+  registerPermitConsumers(queue);
+  registerLifecycleConsumers(queue);
 });
 
-describe("decideRenewal command — approved", () => {
-  it("extends the permit and invalidates the permit's read-through cache", async () => {
-    const q = await buildQueue();
-    await q.publish(COMMANDS.decideRenewal, makeMsg(COMMANDS.decideRenewal, { id: RENEWAL_ID, decision: "approved" }));
-    await settle();
-    expect(updateValidUntilMock).toHaveBeenCalledOnce();
-    expect(enqueuedMessages.find((m) => m.topic === EVENTS.renewalDecided)).toBeDefined();
-    expect(invalidateMock).toHaveBeenCalledOnce();
-    expect(makeKeyMock).toHaveBeenCalledWith(TENANT, "permit", PERMIT_ID);
-    await q.stop();
+afterAll(async () => {
+  await app.close();
+  await sqlClient.end();
+});
+
+async function seedApprovedApplication(): Promise<string> {
+  const id = randomUUID();
+  await runWithTenant(TENANT, async () => {
+    await db.transaction(async (tx) => {
+      await applicationsRepo.insertApplication(tx, {
+        id,
+        tenantId: TENANT,
+        applicationNumber: `BLDG/TEST/${randomUUID().slice(0, 8)}`,
+        status: "approved",
+        siteAddress: { line1: "1 Lifecycle St", city: "Test City", pin: "560001" },
+        feeMinor: 500000n,
+        feeCurrency: "INR",
+        feePaid: true,
+        createdBy: ACTOR,
+        updatedBy: ACTOR,
+      });
+    });
+  });
+  return id;
+}
+
+async function issuePermit(): Promise<{ permitId: string; validUntil: string }> {
+  const applicationId = await seedApprovedApplication();
+  const issueRes = await app.inject({
+    method: "POST",
+    url: "/v1/building/permits",
+    headers: officerAuth,
+    payload: { applicationId, validityMonths: 24 },
+  });
+  const { id: permitId } = issueRes.json() as { id: string };
+  await drain();
+  const getRes = await app.inject({ method: "GET", url: `/v1/building/permits/${permitId}`, headers: officerAuth });
+  return { permitId, validUntil: getRes.json().data.validUntil };
+}
+
+describe("lifecycle — certificates + renewals, real DB reproduction", () => {
+  it("issues a certificate against an active permit and persists it", async () => {
+    const { permitId } = await issuePermit();
+
+    const certRes = await app.inject({
+      method: "POST",
+      url: "/v1/building/certificates",
+      headers: officerAuth,
+      payload: { permitId, certType: "commencement" },
+    });
+    expect(certRes.statusCode).toBe(202);
+    await drain();
+
+    const listRes = await app.inject({ method: "GET", url: `/v1/building/certificates?permitId=${permitId}`, headers: userAuth });
+    expect(listRes.json().data).toHaveLength(1);
+    expect(listRes.json().data[0].certType).toBe("commencement");
+    expect(listRes.json().data[0].status).toBe("issued");
+    expect(listRes.json().data[0].verificationCode).toBeTruthy();
   });
 
-  it("does NOT publish renewalDecided when updateRenewalDecision matches no row (fake-success guard)", async () => {
-    updateRenewalDecisionMock.mockResolvedValueOnce(false);
-    const q = await buildQueue();
-    await q.publish(COMMANDS.decideRenewal, makeMsg(COMMANDS.decideRenewal, { id: RENEWAL_ID, decision: "approved" }));
-    await settle();
-    expect(updateValidUntilMock).not.toHaveBeenCalled();
-    expect(enqueuedMessages.length).toBe(0);
-    expect(invalidateMock).not.toHaveBeenCalled();
-    await q.stop();
+  it("rejects issuing a certificate against a non-'active' permit", async () => {
+    const { permitId } = await issuePermit();
+    const suspendRes = await app.inject({
+      method: "POST",
+      url: `/v1/building/permits/${permitId}/suspend`,
+      headers: officerAuth,
+      payload: { reason: "site inspection pending" },
+    });
+    expect(suspendRes.statusCode).toBe(202);
+    await drain();
+
+    const certRes = await app.inject({
+      method: "POST",
+      url: "/v1/building/certificates",
+      headers: officerAuth,
+      payload: { permitId, certType: "completion" },
+    });
+    expect(certRes.statusCode).toBe(422);
   });
 
-  it("does NOT invalidate the permit cache when the permit's own validUntil update matches no row", async () => {
-    updateValidUntilMock.mockResolvedValueOnce(false);
-    const q = await buildQueue();
-    await q.publish(COMMANDS.decideRenewal, makeMsg(COMMANDS.decideRenewal, { id: RENEWAL_ID, decision: "approved" }));
-    await settle();
-    // The renewal decision itself still genuinely happened, so the event IS published —
-    // but nothing in the permit's cache actually changed, so it must not be invalidated.
-    expect(enqueuedMessages.find((m) => m.topic === EVENTS.renewalDecided)).toBeDefined();
-    expect(invalidateMock).not.toHaveBeenCalled();
-    await q.stop();
+  it("request -> approve renewal extends the permit's validUntil and invalidates the permit's read-through cache", async () => {
+    const { permitId, validUntil: originalValidUntil } = await issuePermit();
+
+    // Populate the permit's GET-by-id cache with the pre-renewal value.
+    const before = await app.inject({ method: "GET", url: `/v1/building/permits/${permitId}`, headers: userAuth });
+    expect(before.json().data.validUntil).toBe(originalValidUntil);
+
+    const requestRes = await app.inject({
+      method: "POST",
+      url: "/v1/building/renewals",
+      headers: userAuth,
+      payload: { permitId, renewalType: "renewal" },
+    });
+    expect(requestRes.statusCode).toBe(202);
+    const { id: renewalId } = requestRes.json() as { id: string };
+    await drain();
+
+    const renewalGet = await app.inject({ method: "GET", url: `/v1/building/renewals/${renewalId}`, headers: userAuth });
+    expect(renewalGet.json().data.status).toBe("submitted");
+    expect(renewalGet.json().data.feeMinor).not.toBeNull();
+
+    const decideRes = await app.inject({
+      method: "POST",
+      url: `/v1/building/renewals/${renewalId}/decide`,
+      headers: officerAuth,
+      payload: { decision: "approved" },
+    });
+    expect(decideRes.statusCode).toBe(202);
+    await drain();
+
+    // Cache invalidation check: this GET must reflect the extended
+    // validUntil, not the pre-renewal cached value.
+    const afterDecide = await app.inject({ method: "GET", url: `/v1/building/permits/${permitId}`, headers: userAuth });
+    expect(afterDecide.json().data.validUntil).not.toBe(originalValidUntil);
+    expect(new Date(afterDecide.json().data.validUntil).getTime()).toBeGreaterThan(new Date(originalValidUntil).getTime());
+
+    const renewalAfterDecide = await app.inject({ method: "GET", url: `/v1/building/renewals/${renewalId}`, headers: userAuth });
+    expect(renewalAfterDecide.json().data.status).toBe("approved");
+  });
+
+  it("a rejected renewal leaves the permit's validUntil unchanged", async () => {
+    const { permitId, validUntil: originalValidUntil } = await issuePermit();
+    const requestRes = await app.inject({
+      method: "POST",
+      url: "/v1/building/renewals",
+      headers: userAuth,
+      payload: { permitId, renewalType: "extension" },
+    });
+    const { id: renewalId } = requestRes.json() as { id: string };
+    await drain();
+
+    await app.inject({
+      method: "POST",
+      url: `/v1/building/renewals/${renewalId}/decide`,
+      headers: officerAuth,
+      payload: { decision: "rejected", reason: "insufficient documentation" },
+    });
+    await drain();
+
+    const afterDecide = await app.inject({ method: "GET", url: `/v1/building/permits/${permitId}`, headers: userAuth });
+    expect(afterDecide.json().data.validUntil).toBe(originalValidUntil);
   });
 });
 
-describe("decideRenewal command — rejected", () => {
-  it("does not attempt to extend the permit, but still publishes renewalDecided", async () => {
-    const q = await buildQueue();
-    await q.publish(COMMANDS.decideRenewal, makeMsg(COMMANDS.decideRenewal, { id: RENEWAL_ID, decision: "rejected", reason: "Incomplete documents" }));
-    await settle();
-    expect(updateValidUntilMock).not.toHaveBeenCalled();
-    expect(enqueuedMessages.find((m) => m.topic === EVENTS.renewalDecided)).toBeDefined();
-    expect(invalidateMock).not.toHaveBeenCalled();
-    await q.stop();
+describe("fake-success guard — a stale/mismatched decideRenewal command must not fabricate success", () => {
+  it("a decideRenewal command for a renewal id that does not exist writes no outbox event", async () => {
+    const bogusRenewalId = randomUUID();
+    await queue.publish(COMMANDS.decideRenewal, {
+      messageId: randomUUID(),
+      type: COMMANDS.decideRenewal,
+      tenantId: TENANT,
+      actorId: ACTOR,
+      correlationId: `corr-${randomUUID()}`,
+      schemaVersion: "1.0",
+      payload: { id: bogusRenewalId, tenantId: TENANT, decision: "approved" },
+    });
+    await drain();
+
+    const rows = await sqlClient`
+      SELECT id FROM _outbox.messages
+      WHERE payload->>'renewalId' = ${bogusRenewalId}
+    `;
+    expect(rows.length).toBe(0);
   });
 });
