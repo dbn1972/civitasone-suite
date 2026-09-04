@@ -48,6 +48,11 @@ export function registerPermitConsumers(rawQueue: Queue): void {
       return;
     }
 
+    // Declared outside the transaction (mirrors revokePermit's `updated`
+    // below) so the fresh row is available afterward to refresh the read-
+    // through applications cache — see the cache.put call after the
+    // transaction closes.
+    let appUpdated: Awaited<ReturnType<typeof appRepo.updateStatus>> = null;
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       await repo.insertPermit(tx, {
@@ -69,7 +74,7 @@ export function registerPermitConsumers(rawQueue: Queue): void {
       // that check and this write (e.g. rejected by another officer in the
       // interim — a narrow but real race), abort the WHOLE transaction rather
       // than issue a permit whose backing application no longer supports it.
-      const appUpdated = await appRepo.updateStatus(tx, p.applicationId, msg.tenantId, "permitted", PERMIT_ELIGIBLE_APPLICATION_STATUSES, msg.actorId);
+      appUpdated = await appRepo.updateStatus(tx, p.applicationId, msg.tenantId, "permitted", PERMIT_ELIGIBLE_APPLICATION_STATUSES, msg.actorId);
       if (!appUpdated) {
         throw new Error(`application ${p.applicationId} status changed since eligibility check; aborting permit issuance for ${p.id}`);
       }
@@ -91,6 +96,16 @@ export function registerPermitConsumers(rawQueue: Queue): void {
         resourceId: p.id,
       });
     });
+    // Was missing entirely: this handler flips the APPLICATION's status to
+    // "permitted" (the update above), but GET /v1/event/applications/:id
+    // reads through cache.getOrLoad (applications/routes.ts) — nothing here
+    // ever refreshed that cached entry, so a caller kept seeing the
+    // application's pre-permit status (whatever was last cached, e.g.
+    // "submitted") until the cache's TTL happened to expire. submit/
+    // withdraw in applications/consumer.ts already do this correctly (see
+    // their own cache.put calls) — this consumer mutates the SAME cached
+    // resource from a different module and had no equivalent.
+    if (appUpdated) await cache.put(`event:${msg.tenantId}:application:${p.applicationId}`, appUpdated);
     log.info({ id: p.id, permitNumber }, "event permit issued");
   });
 

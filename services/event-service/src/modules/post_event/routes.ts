@@ -1,5 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
+import { zMoneyMinorStringNonNeg } from "@civitasone/schemas";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import * as repo from "./repo.js";
 import * as permitsRepo from "../permits/repo.js";
@@ -22,7 +23,20 @@ const depositBody = z.object({
   // the caller believed the decision succeeded when nothing was ever written.
   // Validating the shape synchronously here closes that; the actual bounds
   // check against the real deposit happens below via computeRefundMinor.
-  refundMinor: z.string().regex(/^\d+$/).optional(),
+  //
+  // zMoneyMinorStringNonNeg is the canonical @civitasone/schemas money codec
+  // (R7): same effective validation as the hand-rolled `z.string().regex(/^\d+$/)`
+  // this replaced (non-negative base-10 integer, normalised to a string), but
+  // also accepts a JSON safe-integer number instead of 400ing it, and rejects
+  // an unsafe (>2^53) number outright instead of silently letting it through.
+  // Consistency-only swap, not a correctness fix: this field's value already
+  // flowed as a string straight into `BigInt(body.refundMinor)` below with no
+  // intermediate `Number()`/`parseInt()` anywhere on the path (see also
+  // post_event/consumer.ts's `BigInt(p.refundMinor)`), so there was no
+  // precision-loss bug here to begin with -- verified by reading the actual
+  // consumer, not assumed from roadcut-service's identical (and, on the same
+  // reading, equally safe) pattern.
+  refundMinor: zMoneyMinorStringNonNeg.optional(),
 });
 
 const idParam = z.object({ id: z.string().uuid() });
