@@ -6,6 +6,7 @@ import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { writeAudit } from "../../shared/audit.js";
 import { tenantScoped } from "../../shared/tenant-queue.js";
 import { cache } from "../../shared/infra.js";
+import { emitMunicipalFeeChallan, emitMunicipalNotification, MUNICIPAL_EVENT_TYPES } from "../../shared/cross-events.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
 import * as facilitiesRepo from "../facilities/repo.js";
@@ -64,6 +65,19 @@ export function registerBookingConsumers(rawQueue: Queue): void {
         actorId: msg.actorId,
         correlationId: msg.correlationId,
         payload: { bookingId: p.id, bookingNumber, vehicleNumber: p.vehicleNumber },
+      });
+      // Citizen-meaningful transition: the booking just got confirmed. No fee
+      // challan here — amountMinor is still null at creation (the actual fee
+      // isn't known until recordExit computes it from real elapsed duration);
+      // see that handler below for the challan. There's no owner-name/contact
+      // field on this schema (only vehicleNumber + the citizen's actorId), so
+      // vehicleNumber is the recipient display string, same as elsewhere in
+      // this file's payloads.
+      await emitMunicipalNotification(tx, ctxOf(msg), {
+        eventType: MUNICIPAL_EVENT_TYPES.statusChanged,
+        recipient: p.vehicleNumber,
+        recipientId: msg.actorId,
+        variables: { bookingId: p.id, bookingNumber, status: "booked" },
       });
       await writeAudit(tx, ctxOf(msg), {
         action: "booking.create",
@@ -149,6 +163,20 @@ export function registerBookingConsumers(rawQueue: Queue): void {
         correlationId: msg.correlationId,
         payload: { bookingId: p.id, durationMinutes, amountMinor: amountMinor !== null ? String(amountMinor) : null },
       });
+      // This is where a citizen actually comes to owe money for this booking:
+      // amountMinor is null until now (see the comment above), so raising the
+      // challan atomically with the same write that first asserts a nonzero
+      // fee — not at createBooking, which never knows the amount — is the
+      // correct point in this domain's flow. emitMunicipalFeeChallan no-ops
+      // for a null/<=0 amount (e.g. a facility with no tariffPerHourMinor
+      // configured, logged above) and enforces its own bounds ceiling.
+      if (amountMinor !== null) {
+        await emitMunicipalFeeChallan(tx, ctxOf(msg), {
+          sourceRef: booking.bookingNumber,
+          depositor: booking.vehicleNumber,
+          amountMinor,
+        });
+      }
       await writeAudit(tx, ctxOf(msg), {
         action: "booking.exit",
         resourceType: "parking_booking",
