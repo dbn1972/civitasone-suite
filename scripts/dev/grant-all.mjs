@@ -72,6 +72,11 @@ const DB_USERS = {
   civitas_fire: "fire_svc",
   civitas_market: "market_svc",
   civitas_parking: "parking_svc",
+  // recommendation-service: migrate-all.mjs already provisions
+  // civitas_recommendation (see the SERVICES list there), but grant-all.mjs
+  // never learned about it -- same "tables exist, *_svc role has no grants
+  // on them" gap the batches above already fixed for their own services.
+  civitas_recommendation: "recommendation_svc",
 };
 
 const GRANT_SQL = (role) => `

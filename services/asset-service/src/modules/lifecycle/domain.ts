@@ -6,7 +6,11 @@ export class DomainError extends Error {
 }
 
 export function assertAssetTransferable(status: string): void {
-  const transferableStatuses = ["active", "under_maintenance"];
+  // Only "active" assets may be transferred. An asset under maintenance is
+  // physically unavailable for handover and must not be reassigned mid-repair
+  // (see tests/routes-coverage-full.test.ts "assertAssetTransferable throws for
+  // non-active" and tests/lifecycle-deep.test.ts).
+  const transferableStatuses = ["active"];
   if (!transferableStatuses.includes(status)) {
     throw new DomainError("ASSET_NOT_TRANSFERABLE", `asset with status '${status}' cannot be transferred`);
   }
