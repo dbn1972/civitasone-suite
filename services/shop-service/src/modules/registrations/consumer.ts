@@ -5,6 +5,7 @@ import { cache } from "../../shared/infra.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { writeAudit } from "../../shared/audit.js";
 import { tenantScoped } from "../../shared/tenant-queue.js";
+import { emitMunicipalFeeChallan, emitMunicipalNotification, MUNICIPAL_EVENT_TYPES } from "../../shared/cross-events.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
 import { calculateFeeMinor, generateApplicationNumber, canTransition } from "./domain.js";
@@ -75,6 +76,19 @@ export function registerRegistrationConsumers(rawQueue: Queue): void {
         createdBy: msg.actorId,
         updatedBy: msg.actorId,
       });
+      // Fee becomes due the moment it is assessed (here, at creation) — a
+      // draft application already carries a real feeAmountMinor a citizen
+      // must pay, so the challan is raised atomically with the row that
+      // asserts the fee, not deferred to a later status transition that
+      // doesn't recompute it. emitMunicipalFeeChallan no-ops for
+      // amountMinor <= 0n (never the case here — calculateFeeMinor's floor
+      // is a nonzero base fee) and enforces the PR #1013-style bounds
+      // ceiling itself.
+      await emitMunicipalFeeChallan(tx, ctxOf(msg), {
+        sourceRef: applicationNumber,
+        depositor: p.ownerName,
+        amountMinor: feeAmountMinor,
+      });
       await enqueue(tx, {
         topic: EVENTS.applicationCreated,
         eventType: EVENTS.applicationCreated,
@@ -122,6 +136,14 @@ export function registerRegistrationConsumers(rawQueue: Queue): void {
         actorId: msg.actorId,
         correlationId: msg.correlationId,
         payload: { applicationId: p.id },
+      });
+      // Citizen-meaningful transition: the applicant just successfully
+      // submitted their application and should get a confirmation.
+      await emitMunicipalNotification(tx, ctxOf(msg), {
+        eventType: MUNICIPAL_EVENT_TYPES.applicationSubmitted,
+        recipient: current.ownerName,
+        recipientId: current.applicantId,
+        variables: { applicationId: p.id, applicationNumber: current.applicationNumber },
       });
       await writeAudit(tx, ctxOf(msg), {
         action: "application.submit",

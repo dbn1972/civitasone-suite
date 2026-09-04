@@ -5,9 +5,11 @@ import { cache } from "../../shared/infra.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { writeAudit } from "../../shared/audit.js";
 import { tenantScoped } from "../../shared/tenant-queue.js";
+import { emitMunicipalFeeChallan, emitMunicipalNotification, municipalDecisionNotificationEventType } from "../../shared/cross-events.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
 import * as permitRepo from "../permits/repo.js";
+import * as appRepo from "../registrations/repo.js";
 import { canPerformAction } from "../permits/domain.js";
 import { calculateRenewalFeeMinor, calculateNewValidUntil, canDecideRenewal } from "./domain.js";
 
@@ -47,6 +49,14 @@ export function registerLifecycleConsumers(rawQueue: Queue): void {
         previousValidUntil: permit?.validUntil ?? null,
         createdBy: msg.actorId,
         updatedBy: msg.actorId,
+      });
+      // Fee becomes due the moment the renewal is assessed (a "surrender" has
+      // feeAmountMinor = 0n, so emitMunicipalFeeChallan's own <= 0n guard
+      // naturally skips raising a challan for it — no branching needed here).
+      await emitMunicipalFeeChallan(tx, ctxOf(msg), {
+        sourceRef: p.id,
+        depositor: permit?.establishmentName ?? p.permitId,
+        amountMinor: feeAmountMinor,
       });
       await enqueue(tx, {
         topic: EVENTS.renewalRequested,
@@ -94,6 +104,13 @@ export function registerLifecycleConsumers(rawQueue: Queue): void {
       ? calculateNewValidUntil(renewal.previousValidUntil)
       : null;
 
+    // Fetched unconditionally (previously only on the approved path) — the
+    // approved-path business logic below is unchanged, but the citizen
+    // notification at the end of this handler needs the permit's
+    // applicationId regardless of decision outcome, and this lookup is a
+    // cheap read shared by both uses.
+    const permit = await permitRepo.findById(renewal.permitId, msg.tenantId);
+
     // The permit itself may have moved (e.g. suspended/cancelled by an officer)
     // since this renewal was requested. Determine UP FRONT, before persisting
     // anything, whether an approval can actually be fully honored against the
@@ -104,9 +121,7 @@ export function registerLifecycleConsumers(rawQueue: Queue): void {
     // That half-applied state is exactly the kind of fake-success this whole
     // pass has been hunting: the renewal row and its emitted event would both
     // claim an extension/surrender that never actually happened to the permit.
-    let permit: Awaited<ReturnType<typeof permitRepo.findById>> = null;
     if (p.decision === "approved") {
-      permit = await permitRepo.findById(renewal.permitId, msg.tenantId);
       if (renewal.renewalType === "renewal" && newValidUntil) {
         if (!permit || !PERMIT_ACTIVE_OR_EXPIRED.includes(permit.permitStatus)) {
           log.warn(
@@ -126,6 +141,11 @@ export function registerLifecycleConsumers(rawQueue: Queue): void {
         }
       }
     }
+
+    // Resolved here (not inside the transaction) purely for the citizen
+    // notification below — the renewal row carries no applicant reference,
+    // only permitId, and the permit row in turn only carries applicationId.
+    const application = permit ? await appRepo.findById(permit.applicationId, msg.tenantId) : null;
 
     // The transaction reports back whether it actually committed the decision,
     // so the trailing log can't claim success on a lost race (a throw from the
@@ -178,6 +198,20 @@ export function registerLifecycleConsumers(rawQueue: Queue): void {
           decision: p.decision,
           reason: p.reason,
           newValidUntil: newValidUntil?.toISOString(),
+        },
+      });
+      // Citizen-meaningful transition: the renewal/amendment/duplicate/
+      // surrender request has been decided (approved or rejected).
+      await emitMunicipalNotification(tx, ctxOf(msg), {
+        eventType: municipalDecisionNotificationEventType(EVENTS.renewalDecided, p.decision),
+        recipient: application?.ownerName ?? permit?.establishmentName ?? renewal.permitId,
+        recipientId: application?.applicantId ?? msg.actorId,
+        variables: {
+          renewalId: p.id,
+          permitId: renewal.permitId,
+          renewalType: renewal.renewalType,
+          decision: p.decision,
+          ...(p.reason ? { reason: p.reason } : {}),
         },
       });
       await writeAudit(tx, ctxOf(msg), {

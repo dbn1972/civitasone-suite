@@ -6,8 +6,10 @@ import { cache } from "../../shared/infra.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { writeAudit } from "../../shared/audit.js";
 import { tenantScoped } from "../../shared/tenant-queue.js";
+import { emitMunicipalNotification, MUNICIPAL_EVENT_TYPES } from "../../shared/cross-events.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
+import * as appRepo from "../registrations/repo.js";
 import { generatePermitNumber, generateVerificationCode, calculateValidUntil, canPerformAction } from "./domain.js";
 
 const log = pino({ name: "shop.permits.consumer" });
@@ -40,6 +42,10 @@ export function registerPermitConsumers(rawQueue: Queue): void {
       );
       return;
     }
+    // Looked up here (not inside the transaction) purely to resolve the
+    // applicant's identity for the citizen notification below — the permit
+    // row itself carries no applicant reference, only application_id.
+    const application = await appRepo.findById(p.applicationId, msg.tenantId);
     const now = new Date();
     const verificationCode = generateVerificationCode();
     const validUntil = calculateValidUntil(now, p.validityMonths);
@@ -109,6 +115,16 @@ export function registerPermitConsumers(rawQueue: Queue): void {
           verificationCode,
         },
       });
+      // Citizen-meaningful transition: the permit is now live. Falls back to
+      // the establishment/actor identity if the underlying application was
+      // somehow not found (should not happen given the FK, but this must
+      // never block permit issuance itself).
+      await emitMunicipalNotification(tx, ctxOf(msg), {
+        eventType: MUNICIPAL_EVENT_TYPES.permitIssued,
+        recipient: application?.ownerName ?? p.establishmentName,
+        recipientId: application?.applicantId ?? msg.actorId,
+        variables: { permitId: p.id, permitNumber, establishmentName: p.establishmentName },
+      });
       await writeAudit(tx, ctxOf(msg), {
         action: "permit.issue",
         resourceType: "shop_permit",
@@ -133,6 +149,7 @@ export function registerPermitConsumers(rawQueue: Queue): void {
       );
       return;
     }
+    const application = await appRepo.findById(current.applicationId, msg.tenantId);
     const applied = await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return false;
       const ok = await repo.updatePermitStatus(tx, p.permitId, msg.tenantId, ["active"], "suspended", {
@@ -157,6 +174,14 @@ export function registerPermitConsumers(rawQueue: Queue): void {
         correlationId: msg.correlationId,
         payload: { permitId: p.permitId, reason: p.reason },
       });
+      // Citizen-meaningful (adverse) transition — the holder must be told
+      // their permit was suspended and why.
+      await emitMunicipalNotification(tx, ctxOf(msg), {
+        eventType: MUNICIPAL_EVENT_TYPES.statusChanged,
+        recipient: application?.ownerName ?? current.establishmentName,
+        recipientId: application?.applicantId ?? msg.actorId,
+        variables: { permitId: p.permitId, status: "suspended", reason: p.reason },
+      });
       await writeAudit(tx, ctxOf(msg), {
         action: "permit.suspend",
         resourceType: "shop_permit",
@@ -179,6 +204,7 @@ export function registerPermitConsumers(rawQueue: Queue): void {
       );
       return;
     }
+    const application = await appRepo.findById(current.applicationId, msg.tenantId);
     const applied = await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return false;
       const ok = await repo.updatePermitStatus(tx, p.permitId, msg.tenantId, ["active", "suspended"], "cancelled", {
@@ -203,6 +229,13 @@ export function registerPermitConsumers(rawQueue: Queue): void {
         correlationId: msg.correlationId,
         payload: { permitId: p.permitId, reason: p.reason },
       });
+      // Citizen-meaningful (adverse) transition.
+      await emitMunicipalNotification(tx, ctxOf(msg), {
+        eventType: MUNICIPAL_EVENT_TYPES.statusChanged,
+        recipient: application?.ownerName ?? current.establishmentName,
+        recipientId: application?.applicantId ?? msg.actorId,
+        variables: { permitId: p.permitId, status: "cancelled", reason: p.reason },
+      });
       await writeAudit(tx, ctxOf(msg), {
         action: "permit.cancel",
         resourceType: "shop_permit",
@@ -223,6 +256,7 @@ export function registerPermitConsumers(rawQueue: Queue): void {
       );
       return;
     }
+    const application = await appRepo.findById(current.applicationId, msg.tenantId);
     const applied = await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return false;
       const ok = await repo.updatePermitStatus(tx, p.permitId, msg.tenantId, ["suspended"], "active", {
@@ -246,6 +280,13 @@ export function registerPermitConsumers(rawQueue: Queue): void {
         actorId: msg.actorId,
         correlationId: msg.correlationId,
         payload: { permitId: p.permitId, reason: p.reason },
+      });
+      // Citizen-meaningful transition — the holder's permit is active again.
+      await emitMunicipalNotification(tx, ctxOf(msg), {
+        eventType: MUNICIPAL_EVENT_TYPES.statusChanged,
+        recipient: application?.ownerName ?? current.establishmentName,
+        recipientId: application?.applicantId ?? msg.actorId,
+        variables: { permitId: p.permitId, status: "active", reason: p.reason },
       });
       await writeAudit(tx, ctxOf(msg), {
         action: "permit.restore",
