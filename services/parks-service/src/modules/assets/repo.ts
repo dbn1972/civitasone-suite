@@ -52,3 +52,13 @@ export async function update(tx: ScopedTx, id: string, tenantId: string, patch: 
     .returning({ id: parksAssets.id });
   return result.length > 0;
 }
+
+// Reserves the next asset code from the DB sequence — see
+// complaints/repo.ts's nextComplaintNumber for the full rationale
+// (identical bug, identical fix).
+export async function nextAssetCode(tx: ScopedTx): Promise<number> {
+  const [row] = (await tx.execute(
+    sql`SELECT nextval('"civitas_parks"."asset_code_seq"')::bigint AS seq`,
+  )) as unknown as Array<{ seq: number }>;
+  return Number(row!.seq);
+}

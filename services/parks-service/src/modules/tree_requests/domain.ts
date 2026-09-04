@@ -24,3 +24,9 @@ export function validateTreeRequestTransition(from: TreeRequestStatus, to: TreeR
 }
 
 export const VALID_REQUEST_TYPES: TreeRequestType[] = ["pruning", "removal", "new_planting", "transplant"];
+
+// Pure formatter, no I/O — see complaints/domain.ts's formatComplaintNumber
+// for the full rationale (identical bug, identical fix).
+export function formatRequestNumber(seq: number): string {
+  return `PRKT-${seq}`;
+}

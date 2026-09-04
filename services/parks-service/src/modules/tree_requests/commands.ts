@@ -15,8 +15,10 @@ export interface SubmitInput {
 
 export async function submitTreeRequest(ctx: RequestContext, body: SubmitInput): Promise<Accepted> {
   const id = randomUUID();
-  const requestNumber = `PRKT-${Date.now()}`;
-  return publishCommand(ctx, COMMANDS.CREATE_TREE_REQUEST, id, { id, requestNumber, requestedBy: ctx.actorId, ...body });
+  // requestNumber is reserved from a real Postgres sequence inside the
+  // consumer's own transaction (see repo.ts's nextRequestNumber), not here —
+  // see complaints/commands.ts's createComplaint for the full rationale.
+  return publishCommand(ctx, COMMANDS.CREATE_TREE_REQUEST, id, { id, requestedBy: ctx.actorId, ...body });
 }
 
 export async function inspectTreeRequest(ctx: RequestContext, id: string, inspectionReport: Record<string, unknown>, version: number): Promise<Accepted> {

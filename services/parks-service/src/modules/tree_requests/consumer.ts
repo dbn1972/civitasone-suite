@@ -6,6 +6,7 @@ import { writeAudit } from "../../shared/audit.js";
 import { tenantScoped } from "../../shared/tenant-queue.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
+import { formatRequestNumber } from "./domain.js";
 
 const log = pino({ name: "parks.tree_requests.consumer" });
 
@@ -20,8 +21,13 @@ export function registerTreeRequestConsumers(rawQueue: Queue): void {
     const p = msg.payload as any;
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
+      // Reserved inside this transaction (see repo.nextRequestNumber) —
+      // replaces the old `PRKT-${Date.now()}` scheme, which collided under
+      // concurrent load and had no DB-level guarantee of uniqueness beyond
+      // the UNIQUE constraint rejecting the second insert outright.
+      const requestNumber = formatRequestNumber(await repo.nextRequestNumber(tx));
       await repo.insert(tx, {
-        id: p.id, tenantId: msg.tenantId, requestNumber: p.requestNumber,
+        id: p.id, tenantId: msg.tenantId, requestNumber,
         requestedBy: p.requestedBy, requestType: p.requestType,
         location: p.location, treeSpecies: p.treeSpecies,
         reason: p.reason, photos: p.photos, status: "submitted",
@@ -30,7 +36,7 @@ export function registerTreeRequestConsumers(rawQueue: Queue): void {
       await enqueue(tx, {
         topic: EVENTS.TREE_REQUEST_CREATED, eventType: EVENTS.TREE_REQUEST_CREATED,
         tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
-        payload: { requestId: p.id, requestNumber: p.requestNumber, requestType: p.requestType },
+        payload: { requestId: p.id, requestNumber, requestType: p.requestType },
       });
       await writeAudit(tx, ctxOf(msg), { action: "tree_request.submit", resourceType: "parks_tree_request", resourceId: p.id });
     });

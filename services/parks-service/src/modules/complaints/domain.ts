@@ -23,3 +23,11 @@ export function validateComplaintTransition(from: ComplaintStatus, to: Complaint
 }
 
 export const VALID_COMPLAINT_TYPES: ComplaintType[] = ["broken_equipment", "overgrown", "vandalism", "lighting", "waterlogging", "pest"];
+
+// Pure formatter, no I/O — the sequence value itself comes from Postgres
+// (see repo.ts's nextComplaintNumber), not from this function. Previously
+// commands.ts built the whole number inline as `PRK-${Date.now()}`, which
+// collided under concurrent load (see migrations/0002_number_sequences.sql).
+export function formatComplaintNumber(seq: number): string {
+  return `PRK-${seq}`;
+}

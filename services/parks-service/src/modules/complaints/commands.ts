@@ -16,8 +16,13 @@ export interface CreateComplaintInput {
 
 export async function createComplaint(ctx: RequestContext, body: CreateComplaintInput): Promise<Accepted> {
   const id = randomUUID();
-  const complaintNumber = `PRK-${Date.now()}`;
-  return publishCommand(ctx, COMMANDS.CREATE_COMPLAINT, id, { id, complaintNumber, reportedBy: ctx.actorId, ...body });
+  // complaintNumber is no longer generated here: it used to be a bare
+  // `PRK-${Date.now()}` computed synchronously in this command handler,
+  // which collided under concurrent load (two requests in the same
+  // millisecond). It is now reserved from a real Postgres sequence inside
+  // the consumer's own transaction (see repo.ts's nextComplaintNumber),
+  // right before the insert — see migrations/0002_number_sequences.sql.
+  return publishCommand(ctx, COMMANDS.CREATE_COMPLAINT, id, { id, reportedBy: ctx.actorId, ...body });
 }
 
 export async function assignComplaint(ctx: RequestContext, id: string, assignedTo: string, version: number): Promise<Accepted> {

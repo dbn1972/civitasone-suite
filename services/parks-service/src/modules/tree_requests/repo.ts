@@ -19,6 +19,14 @@ export async function findById(id: string, tenantId: string): Promise<TreeReques
   return rows[0] ?? null;
 }
 
+// Same lookup as findById, but against an already-open transaction (tx)
+// instead of opening its own via scopedRead. See complaints/repo.ts's
+// findByIdTx for the full rationale (identical need, identical fix).
+export async function findByIdTx(tx: ScopedTx, id: string, tenantId: string): Promise<TreeRequestRow | null> {
+  const rows = await tx.select().from(parksTreeRequests).where(and(eq(parksTreeRequests.id, id), eq(parksTreeRequests.tenantId, tenantId))).limit(1);
+  return rows[0] ?? null;
+}
+
 export async function listByTenant(tenantId: string, limit: number, offset: number, status?: string) {
   const conditions = [eq(parksTreeRequests.tenantId, tenantId)];
   if (status) conditions.push(eq(parksTreeRequests.status, status));
@@ -43,4 +51,14 @@ export async function update(tx: ScopedTx, id: string, tenantId: string, patch: 
     .where(and(eq(parksTreeRequests.id, id), eq(parksTreeRequests.tenantId, tenantId), eq(parksTreeRequests.version, currentVersion)))
     .returning({ id: parksTreeRequests.id });
   return result.length > 0;
+}
+
+// Reserves the next request number from the DB sequence — see
+// complaints/repo.ts's nextComplaintNumber for the full rationale
+// (identical bug, identical fix).
+export async function nextRequestNumber(tx: ScopedTx): Promise<number> {
+  const [row] = (await tx.execute(
+    sql`SELECT nextval('"civitas_parks"."request_number_seq"')::bigint AS seq`,
+  )) as unknown as Array<{ seq: number }>;
+  return Number(row!.seq);
 }
