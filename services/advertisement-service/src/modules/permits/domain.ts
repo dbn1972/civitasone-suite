@@ -39,3 +39,14 @@ export function isExpired(validUntil: string | null | undefined): boolean {
   if (!validUntil) return false;
   return new Date(validUntil) < new Date();
 }
+
+// Added for the POST /v1/advertisement/permits/:id/renew pre-accept check.
+// Previously that route only checked the permit existed, with no state
+// gate at all — a cancelled or expired permit could be "renewed" (its
+// validUntil silently extended) exactly like an active one. Renewal is only
+// meaningful for a permit still in force; suspended/expired/cancelled must
+// be excluded (a suspended permit's suspension must be resolved first, not
+// bypassed by renewing around it).
+export function canRenew(status: string): boolean {
+  return status === "issued" || status === "active";
+}

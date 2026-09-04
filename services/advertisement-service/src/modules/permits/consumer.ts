@@ -28,11 +28,16 @@ export function registerPermitConsumers(rawQueue: Queue): void {
       advertisementType: string;
     };
     const now = new Date();
-    const permitNumber = generatePermitNumber("ULB", Date.now() % 999999);
-    const verificationCode = generateVerificationCode();
+    let permitNumber = "";
 
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
+      // BUG FIX (collision-prone number generation): see
+      // applications/repo.ts's nextApplicationNumberSeq for the full
+      // rationale — same fix, same shape, for permit_number.
+      const seq = await repo.nextPermitNumberSeq(tx);
+      permitNumber = generatePermitNumber("ULB", seq);
+      const verificationCode = generateVerificationCode();
       await repo.insertPermit(tx, {
         id: p.id,
         tenantId: msg.tenantId,
@@ -86,6 +91,12 @@ export function registerPermitConsumers(rawQueue: Queue): void {
         permitId: p.permitId,
         renewalType: p.renewalType,
         status: "approved",
+        // BUG FIX (money field): p.feeMinor is now validated + normalized to
+        // a canonical base-10 digit string by zMoneyMinorStringNonNeg at the
+        // route (permits/routes.ts renewBody) before the command is ever
+        // published, so BigInt() here can no longer throw on malformed input
+        // inside the write transaction (previously a bare z.string() let any
+        // non-numeric string reach this BigInt() call post-202).
         feeMinor: BigInt(p.feeMinor),
         currency: "INR",
         previousValidUntil: permit?.validUntil ?? null,

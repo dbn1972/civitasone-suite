@@ -1,5 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
+import { zMoneyMinorStringNonNeg } from "@civitasone/schemas";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { cache } from "../../shared/infra.js";
 import * as repo from "./repo.js";
@@ -22,7 +23,19 @@ const reportBody = z.object({
 });
 
 const noticeBody = z.object({ noticeDetails: z.record(z.unknown()) });
-const penaltyBody = z.object({ penaltyMinor: z.string() });
+// BUG FIX (money field): was a bare z.string() with no format check, so any
+// non-numeric string passed route validation, got 202-accepted, and only
+// threw when enforcement/consumer.ts's `BigInt(p.penaltyMinor)` ran INSIDE
+// the write transaction — a silent failure from the caller's perspective
+// (the transaction rolled back with no way for the citizen/officer to
+// know). zMoneyMinorStringNonNeg is the canonical @civitasone/schemas money
+// codec (same fix applied to revenue-service's arrears/shared validators
+// earlier tonight, PR #985): accepts string | safe-integer number, rejects
+// anything else — including negative and unsafe-integer values — with a
+// normal 400 at the route, before 202. Normalizes to a base-10 string, so
+// the downstream BigInt(p.penaltyMinor) call site in consumer.ts is
+// unaffected.
+const penaltyBody = z.object({ penaltyMinor: zMoneyMinorStringNonNeg });
 const removalOrderBody = z.object({ removalDeadline: z.string().date() });
 const removalRecordBody = z.object({ removalNotes: z.string().min(1).max(2000) });
 

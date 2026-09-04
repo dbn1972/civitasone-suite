@@ -52,3 +52,14 @@ export async function updateViolation(
     .returning({ id: advViolations.id });
   return result.length > 0;
 }
+
+// BUG FIX (collision-prone number generation): see
+// applications/repo.ts's nextApplicationNumberSeq for the full rationale —
+// same fix, same shape, for violation_number. See
+// migrations/0003_number_sequences.sql.
+export async function nextViolationNumberSeq(tx: ScopedTx): Promise<number> {
+  const rows = (await tx.execute(
+    sql`SELECT nextval('adv_enforcement.violation_number_seq') AS seq`,
+  )) as unknown as Array<{ seq: string | number }>;
+  return Number(rows[0]!.seq);
+}

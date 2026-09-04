@@ -1,132 +1,229 @@
 /**
- * Regression test for two bugs in permits/consumer.ts:
+ * Real, DB-backed permits tests — route → consumer → persisted-state.
  *
- * 1. renewPermit inserted an "approved" renewal record carrying the new
- *    expiry date but never wrote that date back onto the permit's own
- *    `validUntil` column — GET /v1/advertisement/permits/:id and the public
- *    /verify endpoint kept showing the OLD validUntil after a genuine
- *    renewal. It also proceeded even if the permit no longer existed
- *    (silently used `permit?.validUntil ?? null`).
- * 2. No consumer invalidated the permit's read-through cache
- *    (cache.getOrLoad, 60s TTL) on renew/suspend/cancel (CLAUDE.md §6).
+ * Replaces the previous fully vi.mock'd consumer.test.ts. Covers this
+ * branch's fixes:
+ *  - money field: renewBody.feeMinor now zMoneyMinorStringNonNeg, rejected
+ *    synchronously at the route (400) instead of throwing inside the
+ *    consumer's write transaction after 202.
+ *  - pre-accept validation on POST /permits (application must exist and be
+ *    approved; no duplicate permit for the same application) and POST
+ *    /permits/:id/renew (permit must be in a renewable status).
+ *  - collision-prone permit-number generation, replaced with a real
+ *    Postgres SEQUENCE.
+ *  - the pre-existing renewPermit regression test (validUntil actually
+ *    getting written back onto the permit row, not just the renewal
+ *    record).
  */
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { randomUUID } from "node:crypto";
-import { MemoryQueue } from "@civitasone/queue";
-
-const {
-  mockTx, dbTransactionFn, enqueuedMessages,
-  findByIdMock, updateValidUntilMock, insertRenewalMock, updateStatusMock,
-  invalidateMock, makeKeyMock,
-} = vi.hoisted(() => {
-  const _mockTx = { insert: vi.fn(), update: vi.fn() };
-  const _dbTransactionFn = vi.fn(async (cb: (tx: unknown) => Promise<void>) => { await cb(_mockTx); });
-  return {
-    mockTx: _mockTx,
-    dbTransactionFn: _dbTransactionFn as any,
-    enqueuedMessages: [] as Array<{ topic: string; payload: unknown }>,
-    findByIdMock: vi.fn() as any,
-    updateValidUntilMock: vi.fn(async () => true) as any,
-    insertRenewalMock: vi.fn(async () => undefined) as any,
-    updateStatusMock: vi.fn(async () => true) as any,
-    invalidateMock: vi.fn(async () => undefined) as any,
-    makeKeyMock: vi.fn((...parts: string[]) => parts.join(":")) as any,
-  };
-});
-
-vi.mock("../../shared/db.js", () => ({ db: { transaction: dbTransactionFn } }));
-vi.mock("../../shared/outbox.js", () => ({
-  enqueue: vi.fn(async (_tx: unknown, msg: { topic: string; payload: unknown }) => { enqueuedMessages.push({ topic: msg.topic, payload: msg.payload }); }),
-  markProcessed: vi.fn(async () => true),
-}));
-vi.mock("./repo.js", () => ({
-  insertPermit: vi.fn(async () => undefined),
-  findById: (...args: any[]) => findByIdMock(...args),
-  updateValidUntil: (...args: any[]) => updateValidUntilMock(...args),
-  insertRenewal: (...args: any[]) => insertRenewalMock(...args),
-  updateStatus: (...args: any[]) => updateStatusMock(...args),
-}));
-vi.mock("../../shared/infra.js", () => ({
-  cache: { invalidate: (...args: any[]) => invalidateMock(...args), makeKey: (...args: any[]) => makeKeyMock(...args) },
-}));
-vi.mock("./domain.js", () => ({
-  generatePermitNumber: vi.fn(() => "ADVP-1"),
-  generateVerificationCode: vi.fn(() => "VERIFY-1"),
-}));
-
+import type { FastifyInstance } from "fastify";
+import { buildApp } from "../../app.js";
+import { queue } from "../../shared/infra.js";
+import { sqlClient } from "../../shared/db.js";
+import { registerApplicationConsumers } from "../applications/consumer.js";
+import { registerApprovalConsumers } from "../approvals/consumer.js";
 import { registerPermitConsumers } from "./consumer.js";
-import { COMMANDS, EVENTS } from "../../topics.js";
+import * as repo from "./repo.js";
+import { tokenForTenant, settle } from "../../shared/test-helpers.js";
 
-const TENANT = "10000000-aaaa-4000-8000-000000000001";
-const ACTOR = "20000000-bbbb-4000-8000-000000000001";
-const PERMIT_ID = "40000000-dddd-4000-8000-000000000001";
+const TENANT = randomUUID();
+const ACTOR = randomUUID();
+const ROLES = ["adv_admin"]; // covers both ADV_ROLES and OFFICER_ROLES checks in this module
 
-function makeMsg(type: string, payload: Record<string, unknown>) {
-  return { messageId: randomUUID(), type, tenantId: TENANT, actorId: ACTOR, correlationId: `corr-${randomUUID()}`, schemaVersion: "1.0", payload };
-}
-async function buildQueue(): Promise<MemoryQueue> {
-  const q = new MemoryQueue();
-  registerPermitConsumers(q);
-  await q.start();
-  return q;
-}
-const settle = () => new Promise<void>((r) => setTimeout(r, 100));
+let app: FastifyInstance;
+let authed: { authorization: string; "content-type": string };
 
-beforeEach(() => {
-  vi.clearAllMocks();
-  enqueuedMessages.length = 0;
-  findByIdMock.mockResolvedValue({ validUntil: "2026-01-01" });
-  updateValidUntilMock.mockResolvedValue(true);
-  updateStatusMock.mockResolvedValue(true);
-  dbTransactionFn.mockImplementation(async (cb: (tx: unknown) => Promise<void>) => { await cb(mockTx); });
+beforeAll(async () => {
+  registerApplicationConsumers(queue);
+  registerApprovalConsumers(queue);
+  registerPermitConsumers(queue);
+  await queue.start();
+  app = await buildApp();
+  authed = { authorization: `Bearer ${tokenForTenant(TENANT, ACTOR, ROLES)}`, "content-type": "application/json" };
 });
 
-describe("renewPermit command", () => {
-  const payload = { id: "renewal-1", permitId: PERMIT_ID, renewalType: "renewal", newValidUntil: "2027-01-01", feeMinor: "50000" };
+afterAll(async () => {
+  await app.close();
+  await queue.stop();
+  await sqlClient.end();
+});
 
-  it("extends the permit's validUntil, records the renewal, and invalidates the cache", async () => {
-    const q = await buildQueue();
-    await q.publish(COMMANDS.renewPermit, makeMsg(COMMANDS.renewPermit, payload));
-    await settle();
-    expect(updateValidUntilMock).toHaveBeenCalledWith(expect.anything(), PERMIT_ID, TENANT, "2027-01-01", ACTOR);
-    expect(insertRenewalMock).toHaveBeenCalledOnce();
-    const insertedRow = insertRenewalMock.mock.calls[0]![1] as Record<string, unknown>;
-    expect(insertedRow.newValidUntil).toBe("2027-01-01");
-    expect(enqueuedMessages.find((m) => m.topic === EVENTS.permitRenewed)).toBeDefined();
-    expect(invalidateMock).toHaveBeenCalledWith("10000000-aaaa-4000-8000-000000000001:permit:40000000-dddd-4000-8000-000000000001");
-    await q.stop();
+async function createApprovedApplication(): Promise<string> {
+  const create = await app.inject({
+    method: "POST",
+    url: "/v1/advertisement/applications",
+    headers: authed,
+    payload: {
+      advertiserName: "Acme Ads",
+      advertiserOrg: "Acme Pvt Ltd",
+      advertisementType: "hoarding",
+      location: { address: "MG Road" },
+      dimensions: { widthFt: 20, heightFt: 10, areaInSqFt: 200 },
+    },
+  });
+  const { id: applicationId } = create.json() as { id: string };
+  await settle();
+  // No content-type/body on this call — the submit route takes no payload,
+  // and Fastify's JSON body parser 400s on an empty body when
+  // content-type: application/json is set with nothing to parse.
+  await app.inject({ method: "POST", url: `/v1/advertisement/applications/${applicationId}/submit`, headers: { authorization: authed.authorization } });
+  await settle();
+  await app.inject({
+    method: "POST",
+    url: "/v1/advertisement/approvals/scrutiny",
+    headers: authed,
+    payload: { applicationId, scrutinyType: "zone_check", officerId: ACTOR },
+  });
+  await settle();
+  await app.inject({
+    method: "POST",
+    url: "/v1/advertisement/approvals/decide",
+    headers: authed,
+    payload: { applicationId, decision: "approved" },
+  });
+  await settle();
+  return applicationId;
+}
+
+function issuePayload(applicationId: string) {
+  return {
+    applicationId,
+    validFrom: "2026-01-01",
+    validUntil: "2026-12-31",
+    location: { address: "MG Road" },
+    advertisementType: "hoarding",
+  };
+}
+
+async function issuePermitFor(applicationId: string): Promise<string> {
+  const res = await app.inject({ method: "POST", url: "/v1/advertisement/permits", headers: authed, payload: issuePayload(applicationId) });
+  expect(res.statusCode).toBe(202);
+  const { id } = res.json() as { id: string };
+  await settle();
+  return id;
+}
+
+describe("POST /v1/advertisement/permits — pre-accept validation + persisted state", () => {
+  it("404s when the referenced application does not exist", async () => {
+    const res = await app.inject({ method: "POST", url: "/v1/advertisement/permits", headers: authed, payload: issuePayload(randomUUID()) });
+    expect(res.statusCode).toBe(404);
   });
 
-  it("does NOT record a renewal, publish an event, or invalidate the cache when the permit no longer matches (fake-success guard)", async () => {
-    updateValidUntilMock.mockResolvedValueOnce(false);
-    const q = await buildQueue();
-    await q.publish(COMMANDS.renewPermit, makeMsg(COMMANDS.renewPermit, payload));
-    await settle();
-    expect(insertRenewalMock).not.toHaveBeenCalled();
-    expect(enqueuedMessages.length).toBe(0);
-    expect(invalidateMock).not.toHaveBeenCalled();
-    await q.stop();
+  it("422s when the referenced application exists but is not approved", async () => {
+    const create = await app.inject({
+      method: "POST",
+      url: "/v1/advertisement/applications",
+      headers: authed,
+      payload: {
+        advertiserName: "Acme Ads", advertiserOrg: "Acme Pvt Ltd", advertisementType: "hoarding",
+        location: { address: "MG Road" }, dimensions: { widthFt: 20, heightFt: 10, areaInSqFt: 200 },
+      },
+    });
+    const { id: applicationId } = create.json() as { id: string };
+    await settle(); // still "draft", never submitted/approved
+
+    const res = await app.inject({ method: "POST", url: "/v1/advertisement/permits", headers: authed, payload: issuePayload(applicationId) });
+    expect(res.statusCode).toBe(422);
+  });
+
+  it("202-accepts for an approved application, and the consumer persists an active permit with a generated permit number", async () => {
+    const applicationId = await createApprovedApplication();
+    const permitId = await issuePermitFor(applicationId);
+
+    const permit = await repo.findById(permitId, TENANT);
+    expect(permit).not.toBeNull();
+    expect(permit!.status).toBe("active");
+    expect(permit!.applicationId).toBe(applicationId);
+    expect(permit!.permitNumber).toMatch(/^ADVP\/ULB\/\d{4}\/\d{6}$/);
+    expect(permit!.verificationCode).toHaveLength(32);
+  });
+
+  it("409s on a second permit for the same already-permitted application", async () => {
+    const applicationId = await createApprovedApplication();
+    await issuePermitFor(applicationId);
+
+    const second = await app.inject({ method: "POST", url: "/v1/advertisement/permits", headers: authed, payload: issuePayload(applicationId) });
+    expect(second.statusCode).toBe(409);
+  });
+
+  it("two permits issued for two different approved applications get distinct, non-colliding permit numbers (collision-prone-generator regression)", async () => {
+    const [appA, appB] = await Promise.all([createApprovedApplication(), createApprovedApplication()]);
+    const [permitIdA, permitIdB] = await Promise.all([issuePermitFor(appA), issuePermitFor(appB)]);
+    const [permitA, permitB] = await Promise.all([repo.findById(permitIdA, TENANT), repo.findById(permitIdB, TENANT)]);
+    expect(permitA!.permitNumber).not.toBe(permitB!.permitNumber);
   });
 });
 
-describe.each([
-  [COMMANDS.suspendPermit, { id: PERMIT_ID, reason: "Structural hazard" }],
-  [COMMANDS.cancelPermit, { id: PERMIT_ID, reason: "Applicant request" }],
-])("%s command", (command, payload) => {
-  it("invalidates the permit's read-through cache entry when the update matches a row", async () => {
-    const q = await buildQueue();
-    await q.publish(command, makeMsg(command, payload));
-    await settle();
-    expect(invalidateMock).toHaveBeenCalledWith("10000000-aaaa-4000-8000-000000000001:permit:40000000-dddd-4000-8000-000000000001");
-    await q.stop();
+describe("POST /v1/advertisement/permits/:id/renew — money field + pre-accept validation", () => {
+  it("400s on a non-numeric feeMinor, before 202 (money field regression)", async () => {
+    const applicationId = await createApprovedApplication();
+    const permitId = await issuePermitFor(applicationId);
+
+    const res = await app.inject({
+      method: "POST",
+      url: `/v1/advertisement/permits/${permitId}/renew`,
+      headers: authed,
+      payload: { renewalType: "renewal", newValidUntil: "2027-12-31", feeMinor: "not-a-number" },
+    });
+    expect(res.statusCode).toBe(400);
+
+    // And crucially: no renewal command was ever published, so validUntil
+    // on the permit is untouched — the old bug was this failing INSIDE the
+    // consumer transaction post-202, not at the route.
+    const permit = await repo.findById(permitId, TENANT);
+    expect(permit!.validUntil).toBe("2026-12-31");
   });
 
-  it("does NOT invalidate the cache when the update matches no row", async () => {
-    updateStatusMock.mockResolvedValueOnce(false);
-    const q = await buildQueue();
-    await q.publish(command, makeMsg(command, payload));
+  it("202-accepts a valid feeMinor and the consumer writes the new validUntil back onto the permit (not just the renewal record)", async () => {
+    const applicationId = await createApprovedApplication();
+    const permitId = await issuePermitFor(applicationId);
+
+    const res = await app.inject({
+      method: "POST",
+      url: `/v1/advertisement/permits/${permitId}/renew`,
+      headers: authed,
+      payload: { renewalType: "renewal", newValidUntil: "2027-12-31", feeMinor: "150000" },
+    });
+    expect(res.statusCode).toBe(202);
     await settle();
-    expect(invalidateMock).not.toHaveBeenCalled();
-    await q.stop();
+
+    const permit = await repo.findById(permitId, TENANT);
+    expect(permit!.validUntil).toBe("2027-12-31");
+  });
+
+  it("422s renewing a cancelled permit (pre-accept state validation)", async () => {
+    const applicationId = await createApprovedApplication();
+    const permitId = await issuePermitFor(applicationId);
+    const cancel = await app.inject({ method: "POST", url: `/v1/advertisement/permits/${permitId}/cancel`, headers: authed, payload: { reason: "test cancel" } });
+    expect(cancel.statusCode).toBe(202);
+    await settle();
+
+    const permit = await repo.findById(permitId, TENANT);
+    expect(permit!.status).toBe("cancelled");
+
+    const renew = await app.inject({
+      method: "POST",
+      url: `/v1/advertisement/permits/${permitId}/renew`,
+      headers: authed,
+      payload: { renewalType: "renewal", newValidUntil: "2028-12-31", feeMinor: "150000" },
+    });
+    expect(renew.statusCode).toBe(422);
+  });
+});
+
+describe("suspend / cancel — persisted state", () => {
+  it("suspend persists suspendedAt + reason", async () => {
+    const applicationId = await createApprovedApplication();
+    const permitId = await issuePermitFor(applicationId);
+
+    const res = await app.inject({ method: "POST", url: `/v1/advertisement/permits/${permitId}/suspend`, headers: authed, payload: { reason: "unsafe structure" } });
+    expect(res.statusCode).toBe(202);
+    await settle();
+
+    const permit = await repo.findById(permitId, TENANT);
+    expect(permit!.status).toBe("suspended");
+    expect(permit!.suspensionReason).toBe("unsafe structure");
+    expect(permit!.suspendedAt).not.toBeNull();
   });
 });

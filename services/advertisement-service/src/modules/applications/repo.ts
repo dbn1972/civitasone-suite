@@ -58,3 +58,18 @@ export async function updateStatus(
     .returning({ id: advApplications.id });
   return result.length > 0;
 }
+
+// BUG FIX (collision-prone number generation): the caller used to compute
+// `Date.now() % 999999` outside any lock and outside the write transaction —
+// two commands processed close together produce the identical
+// application_number, and the UNIQUE constraint on that column then throws
+// inside the SECOND colliding consumer transaction (rolling back the whole
+// write after the route already returned 202). nextval() on a real Postgres
+// SEQUENCE is atomic and collision-free regardless of timing or replica
+// count. See migrations/0003_number_sequences.sql.
+export async function nextApplicationNumberSeq(tx: ScopedTx): Promise<number> {
+  const rows = (await tx.execute(
+    sql`SELECT nextval('adv_applications.application_number_seq') AS seq`,
+  )) as unknown as Array<{ seq: string | number }>;
+  return Number(rows[0]!.seq);
+}
