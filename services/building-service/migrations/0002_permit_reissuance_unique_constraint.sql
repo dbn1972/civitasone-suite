@@ -20,10 +20,13 @@ SET lock_timeout = '5s';
 DROP INDEX CONCURRENTLY IF EXISTS building.building_permits_application_id_key;
 
 -- At most one NON-CANCELLED permit per application. 'expired' is
--- deliberately NOT excluded here: this domain model has no renewal flow
--- that reissues a permit for an already-expired one under the same
--- application (see permits/repo.ts's findByApplicationId comment), so
--- excluding it from the constraint would be speculative.
+-- deliberately NOT excluded here: building-service DOES have a renewal
+-- flow for expired permits (POST /v1/building/renewals; lifecycle/domain.ts's
+-- canRequestRenewal() allows renewal from the 'expired' state). Keeping
+-- 'expired' inside this constraint is intentional -- it forces a caller to
+-- go through that renewal path rather than reissuing a brand-new permit
+-- for the same application (see permits/repo.ts's findByApplicationId comment), so
+-- reissuing a new permit outside that flow.
 CREATE UNIQUE INDEX CONCURRENTLY IF NOT EXISTS building_permits_application_active_unique
   ON building.building_permits (application_id)
   WHERE status != 'cancelled';

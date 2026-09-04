@@ -23,10 +23,12 @@ export async function findByVerificationCode(code: string): Promise<BuildingPerm
 // must not permanently block a legitimate new permit for the same approved
 // application, so 'cancelled' is excluded here, matching the migration's
 // partial unique index (WHERE status != 'cancelled') exactly. 'expired' is
-// deliberately NOT excluded: nothing in this domain model treats an expired
-// permit as reissuable under the same application (no renewal flow exists
+// deliberately NOT excluded: building-service DOES have a renewal flow for
+// expired permits (POST /v1/building/renewals, lifecycle/domain.ts's
+// canRequestRenewal() allows renewal from 'expired'). Keeping 'expired'
+// inside this check forces callers through that renewal path instead of
 // here, unlike advertisement-service's canRenew) -- excluding it would be
-// speculative, not evidenced by the code.
+// reissuing a new permit through this duplicate-check path.
 export async function findByApplicationId(applicationId: string, tenantId: string): Promise<BuildingPermitRow | null> {
   const rows = await scopedRead((tx) =>
     tx.select().from(buildingPermits).where(and(
