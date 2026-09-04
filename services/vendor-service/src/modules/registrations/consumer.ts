@@ -5,6 +5,7 @@ import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { writeAudit } from "../../shared/audit.js";
 import { cache } from "../../shared/infra.js";
 import { tenantScoped } from "../../shared/tenant-queue.js";
+import { emitMunicipalNotification, MUNICIPAL_EVENT_TYPES } from "../../shared/cross-events.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
 import { calculateFeeMinor, generateRegistrationNumber } from "./domain.js";
@@ -86,6 +87,13 @@ export function registerRegistrationConsumers(rawQueue: Queue): void {
 
   queue.subscribe(COMMANDS.submitRegistration, async (msg) => {
     const p = msg.payload as { id: string; tenantId: string };
+    // Read outside the transaction (mirrors building-service's/shop-service's
+    // Wave 3 pattern): repo.findById opens its own scopedRead transaction,
+    // so calling it from inside db.transaction below would nest transactions
+    // on the same pool -- the exact bug class that deadlocked notification-
+    // service's deliveries/consumer.ts under concurrent load. citizen-facing:
+    // the vendor's submission was received -- worth a confirmation.
+    const reg = await repo.findById(p.id, msg.tenantId);
     let applied = false;
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
@@ -100,6 +108,14 @@ export function registerRegistrationConsumers(rawQueue: Queue): void {
         correlationId: msg.correlationId,
         payload: { registrationId: p.id },
       });
+      if (reg) {
+        await emitMunicipalNotification(tx, ctxOf(msg), {
+          eventType: MUNICIPAL_EVENT_TYPES.applicationSubmitted,
+          recipient: reg.vendorName,
+          recipientId: p.id,
+          variables: { registrationId: p.id, registrationNumber: reg.registrationNumber },
+        });
+      }
       await writeAudit(tx, ctxOf(msg), {
         action: "registration.submit",
         resourceType: "vendor_registration",
@@ -113,6 +129,13 @@ export function registerRegistrationConsumers(rawQueue: Queue): void {
 
   queue.subscribe(COMMANDS.withdrawRegistration, async (msg) => {
     const p = msg.payload as { id: string; tenantId: string };
+    // citizen-facing: withdrawal is self-initiated by the vendor, but it is
+    // still a terminal state change on their own application (draft/
+    // submitted -> withdrawn per domain.ts's VALID_TRANSITIONS) that closes
+    // the loop the same way a rejection would -- worth a confirmation record,
+    // not an "internal" step. Read before the transaction for the same
+    // nested-transaction reason as submitRegistration above.
+    const reg = await repo.findById(p.id, msg.tenantId);
     let applied = false;
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
@@ -127,6 +150,14 @@ export function registerRegistrationConsumers(rawQueue: Queue): void {
         correlationId: msg.correlationId,
         payload: { registrationId: p.id },
       });
+      if (reg) {
+        await emitMunicipalNotification(tx, ctxOf(msg), {
+          eventType: MUNICIPAL_EVENT_TYPES.statusChanged,
+          recipient: reg.vendorName,
+          recipientId: p.id,
+          variables: { registrationId: p.id, registrationNumber: reg.registrationNumber, status: "withdrawn" },
+        });
+      }
       await writeAudit(tx, ctxOf(msg), {
         action: "registration.withdraw",
         resourceType: "vendor_registration",

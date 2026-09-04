@@ -5,6 +5,11 @@ import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { writeAudit } from "../../shared/audit.js";
 import { cache } from "../../shared/infra.js";
 import { tenantScoped } from "../../shared/tenant-queue.js";
+import {
+  emitMunicipalNotification,
+  municipalDecisionNotificationEventType,
+  MUNICIPAL_EVENT_TYPES,
+} from "../../shared/cross-events.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
 import * as regRepo from "../registrations/repo.js";
@@ -18,6 +23,15 @@ function ctxOf(msg: { tenantId: string; actorId: string; correlationId: string }
 export function registerCommitteeConsumers(rawQueue: Queue): void {
   const queue = tenantScoped(rawQueue);
 
+  // assignCommitteeReview / completeCommitteeReview (below) and
+  // allocateZone (further below) are deliberately left unwired for
+  // cross-service notifications: pure officer workflow steps (committee
+  // assignment/findings, internal zone bookkeeping) with no citizen-facing
+  // decision of their own -- the eventual citizen-facing outcome
+  // (approveRegistration/rejectRegistration) is already wired below. Same
+  // reasoning trade-service applied to scrutiny initiate/complete (PR
+  // #1022): the intermediate step isn't itself the moment a citizen needs
+  // to hear from us.
   queue.subscribe(COMMANDS.assignCommitteeReview, async (msg) => {
     const p = msg.payload as {
       id: string;
@@ -130,6 +144,11 @@ export function registerCommitteeConsumers(rawQueue: Queue): void {
 
   queue.subscribe(COMMANDS.approveRegistration, async (msg) => {
     const p = msg.payload as { registrationId: string; tenantId: string };
+    // Read before the transaction, not inside it -- regRepo.findById opens
+    // its own scopedRead transaction, so calling it inside db.transaction
+    // below would nest transactions on the same pool (the deadlock class
+    // fixed tonight in notification-service's deliveries/consumer.ts).
+    const reg = await regRepo.findById(p.registrationId, msg.tenantId);
     let applied = false;
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
@@ -144,6 +163,14 @@ export function registerCommitteeConsumers(rawQueue: Queue): void {
         correlationId: msg.correlationId,
         payload: { registrationId: p.registrationId },
       });
+      if (reg) {
+        await emitMunicipalNotification(tx, ctxOf(msg), {
+          eventType: municipalDecisionNotificationEventType(MUNICIPAL_EVENT_TYPES.statusChanged, "approved"),
+          recipient: reg.vendorName,
+          recipientId: p.registrationId,
+          variables: { registrationId: p.registrationId, registrationNumber: reg.registrationNumber, decision: "approved" },
+        });
+      }
       await writeAudit(tx, ctxOf(msg), {
         action: "registration.approve",
         resourceType: "vendor_registration",
@@ -156,6 +183,10 @@ export function registerCommitteeConsumers(rawQueue: Queue): void {
 
   queue.subscribe(COMMANDS.rejectRegistration, async (msg) => {
     const p = msg.payload as { registrationId: string; tenantId: string; reason: string };
+    // citizen-facing decision, same as approval -- rejection is not "internal"
+    // just because it's a negative outcome (mirrors trade-service's
+    // decideApplication, which notifies both approved AND rejected).
+    const reg = await regRepo.findById(p.registrationId, msg.tenantId);
     let applied = false;
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
@@ -170,6 +201,19 @@ export function registerCommitteeConsumers(rawQueue: Queue): void {
         correlationId: msg.correlationId,
         payload: { registrationId: p.registrationId, reason: p.reason },
       });
+      if (reg) {
+        await emitMunicipalNotification(tx, ctxOf(msg), {
+          eventType: municipalDecisionNotificationEventType(MUNICIPAL_EVENT_TYPES.statusChanged, "rejected"),
+          recipient: reg.vendorName,
+          recipientId: p.registrationId,
+          variables: {
+            registrationId: p.registrationId,
+            registrationNumber: reg.registrationNumber,
+            decision: "rejected",
+            reason: p.reason,
+          },
+        });
+      }
       await writeAudit(tx, ctxOf(msg), {
         action: "registration.reject",
         resourceType: "vendor_registration",
