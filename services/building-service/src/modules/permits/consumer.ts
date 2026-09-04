@@ -1,13 +1,16 @@
 import { pino } from "pino";
 import { randomInt } from "node:crypto";
 import type { Queue } from "@civitasone/queue";
+import { MUNICIPAL_EVENT_TYPES } from "@civitasone/events";
 import { db } from "../../shared/db.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { writeAudit } from "../../shared/audit.js";
 import { cache } from "../../shared/infra.js";
 import { tenantScoped } from "../../shared/tenant-queue.js";
+import { emitMunicipalNotification } from "../../shared/cross-events.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
+import * as appRepo from "../applications/repo.js";
 import { generatePermitNumber, generateVerificationCode, calculateValidUntil } from "./domain.js";
 
 const log = pino({ name: "building.permits.consumer" });
@@ -22,15 +25,6 @@ export function registerPermitConsumers(rawQueue: Queue): void {
   queue.subscribe(COMMANDS.issuePermit, async (msg) => {
     const p = msg.payload as { id: string; tenantId: string; applicationId: string; conditions?: Array<{ condition: string; category: string }>; validityMonths: number };
     const now = new Date();
-    // Date.now() % 999999 is deterministic in wall-clock time, not random —
-    // it repeats every ~999999ms (~16.7 min), so any two permits issued
-    // exactly one cycle apart (or, under load, two consumers racing within
-    // the same tenant) collide on permitNumber, which is UNIQUE-constrained
-    // (migrations/0001_init.sql). A collision throws an unhandled DB
-    // constraint violation deep in this transaction, outside any request/
-    // response cycle. crypto.randomInt draws uniformly from the full range
-    // instead of a function of time, cutting collision probability to the
-    // keyspace's birthday bound rather than a near-certainty over time.
     const permitNumber = generatePermitNumber("ULB", randomInt(1, 999999));
     const verificationCode = generateVerificationCode();
     const validUntil = calculateValidUntil(now, p.validityMonths);
@@ -38,6 +32,19 @@ export function registerPermitConsumers(rawQueue: Queue): void {
       if (!(await markProcessed(tx, msg.messageId))) return;
       await repo.insertPermit(tx, { id: p.id, tenantId: msg.tenantId, applicationId: p.applicationId, permitNumber, status: "active", issuedAt: now, validUntil, conditions: p.conditions ?? null, verificationCode, createdBy: msg.actorId, updatedBy: msg.actorId });
       await enqueue(tx, { topic: EVENTS.permitIssued, eventType: EVENTS.permitIssued, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { permitId: p.id, permitNumber, applicationId: p.applicationId, validUntil: validUntil.toISOString(), verificationCode } });
+      // Cross-service wiring: permit issuance is a citizen-meaningful
+      // transition. No fee is raised here — the building fee is assessed
+      // and challaned when the application is first created
+      // (applications/consumer.ts createApplication).
+      const app = await appRepo.findById(p.applicationId, msg.tenantId);
+      if (app) {
+        await emitMunicipalNotification(tx, ctxOf(msg), {
+          eventType: MUNICIPAL_EVENT_TYPES.permitIssued,
+          recipient: app.createdBy,
+          recipientId: p.id,
+          variables: { permitId: p.id, permitNumber, applicationId: p.applicationId },
+        });
+      }
       await writeAudit(tx, ctxOf(msg), { action: "permit.issue", resourceType: "building_permit", resourceId: p.id });
     });
     log.info({ id: p.id, permitNumber }, "building permit issued");
@@ -48,19 +55,12 @@ export function registerPermitConsumers(rawQueue: Queue): void {
     let applied = false;
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
-      // updatePermitStatus reports whether a row actually matched (right
-      // tenant + existing id) via its boolean return — this was previously
-      // discarded, so a stale/mismatched command would still emit
-      // permitSuspended and write an audit record for a change that never
-      // happened. Guard on it like the sibling applications module does.
       const ok = await repo.updatePermitStatus(tx, p.permitId, msg.tenantId, "suspended", { suspendedAt: new Date(), suspensionReason: p.reason }, msg.actorId);
       if (!ok) return;
       applied = true;
       await enqueue(tx, { topic: EVENTS.permitSuspended, eventType: EVENTS.permitSuspended, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { permitId: p.permitId, reason: p.reason } });
       await writeAudit(tx, ctxOf(msg), { action: "permit.suspend", resourceType: "building_permit", resourceId: p.permitId });
     });
-    // Read-through GET-by-id cache must not keep serving pre-suspension state
-    // (CLAUDE.md §6: "the consumer invalidates here").
     if (applied) await cache.invalidate(cache.makeKey(msg.tenantId, "permit", p.permitId));
   });
 
