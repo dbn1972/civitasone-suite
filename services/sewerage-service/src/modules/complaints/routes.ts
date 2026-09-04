@@ -107,6 +107,17 @@ export async function complaintRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, ADMIN_ROLES);
     const body = fieldRecordBody.parse(req.body);
+
+    // Pre-accept check: if a complaintId is supplied, it must reference a
+    // real complaint in this tenant. Previously this route published
+    // fieldRecordCreate for ANY UUID-shaped complaintId (or none at all)
+    // with no existence check whatsoever, so a field record could be
+    // created referencing a complaint that never existed.
+    if (body.complaintId) {
+      const complaint = await repo.findById(body.complaintId, ctx.tenantId);
+      if (!complaint) throw new HttpError(404, "COMPLAINT_NOT_FOUND", "referenced complaint not found");
+    }
+
     return reply.code(202).send(await commands.createFieldRecord(ctx, {
       complaintId: body.complaintId ?? null, bookingId: body.bookingId ?? null,
       assetRef: body.assetRef ?? null, manholeRef: body.manholeRef ?? null,

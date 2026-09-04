@@ -1,4 +1,4 @@
-import { pgSchema, uuid, varchar, integer, timestamp, jsonb, text, boolean, date } from "drizzle-orm/pg-core";
+import { pgSchema, uuid, varchar, integer, bigint, timestamp, jsonb, text, boolean, date } from "drizzle-orm/pg-core";
 
 const sewerageSchema = pgSchema("civitas_sewerage");
 
@@ -13,7 +13,10 @@ export const sewerageDesludgingBookings = sewerageSchema.table("sewerage_desludg
   requestedSlot: varchar("requested_slot", { length: 24 }),
   status: varchar("status", { length: 24 }).notNull().default("requested"),
   vehicleId: text("vehicle_id"),
-  feeMinor: integer("fee_minor"),
+  // Money minor units (paise), stored as bigint (see migrations/
+  // 0002_money_bigint_paise.sql) — was `integer`; see billing/schema.ts's
+  // amountMinor comment for the full rationale, identical here.
+  feeMinor: bigint("fee_minor", { mode: "bigint" }),
   feePaid: boolean("fee_paid").notNull().default(false),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),

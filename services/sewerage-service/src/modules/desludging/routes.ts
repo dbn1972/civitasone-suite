@@ -1,5 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
+import { zMoneyMinorStringNonNeg } from "@civitasone/schemas";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import * as repo from "./repo.js";
 import { validateBookingTransition, type BookingStatus } from "./domain.js";
@@ -19,7 +20,10 @@ const bookBody = z.object({
   tankCapacityLitres: z.number().int().positive().optional(),
   requestedDate: z.string().optional(),
   requestedSlot: z.string().max(24).optional(),
-  feeMinor: z.number().int().nonnegative().optional(),
+  // R7 money codec — see billing/routes.ts's amountMinor comment for the
+  // full rationale (same fix, same bug class: the old
+  // `z.number().int().nonnegative()` had no `.max()`).
+  feeMinor: zMoneyMinorStringNonNeg.optional(),
 });
 
 const scheduleBody = z.object({ vehicleId: z.string().min(1), version: z.number().int().positive() });

@@ -31,3 +31,16 @@ export function validateConnTransition(from: ConnectionStatus, to: ConnectionSta
 }
 
 export const VALID_CONNECTION_CLASSES: ConnectionClass[] = ["domestic", "commercial", "industrial"];
+
+// Format helpers for the sequence-reserved numbers (see repo.ts's
+// nextApplicationNumber/nextConnectionNumber and
+// migrations/0003_number_sequences.sql) — replaces the old
+// `SEW-${Date.now()}` / `SEWC-${Date.now()}` schemes, which could collide
+// under concurrent load (two requests in the same millisecond).
+export function formatApplicationNumber(n: number): string {
+  return `SEW-${n}`;
+}
+
+export function formatConnectionNumber(n: number): string {
+  return `SEWC-${n}`;
+}

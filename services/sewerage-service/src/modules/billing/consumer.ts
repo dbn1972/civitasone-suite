@@ -18,22 +18,30 @@ export function registerBillingConsumers(rawQueue: Queue): void {
 
   queue.subscribe(COMMANDS.billGenerate, async (msg) => {
     const p = msg.payload as any;
+    let applied = false;
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
+      // Reserved inside this transaction (see repo.nextBillNumber) —
+      // replaces the old `SEWB-${Date.now()}` scheme.
+      const billNumber = `SEWB-${await repo.nextBillNumber(tx)}`;
       await repo.insert(tx, {
         id: p.id, tenantId: msg.tenantId, connectionId: p.connectionId,
-        billNumber: p.billNumber, billingPeriod: p.billingPeriod,
-        amountMinor: p.amountMinor, dueDate: p.dueDate, status: "generated",
+        billNumber, billingPeriod: p.billingPeriod,
+        // p.amountMinor is a canonical minor-unit string (zMoneyMinorStringNonNeg
+        // at the route boundary) — BigInt(string) rebuilds the exact integer
+        // with no intermediate JS `number` in the path.
+        amountMinor: BigInt(p.amountMinor), dueDate: p.dueDate, status: "generated",
         createdBy: msg.actorId, updatedBy: msg.actorId,
       });
+      applied = true;
       await enqueue(tx, {
         topic: EVENTS.billGenerated, eventType: EVENTS.billGenerated,
         tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
-        payload: { billId: p.id, billNumber: p.billNumber, connectionId: p.connectionId },
+        payload: { billId: p.id, billNumber, connectionId: p.connectionId },
       });
       await writeAudit(tx, ctxOf(msg), { action: "bill.generate", resourceType: "sewerage_bill", resourceId: p.id });
     });
-    log.info({ id: p.id }, "bill generated");
+    if (applied) log.info({ id: p.id }, "bill generated");
   });
 
   queue.subscribe(COMMANDS.billPay, async (msg) => {

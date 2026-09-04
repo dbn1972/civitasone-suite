@@ -13,3 +13,10 @@ export function validateBookingTransition(from: BookingStatus, to: BookingStatus
   if (!allowed || !allowed.includes(to)) return `invalid transition: ${from} → ${to}`;
   return null;
 }
+
+// Format helper for the sequence-reserved booking number (see repo.ts's
+// nextBookingNumber and migrations/0003_number_sequences.sql) — replaces
+// the old `SEWD-${Date.now()}` scheme.
+export function formatBookingNumber(n: number): string {
+  return `SEWD-${n}`;
+}
