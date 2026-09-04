@@ -8,6 +8,7 @@ import { enqueueSpineJournal, deterministicId } from "../gl/spine.js";
 import { postCashBook } from "../../shared/cashbook.js";
 import { fyFromDate, nextDocNo } from "../hoa/voucher.js";
 import type { JournalLine } from "../gl/schema.js";
+import { parseMinor } from "@civitasone/schemas/money";
 
 const BANK_CODE = process.env.FINANCE_BANK_CODE ?? "1100";
 // Deposits / retention liability control + forfeiture income (seeded in 0015).
@@ -26,9 +27,17 @@ async function headIdByCode(tx: unknown, tenantId: string, code: string, label: 
 export function registerTreasuryConsumers(queue: Queue): void {
   queue.subscribe(COMMANDS.challanCreate, async (msg) => {
     const p = msg.payload as {
-      id: string; tenantId: string; challanNo: string; receiptHeadId: string;
-      depositor: string; amountMinor: number; currency?: string; grnNo?: string;
+      id: string; tenantId: string; challanNo: string;
+      // receiptHeadId: legacy/internal (finance-ops HTTP create) path — the
+      // operator already picked a real head UUID from finance's own head
+      // list. receiptHeadCode: cross-service producers (e.g. municipal-cross)
+      // — resolved to a real id below by tenant, never trusted as a raw id.
+      receiptHeadId?: string; receiptHeadCode?: string;
+      depositor: string; amountMinor: number | string; currency?: string; grnNo?: string;
       bankAccountId?: string;
+      // Cross-service back-link to the originating record (e.g. a municipal
+      // application). Optional — absent for finance-ops-initiated challans.
+      sourceService?: string; sourceRef?: string;
     };
     const today = new Date().toISOString().slice(0, 10);
     await db.transaction(async (tx) => {
@@ -39,21 +48,35 @@ export function registerTreasuryConsumers(queue: Queue): void {
       const { docNo: challanNo } = await nextDocNo(
         tx as unknown as Parameters<typeof nextDocNo>[0], p.tenantId, fy, "CHLN",
       );
+      // Resolve the receipt head. A fabricated/placeholder UUID is never
+      // accepted — a cross-service producer supplies a stable CODE instead,
+      // resolved here per tenant and hard-erroring if absent (mirrors
+      // headIdByCode's AP/deposit pattern above).
+      const receiptHeadId = p.receiptHeadId
+        ?? (p.receiptHeadCode ? await headIdByCode(tx, p.tenantId, p.receiptHeadCode, "municipal_fee_receipt") : undefined);
+      if (!receiptHeadId) {
+        throw new Error("MISSING_RECEIPT_HEAD: challanCreate payload must include receiptHeadId or receiptHeadCode");
+      }
+      // R7: amount crosses the queue boundary as a base-10 string (or a safe
+      // JS number from the legacy HTTP path) — never a JS number that may
+      // already have lost precision above Number.MAX_SAFE_INTEGER.
+      const amount = parseMinor(p.amountMinor);
       await repo.insertChallan(tx, {
         id: p.id, tenantId: p.tenantId, challanNo,
-        receiptHeadId: p.receiptHeadId, depositor: p.depositor,
-        amountMinor: BigInt(p.amountMinor), currency: p.currency ?? "INR",
+        receiptHeadId, depositor: p.depositor,
+        amountMinor: amount, currency: p.currency ?? "INR",
         ...(p.bankAccountId ? { bankAccountId: p.bankAccountId } : {}),
+        ...(p.sourceService ? { sourceService: p.sourceService } : {}),
+        ...(p.sourceRef ? { sourceRef: p.sourceRef } : {}),
         grnNo: p.grnNo ?? null, status: "pending",
         createdBy: msg.actorId, updatedBy: msg.actorId,
       });
       // GL spine: challan/receipt deposited -> Dr Bank / Cr receipt head.
       const bankHead = await budgetRepo.findHeadByCodeTx(tx as Parameters<typeof budgetRepo.findHeadByCodeTx>[0], p.tenantId, BANK_CODE);
       if (!bankHead) throw new Error(`MISSING_CONTROL_HEAD: bank head code ${BANK_CODE} not found for tenant`);
-      const amount = BigInt(p.amountMinor);
       const lines: JournalLine[] = [
-        { accountCode: bankHead.id,      debitMinor: amount, creditMinor: 0n },
-        { accountCode: p.receiptHeadId,  debitMinor: 0n,     creditMinor: amount },
+        { accountCode: bankHead.id,   debitMinor: amount, creditMinor: 0n },
+        { accountCode: receiptHeadId, debitMinor: 0n,     creditMinor: amount },
       ];
       await enqueueSpineJournal(tx, {
         tenantId: p.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,

@@ -285,6 +285,9 @@ importers:
 
   packages/events:
     dependencies:
+      '@civitasone/schemas':
+        specifier: workspace:*
+        version: link:../schemas
       '@civitasone/types':
         specifier: workspace:*
         version: link:../types

@@ -1,6 +1,7 @@
 /**
  * Canonical notification.send payload contract (notification-service deliveries consumer).
  * System template UUIDs are seeded in notification-service/migrations/0003_system_templates.sql
+ * and services/notification-service/migrations/0044_municipal_templates.sql (municipal Sec5).
  */
 
 export const NOTIFICATION_SEND = "notification.send" as const;
@@ -22,6 +23,11 @@ export const SYSTEM_TEMPLATE_IDS = {
   estabRtiCpioAlert:        "00000000-0000-4000-8001-00000000000c",
   hrLeaveApproved:          "00000000-0000-4000-8001-000000000000",
   payrollRunApproved:       "00000000-0000-4000-8001-000000000000",
+  /** Municipal Sec5 (17 services) — see 0044_municipal_templates.sql. */
+  municipalApplicationSubmitted: "00000000-0000-4000-8002-000000000001",
+  municipalFeeDue:           "00000000-0000-4000-8002-000000000002",
+  municipalStatusChanged:    "00000000-0000-4000-8002-000000000003",
+  municipalPermitIssued:     "00000000-0000-4000-8002-000000000004",
 } as const;
 
 const EVENT_TEMPLATE_MAP: Record<string, string> = {
@@ -39,6 +45,14 @@ const EVENT_TEMPLATE_MAP: Record<string, string> = {
   "estab.rti.created":              SYSTEM_TEMPLATE_IDS.estabRtiCpioAlert,
   "hrms.leave.approved":            SYSTEM_TEMPLATE_IDS.hrLeaveApproved,
   "payroll.run.approved":           SYSTEM_TEMPLATE_IDS.payrollRunApproved,
+  // Municipal Sec5 (advertisement, vendor, sewerage, shop, trade, animal, fire,
+  // crematorium, drainage, event, parking, parks, roadcut, building, refund,
+  // market, swm) — canonical event types from packages/events/src/municipal-cross.ts
+  // MUNICIPAL_EVENT_TYPES.
+  "municipal.application.submitted": SYSTEM_TEMPLATE_IDS.municipalApplicationSubmitted,
+  "municipal.fee.due":              SYSTEM_TEMPLATE_IDS.municipalFeeDue,
+  "municipal.status.changed":       SYSTEM_TEMPLATE_IDS.municipalStatusChanged,
+  "municipal.permit.issued":        SYSTEM_TEMPLATE_IDS.municipalPermitIssued,
 };
 
 export type NotificationSendPayload = {

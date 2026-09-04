@@ -7,13 +7,14 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { randomUUID } from "node:crypto";
 import { MemoryQueue } from "@civitasone/queue";
 
-const { mockTx, dbTransactionFn, enqueuedMessages, updateStatusMock, invalidateMock, makeKeyMock } = vi.hoisted(() => {
+const { mockTx, dbTransactionFn, enqueuedMessages, findByIdMock, updateStatusMock, invalidateMock, makeKeyMock } = vi.hoisted(() => {
   const _mockTx = { insert: vi.fn(), update: vi.fn() };
   const _dbTransactionFn = vi.fn(async (cb: (tx: unknown) => Promise<void>) => { await cb(_mockTx); });
   return {
     mockTx: _mockTx,
     dbTransactionFn: _dbTransactionFn as any,
     enqueuedMessages: [] as Array<{ topic: string; payload: unknown }>,
+    findByIdMock: vi.fn(async () => ({ advertiserName: "Acme Outdoor Media" })) as any,
     updateStatusMock: vi.fn(async () => true) as any,
     invalidateMock: vi.fn(async () => undefined) as any,
     makeKeyMock: vi.fn((...parts: string[]) => parts.join(":")) as any,
@@ -27,6 +28,7 @@ vi.mock("../../shared/outbox.js", () => ({
 }));
 vi.mock("./repo.js", () => ({
   insertApplication: vi.fn(async () => undefined),
+  findById: (...args: any[]) => findByIdMock(...args),
   updateStatus: (...args: any[]) => updateStatusMock(...args),
 }));
 vi.mock("../../shared/infra.js", () => ({
@@ -58,6 +60,7 @@ const settle = () => new Promise<void>((r) => setTimeout(r, 100));
 beforeEach(() => {
   vi.clearAllMocks();
   enqueuedMessages.length = 0;
+  findByIdMock.mockResolvedValue({ advertiserName: "Acme Outdoor Media" });
   updateStatusMock.mockResolvedValue(true);
   dbTransactionFn.mockImplementation(async (cb: (tx: unknown) => Promise<void>) => { await cb(mockTx); });
 });
