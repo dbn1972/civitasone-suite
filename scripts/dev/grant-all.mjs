@@ -77,6 +77,13 @@ const DB_USERS = {
   // never learned about it -- same "tables exist, *_svc role has no grants
   // on them" gap the batches above already fixed for their own services.
   civitas_recommendation: "recommendation_svc",
+  // building-service: migrate-all.mjs's SERVICES list carries a
+  // building-service entry (no-op until services/building-service/
+  // migrations/0001_init.sql landed), but grant-all.mjs never learned about
+  // civitas_building/building_svc either -- same "tables exist, *_svc role
+  // has no grants on them" gap the batches above already fixed for their
+  // own services.
+  civitas_building: "building_svc",
 };
 
 const GRANT_SQL = (role) => `

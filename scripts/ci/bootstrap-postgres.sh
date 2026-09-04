@@ -142,6 +142,16 @@ run_bootstrap "$ROOT/infra/db/bootstrap/bootstrap_sewerage.sql"
 # database in CI. Same class of gap bootstrap_shop.sql/bootstrap_sewerage.sql
 # fixed for their services. See bootstrap_ai_agent.sql for the full story.
 run_bootstrap "$ROOT/infra/db/bootstrap/bootstrap_ai_agent.sql"
+# building-service: SERVICE_DBS below already carries a building-service
+# entry (added by the municipal batch-4 CI-wiring pass as a deliberate
+# no-op, since no migrations/ directory existed yet), but no bootstrap file
+# anywhere ever created building_svc/civitas_building. Grepped every
+# infra/db/bootstrap/*.sql and scripts/*.sql for "building_svc"/
+# "civitas_building" before adding this -- confirmed absent. Same class of
+# gap bootstrap_shop.sql and bootstrap_ai_agent.sql fixed above: without
+# this, building-service's new services/building-service/migrations/
+# 0001_init.sql fails to even authenticate on a fresh CI Postgres.
+run_bootstrap "$ROOT/infra/db/bootstrap/bootstrap_building.sql"
 
 # Every migration that fails is recorded here and reconciled against a committed
 # allow-list at the end of this script. Before that reconciliation existed, a
@@ -239,10 +249,12 @@ declare -A SERVICE_DBS=(
   # never ran in CI even where a database already existed for them (see
   # bootstrap_municipal_services.sql above for the 6 that needed a new role/db,
   # and bootstrap_sec5_batch3.sql for the other 5 whose role/db already
-  # existed but were simply never registered here). building-service has no
-  # migrations/ directory yet (a separate change is adding it) — this entry
-  # is a safe no-op via the migration loop's own `[ -d "$mig_dir" ] || continue`
-  # guard until that migration lands.
+  # existed but were simply never registered here). building-service's entry
+  # was a deliberate no-op at that time (no migrations/ directory existed
+  # yet, and neither building_svc nor civitas_building existed anywhere) --
+  # both gaps are now closed: services/building-service/migrations/
+  # 0001_init.sql exists, and bootstrap_building.sql (above) creates
+  # building_svc/civitas_building, so this entry is a real migration target.
   [advertisement-service]="advertisement_svc:civitas_advertisement"
   [vendor-service]="vendor_svc:civitas_vendor"
   [trade-service]="trade_svc:civitas_trade"
