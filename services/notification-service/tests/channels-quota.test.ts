@@ -17,9 +17,16 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 const findCurrentQuotaMock = vi.fn();
 
+// checkQuota reads via findCurrentQuotaInTx now (task_477fafd4: routes the
+// quota lookup onto the caller's already-open tx instead of opening a
+// second, nested transaction via scopedRead -- see quota-guard.ts).
 vi.mock("../src/modules/channels/quota-repo.js", () => ({
-  findCurrentQuota: (...a: any[]) => findCurrentQuotaMock(...a),
+  findCurrentQuotaInTx: (...a: any[]) => findCurrentQuotaMock(...a),
 }));
+
+// Placeholder tx: fully mocked at the repo layer above, so checkQuota never
+// actually touches it -- it only needs to satisfy the parameter.
+const FAKE_TX = {} as never;
 
 import { checkQuota } from "../src/modules/channels/quota-guard.js";
 
@@ -34,19 +41,19 @@ beforeEach(() => {
 describe("checkQuota — quota enforcement", () => {
   it("no quota configured → pass (quotas are opt-in)", async () => {
     findCurrentQuotaMock.mockResolvedValue(null);
-    const r = await checkQuota(TENANT, "email");
+    const r = await checkQuota(FAKE_TX, TENANT, "email");
     expect(r.passed).toBe(true);
   });
 
   it("unlimited status → always pass (even if used > 0)", async () => {
     findCurrentQuotaMock.mockResolvedValue({ status: "unlimited", used: 999n, monthlyLimit: 100n });
-    const r = await checkQuota(TENANT, "sms");
+    const r = await checkQuota(FAKE_TX, TENANT, "sms");
     expect(r.passed).toBe(true);
   });
 
   it("used < limit → pass", async () => {
     findCurrentQuotaMock.mockResolvedValue({ status: "active", used: 50n, monthlyLimit: 100n });
-    const r = await checkQuota(TENANT, "email");
+    const r = await checkQuota(FAKE_TX, TENANT, "email");
     expect(r.passed).toBe(true);
     expect(r.used).toBe(50n);
     expect(r.limit).toBe(100n);
@@ -54,7 +61,7 @@ describe("checkQuota — quota enforcement", () => {
 
   it("used == limit → FAIL (quota exhausted)", async () => {
     findCurrentQuotaMock.mockResolvedValue({ status: "active", used: 100n, monthlyLimit: 100n });
-    const r = await checkQuota(TENANT, "email");
+    const r = await checkQuota(FAKE_TX, TENANT, "email");
     expect(r.passed).toBe(false);
     expect(r.used).toBe(100n);
     expect(r.limit).toBe(100n);
@@ -62,13 +69,13 @@ describe("checkQuota — quota enforcement", () => {
 
   it("used > limit → FAIL (over-quota)", async () => {
     findCurrentQuotaMock.mockResolvedValue({ status: "active", used: 150n, monthlyLimit: 100n });
-    const r = await checkQuota(TENANT, "email");
+    const r = await checkQuota(FAKE_TX, TENANT, "email");
     expect(r.passed).toBe(false);
   });
 
   it("boundary: used = limit - 1 → pass (last available send)", async () => {
     findCurrentQuotaMock.mockResolvedValue({ status: "active", used: 99n, monthlyLimit: 100n });
-    const r = await checkQuota(TENANT, "push");
+    const r = await checkQuota(FAKE_TX, TENANT, "push");
     expect(r.passed).toBe(true);
   });
 });

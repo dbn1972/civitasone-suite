@@ -99,7 +99,11 @@ export function registerSegmentConsumers(q: Queue): void {
         if (!(await markProcessed(tx, msg.messageId))) return;
         const p = msg.payload;
 
-        const segment = await repo.findSegmentById(p.tenantId, p.segmentId);
+        // Reads through the already-open `tx` (not `repo.findSegmentById`'s
+        // `scopedRead`) to avoid opening a second, nested transaction on this
+        // same connection-pool deadlock shape -- see `findSegmentByIdInTx` in
+        // `./repo.ts`.
+        const segment = await repo.findSegmentByIdInTx(tx, p.tenantId, p.segmentId);
         if (!segment) {
           throw new NonRetryableError("SEGMENT_NOT_FOUND", `Segment ${p.segmentId} not found`);
         }

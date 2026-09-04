@@ -26,6 +26,37 @@ export async function findCurrentQuota(
   return rows[0];
 }
 
+/**
+ * Same lookup as `findCurrentQuota`, but reads through an ALREADY-OPEN
+ * transaction instead of opening a second one via `scopedRead`.
+ *
+ * `checkQuota` runs from inside `deliveries/consumer.ts`'s `processSend`
+ * send transaction. `scopedRead` calls `db.transaction(fn)` itself, so
+ * calling it from there opened a SECOND transaction on the SAME pool as
+ * the outer send -- with `pool.max = 10`, 10 concurrent sends exhaust the
+ * pool and every one of them then deadlocks waiting for a connection for
+ * its own nested quota check. This variant reuses the caller's `tx`
+ * (which already carries the RLS `app.tenant_id` GUC set once for the
+ * whole outer transaction -- see `wrapWithTenantGuc`) so no second
+ * connection is ever acquired.
+ */
+export async function findCurrentQuotaInTx(
+  tx: Parameters<Parameters<typeof db.transaction>[0]>[0],
+  tenantId: string,
+  channel: string,
+  today: string,
+): Promise<ChannelQuotaRow | undefined> {
+  const rows = await tx.select().from(channelQuotas)
+    .where(and(
+      eq(channelQuotas.tenantId, tenantId),
+      eq(channelQuotas.channel, channel),
+      lte(channelQuotas.periodStart, today),
+      gte(channelQuotas.periodEnd, today),
+    ))
+    .limit(1);
+  return rows[0];
+}
+
 export async function upsertQuota(
   tx: Parameters<Parameters<typeof db.transaction>[0]>[0],
   row: typeof channelQuotas.$inferInsert,

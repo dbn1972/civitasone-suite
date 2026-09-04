@@ -28,6 +28,26 @@ export async function findActiveByChannel(tenantId: string, channel: string): Pr
   );
 }
 
+/**
+ * Same lookup as `findActiveByChannel`, but reads through an ALREADY-OPEN
+ * transaction instead of opening a second one via `scopedRead`. See
+ * `quota-repo.ts`'s `findCurrentQuotaInTx` for the full pool-exhaustion
+ * deadlock this avoids -- `checkDlt` has the identical shape, called from
+ * the same `processSend` send transaction.
+ */
+export async function findActiveByChannelInTx(
+  tx: Parameters<Parameters<typeof db.transaction>[0]>[0],
+  tenantId: string,
+  channel: string,
+): Promise<DltTemplateRow[]> {
+  return tx.select().from(dltTemplates)
+    .where(and(
+      eq(dltTemplates.tenantId, tenantId),
+      eq(dltTemplates.channel, channel),
+      eq(dltTemplates.status, "active"),
+    ));
+}
+
 export async function insert(
   tx: Parameters<Parameters<typeof db.transaction>[0]>[0],
   row: typeof dltTemplates.$inferInsert,
