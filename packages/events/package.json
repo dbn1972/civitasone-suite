@@ -18,7 +18,8 @@
   },
   "dependencies": {
     "@civitasone/types": "workspace:*",
-    "zod": "^3.23.0"
+    "zod": "^3.23.0",
+    "@civitasone/schemas": "workspace:*"
   },
   "devDependencies": {
     "typescript": "^5.4.0"

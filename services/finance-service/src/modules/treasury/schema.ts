@@ -34,6 +34,12 @@ export const financeChallans = treasurySchema.table("finance_challans", {
   reconciled:    boolean("reconciled").notNull().default(false),
   reconciledLineId: uuid("reconciled_line_id"),
   reconciledAt:  timestamp("reconciled_at", { withTimezone: true }),
+  // Cross-service back-link (migration 0070) — the originating record when
+  // this challan was created from another service's outbox event (e.g. a
+  // municipal licensing application), so "pay the fee for this application"
+  // can be joined in either direction. Null for finance-ops-initiated challans.
+  sourceService: varchar("source_service", { length: 64 }),
+  sourceRef:     text("source_ref"),
   createdAt:     timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt:     timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   createdBy:     uuid("created_by").notNull(),
