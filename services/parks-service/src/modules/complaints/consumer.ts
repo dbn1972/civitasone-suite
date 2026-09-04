@@ -6,6 +6,7 @@ import { writeAudit } from "../../shared/audit.js";
 import { tenantScoped } from "../../shared/tenant-queue.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
+import { formatComplaintNumber } from "./domain.js";
 
 const log = pino({ name: "parks.complaints.consumer" });
 
@@ -20,8 +21,13 @@ export function registerComplaintConsumers(rawQueue: Queue): void {
     const p = msg.payload as any;
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
+      // Reserved inside this transaction (see repo.nextComplaintNumber) —
+      // replaces the old `PRK-${Date.now()}` scheme, which collided under
+      // concurrent load and had no DB-level guarantee of uniqueness beyond
+      // the UNIQUE constraint rejecting the second insert outright.
+      const complaintNumber = formatComplaintNumber(await repo.nextComplaintNumber(tx));
       await repo.insert(tx, {
-        id: p.id, tenantId: msg.tenantId, complaintNumber: p.complaintNumber,
+        id: p.id, tenantId: msg.tenantId, complaintNumber,
         reportedBy: p.reportedBy, location: p.location, parkAssetRef: p.parkAssetRef,
         complaintType: p.complaintType, description: p.description, photo: p.photo,
         severity: p.severity, status: "reported",
@@ -30,7 +36,7 @@ export function registerComplaintConsumers(rawQueue: Queue): void {
       await enqueue(tx, {
         topic: EVENTS.COMPLAINT_CREATED, eventType: EVENTS.COMPLAINT_CREATED,
         tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
-        payload: { complaintId: p.id, complaintNumber: p.complaintNumber, complaintType: p.complaintType },
+        payload: { complaintId: p.id, complaintNumber, complaintType: p.complaintType },
       });
       await writeAudit(tx, ctxOf(msg), { action: "complaint.create", resourceType: "parks_complaint", resourceId: p.id });
     });

@@ -14,3 +14,9 @@ export function validateAssetStatusTransition(from: AssetStatus, to: AssetStatus
   if (!allowed || !allowed.includes(to)) return `invalid transition: ${from} → ${to}`;
   return null;
 }
+
+// Pure formatter, no I/O — see complaints/domain.ts's formatComplaintNumber
+// for the full rationale (identical bug, identical fix).
+export function formatAssetCode(seq: number): string {
+  return `PRKA-${seq}`;
+}

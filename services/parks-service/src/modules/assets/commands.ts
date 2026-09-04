@@ -15,8 +15,10 @@ export interface CreateAssetInput {
 
 export async function createAsset(ctx: RequestContext, body: CreateAssetInput): Promise<Accepted> {
   const id = randomUUID();
-  const assetCode = `PRKA-${Date.now()}`;
-  return publishCommand(ctx, COMMANDS.CREATE_ASSET, id, { id, assetCode, ...body });
+  // assetCode is reserved from a real Postgres sequence inside the
+  // consumer's own transaction (see repo.ts's nextAssetCode), not here —
+  // see complaints/commands.ts's createComplaint for the full rationale.
+  return publishCommand(ctx, COMMANDS.CREATE_ASSET, id, { id, ...body });
 }
 
 export async function updateAsset(ctx: RequestContext, id: string, patch: Record<string, unknown>, version: number): Promise<Accepted> {
