@@ -105,6 +105,12 @@ run_bootstrap "$ROOT/infra/db/bootstrap/bootstrap_sec5_batch3.sql"
 # Without this, swm-service's migrations fail with "database civitas_swm does
 # not exist" before the migration loop below ever reaches them.
 run_bootstrap "$ROOT/infra/db/bootstrap/bootstrap_swm.sql"
+# bootstrap_municipal_services.sql: advertisement/vendor/animal/trade/parks/
+# roadcut had real migrations but no role/database anywhere reachable by CI
+# (fire/crematorium/drainage/event/market/parking already got theirs from
+# bootstrap_sec5_batch3.sql above; this file covers the other 6). Without
+# this, all 6 services' migrations fail with role/database does not exist.
+run_bootstrap "$ROOT/infra/db/bootstrap/bootstrap_municipal_services.sql"
 # shop-service (Sec5 batch 2: parks/refund/roadcut/shop/trade) had a role/db
 # in local dev tooling (scripts/dev/provision-sec5-batch2-roles.sql) but no
 # bootstrap file here ever created shop_svc/civitas_shop, and it was never
@@ -228,7 +234,31 @@ declare -A SERVICE_DBS=(
   [ai-agent-service]="ai_agent_svc:civitas_ai_agent"
   # recommendation-service: role/db created by bootstrap_recommendation.sql
   # above. Migrations live at services/recommendation-service/migrations/.
-  [recommendation-service]="recommendation_svc:civitas_recommendation"
+  # Municipal batch 4 (2026-09-04 CI-wiring pass): 12 municipal services had
+  # real migrations but were never added to this map, so their migrations
+  # never ran in CI even where a database already existed for them (see
+  # bootstrap_municipal_services.sql above for the 6 that needed a new role/db,
+  # and bootstrap_sec5_batch3.sql for the other 5 whose role/db already
+  # existed but were simply never registered here). building-service has no
+  # migrations/ directory yet (a separate change is adding it) — this entry
+  # is a safe no-op via the migration loop's own `[ -d "$mig_dir" ] || continue`
+  # guard until that migration lands.
+  [advertisement-service]="advertisement_svc:civitas_advertisement"
+  [vendor-service]="vendor_svc:civitas_vendor"
+  [trade-service]="trade_svc:civitas_trade"
+  [animal-service]="animal_svc:civitas_animal"
+  [fire-service]="fire_svc:civitas_fire"
+  [crematorium-service]="crematorium_svc:civitas_crematorium"
+  [drainage-service]="drainage_svc:civitas_drainage"
+  [event-service]="event_svc:civitas_event"
+  [parking-service]="parking_svc:civitas_parking"
+  [parks-service]="parks_svc:civitas_parks"
+  [roadcut-service]="roadcut_svc:civitas_roadcut"
+  [building-service]="building_svc:civitas_building"
+  # market-service: role/db already created by bootstrap_sec5_batch3.sql
+  # above, but this entry was never added, so the migration loop above never
+  # reached it even though civitas_market/market_svc already existed.
+  [market-service]="market_svc:civitas_market"
 )
 
 # ── Role-creating migrations must run as the bootstrapping SUPERUSER ─────────
