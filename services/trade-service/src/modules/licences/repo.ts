@@ -1,4 +1,4 @@
-import { eq, and, sql, desc } from "drizzle-orm";
+import { eq, and, ne, sql, desc } from "drizzle-orm";
 import { db, scopedRead, type ScopedTx } from "../../shared/db.js";
 import {
   tradeLicences, licenceActions, tradeLicenceDirectory,
@@ -38,10 +38,25 @@ export async function findPublicByVerificationCode(code: string) {
   return rows[0] ?? null;
 }
 
+// Used by licences/routes.ts's POST /v1/trade/licences pre-accept
+// LICENCE_ALREADY_EXISTS check. trade_licences previously had no
+// unique/FK constraint on application_id at all -- migrations/
+// 0003_licence_reissuance_unique_constraint.sql now adds one, as a partial
+// index excluding 'cancelled' so this query and the DB constraint agree.
+//
+// Only 'cancelled' is excluded, not 'expired': this domain model has no
+// renewal flow (unlike advertisement-service's canRenew, which treats
+// cancelled and expired the same way) that reissues a licence for an
+// already-expired one under the same application -- excluding 'expired'
+// here would be speculative, not evidenced by the code.
 export async function findByApplicationId(applicationId: string, tenantId: string): Promise<TradeLicenceRow | null> {
   const rows = await scopedRead((tx) =>
     tx.select().from(tradeLicences)
-      .where(and(eq(tradeLicences.applicationId, applicationId), eq(tradeLicences.tenantId, tenantId)))
+      .where(and(
+        eq(tradeLicences.applicationId, applicationId),
+        eq(tradeLicences.tenantId, tenantId),
+        ne(tradeLicences.status, "cancelled"),
+      ))
       .limit(1),
   );
   return rows[0] ?? null;

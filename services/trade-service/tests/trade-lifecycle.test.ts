@@ -419,4 +419,67 @@ describe("trade-service — pre-accept validation on POST /v1/trade/licences (is
 
     await app.close();
   });
+
+  it("a cancelled licence does not block a fresh licence for the same application (partial unique index, not a plain UNIQUE)", async () => {
+    const { buildApp } = await import("../src/app.js");
+    const app = await buildApp();
+    const hdr = bearer();
+
+    const created = await app.inject({ method: "POST", url: "/v1/trade/applications", headers: hdr, payload: validApplicationBody });
+    const { id: appId } = JSON.parse(created.body) as { id: string };
+    await drain();
+    await app.inject({ method: "POST", url: `/v1/trade/applications/${appId}/submit`, headers: hdr });
+    await drain();
+    const scrutinyInit = await app.inject({
+      method: "POST", url: "/v1/trade/approvals/scrutiny", headers: hdr,
+      payload: { applicationId: appId, scrutinyType: "document_check", officerId: ACTOR },
+    });
+    const { id: scrutinyId } = JSON.parse(scrutinyInit.body) as { id: string };
+    await drain();
+    await app.inject({
+      method: "POST", url: `/v1/trade/approvals/scrutiny/${scrutinyId}/complete`, headers: hdr,
+      payload: { findings: { items: [{ checkItem: "premises_check", result: "pass" }] } },
+    });
+    await drain();
+    await app.inject({
+      method: "POST", url: "/v1/trade/approvals/decide", headers: hdr,
+      payload: { applicationId: appId, decision: "approved" },
+    });
+    await drain();
+
+    const firstIssue = await app.inject({
+      method: "POST", url: "/v1/trade/licences", headers: hdr,
+      payload: { applicationId: appId, tradeCategory: "retail" },
+    });
+    expect(firstIssue.statusCode).toBe(202);
+    const { id: firstLicenceId } = JSON.parse(firstIssue.body) as { id: string };
+    await drain();
+
+    const cancel = await app.inject({
+      method: "POST", url: `/v1/trade/licences/${firstLicenceId}/cancel`, headers: hdr,
+      payload: { reason: "issued in error, applicant needs to reapply" },
+    });
+    expect(cancel.statusCode).toBe(202);
+    await drain();
+    const cancelled = await licenceRepo.findById(firstLicenceId, T1);
+    expect(cancelled!.status).toBe("cancelled");
+
+    // trade_licences_application_active_unique (migrations/0003) and
+    // findByApplicationId's app-level pre-check must both treat the
+    // cancelled licence as non-blocking.
+    const reissue = await app.inject({
+      method: "POST", url: "/v1/trade/licences", headers: hdr,
+      payload: { applicationId: appId, tradeCategory: "retail" },
+    });
+    expect(reissue.statusCode).toBe(202);
+    const { id: secondLicenceId } = JSON.parse(reissue.body) as { id: string };
+    expect(secondLicenceId).not.toBe(firstLicenceId);
+    await drain();
+
+    const reissued = await licenceRepo.findById(secondLicenceId, T1);
+    expect(reissued).not.toBeNull();
+    expect(reissued!.status).toBe("active");
+
+    await app.close();
+  });
 });
