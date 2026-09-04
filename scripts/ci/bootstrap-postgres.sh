@@ -112,6 +112,14 @@ run_bootstrap "$ROOT/infra/db/bootstrap/bootstrap_swm.sql"
 # bootstrap_shop.sql for the full story (same gap bootstrap_refund.sql fixed
 # for refund-service in the same batch).
 run_bootstrap "$ROOT/infra/db/bootstrap/bootstrap_shop.sql"
+# recommendation-service: has real migrations (services/recommendation-
+# service/migrations/, 8 files) and 15 test files / 1172 tests that already
+# pass cleanly once a database is manually provisioned, but no bootstrap
+# file here ever created recommendation_svc/civitas_recommendation, and it
+# was never added to the SERVICE_DBS map below -- even though
+# scripts/dev/migrate-all.mjs already lists it. Same class of gap as
+# shop-service above.
+run_bootstrap "$ROOT/infra/db/bootstrap/bootstrap_recommendation.sql"
 # sewerage-service had NO bootstrap entry at all (no role, no database) and
 # also had no migrations directory until this pass added one -- see
 # services/sewerage-service/migrations/0001_initial.sql and the SERVICE_DBS
@@ -202,6 +210,9 @@ declare -A SERVICE_DBS=(
   # migrations never ran in CI. bootstrap_shop.sql (added above) now creates
   # shop_svc/civitas_shop so this entry is no longer a no-op.
   [shop-service]="shop_svc:civitas_shop"
+  # recommendation-service: role/db created by bootstrap_recommendation.sql
+  # above. Migrations live at services/recommendation-service/migrations/.
+  [recommendation-service]="recommendation_svc:civitas_recommendation"
 )
 
 # ── Role-creating migrations must run as the bootstrapping SUPERUSER ─────────
