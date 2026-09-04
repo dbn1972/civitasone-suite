@@ -1,7 +1,7 @@
 /**
  * Canonical notification.send payload contract (notification-service deliveries consumer).
  * System template UUIDs are seeded in notification-service/migrations/0003_system_templates.sql
- * and services/notification-service/migrations/0043_municipal_templates.sql (municipal Sec5).
+ * and services/notification-service/migrations/0044_municipal_templates.sql (municipal Sec5).
  */
 
 export const NOTIFICATION_SEND = "notification.send" as const;
@@ -23,7 +23,7 @@ export const SYSTEM_TEMPLATE_IDS = {
   estabRtiCpioAlert:        "00000000-0000-4000-8001-00000000000c",
   hrLeaveApproved:          "00000000-0000-4000-8001-000000000000",
   payrollRunApproved:       "00000000-0000-4000-8001-000000000000",
-  /** Municipal Sec5 (17 services) — see 0043_municipal_templates.sql. */
+  /** Municipal Sec5 (17 services) — see 0044_municipal_templates.sql. */
   municipalApplicationSubmitted: "00000000-0000-4000-8002-000000000001",
   municipalFeeDue:           "00000000-0000-4000-8002-000000000002",
   municipalStatusChanged:    "00000000-0000-4000-8002-000000000003",
