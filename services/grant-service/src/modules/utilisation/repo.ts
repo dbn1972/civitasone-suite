@@ -55,6 +55,36 @@ export async function hasSubmittedUcForApplication(
   }));
 }
 
+/**
+ * Tx-scoped variant of hasSubmittedUcForApplication: reads through the
+ * caller'''s already-open transaction. disbursementInitiate
+ * (disbursement/consumer.ts) enforces the PFMS utilisation-certificate gate
+ * from inside its own db.transaction() -- the scopedRead-based version
+ * there opens a SECOND transaction competing for a connection from the
+ * same pool as the outer one, deadlocking every in-flight disbursement
+ * once concurrency reaches pool.max (see
+ * .claude/skills/16-production-readiness-audit.md section 1).
+ */
+export async function hasSubmittedUcForApplicationTx(
+  tx: Writer,
+  applicationId: string,
+  tenantId: string,
+  installmentNo = 2,
+): Promise<boolean> {
+  if (installmentNo <= 1) return true;
+  const priorTranche = installmentNo - 1;
+  const rows = await (tx as typeof db)
+    .select({ cnt: count() })
+    .from(grantUcStatements)
+    .where(and(
+      eq(grantUcStatements.tenantId, tenantId),
+      eq(grantUcStatements.applicationId, applicationId),
+      eq(grantUcStatements.installmentNo, priorTranche),
+      eq(grantUcStatements.validationStatus, "validated"),
+    ));
+  return (rows[0]?.cnt ?? 0) >= 1;
+}
+
 /** Fetch a single UC statement scoped to tenant (for validation decisions). */
 export async function findUcById(ucId: string, tenantId: string): Promise<UcRow | null> {
   return runWithTenant(tenantId, () => scopedRead(async (tx) => {

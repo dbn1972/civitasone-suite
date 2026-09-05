@@ -13,6 +13,21 @@ export async function findBeneficiaryById(id: string, tenantId: string): Promise
   }));
 }
 
+/**
+ * Tx-scoped variant of findBeneficiaryById: reads through the caller'''s
+ * already-open transaction instead of opening a nested one via scopedRead.
+ * applicationApprove (application/consumer.ts) calls this from inside its
+ * own db.transaction() -- the scopedRead-based version there opens a
+ * SECOND transaction competing for a connection from the same pool as the
+ * outer one, deadlocking every in-flight command once concurrency reaches
+ * pool.max (see .claude/skills/16-production-readiness-audit.md section 1).
+ */
+export async function findBeneficiaryByIdTx(tx: Writer, id: string, tenantId: string): Promise<BeneficiaryRow | null> {
+  const rows = await (tx as typeof db).select().from(grantBeneficiaries)
+    .where(and(eq(grantBeneficiaries.id, id), eq(grantBeneficiaries.tenantId, tenantId))).limit(1);
+  return rows[0] ?? null;
+}
+
 export async function findAadhaarByBeneficiary(beneficiaryId: string, tenantId: string): Promise<AadhaarLinkRow | null> {
   return runWithTenant(tenantId, () => scopedRead(async (tx) => {
     const rows = await tx.select().from(grantAadhaarLinks).where(eq(grantAadhaarLinks.beneficiaryId, beneficiaryId)).limit(1);

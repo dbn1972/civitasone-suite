@@ -95,6 +95,23 @@ export async function findDisbursementByPfmsTxnId(pfmsTxnId: string, tenantId: s
   }));
 }
 
+/**
+ * Tx-scoped variant of findDisbursementByPfmsTxnId: reads through the
+ * caller'''s already-open transaction. pfmsReconcile
+ * (disbursement/consumer.ts) calls this once PER RECORD in a reconciliation
+ * batch from inside its own open db.transaction() -- the scopedRead-based
+ * version there opens a SECOND transaction competing for a connection from
+ * the same pool as the outer one, deadlocking every in-flight reconcile
+ * batch once concurrency reaches pool.max (see
+ * .claude/skills/16-production-readiness-audit.md section 1).
+ */
+export async function findDisbursementByPfmsTxnIdTx(tx: Writer, pfmsTxnId: string, tenantId: string): Promise<DisbursementRow | null> {
+  const rows = await (tx as typeof db).select().from(grantDisbursements)
+    .where(and(eq(grantDisbursements.pfmsTxnId, pfmsTxnId), eq(grantDisbursements.tenantId, tenantId)))
+    .limit(1);
+  return rows[0] ?? null;
+}
+
 export async function findDisbursementByIdTx(tx: Writer, id: string, tenantId: string): Promise<DisbursementRow | null> {
   const rows = await (tx as typeof db).select().from(grantDisbursements)
     .where(and(eq(grantDisbursements.id, id), eq(grantDisbursements.tenantId, tenantId))).limit(1);
