@@ -18,7 +18,7 @@ import type { Queue } from "@civitasone/queue";
 import { NonRetryableError } from "@civitasone/queue";
 import { db } from "../../shared/db.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
-import { cache } from "../../shared/infra.js";
+import { cache, invalidateSafely } from "../../shared/infra.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import {
   deriveSeverity,
@@ -143,12 +143,10 @@ export function registerFindingsConsumers(queue: Queue): void {
 
       // Cache invalidation (outside transaction, best-effort)
       if (findingId) {
-        try {
-          await cache.invalidate(cache.makeKey(msg.tenantId, "finding", findingId));
-        } catch (err) {
-          log.warn({ err, tenantId: msg.tenantId, findingId, event: "cache_invalidate_failed" },
-            "failed to invalidate finding cache after create");
-        }
+        await invalidateSafely(
+          cache.makeKey(msg.tenantId, "finding", findingId), log,
+          { tenantId: msg.tenantId, findingId }, "failed to invalidate finding cache after create",
+        );
       }
     },
   );
@@ -247,12 +245,10 @@ export function registerFindingsConsumers(queue: Queue): void {
 
       // Cache invalidation (outside transaction, best-effort)
       if (findingId) {
-        try {
-          await cache.invalidate(cache.makeKey(msg.tenantId, "finding", findingId));
-        } catch (err) {
-          log.warn({ err, tenantId: msg.tenantId, findingId, event: "cache_invalidate_failed" },
-            "failed to invalidate finding cache after compliance notice");
-        }
+        await invalidateSafely(
+          cache.makeKey(msg.tenantId, "finding", findingId), log,
+          { tenantId: msg.tenantId, findingId }, "failed to invalidate finding cache after compliance notice",
+        );
       }
     },
   );
@@ -351,12 +347,10 @@ export function registerFindingsConsumers(queue: Queue): void {
 
       // Cache invalidation (outside transaction, best-effort)
       if (findingId) {
-        try {
-          await cache.invalidate(cache.makeKey(msg.tenantId, "finding", findingId));
-        } catch (err) {
-          log.warn({ err, tenantId: msg.tenantId, findingId, event: "cache_invalidate_failed" },
-            "failed to invalidate finding cache after verify-resolved");
-        }
+        await invalidateSafely(
+          cache.makeKey(msg.tenantId, "finding", findingId), log,
+          { tenantId: msg.tenantId, findingId }, "failed to invalidate finding cache after verify-resolved",
+        );
       }
     },
   );
@@ -413,12 +407,10 @@ export function registerFindingsConsumers(queue: Queue): void {
       });
 
       if (findingId) {
-        try {
-          await cache.invalidate(cache.makeKey(msg.tenantId, "finding", findingId));
-        } catch (err) {
-          log.warn({ err, tenantId: msg.tenantId, findingId, event: "cache_invalidate_failed" },
-            "failed to invalidate finding cache after soft-delete");
-        }
+        await invalidateSafely(
+          cache.makeKey(msg.tenantId, "finding", findingId), log,
+          { tenantId: msg.tenantId, findingId }, "failed to invalidate finding cache after soft-delete",
+        );
       }
     },
   );

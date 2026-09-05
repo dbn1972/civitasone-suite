@@ -17,7 +17,7 @@ import type { Queue } from "@civitasone/queue";
 import { NonRetryableError } from "@civitasone/queue";
 import { db } from "../../shared/db.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
-import { cache } from "../../shared/infra.js";
+import { cache, invalidateSafely } from "../../shared/infra.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import {
   insertEntity,
@@ -105,12 +105,10 @@ export function registerUniverseConsumers(queue: Queue): void {
 
     // Cache invalidation (outside transaction, best-effort)
     if (entityId) {
-      try {
-        await cache.invalidate(cache.makeKey(msg.tenantId, "entity", entityId));
-      } catch (err) {
-        log.warn({ err, tenantId: msg.tenantId, entityId, event: "cache_invalidate_failed" },
-          "failed to invalidate entity cache after create");
-      }
+      await invalidateSafely(
+        cache.makeKey(msg.tenantId, "entity", entityId), log,
+        { tenantId: msg.tenantId, entityId }, "failed to invalidate entity cache after create",
+      );
     }
   });
 
@@ -168,12 +166,10 @@ export function registerUniverseConsumers(queue: Queue): void {
 
     // Cache invalidation (outside transaction, best-effort)
     if (updatedEntityId) {
-      try {
-        await cache.invalidate(cache.makeKey(msg.tenantId, "entity", updatedEntityId));
-      } catch (err) {
-        log.warn({ err, tenantId: msg.tenantId, entityId: updatedEntityId, event: "cache_invalidate_failed" },
-          "failed to invalidate entity cache after update");
-      }
+      await invalidateSafely(
+        cache.makeKey(msg.tenantId, "entity", updatedEntityId), log,
+        { tenantId: msg.tenantId, entityId: updatedEntityId }, "failed to invalidate entity cache after update",
+      );
     }
   });
 
@@ -217,12 +213,10 @@ export function registerUniverseConsumers(queue: Queue): void {
 
     // Cache invalidation (outside transaction, best-effort)
     if (typeId) {
-      try {
-        await cache.invalidate(cache.makeKey(msg.tenantId, "inspection_type", typeId));
-      } catch (err) {
-        log.warn({ err, tenantId: msg.tenantId, typeId, event: "cache_invalidate_failed" },
-          "failed to invalidate inspection_type cache after create");
-      }
+      await invalidateSafely(
+        cache.makeKey(msg.tenantId, "inspection_type", typeId), log,
+        { tenantId: msg.tenantId, typeId }, "failed to invalidate inspection_type cache after create",
+      );
     }
   });
 
@@ -265,12 +259,10 @@ export function registerUniverseConsumers(queue: Queue): void {
 
     // Cache invalidation (outside transaction, best-effort)
     if (provisionId) {
-      try {
-        await cache.invalidate(cache.makeKey(msg.tenantId, "provision", provisionId));
-      } catch (err) {
-        log.warn({ err, tenantId: msg.tenantId, provisionId, event: "cache_invalidate_failed" },
-          "failed to invalidate provision cache after create");
-      }
+      await invalidateSafely(
+        cache.makeKey(msg.tenantId, "provision", provisionId), log,
+        { tenantId: msg.tenantId, provisionId }, "failed to invalidate provision cache after create",
+      );
     }
   });
 
@@ -312,12 +304,10 @@ export function registerUniverseConsumers(queue: Queue): void {
 
     // Cache invalidation (outside transaction, best-effort)
     if (vocabId) {
-      try {
-        await cache.invalidate(cache.makeKey(msg.tenantId, "vocabulary", vocabId));
-      } catch (err) {
-        log.warn({ err, tenantId: msg.tenantId, vocabId, event: "cache_invalidate_failed" },
-          "failed to invalidate vocabulary cache after upsert");
-      }
+      await invalidateSafely(
+        cache.makeKey(msg.tenantId, "vocabulary", vocabId), log,
+        { tenantId: msg.tenantId, vocabId }, "failed to invalidate vocabulary cache after upsert",
+      );
     }
   });
 }

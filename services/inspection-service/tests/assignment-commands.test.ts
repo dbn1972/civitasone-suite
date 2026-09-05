@@ -8,6 +8,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 const { publish } = vi.hoisted(() => ({ publish: vi.fn().mockResolvedValue(undefined) }));
 vi.mock("../src/shared/infra.js", () => ({
+  invalidateSafely: vi.fn().mockResolvedValue(undefined),
   queue: { publish },
   cache: { makeKey: (...a: string[]) => a.join(":"), invalidate: vi.fn() },
 }));
