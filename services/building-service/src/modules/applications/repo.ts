@@ -11,6 +11,29 @@ export async function findById(id: string, tenantId: string): Promise<BuildingAp
   return rows[0] ?? null;
 }
 
+/**
+ * Same lookup as `findById`, but reads through an ALREADY-OPEN transaction
+ * instead of opening a second one via `scopedRead`.
+ *
+ * `applications/consumer.ts`'s `submitApplication`, `permits/consumer.ts`'s
+ * `issuePermit`, and `scrutiny/consumer.ts`'s `decideApplication` all used to
+ * call `findById` (which calls `scopedRead`, i.e. `db.transaction`) from
+ * inside their own already-open outer `db.transaction(async (tx) => {...})`
+ * block. That opens a SECOND connection from the same pool as the outer
+ * transaction — with `pool.max = 10`, enough concurrent calls exhaust the
+ * pool and every one of them deadlocks waiting for a connection its own
+ * nested lookup will never get. Same shape as notification-service's
+ * checkQuota/checkDlt deadlock (PR #1028) — this variant reuses the caller's
+ * `tx` (which already carries the RLS `app.tenant_id` GUC set once for the
+ * whole outer transaction) so no second connection is ever acquired.
+ */
+export async function findByIdInTx(tx: ScopedTx, id: string, tenantId: string): Promise<BuildingApplicationRow | null> {
+  const rows = await tx.select().from(buildingApplications)
+    .where(and(eq(buildingApplications.id, id), eq(buildingApplications.tenantId, tenantId)))
+    .limit(1);
+  return rows[0] ?? null;
+}
+
 export async function findByNumber(applicationNumber: string, tenantId: string): Promise<BuildingApplicationRow | null> {
   const rows = await scopedRead((tx) =>
     tx.select().from(buildingApplications)

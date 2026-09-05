@@ -36,7 +36,14 @@ export function registerPermitConsumers(rawQueue: Queue): void {
       // transition. No fee is raised here — the building fee is assessed
       // and challaned when the application is first created
       // (applications/consumer.ts createApplication).
-      const app = await appRepo.findById(p.applicationId, msg.tenantId);
+      //
+      // Reads through the already-open outer `tx` (findByIdInTx), not
+      // appRepo.findById's scopedRead, which would open a SECOND, nested
+      // db.transaction() on the same connection pool as this outer issue
+      // transaction and deadlock the pool once enough issuePermit calls are
+      // concurrently in-flight (pool.max = 10) — see the notification-service
+      // checkQuota/checkDlt deadlock fixed in PR #1028.
+      const app = await appRepo.findByIdInTx(tx, p.applicationId, msg.tenantId);
       if (app) {
         await emitMunicipalNotification(tx, ctxOf(msg), {
           eventType: MUNICIPAL_EVENT_TYPES.permitIssued,

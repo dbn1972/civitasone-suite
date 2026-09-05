@@ -106,7 +106,14 @@ export function registerApplicationConsumers(rawQueue: Queue): void {
       // schema has no separate applicant-name/contact field (unlike e.g.
       // advertisement-service's advertiserName), so the citizen identity we
       // notify is the application's own createdBy — the actor who raised it.
-      const app = await repo.findById(p.id, msg.tenantId);
+      //
+      // Reads through the already-open outer `tx` (findByIdInTx), not
+      // repo.findById's scopedRead, which would open a SECOND, nested
+      // db.transaction() on the same connection pool as this outer send
+      // transaction and deadlock the pool once enough submitApplication
+      // calls are concurrently in-flight (pool.max = 10) — see the
+      // notification-service checkQuota/checkDlt deadlock fixed in PR #1028.
+      const app = await repo.findByIdInTx(tx, p.id, msg.tenantId);
       if (app) {
         await emitMunicipalNotification(tx, ctxOf(msg), {
           eventType: MUNICIPAL_EVENT_TYPES.applicationSubmitted,

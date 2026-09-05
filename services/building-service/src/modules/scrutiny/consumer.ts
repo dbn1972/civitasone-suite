@@ -61,7 +61,13 @@ export function registerScrutinyConsumers(rawQueue: Queue): void {
       if (!ok) return;
       applied = true;
       await enqueue(tx, { topic: EVENTS.applicationDecided, eventType: EVENTS.applicationDecided, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { applicationId: p.applicationId, decision: p.decision, reason: p.reason, decidedBy: msg.actorId } });
-      const app = await appRepo.findById(p.applicationId, msg.tenantId);
+      // Reads through the already-open outer `tx` (findByIdInTx), not
+      // appRepo.findById's scopedRead, which would open a SECOND, nested
+      // db.transaction() on the same connection pool as this outer decide
+      // transaction and deadlock the pool once enough decideApplication
+      // calls are concurrently in-flight (pool.max = 10) — see the
+      // notification-service checkQuota/checkDlt deadlock fixed in PR #1028.
+      const app = await appRepo.findByIdInTx(tx, p.applicationId, msg.tenantId);
       if (app) {
         await emitMunicipalNotification(tx, ctxOf(msg), {
           eventType: municipalDecisionNotificationEventType(MUNICIPAL_EVENT_TYPES.statusChanged, p.decision),
