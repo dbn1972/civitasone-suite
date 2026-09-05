@@ -51,7 +51,6 @@ vi.mock("../src/shared/db.js", () => ({
 
 vi.mock("../src/shared/outbox.js", () => ({
   markProcessed: (...args: unknown[]) => markProcessedMock(...(args as [unknown, string])),
-  enqueue: vi.fn(async () => undefined),
 }));
 
 vi.mock("../src/modules/blacklist/screening-store.js", () => ({
@@ -107,7 +106,6 @@ beforeEach(() => {
     status: "pending",
     createdBy: MAKER,
     identityDocHash: DOC_HASH,
-    expiresAt: null,
   };
 });
 
@@ -162,7 +160,7 @@ describe("blacklistApprove -> maker-checker (Property 18)", () => {
 
     expect(fakeTx.update).toHaveBeenCalledTimes(1);
     expect(addToBlacklistHashSetMock).toHaveBeenCalledTimes(1);
-    expect(addToBlacklistHashSetMock).toHaveBeenCalledWith(TENANT, DOC_HASH, null);
+    expect(addToBlacklistHashSetMock).toHaveBeenCalledWith(TENANT, DOC_HASH);
   });
 
   it("does not touch the DB or Redis on an idempotent replay", async () => {

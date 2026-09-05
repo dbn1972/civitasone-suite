@@ -86,14 +86,19 @@ describe("MFA — validation (400)", () => {
 });
 
 describe("MFA — setup", () => {
-  it("POST /identity/mfa/setup → 201 with secret and provisioning URI", async () => {
+  // F3 async: mfa/routes.ts's POST /identity/mfa/setup does a synchronous
+  // pre-accept ALREADY_ENABLED check (still 409, unchanged), then generates
+  // the secret/provisioning URI in-process and returns them with a 202 —
+  // only the persist of the mfaConfig row is deferred to the consumer. 201
+  // was the pre-conversion status; the route has returned 202 since.
+  it("POST /identity/mfa/setup → 202 with secret and provisioning URI", async () => {
     const res = await app.inject({
       method: "POST", url: "/identity/mfa/setup",
       headers: headers(["super_admin"]),
       payload: { method: "totp" },
     });
-    // May be 201 (first setup) or 409 (already enabled from prior test run)
-    if (res.statusCode === 201) {
+    // May be 202 (first setup) or 409 (already enabled from prior test run)
+    if (res.statusCode === 202) {
       const body = res.json();
       expect(body.data.method).toBe("totp");
       expect(body.data.secret).toBeDefined();
@@ -106,7 +111,7 @@ describe("MFA — setup", () => {
     }
   });
 
-  it("POST /identity/mfa/setup with empty body defaults to totp → 201 or 409", async () => {
+  it("POST /identity/mfa/setup with empty body defaults to totp → 202 or 409", async () => {
     // use a different actor to get a fresh setup
     const freshActor = "c0000000-0000-4000-8000-0000000000cc";
     const res = await app.inject({
@@ -114,7 +119,7 @@ describe("MFA — setup", () => {
       headers: headers(["super_admin"], TENANT, freshActor),
       payload: {},
     });
-    expect([201, 409]).toContain(res.statusCode);
+    expect([202, 409]).toContain(res.statusCode);
   });
 });
 

@@ -20,6 +20,9 @@ describe("identity — security & access", () => {
   it("GET /identity/rbac/permissions", async () => { expect([200, 500]).toContain(await hit("GET", "/identity/rbac/permissions", admin)); });
   it("GET /identity/api-keys", async () => { expect([200, 500]).toContain(await hit("GET", "/identity/api-keys", admin)); });
   it("GET /identity/break-glass", async () => { expect([200, 500]).toContain(await hit("GET", "/identity/break-glass", admin)); });
-  it("POST /identity/mfa/setup", async () => { expect([200, 201, 400, 500]).toContain(await hit("POST", "/identity/mfa/setup", admin, { method: "totp" })); });
+  // F3 async: this route returns 202 (accepted) on success, or 409 when MFA
+  // is already enabled for this actor (synchronous pre-accept check) — 201
+  // was the pre-conversion status.
+  it("POST /identity/mfa/setup", async () => { expect([202, 400, 409, 500]).toContain(await hit("POST", "/identity/mfa/setup", admin, { method: "totp" })); });
   it("401 without auth", async () => { expect(await hit("GET", "/identity/rbac/roles")).toBe(401); });
 });

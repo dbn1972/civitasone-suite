@@ -7,6 +7,8 @@
  */
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import type { FastifyInstance } from "fastify";
+import { withTenantConsumer } from "@civitasone/db";
+import type { MemoryQueue } from "@civitasone/queue";
 
 const TENANT = "aaaaaaaa-1111-4000-8000-000000000099";
 const INTERNAL_SECRET = process.env.INTERNAL_SERVICE_SECRET ?? "test-internal-service-secret-32chr";
@@ -18,12 +20,35 @@ const internalHeaders = {
 };
 
 let app: FastifyInstance;
+let scimQueue: MemoryQueue;
 
 beforeAll(async () => {
   const { buildApp } = await import("../src/app.js");
   app = await buildApp();
+
+  // scim/commands.ts's scimCreateUser/Replace/Patch/Delete are F3 async —
+  // each only queue.publish()es and returns a 202 envelope; the actual write
+  // happens in registerScimConsumers's handlers. Without registering that
+  // consumer on the shared `queue` singleton (the same one scim/commands.ts
+  // imports from shared/infra.js — app.js never starts it; only worker.ts
+  // does, in a separate process), every enqueued command here is silently
+  // never processed, so createdUserId's row never actually exists and the
+  // GET/PUT/PATCH/DELETE tests below that depend on it were previously
+  // silently no-op'd by their `if (!createdUserId) return;` guards.
+  const { queue } = await import("../src/shared/infra.js");
+  const { registerScimConsumers } = await import("../src/modules/scim/consumer.js");
+  const rawSubscribe = queue.subscribe.bind(queue);
+  queue.subscribe = ((topic: string, handler: any) =>
+    rawSubscribe(topic, withTenantConsumer(handler))) as typeof queue.subscribe;
+  registerScimConsumers(queue);
+  await queue.start();
+  scimQueue = queue as unknown as MemoryQueue;
 });
 afterAll(async () => { await app.close(); });
+
+async function drainScimQueue(): Promise<void> {
+  await scimQueue.drain();
+}
 
 describe("SCIM via x-internal — ServiceProviderConfig", () => {
   it("GET /v1/identity/scim/ServiceProviderConfig → 200 with SCIM schema", async () => {
@@ -73,7 +98,7 @@ describe("SCIM via x-internal — Users CRUD", () => {
     expect(body).toHaveProperty("Resources");
   });
 
-  it("POST /v1/identity/scim/Users → 201 or 500 (DB uuid constraint on createdBy)", async () => {
+  it("POST /v1/identity/scim/Users → 202 accepted", async () => {
     const email = `scim-internal-${Date.now()}@coverage.gov.in`;
     const res = await app.inject({
       method: "POST", url: "/v1/identity/scim/Users",
@@ -83,14 +108,15 @@ describe("SCIM via x-internal — Users CRUD", () => {
         name: { givenName: "SCIM", familyName: "Internal" },
       },
     });
-    // createdBy: "scim" is not a valid UUID — the DB rejects this with 500
-    // This exercises the SCIM route handler code path regardless
-    expect([201, 500]).toContain(res.statusCode);
-    if (res.statusCode === 201) {
-      const body = res.json();
-      expect(body.schemas).toContain("urn:ietf:params:scim:schemas:core:2.0:User");
-      createdUserId = body.id;
-    }
+    // F3 async: the route publishes and returns 202 with an optimistically
+    // built SCIM user representation; the real insert (with a fixed, valid
+    // UUID actorId — see scim/commands.ts and scim/consumer.ts) happens in
+    // the consumer.
+    expect(res.statusCode).toBe(202);
+    const body = res.json();
+    expect(body.schemas).toContain("urn:ietf:params:scim:schemas:core:2.0:User");
+    createdUserId = body.id;
+    await drainScimQueue();
   });
 
   it("GET /v1/identity/scim/Users/:id → 200 for created user", async () => {
@@ -114,7 +140,7 @@ describe("SCIM via x-internal — Users CRUD", () => {
     expect(res.json().schemas).toContain("urn:ietf:params:scim:api:messages:2.0:Error");
   });
 
-  it("PUT /v1/identity/scim/Users/:id → 200 updates user", async () => {
+  it("PUT /v1/identity/scim/Users/:id → 202 accepted, updates user", async () => {
     if (!createdUserId) return;
     const res = await app.inject({
       method: "PUT",
@@ -122,11 +148,14 @@ describe("SCIM via x-internal — Users CRUD", () => {
       headers: { ...internalHeaders, authorization: `Bearer ${process.env.SCIM_BEARER_TOKEN}` },
       payload: { userName: "updated-scim@coverage.gov.in", active: true, name: { formatted: "Updated Name" } },
     });
-    expect(res.statusCode).toBe(200);
+    // F3 async: 202 with an optimistic merge of the existing row + patch; the
+    // persisted update happens in the consumer.
+    expect(res.statusCode).toBe(202);
     expect(res.json().userName).toBe("updated-scim@coverage.gov.in");
+    await drainScimQueue();
   });
 
-  it("PATCH /v1/identity/scim/Users/:id → 200 patches user", async () => {
+  it("PATCH /v1/identity/scim/Users/:id → 202 accepted, patches user", async () => {
     if (!createdUserId) return;
     const res = await app.inject({
       method: "PATCH",
@@ -134,18 +163,24 @@ describe("SCIM via x-internal — Users CRUD", () => {
       headers: { ...internalHeaders, authorization: `Bearer ${process.env.SCIM_BEARER_TOKEN}` },
       payload: { Operations: [{ op: "replace", path: "active", value: false }] },
     });
-    expect(res.statusCode).toBe(200);
+    expect(res.statusCode).toBe(202);
     expect(res.json().active).toBe(false);
+    await drainScimQueue();
   });
 
-  it("DELETE /v1/identity/scim/Users/:id → 204 soft-deletes user", async () => {
+  it("DELETE /v1/identity/scim/Users/:id → 202 accepted, soft-deletes user", async () => {
     if (!createdUserId) return;
     const res = await app.inject({
       method: "DELETE",
       url: `/v1/identity/scim/Users/${createdUserId}`,
       headers: { ...internalHeaders, authorization: `Bearer ${process.env.SCIM_BEARER_TOKEN}` },
     });
-    expect(res.statusCode).toBe(204);
+    // F3 async: the route publishes a delete/deactivate command and returns
+    // 202 with { id, status: "accepted" } — soft-delete (status: "disabled")
+    // happens in the consumer, not synchronously, so there is no 204.
+    expect(res.statusCode).toBe(202);
+    expect(res.json()).toMatchObject({ id: createdUserId, status: "accepted" });
+    await drainScimQueue();
   });
 
   it("GET /v1/identity/scim/Users with filter → 200", async () => {

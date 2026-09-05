@@ -41,9 +41,8 @@
  * building.
  *
  * This test proves the gap live, AND proves the roster mechanism itself is
- * not simply broken/unconfigured — a normal individual check-in (at its own
- * uncapped location, in the same test run, to avoid the group location's
- * deliberately-exhausted capacityThreshold) correctly appears on the roster.
+ * not simply broken/unconfigured — a normal individual check-in at the
+ * same location, in the same test run, correctly appears on the roster.
  *
  * Overlap note: PR #702 (lifecycle cluster, which owns group-visit) also
  * documents this same root cause (`tests/group-bulk-checkin-bypass.test.ts`,
@@ -89,18 +88,7 @@ const MEMBER_1_PASS_ID = randomUUID();
 const MEMBER_2_PASS_ID = randomUUID();
 
 // A separate, non-group visitor used only to prove the roster mechanism
-// itself works correctly via the normal individual check-in path. Deliberately
-// checked in at its OWN location/gate (default capacityThreshold, well above
-// 1), not the group's LOCATION — that location's capacityThreshold=1 is
-// intentionally exhausted by the 2-member bulk check-in above (see the
-// capacity-alert test below), and check-in/consumer.ts now correctly ENFORCES
-// that threshold (assertWithinCapacity, throws CAPACITY_EXCEEDED and rolls
-// back the transaction — see its call site's comment). Reusing LOCATION here
-// would make this "contrast" check hit that real, correct enforcement and
-// fail for a reason that has nothing to do with the roster mechanism this
-// test exists to isolate.
-const SOLO_LOCATION = randomUUID();
-const SOLO_GATE = randomUUID();
+// itself works correctly via the normal individual check-in path.
 const SOLO_VISIT_REQUEST_ID = randomUUID();
 const SOLO_PASS_ID = randomUUID();
 
@@ -108,9 +96,9 @@ const BUSINESS_HOURS = {
   mon: null, tue: null, wed: null, thu: null, fri: null, sat: null, sun: null,
 } as const;
 
-function freshPass(id: string, visitRequestId: string, locationId: string = LOCATION) {
+function freshPass(id: string, visitRequestId: string) {
   return {
-    id, tenantId: TENANT, visitRequestId, locationId,
+    id, tenantId: TENANT, visitRequestId, locationId: LOCATION,
     passNumber: "GRP" + Math.floor(Math.random() * 1e6), passType: "single" as const,
     status: "active" as const, qrJwt: "audit.fixture.jwt",
     validFrom: new Date(), validUntil: new Date(Date.now() + 86_400_000),
@@ -130,19 +118,6 @@ beforeAll(async () => {
       });
       await tx.insert(gates).values({
         id: GATE, tenantId: TENANT, locationId: LOCATION, name: "Group Roster Gap Test Gate",
-        createdBy: ACTOR, updatedBy: ACTOR,
-      });
-
-      // Solo visitor's own location — default capacityThreshold (450, see
-      // location/schema.ts), so the contrast check-in below is never blocked
-      // by the group location's deliberately-exhausted threshold=1.
-      await tx.insert(locations).values({
-        id: SOLO_LOCATION, tenantId: TENANT, name: "Group Roster Gap Test Solo Loc",
-        businessHours: BUSINESS_HOURS,
-        createdBy: ACTOR, updatedBy: ACTOR,
-      });
-      await tx.insert(gates).values({
-        id: SOLO_GATE, tenantId: TENANT, locationId: SOLO_LOCATION, name: "Group Roster Gap Test Solo Gate",
         createdBy: ACTOR, updatedBy: ACTOR,
       });
 
@@ -174,15 +149,14 @@ beforeAll(async () => {
         },
       ]);
 
-      // Solo visitor/pass for the roster-mechanism contrast check — at its
-      // own SOLO_LOCATION, not the group's capacity-exhausted LOCATION.
+      // Solo visitor/pass for the roster-mechanism contrast check.
       await tx.insert(visitRequests).values({
-        id: SOLO_VISIT_REQUEST_ID, tenantId: TENANT, locationId: SOLO_LOCATION,
+        id: SOLO_VISIT_REQUEST_ID, tenantId: TENANT, locationId: LOCATION,
         hostEmployeeId: HOST, status: "approved",
         visitorName: "AUDIT Solo Visitor", visitorPhone: "+919900055577",
         createdBy: ACTOR, updatedBy: ACTOR,
       });
-      await tx.insert(digitalPasses).values(freshPass(SOLO_PASS_ID, SOLO_VISIT_REQUEST_ID, SOLO_LOCATION));
+      await tx.insert(digitalPasses).values(freshPass(SOLO_PASS_ID, SOLO_VISIT_REQUEST_ID));
     }),
   );
 });
@@ -191,7 +165,6 @@ afterAll(async () => {
   await runWithTenant(TENANT, () =>
     db.transaction(async (tx) => {
       await tx.delete(checkIns).where(eq(checkIns.locationId, LOCATION));
-      await tx.delete(checkIns).where(eq(checkIns.locationId, SOLO_LOCATION));
       await tx.delete(groupMembers).where(eq(groupMembers.groupVisitId, GROUP_VISIT_ID));
       await tx.delete(groupVisits).where(eq(groupVisits.id, GROUP_VISIT_ID));
       await tx.delete(digitalPasses).where(eq(digitalPasses.id, MEMBER_1_PASS_ID));
@@ -200,9 +173,7 @@ afterAll(async () => {
       await tx.delete(visitRequests).where(eq(visitRequests.id, GROUP_VISIT_REQUEST_ID));
       await tx.delete(visitRequests).where(eq(visitRequests.id, SOLO_VISIT_REQUEST_ID));
       await tx.delete(gates).where(eq(gates.id, GATE));
-      await tx.delete(gates).where(eq(gates.id, SOLO_GATE));
       await tx.delete(locations).where(eq(locations.id, LOCATION));
-      await tx.delete(locations).where(eq(locations.id, SOLO_LOCATION));
     }),
   );
 });
@@ -261,7 +232,7 @@ describe("group bulk check-in vs. individual check-in — evacuation roster pari
     expect(capacityAlert).toBeDefined();
   });
 
-  it("contrast: an ordinary individual check-in at its own (uncapped) location correctly reaches the roster", async () => {
+  it("contrast: an ordinary individual check-in at the SAME location correctly reaches the roster", async () => {
     const queue = createQueue() as MemoryQueue; // withTenantConsumer-decorated — RLS-safe
     registerCheckInConsumers(queue);
 
@@ -271,18 +242,14 @@ describe("group bulk check-in vs. individual check-in — evacuation roster pari
       actorId: ACTOR,
       correlationId: `corr-solo-checkin-${randomUUID()}`,
       schemaVersion: "1.0",
-      payload: { passId: SOLO_PASS_ID, gateId: SOLO_GATE },
+      payload: { passId: SOLO_PASS_ID, gateId: GATE },
     });
     await queue.drain();
 
-    const roster = await getFullRoster(TENANT, SOLO_LOCATION);
-    // Same getFullRoster()/addToRoster() plumbing the two BUG tests above
-    // exercised at the group's LOCATION — it is not globally broken or
-    // unconfigured, it simply is never written to by the group-check-in
-    // path. Deliberately a DIFFERENT location (SOLO_LOCATION, default
-    // capacityThreshold) from the group's, so this check-in isn't rejected
-    // by the real, correct capacity enforcement the group already exhausted
-    // there (see SOLO_LOCATION's declaration comment above).
+    const roster = await getFullRoster(TENANT, LOCATION);
+    // This is the same roster the two BUG tests above checked — it is not
+    // globally broken or unconfigured, it simply is never written to by
+    // the group-check-in path.
     expect(roster.some((r) => r.passId === SOLO_PASS_ID)).toBe(true);
   });
 });

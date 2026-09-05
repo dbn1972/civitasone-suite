@@ -180,8 +180,8 @@ describe("passGenerate", () => {
 
     expect(markProcessedMock).toHaveBeenCalledTimes(1);
     expect(fakeTx.insert).toHaveBeenCalledTimes(1); // digital pass
-    // enqueue: passGenerated + email notification + sms notification + audit
-    expect(enqueueMock).toHaveBeenCalledTimes(4);
+    // enqueue: passGenerated + email notification + sms notification
+    expect(enqueueMock).toHaveBeenCalledTimes(3);
   });
 
   it("does not process on idempotent replay", async () => {
@@ -203,8 +203,8 @@ describe("passGenerate", () => {
     const queue = freshQueue();
     await publishAndFlush(queue, COMMANDS.passGenerate, generatePayload);
 
-    // passGenerated + sms only (no email) + audit (phone present)
-    expect(enqueueMock).toHaveBeenCalledTimes(3);
+    // passGenerated + sms only (no email)
+    expect(enqueueMock).toHaveBeenCalledTimes(2);
   });
 
   it("skips SMS notification when no phone", async () => {
@@ -236,8 +236,8 @@ describe("passRevoke", () => {
     await publishAndFlush(queue, COMMANDS.passRevoke, revokePayload);
 
     expect(markProcessedMock).toHaveBeenCalledTimes(1);
-    // enqueue: passRevoked + audit
-    expect(enqueueMock).toHaveBeenCalledTimes(2);
+    // enqueue: passRevoked
+    expect(enqueueMock).toHaveBeenCalledTimes(1);
     expect(addToRevokedSetMock).toHaveBeenCalledWith(TENANT, PASS_ID);
   });
 
@@ -266,7 +266,7 @@ describe("passRevoke", () => {
     await publishAndFlush(queue, COMMANDS.passRevoke, revokePayload);
 
     // Revocation still committed to DB
-    expect(enqueueMock).toHaveBeenCalledTimes(2);
+    expect(enqueueMock).toHaveBeenCalledTimes(1);
     expect(queue.dlq).toHaveLength(0);
   });
 });
@@ -293,8 +293,8 @@ describe("passReplace", () => {
     expect(markProcessedMock).toHaveBeenCalledTimes(1);
     // insert: new pass
     expect(fakeTx.insert).toHaveBeenCalledTimes(1);
-    // enqueue: passReplaced + sms notification + audit
-    expect(enqueueMock).toHaveBeenCalledTimes(3);
+    // enqueue: passReplaced + sms notification
+    expect(enqueueMock).toHaveBeenCalledTimes(2);
     // Post-commit: add original to revocation set
     expect(addToRevokedSetMock).toHaveBeenCalledWith(TENANT, PASS_ID);
   });

@@ -65,7 +65,18 @@ describe("assertCanConfer — anti-self-escalation", () => {
     expect(() => assertCanConfer(["hr_admin"], new Set(["hr.read", "hr.write"]), ["hr.read"])).not.toThrow();
   });
   it("throws SELF_ESCALATION when caller lacks required permission", () => {
-    expect(() => assertCanConfer(["hr_admin"], new Set(["hr.read"]), ["hr.write"])).toThrow("SELF_ESCALATION");
+    // DomainError's message is "cannot confer permissions you do not hold:
+    // ..." — the machine-readable identifier lives on `.code`, per
+    // assertCanConfer's own docstring ('Throws DomainError("SELF_ESCALATION")'
+    // — the ctor's first arg is code, not message). toThrow(string) matches
+    // against .message, so assert on .code directly instead.
+    expect.assertions(2);
+    try {
+      assertCanConfer(["hr_admin"], new Set(["hr.read"]), ["hr.write"]);
+    } catch (err) {
+      expect(err).toBeInstanceOf(DomainError);
+      expect((err as DomainError).code).toBe("SELF_ESCALATION");
+    }
   });
   it("throws when ANY required perm is missing", () => {
     expect(() => assertCanConfer(["hr_admin"], new Set(["hr.read"]), ["hr.read", "payroll.run"])).toThrow(DomainError);

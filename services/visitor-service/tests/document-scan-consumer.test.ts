@@ -161,8 +161,8 @@ describe("scanProcess", () => {
     expect(performOcrMock).toHaveBeenCalledTimes(1);
     // insert: scan_session (Task Q-95.3 — moved off the upload route) + ocrResults
     expect(fakeTx.insert).toHaveBeenCalledTimes(2);
-    // enqueue: scanCompleted + digilockerVerify (aadhaar is supported) + audit
-    expect(enqueueMock).toHaveBeenCalledTimes(3);
+    // enqueue: scanCompleted + digilockerVerify (aadhaar is supported)
+    expect(enqueueMock).toHaveBeenCalledTimes(2);
   });
 
   it("does not process on idempotent replay", async () => {
@@ -230,7 +230,7 @@ describe("scanOcrComplete", () => {
     await publishAndFlush(queue, COMMANDS.scanOcrComplete, completePayload);
 
     expect(markProcessedMock).toHaveBeenCalledTimes(1);
-    expect(enqueueMock).toHaveBeenCalledTimes(2);
+    expect(enqueueMock).toHaveBeenCalledTimes(1);
   });
 
   it("does not process on idempotent replay", async () => {
@@ -248,6 +248,6 @@ describe("scanOcrComplete", () => {
       status: "failed",
     });
 
-    expect(enqueueMock).toHaveBeenCalledTimes(2);
+    expect(enqueueMock).toHaveBeenCalledTimes(1);
   });
 });
