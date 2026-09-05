@@ -158,7 +158,7 @@ export function registerEmployeeConsumers(rawQueue: Queue): void {
     };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
-      const emp = await repo.findById(p.employeeId, p.tenantId);
+      const emp = await repo.findByIdTx(tx, p.employeeId, p.tenantId);
       const basicMinor = emp?.basicMinor ?? 0n;
 
       // Settlement computation (CCS rules):

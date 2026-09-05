@@ -51,7 +51,7 @@ export function registerLeaveConsumers(rawQueue: Queue): void {
     };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
-      const alloc = await repo.findAllocById(p.allocId);
+      const alloc = await repo.findAllocByIdTx(tx, p.allocId);
       if (!alloc) throw new Error(`leave alloc ${p.allocId} not found`);
       assertSufficientLeaveBalance({ totalDays: alloc.totalDays, balanceDays: alloc.balanceDays }, p.daysApplied);
       await repo.insertLeaveApp(tx, {
@@ -95,7 +95,7 @@ export function registerLeaveConsumers(rawQueue: Queue): void {
     try {
       await db.transaction(async (tx) => {
         if (!(await markProcessed(tx, msg.messageId))) return;
-        const app = await repo.findLeaveAppById(p.id, p.tenantId);
+        const app = await repo.findLeaveAppByIdTx(tx, p.id, p.tenantId);
         if (!app) throw new Error(`leave app ${p.id} not found`);
         assertLeaveAppStatusTransition(app.status, "approved");
         employeeId = app.employeeId;
@@ -147,7 +147,7 @@ export function registerLeaveConsumers(rawQueue: Queue): void {
     let employeeId = "";
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
-      const app = await repo.findLeaveAppById(p.id, p.tenantId);
+      const app = await repo.findLeaveAppByIdTx(tx, p.id, p.tenantId);
       if (!app) throw new Error(`leave app ${p.id} not found`);
       assertLeaveAppStatusTransition(app.status, "rejected");
       employeeId = app.employeeId;

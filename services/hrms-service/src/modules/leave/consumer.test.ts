@@ -97,6 +97,12 @@ vi.mock("../../shared/outbox.js", () => ({
 vi.mock("./repo.js", () => ({
   findAllocById:    (...args: any[]) => findAllocByIdMock(...args),
   findLeaveAppById: (...args: any[]) => findLeaveAppByIdMock(...args),
+  // Tx-scoped variants (fix/hrms-batch2-nested-tx-deadlock): the consumer now
+  // reads through its own already-open transaction instead of the
+  // scopedRead-based functions above, to avoid a nested-transaction
+  // connection-pool deadlock under load. Forwarded to the SAME mocks.
+  findAllocByIdTx:    (...args: any[]) => findAllocByIdMock(...args),
+  findLeaveAppByIdTx: (...args: any[]) => findLeaveAppByIdMock(...args),
   insertLeaveApp:   (...args: any[]) => insertLeaveAppMock(...args),
   updateLeaveApp:   (...args: any[]) => updateLeaveAppMock(...args),
   approveLeaveApp:  (...args: any[]) => approveLeaveAppMock(...args),

@@ -28,6 +28,11 @@ vi.mock("../src/shared/infra.js", () => ({
 }));
 vi.mock("../src/modules/disciplinary/repo.js", () => ({
   findCase: (...a: any[]) => findCaseMock(...a),
+  // Tx-scoped variant (fix/hrms-batch2-nested-tx-deadlock): the consumer now
+  // calls this instead of the scopedRead-based findCase above, to avoid a
+  // nested-transaction connection-pool deadlock under load. Forwarded to
+  // the SAME mock.
+  findCaseTx: (...a: any[]) => findCaseMock(...a),
   transitionCase: (...a: any[]) => transitionCaseMock(...a),
   appendEvent: (...a: any[]) => appendEventMock(...a),
 }));

@@ -87,7 +87,7 @@ export function registerDeputationConsumers(queue: Queue): void {
         ...(p.orderRef ? { orderRef: p.orderRef } : {}),
         ...(p.remarks ? { remarks: p.remarks } : {}),
         updatedBy: msg.actorId,
-      }, (await repo.findById(msg.tenantId, p.deputationId))?.version ?? 1);
+      }, (await repo.findByIdTx(tx, msg.tenantId, p.deputationId))?.version ?? 1);
 
       await enqueue(tx, {
         topic: AUDIT,
@@ -120,7 +120,7 @@ export function registerDeputationConsumers(queue: Queue): void {
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
 
-      const dep = await repo.findById(msg.tenantId, p.deputationId);
+      const dep = await repo.findByIdTx(tx, msg.tenantId, p.deputationId);
       const version = dep?.version ?? 1;
 
       await repo.closeDeputation(tx, msg.tenantId, p.deputationId, {

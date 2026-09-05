@@ -39,7 +39,7 @@ export function registerAppraisalConsumers(queue: Queue): void {
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       // Re-fetch inside the transaction for the current rating fallback
-      const existing = await repo.findById(p.id, p.tenantId);
+      const existing = await repo.findByIdTx(tx, p.id, p.tenantId);
       if (!existing) throw new Error(`appraisal ${p.id} not found`);
       await repo.updateAppraisal(tx, p.id, {
         status: p.stage,

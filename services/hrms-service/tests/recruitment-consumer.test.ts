@@ -47,6 +47,10 @@ vi.mock("../src/modules/recruitment/repo.js", () => ({
   updateApplication: (...a: any[]) => updateApplicationMock(...a),
   insertOffer: (...a: any[]) => insertOfferMock(...a),
   findApplicationById: (...a: any[]) => findApplicationByIdMock(...a),
+  // Tx-scoped variant (fix/hrms-batch2-nested-tx-deadlock): applicationHire
+  // now reads through its own already-open transaction instead of the
+  // scopedRead-based findApplicationById above. Forwarded to the SAME mock.
+  findApplicationByIdTx: (...a: any[]) => findApplicationByIdMock(...a),
 }));
 vi.mock("../src/modules/employee/repo.js", () => ({
   insertEmployee: (...a: any[]) => insertEmployeeMock(...a),
