@@ -110,3 +110,24 @@ export const createReimbursementBody = z.object({
   period:      z.string(),
 });
 export type CreateReimbursementBody = z.infer<typeof createReimbursementBody>;
+
+// ─── F3 leftover CQRS: salary revisions / settings ─────────────────────────
+// Hoisted out of world-class-routes.ts (were inline z.object literals) so
+// commands.ts can share the exact same shape/types as the route validation —
+// mirrors createArrearBody/computeBonusBody/createReimbursementBody above.
+export const createSalaryRevisionBody = z.object({
+  employeeId:    z.string().uuid(),
+  effectiveDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  oldBasicMinor: z.number().int().nonnegative(),
+  newBasicMinor: z.number().int().positive(),
+  oldGrossMinor: z.number().int().nonnegative(),
+  newGrossMinor: z.number().int().positive(),
+  revisionType:  z.enum(["annual_increment", "promotion", "correction", "fitment"]).default("annual_increment"),
+  orderNo:       z.string().max(64).optional(),
+});
+export type CreateSalaryRevisionBody = z.infer<typeof createSalaryRevisionBody>;
+
+export const updateSettingsBody = z.object({
+  protectedNetFloorMinor: z.number().int().nonnegative(),
+});
+export type UpdateSettingsBody = z.infer<typeof updateSettingsBody>;

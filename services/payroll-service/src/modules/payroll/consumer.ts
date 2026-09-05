@@ -877,6 +877,61 @@ export function registerPayrollConsumers(rawQueue: Queue): void {
       await audit(tx, msg, "upsert", "payroll_state_rules", p.stateCode);
     });
   });
+
+  // ─── F3 leftover CQRS: salary revisions / settings ─────────────────────
+  // world-class-routes.ts's POST /salary-revisions and PUT /settings did a
+  // synchronous db.transaction INSERT/UPSERT in the request path (added
+  // later than the rest of this module's F3 conversion, marked with
+  // "// ─── Gap:" comments). Same idempotent publish+consume shape as
+  // arrearCreate/pensionerCreate/stateRulesUpsert above.
+
+  queue.subscribe(COMMANDS.salaryRevisionCreate, async (msg) => {
+    const p = msg.payload as {
+      id: string; tenantId: string; employeeId: string; effectiveDate: string;
+      oldBasicMinor: number; newBasicMinor: number; oldGrossMinor: number; newGrossMinor: number;
+      revisionType: string; orderNo?: string | null;
+    };
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+      await tx.execute(sql`
+        INSERT INTO payroll.payroll_salary_revisions
+          (id, tenant_id, employee_id, effective_date, old_basic_minor, new_basic_minor,
+           old_gross_minor, new_gross_minor, revision_type, order_no, approved_by, created_at)
+        VALUES
+          (${p.id}::uuid, ${p.tenantId}::uuid, ${p.employeeId}::uuid,
+           ${p.effectiveDate}::date, ${p.oldBasicMinor}, ${p.newBasicMinor},
+           ${p.oldGrossMinor}, ${p.newGrossMinor}, ${p.revisionType},
+           ${p.orderNo ?? null}, ${msg.actorId}::uuid, NOW())
+        ON CONFLICT (id) DO NOTHING
+      `);
+      await enqueue(tx, {
+        topic: EVENTS.salaryRevisionCreated, eventType: EVENTS.salaryRevisionCreated,
+        tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+        payload: { id: p.id, employeeId: p.employeeId, newBasicMinor: p.newBasicMinor },
+      });
+      await audit(tx, msg, "create", "payroll_salary_revision", p.id);
+    });
+  });
+
+  queue.subscribe(COMMANDS.settingsUpdate, async (msg) => {
+    const p = msg.payload as { tenantId: string; protectedNetFloorMinor: number };
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+      await tx.execute(sql`
+        INSERT INTO payroll.payroll_settings (tenant_id, protected_net_floor_minor, created_at, updated_at)
+        VALUES (${p.tenantId}::uuid, ${p.protectedNetFloorMinor}, NOW(), NOW())
+        ON CONFLICT (tenant_id) DO UPDATE
+          SET protected_net_floor_minor = EXCLUDED.protected_net_floor_minor,
+              updated_at = NOW()
+      `);
+      await enqueue(tx, {
+        topic: EVENTS.settingsUpdated, eventType: EVENTS.settingsUpdated,
+        tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+        payload: { tenantId: p.tenantId, protectedNetFloorMinor: p.protectedNetFloorMinor },
+      });
+      await audit(tx, msg, "update", "payroll_settings", p.tenantId);
+    });
+  });
 }
 
 async function processPayrollRun(

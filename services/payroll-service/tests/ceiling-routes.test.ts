@@ -59,7 +59,9 @@ describe("GET /v1/payroll/tax/exemption-ceilings — seeded defaults", () => {
 // ═══════════════════════════════════════════════════════════════════
 
 describe("PUT /v1/payroll/tax/exemption-ceilings — upsert", () => {
-  it("returns 200 with upserted row for valid body", async () => {
+  // F3 CQRS: publishes the exemptionCeilingUpsert command and returns 202 —
+  // the actual upsert happens later in the tax module's consumer.
+  it("returns 202 accepted envelope for valid body", async () => {
     const app = await buildApp();
     const res = await app.inject({
       method: "PUT",
@@ -73,15 +75,12 @@ describe("PUT /v1/payroll/tax/exemption-ceilings — upsert", () => {
       },
     });
     await app.close();
-    expect([200, 500]).toContain(res.statusCode);
-    if (res.statusCode === 200) {
+    expect([202, 500]).toContain(res.statusCode);
+    if (res.statusCode === 202) {
       const body = res.json();
-      expect(body.data).toBeDefined();
-      expect(body.data.id).toBeDefined();
-      expect(body.data.fyStartYear).toBe(2026);
-      expect(body.data.section).toBe("10_10");
-      expect(body.data.ceilingMinor).toBe("2500000000");
-      expect(body.data.notes).toBe("FY 2026-27 leave encashment ceiling");
+      expect(body.id).toBeDefined();
+      expect(body.status).toBe("accepted");
+      expect(body.correlationId).toBeDefined();
     }
   });
 });

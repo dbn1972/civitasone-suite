@@ -49,6 +49,14 @@ vi.mock("@civitasone/db", () => ({
   tenantTransaction: async (_db: unknown, _tenantId: string, fn: (tx: unknown) => Promise<void>) => { await dbTransactionFn(fn); },
   runWithTenant: async <T>(_tenantId: string, fn: () => T | Promise<T>) => fn(),
   setTenantGuc: vi.fn(async () => undefined),
+  // FIX: tenant-queue.ts's tenantScoped() wraps every subscribed consumer
+  // handler in withTenantConsumer() (imported from @civitasone/db). This mock
+  // replaces the whole module, so without this export registerBudgetConsumers
+  // throws "No withTenantConsumer export is defined on the mock" before any
+  // handler runs. runWithTenant above is already an identity passthrough for
+  // this test, so withTenantConsumer only needs to be too (matches the
+  // convention already used in tests/consumer-coverage-ext.test.ts).
+  withTenantConsumer: vi.fn((handler: any) => handler),
 }));
 vi.mock("../src/shared/outbox.js", () => ({
   enqueue: vi.fn(async (_tx: unknown, msg: { topic: string; payload: unknown; tenantId: string; actorId: string; correlationId: string }) => {
@@ -148,9 +156,20 @@ describe("audit trail — budget mutations emit audit.event.record", () => {
   });
 
   it("sanctionReject emits audit with action=reject", async () => {
+    const id = randomUUID();
+    // FIX: missing mock setup -- findSanctionByIdTxMock defaults to null, so
+    // the consumer's not-found guard fired before ever reaching the reject
+    // path (and its audit() call), silently landing in the queue's internal
+    // DLQ. createdBy must differ from the rejecting actor (default ACTOR from
+    // makeMsg) -- sanctionReject enforces the same maker-checker rule as
+    // sanctionApprove -- so use CHECKER, matching the sanctionApprove test above.
+    findSanctionByIdTxMock.mockResolvedValue({
+      id, tenantId: TENANT, status: "pending_approval",
+      createdBy: CHECKER, headId: randomUUID(), amountMinor: 50000000n,
+    });
     const q = new MemoryQueue(); registerBudgetConsumers(q); await q.start();
     await q.publish(COMMANDS.sanctionReject, makeMsg(COMMANDS.sanctionReject, {
-      id: randomUUID(), tenantId: TENANT, reason: "insufficient justification",
+      id, tenantId: TENANT, reason: "insufficient justification",
     }));
     await settle();
     const auditEvt = enqueuedMessages.find((m) => m.topic === AUDIT_TOPIC);

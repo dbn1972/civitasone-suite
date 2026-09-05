@@ -365,7 +365,11 @@ describe("I8 – Subledger = control account reconciliation (HTTP route)", () =>
       headers: { authorization: `Bearer ${token()}` },
     });
     await app1.close();
-    expect([200, 201, 409]).toContain(closeRes.statusCode); // already closed is ok
+    // FIX: hard-close is a queue-first F3 route (sendAccepted -> 202), not the
+    // old synchronous 200/201/409 set. Stale assertion from before the F3
+    // conversion; 202 covers the "just closed" case, 409 still covers "already
+    // closed" (a synchronous pre-accept check in the route, not the consumer).
+    expect([200, 201, 202, 409]).toContain(closeRes.statusCode); // already closed is ok
 
     // verify periods list reflects the period
     const app2 = await buildApp();
