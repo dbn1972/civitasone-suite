@@ -3,6 +3,7 @@ import type { Queue } from "@civitasone/queue";
 import { db } from "../../shared/db.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { writeAudit } from "../../shared/audit.js";
+import { emitMunicipalNotification, MUNICIPAL_EVENT_TYPES } from "../../shared/cross-events.js";
 import { tenantScoped } from "../../shared/tenant-queue.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
@@ -25,6 +26,10 @@ export function registerFieldActionConsumers(rawQueue: Queue): void {
       if (!(await markProcessed(tx, msg.messageId))) return;
       // Defensive backstop mirroring the route-level check in routes.ts (which
       // can go stale between the HTTP read and this message being processed).
+      // This read runs on the SAME tx (findByIdTx, not a nested
+      // db.transaction()/scopedRead()) so it never risks the pool-exhaustion
+      // deadlock PR #1028 fixed — and its result doubles as the recipient
+      // lookup for the notification below, so no second read is needed.
       const complaint = await complaintsRepo.findByIdTx(tx, p.complaintId, msg.tenantId);
       if (!complaint) {
         log.warn({ complaintId: p.complaintId }, "field action references missing complaint, skipping");
@@ -55,6 +60,16 @@ export function registerFieldActionConsumers(rawQueue: Queue): void {
         topic: EVENTS.fieldActionCreated, eventType: EVENTS.fieldActionCreated,
         tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
         payload: { fieldActionId: p.id, complaintId: p.complaintId, actionType: p.actionType },
+      });
+      // Citizen-meaningful: field crew has taken a concrete action on their
+      // complaint (e.g. desilting, blockage clearance) — distinct from
+      // "dispatched" (complaintAssign) in that it confirms work actually
+      // happened, not just that someone was assigned.
+      await emitMunicipalNotification(tx, ctxOf(msg), {
+        eventType: MUNICIPAL_EVENT_TYPES.statusChanged,
+        recipient: complaint.complaintNumber,
+        recipientId: p.complaintId,
+        variables: { complaintId: p.complaintId, complaintNumber: complaint.complaintNumber, status: "action_taken", actionType: p.actionType },
       });
       await writeAudit(tx, ctxOf(msg), { action: "field_action.create", resourceType: "drainage_field_action", resourceId: p.id });
     });
