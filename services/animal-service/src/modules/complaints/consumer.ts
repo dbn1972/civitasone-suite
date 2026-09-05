@@ -5,6 +5,7 @@ import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { writeAudit } from "../../shared/audit.js";
 import { cache } from "../../shared/infra.js";
 import { tenantScoped } from "../../shared/tenant-queue.js";
+import { emitMunicipalNotification, MUNICIPAL_EVENT_TYPES } from "../../shared/cross-events.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
 import { generateComplaintNumber, routeComplaint } from "./domain.js";
@@ -67,6 +68,25 @@ export function registerComplaintConsumers(rawQueue: Queue): void {
         correlationId: msg.correlationId,
         payload: { complaintId: p.id, complaintNumber, animalType: p.animalType, severity: p.severity },
       });
+      // Citizen-meaningful: acknowledgement that the complaint was
+      // received, with a reference number to track it -- the actor here is
+      // the citizen themselves (repo.insertComplaint sets
+      // reportedBy: msg.actorId, mirrored from complaints/commands.ts's
+      // reportComplaint publishing with no separate reportedBy field), so
+      // no pre-tx recipient lookup is needed. animal_complaints has no
+      // citizen display-name column (only the reportedBy uuid), so
+      // `recipient` is the complaint's own reference number, the same
+      // fallback sewerage-service used for an identical reason.
+      // recipientId is msg.actorId (== reportedBy) rather than the
+      // complaint's own id: it identifies the actual citizen for
+      // notification-service to route to, which is more useful than the
+      // complaint id itself.
+      await emitMunicipalNotification(tx, ctxOf(msg), {
+        eventType: MUNICIPAL_EVENT_TYPES.applicationSubmitted,
+        recipient: complaintNumber,
+        recipientId: msg.actorId,
+        variables: { complaintId: p.id, complaintNumber, animalType: p.animalType, severity: p.severity },
+      });
       await writeAudit(tx, ctxOf(msg), {
         action: "complaint.report",
         resourceType: "animal_complaint",
@@ -95,6 +115,13 @@ export function registerComplaintConsumers(rawQueue: Queue): void {
         correlationId: msg.correlationId,
         payload: { complaintId: p.id, assignedTo: p.assignedTo, assignedTeam: p.assignedTeam },
       });
+      // Internal workflow step (which staff member/team picks up the
+      // complaint) -- deliberately not notified. The citizen already has
+      // their acknowledgement (reportComplaint, above) and gets no new
+      // actionable information from *which* internal team was assigned;
+      // the citizen-facing milestones are report, dispatch, action-taken
+      // and close (same reasoning sewerage-service applied to its own
+      // complaintAssign).
       await writeAudit(tx, ctxOf(msg), {
         action: "complaint.assign",
         resourceType: "animal_complaint",
@@ -108,6 +135,11 @@ export function registerComplaintConsumers(rawQueue: Queue): void {
 
   queue.subscribe(COMMANDS.dispatchTeam, async (msg) => {
     const p = msg.payload as { id: string; tenantId: string };
+    // Recipient-lookup read BEFORE opening the write transaction --
+    // complaintNumber/reportedBy aren't in this command's payload ({id,
+    // tenantId} only) -- see registration/consumer.ts's renewRegistration
+    // for the identical PR #1028 rationale.
+    const existing = await repo.findById(p.id, msg.tenantId);
     let applied = false;
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
@@ -122,6 +154,17 @@ export function registerComplaintConsumers(rawQueue: Queue): void {
         correlationId: msg.correlationId,
         payload: { complaintId: p.id },
       });
+      // Citizen-meaningful: unlike assignment, dispatch means a team is
+      // now actually on the way -- actionable news for whoever reported a
+      // stray/injured/dangerous animal.
+      if (existing) {
+        await emitMunicipalNotification(tx, ctxOf(msg), {
+          eventType: MUNICIPAL_EVENT_TYPES.statusChanged,
+          recipient: existing.complaintNumber,
+          recipientId: existing.reportedBy,
+          variables: { complaintId: p.id, complaintNumber: existing.complaintNumber, status: "dispatched" },
+        });
+      }
       await writeAudit(tx, ctxOf(msg), {
         action: "complaint.dispatch",
         resourceType: "animal_complaint",
@@ -135,6 +178,9 @@ export function registerComplaintConsumers(rawQueue: Queue): void {
   // routes.ts's /action-taken route and domain.ts's VALID_TRANSITIONS).
   queue.subscribe(COMMANDS.markActionTaken, async (msg) => {
     const p = msg.payload as { id: string; tenantId: string };
+    // Recipient-lookup read BEFORE opening the write transaction -- same
+    // rationale as dispatchTeam above.
+    const existing = await repo.findById(p.id, msg.tenantId);
     let applied = false;
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
@@ -149,6 +195,19 @@ export function registerComplaintConsumers(rawQueue: Queue): void {
         correlationId: msg.correlationId,
         payload: { complaintId: p.id },
       });
+      // Citizen-meaningful: field action has actually been taken on the
+      // animal (capture/treatment/etc. -- see operations/consumer.ts,
+      // which logs the specific operation but is not itself citizen-
+      // facing). This is the "something happened" milestone ahead of the
+      // final close.
+      if (existing) {
+        await emitMunicipalNotification(tx, ctxOf(msg), {
+          eventType: MUNICIPAL_EVENT_TYPES.statusChanged,
+          recipient: existing.complaintNumber,
+          recipientId: existing.reportedBy,
+          variables: { complaintId: p.id, complaintNumber: existing.complaintNumber, status: "action_taken" },
+        });
+      }
       await writeAudit(tx, ctxOf(msg), {
         action: "complaint.action_taken",
         resourceType: "animal_complaint",
@@ -160,6 +219,9 @@ export function registerComplaintConsumers(rawQueue: Queue): void {
 
   queue.subscribe(COMMANDS.closeComplaint, async (msg) => {
     const p = msg.payload as { id: string; tenantId: string; resolution: string };
+    // Recipient-lookup read BEFORE opening the write transaction -- same
+    // rationale as dispatchTeam/markActionTaken above.
+    const existing = await repo.findById(p.id, msg.tenantId);
     let applied = false;
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
@@ -177,6 +239,26 @@ export function registerComplaintConsumers(rawQueue: Queue): void {
         correlationId: msg.correlationId,
         payload: { complaintId: p.id, resolution: p.resolution },
       });
+      // Citizen-meaningful: unlike sewerage-service (where "resolved" is
+      // the citizen milestone and "closed" is pure internal bookkeeping
+      // after it), this service's own transition table
+      // (complaints/domain.ts's VALID_TRANSITIONS) has no separate
+      // "resolved" state -- action_taken -> closed IS the final
+      // resolution, carrying the resolution text itself, so it is the
+      // citizen-facing terminal notification.
+      if (existing) {
+        await emitMunicipalNotification(tx, ctxOf(msg), {
+          eventType: MUNICIPAL_EVENT_TYPES.statusChanged,
+          recipient: existing.complaintNumber,
+          recipientId: existing.reportedBy,
+          variables: {
+            complaintId: p.id,
+            complaintNumber: existing.complaintNumber,
+            status: "closed",
+            resolution: p.resolution,
+          },
+        });
+      }
       await writeAudit(tx, ctxOf(msg), {
         action: "complaint.close",
         resourceType: "animal_complaint",

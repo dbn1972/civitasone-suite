@@ -9,6 +9,16 @@ import * as repo from "./repo.js";
 
 const log = pino({ name: "animal.operations.consumer" });
 
+// Wave 3 cross-service events (see ../../shared/cross-events.ts): this
+// consumer is deliberately NOT wired. recordOperation is a field-operations
+// log (capture/sterilize/vaccinate/relocate/shelter/carcass_removal/
+// treatment performed on an animal) with no citizen contact captured
+// anywhere on animal_operations -- only performedBy (the staff member) and
+// complaintId. Any citizen-facing notification for the underlying
+// complaint is already emitted from complaints/consumer.ts's
+// markActionTaken/closeComplaint. This mirrors sewerage-service's
+// fieldRecordCreate, which applied the identical reasoning.
+
 function ctxOf(msg: { tenantId: string; actorId: string; correlationId: string }) {
   return { tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId };
 }
