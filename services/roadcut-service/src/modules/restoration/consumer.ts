@@ -4,8 +4,11 @@ import { db } from "../../shared/db.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { writeAudit } from "../../shared/audit.js";
 import { tenantScoped } from "../../shared/tenant-queue.js";
+import { emitMunicipalNotification, MUNICIPAL_EVENT_TYPES } from "../../shared/cross-events.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
+import * as permitsRepo from "../permits/repo.js";
+import * as applicationsRepo from "../applications/repo.js";
 
 const log = pino({ name: "roadcut.restoration.consumer" });
 
@@ -98,6 +101,35 @@ export function registerRestorationConsumers(rawQueue: Queue): void {
         correlationId: msg.correlationId,
         payload: { restorationId: p.id, decision: p.decision, refundMinor: String(refundAmount) },
       });
+      // Cross-service wiring: the deposit-refund decision is the citizen-
+      // meaningful outcome of this whole module (do they get their security
+      // deposit back). No fee/deposit challan crosses to finance-service
+      // here — see shared/cross-events.ts's file header; this is
+      // notification-only.
+      //
+      // The citizen recipient lives on the ORIGINATING application, three
+      // hops from this restoration row (restoration -> permit ->
+      // application), so this chases that chain via each module's own
+      // findByIdInTx — never `findById`'s scopedRead, which would open a
+      // nested db.transaction() on this same connection pool and deadlock
+      // it once enough decideDepositRefund calls are concurrently in-flight
+      // (see applications/repo.ts's findByIdInTx for the full rationale).
+      const restoration = await repo.findByIdInTx(tx, p.id, msg.tenantId);
+      const permit = restoration ? await permitsRepo.findByIdInTx(tx, restoration.permitId, msg.tenantId) : null;
+      const application = permit ? await applicationsRepo.findByIdInTx(tx, permit.applicationId, msg.tenantId) : null;
+      if (application) {
+        await emitMunicipalNotification(tx, ctxOf(msg), {
+          eventType: MUNICIPAL_EVENT_TYPES.statusChanged,
+          recipient: application.createdBy,
+          recipientId: p.id,
+          variables: {
+            restorationId: p.id,
+            applicationNumber: application.applicationNumber,
+            decision: p.decision,
+            refundMinor: String(refundAmount),
+          },
+        });
+      }
       await writeAudit(tx, ctxOf(msg), {
         action: "deposit.decide",
         resourceType: "roadcut_restoration",

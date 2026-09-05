@@ -5,6 +5,12 @@ import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { writeAudit } from "../../shared/audit.js";
 import { tenantScoped } from "../../shared/tenant-queue.js";
 import { cache } from "../../shared/infra.js";
+import {
+  emitMunicipalFeeChallan,
+  emitMunicipalNotification,
+  municipalDecisionNotificationEventType,
+  MUNICIPAL_EVENT_TYPES,
+} from "../../shared/cross-events.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
 import { calculateFeeMinor, calculateDepositMinor, generateApplicationNumber } from "./domain.js";
@@ -82,6 +88,32 @@ export function registerApplicationConsumers(rawQueue: Queue): void {
           currency: "INR",
         },
       });
+      // Cross-service wiring (municipal-sec5 event contract, Wave 3): assess
+      // the road-cutting permit fee via finance.challan.create, and tell the
+      // applicant it's due, in the same transaction as the application row
+      // and its own domain event — all-or-nothing with the write that
+      // created the obligation in the first place.
+      //
+      // Deliberately excludes depositMinor (the refundable restoration
+      // security deposit) — see shared/cross-events.ts's file header for why
+      // that would misbook a liability as non-tax revenue.
+      await emitMunicipalFeeChallan(tx, ctxOf(msg), {
+        sourceRef: p.id,
+        depositor: msg.actorId,
+        amountMinor: feeMinor,
+        currency: "INR",
+      });
+      await emitMunicipalNotification(tx, ctxOf(msg), {
+        eventType: MUNICIPAL_EVENT_TYPES.feeDue,
+        recipient: msg.actorId,
+        recipientId: p.id,
+        variables: {
+          applicationId: p.id,
+          applicationNumber,
+          feeMinor: String(feeMinor),
+          depositMinor: String(depositMinor),
+        },
+      });
       await writeAudit(tx, ctxOf(msg), {
         action: "application.create",
         resourceType: "roadcut_application",
@@ -107,6 +139,22 @@ export function registerApplicationConsumers(rawQueue: Queue): void {
         correlationId: msg.correlationId,
         payload: { applicationId: p.id },
       });
+      // Cross-service wiring: applicant-facing status notification. Reads
+      // through the already-open outer `tx` (findByIdInTx), not
+      // repo.findById's scopedRead, which would open a SECOND, nested
+      // db.transaction() on the same connection pool as this outer submit
+      // transaction and deadlock the pool once enough submitApplication
+      // calls are concurrently in-flight — see repo.ts's findByIdInTx and
+      // building-service's identical fix (PR #1035).
+      const app = await repo.findByIdInTx(tx, p.id, msg.tenantId);
+      if (app) {
+        await emitMunicipalNotification(tx, ctxOf(msg), {
+          eventType: MUNICIPAL_EVENT_TYPES.applicationSubmitted,
+          recipient: app.createdBy,
+          recipientId: p.id,
+          variables: { applicationId: p.id, applicationNumber: app.applicationNumber },
+        });
+      }
       await writeAudit(tx, ctxOf(msg), {
         action: "application.submit",
         resourceType: "roadcut_application",
@@ -188,6 +236,19 @@ export function registerApplicationConsumers(rawQueue: Queue): void {
         correlationId: msg.correlationId,
         payload: { applicationId: p.id },
       });
+      // Cross-service wiring: an admin decision that is genuinely
+      // citizen-meaningful (their application was approved). Reads through
+      // the already-open outer `tx` (findByIdInTx) for the same
+      // nested-transaction-deadlock reason as submitApplication above.
+      const app = await repo.findByIdInTx(tx, p.id, msg.tenantId);
+      if (app) {
+        await emitMunicipalNotification(tx, ctxOf(msg), {
+          eventType: municipalDecisionNotificationEventType(MUNICIPAL_EVENT_TYPES.statusChanged, "approved"),
+          recipient: app.createdBy,
+          recipientId: p.id,
+          variables: { applicationId: p.id, applicationNumber: app.applicationNumber, decision: "approved" },
+        });
+      }
       await writeAudit(tx, ctxOf(msg), {
         action: "application.approve",
         resourceType: "roadcut_application",
@@ -213,6 +274,25 @@ export function registerApplicationConsumers(rawQueue: Queue): void {
         correlationId: msg.correlationId,
         payload: { applicationId: p.id, reason: p.reason },
       });
+      // Cross-service wiring: same reasoning as approveApplication above —
+      // the citizen needs to know their application was rejected.
+      // municipalDecisionNotificationEventType only special-cases
+      // "approved"; "rejected" falls through to the generic statusChanged
+      // domain event type, matching building-service's decideApplication.
+      const app = await repo.findByIdInTx(tx, p.id, msg.tenantId);
+      if (app) {
+        await emitMunicipalNotification(tx, ctxOf(msg), {
+          eventType: municipalDecisionNotificationEventType(MUNICIPAL_EVENT_TYPES.statusChanged, "rejected"),
+          recipient: app.createdBy,
+          recipientId: p.id,
+          variables: {
+            applicationId: p.id,
+            applicationNumber: app.applicationNumber,
+            decision: "rejected",
+            reason: p.reason,
+          },
+        });
+      }
       await writeAudit(tx, ctxOf(msg), {
         action: "application.reject",
         resourceType: "roadcut_application",

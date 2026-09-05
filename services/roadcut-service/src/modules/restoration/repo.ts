@@ -20,6 +20,21 @@ export async function findByPermit(permitId: string, tenantId: string): Promise<
   return rows[0] ?? null;
 }
 
+/**
+ * Same lookup as `findById`, but reads through an ALREADY-OPEN transaction
+ * instead of opening a second one via `scopedRead` — see applications/repo.ts's
+ * findByIdInTx for the full nested-transaction deadlock rationale this
+ * avoids. Used by this module's own decideDepositRefund consumer, which
+ * needs this restoration row's permitId to resolve the citizen recipient
+ * (restoration -> permit -> application) inside its own write transaction.
+ */
+export async function findByIdInTx(tx: ScopedTx, id: string, tenantId: string): Promise<RestorationRow | null> {
+  const rows = await tx.select().from(roadcutRestorations)
+    .where(and(eq(roadcutRestorations.id, id), eq(roadcutRestorations.tenantId, tenantId)))
+    .limit(1);
+  return rows[0] ?? null;
+}
+
 export async function insertRestoration(tx: ScopedTx, row: RestorationInsert): Promise<void> {
   await tx.insert(roadcutRestorations).values(row);
 }

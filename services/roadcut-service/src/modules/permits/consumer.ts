@@ -5,8 +5,10 @@ import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { writeAudit } from "../../shared/audit.js";
 import { tenantScoped } from "../../shared/tenant-queue.js";
 import { cache } from "../../shared/infra.js";
+import { emitMunicipalNotification, MUNICIPAL_EVENT_TYPES } from "../../shared/cross-events.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
+import * as appRepo from "../applications/repo.js";
 import { generatePermitNumber, generateVerificationCode } from "./domain.js";
 
 const log = pino({ name: "roadcut.permits.consumer" });
@@ -68,6 +70,24 @@ export function registerPermitConsumers(rawQueue: Queue): void {
           workEndDate: p.workEndDate,
         },
       });
+      // Cross-service wiring: permit issuance is a citizen-meaningful
+      // transition. No fee is raised here — the road-cutting fee is
+      // assessed and challaned when the application is first created
+      // (applications/consumer.ts createApplication).
+      //
+      // Reads through the already-open outer `tx` (findByIdInTx), not
+      // appRepo.findById's scopedRead, which would open a SECOND, nested
+      // db.transaction() on the same connection pool as this outer issue
+      // transaction — see applications/repo.ts's findByIdInTx.
+      const app = await appRepo.findByIdInTx(tx, p.applicationId, msg.tenantId);
+      if (app) {
+        await emitMunicipalNotification(tx, ctxOf(msg), {
+          eventType: MUNICIPAL_EVENT_TYPES.permitIssued,
+          recipient: app.createdBy,
+          recipientId: p.id,
+          variables: { permitId: p.id, permitNumber, applicationId: p.applicationId },
+        });
+      }
       await writeAudit(tx, ctxOf(msg), {
         action: "permit.issue",
         resourceType: "roadcut_permit",

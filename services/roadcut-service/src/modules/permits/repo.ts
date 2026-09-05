@@ -11,6 +11,22 @@ export async function findById(id: string, tenantId: string): Promise<RoadcutPer
   return rows[0] ?? null;
 }
 
+/**
+ * Same lookup as `findById`, but reads through an ALREADY-OPEN transaction
+ * instead of opening a second one via `scopedRead` — see applications/repo.ts's
+ * findByIdInTx for the full nested-transaction deadlock rationale this
+ * avoids. Used by restoration/consumer.ts's decideDepositRefund, which
+ * resolves restoration -> permit -> application inside its own write
+ * transaction to find the citizen recipient for the refund-decision
+ * notification.
+ */
+export async function findByIdInTx(tx: ScopedTx, id: string, tenantId: string): Promise<RoadcutPermitRow | null> {
+  const rows = await tx.select().from(roadcutPermits)
+    .where(and(eq(roadcutPermits.id, id), eq(roadcutPermits.tenantId, tenantId)))
+    .limit(1);
+  return rows[0] ?? null;
+}
+
 // BUG FIX: this used to match ANY permit for the application regardless of
 // status, so permits/routes.ts's PERMIT_ALREADY_EXISTS pre-accept check
 // (this function's only caller) permanently blocked re-issuance after a
