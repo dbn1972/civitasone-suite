@@ -97,12 +97,16 @@ export function registerPostEventConsumers(rawQueue: Queue): void {
       // Cross-service wiring: the deposit decision is directly, materially
       // citizen-facing (it decides how much of their own money comes back),
       // unlike conductInspection above which is an internal record with no
-      // decision attached yet. This is a notification only — NOT a second
-      // finance.challan.create — the deposit was already collected as part
-      // of the single combined challan raised at application creation
-      // (applications/consumer.ts); actually disbursing refundAmount back to
-      // the organiser is a separate concern (refund-service), out of scope
-      // for this service's Wave 3 wiring.
+      // decision attached yet. This is a notification only. The refundable
+      // deposit was deliberately NEVER challaned at application creation
+      // (see applications/consumer.ts's correction comment) -- it isn't
+      // finance.challan.create revenue and folding it in there would have
+      // misbooked it. A proper finance.deposit.create / depositRefund
+      // integration (COMMANDS.depositCreate et al. in finance-service's
+      // treasury/consumer.ts) is real follow-up work, gated on adding a
+      // column to persist finance's generated deposit id on this service's
+      // own schema -- not done in this pass, matching roadcut-service's
+      // Wave 3 PR which hit the identical shape.
       if (applicationForNotify) {
         await emitMunicipalNotification(tx, ctxOf(msg), {
           eventType: EVENTS.depositDecided,

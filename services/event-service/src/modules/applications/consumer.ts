@@ -16,13 +16,12 @@ const log = pino({ name: "event.applications.consumer" });
 
 // Defense-in-depth mirroring building-service's Wave 3 pattern: this
 // consumer trusts its queue payload rather than re-deriving feeMinor from
-// HTTP, so a sanity ceiling is re-asserted here directly on the combined
-// amount crossing into finance-service via emitMunicipalFeeChallan — a
-// malformed or replayed command must not reach another service's ledger
-// carrying an unbounded amount. calculateFeeMinor's real-world max (commercial
-// base + attendance scaling + sound permission) plus calculateDepositMinor's
-// max (Rs 50,000) sit far below this.
-const MAX_COMBINED_MINOR = 10_000_000_00n; // Rs 1,00,00,000 (1 crore) in paise
+// HTTP, so a sanity ceiling is re-asserted here directly on the amount
+// crossing into finance-service via emitMunicipalFeeChallan — a malformed or
+// replayed command must not reach another service's ledger carrying an
+// unbounded amount. calculateFeeMinor's real-world max (commercial base +
+// attendance scaling + sound permission) sits far below this.
+const MAX_FEE_MINOR = 10_000_000_00n; // Rs 1,00,00,000 (1 crore) in paise
 
 function ctxOf(msg: { tenantId: string; actorId: string; correlationId: string }) {
   return { tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId };
@@ -63,20 +62,30 @@ export function registerApplicationConsumers(rawQueue: Queue): void {
     // recurs across every module audited in this pass.
     const applicationNumber = generateApplicationNumber("ULB", randomInt(1, 999999));
 
-    // The application fee and the refundable security deposit are combined
-    // into ONE finance.challan.create — @civitasone/events only defines a
-    // single generic MUNICIPAL_FEE_RECEIPT_HEAD_CODE ("0075") today, and no
-    // other Wave 3 service has needed a second receipt head, so inventing an
-    // event-specific deposit head code here would resolve to nothing in
-    // finance-service's headIdByCode lookup and throw MISSING_RECEIPT_HEAD.
-    // This mirrors how an organiser actually pays in practice (fee + deposit
-    // together, upfront); the deposit's later partial/full refund
-    // (post_event/decideDeposit) is a citizen-status notification only, not
-    // a second finance-side event, consistent with Wave 3's scope here.
-    const totalDueMinor = feeMinor + depositMinor;
-    if (totalDueMinor > MAX_COMBINED_MINOR) {
-      log.error({ id: p.id, feeMinor: feeMinor.toString(), depositMinor: depositMinor.toString() }, "computed fee+deposit exceeds sanity ceiling — refusing to create application or raise a challan");
-      throw new Error(`event application fee+deposit ${totalDueMinor.toString()} exceeds MAX_COMBINED_MINOR ceiling`);
+    // CORRECTED (independent review of this PR, cross-checked against
+    // finance-service's actual GL code in services/finance-service/src/modules/treasury/consumer.ts):
+    // an earlier version of this consumer combined feeMinor + depositMinor
+    // into ONE finance.challan.create. That's wrong — COMMANDS.challanCreate
+    // books Dr Bank / Cr receipt-head, and receipt head "0075" (the only one
+    // @civitasone/events defines today) is seeded with classification =
+    // 'revenue'. Folding a REFUNDABLE security deposit into that silently
+    // misbooks it as municipal revenue with no liability ever recorded, and
+    // no GL entry exists anywhere to reverse it when post_event/decideDeposit
+    // later refunds it. finance-service already has the correct path for
+    // this: COMMANDS.depositCreate (Dr Bank / Cr Deposits-liability), paired
+    // with depositRefund/depositForfeit to correctly dispose of it later —
+    // but using it properly requires persisting the finance-generated
+    // deposit id somewhere on this service's own schema so decideDeposit can
+    // reference it, which is a real schema migration, not a same-PR fix.
+    // roadcut-service's own Wave 3 PR hit this identical shape (fee +
+    // refundable deposit) and made the same call: challan the fee only,
+    // exclude the deposit, flag proper finance.deposit.create wiring as
+    // follow-up (see its shared/cross-events.ts header) — matched here for
+    // consistency. The organiser still owes both amounts and is told so via
+    // the notification below; only the FINANCE-SIDE event is fee-only now.
+    if (feeMinor > MAX_FEE_MINOR) {
+      log.error({ id: p.id, feeMinor: feeMinor.toString() }, "computed application fee exceeds sanity ceiling — refusing to create application or raise a challan");
+      throw new Error(`event application fee ${feeMinor.toString()} exceeds MAX_FEE_MINOR ceiling`);
     }
 
     await db.transaction(async (tx) => {
@@ -119,14 +128,16 @@ export function registerApplicationConsumers(rawQueue: Queue): void {
         },
       });
       // Cross-service wiring (municipal-sec5 event contract, Wave 3): assess
-      // the combined fee+deposit via finance.challan.create, and tell the
-      // organiser it's due, in the same transaction as the application row
-      // and its own domain event — all-or-nothing with the write that
-      // created the obligation in the first place.
+      // the application fee (fee ONLY -- see the correction above for why
+      // depositMinor is deliberately excluded here) via finance.challan.create,
+      // and tell the organiser what's due (both amounts), in the same
+      // transaction as the application row and its own domain event —
+      // all-or-nothing with the write that created the obligation in the
+      // first place.
       await emitMunicipalFeeChallan(tx, ctxOf(msg), {
         sourceRef: p.id,
         depositor: msg.actorId,
-        amountMinor: totalDueMinor,
+        amountMinor: feeMinor,
         currency: "INR",
       });
       await emitMunicipalNotification(tx, ctxOf(msg), {

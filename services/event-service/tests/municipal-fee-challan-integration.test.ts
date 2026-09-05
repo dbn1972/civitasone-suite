@@ -4,7 +4,9 @@
  * (modules/applications/consumer.ts createApplication -> emitMunicipalFeeChallan,
  * shared/cross-events.ts) produces a real finance.challan.create outbox
  * message that a real finance-service consumer processes into a real GL
- * journal row, with the correct combined fee+deposit amount and an
+ * journal row, with the correct fee-only amount (never the refundable
+ * deposit -- see applications/consumer.ts's correction comment, and
+ * roadcut-service's Wave 3 PR which hit the identical shape) and an
  * event -> finance back-link.
  *
  * Same dual-DSN dynamic-import technique as
@@ -153,7 +155,7 @@ describe("event-service -> finance-service municipal fee challan -- real DB, no 
     expect(seededHead, "migration 0070 must have seeded the 0075 municipal-fee receipt head").toBeTruthy();
   });
 
-  it("createApplication raises a real combined fee+deposit challan, relayed end-to-end into a real finance-service GL journal row", async () => {
+  it("createApplication raises a real fee challan (never the deposit), relayed end-to-end into a real finance-service GL journal row", async () => {
     const [seededHead] = await finance.withTenantScope(finance.db, TENANT, (tx: any) =>
       tx.select().from(finance.financeHeads)
         .where(and(eq(finance.financeHeads.tenantId, TENANT), eq(finance.financeHeads.code, MUNICIPAL_FEE_RECEIPT_HEAD_CODE)))
@@ -163,9 +165,10 @@ describe("event-service -> finance-service municipal fee challan -- real DB, no 
     const applicationId = randomUUID();
     // calculateFeeMinor("cultural", attendance=600, soundPermission=true):
     //   base 500000n + floor((600-500)/100)*50000n (attendance over 500) = 550000n
-    //   + 200000n (sound permission) = 750000n
-    // calculateDepositMinor(attendance=600): 500 < 600 <= 1000 -> 2500000n
-    // combined (applications/consumer.ts's totalDueMinor) = 750000n + 2500000n = 3250000n
+    //   + 200000n (sound permission) = 750000n -- this is the ONLY amount
+    // that should reach finance-service's ledger.
+    // calculateDepositMinor(attendance=600): 500 < 600 <= 1000 -> 2500000n --
+    // deliberately excluded from the challan (see applications/consumer.ts).
     await queue.publish("event.application.create", makeMsg("event.application.create", {
       id: applicationId,
       tenantId: TENANT,
@@ -194,7 +197,7 @@ describe("event-service -> finance-service municipal fee challan -- real DB, no 
     expect(relayedFromFinance, "finance's outbox must have a pending GL-post message").toBeGreaterThan(0);
     await queue.drain();
 
-    // ── The challan row: resolved head, correct combined amount, real back-link ──
+    // ── The challan row: resolved head, correct fee-only amount, real back-link ──
     const [challanRow] = await finance.withTenantScope(finance.db, TENANT, (tx: any) =>
       tx.select().from(finance.financeChallans)
         .where(and(eq(finance.financeChallans.sourceService, "event"), eq(finance.financeChallans.sourceRef, applicationId)))
@@ -202,10 +205,18 @@ describe("event-service -> finance-service municipal fee challan -- real DB, no 
     );
     expect(challanRow, "a real finance_challans row must exist, back-linked to this event application").toBeTruthy();
     expect(challanRow.receiptHeadId).toBe(seededHead.id);
-    expect(challanRow.amountMinor).toBe(3250000n);
+    expect(challanRow.amountMinor).toBe(750000n);
     expect(challanRow.depositor).toBe(ACTOR);
     expect(challanRow.sourceService).toBe("event");
     expect(challanRow.sourceRef).toBe(applicationId);
+
+    // ── The refundable deposit (2,500,000n) was never separately challaned:
+    // exactly one finance_challans row exists for this application. ──
+    const allChallansForApplication = await finance.withTenantScope(finance.db, TENANT, (tx: any) =>
+      tx.select().from(finance.financeChallans)
+        .where(and(eq(finance.financeChallans.sourceService, "event"), eq(finance.financeChallans.sourceRef, applicationId))),
+    );
+    expect(allChallansForApplication).toHaveLength(1);
 
     // ── A real GL journal row, correctly balanced, credited to the head ──
     const journalId = finance.deterministicId(`challan:${challanRow.id}`);
@@ -216,8 +227,8 @@ describe("event-service -> finance-service municipal fee challan -- real DB, no 
     expect(journalRow.lines).toHaveLength(2);
     const creditLine = journalRow.lines.find((l: { creditMinor: string }) => l.creditMinor !== "0");
     const debitLine = journalRow.lines.find((l: { debitMinor: string }) => l.debitMinor !== "0");
-    expect(creditLine.creditMinor).toBe("3250000");
-    expect(debitLine.debitMinor).toBe("3250000");
+    expect(creditLine.creditMinor).toBe("750000");
+    expect(debitLine.debitMinor).toBe("750000");
     expect(creditLine.accountCode).toBe(seededHead.id);
   });
 });
