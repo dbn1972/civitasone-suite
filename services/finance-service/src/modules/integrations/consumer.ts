@@ -35,7 +35,11 @@ export function registerIntegrationConsumers(queue: Queue): void {
     };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
-      const cfg = await pfmsRepo.getTenantConfig(msg.tenantId);
+      // Tx-scoped read: this handler already holds an open db.transaction, so
+      // the scopedRead-based getTenantConfig must not be called here -- see
+      // getTenantConfigTx's doc comment (pfms/repo.ts) for the pool-
+      // exhaustion deadlock this avoids on the EFT-initiation path.
+      const cfg = await pfmsRepo.getTenantConfigTx(tx, msg.tenantId);
       const agencyCode = (p.agencyCode ?? cfg?.agencyCode ?? "AG001").toUpperCase();
       const ddoCode = (p.ddoCode ?? cfg?.defaultDdo ?? "DDO123456").toUpperCase();
       const pfmsBatchId = randomUUID();

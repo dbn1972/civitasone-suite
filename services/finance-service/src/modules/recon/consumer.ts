@@ -47,7 +47,7 @@ export function registerReconConsumers(queue: Queue): void {
     };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
-      const existing = await repo.getBreak(p.tenantId, p.id);
+      const existing = await repo.getBreakTx(tx, p.tenantId, p.id);
       if (!existing) throw new Error(`recon break ${p.id} not found`);
       let next: ExceptionStatus;
       try {

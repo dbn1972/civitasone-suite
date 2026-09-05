@@ -59,6 +59,11 @@ vi.mock("drizzle-orm", () => ({
 // ─── Period-close mocks ──────────────────────────────────────────────────────
 vi.mock("../src/modules/period-close/repo.js", () => ({
   findPeriodClose: vi.fn(async () => null),
+  // Tx-scoped variant (fix/finance-nested-tx-deadlock): the consumer now
+  // reads through its own already-open transaction instead of the
+  // scopedRead-based findPeriodClose above, to avoid a nested-transaction
+  // connection-pool deadlock under load.
+  findPeriodCloseTx: vi.fn(async () => null),
   upsertPeriodClose: vi.fn(async () => undefined),
   logReopen: vi.fn(async () => undefined),
 }));
@@ -128,6 +133,13 @@ vi.mock("../src/modules/budget/repo.js", () => ({
 // ─── PFMS mocks ──────────────────────────────────────────────────────────────
 vi.mock("../src/modules/pfms/repo.js", () => ({
   findPfmsById: vi.fn(async () => ({
+    id: "pfms-batch-001", submissionStatus: "pending",
+  })),
+  // Tx-scoped variant (fix/finance-nested-tx-deadlock): the consumer now
+  // reads through its own already-open transaction instead of the
+  // scopedRead-based findPfmsById above, to avoid a nested-transaction
+  // connection-pool deadlock under load.
+  findPfmsByIdTx: vi.fn(async () => ({
     id: "pfms-batch-001", submissionStatus: "pending",
   })),
   updatePfmsBatch: vi.fn(async () => undefined),
@@ -247,8 +259,8 @@ describe("Period-close consumers — coverage", () => {
   });
 
   it("finance.period.reopen processes a reopen", async () => {
-    const { findPeriodClose } = await import("../src/modules/period-close/repo.js");
-    (findPeriodClose as any).mockResolvedValueOnce({
+    const { findPeriodCloseTx } = await import("../src/modules/period-close/repo.js");
+    (findPeriodCloseTx as any).mockResolvedValueOnce({
       id: "pc-001", tenantId: TENANT, period: "2025-01", status: "soft_close",
     });
 
@@ -564,8 +576,8 @@ describe("PFMS consumers — coverage", () => {
   });
 
   it("finance.pfms.batch_submit processes batch submission", async () => {
-    const { findPfmsById } = await import("../src/modules/pfms/repo.js");
-    (findPfmsById as any).mockResolvedValueOnce({
+    const { findPfmsByIdTx } = await import("../src/modules/pfms/repo.js");
+    (findPfmsByIdTx as any).mockResolvedValueOnce({
       id: "pfms-batch-001", submissionStatus: "signed",
     });
 
