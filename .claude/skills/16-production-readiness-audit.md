@@ -2,6 +2,8 @@
 
 **When to load:** Before declaring any service "done" or "production ready", and before starting a fix→PR→review→merge pass on a service that hasn't been through this audit yet. Every bug class below was found live, in this codebase, across 20+ services in one hardening pass (Sep 2026) — most of them more than once, in different services, because the same mistake gets copy-pasted along with the pattern it's part of.
 
+**What this skill actually covers, and what it doesn't:** this is a real, empirically-validated checklist for one specific slice of production-readiness — backend transactional correctness, tenancy isolation, and financial integrity, plus a first pass at frontend E2E discipline (section 6, marked as such). It is **not** a general "is this ERP enterprise-grade" checklist. See "Known gaps" at the end before treating a service that passes sections 1–7 as fully audited.
+
 ---
 
 ## The rule
@@ -33,7 +35,12 @@ For every `db.transaction` call site, check every repo function it calls: does t
 
 **The test:** spin up an isolated container, fire `pool.max + a few` concurrent commands through the fixed and unfixed code. Unfixed: `queue.drain()` never resolves, exactly `pool.max` connections stuck `idle in transaction`. Fixed: drains cleanly in milliseconds. A functional regression test alone (assert the command completes) does **not** prove this — you need the actual concurrent-load repro at least once, even if the checked-in test is a smaller, CI-safe version of it.
 
-**Where this bit us:** notification-service (`checkQuota`/`checkDlt`, 3 call sites across 2 review passes before all were found), building-service (`submitApplication`/`issuePermit`/`decideApplication`, reintroduced in already-merged code from an earlier PR).
+**Three sub-patterns that hide inside this bug class — check for all three, not just the obvious single-call-site case:**
+- **Loop inside one open transaction.** A command handler loops over many items (a payroll run's employees, a reconciliation batch's records) making one nested read per iteration. A single such command can't deadlock itself (only one nested connection is needed at a time), but risk compounds when many instances of that command run concurrently — the fix and the test both still apply, just fire concurrent *commands*, not concurrent *loop iterations*.
+- **Multiple sequential `scopedRead` calls in one function.** A function can be worse than the single-call-site case by opening two (or more) nested transactions per invocation — e.g. one `scopedRead` for a parent row, a second for a related row. Fixing only one of the two calls inside the `...Tx` variant is a partial fix that still deadlocks; check every `scopedRead` call inside the flagged function, not just the first one you see.
+- **Partial fix left unapplied.** A `...Tx` variant already exists in the repo file (added for one call site) but a *different* call site in the same or another module still calls the original `scopedRead`-based function from inside its own transaction. Grep for every caller of the original function, not just the one you started from, before considering the fix complete.
+
+**Where this bit us:** notification-service (`checkQuota`/`checkDlt`, 3 call sites across 2 review passes before all were found), building-service (`submitApplication`/`issuePermit`/`decideApplication`, reintroduced in already-merged code from an earlier PR), payroll-service (loop-inside-transaction in the per-employee loan lookup during a payroll run), finance-service (5 modules in one pass), hrms-service (16 call sites in one file, plus a second batch of 9 across 6 more modules — the most bug-dense file of the whole audit), grant-service (loop-inside-transaction in PFMS reconciliation, plus the real financial gate — `hasSubmittedUcForApplication` — sharing the same bug), billing-service (`findByTenant` making two sequential `scopedRead` calls per invocation — the multi-call-per-function variant).
 
 ## 2. RLS sentinel-tenant blindness
 
@@ -104,6 +111,16 @@ This repo already has real E2E infrastructure worth using rather than reinventin
 - **Don't let E2E specs silently rot into no-ops.** A Playwright spec that matches a selector too loosely, or that never actually waits for the async action it's testing to complete, can pass every run while testing nothing — structurally the same failure mode as this skill's section 4 (test files that pass while proving nothing). When adding an E2E spec, deliberately break the underlying feature once and confirm the spec actually fails — the same sabotage-check discipline used for backend regression tests throughout this audit.
 - **Test against a real, isolated environment**, matching the backend discipline in this skill: point Playwright at a throwaway backend/DB instance seeded for the test, never at the shared dev environment or production.
 
+## 6b. Verification infrastructure — gotchas that will cost you real time
+
+**Host contention corrupts full-suite numbers on a shared machine.** When multiple agents/sessions run test suites concurrently on the same host, a full-suite run can show large, non-deterministic failure counts (seen: ~93/228 files "failing" on a shared host vs. 8 pre-existing failures for the identical commit on a dedicated container) — with a competing `vitest` process visible in `ps aux` during the bad run. Don't trust an aggregate full-suite number gathered on a host you know is under concurrent load. Mitigation: verify on your own freshly-created, uniquely-named/ported container; rely on the specific sabotage-checked regression test plus the individually-verified affected files plus `tsc --noEmit` as your primary evidence; if you must report a contended-host number, disclose the contention explicitly rather than presenting it as clean.
+
+**Isolated Postgres containers can vanish mid-verification with no trace.** On a heavily-loaded host, a container can disappear entirely from `docker ps -a` (no crash log) mid-run — not a code issue, just recreate with a fresh, uniquely-timestamped name/port and re-bootstrap.
+
+**`scripts/ci/bootstrap-postgres.sh` connects as role `civitas` against maintenance DB `postgres`** (not the per-service DB) to create roles/databases — `PGPORT`, `PGUSER=civitas`, `PGPASSWORD=civitas_test` are its defaults. Pre-existing, unrelated migration failures are expected and not a sign of a broken bootstrap: `location-service`'s PostGIS migrations fail on a plain `postgres:16-alpine` image (no PostGIS extension) unless you use a postgis-enabled image, and `inspection-service` may log an expected `ALTER ROLE ... SUPERUSER` permission warning. After bootstrap, each service's own tests connect with that service's own DB role (e.g. billing-service's default `DATABASE_URL` in its `vitest.config.ts` uses role `billing_svc` against DB `civitas_billing`) — if that role's password/LOGIN isn't already set the way the service's tests expect, `ALTER ROLE <svc>_svc WITH PASSWORD '<pw-from-vitest.config.ts>' LOGIN;` as `civitas` before running that service's suite.
+
+**Writing multi-line TypeScript test files over SSH via a heredoc (`ssh host "cat > file << 'EOF' ... EOF"`) corrupts template literals.** Backticks and `${...}` interpolation get mangled into literal escaped sequences even inside a single-quoted heredoc terminator, due to layered shell/tool-call escaping — this is not a one-off, it recurred across multiple test files in this audit. After writing such a file this way, grep it for escaped-backslash artifacts before trusting it compiles. More reliable for complex content: fetch the file locally, edit it with a real editing tool, and copy it back — skip the heredoc entirely for anything with backticks or `$`.
+
 ## 7. Verification discipline
 
 - Every "fixed"/"done" claim gets independently re-verified by a different agent/session before merge — never self-reviewed, no exceptions, regardless of how confident the fix looks.
@@ -123,3 +140,19 @@ This repo already has real E2E infrastructure worth using rather than reinventin
 - A UI that renders a money amount or status field as blank/`undefined`/`NaN` instead of erroring loudly.
 - A new E2E spec that hasn't been sabotage-checked (break the feature once, confirm the spec actually fails).
 - Merging your own fix without a review round from a different agent/session.
+
+## Known gaps — not covered by this skill
+
+Passing every section above means a service is free of the specific bug classes this audit knows to look for. It does **not** mean the service is "enterprise-grade" or fully production-ready in every dimension. Not yet covered, and not to be claimed as covered:
+
+- **Real UX/usability evaluation.** Section 6 checks that E2E specs exist and don't render blank/broken money or status fields — it does not evaluate whether a workflow is usable, discoverable, or appropriate for its actual users (e.g. field-level government staff with varying digital literacy).
+- **Performance/load testing at production scale.** Nothing here tests throughput, latency percentiles, or degradation under realistic production traffic — only pool-exhaustion deadlocks under moderate test concurrency.
+- **Security beyond RLS tenant isolation.** No systematic check for authZ-beyond-tenancy (role/permission escalation within a tenant), input validation/injection, dependency CVEs, or secrets handling.
+- **Domain/business-process correctness against actual government rules.** This audit checks code-level correctness (transactions, tenancy, money-flow mechanics), not whether the modeled process is legally/procedurally correct for the actual government scheme it implements.
+- **Resilience/chaos testing.** No fault-injection for downstream service outages, network partitions, or partial infra failure beyond the specific Postgres-pool-exhaustion shape in section 1.
+- **Data migration and disaster-recovery.** No coverage of backup/restore correctness, migration rollback safety at scale, or RTO/RPO.
+- **i18n and cross-browser/device coverage.** Not addressed by section 6's E2E guidance.
+- **Real external-system integration correctness** (PFMS, payment gateways, e-invoicing) beyond the specific financial-integrity shape in section 3 — no contract/compatibility testing against the actual external system's real behavior.
+- **Coverage tracking** — this audit finds bugs by targeted reasoning about known bug shapes, not by measuring what fraction of the codebase has been examined this way.
+
+If asked whether a service (or the whole suite) is "production ready" or "enterprise-grade," answer against this list explicitly rather than letting a clean pass through sections 1–7 imply more than it does.
