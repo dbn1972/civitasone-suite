@@ -99,7 +99,7 @@ export function registerPaymentsConsumers(rawQueue: Queue): void {
       });
 
       // Activate the tenant's subscription (mark as active)
-      const sub = await subsRepo.findByTenant(msg.tenantId);
+      const sub = await subsRepo.findByTenantTx(tx, msg.tenantId);
       if (sub) {
         await subsRepo.updateStatus(tx, sub.id, "active", msg.actorId);
       }
@@ -145,7 +145,7 @@ export function registerPaymentsConsumers(rawQueue: Queue): void {
         });
 
         // Activate subscription on successful capture
-        const sub = await subsRepo.findByTenant(tenantId);
+        const sub = await subsRepo.findByTenantTx(tx, tenantId);
         if (sub && sub.status !== "active") {
           await subsRepo.updateStatus(tx, sub.id, "active", "system");
         }
