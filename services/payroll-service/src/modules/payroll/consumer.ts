@@ -393,10 +393,16 @@ export function registerPayrollConsumers(rawQueue: Queue): void {
         throw new DomainError("SELF_APPROVAL_FORBIDDEN", "payroll run approver must differ from its creator");
       }
       assertRunStatusTransition(run.status, "approved");
-      const slips = await repo.listSlipsByRun(p.id, p.tenantId);
+      // Reads through the caller's already-open `tx` (listSlipsByRunTx /
+      // sumEmployerContribByRunTx), not the scopedRead-based variants, which
+      // would open a SECOND, nested db.transaction() on the same connection
+      // pool as this outer approval transaction and deadlock the pool once
+      // enough concurrent runApprove calls are in-flight (pool.max) — see
+      // .claude/skills/16-production-readiness-audit.md section 1.
+      const slips = await repo.listSlipsByRunTx(tx, p.id, p.tenantId);
       const totalGross = slips.reduce((s, sl) => s + sl.grossMinor, 0n);
       const totalNet = slips.reduce((s, sl) => s + sl.netPayMinor, 0n);
-      const totalEmployerContrib = await statutoryRepo.sumEmployerContribByRun(p.id, p.tenantId);
+      const totalEmployerContrib = await statutoryRepo.sumEmployerContribByRunTx(tx, p.id, p.tenantId);
       await repo.updateRun(tx, p.id, {
         status: "approved",
         totalGrossMinor: totalGross,
@@ -447,7 +453,11 @@ export function registerPayrollConsumers(rawQueue: Queue): void {
       assertRunStatusTransition(run.status, "disbursed");
       // Iter2: reconcile the disbursed amount against the authoritative slip sum,
       // never the denormalized counter (which the audit found could drift).
-      const slips = await repo.listSlipsByRun(p.id, p.tenantId);
+      // listSlipsByRunTx (not listSlipsByRun/scopedRead) — same nested-
+      // transaction deadlock class as runApprove above, but on the actual
+      // EFT-initiation path: see .claude/skills/16-production-readiness-audit.md
+      // section 1.
+      const slips = await repo.listSlipsByRunTx(tx, p.id, p.tenantId);
       const slipNet = slips
         .filter((s) => s.status !== "exception")
         .reduce((acc, s) => acc + s.netPayMinor, 0n);

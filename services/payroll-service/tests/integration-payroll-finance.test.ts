@@ -76,6 +76,11 @@ vi.mock("../src/shared/outbox.js", () => ({
 vi.mock("../src/modules/payroll/repo.js", () => ({
   findRunByIdTx: (...args: any[]) => findRunByIdTxMock(...args),
   listSlipsByRun: (...args: any[]) => listSlipsByRunMock(...args),
+  // Consumer now reads slips through the caller's already-open tx
+  // (nested-transaction deadlock fix -- see
+  // .claude/skills/16-production-readiness-audit.md section 1); same
+  // canned mock, tx arg forwarded but never asserted on.
+  listSlipsByRunTx: (...args: any[]) => listSlipsByRunMock(...args),
   updateRun: (...args: any[]) => updateRunMock(...args),
   insertRun: vi.fn(async () => undefined),
   insertStructure: vi.fn(async () => undefined),
@@ -87,6 +92,8 @@ vi.mock("../src/modules/payroll/repo.js", () => ({
 // 4. Statutory repo.
 vi.mock("../src/modules/statutory/repo.js", () => ({
   sumEmployerContribByRun: (...args: any[]) => sumEmployerContribByRunMock(...args),
+  // Same nested-transaction deadlock fix as listSlipsByRunTx above.
+  sumEmployerContribByRunTx: (...args: any[]) => sumEmployerContribByRunMock(...args),
   insertPf: vi.fn(async () => undefined),
   insertEsi: vi.fn(async () => undefined),
   insertTds: vi.fn(async () => undefined),

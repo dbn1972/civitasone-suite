@@ -66,3 +66,23 @@ export async function sumEmployerContribByRun(runId: string, tenantId: string): 
   // add epfErContribMinor or it double-counts.
   return (await sumOf(payrollPf)) + (await sumOf(payrollEsi)) + (await sumOf(payrollNps));
 }
+
+/**
+ * Transaction-scoped variant of sumEmployerContribByRun, reading through the
+ * caller's already-open `tx` instead of scopedRead's own nested
+ * `db.transaction()`. payroll/consumer.ts's `runApprove` handler called the
+ * scopedRead-based version from inside its own open transaction -- a second
+ * transaction competing for a connection from the SAME pool as the outer one,
+ * which deadlocks every in-flight approval once concurrent approvals reach
+ * pool.max (the same bug class fixed in notification-service PR #1028 and
+ * building-service PR #1035; see the production-readiness-audit skill,
+ * .claude/skills/16-production-readiness-audit.md, section 1).
+ */
+export async function sumEmployerContribByRunTx(tx: Writer, runId: string, tenantId: string): Promise<bigint> {
+  const sumOf = async (tbl: typeof payrollPf | typeof payrollEsi | typeof payrollNps): Promise<bigint> => {
+    const rows = await tx.select({ v: tbl.erContribMinor }).from(tbl)
+      .where(and(eq(tbl.runId, runId), eq(tbl.tenantId, tenantId)));
+    return rows.reduce((s: bigint, r: { v: bigint }) => s + (r.v ?? 0n), 0n);
+  };
+  return (await sumOf(payrollPf)) + (await sumOf(payrollEsi)) + (await sumOf(payrollNps));
+}
