@@ -89,7 +89,22 @@ When wiring citizen-facing (or employee-facing, for internal-staff modules) noti
 - **Don't invent a notification for a state transition no command actually drives.** Check the full `COMMANDS`/topics list against the domain's `VALID_TRANSITIONS` table — a status modeled in the state machine with no command that ever sets it is dead code, not a missing notification.
 - **Genuinely internal steps stay unwired**: department-to-department workflow with no new citizen-facing information, the citizen's own self-initiated action (no need to notify them of what they just did), and internal record-keeping with no decision attached yet.
 
-## 6. Verification discipline
+## 6. Frontend / UI end-to-end testing
+
+Everything in sections 1–5 above was found by auditing backend service code — no frontend/UI pass has been run yet against this checklist. This section is general guidance to apply going forward, not a report of bugs already found, and should be updated with real findings (in the same style as the sections above) the first time it is actually run against a module's UI.
+
+This repo already has real E2E infrastructure worth using rather than reinventing: Playwright (`apps/web/tests/e2e/`, `apps/web/playwright.config.ts` and the live/no-server config variants), a dedicated accessibility suite (`apps/web/tests/a11y/`, `pnpm test:a11y` / `test:a11y:full` / `test:a11y:baseline`), and Lighthouse CI (`pnpm test:lighthouse`).
+
+**When auditing a module's frontend for production-readiness:**
+
+- **Golden-path E2E, not just component/unit tests.** A component test proves a button calls the right handler; it does not prove the handler's result actually reaches the screen through the real API, the real auth context, and the real routing. Every module needs at least one Playwright spec that drives the browser through its actual primary workflow end-to-end (e.g. login → navigate to module → create/submit the module's core resource → see it reflected in a list/detail view), hitting a real (test) backend, not a mocked API layer.
+- **The state a backend fix changes should have a UI assertion too, not just an API-level one.** Several backend fixes made under this audit (deadlock fixes, RLS fixes, financial-integrity fixes) only had backend integration tests. Where the affected data is user-visible (a status, a balance, a notification), add or confirm an E2E check that the UI actually reflects the corrected state — a backend fix that's invisible on the actual user-facing screen isn't verified from the user's perspective.
+- **Money and status fields need an explicit rendering check.** A UI that silently renders `undefined`/`NaN`/blank for a money amount or a status badge (instead of erroring loudly) hides exactly the kind of backend defect this skill's other sections look for — a citizen or officer looking at a blank balance has no way to tell "the fee hasn't posted yet" from "the page is broken." Assert the actual rendered text/value, not just "the element exists."
+- **Accessibility is not optional polish.** Run the existing `test:a11y` suite against any page/flow touched by a fix, not just new pages — GIGW/WCAG 2.2 AA obligations apply to every citizen- and officer-facing screen in a government system, and a backend change that alters what renders (a new status, a new notification banner, a new form field) can introduce a real accessibility regression even when the developer never touched a class name.
+- **Don't let E2E specs silently rot into no-ops.** A Playwright spec that matches a selector too loosely, or that never actually waits for the async action it's testing to complete, can pass every run while testing nothing — structurally the same failure mode as this skill's section 4 (test files that pass while proving nothing). When adding an E2E spec, deliberately break the underlying feature once and confirm the spec actually fails — the same sabotage-check discipline used for backend regression tests throughout this audit.
+- **Test against a real, isolated environment**, matching the backend discipline in this skill: point Playwright at a throwaway backend/DB instance seeded for the test, never at the shared dev environment or production.
+
+## 7. Verification discipline
 
 - Every "fixed"/"done" claim gets independently re-verified by a different agent/session before merge — never self-reviewed, no exceptions, regardless of how confident the fix looks.
 - Re-derive counts and claims from source yourself; don't trust a relayed "found N instances" or "3/5 tests failed" without re-grepping/re-running it.
@@ -105,4 +120,6 @@ When wiring citizen-facing (or employee-facing, for internal-staff modules) noti
 - A new real-DB test file verified only under `--no-file-parallelism` or only against a freshly-truncated DB.
 - A dual-DSN (`DATABASE_URL`-flipping) test file in a `vitest.config.ts` without `fileParallelism: false`.
 - Excluding a punitive/negative status transition from citizen notification as "internal" without checking whether it changes the citizen's actual entitlement or money.
+- A UI that renders a money amount or status field as blank/`undefined`/`NaN` instead of erroring loudly.
+- A new E2E spec that hasn't been sabotage-checked (break the feature once, confirm the spec actually fails).
 - Merging your own fix without a review round from a different agent/session.
