@@ -12,29 +12,46 @@
  *   tenant  00000000-0000-0000-0000-000000000001
  *   head    b98d5225-6b76-474d-8992-eef8ad032436  (code 6001, HoA 207101010101010102)
  *   ddo     DDO123456
- * The consumer enforces UNKNOWN_HEAD / UNKNOWN_DDO / HoA-master checks, so these
- * must resolve or the create transaction rolls back.
+ *   vendor  aaaaaaaa-0000-4000-8000-000000000001 / aaaaaaaa-1111-4000-8000-000000000001
+ *   budget allocation for HEAD in the bill's own FY (netMinor-covering)
+ * The consumer enforces UNKNOWN_HEAD / UNKNOWN_DDO / HoA-master / UNKNOWN_VENDOR
+ * (added in a802eef3, "close 10 live-tested business-logic gaps ... vendors")
+ * and NO_ALLOCATION_FOUND checks, so all of these must resolve or the create
+ * transaction rolls back -- which is exactly what silently sank tests 3 & 4
+ * (0 bill rows, no thrown error visible in the suite output) once vendorExists
+ * started being enforced: this file's fixtures were never updated to seed a
+ * vendor after that commit landed. Confirmed via MemoryQueue's own `dlq`
+ * (UNKNOWN_VENDOR: <id> not found in vendor master for tenant) before fixing.
  */
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { MemoryQueue } from "@civitasone/queue";
-import { eq } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 import { db, sqlClient } from "../src/shared/db.js";
 import { scoped } from "./_tenant.js";
 import { financeBills } from "../src/modules/payments/schema.js";
 import { financeHeads } from "../src/modules/budget/schema.js";
-import { financeDdo } from "../src/modules/masters/schema.js";
+import { financeDdo, financeVendors } from "../src/modules/masters/schema.js";
+import { financeBudgetAllocation } from "../src/modules/budget/allocation-schema.js";
 import { outboxMessages, processed } from "../src/shared/outbox.js";
 import { registerPaymentsConsumers } from "../src/modules/payments/consumer.js";
 import { assertJournalBalances } from "../src/modules/gl/domain.js";
 import { assertBudgetNotExceeded, availableBalance, assertValidPfmsHoA } from "../src/modules/budget/domain.js";
 import { assertValidDdoCode } from "../src/shared/pfms.js";
+import { fyFromDate } from "../src/modules/hoa/voucher.js";
 import { EVENTS } from "../src/topics.js";
 
 const ACTOR  = "00000000-aaaa-4000-8000-000000000001";
 // Real seeded tenant + head so the consumer master checks pass.
-const TENANT = "00000000-0000-0000-0000-000000000001";
-const HEAD   = "b98d5225-6b76-474d-8992-eef8ad032436";
-const DDO    = "DDO123456";
+const TENANT  = "00000000-0000-0000-0000-000000000001";
+const HEAD    = "b98d5225-6b76-474d-8992-eef8ad032436";
+const DDO     = "DDO123456";
+const VENDOR_1 = "aaaaaaaa-0000-4000-8000-000000000001";
+const VENDOR_2 = "aaaaaaaa-1111-4000-8000-000000000001";
+const ALLOC_ID = "b98d5225-a110-4000-8000-000000000001";
+// The billCreate consumer derives the allocation FY from the bill's OWN date
+// (defaulting to today when unset, as both payloads below do), so the seeded
+// allocation must be for that same FY or NO_ALLOCATION_FOUND fires instead.
+const BILL_FY = fyFromDate(new Date().toISOString().slice(0, 10));
 const BILL_1 = "22222222-bbbb-4000-8000-000000000001";
 const BILL_2 = "33333333-cccc-4000-8000-000000000002";
 const MSG_1  = "44444444-dddd-4000-8000-000000000001";
@@ -58,8 +75,10 @@ async function waitFor(fn: () => Promise<boolean>, ms = 3000): Promise<void> {
 }
 
 // Provision the master fixtures the bill consumer validates against: a head with
-// a valid 18-digit HoA whose major head (2071) is in the major-head master, and
-// the DDO. Scoped to the tenant so the RLS WITH CHECK passes; idempotent.
+// a valid 18-digit HoA whose major head (2071) is in the major-head master, the
+// DDO, both vendors the two integration tests bill against, and a budget
+// allocation for HEAD in the bill's own FY. Scoped to the tenant so the RLS
+// WITH CHECK passes; idempotent (re-runnable without manual cleanup).
 beforeAll(async () => {
   await scoped(TENANT, (tx) => tx.insert(financeHeads).values({
     id: HEAD, tenantId: TENANT, code: "BILL-TEST-HEAD", name: "Bill Test Head",
@@ -69,6 +88,31 @@ beforeAll(async () => {
   await scoped(TENANT, (tx) => tx.insert(financeDdo).values({
     tenantId: TENANT, ddoCode: DDO, name: "Bill Test DDO", createdBy: ACTOR, updatedBy: ACTOR,
   }).onConflictDoNothing());
+  // finance_vendors has a UNIQUE(tenant_id, pan) constraint -- each seeded
+  // vendor needs its own PAN or the second onConflictDoNothing() insert
+  // silently no-ops on the PAN collision (not the id), leaving VENDOR_2
+  // missing and UNKNOWN_VENDOR still firing for the second bill.
+  const vendorSeeds: Array<[string, string]> = [[VENDOR_1, "ABCDE1234F"], [VENDOR_2, "ABCDE5678K"]];
+  for (const [vendorId, pan] of vendorSeeds) {
+    await scoped(TENANT, (tx) => tx.insert(financeVendors).values({
+      id: vendorId, tenantId: TENANT, name: `Bill Test Vendor ${vendorId.slice(-4)}`,
+      category: "supplies", pan, address: "1 Test Road",
+      bankName: "Test Bank", bankAccountNo: "000111222333", ifsc: "TEST0001234",
+      createdBy: ACTOR, updatedBy: ACTOR,
+    }).onConflictDoNothing());
+  }
+  // Delete-then-insert (rather than onConflictDoNothing) so committedMinor
+  // always starts at 0 for this run -- the billCreate consumer mutates it via
+  // addCommittedGuarded, and a stale committed balance from a prior run could
+  // eventually make a re-run fail OVER_APPROPRIATION against a fixed allocatedMinor.
+  await scoped(TENANT, (tx) => tx.delete(financeBudgetAllocation).where(
+    and(eq(financeBudgetAllocation.tenantId, TENANT), eq(financeBudgetAllocation.headId, HEAD), eq(financeBudgetAllocation.fy, BILL_FY)),
+  ));
+  await scoped(TENANT, (tx) => tx.insert(financeBudgetAllocation).values({
+    id: ALLOC_ID, tenantId: TENANT, headId: HEAD, fy: BILL_FY,
+    allocatedMinor: 100000000n, committedMinor: 0n, actualMinor: 0n,
+    createdBy: ACTOR, updatedBy: ACTOR,
+  }));
 });
 
 // 1. Journal balance — pure ----------------------------------------------------
@@ -140,7 +184,7 @@ describe("Bill consumer — 3-way match (integration)", () => {
         id: BILL_1,
         tenantId: TENANT,
         billNo: "BILL-3WM-001",
-        vendorId: "aaaaaaaa-0000-4000-8000-000000000001",
+        vendorId: VENDOR_1,
         headId:   HEAD,
         ddoCode:  DDO,
         grossMinor: 50000,
@@ -189,7 +233,7 @@ describe("Bill consumer — CQRS wiring (integration)", () => {
         id: BILL_2,
         tenantId: TENANT,
         billNo: "BILL-HAPPY-001",
-        vendorId: "aaaaaaaa-1111-4000-8000-000000000001",
+        vendorId: VENDOR_2,
         headId:   HEAD,
         ddoCode:  DDO,
         grossMinor: 75000,
