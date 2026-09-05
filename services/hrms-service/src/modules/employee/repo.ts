@@ -15,6 +15,23 @@ export async function findById(id: string, tenantId: string): Promise<EmployeeRo
   return rows[0] ?? null;
 }
 
+/**
+ * Tx-scoped variant of findById: reads through the caller's already-open
+ * transaction instead of opening a nested one via scopedRead. Cross-module
+ * consumers (e.g. contracts/consumer.ts) that look up an employee from
+ * inside their own db.transaction() must use this, not findById -- calling
+ * the scopedRead-based version there opens a SECOND transaction competing
+ * for a connection from the same pool as the outer one, deadlocking every
+ * in-flight command once concurrency reaches pool.max (see
+ * .claude/skills/16-production-readiness-audit.md section 1).
+ */
+export async function findByIdTx(tx: Writer, id: string, tenantId: string): Promise<EmployeeRow | null> {
+  const rows = await (tx as typeof db).select().from(hrmsEmployees)
+    .where(and(eq(hrmsEmployees.id, id), eq(hrmsEmployees.tenantId, tenantId)))
+    .limit(1);
+  return rows[0] ?? null;
+}
+
 export async function findByNo(employeeNo: string, tenantId: string): Promise<EmployeeRow | null> {
   const rows = await scopedRead((tx) => tx.select().from(hrmsEmployees)
     .where(and(eq(hrmsEmployees.employeeNo, employeeNo), eq(hrmsEmployees.tenantId, tenantId)))

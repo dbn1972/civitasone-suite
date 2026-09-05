@@ -8,12 +8,18 @@ import { hrmsContracts, hrmsContractRenewals } from "./schema.js";
 import { assertValidTransition, canRenew, DomainError } from "./domain.js";
 import {
   getContractById,
+  getContractByIdTx,
   getActiveContractForEmployee,
+  getActiveContractForEmployeeTx,
   getPendingRenewalForContract,
+  getPendingRenewalForContractTx,
   getNextContractNo,
   getRenewalById,
+  getRenewalByIdTx,
   getContractConfig,
+  getContractConfigTx,
   getContractHistory,
+  getContractHistoryTx,
 } from "./repo.js";
 import * as employeeRepo from "../employee/repo.js";
 import { eq, and } from "drizzle-orm";
@@ -86,7 +92,7 @@ export function registerContractConsumers(queue: Queue): void {
       if (!(await markProcessed(tx, msg.messageId))) return;
 
       // Validate employee type is "contract"
-      const employee = await employeeRepo.findById(p.employeeId, p.tenantId);
+      const employee = await employeeRepo.findByIdTx(tx, p.employeeId, p.tenantId);
       if (!employee) {
         throw new NonRetryableError(`Employee not found: ${p.employeeId}`);
       }
@@ -97,7 +103,7 @@ export function registerContractConsumers(queue: Queue): void {
       }
 
       // Check no active contract exists
-      const existing = await getActiveContractForEmployee(p.tenantId, p.employeeId);
+      const existing = await getActiveContractForEmployeeTx(tx, p.tenantId, p.employeeId);
       if (existing) {
         throw new NonRetryableError(
           `Active contract already exists for employee ${p.employeeId}: ${existing.id}`,
@@ -152,7 +158,7 @@ export function registerContractConsumers(queue: Queue): void {
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
 
-      const contract = await getContractById(p.tenantId, p.contractId);
+      const contract = await getContractByIdTx(tx, p.tenantId, p.contractId);
       if (!contract) {
         throw new NonRetryableError(`Contract not found: ${p.contractId}`);
       }
@@ -188,7 +194,7 @@ export function registerContractConsumers(queue: Queue): void {
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
 
-      const contract = await getContractById(p.tenantId, p.contractId);
+      const contract = await getContractByIdTx(tx, p.tenantId, p.contractId);
       if (!contract) {
         throw new NonRetryableError(`Contract not found: ${p.contractId}`);
       }
@@ -230,7 +236,7 @@ export function registerContractConsumers(queue: Queue): void {
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
 
-      const contract = await getContractById(p.tenantId, p.contractId);
+      const contract = await getContractByIdTx(tx, p.tenantId, p.contractId);
       if (!contract) {
         throw new NonRetryableError(`Contract not found: ${p.contractId}`);
       }
@@ -258,7 +264,7 @@ export function registerContractConsumers(queue: Queue): void {
       }
 
       // Check no pending renewal exists
-      const pendingRenewal = await getPendingRenewalForContract(p.tenantId, p.contractId);
+      const pendingRenewal = await getPendingRenewalForContractTx(tx, p.tenantId, p.contractId);
       if (pendingRenewal) {
         throw new NonRetryableError(
           `Pending renewal already exists for contract ${p.contractId}: ${pendingRenewal.id}`,
@@ -266,8 +272,8 @@ export function registerContractConsumers(queue: Queue): void {
       }
 
       // Check max duration not exceeded
-      const config = await getContractConfig(p.tenantId);
-      const history = await getContractHistory(p.tenantId, contract.employeeId) ?? [];
+      const config = await getContractConfigTx(tx, p.tenantId);
+      const history = await getContractHistoryTx(tx, p.tenantId, contract.employeeId) ?? [];
       const maxMonths = (config as any)?.maxContractMonths ?? null;
       const eligibility = canRenew(
         history.map((c: any) => ({ startDate: c.startDate, endDate: c.endDate })),
@@ -346,12 +352,12 @@ export function registerContractConsumers(queue: Queue): void {
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
 
-      const renewal = await getRenewalById(p.tenantId, p.renewalId);
+      const renewal = await getRenewalByIdTx(tx, p.tenantId, p.renewalId);
       if (!renewal) {
         throw new NonRetryableError(`Renewal not found: ${p.renewalId}`);
       }
 
-      const contract = await getContractById(p.tenantId, renewal.contractId);
+      const contract = await getContractByIdTx(tx, p.tenantId, renewal.contractId);
       if (!contract) {
         throw new NonRetryableError(`Contract not found: ${renewal.contractId}`);
       }
@@ -545,7 +551,7 @@ export function registerContractConsumers(queue: Queue): void {
 
         await db.transaction(async (tx) => {
           // Validate contract independently
-          const contract = await getContractById(p.tenantId, contractId);
+          const contract = await getContractByIdTx(tx, p.tenantId, contractId);
           if (!contract) {
             throw new NonRetryableError(`Contract not found: ${contractId}`);
           }
@@ -558,14 +564,14 @@ export function registerContractConsumers(queue: Queue): void {
           }
 
           // Check no pending renewal
-          const pendingRenewal = await getPendingRenewalForContract(p.tenantId, contractId);
+          const pendingRenewal = await getPendingRenewalForContractTx(tx, p.tenantId, contractId);
           if (pendingRenewal) {
             throw new NonRetryableError(`Pending renewal already exists for contract ${contractId}`);
           }
 
           // Check max duration
-          const config = await getContractConfig(p.tenantId);
-          const history = await getContractHistory(p.tenantId, contract.employeeId) ?? [];
+          const config = await getContractConfigTx(tx, p.tenantId);
+          const history = await getContractHistoryTx(tx, p.tenantId, contract.employeeId) ?? [];
           const maxMonths = (config as any)?.maxContractMonths ?? null;
           const eligibility = canRenew(
             history.map((c: any) => ({ startDate: c.startDate, endDate: c.endDate })),
@@ -636,12 +642,12 @@ export function registerContractConsumers(queue: Queue): void {
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
 
-      const contract = await getContractById(p.tenantId, p.contractId);
+      const contract = await getContractByIdTx(tx, p.tenantId, p.contractId);
       if (!contract) {
         throw new NonRetryableError(`Contract not found: ${p.contractId}`);
       }
 
-      const config = await getContractConfig(p.tenantId);
+      const config = await getContractConfigTx(tx, p.tenantId);
       const autoSeparationEnabled = (config as any)?.autoSeparationEnabled ?? true;
 
       if (autoSeparationEnabled) {
