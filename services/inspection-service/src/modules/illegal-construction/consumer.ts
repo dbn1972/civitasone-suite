@@ -25,7 +25,8 @@ import type { Queue } from "@civitasone/queue";
 import { NonRetryableError } from "@civitasone/queue";
 import { db } from "../../shared/db.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
-import { cache } from "../../shared/infra.js";
+import { cache, invalidateSafely } from "../../shared/infra.js";
+import { toDomainError } from "../../shared/errors.js";
 import { COMMANDS } from "../../topics.js";
 import {
   assertValidCaseTransition,
@@ -57,11 +58,6 @@ import type {
 const log = pino({ name: "illegal-construction-consumer" });
 
 const AUDIT_TOPIC = "audit.event.record";
-
-function toDomainError(err: unknown): never {
-  if (err instanceof DomainError) throw new NonRetryableError(err.message);
-  throw err as Error;
-}
 
 // actionType -> the case status it drives the case to, when the case
 // reaches that decision point. Only "fine" has no corresponding case
@@ -116,8 +112,7 @@ export function registerIllegalConstructionConsumers(queue: Queue): void {
       });
 
       if (caseId) {
-        try { await cache.invalidate(cache.makeKey(msg.tenantId, "illegal_construction_case", caseId)); }
-        catch (err) { log.warn({ err, event: "cache_invalidate_failed" }, "cache invalidation failed"); }
+        await invalidateSafely(cache.makeKey(msg.tenantId, "illegal_construction_case", caseId), log);
       }
     },
   );
@@ -136,7 +131,7 @@ export function registerIllegalConstructionConsumers(queue: Queue): void {
         try {
           assertValidCaseTransition(record.status as CaseState, "inspected");
           if (p.violationChecklist !== undefined) validateViolationChecklist(p.violationChecklist);
-        } catch (err) { toDomainError(err); }
+        } catch (err) { toDomainError(err, DomainError); }
 
         await updateCase(tx, p.caseId, msg.tenantId, {
           status: "inspected",
@@ -157,8 +152,7 @@ export function registerIllegalConstructionConsumers(queue: Queue): void {
         });
       });
 
-      try { await cache.invalidate(cache.makeKey(msg.tenantId, "illegal_construction_case", p.caseId)); }
-      catch (err) { log.warn({ err, event: "cache_invalidate_failed" }, "cache invalidation failed"); }
+      await invalidateSafely(cache.makeKey(msg.tenantId, "illegal_construction_case", p.caseId), log);
     },
   );
 
@@ -175,7 +169,7 @@ export function registerIllegalConstructionConsumers(queue: Queue): void {
         if (!record) throw new NonRetryableError(`Illegal construction case not found: ${p.caseId}`);
         try {
           assertValidCaseTransition(record.status as CaseState, "violation_confirmed");
-        } catch (err) { toDomainError(err); }
+        } catch (err) { toDomainError(err, DomainError); }
 
         await updateCase(tx, p.caseId, msg.tenantId, {
           status: "violation_confirmed", updatedBy: msg.actorId,
@@ -191,8 +185,7 @@ export function registerIllegalConstructionConsumers(queue: Queue): void {
         });
       });
 
-      try { await cache.invalidate(cache.makeKey(msg.tenantId, "illegal_construction_case", p.caseId)); }
-      catch (err) { log.warn({ err, event: "cache_invalidate_failed" }, "cache invalidation failed"); }
+      await invalidateSafely(cache.makeKey(msg.tenantId, "illegal_construction_case", p.caseId), log);
     },
   );
 
@@ -244,7 +237,7 @@ export function registerIllegalConstructionConsumers(queue: Queue): void {
           } else if (record.status !== "violation_confirmed") {
             try {
               assertValidCaseTransition(record.status as CaseState, targetState);
-            } catch (err) { toDomainError(err); }
+            } catch (err) { toDomainError(err, DomainError); }
           }
         }
 
@@ -295,10 +288,9 @@ export function registerIllegalConstructionConsumers(queue: Queue): void {
         });
       });
 
-      const invalidations = [cache.invalidate(cache.makeKey(msg.tenantId, "illegal_construction_case", p.caseId))];
-      if (actionId) invalidations.push(cache.invalidate(cache.makeKey(msg.tenantId, "illegal_construction_action", actionId)));
-      try { await Promise.all(invalidations); }
-      catch (err) { log.warn({ err, event: "cache_invalidate_failed" }, "cache invalidation failed"); }
+      const keys = [cache.makeKey(msg.tenantId, "illegal_construction_case", p.caseId)];
+      if (actionId) keys.push(cache.makeKey(msg.tenantId, "illegal_construction_action", actionId));
+      await invalidateSafely(keys, log);
     },
   );
 
@@ -363,10 +355,9 @@ export function registerIllegalConstructionConsumers(queue: Queue): void {
       // one that can have written a new case status above — a prior review
       // round caught this only ever invalidating the action key, leaving a
       // cached case read stale for up to the TTL after a real demolition.
-      const invalidations = [cache.invalidate(cache.makeKey(msg.tenantId, "illegal_construction_action", p.actionId))];
-      if (caseId) invalidations.push(cache.invalidate(cache.makeKey(msg.tenantId, "illegal_construction_case", caseId)));
-      try { await Promise.all(invalidations); }
-      catch (err) { log.warn({ err, event: "cache_invalidate_failed" }, "cache invalidation failed"); }
+      const keys = [cache.makeKey(msg.tenantId, "illegal_construction_action", p.actionId)];
+      if (caseId) keys.push(cache.makeKey(msg.tenantId, "illegal_construction_case", caseId));
+      await invalidateSafely(keys, log);
     },
   );
 
@@ -409,8 +400,7 @@ export function registerIllegalConstructionConsumers(queue: Queue): void {
         });
       });
 
-      try { await cache.invalidate(cache.makeKey(msg.tenantId, "illegal_construction_case", p.caseId)); }
-      catch (err) { log.warn({ err, event: "cache_invalidate_failed" }, "cache invalidation failed"); }
+      await invalidateSafely(cache.makeKey(msg.tenantId, "illegal_construction_case", p.caseId), log);
     },
   );
 }

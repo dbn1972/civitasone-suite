@@ -49,6 +49,7 @@ vi.mock("../src/shared/outbox.js", () => ({
 }));
 
 vi.mock("../src/shared/infra.js", () => ({
+  invalidateSafely: vi.fn().mockResolvedValue(undefined),
   cache: {
     put: vi.fn().mockResolvedValue(undefined),
     get: vi.fn().mockResolvedValue(null),

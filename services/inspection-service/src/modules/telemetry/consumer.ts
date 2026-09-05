@@ -8,7 +8,7 @@ import type { Queue } from "@civitasone/queue";
 import { NonRetryableError } from "@civitasone/queue";
 import { db } from "../../shared/db.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
-import { cache } from "../../shared/infra.js";
+import { cache, invalidateSafely } from "../../shared/infra.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import {
   assertDeviceActive,
@@ -100,8 +100,7 @@ export function registerTelemetryConsumers(queue: Queue): void {
       });
 
       if (deviceId) {
-        try { await cache.invalidate(cache.makeKey(msg.tenantId, "telemetry-device", deviceId)); }
-        catch (err) { log.warn({ err, event: "cache_invalidate_failed" }, "cache invalidation failed"); }
+        await invalidateSafely(cache.makeKey(msg.tenantId, "telemetry-device", deviceId), log);
       }
     },
   );
@@ -140,8 +139,7 @@ export function registerTelemetryConsumers(queue: Queue): void {
         });
       });
 
-      try { await cache.invalidate(cache.makeKey(msg.tenantId, "telemetry-device", p.deviceId)); }
-      catch (err) { log.warn({ err, event: "cache_invalidate_failed" }, "cache invalidation failed"); }
+      await invalidateSafely(cache.makeKey(msg.tenantId, "telemetry-device", p.deviceId), log);
     },
   );
 
@@ -272,8 +270,7 @@ export function registerTelemetryConsumers(queue: Queue): void {
       });
 
       if (readingId) {
-        try { await cache.invalidate(cache.makeKey(msg.tenantId, "telemetry-device", p.deviceId)); }
-        catch (err) { log.warn({ err, event: "cache_invalidate_failed" }, "cache invalidation failed"); }
+        await invalidateSafely(cache.makeKey(msg.tenantId, "telemetry-device", p.deviceId), log);
       }
     },
   );
@@ -380,8 +377,7 @@ export function registerTelemetryConsumers(queue: Queue): void {
         });
       });
 
-      try { await cache.invalidate(cache.makeKey(msg.tenantId, "telemetry-alert", p.alertId)); }
-      catch (err) { log.warn({ err, event: "cache_invalidate_failed" }, "cache invalidation failed"); }
+      await invalidateSafely(cache.makeKey(msg.tenantId, "telemetry-alert", p.alertId), log);
     },
   );
 
@@ -437,8 +433,7 @@ export function registerTelemetryConsumers(queue: Queue): void {
         });
       });
 
-      try { await cache.invalidate(cache.makeKey(msg.tenantId, "telemetry-alert", p.alertId)); }
-      catch (err) { log.warn({ err, event: "cache_invalidate_failed" }, "cache invalidation failed"); }
+      await invalidateSafely(cache.makeKey(msg.tenantId, "telemetry-alert", p.alertId), log);
     },
   );
 }

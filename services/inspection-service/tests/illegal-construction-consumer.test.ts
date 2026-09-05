@@ -38,6 +38,7 @@ vi.mock("../src/shared/infra.js", () => ({
     invalidate: vi.fn().mockResolvedValue(undefined),
     makeKey: vi.fn((...args: string[]) => args.join(":")),
   },
+  invalidateSafely: vi.fn().mockResolvedValue(undefined),
   queue: {
     publish: vi.fn().mockResolvedValue(undefined),
     subscribe: vi.fn((topic: string, handler: (msg: unknown) => Promise<void>) => {

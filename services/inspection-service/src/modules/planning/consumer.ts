@@ -23,7 +23,7 @@ import type { Queue } from "@civitasone/queue";
 import { NonRetryableError } from "@civitasone/queue";
 import { db } from "../../shared/db.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
-import { cache } from "../../shared/infra.js";
+import { cache, invalidateSafely } from "../../shared/infra.js";
 import { COMMANDS, EVENTS, CONSUMED_EVENTS } from "../../topics.js";
 import { insertPlan, updatePlan, findPlanById } from "./repo.js";
 import { submitPlanForWorkflowApproval } from "./commands.js";
@@ -107,12 +107,10 @@ export function registerPlanningConsumers(queue: Queue): void {
 
     // Cache invalidation (outside transaction, best-effort)
     if (planId) {
-      try {
-        await cache.invalidate(cache.makeKey(msg.tenantId, "plan", planId));
-      } catch (err) {
-        log.warn({ err, tenantId: msg.tenantId, planId, event: "cache_invalidate_failed" },
-          "failed to invalidate plan cache after create");
-      }
+      await invalidateSafely(
+        cache.makeKey(msg.tenantId, "plan", planId), log,
+        { tenantId: msg.tenantId, planId }, "failed to invalidate plan cache after create",
+      );
     }
   });
 
@@ -167,12 +165,10 @@ export function registerPlanningConsumers(queue: Queue): void {
 
     // Cache invalidation (outside transaction, best-effort)
     if (updatedPlanId) {
-      try {
-        await cache.invalidate(cache.makeKey(msg.tenantId, "plan", updatedPlanId));
-      } catch (err) {
-        log.warn({ err, tenantId: msg.tenantId, planId: updatedPlanId, event: "cache_invalidate_failed" },
-          "failed to invalidate plan cache after modify");
-      }
+      await invalidateSafely(
+        cache.makeKey(msg.tenantId, "plan", updatedPlanId), log,
+        { tenantId: msg.tenantId, planId: updatedPlanId }, "failed to invalidate plan cache after modify",
+      );
     }
   });
 
@@ -233,12 +229,10 @@ export function registerPlanningConsumers(queue: Queue): void {
       );
 
       // Cache invalidation (best-effort)
-      try {
-        await cache.invalidate(cache.makeKey(msg.tenantId, "plan", submittedPlanId));
-      } catch (err) {
-        log.warn({ err, tenantId: msg.tenantId, planId: submittedPlanId, event: "cache_invalidate_failed" },
-          "failed to invalidate plan cache after submit");
-      }
+      await invalidateSafely(
+        cache.makeKey(msg.tenantId, "plan", submittedPlanId), log,
+        { tenantId: msg.tenantId, planId: submittedPlanId }, "failed to invalidate plan cache after submit",
+      );
     }
   });
 
@@ -314,12 +308,10 @@ export function registerPlanningConsumers(queue: Queue): void {
 
     // Cache invalidation (outside transaction, best-effort)
     if (activatedPlanId) {
-      try {
-        await cache.invalidate(cache.makeKey(msg.tenantId, "plan", activatedPlanId));
-      } catch (err) {
-        log.warn({ err, tenantId: msg.tenantId, planId: activatedPlanId, event: "cache_invalidate_failed" },
-          "failed to invalidate plan cache after activate");
-      }
+      await invalidateSafely(
+        cache.makeKey(msg.tenantId, "plan", activatedPlanId), log,
+        { tenantId: msg.tenantId, planId: activatedPlanId }, "failed to invalidate plan cache after activate",
+      );
     }
   });
 
@@ -410,12 +402,10 @@ export function registerPlanningConsumers(queue: Queue): void {
         });
 
         // Cache invalidation for rejected plan
-        try {
-          await cache.invalidate(cache.makeKey(msg.tenantId, "plan", p.entityId));
-        } catch (err) {
-          log.warn({ err, tenantId: msg.tenantId, planId: p.entityId, event: "cache_invalidate_failed" },
-            "failed to invalidate plan cache after rejection");
-        }
+        await invalidateSafely(
+          cache.makeKey(msg.tenantId, "plan", p.entityId), log,
+          { tenantId: msg.tenantId, planId: p.entityId }, "failed to invalidate plan cache after rejection",
+        );
       }
     });
   });

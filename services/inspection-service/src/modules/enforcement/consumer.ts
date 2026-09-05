@@ -14,7 +14,7 @@ import type { Queue } from "@civitasone/queue";
 import { NonRetryableError } from "@civitasone/queue";
 import { db } from "../../shared/db.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
-import { cache } from "../../shared/infra.js";
+import { cache, invalidateSafely } from "../../shared/infra.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import {
   assertValidPenaltyOrderTransition,
@@ -146,8 +146,7 @@ export function registerEnforcementConsumers(queue: Queue): void {
       });
 
       if (noticeId) {
-        try { await cache.invalidate(cache.makeKey(msg.tenantId, "show_cause", noticeId)); }
-        catch (err) { log.warn({ err, event: "cache_invalidate_failed" }, "cache invalidation failed"); }
+        await invalidateSafely(cache.makeKey(msg.tenantId, "show_cause", noticeId), log);
       }
     },
   );
@@ -188,8 +187,7 @@ export function registerEnforcementConsumers(queue: Queue): void {
         });
       });
 
-      try { await cache.invalidate(cache.makeKey(msg.tenantId, "show_cause", p.showCauseId)); }
-      catch (err) { log.warn({ err, event: "cache_invalidate_failed" }, "cache invalidation failed"); }
+      await invalidateSafely(cache.makeKey(msg.tenantId, "show_cause", p.showCauseId), log);
     },
   );
 
@@ -255,8 +253,7 @@ export function registerEnforcementConsumers(queue: Queue): void {
       });
 
       if (orderId) {
-        try { await cache.invalidate(cache.makeKey(msg.tenantId, "penalty_order", orderId)); }
-        catch (err) { log.warn({ err, event: "cache_invalidate_failed" }, "cache invalidation failed"); }
+        await invalidateSafely(cache.makeKey(msg.tenantId, "penalty_order", orderId), log);
       }
     },
   );
@@ -327,8 +324,7 @@ export function registerEnforcementConsumers(queue: Queue): void {
         });
       });
 
-      try { await cache.invalidate(cache.makeKey(msg.tenantId, "penalty_order", p.penaltyOrderId)); }
-      catch (err) { log.warn({ err, event: "cache_invalidate_failed" }, "cache invalidation failed"); }
+      await invalidateSafely(cache.makeKey(msg.tenantId, "penalty_order", p.penaltyOrderId), log);
     },
   );
 
@@ -389,8 +385,7 @@ export function registerEnforcementConsumers(queue: Queue): void {
       });
 
       if (referralId) {
-        try { await cache.invalidate(cache.makeKey(msg.tenantId, "prosecution_referral", referralId)); }
-        catch (err) { log.warn({ err, event: "cache_invalidate_failed" }, "cache invalidation failed"); }
+        await invalidateSafely(cache.makeKey(msg.tenantId, "prosecution_referral", referralId), log);
       }
     },
   );

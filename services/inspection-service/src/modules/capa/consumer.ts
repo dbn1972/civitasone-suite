@@ -14,7 +14,7 @@ import type { Queue } from "@civitasone/queue";
 import { NonRetryableError } from "@civitasone/queue";
 import { db } from "../../shared/db.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
-import { cache } from "../../shared/infra.js";
+import { cache, invalidateSafely } from "../../shared/infra.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import {
   assertValidCapaTransition,
@@ -94,12 +94,10 @@ export function registerCapaConsumers(queue: Queue): void {
       });
 
       if (capaId) {
-        try {
-          await cache.invalidate(cache.makeKey(msg.tenantId, "capa", capaId));
-        } catch (err) {
-          log.warn({ err, tenantId: msg.tenantId, capaId, event: "cache_invalidate_failed" },
-            "failed to invalidate capa cache after create");
-        }
+        await invalidateSafely(
+          cache.makeKey(msg.tenantId, "capa", capaId), log,
+          { tenantId: msg.tenantId, capaId }, "failed to invalidate capa cache after create",
+        );
       }
     },
   );
@@ -135,12 +133,10 @@ export function registerCapaConsumers(queue: Queue): void {
         });
       });
 
-      try {
-        await cache.invalidate(cache.makeKey(msg.tenantId, "capa", p.capaId));
-      } catch (err) {
-        log.warn({ err, tenantId: msg.tenantId, capaId: p.capaId, event: "cache_invalidate_failed" },
-          "failed to invalidate capa cache after update");
-      }
+      await invalidateSafely(
+        cache.makeKey(msg.tenantId, "capa", p.capaId), log,
+        { tenantId: msg.tenantId, capaId: p.capaId }, "failed to invalidate capa cache after update",
+      );
     },
   );
 
@@ -209,12 +205,10 @@ export function registerCapaConsumers(queue: Queue): void {
         });
       });
 
-      try {
-        await cache.invalidate(cache.makeKey(msg.tenantId, "capa", p.capaId));
-      } catch (err) {
-        log.warn({ err, tenantId: msg.tenantId, capaId: p.capaId, event: "cache_invalidate_failed" },
-          "failed to invalidate capa cache after start");
-      }
+      await invalidateSafely(
+        cache.makeKey(msg.tenantId, "capa", p.capaId), log,
+        { tenantId: msg.tenantId, capaId: p.capaId }, "failed to invalidate capa cache after start",
+      );
     },
   );
 
@@ -278,12 +272,10 @@ export function registerCapaConsumers(queue: Queue): void {
         });
       });
 
-      try {
-        await cache.invalidate(cache.makeKey(msg.tenantId, "capa", p.capaId));
-      } catch (err) {
-        log.warn({ err, tenantId: msg.tenantId, capaId: p.capaId, event: "cache_invalidate_failed" },
-          "failed to invalidate capa cache after complete");
-      }
+      await invalidateSafely(
+        cache.makeKey(msg.tenantId, "capa", p.capaId), log,
+        { tenantId: msg.tenantId, capaId: p.capaId }, "failed to invalidate capa cache after complete",
+      );
     },
   );
 
@@ -348,12 +340,10 @@ export function registerCapaConsumers(queue: Queue): void {
         });
       });
 
-      try {
-        await cache.invalidate(cache.makeKey(msg.tenantId, "capa", p.capaId));
-      } catch (err) {
-        log.warn({ err, tenantId: msg.tenantId, capaId: p.capaId, event: "cache_invalidate_failed" },
-          "failed to invalidate capa cache after verify");
-      }
+      await invalidateSafely(
+        cache.makeKey(msg.tenantId, "capa", p.capaId), log,
+        { tenantId: msg.tenantId, capaId: p.capaId }, "failed to invalidate capa cache after verify",
+      );
     },
   );
 
@@ -400,12 +390,10 @@ export function registerCapaConsumers(queue: Queue): void {
         });
       });
 
-      try {
-        await cache.invalidate(cache.makeKey(msg.tenantId, "capa", p.capaId));
-      } catch (err) {
-        log.warn({ err, tenantId: msg.tenantId, capaId: p.capaId, event: "cache_invalidate_failed" },
-          "failed to invalidate capa cache after reinspection trigger");
-      }
+      await invalidateSafely(
+        cache.makeKey(msg.tenantId, "capa", p.capaId), log,
+        { tenantId: msg.tenantId, capaId: p.capaId }, "failed to invalidate capa cache after reinspection trigger",
+      );
     },
   );
 }

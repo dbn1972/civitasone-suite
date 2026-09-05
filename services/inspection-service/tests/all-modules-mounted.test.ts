@@ -59,6 +59,7 @@ vi.mock("../src/shared/db.js", () => ({
 
 // Mock infra (cache + queue): a resolved publish lets create routes reach 202.
 vi.mock("../src/shared/infra.js", () => ({
+  invalidateSafely: vi.fn().mockResolvedValue(undefined),
   cache: {
     put: vi.fn().mockResolvedValue(undefined),
     get: vi.fn().mockResolvedValue(null),

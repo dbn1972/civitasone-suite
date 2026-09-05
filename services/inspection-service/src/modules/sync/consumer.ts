@@ -20,7 +20,7 @@ import type { Queue } from "@civitasone/queue";
 import { NonRetryableError } from "@civitasone/queue";
 import { db } from "../../shared/db.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
-import { cache } from "../../shared/infra.js";
+import { cache, invalidateSafely } from "../../shared/infra.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import {
   deterministicSerialize,
@@ -147,12 +147,10 @@ export function registerSyncConsumers(queue: Queue): void {
 
       // Cache invalidation (outside transaction, best-effort)
       if (packageId) {
-        try {
-          await cache.invalidate(cache.makeKey(msg.tenantId, "sync_pkg", packageId));
-        } catch (err) {
-          log.warn({ err, tenantId: msg.tenantId, packageId, event: "cache_invalidate_failed" },
-            "failed to invalidate sync_pkg cache after generate");
-        }
+        await invalidateSafely(
+          cache.makeKey(msg.tenantId, "sync_pkg", packageId), log,
+          { tenantId: msg.tenantId, packageId }, "failed to invalidate sync_pkg cache after generate",
+        );
       }
     },
   );

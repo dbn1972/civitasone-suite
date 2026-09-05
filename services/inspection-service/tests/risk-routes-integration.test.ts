@@ -85,6 +85,7 @@ vi.mock("../src/shared/db.js", () => ({
 }));
 
 vi.mock("../src/shared/infra.js", () => ({
+  invalidateSafely: vi.fn().mockResolvedValue(undefined),
   cache: {
     put: vi.fn().mockResolvedValue(undefined),
     get: vi.fn().mockResolvedValue(null),

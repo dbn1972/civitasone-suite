@@ -8,7 +8,7 @@ import type { Queue } from "@civitasone/queue";
 import { NonRetryableError } from "@civitasone/queue";
 import { db } from "../../shared/db.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
-import { cache } from "../../shared/infra.js";
+import { cache, invalidateSafely } from "../../shared/infra.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import {
   assertValidLicenceTransition,
@@ -87,8 +87,7 @@ export function registerLicenceConsumers(queue: Queue): void {
       });
 
       if (licenceId) {
-        try { await cache.invalidate(cache.makeKey(msg.tenantId, "licence", licenceId)); }
-        catch (err) { log.warn({ err, event: "cache_invalidate_failed" }, "cache invalidation failed"); }
+        await invalidateSafely(cache.makeKey(msg.tenantId, "licence", licenceId), log);
       }
     },
   );
@@ -127,8 +126,7 @@ export function registerLicenceConsumers(queue: Queue): void {
         });
       });
 
-      try { await cache.invalidate(cache.makeKey(msg.tenantId, "licence", p.licenceId)); }
-      catch (err) { log.warn({ err, event: "cache_invalidate_failed" }, "cache invalidation failed"); }
+      await invalidateSafely(cache.makeKey(msg.tenantId, "licence", p.licenceId), log);
     },
   );
 
@@ -191,8 +189,7 @@ export function registerLicenceConsumers(queue: Queue): void {
         });
       });
 
-      try { await cache.invalidate(cache.makeKey(msg.tenantId, "licence", p.licenceId)); }
-      catch (err) { log.warn({ err, event: "cache_invalidate_failed" }, "cache invalidation failed"); }
+      await invalidateSafely(cache.makeKey(msg.tenantId, "licence", p.licenceId), log);
     },
   );
 
@@ -246,8 +243,7 @@ export function registerLicenceConsumers(queue: Queue): void {
         });
       });
 
-      try { await cache.invalidate(cache.makeKey(msg.tenantId, "licence", p.licenceId)); }
-      catch (err) { log.warn({ err, event: "cache_invalidate_failed" }, "cache invalidation failed"); }
+      await invalidateSafely(cache.makeKey(msg.tenantId, "licence", p.licenceId), log);
     },
   );
 
@@ -301,8 +297,7 @@ export function registerLicenceConsumers(queue: Queue): void {
         });
       });
 
-      try { await cache.invalidate(cache.makeKey(msg.tenantId, "licence", p.licenceId)); }
-      catch (err) { log.warn({ err, event: "cache_invalidate_failed" }, "cache invalidation failed"); }
+      await invalidateSafely(cache.makeKey(msg.tenantId, "licence", p.licenceId), log);
     },
   );
 }
