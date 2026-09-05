@@ -62,16 +62,30 @@ vi.mock("../src/shared/infra.js", () => ({
 
 vi.mock("../src/modules/contracts/repo.js", () => ({
   getContractById: (...a: unknown[]) => H.getContractById(...a),
+  // Tx-scoped variants (fix/hrms-contracts-nested-tx-deadlock): the consumer
+  // now reads through its own already-open transaction instead of these
+  // scopedRead-based functions, to avoid a nested-transaction connection-
+  // pool deadlock under load (.claude/skills/16-production-readiness-audit.md
+  // section 1). Forwarded to the SAME underlying mocks as their non-Tx
+  // counterparts -- every existing mockResolvedValue/assertion below keeps
+  // working unchanged.
+  getContractByIdTx: (...a: unknown[]) => H.getContractById(...a),
   getActiveContractForEmployee: (...a: unknown[]) => H.getActiveContractForEmployee(...a),
+  getActiveContractForEmployeeTx: (...a: unknown[]) => H.getActiveContractForEmployee(...a),
   getPendingRenewalForContract: (...a: unknown[]) => H.getPendingRenewalForContract(...a),
+  getPendingRenewalForContractTx: (...a: unknown[]) => H.getPendingRenewalForContract(...a),
   getNextContractNo: (...a: unknown[]) => H.getNextContractNo(...a),
   getRenewalById: (...a: unknown[]) => H.getRenewalById(...a),
+  getRenewalByIdTx: (...a: unknown[]) => H.getRenewalById(...a),
   getContractConfig: (...a: unknown[]) => H.getContractConfig(...a),
+  getContractConfigTx: (...a: unknown[]) => H.getContractConfig(...a),
   getContractHistory: (...a: unknown[]) => H.getContractHistory(...a),
+  getContractHistoryTx: (...a: unknown[]) => H.getContractHistory(...a),
 }));
 
 vi.mock("../src/modules/employee/repo.js", () => ({
   findById: (...a: unknown[]) => H.employeeFindById(...a),
+  findByIdTx: (...a: unknown[]) => H.employeeFindById(...a),
 }));
 
 import { registerContractConsumers } from "../src/modules/contracts/consumer.js";
