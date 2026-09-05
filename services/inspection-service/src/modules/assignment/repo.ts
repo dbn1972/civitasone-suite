@@ -112,6 +112,27 @@ export async function findConflicts(
 }
 
 /**
+ * Tx-scoped variant of findConflicts: reads through the caller's already-open
+ * transaction instead of opening a nested one via scopedRead. Used by
+ * inspectorAssign (assignment/consumer.ts) -- calling the scopedRead-based
+ * version from inside an open db.transaction() opens a SECOND transaction
+ * competing for a connection from the same pool as the outer one, deadlocking
+ * every in-flight command once concurrency reaches pool.max (see
+ * .claude/skills/16-production-readiness-audit.md section 1).
+ */
+export async function findConflictsTx(
+  tx: Tx,
+  tenantId: string,
+  inspectorId: string,
+): Promise<ConflictDeclarationRow[]> {
+  return tx.select().from(conflictDeclarations)
+    .where(and(
+      eq(conflictDeclarations.tenantId, tenantId),
+      eq(conflictDeclarations.inspectorId, inspectorId),
+    ));
+}
+
+/**
  * Count assignments for an inspector on a specific date (for capacity validation).
  */
 export async function countDailyAssignments(
@@ -129,6 +150,25 @@ export async function countDailyAssignments(
       ));
     return result[0]?.count ?? 0;
   });
+}
+
+/**
+ * Tx-scoped variant of countDailyAssignments -- see findConflictsTx above.
+ */
+export async function countDailyAssignmentsTx(
+  tx: Tx,
+  tenantId: string,
+  inspectorId: string,
+  scheduledDate: string,
+): Promise<number> {
+  const result = await tx.select({ count: sql<number>`count(*)::int` })
+    .from(inspectionAssignments)
+    .where(and(
+      eq(inspectionAssignments.tenantId, tenantId),
+      eq(inspectionAssignments.inspectorId, inspectorId),
+      eq(inspectionAssignments.scheduledDate, scheduledDate),
+    ));
+  return result[0]?.count ?? 0;
 }
 
 /**
@@ -151,6 +191,25 @@ export async function findCapacity(
       return rows[0] ?? null;
     },
   );
+}
+
+/**
+ * Tx-scoped variant of findCapacity -- see findConflictsTx above. Bypasses
+ * the read-through cache deliberately: a value read inside the caller's own
+ * transaction must reflect the current transaction's view, not a
+ * possibly-stale cached one.
+ */
+export async function findCapacityTx(
+  tx: Tx,
+  tenantId: string,
+  inspectorId: string,
+): Promise<InspectorCapacityRow | null> {
+  const rows = await tx.select().from(inspectorCapacity)
+    .where(and(
+      eq(inspectorCapacity.tenantId, tenantId),
+      eq(inspectorCapacity.inspectorId, inspectorId),
+    ));
+  return rows[0] ?? null;
 }
 
 // ── Geo-Attendance ────────────────────────────────────────────────────────────
@@ -224,6 +283,24 @@ export async function findTourPlanById(
       return rows[0] ?? null;
     },
   );
+}
+
+/**
+ * Tx-scoped variant of findTourPlanById -- see findConflictsTx above.
+ * Bypasses the read-through cache deliberately, same reasoning as
+ * findCapacityTx.
+ */
+export async function findTourPlanByIdTx(
+  tx: Tx,
+  tenantId: string,
+  id: string,
+): Promise<TourPlanRow | null> {
+  const rows = await tx.select().from(tourPlans)
+    .where(and(
+      eq(tourPlans.id, id),
+      eq(tourPlans.tenantId, tenantId),
+    ));
+  return rows[0] ?? null;
 }
 
 /**
