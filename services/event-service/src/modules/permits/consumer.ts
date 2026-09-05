@@ -1,11 +1,13 @@
 import { pino } from "pino";
 import { randomInt } from "node:crypto";
 import type { Queue } from "@civitasone/queue";
+import { MUNICIPAL_EVENT_TYPES } from "@civitasone/events";
 import { db } from "../../shared/db.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { writeAudit } from "../../shared/audit.js";
 import { tenantScoped } from "../../shared/tenant-queue.js";
 import { cache } from "../../shared/infra.js";
+import { emitMunicipalNotification } from "../../shared/cross-events.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
 import * as appRepo from "../applications/repo.js";
@@ -90,6 +92,17 @@ export function registerPermitConsumers(rawQueue: Queue): void {
           applicationId: p.applicationId,
         },
       });
+      // Cross-service wiring: applicant-facing status notification. `application`
+      // was already fetched above (for the eligibility check) BEFORE this
+      // transaction opened, so this is not a fresh scopedRead call from inside
+      // an open db.transaction — no nested-transaction connection-pool deadlock
+      // risk (see building-service PR #1035 for that bug class).
+      await emitMunicipalNotification(tx, ctxOf(msg), {
+        eventType: MUNICIPAL_EVENT_TYPES.permitIssued,
+        recipient: application!.createdBy,
+        recipientId: p.id,
+        variables: { permitId: p.id, permitNumber, applicationId: p.applicationId },
+      });
       await writeAudit(tx, ctxOf(msg), {
         action: "permit.issue",
         resourceType: "event_permit",
@@ -111,6 +124,17 @@ export function registerPermitConsumers(rawQueue: Queue): void {
 
   queue.subscribe(COMMANDS.revokePermit, async (msg) => {
     const p = msg.payload as { id: string; tenantId: string; reason: string };
+    // Fetched BEFORE opening the write transaction (same convention as
+    // issuePermit's eligibility reads above) purely to resolve who to notify
+    // — revocation is punitive/important and the citizen must hear about it
+    // directly, not infer it from a later GET. A permit not found or already
+    // revoked is handled the normal way below (repo.updateStatus's WHERE
+    // guard simply matches zero rows); this lookup existing or not doesn't
+    // gate the revoke itself.
+    const permitForNotify = await repo.findById(p.id, msg.tenantId);
+    const applicationForNotify = permitForNotify
+      ? await appRepo.findById(permitForNotify.applicationId, msg.tenantId)
+      : null;
     let updated: Awaited<ReturnType<typeof repo.updateStatus>> = null;
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
@@ -124,6 +148,14 @@ export function registerPermitConsumers(rawQueue: Queue): void {
         correlationId: msg.correlationId,
         payload: { permitId: p.id, reason: p.reason },
       });
+      if (applicationForNotify) {
+        await emitMunicipalNotification(tx, ctxOf(msg), {
+          eventType: EVENTS.permitRevoked,
+          recipient: applicationForNotify.createdBy,
+          recipientId: p.id,
+          variables: { permitId: p.id, reason: p.reason, applicationId: applicationForNotify.id },
+        });
+      }
       await writeAudit(tx, ctxOf(msg), {
         action: "permit.revoke",
         resourceType: "event_permit",

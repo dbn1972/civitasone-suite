@@ -4,8 +4,11 @@ import { db } from "../../shared/db.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { writeAudit } from "../../shared/audit.js";
 import { tenantScoped } from "../../shared/tenant-queue.js";
+import { emitMunicipalNotification } from "../../shared/cross-events.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
+import * as permitRepo from "../permits/repo.js";
+import * as appRepo from "../applications/repo.js";
 
 const log = pino({ name: "event.post_event.consumer" });
 
@@ -62,6 +65,19 @@ export function registerPostEventConsumers(rawQueue: Queue): void {
     // that bypassed the route), not the primary path.
     const p = msg.payload as { id: string; tenantId: string; decision: string; refundMinor?: string };
     const refundAmount = p.refundMinor ? BigInt(p.refundMinor) : 0n;
+    // Resolve who to notify BEFORE opening the write transaction (same
+    // convention as permits/consumer.ts's revokePermit above) — this is a
+    // two-hop chain (inspection -> permit -> application) purely to find the
+    // organiser, not part of the decision logic itself, so it must not run
+    // as a scopedRead call from inside an already-open db.transaction (the
+    // deadlock class fixed in building-service PR #1035).
+    const inspectionForNotify = await repo.findById(p.id, msg.tenantId);
+    const permitForNotify = inspectionForNotify
+      ? await permitRepo.findById(inspectionForNotify.permitId, msg.tenantId)
+      : null;
+    const applicationForNotify = permitForNotify
+      ? await appRepo.findById(permitForNotify.applicationId, msg.tenantId)
+      : null;
     let updated: Awaited<ReturnType<typeof repo.updateDepositDecision>> = null;
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
@@ -78,6 +94,28 @@ export function registerPostEventConsumers(rawQueue: Queue): void {
         correlationId: msg.correlationId,
         payload: { inspectionId: p.id, decision: p.decision, refundMinor: String(refundAmount) },
       });
+      // Cross-service wiring: the deposit decision is directly, materially
+      // citizen-facing (it decides how much of their own money comes back),
+      // unlike conductInspection above which is an internal record with no
+      // decision attached yet. This is a notification only — NOT a second
+      // finance.challan.create — the deposit was already collected as part
+      // of the single combined challan raised at application creation
+      // (applications/consumer.ts); actually disbursing refundAmount back to
+      // the organiser is a separate concern (refund-service), out of scope
+      // for this service's Wave 3 wiring.
+      if (applicationForNotify) {
+        await emitMunicipalNotification(tx, ctxOf(msg), {
+          eventType: EVENTS.depositDecided,
+          recipient: applicationForNotify.createdBy,
+          recipientId: p.id,
+          variables: {
+            inspectionId: p.id,
+            decision: p.decision,
+            refundMinor: String(refundAmount),
+            applicationId: applicationForNotify.id,
+          },
+        });
+      }
       await writeAudit(tx, ctxOf(msg), {
         action: "deposit.decide",
         resourceType: "event_post_inspection",
