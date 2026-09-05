@@ -31,6 +31,43 @@ export default defineConfig({
         process.env.DATABASE_URL ??
         "postgres://animal_svc:animal_dev_pw@localhost:5435/civitas_animal",
     },
+    // Wave 3 cross-events wiring added tests/cross-events-integration.test.ts,
+    // which dynamically imports a SECOND and THIRD service's real db.ts/
+    // consumer/schema modules (finance-service, notification-service) after
+    // temporarily swapping process.env.DATABASE_URL to each one's own
+    // connection in turn (createTenantDb() reads DATABASE_URL once at
+    // import time, so this env-var swap is the only way to reach another
+    // service's real database from inside one test file).
+    //
+    // Confirmed against this exact service, the same way building-service
+    // and sewerage-service already found it (see
+    // services/sewerage-service/vitest.config.ts for the full writeup):
+    // the default `threads` pool reuses a small set of worker threads
+    // across test files, so Node module state (@civitasone/db's internal
+    // client caches, keyed off DATABASE_URL at import time) can leak across
+    // files that land in the same thread — running the full suite
+    // (`vitest run`, no flags) alongside the six pre-existing test files
+    // made cross-events-integration.test.ts's notification-service
+    // assertion fail deterministically (a delivery row this test had just
+    // caused to be written was never found), even though the same file
+    // passed cleanly every time run in isolation. `pool: "forks"` gives
+    // every test file its own OS process, removing the shared module state
+    // entirely; `fileParallelism: false` serializes file execution on top
+    // of that (each file still runs its own tests normally, only the
+    // process-level schedule changes) — this test file's DATABASE_URL
+    // flips are process-wide for the file, not test-scoped, so a
+    // concurrently-running sibling file must not observe them. Same fix
+    // fleet-wide for this class of bug: trade-service (PR #1022),
+    // parking-service (PR #1026), advertisement-service (PR #1030) and
+    // sewerage-service (PR #1029) all hit a variant of it and used this
+    // exact setting.
+    pool: "forks",
+    poolOptions: {
+      forks: {
+        singleFork: false,
+      },
+    },
+    fileParallelism: false,
     coverage: {
       provider: "v8",
       exclude: ["dist/**", "src/index.ts", "src/worker.ts", "**/*.config.ts"],
