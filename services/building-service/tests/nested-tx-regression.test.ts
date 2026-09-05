@@ -38,6 +38,7 @@ import { eq } from "drizzle-orm";
 import { MemoryQueue } from "@civitasone/queue";
 import { runWithTenant } from "@civitasone/db";
 import { db, sqlClient } from "../src/shared/db.js";
+import { outboxMessages } from "@civitasone/outbox";
 import { buildingApplications } from "../src/modules/applications/schema.js";
 import { buildingPermits } from "../src/modules/permits/schema.js";
 import * as appRepo from "../src/modules/applications/repo.js";
@@ -51,6 +52,15 @@ const ACTOR = "80000000-dead-4000-8000-00000000ac70";
 
 async function cleanup(): Promise<void> {
   await runWithTenant(TENANT, () => db.transaction(async (tx) => {
+    // These tests run real commands through the consumers, which (per the
+    // Wave 3 cross-events wiring) write real _outbox.messages rows in the
+    // same transaction as their status writes. _outbox.messages has RLS
+    // disabled and relayOnce() scans it unscoped-by-tenant, so leftover rows
+    // here get swept into an unrelated later test file's own relayOnce()
+    // call and can starve it of the specific row it expects within its
+    // assertion window -- clean them up the same way admin-service's tests
+    // do (tests/admin.test.ts), scoped by this file's own TENANT.
+    await tx.delete(outboxMessages).where(eq(outboxMessages.tenantId, TENANT));
     await tx.delete(buildingPermits).where(eq(buildingPermits.tenantId, TENANT));
     await tx.delete(buildingApplications).where(eq(buildingApplications.tenantId, TENANT));
   }));
