@@ -236,11 +236,16 @@ vi.mock("../src/modules/assignment/repo.js", () => ({
   findAssignmentsByTenant: vi.fn().mockResolvedValue({ data: [], meta: { page: 1, pageSize: 20, total: 0 } }),
   insertAssignment: vi.fn().mockResolvedValue(undefined),
   findConflicts: vi.fn().mockResolvedValue([]),
+  findConflictsTx: vi.fn().mockResolvedValue([]),
   countDailyAssignments: vi.fn().mockResolvedValue(0),
+  countDailyAssignmentsTx: vi.fn().mockResolvedValue(0),
   findCapacity: vi.fn().mockResolvedValue(null),
+  findCapacityTx: vi.fn().mockResolvedValue(null),
   insertGeoAttendance: vi.fn().mockResolvedValue(undefined),
   insertTourPlan: vi.fn().mockResolvedValue(undefined),
   findTourPlan: vi.fn().mockResolvedValue(null),
+  findTourPlanById: vi.fn().mockResolvedValue(null),
+  findTourPlanByIdTx: vi.fn().mockResolvedValue(null),
 }));
 
 vi.mock("../src/modules/checklist/repo.js", () => ({

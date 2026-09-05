@@ -112,11 +112,16 @@ vi.mock("../src/modules/assignment/repo.js", () => ({
   findAssignmentsByTenant: vi.fn().mockResolvedValue({ data: [], meta: { page: 1, pageSize: 20, total: 0 } }),
   insertAssignment: vi.fn().mockResolvedValue({ id: "assign-1" }),
   findConflicts: vi.fn().mockResolvedValue([]),
+  findConflictsTx: vi.fn().mockResolvedValue([]),
   countDailyAssignments: vi.fn().mockResolvedValue(0),
+  countDailyAssignmentsTx: vi.fn().mockResolvedValue(0),
   findCapacity: vi.fn().mockResolvedValue({ dailyLimit: 5 }),
+  findCapacityTx: vi.fn().mockResolvedValue({ dailyLimit: 5 }),
   insertGeoAttendance: vi.fn().mockResolvedValue({ id: "geo-1" }),
   insertTourPlan: vi.fn().mockResolvedValue({ id: "tour-1" }),
   findTourPlan: vi.fn().mockResolvedValue(null),
+  findTourPlanById: vi.fn().mockResolvedValue(null),
+  findTourPlanByIdTx: vi.fn().mockResolvedValue(null),
 }));
 
 vi.mock("../src/modules/checklist/repo.js", () => ({

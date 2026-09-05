@@ -143,7 +143,7 @@ export function registerAssignmentConsumers(queue: Queue): void {
       if (!(await markProcessed(tx, msg.messageId))) return;
 
       // 1. Fetch inspector capacity (competencies + daily limit)
-      const capacity = await repo.findCapacity(msg.tenantId, p.inspectorId);
+      const capacity = await repo.findCapacityTx(tx, msg.tenantId, p.inspectorId);
       if (!capacity) {
         throw new NonRetryableError(
           `No capacity record found for inspector ${p.inspectorId}`,
@@ -168,7 +168,7 @@ export function registerAssignmentConsumers(queue: Queue): void {
 
       // 3. Check conflict of interest (unless bypassed)
       if (!p.conflictCheckBypass) {
-        const conflicts = await repo.findConflicts(msg.tenantId, p.inspectorId);
+        const conflicts = await repo.findConflictsTx(tx, msg.tenantId, p.inspectorId);
         try {
           checkConflictOfInterest(
             conflicts.map((c) => ({ entityId: c.entityId, relationshipType: c.relationshipType })),
@@ -183,7 +183,8 @@ export function registerAssignmentConsumers(queue: Queue): void {
       }
 
       // 4. Validate daily capacity
-      const dailyCount = await repo.countDailyAssignments(
+      const dailyCount = await repo.countDailyAssignmentsTx(
+        tx,
         msg.tenantId,
         p.inspectorId,
         p.scheduledDate,
@@ -418,7 +419,7 @@ export function registerAssignmentConsumers(queue: Queue): void {
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
 
-      const existing = await repo.findTourPlanById(msg.tenantId, p.tourPlanId);
+      const existing = await repo.findTourPlanByIdTx(tx, msg.tenantId, p.tourPlanId);
       if (!existing) {
         throw new NonRetryableError(
           `Tour plan ${p.tourPlanId} not found for tenant ${msg.tenantId}`,
@@ -519,7 +520,7 @@ export function registerAssignmentConsumers(queue: Queue): void {
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
 
-      const existing = await repo.findTourPlanById(msg.tenantId, p.tourPlanId);
+      const existing = await repo.findTourPlanByIdTx(tx, msg.tenantId, p.tourPlanId);
       if (!existing) {
         throw new NonRetryableError(
           `Tour plan ${p.tourPlanId} not found for tenant ${msg.tenantId}`,
