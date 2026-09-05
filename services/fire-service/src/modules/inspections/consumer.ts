@@ -5,8 +5,10 @@ import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { writeAudit } from "../../shared/audit.js";
 import { cache } from "../../shared/infra.js";
 import { tenantScoped } from "../../shared/tenant-queue.js";
+import { emitMunicipalNotification, MUNICIPAL_EVENT_TYPES } from "../../shared/cross-events.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
+import * as appRepo from "../applications/repo.js";
 import { validateFindings } from "./domain.js";
 
 const log = pino({ name: "fire.inspections.consumer" });
@@ -20,6 +22,14 @@ export function registerInspectionConsumers(rawQueue: Queue): void {
 
   queue.subscribe(COMMANDS.scheduleInspection, async (msg) => {
     const p = msg.payload as { id: string; applicationId: string; inspectorId: string; scheduledDate: string };
+    // Recipient-lookup read BEFORE opening the write transaction — never
+    // nested inside it (the PR #1028 connection-pool deadlock class:
+    // repo.findById below opens its own scopedRead transaction, so calling
+    // it from inside db.transaction would nest transactions on the same
+    // pool). This service has no citizen-name field anywhere in its schema
+    // (see shared/cross-events.ts's file header), so the application's
+    // buildingName/createdBy is the best available notification identity.
+    const application = await appRepo.findById(msg.tenantId, p.applicationId);
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       await repo.insert(tx, {
@@ -40,6 +50,24 @@ export function registerInspectionConsumers(rawQueue: Queue): void {
         correlationId: msg.correlationId,
         payload: { inspectionId: p.id, applicationId: p.applicationId, scheduledDate: p.scheduledDate },
       });
+      // Citizen-meaningful transition: an inspection has been scheduled
+      // against the applicant's building and they need the date. No
+      // canonical "inspection scheduled" municipal event type exists (see
+      // packages/events/src/municipal-cross.ts's MUNICIPAL_EVENT_TYPES) —
+      // statusChanged is the same fallback shop-service/sewerage-service use
+      // for intermediate, non-terminal transitions.
+      if (application) {
+        // recipientId is the application's own id (the stable per-citizen
+        // -journey inbox key this schema-less-of-a-citizen-field service
+        // uses throughout — see applications/consumer.ts's submitApplication
+        // for the full reasoning), not inspectorId/createdBy.
+        await emitMunicipalNotification(tx, ctxOf(msg), {
+          eventType: MUNICIPAL_EVENT_TYPES.statusChanged,
+          recipient: application.buildingName,
+          recipientId: p.applicationId,
+          variables: { inspectionId: p.id, applicationId: p.applicationId, status: "inspection_scheduled", scheduledDate: p.scheduledDate },
+        });
+      }
       await writeAudit(tx, ctxOf(msg), { action: "inspection.schedule", resourceType: "fire_inspection", resourceId: p.id });
     });
     log.info({ id: p.id, applicationId: p.applicationId }, "fire inspection scheduled");
@@ -47,6 +75,14 @@ export function registerInspectionConsumers(rawQueue: Queue): void {
 
   queue.subscribe(COMMANDS.completeInspection, async (msg) => {
     const p = msg.payload as { inspectionId: string; recommendation: string; deficiencies?: unknown[] };
+    // Recipient-lookup reads BEFORE opening the write transaction (same
+    // deadlock-class reasoning as scheduleInspection above). This command's
+    // payload carries no applicationId, so the inspection row must be read
+    // first to get it, then the application row for buildingName/createdBy.
+    const existingInspection = await repo.findById(msg.tenantId, p.inspectionId);
+    const application = existingInspection
+      ? await appRepo.findById(msg.tenantId, existingInspection.applicationId)
+      : null;
     let applied = false;
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
@@ -67,6 +103,23 @@ export function registerInspectionConsumers(rawQueue: Queue): void {
         correlationId: msg.correlationId,
         payload: { inspectionId: p.inspectionId, recommendation: p.recommendation },
       });
+      // Citizen-meaningful transition: the inspection outcome (approve/
+      // reject/re_inspect) directly determines whether the applicant can
+      // move on to NOC issuance — they need to know it happened and what
+      // was recommended.
+      if (application) {
+        await emitMunicipalNotification(tx, ctxOf(msg), {
+          eventType: MUNICIPAL_EVENT_TYPES.statusChanged,
+          recipient: application.buildingName,
+          recipientId: existingInspection!.applicationId,
+          variables: {
+            inspectionId: p.inspectionId,
+            applicationId: existingInspection!.applicationId,
+            status: "inspection_completed",
+            recommendation: p.recommendation,
+          },
+        });
+      }
       await writeAudit(tx, ctxOf(msg), { action: "inspection.complete", resourceType: "fire_inspection", resourceId: p.inspectionId });
     });
     // BUG FIX: same cache-invalidation gap as applications/consumer.ts (see
@@ -111,6 +164,11 @@ export function registerInspectionConsumers(rawQueue: Queue): void {
         correlationId: msg.correlationId,
         payload: { inspectionId: p.inspectionId },
       });
+      // Internal evidence-gathering step, not a status change itself
+      // (recordFindings deliberately never flips status — see the CRITICAL
+      // fix comment above) — deliberately not notified, mirroring
+      // sewerage-service's field_record.create precedent for the same
+      // reasoning class.
       await writeAudit(tx, ctxOf(msg), { action: "inspection.record_findings", resourceType: "fire_inspection", resourceId: p.inspectionId });
     });
     if (applied) await cache.invalidate(cache.makeKey(msg.tenantId, "inspection", p.inspectionId));

@@ -5,6 +5,7 @@ import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { writeAudit } from "../../shared/audit.js";
 import { cache } from "../../shared/infra.js";
 import { tenantScoped } from "../../shared/tenant-queue.js";
+import { emitMunicipalNotification, MUNICIPAL_EVENT_TYPES } from "../../shared/cross-events.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
 import * as appRepo from "../applications/repo.js";
@@ -97,6 +98,21 @@ export function registerNocConsumers(rawQueue: Queue): void {
         correlationId: msg.correlationId,
         payload: { nocId: p.id, nocNumber, applicationId: p.applicationId, verificationCode },
       });
+      // Citizen-meaningful transition: the fire-safety NOC — the terminal,
+      // most consequential outcome of this whole module — has been issued.
+      // `application` was already fetched above for the eligibility check,
+      // so no extra recipient-lookup read is needed here. recipientId is the
+      // application's own id — the stable per-citizen-journey inbox key
+      // this service uses throughout (see applications/consumer.ts's
+      // submitApplication for the full reasoning), so a citizen's
+      // application-submitted and NOC-issued notifications land in the same
+      // notification-service inbox.
+      await emitMunicipalNotification(tx, ctxOf(msg), {
+        eventType: MUNICIPAL_EVENT_TYPES.permitIssued,
+        recipient: application?.buildingName ?? nocNumber,
+        recipientId: p.applicationId,
+        variables: { nocId: p.id, nocNumber, applicationId: p.applicationId, verificationCode },
+      });
       await writeAudit(tx, ctxOf(msg), { action: "noc.issue", resourceType: "fire_noc", resourceId: p.id });
       log.info({ id: p.id, nocNumber }, "fire NOC issued");
     });
@@ -104,6 +120,13 @@ export function registerNocConsumers(rawQueue: Queue): void {
 
   queue.subscribe(COMMANDS.suspendNoc, async (msg) => {
     const p = msg.payload as { nocId: string; reason: string };
+    // Recipient-lookup reads BEFORE opening the write transaction — never
+    // nested inside it (PR #1028 deadlock class). This command's payload
+    // carries no applicationId/buildingName, so the NOC row is read first to
+    // get applicationId, then the application row for the notification
+    // identity.
+    const existingNoc = await repo.findById(msg.tenantId, p.nocId);
+    const application = existingNoc ? await appRepo.findById(msg.tenantId, existingNoc.applicationId) : null;
     let applied = false;
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
@@ -112,6 +135,17 @@ export function registerNocConsumers(rawQueue: Queue): void {
       applied = true;
       await repo.updatePublicDirectoryStatus(tx, p.nocId, "suspended");
       await enqueue(tx, { topic: EVENTS.nocSuspended, eventType: EVENTS.nocSuspended, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { nocId: p.nocId, reason: p.reason } });
+      // Citizen-meaningful (adverse) transition — the NOC holder must be
+      // told their fire-safety NOC was suspended and why. recipientId falls
+      // back to the noc's own applicationId when known, else the nocId
+      // itself (same "some stable id, since there is no real citizen-account
+      // id" reasoning as issueNoc above).
+      await emitMunicipalNotification(tx, ctxOf(msg), {
+        eventType: MUNICIPAL_EVENT_TYPES.statusChanged,
+        recipient: application?.buildingName ?? existingNoc?.nocNumber ?? p.nocId,
+        recipientId: existingNoc?.applicationId ?? p.nocId,
+        variables: { nocId: p.nocId, status: "suspended", reason: p.reason },
+      });
       await writeAudit(tx, ctxOf(msg), { action: "noc.suspend", resourceType: "fire_noc", resourceId: p.nocId });
     });
     // BUG FIX: same cache-invalidation gap as applications/consumer.ts (see
@@ -124,6 +158,9 @@ export function registerNocConsumers(rawQueue: Queue): void {
 
   queue.subscribe(COMMANDS.revokeNoc, async (msg) => {
     const p = msg.payload as { nocId: string; reason: string };
+    // Same recipient-lookup-before-transaction reasoning as suspendNoc above.
+    const existingNoc = await repo.findById(msg.tenantId, p.nocId);
+    const application = existingNoc ? await appRepo.findById(msg.tenantId, existingNoc.applicationId) : null;
     let applied = false;
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
@@ -135,6 +172,14 @@ export function registerNocConsumers(rawQueue: Queue): void {
       applied = true;
       await repo.updatePublicDirectoryStatus(tx, p.nocId, "revoked");
       await enqueue(tx, { topic: EVENTS.nocRevoked, eventType: EVENTS.nocRevoked, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { nocId: p.nocId, reason: p.reason } });
+      // Citizen-meaningful (adverse) transition — the NOC holder must be
+      // told their fire-safety NOC was revoked and why.
+      await emitMunicipalNotification(tx, ctxOf(msg), {
+        eventType: MUNICIPAL_EVENT_TYPES.statusChanged,
+        recipient: application?.buildingName ?? existingNoc?.nocNumber ?? p.nocId,
+        recipientId: existingNoc?.applicationId ?? p.nocId,
+        variables: { nocId: p.nocId, status: "revoked", reason: p.reason },
+      });
       await writeAudit(tx, ctxOf(msg), { action: "noc.revoke", resourceType: "fire_noc", resourceId: p.nocId });
     });
     if (applied) await cache.invalidate(cache.makeKey(msg.tenantId, "noc", p.nocId));
