@@ -5,6 +5,11 @@ import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { writeAudit } from "../../shared/audit.js";
 import { tenantScoped } from "../../shared/tenant-queue.js";
 import { invalidateCacheSafely } from "../../shared/infra.js";
+import {
+  emitMunicipalNotification,
+  municipalDecisionNotificationEventType,
+  MUNICIPAL_EVENT_TYPES,
+} from "../../shared/cross-events.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
 import * as reqRepo from "../requests/repo.js";
@@ -170,6 +175,30 @@ export function registerProcessingConsumers(rawQueue: Queue): void {
           );
           throw new RaceLost();
         }
+        // Citizen-meaningful transition: the request is now FULLY approved
+        // (both maker and checker levels cleared), not merely one internal
+        // approval step — a level-1 checker sign-off is not yet news the
+        // citizen needs. reqRepo.findByIdTx is a plain SELECT scoped to
+        // this already-open tx (not scopedRead, which would open a nested
+        // transaction on the same pool connection — see this service's
+        // cross-events.ts and the RACE-2/RACE-3 doc comments in this file
+        // for why that class of bug matters here), so this read is safe
+        // immediately after the write above.
+        const request = await reqRepo.findByIdTx(tx, p.requestId, msg.tenantId);
+        if (request) {
+          await emitMunicipalNotification(tx, ctxOf(msg), {
+            eventType: municipalDecisionNotificationEventType(MUNICIPAL_EVENT_TYPES.statusChanged, "approved"),
+            recipient: request.applicantName,
+            recipientId: p.requestId,
+            variables: {
+              requestId: p.requestId,
+              requestNumber: request.requestNumber,
+              decision: "approved",
+              refundAmountMinor: request.refundAmountMinor.toString(),
+              currency: request.currency,
+            },
+          });
+        }
       }
       await enqueue(tx, {
         topic: EVENTS.requestApproved,
@@ -240,6 +269,22 @@ export function registerProcessingConsumers(rawQueue: Queue): void {
         );
         throw new RaceLost();
       }
+      // Citizen-meaningful transition: same tx-scoped re-read reasoning as
+      // approveRequest above.
+      const request = await reqRepo.findByIdTx(tx, p.requestId, msg.tenantId);
+      if (request) {
+        await emitMunicipalNotification(tx, ctxOf(msg), {
+          eventType: municipalDecisionNotificationEventType(MUNICIPAL_EVENT_TYPES.statusChanged, "rejected"),
+          recipient: request.applicantName,
+          recipientId: p.requestId,
+          variables: {
+            requestId: p.requestId,
+            requestNumber: request.requestNumber,
+            decision: "rejected",
+            remarks: p.remarks,
+          },
+        });
+      }
       await enqueue(tx, {
         topic: EVENTS.requestRejected,
         eventType: EVENTS.requestRejected,
@@ -303,6 +348,23 @@ export function registerProcessingConsumers(rawQueue: Queue): void {
           "return lost the race: a concurrent action already moved the request out of under_review — rolling back this return (and the approval it would have superseded) entirely",
         );
         throw new RaceLost();
+      }
+      // Citizen-meaningful transition: a return sends the request back to
+      // the citizen for correction — genuinely actionable, same tx-scoped
+      // re-read reasoning as approveRequest above.
+      const request = await reqRepo.findByIdTx(tx, p.requestId, msg.tenantId);
+      if (request) {
+        await emitMunicipalNotification(tx, ctxOf(msg), {
+          eventType: municipalDecisionNotificationEventType(MUNICIPAL_EVENT_TYPES.statusChanged, "returned"),
+          recipient: request.applicantName,
+          recipientId: p.requestId,
+          variables: {
+            requestId: p.requestId,
+            requestNumber: request.requestNumber,
+            decision: "returned",
+            remarks: p.remarks,
+          },
+        });
       }
       await enqueue(tx, {
         topic: EVENTS.requestReturned,

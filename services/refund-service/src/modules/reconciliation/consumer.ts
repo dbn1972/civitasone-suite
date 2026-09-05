@@ -5,6 +5,7 @@ import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { writeAudit } from "../../shared/audit.js";
 import { tenantScoped } from "../../shared/tenant-queue.js";
 import { invalidateCacheSafely } from "../../shared/infra.js";
+import { emitMunicipalNotification, MUNICIPAL_EVENT_TYPES } from "../../shared/cross-events.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
 import * as reqRepo from "../requests/repo.js";
@@ -143,6 +144,30 @@ export function registerReconciliationConsumers(rawQueue: Queue): void {
           throw new RaceLost();
         }
         requestId = disb.requestId;
+        // Citizen-meaningful transition: the refund has actually landed in
+        // the citizen's bank account. reqRepo.findByIdTx is a plain
+        // tx-scoped SELECT (not scopedRead, which would open a nested
+        // transaction on this same connection — see this service's
+        // cross-events.ts and the RACE-3 doc comments above for why that
+        // matters here), so reading the request's applicantName from
+        // inside this already-open tx is safe. Deliberately no
+        // bankAccountDetails in `variables` — see cross-events.ts.
+        const request = await reqRepo.findByIdTx(tx, disb.requestId, msg.tenantId);
+        if (request) {
+          await emitMunicipalNotification(tx, ctxOf(msg), {
+            eventType: MUNICIPAL_EVENT_TYPES.statusChanged,
+            recipient: request.applicantName,
+            recipientId: disb.requestId,
+            variables: {
+              requestId: disb.requestId,
+              requestNumber: request.requestNumber,
+              disbursementId: p.id,
+              disbursedAmountMinor: disb.disbursedAmountMinor.toString(),
+              currency: disb.currency,
+              status: "refunded",
+            },
+          });
+        }
       }
       await enqueue(tx, {
         topic: EVENTS.disbursementCompleted,
@@ -195,6 +220,25 @@ export function registerReconciliationConsumers(rawQueue: Queue): void {
           throw new RaceLost();
         }
         requestId = disb.requestId;
+        // Citizen-meaningful transition: the disbursement failed (e.g. bad
+        // bank details) — actionable, the citizen may need to correct
+        // something before a retry. Same tx-scoped re-read reasoning as
+        // completeDisbursement above.
+        const request = await reqRepo.findByIdTx(tx, disb.requestId, msg.tenantId);
+        if (request) {
+          await emitMunicipalNotification(tx, ctxOf(msg), {
+            eventType: MUNICIPAL_EVENT_TYPES.statusChanged,
+            recipient: request.applicantName,
+            recipientId: disb.requestId,
+            variables: {
+              requestId: disb.requestId,
+              requestNumber: request.requestNumber,
+              disbursementId: p.id,
+              reason: p.reason,
+              status: "failed",
+            },
+          });
+        }
       }
       await enqueue(tx, {
         topic: EVENTS.disbursementFailed,
