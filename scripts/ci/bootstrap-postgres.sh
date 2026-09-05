@@ -98,6 +98,11 @@ run_bootstrap "$ROOT/infra/db/bootstrap/bootstrap_missing_schemas.sql"
 # batches. Without this, all 6 services' migrations fail in CI with
 # "database does not exist" before the migration loop ever reaches them.
 run_bootstrap "$ROOT/infra/db/bootstrap/bootstrap_sec5_batch3.sql"
+# sewerage-service had NO bootstrap entry at all (no role, no database) and
+# also had no migrations directory until this pass added one -- see
+# services/sewerage-service/migrations/0001_initial.sql and the SERVICE_DBS
+# entry below.
+run_bootstrap "$ROOT/infra/db/bootstrap/bootstrap_sewerage.sql"
 
 # Every migration that fails is recorded here and reconciled against a committed
 # allow-list at the end of this script. Before that reconciliation existed, a
@@ -148,6 +153,10 @@ declare -A SERVICE_DBS=(
   [project-service]="project_svc:civitas_project"
   [asset-service]="asset_svc:civitas_asset"
   [estab-service]="estab_svc:civitas_estab"
+  # sewerage-service: same gap as journey/catalogue/loyalty/cdp above -- real
+  # migration added in this pass (services/sewerage-service/migrations/), but
+  # never registered here, so its role/database never existed in CI.
+  [sewerage-service]="sewerage_svc:civitas_sewerage"
   [payroll-service]="payroll_svc:civitas_payroll"
   [hrms-service]="hrms_svc:civitas_hrms"
   [theme-service]="theme_svc:civitas_theme"
