@@ -59,12 +59,16 @@ export function registerBankReconConsumers(queue: Queue): void {
     const p = msg.payload as { id: string; tenantId: string; nearDays?: number };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
-      const stmt = await repo.findStatement(p.id, p.tenantId);
+      // Tx-scoped reads: these run inside this handler's own db.transaction, so
+      // the scopedRead-based (nested-transaction) variants must not be used
+      // here — see findStatementTx's doc comment for the pool-exhaustion
+      // deadlock that causes under concurrent load.
+      const stmt = await repo.findStatementTx(tx, p.id, p.tenantId);
       if (!stmt) throw new Error(`statement ${p.id} not found`);
 
       const lines = (await repo.linesForStatement(tx, p.id)).filter((l) => !l.matched);
-      const payments = await repo.unreconciledPayments(p.tenantId, stmt.bankAccountId);
-      const challans = await repo.unreconciledChallans(p.tenantId, stmt.bankAccountId);
+      const payments = await repo.unreconciledPaymentsTx(tx, p.tenantId, stmt.bankAccountId);
+      const challans = await repo.unreconciledChallansTx(tx, p.tenantId, stmt.bankAccountId);
 
       const debitLines: StatementLine[] = lines.filter((l) => l.direction === "debit")
         .map((l) => ({ id: l.id, amountMinor: l.amountMinor, direction: "debit" as const, date: l.lineDate, reference: l.reference }));

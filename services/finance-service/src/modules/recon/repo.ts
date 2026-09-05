@@ -63,6 +63,21 @@ export async function getBreak(tenantId: string, id: string): Promise<ReconBreak
   return rows[0] ?? null;
 }
 
+/**
+ * Tx-scoped variant of getBreak: reads through the caller's already-open
+ * transaction. finance.recon.exception_action calls this from inside its own
+ * db.transaction(); the scopedRead-based getBreak would open a second, nested
+ * transaction competing for an extra pool connection while the outer one is
+ * already held — under load (pool.max concurrent in-flight commands) that is
+ * a total, silent deadlock (every in-flight transaction blocks forever
+ * waiting on a connection the others are holding hostage).
+ */
+export async function getBreakTx(tx: Writer, tenantId: string, id: string): Promise<ReconBreakRow | null> {
+  const rows = await (tx as typeof db).select().from(reconBreak)
+    .where(and(eq(reconBreak.tenantId, tenantId), eq(reconBreak.id, id))).limit(1);
+  return rows[0] ?? null;
+}
+
 export async function updateBreakStatus(
   tx: Writer,
   tenantId: string,

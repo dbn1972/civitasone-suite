@@ -17,7 +17,7 @@ export function registerPfmsConsumers(queue: Queue): void {
     };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
-      const batch = await repo.findPfmsById(p.id, p.tenantId);
+      const batch = await repo.findPfmsByIdTx(tx, p.id, p.tenantId);
       if (!batch) throw new Error(`PFMS batch ${p.id} not found`);
       if (batch.submissionStatus === "signed") return; // idempotent
 
@@ -46,7 +46,7 @@ export function registerPfmsConsumers(queue: Queue): void {
     const p = msg.payload as { id: string; tenantId: string };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
-      const batch = await repo.findPfmsById(p.id, p.tenantId);
+      const batch = await repo.findPfmsByIdTx(tx, p.id, p.tenantId);
       if (!batch) throw new Error(`PFMS batch ${p.id} not found`);
       if (batch.submissionStatus === "submitted") return; // idempotent
       if (batch.submissionStatus !== "signed") {

@@ -23,6 +23,23 @@ export async function findStatement(id: string, tenantId: string): Promise<BankS
   return rows[0] ?? null;
 }
 
+/**
+ * Tx-scoped variant of findStatement: reads through the CALLER's already-open
+ * transaction instead of opening a nested one via scopedRead. Use this from
+ * inside a db.transaction() callback (e.g. finance.bank_statement.reconcile) —
+ * calling the scopedRead-based findStatement there opens a second, nested
+ * transaction that needs an extra pool connection while the outer transaction
+ * already holds one; under load (pool.max concurrent outer transactions all
+ * doing the same nested read) every one of them blocks forever waiting on a
+ * connection the others are holding hostage. Keep findStatement itself for its
+ * legitimate non-transactional (route-handler) callers.
+ */
+export async function findStatementTx(tx: Writer, id: string, tenantId: string): Promise<BankStatementRow | null> {
+  const rows = await (tx as typeof db).select().from(bankStatement)
+    .where(and(eq(bankStatement.id, id), eq(bankStatement.tenantId, tenantId))).limit(1);
+  return rows[0] ?? null;
+}
+
 export async function linesForStatement(tx: Writer, statementId: string, limit = 500): Promise<BankStatementLineRow[]> {
   return (tx as typeof db).select().from(bankStatementLines)
     .where(eq(bankStatementLines.statementId, statementId))
@@ -42,7 +59,16 @@ export async function listStatements(tenantId: string, limit: number) {
  * eligible (legacy/untagged), preserving prior behaviour.
  */
 export async function unreconciledPayments(tenantId: string, bankAccountId?: string, limit = 500) {
-  return scopedRead((tx) => tx.select({
+  return scopedRead((tx) => unreconciledPaymentsQuery(tx, tenantId, bankAccountId, limit));
+}
+
+/** Tx-scoped variant of unreconciledPayments — see findStatementTx for why. */
+export async function unreconciledPaymentsTx(tx: Writer, tenantId: string, bankAccountId?: string, limit = 500) {
+  return unreconciledPaymentsQuery(tx as typeof db, tenantId, bankAccountId, limit);
+}
+
+function unreconciledPaymentsQuery(tx: typeof db, tenantId: string, bankAccountId: string | undefined, limit: number) {
+  return tx.select({
     id: financePayments.id,
     amountMinor: financePayments.amountMinor,
     date: sql<string>`to_char(${financePayments.createdAt}, 'YYYY-MM-DD')`,
@@ -55,7 +81,7 @@ export async function unreconciledPayments(tenantId: string, bankAccountId?: str
         ? [or(isNull(financePayments.bankAccountId), eq(financePayments.bankAccountId, bankAccountId))!]
         : []),
     ))
-    .limit(limit));
+    .limit(limit);
 }
 
 /**
@@ -64,7 +90,16 @@ export async function unreconciledPayments(tenantId: string, bankAccountId?: str
  * (NULL) challans remain eligible.
  */
 export async function unreconciledChallans(tenantId: string, bankAccountId?: string, limit = 500) {
-  return scopedRead((tx) => tx.select({
+  return scopedRead((tx) => unreconciledChallansQuery(tx, tenantId, bankAccountId, limit));
+}
+
+/** Tx-scoped variant of unreconciledChallans — see findStatementTx for why. */
+export async function unreconciledChallansTx(tx: Writer, tenantId: string, bankAccountId?: string, limit = 500) {
+  return unreconciledChallansQuery(tx as typeof db, tenantId, bankAccountId, limit);
+}
+
+function unreconciledChallansQuery(tx: typeof db, tenantId: string, bankAccountId: string | undefined, limit: number) {
+  return tx.select({
     id: financeChallans.id,
     amountMinor: financeChallans.amountMinor,
     date: sql<string>`to_char(${financeChallans.createdAt}, 'YYYY-MM-DD')`,
@@ -77,7 +112,7 @@ export async function unreconciledChallans(tenantId: string, bankAccountId?: str
         ? [or(isNull(financeChallans.bankAccountId), eq(financeChallans.bankAccountId, bankAccountId))!]
         : []),
     ))
-    .limit(limit));
+    .limit(limit);
 }
 
 export async function markLineMatched(tx: Writer, lineId: string, matchType: string, matchId: string): Promise<void> {

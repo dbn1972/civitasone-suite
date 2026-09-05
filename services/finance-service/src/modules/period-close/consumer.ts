@@ -15,7 +15,7 @@ export function registerPeriodCloseConsumers(queue: Queue): void {
     const p = msg.payload as { tenantId: string; period: string; closeType: "soft_close" | "hard_close" };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
-      const existing = await periodRepo.findPeriodClose(p.tenantId, p.period);
+      const existing = await periodRepo.findPeriodCloseTx(tx, p.tenantId, p.period);
       if (existing?.status === "hard_close") return; // already hard-closed, idempotent
       if (existing?.status === p.closeType) return; // already in desired state
 
@@ -43,7 +43,7 @@ export function registerPeriodCloseConsumers(queue: Queue): void {
     const p = msg.payload as { tenantId: string; period: string; reason?: string };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
-      const existing = await periodRepo.findPeriodClose(p.tenantId, p.period);
+      const existing = await periodRepo.findPeriodCloseTx(tx, p.tenantId, p.period);
       if (!existing || existing.status === "open") return; // already open
       const fromStatus = existing.status;
 

@@ -44,9 +44,17 @@ vi.mock("../src/modules/bank-recon/repo.js", () => ({
   insertStatement: (...a: any[]) => insertStatementMock(...a),
   insertLine: (...a: any[]) => insertLineMock(...a),
   findStatement: vi.fn(async () => ({ id: "s1", bankAccountId: "ba1" })),
+  // Tx-scoped variants (fix/finance-nested-tx-deadlock): the consumer now
+  // reads through its own already-open transaction instead of the
+  // scopedRead-based functions above, to avoid a nested-transaction
+  // connection-pool deadlock under load. Mocked identically to their
+  // non-Tx counterparts since this suite doesn't exercise real Postgres.
+  findStatementTx: vi.fn(async () => ({ id: "s1", bankAccountId: "ba1" })),
   linesForStatement: vi.fn(async () => []),
   unreconciledPayments: vi.fn(async () => []),
+  unreconciledPaymentsTx: vi.fn(async () => []),
   unreconciledChallans: vi.fn(async () => []),
+  unreconciledChallansTx: vi.fn(async () => []),
   markPaymentReconciled: vi.fn(async () => true),
   markChallanReconciled: vi.fn(async () => true),
   markLineMatched: vi.fn(async () => undefined),

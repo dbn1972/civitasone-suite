@@ -12,6 +12,24 @@ export async function findPeriodClose(tenantId: string, period: string) {
   return rows[0] ?? null;
 }
 
+/**
+ * Tx-scoped variant of findPeriodClose: reads through the caller's already-open
+ * transaction. finance.period.close / finance.period.reopen call this from
+ * inside their own db.transaction(); calling the scopedRead-based
+ * findPeriodClose there would open a second, nested transaction competing for
+ * an extra pool connection while the outer one is already held — under load
+ * (pool.max concurrent in-flight commands) that is a total, silent deadlock.
+ * Returns the full row (unlike getPeriodStatusTx below, which only needs the
+ * status) since callers here also need `id` for the upsert.
+ */
+export async function findPeriodCloseTx(tx: Writer, tenantId: string, period: string) {
+  const rows = await (tx as typeof db).select().from(financePeriodClose).where(and(
+    eq(financePeriodClose.tenantId, tenantId),
+    eq(financePeriodClose.period, period),
+  )).limit(1);
+  return rows[0] ?? null;
+}
+
 export async function upsertPeriodClose(tx: Writer, row: typeof financePeriodClose.$inferInsert): Promise<void> {
   // M2: atomic ON CONFLICT eliminates the TOCTOU race of the previous
   // read-then-insert pattern. The WHERE guard prevents overwriting a

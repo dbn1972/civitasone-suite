@@ -26,6 +26,22 @@ export async function findPfmsById(id: string, tenantId: string) {
   return row && row.tenantId === tenantId ? row : null;
 }
 
+/**
+ * Tx-scoped variant of findPfmsById: reads through the caller's already-open
+ * transaction instead of opening a nested one via scopedRead. finance.pfms.
+ * batch_sign / batch_submit call this from inside their own db.transaction();
+ * the scopedRead-based findPfmsById would open a second, nested transaction
+ * competing for an extra pool connection while the outer one is already
+ * held — under load (pool.max concurrent in-flight commands) that deadlocks.
+ */
+export async function findPfmsByIdTx(tx: Writer, id: string, tenantId: string) {
+  const rows = await (tx as typeof db).select().from(financePfms)
+    .where(eq(financePfms.id, id))
+    .limit(1);
+  const row = rows[0];
+  return row && row.tenantId === tenantId ? row : null;
+}
+
 export async function listPfmsByTenant(tenantId: string, limit = 50) {
   return scopedRead((tx) => tx.select().from(financePfms)
     .where(eq(financePfms.tenantId, tenantId))
@@ -36,6 +52,20 @@ export async function getTenantConfig(tenantId: string) {
   const rows = await scopedRead((tx) => tx.select().from(financePfmsConfig)
     .where(eq(financePfmsConfig.tenantId, tenantId))
     .limit(1));
+  return rows[0] ?? null;
+}
+
+/**
+ * Tx-scoped variant of getTenantConfig: reads through the caller's already-
+ * open transaction instead of opening a nested one via scopedRead.
+ * integrations/consumer.ts's PFMS-initiate handler calls this from inside
+ * its own db.transaction() (the actual EFT-initiation path) -- see
+ * findPfmsByIdTx above for the pool-exhaustion deadlock this avoids.
+ */
+export async function getTenantConfigTx(tx: Writer, tenantId: string) {
+  const rows = await (tx as typeof db).select().from(financePfmsConfig)
+    .where(eq(financePfmsConfig.tenantId, tenantId))
+    .limit(1);
   return rows[0] ?? null;
 }
 
