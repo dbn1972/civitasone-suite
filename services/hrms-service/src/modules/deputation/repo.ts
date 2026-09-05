@@ -17,6 +17,19 @@ export async function findById(tenantId: string, id: string): Promise<Deputation
   return rows[0] ?? null;
 }
 
+/**
+ * Tx-scoped variant of findById -- see the production-readiness-audit skill
+ * (.claude/skills/16-production-readiness-audit.md, section 1) for why: the
+ * scopedRead-based findById opens a SECOND transaction when called from
+ * inside a consumer's already-open db.transaction(), deadlocking the pool
+ * under concurrent load.
+ */
+export async function findByIdTx(tx: Writer, tenantId: string, id: string): Promise<DeputationRow | null> {
+  const rows = await (tx as typeof db).select().from(hrmsDeputations)
+    .where(and(eq(hrmsDeputations.tenantId, tenantId), eq(hrmsDeputations.id, id))).limit(1);
+  return rows[0] ?? null;
+}
+
 export async function findActiveByEmployee(tenantId: string, employeeId: string): Promise<DeputationRow | null> {
   const rows = await scopedRead((tx) => tx.select().from(hrmsDeputations)
     .where(and(

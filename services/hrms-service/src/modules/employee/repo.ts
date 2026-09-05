@@ -17,12 +17,12 @@ export async function findById(id: string, tenantId: string): Promise<EmployeeRo
 
 /**
  * Tx-scoped variant of findById: reads through the caller's already-open
- * transaction instead of opening a nested one via scopedRead. Cross-module
- * consumers (e.g. contracts/consumer.ts) that look up an employee from
- * inside their own db.transaction() must use this, not findById -- calling
- * the scopedRead-based version there opens a SECOND transaction competing
- * for a connection from the same pool as the outer one, deadlocking every
- * in-flight command once concurrency reaches pool.max (see
+ * transaction instead of opening a nested one via scopedRead. Used by
+ * employeeSeparate (own module) and cross-module by contracts/consumer.ts
+ * -- calling the scopedRead-based version from inside an open
+ * db.transaction() opens a SECOND transaction competing for a connection
+ * from the same pool as the outer one, deadlocking every in-flight command
+ * once concurrency reaches pool.max (see
  * .claude/skills/16-production-readiness-audit.md section 1).
  */
 export async function findByIdTx(tx: Writer, id: string, tenantId: string): Promise<EmployeeRow | null> {

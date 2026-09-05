@@ -27,6 +27,11 @@ vi.mock("../src/modules/appraisals/repo.js", () => ({
   insertAppraisal: (...a: any[]) => insertAppraisalMock(...a),
   updateAppraisal: (...a: any[]) => updateAppraisalMock(...a),
   findById: (...a: any[]) => findByIdMock(...a),
+  // Tx-scoped variant (fix/hrms-batch2-nested-tx-deadlock): the consumer now
+  // reads through its own already-open transaction instead of the
+  // scopedRead-based findById above, to avoid a nested-transaction
+  // connection-pool deadlock under load. Forwarded to the SAME mock.
+  findByIdTx: (...a: any[]) => findByIdMock(...a),
 }));
 
 import { registerAppraisalConsumers } from "../src/modules/appraisals/consumer.js";

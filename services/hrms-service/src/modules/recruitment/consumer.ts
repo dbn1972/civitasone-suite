@@ -105,7 +105,7 @@ export function registerRecruitmentConsumers(queue: Queue): void {
       if (!(await markProcessed(tx, msg.messageId))) return;
 
       // Fetch application for applicant details
-      const application = await repo.findApplicationById(p.applicationId, p.tenantId);
+      const application = await repo.findApplicationByIdTx(tx, p.applicationId, p.tenantId);
       const fullName = application?.applicantName ?? "Unknown";
       const email = application?.email ?? null;
       const mobile = application?.mobile ?? null;

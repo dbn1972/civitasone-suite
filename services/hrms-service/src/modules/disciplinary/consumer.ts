@@ -26,7 +26,7 @@ export function registerDisciplinaryConsumers(queue: Queue): void {
     };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
-      const existing = await repo.findCase(p.tenantId, p.caseId);
+      const existing = await repo.findCaseTx(tx, p.tenantId, p.caseId);
       const prior = existing?.status ?? null;
       const set: Partial<DisciplinaryCaseInsert> = {
         penaltyClass: p.penaltyClass,

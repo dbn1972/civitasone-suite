@@ -12,6 +12,12 @@ export async function findAllocById(id: string): Promise<LeaveAllocRow | null> {
   return rows[0] ?? null;
 }
 
+/** Tx-scoped variant of findAllocById -- see .claude/skills/16-production-readiness-audit.md section 1. */
+export async function findAllocByIdTx(tx: Writer, id: string): Promise<LeaveAllocRow | null> {
+  const rows = await (tx as typeof db).select().from(hrmsLeaveAllocs).where(eq(hrmsLeaveAllocs.id, id)).limit(1);
+  return rows[0] ?? null;
+}
+
 export async function findAllocByEmpAndType(
   tenantId: string, employeeId: string, leaveTypeId: string, fy: string
 ): Promise<LeaveAllocRow | null> {
@@ -29,6 +35,14 @@ export async function findLeaveAppById(id: string, tenantId: string): Promise<Le
   const rows = await scopedRead((tx) => tx.select().from(hrmsLeaveApps)
     .where(and(eq(hrmsLeaveApps.id, id), eq(hrmsLeaveApps.tenantId, tenantId)))
     .limit(1));
+  return rows[0] ?? null;
+}
+
+/** Tx-scoped variant of findLeaveAppById -- see .claude/skills/16-production-readiness-audit.md section 1. */
+export async function findLeaveAppByIdTx(tx: Writer, id: string, tenantId: string): Promise<LeaveAppRow | null> {
+  const rows = await (tx as typeof db).select().from(hrmsLeaveApps)
+    .where(and(eq(hrmsLeaveApps.id, id), eq(hrmsLeaveApps.tenantId, tenantId)))
+    .limit(1);
   return rows[0] ?? null;
 }
 
