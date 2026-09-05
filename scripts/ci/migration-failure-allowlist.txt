@@ -3,5 +3,74 @@
 # The reason after '#' is the first error, which under ON_ERROR_STOP=1 is the
 # one that aborted the file. Only the path before '#' is compared.
 # Regenerate with BOOTSTRAP_WRITE_ALLOWLIST=1 against a throwaway container.
-# Generated: 2026-08-27  Count: 0 (all previously-tracked failures fixed — see
-# PRs #765-#770 for the individual root-cause fixes, grouped by service)
+# Generated: 2026-09-04  Count: 70
+analytics-service/0002_hardening.sql                       # unique constraint on partitioned table must include all partitioning columns
+analytics-service/0004_money_bigint.sql                    # unrecognized configuration parameter "app.tenant_id"
+asset-service/0006b_seed_default_categories.sql            # new row violates row-level security policy for table "asset_categories"
+audit-service/0005_audit_immutability.sql                  # permission denied for table events_y2026m09
+audit-service/0006_audit_immutability.sql                  # permission denied for table events_y2026m09
+audit-service/0028_restore_cert_in_columns_partition_gap.sql # permission denied for table events
+audit-service/0029_events_immutability_trigger_missing_on_partitions.sql # trg_events_immutable is missing on 5 partition(s) of events.events after CREATE TRIGGER on the parent — see pr
+citizen-service/0020_designer_phase0.sql                   # new row violates row-level security policy for table "domain_packs"
+contract-service/0009_clause_library.sql                   # policy "tenant_isolation" for table "clause_library" already exists
+contract-service/0012_esign_routes.sql                     # policy "tenant_isolation" for table "esign_routes" already exists
+crm-service/0015_pipelines_deals_enhancement.sql           # constraint "chk_pipelines_stages_count" for relation "pipelines" already exists
+crm-service/0017_custom_fields.sql                         # constraint "chk_custom_fields_entity_type" for relation "custom_fields" already exists
+crm-service/0047_lead_escalation.sql                       # must be owner of function list_escalation_tenants
+crm-service/0055_task_escalation_rules.sql                 # must be owner of function list_task_escalation_tenants
+crm-service/0068_document_types.sql                        # must be owner of function list_document_alert_tenants
+crm-service/0082_cpgrams_alignment.sql                     # constraint "grievances_status_cpgrams_check" for relation "grievances" already exists
+crm-service/0088_document_types_applies_to_array.sql       # constraint "chk_document_types_applies_to" for relation "document_types" already exists
+estab-service/0007_module_linkage_immutability.sql         # permission denied for table estab_notings
+estab-service/0011_noting_truncate_guard.sql               # permission denied for table estab_notings
+estab-service/0027_drop_org_unit_use_hrms.sql              # column "org_unit_id" does not exist
+estab-service/0041_consumables.sql                         # policy "rls_consumable_items" for table "items" already exists
+finance-service/0004_coa_account_types.sql                 # new row violates row-level security policy for table "finance_heads"
+finance-service/0008_pfms_phase2.sql                       # new row violates row-level security policy for table "finance_pfms_config"
+finance-service/0009_world_class_finance.sql               # new row violates row-level security policy for table "finance_voucher_types"
+finance-service/0010_hoa_pao_voucher.sql                   # new row violates row-level security policy for table "finance_pao"
+finance-service/0014_gl_immutability_reversal.sql          # new row violates row-level security policy for table "finance_heads"
+finance-service/0015_finance_p1_gaps.sql                   # new row violates row-level security policy for table "finance_heads"
+finance-service/0031_simplified_chart_of_accounts.sql      # relation "accounts" already exists
+finance-service/0041_anomaly_detection.sql                 # policy "finance_anomalies_tenant_isolation" for table "finance_anomalies" already exists
+finance-service/0054_payment_bill_unique.sql               # relation "uq_finance_payments_tenant_bill" already exists
+finance-service/0055_advance_adjusted_check.sql            # constraint "chk_advance_adjusted_lte_amount" for relation "finance_advances" already exists
+finance-service/0056_allocation_no_overcommit.sql          # constraint "chk_allocation_no_overcommit" for relation "finance_budget_allocation" already exists
+hrms-service/0004_production_ready.sql                     # new row violates row-level security policy for table "hrms_holidays"
+hrms-service/0005_configurable_leave_policies.sql          # new row violates row-level security policy for table "hrms_leave_types"
+hrms-service/0006_world_class_leave.sql                    # new row violates row-level security policy for table "hrms_leave_year_config"
+hrms-service/0007_geo_attendance_ro.sql                    # new row violates row-level security policy for table "hrms_office_locations"
+hrms-service/0008_recruitment_payroll_gaps.sql             # new row violates row-level security policy for table "payroll_slip_templates"
+hrms-service/0009_letters_shifts_fnf.sql                   # new row violates row-level security policy for table "hrms_letter_templates"
+hrms-service/0010_face_verification.sql                    # new row violates row-level security policy for table "hrms_face_config"
+hrms-service/0019_device_trust.sql                         # relation "idx_trusted_devices_tenant" already exists
+hrms-service/0020_ai_ml_tables.sql                         # relation "idx_face_verif_employee" already exists
+hrms-service/0021_ai_plugin_registry.sql                   # relation "idx_ai_prediction_tenant" already exists
+hrms-service/0045_contract_renewal_workflows.sql           # relation "uq_contracts_tenant_contract_no" already exists
+hrms-service/0064_cpf_number_unique.sql                    # relation "hrms_cpf_accounts_cpf_number_uq" already exists
+hrms-service/0116_pulse_goals_leaderboard.sql              # relation "idx_pulse_surveys_tenant" already exists
+hrms-service/0117_id_cards.sql                             # relation "idx_id_cards_tenant_holder" already exists
+inspection-service/0025_reports.sql                        # policy "rls_reports" for table "inspection_reports" already exists
+install-service/0004_orchestrator.sql                      # policy "rls_wizard_definitions" for table "wizard_definitions" already exists
+legal-service/0015_cause_list_syncs.sql                    # policy "tenant_isolation" for table "cause_list_syncs" already exists
+legal-service/0016_matter_documents.sql                    # policy "tenant_isolation" for table "matter_documents" already exists
+location-service/0011_postgis_spatial.sql                  # extension "postgis" is not available
+location-service/0014_land_cadastral_rls.sql               # extension "postgis" is not available
+location-service/0015_locations_geom_trigger.sql           # extension "postgis" is not available
+location-service/0016_spatial_features.sql                 # extension "postgis" is not available
+location-service/0017_road_network.sql                     # extension "postgis" is not available
+location-service/0019_geo_points.sql                       # extension "postgis" is not available
+metadata-service/0001_metadata_schema.sql                  # policy "tenant_isolation" for table "entity_definitions" already exists
+notification-service/0003_system_templates.sql             # new row violates row-level security policy for table "templates"
+notification-service/0023_i18n_schema_widen_columns.sql    # unrecognized configuration parameter "app.tenant_id"
+payroll-service/0005_world_class_payroll.sql               # new row violates row-level security policy for table "payroll_professional_tax"
+payroll-service/0006_da_rates.sql                          # new row violates row-level security policy for table "dearness_allowance_rates"
+procurement-service/0005_seed_data.sql                     # new row violates row-level security policy for table "procurement_vendors"
+project-service/0001_init.sql                              # constraint "fk_task_parent" for relation "project_tasks" already exists
+report-service/0013_scheduled_reports.sql                  # policy "tenant_isolation_policy" for table "scheduled_reports" already exists
+tenant-service/0004_isolation_tier.sql                     # constraint "chk_isolation_tier" for relation "tenants" already exists
+workflow-service/0003_seed_definitions.sql                 # there is no unique or exclusion constraint matching the ON CONFLICT specification
+workflow-service/0004_asset_disposal_workflow.sql          # there is no unique or exclusion constraint matching the ON CONFLICT specification
+workflow-service/0012b_seed_definition_edges.sql           # new row violates row-level security policy for table "definition_edges"
+workflow-service/0029_rls_sweep_tenant_enumeration.sql     # must be owner of function sweep_task_tenants
+works-service/0017_rename_rating_range_constraint.sql      # constraint "contractor_ratings_rating_check" for table "contractor_ratings" does not exist
