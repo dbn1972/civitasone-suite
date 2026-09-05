@@ -4,9 +4,11 @@ import { db } from "../../shared/db.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { writeAudit } from "../../shared/audit.js";
 import { tenantScoped } from "../../shared/tenant-queue.js";
+import { emitMunicipalFeeChallan, emitMunicipalNotification, municipalDecisionNotificationEventType } from "../../shared/cross-events.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
 import * as nocRepo from "../nocs/repo.js";
+import * as appRepo from "../applications/repo.js";
 import { calculateRenewalFee, calculateNewValidUntil, canRequestRenewal } from "./domain.js";
 
 const log = pino({ name: "fire.lifecycle.consumer" });
@@ -21,7 +23,13 @@ export function registerLifecycleConsumers(rawQueue: Queue): void {
   queue.subscribe(COMMANDS.requestRenewal, async (msg) => {
     const p = msg.payload as { id: string; nocId: string; renewalType: string };
     const feeMinor = calculateRenewalFee(p.renewalType as never);
+    // Recipient-lookup reads BEFORE opening the write transaction — never
+    // nested inside it (PR #1028 deadlock class). `noc` was already fetched
+    // here pre-existing (for previousValidUntil); `application` is fetched
+    // alongside it for the fee-challan depositor / notification identity,
+    // since this service has no citizen-name field anywhere in its schema.
     const noc = await nocRepo.findById(msg.tenantId, p.nocId);
+    const application = noc ? await appRepo.findById(msg.tenantId, noc.applicationId) : null;
 
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
@@ -43,6 +51,19 @@ export function registerLifecycleConsumers(rawQueue: Queue): void {
         actorId: msg.actorId,
         correlationId: msg.correlationId,
         payload: { renewalId: p.id, nocId: p.nocId, renewalType: p.renewalType, feeMinor: String(feeMinor) },
+      });
+      // Fee becomes due the moment the renewal is assessed — feeMinor is
+      // server-computed entirely from a fixed schedule
+      // (lifecycle/domain.ts's calculateRenewalFee: renewal vs. amendment),
+      // never a client-supplied amount, so no ADMIN_ROLES gate is needed
+      // here (cross-events.ts's own MAX_FEE_CHALLAN_AMOUNT_MINOR ceiling is
+      // the remaining backstop). calculateRenewalFee's floor is always a
+      // nonzero flat fee, so emitMunicipalFeeChallan's own <= 0n guard never
+      // actually skips this — no branching needed.
+      await emitMunicipalFeeChallan(tx, ctxOf(msg), {
+        sourceRef: p.id,
+        depositor: application?.buildingName ?? p.nocId,
+        amountMinor: feeMinor,
       });
       await writeAudit(tx, ctxOf(msg), { action: "renewal.request", resourceType: "fire_renewal", resourceId: p.id });
     });
@@ -67,6 +88,11 @@ export function registerLifecycleConsumers(rawQueue: Queue): void {
     // it had been revoked in the interim. Re-fetch the NOC's live state here,
     // right before acting on it.
     const currentNoc = await nocRepo.findById(msg.tenantId, renewal.nocId);
+    // Recipient-lookup read BEFORE opening the write transaction (same
+    // deadlock-class reasoning as requestRenewal above) — used only for the
+    // decision notification below, fetched unconditionally (both approved
+    // and rejected outcomes are citizen-meaningful).
+    const application = currentNoc ? await appRepo.findById(msg.tenantId, currentNoc.applicationId) : null;
     const nocStillEligible = p.decision === "approved" && currentNoc
       ? canRequestRenewal(currentNoc.status, currentNoc.validUntil)
       : true; // rejection never touches the NOC, so eligibility is moot
@@ -99,6 +125,23 @@ export function registerLifecycleConsumers(rawQueue: Queue): void {
         actorId: msg.actorId,
         correlationId: msg.correlationId,
         payload: { renewalId: p.renewalId, nocId: renewal.nocId, decision: p.decision, newValidUntil },
+      });
+      // Citizen-meaningful transition: the renewal/amendment request has
+      // been decided — an approval means the NOC's validity was just
+      // extended, so this is the "NOC renewed" notification. recipientId
+      // falls back through the NOC's own applicationId, else the nocId
+      // itself (same stable-inbox-key reasoning as nocs/consumer.ts).
+      await emitMunicipalNotification(tx, ctxOf(msg), {
+        eventType: municipalDecisionNotificationEventType(EVENTS.renewalDecided, p.decision),
+        recipient: application?.buildingName ?? renewal.nocId,
+        recipientId: currentNoc?.applicationId ?? renewal.nocId,
+        variables: {
+          renewalId: p.renewalId,
+          nocId: renewal.nocId,
+          renewalType: renewal.renewalType,
+          decision: p.decision,
+          ...(newValidUntil ? { newValidUntil } : {}),
+        },
       });
       await writeAudit(tx, ctxOf(msg), { action: `renewal.${p.decision}`, resourceType: "fire_renewal", resourceId: p.renewalId });
     });

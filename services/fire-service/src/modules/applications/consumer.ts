@@ -5,6 +5,7 @@ import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { writeAudit } from "../../shared/audit.js";
 import { cache } from "../../shared/infra.js";
 import { tenantScoped } from "../../shared/tenant-queue.js";
+import { emitMunicipalFeeChallan, emitMunicipalNotification, MUNICIPAL_EVENT_TYPES } from "../../shared/cross-events.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
 import { calculateFeeMinor, generateApplicationNumber, fromStatusesFor } from "./domain.js";
@@ -86,6 +87,20 @@ export function registerApplicationConsumers(rawQueue: Queue): void {
         correlationId: msg.correlationId,
         payload: { applicationId: p.id, applicationNumber, buildingName: p.buildingName, feeMinor: String(feeMinor) },
       });
+      // Cross-service wiring (municipal-sec5 event contract, Wave 3): the
+      // fire-safety NOC fee is assessed the moment the application is
+      // created — feeMinor above is server-computed entirely from a fixed
+      // schedule (calculateFeeMinor: base fee by occupancyType + a flat
+      // per-sqft surcharge), never a client-supplied amount, so no
+      // ADMIN_ROLES gate is needed here (cross-events.ts's own
+      // MAX_FEE_CHALLAN_AMOUNT_MINOR ceiling is the remaining backstop).
+      // Same transaction as the application row and its own domain event —
+      // all-or-nothing with the write that created the obligation.
+      await emitMunicipalFeeChallan(tx, ctxOf(msg), {
+        sourceRef: applicationNumber,
+        depositor: p.buildingName,
+        amountMinor: feeMinor,
+      });
       await writeAudit(tx, ctxOf(msg), { action: "application.create", resourceType: "fire_application", resourceId: p.id });
       log.info({ id: p.id, applicationNumber }, "fire application created");
     });
@@ -100,6 +115,26 @@ export function registerApplicationConsumers(rawQueue: Queue): void {
       if (!row) return;
       applied = true;
       await enqueue(tx, { topic: EVENTS.applicationSubmitted, eventType: EVENTS.applicationSubmitted, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { applicationId: p.applicationId } });
+      // Citizen-meaningful transition: the applicant just successfully
+      // submitted their application and should get a confirmation. `row` is
+      // the UPDATE ... RETURNING result from the CAS immediately above, so
+      // buildingName comes from the write itself — no separate
+      // recipient-lookup read is needed (and none is nested inside this
+      // transaction, per the PR #1028 deadlock-class gotcha: this service
+      // has no citizen-name field, so buildingName is the display identity
+      // we notify, same fallback building-service uses for its own
+      // no-applicant-field schema). recipientId is the application's own id
+      // — this service has no separate citizen-account id either
+      // (notification-service's findByRecipient scopes an inbox by
+      // recipientId; building-service's identical-shape schema uses the
+      // application id as that stable per-citizen-journey key throughout,
+      // rather than the internal actor id that created the row).
+      await emitMunicipalNotification(tx, ctxOf(msg), {
+        eventType: MUNICIPAL_EVENT_TYPES.applicationSubmitted,
+        recipient: row.buildingName,
+        recipientId: p.applicationId,
+        variables: { applicationId: p.applicationId, applicationNumber: row.applicationNumber },
+      });
       await writeAudit(tx, ctxOf(msg), { action: "application.submit", resourceType: "fire_application", resourceId: p.applicationId });
     });
     // BUG FIX: GET /v1/fire/applications/:id is read-through cached
