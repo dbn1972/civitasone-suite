@@ -1041,7 +1041,7 @@ async function processPayrollRun(
       // until AFTER computeSlip tells us how much recovery was actually applied.
       // The carried-forward (unrecovered) portion must NOT reduce the loan
       // outstanding — it is recovered in a future run.
-      const loans = await loansRepo.findLoansByEmployee(p.tenantId, emp.id);
+      const loans = await loansRepo.findLoansByEmployeeTx(tx, p.tenantId, emp.id);
       const loanPlans: Array<{ loanId: string; principal: bigint; interest: bigint; outstanding: bigint }> = [];
       let emiTotal = 0n;
       for (const l of loans) {

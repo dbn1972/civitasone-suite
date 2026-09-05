@@ -105,6 +105,10 @@ vi.mock("../src/modules/statutory/repo.js", () => ({
 // 5. Loans repo.
 vi.mock("../src/modules/loans/repo.js", () => ({
   findLoansByEmployee: vi.fn(async () => []),
+  // Tx-scoped variant (fix/payroll-loans-nested-tx-deadlock): the payroll-run
+  // computation loop now reads through its own already-open transaction
+  // instead of the scopedRead-based findLoansByEmployee above.
+  findLoansByEmployeeTx: vi.fn(async () => []),
 }));
 
 // 6. Integration LOP repo.
