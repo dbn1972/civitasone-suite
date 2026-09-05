@@ -2,6 +2,18 @@ import { defineConfig } from "vitest/config";
 
 export default defineConfig({
   test: {
+    // Several real-DB test files here (municipal-challan-integration,
+    // recon-db, recon-idempotency-db, rls-isolation, distribution-lock-race,
+    // masters-opening-balance-consumer, ...) write/relay through the SAME
+    // shared _outbox.messages table with no per-file isolation. Under
+    // default parallelism, one file's relay/TRUNCATE-style operation can race
+    // another concurrently-running file's writes to that table — a real bug,
+    // not environment noise (see .claude/skills/16-production-readiness-audit
+    // .md Section 4a). Bare `vitest run` in CI uses default parallelism, so a
+    // fix only verified under --no-file-parallelism proves nothing about what
+    // CI actually sees; serialising file execution here is the fix that holds
+    // regardless of the pool's scheduling.
+    fileParallelism: false,
     env: {
       JWT_ALGORITHM: "HS256",
       JWT_SECRET: "test_secret_for_civitasone_32chr",

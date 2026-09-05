@@ -48,6 +48,29 @@ const BANK_CODE = "1100";
 // ...740992 if it is ever coerced through a JS `number` anywhere in the path.
 const HIGH_PRECISION_AMOUNT = "9007199254740993";
 
+/**
+ * Drain the outbox backlog fully instead of trusting one bounded
+ * relayOnce(limit) call. This suite's real-DB tests (this file and its
+ * siblings: recon-db, recon-idempotency-db, rls-isolation,
+ * masters-opening-balance-consumer, ...) never truncate their own outbox
+ * writes, so re-running the full suite repeatedly (as CI does across many
+ * pushes, and as this test itself was observed to do) lets unrelated,
+ * never-relayed rows pile up ahead of THIS test's own finance.gl.post
+ * message in created_at order. A single relayOnce(100) then returns before
+ * ever reaching it once the backlog exceeds 100 rows — this test fails
+ * intermittently with "GL journal row must have been posted by the second
+ * hop" for a reason that has nothing to do with the fix under test (see
+ * .claude/skills/16-production-readiness-audit.md Section 4c). Looping to
+ * zero removes the dependency on backlog size entirely.
+ */
+async function relayToCompletion(queue: MemoryQueue, service: string, maxIterations = 500): Promise<void> {
+  for (let i = 0; i < maxIterations; i++) {
+    const relayed = await relayOnce(db as never, queue, 200, service);
+    if (relayed === 0) return;
+  }
+  throw new Error(`relayToCompletion: outbox did not drain within ${maxIterations} iterations`);
+}
+
 function makeMsg(type: string, payload: Record<string, unknown>) {
   return { messageId: randomUUID(), type, tenantId: TENANT, actorId: ACTOR, correlationId: randomUUID(), schemaVersion: "1.0", payload };
 }
@@ -109,7 +132,7 @@ describe("municipal cross-service challan — real DB, no mocks", () => {
     await q.drain();
     // Second hop: the challanCreate consumer enqueues finance.gl.post via the
     // outbox (same tx) — relay it once, like the real outbox relay would.
-    await relayOnce(db as never, q, 100, "finance-service");
+    await relayToCompletion(q, "finance-service");
     await q.drain();
 
     // ── Fix 1: receiptHeadId resolved by tenant, never a fabricated UUID ──
