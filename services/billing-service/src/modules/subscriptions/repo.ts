@@ -18,7 +18,7 @@ export async function findByTenant(tenantId: string): Promise<SubscriptionView |
 }
 
 /**
- * Tx-scoped variant of findByTenant: reads through the caller'''s already-open
+ * Tx-scoped variant of findByTenant: reads through the caller's already-open
  * transaction instead of opening up to TWO nested ones via scopedRead (this
  * function makes two separate scopedRead calls -- subscription then trial --
  * each of which opens its own db.transaction()). The Razorpay checkout-verify
