@@ -3,6 +3,7 @@ import type { Queue } from "@civitasone/queue";
 import { db } from "../../shared/db.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { writeAudit } from "../../shared/audit.js";
+import { emitMunicipalFeeChallan, emitMunicipalNotification, MUNICIPAL_EVENT_TYPES } from "../../shared/cross-events.js";
 import { tenantScoped } from "../../shared/tenant-queue.js";
 import { cache } from "../../shared/infra.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
@@ -83,6 +84,33 @@ export function registerBookingConsumers(rawQueue: Queue): void {
         correlationId: msg.correlationId,
         payload: { bookingId: p.id, bookingNumber, facilityId: p.facilityId, serviceType: p.serviceType },
       });
+      // Fee challan: feeMinor is computed above by calculateFeeMinor(serviceType)
+      // — a pure function of a closed 3-value enum with no client-supplied
+      // amount anywhere in this command's payload (see cross-events.ts's file
+      // header for why no ceiling/role-gate applies here). Fired in the same
+      // transaction as the booking insert so a finance-side failure rolls the
+      // booking back too, rather than leaving an unbilled booking on record.
+      await emitMunicipalFeeChallan(tx, ctxOf(msg), {
+        sourceRef: bookingNumber,
+        depositor: p.applicantName,
+        amountMinor: feeMinor,
+      });
+      // Citizen-meaningful: this command IS the booking request — the
+      // applicant needs to know it was received, and bookingNumber/feeMinor
+      // are both already in hand from this same transaction, so no pre-tx
+      // recipient lookup is needed (unlike the admin-triggered transitions
+      // below, whose command payloads carry only {id, ...}).
+      await emitMunicipalNotification(tx, ctxOf(msg), {
+        eventType: MUNICIPAL_EVENT_TYPES.applicationSubmitted,
+        recipient: p.applicantPhone,
+        recipientId: p.id,
+        variables: {
+          bookingId: p.id,
+          bookingNumber,
+          applicantName: p.applicantName,
+          serviceType: p.serviceType,
+        },
+      });
       await writeAudit(tx, ctxOf(msg), {
         action: "booking.request",
         resourceType: "crematorium_booking",
@@ -94,6 +122,14 @@ export function registerBookingConsumers(rawQueue: Queue): void {
 
   queue.subscribe(COMMANDS.confirmBooking, async (msg) => {
     const p = msg.payload as { id: string; tenantId: string; slotNumber: string; paymentRef?: string };
+    // Recipient-lookup read BEFORE opening the write transaction — this
+    // command's payload carries only {id, slotNumber, paymentRef}, no
+    // applicantPhone/bookingNumber. repo.findById opens its own scopedRead
+    // transaction, so calling it from inside db.transaction below would nest
+    // transactions on the same connection pool — the exact deadlock class
+    // fixed in PR #1028 (notification-service's checkQuota/checkDlt nested
+    // inside the outer send transaction).
+    const existing = await repo.findById(p.id, msg.tenantId);
     let updated: Awaited<ReturnType<typeof repo.updateStatus>> = null;
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
@@ -111,6 +147,22 @@ export function registerBookingConsumers(rawQueue: Queue): void {
         correlationId: msg.correlationId,
         payload: { bookingId: p.id, slotNumber: p.slotNumber },
       });
+      // Citizen-meaningful: the booking is now confirmed with a slot — the
+      // applicant needs this before showing up at the facility.
+      if (existing) {
+        await emitMunicipalNotification(tx, ctxOf(msg), {
+          eventType: MUNICIPAL_EVENT_TYPES.statusChanged,
+          recipient: existing.applicantPhone,
+          recipientId: p.id,
+          variables: {
+            bookingId: p.id,
+            bookingNumber: existing.bookingNumber,
+            applicantName: existing.applicantName,
+            status: "confirmed",
+            slotNumber: p.slotNumber,
+          },
+        });
+      }
       await writeAudit(tx, ctxOf(msg), {
         action: "booking.confirm",
         resourceType: "crematorium_booking",
@@ -131,6 +183,10 @@ export function registerBookingConsumers(rawQueue: Queue): void {
 
   queue.subscribe(COMMANDS.completeBooking, async (msg) => {
     const p = msg.payload as { id: string; tenantId: string };
+    // Recipient-lookup read BEFORE opening the write transaction — same
+    // reasoning as confirmBooking above; this command's payload carries
+    // only {id}.
+    const existing = await repo.findById(p.id, msg.tenantId);
     let updated: Awaited<ReturnType<typeof repo.updateStatus>> = null;
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
@@ -146,6 +202,21 @@ export function registerBookingConsumers(rawQueue: Queue): void {
         correlationId: msg.correlationId,
         payload: { bookingId: p.id },
       });
+      // Citizen-meaningful: the service has been completed — the family's
+      // final confirmation that the cremation/burial has taken place.
+      if (existing) {
+        await emitMunicipalNotification(tx, ctxOf(msg), {
+          eventType: MUNICIPAL_EVENT_TYPES.statusChanged,
+          recipient: existing.applicantPhone,
+          recipientId: p.id,
+          variables: {
+            bookingId: p.id,
+            bookingNumber: existing.bookingNumber,
+            applicantName: existing.applicantName,
+            status: "completed",
+          },
+        });
+      }
       await writeAudit(tx, ctxOf(msg), {
         action: "booking.complete",
         resourceType: "crematorium_booking",
@@ -157,6 +228,10 @@ export function registerBookingConsumers(rawQueue: Queue): void {
 
   queue.subscribe(COMMANDS.cancelBooking, async (msg) => {
     const p = msg.payload as { id: string; tenantId: string };
+    // Recipient-lookup read BEFORE opening the write transaction — same
+    // reasoning as confirmBooking/completeBooking above; this command's
+    // payload carries only {id}.
+    const existing = await repo.findById(p.id, msg.tenantId);
     let updated: Awaited<ReturnType<typeof repo.updateStatus>> = null;
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
@@ -170,6 +245,22 @@ export function registerBookingConsumers(rawQueue: Queue): void {
         correlationId: msg.correlationId,
         payload: { bookingId: p.id },
       });
+      // Citizen-meaningful: the booking was cancelled — the applicant (or
+      // staff acting on their behalf) needs confirmation, most of all if
+      // they didn't initiate the cancellation themselves.
+      if (existing) {
+        await emitMunicipalNotification(tx, ctxOf(msg), {
+          eventType: MUNICIPAL_EVENT_TYPES.statusChanged,
+          recipient: existing.applicantPhone,
+          recipientId: p.id,
+          variables: {
+            bookingId: p.id,
+            bookingNumber: existing.bookingNumber,
+            applicantName: existing.applicantName,
+            status: "cancelled",
+          },
+        });
+      }
       await writeAudit(tx, ctxOf(msg), {
         action: "booking.cancel",
         resourceType: "crematorium_booking",
