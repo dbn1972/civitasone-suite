@@ -61,7 +61,7 @@ async function relayToCompletion(db: unknown, queue: unknown, batchLimit: number
   }
 }
 
-const PGPORT = process.env.EVENT_TEST_PGPORT ?? "5444";
+const PGPORT = process.env.PGPORT ?? "5435";
 const EVENT_DSN = `postgres://event_svc:event_dev_pw@localhost:${PGPORT}/civitas_event`;
 const FINANCE_DSN = `postgres://finance_svc:finance_dev_pw@localhost:${PGPORT}/civitas_finance`;
 
