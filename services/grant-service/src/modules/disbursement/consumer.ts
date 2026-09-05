@@ -99,7 +99,8 @@ export function registerDisbursementConsumers(queue: Queue): void {
       // submitted for the application (confirming utilisation of previous tranche).
       // Installment 1 (no = 1) is exempt from this gate; all subsequent installments require UC.
       if (installment.installmentNo > 1) {
-        const ucExists = await ucRepo.hasSubmittedUcForApplication(
+        const ucExists = await ucRepo.hasSubmittedUcForApplicationTx(
+          tx,
           installment.applicationId,
           installment.tenantId,
           installment.installmentNo,
@@ -311,7 +312,7 @@ export function registerDisbursementConsumers(queue: Queue): void {
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       for (const rec of p.records) {
-        const disbursement = await repo.findDisbursementByPfmsTxnId(rec.pfmsTxnId, p.tenantId);
+        const disbursement = await repo.findDisbursementByPfmsTxnIdTx(tx, rec.pfmsTxnId, p.tenantId);
         if (!disbursement) continue;
         const isSuccess = rec.status === "completed";
         await repo.updateDisbursement(tx, disbursement.id, {

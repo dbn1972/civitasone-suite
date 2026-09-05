@@ -139,7 +139,7 @@ export function registerApplicationConsumers(queue: Queue): void {
         tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
         payload: { applicationId: p.id, amountApprovedMinor: p.amountApprovedMinor },
       });
-      const beneficiary = await beneficiaryRepo.findBeneficiaryById(app.beneficiaryId, app.tenantId);
+      const beneficiary = await beneficiaryRepo.findBeneficiaryByIdTx(tx, app.beneficiaryId, app.tenantId);
       await enqueue(tx, {
         topic: NOTIFICATION_SEND, eventType: NOTIFICATION_SEND,
         tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
