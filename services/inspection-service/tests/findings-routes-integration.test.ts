@@ -117,11 +117,17 @@ vi.mock("../src/modules/universe/repo.js", () => ({
     tenantId,
     severityClass: "major",
   })),
+  findProvisionByIdTx: vi.fn(async (_tx: unknown, tenantId: string, id: string) => ({
+    id,
+    tenantId,
+    severityClass: "major",
+  })),
 }));
 
 // findings repo backed by the tenant-scoped in-memory store.
 vi.mock("../src/modules/findings/repo.js", () => ({
   findFindingById: vi.fn(async (tenantId: string, id: string) => store.get(key(tenantId, id)) ?? null),
+  findFindingByIdTx: vi.fn(async (_tx: unknown, tenantId: string, id: string) => store.get(key(tenantId, id)) ?? null),
   findFindings: vi.fn(async (
     tenantId: string,
     pagination: { page: number; pageSize: number },

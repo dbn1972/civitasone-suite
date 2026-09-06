@@ -200,6 +200,7 @@ vi.mock("../src/modules/universe/repo.js", () => ({
   findInspectionTypesByTenant: vi.fn().mockResolvedValue({ data: [], meta: { page: 1, pageSize: 20, total: 0 } }),
   insertInspectionType: vi.fn().mockResolvedValue(undefined),
   findProvisionById: vi.fn().mockResolvedValue(null),
+  findProvisionByIdTx: vi.fn().mockResolvedValue(null),
   findProvisionsByTenant: vi.fn().mockResolvedValue({ data: [], meta: { page: 1, pageSize: 20, total: 0 } }),
   insertProvision: vi.fn().mockResolvedValue(undefined),
   findVocabularyById: vi.fn().mockResolvedValue(null),
@@ -295,6 +296,7 @@ vi.mock("../src/modules/execution/repo.js", () => ({
 
 vi.mock("../src/modules/findings/repo.js", () => ({
   findFindingById: vi.fn().mockResolvedValue(null),
+  findFindingByIdTx: vi.fn().mockResolvedValue(null),
   findFindings: vi.fn().mockResolvedValue({ data: [], meta: { page: 1, pageSize: 20, total: 0 } }),
   insertFinding: vi.fn().mockResolvedValue(undefined),
   updateFindingState: vi.fn().mockResolvedValue(undefined),

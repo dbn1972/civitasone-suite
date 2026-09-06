@@ -85,6 +85,7 @@ vi.mock("../src/modules/universe/repo.js", () => ({
   findInspectionTypesByTenant: vi.fn().mockResolvedValue({ data: [], meta: { page: 1, pageSize: 20, total: 0 } }),
   insertInspectionType: vi.fn().mockResolvedValue({ id: "type-1", code: "FIRE" }),
   findProvisionById: vi.fn().mockResolvedValue(null),
+  findProvisionByIdTx: vi.fn().mockResolvedValue(null),
   findProvisionsByTenant: vi.fn().mockResolvedValue({ data: [], meta: { page: 1, pageSize: 20, total: 0 } }),
   insertProvision: vi.fn().mockResolvedValue({ id: "prov-1" }),
   findVocabularyById: vi.fn().mockResolvedValue(null),
@@ -171,6 +172,7 @@ vi.mock("../src/modules/execution/repo.js", () => ({
 
 vi.mock("../src/modules/findings/repo.js", () => ({
   findFindingById: vi.fn().mockResolvedValue({ id: "find-1", state: "open", version: 1, tenantId: TENANT_ID }),
+  findFindingByIdTx: vi.fn().mockResolvedValue({ id: "find-1", state: "open", version: 1, tenantId: TENANT_ID }),
   findFindings: vi.fn().mockResolvedValue({ data: [], meta: { page: 1, pageSize: 20, total: 0 } }),
   insertFinding: vi.fn().mockResolvedValue({ id: "find-1", findingNumber: "FND-2025-000001" }),
   updateFindingState: vi.fn().mockResolvedValue({ id: "find-1", state: "closed" }),
@@ -579,8 +581,8 @@ describe("Execution consumers", () => {
 
 describe("Findings consumers", () => {
   it("handles findingCreate", async () => {
-    const { findProvisionById } = await import("../src/modules/universe/repo.js");
-    (findProvisionById as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+    const { findProvisionByIdTx } = await import("../src/modules/universe/repo.js");
+    (findProvisionByIdTx as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
       id: "prov-1", severityClass: "critical", actReference: "Act 1948", sectionNumber: "S.14",
     });
     const handler = handlers.get("inspection.finding.create");

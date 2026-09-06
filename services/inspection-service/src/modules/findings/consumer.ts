@@ -34,10 +34,11 @@ import {
   updateFindingState,
   nextFindingSequence,
   findFindingById,
+  findFindingByIdTx,
   softDeleteFinding,
 } from "./repo.js";
-import { findInspectionById } from "../execution/repo.js";
-import { findProvisionById } from "../universe/repo.js";
+import { findInspectionById, findInspectionByIdTx } from "../execution/repo.js";
+import { findProvisionById, findProvisionByIdTx } from "../universe/repo.js";
 import type {
   FindingCreatePayload,
   ComplianceNoticeCreatePayload,
@@ -64,7 +65,7 @@ export function registerFindingsConsumers(queue: Queue): void {
         if (!(await markProcessed(tx, msg.messageId))) return;
 
         // 1. Look up linked provision to derive severity (Req 9.2)
-        const provision = await findProvisionById(msg.tenantId, p.provisionId);
+        const provision = await findProvisionByIdTx(tx, msg.tenantId, p.provisionId);
         if (!provision) {
           throw new NonRetryableError(
             `Provision not found: ${p.provisionId} (tenant: ${msg.tenantId})`,
@@ -162,7 +163,7 @@ export function registerFindingsConsumers(queue: Queue): void {
         if (!(await markProcessed(tx, msg.messageId))) return;
 
         // 1. Load finding and validate it exists
-        const finding = await findFindingById(msg.tenantId, p.findingId);
+        const finding = await findFindingByIdTx(tx, msg.tenantId, p.findingId);
         if (!finding) {
           throw new NonRetryableError(
             `Finding not found: ${p.findingId} (tenant: ${msg.tenantId})`,
@@ -264,7 +265,7 @@ export function registerFindingsConsumers(queue: Queue): void {
         if (!(await markProcessed(tx, msg.messageId))) return;
 
         // 1. Load finding and validate it exists
-        const finding = await findFindingById(msg.tenantId, p.findingId);
+        const finding = await findFindingByIdTx(tx, msg.tenantId, p.findingId);
         if (!finding) {
           throw new NonRetryableError(
             `Finding not found: ${p.findingId} (tenant: ${msg.tenantId})`,
@@ -365,12 +366,12 @@ export function registerFindingsConsumers(queue: Queue): void {
       await db.transaction(async (tx) => {
         await markProcessed(tx, msg.messageId);
 
-        const finding = await findFindingById(msg.tenantId, p.findingId);
+        const finding = await findFindingByIdTx(tx, msg.tenantId, p.findingId);
         if (!finding) {
           throw new NonRetryableError(`finding ${p.findingId} not found`);
         }
 
-        const inspection = await findInspectionById(msg.tenantId, finding.inspectionId);
+        const inspection = await findInspectionByIdTx(tx, msg.tenantId, finding.inspectionId);
         if (!inspection) {
           throw new NonRetryableError(`parent inspection ${finding.inspectionId} not found`);
         }
