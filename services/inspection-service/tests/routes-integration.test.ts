@@ -286,6 +286,7 @@ vi.mock("../src/modules/evidence/repo.js", () => ({
 
 vi.mock("../src/modules/execution/repo.js", () => ({
   findInspectionById: vi.fn().mockResolvedValue(null),
+  findInspectionByIdTx: vi.fn().mockResolvedValue(null),
   findInspections: vi.fn().mockResolvedValue({ data: [], meta: { page: 1, pageSize: 20, total: 0 } }),
   updateInspectionState: vi.fn().mockResolvedValue(undefined),
   insertHistory: vi.fn().mockResolvedValue(undefined),

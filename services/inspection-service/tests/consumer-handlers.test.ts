@@ -162,6 +162,7 @@ vi.mock("../src/modules/evidence/repo.js", () => ({
 
 vi.mock("../src/modules/execution/repo.js", () => ({
   findInspectionById: vi.fn().mockResolvedValue({ id: "insp-1", state: "scheduled", version: 1, tenantId: TENANT_ID }),
+  findInspectionByIdTx: vi.fn().mockResolvedValue({ id: "insp-1", state: "scheduled", version: 1, tenantId: TENANT_ID }),
   findInspections: vi.fn().mockResolvedValue({ data: [], meta: { page: 1, pageSize: 20, total: 0 } }),
   updateInspectionState: vi.fn().mockResolvedValue({ id: "insp-1", state: "in_progress", version: 2 }),
   insertHistory: vi.fn().mockResolvedValue(undefined),
@@ -490,8 +491,8 @@ describe("Execution consumers", () => {
   // with no version argument at all (the version-conflict path could never
   // be reached, let alone surfaced correctly).
   it("threads the pre-read version into updateInspectionState and rejects a concurrent-modification conflict (null return) as NonRetryableError", async () => {
-    const { findInspectionById, updateInspectionState } = await import("../src/modules/execution/repo.js");
-    (findInspectionById as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+    const { findInspectionByIdTx, updateInspectionState } = await import("../src/modules/execution/repo.js");
+    (findInspectionByIdTx as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
       id: "insp-1", state: "scheduled", version: 5, tenantId: TENANT_ID,
     });
     // null is the guarded-UPDATE's controlled "the row moved" signal (mirrors
@@ -525,8 +526,8 @@ describe("Execution consumers", () => {
   // instead of letting the queue's normal redelivery/retry handle it.
   it("does NOT reclassify a genuine updateInspectionState error as NonRetryableError", async () => {
     const { isNonRetryable } = await import("@civitasone/queue");
-    const { findInspectionById, updateInspectionState } = await import("../src/modules/execution/repo.js");
-    (findInspectionById as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+    const { findInspectionByIdTx, updateInspectionState } = await import("../src/modules/execution/repo.js");
+    (findInspectionByIdTx as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
       id: "insp-1", state: "scheduled", version: 1, tenantId: TENANT_ID,
     });
     (updateInspectionState as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
@@ -548,8 +549,8 @@ describe("Execution consumers", () => {
   });
 
   it("handles inspectionSubmitReview", async () => {
-    const { findInspectionById } = await import("../src/modules/execution/repo.js");
-    (findInspectionById as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+    const { findInspectionByIdTx } = await import("../src/modules/execution/repo.js");
+    (findInspectionByIdTx as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
       id: "insp-1", state: "completed", version: 1, tenantId: TENANT_ID,
     });
     const handler = handlers.get("inspection.inspection.submit_review");
@@ -560,8 +561,8 @@ describe("Execution consumers", () => {
   });
 
   it("handles inspectionFinalize", async () => {
-    const { findInspectionById } = await import("../src/modules/execution/repo.js");
-    (findInspectionById as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+    const { findInspectionByIdTx } = await import("../src/modules/execution/repo.js");
+    (findInspectionByIdTx as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
       id: "insp-1", state: "under_review", version: 1, tenantId: TENANT_ID,
     });
     const handler = handlers.get("inspection.inspection.finalize");
