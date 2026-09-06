@@ -59,6 +59,32 @@ export async function findPlanById(
 }
 
 /**
+ * Tx-scoped variant of findPlanById: reads through the caller's already-open
+ * transaction instead of opening a nested one via scopedRead. Used by
+ * planModify/planSubmitApproval/planActivate/planApprovalDecided (this
+ * module's own consumer.ts) -- calling the scopedRead-based version from
+ * inside an open db.transaction() opens a SECOND transaction competing for a
+ * connection from the same pool as the outer one, deadlocking every
+ * in-flight command once concurrency reaches pool.max (see
+ * .claude/skills/16-production-readiness-audit.md section 1). Bypasses the
+ * read-through cache deliberately: a value read inside the caller's own
+ * transaction must reflect that transaction's current view, not a possibly-
+ * stale cached one.
+ */
+export async function findPlanByIdTx(
+  tx: Tx,
+  tenantId: string,
+  id: string,
+): Promise<InspectionPlanRow | null> {
+  const rows = await tx.select().from(inspectionPlans)
+    .where(and(
+      eq(inspectionPlans.id, id),
+      eq(inspectionPlans.tenantId, tenantId),
+    ));
+  return rows[0] ?? null;
+}
+
+/**
  * Paginated list of plans for a tenant with optional status filter.
  * List queries go directly to Postgres (not cached individually).
  */
