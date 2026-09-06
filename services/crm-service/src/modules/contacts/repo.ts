@@ -314,6 +314,13 @@ export async function findActiveRow(id: string, tenantId: string): Promise<Conta
   return rows[0] ?? null;
 }
 
+export async function findActiveRowTx(tx: Writer, id: string, tenantId: string): Promise<ContactRow | null> {
+  const rows = await tx.select().from(contacts)
+    .where(and(eq(contacts.id, id), eq(contacts.tenantId, tenantId), sql`${contacts.status} = 'active'`))
+    .limit(1);
+  return rows[0] ?? null;
+}
+
 export async function softDelete(tx: Writer, id: string, tenantId: string, actorId: string): Promise<void> {
   await update(tx, id, tenantId, { status: "inactive" }, actorId);
 }
@@ -381,11 +388,25 @@ export async function accountExists(tenantId: string, accountId: string): Promis
   return rows.length > 0;
 }
 
+export async function accountExistsTx(tx: Writer, tenantId: string, accountId: string): Promise<boolean> {
+  const rows = await tx.select({ one: sql`1` }).from(accounts)
+    .where(and(eq(accounts.tenantId, tenantId), eq(accounts.id, accountId)))
+    .limit(1);
+  return rows.length > 0;
+}
+
 /** Tenant-scoped existence check for a contact (cross-tenant FK guard). */
 export async function contactExists(tenantId: string, contactId: string): Promise<boolean> {
   const rows = await scopedRead((tx) => tx.select({ one: sql`1` }).from(contacts)
     .where(and(eq(contacts.tenantId, tenantId), eq(contacts.id, contactId)))
     .limit(1));
+  return rows.length > 0;
+}
+
+export async function contactExistsTx(tx: Writer, tenantId: string, contactId: string): Promise<boolean> {
+  const rows = await tx.select({ one: sql`1` }).from(contacts)
+    .where(and(eq(contacts.tenantId, tenantId), eq(contacts.id, contactId)))
+    .limit(1);
   return rows.length > 0;
 }
 

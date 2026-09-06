@@ -20,7 +20,7 @@ export function registerDealConsumers(queue: Queue): void {
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       const p = msg.payload;
-      if (p.contactId && !(await repo.contactExists(p.tenantId, p.contactId))) {
+      if (p.contactId && !(await repo.contactExistsTx(tx, p.tenantId, p.contactId))) {
         await emitAudit(tx, msg, "create", p.id, "rejected_cross_tenant_contact");
         return;
       }
@@ -79,7 +79,7 @@ export function registerDealConsumers(queue: Queue): void {
     };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
-      if (p.contactId && !(await repo.contactExists(p.tenantId, p.contactId))) {
+      if (p.contactId && !(await repo.contactExistsTx(tx, p.tenantId, p.contactId))) {
         await emitAudit(tx, msg, "update", p.id, "rejected_cross_tenant_contact");
         return;
       }

@@ -265,11 +265,40 @@ export async function dealExists(tenantId: string, dealId: string): Promise<bool
   return rows.length > 0;
 }
 
+/**
+ * Tx-scoped variant of dealExists -- see contactExistsTx above for the full
+ * rationale (tenantTransaction has the exact same shape as scopedRead for
+ * this bug -- see .claude/skills/16-production-readiness-audit.md section 1).
+ */
+export async function dealExistsTx(tx: Writer, tenantId: string, dealId: string): Promise<boolean> {
+  const rows = await (tx as typeof db).select({ one: sql`1` }).from(deals)
+    .where(and(eq(deals.tenantId, tenantId), eq(deals.id, dealId)))
+    .limit(1);
+  return rows.length > 0;
+}
+
 /** Same `tenantTransaction`/FORCE RLS rationale as `findById`/`dealExists` above. */
 export async function contactExists(tenantId: string, contactId: string): Promise<boolean> {
   const rows = await tenantTransaction(db, tenantId, (tx) => (tx as typeof db).select({ one: sql`1` }).from(contacts)
     .where(and(eq(contacts.tenantId, tenantId), eq(contacts.id, contactId)))
     .limit(1));
+  return rows.length > 0;
+}
+
+/**
+ * Tx-scoped variant of contactExists: reads through the callers already-open
+ * transaction directly instead of opening a nested one via tenantTransaction
+ * -- tenantTransaction has the exact same shape as scopedRead for this bug
+ * (it opens its own db.transaction() internally), so calling the
+ * tenantTransaction-based version from inside an open db.transaction() opens
+ * a SECOND transaction competing for a connection from the same pool as the
+ * outer one, deadlocking every in-flight command once concurrency reaches
+ * pool.max (see .claude/skills/16-production-readiness-audit.md section 1).
+ */
+export async function contactExistsTx(tx: Writer, tenantId: string, contactId: string): Promise<boolean> {
+  const rows = await (tx as typeof db).select({ one: sql`1` }).from(contacts)
+    .where(and(eq(contacts.tenantId, tenantId), eq(contacts.id, contactId)))
+    .limit(1);
   return rows.length > 0;
 }
 

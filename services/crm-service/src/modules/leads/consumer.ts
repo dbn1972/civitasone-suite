@@ -87,6 +87,20 @@ export async function getTenantScoringRules(tenantId: string, actorId: string): 
   return rules.length > 0 ? rules : DEFAULT_SCORING_RULES;
 }
 
+/**
+ * Tx-scoped twin of getTenantScoringRules for callers already inside an open
+ * transaction (recalculateScore below) -- see score-rules-repo.getStoredRulesTx.
+ */
+async function getTenantScoringRulesTx(
+  tx: unknown,
+  tenantId: string,
+  actorId: string,
+): Promise<ScoringRule[]> {
+  const dtx = tx as typeof db;
+  const rules = await scoreRulesRepo.getScoringRulesTx(dtx, tenantId, actorId);
+  return rules.length > 0 ? rules : DEFAULT_SCORING_RULES;
+}
+
 /** Per-attribute partial scores (0-100) for score-history explainability. */
 function computeFactors(attributes: LeadAttributes, rules: ScoringRule[]): Record<string, number> {
   const factors: Record<string, number> = {};
@@ -169,7 +183,7 @@ async function recalculateScore(
     designation: row.designation,
   };
 
-  const rules = await getTenantScoringRules(tenantId, msg.actorId);
+  const rules = await getTenantScoringRulesTx(tx, tenantId, msg.actorId);
   const score = computeLeadScore(leadAttributes, rules);
   const factors = computeFactors(leadAttributes, rules);
   const previousScore = row.score == null ? null : Number(row.score);

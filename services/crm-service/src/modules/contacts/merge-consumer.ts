@@ -39,8 +39,8 @@ export function registerMergeConsumers(queue: Queue): void {
         await emitAudit(tx, msg, "merge", "lead", p.primaryId, "rejected_same_id");
         return;
       }
-      const primary = await repo.findActiveRow(p.primaryId, p.tenantId);
-      const duplicate = await repo.findActiveRow(p.duplicateId, p.tenantId);
+      const primary = await repo.findActiveRowTx(tx, p.primaryId, p.tenantId);
+      const duplicate = await repo.findActiveRowTx(tx, p.duplicateId, p.tenantId);
       if (!primary || !duplicate) {
         await emitAudit(tx, msg, "merge", "lead", p.primaryId, "rejected_not_found_or_cross_tenant");
         return;
@@ -75,8 +75,8 @@ export function registerMergeConsumers(queue: Queue): void {
         await emitAudit(tx, msg, "merge", "account", p.primaryId, "rejected_same_id");
         return;
       }
-      const primary = await mergeRepo.findActiveAccountRow(p.primaryId, p.tenantId);
-      const duplicate = await mergeRepo.findActiveAccountRow(p.duplicateId, p.tenantId);
+      const primary = await mergeRepo.findActiveAccountRowTx(tx, p.primaryId, p.tenantId);
+      const duplicate = await mergeRepo.findActiveAccountRowTx(tx, p.duplicateId, p.tenantId);
       if (!primary || !duplicate) {
         await emitAudit(tx, msg, "merge", "account", p.primaryId, "rejected_not_found_or_cross_tenant");
         return;
