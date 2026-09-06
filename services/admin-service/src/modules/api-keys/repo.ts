@@ -22,9 +22,14 @@ export async function findById(id: string, tenantId: string): Promise<ApiKeyRow 
 }
 
 export async function revokeKey(id: string, tenantId: string, actorId: string): Promise<void> {
-  await db.transaction((tx) => tx.update(adminApiKeys)
+  await db.transaction((tx) => revokeKeyTx(tx, id, tenantId, actorId));
+}
+
+/** Tx-scoped twin of revokeKey for callers already inside an open transaction. */
+export async function revokeKeyTx(tx: Writer, id: string, tenantId: string, actorId: string): Promise<void> {
+  await tx.update(adminApiKeys)
     .set({ status: "revoked", updatedAt: new Date(), updatedBy: actorId })
-    .where(and(eq(adminApiKeys.id, id), eq(adminApiKeys.tenantId, tenantId))));
+    .where(and(eq(adminApiKeys.id, id), eq(adminApiKeys.tenantId, tenantId)));
 }
 
 // P1-5: rotate replaces the stored hash/prefix in place. The old secret stops

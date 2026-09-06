@@ -59,7 +59,7 @@ export function registerApiKeyConsumers(queue: Queue): void {
     try {
       await db.transaction(async (tx) => {
         if (!(await markProcessed(tx, msg.messageId))) return;
-        await repo.revokeKey(p.id, p.tenantId, msg.actorId);
+        await repo.revokeKeyTx(tx, p.id, p.tenantId, msg.actorId);
         await enqueue(tx, audit(msg.actorId, msg.tenantId, msg.correlationId, "api_key_revoke", p.id));
       });
       await cache.invalidateResource(msg.tenantId, "api_keys");
