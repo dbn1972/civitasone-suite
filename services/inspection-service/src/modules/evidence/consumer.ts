@@ -17,7 +17,7 @@ import { pino } from "pino";
 import type { Queue } from "@civitasone/queue";
 import { db } from "../../shared/db.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
-import { cache } from "../../shared/infra.js";
+import { cache, invalidateSafely } from "../../shared/infra.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import { decideIntegrity } from "./domain.js";
 import { resolveStorageConfig, fetchObjectSha256 } from "./storage.js";
@@ -120,12 +120,10 @@ export function registerEvidenceConsumers(queue: Queue): void {
 
       // Cache invalidation (outside transaction, best-effort)
       if (evidenceId) {
-        try {
-          await cache.invalidate(cache.makeKey(msg.tenantId, "evidence", evidenceId));
-        } catch (err) {
-          log.warn({ err, tenantId: msg.tenantId, evidenceId, event: "cache_invalidate_failed" },
-            "failed to invalidate evidence cache after register");
-        }
+        await invalidateSafely(
+          cache.makeKey(msg.tenantId, "evidence", evidenceId), log,
+          { tenantId: msg.tenantId, evidenceId }, "failed to invalidate evidence cache after register",
+        );
       }
     },
   );
@@ -213,12 +211,10 @@ export function registerEvidenceConsumers(queue: Queue): void {
       });
 
       // Cache invalidation (outside transaction, best-effort)
-      try {
-        await cache.invalidate(cache.makeKey(msg.tenantId, "evidence", p.evidenceId));
-      } catch (err) {
-        log.warn({ err, tenantId: msg.tenantId, evidenceId: p.evidenceId, event: "cache_invalidate_failed" },
-          "failed to invalidate evidence cache after integrity check");
-      }
+      await invalidateSafely(
+        cache.makeKey(msg.tenantId, "evidence", p.evidenceId), log,
+        { tenantId: msg.tenantId, evidenceId: p.evidenceId }, "failed to invalidate evidence cache after integrity check",
+      );
     },
   );
 }

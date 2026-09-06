@@ -8,7 +8,7 @@ import type { Queue } from "@civitasone/queue";
 import { NonRetryableError } from "@civitasone/queue";
 import { db } from "../../shared/db.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
-import { cache } from "../../shared/infra.js";
+import { cache, invalidateSafely } from "../../shared/infra.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import {
   assertValidSurveyTransition,
@@ -100,8 +100,7 @@ export function registerSurveyConsumers(queue: Queue): void {
       });
 
       if (surveyId) {
-        try { await cache.invalidate(cache.makeKey(msg.tenantId, "survey", surveyId)); }
-        catch (err) { log.warn({ err, event: "cache_invalidate_failed" }, "cache invalidation failed"); }
+        await invalidateSafely(cache.makeKey(msg.tenantId, "survey", surveyId), log);
       }
     },
   );
@@ -146,8 +145,7 @@ export function registerSurveyConsumers(queue: Queue): void {
         });
       });
 
-      try { await cache.invalidate(cache.makeKey(msg.tenantId, "survey", p.surveyId)); }
-      catch (err) { log.warn({ err, event: "cache_invalidate_failed" }, "cache invalidation failed"); }
+      await invalidateSafely(cache.makeKey(msg.tenantId, "survey", p.surveyId), log);
     },
   );
 
@@ -236,8 +234,7 @@ export function registerSurveyConsumers(queue: Queue): void {
         });
       });
 
-      try { await cache.invalidate(cache.makeKey(msg.tenantId, "survey", p.surveyId)); }
-      catch (err) { log.warn({ err, event: "cache_invalidate_failed" }, "cache invalidation failed"); }
+      await invalidateSafely(cache.makeKey(msg.tenantId, "survey", p.surveyId), log);
     },
   );
 
@@ -289,8 +286,7 @@ export function registerSurveyConsumers(queue: Queue): void {
         });
       });
 
-      try { await cache.invalidate(cache.makeKey(msg.tenantId, "survey", p.surveyId)); }
-      catch (err) { log.warn({ err, event: "cache_invalidate_failed" }, "cache invalidation failed"); }
+      await invalidateSafely(cache.makeKey(msg.tenantId, "survey", p.surveyId), log);
     },
   );
 
@@ -366,8 +362,7 @@ export function registerSurveyConsumers(queue: Queue): void {
       });
 
       if (responseId) {
-        try { await cache.invalidate(cache.makeKey(msg.tenantId, "survey-agg", p.surveyId)); }
-        catch (err) { log.warn({ err, event: "cache_invalidate_failed" }, "cache invalidation failed"); }
+        await invalidateSafely(cache.makeKey(msg.tenantId, "survey-agg", p.surveyId), log);
       }
     },
   );
@@ -434,8 +429,7 @@ export function registerSurveyConsumers(queue: Queue): void {
         });
       });
 
-      try { await cache.invalidate(cache.makeKey(msg.tenantId, "survey-agg", p.surveyId)); }
-      catch (err) { log.warn({ err, event: "cache_invalidate_failed" }, "cache invalidation failed"); }
+      await invalidateSafely(cache.makeKey(msg.tenantId, "survey-agg", p.surveyId), log);
     },
   );
 }

@@ -19,7 +19,7 @@ import type { Queue } from "@civitasone/queue";
 import { NonRetryableError } from "@civitasone/queue";
 import { db } from "../../shared/db.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
-import { cache } from "../../shared/infra.js";
+import { cache, invalidateSafely } from "../../shared/infra.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import {
   assertValidTransition,
@@ -193,12 +193,10 @@ export function registerExecutionConsumers(queue: Queue): void {
 
       // Cache invalidation (outside transaction, best-effort)
       if (inspectionId) {
-        try {
-          await cache.invalidate(cache.makeKey(msg.tenantId, "inspection", inspectionId));
-        } catch (err) {
-          log.warn({ err, tenantId: msg.tenantId, inspectionId, event: "cache_invalidate_failed" },
-            "failed to invalidate inspection cache after transition");
-        }
+        await invalidateSafely(
+          cache.makeKey(msg.tenantId, "inspection", inspectionId), log,
+          { tenantId: msg.tenantId, inspectionId }, "failed to invalidate inspection cache after transition",
+        );
       }
     },
   );
@@ -311,12 +309,10 @@ export function registerExecutionConsumers(queue: Queue): void {
 
       // Cache invalidation (outside transaction, best-effort)
       if (inspectionId) {
-        try {
-          await cache.invalidate(cache.makeKey(msg.tenantId, "inspection", inspectionId));
-        } catch (err) {
-          log.warn({ err, tenantId: msg.tenantId, inspectionId, event: "cache_invalidate_failed" },
-            "failed to invalidate inspection cache after submit-review");
-        }
+        await invalidateSafely(
+          cache.makeKey(msg.tenantId, "inspection", inspectionId), log,
+          { tenantId: msg.tenantId, inspectionId }, "failed to invalidate inspection cache after submit-review",
+        );
       }
     },
   );
@@ -432,12 +428,10 @@ export function registerExecutionConsumers(queue: Queue): void {
 
       // Cache invalidation (outside transaction, best-effort)
       if (inspectionId) {
-        try {
-          await cache.invalidate(cache.makeKey(msg.tenantId, "inspection", inspectionId));
-        } catch (err) {
-          log.warn({ err, tenantId: msg.tenantId, inspectionId, event: "cache_invalidate_failed" },
-            "failed to invalidate inspection cache after finalize");
-        }
+        await invalidateSafely(
+          cache.makeKey(msg.tenantId, "inspection", inspectionId), log,
+          { tenantId: msg.tenantId, inspectionId }, "failed to invalidate inspection cache after finalize",
+        );
       }
     },
   );

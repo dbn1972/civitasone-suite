@@ -22,7 +22,7 @@ import type { Queue } from "@civitasone/queue";
 import { NonRetryableError } from "@civitasone/queue";
 import { db } from "../../shared/db.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
-import { cache } from "../../shared/infra.js";
+import { cache, invalidateSafely } from "../../shared/infra.js";
 import { COMMANDS } from "../../topics.js";
 import {
   findTemplateById,
@@ -221,12 +221,10 @@ export function registerChecklistConsumers(queue: Queue): void {
 
     // Cache invalidation (outside transaction, best-effort)
     if (templateId) {
-      try {
-        await cache.invalidate(cache.makeKey(msg.tenantId, "checklist_template", templateId));
-      } catch (err) {
-        log.warn({ err, tenantId: msg.tenantId, templateId, event: "cache_invalidate_failed" },
-          "failed to invalidate checklist_template cache after create");
-      }
+      await invalidateSafely(
+        cache.makeKey(msg.tenantId, "checklist_template", templateId), log,
+        { tenantId: msg.tenantId, templateId }, "failed to invalidate checklist_template cache after create",
+      );
     }
   });
 
@@ -286,12 +284,10 @@ export function registerChecklistConsumers(queue: Queue): void {
 
     // Cache invalidation (outside transaction, best-effort)
     if (publishedTemplateId) {
-      try {
-        await cache.invalidate(cache.makeKey(msg.tenantId, "checklist_template", publishedTemplateId));
-      } catch (err) {
-        log.warn({ err, tenantId: msg.tenantId, templateId: publishedTemplateId, event: "cache_invalidate_failed" },
-          "failed to invalidate checklist_template cache after publish");
-      }
+      await invalidateSafely(
+        cache.makeKey(msg.tenantId, "checklist_template", publishedTemplateId), log,
+        { tenantId: msg.tenantId, templateId: publishedTemplateId }, "failed to invalidate checklist_template cache after publish",
+      );
     }
   });
 
@@ -363,12 +359,10 @@ export function registerChecklistConsumers(queue: Queue): void {
 
     // Cache invalidation (outside transaction, best-effort)
     if (instanceId) {
-      try {
-        await cache.invalidate(cache.makeKey(msg.tenantId, "checklist_instance", instanceId));
-      } catch (err) {
-        log.warn({ err, tenantId: msg.tenantId, instanceId, event: "cache_invalidate_failed" },
-          "failed to invalidate checklist_instance cache after generate");
-      }
+      await invalidateSafely(
+        cache.makeKey(msg.tenantId, "checklist_instance", instanceId), log,
+        { tenantId: msg.tenantId, instanceId }, "failed to invalidate checklist_instance cache after generate",
+      );
     }
   });
 
@@ -443,12 +437,10 @@ export function registerChecklistConsumers(queue: Queue): void {
 
     // Cache invalidation (outside transaction, best-effort)
     if (updatedInstanceId) {
-      try {
-        await cache.invalidate(cache.makeKey(msg.tenantId, "checklist_instance", updatedInstanceId));
-      } catch (err) {
-        log.warn({ err, tenantId: msg.tenantId, instanceId: updatedInstanceId, event: "cache_invalidate_failed" },
-          "failed to invalidate checklist_instance cache after response submit");
-      }
+      await invalidateSafely(
+        cache.makeKey(msg.tenantId, "checklist_instance", updatedInstanceId), log,
+        { tenantId: msg.tenantId, instanceId: updatedInstanceId }, "failed to invalidate checklist_instance cache after response submit",
+      );
     }
   });
 }

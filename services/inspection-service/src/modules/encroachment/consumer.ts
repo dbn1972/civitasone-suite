@@ -30,7 +30,8 @@ import type { Queue } from "@civitasone/queue";
 import { NonRetryableError } from "@civitasone/queue";
 import { db } from "../../shared/db.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
-import { cache } from "../../shared/infra.js";
+import { cache, invalidateSafely } from "../../shared/infra.js";
+import { toDomainError } from "../../shared/errors.js";
 import { COMMANDS } from "../../topics.js";
 import {
   assertValidComplaintTransition,
@@ -75,11 +76,6 @@ const log = pino({ name: "encroachment-consumer" });
 
 const AUDIT_TOPIC = "audit.event.record";
 
-function toDomainError(err: unknown): never {
-  if (err instanceof DomainError) throw new NonRetryableError(err.message);
-  throw err as Error;
-}
-
 export function registerEncroachmentConsumers(queue: Queue): void {
   // ─── encroachmentComplaintCreate ──────────────────────────────────────────
   queue.subscribe<CreateComplaintPayload & { tenantId: string }>(
@@ -118,8 +114,7 @@ export function registerEncroachmentConsumers(queue: Queue): void {
       });
 
       if (complaintId) {
-        try { await cache.invalidate(cache.makeKey(msg.tenantId, "encroachment_complaint", complaintId)); }
-        catch (err) { log.warn({ err, event: "cache_invalidate_failed" }, "cache invalidation failed"); }
+        await invalidateSafely(cache.makeKey(msg.tenantId, "encroachment_complaint", complaintId), log);
       }
     },
   );
@@ -145,9 +140,9 @@ export function registerEncroachmentConsumers(queue: Queue): void {
         if (!["received", "under_verification"].includes(complaint.status)) {
           try {
             assertValidComplaintTransition(complaint.status as ComplaintState, "verified");
-          } catch (err) { toDomainError(err); }
+          } catch (err) { toDomainError(err, DomainError); }
         }
-        try { validateVerification(p.landVerificationReport); } catch (err) { toDomainError(err); }
+        try { validateVerification(p.landVerificationReport); } catch (err) { toDomainError(err, DomainError); }
 
         await updateComplaint(tx, p.complaintId, msg.tenantId, {
           status: "verified",
@@ -167,8 +162,7 @@ export function registerEncroachmentConsumers(queue: Queue): void {
         });
       });
 
-      try { await cache.invalidate(cache.makeKey(msg.tenantId, "encroachment_complaint", p.complaintId)); }
-      catch (err) { log.warn({ err, event: "cache_invalidate_failed" }, "cache invalidation failed"); }
+      await invalidateSafely(cache.makeKey(msg.tenantId, "encroachment_complaint", p.complaintId), log);
     },
   );
 
@@ -186,7 +180,7 @@ export function registerEncroachmentConsumers(queue: Queue): void {
         if (!complaint) throw new NonRetryableError(`Encroachment complaint not found: ${p.complaintId}`);
         try {
           assertValidComplaintTransition(complaint.status as ComplaintState, "notice_issued");
-        } catch (err) { toDomainError(err); }
+        } catch (err) { toDomainError(err, DomainError); }
 
         const notice = await insertNotice(tx, {
           tenantId: msg.tenantId,
@@ -216,12 +210,9 @@ export function registerEncroachmentConsumers(queue: Queue): void {
         });
       });
 
-      const invalidations = [
-        cache.invalidate(cache.makeKey(msg.tenantId, "encroachment_complaint", p.complaintId)),
-      ];
-      if (noticeId) invalidations.push(cache.invalidate(cache.makeKey(msg.tenantId, "encroachment_notice", noticeId)));
-      try { await Promise.all(invalidations); }
-      catch (err) { log.warn({ err, event: "cache_invalidate_failed" }, "cache invalidation failed"); }
+      const keys = [cache.makeKey(msg.tenantId, "encroachment_complaint", p.complaintId)];
+      if (noticeId) keys.push(cache.makeKey(msg.tenantId, "encroachment_notice", noticeId));
+      await invalidateSafely(keys, log);
     },
   );
 
@@ -238,7 +229,7 @@ export function registerEncroachmentConsumers(queue: Queue): void {
         if (!notice) throw new NonRetryableError(`Encroachment notice not found: ${p.noticeId}`);
         try {
           assertValidNoticeTransition(notice.status as NoticeState, "served");
-        } catch (err) { toDomainError(err); }
+        } catch (err) { toDomainError(err, DomainError); }
 
         await updateNotice(tx, p.noticeId, msg.tenantId, {
           status: "served",
@@ -256,8 +247,7 @@ export function registerEncroachmentConsumers(queue: Queue): void {
         });
       });
 
-      try { await cache.invalidate(cache.makeKey(msg.tenantId, "encroachment_notice", p.noticeId)); }
-      catch (err) { log.warn({ err, event: "cache_invalidate_failed" }, "cache invalidation failed"); }
+      await invalidateSafely(cache.makeKey(msg.tenantId, "encroachment_notice", p.noticeId), log);
     },
   );
 
@@ -274,7 +264,7 @@ export function registerEncroachmentConsumers(queue: Queue): void {
         if (!notice) throw new NonRetryableError(`Encroachment notice not found: ${p.noticeId}`);
         try {
           assertValidNoticeTransition(notice.status as NoticeState, "response_received");
-        } catch (err) { toDomainError(err); }
+        } catch (err) { toDomainError(err, DomainError); }
 
         await updateNotice(tx, p.noticeId, msg.tenantId, {
           status: "response_received",
@@ -292,8 +282,7 @@ export function registerEncroachmentConsumers(queue: Queue): void {
         });
       });
 
-      try { await cache.invalidate(cache.makeKey(msg.tenantId, "encroachment_notice", p.noticeId)); }
-      catch (err) { log.warn({ err, event: "cache_invalidate_failed" }, "cache invalidation failed"); }
+      await invalidateSafely(cache.makeKey(msg.tenantId, "encroachment_notice", p.noticeId), log);
     },
   );
 
@@ -318,7 +307,7 @@ export function registerEncroachmentConsumers(queue: Queue): void {
         try {
           assertValidComplaintTransition(complaint.status as ComplaintState, "hearing_scheduled");
           assertValidNoticeTransition(notice.status as NoticeState, "hearing_scheduled");
-        } catch (err) { toDomainError(err); }
+        } catch (err) { toDomainError(err, DomainError); }
 
         const hearing = await insertHearing(tx, {
           tenantId: msg.tenantId,
@@ -352,13 +341,12 @@ export function registerEncroachmentConsumers(queue: Queue): void {
         });
       });
 
-      const invalidations = [
-        cache.invalidate(cache.makeKey(msg.tenantId, "encroachment_complaint", p.complaintId)),
-        cache.invalidate(cache.makeKey(msg.tenantId, "encroachment_notice", p.noticeId)),
+      const keys = [
+        cache.makeKey(msg.tenantId, "encroachment_complaint", p.complaintId),
+        cache.makeKey(msg.tenantId, "encroachment_notice", p.noticeId),
       ];
-      if (hearingId) invalidations.push(cache.invalidate(cache.makeKey(msg.tenantId, "encroachment_hearing", hearingId)));
-      try { await Promise.all(invalidations); }
-      catch (err) { log.warn({ err, event: "cache_invalidate_failed" }, "cache invalidation failed"); }
+      if (hearingId) keys.push(cache.makeKey(msg.tenantId, "encroachment_hearing", hearingId));
+      await invalidateSafely(keys, log);
     },
   );
 
@@ -410,7 +398,7 @@ export function registerEncroachmentConsumers(queue: Queue): void {
         if (!adjourned) {
           try {
             assertValidComplaintTransition(complaint.status as ComplaintState, "hearing_done");
-          } catch (err) { toDomainError(err); }
+          } catch (err) { toDomainError(err, DomainError); }
         }
 
         await updateHearing(tx, p.hearingId, msg.tenantId, {
@@ -439,10 +427,9 @@ export function registerEncroachmentConsumers(queue: Queue): void {
         });
       });
 
-      const invalidations = [cache.invalidate(cache.makeKey(msg.tenantId, "encroachment_hearing", p.hearingId))];
-      if (complaintId) invalidations.push(cache.invalidate(cache.makeKey(msg.tenantId, "encroachment_complaint", complaintId)));
-      try { await Promise.all(invalidations); }
-      catch (err) { log.warn({ err, event: "cache_invalidate_failed" }, "cache invalidation failed"); }
+      const keys = [cache.makeKey(msg.tenantId, "encroachment_hearing", p.hearingId)];
+      if (complaintId) keys.push(cache.makeKey(msg.tenantId, "encroachment_complaint", complaintId));
+      await invalidateSafely(keys, log);
     },
   );
 
@@ -460,7 +447,7 @@ export function registerEncroachmentConsumers(queue: Queue): void {
         if (!complaint) throw new NonRetryableError(`Encroachment complaint not found: ${p.complaintId}`);
         try {
           assertValidComplaintTransition(complaint.status as ComplaintState, "removal_ordered");
-        } catch (err) { toDomainError(err); }
+        } catch (err) { toDomainError(err, DomainError); }
 
         const removal = await insertRemoval(tx, {
           tenantId: msg.tenantId,
@@ -487,12 +474,9 @@ export function registerEncroachmentConsumers(queue: Queue): void {
         });
       });
 
-      const invalidations = [
-        cache.invalidate(cache.makeKey(msg.tenantId, "encroachment_complaint", p.complaintId)),
-      ];
-      if (removalId) invalidations.push(cache.invalidate(cache.makeKey(msg.tenantId, "encroachment_removal", removalId)));
-      try { await Promise.all(invalidations); }
-      catch (err) { log.warn({ err, event: "cache_invalidate_failed" }, "cache invalidation failed"); }
+      const keys = [cache.makeKey(msg.tenantId, "encroachment_complaint", p.complaintId)];
+      if (removalId) keys.push(cache.makeKey(msg.tenantId, "encroachment_removal", removalId));
+      await invalidateSafely(keys, log);
     },
   );
 
@@ -509,7 +493,7 @@ export function registerEncroachmentConsumers(queue: Queue): void {
         if (!removal) throw new NonRetryableError(`Encroachment removal not found: ${p.removalId}`);
         try {
           assertValidRemovalTransition(removal.status as RemovalState, "team_assigned");
-        } catch (err) { toDomainError(err); }
+        } catch (err) { toDomainError(err, DomainError); }
 
         await updateRemoval(tx, p.removalId, msg.tenantId, {
           teamMembers: p.teamMembers,
@@ -528,8 +512,7 @@ export function registerEncroachmentConsumers(queue: Queue): void {
         });
       });
 
-      try { await cache.invalidate(cache.makeKey(msg.tenantId, "encroachment_removal", p.removalId)); }
-      catch (err) { log.warn({ err, event: "cache_invalidate_failed" }, "cache invalidation failed"); }
+      await invalidateSafely(cache.makeKey(msg.tenantId, "encroachment_removal", p.removalId), log);
     },
   );
 
@@ -554,7 +537,7 @@ export function registerEncroachmentConsumers(queue: Queue): void {
         if (!["team_assigned", "in_progress"].includes(removal.status)) {
           try {
             assertValidRemovalTransition(removal.status as RemovalState, "completed");
-          } catch (err) { toDomainError(err); }
+          } catch (err) { toDomainError(err, DomainError); }
         }
 
         await updateRemoval(tx, p.removalId, msg.tenantId, {
@@ -579,7 +562,7 @@ export function registerEncroachmentConsumers(queue: Queue): void {
           // handler already does.
           try {
             assertValidComplaintTransition(complaint.status as ComplaintState, "removed");
-          } catch (err) { toDomainError(err); }
+          } catch (err) { toDomainError(err, DomainError); }
           await updateComplaint(tx, removal.complaintId, msg.tenantId, {
             status: "removed", updatedBy: msg.actorId,
           }, complaint.version);
@@ -595,10 +578,9 @@ export function registerEncroachmentConsumers(queue: Queue): void {
         });
       });
 
-      const invalidations = [cache.invalidate(cache.makeKey(msg.tenantId, "encroachment_removal", p.removalId))];
-      if (complaintId) invalidations.push(cache.invalidate(cache.makeKey(msg.tenantId, "encroachment_complaint", complaintId)));
-      try { await Promise.all(invalidations); }
-      catch (err) { log.warn({ err, event: "cache_invalidate_failed" }, "cache invalidation failed"); }
+      const keys = [cache.makeKey(msg.tenantId, "encroachment_removal", p.removalId)];
+      if (complaintId) keys.push(cache.makeKey(msg.tenantId, "encroachment_complaint", complaintId));
+      await invalidateSafely(keys, log);
     },
   );
 }
