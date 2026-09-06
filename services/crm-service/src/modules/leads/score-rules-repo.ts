@@ -81,6 +81,46 @@ export async function getScoringRules(tenantId: string, actorId: string): Promis
   return toScoringRules(await getStoredRules(tenantId, actorId));
 }
 
+/**
+ * Tx-scoped twin of getStoredRules for callers already inside an open
+ * transaction (see .claude/skills/16-production-readiness-audit.md section 1):
+ * scopedRead/db.transaction open their own connection, so calling the
+ * non-Tx variant from inside another transaction deadlocks the pool. Reads
+ * and the lazy-seed insert both go through the caller-supplied tx.
+ */
+export async function getStoredRulesTx(
+  tx: Pick<typeof db, "select" | "insert">,
+  tenantId: string,
+  actorId: string,
+): Promise<StoredScoreRule[]> {
+  const existing = await tx.select().from(leadScoreRules).where(eq(leadScoreRules.tenantId, tenantId));
+  if (existing.length > 0) return existing.map(toStored);
+
+  for (const d of DEFAULT_SCORE_RULE_CONFIGS) {
+    await tx.insert(leadScoreRules).values({
+      tenantId,
+      attribute: d.attribute,
+      weight: d.weight,
+      scoreFnType: d.scoreFnType,
+      params: d.params,
+      enabled: d.enabled,
+      createdBy: actorId,
+      updatedBy: actorId,
+    }).onConflictDoNothing();
+  }
+  const seeded = await tx.select().from(leadScoreRules).where(eq(leadScoreRules.tenantId, tenantId));
+  return seeded.map(toStored);
+}
+
+/** Tx-scoped twin of getScoringRules — see getStoredRulesTx. */
+export async function getScoringRulesTx(
+  tx: Pick<typeof db, "select" | "insert">,
+  tenantId: string,
+  actorId: string,
+): Promise<ScoringRule[]> {
+  return toScoringRules(await getStoredRulesTx(tx, tenantId, actorId));
+}
+
 export interface RuleUpsert {
   attribute: string;
   weight: number;
