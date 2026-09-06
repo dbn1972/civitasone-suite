@@ -104,6 +104,7 @@ vi.mock("../src/modules/risk/repo.js", () => ({
 
 vi.mock("../src/modules/planning/repo.js", () => ({
   findPlanById: vi.fn().mockResolvedValue({ id: "plan-1", status: "draft", version: 1, tenantId: TENANT_ID }),
+  findPlanByIdTx: vi.fn().mockResolvedValue({ id: "plan-1", status: "draft", version: 1, tenantId: TENANT_ID }),
   findPlansByTenant: vi.fn().mockResolvedValue({ data: [], meta: { page: 1, pageSize: 20, total: 0 } }),
   insertPlan: vi.fn().mockResolvedValue({ id: "plan-1", status: "draft" }),
   updatePlan: vi.fn().mockResolvedValue({ id: "plan-1", status: "pending_approval", version: 2 }),

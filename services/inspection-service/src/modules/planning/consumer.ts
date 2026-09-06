@@ -25,7 +25,7 @@ import { db } from "../../shared/db.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { cache, invalidateSafely } from "../../shared/infra.js";
 import { COMMANDS, EVENTS, CONSUMED_EVENTS } from "../../topics.js";
-import { insertPlan, updatePlan, findPlanById } from "./repo.js";
+import { insertPlan, updatePlan, findPlanById, findPlanByIdTx } from "./repo.js";
 import { submitPlanForWorkflowApproval } from "./commands.js";
 import type {
   PlanCreatePayload,
@@ -123,7 +123,7 @@ export function registerPlanningConsumers(queue: Queue): void {
       if (!(await markProcessed(tx, msg.messageId))) return;
 
       // Look up the plan to check state
-      const existing = await findPlanById(msg.tenantId, p.planId);
+      const existing = await findPlanByIdTx(tx, msg.tenantId, p.planId);
       if (!existing) {
         throw new NonRetryableError(`Plan ${p.planId} not found for tenant ${msg.tenantId}`);
       }
@@ -181,7 +181,7 @@ export function registerPlanningConsumers(queue: Queue): void {
       if (!(await markProcessed(tx, msg.messageId))) return;
 
       // Look up the plan to check state
-      const existing = await findPlanById(msg.tenantId, p.planId);
+      const existing = await findPlanByIdTx(tx, msg.tenantId, p.planId);
       if (!existing) {
         throw new NonRetryableError(`Plan ${p.planId} not found for tenant ${msg.tenantId}`);
       }
@@ -245,7 +245,7 @@ export function registerPlanningConsumers(queue: Queue): void {
       if (!(await markProcessed(tx, msg.messageId))) return;
 
       // Look up the plan to check state
-      const existing = await findPlanById(msg.tenantId, p.planId);
+      const existing = await findPlanByIdTx(tx, msg.tenantId, p.planId);
       if (!existing) {
         throw new NonRetryableError(`Plan ${p.planId} not found for tenant ${msg.tenantId}`);
       }
@@ -330,7 +330,7 @@ export function registerPlanningConsumers(queue: Queue): void {
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
 
-      const existing = await findPlanById(msg.tenantId, p.entityId);
+      const existing = await findPlanByIdTx(tx, msg.tenantId, p.entityId);
       if (!existing) {
         throw new NonRetryableError(`Plan ${p.entityId} not found for tenant ${msg.tenantId}`);
       }
