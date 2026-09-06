@@ -16,7 +16,7 @@ import {
   DomainError,
   type LicenceState,
 } from "./domain.js";
-import { insertLicence, updateLicence, findLicenceById } from "./repo.js";
+import { insertLicence, updateLicence, findLicenceById, findLicenceByIdTx } from "./repo.js";
 import type {
   LicenceCreatePayload,
   LicenceUpdatePayload,
@@ -139,7 +139,7 @@ export function registerLicenceConsumers(queue: Queue): void {
       await db.transaction(async (tx) => {
         if (!(await markProcessed(tx, msg.messageId))) return;
 
-        const licence = await findLicenceById(msg.tenantId, p.licenceId);
+        const licence = await findLicenceByIdTx(tx, msg.tenantId, p.licenceId);
         if (!licence) {
           throw new NonRetryableError(`Licence not found: ${p.licenceId}`);
         }
@@ -202,7 +202,7 @@ export function registerLicenceConsumers(queue: Queue): void {
       await db.transaction(async (tx) => {
         if (!(await markProcessed(tx, msg.messageId))) return;
 
-        const licence = await findLicenceById(msg.tenantId, p.licenceId);
+        const licence = await findLicenceByIdTx(tx, msg.tenantId, p.licenceId);
         if (!licence) {
           throw new NonRetryableError(`Licence not found: ${p.licenceId}`);
         }
@@ -256,7 +256,7 @@ export function registerLicenceConsumers(queue: Queue): void {
       await db.transaction(async (tx) => {
         if (!(await markProcessed(tx, msg.messageId))) return;
 
-        const licence = await findLicenceById(msg.tenantId, p.licenceId);
+        const licence = await findLicenceByIdTx(tx, msg.tenantId, p.licenceId);
         if (!licence) {
           throw new NonRetryableError(`Licence not found: ${p.licenceId}`);
         }
