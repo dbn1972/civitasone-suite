@@ -119,7 +119,7 @@ export function registerFleetConsumers(rawQueue: Queue): void {
           fuelLevelPct: p.fuelLevelPct ?? null, engineOn: p.engineOn ?? null,
           recordedAt: new Date(p.timestamp),
         });
-        const device = await repo.findDeviceById(p.deviceId, p.tenantId);
+        const device = await repo.findDeviceByIdTx(tx, p.deviceId, p.tenantId);
         if (device) {
           await repo.updateVehiclePosition(tx, device.vehicleId, p.tenantId, {
             lat: String(p.lat), lng: String(p.lng),

@@ -65,7 +65,7 @@ export function registerMaintenanceConsumers(rawQueue: Queue): void {
       };
       await db.transaction(async (tx) => {
         if (!(await markProcessed(tx, msg.messageId))) return;
-        const wo = await repo.findWorkOrderById(p.id, p.tenantId);
+        const wo = await repo.findWorkOrderByIdTx(tx, p.id, p.tenantId);
         if (!wo) {
           throw new Error(`WORK_ORDER_NOT_FOUND_OR_CROSS_TENANT: ${p.id} for tenant ${p.tenantId}`);
         }

@@ -110,6 +110,19 @@ export async function findPendingDisposal(id: string, tenantId: string) {
   return rows[0] ?? null;
 }
 
+/**
+ * Tx-scoped variant of findPendingDisposal -- see findAssetByIdTx in
+ * register/repo.ts for the full rationale (section 1 of the
+ * production-readiness-audit skill). Note this pendingDisposals table is the
+ * enterprise-module one (lifecycleSchema.pending_disposals), a distinct
+ * table from the unrelated lifecycle-module pendingDisposals of the same
+ * name -- do not confuse with findPendingDisposalByIdTx in lifecycle/repo.ts.
+ */
+export async function findPendingDisposalTx(tx: Writer, id: string, tenantId: string) {
+  const rows = await tx.select().from(pendingDisposals).where(and(eq(pendingDisposals.id, id), eq(pendingDisposals.tenantId, tenantId))).limit(1);
+  return rows[0] ?? null;
+}
+
 export async function updatePendingDisposal(tx: Writer, id: string, status: string) {
   await tx.update(pendingDisposals).set({ workflowStatus: status }).where(eq(pendingDisposals.id, id));
 }

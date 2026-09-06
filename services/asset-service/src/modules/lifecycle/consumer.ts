@@ -27,7 +27,7 @@ export function registerLifecycleConsumers(rawQueue: Queue): void {
       };
       await db.transaction(async (tx) => {
         if (!(await markProcessed(tx, msg.messageId))) return;
-        const asset = await registerRepo.findAssetById(p.assetId, p.tenantId);
+        const asset = await registerRepo.findAssetByIdTx(tx, p.assetId, p.tenantId);
         if (!asset) throw new Error("ASSET_NOT_FOUND_OR_CROSS_TENANT: cannot transfer a missing or cross-tenant asset");
         assertAssetTransferable(asset.status);
         await repo.insertTransfer(tx, {
@@ -58,10 +58,10 @@ export function registerLifecycleConsumers(rawQueue: Queue): void {
       };
       await db.transaction(async (tx) => {
         if (!(await markProcessed(tx, msg.messageId))) return;
-        const asset = await registerRepo.findAssetById(p.assetId, p.tenantId);
+        const asset = await registerRepo.findAssetByIdTx(tx, p.assetId, p.tenantId);
         if (!asset) throw new Error("ASSET_NOT_FOUND_OR_CROSS_TENANT: cannot dispose a missing or cross-tenant asset");
         assertAssetDisposable(asset.status);
-        const approval = await verificationRepo.findApprovedWriteoff(p.tenantId, p.assetId);
+        const approval = await verificationRepo.findApprovedWriteoffTx(tx, p.tenantId, p.assetId);
         if (!approval) {
           throw new Error("COMMITTEE_APPROVAL_REQUIRED: Asset write-off requires committee approval per GFR Rule 173.");
         }
@@ -112,10 +112,10 @@ export function registerLifecycleConsumers(rawQueue: Queue): void {
       };
       await db.transaction(async (tx) => {
         if (!(await markProcessed(tx, msg.messageId))) return;
-        const asset = await registerRepo.findAssetById(p.assetId, p.tenantId);
+        const asset = await registerRepo.findAssetByIdTx(tx, p.assetId, p.tenantId);
         if (!asset) throw new Error("ASSET_NOT_FOUND_OR_CROSS_TENANT: cannot submit a missing or cross-tenant asset for disposal");
         assertAssetDisposable(asset.status);
-        const approval = await verificationRepo.findApprovedWriteoff(p.tenantId, p.assetId);
+        const approval = await verificationRepo.findApprovedWriteoffTx(tx, p.tenantId, p.assetId);
         if (!approval) {
           throw new Error("COMMITTEE_APPROVAL_REQUIRED: Asset write-off requires committee approval per GFR Rule 173.");
         }

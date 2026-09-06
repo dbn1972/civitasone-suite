@@ -25,9 +25,9 @@ export function registerEnterpriseConsumers(rawQueue: Queue): void {
       let disposedAssetId: string | undefined;
       await db.transaction(async (tx) => {
         if (!(await markProcessed(tx, msg.messageId))) return;
-        const pending = await pendingRepo.findPendingDisposal(p.pendingId, p.tenantId);
+        const pending = await pendingRepo.findPendingDisposalTx(tx, p.pendingId, p.tenantId);
         if (!pending || pending.workflowStatus === "completed") return;
-        const asset = await registerRepo.findAssetById(pending.assetId, p.tenantId);
+        const asset = await registerRepo.findAssetByIdTx(tx, pending.assetId, p.tenantId);
         if (!asset) return;
         disposedAssetId = pending.assetId;
         const gainLoss = computeDisposalGainLoss(pending.proceedsMinor, asset.bookValue);

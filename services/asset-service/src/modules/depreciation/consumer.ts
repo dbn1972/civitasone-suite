@@ -26,7 +26,7 @@ export function registerDepreciationConsumers(rawQueue: Queue): void {
     const method = p.method as "SLM" | "WDV";
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
-      const asset = await registerRepo.findAssetById(p.assetId, p.tenantId);
+      const asset = await registerRepo.findAssetByIdTx(tx, p.assetId, p.tenantId);
       if (!asset) return;
       const usefulLifeYears = asset.usefulLifeYears;
       const ratePercent = depBook === "statutory" ? 25 : Number(asset.depRate);
@@ -109,7 +109,7 @@ export function registerDepreciationConsumers(rawQueue: Queue): void {
         const glRef = `dep:${entry.depBook}:${entry.assetId}:${entry.period}`;
         await repo.markEntryPosted(tx, entry.id, p.tenantId, glRef, msg.actorId);
         if (entry.depBook === "company") {
-          const asset = await registerRepo.findAssetById(entry.assetId, p.tenantId);
+          const asset = await registerRepo.findAssetByIdTx(tx, entry.assetId, p.tenantId);
           if (asset) {
             // Derive both figures from the asset's OWN current accumulatedDep,
             // never from the schedule entry's pre-baked `bookValueAfterMinor`

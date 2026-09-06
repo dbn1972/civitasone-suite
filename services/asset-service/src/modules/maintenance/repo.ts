@@ -22,6 +22,16 @@ export async function findWorkOrderById(id: string, tenantId: string): Promise<W
   return rows[0] ?? null;
 }
 
+/**
+ * Tx-scoped variant of findWorkOrderById -- see findAssetByIdTx in
+ * register/repo.ts for the full rationale (section 1 of the
+ * production-readiness-audit skill).
+ */
+export async function findWorkOrderByIdTx(tx: Writer, id: string, tenantId: string): Promise<WorkOrderRow | null> {
+  const rows = await tx.select().from(assetWorkOrders).where(and(eq(assetWorkOrders.id, id), eq(assetWorkOrders.tenantId, tenantId))).limit(1);
+  return rows[0] ?? null;
+}
+
 export async function completeWorkOrder(tx: Writer, id: string, tenantId: string, completedDate: string, costMinor: bigint, actorId: string): Promise<void> {
   await (tx as typeof db).update(assetWorkOrders)
     .set({ status: "completed", completedDate, costMinor, updatedAt: new Date(), updatedBy: actorId })

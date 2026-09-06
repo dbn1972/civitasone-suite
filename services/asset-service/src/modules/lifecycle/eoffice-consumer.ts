@@ -54,7 +54,7 @@ export function registerDisposalEOfficeDecisionConsumers(rawQueue: Queue): void 
       assetIdToInvalidate = pending.assetId;
 
       if (cb.decision === "approved") {
-        const asset = await registerRepo.findAssetById(pending.assetId, msg.tenantId);
+        const asset = await registerRepo.findAssetByIdTx(tx, pending.assetId, msg.tenantId);
         // Asset vanished / cross-tenant — cannot effect the disposal. Cancel the
         // staged row so the loop is not left open and record the miss.
         if (!asset) {
