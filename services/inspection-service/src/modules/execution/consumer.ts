@@ -30,6 +30,7 @@ import {
   updateInspectionState,
   insertHistory,
   findInspectionById,
+  findInspectionByIdTx,
 } from "./repo.js";
 import type {
   InspectionTransitionPayload,
@@ -56,7 +57,7 @@ export function registerExecutionConsumers(queue: Queue): void {
         if (!(await markProcessed(tx, msg.messageId))) return;
 
         // 1. Load current inspection
-        const inspection = await findInspectionById(msg.tenantId, p.inspectionId);
+        const inspection = await findInspectionByIdTx(tx, msg.tenantId, p.inspectionId);
         if (!inspection) {
           throw new NonRetryableError(
             `Inspection not found: ${p.inspectionId} (tenant: ${msg.tenantId})`,
@@ -212,7 +213,7 @@ export function registerExecutionConsumers(queue: Queue): void {
         if (!(await markProcessed(tx, msg.messageId))) return;
 
         // 1. Load current inspection
-        const inspection = await findInspectionById(msg.tenantId, p.inspectionId);
+        const inspection = await findInspectionByIdTx(tx, msg.tenantId, p.inspectionId);
         if (!inspection) {
           throw new NonRetryableError(
             `Inspection not found: ${p.inspectionId} (tenant: ${msg.tenantId})`,
@@ -328,7 +329,7 @@ export function registerExecutionConsumers(queue: Queue): void {
         if (!(await markProcessed(tx, msg.messageId))) return;
 
         // 1. Load current inspection
-        const inspection = await findInspectionById(msg.tenantId, p.inspectionId);
+        const inspection = await findInspectionByIdTx(tx, msg.tenantId, p.inspectionId);
         if (!inspection) {
           throw new NonRetryableError(
             `Inspection not found: ${p.inspectionId} (tenant: ${msg.tenantId})`,

@@ -58,6 +58,31 @@ export async function findInspectionById(
 }
 
 /**
+ * Tx-scoped variant of findInspectionById: reads through the caller's
+ * already-open transaction instead of opening a nested one via scopedRead.
+ * Used by this module's own consumer.ts -- calling the scopedRead-based
+ * version from inside an open db.transaction() opens a SECOND transaction
+ * competing for a connection from the same pool as the outer one,
+ * deadlocking every in-flight command once concurrency reaches pool.max
+ * (see .claude/skills/16-production-readiness-audit.md section 1).
+ * Bypasses the read-through cache deliberately: a value read inside the
+ * caller's own transaction must reflect that transaction's current view,
+ * not a possibly-stale cached one.
+ */
+export async function findInspectionByIdTx(
+  tx: Tx,
+  tenantId: string,
+  id: string,
+): Promise<InspectionRow | null> {
+  const rows = await tx.select().from(inspections)
+    .where(and(
+      eq(inspections.id, id),
+      eq(inspections.tenantId, tenantId),
+    ));
+  return rows[0] ?? null;
+}
+
+/**
  * List inspections with pagination (not cached individually).
  */
 export async function findInspections(
