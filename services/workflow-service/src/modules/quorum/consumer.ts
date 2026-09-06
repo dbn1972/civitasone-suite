@@ -24,7 +24,7 @@ export function registerQuorumConsumers(queue: Queue): void {
         // id: p.id -- the accepted-response id (see repo.createDecision doc): without
         // forwarding it here the row got a fresh defaultRandom() id instead, and the
         // id returned to the HTTP caller never matched anything in the database.
-        await repo.createDecision({
+        await repo.createDecisionTx(tx, {
           id: p.id, tenantId: p.tenantId, instanceId: p.instanceId, taskId: p.taskId, nodeKey: p.nodeKey,
           subject: p.subject, rule: p.rule, threshold: p.threshold, totalMembers: p.totalMembers,
           createdBy: msg.actorId,

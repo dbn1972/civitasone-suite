@@ -1,5 +1,7 @@
 import { and, eq, desc, isNull, isNotNull, lte, sql } from "drizzle-orm";
 import { db, scopedRead } from "../../shared/db.js";
+
+export type Writer = Pick<typeof db, "select" | "insert" | "update">;
 import { workingCalendars, taskSlaPauses, type WorkingCalendarRow, type TaskSlaPauseRow } from "./schema.js";
 import { tasks } from "../tasks/schema.js";
 import type { WorkingCalendar } from "../../shared/calendar.js";
@@ -27,19 +29,22 @@ export interface CreateCalendarInput {
 }
 
 export async function createCalendar(input: CreateCalendarInput): Promise<WorkingCalendarRow> {
-  const rows = await db.transaction((tx) =>
-    tx.insert(workingCalendars).values({
-      tenantId: input.tenantId,
-      code: input.code,
-      name: input.name,
-      timezone: input.timezone,
-      workweek: input.workweek,
-      holidays: input.holidays,
-      workStartMinute: input.workStartMinute,
-      workEndMinute: input.workEndMinute,
-      createdBy: input.createdBy,
-    }).returning(),
-  );
+  return db.transaction((tx) => createCalendarTx(tx, input));
+}
+
+/** Tx-scoped twin of createCalendar for callers already inside an open transaction. */
+export async function createCalendarTx(tx: Writer, input: CreateCalendarInput): Promise<WorkingCalendarRow> {
+  const rows = await tx.insert(workingCalendars).values({
+    tenantId: input.tenantId,
+    code: input.code,
+    name: input.name,
+    timezone: input.timezone,
+    workweek: input.workweek,
+    holidays: input.holidays,
+    workStartMinute: input.workStartMinute,
+    workEndMinute: input.workEndMinute,
+    createdBy: input.createdBy,
+  }).returning();
   return rows[0]!;
 }
 
@@ -73,16 +78,21 @@ export async function openPause(tenantId: string, taskId: string): Promise<TaskS
 export async function pauseTask(
   tenantId: string, taskId: string, reason: string | null, createdBy: string, now = new Date(),
 ): Promise<TaskSlaPauseRow | null> {
-  return db.transaction(async (tx) => {
-    const existing = await tx.select().from(taskSlaPauses)
-      .where(and(eq(taskSlaPauses.taskId, taskId), eq(taskSlaPauses.tenantId, tenantId), isNull(taskSlaPauses.resumedAt)))
-      .for("update").limit(1);
-    if (existing[0]) return null;
-    const rows = await tx.insert(taskSlaPauses)
-      .values({ tenantId, taskId, reason, createdBy, pausedAt: now })
-      .returning();
-    return rows[0]!;
-  });
+  return db.transaction((tx) => pauseTaskTx(tx, tenantId, taskId, reason, createdBy, now));
+}
+
+/** Tx-scoped twin of pauseTask for callers already inside an open transaction. */
+export async function pauseTaskTx(
+  tx: Writer, tenantId: string, taskId: string, reason: string | null, createdBy: string, now = new Date(),
+): Promise<TaskSlaPauseRow | null> {
+  const existing = await tx.select().from(taskSlaPauses)
+    .where(and(eq(taskSlaPauses.taskId, taskId), eq(taskSlaPauses.tenantId, tenantId), isNull(taskSlaPauses.resumedAt)))
+    .for("update").limit(1);
+  if (existing[0]) return null;
+  const rows = await tx.insert(taskSlaPauses)
+    .values({ tenantId, taskId, reason, createdBy, pausedAt: now })
+    .returning();
+  return rows[0]!;
 }
 
 /**

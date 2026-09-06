@@ -14,7 +14,7 @@ export function registerDeviationConsumers(queue: Queue): void {
     try {
       await db.transaction(async (tx) => {
         if (!(await markProcessed(tx, msg.messageId))) return;
-        await repo.raise({
+        await repo.raiseTx(tx, {
           tenantId: p.tenantId, entityType: p.entityType, entityId: p.entityId,
           deviationType: p.deviationType, reason: p.reason,
           expiresAt: p.expiresAt ? new Date(p.expiresAt) : null,
@@ -31,7 +31,7 @@ export function registerDeviationConsumers(queue: Queue): void {
     try {
       await db.transaction(async (tx) => {
         if (!(await markProcessed(tx, msg.messageId))) return;
-        await repo.review({ tenantId: p.tenantId, id: p.id, status: p.status, reviewerId: msg.actorId, note: p.note, correlationId: msg.correlationId });
+        await repo.reviewTx(tx, { tenantId: p.tenantId, id: p.id, status: p.status, reviewerId: msg.actorId, note: p.note, correlationId: msg.correlationId });
         await enqueue(tx, { topic: EVENTS.deviationReviewed, eventType: EVENTS.deviationReviewed,
           tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { id: p.id, status: p.status } });
           await enqueue(tx, { topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { service: "workflow-service", action: "review", resourceType: "deviation", resourceId: p.id, outcome: "success" } });
@@ -43,7 +43,7 @@ export function registerDeviationConsumers(queue: Queue): void {
     try {
       await db.transaction(async (tx) => {
         if (!(await markProcessed(tx, msg.messageId))) return;
-        await repo.revoke(p.tenantId, p.id, msg.actorId, msg.correlationId);
+        await repo.revokeTx(tx, p.tenantId, p.id, msg.actorId, msg.correlationId);
         await enqueue(tx, { topic: EVENTS.deviationRevoked, eventType: EVENTS.deviationRevoked,
           tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { id: p.id } });
           await enqueue(tx, { topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { service: "workflow-service", action: "process", resourceType: "deviations", resourceId: p.id, outcome: "success" } });

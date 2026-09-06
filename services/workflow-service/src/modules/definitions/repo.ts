@@ -18,22 +18,37 @@ export async function findByTenant(tenantId: string, limit = 50, offset = 0) {
 }
 
 export async function findById(id: string, tenantId: string) {
-  const rows = await scopedRead((tx) => tx.select().from(definitions)
+  return scopedRead((tx) => findByIdTx(tx, id, tenantId));
+}
+
+/** Tx-scoped twin of findById for callers already inside an open transaction. */
+export async function findByIdTx(tx: Writer, id: string, tenantId: string) {
+  const rows = await tx.select().from(definitions)
     .where(and(eq(definitions.id, id), eq(definitions.tenantId, tenantId)))
-    .limit(1));
+    .limit(1);
   return rows[0] ?? null;
 }
 
 export async function listNodes(definitionId: string) {
-  return scopedRead((tx) => tx.select().from(definitionNodes)
+  return scopedRead((tx) => listNodesTx(tx, definitionId));
+}
+
+/** Tx-scoped twin of listNodes for callers already inside an open transaction. */
+export async function listNodesTx(tx: Writer, definitionId: string) {
+  return tx.select().from(definitionNodes)
     .where(eq(definitionNodes.definitionId, definitionId))
-    .orderBy(asc(definitionNodes.sortOrder)));
+    .orderBy(asc(definitionNodes.sortOrder));
 }
 
 export async function listEdges(definitionId: string) {
-  return scopedRead((tx) => tx.select().from(definitionEdges)
+  return scopedRead((tx) => listEdgesTx(tx, definitionId));
+}
+
+/** Tx-scoped twin of listEdges for callers already inside an open transaction. */
+export async function listEdgesTx(tx: Writer, definitionId: string) {
+  return tx.select().from(definitionEdges)
     .where(eq(definitionEdges.definitionId, definitionId))
-    .orderBy(asc(definitionEdges.sortOrder)));
+    .orderBy(asc(definitionEdges.sortOrder));
 }
 
 /** Active definition for a code (the deployed, non-archived version). */
