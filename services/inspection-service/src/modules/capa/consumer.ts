@@ -23,7 +23,7 @@ import {
   DomainError,
   type CapaState,
 } from "./domain.js";
-import { insertCapa, updateCapa, findCapaById } from "./repo.js";
+import { insertCapa, updateCapa, findCapaById, findCapaByIdTx } from "./repo.js";
 import type {
   CapaCreatePayload,
   CapaUpdatePayload,
@@ -158,7 +158,7 @@ export function registerCapaConsumers(queue: Queue): void {
       await db.transaction(async (tx) => {
         if (!(await markProcessed(tx, msg.messageId))) return;
 
-        const capa = await findCapaById(msg.tenantId, p.capaId);
+        const capa = await findCapaByIdTx(tx, msg.tenantId, p.capaId);
         if (!capa) {
           throw new NonRetryableError(`CAPA not found: ${p.capaId} (tenant: ${msg.tenantId})`);
         }
@@ -221,7 +221,7 @@ export function registerCapaConsumers(queue: Queue): void {
       await db.transaction(async (tx) => {
         if (!(await markProcessed(tx, msg.messageId))) return;
 
-        const capa = await findCapaById(msg.tenantId, p.capaId);
+        const capa = await findCapaByIdTx(tx, msg.tenantId, p.capaId);
         if (!capa) {
           throw new NonRetryableError(`CAPA not found: ${p.capaId} (tenant: ${msg.tenantId})`);
         }
@@ -288,7 +288,7 @@ export function registerCapaConsumers(queue: Queue): void {
       await db.transaction(async (tx) => {
         if (!(await markProcessed(tx, msg.messageId))) return;
 
-        const capa = await findCapaById(msg.tenantId, p.capaId);
+        const capa = await findCapaByIdTx(tx, msg.tenantId, p.capaId);
         if (!capa) {
           throw new NonRetryableError(`CAPA not found: ${p.capaId} (tenant: ${msg.tenantId})`);
         }
@@ -356,7 +356,7 @@ export function registerCapaConsumers(queue: Queue): void {
       await db.transaction(async (tx) => {
         if (!(await markProcessed(tx, msg.messageId))) return;
 
-        const capa = await findCapaById(msg.tenantId, p.capaId);
+        const capa = await findCapaByIdTx(tx, msg.tenantId, p.capaId);
         if (!capa) {
           throw new NonRetryableError(`CAPA not found: ${p.capaId} (tenant: ${msg.tenantId})`);
         }
