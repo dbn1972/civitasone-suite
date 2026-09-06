@@ -77,6 +77,11 @@ vi.mock("../src/modules/licence/repo.js", () => ({
     licenceType: "fire_noc", validFrom: "2025-01-01", validTo: "2026-01-01",
     entityId: ENTITY_ID,
   }),
+  findLicenceByIdTx: vi.fn().mockResolvedValue({
+    id: "lic-1", status: "active", version: 1, tenantId: TENANT_ID,
+    licenceType: "fire_noc", validFrom: "2025-01-01", validTo: "2026-01-01",
+    entityId: ENTITY_ID,
+  }),
   findLicences: vi.fn().mockResolvedValue({ data: [], meta: { page: 1, pageSize: 20, total: 0 } }),
   findExpiringLicences: vi.fn().mockResolvedValue([]),
   insertLicence: vi.fn().mockResolvedValue({
