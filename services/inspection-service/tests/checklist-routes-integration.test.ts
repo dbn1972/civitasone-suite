@@ -142,8 +142,10 @@ vi.mock("../src/shared/infra.js", () => ({
 
 vi.mock("../src/modules/checklist/repo.js", () => ({
   findTemplateById: (...args: unknown[]) => mockFindTemplateById(...args),
+  findTemplateByIdTx: (...args: unknown[]) => mockFindTemplateById(...args),
   findTemplatesByTenant: (...args: unknown[]) => mockFindTemplatesByTenant(...args),
   findInstanceById: (...args: unknown[]) => mockFindInstanceById(...args),
+  findInstanceByIdTx: (...args: unknown[]) => mockFindInstanceById(...args),
   insertTemplate: (...args: unknown[]) => mockInsertTemplate(...args),
   updateTemplate: (...args: unknown[]) => mockUpdateTemplate(...args),
   insertInstance: (...args: unknown[]) => mockInsertInstance(...args),
