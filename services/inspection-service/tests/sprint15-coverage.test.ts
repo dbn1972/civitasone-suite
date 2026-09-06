@@ -177,6 +177,7 @@ vi.mock("../src/modules/telemetry/repo.js", () => ({
 
 vi.mock("../src/modules/findings/repo.js", () => ({
   findFindingById: vi.fn().mockResolvedValue({ id: "find-1", state: "open", version: 1, tenantId: TENANT_ID }),
+  findFindingByIdTx: vi.fn().mockResolvedValue({ id: "find-1", state: "open", version: 1, tenantId: TENANT_ID }),
   findFindings: vi.fn().mockResolvedValue({ data: [], meta: { page: 1, pageSize: 20, total: 0 } }),
   insertFinding: vi.fn().mockResolvedValue({ id: "find-1", findingNumber: "FND-2025-000001" }),
   updateFindingState: vi.fn().mockResolvedValue({ id: "find-1", state: "closed" }),

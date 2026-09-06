@@ -119,6 +119,7 @@ vi.mock("../src/modules/universe/repo.js", () => ({
   findInspectionTypesByTenant: (...args: unknown[]) => mockFindInspectionTypesByTenant(...args),
   insertInspectionType: vi.fn().mockResolvedValue(undefined),
   findProvisionById: vi.fn().mockResolvedValue(null),
+  findProvisionByIdTx: vi.fn().mockResolvedValue(null),
   findProvisionsByTenant: (...args: unknown[]) => mockFindProvisionsByTenant(...args),
   insertProvision: vi.fn().mockResolvedValue(undefined),
   findVocabularyById: vi.fn().mockResolvedValue(null),
