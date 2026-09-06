@@ -94,6 +94,19 @@ export async function findShowCauseById(
   );
 }
 
+export async function findShowCauseByIdTx(
+  tx: Tx,
+  tenantId: string,
+  id: string,
+): Promise<ShowCauseNoticeRow | null> {
+  const rows = await tx.select().from(showCauseNotices)
+    .where(and(
+      eq(showCauseNotices.id, id),
+      eq(showCauseNotices.tenantId, tenantId),
+    ));
+  return rows[0] ?? null;
+}
+
 // ── Show Cause Writes ─────────────────────────────────────────────────────────
 
 export async function insertShowCauseNotice(
@@ -149,6 +162,19 @@ export async function findPenaltyOrderById(
       return rows[0] ?? null;
     },
   );
+}
+
+export async function findPenaltyOrderByIdTx(
+  tx: Tx,
+  tenantId: string,
+  id: string,
+): Promise<PenaltyOrderRow | null> {
+  const rows = await tx.select().from(penaltyOrders)
+    .where(and(
+      eq(penaltyOrders.id, id),
+      eq(penaltyOrders.tenantId, tenantId),
+    ));
+  return rows[0] ?? null;
 }
 
 export async function findPenaltyOrders(

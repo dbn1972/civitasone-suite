@@ -106,9 +106,18 @@ vi.mock("../src/modules/enforcement/repo.js", () => ({
   findShowCauseById: vi.fn().mockResolvedValue({
     id: "scn-1", status: "issued", version: 1, tenantId: TENANT_ID, findingId: "find-1",
   }),
+  findShowCauseByIdTx: vi.fn().mockResolvedValue({
+    id: "scn-1", status: "issued", version: 1, tenantId: TENANT_ID, findingId: "find-1",
+  }),
   insertShowCauseNotice: vi.fn().mockResolvedValue({ id: "scn-1", status: "issued" }),
   updateShowCauseNotice: vi.fn().mockResolvedValue({ id: "scn-1", status: "replied" }),
   findPenaltyOrderById: vi.fn().mockResolvedValue({
+    id: "po-1", status: "draft", version: 1, tenantId: TENANT_ID,
+    showCauseId: "scn-1",
+    // amount must have toString() — use a numeric-like object
+    amount: { toString: () => "50000" },
+  }),
+  findPenaltyOrderByIdTx: vi.fn().mockResolvedValue({
     id: "po-1", status: "draft", version: 1, tenantId: TENANT_ID,
     showCauseId: "scn-1",
     // amount must have toString() — use a numeric-like object
