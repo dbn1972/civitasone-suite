@@ -79,6 +79,16 @@ export async function findDeviceById(id: string, tenantId: string): Promise<Flee
   return rows[0] ?? null;
 }
 
+/**
+ * Tx-scoped variant of findDeviceById -- see findAssetByIdTx in
+ * register/repo.ts for the full rationale (section 1 of the
+ * production-readiness-audit skill).
+ */
+export async function findDeviceByIdTx(tx: Writer, id: string, tenantId: string): Promise<FleetDeviceRow | null> {
+  const rows = await tx.select().from(fleetDevices).where(and(eq(fleetDevices.id, id), eq(fleetDevices.tenantId, tenantId))).limit(1);
+  return rows[0] ?? null;
+}
+
 export async function listDevicesByTenant(tenantId: string, opts?: { limit?: number; offset?: number }) {
   // scopedRead() so wrapWithTenantGuc injects app.tenant_id before this
   // read — a bare db.select() runs with no RLS GUC set.

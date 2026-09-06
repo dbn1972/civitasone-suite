@@ -15,6 +15,21 @@ export async function findAssetById(id: string, tenantId: string): Promise<Asset
   return rows[0] ?? null;
 }
 
+/**
+ * Tx-scoped variant of findAssetById: reads through the callers already-open
+ * transaction instead of opening a nested one via scopedRead. Calling the
+ * scopedRead-based version from inside an open db.transaction() opens a
+ * SECOND transaction competing for a connection from the same pool as the
+ * outer one, deadlocking every in-flight command once concurrency reaches
+ * pool.max (see .claude/skills/16-production-readiness-audit.md section 1).
+ */
+export async function findAssetByIdTx(tx: Writer, id: string, tenantId: string): Promise<AssetRow | null> {
+  const rows = await tx.select().from(assetAssets)
+    .where(and(eq(assetAssets.id, id), eq(assetAssets.tenantId, tenantId)))
+    .limit(1);
+  return rows[0] ?? null;
+}
+
 export async function findAssetsByTenant(tenantId: string, opts?: { category?: string; status?: string; type?: string; search?: string; limit?: number; offset?: number }): Promise<AssetRow[]> {
   const conditions: SQL[] = [eq(assetAssets.tenantId, tenantId)];
   if (opts?.category) conditions.push(eq(assetAssets.categoryId, opts.category));

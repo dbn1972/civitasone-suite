@@ -62,6 +62,20 @@ export async function findApprovedWriteoff(tenantId: string, assetId: string) {
   return rows[0] ?? null;
 }
 
+/**
+ * Tx-scoped variant of findApprovedWriteoff -- see findAssetByIdTx in
+ * register/repo.ts for the full rationale (section 1 of the
+ * production-readiness-audit skill).
+ */
+export async function findApprovedWriteoffTx(tx: Writer, tenantId: string, assetId: string) {
+  const rows = await tx.select().from(writeoffApprovals).where(and(
+    eq(writeoffApprovals.tenantId, tenantId),
+    eq(writeoffApprovals.assetId, assetId),
+    eq(writeoffApprovals.status, "approved"),
+  )).limit(1);
+  return rows[0] ?? null;
+}
+
 // P0-1 + P0-2: tenant-scoped, and only flips a still-pending request to approved
 // (the SoD check on requestedBy vs approvedBy is enforced in commands.ts).
 export async function approveWriteoff(tx: Writer, id: string, tenantId: string, approvedBy: string): Promise<void> {
