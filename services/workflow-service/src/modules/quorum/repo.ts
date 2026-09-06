@@ -1,5 +1,7 @@
 import { and, eq, asc } from "drizzle-orm";
 import { db, scopedRead } from "../../shared/db.js";
+
+export type Writer = Pick<typeof db, "select" | "insert" | "update">;
 import { enqueue } from "../../shared/outbox.js";
 import { randomUUID } from "node:crypto";
 import { EVENTS } from "../../topics.js";
@@ -29,21 +31,24 @@ export interface CreateDecisionInput {
 }
 
 export async function createDecision(input: CreateDecisionInput): Promise<CommitteeDecisionRow> {
-  const rows = await db.transaction((tx) =>
-    tx.insert(committeeDecisions).values({
-      id: input.id,
-      tenantId: input.tenantId,
-      instanceId: input.instanceId,
-      taskId: input.taskId,
-      nodeKey: input.nodeKey,
-      subject: input.subject,
-      rule: input.rule,
-      threshold: input.threshold,
-      totalMembers: input.totalMembers,
-      status: "open",
-      createdBy: input.createdBy,
-    }).returning(),
-  );
+  return db.transaction((tx) => createDecisionTx(tx, input));
+}
+
+/** Tx-scoped twin of createDecision for callers already inside an open transaction. */
+export async function createDecisionTx(tx: Writer, input: CreateDecisionInput): Promise<CommitteeDecisionRow> {
+  const rows = await tx.insert(committeeDecisions).values({
+    id: input.id,
+    tenantId: input.tenantId,
+    instanceId: input.instanceId,
+    taskId: input.taskId,
+    nodeKey: input.nodeKey,
+    subject: input.subject,
+    rule: input.rule,
+    threshold: input.threshold,
+    totalMembers: input.totalMembers,
+    status: "open",
+    createdBy: input.createdBy,
+  }).returning();
   return rows[0]!;
 }
 

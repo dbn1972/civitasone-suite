@@ -34,9 +34,14 @@ export async function findByCodeTx(tx: Writer, tenantId: string, code: string) {
 
 /** Find a decision table by id + tenant. */
 export async function findById(id: string, tenantId: string) {
-  const rows = await scopedRead((tx) => tx.select().from(decisionTables)
+  return scopedRead((tx) => findByIdTx(tx, id, tenantId));
+}
+
+/** Tx-scoped twin of findById for callers already inside an open transaction. */
+export async function findByIdTx(tx: Writer, id: string, tenantId: string) {
+  const rows = await tx.select().from(decisionTables)
     .where(and(eq(decisionTables.id, id), eq(decisionTables.tenantId, tenantId)))
-    .limit(1));
+    .limit(1);
   return rows[0] ?? null;
 }
 

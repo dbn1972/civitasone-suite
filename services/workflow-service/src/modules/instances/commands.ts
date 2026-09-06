@@ -152,7 +152,7 @@ export async function migrateInstanceVersion(
       throw new HttpError(409, "NO_DEFINITION", "instance is not bound to a definition");
     }
 
-    const currentDef = await defRepo.findById(instance.definitionId, ctx.tenantId);
+    const currentDef = await defRepo.findByIdTx(tx, instance.definitionId, ctx.tenantId);
     if (!currentDef) throw new HttpError(409, "NO_DEFINITION", "current definition not found");
 
     const target = await defRepo.findByCodeVersionTx(tx, ctx.tenantId, currentDef.code, toVersion);
@@ -172,7 +172,7 @@ export async function migrateInstanceVersion(
     if (target.status !== "active") {
       throw new HttpError(409, "TARGET_NOT_ACTIVE", `version ${toVersion} of '${currentDef.code}' is ${target.status}; can only migrate onto an active version`);
     }
-    const [tNodes, tEdges] = await Promise.all([defRepo.listNodes(target.id), defRepo.listEdges(target.id)]);
+    const [tNodes, tEdges] = await Promise.all([defRepo.listNodesTx(tx, target.id), defRepo.listEdgesTx(tx, target.id)]);
     const gv = validateGraph(
       tNodes.map((n) => ({
         nodeKey: n.nodeKey,

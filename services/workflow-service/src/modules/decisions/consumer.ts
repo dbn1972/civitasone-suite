@@ -20,7 +20,7 @@ export function registerDecisionConsumers(queue: Queue): void {
   subscribeWithDlq<{ id: string; tenantId: string }>(queue, COMMANDS.deployDecision, async (msg) => {
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
-      const row = await repo.findById(msg.payload.id, msg.payload.tenantId);
+      const row = await repo.findByIdTx(tx, msg.payload.id, msg.payload.tenantId);
       if (!row || row.status === "active") return;
       await repo.deployVersion(tx, msg.payload.id, msg.payload.tenantId, msg.actorId);
       await enqueue(tx, { topic: EVENTS.decisionDeployed, eventType: EVENTS.decisionDeployed, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { decisionId: msg.payload.id } });

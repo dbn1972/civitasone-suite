@@ -44,16 +44,19 @@ export interface RaiseInput {
 }
 
 export async function raise(input: RaiseInput): Promise<DeviationRow> {
+  return db.transaction((tx) => raiseTx(tx, input));
+}
+
+/** Tx-scoped twin of raise for callers already inside an open transaction. */
+export async function raiseTx(tx: Tx, input: RaiseInput): Promise<DeviationRow> {
   const id = randomUUID();
-  return db.transaction(async (tx) => {
-    const insRows = await tx.insert(deviationRequests).values({
-      id, tenantId: input.tenantId, entityType: input.entityType, entityId: input.entityId,
-      deviationType: input.deviationType, reason: input.reason, status: "pending",
-      requestedBy: input.actorId, expiresAt: input.expiresAt ?? null,
-    }).returning();
-    await audit(tx as Tx, input.tenantId, input.actorId, input.correlationId, "raise_deviation", id, { entityType: input.entityType, entityId: input.entityId });
-    return insRows[0]!;
-  });
+  const insRows = await tx.insert(deviationRequests).values({
+    id, tenantId: input.tenantId, entityType: input.entityType, entityId: input.entityId,
+    deviationType: input.deviationType, reason: input.reason, status: "pending",
+    requestedBy: input.actorId, expiresAt: input.expiresAt ?? null,
+  }).returning();
+  await audit(tx, input.tenantId, input.actorId, input.correlationId, "raise_deviation", id, { entityType: input.entityType, entityId: input.entityId });
+  return insRows[0]!;
 }
 
 export interface ReviewInput {
@@ -64,27 +67,33 @@ export interface ReviewInput {
 /** Apply an approve/reject decision. Conditional UPDATE keeps it idempotent
  *  under concurrency (only a still-pending row transitions). */
 export async function review(input: ReviewInput): Promise<DeviationRow | null> {
-  return db.transaction(async (tx) => {
-    const res = await tx.update(deviationRequests)
-      .set({ status: input.status, reviewedBy: input.reviewerId, reviewedAt: new Date(), reviewNote: input.note ?? null, updatedAt: new Date() })
-      .where(and(eq(deviationRequests.tenantId, input.tenantId), eq(deviationRequests.id, input.id), eq(deviationRequests.status, "pending")))
-      .returning();
-    if (res.length === 0) return null;
-    await audit(tx as Tx, input.tenantId, input.reviewerId, input.correlationId, `deviation_${input.status}`, input.id, { note: input.note });
-    return res[0]!;
-  });
+  return db.transaction((tx) => reviewTx(tx, input));
+}
+
+/** Tx-scoped twin of review for callers already inside an open transaction. */
+export async function reviewTx(tx: Tx, input: ReviewInput): Promise<DeviationRow | null> {
+  const res = await tx.update(deviationRequests)
+    .set({ status: input.status, reviewedBy: input.reviewerId, reviewedAt: new Date(), reviewNote: input.note ?? null, updatedAt: new Date() })
+    .where(and(eq(deviationRequests.tenantId, input.tenantId), eq(deviationRequests.id, input.id), eq(deviationRequests.status, "pending")))
+    .returning();
+  if (res.length === 0) return null;
+  await audit(tx, input.tenantId, input.reviewerId, input.correlationId, `deviation_${input.status}`, input.id, { note: input.note });
+  return res[0]!;
 }
 
 export async function revoke(tenantId: string, id: string, actorId: string, correlationId: string): Promise<DeviationRow | null> {
-  return db.transaction(async (tx) => {
-    const res = await tx.update(deviationRequests)
-      .set({ status: "revoked", updatedAt: new Date() })
-      .where(and(eq(deviationRequests.tenantId, tenantId), eq(deviationRequests.id, id), eq(deviationRequests.status, "approved")))
-      .returning();
-    if (res.length === 0) return null;
-    await audit(tx as Tx, tenantId, actorId, correlationId, "deviation_revoked", id, {});
-    return res[0]!;
-  });
+  return db.transaction((tx) => revokeTx(tx, tenantId, id, actorId, correlationId));
+}
+
+/** Tx-scoped twin of revoke for callers already inside an open transaction. */
+export async function revokeTx(tx: Tx, tenantId: string, id: string, actorId: string, correlationId: string): Promise<DeviationRow | null> {
+  const res = await tx.update(deviationRequests)
+    .set({ status: "revoked", updatedAt: new Date() })
+    .where(and(eq(deviationRequests.tenantId, tenantId), eq(deviationRequests.id, id), eq(deviationRequests.status, "approved")))
+    .returning();
+  if (res.length === 0) return null;
+  await audit(tx, tenantId, actorId, correlationId, "deviation_revoked", id, {});
+  return res[0]!;
 }
 
 async function audit(tx: Tx, tenantId: string, actorId: string, correlationId: string, action: string, id: string, detail: Record<string, unknown>): Promise<void> {

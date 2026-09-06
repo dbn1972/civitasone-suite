@@ -13,7 +13,7 @@ export function registerWorkbasketConsumers(queue: Queue): void {
     try {
       await db.transaction(async (tx) => {
         if (!(await markProcessed(tx, msg.messageId))) return;
-        await repo.upsert({
+        await repo.upsertTx(tx, {
           tenantId: p.tenantId, code: p.code, name: p.name, description: p.description,
           filter: p.filter, sortOrder: p.sortOrder, actorId: msg.actorId,
         });

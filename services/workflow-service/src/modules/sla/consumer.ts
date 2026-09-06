@@ -13,7 +13,7 @@ export function registerSlaConsumers(queue: Queue): void {
     try {
       await db.transaction(async (tx) => {
         if (!(await markProcessed(tx, msg.messageId))) return;
-        await repo.createCalendar({
+        await repo.createCalendarTx(tx, {
           tenantId: p.tenantId, code: p.code, name: p.name, timezone: p.timezone,
           workweek: p.workweek, holidays: p.holidays, workStartMinute: p.workStartMinute,
           workEndMinute: p.workEndMinute, createdBy: msg.actorId,
@@ -29,7 +29,7 @@ export function registerSlaConsumers(queue: Queue): void {
     try {
       await db.transaction(async (tx) => {
         if (!(await markProcessed(tx, msg.messageId))) return;
-        const paused = await repo.pauseTask(p.tenantId, p.id, p.reason ?? null, msg.actorId);
+        const paused = await repo.pauseTaskTx(tx, p.tenantId, p.id, p.reason ?? null, msg.actorId);
         // pauseTask returns null when a pause is already open (idempotent
         // no-op, e.g. a race with another pause request for the same task).
         // Emitting taskSlaPaused + an audit "success" record here regardless

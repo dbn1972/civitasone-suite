@@ -1,6 +1,8 @@
 import { randomUUID } from "node:crypto";
 import { and, eq, asc, desc, inArray, isNull, sql, type SQL } from "drizzle-orm";
 import { db, scopedRead } from "../../shared/db.js";
+
+export type Writer = Pick<typeof db, "select" | "insert" | "update">;
 import { workbaskets, type WorkbasketRow } from "./schema.js";
 import { tasks, type TaskRow } from "../tasks/schema.js";
 import type { WorkbasketFilter } from "./domain.js";
@@ -20,17 +22,20 @@ export interface UpsertInput {
   filter: Record<string, unknown>; sortOrder: string; actorId: string;
 }
 export async function upsert(input: UpsertInput): Promise<WorkbasketRow> {
+  return db.transaction((tx) => upsertTx(tx, input));
+}
+
+/** Tx-scoped twin of upsert for callers already inside an open transaction. */
+export async function upsertTx(tx: Writer, input: UpsertInput): Promise<WorkbasketRow> {
   const id = randomUUID();
-  return db.transaction(async (tx) => {
-    const insRows = await tx.insert(workbaskets).values({
-      id, tenantId: input.tenantId, code: input.code, name: input.name,
-      description: input.description ?? null, filter: input.filter, sortOrder: input.sortOrder, createdBy: input.actorId,
-    }).onConflictDoUpdate({
-      target: [workbaskets.tenantId, workbaskets.code],
-      set: { name: input.name, description: input.description ?? null, filter: input.filter, sortOrder: input.sortOrder, updatedAt: new Date() },
-    }).returning();
-    return insRows[0]!;
-  });
+  const insRows = await tx.insert(workbaskets).values({
+    id, tenantId: input.tenantId, code: input.code, name: input.name,
+    description: input.description ?? null, filter: input.filter, sortOrder: input.sortOrder, createdBy: input.actorId,
+  }).onConflictDoUpdate({
+    target: [workbaskets.tenantId, workbaskets.code],
+    set: { name: input.name, description: input.description ?? null, filter: input.filter, sortOrder: input.sortOrder, updatedAt: new Date() },
+  }).returning();
+  return insRows[0]!;
 }
 
 /** CAP-035 — run a workbasket's filter against the task pool (tenant-scoped). */
