@@ -30,7 +30,9 @@ import {
   updatePenaltyOrder,
   insertProsecutionReferral,
   findShowCauseById,
+  findShowCauseByIdTx,
   findPenaltyOrderById,
+  findPenaltyOrderByIdTx,
 } from "./repo.js";
 import type {
   PenaltyRateCreatePayload,
@@ -160,7 +162,7 @@ export function registerEnforcementConsumers(queue: Queue): void {
       await db.transaction(async (tx) => {
         if (!(await markProcessed(tx, msg.messageId))) return;
 
-        const notice = await findShowCauseById(msg.tenantId, p.showCauseId);
+        const notice = await findShowCauseByIdTx(tx, msg.tenantId, p.showCauseId);
         if (!notice) {
           throw new NonRetryableError(`Show cause notice not found: ${p.showCauseId}`);
         }
@@ -267,7 +269,7 @@ export function registerEnforcementConsumers(queue: Queue): void {
       await db.transaction(async (tx) => {
         if (!(await markProcessed(tx, msg.messageId))) return;
 
-        const order = await findPenaltyOrderById(msg.tenantId, p.penaltyOrderId);
+        const order = await findPenaltyOrderByIdTx(tx, msg.tenantId, p.penaltyOrderId);
         if (!order) {
           throw new NonRetryableError(`Penalty order not found: ${p.penaltyOrderId}`);
         }
@@ -338,7 +340,7 @@ export function registerEnforcementConsumers(queue: Queue): void {
       await db.transaction(async (tx) => {
         if (!(await markProcessed(tx, msg.messageId))) return;
 
-        const order = await findPenaltyOrderById(msg.tenantId, p.penaltyOrderId);
+        const order = await findPenaltyOrderByIdTx(tx, msg.tenantId, p.penaltyOrderId);
         if (!order) {
           throw new NonRetryableError(`Penalty order not found: ${p.penaltyOrderId}`);
         }
