@@ -9,8 +9,10 @@
  * write inside the caller's tenant.
  */
 import { eq, and, sql, type SQL } from "drizzle-orm";
-import { scopedRead } from "../../shared/db.js";
+import { scopedRead, type Db } from "../../shared/db.js";
 import { accounts, type AccountRow } from "./schema.js";
+
+type Writer = Pick<Db, "insert" | "update" | "select">;
 
 /** Minimal transaction handle: everything here needs only `execute`. */
 export interface ExecTx {
@@ -29,6 +31,26 @@ export async function findActiveAccountRow(
       .where(and(eq(accounts.id, id), eq(accounts.tenantId, tenantId), sql`${accounts.status} = 'active'`))
       .limit(1),
   );
+  return rows[0] ?? null;
+}
+
+/**
+ * Tx-scoped variant of findActiveAccountRow -- see findActiveRowTx in
+ * repo.ts for the full rationale (section 1 of the production-readiness-
+ * audit skill). Used by mergeAccounts (this file, below), which already
+ * had the identical fix applied to mergeLeads findActiveRow a few lines up
+ * -- this call site was missed in the first pass.
+ */
+export async function findActiveAccountRowTx(
+  tx: Writer,
+  id: string,
+  tenantId: string,
+): Promise<AccountRow | null> {
+  const rows = await tx
+    .select()
+    .from(accounts)
+    .where(and(eq(accounts.id, id), eq(accounts.tenantId, tenantId), sql`${accounts.status} = 'active'`))
+    .limit(1);
   return rows[0] ?? null;
 }
 

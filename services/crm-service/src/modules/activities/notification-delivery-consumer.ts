@@ -58,7 +58,7 @@ export function registerNotificationDeliveryConsumer(queue: Queue): void {
       // P0-1-style cross-tenant FK guard, mirroring modules/activities/consumer.ts:
       // a contactId from another tenant must not be attached to this tenant's row.
       let contactId: string | null = p.contactId ?? null;
-      if (contactId && !(await contactRepo.contactExists(p.tenantId, contactId))) {
+      if (contactId && !(await contactRepo.contactExistsTx(tx, p.tenantId, contactId))) {
         await enqueue(tx as Parameters<typeof enqueue>[0], {
           topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC,
           tenantId: p.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,

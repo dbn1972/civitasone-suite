@@ -18,15 +18,15 @@ export function registerActivityConsumers(queue: Queue): void {
       if (!(await markProcessed(tx, msg.messageId))) return;
       const p = msg.payload;
       // P0-1 cross-tenant FK guards: any referenced contact/deal must live here.
-      if (p.contactId && !(await contactRepo.contactExists(p.tenantId, p.contactId))) {
+      if (p.contactId && !(await contactRepo.contactExistsTx(tx, p.tenantId, p.contactId))) {
         await emitAudit(tx, msg, "create", p.id, "rejected_cross_tenant_contact");
         return;
       }
-      if (p.dealId && !(await dealRepo.dealExists(p.tenantId, p.dealId))) {
+      if (p.dealId && !(await dealRepo.dealExistsTx(tx, p.tenantId, p.dealId))) {
         await emitAudit(tx, msg, "create", p.id, "rejected_cross_tenant_deal");
         return;
       }
-      if (p.accountId && !(await contactRepo.accountExists(p.tenantId, p.accountId))) {
+      if (p.accountId && !(await contactRepo.accountExistsTx(tx, p.tenantId, p.accountId))) {
         await emitAudit(tx, msg, "create", p.id, "rejected_cross_tenant_account");
         return;
       }

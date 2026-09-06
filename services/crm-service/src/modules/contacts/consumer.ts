@@ -26,7 +26,7 @@ export function registerContactConsumers(rawQueue: Queue): void {
       if (!(await markProcessed(tx, msg.messageId))) return;
       const p = msg.payload;
       // P0-1 cross-tenant FK guard: a referenced account must live in this tenant.
-      if (p.accountId && !(await repo.accountExists(p.tenantId, p.accountId))) {
+      if (p.accountId && !(await repo.accountExistsTx(tx, p.tenantId, p.accountId))) {
         await emitAudit(tx, msg, "create", p.id, "rejected_cross_tenant_account");
         return;
       }
@@ -57,7 +57,7 @@ export function registerContactConsumers(rawQueue: Queue): void {
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       // P0-1 cross-tenant FK guard: a (re)assigned account must live in this tenant.
-      if (p.accountId && !(await repo.accountExists(p.tenantId, p.accountId))) {
+      if (p.accountId && !(await repo.accountExistsTx(tx, p.tenantId, p.accountId))) {
         await emitAudit(tx, msg, "update", p.id, "rejected_cross_tenant_account");
         return;
       }
@@ -119,8 +119,8 @@ export function registerContactConsumers(rawQueue: Queue): void {
         return;
       }
       // Both contacts must exist, be active, and belong to the caller's tenant.
-      const primary = await repo.findActiveRow(p.primaryId, p.tenantId);
-      const duplicate = await repo.findActiveRow(p.duplicateId, p.tenantId);
+      const primary = await repo.findActiveRowTx(tx, p.primaryId, p.tenantId);
+      const duplicate = await repo.findActiveRowTx(tx, p.duplicateId, p.tenantId);
       if (!primary || !duplicate) {
         await emitAudit(tx, msg, "merge", p.primaryId, "rejected_not_found_or_cross_tenant");
         return;
