@@ -54,8 +54,8 @@ describe("inspection-service findingVerifyResolved -- nested-transaction pool-ex
         findingIds.push(findingId);
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         await withTenantScope(db, TENANT, (tx: any) => tx.insert(findings).values({
-          id: findingId, tenantId: TENANT, findingNumber: `FND-2026-${String(i).padStart(6, "0")}`,
-          inspectionId: randomUUID(), questionId: "q-1", provisionId: randomUUID(),
+          id: findingId, tenantId: TENANT, findingNumber: `FND-2026-${randomUUID().slice(0, 8)}`,
+          inspectionId: randomUUID(), questionId: randomUUID(), provisionId: randomUUID(),
           severity: "major", description: "fire exit blocked", state: "open",
           evidenceIds: [], createdBy: ACTOR, updatedBy: ACTOR,
         }));
