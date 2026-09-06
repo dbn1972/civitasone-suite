@@ -91,6 +91,10 @@ vi.mock("../src/modules/capa/repo.js", () => ({
     id: "capa-1", status: "open", version: 1, tenantId: TENANT_ID,
     findingId: "find-1", assignedTo: USER_ID, createdBy: USER_ID,
   }),
+  findCapaByIdTx: vi.fn().mockResolvedValue({
+    id: "capa-1", status: "open", version: 1, tenantId: TENANT_ID,
+    findingId: "find-1", assignedTo: USER_ID, createdBy: USER_ID,
+  }),
   findCapas: vi.fn().mockResolvedValue({ data: [], meta: { page: 1, pageSize: 20, total: 0 } }),
   insertCapa: vi.fn().mockResolvedValue({ id: "capa-1", status: "open", version: 1 }),
   updateCapa: vi.fn().mockResolvedValue({ id: "capa-1", status: "in_progress", version: 2 }),
@@ -302,8 +306,8 @@ describe("CAPA consumers — Sprint 15 coverage", () => {
   // ran. This test would have nothing to call before the fix (no
   // "inspection.capa.start" handler was ever registered).
   it("handles capaStart — open CAPA transitions to in_progress", async () => {
-    const { findCapaById, updateCapa } = await import("../src/modules/capa/repo.js");
-    (findCapaById as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+    const { findCapaByIdTx, updateCapa } = await import("../src/modules/capa/repo.js");
+    (findCapaByIdTx as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
       id: "capa-1", status: "open", version: 1, tenantId: TENANT_ID,
       findingId: "find-1", assignedTo: USER_ID, createdBy: USER_ID,
     });
@@ -320,8 +324,8 @@ describe("CAPA consumers — Sprint 15 coverage", () => {
   });
 
   it("rejects capaStart when the CAPA is already completed (invalid transition, no write)", async () => {
-    const { findCapaById, updateCapa } = await import("../src/modules/capa/repo.js");
-    (findCapaById as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+    const { findCapaByIdTx, updateCapa } = await import("../src/modules/capa/repo.js");
+    (findCapaByIdTx as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
       id: "capa-2", status: "completed", version: 3, tenantId: TENANT_ID,
       findingId: "find-1", assignedTo: USER_ID, createdBy: USER_ID,
     });
@@ -332,8 +336,8 @@ describe("CAPA consumers — Sprint 15 coverage", () => {
   });
 
   it("handles capaComplete", async () => {
-    const { findCapaById } = await import("../src/modules/capa/repo.js");
-    (findCapaById as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+    const { findCapaByIdTx } = await import("../src/modules/capa/repo.js");
+    (findCapaByIdTx as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
       id: "capa-1", status: "in_progress", version: 1, tenantId: TENANT_ID,
       findingId: "find-1", assignedTo: USER_ID, createdBy: USER_ID,
     });
@@ -348,8 +352,8 @@ describe("CAPA consumers — Sprint 15 coverage", () => {
   });
 
   it("handles capaVerify — checker is a different user (maker-checker)", async () => {
-    const { findCapaById } = await import("../src/modules/capa/repo.js");
-    (findCapaById as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+    const { findCapaByIdTx } = await import("../src/modules/capa/repo.js");
+    (findCapaByIdTx as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
       id: "capa-1", status: "completed", version: 2, tenantId: TENANT_ID,
       findingId: "find-1", assignedTo: USER_ID,
       createdBy: USER_ID, // maker
