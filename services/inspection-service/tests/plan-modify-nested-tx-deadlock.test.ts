@@ -23,8 +23,8 @@ import { registerPlanningConsumers } from "../src/modules/planning/consumer.js";
 import { inspectionPlans } from "../src/modules/planning/schema.js";
 import { COMMANDS } from "../src/topics.js";
 
-const TENANT = "1a000000-dead-4000-8000-00000000p1a4";
-const ACTOR = "1a000000-dead-4000-8000-0000000ac70b";
+const TENANT = "2a000000-dead-4000-8000-0000000fa1a4";
+const ACTOR = "2a000000-dead-4000-8000-0000000ac70b";
 const CONCURRENCY = 13; // pool.max (10) + 3
 
 function tenantWrappedQueue(): MemoryQueue {
