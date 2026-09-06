@@ -26,7 +26,9 @@ import { cache, invalidateSafely } from "../../shared/infra.js";
 import { COMMANDS } from "../../topics.js";
 import {
   findTemplateById,
+  findTemplateByIdTx,
   findInstanceById,
+  findInstanceByIdTx,
   insertTemplate,
   updateTemplate,
   insertInstance,
@@ -237,7 +239,7 @@ export function registerChecklistConsumers(queue: Queue): void {
       if (!(await markProcessed(tx, msg.messageId))) return;
 
       // Fetch template to validate state
-      const existing = await findTemplateById(msg.tenantId, p.templateId);
+      const existing = await findTemplateByIdTx(tx, msg.tenantId, p.templateId);
       if (!existing) {
         throw new NonRetryableError(`Template ${p.templateId} not found for tenant ${msg.tenantId}`);
       }
@@ -300,7 +302,7 @@ export function registerChecklistConsumers(queue: Queue): void {
       if (!(await markProcessed(tx, msg.messageId))) return;
 
       // Fetch the template to deep-copy from
-      const template = await findTemplateById(msg.tenantId, p.templateId);
+      const template = await findTemplateByIdTx(tx, msg.tenantId, p.templateId);
       if (!template) {
         throw new NonRetryableError(`Template ${p.templateId} not found for tenant ${msg.tenantId}`);
       }
@@ -375,7 +377,7 @@ export function registerChecklistConsumers(queue: Queue): void {
       if (!(await markProcessed(tx, msg.messageId))) return;
 
       // Fetch the instance
-      const existing = await findInstanceById(msg.tenantId, p.instanceId);
+      const existing = await findInstanceByIdTx(tx, msg.tenantId, p.instanceId);
       if (!existing) {
         throw new NonRetryableError(`Instance ${p.instanceId} not found for tenant ${msg.tenantId}`);
       }

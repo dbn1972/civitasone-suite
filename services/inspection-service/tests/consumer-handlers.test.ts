@@ -127,10 +127,12 @@ vi.mock("../src/modules/assignment/repo.js", () => ({
 
 vi.mock("../src/modules/checklist/repo.js", () => ({
   findTemplateById: vi.fn().mockResolvedValue({ id: "tmpl-1", status: "draft", sections: [{ title: "S1", questions: [{ fieldType: "boolean", label: "Q?" }] }], versionNumber: 1 }),
+  findTemplateByIdTx: vi.fn().mockResolvedValue({ id: "tmpl-1", status: "draft", sections: [{ title: "S1", questions: [{ fieldType: "boolean", label: "Q?" }] }], versionNumber: 1 }),
   findTemplatesByTenant: vi.fn().mockResolvedValue({ data: [], meta: { page: 1, pageSize: 20, total: 0 } }),
   insertTemplate: vi.fn().mockResolvedValue({ id: "tmpl-1" }),
   updateTemplate: vi.fn().mockResolvedValue({ id: "tmpl-1", status: "published" }),
   findInstanceById: vi.fn().mockResolvedValue({ id: "inst-1" }),
+  findInstanceByIdTx: vi.fn().mockResolvedValue({ id: "inst-1" }),
   findInstancesByInspection: vi.fn().mockResolvedValue({ data: [], meta: { page: 1, pageSize: 20, total: 0 } }),
   insertInstance: vi.fn().mockResolvedValue({ id: "inst-1" }),
   updateInstance: vi.fn().mockResolvedValue({ id: "inst-1" }),
@@ -386,8 +388,8 @@ describe("Checklist consumers", () => {
   });
 
   it("handles instanceGenerate", async () => {
-    const { findTemplateById } = await import("../src/modules/checklist/repo.js");
-    (findTemplateById as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+    const { findTemplateByIdTx } = await import("../src/modules/checklist/repo.js");
+    (findTemplateByIdTx as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
       id: "tmpl-1", status: "published", sections: [{ title: "S1", questions: [{ fieldType: "boolean", label: "Q?" }] }], versionNumber: 1,
     });
     const handler = handlers.get("inspection.instance.generate");
@@ -398,8 +400,8 @@ describe("Checklist consumers", () => {
   });
 
   it("handles instanceSubmitResponse", async () => {
-    const { findInstanceById } = await import("../src/modules/checklist/repo.js");
-    (findInstanceById as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+    const { findInstanceByIdTx } = await import("../src/modules/checklist/repo.js");
+    (findInstanceByIdTx as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
       id: "inst-1", sections: [{ title: "S1", weight: 1, questions: [{ id: "q1", fieldType: "boolean", label: "Q?", required: true }] }],
       responses: [],
     });

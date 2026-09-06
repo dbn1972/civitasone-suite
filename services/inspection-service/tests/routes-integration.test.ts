@@ -251,10 +251,12 @@ vi.mock("../src/modules/assignment/repo.js", () => ({
 
 vi.mock("../src/modules/checklist/repo.js", () => ({
   findTemplateById: vi.fn().mockResolvedValue(null),
+  findTemplateByIdTx: vi.fn().mockResolvedValue(null),
   findTemplatesByTenant: vi.fn().mockResolvedValue({ data: [], meta: { page: 1, pageSize: 20, total: 0 } }),
   insertTemplate: vi.fn().mockResolvedValue(undefined),
   updateTemplate: vi.fn().mockResolvedValue(undefined),
   findInstanceById: vi.fn().mockResolvedValue(null),
+  findInstanceByIdTx: vi.fn().mockResolvedValue(null),
   findInstancesByInspection: vi.fn().mockResolvedValue({ data: [], meta: { page: 1, pageSize: 20, total: 0 } }),
   insertInstance: vi.fn().mockResolvedValue(undefined),
   updateInstance: vi.fn().mockResolvedValue(undefined),
