@@ -1008,7 +1008,7 @@ async function processPayrollRun(
       // when any ledger row exists for the month; otherwise we fall back to the
       // HRMS payroll-input feed. We never add the two together — that deducted
       // the same LOP twice.
-      const ledgerLop = await lopRepo.getLopForMonth(p.tenantId, emp.id, p.month);
+      const ledgerLop = await lopRepo.getLopForMonthTx(tx as unknown as typeof db, p.tenantId, emp.id, p.month);
       const attendanceLopDays = ledgerLop.hasLedger ? ledgerLop.days : (input.lopDays[emp.id] ?? 0);
       // BUG-1 fix: mid-month joining pro-ration. Days in the run month BEFORE
       // dateOfJoining are unpaid, on top of (added to, not instead of) the

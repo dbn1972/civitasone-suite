@@ -54,7 +54,17 @@ export async function getLopForMonth(
   employeeId: string,
   month: string,
 ): Promise<{ hasLedger: boolean; days: number }> {
-  const [row] = await scopedRead((tx) => tx.select({
+  return scopedRead((tx) => getLopForMonthTx(tx, tenantId, employeeId, month));
+}
+
+/** Tx-scoped twin of getLopForMonth for callers already inside an open transaction. */
+export async function getLopForMonthTx(
+  tx: Writer,
+  tenantId: string,
+  employeeId: string,
+  month: string,
+): Promise<{ hasLedger: boolean; days: number }> {
+  const [row] = await tx.select({
     cnt: sql<number>`count(*)::int`,
     total: sql<number>`coalesce(sum(${payrollLopLedger.lopDays}), 0)::int`,
   })
@@ -63,6 +73,6 @@ export async function getLopForMonth(
       eq(payrollLopLedger.tenantId, tenantId),
       eq(payrollLopLedger.employeeId, employeeId),
       eq(payrollLopLedger.month, month),
-    )));
+    ));
   return { hasLedger: (row?.cnt ?? 0) > 0, days: row?.total ?? 0 };
 }
