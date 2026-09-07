@@ -315,6 +315,7 @@ export async function socialRoutes(app: FastifyInstance): Promise<void> {
   /** POST /v1/hrms/announcements — create an org announcement (HR admin only) */
   app.post("/v1/hrms/announcements", async (req, reply) => {
     const ctx = resolveContext(req);
+    requireRole(ctx, ["hr_admin", "super_admin"]);
     const body = announcementCreateSchema.parse(req.body);
     const id = randomUUID();
     const now = new Date().toISOString();
