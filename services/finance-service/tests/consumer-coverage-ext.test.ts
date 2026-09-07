@@ -331,8 +331,11 @@ describe("Anomaly consumers — coverage", () => {
   });
 
   it("ml.prediction.anomaly_detected skips dismissed transaction", async () => {
-    const { isTransactionDismissed } = await import("../src/modules/anomaly/queries.js");
-    (isTransactionDismissed as any).mockResolvedValueOnce(true);
+    // mlAnomalyDetected runs inside its own db.transaction and checks the
+    // Tx-scoped variant (tenantTransaction re-audit fix) -- mocking the
+    // non-Tx isTransactionDismissed here has no effect on the handler.
+    const { isTransactionDismissedTx } = await import("../src/modules/anomaly/queries.js");
+    (isTransactionDismissedTx as any).mockResolvedValueOnce(true);
 
     const q = new MemoryQueue();
     registerAnomalyConsumers(q);
@@ -345,8 +348,8 @@ describe("Anomaly consumers — coverage", () => {
     }));
     await settle();
 
-    const { createAnomalyFlag } = await import("../src/modules/anomaly/commands.js");
-    expect(createAnomalyFlag).not.toHaveBeenCalled();
+    const { createAnomalyFlagTx } = await import("../src/modules/anomaly/commands.js");
+    expect(createAnomalyFlagTx).not.toHaveBeenCalled();
     await q.stop();
   });
 
