@@ -103,21 +103,26 @@ export async function pauseTaskTx(
 export async function resumeTask(
   tenantId: string, taskId: string, now = new Date(),
 ): Promise<{ pausedMinutes: number } | null> {
-  return db.transaction(async (tx) => {
-    const open = await tx.select().from(taskSlaPauses)
-      .where(and(eq(taskSlaPauses.taskId, taskId), eq(taskSlaPauses.tenantId, tenantId), isNull(taskSlaPauses.resumedAt)))
-      .for("update").limit(1);
-    const pause = open[0];
-    if (!pause) return null;
-    const pausedMs = now.getTime() - pause.pausedAt.getTime();
-    const pausedMinutes = Math.max(0, Math.round(pausedMs / 60000));
-    await tx.update(taskSlaPauses).set({ resumedAt: now }).where(eq(taskSlaPauses.id, pause.id));
-    // shift due_at forward by the paused span so the SLA clock ignores the pause
-    await tx.update(tasks)
-      .set({ dueAt: sql`${tasks.dueAt} + (${pausedMs}::bigint * interval '1 millisecond')`, updatedAt: now })
-      .where(and(eq(tasks.id, taskId), eq(tasks.tenantId, tenantId), isNotNull(tasks.dueAt)));
-    return { pausedMinutes };
-  });
+  return db.transaction((tx) => resumeTaskTx(tx, tenantId, taskId, now));
+}
+
+/** Tx-scoped twin of resumeTask for callers already inside an open transaction. */
+export async function resumeTaskTx(
+  tx: Writer, tenantId: string, taskId: string, now = new Date(),
+): Promise<{ pausedMinutes: number } | null> {
+  const open = await tx.select().from(taskSlaPauses)
+    .where(and(eq(taskSlaPauses.taskId, taskId), eq(taskSlaPauses.tenantId, tenantId), isNull(taskSlaPauses.resumedAt)))
+    .for("update").limit(1);
+  const pause = open[0];
+  if (!pause) return null;
+  const pausedMs = now.getTime() - pause.pausedAt.getTime();
+  const pausedMinutes = Math.max(0, Math.round(pausedMs / 60000));
+  await tx.update(taskSlaPauses).set({ resumedAt: now }).where(eq(taskSlaPauses.id, pause.id));
+  // shift due_at forward by the paused span so the SLA clock ignores the pause
+  await tx.update(tasks)
+    .set({ dueAt: sql`${tasks.dueAt} + (${pausedMs}::bigint * interval '1 millisecond')`, updatedAt: now })
+    .where(and(eq(tasks.id, taskId), eq(tasks.tenantId, tenantId), isNotNull(tasks.dueAt)));
+  return { pausedMinutes };
 }
 
 /** Total paused minutes (closed pauses) for a task — used for ageing. */
