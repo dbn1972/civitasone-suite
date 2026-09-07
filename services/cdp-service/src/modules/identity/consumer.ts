@@ -103,7 +103,7 @@ export function registerIdentityConsumers(rawQueue: Queue): void {
     const p = msg.payload as { id: string; tenantId: string };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
-      const existing = await repo.findById(p.id, msg.tenantId);
+      const existing = await repo.findByIdTx(tx, p.id, msg.tenantId);
       if (!existing) return;
       const deleted = await repo.deleteById(tx, p.id, msg.tenantId);
       if (!deleted) return;

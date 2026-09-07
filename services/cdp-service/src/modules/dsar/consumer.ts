@@ -120,7 +120,7 @@ export async function handleCompleteDsar(msg: CommandEnvelope<unknown>): Promise
 
   await db.transaction(async (tx) => {
     if (!(await markProcessed(tx, msg.messageId))) return;
-    const existing = await repo.findById(p.dsarId, msg.tenantId);
+    const existing = await repo.findByIdTx(tx, p.dsarId, msg.tenantId);
     if (!existing) return;
     const ok = await repo.complete(tx, p.dsarId, msg.tenantId, p.version, completedAt);
     if (!ok) return;

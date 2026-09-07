@@ -50,11 +50,14 @@ export async function findByProfileId(profileId: string, tenantId: string): Prom
  * Find a single identity graph entry by ID.
  */
 export async function findById(id: string, tenantId: string): Promise<IdentityGraphRow | null> {
-  const rows = await scopedRead((tx) =>
-    tx.select().from(identityGraph)
-      .where(and(eq(identityGraph.id, id), eq(identityGraph.tenantId, tenantId)))
-      .limit(1),
-  );
+  return scopedRead((tx) => findByIdTx(tx, id, tenantId));
+}
+
+/** Tx-scoped twin of findById for callers already inside an open transaction. */
+export async function findByIdTx(tx: ScopedTx, id: string, tenantId: string): Promise<IdentityGraphRow | null> {
+  const rows = await tx.select().from(identityGraph)
+    .where(and(eq(identityGraph.id, id), eq(identityGraph.tenantId, tenantId)))
+    .limit(1);
   return rows[0] ?? null;
 }
 
