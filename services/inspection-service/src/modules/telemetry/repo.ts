@@ -43,17 +43,23 @@ export async function findDeviceById(
 ): Promise<DeviceRow | null> {
   return cache.getOrLoad<DeviceRow>(
     cache.makeKey(tenantId, "telemetry-device", id),
-    async () => {
-      const rows = await scopedRead((tx) =>
-        tx.select().from(devices)
-          .where(and(
-            eq(devices.id, id),
-            eq(devices.tenantId, tenantId),
-          )),
-      );
-      return rows[0] ?? null;
-    },
+    () => scopedRead((tx) => findDeviceByIdTx(tx, tenantId, id)),
   );
+}
+
+/** Tx-scoped twin of findDeviceById for callers already inside an open
+ * transaction. Deliberately bypasses the read-through cache. */
+export async function findDeviceByIdTx(
+  tx: Tx,
+  tenantId: string,
+  id: string,
+): Promise<DeviceRow | null> {
+  const rows = await tx.select().from(devices)
+    .where(and(
+      eq(devices.id, id),
+      eq(devices.tenantId, tenantId),
+    ));
+  return rows[0] ?? null;
 }
 
 export async function findDevices(
@@ -186,17 +192,23 @@ export async function findAlertById(
 ): Promise<TelemetryAlertRow | null> {
   return cache.getOrLoad<TelemetryAlertRow>(
     cache.makeKey(tenantId, "telemetry-alert", id),
-    async () => {
-      const rows = await scopedRead((tx) =>
-        tx.select().from(telemetryAlerts)
-          .where(and(
-            eq(telemetryAlerts.id, id),
-            eq(telemetryAlerts.tenantId, tenantId),
-          )),
-      );
-      return rows[0] ?? null;
-    },
+    () => scopedRead((tx) => findAlertByIdTx(tx, tenantId, id)),
   );
+}
+
+/** Tx-scoped twin of findAlertById for callers already inside an open
+ * transaction. Deliberately bypasses the read-through cache. */
+export async function findAlertByIdTx(
+  tx: Tx,
+  tenantId: string,
+  id: string,
+): Promise<TelemetryAlertRow | null> {
+  const rows = await tx.select().from(telemetryAlerts)
+    .where(and(
+      eq(telemetryAlerts.id, id),
+      eq(telemetryAlerts.tenantId, tenantId),
+    ));
+  return rows[0] ?? null;
 }
 
 // ── Alert Rule Reads ──────────────────────────────────────────────────────────
@@ -204,13 +216,19 @@ export async function findAlertById(
 export async function findActiveAlertRules(
   tenantId: string,
 ): Promise<AlertRuleRow[]> {
-  return scopedRead((tx) =>
-    tx.select().from(alertRules)
-      .where(and(
-        eq(alertRules.tenantId, tenantId),
-        eq(alertRules.isActive, true),
-      )),
-  );
+  return scopedRead((tx) => findActiveAlertRulesTx(tx, tenantId));
+}
+
+/** Tx-scoped twin of findActiveAlertRules for callers already inside an open transaction. */
+export async function findActiveAlertRulesTx(
+  tx: Tx,
+  tenantId: string,
+): Promise<AlertRuleRow[]> {
+  return tx.select().from(alertRules)
+    .where(and(
+      eq(alertRules.tenantId, tenantId),
+      eq(alertRules.isActive, true),
+    ));
 }
 
 export async function findAlertRules(

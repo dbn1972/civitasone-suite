@@ -46,7 +46,10 @@ import {
 import {
   insertComplaint,
   updateComplaint,
-  findComplaintById,
+  findComplaintByIdTx,
+  findNoticeByIdTx,
+  findHearingByIdTx,
+  findRemovalByIdTx,
   nextComplaintNumber,
   insertNotice,
   updateNotice,
@@ -134,7 +137,7 @@ export function registerEncroachmentConsumers(queue: Queue): void {
       await db.transaction(async (tx) => {
         if (!(await markProcessed(tx, msg.messageId))) return;
 
-        const complaint = await findComplaintById(msg.tenantId, p.complaintId);
+        const complaint = await findComplaintByIdTx(tx, msg.tenantId, p.complaintId);
         if (!complaint) throw new NonRetryableError(`Encroachment complaint not found: ${p.complaintId}`);
 
         if (!["received", "under_verification"].includes(complaint.status)) {
@@ -176,7 +179,7 @@ export function registerEncroachmentConsumers(queue: Queue): void {
       await db.transaction(async (tx) => {
         if (!(await markProcessed(tx, msg.messageId))) return;
 
-        const complaint = await findComplaintById(msg.tenantId, p.complaintId);
+        const complaint = await findComplaintByIdTx(tx, msg.tenantId, p.complaintId);
         if (!complaint) throw new NonRetryableError(`Encroachment complaint not found: ${p.complaintId}`);
         try {
           assertValidComplaintTransition(complaint.status as ComplaintState, "notice_issued");
@@ -225,7 +228,7 @@ export function registerEncroachmentConsumers(queue: Queue): void {
       await db.transaction(async (tx) => {
         if (!(await markProcessed(tx, msg.messageId))) return;
 
-        const notice = await findNoticeById(msg.tenantId, p.noticeId);
+        const notice = await findNoticeByIdTx(tx, msg.tenantId, p.noticeId);
         if (!notice) throw new NonRetryableError(`Encroachment notice not found: ${p.noticeId}`);
         try {
           assertValidNoticeTransition(notice.status as NoticeState, "served");
@@ -260,7 +263,7 @@ export function registerEncroachmentConsumers(queue: Queue): void {
       await db.transaction(async (tx) => {
         if (!(await markProcessed(tx, msg.messageId))) return;
 
-        const notice = await findNoticeById(msg.tenantId, p.noticeId);
+        const notice = await findNoticeByIdTx(tx, msg.tenantId, p.noticeId);
         if (!notice) throw new NonRetryableError(`Encroachment notice not found: ${p.noticeId}`);
         try {
           assertValidNoticeTransition(notice.status as NoticeState, "response_received");
@@ -299,8 +302,8 @@ export function registerEncroachmentConsumers(queue: Queue): void {
         // Independent lookups (no data dependency between them) — run
         // concurrently rather than paying both round-trips sequentially.
         const [complaint, notice] = await Promise.all([
-          findComplaintById(msg.tenantId, p.complaintId),
-          findNoticeById(msg.tenantId, p.noticeId),
+          findComplaintByIdTx(tx, msg.tenantId, p.complaintId),
+          findNoticeByIdTx(tx, msg.tenantId, p.noticeId),
         ]);
         if (!complaint) throw new NonRetryableError(`Encroachment complaint not found: ${p.complaintId}`);
         if (!notice) throw new NonRetryableError(`Encroachment notice not found: ${p.noticeId}`);
@@ -360,9 +363,9 @@ export function registerEncroachmentConsumers(queue: Queue): void {
       await db.transaction(async (tx) => {
         if (!(await markProcessed(tx, msg.messageId))) return;
 
-        const hearing = await findHearingById(msg.tenantId, p.hearingId);
+        const hearing = await findHearingByIdTx(tx, msg.tenantId, p.hearingId);
         if (!hearing) throw new NonRetryableError(`Encroachment hearing not found: ${p.hearingId}`);
-        const complaint = await findComplaintById(msg.tenantId, hearing.complaintId);
+        const complaint = await findComplaintByIdTx(tx, msg.tenantId, hearing.complaintId);
         if (!complaint) throw new NonRetryableError(`Encroachment complaint not found: ${hearing.complaintId}`);
         complaintId = complaint.id;
 
@@ -443,7 +446,7 @@ export function registerEncroachmentConsumers(queue: Queue): void {
       await db.transaction(async (tx) => {
         if (!(await markProcessed(tx, msg.messageId))) return;
 
-        const complaint = await findComplaintById(msg.tenantId, p.complaintId);
+        const complaint = await findComplaintByIdTx(tx, msg.tenantId, p.complaintId);
         if (!complaint) throw new NonRetryableError(`Encroachment complaint not found: ${p.complaintId}`);
         try {
           assertValidComplaintTransition(complaint.status as ComplaintState, "removal_ordered");
@@ -489,7 +492,7 @@ export function registerEncroachmentConsumers(queue: Queue): void {
       await db.transaction(async (tx) => {
         if (!(await markProcessed(tx, msg.messageId))) return;
 
-        const removal = await findRemovalById(msg.tenantId, p.removalId);
+        const removal = await findRemovalByIdTx(tx, msg.tenantId, p.removalId);
         if (!removal) throw new NonRetryableError(`Encroachment removal not found: ${p.removalId}`);
         try {
           assertValidRemovalTransition(removal.status as RemovalState, "team_assigned");
@@ -526,7 +529,7 @@ export function registerEncroachmentConsumers(queue: Queue): void {
       await db.transaction(async (tx) => {
         if (!(await markProcessed(tx, msg.messageId))) return;
 
-        const removal = await findRemovalById(msg.tenantId, p.removalId);
+        const removal = await findRemovalByIdTx(tx, msg.tenantId, p.removalId);
         if (!removal) throw new NonRetryableError(`Encroachment removal not found: ${p.removalId}`);
         complaintId = removal.complaintId;
         // team_assigned -> in_progress -> completed is a 3rd, separate step
@@ -548,7 +551,7 @@ export function registerEncroachmentConsumers(queue: Queue): void {
           updatedBy: msg.actorId,
         }, removal.version);
 
-        const complaint = await findComplaintById(msg.tenantId, removal.complaintId);
+        const complaint = await findComplaintByIdTx(tx, msg.tenantId, removal.complaintId);
         if (complaint) {
           // Every other complaint-mutating handler in this file validates
           // the transition first; this one didn't. Currently latent (a

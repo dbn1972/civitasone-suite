@@ -47,17 +47,23 @@ export async function findComplaintById(
 ): Promise<EncroachmentComplaintRow | null> {
   return cache.getOrLoad<EncroachmentComplaintRow>(
     cache.makeKey(tenantId, "encroachment_complaint", id),
-    async () => {
-      const rows = await scopedRead((tx) =>
-        tx.select().from(encroachmentComplaints)
-          .where(and(
-            eq(encroachmentComplaints.id, id),
-            eq(encroachmentComplaints.tenantId, tenantId),
-          )),
-      );
-      return rows[0] ?? null;
-    },
+    () => scopedRead((tx) => findComplaintByIdTx(tx, tenantId, id)),
   );
+}
+
+/** Tx-scoped twin of findComplaintById for callers already inside an open
+ * transaction. Deliberately bypasses the read-through cache. */
+export async function findComplaintByIdTx(
+  tx: Tx,
+  tenantId: string,
+  id: string,
+): Promise<EncroachmentComplaintRow | null> {
+  const rows = await tx.select().from(encroachmentComplaints)
+    .where(and(
+      eq(encroachmentComplaints.id, id),
+      eq(encroachmentComplaints.tenantId, tenantId),
+    ));
+  return rows[0] ?? null;
 }
 
 export async function findComplaints(
@@ -146,17 +152,23 @@ export async function findNoticeById(
 ): Promise<EncroachmentNoticeRow | null> {
   return cache.getOrLoad<EncroachmentNoticeRow>(
     cache.makeKey(tenantId, "encroachment_notice", id),
-    async () => {
-      const rows = await scopedRead((tx) =>
-        tx.select().from(encroachmentNotices)
-          .where(and(
-            eq(encroachmentNotices.id, id),
-            eq(encroachmentNotices.tenantId, tenantId),
-          )),
-      );
-      return rows[0] ?? null;
-    },
+    () => scopedRead((tx) => findNoticeByIdTx(tx, tenantId, id)),
   );
+}
+
+/** Tx-scoped twin of findNoticeById for callers already inside an open
+ * transaction. Deliberately bypasses the read-through cache. */
+export async function findNoticeByIdTx(
+  tx: Tx,
+  tenantId: string,
+  id: string,
+): Promise<EncroachmentNoticeRow | null> {
+  const rows = await tx.select().from(encroachmentNotices)
+    .where(and(
+      eq(encroachmentNotices.id, id),
+      eq(encroachmentNotices.tenantId, tenantId),
+    ));
+  return rows[0] ?? null;
 }
 
 export async function findNotices(
@@ -245,17 +257,23 @@ export async function findHearingById(
 ): Promise<EncroachmentHearingRow | null> {
   return cache.getOrLoad<EncroachmentHearingRow>(
     cache.makeKey(tenantId, "encroachment_hearing", id),
-    async () => {
-      const rows = await scopedRead((tx) =>
-        tx.select().from(encroachmentHearings)
-          .where(and(
-            eq(encroachmentHearings.id, id),
-            eq(encroachmentHearings.tenantId, tenantId),
-          )),
-      );
-      return rows[0] ?? null;
-    },
+    () => scopedRead((tx) => findHearingByIdTx(tx, tenantId, id)),
   );
+}
+
+/** Tx-scoped twin of findHearingById for callers already inside an open
+ * transaction. Deliberately bypasses the read-through cache. */
+export async function findHearingByIdTx(
+  tx: Tx,
+  tenantId: string,
+  id: string,
+): Promise<EncroachmentHearingRow | null> {
+  const rows = await tx.select().from(encroachmentHearings)
+    .where(and(
+      eq(encroachmentHearings.id, id),
+      eq(encroachmentHearings.tenantId, tenantId),
+    ));
+  return rows[0] ?? null;
 }
 
 export async function findHearings(
@@ -333,17 +351,23 @@ export async function findRemovalById(
 ): Promise<EncroachmentRemovalRow | null> {
   return cache.getOrLoad<EncroachmentRemovalRow>(
     cache.makeKey(tenantId, "encroachment_removal", id),
-    async () => {
-      const rows = await scopedRead((tx) =>
-        tx.select().from(encroachmentRemovals)
-          .where(and(
-            eq(encroachmentRemovals.id, id),
-            eq(encroachmentRemovals.tenantId, tenantId),
-          )),
-      );
-      return rows[0] ?? null;
-    },
+    () => scopedRead((tx) => findRemovalByIdTx(tx, tenantId, id)),
   );
+}
+
+/** Tx-scoped twin of findRemovalById for callers already inside an open
+ * transaction. Deliberately bypasses the read-through cache. */
+export async function findRemovalByIdTx(
+  tx: Tx,
+  tenantId: string,
+  id: string,
+): Promise<EncroachmentRemovalRow | null> {
+  const rows = await tx.select().from(encroachmentRemovals)
+    .where(and(
+      eq(encroachmentRemovals.id, id),
+      eq(encroachmentRemovals.tenantId, tenantId),
+    ));
+  return rows[0] ?? null;
 }
 
 // ── Removal Writes ────────────────────────────────────────────────────────────

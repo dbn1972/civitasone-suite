@@ -39,11 +39,11 @@ import {
 import {
   insertCase,
   updateCase,
-  findCaseById,
+  findCaseByIdTx,
   nextCaseNumber,
   insertAction,
   updateAction,
-  findActionById,
+  findActionByIdTx,
   nextActionNumber,
 } from "./repo.js";
 import type {
@@ -126,7 +126,7 @@ export function registerIllegalConstructionConsumers(queue: Queue): void {
       await db.transaction(async (tx) => {
         if (!(await markProcessed(tx, msg.messageId))) return;
 
-        const record = await findCaseById(msg.tenantId, p.caseId);
+        const record = await findCaseByIdTx(tx, msg.tenantId, p.caseId);
         if (!record) throw new NonRetryableError(`Illegal construction case not found: ${p.caseId}`);
         try {
           assertValidCaseTransition(record.status as CaseState, "inspected");
@@ -165,7 +165,7 @@ export function registerIllegalConstructionConsumers(queue: Queue): void {
       await db.transaction(async (tx) => {
         if (!(await markProcessed(tx, msg.messageId))) return;
 
-        const record = await findCaseById(msg.tenantId, p.caseId);
+        const record = await findCaseByIdTx(tx, msg.tenantId, p.caseId);
         if (!record) throw new NonRetryableError(`Illegal construction case not found: ${p.caseId}`);
         try {
           assertValidCaseTransition(record.status as CaseState, "violation_confirmed");
@@ -215,7 +215,7 @@ export function registerIllegalConstructionConsumers(queue: Queue): void {
       await db.transaction(async (tx) => {
         if (!(await markProcessed(tx, msg.messageId))) return;
 
-        const record = await findCaseById(msg.tenantId, p.caseId);
+        const record = await findCaseByIdTx(tx, msg.tenantId, p.caseId);
         if (!record) throw new NonRetryableError(`Illegal construction case not found: ${p.caseId}`);
 
         const targetState = ACTION_TYPE_TO_CASE_STATE[p.actionType];
@@ -304,7 +304,7 @@ export function registerIllegalConstructionConsumers(queue: Queue): void {
       await db.transaction(async (tx) => {
         if (!(await markProcessed(tx, msg.messageId))) return;
 
-        const action = await findActionById(msg.tenantId, p.actionId);
+        const action = await findActionByIdTx(tx, msg.tenantId, p.actionId);
         if (!action) throw new NonRetryableError(`Illegal construction action not found: ${p.actionId}`);
         if (action.status !== "issued") {
           throw new NonRetryableError(`Action ${p.actionId} is not in "issued" state (currently "${action.status}")`);
@@ -322,7 +322,7 @@ export function registerIllegalConstructionConsumers(queue: Queue): void {
         // "issued -> enforced" as an action-level fact; the case stays in the
         // decision state issueAction already moved it to).
         if (action.actionType === "demolition_order") {
-          const record = await findCaseById(msg.tenantId, action.caseId);
+          const record = await findCaseByIdTx(tx, msg.tenantId, action.caseId);
           if (record) {
             caseId = record.id;
             try {
@@ -370,7 +370,7 @@ export function registerIllegalConstructionConsumers(queue: Queue): void {
       await db.transaction(async (tx) => {
         if (!(await markProcessed(tx, msg.messageId))) return;
 
-        const record = await findCaseById(msg.tenantId, p.caseId);
+        const record = await findCaseByIdTx(tx, msg.tenantId, p.caseId);
         if (!record) throw new NonRetryableError(`Illegal construction case not found: ${p.caseId}`);
 
         // canRegularize checks both the state-machine transition AND the

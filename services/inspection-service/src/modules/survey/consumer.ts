@@ -24,11 +24,11 @@ import type { QuestionnaireItem } from "./schema.js";
 import {
   insertSurveyDefinition,
   updateSurveyDefinition,
-  findSurveyById,
+  findSurveyByIdTx,
   insertSamplingFrame,
   insertSurveyResponse,
   insertSurveyAggregation,
-  findResponsesBySurvey,
+  findResponsesBySurveyTx,
 } from "./repo.js";
 import type {
   SurveyCreatePayload,
@@ -114,7 +114,7 @@ export function registerSurveyConsumers(queue: Queue): void {
       await db.transaction(async (tx) => {
         if (!(await markProcessed(tx, msg.messageId))) return;
 
-        const survey = await findSurveyById(msg.tenantId, p.surveyId);
+        const survey = await findSurveyByIdTx(tx, msg.tenantId, p.surveyId);
         if (!survey) throw new NonRetryableError(`Survey not found: ${p.surveyId}`);
         if (survey.status !== "draft") {
           throw new NonRetryableError("Can only update surveys in draft status");
@@ -158,7 +158,7 @@ export function registerSurveyConsumers(queue: Queue): void {
       await db.transaction(async (tx) => {
         if (!(await markProcessed(tx, msg.messageId))) return;
 
-        const survey = await findSurveyById(msg.tenantId, p.surveyId);
+        const survey = await findSurveyByIdTx(tx, msg.tenantId, p.surveyId);
         if (!survey) throw new NonRetryableError(`Survey not found: ${p.surveyId}`);
 
         try {
@@ -247,7 +247,7 @@ export function registerSurveyConsumers(queue: Queue): void {
       await db.transaction(async (tx) => {
         if (!(await markProcessed(tx, msg.messageId))) return;
 
-        const survey = await findSurveyById(msg.tenantId, p.surveyId);
+        const survey = await findSurveyByIdTx(tx, msg.tenantId, p.surveyId);
         if (!survey) throw new NonRetryableError(`Survey not found: ${p.surveyId}`);
 
         try {
@@ -300,7 +300,7 @@ export function registerSurveyConsumers(queue: Queue): void {
       await db.transaction(async (tx) => {
         if (!(await markProcessed(tx, msg.messageId))) return;
 
-        const survey = await findSurveyById(msg.tenantId, p.surveyId);
+        const survey = await findSurveyByIdTx(tx, msg.tenantId, p.surveyId);
         if (!survey) throw new NonRetryableError(`Survey not found: ${p.surveyId}`);
         if (survey.status !== "active") {
           throw new NonRetryableError("Can only submit responses to active surveys");
@@ -376,10 +376,10 @@ export function registerSurveyConsumers(queue: Queue): void {
       await db.transaction(async (tx) => {
         if (!(await markProcessed(tx, msg.messageId))) return;
 
-        const survey = await findSurveyById(msg.tenantId, p.surveyId);
+        const survey = await findSurveyByIdTx(tx, msg.tenantId, p.surveyId);
         if (!survey) throw new NonRetryableError(`Survey not found: ${p.surveyId}`);
 
-        const responses = await findResponsesBySurvey(msg.tenantId, p.surveyId);
+        const responses = await findResponsesBySurveyTx(tx, msg.tenantId, p.surveyId);
         const questionnaire = survey.questionnaire as QuestionnaireItem[];
 
         const questionSummaries = computeAggregation(

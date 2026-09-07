@@ -96,11 +96,14 @@ vi.mock("../src/modules/universe/repo.js", () => ({
 
 vi.mock("../src/modules/risk/repo.js", () => ({
   findModelById: vi.fn().mockResolvedValue({ id: "model-1", factors: [{ factorName: "h", weight: 1 }] }),
+  findModelByIdTx: vi.fn().mockResolvedValue({ id: "model-1", factors: [{ factorName: "h", weight: 1, scoringFunction: "linear", dataSource: "db" }] }),
   findModelsByTenant: vi.fn().mockResolvedValue({ data: [], meta: { page: 1, pageSize: 20, total: 0 } }),
   insertModel: vi.fn().mockResolvedValue({ id: "model-1" }),
   findScoreByEntity: vi.fn().mockResolvedValue({ score: 60 }),
+  findScoreByEntityTx: vi.fn().mockResolvedValue({ score: 60 }),
   insertScore: vi.fn().mockResolvedValue({ id: "score-1", score: 72 }),
   findActiveModelByTenant: vi.fn().mockResolvedValue({ id: "model-1", factors: [{ factorName: "h", weight: 1, scoringFunction: "linear", dataSource: "db" }] }),
+  findActiveModelByTenantTx: vi.fn().mockResolvedValue({ id: "model-1", factors: [{ factorName: "h", weight: 1, scoringFunction: "linear", dataSource: "db" }] }),
 }));
 
 vi.mock("../src/modules/planning/repo.js", () => ({

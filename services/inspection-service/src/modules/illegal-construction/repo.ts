@@ -41,17 +41,23 @@ export async function findCaseById(
 ): Promise<IllegalConstructionCaseRow | null> {
   return cache.getOrLoad<IllegalConstructionCaseRow>(
     cache.makeKey(tenantId, "illegal_construction_case", id),
-    async () => {
-      const rows = await scopedRead((tx) =>
-        tx.select().from(illegalConstructionCases)
-          .where(and(
-            eq(illegalConstructionCases.id, id),
-            eq(illegalConstructionCases.tenantId, tenantId),
-          )),
-      );
-      return rows[0] ?? null;
-    },
+    () => scopedRead((tx) => findCaseByIdTx(tx, tenantId, id)),
   );
+}
+
+/** Tx-scoped twin of findCaseById for callers already inside an open
+ * transaction. Deliberately bypasses the read-through cache. */
+export async function findCaseByIdTx(
+  tx: Tx,
+  tenantId: string,
+  id: string,
+): Promise<IllegalConstructionCaseRow | null> {
+  const rows = await tx.select().from(illegalConstructionCases)
+    .where(and(
+      eq(illegalConstructionCases.id, id),
+      eq(illegalConstructionCases.tenantId, tenantId),
+    ));
+  return rows[0] ?? null;
 }
 
 export async function findCases(
@@ -143,17 +149,23 @@ export async function findActionById(
 ): Promise<IllegalConstructionActionRow | null> {
   return cache.getOrLoad<IllegalConstructionActionRow>(
     cache.makeKey(tenantId, "illegal_construction_action", id),
-    async () => {
-      const rows = await scopedRead((tx) =>
-        tx.select().from(illegalConstructionActions)
-          .where(and(
-            eq(illegalConstructionActions.id, id),
-            eq(illegalConstructionActions.tenantId, tenantId),
-          )),
-      );
-      return rows[0] ?? null;
-    },
+    () => scopedRead((tx) => findActionByIdTx(tx, tenantId, id)),
   );
+}
+
+/** Tx-scoped twin of findActionById for callers already inside an open
+ * transaction. Deliberately bypasses the read-through cache. */
+export async function findActionByIdTx(
+  tx: Tx,
+  tenantId: string,
+  id: string,
+): Promise<IllegalConstructionActionRow | null> {
+  const rows = await tx.select().from(illegalConstructionActions)
+    .where(and(
+      eq(illegalConstructionActions.id, id),
+      eq(illegalConstructionActions.tenantId, tenantId),
+    ));
+  return rows[0] ?? null;
 }
 
 export async function findActionsByCaseId(

@@ -22,12 +22,12 @@ import {
 import {
   insertDevice,
   updateDevice,
-  findDeviceById,
+  findDeviceByIdTx,
   insertReading,
   insertAlert,
   updateAlert,
-  findAlertById,
-  findActiveAlertRules,
+  findAlertByIdTx,
+  findActiveAlertRulesTx,
 } from "./repo.js";
 import type {
   DeviceCreatePayload,
@@ -154,7 +154,7 @@ export function registerTelemetryConsumers(queue: Queue): void {
         if (!(await markProcessed(tx, msg.messageId))) return;
 
         // Verify device exists and is active
-        const device = await findDeviceById(msg.tenantId, p.deviceId);
+        const device = await findDeviceByIdTx(tx, msg.tenantId, p.deviceId);
         if (!device) throw new NonRetryableError(`Device not found: ${p.deviceId}`);
 
         try {
@@ -186,7 +186,7 @@ export function registerTelemetryConsumers(queue: Queue): void {
         }, device.version);
 
         // Evaluate alert rules
-        const rules = await findActiveAlertRules(msg.tenantId);
+        const rules = await findActiveAlertRulesTx(tx, msg.tenantId);
         const readingForEval: Reading = {
           value: Number(p.value),
           readingType: p.readingType,
@@ -338,7 +338,7 @@ export function registerTelemetryConsumers(queue: Queue): void {
       await db.transaction(async (tx) => {
         if (!(await markProcessed(tx, msg.messageId))) return;
 
-        const alert = await findAlertById(msg.tenantId, p.alertId);
+        const alert = await findAlertByIdTx(tx, msg.tenantId, p.alertId);
         if (!alert) throw new NonRetryableError(`Alert not found: ${p.alertId}`);
 
         try {
@@ -390,7 +390,7 @@ export function registerTelemetryConsumers(queue: Queue): void {
       await db.transaction(async (tx) => {
         if (!(await markProcessed(tx, msg.messageId))) return;
 
-        const alert = await findAlertById(msg.tenantId, p.alertId);
+        const alert = await findAlertByIdTx(tx, msg.tenantId, p.alertId);
         if (!alert) throw new NonRetryableError(`Alert not found: ${p.alertId}`);
 
         try {

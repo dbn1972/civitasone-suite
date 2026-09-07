@@ -140,9 +140,19 @@ vi.mock("../src/modules/survey/repo.js", () => ({
     samplingMethod: "random",
     sampleSizePercent: "50",
   }),
+  findSurveyByIdTx: vi.fn().mockResolvedValue({
+    id: "surv-1", status: "draft", version: 1, tenantId: TENANT_ID,
+    questionnaire: [{ id: "q1", fieldType: "rating", label: "How satisfied?", required: true }],
+    samplingMethod: "random",
+    sampleSizePercent: "50",
+  }),
   findSurveys: vi.fn().mockResolvedValue({ data: [], meta: { page: 1, pageSize: 20, total: 0 } }),
   findLatestAggregation: vi.fn().mockResolvedValue(null),
   findResponsesBySurvey: vi.fn().mockResolvedValue([
+    { answers: { q1: 4 } },
+    { answers: { q1: 5 } },
+  ]),
+  findResponsesBySurveyTx: vi.fn().mockResolvedValue([
     { answers: { q1: 4 } },
     { answers: { q1: 5 } },
   ]),
@@ -158,6 +168,10 @@ vi.mock("../src/modules/telemetry/repo.js", () => ({
     id: "dev-1", status: "active", version: 1, tenantId: TENANT_ID,
     deviceType: "smoke_detector", serialNumber: "SN-001", entityId: ENTITY_ID,
   }),
+  findDeviceByIdTx: vi.fn().mockResolvedValue({
+    id: "dev-1", status: "active", version: 1, tenantId: TENANT_ID,
+    deviceType: "smoke_detector", serialNumber: "SN-001", entityId: ENTITY_ID,
+  }),
   findDevices: vi.fn().mockResolvedValue({ data: [], meta: { page: 1, pageSize: 20, total: 0 } }),
   findReadings: vi.fn().mockResolvedValue({ data: [], meta: { page: 1, pageSize: 20, total: 0 } }),
   findAlerts: vi.fn().mockResolvedValue({ data: [], meta: { page: 1, pageSize: 20, total: 0 } }),
@@ -165,7 +179,12 @@ vi.mock("../src/modules/telemetry/repo.js", () => ({
     id: "alert-1", status: "acknowledged", version: 1, tenantId: TENANT_ID,
     deviceId: "dev-1", ruleId: "rule-1",
   }),
+  findAlertByIdTx: vi.fn().mockResolvedValue({
+    id: "alert-1", status: "acknowledged", version: 1, tenantId: TENANT_ID,
+    deviceId: "dev-1", ruleId: "rule-1",
+  }),
   findActiveAlertRules: vi.fn().mockResolvedValue([]),
+  findActiveAlertRulesTx: vi.fn().mockResolvedValue([]),
   findAlertRules: vi.fn().mockResolvedValue({ data: [], meta: { page: 1, pageSize: 20, total: 0 } }),
   insertDevice: vi.fn().mockResolvedValue({ id: "dev-1", status: "active", version: 1 }),
   updateDevice: vi.fn().mockResolvedValue({ id: "dev-1", status: "inactive", version: 2 }),
@@ -502,8 +521,8 @@ describe("Survey consumers — Sprint 15 coverage", () => {
   });
 
   it("handles surveyActivate (random sampling)", async () => {
-    const { findSurveyById } = await import("../src/modules/survey/repo.js");
-    (findSurveyById as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+    const { findSurveyByIdTx } = await import("../src/modules/survey/repo.js");
+    (findSurveyByIdTx as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
       id: "surv-1", status: "draft", version: 1, tenantId: TENANT_ID,
       questionnaire: [{ id: "q1", fieldType: "rating", label: "Satisfaction", required: true }],
       samplingMethod: "random",
@@ -520,8 +539,8 @@ describe("Survey consumers — Sprint 15 coverage", () => {
   });
 
   it("handles surveyActivate (stratified sampling)", async () => {
-    const { findSurveyById } = await import("../src/modules/survey/repo.js");
-    (findSurveyById as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+    const { findSurveyByIdTx } = await import("../src/modules/survey/repo.js");
+    (findSurveyByIdTx as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
       id: "surv-1", status: "draft", version: 1, tenantId: TENANT_ID,
       questionnaire: [{ id: "q1", fieldType: "rating", label: "Satisfaction", required: true }],
       samplingMethod: "stratified",
@@ -543,8 +562,8 @@ describe("Survey consumers — Sprint 15 coverage", () => {
   });
 
   it("handles surveyActivate (systematic sampling)", async () => {
-    const { findSurveyById } = await import("../src/modules/survey/repo.js");
-    (findSurveyById as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+    const { findSurveyByIdTx } = await import("../src/modules/survey/repo.js");
+    (findSurveyByIdTx as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
       id: "surv-1", status: "draft", version: 1, tenantId: TENANT_ID,
       questionnaire: [{ id: "q1", fieldType: "rating", label: "Satisfaction", required: true }],
       samplingMethod: "systematic",
@@ -560,8 +579,8 @@ describe("Survey consumers — Sprint 15 coverage", () => {
   });
 
   it("handles surveyClose", async () => {
-    const { findSurveyById } = await import("../src/modules/survey/repo.js");
-    (findSurveyById as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+    const { findSurveyByIdTx } = await import("../src/modules/survey/repo.js");
+    (findSurveyByIdTx as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
       id: "surv-1", status: "active", version: 2, tenantId: TENANT_ID,
       questionnaire: [{ id: "q1", fieldType: "rating", label: "Satisfaction", required: true }],
       samplingMethod: "random", sampleSizePercent: "50",
@@ -576,8 +595,8 @@ describe("Survey consumers — Sprint 15 coverage", () => {
   });
 
   it("handles surveyResponseSubmit", async () => {
-    const { findSurveyById } = await import("../src/modules/survey/repo.js");
-    (findSurveyById as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+    const { findSurveyByIdTx } = await import("../src/modules/survey/repo.js");
+    (findSurveyByIdTx as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
       id: "surv-1", status: "active", version: 2, tenantId: TENANT_ID,
       questionnaire: [{ id: "q1", fieldType: "rating", label: "Satisfaction", required: true }],
       samplingMethod: "random", sampleSizePercent: "50",
@@ -595,15 +614,15 @@ describe("Survey consumers — Sprint 15 coverage", () => {
   });
 
   it("handles surveyAggregate", async () => {
-    const { findSurveyById } = await import("../src/modules/survey/repo.js");
-    (findSurveyById as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+    const { findSurveyByIdTx } = await import("../src/modules/survey/repo.js");
+    (findSurveyByIdTx as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
       id: "surv-1", status: "closed", version: 3, tenantId: TENANT_ID,
       questionnaire: [{ id: "q1", fieldType: "rating", label: "Satisfaction", required: true }],
       samplingMethod: "random", sampleSizePercent: "50",
     });
     // findResponsesBySurvey mock returns objects with `answers` keyed by questionId
-    const { findResponsesBySurvey } = await import("../src/modules/survey/repo.js");
-    (findResponsesBySurvey as ReturnType<typeof vi.fn>).mockResolvedValueOnce([
+    const { findResponsesBySurveyTx } = await import("../src/modules/survey/repo.js");
+    (findResponsesBySurveyTx as ReturnType<typeof vi.fn>).mockResolvedValueOnce([
       { answers: { q1: 4 } },
       { answers: { q1: 5 } },
     ]);
@@ -645,8 +664,8 @@ describe("Telemetry consumers — Sprint 15 coverage", () => {
   });
 
   it("handles readingIngest — no alert triggered", async () => {
-    const { findActiveAlertRules } = await import("../src/modules/telemetry/repo.js");
-    (findActiveAlertRules as ReturnType<typeof vi.fn>).mockResolvedValueOnce([]);
+    const { findActiveAlertRulesTx } = await import("../src/modules/telemetry/repo.js");
+    (findActiveAlertRulesTx as ReturnType<typeof vi.fn>).mockResolvedValueOnce([]);
     const handler = handlers.get("inspection.reading.ingest");
     expect(handler).toBeDefined();
     await handler!(makeMsg("inspection.reading.ingest", {
@@ -658,8 +677,8 @@ describe("Telemetry consumers — Sprint 15 coverage", () => {
   });
 
   it("handles readingIngest — alert triggered when metric exceeds threshold", async () => {
-    const { findActiveAlertRules } = await import("../src/modules/telemetry/repo.js");
-    (findActiveAlertRules as ReturnType<typeof vi.fn>).mockResolvedValueOnce([
+    const { findActiveAlertRulesTx } = await import("../src/modules/telemetry/repo.js");
+    (findActiveAlertRulesTx as ReturnType<typeof vi.fn>).mockResolvedValueOnce([
       {
         id: "rule-1",
         metric: "smokeLevel",
@@ -694,8 +713,8 @@ describe("Telemetry consumers — Sprint 15 coverage", () => {
   });
 
   it("handles alertAcknowledge", async () => {
-    const { findAlertById } = await import("../src/modules/telemetry/repo.js");
-    (findAlertById as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+    const { findAlertByIdTx } = await import("../src/modules/telemetry/repo.js");
+    (findAlertByIdTx as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
       id: "alert-1", status: "open", version: 1, tenantId: TENANT_ID,
       deviceId: "dev-1", ruleId: "rule-1",
     });

@@ -125,8 +125,8 @@ export function registerRiskConsumers(queue: Queue): void {
 
       // Resolve the risk model (explicit or active default).
       const model = p.modelId
-        ? await repo.findModelById(msg.tenantId, p.modelId)
-        : await repo.findActiveModelByTenant(msg.tenantId);
+        ? await repo.findModelByIdTx(tx, msg.tenantId, p.modelId)
+        : await repo.findActiveModelByTenantTx(tx, msg.tenantId);
 
       if (!model) {
         throw new NonRetryableError(
@@ -157,7 +157,7 @@ export function registerRiskConsumers(queue: Queue): void {
       const result = computeRiskScore(factors, rawScores);
 
       // Fetch previous score for trend tracking.
-      const previousRecord = await repo.findScoreByEntity(msg.tenantId, p.entityId);
+      const previousRecord = await repo.findScoreByEntityTx(tx, msg.tenantId, p.entityId);
       const previousScore = previousRecord?.score ?? null;
 
       // Persist the computed score.
@@ -223,8 +223,8 @@ export function registerRiskConsumers(queue: Queue): void {
 
       // Resolve the risk model.
       const model = p.modelId
-        ? await repo.findModelById(msg.tenantId, p.modelId)
-        : await repo.findActiveModelByTenant(msg.tenantId);
+        ? await repo.findModelByIdTx(tx, msg.tenantId, p.modelId)
+        : await repo.findActiveModelByTenantTx(tx, msg.tenantId);
 
       if (!model) {
         throw new NonRetryableError(
@@ -258,7 +258,7 @@ export function registerRiskConsumers(queue: Queue): void {
         const result = computeRiskScore(factors, rawScores);
 
         // Fetch previous score for trend tracking.
-        const previousRecord = await repo.findScoreByEntity(msg.tenantId, entityId);
+        const previousRecord = await repo.findScoreByEntityTx(tx, msg.tenantId, entityId);
         const previousScore = previousRecord?.score ?? null;
 
         // Persist score.
