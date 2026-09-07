@@ -12,6 +12,8 @@
 import { eq, and, desc, sql } from "drizzle-orm";
 import { cache } from "../../shared/infra.js";
 import { scopedRead, type Db } from "../../shared/db.js";
+
+export type Writer = Pick<Db, "select" | "insert" | "update">;
 import {
   riskModels,
   riskScores,
@@ -46,17 +48,27 @@ export async function findModelById(
 ): Promise<RiskModelRow | null> {
   return cache.getOrLoad<RiskModelRow>(
     cache.makeKey(tenantId, "risk_model", id),
-    async () => {
-      const rows = await scopedRead((tx) =>
-        tx.select().from(riskModels)
-          .where(and(
-            eq(riskModels.id, id),
-            eq(riskModels.tenantId, tenantId),
-          )),
-      );
-      return rows[0] ?? null;
-    },
+    () => scopedRead((tx) => findModelByIdTx(tx, tenantId, id)),
   );
+}
+
+/**
+ * Tx-scoped twin of findModelById for callers already inside an open
+ * transaction. Deliberately bypasses the read-through cache -- a
+ * transactional caller needs a consistent read through its own tx, not a
+ * cached value from outside it.
+ */
+export async function findModelByIdTx(
+  tx: Writer,
+  tenantId: string,
+  id: string,
+): Promise<RiskModelRow | null> {
+  const rows = await tx.select().from(riskModels)
+    .where(and(
+      eq(riskModels.id, id),
+      eq(riskModels.tenantId, tenantId),
+    ));
+  return rows[0] ?? null;
 }
 
 /**
@@ -115,19 +127,25 @@ export async function findScoreByEntity(
 ): Promise<RiskScoreRow | null> {
   return cache.getOrLoad<RiskScoreRow>(
     cache.makeKey(tenantId, "risk_score", entityId),
-    async () => {
-      const rows = await scopedRead((tx) =>
-        tx.select().from(riskScores)
-          .where(and(
-            eq(riskScores.entityId, entityId),
-            eq(riskScores.tenantId, tenantId),
-          ))
-          .orderBy(desc(riskScores.computedAt))
-          .limit(1),
-      );
-      return rows[0] ?? null;
-    },
+    () => scopedRead((tx) => findScoreByEntityTx(tx, tenantId, entityId)),
   );
+}
+
+/** Tx-scoped twin of findScoreByEntity for callers already inside an open
+ * transaction. Deliberately bypasses the read-through cache. */
+export async function findScoreByEntityTx(
+  tx: Writer,
+  tenantId: string,
+  entityId: string,
+): Promise<RiskScoreRow | null> {
+  const rows = await tx.select().from(riskScores)
+    .where(and(
+      eq(riskScores.entityId, entityId),
+      eq(riskScores.tenantId, tenantId),
+    ))
+    .orderBy(desc(riskScores.computedAt))
+    .limit(1);
+  return rows[0] ?? null;
 }
 
 /**
@@ -148,14 +166,20 @@ export async function insertScore(
 export async function findActiveModelByTenant(
   tenantId: string,
 ): Promise<RiskModelRow | null> {
-  const rows = await scopedRead((tx) =>
-    tx.select().from(riskModels)
-      .where(and(
-        eq(riskModels.tenantId, tenantId),
-        eq(riskModels.isActive, 1),
-      ))
-      .orderBy(desc(riskModels.createdAt))
-      .limit(1),
-  );
+  return scopedRead((tx) => findActiveModelByTenantTx(tx, tenantId));
+}
+
+/** Tx-scoped twin of findActiveModelByTenant for callers already inside an open transaction. */
+export async function findActiveModelByTenantTx(
+  tx: Writer,
+  tenantId: string,
+): Promise<RiskModelRow | null> {
+  const rows = await tx.select().from(riskModels)
+    .where(and(
+      eq(riskModels.tenantId, tenantId),
+      eq(riskModels.isActive, 1),
+    ))
+    .orderBy(desc(riskModels.createdAt))
+    .limit(1);
   return rows[0] ?? null;
 }

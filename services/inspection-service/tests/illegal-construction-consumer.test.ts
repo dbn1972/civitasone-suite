@@ -61,6 +61,7 @@ let updateCaseCalls: Array<{ id: string; data: Record<string, unknown> }> = [];
 
 vi.mock("../src/modules/illegal-construction/repo.js", () => ({
   findCaseById: vi.fn(async () => violationConfirmedCase),
+  findCaseByIdTx: vi.fn(async () => violationConfirmedCase),
   updateCase: vi.fn(async (_tx: unknown, id: string, _tenantId: string, data: Record<string, unknown>) => {
     updateCaseCalls.push({ id, data });
     return { ...violationConfirmedCase, ...data };
@@ -69,6 +70,7 @@ vi.mock("../src/modules/illegal-construction/repo.js", () => ({
   insertAction: vi.fn(async (_tx: unknown, data: Record<string, unknown>) => ({ id: "action-1", ...data })),
   updateAction: vi.fn(async (_tx: unknown, id: string, _tenantId: string, data: Record<string, unknown>) => ({ id, ...data })),
   findActionById: vi.fn(),
+  findActionByIdTx: vi.fn(),
   nextActionNumber: vi.fn(async () => "ILBLD-A-2026-000001"),
 }));
 
@@ -131,8 +133,8 @@ describe("illegalConstructionActionIssue — status-changing actions from violat
   });
 
   it("regularization_order on an ineligible violation type is rejected even though the transition table alone would allow it", async () => {
-    const { findCaseById } = await import("../src/modules/illegal-construction/repo.js");
-    vi.mocked(findCaseById).mockResolvedValueOnce({
+    const { findCaseByIdTx } = await import("../src/modules/illegal-construction/repo.js");
+    vi.mocked(findCaseByIdTx).mockResolvedValueOnce({
       ...violationConfirmedCase, violationType: "fsi_exceeded", // canRegularize excludes this
     });
     const COMMANDS = await loadConsumer();

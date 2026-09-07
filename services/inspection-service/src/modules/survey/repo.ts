@@ -43,17 +43,23 @@ export async function findSurveyById(
 ): Promise<SurveyDefinitionRow | null> {
   return cache.getOrLoad<SurveyDefinitionRow>(
     cache.makeKey(tenantId, "survey", id),
-    async () => {
-      const rows = await scopedRead((tx) =>
-        tx.select().from(surveyDefinitions)
-          .where(and(
-            eq(surveyDefinitions.id, id),
-            eq(surveyDefinitions.tenantId, tenantId),
-          )),
-      );
-      return rows[0] ?? null;
-    },
+    () => scopedRead((tx) => findSurveyByIdTx(tx, tenantId, id)),
   );
+}
+
+/** Tx-scoped twin of findSurveyById for callers already inside an open
+ * transaction. Deliberately bypasses the read-through cache. */
+export async function findSurveyByIdTx(
+  tx: Tx,
+  tenantId: string,
+  id: string,
+): Promise<SurveyDefinitionRow | null> {
+  const rows = await tx.select().from(surveyDefinitions)
+    .where(and(
+      eq(surveyDefinitions.id, id),
+      eq(surveyDefinitions.tenantId, tenantId),
+    ));
+  return rows[0] ?? null;
 }
 
 export async function findSurveys(
@@ -121,14 +127,21 @@ export async function findResponsesBySurvey(
   tenantId: string,
   surveyId: string,
 ): Promise<SurveyResponseRow[]> {
-  return scopedRead((tx) =>
-    tx.select().from(surveyResponses)
-      .where(and(
-        eq(surveyResponses.surveyId, surveyId),
-        eq(surveyResponses.tenantId, tenantId),
-      ))
-      .orderBy(desc(surveyResponses.capturedAt)),
-  );
+  return scopedRead((tx) => findResponsesBySurveyTx(tx, tenantId, surveyId));
+}
+
+/** Tx-scoped twin of findResponsesBySurvey for callers already inside an open transaction. */
+export async function findResponsesBySurveyTx(
+  tx: Tx,
+  tenantId: string,
+  surveyId: string,
+): Promise<SurveyResponseRow[]> {
+  return tx.select().from(surveyResponses)
+    .where(and(
+      eq(surveyResponses.surveyId, surveyId),
+      eq(surveyResponses.tenantId, tenantId),
+    ))
+    .orderBy(desc(surveyResponses.capturedAt));
 }
 
 // ── Writes ────────────────────────────────────────────────────────────────────
