@@ -1,5 +1,7 @@
 import { and, eq, desc, inArray, sql } from "drizzle-orm";
 import { db, scopedRead } from "../../shared/db.js";
+
+export type Writer = Pick<typeof db, "select" | "insert" | "update">;
 import {
   financeInstruments,
   type InstrumentRow,
@@ -12,28 +14,30 @@ import {
  * than creating a duplicate or erroring.
  */
 export async function insertInstrument(row: InstrumentInsert): Promise<{ row: InstrumentRow; created: boolean }> {
-  return db.transaction(async (tx) => {
-    const inserted = await tx
-      .insert(financeInstruments)
-      .values(row)
-      .onConflictDoNothing({
-        target: [financeInstruments.tenantId, financeInstruments.instrumentType, financeInstruments.instrumentNo],
-      })
-      .returning();
-    if (inserted[0]) return { row: inserted[0], created: true };
-    // Conflict — the instrument already exists; return the canonical row.
-    const existing = await tx
-      .select()
-      .from(financeInstruments)
-      .where(and(
-        eq(financeInstruments.tenantId, row.tenantId),
-        eq(financeInstruments.instrumentType, row.instrumentType),
-        eq(financeInstruments.instrumentNo, row.instrumentNo),
-      ))
-      .limit(1);
-    if (!existing[0]) throw new Error("INSTRUMENT_INSERT_RACE: conflict but no existing row found");
-    return { row: existing[0], created: false };
-  });
+  return db.transaction((tx) => insertInstrumentTx(tx, row));
+}
+
+/** Tx-scoped twin of insertInstrument for callers already inside an open transaction. */
+export async function insertInstrumentTx(tx: Writer, row: InstrumentInsert): Promise<{ row: InstrumentRow; created: boolean }> {
+  const inserted = await tx
+    .insert(financeInstruments)
+    .values(row)
+    .onConflictDoNothing({
+      target: [financeInstruments.tenantId, financeInstruments.instrumentType, financeInstruments.instrumentNo],
+    })
+    .returning();
+  if (inserted[0]) return { row: inserted[0], created: true };
+  const existing = await tx
+    .select()
+    .from(financeInstruments)
+    .where(and(
+      eq(financeInstruments.tenantId, row.tenantId),
+      eq(financeInstruments.instrumentType, row.instrumentType),
+      eq(financeInstruments.instrumentNo, row.instrumentNo),
+    ))
+    .limit(1);
+  if (!existing[0]) throw new Error("INSTRUMENT_INSERT_RACE: conflict but no existing row found");
+  return { row: existing[0], created: false };
 }
 
 export async function findById(tenantId: string, id: string): Promise<InstrumentRow | null> {
@@ -95,23 +99,35 @@ export async function transition(
   tsColumn: "presentedAt" | "clearedAt" | "bouncedAt" | "cancelledAt",
   updatedBy: string,
 ): Promise<InstrumentRow | null> {
-  return db.transaction(async (tx) => {
-    const updated = await tx
-      .update(financeInstruments)
-      .set({
-        status: toStatus,
-        [tsColumn]: new Date(),
-        updatedBy,
-        updatedAt: new Date(),
-        version: sql`${financeInstruments.version} + 1`,
-        ...(patch.bounceReason !== undefined ? { bounceReason: patch.bounceReason } : {}),
-      })
-      .where(and(
-        eq(financeInstruments.tenantId, tenantId),
-        eq(financeInstruments.id, id),
-        inArray(financeInstruments.status, fromStatuses),
-      ))
-      .returning();
-    return updated[0] ?? null;
-  });
+  return db.transaction((tx) => transitionTx(tx, tenantId, id, fromStatuses, toStatus, patch, tsColumn, updatedBy));
+}
+
+/** Tx-scoped twin of transition for callers already inside an open transaction. */
+export async function transitionTx(
+  tx: Writer,
+  tenantId: string,
+  id: string,
+  fromStatuses: string[],
+  toStatus: string,
+  patch: Partial<Pick<InstrumentRow, "bounceReason">>,
+  tsColumn: "presentedAt" | "clearedAt" | "bouncedAt" | "cancelledAt",
+  updatedBy: string,
+): Promise<InstrumentRow | null> {
+  const updated = await tx
+    .update(financeInstruments)
+    .set({
+      status: toStatus,
+      [tsColumn]: new Date(),
+      updatedBy,
+      updatedAt: new Date(),
+      version: sql`${financeInstruments.version} + 1`,
+      ...(patch.bounceReason !== undefined ? { bounceReason: patch.bounceReason } : {}),
+    })
+    .where(and(
+      eq(financeInstruments.tenantId, tenantId),
+      eq(financeInstruments.id, id),
+      inArray(financeInstruments.status, fromStatuses),
+    ))
+    .returning();
+  return updated[0] ?? null;
 }
