@@ -38,10 +38,17 @@ export async function insertCauseList(tx: Writer, row: CauseListInsert): Promise
 export async function getCauseList(
   tenantId: string, id: string,
 ): Promise<{ id: string; listDate: string; courtId: string } | undefined> {
-  const rows = await scopedRead<{ id: string; listDate: string; courtId: string }[]>((tx) => tx.select({ id: causeLists.id, listDate: causeLists.listDate, courtId: causeLists.courtId })
+  return scopedRead((tx) => getCauseListTx(tx, tenantId, id));
+}
+
+/** Tx-scoped twin of getCauseList for callers already inside an open transaction. */
+export async function getCauseListTx(
+  tx: Writer, tenantId: string, id: string,
+): Promise<{ id: string; listDate: string; courtId: string } | undefined> {
+  const rows = await tx.select({ id: causeLists.id, listDate: causeLists.listDate, courtId: causeLists.courtId })
     .from(causeLists)
     .where(and(eq(causeLists.tenantId, tenantId), eq(causeLists.id, id)))
-    .limit(1));
+    .limit(1);
   return rows[0];
 }
 

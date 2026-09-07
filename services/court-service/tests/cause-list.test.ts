@@ -29,6 +29,7 @@ vi.mock("../src/modules/cause-list/schema.js", () => ({ causeLists: {}, causeLis
 vi.mock("../src/modules/cause-list/repo.js", () => ({
   insertCauseList: vi.fn(async () => {}),
   getCauseList: vi.fn(async () => currentList),
+  getCauseListTx: vi.fn(async () => currentList),
   insertCauseListItem: vi.fn(async () => insertItemImpl()),
   // real semantics: 23505 unique or 23P01 exclusion violation
   isUniqueViolation: (err: unknown) => {

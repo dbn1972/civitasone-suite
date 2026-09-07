@@ -60,7 +60,7 @@ export function registerCauseListConsumers(
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
 
-      const parent = await repo.getCauseList(p.tenantId, p.causeListId);
+      const parent = await repo.getCauseListTx(tx, p.tenantId, p.causeListId);
       if (!parent) throw new NonRetryableError(`CAUSELIST_NOT_FOUND: ${p.causeListId}`);
 
       try {
