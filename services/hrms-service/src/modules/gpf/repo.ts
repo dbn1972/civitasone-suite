@@ -11,10 +11,14 @@ export type Writer = Pick<typeof db, "insert" | "update" | "select">;
 /** A transaction handle that can post ledger rows AND take advisory locks / read the locked balance. */
 export type LockingTx = Writer & Pick<typeof db, "execute">;
 
-export async function findAccountByEmployee(tenantId: string, employeeId: string): Promise<GpfAccountRow | null> {
-  const rows = await scopedRead((tx) => tx.select().from(hrmsGpfAccounts)
-    .where(and(eq(hrmsGpfAccounts.tenantId, tenantId), eq(hrmsGpfAccounts.employeeId, employeeId))).limit(1));
+export async function findAccountByEmployeeTx(tx: Writer, tenantId: string, employeeId: string): Promise<GpfAccountRow | null> {
+  const rows = await tx.select().from(hrmsGpfAccounts)
+    .where(and(eq(hrmsGpfAccounts.tenantId, tenantId), eq(hrmsGpfAccounts.employeeId, employeeId))).limit(1);
   return rows[0] ?? null;
+}
+
+export async function findAccountByEmployee(tenantId: string, employeeId: string): Promise<GpfAccountRow | null> {
+  return db.transaction((tx) => findAccountByEmployeeTx(tx, tenantId, employeeId));
 }
 
 export async function findAccountById(tenantId: string, id: string): Promise<GpfAccountRow | null> {

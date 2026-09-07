@@ -81,7 +81,7 @@ export function registerF3_contractor_bill_Consumers(queue: Queue): void {
             // Restored: `c` (the current contractor, for its optimistic-lock
             // version) and `patch` (built field-by-field from the body).
             const contractorId = (params.id as string) || id;
-            const c = await repo.findContractor(p.tenantId, contractorId);
+            const c = await repo.findContractorTx(tx, p.tenantId, contractorId);
             if (!c) throw new HttpError(404, "NOT_FOUND", "contractor not found");
             const patch = {
               updatedBy: msg.actorId,
@@ -98,7 +98,7 @@ export function registerF3_contractor_bill_Consumers(queue: Queue): void {
             // Restored: `c` — the bill snapshots the contractor's GSTIN — and
             // the new bill's id.
             const contractorId = (params.id as string) || id;
-            const c = await repo.findContractor(p.tenantId, contractorId);
+            const c = await repo.findContractorTx(tx, p.tenantId, contractorId);
             if (!c) throw new HttpError(404, "NOT_FOUND", "contractor not found");
             const billId = id;
             await repo.insertBill(tx, {
@@ -120,7 +120,7 @@ export function registerF3_contractor_bill_Consumers(queue: Queue): void {
           case "contractor_bill_routes__3": {
             // Restored: `bill` — read for its optimistic-lock version.
             const billId = (params.billId as string) || id;
-            const bill = await repo.findBill(p.tenantId, billId);
+            const bill = await repo.findBillTx(tx, p.tenantId, billId);
             if (!bill) throw new HttpError(404, "NOT_FOUND", "contractor bill not found");
             await repo.updateBill(tx, p.tenantId, billId, {
                   status: "verified", verifiedBy: msg.actorId, verifiedAt: new Date(), updatedBy: msg.actorId,
@@ -134,9 +134,9 @@ export function registerF3_contractor_bill_Consumers(queue: Queue): void {
             // override the submitted one). This is the step that actually
             // withholds GST + Section-194C TDS.
             const billId = (params.billId as string) || id;
-            const bill = await repo.findBill(p.tenantId, billId);
+            const bill = await repo.findBillTx(tx, p.tenantId, billId);
             if (!bill) throw new HttpError(404, "NOT_FOUND", "contractor bill not found");
-            const contractor = await repo.findContractor(p.tenantId, bill.contractorId);
+            const contractor = await repo.findContractorTx(tx, p.tenantId, bill.contractorId);
             if (!contractor) throw new HttpError(404, "NOT_FOUND", "contractor not found");
             const gstRateBps = body.gstRateBps ?? bill.gstRateBps;
             const fy = financialYearWindow(bill.billDate as unknown as string);
@@ -173,7 +173,7 @@ export function registerF3_contractor_bill_Consumers(queue: Queue): void {
           case "contractor_bill_routes__5": {
             // Restored: `bill` — read for its optimistic-lock version.
             const billId = (params.billId as string) || id;
-            const bill = await repo.findBill(p.tenantId, billId);
+            const bill = await repo.findBillTx(tx, p.tenantId, billId);
             if (!bill) throw new HttpError(404, "NOT_FOUND", "contractor bill not found");
             await repo.updateBill(tx, p.tenantId, billId, {
                   status: "rejected",
@@ -186,7 +186,7 @@ export function registerF3_contractor_bill_Consumers(queue: Queue): void {
             // Restored: `bill` — read for its version AND for the paid-event
             // payload (bill no + the net payable settled at approval).
             const billId = (params.billId as string) || id;
-            const bill = await repo.findBill(p.tenantId, billId);
+            const bill = await repo.findBillTx(tx, p.tenantId, billId);
             if (!bill) throw new HttpError(404, "NOT_FOUND", "contractor bill not found");
             await repo.updateBill(tx, p.tenantId, billId, {
                     status: "paid", paymentRef: body.paymentRef, paidAt: new Date(), updatedBy: msg.actorId,

@@ -16,10 +16,14 @@ export async function insertContractor(tx: Writer, row: ContractorInsert): Promi
   await tx.insert(hrmsContractors).values(row);
 }
 
-export async function findContractor(tenantId: string, id: string): Promise<ContractorRow | null> {
-  const rows = await scopedRead((tx) => tx.select().from(hrmsContractors)
-    .where(and(eq(hrmsContractors.tenantId, tenantId), eq(hrmsContractors.id, id))).limit(1));
+export async function findContractorTx(tx: Writer, tenantId: string, id: string): Promise<ContractorRow | null> {
+  const rows = await tx.select().from(hrmsContractors)
+    .where(and(eq(hrmsContractors.tenantId, tenantId), eq(hrmsContractors.id, id))).limit(1);
   return rows[0] ?? null;
+}
+
+export async function findContractor(tenantId: string, id: string): Promise<ContractorRow | null> {
+  return db.transaction((tx) => findContractorTx(tx, tenantId, id));
 }
 
 export async function listContractors(tenantId: string, limit = 200): Promise<ContractorRow[]> {
@@ -44,10 +48,14 @@ export async function insertBill(tx: Writer, row: ContractorBillInsert): Promise
   await tx.insert(hrmsContractorBills).values(row);
 }
 
-export async function findBill(tenantId: string, id: string): Promise<ContractorBillRow | null> {
-  const rows = await scopedRead((tx) => tx.select().from(hrmsContractorBills)
-    .where(and(eq(hrmsContractorBills.tenantId, tenantId), eq(hrmsContractorBills.id, id))).limit(1));
+export async function findBillTx(tx: Writer, tenantId: string, id: string): Promise<ContractorBillRow | null> {
+  const rows = await tx.select().from(hrmsContractorBills)
+    .where(and(eq(hrmsContractorBills.tenantId, tenantId), eq(hrmsContractorBills.id, id))).limit(1);
   return rows[0] ?? null;
+}
+
+export async function findBill(tenantId: string, id: string): Promise<ContractorBillRow | null> {
+  return db.transaction((tx) => findBillTx(tx, tenantId, id));
 }
 
 /**

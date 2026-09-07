@@ -78,7 +78,7 @@ export function registerF3_apprentice_stipend_Consumers(queue: Queue): void {
             // Restored: `a` (the current apprenticeship, for its optimistic-lock
             // version) and `patch` (built field-by-field from the body).
             const apprenticeshipId = (params.id as string) || id;
-            const a = await repo.findApprenticeship(p.tenantId, apprenticeshipId);
+            const a = await repo.findApprenticeshipTx(tx, p.tenantId, apprenticeshipId);
             if (!a) throw new HttpError(404, "NOT_FOUND", "apprenticeship not found");
             const patch = {
               updatedBy: msg.actorId,
@@ -93,7 +93,7 @@ export function registerF3_apprentice_stipend_Consumers(queue: Queue): void {
             // Restored: `a` — the run snapshots the apprenticeship's agreed
             // stipend and NAPS rate/cap, so `a` must be read before inserting.
             const apprenticeshipId = (params.id as string) || id;
-            const a = await repo.findApprenticeship(p.tenantId, apprenticeshipId);
+            const a = await repo.findApprenticeshipTx(tx, p.tenantId, apprenticeshipId);
             if (!a) throw new HttpError(404, "NOT_FOUND", "apprenticeship not found");
             const stipendId = id;
             await repo.insertStipend(tx, {
@@ -113,7 +113,7 @@ export function registerF3_apprentice_stipend_Consumers(queue: Queue): void {
           case "apprentice_stipend_routes__3": {
             // Restored: `s` — read for its optimistic-lock version.
             const stipendId = (params.stipendId as string) || id;
-            const s = await repo.findStipend(p.tenantId, stipendId);
+            const s = await repo.findStipendTx(tx, p.tenantId, stipendId);
             if (!s) throw new HttpError(404, "NOT_FOUND", "stipend run not found");
             await repo.updateStipend(tx, p.tenantId, stipendId, {
                   status: "verified", verifiedBy: msg.actorId, verifiedAt: new Date(), updatedBy: msg.actorId,
@@ -126,9 +126,9 @@ export function registerF3_apprentice_stipend_Consumers(queue: Queue): void {
             // reimbursement, computed from the values SNAPSHOTTED on the run at
             // submit (not the live master), exactly as routes.ts did.
             const stipendId = (params.stipendId as string) || id;
-            const s = await repo.findStipend(p.tenantId, stipendId);
+            const s = await repo.findStipendTx(tx, p.tenantId, stipendId);
             if (!s) throw new HttpError(404, "NOT_FOUND", "stipend run not found");
-            const a = await repo.findApprenticeship(p.tenantId, s.apprenticeshipId);
+            const a = await repo.findApprenticeshipTx(tx, p.tenantId, s.apprenticeshipId);
             if (!a) throw new HttpError(404, "NOT_FOUND", "apprenticeship not found");
             const stipend = computeStipend({
               monthlyStipendMinor: s.monthlyStipendMinor,
@@ -158,7 +158,7 @@ export function registerF3_apprentice_stipend_Consumers(queue: Queue): void {
           case "apprentice_stipend_routes__5": {
             // Restored: `s` — read for its optimistic-lock version.
             const stipendId = (params.stipendId as string) || id;
-            const s = await repo.findStipend(p.tenantId, stipendId);
+            const s = await repo.findStipendTx(tx, p.tenantId, stipendId);
             if (!s) throw new HttpError(404, "NOT_FOUND", "stipend run not found");
             await repo.updateStipend(tx, p.tenantId, stipendId, {
                   status: "rejected",
@@ -171,7 +171,7 @@ export function registerF3_apprentice_stipend_Consumers(queue: Queue): void {
             // Restored: `s` — read for its version AND for the paid-event
             // payload (month + the gross approved at the previous step).
             const stipendId = (params.stipendId as string) || id;
-            const s = await repo.findStipend(p.tenantId, stipendId);
+            const s = await repo.findStipendTx(tx, p.tenantId, stipendId);
             if (!s) throw new HttpError(404, "NOT_FOUND", "stipend run not found");
             await repo.updateStipend(tx, p.tenantId, stipendId, {
                     status: "paid", paymentRef: body.paymentRef, paidAt: new Date(), updatedBy: msg.actorId,

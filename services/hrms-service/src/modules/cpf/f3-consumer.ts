@@ -80,7 +80,7 @@ export function registerF3_cpf_Consumers(queue: Queue): void {
           case "cpf_routes__1": {
             // Restored: `acct` (mustAccount), the two subscription legs, and the
             // new ledger row's id.
-            const acct = await repo.findAccountByEmployee(p.tenantId, employeeId);
+            const acct = await repo.findAccountByEmployeeTx(tx, p.tenantId, employeeId);
             if (!acct) throw new HttpError(404, "NO_CPF_ACCOUNT", "employee has no CPF account");
             const empAmt = BigInt(body.empAmountMinor ?? 0);
             const erAmt = BigInt(body.erAmountMinor ?? 0);
@@ -100,7 +100,7 @@ export function registerF3_cpf_Consumers(queue: Queue): void {
           case "cpf_routes__2": {
             // Restored: `acct` (mustAccount), the refund `amount` and the new
             // ledger row's id. A refund credits the EMPLOYEE leg only.
-            const acct = await repo.findAccountByEmployee(p.tenantId, employeeId);
+            const acct = await repo.findAccountByEmployeeTx(tx, p.tenantId, employeeId);
             if (!acct) throw new HttpError(404, "NO_CPF_ACCOUNT", "employee has no CPF account");
             const amount = BigInt(body.amountMinor);
             const ledgerId = randomUUID();
@@ -120,7 +120,7 @@ export function registerF3_cpf_Consumers(queue: Queue): void {
             // Restored: `acct` (mustAccount), `ratePct` — the override if the
             // caller supplied one, else the account's own configured rate — the
             // month count, and the new ledger row's id.
-            const acct = await repo.findAccountByEmployee(p.tenantId, employeeId);
+            const acct = await repo.findAccountByEmployeeTx(tx, p.tenantId, employeeId);
             if (!acct) throw new HttpError(404, "NO_CPF_ACCOUNT", "employee has no CPF account");
             const ratePct = Number(body.ratePctOverride ?? acct.interestRatePct);
             const months = Number(body.months ?? 12);
@@ -148,7 +148,7 @@ export function registerF3_cpf_Consumers(queue: Queue): void {
           case "cpf_routes__debit": {
             // `repo.findAccount` never existed; the real helper is keyed on the
             // employee and takes no tx (it opens its own tenant-scoped read).
-            const acct = await repo.findAccountByEmployee(p.tenantId, employeeId);
+            const acct = await repo.findAccountByEmployeeTx(tx, p.tenantId, employeeId);
             if (!acct) return;
             const amount = BigInt(body.amountMinor);
             const entryType = body.entryType as "advance" | "withdrawal";
