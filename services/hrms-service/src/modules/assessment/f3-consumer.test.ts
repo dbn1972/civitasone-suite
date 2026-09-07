@@ -42,7 +42,19 @@ const { mockTx, dbTransactionFn, enqueueMock, R } = vi.hoisted(() => {
     retireAssessment: vi.fn(async (..._a: any[]) => null),
     insertBank: vi.fn(async (..._a: any[]) => undefined),
     insertAssessment: vi.fn(async (..._a: any[]) => undefined),
-  };
+  } as Record<string, any>;
+  // Nested-tx-deadlock fix (skill section 1): the consumer now calls the
+  // Tx-suffixed siblings (reading through the caller's already-open `tx`)
+  // instead of the scopedRead-based originals above. Forward each one to
+  // its non-Tx counterpart, dropping the leading `tx` arg, so existing
+  // `R.getAttempt.mockResolvedValue(...)`-style test setup (and the one
+  // `toHaveBeenCalledWith` assertion on countAttempts, which never expected
+  // a tx argument) keep working unchanged.
+  _R.countAttemptsTx = vi.fn(async (_tx: unknown, ...a: any[]) => _R.countAttempts(...a));
+  _R.getAttemptTx = vi.fn(async (_tx: unknown, ...a: any[]) => _R.getAttempt(...a));
+  _R.getAssessmentTx = vi.fn(async (_tx: unknown, ...a: any[]) => _R.getAssessment(...a));
+  _R.getBankTx = vi.fn(async (_tx: unknown, ...a: any[]) => _R.getBank(...a));
+  _R.listQuestionsTx = vi.fn(async (_tx: unknown, ...a: any[]) => _R.listQuestions(...a));
   return { mockTx: _mockTx, dbTransactionFn: _dbTransactionFn, enqueueMock: _enqueueMock, R: _R };
 });
 

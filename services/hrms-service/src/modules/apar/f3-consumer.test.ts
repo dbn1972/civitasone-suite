@@ -23,18 +23,30 @@ import { MemoryQueue } from "@civitasone/queue";
 
 const { mockTx, insertValuesMock, R } = vi.hoisted(() => {
   const _insertValuesMock = vi.fn((..._a: any[]): any => undefined);
+  const _R = {
+    findAppraisal: vi.fn((..._a: any[]): any => undefined),
+    updateAppraisal: vi.fn(async (..._a: any[]): Promise<any> => undefined),
+    upsertScore: vi.fn(async (..._a: any[]): Promise<any> => undefined),
+    appendHistory: vi.fn(async (..._a: any[]): Promise<any> => undefined),
+    listScores: vi.fn(async (..._a: any[]): Promise<any> => []),
+  } as Record<string, any>;
+  // Nested-tx-deadlock fix (skill section 1): the consumer now reaches
+  // findAppraisal/listScores exclusively through the Tx-suffixed siblings
+  // (findAppraisalTx via the local mustAppraisal(tx) helper, listScoresTx
+  // directly) so they read through the caller's already-open `tx` instead
+  // of opening their own scopedRead transaction. Forward each Tx variant to
+  // its non-Tx counterpart, dropping the leading `tx` arg, so existing
+  // `R.findAppraisal.mockResolvedValue(...)` setup and the
+  // `toHaveBeenCalledWith(APAR, TENANT)` assertion (which never expected a
+  // tx argument) keep working unchanged.
+  _R.findAppraisalTx = vi.fn((_tx: unknown, ...a: any[]) => _R.findAppraisal(...a));
+  _R.listScoresTx = vi.fn(async (_tx: unknown, ...a: any[]) => _R.listScores(...a));
   return {
     insertValuesMock: _insertValuesMock,
     mockTx: {
       insert: vi.fn().mockReturnValue({ values: async (v: unknown) => { _insertValuesMock(v); } }),
     },
-    R: {
-      findAppraisal: vi.fn((..._a: any[]): any => undefined),
-      updateAppraisal: vi.fn(async (..._a: any[]): Promise<any> => undefined),
-      upsertScore: vi.fn(async (..._a: any[]): Promise<any> => undefined),
-      appendHistory: vi.fn(async (..._a: any[]): Promise<any> => undefined),
-      listScores: vi.fn(async (..._a: any[]): Promise<any> => []),
-    },
+    R: _R,
   };
 });
 
@@ -53,10 +65,12 @@ vi.mock("../../shared/outbox.js", () => ({
 }));
 vi.mock("./repo.js", () => ({
   findAppraisal: (...a: unknown[]) => R.findAppraisal(...a),
+  findAppraisalTx: (...a: unknown[]) => R.findAppraisalTx(...a),
   updateAppraisal: (...a: unknown[]) => R.updateAppraisal(...a),
   upsertScore: (...a: unknown[]) => R.upsertScore(...a),
   appendHistory: (...a: unknown[]) => R.appendHistory(...a),
   listScores: (...a: unknown[]) => R.listScores(...a),
+  listScoresTx: (...a: unknown[]) => R.listScoresTx(...a),
 }));
 
 import { registerF3_apar_Consumers } from "./f3-consumer.js";

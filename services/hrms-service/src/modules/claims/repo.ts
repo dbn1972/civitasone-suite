@@ -14,8 +14,11 @@ export async function insertLtc(tx: Writer, row: LtcClaimInsert): Promise<void> 
 }
 
 export async function findLtc(tenantId: string, id: string): Promise<LtcClaimRow | null> {
-  const rows = await scopedRead((tx) => tx.select().from(hrmsLtcClaims)
-    .where(and(eq(hrmsLtcClaims.tenantId, tenantId), eq(hrmsLtcClaims.id, id))).limit(1));
+  return scopedRead((tx) => findLtcTx(tx, tenantId, id));
+}
+export async function findLtcTx(tx: Writer, tenantId: string, id: string): Promise<LtcClaimRow | null> {
+  const rows = await tx.select().from(hrmsLtcClaims)
+    .where(and(eq(hrmsLtcClaims.tenantId, tenantId), eq(hrmsLtcClaims.id, id))).limit(1);
   return rows[0] ?? null;
 }
 
@@ -43,8 +46,11 @@ export async function insertCea(tx: Writer, row: CeaClaimInsert): Promise<void> 
 }
 
 export async function findCea(tenantId: string, id: string): Promise<CeaClaimRow | null> {
-  const rows = await scopedRead((tx) => tx.select().from(hrmsCeaClaims)
-    .where(and(eq(hrmsCeaClaims.tenantId, tenantId), eq(hrmsCeaClaims.id, id))).limit(1));
+  return scopedRead((tx) => findCeaTx(tx, tenantId, id));
+}
+export async function findCeaTx(tx: Writer, tenantId: string, id: string): Promise<CeaClaimRow | null> {
+  const rows = await tx.select().from(hrmsCeaClaims)
+    .where(and(eq(hrmsCeaClaims.tenantId, tenantId), eq(hrmsCeaClaims.id, id))).limit(1);
   return rows[0] ?? null;
 }
 
@@ -65,6 +71,12 @@ export async function ceaCommittedForChild(
   tenantId: string, employeeId: string, academicYear: string,
   childRef: string, claimKind: string, excludeId?: string,
 ): Promise<bigint> {
+  return scopedRead((tx) => ceaCommittedForChildTx(tx, tenantId, employeeId, academicYear, childRef, claimKind, excludeId));
+}
+export async function ceaCommittedForChildTx(
+  tx: Writer, tenantId: string, employeeId: string, academicYear: string,
+  childRef: string, claimKind: string, excludeId?: string,
+): Promise<bigint> {
   const conds = [
     eq(hrmsCeaClaims.tenantId, tenantId),
     eq(hrmsCeaClaims.employeeId, employeeId),
@@ -74,10 +86,10 @@ export async function ceaCommittedForChild(
     sql`${hrmsCeaClaims.status} IN ('submitted','approved')`,
   ];
   if (excludeId) conds.push(ne(hrmsCeaClaims.id, excludeId));
-  const rows = await scopedRead((tx) => tx
+  const rows = await tx
     .select({ total: sql<string>`COALESCE(SUM(${hrmsCeaClaims.claimedAmountMinor}), 0)` })
     .from(hrmsCeaClaims)
-    .where(and(...conds)));
+    .where(and(...conds));
   return BigInt(rows[0]?.total ?? "0");
 }
 

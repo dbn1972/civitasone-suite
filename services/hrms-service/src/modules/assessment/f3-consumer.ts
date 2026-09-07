@@ -90,7 +90,7 @@ export function registerF3_assessment_Consumers(queue: Queue): void {
             // without it every "start attempt" call crashed here while the
             // route had already answered 201.
             const attemptId = id;
-            const priorCount = await repo.countAttempts(p.tenantId, pathId, body.employeeId);
+            const priorCount = await repo.countAttemptsTx(tx, p.tenantId, pathId, body.employeeId);
             await repo.insertAttempt(tx, {
                   id: attemptId, tenantId: p.tenantId, assessmentId: pathId, employeeId: body.employeeId,
                   attemptNo: priorCount + 1, status: "in_progress",
@@ -112,14 +112,14 @@ export function registerF3_assessment_Consumers(queue: Queue): void {
             // and the submitted answers, so recomputing here reproduces exactly
             // the score the caller was shown.
             const attemptId = pathId;
-            const attempt = await repo.getAttempt(p.tenantId, attemptId);
+            const attempt = await repo.getAttemptTx(tx, p.tenantId, attemptId);
             // The route already 404'd on a missing attempt and 409'd unless it
             // was still in_progress; if it changed underneath us, drop the write.
             if (!attempt) return null;
-            const a = await repo.getAssessment(p.tenantId, attempt.assessmentId);
+            const a = await repo.getAssessmentTx(tx, p.tenantId, attempt.assessmentId);
             if (!a) return null;
-            const bank = await repo.getBank(p.tenantId, a.bankId);
-            const qrows = await repo.listQuestions(p.tenantId, a.bankId);
+            const bank = await repo.getBankTx(tx, p.tenantId, a.bankId);
+            const qrows = await repo.listQuestionsTx(tx, p.tenantId, a.bankId);
             const gradable: GradableQuestion[] = qrows.map((q) => ({
               id: q.id, qtype: q.qtype as Qtype, correct: q.correct, marks: Number(q.marks),
             }));

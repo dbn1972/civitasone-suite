@@ -208,7 +208,7 @@ export function registerF3_learning_Consumers(queue: Queue): void {
             // progress by LESSON id and recomputes the aggregate). Restored:
             // `existing` — routes.ts reads the enrollment first to preserve its
             // current `resumeLessonId` (this endpoint doesn't set one).
-            const existing = await repo.getEnrollmentById(p.tenantId, id);
+            const existing = await repo.getEnrollmentByIdTx(tx, p.tenantId, id);
             if (!existing) {
               log.warn({ op, enrollmentId: id, messageId: msg.messageId }, "enrollment disappeared before async progress PATCH");
               return;
