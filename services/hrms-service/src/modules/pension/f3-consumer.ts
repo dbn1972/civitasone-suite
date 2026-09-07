@@ -1,7 +1,7 @@
 import type { Queue } from "@civitasone/queue";
 import { pino } from "pino";
 import { and, eq, desc, asc, sql, inArray, isNull, isNotNull, ne, or, gt, lt, gte, lte } from "drizzle-orm";
-import { db, scopedRead } from "../../shared/db.js";
+import { db } from "../../shared/db.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS } from "../../topics.js";
 import { hrmsEmployees } from "../employee/schema.js";
@@ -71,15 +71,20 @@ export function registerF3_pension_Consumers(queue: Queue): void {
               avgEmolumentsMinor: rawQuery.avgEmolumentsMinor !== undefined ? Number(rawQuery.avgEmolumentsMinor) : undefined,
             };
 
-            const empRows = await scopedRead((rtx) => rtx.select().from(hrmsEmployees)
+            // Read through the caller's already-open tx directly -- this used
+            // to call the module-level scopedRead(...) helper inline, which
+            // opens its OWN transaction, same nested-tx deadlock shape as the
+            // serviceBookRepo.listServiceBookEntries call below (see
+            // .claude/skills/16-production-readiness-audit.md section 1).
+            const empRows = await tx.select().from(hrmsEmployees)
               .where(and(eq(hrmsEmployees.id, employeeId), eq(hrmsEmployees.tenantId, p.tenantId)))
-              .limit(1));
+              .limit(1);
             const emp = empRows[0];
             // The route already 404'd on a missing employee; if the row is gone
             // by the time this async write runs there is nothing to persist.
             if (!emp) return;
 
-            const sbEntries = await serviceBookRepo.listServiceBookEntries(p.tenantId, employeeId);
+            const sbEntries = await serviceBookRepo.listServiceBookEntriesTx(tx, p.tenantId, employeeId);
             const sbEvents: ServiceBookEvent[] = sbEntries.map((e) => ({
               entryType: e.entryType,
               effectiveDate: e.effectiveDate,

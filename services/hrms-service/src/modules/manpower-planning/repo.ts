@@ -114,6 +114,17 @@ export async function listRoster(tenantId: string, planId: string): Promise<Plan
     .where(and(eq(manpowerPlanRoster.tenantId, tenantId), eq(manpowerPlanRoster.planId, planId))));
 }
 
+/**
+ * Tx-scoped variant of listRoster -- see .claude/skills/16-production-readiness-audit.md
+ * section 1: the scopedRead-based listRoster opens a SECOND transaction when
+ * called from inside a consumer's already-open db.transaction(), deadlocking
+ * the pool under concurrent load.
+ */
+export async function listRosterTx(tx: Writer, tenantId: string, planId: string): Promise<PlanRosterRow[]> {
+  return (tx as typeof db).select().from(manpowerPlanRoster)
+    .where(and(eq(manpowerPlanRoster.tenantId, tenantId), eq(manpowerPlanRoster.planId, planId)));
+}
+
 // ── Requisitions ───────────────────────────────────────────────────
 
 export async function insertRequisition(tx: Writer, row: typeof manpowerRequisitions.$inferInsert): Promise<void> {

@@ -5,7 +5,7 @@
 import type { Queue } from "@civitasone/queue";
 import { pino } from "pino";
 import { and, eq, desc, asc, sql, inArray, isNull, isNotNull, ne, or, gt, lt, gte, lte } from "drizzle-orm";
-import { db, scopedRead } from "../../shared/db.js";
+import { db } from "../../shared/db.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS } from "../../topics.js";
 import { hrmsEmployees } from "../employee/schema.js";
@@ -48,9 +48,14 @@ export function registerF3_deputation_Consumers(queue: Queue): void {
             // managerId) that repatriation later restores, so it must be the
             // employee row as it stands BEFORE the update below.
             const depId = id;
-            const empRows = await scopedRead((rtx) => rtx.select().from(hrmsEmployees)
+            // Read through the caller's already-open tx directly -- this used
+            // to call the module-level scopedRead(...) helper inline, which
+            // opens its OWN transaction from inside this already-open
+            // db.transaction(), the same nested-tx deadlock shape documented
+            // in .claude/skills/16-production-readiness-audit.md section 1.
+            const empRows = await tx.select().from(hrmsEmployees)
               .where(and(eq(hrmsEmployees.id, employeeId), eq(hrmsEmployees.tenantId, p.tenantId)))
-              .limit(1));
+              .limit(1);
             const emp = empRows[0];
             // The route already 404'd on a missing employee and 409'd on an
             // existing active deputation before publishing.

@@ -90,7 +90,7 @@ export function registerF3_manpower_planning_Consumers(queue: Queue): void {
                   if (!approved) return null; // lost the race — no longer pending
 
                   // Persist an auto-allocated roster if the maker did not set one.
-                  const existing = await repo.listRoster(p.tenantId, pathId);
+                  const existing = await repo.listRosterTx(tx, p.tenantId, pathId);
                   if (existing.length === 0 && vac.vacancy > 0) {
                     const alloc = allocateRoster(vac.vacancy);
                     await repo.replaceRoster(tx, p.tenantId, pathId,
