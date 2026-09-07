@@ -16,8 +16,11 @@ export async function listBanks(tenantId: string, limit = 100) {
     .where(eq(questionBanks.tenantId, tenantId)).limit(limit));
 }
 export async function getBank(tenantId: string, id: string) {
-  const rows = await scopedRead((t) => t.select().from(questionBanks)
-    .where(and(eq(questionBanks.id, id), eq(questionBanks.tenantId, tenantId))).limit(1));
+  return scopedRead((t) => getBankTx(t, tenantId, id));
+}
+export async function getBankTx(tx: Writer, tenantId: string, id: string) {
+  const rows = await tx.select().from(questionBanks)
+    .where(and(eq(questionBanks.id, id), eq(questionBanks.tenantId, tenantId))).limit(1);
   return rows[0];
 }
 
@@ -26,8 +29,11 @@ export async function insertQuestion(tx: Writer, row: typeof questions.$inferIns
   await tx.insert(questions).values(row);
 }
 export async function listQuestions(tenantId: string, bankId: string): Promise<QuestionRow[]> {
-  return scopedRead((t) => t.select().from(questions)
-    .where(and(eq(questions.tenantId, tenantId), eq(questions.bankId, bankId))));
+  return scopedRead((t) => listQuestionsTx(t, tenantId, bankId));
+}
+export async function listQuestionsTx(tx: Writer, tenantId: string, bankId: string): Promise<QuestionRow[]> {
+  return tx.select().from(questions)
+    .where(and(eq(questions.tenantId, tenantId), eq(questions.bankId, bankId)));
 }
 
 // ── assessments ───────────────────────────────────────────────────
@@ -35,8 +41,11 @@ export async function insertAssessment(tx: Writer, row: typeof assessments.$infe
   await tx.insert(assessments).values(row);
 }
 export async function getAssessment(tenantId: string, id: string): Promise<AssessmentRow | undefined> {
-  const rows = await scopedRead((t) => t.select().from(assessments)
-    .where(and(eq(assessments.id, id), eq(assessments.tenantId, tenantId))).limit(1));
+  return scopedRead((t) => getAssessmentTx(t, tenantId, id));
+}
+export async function getAssessmentTx(tx: Writer, tenantId: string, id: string): Promise<AssessmentRow | undefined> {
+  const rows = await tx.select().from(assessments)
+    .where(and(eq(assessments.id, id), eq(assessments.tenantId, tenantId))).limit(1);
   return rows[0];
 }
 export async function listAssessments(tenantId: string, limit = 100) {
@@ -77,14 +86,17 @@ export async function updatePassingScore(tx: Writer, tenantId: string, id: strin
 
 // ── attempts ──────────────────────────────────────────────────────
 export async function countAttempts(tenantId: string, assessmentId: string, employeeId: string): Promise<number> {
-  const rows = await scopedRead((t) => t
+  return scopedRead((t) => countAttemptsTx(t, tenantId, assessmentId, employeeId));
+}
+export async function countAttemptsTx(tx: Writer, tenantId: string, assessmentId: string, employeeId: string): Promise<number> {
+  const rows = await tx
     .select({ n: sql<number>`count(*)::int` })
     .from(attempts)
     .where(and(
       eq(attempts.tenantId, tenantId),
       eq(attempts.assessmentId, assessmentId),
       eq(attempts.employeeId, employeeId),
-    )));
+    ));
   return rows[0]?.n ?? 0;
 }
 export async function insertAttempt(tx: Writer, row: typeof attempts.$inferInsert): Promise<AttemptRow> {
@@ -92,8 +104,11 @@ export async function insertAttempt(tx: Writer, row: typeof attempts.$inferInser
   return rows[0]!;
 }
 export async function getAttempt(tenantId: string, id: string): Promise<AttemptRow | undefined> {
-  const rows = await scopedRead((t) => t.select().from(attempts)
-    .where(and(eq(attempts.id, id), eq(attempts.tenantId, tenantId))).limit(1));
+  return scopedRead((t) => getAttemptTx(t, tenantId, id));
+}
+export async function getAttemptTx(tx: Writer, tenantId: string, id: string): Promise<AttemptRow | undefined> {
+  const rows = await tx.select().from(attempts)
+    .where(and(eq(attempts.id, id), eq(attempts.tenantId, tenantId))).limit(1);
   return rows[0];
 }
 /** in_progress → graded. Guarded to in_progress so a resubmit is a no-op. */

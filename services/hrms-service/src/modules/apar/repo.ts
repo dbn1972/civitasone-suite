@@ -7,7 +7,7 @@ import {
   type AparScoreRow, type AparScoreInsert, type AparStageHistoryInsert,
 } from "./schema.js";
 
-export type Writer = Pick<typeof db, "insert" | "update">;
+export type Writer = Pick<typeof db, "insert" | "update" | "select">;
 
 export async function listAppraisals(tenantId: string, limit = 100): Promise<AppraisalRow[]> {
   return scopedRead((tx) => tx.select().from(hrmsAppraisals)
@@ -17,8 +17,11 @@ export async function listAppraisals(tenantId: string, limit = 100): Promise<App
 }
 
 export async function findAppraisal(id: string, tenantId: string): Promise<AppraisalRow | null> {
-  const rows = await scopedRead((tx) => tx.select().from(hrmsAppraisals)
-    .where(and(eq(hrmsAppraisals.id, id), eq(hrmsAppraisals.tenantId, tenantId))).limit(1));
+  return scopedRead((tx) => findAppraisalTx(tx, id, tenantId));
+}
+export async function findAppraisalTx(tx: Writer, id: string, tenantId: string): Promise<AppraisalRow | null> {
+  const rows = await tx.select().from(hrmsAppraisals)
+    .where(and(eq(hrmsAppraisals.id, id), eq(hrmsAppraisals.tenantId, tenantId))).limit(1);
   return rows[0] ?? null;
 }
 
@@ -56,10 +59,13 @@ export async function upsertScore(tx: Writer, row: AparScoreInsert): Promise<voi
 }
 
 export async function listScores(tenantId: string, appraisalId: string, limit = 500): Promise<AparScoreRow[]> {
-  return scopedRead((tx) => tx.select().from(hrmsAparScores)
+  return scopedRead((tx) => listScoresTx(tx, tenantId, appraisalId, limit));
+}
+export async function listScoresTx(tx: Writer, tenantId: string, appraisalId: string, limit = 500): Promise<AparScoreRow[]> {
+  return tx.select().from(hrmsAparScores)
     .where(and(eq(hrmsAparScores.tenantId, tenantId), eq(hrmsAparScores.appraisalId, appraisalId)))
     .orderBy(asc(hrmsAparScores.attribute))
-    .limit(limit));
+    .limit(limit);
 }
 
 export async function appendHistory(tx: Writer, row: AparStageHistoryInsert): Promise<void> {

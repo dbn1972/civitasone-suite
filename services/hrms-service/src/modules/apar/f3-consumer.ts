@@ -97,8 +97,8 @@ export function registerF3_apar_Consumers(queue: Queue): void {
     const id = (p.id as string) || (params.id as string);
     /** The appraisal a stage-transition case acts on (cases 1..6). */
     const appraisalId = String(params.id ?? "");
-    const mustAppraisal = async (): Promise<AppraisalRow> => {
-      const a = await repo.findAppraisal(appraisalId, p.tenantId);
+    const mustAppraisal = async (tx: repo.Writer): Promise<AppraisalRow> => {
+      const a = await repo.findAppraisalTx(tx, appraisalId, p.tenantId);
       if (!a) throw new HttpError(404, "NOT_FOUND", "appraisal not found");
       return a;
     };
@@ -125,7 +125,7 @@ export function registerF3_apar_Consumers(queue: Queue): void {
           }
           case "apar_routes__1": {
             // POST /v1/hrms/apar/:id/self-appraisal — stage self_pending -> reporting_officer
-            const a = await mustAppraisal();
+            const a = await mustAppraisal(tx);
             const override = stageOverride(a, msg.actorId);
             await repo.updateAppraisal(tx, appraisalId, {
                     selfAppraisal: body.selfAppraisal, status: "reporting_officer", updatedBy: msg.actorId,
@@ -142,7 +142,7 @@ export function registerF3_apar_Consumers(queue: Queue): void {
             // POST /v1/hrms/apar/:id/reporting — stage reporting_officer -> reviewing_officer.
             // `weight` falls back to the route schema's Zod `.default(1)` because
             // `body` here is the raw pre-Zod request payload.
-            const a = await mustAppraisal();
+            const a = await mustAppraisal(tx);
             const override = stageOverride(a, msg.actorId);
             for (const s of body.scores) {
                     await repo.upsertScore(tx, {
@@ -165,10 +165,10 @@ export function registerF3_apar_Consumers(queue: Queue): void {
           }
           case "apar_routes__3": {
             // POST /v1/hrms/apar/:id/reviewing — stage reviewing_officer -> accepting_authority
-            const a = await mustAppraisal();
+            const a = await mustAppraisal(tx);
             const override = stageOverride(a, msg.actorId);
             if (body.decision === "vary" && body.variations) {
-                    const existing = await repo.listScores(p.tenantId, appraisalId);
+                    const existing = await repo.listScoresTx(tx, p.tenantId, appraisalId);
                     const byAttr = new Map(existing.map((e) => [e.attribute, e]));
                     for (const v of body.variations) {
                       const row = byAttr.get(v.attribute);
@@ -196,9 +196,9 @@ export function registerF3_apar_Consumers(queue: Queue): void {
             // The grade is server-computed, exactly as the route did: read the
             // persisted attribute scores (already including any stage-3
             // variations) and run the same engine.
-            const a = await mustAppraisal();
+            const a = await mustAppraisal(tx);
             const override = stageOverride(a, msg.actorId);
-            const scoreRows = await repo.listScores(p.tenantId, appraisalId);
+            const scoreRows = await repo.listScoresTx(tx, p.tenantId, appraisalId);
             if (scoreRows.length === 0) throw new HttpError(409, "NO_SCORES", "no attribute scores to grade");
             const scores: ScoreInput[] = scoreRows.map((s) => ({
               attribute: s.attribute, weight: Number(s.weight), score: s.score,
@@ -222,7 +222,7 @@ export function registerF3_apar_Consumers(queue: Queue): void {
           }
           case "apar_routes__5": {
             // POST /v1/hrms/apar/:id/representation — stage disclosed -> representation
-            const a = await mustAppraisal();
+            const a = await mustAppraisal(tx);
             const override = stageOverride(a, msg.actorId);
             await repo.updateAppraisal(tx, appraisalId, {
                     representation: body.representation, status: "representation", updatedBy: msg.actorId,
@@ -239,7 +239,7 @@ export function registerF3_apar_Consumers(queue: Queue): void {
             // POST /v1/hrms/apar/:id/finalise — HR closes from disclosed or
             // representation; the route restricts this to HR_ROLES, so the audited
             // actor role stays "hr" and there is no stage-owner override concept.
-            const a = await mustAppraisal();
+            const a = await mustAppraisal(tx);
             await repo.updateAppraisal(tx, appraisalId, { status: "finalised", updatedBy: msg.actorId }, a.version);
                   await repo.appendHistory(tx, {
                     tenantId: p.tenantId, appraisalId, fromStage: a.status, toStage: "finalised",

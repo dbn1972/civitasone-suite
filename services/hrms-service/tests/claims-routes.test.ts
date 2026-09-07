@@ -94,13 +94,22 @@ vi.mock("../src/shared/infra.js", async () => {
 vi.mock("../src/modules/claims/repo.js", () => ({
   insertLtc: (...a: unknown[]) => H.insertLtc(...a),
   findLtc: (...a: unknown[]) => H.findLtc(...a),
+  // Nested-tx-deadlock fix (skill section 1): the consumer now calls the
+  // Tx-suffixed siblings (reading through the caller's already-open `tx`)
+  // instead of the scopedRead-based originals above. Forward each one to
+  // its non-Tx counterpart, dropping the leading `tx` arg, so existing
+  // `H.findLtc.mockResolvedValue(...)`-style test setup keeps working
+  // unchanged (no test here asserts on the exact call args of these three).
+  findLtcTx: (_tx: unknown, ...a: unknown[]) => H.findLtc(...a),
   listLtcByEmployee: (...a: unknown[]) => H.listLtcByEmployee(...a),
   updateLtc: (...a: unknown[]) => H.updateLtc(...a),
   insertCea: (...a: unknown[]) => H.insertCea(...a),
   findCea: (...a: unknown[]) => H.findCea(...a),
+  findCeaTx: (_tx: unknown, ...a: unknown[]) => H.findCea(...a),
   listCeaByEmployee: (...a: unknown[]) => H.listCeaByEmployee(...a),
   updateCea: (...a: unknown[]) => H.updateCea(...a),
   ceaCommittedForChild: (...a: unknown[]) => H.ceaCommittedForChild(...a),
+  ceaCommittedForChildTx: (_tx: unknown, ...a: unknown[]) => H.ceaCommittedForChild(...a),
 }));
 
 import { buildApp } from "../src/app.js";

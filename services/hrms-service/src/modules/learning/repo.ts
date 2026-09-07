@@ -87,8 +87,11 @@ export async function getEnrollment(tenantId: string, courseId: string, employee
   return rows[0];
 }
 export async function getEnrollmentById(tenantId: string, id: string): Promise<EnrollmentRow | undefined> {
-  const rows = await scopedRead((t) => t.select().from(enrollments)
-    .where(and(eq(enrollments.id, id), eq(enrollments.tenantId, tenantId))).limit(1));
+  return scopedRead((t) => getEnrollmentByIdTx(t, tenantId, id));
+}
+export async function getEnrollmentByIdTx(tx: Writer, tenantId: string, id: string): Promise<EnrollmentRow | undefined> {
+  const rows = await tx.select().from(enrollments)
+    .where(and(eq(enrollments.id, id), eq(enrollments.tenantId, tenantId))).limit(1);
   return rows[0];
 }
 export async function insertEnrollment(tx: Writer, row: typeof enrollments.$inferInsert): Promise<EnrollmentRow | null> {

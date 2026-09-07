@@ -43,7 +43,7 @@ export function registerF3_claims_Consumers(queue: Queue): void {
             // `c.version` is also the optimistic-concurrency token updateLtc
             // requires, so it must come from a live read, not from the payload.
             const claimId = String(params.claimId ?? "");
-            const c = await repo.findLtc(p.tenantId, claimId);
+            const c = await repo.findLtcTx(tx, p.tenantId, claimId);
             if (!c) throw new Error(`LTC claim ${claimId} not found for tenant ${p.tenantId}`);
             // Ceiling enforcement, identical to routes.ts: approved fare cannot
             // exceed the entitlement.
@@ -60,7 +60,7 @@ export function registerF3_claims_Consumers(queue: Queue): void {
             // Same reconstruction as __0, for the LTC reject route: `claimId`
             // and the fetched claim `c` (needed for c.version) were undefined.
             const claimId = String(params.claimId ?? "");
-            const c = await repo.findLtc(p.tenantId, claimId);
+            const c = await repo.findLtcTx(tx, p.tenantId, claimId);
             if (!c) throw new Error(`LTC claim ${claimId} not found for tenant ${p.tenantId}`);
             await repo.updateLtc(tx, p.tenantId, claimId, {
                     status: "rejected", decidedAt: new Date(), decidedBy: msg.actorId,
@@ -75,10 +75,10 @@ export function registerF3_claims_Consumers(queue: Queue): void {
             // for the same child+kind+year have already committed — recomputed
             // via repo.ceaCommittedForChild exactly as routes.ts does.
             const claimId = String(params.claimId ?? "");
-            const c = await repo.findCea(p.tenantId, claimId);
+            const c = await repo.findCeaTx(tx, p.tenantId, claimId);
             if (!c) throw new Error(`CEA claim ${claimId} not found for tenant ${p.tenantId}`);
-            const otherCommitted = await repo.ceaCommittedForChild(
-              p.tenantId, c.employeeId, c.academicYear, c.childRef, c.claimKind, c.id);
+            const otherCommitted = await repo.ceaCommittedForChildTx(
+              tx, p.tenantId, c.employeeId, c.academicYear, c.childRef, c.claimKind, c.id);
             const remaining = c.annualCapMinor - otherCommitted;
             const approved = remaining <= 0n ? 0n : bmin(c.claimedAmountMinor, remaining);
             await repo.updateCea(tx, p.tenantId, claimId, {
@@ -92,7 +92,7 @@ export function registerF3_claims_Consumers(queue: Queue): void {
           case "claims_routes__3": {
             // Same reconstruction as __0, for the CEA reject route.
             const claimId = String(params.claimId ?? "");
-            const c = await repo.findCea(p.tenantId, claimId);
+            const c = await repo.findCeaTx(tx, p.tenantId, claimId);
             if (!c) throw new Error(`CEA claim ${claimId} not found for tenant ${p.tenantId}`);
             await repo.updateCea(tx, p.tenantId, claimId, {
                     status: "rejected", decidedAt: new Date(), decidedBy: msg.actorId,
