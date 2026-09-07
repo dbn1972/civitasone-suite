@@ -74,6 +74,11 @@ vi.mock("../src/modules/reports/routes.js", () => ({
 // ─── Anomaly mocks ──────────────────────────────────────────────────────────
 vi.mock("../src/modules/anomaly/queries.js", () => ({
   isTransactionDismissed: vi.fn(async () => false),
+  // mlAnomalyDetected runs inside its own db.transaction and calls the
+  // tx-scoped variant directly (tenantTransaction re-audit fix) -- without
+  // this the mocked module has no such export and the handler throws
+  // inside the transaction.
+  isTransactionDismissedTx: vi.fn(async () => false),
 }));
 vi.mock("../src/modules/anomaly/commands.js", () => ({
   createAnomalyFlag: vi.fn(async () => undefined),
@@ -95,6 +100,12 @@ vi.mock("../src/modules/anomaly/domain.js", () => ({
 vi.mock("../src/modules/instruments/repo.js", () => ({
   insertInstrument: vi.fn(async () => undefined),
   transition: vi.fn(async () => true),
+  // Both instrument consumer handlers run inside their own db.transaction
+  // and call the tx-scoped variants directly (tenantTransaction re-audit
+  // fix) -- without these the mocked module has no such exports and the
+  // handlers throw inside the transaction.
+  insertInstrumentTx: vi.fn(async () => undefined),
+  transitionTx: vi.fn(async () => true),
 }));
 
 // ─── Reappropriation eOffice mocks ──────────────────────────────────────────
@@ -320,8 +331,11 @@ describe("Anomaly consumers — coverage", () => {
   });
 
   it("ml.prediction.anomaly_detected skips dismissed transaction", async () => {
-    const { isTransactionDismissed } = await import("../src/modules/anomaly/queries.js");
-    (isTransactionDismissed as any).mockResolvedValueOnce(true);
+    // mlAnomalyDetected runs inside its own db.transaction and checks the
+    // Tx-scoped variant (tenantTransaction re-audit fix) -- mocking the
+    // non-Tx isTransactionDismissed here has no effect on the handler.
+    const { isTransactionDismissedTx } = await import("../src/modules/anomaly/queries.js");
+    (isTransactionDismissedTx as any).mockResolvedValueOnce(true);
 
     const q = new MemoryQueue();
     registerAnomalyConsumers(q);
@@ -334,8 +348,8 @@ describe("Anomaly consumers — coverage", () => {
     }));
     await settle();
 
-    const { createAnomalyFlag } = await import("../src/modules/anomaly/commands.js");
-    expect(createAnomalyFlag).not.toHaveBeenCalled();
+    const { createAnomalyFlagTx } = await import("../src/modules/anomaly/commands.js");
+    expect(createAnomalyFlagTx).not.toHaveBeenCalled();
     await q.stop();
   });
 

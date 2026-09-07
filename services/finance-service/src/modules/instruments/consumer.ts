@@ -19,7 +19,7 @@ export function registerInstrumentsConsumers(queue: Queue): void {
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       const issueDate = p.issueDate ?? new Date().toISOString().slice(0, 10);
-      await repo.insertInstrument({
+      await repo.insertInstrumentTx(tx, {
         tenantId: p.tenantId,
         instrumentType: p.instrumentType,
         instrumentNo: p.instrumentNo,
@@ -75,8 +75,8 @@ export function registerInstrumentsConsumers(queue: Queue): void {
       const ts = tsField[p.action];
       if (!from || !to || !ts) throw new Error(`UNKNOWN_ACTION: ${p.action}`);
       const extras = p.action === "bounce" && p.reason ? { bounceReason: p.reason } : {};
-      const updated = await repo.transition(
-        p.tenantId, p.id, from, to,
+      const updated = await repo.transitionTx(
+        tx, p.tenantId, p.id, from, to,
         extras, ts, msg.actorId,
       );
       if (!updated) throw new Error(`ILLEGAL_TRANSITION: instrument ${p.id} cannot ${p.action}`);

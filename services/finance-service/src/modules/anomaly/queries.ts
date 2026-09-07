@@ -6,7 +6,9 @@
  * Requirements: 11.6
  */
 import { eq, and, desc, sql } from "drizzle-orm";
-import { scopedRead } from "../../shared/db.js";
+import { db, scopedRead } from "../../shared/db.js";
+
+type Writer = Pick<typeof db, "select">;
 import { financeAnomalies } from "./schema.js";
 import type { AnomalyStatus } from "./domain.js";
 
@@ -100,19 +102,26 @@ export async function isTransactionDismissed(
   tenantId: string,
   transactionId: string
 ): Promise<boolean> {
-  const rows = await scopedRead((tx) =>
-    tx
-      .select({ id: financeAnomalies.id })
-      .from(financeAnomalies)
-      .where(
-        and(
-          eq(financeAnomalies.tenantId, tenantId),
-          eq(financeAnomalies.transactionId, transactionId),
-          eq(financeAnomalies.status, "dismissed")
-        )
+  return scopedRead((tx) => isTransactionDismissedTx(tx, tenantId, transactionId));
+}
+
+/** Tx-scoped twin of isTransactionDismissed for callers already inside an open transaction. */
+export async function isTransactionDismissedTx(
+  tx: Writer,
+  tenantId: string,
+  transactionId: string
+): Promise<boolean> {
+  const rows = await tx
+    .select({ id: financeAnomalies.id })
+    .from(financeAnomalies)
+    .where(
+      and(
+        eq(financeAnomalies.tenantId, tenantId),
+        eq(financeAnomalies.transactionId, transactionId),
+        eq(financeAnomalies.status, "dismissed")
       )
-      .limit(1)
-  );
+    )
+    .limit(1);
 
   return rows.length > 0;
 }

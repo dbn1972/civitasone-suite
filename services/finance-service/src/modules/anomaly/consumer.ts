@@ -15,7 +15,7 @@ import { randomUUID } from "node:crypto";
 import { db } from "../../shared/db.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { CONSUMED_EVENTS } from "../../topics.js";
-import { isTransactionDismissed } from "./queries.js";
+import { isTransactionDismissed, isTransactionDismissedTx } from "./queries.js";
 import { createAnomalyFlag, createAnomalyFlagTx } from "./commands.js";
 import {
   scoreTransactionZScore,
@@ -95,7 +95,7 @@ export function registerAnomalyConsumers(queue: Queue): void {
       if (!(await markProcessed(tx, msg.messageId))) return;
 
       // 11.7: Check if this transaction was previously dismissed — prevent re-flagging
-      const dismissed = await isTransactionDismissed(msg.tenantId, p.entityId);
+      const dismissed = await isTransactionDismissedTx(tx, msg.tenantId, p.entityId);
       if (dismissed) {
         log.info(
           { tenantId: msg.tenantId, transactionId: p.entityId, correlationId },
