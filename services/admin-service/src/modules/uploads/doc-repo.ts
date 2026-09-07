@@ -45,15 +45,20 @@ export async function findTypeTx(tx: Writer, tenantId: string, id: string): Prom
 export async function listTypes(
   tenantId: string, limit: number, offset: number, status?: string,
 ): Promise<{ rows: DocumentTypeRow[]; total: number }> {
+  return scopedRead((tx) => listTypesTx(tx, tenantId, limit, offset, status));
+}
+
+/** Tx-scoped twin of listTypes for callers already inside an open transaction. */
+export async function listTypesTx(
+  tx: Writer, tenantId: string, limit: number, offset: number, status?: string,
+): Promise<{ rows: DocumentTypeRow[]; total: number }> {
   const clauses = [eq(documentTypes.tenantId, tenantId)];
   if (status !== undefined) clauses.push(eq(documentTypes.status, status));
   const where = and(...clauses);
-  return scopedRead(async (tx) => {
-    const rows = await tx.select().from(documentTypes).where(where)
-      .orderBy(asc(documentTypes.code)).limit(limit).offset(offset);
-    const counted = await tx.select({ n: sql<number>`count(*)::int` }).from(documentTypes).where(where);
-    return { rows, total: counted[0]?.n ?? 0 };
-  });
+  const rows = await tx.select().from(documentTypes).where(where)
+    .orderBy(asc(documentTypes.code)).limit(limit).offset(offset);
+  const counted = await tx.select({ n: sql<number>`count(*)::int` }).from(documentTypes).where(where);
+  return { rows, total: counted[0]?.n ?? 0 };
 }
 
 export async function typesByCodes(tenantId: string, codes: readonly string[]): Promise<DocumentTypeRow[]> {

@@ -127,7 +127,7 @@ export async function apply_uploads_4(ctx: any, req: Req): Promise<void> {
   await db.transaction(async (tx) => {
     const w = tx as repo.Writer;
     const now = new Date();
-    const { rows: typeRows } = await repo.listTypes(ctx.tenantId, 200, 0, "active");
+    const { rows: typeRows } = await repo.listTypesTx(w, ctx.tenantId, 200, 0, "active");
     const widestWarnDays = typeRows.reduce((m, t) => (t.expiryWarnDays > m ? t.expiryWarnDays : m), 30);
     const horizon = new Date(now.getTime() + widestWarnDays * 24 * 60 * 60_000);
     const warnDays: Record<string, number> = {};
