@@ -39,7 +39,7 @@ export function registerQuorumConsumers(queue: Queue): void {
     try {
       await db.transaction(async (tx) => {
         if (!(await markProcessed(tx, msg.messageId))) return;
-        await repo.castVote(p.tenantId, p.id, msg.actorId, p.vote, p.reason, msg.actorId, msg.correlationId);
+        await repo.castVoteTx(tx, p.tenantId, p.id, msg.actorId, p.vote, p.reason, msg.actorId, msg.correlationId);
         await enqueue(tx, { topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { service: "workflow-service", action: "cast_vote", resourceType: "committee_vote", resourceId: p.id, outcome: "success" } });
       });
     } catch (err) { log.error({ err, messageId: msg.messageId }, "castCommitteeVote failed"); throw err; }

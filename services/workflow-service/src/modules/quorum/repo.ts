@@ -86,58 +86,70 @@ export async function castVote(
   actorId: string,
   correlationId: string,
 ): Promise<VoteResult | { notFound: true }> {
-  return db.transaction(async (tx) => {
-    const locked = await tx.select().from(committeeDecisions)
-      .where(and(eq(committeeDecisions.id, decisionId), eq(committeeDecisions.tenantId, tenantId)))
-      .for("update").limit(1);
-    const decision = locked[0];
-    if (!decision) return { notFound: true as const };
+  return db.transaction((tx) => castVoteTx(tx, tenantId, decisionId, voterId, vote, reason, actorId, correlationId));
+}
 
-    // one-vote-per-voter idempotency
-    const existing = await tx.select().from(committeeVotes)
-      .where(and(eq(committeeVotes.decisionId, decisionId), eq(committeeVotes.voterId, voterId))).limit(1);
-    let duplicate = false;
-    if (existing[0]) {
-      duplicate = true;
-    } else if (decision.status === "open") {
-      await tx.insert(committeeVotes).values({ tenantId, decisionId, voterId, vote, reason });
-    }
+/** Tx-scoped twin of castVote for callers already inside an open transaction. */
+export async function castVoteTx(
+  tx: Writer,
+  tenantId: string,
+  decisionId: string,
+  voterId: string,
+  vote: VoteChoice,
+  reason: string | null,
+  actorId: string,
+  correlationId: string,
+): Promise<VoteResult | { notFound: true }> {
+  const locked = await tx.select().from(committeeDecisions)
+    .where(and(eq(committeeDecisions.id, decisionId), eq(committeeDecisions.tenantId, tenantId)))
+    .for("update").limit(1);
+  const decision = locked[0];
+  if (!decision) return { notFound: true as const };
 
-    const votes = await tx.select().from(committeeVotes)
-      .where(eq(committeeVotes.decisionId, decisionId));
-    const tally = tallyQuorum({
-      rule: decision.rule as QuorumRule,
-      totalMembers: decision.totalMembers,
-      threshold: decision.threshold,
-      votes: votes.map((v) => v.vote as VoteChoice),
-    });
+  // one-vote-per-voter idempotency
+  const existing = await tx.select().from(committeeVotes)
+    .where(and(eq(committeeVotes.decisionId, decisionId), eq(committeeVotes.voterId, voterId))).limit(1);
+  let duplicate = false;
+  if (existing[0]) {
+    duplicate = true;
+  } else if (decision.status === "open") {
+    await tx.insert(committeeVotes).values({ tenantId, decisionId, voterId, vote, reason });
+  }
 
-    let current = decision;
-    if (tally.decided && decision.status === "open") {
-      const upd = await tx.update(committeeDecisions)
-        .set({ status: "decided", outcome: tally.outcome, decidedAt: new Date(), updatedAt: new Date() })
-        .where(and(eq(committeeDecisions.id, decisionId), eq(committeeDecisions.status, "open")))
-        .returning();
-      current = upd[0] ?? decision;
-      await enqueue(tx as Parameters<typeof enqueue>[0], {
-        topic: EVENTS.committeeDecided,
-        eventType: EVENTS.committeeDecided,
-        tenantId,
-        actorId,
-        correlationId: correlationId || randomUUID(),
-        payload: {
-          decisionId,
-          instanceId: decision.instanceId,
-          taskId: decision.taskId,
-          nodeKey: decision.nodeKey,
-          rule: decision.rule,
-          outcome: tally.outcome,
-          approvals: tally.approvals,
-          rejections: tally.rejections,
-          totalMembers: decision.totalMembers,
-        },
-      });
-    }
-    return { tally, decision: current, duplicate };
+  const votes = await tx.select().from(committeeVotes)
+    .where(eq(committeeVotes.decisionId, decisionId));
+  const tally = tallyQuorum({
+    rule: decision.rule as QuorumRule,
+    totalMembers: decision.totalMembers,
+    threshold: decision.threshold,
+    votes: votes.map((v) => v.vote as VoteChoice),
   });
+
+  let current = decision;
+  if (tally.decided && decision.status === "open") {
+    const upd = await tx.update(committeeDecisions)
+      .set({ status: "decided", outcome: tally.outcome, decidedAt: new Date(), updatedAt: new Date() })
+      .where(and(eq(committeeDecisions.id, decisionId), eq(committeeDecisions.status, "open")))
+      .returning();
+    current = upd[0] ?? decision;
+    await enqueue(tx as Parameters<typeof enqueue>[0], {
+      topic: EVENTS.committeeDecided,
+      eventType: EVENTS.committeeDecided,
+      tenantId,
+      actorId,
+      correlationId: correlationId || randomUUID(),
+      payload: {
+        decisionId,
+        instanceId: decision.instanceId,
+        taskId: decision.taskId,
+        nodeKey: decision.nodeKey,
+        rule: decision.rule,
+        outcome: tally.outcome,
+        approvals: tally.approvals,
+        rejections: tally.rejections,
+        totalMembers: decision.totalMembers,
+      },
+    });
+  }
+  return { tally, decision: current, duplicate };
 }

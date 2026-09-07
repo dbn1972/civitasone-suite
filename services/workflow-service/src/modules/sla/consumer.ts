@@ -50,7 +50,7 @@ export function registerSlaConsumers(queue: Queue): void {
     try {
       await db.transaction(async (tx) => {
         if (!(await markProcessed(tx, msg.messageId))) return;
-        const resumed = await repo.resumeTask(p.tenantId, p.id);
+        const resumed = await repo.resumeTaskTx(tx, p.tenantId, p.id);
         // resumeTask returns null when there was no open pause to resume
         // (e.g. resume replayed, or resume raced ahead of pause). Same
         // false-success problem as pauseTaskSla above.
