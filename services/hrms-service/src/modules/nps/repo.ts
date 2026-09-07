@@ -12,10 +12,14 @@ export type LockingTx = Writer & Pick<typeof db, "execute">;
 /** Balance triple carried on every contribution row (employee leg + employer leg + total). */
 export interface Balances { emp: bigint; er: bigint; total: bigint }
 
-export async function findAccountByEmployee(tenantId: string, employeeId: string): Promise<NpsAccountRow | null> {
-  const rows = await scopedRead((tx) => tx.select().from(hrmsNpsAccounts)
-    .where(and(eq(hrmsNpsAccounts.tenantId, tenantId), eq(hrmsNpsAccounts.employeeId, employeeId))).limit(1));
+export async function findAccountByEmployeeTx(tx: Writer, tenantId: string, employeeId: string): Promise<NpsAccountRow | null> {
+  const rows = await tx.select().from(hrmsNpsAccounts)
+    .where(and(eq(hrmsNpsAccounts.tenantId, tenantId), eq(hrmsNpsAccounts.employeeId, employeeId))).limit(1);
   return rows[0] ?? null;
+}
+
+export async function findAccountByEmployee(tenantId: string, employeeId: string): Promise<NpsAccountRow | null> {
+  return db.transaction((tx) => findAccountByEmployeeTx(tx, tenantId, employeeId));
 }
 
 /**

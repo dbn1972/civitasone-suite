@@ -32,7 +32,7 @@ const { mockTx, R } = vi.hoisted(() => ({
     insertLedger: vi.fn(async (..._a: any[]): Promise<any> => undefined),
     lockedBalance: vi.fn(async (..._a: any[]): Promise<any> => 0n),
     bumpAccountVersion: vi.fn(async (..._a: any[]): Promise<any> => undefined),
-    findAccountByEmployee: vi.fn((..._a: any[]): any => undefined),
+    findAccountByEmployeeTx: vi.fn((..._a: any[]): any => undefined),
   },
 }));
 
@@ -48,7 +48,7 @@ vi.mock("./repo.js", () => ({
   insertLedger: (...a: unknown[]) => R.insertLedger(...a),
   lockedBalance: (...a: unknown[]) => R.lockedBalance(...a),
   bumpAccountVersion: (...a: unknown[]) => R.bumpAccountVersion(...a),
-  findAccountByEmployee: (...a: unknown[]) => R.findAccountByEmployee(...a),
+  findAccountByEmployeeTx: (...a: unknown[]) => R.findAccountByEmployeeTx(...a),
 }));
 
 import { registerF3_gpf_Consumers } from "./f3-consumer.js";
@@ -88,7 +88,7 @@ async function run(payload: Record<string, unknown>): Promise<MemoryQueue> {
 beforeEach(() => {
   vi.clearAllMocks();
   R.lockedBalance.mockResolvedValue(0n);
-  R.findAccountByEmployee.mockResolvedValue(account());
+  R.findAccountByEmployeeTx.mockResolvedValue(account());
 });
 
 describe("gpf_routes__0 (open GPF account)", () => {
@@ -135,7 +135,7 @@ describe("gpf_routes__2 (interest accrual)", () => {
     const ledgerId = randomUUID();
     const q = await run({ op: "gpf_routes__2", id: ledgerId, params: { id: EMP }, body: { months: 12 } });
     expect(q.dlq).toEqual([]);
-    expect(R.findAccountByEmployee).toHaveBeenCalledWith(TENANT, EMP);
+    expect(R.findAccountByEmployeeTx).toHaveBeenCalledWith(mockTx, TENANT, EMP);
     expect(R.insertLedger).toHaveBeenCalledOnce();
     // 100000 paise * 7.10% * 12/12 = 7100 paise
     expect(R.insertLedger.mock.calls[0]![1]).toMatchObject({
@@ -166,7 +166,7 @@ describe("gpf_routes__2 (interest accrual)", () => {
   });
 
   it("fails loudly rather than writing when the employee has no GPF account", async () => {
-    R.findAccountByEmployee.mockResolvedValue(null);
+    R.findAccountByEmployeeTx.mockResolvedValue(null);
     const q = await run({ op: "gpf_routes__2", id: randomUUID(), params: { id: EMP }, body: { months: 12 } });
     expect(R.insertLedger).not.toHaveBeenCalled();
     expect(q.dlq).toHaveLength(1);
@@ -196,7 +196,7 @@ describe("gpf_routes__1 (subscription / advance / withdrawal / refund)", () => {
       body: { amountMinor: 5000 }, entryType, sign,
     });
     expect(q.dlq).toEqual([]);
-    expect(R.findAccountByEmployee).toHaveBeenCalledWith(TENANT, EMP);
+    expect(R.findAccountByEmployeeTx).toHaveBeenCalledWith(mockTx, TENANT, EMP);
     expect(R.insertLedger).toHaveBeenCalledOnce();
     const expectedDelta = sign === 1 ? 5000n : -5000n;
     const expectedBalance = 100000n + expectedDelta;
@@ -269,7 +269,7 @@ describe("gpf_routes__1 (subscription / advance / withdrawal / refund)", () => {
   });
 
   it("fails loudly rather than writing when the employee has no GPF account", async () => {
-    R.findAccountByEmployee.mockResolvedValue(null);
+    R.findAccountByEmployeeTx.mockResolvedValue(null);
     const q = await run({
       op: "gpf_routes__1", id: randomUUID(), params: { id: EMP },
       body: { amountMinor: 5000 }, entryType: "advance", sign: -1,

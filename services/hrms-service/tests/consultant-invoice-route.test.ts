@@ -47,6 +47,7 @@ vi.mock("../src/modules/consultant-invoice/repo.js", async (io) => ({
   ...(await io<Record<string, unknown>>()),
   insertInvoice: (...a: unknown[]) => H.insertInvoiceMock(...a),
   findInvoice: (...a: unknown[]) => H.findInvoiceMock(...a),
+  findInvoiceTx: (...a: unknown[]) => H.findInvoiceMock(...a.slice(1)),
   findInvoiceByNumber: (...a: unknown[]) => H.findByNumberMock(...a),
   updateInvoice: (...a: unknown[]) => H.updateInvoiceMock(...a),
   ytdApprovedGross: (...a: unknown[]) => H.ytdMock(...a),

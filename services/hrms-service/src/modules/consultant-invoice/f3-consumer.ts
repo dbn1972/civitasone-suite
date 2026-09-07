@@ -91,7 +91,7 @@ export function registerF3_consultant_invoice_Consumers(queue: Queue): void {
           case "consultant_invoice_routes__1": {
             // Restored: `inv` — read for its optimistic-lock version.
             const invId = (params.invId as string) || id;
-            const inv = await repo.findInvoice(p.tenantId, invId);
+            const inv = await repo.findInvoiceTx(tx, p.tenantId, invId);
             if (!inv) throw new HttpError(404, "NOT_FOUND", "consultant invoice not found");
             await repo.updateInvoice(tx, p.tenantId, invId, {
                     status: "verified", verifiedBy: msg.actorId, verifiedAt: new Date(), updatedBy: msg.actorId,
@@ -104,7 +104,7 @@ export function registerF3_consultant_invoice_Consumers(queue: Queue): void {
             // submitted rates; omitted => keep what was submitted. This is the
             // step that actually withholds GST + 194J TDS.
             const invId = (params.invId as string) || id;
-            const inv = await repo.findInvoice(p.tenantId, invId);
+            const inv = await repo.findInvoiceTx(tx, p.tenantId, invId);
             if (!inv) throw new HttpError(404, "NOT_FOUND", "consultant invoice not found");
             const gstRateBps = body.gstRateBps ?? inv.gstRateBps;
             const tdsRateBps = body.tdsRateBps ?? inv.tdsRateBps;
@@ -143,7 +143,7 @@ export function registerF3_consultant_invoice_Consumers(queue: Queue): void {
           case "consultant_invoice_routes__3": {
             // Restored: `inv` — read for its optimistic-lock version.
             const invId = (params.invId as string) || id;
-            const inv = await repo.findInvoice(p.tenantId, invId);
+            const inv = await repo.findInvoiceTx(tx, p.tenantId, invId);
             if (!inv) throw new HttpError(404, "NOT_FOUND", "consultant invoice not found");
             await repo.updateInvoice(tx, p.tenantId, invId, {
                     status: "rejected",
@@ -156,7 +156,7 @@ export function registerF3_consultant_invoice_Consumers(queue: Queue): void {
             // Restored: `inv` — read for its version AND for the paid-event
             // payload (invoice no + the net payable settled at approval).
             const invId = (params.invId as string) || id;
-            const inv = await repo.findInvoice(p.tenantId, invId);
+            const inv = await repo.findInvoiceTx(tx, p.tenantId, invId);
             if (!inv) throw new HttpError(404, "NOT_FOUND", "consultant invoice not found");
             await repo.updateInvoice(tx, p.tenantId, invId, {
                     status: "paid", paymentRef: body.paymentRef, paidAt: new Date(), updatedBy: msg.actorId,

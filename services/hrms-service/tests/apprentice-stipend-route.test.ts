@@ -48,10 +48,12 @@ vi.mock("../src/modules/apprentice-stipend/repo.js", async (io) => ({
   ...(await io<Record<string, unknown>>()),
   insertApprenticeship: (...a: unknown[]) => H.insertApprMock(...a),
   findApprenticeship: (...a: unknown[]) => H.findApprMock(...a),
+  findApprenticeshipTx: (...a: unknown[]) => H.findApprMock(...a.slice(1)),
   updateApprenticeship: async () => undefined,
   listApprenticeships: async () => [],
   insertStipend: (...a: unknown[]) => H.insertStipendMock(...a),
   findStipend: (...a: unknown[]) => H.findStipendMock(...a),
+  findStipendTx: (...a: unknown[]) => H.findStipendMock(...a.slice(1)),
   // Without this override, findStipendByMonth (the route's synchronous
   // duplicate pre-check — see apprentice-stipend/routes.ts) falls through to
   // the REAL repo.js implementation via the `...(await io(...))` spread

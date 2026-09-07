@@ -14,10 +14,14 @@ export async function insertApprenticeship(tx: Writer, row: ApprenticeshipInsert
   await tx.insert(hrmsApprenticeships).values(row);
 }
 
-export async function findApprenticeship(tenantId: string, id: string): Promise<ApprenticeshipRow | null> {
-  const rows = await scopedRead((tx) => tx.select().from(hrmsApprenticeships)
-    .where(and(eq(hrmsApprenticeships.tenantId, tenantId), eq(hrmsApprenticeships.id, id))).limit(1));
+export async function findApprenticeshipTx(tx: Writer, tenantId: string, id: string): Promise<ApprenticeshipRow | null> {
+  const rows = await tx.select().from(hrmsApprenticeships)
+    .where(and(eq(hrmsApprenticeships.tenantId, tenantId), eq(hrmsApprenticeships.id, id))).limit(1);
   return rows[0] ?? null;
+}
+
+export async function findApprenticeship(tenantId: string, id: string): Promise<ApprenticeshipRow | null> {
+  return db.transaction((tx) => findApprenticeshipTx(tx, tenantId, id));
 }
 
 export async function listApprenticeships(tenantId: string, limit = 200): Promise<ApprenticeshipRow[]> {
@@ -42,10 +46,14 @@ export async function insertStipend(tx: Writer, row: StipendInsert): Promise<voi
   await tx.insert(hrmsApprenticeStipends).values(row);
 }
 
-export async function findStipend(tenantId: string, id: string): Promise<StipendRow | null> {
-  const rows = await scopedRead((tx) => tx.select().from(hrmsApprenticeStipends)
-    .where(and(eq(hrmsApprenticeStipends.tenantId, tenantId), eq(hrmsApprenticeStipends.id, id))).limit(1));
+export async function findStipendTx(tx: Writer, tenantId: string, id: string): Promise<StipendRow | null> {
+  const rows = await tx.select().from(hrmsApprenticeStipends)
+    .where(and(eq(hrmsApprenticeStipends.tenantId, tenantId), eq(hrmsApprenticeStipends.id, id))).limit(1);
   return rows[0] ?? null;
+}
+
+export async function findStipend(tenantId: string, id: string): Promise<StipendRow | null> {
+  return db.transaction((tx) => findStipendTx(tx, tenantId, id));
 }
 
 // Mirrors the table's own UNIQUE(tenant_id, apprenticeship_id, month) index

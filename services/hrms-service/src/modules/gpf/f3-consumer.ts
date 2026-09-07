@@ -100,7 +100,7 @@ export function registerF3_gpf_Consumers(queue: Queue): void {
             // route now forwards `entryType` and `sign` explicitly, so this case
             // no longer has to guess the credit/debit direction.
             const employeeId = String(params.id ?? "");
-            const acct = await repo.findAccountByEmployee(p.tenantId, employeeId);
+            const acct = await repo.findAccountByEmployeeTx(tx, p.tenantId, employeeId);
             if (!acct) throw new HttpError(404, "NO_GPF_ACCOUNT", "employee has no GPF account");
             const entryType = String(p.entryType);
             const amount = BigInt(body.amountMinor);
@@ -127,7 +127,7 @@ export function registerF3_gpf_Consumers(queue: Queue): void {
             // here; `ratePct` and `months` mirror the route exactly
             // (`body.ratePctOverride ?? acct.interestRatePct`, months Zod-default 12).
             const employeeId = String(params.id ?? "");
-            const acct = await repo.findAccountByEmployee(p.tenantId, employeeId);
+            const acct = await repo.findAccountByEmployeeTx(tx, p.tenantId, employeeId);
             if (!acct) throw new HttpError(404, "NO_GPF_ACCOUNT", "employee has no GPF account");
             const ledgerId = id;
             const months = Number(body.months ?? 12);

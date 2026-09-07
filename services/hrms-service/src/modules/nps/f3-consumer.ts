@@ -70,7 +70,7 @@ export function registerF3_nps_Consumers(queue: Queue): void {
           case "nps_routes__1": {
             // Restored: `acct` (mustAccount), the two contribution legs, and the
             // new ledger row's id.
-            const acct = await repo.findAccountByEmployee(p.tenantId, employeeId);
+            const acct = await repo.findAccountByEmployeeTx(tx, p.tenantId, employeeId);
             if (!acct) throw new HttpError(404, "NO_NPS_ACCOUNT", "employee has no NPS account");
             const empAmt = BigInt(body.empAmountMinor ?? 0);
             const erAmt = BigInt(body.erAmountMinor ?? 0);
@@ -96,7 +96,7 @@ export function registerF3_nps_Consumers(queue: Queue): void {
             // new ledger row's id. The overdraft guard is kept — unlike the
             // route's pre-publish state checks it depends on the balance read
             // under the advisory lock HERE, so it cannot be delegated upstream.
-            const acct = await repo.findAccountByEmployee(p.tenantId, employeeId);
+            const acct = await repo.findAccountByEmployeeTx(tx, p.tenantId, employeeId);
             if (!acct) throw new HttpError(404, "NO_NPS_ACCOUNT", "employee has no NPS account");
             const amount = BigInt(body.amountMinor);
             const ledgerId = randomUUID();

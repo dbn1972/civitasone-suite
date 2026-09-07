@@ -14,10 +14,14 @@ export async function insertInvoice(tx: Writer, row: ConsultantInvoiceInsert): P
   await tx.insert(hrmsConsultantInvoices).values(row);
 }
 
-export async function findInvoice(tenantId: string, id: string): Promise<ConsultantInvoiceRow | null> {
-  const rows = await scopedRead((tx) => tx.select().from(hrmsConsultantInvoices)
-    .where(and(eq(hrmsConsultantInvoices.tenantId, tenantId), eq(hrmsConsultantInvoices.id, id))).limit(1));
+export async function findInvoiceTx(tx: Writer, tenantId: string, id: string): Promise<ConsultantInvoiceRow | null> {
+  const rows = await tx.select().from(hrmsConsultantInvoices)
+    .where(and(eq(hrmsConsultantInvoices.tenantId, tenantId), eq(hrmsConsultantInvoices.id, id))).limit(1);
   return rows[0] ?? null;
+}
+
+export async function findInvoice(tenantId: string, id: string): Promise<ConsultantInvoiceRow | null> {
+  return db.transaction((tx) => findInvoiceTx(tx, tenantId, id));
 }
 
 /**
