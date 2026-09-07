@@ -36,7 +36,7 @@ export function registerLeaveSpecialEOfficeConsumers(queue: Queue): void {
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
 
-      const app = await repo.findLeaveAppById(cb.refId, msg.tenantId);
+      const app = await repo.findLeaveAppByIdTx(tx, cb.refId, msg.tenantId);
       if (!app) return; // not ours / unknown
       // Only act on a leave app still awaiting the eOffice decision.
       if (app.status !== "pending_approval") return;

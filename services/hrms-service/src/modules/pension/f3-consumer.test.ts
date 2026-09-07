@@ -22,7 +22,20 @@ const { mockTx, dbTransactionFn, scopedReadResult, insertPensionRecordMock, serv
   const _insertPensionRecordMock = vi.fn(async (..._a: any[]) => undefined);
   const _scopedReadResult: { current: any[] } = { current: [] };
   const _serviceBookRows: { current: any[] } = { current: [] };
-  const _mockTx = { insert: vi.fn(), update: vi.fn(), select: vi.fn() };
+  // select() must be chainable ( .from().where().limit() ) because the
+  // pension_routes__0 fix (nested-tx-deadlock audit) reads the employee
+  // row directly through the already-open tx instead of the old
+  // module-level scopedRead(...) helper -- see f3-consumer.ts and
+  // .claude/skills/16-production-readiness-audit.md section 1.
+  const _mockTx = {
+    insert: vi.fn(),
+    update: vi.fn(),
+    select: vi.fn().mockReturnValue({
+      from: vi.fn().mockReturnValue({
+        where: vi.fn().mockReturnValue({ limit: vi.fn(async () => _scopedReadResult.current) }),
+      }),
+    }),
+  };
   const _dbTransactionFn = vi.fn(async (cb: (tx: unknown) => Promise<void>) => { await cb(_mockTx); });
   return {
     mockTx: _mockTx,
@@ -35,7 +48,6 @@ const { mockTx, dbTransactionFn, scopedReadResult, insertPensionRecordMock, serv
 
 vi.mock("../../shared/db.js", () => ({
   db: { transaction: dbTransactionFn },
-  scopedRead: async () => scopedReadResult.current,
 }));
 vi.mock("../../shared/outbox.js", () => ({
   enqueue: vi.fn(async (..._a: any[]) => undefined),
@@ -43,6 +55,7 @@ vi.mock("../../shared/outbox.js", () => ({
 }));
 vi.mock("../service-book/repo.js", () => ({
   listServiceBookEntries: async () => serviceBookRows.current,
+  listServiceBookEntriesTx: async () => serviceBookRows.current,
 }));
 vi.mock("./repo.js", () => ({
   insertPensionRecord: (...a: unknown[]) => insertPensionRecordMock(...(a as [])),

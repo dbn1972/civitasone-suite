@@ -31,6 +31,11 @@ const { mockTx, dbTransactionFn, enqueueMock, R } = vi.hoisted(() => {
     rejectPlan: vi.fn(async (..._a: any[]) => null),
     replaceRoster: vi.fn(async (..._a: any[]) => undefined),
     listRoster: vi.fn(async (..._a: any[]) => [] as any[]),
+    // manpower_planning_routes__4 fix (nested-tx-deadlock audit) routes
+    // this call onto listRosterTx, reading through the already-open tx --
+    // see f3-consumer.ts and
+    // .claude/skills/16-production-readiness-audit.md section 1.
+    listRosterTx: vi.fn(async (..._a: any[]) => [] as any[]),
     insertRequisition: vi.fn(async (..._a: any[]) => undefined),
     markRequisitionAdvertised: vi.fn(async (..._a: any[]) => null),
   };
@@ -79,7 +84,7 @@ beforeEach(() => {
   dbTransactionFn.mockImplementation(async (cb: (tx: unknown) => Promise<void>) => { await cb(mockTx); });
   R.getPlanTx.mockResolvedValue(plan());
   R.approvePlan.mockResolvedValue(plan({ status: "approved", approvedBy: ACTOR }));
-  R.listRoster.mockResolvedValue([]);
+  R.listRosterTx.mockResolvedValue([]);
 });
 
 describe("manpower_planning_routes__4 (approve a plan)", () => {
@@ -128,7 +133,7 @@ describe("manpower_planning_routes__4 (approve a plan)", () => {
   });
 
   it("keeps a manually-set roster instead of overwriting it", async () => {
-    R.listRoster.mockResolvedValue([{ category: "UR", reservedCount: 7 }]);
+    R.listRosterTx.mockResolvedValue([{ category: "UR", reservedCount: 7 }]);
     const q = await buildQueue();
     await q.publish(COMMANDS.f3RouteWrite, makeMsg({
       op: "manpower_planning_routes__4", id: randomUUID(), tenantId: TENANT,

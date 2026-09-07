@@ -60,7 +60,7 @@ export function registerServiceBookConsumers(queue: Queue): void {
     };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
-      await repo.attestEntry(p.tenantId, p.entryId, msg.actorId, p.remarks ?? null);
+      await repo.attestEntryTx(tx, p.tenantId, p.entryId, msg.actorId, p.remarks ?? null);
       await enqueue(tx, {
         topic: AUDIT,
         eventType: AUDIT,
