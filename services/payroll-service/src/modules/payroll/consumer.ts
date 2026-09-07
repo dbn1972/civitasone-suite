@@ -28,17 +28,23 @@ async function resolveDaRateBps(tenantId: string, month: string): Promise<bigint
 }
 
 /** Active Professional Tax slabs for the tenant + state (H14 fix). */
-async function resolvePtSlabs(tenantId: string, stateCode?: string): Promise<Array<{ from: bigint; to: bigint; amount: bigint }>> {
+async function resolvePtSlabs(tx: typeof db, tenantId: string, stateCode?: string): Promise<Array<{ from: bigint; to: bigint; amount: bigint }>> {
+  // tenantTransaction re-audit: reads through the caller-supplied tx (db
+  // itself for the pre-loop call, the outer transaction tx for the per-employee
+  // in-loop call) instead of always hitting the pool-level db -- a bare
+  // db.execute() from inside an already-open outer db.transaction() checks out
+  // a SEPARATE pool connection, the same deadlock class as a nested
+  // db.transaction()/scopedRead(), just via a raw query instead of a wrapper.
   // H14 FIX: filter by employee's state_code. Without this, a two-state tenant
   // (e.g. Karnataka + Maharashtra) would apply the same PT schedule to everyone.
   const rows = stateCode
-    ? (await db.execute(sql`
+    ? (await tx.execute(sql`
         SELECT slab_from_minor, slab_to_minor, pt_amount_minor
         FROM payroll.payroll_professional_tax
         WHERE tenant_id = ${tenantId}::uuid AND is_active = true AND state_code = ${stateCode}
         ORDER BY slab_from_minor
       `)) as unknown as Array<{ slab_from_minor: string | number; slab_to_minor: string | number; pt_amount_minor: string | number }>
-    : (await db.execute(sql`
+    : (await tx.execute(sql`
         SELECT slab_from_minor, slab_to_minor, pt_amount_minor
         FROM payroll.payroll_professional_tax
         WHERE tenant_id = ${tenantId}::uuid AND is_active = true
@@ -53,11 +59,13 @@ function resolvePt(slabs: Array<{ from: bigint; to: bigint; amount: bigint }>, i
 }
 
 /** Employee's submitted tax declaration for the FY (drives old-regime TDS exemptions). */
-async function resolveDeclaration(tenantId: string, employeeId: string, fy: string): Promise<{
+async function resolveDeclaration(tx: typeof db, tenantId: string, employeeId: string, fy: string): Promise<{
+  // tenantTransaction re-audit: reads through the caller's outer tx,
+  // see resolvePtSlabs comment above.
   regime: "old" | "new"; rentPaidAnnualMinor: bigint; ded80cMinor: bigint; ded80dMinor: bigint; otherDedMinor: bigint;
   prevEmployerSalaryMinor: bigint; prevEmployerTdsMinor: bigint; otherSourcesIncomeMinor: bigint; perquisitesMinor: bigint;
 } | null> {
-  const rows = (await db.execute(sql`
+  const rows = (await tx.execute(sql`
     SELECT regime, section_80c, section_80d, other_deductions,
            COALESCE(rent_paid_minor, 0) AS rent_paid_minor,
            COALESCE(prev_employer_salary_minor, 0) AS prev_employer_salary_minor,
@@ -88,8 +96,10 @@ async function resolveDeclaration(tenantId: string, employeeId: string, fy: stri
  * M3: only count TDS whose source run is approved/disbursed. A draft/processing/
  * failed (or out-of-order/abandoned) run must not corrupt the YTD true-up.
  */
-async function resolveTdsYtdMinor(tenantId: string, employeeId: string, fyStart: number, beforeMonth: string): Promise<bigint> {
-  const rows = (await db.execute(sql`
+async function resolveTdsYtdMinor(tx: typeof db, tenantId: string, employeeId: string, fyStart: number, beforeMonth: string): Promise<bigint> {
+  // tenantTransaction re-audit: reads through the caller's outer tx,
+  // see resolvePtSlabs comment above.
+  const rows = (await tx.execute(sql`
     SELECT COALESCE(SUM(t.tds_minor), 0)::text AS ytd
     FROM statutory.payroll_tds t
     JOIN payroll.payroll_runs r ON r.id = t.run_id
@@ -114,8 +124,10 @@ async function resolveProtectedNetFloorMinor(tenantId: string): Promise<bigint> 
  * P2: latest salary revision effective on/before the run month, if any.
  * Drives the Basic the run pays (HRMS basic is the fallback when none exists).
  */
-async function resolveLatestRevision(tenantId: string, employeeId: string, month: string): Promise<{ newBasicMinor: bigint; effectiveDate: string } | null> {
-  const rows = (await db.execute(sql`
+export async function resolveLatestRevision(tx: typeof db, tenantId: string, employeeId: string, month: string): Promise<{ newBasicMinor: bigint; effectiveDate: string } | null> {
+  // tenantTransaction re-audit: reads through the caller's outer tx,
+  // see resolvePtSlabs comment above.
+  const rows = (await tx.execute(sql`
     SELECT new_basic_minor, effective_date::text AS effective_date
     FROM payroll.payroll_salary_revisions
     WHERE tenant_id = ${tenantId}::uuid AND employee_id = ${employeeId}::uuid
@@ -955,7 +967,7 @@ async function processPayrollRun(
   const daRateBps = await resolveDaRateBps(p.tenantId, p.month);
   // H14 FIX: PT slabs are now resolved per-employee (by state_code) inside the loop.
   // A tenant-level fallback is kept for employees without a state_code.
-  const ptSlabsFallback = await resolvePtSlabs(p.tenantId);
+  const ptSlabsFallback = await resolvePtSlabs(db, p.tenantId);
   const protectedNetFloorMinor = await resolveProtectedNetFloorMinor(p.tenantId);
   // Days in the run month (LOP divisor) — 7th CPC uses actual days, not flat 30.
   const daysInMonth = BigInt(new Date(Number(p.month.slice(0, 4)), Number(p.month.slice(5, 7)), 0).getDate());
@@ -1000,7 +1012,7 @@ async function processPayrollRun(
 
       // P2: source current Basic from the latest revision effective on/before the
       // run month; fall back to the HRMS-provided basic when no revision exists.
-      const revision = await resolveLatestRevision(p.tenantId, emp.id, p.month);
+      const revision = await resolveLatestRevision(tx as unknown as typeof db, p.tenantId, emp.id, p.month);
       const basicMinor = revision ? revision.newBasicMinor : BigInt(emp.basicMinor);
       const daMinor = (basicMinor * daRateBps) / 10000n;
       // M2 (LOP double-count): one authoritative source per (employee, month).
@@ -1070,10 +1082,10 @@ async function processPayrollRun(
 
       const fyStart = Number(p.month.slice(5, 7)) >= 4 ? Number(p.month.slice(0, 4)) : Number(p.month.slice(0, 4)) - 1;
       const fyStr = `${fyStart}-${String((fyStart + 1) % 100).padStart(2, "0")}`;
-      const decl = await resolveDeclaration(p.tenantId, emp.id, fyStr);
+      const decl = await resolveDeclaration(tx as unknown as typeof db, p.tenantId, emp.id, fyStr);
       const monthIdxInFy = (Number(p.month.slice(5, 7)) - 4 + 12) % 12; // Apr=0..Mar=11
       // Sec 192 true-up: prev-employer TDS counts toward tax already deducted this FY.
-      const tdsYtdMinor = (await resolveTdsYtdMinor(p.tenantId, emp.id, fyStart, p.month))
+      const tdsYtdMinor = (await resolveTdsYtdMinor(tx as unknown as typeof db, p.tenantId, emp.id, fyStart, p.month))
         + (decl?.prevEmployerTdsMinor ?? 0n);
 
       // Engagement statutory gates carried on the run input (default: on).
@@ -1095,7 +1107,7 @@ async function processPayrollRun(
           // H14 FIX: use employee's state_code for PT schedule lookup.
           // Falls back to tenant-level slabs when employee has no state.
           (emp as { stateCode?: string }).stateCode
-            ? await resolvePtSlabs(p.tenantId, (emp as { stateCode?: string }).stateCode)
+            ? await resolvePtSlabs(tx as unknown as typeof db, p.tenantId, (emp as { stateCode?: string }).stateCode)
             : ptSlabsFallback,
           basicMinor + daMinor,
         ),
