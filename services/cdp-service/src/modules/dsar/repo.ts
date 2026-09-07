@@ -22,11 +22,14 @@ export function toView(r: DsarRequestRow) {
 export type DsarView = ReturnType<typeof toView>;
 
 export async function findById(id: string, tenantId: string): Promise<DsarRequestRow | null> {
-  const rows = await scopedRead((tx) =>
-    tx.select().from(dsarRequests)
-      .where(and(eq(dsarRequests.id, id), eq(dsarRequests.tenantId, tenantId)))
-      .limit(1),
-  );
+  return scopedRead((tx) => findByIdTx(tx, id, tenantId));
+}
+
+/** Tx-scoped twin of findById for callers already inside an open transaction. */
+export async function findByIdTx(tx: ScopedTx, id: string, tenantId: string): Promise<DsarRequestRow | null> {
+  const rows = await tx.select().from(dsarRequests)
+    .where(and(eq(dsarRequests.id, id), eq(dsarRequests.tenantId, tenantId)))
+    .limit(1);
   return rows[0] ?? null;
 }
 

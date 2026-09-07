@@ -33,7 +33,7 @@ export function registerStewardConsumers(rawQueue: Queue): void {
 
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
-      const mergeRequest = await repo.findById(p.mergeRequestId, msg.tenantId);
+      const mergeRequest = await repo.findByIdTx(tx, p.mergeRequestId, msg.tenantId);
       if (!mergeRequest || mergeRequest.status !== "pending") return;
 
       const ok = await repo.decide(tx, p.mergeRequestId, msg.tenantId, decision, msg.actorId, p.reason);

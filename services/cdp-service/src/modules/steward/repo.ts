@@ -24,11 +24,14 @@ export function toView(r: MergeQueueRow) {
 export type MergeQueueView = ReturnType<typeof toView>;
 
 export async function findById(id: string, tenantId: string): Promise<MergeQueueRow | null> {
-  const rows = await scopedRead((tx) =>
-    tx.select().from(mergeQueue)
-      .where(and(eq(mergeQueue.id, id), eq(mergeQueue.tenantId, tenantId)))
-      .limit(1),
-  );
+  return scopedRead((tx) => findByIdTx(tx, id, tenantId));
+}
+
+/** Tx-scoped twin of findById for callers already inside an open transaction. */
+export async function findByIdTx(tx: ScopedTx, id: string, tenantId: string): Promise<MergeQueueRow | null> {
+  const rows = await tx.select().from(mergeQueue)
+    .where(and(eq(mergeQueue.id, id), eq(mergeQueue.tenantId, tenantId)))
+    .limit(1);
   return rows[0] ?? null;
 }
 
