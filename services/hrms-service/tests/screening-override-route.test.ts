@@ -34,6 +34,7 @@ vi.mock("../src/shared/db.js", async (io) => {
 vi.mock("../src/modules/recruitment/screening-repo.js", async (io) => ({
   ...(await io<Record<string, unknown>>()),
   findApplication: (...a: unknown[]) => H.findApplication(...a),
+  findApplicationTx: (_tx: unknown, ...a: unknown[]) => H.findApplication(...a),
   setScreening: (...a: unknown[]) => H.setScreening(...a),
   insertEvent: (...a: unknown[]) => H.insertEvent(...a),
 }));
@@ -41,6 +42,7 @@ vi.mock("../src/modules/recruitment/screening-override-repo.js", async (io) => (
   ...(await io<Record<string, unknown>>()),
   createRequest: (...a: unknown[]) => H.createRequest(...a),
   findRequest: (...a: unknown[]) => H.findRequest(...a),
+  findRequestTx: (_tx: unknown, ...a: unknown[]) => H.findRequest(...a),
   findPendingForApplication: (...a: unknown[]) => H.findPending(...a),
   listForApplication: (...a: unknown[]) => H.listForApp(...a),
   setRequestStatus: (...a: unknown[]) => H.setRequestStatus(...a),

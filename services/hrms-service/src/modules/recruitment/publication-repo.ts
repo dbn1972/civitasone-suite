@@ -7,8 +7,13 @@ export type Writer = Pick<typeof db, "insert" | "update" | "select">;
 type VacancyRow = typeof hrmsJobOpenings.$inferSelect;
 
 export async function findVacancy(tenantId: string, id: string): Promise<VacancyRow | null> {
-  const rows = await scopedRead((tx) => tx.select().from(hrmsJobOpenings)
-    .where(and(eq(hrmsJobOpenings.tenantId, tenantId), eq(hrmsJobOpenings.id, id))).limit(1));
+  return scopedRead((tx) => findVacancyTx(tx, tenantId, id));
+}
+
+/** Tx-scoped variant of findVacancy -- see .claude/skills/16-production-readiness-audit.md section 1. */
+export async function findVacancyTx(tx: Writer, tenantId: string, id: string): Promise<VacancyRow | null> {
+  const rows = await (tx as typeof db).select().from(hrmsJobOpenings)
+    .where(and(eq(hrmsJobOpenings.tenantId, tenantId), eq(hrmsJobOpenings.id, id))).limit(1);
   return rows[0] ?? null;
 }
 
@@ -24,9 +29,14 @@ export async function updateVacancy(
 }
 
 export async function nextCorrigendumSeq(tenantId: string, jobOpeningId: string): Promise<number> {
-  const rows = await scopedRead((tx) => tx.select({ m: sql<number>`COALESCE(MAX(${hrmsVacancyCorrigenda.seq}), 0)` })
+  return scopedRead((tx) => nextCorrigendumSeqTx(tx, tenantId, jobOpeningId));
+}
+
+/** Tx-scoped variant of nextCorrigendumSeq -- see .claude/skills/16-production-readiness-audit.md section 1. */
+export async function nextCorrigendumSeqTx(tx: Writer, tenantId: string, jobOpeningId: string): Promise<number> {
+  const rows = await (tx as typeof db).select({ m: sql<number>`COALESCE(MAX(${hrmsVacancyCorrigenda.seq}), 0)` })
     .from(hrmsVacancyCorrigenda)
-    .where(and(eq(hrmsVacancyCorrigenda.tenantId, tenantId), eq(hrmsVacancyCorrigenda.jobOpeningId, jobOpeningId))));
+    .where(and(eq(hrmsVacancyCorrigenda.tenantId, tenantId), eq(hrmsVacancyCorrigenda.jobOpeningId, jobOpeningId)));
   return Number(rows[0]?.m ?? 0) + 1;
 }
 

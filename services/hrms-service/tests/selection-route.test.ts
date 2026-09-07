@@ -30,6 +30,7 @@ vi.mock("../src/modules/recruitment/selection-repo.js", async (io) => ({
   ...(await io<Record<string, unknown>>()),
   insertList: (...a: unknown[]) => H.insertList(...a),
   findList: (...a: unknown[]) => H.findList(...a),
+  findListTx: (_tx: unknown, ...a: unknown[]) => H.findList(...a),
   updateList: (...a: unknown[]) => H.updateList(...a),
   setEntries: (...a: unknown[]) => H.setEntries(...a),
   listEntries: (...a: unknown[]) => H.listEntries(...a),

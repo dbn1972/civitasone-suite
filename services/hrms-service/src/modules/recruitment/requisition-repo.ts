@@ -16,8 +16,13 @@ export async function insertRequisition(tx: Writer, row: RequisitionInsert): Pro
 }
 
 export async function findRequisition(tenantId: string, id: string): Promise<RequisitionRow | null> {
-  const rows = await scopedRead((tx) => tx.select().from(hrmsRequisitions)
-    .where(and(eq(hrmsRequisitions.tenantId, tenantId), eq(hrmsRequisitions.id, id))).limit(1));
+  return scopedRead((tx) => findRequisitionTx(tx, tenantId, id));
+}
+
+/** Tx-scoped variant of findRequisition -- see .claude/skills/16-production-readiness-audit.md section 1. */
+export async function findRequisitionTx(tx: Writer, tenantId: string, id: string): Promise<RequisitionRow | null> {
+  const rows = await (tx as typeof db).select().from(hrmsRequisitions)
+    .where(and(eq(hrmsRequisitions.tenantId, tenantId), eq(hrmsRequisitions.id, id))).limit(1);
   return rows[0] ?? null;
 }
 

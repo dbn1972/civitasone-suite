@@ -15,8 +15,13 @@ export async function insertBlueprint(tx: Writer, row: BlueprintInsert): Promise
 }
 
 export async function findBlueprint(tenantId: string, id: string): Promise<BlueprintRow | null> {
-  const rows = await scopedRead((tx) => tx.select().from(hrmsAssessmentBlueprints)
-    .where(and(eq(hrmsAssessmentBlueprints.tenantId, tenantId), eq(hrmsAssessmentBlueprints.id, id))).limit(1));
+  return scopedRead((tx) => findBlueprintTx(tx, tenantId, id));
+}
+
+/** Tx-scoped variant of findBlueprint -- see .claude/skills/16-production-readiness-audit.md section 1. */
+export async function findBlueprintTx(tx: Writer, tenantId: string, id: string): Promise<BlueprintRow | null> {
+  const rows = await (tx as typeof db).select().from(hrmsAssessmentBlueprints)
+    .where(and(eq(hrmsAssessmentBlueprints.tenantId, tenantId), eq(hrmsAssessmentBlueprints.id, id))).limit(1);
   return rows[0] ?? null;
 }
 
@@ -51,8 +56,13 @@ export async function insertQuestion(tx: Writer, row: QuestionInsert): Promise<v
 }
 
 export async function findQuestion(tenantId: string, id: string): Promise<QuestionRow | null> {
-  const rows = await scopedRead((tx) => tx.select().from(hrmsAssessmentQuestions)
-    .where(and(eq(hrmsAssessmentQuestions.tenantId, tenantId), eq(hrmsAssessmentQuestions.id, id))).limit(1));
+  return scopedRead((tx) => findQuestionTx(tx, tenantId, id));
+}
+
+/** Tx-scoped variant of findQuestion -- see .claude/skills/16-production-readiness-audit.md section 1. */
+export async function findQuestionTx(tx: Writer, tenantId: string, id: string): Promise<QuestionRow | null> {
+  const rows = await (tx as typeof db).select().from(hrmsAssessmentQuestions)
+    .where(and(eq(hrmsAssessmentQuestions.tenantId, tenantId), eq(hrmsAssessmentQuestions.id, id))).limit(1);
   return rows[0] ?? null;
 }
 

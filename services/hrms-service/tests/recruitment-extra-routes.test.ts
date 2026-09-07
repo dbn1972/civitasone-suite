@@ -69,8 +69,10 @@ vi.mock("../src/shared/infra.js", async () => {
 vi.mock("../src/modules/recruitment/publication-repo.js", async (io) => ({
   ...(await io<Record<string, unknown>>()),
   findVacancy: (...a: unknown[]) => H.findVacancy(...a),
+  findVacancyTx: (_tx: unknown, ...a: unknown[]) => H.findVacancy(...a),
   updateVacancy: (...a: unknown[]) => H.updateVacancy(...a),
   nextCorrigendumSeq: (...a: unknown[]) => H.nextCorrigendumSeq(...a),
+  nextCorrigendumSeqTx: (_tx: unknown, ...a: unknown[]) => H.nextCorrigendumSeq(...a),
   insertCorrigendum: (...a: unknown[]) => H.insertCorrigendum(...a),
   listCorrigenda: (...a: unknown[]) => H.listCorrigenda(...a),
   searchVacancies: (...a: unknown[]) => H.searchVacancies(...a),
@@ -78,6 +80,7 @@ vi.mock("../src/modules/recruitment/publication-repo.js", async (io) => ({
 vi.mock("../src/modules/recruitment/selection-repo.js", async (io) => ({
   ...(await io<Record<string, unknown>>()),
   findList: (...a: unknown[]) => H.findList(...a),
+  findListTx: (_tx: unknown, ...a: unknown[]) => H.findList(...a),
   updateList: (...a: unknown[]) => H.updateList(...a),
   listEntries: (...a: unknown[]) => H.listEntries(...a),
   listByJob: (...a: unknown[]) => H.listByJob(...a),
@@ -87,6 +90,7 @@ vi.mock("../src/modules/recruitment/selection-repo.js", async (io) => ({
 vi.mock("../src/modules/recruitment/panel-repo.js", async (io) => ({
   ...(await io<Record<string, unknown>>()),
   findInterview: (...a: unknown[]) => H.findInterview(...a),
+  findInterviewTx: (_tx: unknown, ...a: unknown[]) => H.findInterview(...a),
   updateInterview: (...a: unknown[]) => H.updateInterview(...a),
   setPanelists: (...a: unknown[]) => H.setPanelists(...a),
   listPanelists: (...a: unknown[]) => H.listPanelists(...a),
@@ -95,6 +99,7 @@ vi.mock("../src/modules/recruitment/panel-repo.js", async (io) => ({
 vi.mock("../src/modules/recruitment/offer-repo.js", async (io) => ({
   ...(await io<Record<string, unknown>>()),
   findOffer: (...a: unknown[]) => H.findOffer(...a),
+  findOfferTx: (_tx: unknown, ...a: unknown[]) => H.findOffer(...a),
   updateOffer: (...a: unknown[]) => H.updateOffer(...a),
 }));
 vi.mock("../src/modules/recruitment/offer-analytics-repo.js", async (io) => ({

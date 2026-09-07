@@ -38,10 +38,12 @@ vi.mock("../src/shared/db.js", async (io) => {
 vi.mock("../src/modules/recruitment/blueprint-repo.js", async (io) => ({
   ...(await io<Record<string, unknown>>()),
   findBlueprint: (...a: unknown[]) => H.findBlueprint(...a),
+  findBlueprintTx: (_tx: unknown, ...a: unknown[]) => H.findBlueprint(...a),
   insertBlueprint: (...a: unknown[]) => H.insertBlueprint(...a),
   updateBlueprint: (...a: unknown[]) => H.updateBlueprint(...a),
   listBlueprints: (...a: unknown[]) => H.listBlueprints(...a),
   findQuestion: (...a: unknown[]) => H.findQuestion(...a),
+  findQuestionTx: (_tx: unknown, ...a: unknown[]) => H.findQuestion(...a),
   insertQuestion: (...a: unknown[]) => H.insertQuestion(...a),
   updateQuestion: (...a: unknown[]) => H.updateQuestion(...a),
   listQuestions: (...a: unknown[]) => H.listQuestions(...a),

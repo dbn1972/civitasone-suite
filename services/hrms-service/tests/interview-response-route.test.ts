@@ -29,12 +29,14 @@ vi.mock("../src/shared/db.js", async (io) => {
 vi.mock("../src/modules/recruitment/interview-comms-repo.js", async (io) => ({
   ...(await io<Record<string, unknown>>()),
   findInterview: (...a: unknown[]) => H.findInterview(...a),
+  findInterviewTx: (_tx: unknown, ...a: unknown[]) => H.findInterview(...a),
   rescheduleInterview: (...a: unknown[]) => H.reschedule(...a),
 }));
 vi.mock("../src/modules/recruitment/interview-response-repo.js", async (io) => ({
   ...(await io<Record<string, unknown>>()),
   insertResponse: (...a: unknown[]) => H.insertResponse(...a),
   findResponse: (...a: unknown[]) => H.findResponse(...a),
+  findResponseTx: (_tx: unknown, ...a: unknown[]) => H.findResponse(...a),
   findPendingForInterview: (...a: unknown[]) => H.findPending(...a),
   listForInterview: (...a: unknown[]) => H.listForInterview(...a),
   setResponseStatus: (...a: unknown[]) => H.setStatus(...a),

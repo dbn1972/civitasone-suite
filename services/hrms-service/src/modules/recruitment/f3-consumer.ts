@@ -288,12 +288,12 @@ export function registerF3_recruitment_Consumers(queue: Queue): void {
           case "recruitment_application_fee_routes__0": {
             // Restored: the application (for job opening + category), the vacancy
             // fee, the assessment, and the new fee row's id.
-            const a = await screeningRepo.findApplication(p.tenantId, id);
+            const a = await screeningRepo.findApplicationTx(tx, p.tenantId, id);
             if (!a) throw new HttpError(404, "NOT_FOUND", "application not found");
             // The route's own pre-check can race; the fee row is unique per
             // application, so re-check inside the write transaction.
-            if (await feeRepo.findFee(p.tenantId, id)) return;
-            const vacancyFee = await feeRepo.getVacancyFee(p.tenantId, a.jobOpeningId);
+            if (await feeRepo.findFeeTx(tx, p.tenantId, id)) return;
+            const vacancyFee = await feeRepo.getVacancyFeeTx(tx, p.tenantId, a.jobOpeningId);
             const assessment = assessFee(vacancyFee, { category: a.category, categoryVerified: Boolean(body.categoryVerified ?? false) });
             const fid = genId;
             await feeRepo.insertFee(tx, {
@@ -306,7 +306,7 @@ export function registerF3_recruitment_Consumers(queue: Queue): void {
           }
           case "recruitment_application_fee_routes__1": {
             // Restored: the assessed fee row and the trimmed manual payment ref.
-            const fee = await feeRepo.findFee(p.tenantId, id);
+            const fee = await feeRepo.findFeeTx(tx, p.tenantId, id);
             if (!fee) throw new HttpError(404, "NOT_FOUND", "no fee has been assessed for this application");
             const paymentRef = String(body.paymentRef ?? "").trim();
             await feeRepo.updateFee(tx, p.tenantId, fee.id, {
@@ -322,12 +322,12 @@ export function registerF3_recruitment_Consumers(queue: Queue): void {
             // validated question) and its total marks. The route already
             // validated section counts / duplicates / blueprint status.
             const scheduleId = genId;
-            const blueprint = await blueprintRepo.findBlueprint(p.tenantId, body.blueprintId);
+            const blueprint = await blueprintRepo.findBlueprintTx(tx, p.tenantId, body.blueprintId);
             if (!blueprint) throw new HttpError(404, "NOT_FOUND", "blueprint not found");
             const paper: Array<PaperEntry & { stem: string; options: unknown }> = [];
             let totalMarks = 0;
             for (const q of (body.questions ?? []) as Array<{ questionId: string; section: string }>) {
-              const question = await blueprintRepo.findQuestion(p.tenantId, q.questionId);
+              const question = await blueprintRepo.findQuestionTx(tx, p.tenantId, q.questionId);
               if (!question) throw new HttpError(404, "QUESTION_NOT_FOUND", `question ${q.questionId} not found`);
               paper.push({
                 questionId: question.id, section: q.section, marks: question.marks, qtype: question.qtype,
@@ -348,7 +348,7 @@ export function registerF3_recruitment_Consumers(queue: Queue): void {
             // publish this one op, so the transition cannot be derived from the
             // current status (`scheduled` is a legal source for all three) — the
             // route now carries it on the payload as `nextStatus`.
-            const s = await attemptRepo.findSchedule(p.tenantId, id);
+            const s = await attemptRepo.findScheduleTx(tx, p.tenantId, id);
             if (!s) throw new HttpError(404, "NOT_FOUND", "schedule not found");
             const to = String(p.nextStatus ?? "");
             if (!to) throw new HttpError(422, "MISSING_TRANSITION", "the schedule transition target is missing from the payload");
@@ -360,7 +360,7 @@ export function registerF3_recruitment_Consumers(queue: Queue): void {
             // per-candidate deterministic question order, seeded on the NEW
             // attempt id so it reproduces exactly what the route returned.
             const attemptId = genId;
-            const s = await attemptRepo.findSchedule(p.tenantId, id);
+            const s = await attemptRepo.findScheduleTx(tx, p.tenantId, id);
             if (!s) throw new HttpError(404, "NOT_FOUND", "schedule not found");
             const order = randomizeQuestionOrder((s.paper as PaperEntry[]).map((q) => q.questionId), attemptId);
             await attemptRepo.insertAttempt(tx, {
@@ -373,14 +373,14 @@ export function registerF3_recruitment_Consumers(queue: Queue): void {
           }
           case "recruitment_attempt_routes__3": {
             // Restored: the attempt (for the optimistic-version guard).
-            const a = await attemptRepo.findAttempt(p.tenantId, id);
+            const a = await attemptRepo.findAttemptTx(tx, p.tenantId, id);
             if (!a) throw new HttpError(404, "NOT_FOUND", "attempt not found");
             await attemptRepo.updateAttempt(tx, p.tenantId, id, { accommodation: { extraTimePct: numOr(body.extraTimePct, 0), notes: body.notes ?? null } as never, updatedBy: msg.actorId }, a.version);
             break;
           }
           case "recruitment_attempt_routes__4": {
             // Restored: the attempt (for the optimistic-version guard).
-            const a = await attemptRepo.findAttempt(p.tenantId, id);
+            const a = await attemptRepo.findAttemptTx(tx, p.tenantId, id);
             if (!a) throw new HttpError(404, "NOT_FOUND", "attempt not found");
             await attemptRepo.updateAttempt(tx, p.tenantId, id, {
                   identityVerified: true, identityMethod: body.method, identityMeta: (body.meta ?? {}) as never, identityVerifiedAt: new Date(), updatedBy: msg.actorId,
@@ -390,12 +390,12 @@ export function registerF3_recruitment_Consumers(queue: Queue): void {
           case "recruitment_attempt_routes__5": {
             // Restored: the attempt, its schedule (window end caps the deadline),
             // the blueprint duration and the accommodation extra time.
-            const a = await attemptRepo.findAttempt(p.tenantId, id);
+            const a = await attemptRepo.findAttemptTx(tx, p.tenantId, id);
             if (!a) throw new HttpError(404, "NOT_FOUND", "attempt not found");
-            const s = await attemptRepo.findSchedule(p.tenantId, a.scheduleId);
+            const s = await attemptRepo.findScheduleTx(tx, p.tenantId, a.scheduleId);
             if (!s) throw new HttpError(404, "NOT_FOUND", "schedule not found");
             const now = Date.now();
-            const blueprint = await blueprintRepo.findBlueprint(p.tenantId, a.blueprintId);
+            const blueprint = await blueprintRepo.findBlueprintTx(tx, p.tenantId, a.blueprintId);
             const durationMinutes = blueprint?.durationMinutes ?? 60;
             const extraPct = Number((a.accommodation as { extraTimePct?: number })?.extraTimePct ?? 0);
             const deadline = new Date(attemptDeadline(now, durationMinutes, extraPct, s.windowEnd.getTime()));
@@ -404,7 +404,7 @@ export function registerF3_recruitment_Consumers(queue: Queue): void {
           }
           case "recruitment_attempt_routes__6": {
             // Restored: the attempt (for the optimistic-version guard).
-            const a = await attemptRepo.findAttempt(p.tenantId, id);
+            const a = await attemptRepo.findAttemptTx(tx, p.tenantId, id);
             if (!a) throw new HttpError(404, "NOT_FOUND", "attempt not found");
             for (const r of (body.responses ?? []) as Array<{ questionId: string; response: Record<string, unknown> }>) {
                     await attemptRepo.saveResponse(tx, { tenantId: p.tenantId, attemptId: id, questionId: r.questionId, response: r.response as never });
@@ -415,14 +415,14 @@ export function registerF3_recruitment_Consumers(queue: Queue): void {
           case "recruitment_attempt_routes__7": {
             // Restored: the attempt, its schedule's paper, the blueprint scoring
             // config, the saved responses and the deterministic auto-evaluation.
-            const a = await attemptRepo.findAttempt(p.tenantId, id);
+            const a = await attemptRepo.findAttemptTx(tx, p.tenantId, id);
             if (!a) throw new HttpError(404, "NOT_FOUND", "attempt not found");
-            const s = await attemptRepo.findSchedule(p.tenantId, a.scheduleId);
+            const s = await attemptRepo.findScheduleTx(tx, p.tenantId, a.scheduleId);
             if (!s) throw new HttpError(404, "NOT_FOUND", "schedule not found");
-            const blueprint = await blueprintRepo.findBlueprint(p.tenantId, a.blueprintId);
+            const blueprint = await blueprintRepo.findBlueprintTx(tx, p.tenantId, a.blueprintId);
             const scoring = (blueprint?.scoringConfig ?? {}) as { negativeMarking?: { enabled: boolean; fraction?: number }; totalCutoffPct?: number; sections?: Array<{ key: string; sectionCutoffPct?: number }> };
             const paper = s.paper as PaperEntry[];
-            const responses = await attemptRepo.listResponses(p.tenantId, id);
+            const responses = await attemptRepo.listResponsesTx(tx, p.tenantId, id);
             const respByQ = new Map(responses.map((r) => [r.questionId, r.response as Record<string, unknown>]));
             const scored = new Map<string, ObjectiveScore>();
             for (const entry of paper) {
@@ -458,7 +458,7 @@ export function registerF3_recruitment_Consumers(queue: Queue): void {
           }
           case "recruitment_blueprint_routes__1": {
             // Restored: the blueprint and the field-by-field patch + change list.
-            const bp = await blueprintRepo.findBlueprint(p.tenantId, id);
+            const bp = await blueprintRepo.findBlueprintTx(tx, p.tenantId, id);
             if (!bp) throw new HttpError(404, "NOT_FOUND", "blueprint not found");
             const patch: Record<string, unknown> = { updatedBy: msg.actorId };
             for (const k of ["title", "roleTitle", "designationId"] as const) {
@@ -475,7 +475,7 @@ export function registerF3_recruitment_Consumers(queue: Queue): void {
           }
           case "recruitment_blueprint_routes__2": {
             // Restored: the blueprint and the effective-from instant.
-            const bp = await blueprintRepo.findBlueprint(p.tenantId, id);
+            const bp = await blueprintRepo.findBlueprintTx(tx, p.tenantId, id);
             if (!bp) throw new HttpError(404, "NOT_FOUND", "blueprint not found");
             const effectiveFrom = body.effectiveFrom ? new Date(body.effectiveFrom) : new Date();
             await blueprintRepo.updateBlueprint(tx, p.tenantId, id, {
@@ -486,7 +486,7 @@ export function registerF3_recruitment_Consumers(queue: Queue): void {
           }
           case "recruitment_blueprint_routes__3": {
             // Restored: the blueprint (for the optimistic-version guard).
-            const bp = await blueprintRepo.findBlueprint(p.tenantId, id);
+            const bp = await blueprintRepo.findBlueprintTx(tx, p.tenantId, id);
             if (!bp) throw new HttpError(404, "NOT_FOUND", "blueprint not found");
             await blueprintRepo.updateBlueprint(tx, p.tenantId, id, { status: "inactive", updatedBy: msg.actorId } as never, bp.version);
                   await blueprintRepo.insertEvent(tx, { tenantId: p.tenantId, entityType: "blueprint", entityId: id, action: "deactivate", detail: { reason: body.reason ?? null }, actorId: msg.actorId });
@@ -506,7 +506,7 @@ export function registerF3_recruitment_Consumers(queue: Queue): void {
           }
           case "recruitment_blueprint_routes__5": {
             // Restored: the question and the field-by-field patch + change list.
-            const q = await blueprintRepo.findQuestion(p.tenantId, id);
+            const q = await blueprintRepo.findQuestionTx(tx, p.tenantId, id);
             if (!q) throw new HttpError(404, "NOT_FOUND", "question not found");
             const patch: Record<string, unknown> = { updatedBy: msg.actorId };
             for (const k of ["topic", "qtype", "stem", "difficulty"] as const) {
@@ -522,7 +522,7 @@ export function registerF3_recruitment_Consumers(queue: Queue): void {
           }
           case "recruitment_blueprint_routes__6": {
             // Restored: the question (for the optimistic-version guard).
-            const q = await blueprintRepo.findQuestion(p.tenantId, id);
+            const q = await blueprintRepo.findQuestionTx(tx, p.tenantId, id);
             if (!q) throw new HttpError(404, "NOT_FOUND", "question not found");
             await blueprintRepo.updateQuestion(tx, p.tenantId, id, { status: "validated", validatedBy: msg.actorId, validatedAt: new Date(), updatedBy: msg.actorId } as never, q.version);
                   await blueprintRepo.insertEvent(tx, { tenantId: p.tenantId, entityType: "question", entityId: id, action: "validate", detail: {}, actorId: msg.actorId });
@@ -530,7 +530,7 @@ export function registerF3_recruitment_Consumers(queue: Queue): void {
           }
           case "recruitment_blueprint_routes__7": {
             // Restored: the question (for the optimistic-version guard).
-            const q = await blueprintRepo.findQuestion(p.tenantId, id);
+            const q = await blueprintRepo.findQuestionTx(tx, p.tenantId, id);
             if (!q) throw new HttpError(404, "NOT_FOUND", "question not found");
             await blueprintRepo.updateQuestion(tx, p.tenantId, id, { status: "retired", updatedBy: msg.actorId } as never, q.version);
                   await blueprintRepo.insertEvent(tx, { tenantId: p.tenantId, entityType: "question", entityId: id, action: "retire", detail: { reason: body.reason ?? null }, actorId: msg.actorId });
@@ -604,7 +604,7 @@ export function registerF3_recruitment_Consumers(queue: Queue): void {
           }
           case "recruitment_candidate_routes__1": {
             // Restored: the candidate and the profile patch.
-            const c = await candidateRepo.findCandidate(p.tenantId, id);
+            const c = await candidateRepo.findCandidateTx(tx, p.tenantId, id);
             if (!c) throw new HttpError(404, "NOT_FOUND", "candidate not found");
             const patch: Record<string, unknown> = { updatedBy: msg.actorId, ...pickProfile(body) };
             await candidateRepo.updateCandidate(tx, p.tenantId, id, patch as never, c.version);
@@ -612,7 +612,7 @@ export function registerF3_recruitment_Consumers(queue: Queue): void {
           }
           case "recruitment_candidate_routes__2": {
             // Restored: the candidate (existence) and the new education row's id.
-            const c = await candidateRepo.findCandidate(p.tenantId, id);
+            const c = await candidateRepo.findCandidateTx(tx, p.tenantId, id);
             if (!c) throw new HttpError(404, "NOT_FOUND", "candidate not found");
             const eid = genId;
             await candidateRepo.insertEducation(tx, {
@@ -629,7 +629,7 @@ export function registerF3_recruitment_Consumers(queue: Queue): void {
           }
           case "recruitment_candidate_routes__3": {
             // Restored: the candidate (existence) and the new employment row's id.
-            const c = await candidateRepo.findCandidate(p.tenantId, id);
+            const c = await candidateRepo.findCandidateTx(tx, p.tenantId, id);
             if (!c) throw new HttpError(404, "NOT_FOUND", "candidate not found");
             const eid = genId;
             await candidateRepo.insertEmployment(tx, {
@@ -646,7 +646,7 @@ export function registerF3_recruitment_Consumers(queue: Queue): void {
           }
           case "recruitment_candidate_routes__4": {
             // Restored: the candidate (for the optimistic-version guard).
-            const c = await candidateRepo.findCandidate(p.tenantId, id);
+            const c = await candidateRepo.findCandidateTx(tx, p.tenantId, id);
             if (!c) throw new HttpError(404, "NOT_FOUND", "candidate not found");
             await candidateRepo.updateCandidate(tx, p.tenantId, id, {
                   status: "submitted", submittedAt: new Date(),
@@ -656,14 +656,14 @@ export function registerF3_recruitment_Consumers(queue: Queue): void {
           }
           case "recruitment_candidate_routes__5": {
             // Restored: the candidate (for the optimistic-version guard).
-            const c = await candidateRepo.findCandidate(p.tenantId, id);
+            const c = await candidateRepo.findCandidateTx(tx, p.tenantId, id);
             if (!c) throw new HttpError(404, "NOT_FOUND", "candidate not found");
             await candidateRepo.updateCandidate(tx, p.tenantId, id, { status: "withdrawn", withdrawnAt: new Date(), updatedBy: msg.actorId } as never, c.version);
             break;
           }
           case "recruitment_candidate_routes__6": {
             // Restored: the candidate (for the optimistic-version guard).
-            const c = await candidateRepo.findCandidate(p.tenantId, id);
+            const c = await candidateRepo.findCandidateTx(tx, p.tenantId, id);
             if (!c) throw new HttpError(404, "NOT_FOUND", "candidate not found");
             await candidateRepo.updateCandidate(tx, p.tenantId, id, { dataRequestAt: new Date(), updatedBy: msg.actorId } as never, c.version);
             break;
@@ -671,7 +671,7 @@ export function registerF3_recruitment_Consumers(queue: Queue): void {
           case "recruitment_eligibility_routes__0": {
             // Restored: the vacancy (for the optimistic-version guard) and the
             // coerced criteria object the route's Zod schema produced.
-            const v = await eligibilityRepo.findVacancy(p.tenantId, id);
+            const v = await eligibilityRepo.findVacancyTx(tx, p.tenantId, id);
             if (!v) throw new HttpError(404, "NOT_FOUND", "vacancy not found");
             await eligibilityRepo.setVacancyEligibility(tx, p.tenantId, id, toCriteria(body) as never, v.version);
             break;
@@ -680,7 +680,7 @@ export function registerF3_recruitment_Consumers(queue: Queue): void {
             // Restored: the vacancy + its advertised criteria, the eligibility
             // result stored on the application, the new application's id, its
             // application number and the dedup key.
-            const v = await eligibilityRepo.findVacancy(p.tenantId, id);
+            const v = await eligibilityRepo.findVacancyTx(tx, p.tenantId, id);
             if (!v) throw new HttpError(404, "NOT_FOUND", "vacancy not found");
             const criteria = (v.eligibility ?? {}) as EligibilityCriteria;
             const experienceYears = numOrNull(body.experienceYears);
@@ -712,7 +712,7 @@ export function registerF3_recruitment_Consumers(queue: Queue): void {
           }
           case "recruitment_eligibility_routes__2": {
             // Restored: the application (for the optimistic-version guard).
-            const a = await eligibilityRepo.findApplication(p.tenantId, id);
+            const a = await eligibilityRepo.findApplicationTx(tx, p.tenantId, id);
             if (!a) throw new HttpError(404, "NOT_FOUND", "application not found");
             await eligibilityRepo.withdrawApplication(tx, p.tenantId, id, body.reason, a.version);
             break;
@@ -724,7 +724,7 @@ export function registerF3_recruitment_Consumers(queue: Queue): void {
             // did not carry — the route now forwards it on the payload, otherwise
             // the replay guard (unique index on idempotency_key) is defeated and
             // a retried dispatch double-sends.
-            const iv = await ivRepo.findInterview(p.tenantId, id);
+            const iv = await ivRepo.findInterviewTx(tx, p.tenantId, id);
             if (!iv) throw new HttpError(404, "NOT_FOUND", "interview not found");
             const commId = genId;
             const idempotencyKey = (p.idempotencyKey as string | undefined) ?? null;
@@ -761,7 +761,7 @@ export function registerF3_recruitment_Consumers(queue: Queue): void {
           case "recruitment_interview_recording_routes__0": {
             // Restored: the interview, the new artefact's id and the retention
             // deadline. The route already enforced consent + key namespacing.
-            const iv = await ivRepo.findInterview(p.tenantId, id);
+            const iv = await ivRepo.findInterviewTx(tx, p.tenantId, id);
             if (!iv) throw new HttpError(404, "NOT_FOUND", "interview not found");
             const rid = genId;
             const retentionUntil = computeRetentionUntil(Date.now(), body.retentionDays != null ? Number(body.retentionDays) : DEFAULT_RETENTION_DAYS);
@@ -776,7 +776,7 @@ export function registerF3_recruitment_Consumers(queue: Queue): void {
           }
           case "recruitment_interview_recording_routes__1": {
             // Restored: the recording (for the optimistic-version guard).
-            const rec = await recordingRepo.findRecording(p.tenantId, id);
+            const rec = await recordingRepo.findRecordingTx(tx, p.tenantId, id);
             if (!rec) throw new HttpError(404, "NOT_FOUND", "active recording not found");
             await recordingRepo.softDelete(tx, p.tenantId, id, msg.actorId, rec.version);
             break;
@@ -784,7 +784,7 @@ export function registerF3_recruitment_Consumers(queue: Queue): void {
           case "recruitment_interview_response_routes__0": {
             // Restored: the interview (application id + the FROM slot recorded on
             // the response) and the new response row's id.
-            const iv = await ivRepo.findInterview(p.tenantId, id);
+            const iv = await ivRepo.findInterviewTx(tx, p.tenantId, id);
             if (!iv) throw new HttpError(404, "NOT_FOUND", "interview not found");
             const rid = genId;
             await responseRepo.insertResponse(tx, {
@@ -801,11 +801,11 @@ export function registerF3_recruitment_Consumers(queue: Queue): void {
           case "recruitment_interview_response_routes__1": {
             // Restored: the reschedule request, its preferred slot and the
             // interview it moves (both under their own version guards).
-            const r = await responseRepo.findResponse(p.tenantId, reqId);
+            const r = await responseRepo.findResponseTx(tx, p.tenantId, reqId);
             if (!r) throw new HttpError(404, "NOT_FOUND", "reschedule request not found");
             const preferredDate = r.preferredDate as unknown as string | null;
             if (!preferredDate || !r.preferredTime) throw new HttpError(422, "INVALID_RESPONSE", "the reschedule request has no valid preferred slot");
-            const iv = await ivRepo.findInterview(p.tenantId, r.interviewId);
+            const iv = await ivRepo.findInterviewTx(tx, p.tenantId, r.interviewId);
             if (!iv) throw new HttpError(404, "NOT_FOUND", "interview not found");
             const ok = await ivRepo.rescheduleInterview(tx, p.tenantId, r.interviewId, preferredDate, r.preferredTime!, msg.actorId, iv.version);
                     if (!ok) throw new Error("VERSION_CONFLICT");
@@ -816,7 +816,7 @@ export function registerF3_recruitment_Consumers(queue: Queue): void {
           }
           case "recruitment_interview_response_routes__2": {
             // Restored: the reschedule request (for the optimistic-version guard).
-            const r = await responseRepo.findResponse(p.tenantId, reqId);
+            const r = await responseRepo.findResponseTx(tx, p.tenantId, reqId);
             if (!r) throw new HttpError(404, "NOT_FOUND", "reschedule request not found");
             await responseRepo.setResponseStatus(tx, p.tenantId, reqId, {
                     status: "declined", decidedBy: msg.actorId, decidedAt: new Date(), decisionNote: body.note ?? null,
@@ -849,7 +849,7 @@ export function registerF3_recruitment_Consumers(queue: Queue): void {
           }
           case "recruitment_interview_routes__1": {
             // Restored: the interview (existence) and the scorecard envelope.
-            const interview = await coreRepo.findInterviewById(id, p.tenantId);
+            const interview = await coreRepo.findInterviewByIdTx(tx, id, p.tenantId);
             if (!interview) throw new HttpError(404, "NOT_FOUND", "interview not found");
             const scorecard: Record<string, unknown> = {
               ...body, submittedBy: msg.actorId, submittedAt: new Date().toISOString(),
@@ -859,7 +859,7 @@ export function registerF3_recruitment_Consumers(queue: Queue): void {
           }
           case "recruitment_interview_scoring_routes__0": {
             // Restored: the interview (for the optimistic-version guard).
-            const iv = await scoringRepo.findInterview(p.tenantId, id);
+            const iv = await scoringRepo.findInterviewTx(tx, p.tenantId, id);
             if (!iv) throw new HttpError(404, "NOT_FOUND", "interview not found");
             await scoringRepo.updateInterview(tx, p.tenantId, id, {
                   scorecardTemplate: body.competencies as never,
@@ -870,7 +870,7 @@ export function registerF3_recruitment_Consumers(queue: Queue): void {
           case "recruitment_interview_scoring_routes__1": {
             // Restored: the interview's scorecard template and this
             // interviewer's normalised overall (0-100).
-            const iv = await scoringRepo.findInterview(p.tenantId, id);
+            const iv = await scoringRepo.findInterviewTx(tx, p.tenantId, id);
             if (!iv) throw new HttpError(404, "NOT_FOUND", "interview not found");
             const template = (iv.scorecardTemplate ?? []) as Competency[];
             const scores = body.scores as Record<string, number>;
@@ -884,10 +884,10 @@ export function registerF3_recruitment_Consumers(queue: Queue): void {
           case "recruitment_interview_scoring_routes__2": {
             // Restored: the interview, its template, the submitted scores and the
             // competency-weighted consolidation.
-            const iv = await scoringRepo.findInterview(p.tenantId, id);
+            const iv = await scoringRepo.findInterviewTx(tx, p.tenantId, id);
             if (!iv) throw new HttpError(404, "NOT_FOUND", "interview not found");
             const template = (iv.scorecardTemplate ?? []) as Competency[];
-            const rows = await scoringRepo.listScores(p.tenantId, id);
+            const rows = await scoringRepo.listScoresTx(tx, p.tenantId, id);
             const submitted: InterviewerScore[] = rows.filter((s) => s.submitted).map((s) => ({ interviewerId: s.interviewerId, scores: s.scores as Record<string, number>, submitted: true }));
             const result = computePanelScore(template, submitted, iv.cutoffScore ?? null);
             await scoringRepo.updateInterview(tx, p.tenantId, id, {
@@ -899,7 +899,7 @@ export function registerF3_recruitment_Consumers(queue: Queue): void {
           case "recruitment_offer_extra_routes__0": {
             // Restored: the offer and its current joining date (preserved as the
             // ORIGINAL when the first extension is requested).
-            const offer = await offerRepo.findOffer(p.tenantId, offerId);
+            const offer = await offerRepo.findOfferTx(tx, p.tenantId, offerId);
             if (!offer) throw new HttpError(404, "NOT_FOUND", "offer not found");
             const current = offer.joiningDate;
             await offerRepo.updateOffer(tx, p.tenantId, offerId, {
@@ -914,7 +914,7 @@ export function registerF3_recruitment_Consumers(queue: Queue): void {
           }
           case "recruitment_offer_extra_routes__1": {
             // Restored: the offer (the requested date becomes the joining date).
-            const offer = await offerRepo.findOffer(p.tenantId, offerId);
+            const offer = await offerRepo.findOfferTx(tx, p.tenantId, offerId);
             if (!offer) throw new HttpError(404, "NOT_FOUND", "offer not found");
             await offerRepo.updateOffer(tx, p.tenantId, offerId, {
                   joiningDate: offer.requestedJoiningDate,     // apply the new date
@@ -927,7 +927,7 @@ export function registerF3_recruitment_Consumers(queue: Queue): void {
           }
           case "recruitment_offer_extra_routes__2": {
             // Restored: the offer (for the optimistic-version guard).
-            const offer = await offerRepo.findOffer(p.tenantId, offerId);
+            const offer = await offerRepo.findOfferTx(tx, p.tenantId, offerId);
             if (!offer) throw new HttpError(404, "NOT_FOUND", "offer not found");
             await offerRepo.updateOffer(tx, p.tenantId, offerId, {
                   joiningExtensionStatus: "rejected",
@@ -942,7 +942,7 @@ export function registerF3_recruitment_Consumers(queue: Queue): void {
             // application, the approval chain and the derived compensation.
             // NOTE: `id` is the APPLICATION here (`/applications/:id/offers`).
             const newOfferId = genId;
-            const nextVersion = (await offerRepo.maxOfferVersion(p.tenantId, id)) + 1;
+            const nextVersion = (await offerRepo.maxOfferVersionTx(tx, p.tenantId, id)) + 1;
             const chain = (body.approvalChain ?? DEFAULT_OFFER_CHAIN) as ApprovalStage[];
             const c = computeCompensation({
               basicMinor: BigInt(body.basicMinor ?? 0), joiningBonusMinor: BigInt(body.joiningBonusMinor ?? 0),
@@ -964,7 +964,7 @@ export function registerF3_recruitment_Consumers(queue: Queue): void {
           }
           case "recruitment_offer_routes__1": {
             // Restored: the offer (version guard + the application it belongs to).
-            const o = await offerRepo.findOffer(p.tenantId, offerId);
+            const o = await offerRepo.findOfferTx(tx, p.tenantId, offerId);
             if (!o) throw new HttpError(404, "NOT_FOUND", "offer not found");
             await offerRepo.updateOffer(tx, p.tenantId, offerId, { status: "pending_approval", currentStage: 0 }, o.version);
                   await offerRepo.insertEvent(tx, { tenantId: p.tenantId, offerId, applicationId: o.applicationId, action: "submit", actorId: msg.actorId });
@@ -972,7 +972,7 @@ export function registerF3_recruitment_Consumers(queue: Queue): void {
           }
           case "recruitment_offer_routes__2": {
             // Restored: the offer and whether this is the FINAL approval stage.
-            const o = await offerRepo.findOffer(p.tenantId, offerId);
+            const o = await offerRepo.findOfferTx(tx, p.tenantId, offerId);
             if (!o) throw new HttpError(404, "NOT_FOUND", "offer not found");
             const final = isFinalStage(o.approvalChain as ApprovalStage[], o.currentStage);
             await offerRepo.updateOffer(tx, p.tenantId, offerId,
@@ -982,7 +982,7 @@ export function registerF3_recruitment_Consumers(queue: Queue): void {
           }
           case "recruitment_offer_routes__3": {
             // Restored: the offer (for the optimistic-version guard).
-            const o = await offerRepo.findOffer(p.tenantId, offerId);
+            const o = await offerRepo.findOfferTx(tx, p.tenantId, offerId);
             if (!o) throw new HttpError(404, "NOT_FOUND", "offer not found");
             await offerRepo.updateOffer(tx, p.tenantId, offerId, { status: "returned", currentStage: -1 }, o.version);
                   await offerRepo.insertEvent(tx, { tenantId: p.tenantId, offerId, applicationId: o.applicationId, action: "return", remarks: body.comments, actorId: msg.actorId });
@@ -990,7 +990,7 @@ export function registerF3_recruitment_Consumers(queue: Queue): void {
           }
           case "recruitment_offer_routes__4": {
             // Restored: the offer (for the optimistic-version guard).
-            const o = await offerRepo.findOffer(p.tenantId, offerId);
+            const o = await offerRepo.findOfferTx(tx, p.tenantId, offerId);
             if (!o) throw new HttpError(404, "NOT_FOUND", "offer not found");
             await offerRepo.updateOffer(tx, p.tenantId, offerId, { status: "released", releasedAt: new Date(), ...(body.expiresAt ? { expiresAt: body.expiresAt } : {}) }, o.version);
                   await offerRepo.insertEvent(tx, { tenantId: p.tenantId, offerId, applicationId: o.applicationId, action: "release", actorId: msg.actorId });
@@ -1001,7 +1001,7 @@ export function registerF3_recruitment_Consumers(queue: Queue): void {
             // IP / user-agent live on the HTTP request, not the body, so the
             // route now forwards them on the payload as `meta`; fabricating them
             // here would put false evidence on the acceptance record.
-            const o = await offerRepo.findOffer(p.tenantId, offerId);
+            const o = await offerRepo.findOfferTx(tx, p.tenantId, offerId);
             if (!o) throw new HttpError(404, "NOT_FOUND", "offer not found");
             const meta = (p.meta ?? {}) as Record<string, unknown>;
             await offerRepo.updateOffer(tx, p.tenantId, offerId, {
@@ -1012,7 +1012,7 @@ export function registerF3_recruitment_Consumers(queue: Queue): void {
           }
           case "recruitment_offer_routes__6": {
             // Restored: the offer (for the optimistic-version guard).
-            const o = await offerRepo.findOffer(p.tenantId, offerId);
+            const o = await offerRepo.findOfferTx(tx, p.tenantId, offerId);
             if (!o) throw new HttpError(404, "NOT_FOUND", "offer not found");
             await offerRepo.updateOffer(tx, p.tenantId, offerId, { status: "declined", declinedAt: new Date(), declineReasonCode: body.reasonCode, declineRemarks: body.remarks ?? null }, o.version);
                   await offerRepo.insertEvent(tx, { tenantId: p.tenantId, offerId, applicationId: o.applicationId, action: "decline", reasonCode: body.reasonCode, remarks: body.remarks ?? null, actorId: msg.actorId });
@@ -1020,7 +1020,7 @@ export function registerF3_recruitment_Consumers(queue: Queue): void {
           }
           case "recruitment_offer_routes__7": {
             // Restored: the offer (for the optimistic-version guard).
-            const o = await offerRepo.findOffer(p.tenantId, offerId);
+            const o = await offerRepo.findOfferTx(tx, p.tenantId, offerId);
             if (!o) throw new HttpError(404, "NOT_FOUND", "offer not found");
             await offerRepo.updateOffer(tx, p.tenantId, offerId, { status: "withdrawn", withdrawReason: body.reason }, o.version);
                   await offerRepo.insertEvent(tx, { tenantId: p.tenantId, offerId, applicationId: o.applicationId, action: "withdraw", remarks: body.reason, actorId: msg.actorId });
@@ -1028,7 +1028,7 @@ export function registerF3_recruitment_Consumers(queue: Queue): void {
           }
           case "recruitment_offer_routes__8": {
             // Restored: the offer (for the optimistic-version guard).
-            const o = await offerRepo.findOffer(p.tenantId, offerId);
+            const o = await offerRepo.findOfferTx(tx, p.tenantId, offerId);
             if (!o) throw new HttpError(404, "NOT_FOUND", "offer not found");
             await offerRepo.updateOffer(tx, p.tenantId, offerId, { status: "expired" }, o.version);
                   await offerRepo.insertEvent(tx, { tenantId: p.tenantId, offerId, applicationId: o.applicationId, action: "expire", actorId: msg.actorId });
@@ -1037,10 +1037,10 @@ export function registerF3_recruitment_Consumers(queue: Queue): void {
           case "recruitment_offer_routes__9": {
             // Restored: the superseded offer, the new version's id and number,
             // and the compensation merged over the previous offer's figures.
-            const prev = await offerRepo.findOffer(p.tenantId, offerId);
+            const prev = await offerRepo.findOfferTx(tx, p.tenantId, offerId);
             if (!prev) throw new HttpError(404, "NOT_FOUND", "offer not found");
             const newId = genId;
-            const nextVersion = (await offerRepo.maxOfferVersion(p.tenantId, prev.applicationId)) + 1;
+            const nextVersion = (await offerRepo.maxOfferVersionTx(tx, p.tenantId, prev.applicationId)) + 1;
             const c = computeCompensation({
               basicMinor: BigInt(body.basicMinor ?? prev.basicMinor),
               joiningBonusMinor: BigInt(body.joiningBonusMinor ?? prev.joiningBonusMinor),
@@ -1080,7 +1080,7 @@ export function registerF3_recruitment_Consumers(queue: Queue): void {
           }
           case "recruitment_otp_verify_routes__1": {
             // Restored: the latest challenge for this candidate + channel.
-            const challenge = await otpRepo.findLatestChallenge(p.tenantId, id, body.channel ?? "email");
+            const challenge = await otpRepo.findLatestChallengeTx(tx, p.tenantId, id, body.channel ?? "email");
             if (!challenge) return; // nothing to count against; the route already 4xx'd
             await otpRepo.incrementAttempts(tx, p.tenantId, challenge.id);
             break;
@@ -1096,7 +1096,7 @@ export function registerF3_recruitment_Consumers(queue: Queue): void {
             // verification before this deferred write landed. Handler kept
             // as-is (idempotent) so it remains safe to process any such
             // in-flight message.
-            const challenge = await otpRepo.findLatestChallenge(p.tenantId, id, body.channel ?? "email");
+            const challenge = await otpRepo.findLatestChallengeTx(tx, p.tenantId, id, body.channel ?? "email");
             if (!challenge) throw new HttpError(404, "NO_CHALLENGE", "no OTP challenge found");
             await otpRepo.markVerified(tx, p.tenantId, challenge.id, id, body.channel ?? "email");
             break;
@@ -1122,7 +1122,7 @@ export function registerF3_recruitment_Consumers(queue: Queue): void {
           case "recruitment_panel_routes__2": {
             // Restored: the interview (its version binds this outcome to the
             // exact panel that cleared the COI gate) and the validity date.
-            const interview = await panelRepo.findInterview(p.tenantId, id);
+            const interview = await panelRepo.findInterviewTx(tx, p.tenantId, id);
             if (!interview) throw new HttpError(404, "NOT_FOUND", "interview not found");
             const validUntil = body.validUntil ? new Date(body.validUntil).toISOString().slice(0, 10) : null;
             await panelRepo.updateInterview(tx, p.tenantId, id, {
@@ -1137,7 +1137,7 @@ export function registerF3_recruitment_Consumers(queue: Queue): void {
           }
           case "recruitment_publication_routes__0": {
             // Restored: the vacancy and the advertisement patch.
-            const v = await publicationRepo.findVacancy(p.tenantId, id);
+            const v = await publicationRepo.findVacancyTx(tx, p.tenantId, id);
             if (!v) throw new HttpError(404, "NOT_FOUND", "vacancy not found");
             const patch: Record<string, unknown> = { updatedBy: msg.actorId };
             if (body.feesMinor != null) patch.feesMinor = BigInt(body.feesMinor);
@@ -1150,20 +1150,20 @@ export function registerF3_recruitment_Consumers(queue: Queue): void {
           }
           case "recruitment_publication_routes__1": {
             // Restored: the vacancy and the next corrigendum sequence number.
-            const v = await publicationRepo.findVacancy(p.tenantId, id);
+            const v = await publicationRepo.findVacancyTx(tx, p.tenantId, id);
             if (!v) throw new HttpError(404, "NOT_FOUND", "vacancy not found");
-            const seq = await publicationRepo.nextCorrigendumSeq(p.tenantId, id);
+            const seq = await publicationRepo.nextCorrigendumSeqTx(tx, p.tenantId, id);
             await publicationRepo.insertCorrigendum(tx, { tenantId: p.tenantId, jobOpeningId: id, seq, action: "corrigendum", changes: body.changes, actorId: msg.actorId });
                   await publicationRepo.updateVacancy(tx, p.tenantId, id, { corrigendumCount: seq, updatedBy: msg.actorId }, v.version);
             break;
           }
           case "recruitment_publication_routes__2": {
             // Restored: the vacancy, the old/new deadlines and the sequence.
-            const v = await publicationRepo.findVacancy(p.tenantId, id);
+            const v = await publicationRepo.findVacancyTx(tx, p.tenantId, id);
             if (!v) throw new HttpError(404, "NOT_FOUND", "vacancy not found");
             const oldDeadline = v.applicationDeadline as Date | null;
             const newDeadline = new Date(body.newDeadline);
-            const seq = await publicationRepo.nextCorrigendumSeq(p.tenantId, id);
+            const seq = await publicationRepo.nextCorrigendumSeqTx(tx, p.tenantId, id);
             await publicationRepo.insertCorrigendum(tx, {
                     tenantId: p.tenantId, jobOpeningId: id, seq, action: "extension",
                     changes: body.reason ?? `deadline extended to ${body.newDeadline}`, oldDeadline, newDeadline, actorId: msg.actorId,
@@ -1174,9 +1174,9 @@ export function registerF3_recruitment_Consumers(queue: Queue): void {
           }
           case "recruitment_publication_routes__3": {
             // Restored: the vacancy and the next corrigendum sequence number.
-            const v = await publicationRepo.findVacancy(p.tenantId, id);
+            const v = await publicationRepo.findVacancyTx(tx, p.tenantId, id);
             if (!v) throw new HttpError(404, "NOT_FOUND", "vacancy not found");
-            const seq = await publicationRepo.nextCorrigendumSeq(p.tenantId, id);
+            const seq = await publicationRepo.nextCorrigendumSeqTx(tx, p.tenantId, id);
             await publicationRepo.insertCorrigendum(tx, { tenantId: p.tenantId, jobOpeningId: id, seq, action: "cancellation", changes: body.reason, actorId: msg.actorId });
                   // Cancel preserves the advert (row untouched except status) — R-RA-0068.
                   await publicationRepo.updateVacancy(tx, p.tenantId, id, { status: "cancelled", corrigendumCount: seq, updatedBy: msg.actorId }, v.version);
@@ -1196,7 +1196,7 @@ export function registerF3_recruitment_Consumers(queue: Queue): void {
               recognisedInstitutionsOnly: body.recognisedInstitutionsOnly ?? false,
               updatedBy: msg.actorId,
             };
-            const existing = await qualificationRepo.findByJob(p.tenantId, jobOpeningId);
+            const existing = await qualificationRepo.findByJobTx(tx, p.tenantId, jobOpeningId);
             if (existing) await qualificationRepo.updateRequirement(tx, p.tenantId, jobOpeningId, patch as never, existing.version);
                     else await qualificationRepo.insertRequirement(tx, { id: randomUUID(), tenantId: p.tenantId, jobOpeningId, ...patch, createdBy: msg.actorId } as never);
             break;
@@ -1237,7 +1237,7 @@ export function registerF3_recruitment_Consumers(queue: Queue): void {
           }
           case "recruitment_report_routes__0": {
             // Restored: the attempt (for the optimistic-version guard).
-            const a = await attemptRepo.findAttempt(p.tenantId, id);
+            const a = await attemptRepo.findAttemptTx(tx, p.tenantId, id);
             if (!a) throw new HttpError(404, "NOT_FOUND", "attempt not found");
             // Malpractice is also a post-publish REVOCATION: clear frozen/published so a
                   // voided result can never continue to surface as an authoritative published one.
@@ -1251,10 +1251,10 @@ export function registerF3_recruitment_Consumers(queue: Queue): void {
           case "recruitment_report_routes__1": {
             // Restored: the voided attempt, the target schedule, the replacement
             // attempt's id and its per-candidate question order.
-            const a = await attemptRepo.findAttempt(p.tenantId, id);
+            const a = await attemptRepo.findAttemptTx(tx, p.tenantId, id);
             if (!a) throw new HttpError(404, "NOT_FOUND", "attempt not found");
             const targetScheduleId = (body.targetScheduleId as string) ?? a.scheduleId;
-            const target = await attemptRepo.findSchedule(p.tenantId, targetScheduleId);
+            const target = await attemptRepo.findScheduleTx(tx, p.tenantId, targetScheduleId);
             if (!target) throw new HttpError(404, "NOT_FOUND", "target schedule not found");
             const newId = genId;
             const order = randomizeQuestionOrder((target.paper as PaperEntry[]).map((q) => q.questionId), newId);
@@ -1305,7 +1305,7 @@ export function registerF3_recruitment_Consumers(queue: Queue): void {
           case "recruitment_requisition_routes__1": {
             // Restored: the requisition and the field-by-field patch (mirrors the
             // route's allow-list; the chain change was already authorised there).
-            const r = await requisitionRepo.findRequisition(p.tenantId, id);
+            const r = await requisitionRepo.findRequisitionTx(tx, p.tenantId, id);
             if (!r) throw new HttpError(404, "NOT_FOUND", "requisition not found");
             const patch: Record<string, unknown> = { updatedBy: msg.actorId };
             for (const k of ["title", "reason", "employmentType", "recruitmentMode", "campaignType", "grade", "location",
@@ -1323,7 +1323,7 @@ export function registerF3_recruitment_Consumers(queue: Queue): void {
           }
           case "recruitment_requisition_routes__2": {
             // Restored: the requisition (for the optimistic-version guard).
-            const r = await requisitionRepo.findRequisition(p.tenantId, id);
+            const r = await requisitionRepo.findRequisitionTx(tx, p.tenantId, id);
             if (!r) throw new HttpError(404, "NOT_FOUND", "requisition not found");
             await requisitionRepo.updateRequisition(tx, p.tenantId, id, {
                   status: "pending_approval", currentStage: 0, submittedAt: new Date(), updatedBy: msg.actorId,
@@ -1333,7 +1333,7 @@ export function registerF3_recruitment_Consumers(queue: Queue): void {
           case "recruitment_requisition_routes__3": {
             // Restored: the requisition, the role configured for the CURRENT
             // stage (recorded on the approval row) and whether it is the final one.
-            const r = await requisitionRepo.findRequisition(p.tenantId, id);
+            const r = await requisitionRepo.findRequisitionTx(tx, p.tenantId, id);
             if (!r) throw new HttpError(404, "NOT_FOUND", "requisition not found");
             const chain = r.approvalChain as ApprovalStage[];
             const role = currentStageRole(chain, r.currentStage);
@@ -1351,7 +1351,7 @@ export function registerF3_recruitment_Consumers(queue: Queue): void {
           }
           case "recruitment_requisition_routes__4": {
             // Restored: the requisition and the current stage's role.
-            const r = await requisitionRepo.findRequisition(p.tenantId, id);
+            const r = await requisitionRepo.findRequisitionTx(tx, p.tenantId, id);
             if (!r) throw new HttpError(404, "NOT_FOUND", "requisition not found");
             const role = currentStageRole(r.approvalChain as ApprovalStage[], r.currentStage);
             await requisitionRepo.insertApproval(tx, {
@@ -1365,7 +1365,7 @@ export function registerF3_recruitment_Consumers(queue: Queue): void {
           }
           case "recruitment_requisition_routes__5": {
             // Restored: the requisition (for the optimistic-version guard).
-            const r = await requisitionRepo.findRequisition(p.tenantId, id);
+            const r = await requisitionRepo.findRequisitionTx(tx, p.tenantId, id);
             if (!r) throw new HttpError(404, "NOT_FOUND", "requisition not found");
             await requisitionRepo.updateRequisition(tx, p.tenantId, id, {
                   status: "on_hold", holdReason: body.reason, updatedBy: msg.actorId,
@@ -1375,7 +1375,7 @@ export function registerF3_recruitment_Consumers(queue: Queue): void {
           case "recruitment_requisition_routes__6": {
             // Restored: the requisition and the status it is restored TO — a
             // fully-approved run resumes 'approved', otherwise 'pending_approval'.
-            const r = await requisitionRepo.findRequisition(p.tenantId, id);
+            const r = await requisitionRepo.findRequisitionTx(tx, p.tenantId, id);
             if (!r) throw new HttpError(404, "NOT_FOUND", "requisition not found");
             const restored = r.approvedAt ? "approved" : "pending_approval";
             await requisitionRepo.updateRequisition(tx, p.tenantId, id, {
@@ -1385,7 +1385,7 @@ export function registerF3_recruitment_Consumers(queue: Queue): void {
           }
           case "recruitment_requisition_routes__7": {
             // Restored: the requisition (for the optimistic-version guard).
-            const r = await requisitionRepo.findRequisition(p.tenantId, id);
+            const r = await requisitionRepo.findRequisitionTx(tx, p.tenantId, id);
             if (!r) throw new HttpError(404, "NOT_FOUND", "requisition not found");
             await requisitionRepo.updateRequisition(tx, p.tenantId, id, {
                   status: "cancelled", closeReason: body.reason, updatedBy: msg.actorId,
@@ -1394,7 +1394,7 @@ export function registerF3_recruitment_Consumers(queue: Queue): void {
           }
           case "recruitment_requisition_routes__8": {
             // Restored: the requisition (for the optimistic-version guard).
-            const r = await requisitionRepo.findRequisition(p.tenantId, id);
+            const r = await requisitionRepo.findRequisitionTx(tx, p.tenantId, id);
             if (!r) throw new HttpError(404, "NOT_FOUND", "requisition not found");
             await requisitionRepo.updateRequisition(tx, p.tenantId, id, {
                   status: "closed", closeReason: body.reason, updatedBy: msg.actorId,
@@ -1404,7 +1404,7 @@ export function registerF3_recruitment_Consumers(queue: Queue): void {
           case "recruitment_requisition_routes__9": {
             // Restored: the source requisition, the clone's id and the carried
             // field set (CLONE_CARRY_FIELDS, so status/approval state is dropped).
-            const r = await requisitionRepo.findRequisition(p.tenantId, id);
+            const r = await requisitionRepo.findRequisitionTx(tx, p.tenantId, id);
             if (!r) throw new HttpError(404, "NOT_FOUND", "requisition not found");
             const newId = genId;
             const carried = cloneFields(r as unknown as Record<string, unknown>);
@@ -1419,7 +1419,7 @@ export function registerF3_recruitment_Consumers(queue: Queue): void {
           case "recruitment_requisition_routes__10": {
             // Restored: the approved requisition (the job opening is projected
             // from it) and the new job opening's id.
-            const r = await requisitionRepo.findRequisition(p.tenantId, id);
+            const r = await requisitionRepo.findRequisitionTx(tx, p.tenantId, id);
             if (!r) throw new HttpError(404, "NOT_FOUND", "requisition not found");
             const openingId = genId;
             await requisitionRepo.insertJobOpening(tx, {
@@ -1442,7 +1442,7 @@ export function registerF3_recruitment_Consumers(queue: Queue): void {
             // Restored: the job opening (the `:id` path param) and any existing
             // roster, plus numeric coercion of the raw vacancy counts.
             const jobOpeningId = id;
-            const existing = await reservationRepo.findByJob(p.tenantId, jobOpeningId);
+            const existing = await reservationRepo.findByJobTx(tx, p.tenantId, jobOpeningId);
             const totalVacancies = numOr(body.totalVacancies, 0);
             const categoryVacancies = numRecord(body.categoryVacancies ?? {});
             const locationRosters: Record<string, Record<string, number>> = {};
@@ -1466,7 +1466,7 @@ export function registerF3_recruitment_Consumers(queue: Queue): void {
           case "recruitment_reservation_routes__1": {
             // Restored: the roster (for the optimistic-version guard).
             const jobOpeningId = id;
-            const roster = await reservationRepo.findByJob(p.tenantId, jobOpeningId);
+            const roster = await reservationRepo.findByJobTx(tx, p.tenantId, jobOpeningId);
             if (!roster) throw new HttpError(404, "NOT_FOUND", "reservation roster not found for this job opening");
             await reservationRepo.updateRoster(tx, p.tenantId, jobOpeningId, {
                   status: "approved", approvedBy: msg.actorId, approvedAt: new Date(), updatedBy: msg.actorId,
@@ -1476,9 +1476,9 @@ export function registerF3_recruitment_Consumers(queue: Queue): void {
           case "recruitment_result_routes__0": {
             // Restored: the attempt, its schedule and the paper entry being
             // scored (its marks cap the evaluation).
-            const a = await attemptRepo.findAttempt(p.tenantId, id);
+            const a = await attemptRepo.findAttemptTx(tx, p.tenantId, id);
             if (!a) throw new HttpError(404, "NOT_FOUND", "attempt not found");
-            const s = await attemptRepo.findSchedule(p.tenantId, a.scheduleId);
+            const s = await attemptRepo.findScheduleTx(tx, p.tenantId, a.scheduleId);
             if (!s) throw new HttpError(404, "NOT_FOUND", "schedule not found");
             const entry = (s.paper as PaperEntry[]).find((q) => q.questionId === body.questionId);
             if (!entry) throw new HttpError(422, "UNKNOWN_QUESTION", "question is not part of this attempt");
@@ -1490,16 +1490,16 @@ export function registerF3_recruitment_Consumers(queue: Queue): void {
             // Restored: the attempt, its paper + responses, the manual
             // evaluations, the consolidated score and whether a prior moderation
             // is being invalidated by this re-consolidation.
-            const a = await attemptRepo.findAttempt(p.tenantId, id);
+            const a = await attemptRepo.findAttemptTx(tx, p.tenantId, id);
             if (!a) throw new HttpError(404, "NOT_FOUND", "attempt not found");
-            const s = await attemptRepo.findSchedule(p.tenantId, a.scheduleId);
+            const s = await attemptRepo.findScheduleTx(tx, p.tenantId, a.scheduleId);
             if (!s) throw new HttpError(404, "NOT_FOUND", "schedule not found");
-            const blueprint = await blueprintRepo.findBlueprint(p.tenantId, a.blueprintId);
+            const blueprint = await blueprintRepo.findBlueprintTx(tx, p.tenantId, a.blueprintId);
             const scoring = (blueprint?.scoringConfig ?? {}) as { negativeMarking?: { enabled: boolean; fraction?: number }; totalCutoffPct?: number; sections?: Array<{ key: string; sectionCutoffPct?: number }> };
             const paper = s.paper as PaperEntry[];
-            const responses = await attemptRepo.listResponses(p.tenantId, id);
+            const responses = await attemptRepo.listResponsesTx(tx, p.tenantId, id);
             const respByQ = new Map(responses.map((r) => [r.questionId, r.response as Record<string, unknown>]));
-            const evals = await resultRepo.listEvaluations(p.tenantId, id);
+            const evals = await resultRepo.listEvaluationsTx(tx, p.tenantId, id);
             const objectiveByQ = new Map<string, ObjectiveScore>();
             const manualByQ = new Map<string, number>();
             for (const e of paper) {
@@ -1526,7 +1526,7 @@ export function registerF3_recruitment_Consumers(queue: Queue): void {
           }
           case "recruitment_result_routes__2": {
             // Restored: the attempt (its raw total is snapshotted into the proposal).
-            const a = await attemptRepo.findAttempt(p.tenantId, id);
+            const a = await attemptRepo.findAttemptTx(tx, p.tenantId, id);
             if (!a) throw new HttpError(404, "NOT_FOUND", "attempt not found");
             await attemptRepo.updateAttempt(tx, p.tenantId, id, {
                     // rawSnapshot binds the checker's approval to the exact raw score under
@@ -1540,11 +1540,11 @@ export function registerF3_recruitment_Consumers(queue: Queue): void {
           case "recruitment_result_routes__3": {
             // Restored: the attempt, the pending moderation proposal, and the
             // moderated total + result band derived from the blueprint cut-offs.
-            const a = await attemptRepo.findAttempt(p.tenantId, id);
+            const a = await attemptRepo.findAttemptTx(tx, p.tenantId, id);
             if (!a) throw new HttpError(404, "NOT_FOUND", "attempt not found");
             const mod = (a.moderation ?? {}) as { method?: string; factor?: number; proposedBy?: string; rawSnapshot?: string };
             if (!mod.proposedBy) throw new HttpError(409, "NO_PROPOSAL", "there is no moderation proposal to approve");
-            const blueprint = await blueprintRepo.findBlueprint(p.tenantId, a.blueprintId);
+            const blueprint = await blueprintRepo.findBlueprintTx(tx, p.tenantId, a.blueprintId);
             const scoring = (blueprint?.scoringConfig ?? {}) as { totalCutoffPct?: number; sections?: Array<{ key: string; sectionCutoffPct?: number }> };
             const raw = Number(a.rawTotalScore);
             const max = Number(a.maxScore);
@@ -1559,7 +1559,7 @@ export function registerF3_recruitment_Consumers(queue: Queue): void {
           }
           case "recruitment_result_routes__4": {
             // Restored: the attempt (the frozen event records its final scores).
-            const a = await attemptRepo.findAttempt(p.tenantId, id);
+            const a = await attemptRepo.findAttemptTx(tx, p.tenantId, id);
             if (!a) throw new HttpError(404, "NOT_FOUND", "attempt not found");
             await attemptRepo.updateAttempt(tx, p.tenantId, id, { frozen: true, frozenBy: msg.actorId, frozenAt: new Date(), updatedBy: msg.actorId } as never, a.version);
                   await resultRepo.insertResultEvent(tx, { tenantId: p.tenantId, attemptId: id, action: "freeze", detail: { result: a.result, totalScore: a.totalScore }, actorId: msg.actorId });
@@ -1567,7 +1567,7 @@ export function registerF3_recruitment_Consumers(queue: Queue): void {
           }
           case "recruitment_result_routes__5": {
             // Restored: the attempt (the publish event records the result band).
-            const a = await attemptRepo.findAttempt(p.tenantId, id);
+            const a = await attemptRepo.findAttemptTx(tx, p.tenantId, id);
             if (!a) throw new HttpError(404, "NOT_FOUND", "attempt not found");
             await attemptRepo.updateAttempt(tx, p.tenantId, id, { published: true, publishedAt: new Date(), updatedBy: msg.actorId } as never, a.version);
                   await resultRepo.insertResultEvent(tx, { tenantId: p.tenantId, attemptId: id, action: "publish", detail: { result: a.result }, actorId: msg.actorId });
@@ -1575,7 +1575,7 @@ export function registerF3_recruitment_Consumers(queue: Queue): void {
           }
           case "recruitment_resume_routes__0": {
             // Restored: the candidate (existence) and the new resume version's id.
-            const c = await candidateRepo.findCandidate(p.tenantId, id);
+            const c = await candidateRepo.findCandidateTx(tx, p.tenantId, id);
             if (!c) throw new HttpError(404, "NOT_FOUND", "candidate not found");
             const rid = genId;
             const r = await resumeRepo.createResumeVersion(tx, {
@@ -1592,7 +1592,7 @@ export function registerF3_recruitment_Consumers(queue: Queue): void {
             // Restored: the resume version being activated (its file key is
             // denormalised onto the candidate). `resumeId` is a PATH parameter.
             const resumeId = params.resumeId as string;
-            const resume = await resumeRepo.findResume(p.tenantId, id, resumeId);
+            const resume = await resumeRepo.findResumeTx(tx, p.tenantId, id, resumeId);
             if (!resume) throw new HttpError(404, "NOT_FOUND", "resume version not found");
             await resumeRepo.activateResume(tx, p.tenantId, id, resumeId, resume.fileKey, msg.actorId);
             break;
@@ -1601,7 +1601,7 @@ export function registerF3_recruitment_Consumers(queue: Queue): void {
             // Restored: the application (the FROM decision, its version and the
             // original screener are snapshotted onto the request) and the new
             // request's id.
-            const a = await screeningRepo.findApplication(p.tenantId, id);
+            const a = await screeningRepo.findApplicationTx(tx, p.tenantId, id);
             if (!a) throw new HttpError(404, "NOT_FOUND", "application not found");
             const rid = genId;
             await overrideRepo.createRequest(tx, {
@@ -1617,9 +1617,9 @@ export function registerF3_recruitment_Consumers(queue: Queue): void {
           case "recruitment_screening_override_routes__1": {
             // Restored: the override request and the application it overturns
             // (both under their own optimistic-version guards).
-            const r = await overrideRepo.findRequest(p.tenantId, reqId);
+            const r = await overrideRepo.findRequestTx(tx, p.tenantId, reqId);
             if (!r) throw new HttpError(404, "NOT_FOUND", "override request not found");
-            const a = await screeningRepo.findApplication(p.tenantId, r.applicationId);
+            const a = await screeningRepo.findApplicationTx(tx, p.tenantId, r.applicationId);
             if (!a) throw new HttpError(404, "NOT_FOUND", "application not found");
             await screeningRepo.setScreening(tx, p.tenantId, r.applicationId, {
                       screeningDecision: r.toDecision,
@@ -1642,7 +1642,7 @@ export function registerF3_recruitment_Consumers(queue: Queue): void {
           }
           case "recruitment_screening_override_routes__2": {
             // Restored: the override request (for the optimistic-version guard).
-            const r = await overrideRepo.findRequest(p.tenantId, reqId);
+            const r = await overrideRepo.findRequestTx(tx, p.tenantId, reqId);
             if (!r) throw new HttpError(404, "NOT_FOUND", "override request not found");
             await overrideRepo.setRequestStatus(tx, p.tenantId, reqId, {
                     status: "rejected", decidedBy: msg.actorId, decidedAt: new Date(), decisionNote: body.note ?? null,
@@ -1651,7 +1651,7 @@ export function registerF3_recruitment_Consumers(queue: Queue): void {
           }
           case "recruitment_screening_override_routes__3": {
             // Restored: the override request (for the optimistic-version guard).
-            const r = await overrideRepo.findRequest(p.tenantId, reqId);
+            const r = await overrideRepo.findRequestTx(tx, p.tenantId, reqId);
             if (!r) throw new HttpError(404, "NOT_FOUND", "override request not found");
             await overrideRepo.setRequestStatus(tx, p.tenantId, reqId, {
                     status: "cancelled", decidedBy: msg.actorId, decidedAt: new Date(), decisionNote: body.note ?? null,
@@ -1661,7 +1661,7 @@ export function registerF3_recruitment_Consumers(queue: Queue): void {
           case "recruitment_screening_routes__0": {
             // Restored: the vacancy's applications and the screened/skipped
             // counters the loop maintains.
-            const applications = await screeningRepo.listApplicationsForVacancy(p.tenantId, id);
+            const applications = await screeningRepo.listApplicationsForVacancyTx(tx, p.tenantId, id);
             let screened = 0, skipped = 0;
             for (const a of applications) {
                     if (a.screeningDecision !== "pending") { skipped++; continue; }
@@ -1683,7 +1683,7 @@ export function registerF3_recruitment_Consumers(queue: Queue): void {
           }
           case "recruitment_screening_routes__1": {
             // Restored: the application (its job opening and version).
-            const a = await screeningRepo.findApplication(p.tenantId, id);
+            const a = await screeningRepo.findApplicationTx(tx, p.tenantId, id);
             if (!a) throw new HttpError(404, "NOT_FOUND", "application not found");
             await screeningRepo.setScreening(tx, p.tenantId, id, {
                       screeningDecision: body.decision,
@@ -1702,7 +1702,7 @@ export function registerF3_recruitment_Consumers(queue: Queue): void {
           case "recruitment_screening_routes__2": {
             // Restored: the requested applications (scoped to this vacancy) and
             // the shortlisted/skipped counters.
-            const apps = await screeningRepo.findApplicationsByIds(p.tenantId, id, (body.applicationIds ?? []) as string[]);
+            const apps = await screeningRepo.findApplicationsByIdsTx(tx, p.tenantId, id, (body.applicationIds ?? []) as string[]);
             let shortlisted = 0, skipped = 0;
             for (const a of apps) {
                     if (a.shortlistFrozen) { skipped++; continue; }
@@ -1727,7 +1727,7 @@ export function registerF3_recruitment_Consumers(queue: Queue): void {
           }
           case "recruitment_screening_routes__3": {
             // Restored: the not-yet-frozen shortlisted applications for the vacancy.
-            const all = await screeningRepo.listApplicationsForVacancy(p.tenantId, id);
+            const all = await screeningRepo.listApplicationsForVacancyTx(tx, p.tenantId, id);
             const shortlisted = all.filter((a) => a.screeningDecision === "shortlisted" && !a.shortlistFrozen);
             for (const a of shortlisted) {
                     await screeningRepo.setScreeningById(tx, p.tenantId, a.id, { shortlistFrozen: true });
@@ -1750,7 +1750,7 @@ export function registerF3_recruitment_Consumers(queue: Queue): void {
           }
           case "recruitment_selection_routes__1": {
             // Restored: the list (for the optimistic-version guard).
-            const list = await selectionRepo.findList(p.tenantId, id);
+            const list = await selectionRepo.findListTx(tx, p.tenantId, id);
             if (!list) throw new HttpError(404, "NOT_FOUND", "selection list not found");
             await selectionRepo.setEntries(tx, p.tenantId, id, ((body.entries ?? []) as Array<Record<string, any>>).map((e) => ({
                       tenantId: p.tenantId, listId: id, applicationId: e.applicationId, candidateName: e.candidateName,
@@ -1763,7 +1763,7 @@ export function registerF3_recruitment_Consumers(queue: Queue): void {
           }
           case "recruitment_selection_routes__2": {
             // Restored: the list and the validity date (YYYY-MM-DD).
-            const list = await selectionRepo.findList(p.tenantId, id);
+            const list = await selectionRepo.findListTx(tx, p.tenantId, id);
             if (!list) throw new HttpError(404, "NOT_FOUND", "selection list not found");
             const validUntil = new Date(body.validUntil).toISOString().slice(0, 10);
             await selectionRepo.updateList(tx, p.tenantId, id, {
@@ -1773,14 +1773,14 @@ export function registerF3_recruitment_Consumers(queue: Queue): void {
           }
           case "recruitment_selection_routes__3": {
             // Restored: the list (for the optimistic-version guard).
-            const list = await selectionRepo.findList(p.tenantId, id);
+            const list = await selectionRepo.findListTx(tx, p.tenantId, id);
             if (!list) throw new HttpError(404, "NOT_FOUND", "selection list not found");
             await selectionRepo.updateList(tx, p.tenantId, id, { status: "published", publishedAt: new Date(), updatedBy: msg.actorId } as never, list.version);
             break;
           }
           case "recruitment_selection_routes__4": {
             // Restored: the list (for the optimistic-version guard).
-            const list = await selectionRepo.findList(p.tenantId, id);
+            const list = await selectionRepo.findListTx(tx, p.tenantId, id);
             if (!list) throw new HttpError(404, "NOT_FOUND", "selection list not found");
             await selectionRepo.updateList(tx, p.tenantId, id, { status: "expired", updatedBy: msg.actorId } as never, list.version);
             break;

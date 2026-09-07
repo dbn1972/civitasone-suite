@@ -15,8 +15,13 @@ export async function insertSchedule(tx: Writer, row: ScheduleInsert): Promise<v
   await tx.insert(hrmsAssessmentSchedules).values(row);
 }
 export async function findSchedule(tenantId: string, id: string): Promise<ScheduleRow | null> {
-  const rows = await scopedRead((tx) => tx.select().from(hrmsAssessmentSchedules)
-    .where(and(eq(hrmsAssessmentSchedules.tenantId, tenantId), eq(hrmsAssessmentSchedules.id, id))).limit(1));
+  return scopedRead((tx) => findScheduleTx(tx, tenantId, id));
+}
+
+/** Tx-scoped variant of findSchedule -- see .claude/skills/16-production-readiness-audit.md section 1. */
+export async function findScheduleTx(tx: Writer, tenantId: string, id: string): Promise<ScheduleRow | null> {
+  const rows = await (tx as typeof db).select().from(hrmsAssessmentSchedules)
+    .where(and(eq(hrmsAssessmentSchedules.tenantId, tenantId), eq(hrmsAssessmentSchedules.id, id))).limit(1);
   return rows[0] ?? null;
 }
 export async function updateSchedule(tx: Writer, tenantId: string, id: string, patch: Partial<ScheduleInsert>, expectedVersion: number): Promise<void> {
@@ -38,8 +43,13 @@ export async function insertAttempt(tx: Writer, row: AttemptInsert): Promise<voi
   await tx.insert(hrmsAssessmentAttempts).values(row);
 }
 export async function findAttempt(tenantId: string, id: string): Promise<AttemptRow | null> {
-  const rows = await scopedRead((tx) => tx.select().from(hrmsAssessmentAttempts)
-    .where(and(eq(hrmsAssessmentAttempts.tenantId, tenantId), eq(hrmsAssessmentAttempts.id, id))).limit(1));
+  return scopedRead((tx) => findAttemptTx(tx, tenantId, id));
+}
+
+/** Tx-scoped variant of findAttempt -- see .claude/skills/16-production-readiness-audit.md section 1. */
+export async function findAttemptTx(tx: Writer, tenantId: string, id: string): Promise<AttemptRow | null> {
+  const rows = await (tx as typeof db).select().from(hrmsAssessmentAttempts)
+    .where(and(eq(hrmsAssessmentAttempts.tenantId, tenantId), eq(hrmsAssessmentAttempts.id, id))).limit(1);
   return rows[0] ?? null;
 }
 export async function updateAttempt(tx: Writer, tenantId: string, id: string, patch: Partial<AttemptInsert>, expectedVersion: number): Promise<void> {
@@ -70,6 +80,11 @@ export async function updateResponseScore(tx: Writer, tenantId: string, attemptI
     .where(and(eq(hrmsAssessmentResponses.tenantId, tenantId), eq(hrmsAssessmentResponses.attemptId, attemptId), eq(hrmsAssessmentResponses.questionId, questionId)));
 }
 export async function listResponses(tenantId: string, attemptId: string): Promise<ResponseRow[]> {
-  return scopedRead((tx) => tx.select().from(hrmsAssessmentResponses)
-    .where(and(eq(hrmsAssessmentResponses.tenantId, tenantId), eq(hrmsAssessmentResponses.attemptId, attemptId))));
+  return scopedRead((tx) => listResponsesTx(tx, tenantId, attemptId));
+}
+
+/** Tx-scoped variant of listResponses -- see .claude/skills/16-production-readiness-audit.md section 1. */
+export async function listResponsesTx(tx: Writer, tenantId: string, attemptId: string): Promise<ResponseRow[]> {
+  return (tx as typeof db).select().from(hrmsAssessmentResponses)
+    .where(and(eq(hrmsAssessmentResponses.tenantId, tenantId), eq(hrmsAssessmentResponses.attemptId, attemptId)));
 }

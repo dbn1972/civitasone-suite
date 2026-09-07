@@ -37,6 +37,7 @@ vi.mock("../src/modules/recruitment/requisition-repo.js", async (io) => ({
   ...(await io<Record<string, unknown>>()),
   insertRequisition: (...a: unknown[]) => H.insertReqMock(...a),
   findRequisition: (...a: unknown[]) => H.findReqMock(...a),
+  findRequisitionTx: (_tx: unknown, ...a: unknown[]) => H.findReqMock(...a),
   updateRequisition: (...a: unknown[]) => H.updateReqMock(...a),
   insertApproval: (...a: unknown[]) => H.insertApprovalMock(...a),
   insertJobOpening: (...a: unknown[]) => H.insertJobOpeningMock(...a),

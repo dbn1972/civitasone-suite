@@ -86,12 +86,17 @@ export async function listResumes(tenantId: string, candidateId: string): Promis
 }
 
 export async function findResume(tenantId: string, candidateId: string, resumeId: string): Promise<ResumeRow | null> {
-  const rows = await scopedRead((tx) => tx.select().from(hrmsCandidateResumes)
+  return scopedRead((tx) => findResumeTx(tx, tenantId, candidateId, resumeId));
+}
+
+/** Tx-scoped variant of findResume -- see .claude/skills/16-production-readiness-audit.md section 1. */
+export async function findResumeTx(tx: Writer, tenantId: string, candidateId: string, resumeId: string): Promise<ResumeRow | null> {
+  const rows = await (tx as typeof db).select().from(hrmsCandidateResumes)
     .where(and(
       eq(hrmsCandidateResumes.tenantId, tenantId),
       eq(hrmsCandidateResumes.candidateId, candidateId),
       eq(hrmsCandidateResumes.id, resumeId),
-    )).limit(1));
+    )).limit(1);
   return rows[0] ?? null;
 }
 

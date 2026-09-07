@@ -33,12 +33,14 @@ vi.mock("../src/shared/db.js", async (io) => {
 vi.mock("../src/modules/recruitment/candidate-repo.js", async (io) => ({
   ...(await io<Record<string, unknown>>()),
   findCandidate: (...a: unknown[]) => H.findCandidate(...a),
+  findCandidateTx: (_tx: unknown, ...a: unknown[]) => H.findCandidate(...a),
 }));
 vi.mock("../src/modules/recruitment/resume-repo.js", async (io) => ({
   ...(await io<Record<string, unknown>>()),
   createResumeVersion: (...a: unknown[]) => H.createResumeVersion(...a),
   listResumes: (...a: unknown[]) => H.listResumes(...a),
   findResume: (...a: unknown[]) => H.findResume(...a),
+  findResumeTx: (_tx: unknown, ...a: unknown[]) => H.findResume(...a),
   activateResume: (...a: unknown[]) => H.activateResume(...a),
 }));
 

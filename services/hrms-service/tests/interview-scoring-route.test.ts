@@ -30,9 +30,11 @@ vi.mock("../src/shared/db.js", async (io) => {
 vi.mock("../src/modules/recruitment/interview-scoring-repo.js", async (io) => ({
   ...(await io<Record<string, unknown>>()),
   findInterview: (...a: unknown[]) => H.findIvMock(...a),
+  findInterviewTx: (_tx: unknown, ...a: unknown[]) => H.findIvMock(...a),
   updateInterview: (...a: unknown[]) => H.updateIvMock(...a),
   findScore: (...a: unknown[]) => H.findScoreMock(...a),
   listScores: (...a: unknown[]) => H.listScoresMock(...a),
+  listScoresTx: (_tx: unknown, ...a: unknown[]) => H.listScoresMock(...a),
   insertScore: (...a: unknown[]) => H.insertScoreMock(...a),
 }));
 

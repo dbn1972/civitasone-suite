@@ -27,6 +27,7 @@ vi.mock("../src/shared/db.js", async (io) => {
 vi.mock("../src/modules/recruitment/reservation-repo.js", async (io) => ({
   ...(await io<Record<string, unknown>>()),
   findByJob: (...a: unknown[]) => H.findByJob(...a),
+  findByJobTx: (_tx: unknown, ...a: unknown[]) => H.findByJob(...a),
   insertRoster: (...a: unknown[]) => H.insertRoster(...a),
   updateRoster: (...a: unknown[]) => H.updateRoster(...a),
 }));

@@ -17,8 +17,13 @@ export async function saveEvaluation(tx: Writer, row: EvaluationInsert): Promise
 }
 
 export async function listEvaluations(tenantId: string, attemptId: string): Promise<EvaluationRow[]> {
-  return scopedRead((tx) => tx.select().from(hrmsAssessmentEvaluations)
-    .where(and(eq(hrmsAssessmentEvaluations.tenantId, tenantId), eq(hrmsAssessmentEvaluations.attemptId, attemptId))));
+  return scopedRead((tx) => listEvaluationsTx(tx, tenantId, attemptId));
+}
+
+/** Tx-scoped variant of listEvaluations -- see .claude/skills/16-production-readiness-audit.md section 1. */
+export async function listEvaluationsTx(tx: Writer, tenantId: string, attemptId: string): Promise<EvaluationRow[]> {
+  return (tx as typeof db).select().from(hrmsAssessmentEvaluations)
+    .where(and(eq(hrmsAssessmentEvaluations.tenantId, tenantId), eq(hrmsAssessmentEvaluations.attemptId, attemptId)));
 }
 
 export async function insertResultEvent(

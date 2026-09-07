@@ -6,26 +6,42 @@ export type Writer = Pick<typeof db, "insert" | "update" | "select">;
 type ApplicationRow = typeof hrmsApplications.$inferSelect;
 
 export async function findApplication(tenantId: string, id: string): Promise<ApplicationRow | null> {
-  const rows = await scopedRead((tx) => tx.select().from(hrmsApplications)
-    .where(and(eq(hrmsApplications.tenantId, tenantId), eq(hrmsApplications.id, id))).limit(1));
+  return scopedRead((tx) => findApplicationTx(tx, tenantId, id));
+}
+
+/** Tx-scoped variant of findApplication -- see .claude/skills/16-production-readiness-audit.md section 1. */
+export async function findApplicationTx(tx: Writer, tenantId: string, id: string): Promise<ApplicationRow | null> {
+  const rows = await (tx as typeof db).select().from(hrmsApplications)
+    .where(and(eq(hrmsApplications.tenantId, tenantId), eq(hrmsApplications.id, id))).limit(1);
   return rows[0] ?? null;
 }
 
 export async function listApplicationsForVacancy(tenantId: string, jobOpeningId: string, limit = 500): Promise<ApplicationRow[]> {
-  return scopedRead((tx) => tx.select().from(hrmsApplications)
+  return scopedRead((tx) => listApplicationsForVacancyTx(tx, tenantId, jobOpeningId, limit));
+}
+
+/** Tx-scoped variant of listApplicationsForVacancy -- see .claude/skills/16-production-readiness-audit.md section 1. */
+export async function listApplicationsForVacancyTx(tx: Writer, tenantId: string, jobOpeningId: string, limit = 500): Promise<ApplicationRow[]> {
+  return (tx as typeof db).select().from(hrmsApplications)
     .where(and(eq(hrmsApplications.tenantId, tenantId), eq(hrmsApplications.jobOpeningId, jobOpeningId)))
-    .orderBy(desc(hrmsApplications.appliedAt)).limit(limit));
+    .orderBy(desc(hrmsApplications.appliedAt)).limit(limit);
 }
 
 /** Applications for a vacancy filtered to a set of ids (for bulk shortlist). */
 export async function findApplicationsByIds(tenantId: string, jobOpeningId: string, ids: string[]): Promise<ApplicationRow[]> {
   if (ids.length === 0) return [];
-  return scopedRead((tx) => tx.select().from(hrmsApplications)
+  return scopedRead((tx) => findApplicationsByIdsTx(tx, tenantId, jobOpeningId, ids));
+}
+
+/** Tx-scoped variant of findApplicationsByIds -- see .claude/skills/16-production-readiness-audit.md section 1. */
+export async function findApplicationsByIdsTx(tx: Writer, tenantId: string, jobOpeningId: string, ids: string[]): Promise<ApplicationRow[]> {
+  if (ids.length === 0) return [];
+  return (tx as typeof db).select().from(hrmsApplications)
     .where(and(
       eq(hrmsApplications.tenantId, tenantId),
       eq(hrmsApplications.jobOpeningId, jobOpeningId),
       inArray(hrmsApplications.id, ids),
-    )));
+    ));
 }
 
 export async function setScreening(

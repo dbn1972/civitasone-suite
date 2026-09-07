@@ -9,8 +9,13 @@ type ApplicationRow = typeof hrmsApplications.$inferSelect;
 type ApplicationInsert = typeof hrmsApplications.$inferInsert;
 
 export async function findVacancy(tenantId: string, id: string): Promise<JobOpeningRow | null> {
-  const rows = await scopedRead((tx) => tx.select().from(hrmsJobOpenings)
-    .where(and(eq(hrmsJobOpenings.tenantId, tenantId), eq(hrmsJobOpenings.id, id))).limit(1));
+  return scopedRead((tx) => findVacancyTx(tx, tenantId, id));
+}
+
+/** Tx-scoped variant of findVacancy -- see .claude/skills/16-production-readiness-audit.md section 1. */
+export async function findVacancyTx(tx: Writer, tenantId: string, id: string): Promise<JobOpeningRow | null> {
+  const rows = await (tx as typeof db).select().from(hrmsJobOpenings)
+    .where(and(eq(hrmsJobOpenings.tenantId, tenantId), eq(hrmsJobOpenings.id, id))).limit(1);
   return rows[0] ?? null;
 }
 
@@ -45,8 +50,13 @@ export async function insertApplication(tx: Writer, row: ApplicationInsert): Pro
 }
 
 export async function findApplication(tenantId: string, id: string): Promise<ApplicationRow | null> {
-  const rows = await scopedRead((tx) => tx.select().from(hrmsApplications)
-    .where(and(eq(hrmsApplications.tenantId, tenantId), eq(hrmsApplications.id, id))).limit(1));
+  return scopedRead((tx) => findApplicationTx(tx, tenantId, id));
+}
+
+/** Tx-scoped variant of findApplication -- see .claude/skills/16-production-readiness-audit.md section 1. */
+export async function findApplicationTx(tx: Writer, tenantId: string, id: string): Promise<ApplicationRow | null> {
+  const rows = await (tx as typeof db).select().from(hrmsApplications)
+    .where(and(eq(hrmsApplications.tenantId, tenantId), eq(hrmsApplications.id, id))).limit(1);
   return rows[0] ?? null;
 }
 

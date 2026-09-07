@@ -35,21 +35,26 @@ vi.mock("../src/shared/db.js", async (io) => {
 vi.mock("../src/modules/recruitment/blueprint-repo.js", async (io) => ({
   ...(await io<Record<string, unknown>>()),
   findBlueprint: (...a: unknown[]) => H.findBlueprint(...a),
+  findBlueprintTx: (_tx: unknown, ...a: unknown[]) => H.findBlueprint(...a),
   findQuestion: (...a: unknown[]) => H.findQuestion(...a),
+  findQuestionTx: (_tx: unknown, ...a: unknown[]) => H.findQuestion(...a),
 }));
 vi.mock("../src/modules/recruitment/attempt-repo.js", async (io) => ({
   ...(await io<Record<string, unknown>>()),
   insertSchedule: (...a: unknown[]) => H.insertSchedule(...a),
   findSchedule: (...a: unknown[]) => H.findSchedule(...a),
+  findScheduleTx: (_tx: unknown, ...a: unknown[]) => H.findSchedule(...a),
   updateSchedule: (...a: unknown[]) => H.updateSchedule(...a),
   listSchedules: (...a: unknown[]) => H.listSchedules(...a),
   insertAttempt: (...a: unknown[]) => H.insertAttempt(...a),
   findAttempt: (...a: unknown[]) => H.findAttempt(...a),
+  findAttemptTx: (_tx: unknown, ...a: unknown[]) => H.findAttempt(...a),
   updateAttempt: (...a: unknown[]) => H.updateAttempt(...a),
   listAttemptsBySchedule: (...a: unknown[]) => H.listAttemptsBySchedule(...a),
   saveResponse: (...a: unknown[]) => H.saveResponse(...a),
   updateResponseScore: (...a: unknown[]) => H.updateResponseScore(...a),
   listResponses: (...a: unknown[]) => H.listResponses(...a),
+  listResponsesTx: (_tx: unknown, ...a: unknown[]) => H.listResponses(...a),
 }));
 
 import { buildApp } from "../src/app.js";
