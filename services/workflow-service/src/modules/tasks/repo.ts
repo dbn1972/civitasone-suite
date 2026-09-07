@@ -201,8 +201,10 @@ export async function markCompleted(
   decision: string,
   sodOverride = false,
 ): Promise<TaskView | null> {
-  const existing = await findById(id, tenantId);
-  if (!existing || existing.status === "completed") return null;
+  const existingRow = await findByIdTx(tx, id, tenantId);
+  if (!existingRow) return null;
+  const existing = toView(existingRow);
+  if (existing.status === "completed") return null;
   // H2 — optimistic lock. Guard the UPDATE with `status='pending'` and a
   // version predicate so a second completeTask message for the same task (or a
   // concurrent worker) cannot re-complete it. `returning()` lets us detect the
@@ -270,8 +272,9 @@ export async function assignTx(
   assigneeId: string,
   actorId: string,
 ): Promise<{ view: TaskView; priorAssigneeId: string | null } | null> {
-  const existing = await findById(id, tenantId);
-  if (!existing) return null;
+  const existingRow = await findByIdTx(tx, id, tenantId);
+  if (!existingRow) return null;
+  const existing = toView(existingRow);
   const updated = await (tx as typeof db).update(tasks).set({
     assigneeId,
     updatedBy: actorId,
