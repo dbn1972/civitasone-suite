@@ -25,6 +25,7 @@ vi.mock("../src/shared/db.js", async (io) => {
 vi.mock("../src/modules/recruitment/offer-repo.js", async (io) => ({
   ...(await io<Record<string, unknown>>()),
   findOffer: (...a: unknown[]) => H.findOffer(...a),
+  findOfferTx: (_tx: unknown, ...a: unknown[]) => H.findOffer(...a),
   updateOffer: (...a: unknown[]) => H.updateOffer(...a),
 }));
 vi.mock("../src/modules/recruitment/offer-analytics-repo.js", async (io) => ({

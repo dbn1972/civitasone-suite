@@ -18,8 +18,13 @@ export async function insertList(tx: Writer, row: SelectionListInsert): Promise<
   await tx.insert(hrmsSelectionLists).values(row);
 }
 export async function findList(tenantId: string, id: string): Promise<SelectionListRow | null> {
-  const rows = await scopedRead((tx) => tx.select().from(hrmsSelectionLists)
-    .where(and(eq(hrmsSelectionLists.tenantId, tenantId), eq(hrmsSelectionLists.id, id))).limit(1));
+  return scopedRead((tx) => findListTx(tx, tenantId, id));
+}
+
+/** Tx-scoped variant of findList -- see .claude/skills/16-production-readiness-audit.md section 1. */
+export async function findListTx(tx: Writer, tenantId: string, id: string): Promise<SelectionListRow | null> {
+  const rows = await (tx as typeof db).select().from(hrmsSelectionLists)
+    .where(and(eq(hrmsSelectionLists.tenantId, tenantId), eq(hrmsSelectionLists.id, id))).limit(1);
   return rows[0] ?? null;
 }
 export async function updateList(tx: Writer, tenantId: string, id: string, patch: Partial<SelectionListInsert>, expectedVersion: number): Promise<void> {

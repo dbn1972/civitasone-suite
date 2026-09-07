@@ -11,14 +11,24 @@ function affected(res: unknown): number {
 
 /** The vacancy's fee (paise) — null when no fee is configured. */
 export async function getVacancyFee(tenantId: string, jobOpeningId: string): Promise<bigint | null> {
-  const rows = await scopedRead((tx) => tx.select({ fee: hrmsJobOpenings.feesMinor }).from(hrmsJobOpenings)
-    .where(and(eq(hrmsJobOpenings.tenantId, tenantId), eq(hrmsJobOpenings.id, jobOpeningId))).limit(1));
+  return scopedRead((tx) => getVacancyFeeTx(tx, tenantId, jobOpeningId));
+}
+
+/** Tx-scoped variant of getVacancyFee -- see .claude/skills/16-production-readiness-audit.md section 1. */
+export async function getVacancyFeeTx(tx: Writer, tenantId: string, jobOpeningId: string): Promise<bigint | null> {
+  const rows = await (tx as typeof db).select({ fee: hrmsJobOpenings.feesMinor }).from(hrmsJobOpenings)
+    .where(and(eq(hrmsJobOpenings.tenantId, tenantId), eq(hrmsJobOpenings.id, jobOpeningId))).limit(1);
   return rows[0] ? (rows[0].fee ?? null) : null;
 }
 
 export async function findFee(tenantId: string, applicationId: string): Promise<ApplicationFeeRow | null> {
-  const rows = await scopedRead((tx) => tx.select().from(hrmsApplicationFees)
-    .where(and(eq(hrmsApplicationFees.tenantId, tenantId), eq(hrmsApplicationFees.applicationId, applicationId))).limit(1));
+  return scopedRead((tx) => findFeeTx(tx, tenantId, applicationId));
+}
+
+/** Tx-scoped variant of findFee -- see .claude/skills/16-production-readiness-audit.md section 1. */
+export async function findFeeTx(tx: Writer, tenantId: string, applicationId: string): Promise<ApplicationFeeRow | null> {
+  const rows = await (tx as typeof db).select().from(hrmsApplicationFees)
+    .where(and(eq(hrmsApplicationFees.tenantId, tenantId), eq(hrmsApplicationFees.applicationId, applicationId))).limit(1);
   return rows[0] ?? null;
 }
 

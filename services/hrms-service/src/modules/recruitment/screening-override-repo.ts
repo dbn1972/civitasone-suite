@@ -17,8 +17,13 @@ export async function createRequest(tx: Writer, row: ScreeningOverrideInsert): P
 }
 
 export async function findRequest(tenantId: string, id: string): Promise<ScreeningOverrideRow | null> {
-  const rows = await scopedRead((tx) => tx.select().from(hrmsScreeningOverrides)
-    .where(and(eq(hrmsScreeningOverrides.tenantId, tenantId), eq(hrmsScreeningOverrides.id, id))).limit(1));
+  return scopedRead((tx) => findRequestTx(tx, tenantId, id));
+}
+
+/** Tx-scoped variant of findRequest -- see .claude/skills/16-production-readiness-audit.md section 1. */
+export async function findRequestTx(tx: Writer, tenantId: string, id: string): Promise<ScreeningOverrideRow | null> {
+  const rows = await (tx as typeof db).select().from(hrmsScreeningOverrides)
+    .where(and(eq(hrmsScreeningOverrides.tenantId, tenantId), eq(hrmsScreeningOverrides.id, id))).limit(1);
   return rows[0] ?? null;
 }
 

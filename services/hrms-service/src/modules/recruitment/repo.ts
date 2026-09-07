@@ -78,9 +78,14 @@ export async function insertInterview(tx: Writer, row: typeof hrmsInterviews.$in
 }
 
 export async function findInterviewById(id: string, tenantId: string): Promise<InterviewRow | null> {
-  const rows = await scopedRead((tx) => tx.select().from(hrmsInterviews)
+  return scopedRead((tx) => findInterviewByIdTx(tx, id, tenantId));
+}
+
+/** Tx-scoped variant of findInterviewById -- see .claude/skills/16-production-readiness-audit.md section 1. */
+export async function findInterviewByIdTx(tx: Writer, id: string, tenantId: string): Promise<InterviewRow | null> {
+  const rows = await (tx as typeof db).select().from(hrmsInterviews)
     .where(and(eq(hrmsInterviews.id, id), eq(hrmsInterviews.tenantId, tenantId)))
-    .limit(1));
+    .limit(1);
   return rows[0] ?? null;
 }
 

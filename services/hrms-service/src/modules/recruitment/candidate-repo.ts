@@ -13,8 +13,13 @@ export async function insertCandidate(tx: Writer, row: CandidateInsert): Promise
 }
 
 export async function findCandidate(tenantId: string, id: string): Promise<CandidateRow | null> {
-  const rows = await scopedRead((tx) => tx.select().from(hrmsCandidates)
-    .where(and(eq(hrmsCandidates.tenantId, tenantId), eq(hrmsCandidates.id, id))).limit(1));
+  return scopedRead((tx) => findCandidateTx(tx, tenantId, id));
+}
+
+/** Tx-scoped variant of findCandidate -- see .claude/skills/16-production-readiness-audit.md section 1. */
+export async function findCandidateTx(tx: Writer, tenantId: string, id: string): Promise<CandidateRow | null> {
+  const rows = await (tx as typeof db).select().from(hrmsCandidates)
+    .where(and(eq(hrmsCandidates.tenantId, tenantId), eq(hrmsCandidates.id, id))).limit(1);
   return rows[0] ?? null;
 }
 

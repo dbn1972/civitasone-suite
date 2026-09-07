@@ -36,10 +36,12 @@ vi.mock("../src/modules/recruitment/offer-repo.js", async (io) => ({
   ...(await io<Record<string, unknown>>()),
   findApplication: (...a: unknown[]) => H.findAppMock(...a),
   findOffer: (...a: unknown[]) => H.findOfferMock(...a),
+  findOfferTx: (_tx: unknown, ...a: unknown[]) => H.findOfferMock(...a),
   insertOffer: (...a: unknown[]) => H.insertOfferMock(...a),
   updateOffer: (...a: unknown[]) => H.updateOfferMock(...a),
   insertEvent: (...a: unknown[]) => H.insertEventMock(...a),
   maxOfferVersion: (...a: unknown[]) => H.maxVersionMock(...a),
+  maxOfferVersionTx: (_tx: unknown, ...a: unknown[]) => H.maxVersionMock(...a),
   listOffersForApplication: async () => [],
   listEvents: async () => [],
 }));

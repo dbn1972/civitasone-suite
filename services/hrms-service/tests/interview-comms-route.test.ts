@@ -33,6 +33,7 @@ vi.mock("../src/shared/outbox.js", async (io) => ({
 vi.mock("../src/modules/recruitment/interview-comms-repo.js", async (io) => ({
   ...(await io<Record<string, unknown>>()),
   findInterview: (...a: unknown[]) => H.findInterview(...a),
+  findInterviewTx: (_tx: unknown, ...a: unknown[]) => H.findInterview(...a),
   insertComm: (...a: unknown[]) => H.insertComm(...a),
   listComms: (...a: unknown[]) => H.listComms(...a),
   rescheduleInterview: (...a: unknown[]) => H.reschedule(...a),

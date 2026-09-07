@@ -35,8 +35,11 @@ vi.mock("../src/shared/db.js", async (io) => {
 vi.mock("../src/modules/recruitment/screening-repo.js", async (io) => ({
   ...(await io<Record<string, unknown>>()),
   findApplication: (...a: unknown[]) => H.findAppMock(...a),
+  findApplicationTx: (_tx: unknown, ...a: unknown[]) => H.findAppMock(...a),
   listApplicationsForVacancy: (...a: unknown[]) => H.listForVacMock(...a),
+  listApplicationsForVacancyTx: (_tx: unknown, ...a: unknown[]) => H.listForVacMock(...a),
   findApplicationsByIds: (...a: unknown[]) => H.findByIdsMock(...a),
+  findApplicationsByIdsTx: (_tx: unknown, ...a: unknown[]) => H.findByIdsMock(...a),
   setScreening: (...a: unknown[]) => H.setScreeningMock(...a),
   setScreeningById: (...a: unknown[]) => H.setByIdMock(...a),
   insertEvent: (...a: unknown[]) => H.insertEventMock(...a),

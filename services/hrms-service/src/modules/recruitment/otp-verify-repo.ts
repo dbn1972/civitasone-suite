@@ -15,13 +15,18 @@ export async function insertChallenge(tx: Writer, row: typeof hrmsCandidateOtpCh
 
 /** The latest challenge for a candidate+channel (may be expired/verified). */
 export async function findLatestChallenge(tenantId: string, candidateId: string, channel: string): Promise<OtpChallengeRow | null> {
-  const rows = await scopedRead((tx) => tx.select().from(hrmsCandidateOtpChallenges)
+  return scopedRead((tx) => findLatestChallengeTx(tx, tenantId, candidateId, channel));
+}
+
+/** Tx-scoped variant of findLatestChallenge -- see .claude/skills/16-production-readiness-audit.md section 1. */
+export async function findLatestChallengeTx(tx: Writer, tenantId: string, candidateId: string, channel: string): Promise<OtpChallengeRow | null> {
+  const rows = await (tx as typeof db).select().from(hrmsCandidateOtpChallenges)
     .where(and(
       eq(hrmsCandidateOtpChallenges.tenantId, tenantId),
       eq(hrmsCandidateOtpChallenges.candidateId, candidateId),
       eq(hrmsCandidateOtpChallenges.channel, channel),
     ))
-    .orderBy(desc(hrmsCandidateOtpChallenges.createdAt)).limit(1));
+    .orderBy(desc(hrmsCandidateOtpChallenges.createdAt)).limit(1);
   return rows[0] ?? null;
 }
 

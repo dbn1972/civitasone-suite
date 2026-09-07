@@ -30,6 +30,7 @@ vi.mock("../src/shared/db.js", async (io) => {
 vi.mock("../src/modules/recruitment/panel-repo.js", async (io) => ({
   ...(await io<Record<string, unknown>>()),
   findInterview: (...a: unknown[]) => H.findInterview(...a),
+  findInterviewTx: (_tx: unknown, ...a: unknown[]) => H.findInterview(...a),
   updateInterview: (...a: unknown[]) => H.updateInterview(...a),
   setPanelists: (...a: unknown[]) => H.setPanelists(...a),
   listPanelists: (...a: unknown[]) => H.listPanelists(...a),

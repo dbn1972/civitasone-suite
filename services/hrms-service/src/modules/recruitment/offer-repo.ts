@@ -19,8 +19,13 @@ export async function insertOffer(tx: Writer, row: OfferInsert): Promise<void> {
 }
 
 export async function findOffer(tenantId: string, id: string): Promise<OfferRow | null> {
-  const rows = await scopedRead((tx) => tx.select().from(hrmsOffers)
-    .where(and(eq(hrmsOffers.tenantId, tenantId), eq(hrmsOffers.id, id))).limit(1));
+  return scopedRead((tx) => findOfferTx(tx, tenantId, id));
+}
+
+/** Tx-scoped variant of findOffer -- see .claude/skills/16-production-readiness-audit.md section 1. */
+export async function findOfferTx(tx: Writer, tenantId: string, id: string): Promise<OfferRow | null> {
+  const rows = await (tx as typeof db).select().from(hrmsOffers)
+    .where(and(eq(hrmsOffers.tenantId, tenantId), eq(hrmsOffers.id, id))).limit(1);
   return rows[0] ?? null;
 }
 
@@ -33,10 +38,15 @@ export async function listOffersForApplication(tenantId: string, applicationId: 
 
 /** Highest offer_version for an application (0 if none) — for the next revision. */
 export async function maxOfferVersion(tenantId: string, applicationId: string): Promise<number> {
-  const rows = await scopedRead((tx) => tx
+  return scopedRead((tx) => maxOfferVersionTx(tx, tenantId, applicationId));
+}
+
+/** Tx-scoped variant of maxOfferVersion -- see .claude/skills/16-production-readiness-audit.md section 1. */
+export async function maxOfferVersionTx(tx: Writer, tenantId: string, applicationId: string): Promise<number> {
+  const rows = await (tx as typeof db)
     .select({ m: sql<number>`COALESCE(MAX(${hrmsOffers.offerVersion}), 0)` })
     .from(hrmsOffers)
-    .where(and(eq(hrmsOffers.tenantId, tenantId), eq(hrmsOffers.applicationId, applicationId))));
+    .where(and(eq(hrmsOffers.tenantId, tenantId), eq(hrmsOffers.applicationId, applicationId)));
   return Number(rows[0]?.m ?? 0);
 }
 

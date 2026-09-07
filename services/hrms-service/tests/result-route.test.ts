@@ -34,18 +34,23 @@ vi.mock("../src/shared/db.js", async (io) => {
 vi.mock("../src/modules/recruitment/attempt-repo.js", async (io) => ({
   ...(await io<Record<string, unknown>>()),
   findAttempt: (...a: unknown[]) => H.findAttempt(...a),
+  findAttemptTx: (_tx: unknown, ...a: unknown[]) => H.findAttempt(...a),
   updateAttempt: (...a: unknown[]) => H.updateAttempt(...a),
   findSchedule: (...a: unknown[]) => H.findSchedule(...a),
+  findScheduleTx: (_tx: unknown, ...a: unknown[]) => H.findSchedule(...a),
   listResponses: (...a: unknown[]) => H.listResponses(...a),
+  listResponsesTx: (_tx: unknown, ...a: unknown[]) => H.listResponses(...a),
 }));
 vi.mock("../src/modules/recruitment/blueprint-repo.js", async (io) => ({
   ...(await io<Record<string, unknown>>()),
   findBlueprint: (...a: unknown[]) => H.findBlueprint(...a),
+  findBlueprintTx: (_tx: unknown, ...a: unknown[]) => H.findBlueprint(...a),
 }));
 vi.mock("../src/modules/recruitment/result-repo.js", async (io) => ({
   ...(await io<Record<string, unknown>>()),
   saveEvaluation: (...a: unknown[]) => H.saveEvaluation(...a),
   listEvaluations: (...a: unknown[]) => H.listEvaluations(...a),
+  listEvaluationsTx: (_tx: unknown, ...a: unknown[]) => H.listEvaluations(...a),
   insertResultEvent: (...a: unknown[]) => H.insertResultEvent(...a),
   listResultEvents: (...a: unknown[]) => H.listResultEvents(...a),
 }));

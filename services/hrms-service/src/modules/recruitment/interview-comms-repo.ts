@@ -11,8 +11,13 @@ function affected(res: unknown): number {
 }
 
 export async function findInterview(tenantId: string, id: string): Promise<InterviewRow | null> {
-  const rows = await scopedRead((tx) => tx.select().from(hrmsInterviews)
-    .where(and(eq(hrmsInterviews.tenantId, tenantId), eq(hrmsInterviews.id, id))).limit(1));
+  return scopedRead((tx) => findInterviewTx(tx, tenantId, id));
+}
+
+/** Tx-scoped variant of findInterview -- see .claude/skills/16-production-readiness-audit.md section 1. */
+export async function findInterviewTx(tx: Writer, tenantId: string, id: string): Promise<InterviewRow | null> {
+  const rows = await (tx as typeof db).select().from(hrmsInterviews)
+    .where(and(eq(hrmsInterviews.tenantId, tenantId), eq(hrmsInterviews.id, id))).limit(1);
   return rows[0] ?? null;
 }
 

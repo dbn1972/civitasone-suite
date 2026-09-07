@@ -31,9 +31,11 @@ vi.mock("../src/shared/db.js", async (io) => {
 vi.mock("../src/modules/recruitment/attempt-repo.js", async (io) => ({
   ...(await io<Record<string, unknown>>()),
   findAttempt: (...a: unknown[]) => H.findAttempt(...a),
+  findAttemptTx: (_tx: unknown, ...a: unknown[]) => H.findAttempt(...a),
   updateAttempt: (...a: unknown[]) => H.updateAttempt(...a),
   insertAttempt: (...a: unknown[]) => H.insertAttempt(...a),
   findSchedule: (...a: unknown[]) => H.findSchedule(...a),
+  findScheduleTx: (_tx: unknown, ...a: unknown[]) => H.findSchedule(...a),
   listAttemptsBySchedule: (...a: unknown[]) => H.listAttemptsBySchedule(...a),
 }));
 vi.mock("../src/modules/recruitment/result-repo.js", async (io) => ({

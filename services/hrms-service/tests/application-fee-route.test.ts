@@ -29,6 +29,11 @@ vi.mock("../src/shared/db.js", async (io) => {
 vi.mock("../src/modules/recruitment/screening-repo.js", async (io) => ({
   ...(await io<Record<string, unknown>>()),
   findApplication: (...a: unknown[]) => H.findApplication(...a),
+  // Nested-tx-deadlock fix (skill section 1): the consumer now calls the
+  // Tx-suffixed sibling (reading through the callers already-open tx)
+  // instead of the scopedRead-based original above. Forward it to the
+  // existing non-Tx mock, dropping the leading tx arg.
+  findApplicationTx: (_tx: unknown, ...a: unknown[]) => H.findApplication(...a),
 }));
 vi.mock("../src/modules/recruitment/application-fee-repo.js", async (io) => ({
   ...(await io<Record<string, unknown>>()),
@@ -36,6 +41,11 @@ vi.mock("../src/modules/recruitment/application-fee-repo.js", async (io) => ({
   findFee: (...a: unknown[]) => H.findFee(...a),
   insertFee: (...a: unknown[]) => H.insertFee(...a),
   updateFee: (...a: unknown[]) => H.updateFee(...a),
+  // Nested-tx-deadlock fix (skill section 1): forward the Tx-suffixed
+  // siblings the consumer now calls directly to the existing non-Tx mocks,
+  // dropping the leading tx arg.
+  getVacancyFeeTx: (_tx: unknown, ...a: unknown[]) => H.getVacancyFee(...a),
+  findFeeTx: (_tx: unknown, ...a: unknown[]) => H.findFee(...a),
 }));
 
 import { buildApp } from "../src/app.js";

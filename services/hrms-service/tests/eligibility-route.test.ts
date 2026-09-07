@@ -34,10 +34,12 @@ vi.mock("../src/shared/db.js", async (io) => {
 vi.mock("../src/modules/recruitment/eligibility-repo.js", async (io) => ({
   ...(await io<Record<string, unknown>>()),
   findVacancy: (...a: unknown[]) => H.findVacancyMock(...a),
+  findVacancyTx: (_tx: unknown, ...a: unknown[]) => H.findVacancyMock(...a),
   setVacancyEligibility: (...a: unknown[]) => H.setEligMock(...a),
   countApplicationsForEmail: (...a: unknown[]) => H.countMock(...a),
   insertApplication: (...a: unknown[]) => H.insertAppMock(...a),
   findApplication: (...a: unknown[]) => H.findAppMock(...a),
+  findApplicationTx: (_tx: unknown, ...a: unknown[]) => H.findAppMock(...a),
   withdrawApplication: (...a: unknown[]) => H.withdrawMock(...a),
 }));
 

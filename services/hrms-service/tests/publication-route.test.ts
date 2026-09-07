@@ -27,8 +27,10 @@ vi.mock("../src/shared/db.js", async (io) => {
 vi.mock("../src/modules/recruitment/publication-repo.js", async (io) => ({
   ...(await io<Record<string, unknown>>()),
   findVacancy: (...a: unknown[]) => H.findMock(...a),
+  findVacancyTx: (_tx: unknown, ...a: unknown[]) => H.findMock(...a),
   updateVacancy: (...a: unknown[]) => H.updMock(...a),
   nextCorrigendumSeq: (...a: unknown[]) => H.seqMock(...a),
+  nextCorrigendumSeqTx: (_tx: unknown, ...a: unknown[]) => H.seqMock(...a),
   insertCorrigendum: (...a: unknown[]) => H.insCorrMock(...a),
   listCorrigenda: (...a: unknown[]) => H.listCorrMock(...a),
   searchVacancies: (...a: unknown[]) => H.searchMock(...a),
