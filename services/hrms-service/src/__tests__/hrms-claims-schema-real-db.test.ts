@@ -331,7 +331,7 @@ describe("announcements — real round-trip against employee.hrms_social_announc
     const create = await app.inject({
       method: "POST",
       url: "/v1/hrms/announcements",
-      headers: { authorization: `Bearer ${selfToken}`, "content-type": "application/json" },
+      headers: { authorization: `Bearer ${approverToken}`, "content-type": "application/json" },
       body: JSON.stringify({
         title: "Office closed Friday",
         body: "The office will be closed for a regional holiday.",
