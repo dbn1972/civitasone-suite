@@ -89,4 +89,12 @@ describe("BBPS Biller Domain — M7 SVC-134", () => {
       expect(isBbpsEnabled()).toBe(true);
     });
   });
+
+  // NOTE (SEC-001): an earlier version of this fix added `verifyBbpsCallback`
+  // (HMAC-over-raw-body webhook-signature verification) here, plus a describe
+  // block testing it. It has been removed — see domain.ts's SEC-001 comment
+  // and routes.ts for why it was the wrong shape for the staff-facing
+  // pay-bill route. A real future gateway-webhook route should follow
+  // billing-service's Razorpay webhook pattern (and fix that pattern's
+  // not-actually-raw-body bug) rather than reintroducing this function as-is.
 });
