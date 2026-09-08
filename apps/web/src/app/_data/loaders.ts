@@ -4856,6 +4856,25 @@ export async function getAdminOrgUnits(): Promise<LoaderResult<AdminOrgUnit[]>> 
   });
 }
 
+export type AdminRoleDetail = AdminRoleSummary & { permissionKeys: string[] };
+
+export async function getAdminRoleDetail(id: string): Promise<LoaderResult<AdminRoleDetail | null>> {
+  return fetchJson<unknown, AdminRoleDetail | null>(`/api/v1/admin/roles/${id}`, null, {
+    telemetryKey: "admin.roles.detail",
+    mapResponse: (p) => {
+      if (!isRecord(p)) return null;
+      return {
+        id: String(p.id ?? ""),
+        key: String(p.key ?? ""),
+        name: String(p.name ?? p.key ?? ""),
+        description: toText(p.description),
+        isSystem: p.isSystem === true,
+        permissionKeys: Array.isArray(p.permissions) ? p.permissions.map(String) : [],
+      };
+    },
+  });
+}
+
 // ── Project sub-resource loaders ──────────────────────────────────────────────
 
 export type ProjectEscalationRow = {
