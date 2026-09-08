@@ -3,10 +3,35 @@
 # The reason after '#' is the first error, which under ON_ERROR_STOP=1 is the
 # one that aborted the file. Only the path before '#' is compared.
 # Regenerate with BOOTSTRAP_WRITE_ALLOWLIST=1 against a throwaway container.
-# Generated: 2026-09-06  Count: 6
-location-service/0011_postgis_spatial.sql                  # extension "postgis" is not available
-location-service/0014_land_cadastral_rls.sql               # extension "postgis" is not available
-location-service/0015_locations_geom_trigger.sql           # extension "postgis" is not available
-location-service/0016_spatial_features.sql                 # extension "postgis" is not available
-location-service/0017_road_network.sql                     # extension "postgis" is not available
-location-service/0019_geo_points.sql                       # extension "postgis" is not available
+#
+# A line may be prefixed with `CONDITIONAL: ` (before the path, after any
+# leading whitespace) to mark a failure as legitimately dependent on an
+# optional cluster capability -- e.g. the PostGIS extension -- rather than
+# tracked debt owed a real fix. bootstrap-postgres.sh's reconciliation exempts
+# CONDITIONAL entries from BOTH checks below: they are never "novel" (may
+# fail) and never "stale" (may pass); whether they show up in a given run's
+# observed failures or observed passes never changes the exit code. This is
+# how the same allow-list serves both postgis/postgis:16-3.4 (extension
+# present -- these pass) and postgres:16-alpine (extension absent -- these
+# fail) without either job ever seeing a false ratchet violation. See the
+# reconciliation comments in bootstrap-postgres.sh (REL-001) for the history:
+# these 6 entries were added straight (commit 2adebc42, PR #1053) to stop
+# postgres:16-alpine jobs (coverage-gate, quality-gates-schema) from tripping
+# on expected PostGIS-less failures -- which then broke the postgis-image
+# `test` job the moment it observed the same 6 migrations legitimately PASS.
+# CONDITIONAL tagging is the missing third state; it is not a revert of
+# 2adebc42's content.
+#
+# Regenerating this file (BOOTSTRAP_WRITE_ALLOWLIST=1) does not know about
+# CONDITIONAL -- it always writes a flat list from one run's observed
+# failures. If you regenerate against postgres:16-alpine, re-add
+# `CONDITIONAL: ` to these 6 lines (or any other genuinely
+# extension-dependent entries) by hand afterward.
+#
+# Generated: 2026-09-06  Count: 6 (all CONDITIONAL: require the postgis extension)
+CONDITIONAL: location-service/0011_postgis_spatial.sql                  # extension "postgis" is not available
+CONDITIONAL: location-service/0014_land_cadastral_rls.sql               # extension "postgis" is not available
+CONDITIONAL: location-service/0015_locations_geom_trigger.sql           # extension "postgis" is not available
+CONDITIONAL: location-service/0016_spatial_features.sql                 # extension "postgis" is not available
+CONDITIONAL: location-service/0017_road_network.sql                     # extension "postgis" is not available
+CONDITIONAL: location-service/0019_geo_points.sql                       # extension "postgis" is not available
