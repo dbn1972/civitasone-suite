@@ -3,12 +3,12 @@ import { PageHeader, StatGrid, StatCard, Card } from "@/app/_components/ds";
 import { getMLDomainOverview } from "./_data";
 
 const DOMAIN_META: Record<string, { label: string; icon: string; iconBg: string; href: string }> = {
-  leads: { label: "Lead Scoring", icon: "🎯", iconBg: "#eef2ff", href: "/analytics/ms-insights/leads" },
-  tickets: { label: "SLA Breach Prediction", icon: "🎫", iconBg: "#fef9c3", href: "/analytics/ms-insights/tickets" },
-  inventory: { label: "Demand Forecasting", icon: "📦", iconBg: "#dcfce7", href: "/analytics/ms-insights/inventory" },
-  subscriptions: { label: "Churn Prediction", icon: "💳", iconBg: "#fce7f3", href: "/analytics/ms-insights/subscriptions" },
-  tasks: { label: "Project Delay Prediction", icon: "📋", iconBg: "#dbeafe", href: "/analytics/ms-insights/projects" },
-  transactions: { label: "Anomaly Detection", icon: "🔍", iconBg: "#fef3c7", href: "/analytics/ms-insights/anomalies" },
+  leads: { label: "Lead Scoring", icon: "🎯", iconBg: "#eef2ff", href: "/analytics/ml-insights/leads" },
+  tickets: { label: "SLA Breach Prediction", icon: "🎫", iconBg: "#fef9c3", href: "/analytics/ml-insights/tickets" },
+  inventory: { label: "Demand Forecasting", icon: "📦", iconBg: "#dcfce7", href: "/analytics/ml-insights/inventory" },
+  subscriptions: { label: "Churn Prediction", icon: "💳", iconBg: "#fce7f3", href: "/analytics/ml-insights/subscriptions" },
+  tasks: { label: "Project Delay Prediction", icon: "📋", iconBg: "#dbeafe", href: "/analytics/ml-insights/projects" },
+  transactions: { label: "Anomaly Detection", icon: "🔍", iconBg: "#fef3c7", href: "/analytics/ml-insights/anomalies" },
 };
 
 function formatPct(value: number): string {

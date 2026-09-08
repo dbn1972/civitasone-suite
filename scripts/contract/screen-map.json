@@ -10213,5 +10213,40 @@
     "missing": 0,
     "mismatch": 0,
     "noLoader": 572
+  },
+  "linkAudit": {
+    "total": 1343,
+    "dead": [
+      {
+        "file": "apps/web/src/app/(app)/grants/applications/[id]/page.tsx",
+        "href": "/grants/applications/${params.id}/assign-reviewer",
+        "resolved": false
+      },
+      {
+        "file": "apps/web/src/app/(app)/grants/applications/[id]/page.tsx",
+        "href": "/grants/applications/${params.id}/score",
+        "resolved": false
+      },
+      {
+        "file": "apps/web/src/app/(app)/grants/applications/[id]/page.tsx",
+        "href": "/grants/applications/${params.id}/approve",
+        "resolved": false
+      },
+      {
+        "file": "apps/web/src/app/(app)/grants/applications/[id]/page.tsx",
+        "href": "/grants/applications/${params.id}/reject",
+        "resolved": false
+      },
+      {
+        "file": "apps/web/src/app/(app)/grants/applications/[id]/page.tsx",
+        "href": "/grants/applications/${params.id}/withdraw",
+        "resolved": false
+      },
+      {
+        "file": "apps/web/src/app/(app)/platform-admin/users/UserManagementPage.tsx",
+        "href": "/tenant-admin/users/${user.id}/password-reset",
+        "resolved": false
+      }
+    ]
   }
 }
