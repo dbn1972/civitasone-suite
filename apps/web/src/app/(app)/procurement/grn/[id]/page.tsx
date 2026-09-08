@@ -5,6 +5,7 @@ import { getProcurementGRNById, getSrnByGrn } from "../../../../_data/loaders";
 import { formatIndianDate } from "@/lib/formatters";
 import { toHumanError } from "@/lib/messages";
 import { AmendGrnForm } from "./AmendGrnForm";
+import { InspectGrnForm } from "./InspectGrnForm";
 
 const STATUS_LABELS: Record<string, string> = {
   draft: "Draft",
@@ -20,6 +21,13 @@ const STATUS_LABELS: Record<string, string> = {
 // `under_inspection`; the server rejects a PATCH after that with 409
 // GRN_NOT_AMENDABLE, so the UI gate mirrors the same rule.
 function canAmendGrn(status: string): boolean {
+  return status === "draft" || status === "under_inspection";
+}
+
+// DOM-002 — a GRN can be inspected (accepted/rejected) while it's still
+// awaiting inspection; the server rejects a PATCH .../accept|reject after
+// that with 409 GRN_NOT_INSPECTABLE, so the UI gate mirrors the same rule.
+function canInspectGrn(status: string): boolean {
   return status === "draft" || status === "under_inspection";
 }
 
@@ -156,6 +164,15 @@ export default async function GRNDetailPage({ params }: { params: { id: string }
               </div>
             ) : null}
           </div>
+        </Card>
+      ) : canInspectGrn(grn.status) ? (
+        // DOM-002 — this GRN was received but has not yet been inspected. A
+        // DIFFERENT, independently authenticated officer from whoever
+        // created it must accept or reject it here; the server enforces
+        // that separation (403 SOD_VIOLATION otherwise), this is just the UI
+        // entry point.
+        <Card title="Inspection required" padding>
+          <InspectGrnForm grnId={grn.id} />
         </Card>
       ) : null}
 

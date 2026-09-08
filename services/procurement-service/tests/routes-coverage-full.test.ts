@@ -135,9 +135,9 @@ describe("POST routes — accepted (202)", () => {
     const res = await app.inject({
       method: "POST", url: "/v1/procurement/grns", headers: auth,
       payload: {
+        // DOM-002 — grnCreate is receive-only now: no `inspection` field.
         grnNo: "GRN-TEST-001", poRef: "PO-001", vendorId: FAKE_UUID,
         items: [{ poItemRef: "item-1", itemCode: "IT001", orderedQty: 5, receivedQty: 5, acceptedQty: 5 }],
-        inspection: { inspectorId: FAKE_UUID, result: "pass" },
       },
     });
     await app.close();
@@ -1023,17 +1023,33 @@ describe("Vendor-blacklist additional coverage", () => {
 
 // ─── GRN additional coverage ────────────────────────────────────────────────
 describe("GRN additional coverage", () => {
-  it("POST /v1/procurement/grns with missing inspection → 400", async () => {
+  // DOM-002 — grnCreate is receive-only now (no `inspection` field exists
+  // on the schema any more), so this now covers the still-required `items`
+  // field instead of the removed `inspection` field.
+  it("POST /v1/procurement/grns with empty items → 400", async () => {
     const app = await buildApp();
     const res = await app.inject({
       method: "POST", url: "/v1/procurement/grns", headers: auth,
       payload: {
         grnNo: "GRN-BAD", poRef: "PO-001", vendorId: FAKE_UUID,
-        items: [{ poItemRef: "item-1", itemCode: "IT001", orderedQty: 5, receivedQty: 5, acceptedQty: 5 }],
+        items: [],
       },
     });
     await app.close();
     expect(res.statusCode).toBe(400);
+  });
+
+  // DOM-002 — the inspector's identity comes from the caller's own auth
+  // context, never a client-supplied field: accept/reject take no
+  // inspectorId in the body at all. A GRN that doesn't exist still 404s.
+  it("PATCH /v1/procurement/grns/:id/accept for unknown GRN → 404", async () => {
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "PATCH", url: `/v1/procurement/grns/${FAKE_UUID}/accept`, headers: auth,
+      payload: {},
+    });
+    await app.close();
+    expect(res.statusCode).toBe(404);
   });
 
   it("GET /v1/procurement/grns with limit/offset → 200", async () => {
