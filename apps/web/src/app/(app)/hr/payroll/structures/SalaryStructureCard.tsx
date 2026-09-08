@@ -20,6 +20,9 @@ export interface SalaryStructureCardProps {
 }
 
 // GoI 7th CPC standard component percentage distribution of gross salary
+// COMP-004 detector note: static reference -- the standard GoI salary-
+// structure percentage breakdown (Basic/DA/HRA/...) is a fixed norm, not
+// per-tenant or per-employee data a backend would serve.
 const GOI_STANDARD_PCT: { label: string; value: number; color: string }[] = [
   { label: "Basic", value: 50, color: "#4f46e5" },
   { label: "DA (46%)", value: 23, color: "#06b6d4" },

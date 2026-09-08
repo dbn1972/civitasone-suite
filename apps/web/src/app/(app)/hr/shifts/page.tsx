@@ -75,6 +75,9 @@ const COLUMNS: { key: keyof Row & string; label: string; cellType?: "status" }[]
   { key: "status", label: "Status", cellType: "status" },
 ];
 
+// COMP-004 detector note: static reference -- DoPT-standard shift
+// definitions, used only as the fallback when getShifts() (real API call
+// above) returns zero rows. Not a stand-in for the real load.
 const GOVT_SHIFTS: Row[] = [
   { id: "dopt-general", name: "General Duty", startTime: "09:00", endTime: "17:30", breakDuration: "30 min", workingHours: "8 hrs", applicableTo: "All Cadres (DoPT O.M.)", status: "active" },
   { id: "dopt-morning", name: "Morning Shift", startTime: "06:00", endTime: "14:00", breakDuration: "30 min", workingHours: "7.5 hrs", applicableTo: "Operational Staff", status: "active" },

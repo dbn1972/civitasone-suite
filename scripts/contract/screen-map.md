@@ -1,8 +1,8 @@
 # Screen Contract Map
 
-Generated: 2026-09-08T14:30:26.650Z
+Generated: 2026-09-08T15:23:57.958Z
 
-**Summary:** 271 WIRED | 0 MISSING | 0 MISMATCH | 565 NO_LOADER | 0 FABRICATED_DATA
+**Summary:** 271 WIRED | 0 MISSING | 0 MISMATCH | 561 NO_LOADER | 4 FABRICATED_DATA
 
 | module | screen | loader | apiPath | upstream | route? | table? | status |
 |--------|--------|--------|---------|----------|--------|--------|--------|
@@ -427,7 +427,7 @@ Generated: 2026-09-08T14:30:26.650Z
 | hr | /hr/locations/new | — | — | — | — | — | — NO_LOADER |
 | hr | /hr/locations | — | — | — | — | — | — NO_LOADER |
 | hr | /hr/medical | — | — | — | — | — | — NO_LOADER |
-| hr | /hr/onboarding/[id] | — | — | — | — | — | — NO_LOADER |
+| hr | /hr/onboarding/[id] | — | — | — | ✗ | — | 🎭 FABRICATED_DATA |
 | hr | /hr/onboarding | — | — | — | — | — | — NO_LOADER |
 | hr | /hr/org-chart | getOrgChart | /api/v1/hrms/org-chart | hrms → /v1/hrms/org-chart | ✓ `/v1/hrms/org-chart` | ✓ | ✅ WIRED |
 | hr | /hr/orgchart | getOrgChart | /api/v1/hrms/org-chart | hrms → /v1/hrms/org-chart | ✓ `/v1/hrms/org-chart` | ✓ | ✅ WIRED |
@@ -623,9 +623,9 @@ Generated: 2026-09-08T14:30:26.650Z
 | notifications | /notifications/templates/[id] | — | — | — | — | — | — NO_LOADER |
 | notifications | /notifications/templates | — | — | — | — | — | — NO_LOADER |
 | platform-admin | /platform-admin/audit-log | getTenantAuditLog | /api/v1/audit/events | audit → /v1/audit/events | ✓ `/v1/audit/events` | ✓ | ✅ WIRED |
-| platform-admin | /platform-admin/org-config | — | — | — | — | — | — NO_LOADER |
+| platform-admin | /platform-admin/org-config | — | — | — | ✗ | — | 🎭 FABRICATED_DATA |
 | platform-admin | /platform-admin | — | — | — | — | — | — NO_LOADER |
-| platform-admin | /platform-admin/roles | — | — | — | — | — | — NO_LOADER |
+| platform-admin | /platform-admin/roles | — | — | — | ✗ | — | 🎭 FABRICATED_DATA |
 | platform-admin | /platform-admin/system-settings | — | — | — | — | — | — NO_LOADER |
 | platform-admin | /platform-admin/tenant-config | — | — | — | — | — | — NO_LOADER |
 | platform-admin | /platform-admin/users | getAdminUsers | /api/identity/users | identity → /identity/users | ✓ `/identity/users` | ✓ | ✅ WIRED |
@@ -697,7 +697,7 @@ Generated: 2026-09-08T14:30:26.650Z
 | projects | /projects/milestones | getMilestones | /api/v1/project/milestones | project → /v1/projects/milestones | ✓ `/v1/projects/milestones` | ✓ | ✅ WIRED |
 | projects | /projects/new | — | — | — | — | — | — NO_LOADER |
 | projects | /projects | — | — | — | — | — | — NO_LOADER |
-| projects | /projects/schemes/[id] | — | — | — | — | — | — NO_LOADER |
+| projects | /projects/schemes/[id] | — | — | — | ✗ | — | 🎭 FABRICATED_DATA |
 | projects | /projects/schemes | getSchemes | /api/v1/project/schemes | project → /v1/projects/schemes | ✓ `/v1/projects/:id` | ✓ | ✅ WIRED |
 | projects | /projects/utilization | — | — | — | — | — | — NO_LOADER |
 | projects | /projects/wbs | getProjectWbs | /api/v1/projects/wbs | projects → /v1/projects/wbs | ✓ `/v1/projects/wbs` | ✓ | ✅ WIRED |

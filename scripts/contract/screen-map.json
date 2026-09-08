@@ -5251,8 +5251,8 @@
       "upstream": null,
       "routeHandler": null,
       "tablesPresent": null,
-      "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "status": "FABRICATED_DATA",
+      "detail": "no loader, but DEFAULT_DOCUMENTS in apps/web/src/app/(app)/hr/onboarding/[id]/page.tsx:59 looks like 6 hardcoded records"
     },
     {
       "module": "hr",
@@ -7555,8 +7555,8 @@
       "upstream": null,
       "routeHandler": null,
       "tablesPresent": null,
-      "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "status": "FABRICATED_DATA",
+      "detail": "no loader, but DEFAULT_LEVELS in apps/web/src/app/(app)/platform-admin/org-config/OrgConfigPage.tsx:16 looks like 5 hardcoded records"
     },
     {
       "module": "platform-admin",
@@ -7577,8 +7577,8 @@
       "upstream": null,
       "routeHandler": null,
       "tablesPresent": null,
-      "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "status": "FABRICATED_DATA",
+      "detail": "no loader, but ROLES in apps/web/src/app/(app)/platform-admin/roles/RolePermissionsMatrix.tsx:7 looks like 9 hardcoded records"
     },
     {
       "module": "platform-admin",
@@ -8533,8 +8533,8 @@
       "upstream": null,
       "routeHandler": null,
       "tablesPresent": null,
-      "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "status": "FABRICATED_DATA",
+      "detail": "no loader, but SCHEMES in apps/web/src/app/(app)/projects/schemes/[id]/page.tsx:21 looks like 11 hardcoded records"
     },
     {
       "module": "projects",
@@ -10285,8 +10285,8 @@
     "wired": 271,
     "missing": 0,
     "mismatch": 0,
-    "noLoader": 565,
-    "fabricatedData": 0
+    "noLoader": 561,
+    "fabricatedData": 4
   },
   "linkAudit": {
     "total": 1343,

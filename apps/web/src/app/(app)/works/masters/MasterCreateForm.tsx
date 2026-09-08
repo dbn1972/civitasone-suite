@@ -31,6 +31,9 @@ type FieldSpec = TextField | MoneyField | CheckboxField;
 
 // ─── Field map ────────────────────────────────────────────────────────────────
 
+// COMP-004 detector note: static reference -- this defines which form
+// FIELDS (type/key/label/required) each master-data type's create-form
+// renders. It's a frontend form-schema decision, not fabricated records.
 const FIELD_MAP: Record<string, FieldSpec[]> = {
   "authorities": [
     { type: "text",     key: "name",  label: "Name",  required: true },
@@ -131,6 +134,9 @@ const FIELD_MAP: Record<string, FieldSpec[]> = {
   ],
 };
 
+// COMP-004 detector note: static reference -- same rationale as FIELD_MAP
+// above: this is the fallback form-schema for a master type with no
+// specific field list, not fabricated data.
 const DEFAULT_FIELDS: FieldSpec[] = [
   { type: "text",     key: "name",  label: "Name", required: true },
   { type: "text",     key: "code",  label: "Code" },

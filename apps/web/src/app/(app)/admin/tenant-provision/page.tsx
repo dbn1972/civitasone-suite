@@ -2,6 +2,10 @@ import { PageHeader, StatGrid, StatCard, Card, DataTable } from "@/app/_componen
 
 type Step = { step: number; name: string; description: string; required: string; status: string; [k: string]: unknown };
 
+// COMP-004 detector note: static reference -- this documents the steps a
+// (not-yet-built) provisioning wizard will walk through; every row's status
+// is literally "Template Ready" for all tenants. No fetch/save in this file:
+// it is read-only documentation, not fabricated live data.
 const PROVISIONING_STEPS: Step[] = [
   { step: 1, name: "Organisation Details", description: "Name, address, GSTIN, contact person, phone, email", required: "Yes", status: "Template Ready" },
   { step: 2, name: "Edition Selection", description: "Choose Small Office, PSU, or Government edition", required: "Yes", status: "Template Ready" },

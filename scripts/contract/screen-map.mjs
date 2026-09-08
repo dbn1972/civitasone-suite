@@ -13,7 +13,7 @@
 
 import { readFileSync, existsSync, readdirSync, writeFileSync, mkdirSync } from 'fs';
 import { join, relative, dirname, basename } from 'path';
-import { fileURLToPath } from 'url';
+import { fileURLToPath, pathToFileURL } from 'url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, '../..');
@@ -576,24 +576,33 @@ function findDeadLinks() {
 // loader. A page with ZERO loaders was always classified as a harmless
 // "navigation hub" (NO_LOADER) — but that is exactly the shape every
 // COMP-004 offender had: a `page.tsx` (or a client component it renders)
-// with no loader import at all, and instead a hardcoded array of
-// record-shaped object literals (MOCK_USERS, INITIAL_FLAGS, INITIAL_JOBS,
-// INITIAL_GRANTS, the old admin/roles INITIAL_MATRIX/ROLES, ...) standing in
+// with no loader import at all, and instead a hardcoded array (or object
+// map) of record-shaped literals (MOCK_USERS, INITIAL_FLAGS, INITIAL_JOBS,
+// INITIAL_GRANTS, the old admin/roles ROLES/INITIAL_MATRIX, ...) standing in
 // for real backend data. This heuristic tells those two NO_LOADER shapes
 // apart: a genuine hub page (dashboard tiles, a nav menu) has no such
 // literal; a fabricated-data page does.
 //
 // Heuristic (regex-based, matching this script's existing style — not a
-// full TS parser): find a module-scope `const NAME = [` (or `const NAME:
-// Type[] = [`) whose name starts uppercase (this codebase's own convention
-// for these constants — MOCK_*, INITIAL_*, and plain screaming-case lists
-// like ROLES/PRESETS/FEATURE_KEYS all match), walk to the matching `]`, and
-// count how many object-literal entries are inside and how many `key:`
-// pairs they carry in total. Real record data consistently carries 3+
-// fields per entry (id/name/email/status/...); short 2-field config lists
-// (nav links, cron presets) fall under the threshold on purpose, so this
-// does not fire on every constant array in the app — only ones dense enough
-// to plausibly be standing in for a real dataset.
+// full TS parser): find a module-scope `const NAME = [` or `const NAME = {`
+// (each optionally with a `: Type` annotation before the `=`) whose NAME is
+// a plain UPPER_SNAKE identifier — no required MOCK_/INITIAL_/SAMPLE_/
+// FAKE_/DUMMY_/STUB_ prefix; a name like `ROLES` or `DEFAULTS` fabricates
+// data exactly as readily as `MOCK_ROLES` does, and requiring a prefix is
+// what let the original admin/roles bug (`ROLES`, an array; `INITIAL_MATRIX`,
+// an object) sail through undetected. Walk to the matching close bracket —
+// `]` for an array, `}` for an object — and count how many nested
+// object-literal entries are inside (an array's `{...}` elements, or an
+// object map's `{...}` values) and how many `key:` pairs they carry in
+// total. Real record data consistently carries 3+ fields per entry
+// (id/name/email/status/...); short 2-field config lists (nav links, cron
+// presets) and flat string/number lookup tables (no nested `{`) fall under
+// the threshold on purpose, so this does not fire on every constant
+// array/object in the app — only ones dense enough to plausibly be standing
+// in for a real dataset. Because this only runs on pages the caller has
+// already determined have zero data loaders (see detectFabricatedData /
+// computeStatus), a name/shape match here does not also need to re-check
+// for a nearby loader — "no loader nearby" is already the precondition.
 function findMatchingBracket(src, openIdx, openCh, closeCh) {
   let depth = 0;
   for (let i = openIdx; i < src.length; i++) {
@@ -609,27 +618,109 @@ function findMatchingBracket(src, openIdx, openCh, closeCh) {
 const FABRICATED_MIN_ENTRIES = 3;
 const FABRICATED_MIN_FIELDS_PER_ENTRY = 3;
 
+// Extracts the field-key set of each nested object literal directly inside
+// `body` (an array's `{...}` elements, or an object map's `{...}` values) —
+// i.e. the same "entries" the density check above counts — ignoring keys
+// that belong to a deeper level of nesting. Used by the presentation-vocab
+// filter below.
+function extractEntryFieldKeys(body) {
+  const keys = new Set();
+  const keyRe = /([A-Za-z_$][\w$]*)\s*:/g;
+  let i = 0;
+  while (i < body.length) {
+    if (body[i] === '{') {
+      const close = findMatchingBracket(body, i, '{', '}');
+      if (close === -1) break;
+      const entryBody = body.slice(i + 1, close);
+      let km;
+      keyRe.lastIndex = 0;
+      while ((km = keyRe.exec(entryBody)) !== null) {
+        const before = entryBody.slice(0, km.index);
+        const opens = (before.match(/\{/g) || []).length;
+        const closes = (before.match(/\}/g) || []).length;
+        if (opens === closes) keys.add(km[1]); // only this entry's own top-level keys
+      }
+      i = close + 1;
+    } else {
+      i++;
+    }
+  }
+  return keys;
+}
+
+// Field names that only ever carry UI presentation/action metadata (colour,
+// icon, copy for a confirm dialog, ...) — never the record's own identity or
+// business state. A `Record<enum, {...}>` lookup map whose entries are built
+// *entirely* from this vocabulary (e.g. STATUS_CHIP: bg/color/label per
+// status, NEXT_ACTION: label/endpoint/confirm per status) is a display/
+// action-menu helper keyed by an already-known enum value, not a stand-in
+// for backend data — excluding it is what keeps the broadened, prefix-free
+// name match (below) from flagging every such helper in the app.
+const PRESENTATION_ONLY_FIELDS = new Set([
+  'label', 'color', 'bg', 'background', 'fg', 'desc', 'description', 'icon',
+  'iconBg', 'dot', 'border', 'endpoint', 'confirm', 'title',
+]);
+
+// Matches this codebase's own established escape hatch (see ISSUE_LIBRARY in
+// apps/web/src/app/(app)/library/page.tsx, pre-dating this change): a
+// constant that looks record-shaped but is deliberately, permanently
+// static — a developer-authored reference/policy table, the same for every
+// tenant, not a stand-in for something a backend should serve — is marked
+// with a comment containing the phrase "static reference" directly above
+// its declaration. This is an explicit, reviewable, greppable assertion
+// (like an eslint-disable comment), not a silent regex carve-out: anyone
+// disagreeing can challenge or remove the comment in review.
+const STATIC_REFERENCE_MARKER = /static reference/i;
+function hasStaticReferenceMarker(src, declStartIdx) {
+  const before = src.slice(0, declStartIdx);
+  const lines = before.split('\n');
+  const window = lines.slice(-8).join('\n'); // up to 8 lines of leading comment
+  return STATIC_REFERENCE_MARKER.test(window);
+}
+
 function scanForFabricatedArray(src) {
-  // Scoped to this codebase's own established naming convention for these
-  // exact bugs (every genuine COMP-00x offender found: MOCK_USERS,
-  // MOCK_JOBS, MOCK_SERVICES, MOCK_ISSUES, INITIAL_FLAGS, INITIAL_JOBS,
-  // INITIAL_GRANTS, SAMPLE_HISTORY, ...) rather than every uppercase
-  // module-scope array — a broader match also catches legitimate static UI
-  // config (nav tiles, dashboards' MODULES/CONSOLES lists, default-value
-  // templates) which would turn this into a repo-wide false-positive gate
-  // instead of a targeted one.
-  const declRe = /^const\s+((?:MOCK|INITIAL|SAMPLE|FAKE|DUMMY|STUB)_[A-Z0-9_]*)\s*(?::\s*[^=\n]+)?=\s*\[/gm;
+  // Any plain UPPER_SNAKE module-scope const, assigned either an array or
+  // an object literal. No MOCK_/INITIAL_/SAMPLE_/FAKE_/DUMMY_/STUB_ prefix
+  // is required — that prefix list was the original detector's hole (see
+  // header comment above): it let unprefixed names like `ROLES` and
+  // object-literal maps like `INITIAL_MATRIX` (an object, not an array)
+  // through.
+  //
+  // Dropping the prefix requirement means the entry-count / field-density
+  // threshold alone is no longer enough to stay targeted — repo-wide testing
+  // (see PR description) showed it also matches legitimate nav-tile lists,
+  // enum-keyed style/label lookup maps, and static reference/policy tables.
+  // Three additional, narrow filters below rule those out without
+  // reintroducing a name-prefix requirement:
+  //   1. `href` present in an entry           → nav tile / menu card, skip.
+  //   2. every entry's fields ⊆ PRESENTATION_ONLY_FIELDS → style/action
+  //      lookup map keyed by an enum value, skip.
+  //   3. a "static reference" comment marker directly above the decl → skip.
+  const declRe = /^const\s+([A-Z][A-Z0-9_]*)\s*(?::\s*[^=\n]+)?=\s*([[{])/gm;
   let m;
   while ((m = declRe.exec(src)) !== null) {
-    const openIdx = m.index + m[0].length - 1; // index of the '['
-    const closeIdx = findMatchingBracket(src, openIdx, '[', ']');
+    const openCh = m[2];
+    const closeCh = openCh === '[' ? ']' : '}';
+    const openIdx = m.index + m[0].length - 1; // index of the '[' or '{'
+    const closeIdx = findMatchingBracket(src, openIdx, openCh, closeCh);
     if (closeIdx === -1) continue;
     const body = src.slice(openIdx + 1, closeIdx);
+    // Entries = nested object literals: an array's `{...}` elements, or an
+    // object map's `{...}` values. A flat object of primitive values (e.g.
+    // `{ active: "Active", inactive: "Inactive" }`) has none of these and
+    // so never crosses the threshold below, regardless of key count.
     const entries = (body.match(/\{/g) || []).length;
     const colons = (body.match(/:/g) || []).length;
-    if (entries >= FABRICATED_MIN_ENTRIES && colons >= entries * FABRICATED_MIN_FIELDS_PER_ENTRY) {
-      return { name: m[1], entries, line: src.slice(0, m.index).split('\n').length };
-    }
+    if (entries < FABRICATED_MIN_ENTRIES || colons < entries * FABRICATED_MIN_FIELDS_PER_ENTRY) continue;
+
+    if (/\bhref\s*:/.test(body)) continue; // nav tile / menu card list
+
+    const fieldKeys = extractEntryFieldKeys(body);
+    if (fieldKeys.size > 0 && [...fieldKeys].every((k) => PRESENTATION_ONLY_FIELDS.has(k))) continue;
+
+    if (hasStaticReferenceMarker(src, m.index)) continue;
+
+    return { name: m[1], entries, line: src.slice(0, m.index).split('\n').length };
   }
   return null;
 }
@@ -845,4 +936,12 @@ function run() {
   process.stdout.write('\nOutputs written to scripts/contract/screen-map.json + screen-map.md\n\n');
 }
 
-run();
+// Exported for direct, fixture-based testing of the COMP-004 fabricated-data
+// heuristic (see tests/contract/screens.contract.test.ts) without going
+// through a full repo scan.
+export { scanForFabricatedArray, detectFabricatedData };
+
+// Only run the full CLI scan when this file is executed directly (`node
+// scripts/contract/screen-map.mjs`), not when it's imported by a test.
+const isMain = process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href;
+if (isMain) run();
