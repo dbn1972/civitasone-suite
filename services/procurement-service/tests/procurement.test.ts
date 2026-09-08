@@ -63,10 +63,10 @@ async function wipe() {
 // DOM-002 — seeds the real PO + PO item each GRN-creation test below
 // receives against, so the server-derived orderedQty matches what the test
 // previously trusted from the client payload.
-async function seedPoForGrn(poId: string, poItemId: string, vendorId: string, quantity: number, unitPriceMinor = 10000n): Promise<void> {
+async function seedPoForGrn(poId: string, poNo: string, poItemId: string, vendorId: string, quantity: number, unitPriceMinor = 10000n): Promise<void> {
   await runWithTenant(TENANT, () => db.transaction(async (tx) => {
     await tx.insert(procurementPos).values({
-      id: poId, tenantId: TENANT, poNo: `PO-GRN-${poId.slice(-4)}`, vendorId,
+      id: poId, tenantId: TENANT, poNo, vendorId,
       indentRef: "procurement_indent:seed", status: "approved", totalMinor: unitPriceMinor * BigInt(quantity),
       createdBy: ACTOR, updatedBy: ACTOR,
     });
@@ -215,8 +215,8 @@ describe("GRN consumer — CQRS wiring (integration)", () => {
     // DOM-002 — real PO + PO item fixtures the GRN tests below receive
     // against; quantity mirrors what the payloads previously sent as a
     // (now-ignored) client orderedQty, so behaviour is unchanged.
-    await seedPoForGrn(PO_GRN_1, POITEM_1, "aaaaaaaa-1111-4000-8000-000000000001", 10);
-    await seedPoForGrn(PO_GRN_2, POITEM_2, "aaaaaaaa-2222-4000-8000-000000000001", 5);
+    await seedPoForGrn(PO_GRN_1, "PO-GRN-0001", POITEM_1, "aaaaaaaa-1111-4000-8000-000000000001", 10);
+    await seedPoForGrn(PO_GRN_2, "PO-GRN-0002", POITEM_2, "aaaaaaaa-2222-4000-8000-000000000001", 5);
   });
   afterAll(async () => { await wipe(); });
 
