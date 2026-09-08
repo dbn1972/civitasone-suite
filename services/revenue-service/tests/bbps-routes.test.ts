@@ -4,28 +4,30 @@
  * Covers: POST /bbps/fetch-bill 202, POST /bbps/pay-bill 202,
  * BBPS_DISABLED guard (403), 400/401 error paths.
  *
- * SEC-001: also covers the pay-bill authorization gate — role check +
- * BBPS gateway signature — added after this route was found to accept
- * fully client-fabricated payments (any authenticated user, no signature,
- * wrote a real receipt + DCB collection + GL event). See sec-001-*
- * describe blocks below.
+ * SEC-001: also covers the pay-bill authorization gate, added after this
+ * route was found to accept fully client-fabricated payments (any
+ * authenticated user, wrote a real receipt + DCB collection + GL event).
+ * See the sec-001 describe block below.
+ *
+ * An earlier version of this fix additionally required an x-bbps-signature
+ * HMAC header on this route (verifyBbpsCallback), tested here. That has been
+ * removed: the real caller is PayBillForm.tsx, a staff browser form with no
+ * access to (and no business having) the signing secret, so requiring it
+ * made every real call 400. See routes.ts's SEC-001 comment for the full
+ * reasoning. Replay/duplicate protection for this route now lives at the DB
+ * layer (migrations/0006_bbps_replay_protection.sql) and is covered in
+ * bbps-consumer.test.ts, not here.
  */
 import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach, vi } from "vitest";
 import type { FastifyInstance } from "fastify";
-import { createHmac } from "node:crypto";
 import { signToken } from "@civitasone/auth";
 
 const SECRET = "test_secret_for_civitasone_32chr";
 const TENANT_ID = "t1111111-1111-1111-1111-111111111111";
 const USER_ID = "u1111111-1111-1111-1111-111111111111";
-const BBPS_WEBHOOK_SECRET = "bbps_test_webhook_secret_32char";
 
 function makeToken(roles: string[]) {
   return signToken({ sub: USER_ID, tid: TENANT_ID, roles, sid: "s1" }, SECRET, 3600);
-}
-
-function signBbps(payload: unknown): string {
-  return createHmac("sha256", BBPS_WEBHOOK_SECRET).update(JSON.stringify(payload)).digest("hex");
 }
 
 const AUTH = { authorization: `Bearer ${makeToken(["revenue_admin"])}` };
@@ -162,31 +164,33 @@ describe("POST /v1/revenue/bbps/pay-bill (validation)", () => {
 // command straight to the consumer which wrote a receipt + DCB collection +
 // bbps_transaction(success) row and enqueued a GL-bound receiptCaptured event.
 //
-// These tests prove: (a) a caller lacking a revenue/collection role is
-// rejected even with a perfectly valid signature, (b) a caller with the
-// right role but no/invalid BBPS signature is rejected, and in every
-// rejection case NOTHING is published to the queue — so the consumer never
-// runs and no receipt/DCB/bbps_transaction/event row is ever written.
+// These tests prove: a caller lacking a revenue/collection role is rejected,
+// and in that rejection case NOTHING is published to the queue — so the
+// consumer never runs and no receipt/DCB/bbps_transaction/event row is ever
+// written. A caller WITH a revenue/collection role is accepted and the
+// command is published — this route does not (and, absent a real BBPS
+// gateway integration, cannot) cryptographically prove a real payment
+// occurred; see routes.ts's SEC-001 comment for that residual limitation and
+// consumer.ts / bbps-consumer.test.ts for the separate replay/duplicate
+// protection this fix also adds.
 
 describe("SEC-001: POST /v1/revenue/bbps/pay-bill authorization gate (BBPS_ENABLED=true)", () => {
   const payload = { assesseeIdentifier: "PROP-001", amountMinor: "200000", bbpsTxnId: "BBPS-TXN-001", channel: "bbps" };
 
   beforeEach(() => {
     process.env.BBPS_ENABLED = "true";
-    process.env.BBPS_WEBHOOK_SECRET = BBPS_WEBHOOK_SECRET;
     publishSpy.mockClear();
   });
 
   afterEach(() => {
     delete process.env.BBPS_ENABLED;
-    delete process.env.BBPS_WEBHOOK_SECRET;
   });
 
-  it("rejects a caller with no revenue/collection role, even with a correctly signed payload — no command published", async () => {
+  it("rejects a caller with no revenue/collection role — no command published", async () => {
     const res = await app.inject({
       method: "POST",
       url: "/v1/revenue/bbps/pay-bill",
-      headers: { ...UNPRIVILEGED_AUTH, "x-bbps-signature": signBbps(payload) },
+      headers: UNPRIVILEGED_AUTH,
       payload,
     });
     expect(res.statusCode).toBe(403);
@@ -194,50 +198,11 @@ describe("SEC-001: POST /v1/revenue/bbps/pay-bill authorization gate (BBPS_ENABL
     expect(publishSpy).not.toHaveBeenCalled();
   });
 
-  it("rejects a revenue_admin request with no x-bbps-signature header — no command published", async () => {
+  it("accepts a revenue_admin request — publishes the command", async () => {
     const res = await app.inject({
       method: "POST",
       url: "/v1/revenue/bbps/pay-bill",
       headers: AUTH,
-      payload,
-    });
-    expect(res.statusCode).toBe(400);
-    expect(res.json().error.code).toBe("MISSING_SIGNATURE");
-    expect(publishSpy).not.toHaveBeenCalled();
-  });
-
-  it("SEC-001 regression: rejects a revenue_admin request with a forged x-bbps-signature — no command published", async () => {
-    const res = await app.inject({
-      method: "POST",
-      url: "/v1/revenue/bbps/pay-bill",
-      headers: { ...AUTH, "x-bbps-signature": "deadbeef".repeat(8) },
-      payload,
-    });
-    expect(res.statusCode).toBe(400);
-    expect(res.json().error.code).toBe("INVALID_BBPS_SIGNATURE");
-    expect(publishSpy).not.toHaveBeenCalled();
-  });
-
-  it("rejects a signature computed with the wrong secret — no command published", async () => {
-    const wrongSignature = createHmac("sha256", "not-the-real-secret-at-all-32ch")
-      .update(JSON.stringify(payload))
-      .digest("hex");
-    const res = await app.inject({
-      method: "POST",
-      url: "/v1/revenue/bbps/pay-bill",
-      headers: { ...AUTH, "x-bbps-signature": wrongSignature },
-      payload,
-    });
-    expect(res.statusCode).toBe(400);
-    expect(res.json().error.code).toBe("INVALID_BBPS_SIGNATURE");
-    expect(publishSpy).not.toHaveBeenCalled();
-  });
-
-  it("accepts a revenue_admin request with a valid role AND a valid BBPS signature — publishes the command", async () => {
-    const res = await app.inject({
-      method: "POST",
-      url: "/v1/revenue/bbps/pay-bill",
-      headers: { ...AUTH, "x-bbps-signature": signBbps(payload) },
       payload,
     });
     expect(res.statusCode).toBe(202);

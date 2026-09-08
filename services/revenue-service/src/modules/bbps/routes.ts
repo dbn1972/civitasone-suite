@@ -1,7 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { ZodError } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { isBbpsEnabled, verifyBbpsCallback } from "./domain.js";
+import { isBbpsEnabled } from "./domain.js";
 import * as commands from "./commands.js";
 import { fetchBillBody, payBillBody } from "./validators.js";
 
@@ -39,20 +39,32 @@ export async function bbpsRoutes(app: FastifyInstance): Promise<void> {
   // any BBPS payment ever happened — any authenticated user could fabricate a
   // successful tax payment, a DCB collection, and a GL-bound event.
   //
-  // Two independent controls now gate this, matching this codebase's two
-  // established conventions rather than inventing new ones:
-  //   1. requireRole — same REVENUE_ROLES gate collection/routes.ts uses for
-  //      every other collection-writing endpoint (accountability: who is
-  //      relaying this claim).
-  //   2. verifyBbpsCallback — same HMAC-over-raw-body pattern billing-service
-  //      uses for Razorpay's webhook (integrity: proof the claim really came
-  //      from the BBPS gateway, since there is no live gateway to call out to
-  //      and verify against synchronously in this environment — see the STUB
-  //      NOTE in domain.ts).
-  // Both must pass BEFORE the command is published — an unsigned/unverified
-  // request never reaches the queue, so the consumer never runs and no rows
-  // are written (see consumer.ts for the additional server-side amount
-  // re-derivation from the DCB record, kept as defense in depth).
+  // requireRole — same REVENUE_ROLES gate collection/routes.ts uses for every
+  // other collection-writing endpoint — closes the "ANY authenticated user"
+  // part of that gap: only revenue/collection staff can call this route now.
+  //
+  // KNOWN RESIDUAL LIMITATION (not closed by this route, be honest about it):
+  // there is still no live NPCI BBPS gateway integration in this codebase
+  // (see the STUB NOTE in domain.ts), so nothing here cryptographically
+  // proves a real BBPS payment occurred — a revenue-role user can still
+  // submit a fabricated bbpsTxnId/amount and it will be accepted. A prior
+  // version of this route additionally required an `x-bbps-signature` HMAC
+  // header (`verifyBbpsCallback` in domain.ts), modeled on billing-service's
+  // Razorpay *webhook* verification. That was wrong for THIS route: the real
+  // caller is `PayBillForm.tsx`, a staff browser form that has no access to
+  // (and should never see) the signing secret, so requiring both role AND
+  // signature made every real call 400 MISSING_SIGNATURE. A signed-callback
+  // check only makes sense on a separate, unauthenticated, gateway-facing
+  // webhook route — see billing-service's
+  // `POST /v1/billing/webhooks/razorpay` for that pattern — which is a
+  // distinct, larger piece of future work once a real BBPS gateway exists,
+  // not something this route can fake today.
+  //
+  // The consumer's amount bound (validateBbpsPayment: amount > 0 and <= the
+  // assessee's real DCB outstanding, re-read fresh inside the transaction)
+  // and the new per-tenant bbpsTxnId replay/duplicate protection (see
+  // consumer.ts + migrations/0006_bbps_replay_protection.sql) remain as
+  // defense in depth on top of the role gate.
 
   app.post("/v1/revenue/bbps/pay-bill", async (req, reply) => {
     if (!isBbpsEnabled()) {
@@ -60,15 +72,6 @@ export async function bbpsRoutes(app: FastifyInstance): Promise<void> {
     }
     const ctx = resolveContext(req);
     requireRole(ctx, REVENUE_ROLES);
-
-    const signature = req.headers["x-bbps-signature"] as string | undefined;
-    if (!signature) {
-      throw new HttpError(400, "MISSING_SIGNATURE", "x-bbps-signature header is required");
-    }
-    const rawBody = typeof req.body === "string" ? req.body : JSON.stringify(req.body);
-    if (!verifyBbpsCallback(rawBody, signature)) {
-      throw new HttpError(400, "INVALID_BBPS_SIGNATURE", "BBPS callback signature verification failed");
-    }
 
     const body = payBillBody.parse(req.body);
     const result = await commands.payBill(ctx, body);

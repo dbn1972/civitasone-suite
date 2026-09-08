@@ -6,12 +6,10 @@
  * _Requirements: SVC-134_
  */
 import { describe, it, expect, afterEach } from "vitest";
-import { createHmac } from "node:crypto";
 import {
   buildFetchBillResponse,
   validateBbpsPayment,
   isBbpsEnabled,
-  verifyBbpsCallback,
   DomainError,
   type DcbOutstanding,
 } from "../src/modules/bbps/domain.js";
@@ -92,46 +90,11 @@ describe("BBPS Biller Domain — M7 SVC-134", () => {
     });
   });
 
-  describe("verifyBbpsCallback (SEC-001)", () => {
-    const origSecret = process.env.BBPS_WEBHOOK_SECRET;
-    const SECRET = "unit_test_bbps_webhook_secret_x";
-    const body = JSON.stringify({ assesseeIdentifier: "PROP-001", amountMinor: "200000", bbpsTxnId: "T1", channel: "bbps" });
-
-    afterEach(() => {
-      if (origSecret === undefined) {
-        delete process.env.BBPS_WEBHOOK_SECRET;
-      } else {
-        process.env.BBPS_WEBHOOK_SECRET = origSecret;
-      }
-    });
-
-    it("accepts a signature correctly computed with the configured secret", () => {
-      process.env.BBPS_WEBHOOK_SECRET = SECRET;
-      const signature = createHmac("sha256", SECRET).update(body).digest("hex");
-      expect(verifyBbpsCallback(body, signature)).toBe(true);
-    });
-
-    it("rejects a signature computed with the wrong secret (forged callback)", () => {
-      process.env.BBPS_WEBHOOK_SECRET = SECRET;
-      const forged = createHmac("sha256", "a-completely-different-secret-32").update(body).digest("hex");
-      expect(verifyBbpsCallback(body, forged)).toBe(false);
-    });
-
-    it("rejects a signature computed over a different body (tampered payload)", () => {
-      process.env.BBPS_WEBHOOK_SECRET = SECRET;
-      const signatureForOtherBody = createHmac("sha256", SECRET).update(JSON.stringify({ amountMinor: "1" })).digest("hex");
-      expect(verifyBbpsCallback(body, signatureForOtherBody)).toBe(false);
-    });
-
-    it("rejects garbage/malformed signature input without throwing", () => {
-      process.env.BBPS_WEBHOOK_SECRET = SECRET;
-      expect(verifyBbpsCallback(body, "not-hex-at-all")).toBe(false);
-      expect(verifyBbpsCallback(body, "")).toBe(false);
-    });
-
-    it("throws if BBPS_WEBHOOK_SECRET is not configured", () => {
-      delete process.env.BBPS_WEBHOOK_SECRET;
-      expect(() => verifyBbpsCallback(body, "anything")).toThrow("BBPS_WEBHOOK_SECRET");
-    });
-  });
+  // NOTE (SEC-001): an earlier version of this fix added `verifyBbpsCallback`
+  // (HMAC-over-raw-body webhook-signature verification) here, plus a describe
+  // block testing it. It has been removed — see domain.ts's SEC-001 comment
+  // and routes.ts for why it was the wrong shape for the staff-facing
+  // pay-bill route. A real future gateway-webhook route should follow
+  // billing-service's Razorpay webhook pattern (and fix that pattern's
+  // not-actually-raw-body bug) rather than reintroducing this function as-is.
 });

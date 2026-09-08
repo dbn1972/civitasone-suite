@@ -6,22 +6,26 @@
  * The adapter is env-gated: BBPS_ENABLED=true enables the live path.
  * Without it, the stub path returns structured errors.
  *
- * SEC-001: there is no live NPCI BBPS gateway to call out to and synchronously
- * verify a payment against in this environment. Absent that, the only trust
- * boundary available is a signed callback — mirroring
- * billing-service/src/modules/payments/razorpay.ts's `verifyWebhookSignature`
- * (HMAC-SHA256 over the raw body, timing-safe compare). `verifyBbpsCallback`
- * below is that same pattern applied to BBPS: a pay-bill claim is only ever
- * accepted once it carries a signature that only the BBPS gateway (holder of
- * BBPS_WEBHOOK_SECRET) could have produced. See routes.ts for where this is
- * enforced, and consumer.ts for why the settled amount is still re-derived
- * from the DCB record rather than trusted verbatim even after the signature
- * checks out.
+ * SEC-001: an earlier version of this fix added a `verifyBbpsCallback`
+ * HMAC-over-raw-body check here (modeled on billing-service's Razorpay
+ * *webhook* verification) and required it on POST /v1/revenue/bbps/pay-bill
+ * alongside a role check. That was wrong: pay-bill is called by
+ * `PayBillForm.tsx`, a staff browser form that legitimately has no access to
+ * a webhook signing secret — requiring both broke every real call. It has
+ * been removed from this route; see routes.ts for the current reasoning.
+ * A REAL BBPS gateway callback, when one exists, should be a separate
+ * PUBLIC/unauthenticated webhook route signed over the genuine raw request
+ * body — follow billing-service's `POST /v1/billing/webhooks/razorpay` +
+ * `verifyWebhookSignature` pattern for that, not this file. (Note also that
+ * `verifyWebhookSignature`'s own "raw body" is actually
+ * `JSON.stringify(req.body)` computed *after* Fastify's JSON parser already
+ * consumed the original bytes — not a genuine raw-body hash. A real BBPS
+ * webhook implementation should capture the true raw body via
+ * `preParsing`/`rawBody` rather than copying that pattern verbatim.)
  *
  * _Requirements: SVC-134_
  */
 
-import { createHmac, timingSafeEqual } from "node:crypto";
 import { DomainError } from "../rate-engine/domain.js";
 
 export { DomainError };
@@ -82,30 +86,6 @@ export function validateBbpsPayment(paymentMinor: bigint, outstandingMinor: bigi
  */
 export function isBbpsEnabled(): boolean {
   return process.env.BBPS_ENABLED === "true";
-}
-
-function getBbpsWebhookSecret(): string {
-  const secret = process.env.BBPS_WEBHOOK_SECRET;
-  if (!secret) throw new Error("BBPS_WEBHOOK_SECRET is not set");
-  return secret;
-}
-
-/**
- * Verify a BBPS gateway callback signature.
- *
- * HMAC-SHA256(rawBody, BBPS_WEBHOOK_SECRET) === signature (hex), timing-safe —
- * same construction as billing-service's Razorpay webhook verification. This
- * is the sole authorization boundary for POST /v1/revenue/bbps/pay-bill: the
- * route requires this to pass BEFORE the payBill command is ever published,
- * so an unsigned or forged claim never reaches the queue/consumer at all.
- */
-export function verifyBbpsCallback(rawBody: string, signature: string): boolean {
-  const expected = createHmac("sha256", getBbpsWebhookSecret()).update(rawBody).digest("hex");
-  try {
-    return timingSafeEqual(Buffer.from(expected), Buffer.from(signature));
-  } catch {
-    return false;
-  }
 }
 
 /**

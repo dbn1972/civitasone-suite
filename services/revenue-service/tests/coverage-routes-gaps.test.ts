@@ -5,20 +5,14 @@
  */
 import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
 import type { FastifyInstance } from "fastify";
-import { createHmac } from "node:crypto";
 import { signToken } from "@civitasone/auth";
 
 const SECRET = "test_secret_for_civitasone_32chr";
 const TENANT_ID = "t1111111-1111-1111-1111-111111111111";
 const USER_ID = "u1111111-1111-1111-1111-111111111111";
-const BBPS_WEBHOOK_SECRET = "bbps_test_webhook_secret_32char";
 
 function makeToken(roles: string[]) {
   return signToken({ sub: USER_ID, tid: TENANT_ID, roles, sid: "s1" }, SECRET, 3600);
-}
-
-function signBbps(payload: unknown): string {
-  return createHmac("sha256", BBPS_WEBHOOK_SECRET).update(JSON.stringify(payload)).digest("hex");
 }
 
 const AUTH = { authorization: `Bearer ${makeToken(["revenue_admin"])}` };
@@ -83,7 +77,6 @@ let app: FastifyInstance;
 beforeAll(async () => {
   // Enable BBPS for these tests
   process.env.BBPS_ENABLED = "true";
-  process.env.BBPS_WEBHOOK_SECRET = BBPS_WEBHOOK_SECRET;
   const { buildApp } = await import("../src/app.js");
   app = await buildApp();
   await app.ready();
@@ -91,7 +84,6 @@ beforeAll(async () => {
 
 afterAll(async () => {
   delete process.env.BBPS_ENABLED;
-  delete process.env.BBPS_WEBHOOK_SECRET;
   await app.close();
 });
 
@@ -194,18 +186,17 @@ describe("BBPS routes when BBPS_ENABLED=true", () => {
     expect(res.statusCode).toBe(400);
   });
 
-  it("POST /v1/revenue/bbps/pay-bill returns 202 with valid body, role, and BBPS signature", async () => {
-    const payload = {
-      assesseeIdentifier: "PROP-12345",
-      amountMinor: "500000",
-      bbpsTxnId: "TXN001",
-      channel: "mobile",
-    };
+  it("POST /v1/revenue/bbps/pay-bill returns 202 with valid body and role", async () => {
     const res = await app.inject({
       method: "POST",
       url: "/v1/revenue/bbps/pay-bill",
-      headers: { ...AUTH, "x-bbps-signature": signBbps(payload) },
-      payload,
+      headers: AUTH,
+      payload: {
+        assesseeIdentifier: "PROP-12345",
+        amountMinor: "500000",
+        bbpsTxnId: "TXN001",
+        channel: "mobile",
+      },
     });
     expect(res.statusCode).toBe(202);
     expect(res.json().data).toHaveProperty("messageId");
