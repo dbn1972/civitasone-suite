@@ -1,4 +1,4 @@
--- 0135_perf002_widest_tenant_created_indexes.sql
+-- 0136_perf002_widest_tenant_created_indexes.sql
 -- PERF-002: 0/12 of the fleet's widest tenant tables (by column count) had a
 -- (tenant_id, created_at) composite index, the shape most list/audit/report
 -- queries filter and sort by. hrms-service holds 9 of the 12 (verified
