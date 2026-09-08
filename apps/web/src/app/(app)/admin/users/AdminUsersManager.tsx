@@ -165,10 +165,6 @@ export function AdminUsersManager({
     return base as Row[];
   }, [users, filter]);
 
-  const active = users.filter((u) => u.status === "active").length;
-  const suspended = users.filter((u) => u.status === "suspended").length;
-  const locked = users.filter((u) => u.status === "locked" || u.status === "deactivated").length;
-
   async function toggleStatus(user: AdminUserSummary) {
     const newStatus = user.status === "active" ? "suspended" : "active";
     setBusyId(user.id);
