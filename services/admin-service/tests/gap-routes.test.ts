@@ -285,6 +285,40 @@ describe("cross-service routes → identity-service (token-forwarded)", () => {
     expect(res.json().code).toBe("CONFLICT");
   });
 
+  it("PATCH /v1/admin/users/:id forwards the caller's bearer token and relays identity-service's real update", async () => {
+    const userId = "33333333-3333-4333-8333-333333333333";
+    const fetchMock = vi.fn(async (url: string, init: { headers: Record<string, string> }) => {
+      expect(url).toContain(`/identity/users/${userId}`);
+      expectForwardsCallerAuth(init);
+      return jsonResponse(200, { id: userId, tenantId: TENANT, email: "a@gov.in", name: "Updated Name", empCode: null, status: "active", mfaEnabled: true, version: 2 });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const res = await app.inject({
+      method: "PATCH", url: `/v1/admin/users/${userId}`,
+      headers: authHeader(["tenant_admin"]),
+      payload: { name: "Updated Name" },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().name).toBe("Updated Name");
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("PATCH /v1/admin/users/:id relays a real identity-service failure honestly (never swallows it into a fake 2xx)", async () => {
+    const userId = "44444444-4444-4444-8444-444444444444";
+    const fetchMock = vi.fn(async (_url: string, init: { headers: Record<string, string> }) => {
+      expectForwardsCallerAuth(init);
+      return jsonResponse(404, { code: "NOT_FOUND", message: "user not found" });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const res = await app.inject({
+      method: "PATCH", url: `/v1/admin/users/${userId}`,
+      headers: authHeader(["tenant_admin"]),
+      payload: { name: "Ghost" },
+    });
+    expect(res.statusCode).toBe(404);
+    expect(res.json().code).toBe("NOT_FOUND");
+  });
+
   it("GET /v1/admin/roles and POST /v1/admin/roles forward the caller's bearer token and relay identity-service's real RBAC store", async () => {
     const listMock = vi.fn(async (_url: string, init: { headers: Record<string, string> }) => {
       expectForwardsCallerAuth(init);
