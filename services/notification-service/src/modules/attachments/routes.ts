@@ -8,9 +8,10 @@ import type { FastifyInstance } from "fastify";
 import { sql } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { scopedRead } from "../../shared/db.js";
+import { scopedRead, db } from "../../shared/db.js";
 import { validateMime, ALLOWED_MIME_TYPES } from "./mime.js";
 import { scanFile } from "@civitasone/scanner";
+import { putObject, presignedGetUrl } from "@civitasone/storage";
 
 const UPLOAD_ROLES = ["notification_admin", "notification_user", "helpdesk_admin", "crm_user", "crm_admin", "super_admin"];
 
@@ -18,13 +19,16 @@ const UPLOAD_ROLES = ["notification_admin", "notification_user", "helpdesk_admin
 function getMaxFileSize(): number {
   return Number(process.env.MAX_ATTACHMENT_BYTES ?? process.env.MAX_ATTACHMENT_SIZE_BYTES ?? 25 * 1024 * 1024); // 25MB default per spec
 }
-const STORAGE_BASE = process.env.STORAGE_URL ?? "http://localhost:4566";
+
+/** Presigned download URL lifetime — 24h, matching the metadata endpoint's `expiresAt`. */
+const DOWNLOAD_URL_TTL_SECONDS = 24 * 60 * 60;
 
 /**
- * Generate a presigned download URL (simulated for now; in prod this calls S3/MinIO).
+ * Generate a REAL SigV4 presigned GET URL against the object actually stored
+ * in S3/LocalStack (via @civitasone/storage — no fabricated URL string).
  */
-function presignedUrl(storageKey: string): string {
-  return `${STORAGE_BASE}/${storageKey}?X-Amz-Expires=86400`;
+async function presignedUrl(storageKey: string): Promise<string> {
+  return presignedGetUrl({ key: storageKey, expiresIn: DOWNLOAD_URL_TTL_SECONDS });
 }
 
 export async function attachmentRoutes(app: FastifyInstance): Promise<void> {
@@ -69,23 +73,36 @@ export async function attachmentRoutes(app: FastifyInstance): Promise<void> {
       });
     }
 
-    // Store to S3/MinIO (simulated: generate storage key)
-    const storageKey = `attachments/${ctx.tenantId}/${randomUUID()}/${filename}`;
-
     // Malware scan
     const scanResult = await scanFile(buffer, filename);
 
     if (scanResult.status === "infected") {
-      // Delete from storage (in production) and reject
+      // Nothing was ever uploaded to storage for an infected file — reject
+      // before any bytes leave this request.
       return reply.code(422).send({ code: "MALWARE_DETECTED", message: "file is infected and has been rejected" });
     }
 
     // Determine scan_status: clean if scanner confirmed, pending if scanner errored
     const scanStatus = scanResult.status === "clean" ? "clean" : "pending";
 
-    // Insert record
+    // Store to S3/LocalStack for real — a genuine object at this key from
+    // here on, not a fabricated storage_key that nothing ever wrote to.
+    const storageKey = `attachments/${ctx.tenantId}/${randomUUID()}/${filename}`;
+    await putObject(storageKey, buffer, mimeResult.detectedMime);
+
+    // Insert record. This is a WRITE, so it goes through `db.transaction`
+    // (the write-capable primitive every other mutating module in this
+    // service uses — see e.g. bulk/consumer.ts, conversations/consumer.ts),
+    // not `scopedRead`. `scopedRead` is named and documented (shared/db.ts)
+    // as a READ helper: it exists solely to run SELECTs inside a tenant-GUC
+    // transaction so RLS is enforced on reads too. It happens to be
+    // implemented as `db.transaction(fn)` under the hood, which is why an
+    // INSERT routed through it "worked" — but that was an accident of
+    // implementation, not a sanctioned write path, and the next refactor of
+    // scopedRead (e.g. making it a read-only replica connection per
+    // `dbForRead`) would silently break this insert.
     const id = randomUUID();
-    await scopedRead((tx) => tx.execute(sql`
+    await db.transaction((tx) => tx.execute(sql`
       INSERT INTO notification.message_attachments
         (id, tenant_id, filename, mime_type, size_bytes, storage_key, scan_status, scanned_at, uploaded_by)
       VALUES
@@ -101,7 +118,7 @@ export async function attachmentRoutes(app: FastifyInstance): Promise<void> {
         mimeType: mimeResult.detectedMime,
         sizeBytes: buffer.length,
         scanStatus,
-        downloadUrl: presignedUrl(storageKey),
+        downloadUrl: await presignedUrl(storageKey),
       },
     });
   });
@@ -137,7 +154,7 @@ export async function attachmentRoutes(app: FastifyInstance): Promise<void> {
       data: {
         id: attachment.id,
         filename: attachment.filename,
-        downloadUrl: presignedUrl(attachment.storageKey),
+        downloadUrl: await presignedUrl(attachment.storageKey),
         scanStatus: attachment.scanStatus,
       },
     });
@@ -167,7 +184,7 @@ export async function attachmentRoutes(app: FastifyInstance): Promise<void> {
     }
 
     const attachment = rows[0]!;
-    const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+    const expiresAt = new Date(Date.now() + DOWNLOAD_URL_TTL_SECONDS * 1000).toISOString();
 
     return reply.code(200).send({
       data: {
@@ -179,7 +196,7 @@ export async function attachmentRoutes(app: FastifyInstance): Promise<void> {
         scannedAt: attachment.scannedAt,
         uploadedBy: attachment.uploadedBy,
         createdAt: attachment.createdAt,
-        presignedUrl: presignedUrl(attachment.storageKey),
+        presignedUrl: await presignedUrl(attachment.storageKey),
         expiresAt,
       },
     });
