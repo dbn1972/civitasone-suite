@@ -336,8 +336,8 @@ jobs:
       - uses: actions/setup-node@v4
         with: { node-version: '${{ env.NODE_VERSION }}', cache: 'pnpm' }
       - run: pnpm install --frozen-lockfile
-      - name: Ops regression locks (ecosystem workers + migrate-all inventory)
-        run: pnpm exec vitest run tests/ops/ecosystem-workers.test.ts tests/ops/migrate-all-inventory.test.ts
+      - name: Ops regression locks (ecosystem workers + migrate-all inventory + runbook lint)
+        run: pnpm exec vitest run tests/ops/ecosystem-workers.test.ts tests/ops/migrate-all-inventory.test.ts tests/architecture/runbook-lint.test.ts
 
       - name: Tenant router adoption guard (Req 1.7)
         run: node scripts/ci/tenant-router-guard.mjs
