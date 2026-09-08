@@ -8,6 +8,7 @@
  * Test 5 — MSE preference (pure): 15% effective price reduction for MSE vendors.
  */
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { randomUUID } from "node:crypto";
 import { MemoryQueue } from "@civitasone/queue";
 import type { Queue, Handler } from "@civitasone/queue";
 import { eq } from "drizzle-orm";
@@ -15,6 +16,7 @@ import { runWithTenant, withTenantConsumer } from "@civitasone/db";
 import { db, sqlClient } from "../src/shared/db.js";
 import { procurementGrns } from "../src/modules/grn/schema.js";
 import { procurementIndents } from "../src/modules/indent/schema.js";
+import { procurementPos, procurementPoItems } from "../src/modules/po/schema.js";
 import { outboxMessages, processed } from "../src/shared/outbox.js";
 import { registerIndentConsumers } from "../src/modules/indent/consumer.js";
 import { registerGrnConsumers }    from "../src/modules/grn/consumer.js";
@@ -22,9 +24,13 @@ import { registerPoConsumers }     from "../src/modules/po/consumer.js";
 import { assertTransitionAllowed } from "../src/modules/indent/domain.js";
 import { computeThreeWayMatch }    from "../src/modules/grn/domain.js";
 import { computeEffectivePrice, rankBids } from "../src/modules/auction/domain.js";
-import { EVENTS } from "../src/topics.js";
+import { COMMANDS, EVENTS } from "../src/topics.js";
 
 const ACTOR  = "00000000-aaaa-4000-8000-000000000001";
+// DOM-002 — the GRN receiver (ACTOR, who creates/receives) and the inspector
+// who accepts/rejects must be genuinely distinct, independently
+// authenticated actors. INSPECTOR stands in for that second actor below.
+const INSPECTOR = "00000000-aaaa-4000-8000-000000000009";
 const TENANT = "11111111-aaaa-4000-8000-000000000002";
 
 const IND_1  = "22222222-bbbb-4000-8000-000000000001";
@@ -37,14 +43,43 @@ const MSG_G1 = "55555555-eeee-4000-8000-000000000003";
 const MSG_G2 = "55555555-eeee-4000-8000-000000000004";
 const MSG_P1 = "55555555-eeee-4000-8000-000000000005";
 
+// DOM-002 — the GRN over-receipt guard now re-derives orderedQty from the
+// real PO line server-side, so the GRN-creation tests below need a real PO +
+// PO item to receive against (previously the poRef/poItemRef were fabricated
+// strings and the guard trusted whatever orderedQty the client sent).
+const PO_GRN_1   = "dddddddd-0000-4000-8000-000000000001";
+const PO_GRN_2   = "dddddddd-1111-4000-8000-000000000001";
+const POITEM_1   = "eeeeeeee-0000-4000-8000-000000000001";
+const POITEM_2   = "eeeeeeee-1111-4000-8000-000000000001";
+
 async function wipe() {
   await runWithTenant(TENANT, () => db.transaction(async (tx) => {
     await tx.delete(outboxMessages).where(eq(outboxMessages.tenantId, TENANT));
     await tx.delete(procurementGrns).where(eq(procurementGrns.tenantId, TENANT));
     await tx.delete(procurementIndents).where(eq(procurementIndents.tenantId, TENANT));
+    await tx.delete(procurementPoItems).where(eq(procurementPoItems.tenantId, TENANT));
+    await tx.delete(procurementPos).where(eq(procurementPos.tenantId, TENANT));
     for (const id of [MSG_I1, MSG_IA, MSG_G1, MSG_G2, MSG_P1]) {
       await tx.delete(processed).where(eq(processed.messageId, id));
     }
+  }));
+}
+
+// DOM-002 — seeds the real PO + PO item each GRN-creation test below
+// receives against, so the server-derived orderedQty matches what the test
+// previously trusted from the client payload.
+async function seedPoForGrn(poId: string, poNo: string, poItemId: string, vendorId: string, quantity: number, unitPriceMinor = 10000n): Promise<void> {
+  await runWithTenant(TENANT, () => db.transaction(async (tx) => {
+    await tx.insert(procurementPos).values({
+      id: poId, tenantId: TENANT, poNo, vendorId,
+      indentRef: "procurement_indent:seed", status: "approved", totalMinor: unitPriceMinor * BigInt(quantity),
+      createdBy: ACTOR, updatedBy: ACTOR,
+    });
+    await tx.insert(procurementPoItems).values({
+      id: poItemId, poId, tenantId: TENANT, itemCode: "LAP-001", description: "Laptop",
+      quantity, unit: "nos", unitPriceMinor,
+      createdBy: ACTOR, updatedBy: ACTOR,
+    });
   }));
 }
 
@@ -177,10 +212,24 @@ describe("GRN domain — three-way match (pure)", () => {
   });
 });
 
-// ── 4. CQRS wiring — GRN with mismatch ─────────────────────────────────────
+// ── 4. CQRS wiring — GRN receive (create) then inspect (accept/reject) ─────
+//
+// DOM-002 — GRN creation is receive-only (no inspection verdict, no
+// inspector identity) and lands in `under_inspection`. A genuinely separate,
+// independently authenticated actor (INSPECTOR, never ACTOR/the receiver)
+// then issues its OWN accept/reject command — mirroring two real, distinct
+// HTTP requests — before the three-way match is computed and the
+// accepted/rejected outbox events are emitted.
 
 describe("GRN consumer — CQRS wiring (integration)", () => {
-  beforeAll(async () => { await wipe(); });
+  beforeAll(async () => {
+    await wipe();
+    // DOM-002 — real PO + PO item fixtures the GRN tests below receive
+    // against; quantity mirrors what the payloads previously sent as a
+    // (now-ignored) client orderedQty, so behaviour is unchanged.
+    await seedPoForGrn(PO_GRN_1, "PO-GRN-0001", POITEM_1, "aaaaaaaa-1111-4000-8000-000000000001", 10);
+    await seedPoForGrn(PO_GRN_2, "PO-GRN-0002", POITEM_2, "aaaaaaaa-2222-4000-8000-000000000001", 5);
+  });
   afterAll(async () => { await wipe(); });
 
   it("GRN qty mismatch: three_way_match=false, grnRejected in outbox", async () => {
@@ -188,25 +237,45 @@ describe("GRN consumer — CQRS wiring (integration)", () => {
     registerGrnConsumers(q);
     await q.start();
 
+    // Step 1 — receive (create), authenticated as ACTOR. Lands in
+    // under_inspection; no accepted/rejected decision made yet.
     await q.publish("procurement.grn.create", {
       messageId: MSG_G1,
       type: "procurement.grn.create",
       tenantId: TENANT,
       actorId: ACTOR,
-      correlationId: "corr-grn-mismatch",
+      correlationId: "corr-grn-mismatch-create",
       schemaVersion: "1.0",
       payload: {
         id: GRN_1, tenantId: TENANT, grnNo: "GRN-001",
-        poRef: "procurement_po:dddddddd-0000-4000-8000-000000000001",
+        poRef: `procurement_po:${PO_GRN_1}`,
         vendorId: "aaaaaaaa-1111-4000-8000-000000000001",
         items: [{
-          poItemRef: "procurement_po_item:eeeeeeee-0000-4000-8000-000000000001",
+          poItemRef: POITEM_1,
           itemCode: "LAP-001", orderedQty: 10, receivedQty: 8, acceptedQty: 8, unit: "nos",
         }],
-        // R18: a partial qty (8 of 10) is now a VALID receipt, so the rejection
-        // here is driven by a FAILED inspection — that still emits grnRejected.
-        inspection: { inspectorId: "ffffffff-0000-4000-8000-000000000001", result: "fail" },
       },
+    });
+
+    await new Promise<void>((r) => setTimeout(r, 500));
+
+    const afterCreate = await runWithTenant(TENANT, () => db.transaction(async (tx) =>
+      tx.select().from(procurementGrns).where(eq(procurementGrns.id, GRN_1))
+    ));
+    expect(afterCreate[0]?.status).toBe("under_inspection");
+
+    // Step 2 — inspect (reject), authenticated as INSPECTOR — a genuinely
+    // distinct actor from ACTOR. R18: a partial qty (8 of 10) is now a
+    // VALID receipt, so the rejection here is driven by a FAILED
+    // inspection — that still emits grnRejected.
+    await q.publish(COMMANDS.grnReject, {
+      messageId: randomUUID(),
+      type: COMMANDS.grnReject,
+      tenantId: TENANT,
+      actorId: INSPECTOR,
+      correlationId: "corr-grn-mismatch-reject",
+      schemaVersion: "1.0",
+      payload: { id: GRN_1, tenantId: TENANT, reason: "failed inspection" },
     });
 
     await new Promise<void>((r) => setTimeout(r, 500));
@@ -232,23 +301,37 @@ describe("GRN consumer — CQRS wiring (integration)", () => {
     registerGrnConsumers(q);
     await q.start();
 
+    // Step 1 — receive (create), authenticated as ACTOR.
     await q.publish("procurement.grn.create", {
       messageId: MSG_G2,
       type: "procurement.grn.create",
       tenantId: TENANT,
       actorId: ACTOR,
-      correlationId: "corr-grn-pass",
+      correlationId: "corr-grn-pass-create",
       schemaVersion: "1.0",
       payload: {
         id: GRN_2, tenantId: TENANT, grnNo: "GRN-002",
-        poRef: "procurement_po:dddddddd-1111-4000-8000-000000000001",
+        poRef: `procurement_po:${PO_GRN_2}`,
         vendorId: "aaaaaaaa-2222-4000-8000-000000000001",
         items: [{
-          poItemRef: "procurement_po_item:eeeeeeee-1111-4000-8000-000000000001",
+          poItemRef: POITEM_2,
           itemCode: "SUP-001", orderedQty: 5, receivedQty: 5, acceptedQty: 5, unit: "nos",
         }],
-        inspection: { inspectorId: "ffffffff-1111-4000-8000-000000000001", result: "pass" },
       },
+    });
+
+    await new Promise<void>((r) => setTimeout(r, 500));
+
+    // Step 2 — inspect (accept), authenticated as INSPECTOR — a genuinely
+    // distinct actor from ACTOR.
+    await q.publish(COMMANDS.grnAccept, {
+      messageId: randomUUID(),
+      type: COMMANDS.grnAccept,
+      tenantId: TENANT,
+      actorId: INSPECTOR,
+      correlationId: "corr-grn-pass-accept",
+      schemaVersion: "1.0",
+      payload: { id: GRN_2, tenantId: TENANT },
     });
 
     await new Promise<void>((r) => setTimeout(r, 500));
@@ -266,6 +349,51 @@ describe("GRN consumer — CQRS wiring (integration)", () => {
     ));
     const types = rows.map((r) => r.eventType);
     expect(types).toContain(EVENTS.grnAccepted);
+  });
+
+  it("SoD: the same actor cannot both create and accept the same GRN — self-inspection is rejected", async () => {
+    const q = wireTenantAwareQueue(new MemoryQueue());
+    registerGrnConsumers(q);
+    await q.start();
+
+    const selfGrnId = "33333333-cccc-4000-8000-000000000009";
+    await q.publish("procurement.grn.create", {
+      messageId: randomUUID(),
+      type: "procurement.grn.create",
+      tenantId: TENANT,
+      actorId: ACTOR,
+      correlationId: "corr-grn-self-create",
+      schemaVersion: "1.0",
+      payload: {
+        id: selfGrnId, tenantId: TENANT, grnNo: "GRN-SELF-001",
+        poRef: `procurement_po:${PO_GRN_2}`,
+        vendorId: "aaaaaaaa-2222-4000-8000-000000000001",
+        items: [{
+          poItemRef: POITEM_2,
+          itemCode: "SUP-001", orderedQty: 5, receivedQty: 5, acceptedQty: 5, unit: "nos",
+        }],
+      },
+    });
+    await new Promise<void>((r) => setTimeout(r, 500));
+
+    // Same actor (ACTOR) tries to accept the GRN it just created.
+    await q.publish(COMMANDS.grnAccept, {
+      messageId: randomUUID(),
+      type: COMMANDS.grnAccept,
+      tenantId: TENANT,
+      actorId: ACTOR,
+      correlationId: "corr-grn-self-accept",
+      schemaVersion: "1.0",
+      payload: { id: selfGrnId, tenantId: TENANT },
+    });
+    await new Promise<void>((r) => setTimeout(r, 500));
+    await q.stop();
+
+    const grns = await runWithTenant(TENANT, () => db.transaction(async (tx) =>
+      tx.select().from(procurementGrns).where(eq(procurementGrns.id, selfGrnId))
+    ));
+    // Self-accept must be rejected: the GRN stays under_inspection.
+    expect(grns[0]?.status).toBe("under_inspection");
   });
 });
 

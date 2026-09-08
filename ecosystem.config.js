@@ -373,7 +373,37 @@ const FINANCE_PII_KEY = piiKey("FINANCE_PII_KEY", "finance", "finance-service");
 // env missing S3_BUCKET_NAME/HRMS_SERVICE_URL — a defect in the probe, not in
 // this config. No change needed here.
 
-function svc(name, port, dbUser, dbName, extra = {}) {
+// REL-012: opt-in PM2 graceful-lifecycle flags for pm2 reload / rollback.
+// wait_ready + listen_timeout make PM2 hold a (re)started process out of
+// traffic rotation until it sends the 'ready' IPC message (see
+// packages/observability/src/lifecycle.ts's signalReady(), called from the
+// service's src/index.ts / src/worker.ts once it is actually able to do its
+// job) or listen_timeout elapses, whichever is first. kill_timeout is the
+// SIGTERM grace period before PM2 escalates to SIGKILL, giving
+// registerGracefulShutdown()'s in-flight-request drain time to finish before
+// the process is torn down.
+//
+// Deliberately opt-in per svc()/worker() call (pass { graceful: true } as
+// the last argument), not a blanket default: setting wait_ready:true on a
+// process whose code never calls signalReady() makes PM2 wait out the full
+// listen_timeout on every start/reload before declaring that process failed
+// -- pure downside, no upside, for any service not yet wired up. Rolled out
+// so far to finance (svc + worker) and court (svc) as the representative
+// subset validated for REL-012; extending it fleet-wide means adding the
+// signalReady()/registerGracefulShutdown() call to each remaining service's
+// entrypoint first (see docs/ENTERPRISE-GAP-REPORT-2026-09-07.md REL-012).
+const GRACEFUL_LIFECYCLE = {
+  wait_ready: true,
+  // ms PM2 waits for the 'ready' IPC message after a (re)start before it
+  // gives up and treats that start as failed.
+  listen_timeout: 15000,
+  // ms grace period after SIGTERM before PM2 sends SIGKILL. Kept above
+  // registerGracefulShutdown()'s default forceExitMs (8000ms) so a healthy
+  // process's own clean exit(0)/exit(1) wins the race against being killed.
+  kill_timeout: 10000,
+};
+
+function svc(name, port, dbUser, dbName, extra = {}, opts = {}) {
   return {
     name,
     script: "dist/index.js",
@@ -383,6 +413,7 @@ function svc(name, port, dbUser, dbName, extra = {}) {
     merge_logs: true,
     restart_delay: 3000,
     max_restarts: 10,
+    ...(opts.graceful ? GRACEFUL_LIFECYCLE : {}),
     env: {
       NODE_ENV: RUNTIME_NODE_ENV,
       PORT: port,
@@ -397,7 +428,7 @@ function svc(name, port, dbUser, dbName, extra = {}) {
   };
 }
 
-function worker(name, dbUser, dbName, extra = {}, scriptFile = "dist/worker.js") {
+function worker(name, dbUser, dbName, extra = {}, scriptFile = "dist/worker.js", opts = {}) {
   return {
     name: `${name}-worker`,
     // Court: dist/worker.js only exports startWorker(); dist/worker-main.js boots it.
@@ -408,6 +439,7 @@ function worker(name, dbUser, dbName, extra = {}, scriptFile = "dist/worker.js")
     merge_logs: true,
     restart_delay: 3000,
     max_restarts: 10,
+    ...(opts.graceful ? GRACEFUL_LIFECYCLE : {}),
     env: {
       NODE_ENV: RUNTIME_NODE_ENV,
       ...AUTH_ENV,
@@ -433,7 +465,7 @@ module.exports = {
     svc("notification", 3006, "notification_svc",  "civitas_notification"),
 
     // ── Finance & procurement ──────────────────────────────────────────────────
-    svc("finance",      3007, "finance_svc",       "civitas_finance", { PII_ENC_KEY: FINANCE_PII_KEY }),
+    svc("finance",      3007, "finance_svc",       "civitas_finance", { PII_ENC_KEY: FINANCE_PII_KEY }, { graceful: true }), // REL-012: validated subset
     svc("procurement",  3008, "procurement_svc",   "civitas_procurement", { PII_ENC_KEY: PROCUREMENT_PII_KEY }),
     svc("contract",     3009, "contract_svc",      "civitas_contract"),
 
@@ -473,7 +505,7 @@ module.exports = {
     worker("finance",      "finance_svc",      "civitas_finance", {
       PII_ENC_KEY: FINANCE_PII_KEY,
       FINANCE_SCANNER_DATABASE_URL: scannerDbUrl("finance_scanner", "civitas_finance", "FINANCE_SCANNER_DATABASE_URL"),
-    }),
+    }, "dist/worker.js", { graceful: true }), // REL-012: validated subset
     worker("procurement",  "procurement_svc",  "civitas_procurement", {
       PII_ENC_KEY: PROCUREMENT_PII_KEY,
       PROCUREMENT_SCANNER_DATABASE_URL: scannerDbUrl("procurement_scanner", "civitas_procurement", "PROCUREMENT_SCANNER_DATABASE_URL"),
@@ -608,7 +640,7 @@ module.exports = {
     svc("analytics",    3031, "analytics_svc",    "civitas_analytics"),
     svc("ml",           3032, "ml_svc",           "civitas_ml"),
     svc("meeting",      3033, "meeting_svc",      "civitas_meeting", { MEETING_PII_KEY }),
-    svc("court",        3034, "court_svc",        "civitas_court", { COURT_PII_KEY }),
+    svc("court",        3034, "court_svc",        "civitas_court", { COURT_PII_KEY }, { graceful: true }), // REL-012: validated subset
     svc("visitor",      3035, "visitor_svc",      "civitas_visitor", { VISITOR_PII_KEY }),
     // Previously absent from this file entirely, so they could never be started.
     // Boot-probed 2026-07-27: works listens cleanly with no extra config.

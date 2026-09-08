@@ -43,6 +43,7 @@ import { schema as consultantInvoiceModule } from "../modules/consultant-invoice
 import { schema as contractorBillModule } from "../modules/contractor-bill/schema.js";
 import { schema as apprenticeStipendModule } from "../modules/apprentice-stipend/schema.js";
 import { schema as payrollConfigModule } from "../modules/payroll-config/schema.js";
+import { schema as seniorityModule }    from "../modules/seniority/schema.js";
 import { outboxSchema }                from "./outbox.js";
 
 const SCHEMA = {
@@ -84,6 +85,7 @@ const SCHEMA = {
   ...contractorBillModule,
   ...apprenticeStipendModule,
   ...payrollConfigModule,
+  ...seniorityModule,
   ...outboxSchema,
 };
 
@@ -125,7 +127,7 @@ export const sqlPool = {
  * correctly tenant-scoped by RLS, not merely by an app-layer WHERE. Mirrors
  * court-service / visitor-service / meeting-service.
  */
-type ScopedTx = Parameters<Parameters<Db["transaction"]>[0]>[0];
+export type ScopedTx = Parameters<Parameters<Db["transaction"]>[0]>[0];
 export function scopedRead<T>(fn: (tx: ScopedTx) => Promise<T>): Promise<T> {
   return db.transaction(fn as Parameters<Db["transaction"]>[0]) as Promise<T>;
 }
