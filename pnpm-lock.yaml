@@ -135,6 +135,9 @@ importers:
 
   packages/auth:
     dependencies:
+      '@civitasone/cache':
+        specifier: workspace:*
+        version: link:../cache
       '@civitasone/types':
         specifier: workspace:*
         version: link:../types

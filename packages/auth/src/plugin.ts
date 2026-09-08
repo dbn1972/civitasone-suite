@@ -19,6 +19,7 @@ import { verifyJwt, verifyToken, toRequestContext } from "./index.js";
 import type { RequestContext } from "@civitasone/types";
 import { randomUUID, timingSafeEqual } from "node:crypto";
 import { AuthContextError } from "./context.js";
+import { isSessionDenylisted } from "./denylist.js";
 
 declare module "fastify" {
   interface FastifyRequest {
@@ -157,14 +158,28 @@ const authPluginImpl: FastifyPluginAsync = async (fastify) => {
             correlationId,
             (req.headers["x-tenant-id"] as string | undefined),
           );
-          return;
         } catch (hs256Err) {
           req.log.warn({ hs256Err }, "HS256 fallback also failed");
-          // fall through to 401
+          req.log.warn({ err }, "JWT verification failed");
+          return reply.status(401).send({ error: "UNAUTHORIZED", message: "Invalid or expired token" });
         }
+      } else {
+        req.log.warn({ err }, "JWT verification failed");
+        return reply.status(401).send({ error: "UNAUTHORIZED", message: "Invalid or expired token" });
       }
-      req.log.warn({ err }, "JWT verification failed");
-      return reply.status(401).send({ error: "UNAUTHORIZED", message: "Invalid or expired token" });
+    }
+
+    // SEC-006: signature + expiry are verified above; this closes the gap they
+    // leave open — a revoked session's token stays cryptographically valid
+    // until it naturally expires. Cheap Redis lookup keyed by the token's
+    // `sid` (session id). Fails open on a Redis error — see denylist.ts for
+    // why that's the deliberate choice here, not fail-closed.
+    if (req.ctx.sessionId) {
+      const denylisted = await isSessionDenylisted(req.ctx.sessionId, req.log);
+      if (denylisted) {
+        req.log.warn({ sid: req.ctx.sessionId }, "SEC-006: rejected — session has been revoked");
+        return reply.status(401).send({ error: "UNAUTHORIZED", message: "Session has been revoked" });
+      }
     }
   });
 };

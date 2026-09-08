@@ -1,4 +1,5 @@
 import type { Queue, CommandEnvelope } from "@civitasone/queue";
+import { denylistSession } from "@civitasone/auth/denylist";
 import { db } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
@@ -33,6 +34,13 @@ export function registerSessionConsumers(q: Queue): void {
       await emitAudit(tx, msg, EVENTS.sessionRevoked, { sessionId: msg.payload.id }, "revoke", msg.payload.id);
     });
     await cache.invalidate(cache.makeKey(msg.tenantId, RESOURCE.session, msg.payload.id));
+    // SEC-006: this session's id doubles as the JWT `sid` this system tracks
+    // (see the auth package's denylist.ts and the PR description for the
+    // caveat on how that identifier is populated today). Denylisting here —
+    // right where the row is flipped, not just when the DB write happens to
+    // find a row — means a repeat revoke of an already-revoked/unknown id is
+    // still denied, which is the safer default for a security control.
+    await denylistSession(msg.payload.id);
   });
 
   q.subscribe<{ userId: string }>(COMMANDS.revokeAllSessions, async (msg) => {
@@ -50,9 +58,10 @@ export function registerSessionConsumers(q: Queue): void {
       );
     });
     // Invalidate each revoked session's cache entry so reads never serve a stale
-    // "active" view.
+    // "active" view, and denylist its token (SEC-006).
     for (const id of revokedIds) {
       await cache.invalidate(cache.makeKey(msg.tenantId, RESOURCE.session, id));
+      await denylistSession(id);
     }
   });
 }

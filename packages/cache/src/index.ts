@@ -361,6 +361,25 @@ function defaultStore(): CacheStore {
 }
 
 /**
+ * SEC-006: fleet-wide, un-tenant-scoped store for cross-cutting shared state
+ * that every service must agree on regardless of which one wrote it — e.g.
+ * the session-revocation denylist in `@civitasone/auth`, populated by
+ * identity-service and read by every service's `authPlugin`.
+ *
+ * `Cache` deliberately can't be used for this: it enforces the
+ * `{service}:{tenant}:{resource}:{id}` convention so a service can only
+ * read/write its OWN keyspace, which is exactly wrong for a value one
+ * service writes and every other service must read. `sharedStore()` reuses
+ * the same REDIS_URL / CACHE_DRIVER=memory connection conventions as
+ * `Cache` (same env vars, same client construction) so callers don't need a
+ * second, hand-rolled Redis client — they just own their own key prefix
+ * (e.g. "session-denylist:") to avoid colliding with other shared uses.
+ */
+export function sharedStore(): CacheStore {
+  return defaultStore();
+}
+
+/**
  * SC-3: In-process inflight map for cache-stampede / thundering-herd protection.
  *
  * When N concurrent requests all miss the same cold cache key simultaneously,
