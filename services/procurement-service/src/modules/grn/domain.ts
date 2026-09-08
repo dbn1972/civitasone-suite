@@ -96,11 +96,36 @@ export function assertGrnLinesResolved(lineIds: string[], known: ReadonlySet<str
 }
 
 /**
+ * DOM-002 — a GRN can only be inspected (accepted/rejected) while it is
+ * genuinely awaiting inspection. grnCreate persists new GRNs directly into
+ * `under_inspection` (see grn/consumer.ts) — this is the real, reachable
+ * pending state a GRN sits in between being received and being inspected,
+ * not a dead status only reachable by direct SQL insert in tests. Mirrors
+ * assertGrnAmendable's shape/DoD.
+ */
+export function canInspectGrn(grn: { status: string }): boolean {
+  return grn.status === "draft" || grn.status === "under_inspection";
+}
+
+/** Defense-in-depth: the consumer re-checks inspectability under the DB
+ * lock, since the route-level check and the consumer write are not atomic. */
+export function assertGrnInspectable(grn: { status: string }): void {
+  if (!canInspectGrn(grn)) {
+    throw new DomainError("GRN_NOT_INSPECTABLE", `GRN in status '${grn.status}' cannot be inspected`);
+  }
+}
+
+/**
  * DOM-002 — separation of duties: the actor who received the goods (the GRN
- * creator) must not be the same actor who inspects/accepts or rejects them.
- * Mirrors po/amendment-domain.ts's assertDistinctMakerChecker (same
- * SOD_VIOLATION code), the established maker-checker convention elsewhere in
- * this service.
+ * creator, `receivedBy` — persisted as `grn.createdBy` from the CREATE
+ * call's own `msg.actorId`) must not be the same actor who inspects/accepts
+ * or rejects them (`inspectorId` — the ACCEPT/REJECT call's own
+ * `ctx.actorId`/`msg.actorId`). Both identities come from each call's own
+ * independent authentication — never from a client-supplied field in either
+ * request body — so this is a genuine two-person check, not a same-request
+ * string comparison. Mirrors po/amendment-domain.ts's
+ * assertDistinctMakerChecker (same SOD_VIOLATION code), the established
+ * maker-checker convention elsewhere in this service.
  */
 export function assertDistinctReceiverInspector(receivedBy: string, inspectorId: string): void {
   if (receivedBy && inspectorId && receivedBy === inspectorId) {

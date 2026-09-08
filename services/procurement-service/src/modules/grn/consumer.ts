@@ -8,6 +8,7 @@ import * as repo from "./repo.js";
 import {
   computeThreeWayMatch, assertQtyValid, assertGrnAmendable,
   assertPoItemsResolved, assertGrnLinesResolved, assertDistinctReceiverInspector,
+  assertGrnInspectable,
 } from "./domain.js";
 import { minorString } from "@civitasone/schemas/money";
 import { allocateDocNo } from "../../shared/numbering.js";
@@ -28,14 +29,7 @@ export function registerGrnConsumers(queue: Queue): void {
       id: string; tenantId: string; grnNo: string; poRef: string; vendorId: string;
       receivedDate?: string; notes?: string;
       items: Array<{ poItemRef: string; itemCode: string; orderedQty: number; receivedQty: number; acceptedQty: number; unit: string }>;
-      inspection: { inspectorId: string; result: string; remarks?: string };
     };
-
-    // DOM-002 — separation of duties: the receiving actor (msg.actorId, who
-    // submitted this GRN) must not also be the inspector who determines
-    // accept/reject on it. Checked before any I/O so a violation never
-    // touches the DB.
-    assertDistinctReceiverInspector(msg.actorId, p.inspection.inspectorId);
 
     // DOM-002 — re-derive orderedQty from the real PO line server-side.
     // Previously items[].orderedQty was trusted as-is from the client
@@ -45,7 +39,6 @@ export function registerGrnConsumers(queue: Queue): void {
     // against the PO's real items is rejected rather than silently treated
     // as "unbounded" (see assertPoItemsResolved).
     const poId = p.poRef.replace(/^procurement_po:/, "");
-    const po = await findPoById(poId, p.tenantId);
     const poItems = await findPoItemsByPoId(poId, p.tenantId);
     const poItemMap = new Map(poItems.map((pi) => [pi.id, pi]));
     assertPoItemsResolved(p.items.map((i) => i.poItemRef), new Set(poItemMap.keys()));
@@ -55,18 +48,27 @@ export function registerGrnConsumers(queue: Queue): void {
       receivedQty: i.receivedQty,
       acceptedQty: i.acceptedQty,
     }));
+    // Only the qty/bounds guard runs at receive time — there is no
+    // inspection verdict yet, so computeThreeWayMatch (which also weighs
+    // pass/fail) is deferred entirely to the accept/reject step below.
     assertQtyValid(guardItems);
-
-    const threeWayMatch = computeThreeWayMatch(guardItems, p.inspection.result);
 
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       const grnNo = await allocateDocNo(tx, p.tenantId, "grn");
+      // DOM-002 — grnCreate is now a receive-only step: it persists the GRN
+      // in `under_inspection`, awaiting a SEPARATE, independently
+      // authenticated actor to accept or reject it via COMMANDS.grnAccept /
+      // COMMANDS.grnReject below. No inspection row is written here and no
+      // accepted/rejected decision is made in this call — that used to
+      // happen inline, driven by a client-supplied
+      // `inspection.inspectorId` that was never actually a verified,
+      // distinct person (see grn/domain.ts assertDistinctReceiverInspector).
       await repo.insertGrn(tx, {
         id: p.id, tenantId: p.tenantId, grnNo, poRef: p.poRef,
         vendorId: p.vendorId,
         receivedDate: p.receivedDate ?? new Date().toISOString().slice(0, 10),
-        threeWayMatch, status: threeWayMatch ? "accepted" : "rejected",
+        threeWayMatch: false, status: "under_inspection",
         notes: p.notes ?? null, createdBy: msg.actorId, updatedBy: msg.actorId,
       });
       const itemRows: GrnItemInsert[] = p.items.map((i, idx) => ({
@@ -78,88 +80,32 @@ export function registerGrnConsumers(queue: Queue): void {
         unit: i.unit, createdBy: msg.actorId, updatedBy: msg.actorId,
       }));
       await repo.insertGrnItems(tx, itemRows);
-      await repo.insertInspection(tx, {
-        id: randomUUID(), grnId: p.id, tenantId: p.tenantId,
-        inspectorId: p.inspection.inspectorId,
-        inspectionDate: new Date().toISOString().slice(0, 10),
-        result: p.inspection.result, remarks: p.inspection.remarks ?? null,
-        createdBy: msg.actorId, updatedBy: msg.actorId,
-      });
-      if (threeWayMatch) {
-        await enqueue(tx, {
-          topic: EVENTS.threeWayMatchPassed, eventType: EVENTS.threeWayMatchPassed,
-          tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
-          payload: { grnId: p.id, poRef: p.poRef, vendorId: p.vendorId },
-        });
-        // R7: transport money as exact strings, never Number(bigint paise).
-        const grossMinorStr = po ? minorString(po.totalMinor) : "0";
-
-        // Derive the authoritative PO and GRN(accepted) values server-side from
-        // real PO line prices × GRN accepted qty — never from a caller. These
-        // are persisted to the three-way-match table AND carried on the
-        // grn.accepted event so finance can reconcile invoice↔GRN↔PO (R5).
-        // po / poItemMap are already fetched above (DOM-002) — reused here
-        // rather than re-fetched.
-        const poAmountMinor = po ? BigInt(po.totalMinor) : 0n;
-        let grnAmountMinor = 0n;
-        for (const gi of p.items) {
-          const poItem = poItemMap.get(gi.poItemRef);
-          if (poItem) grnAmountMinor += BigInt(poItem.unitPriceMinor) * BigInt(gi.acceptedQty);
-        }
-
-        // Persist a server-DERIVED three-way match (PO vs GRN). The payment gate
-        // reads this table.
-        if (po) {
-          const variancePct = poAmountMinor > 0n
-            ? Number((poAmountMinor > grnAmountMinor ? poAmountMinor - grnAmountMinor : grnAmountMinor - poAmountMinor) * 10000n / poAmountMinor) / 100
-            : 0;
-          const matchStatus = variancePct <= 2 ? "matched" : variancePct <= 5 ? "matched" : "mismatch";
-          const { upsertDerivedMatch } = await import("../three-way-match/repo.js");
-          await upsertDerivedMatch(tx, {
-            id: randomUUID(),
-            tenantId: p.tenantId, poId, grnId: p.id,
-            poAmountMinor, grnAmountMinor, matchStatus,
-          });
-        }
-        const enrichedItems = p.items.map((gi) => {
-          const poItem = poItemMap.get(gi.poItemRef);
-          const itemType = inferItemType(gi.itemCode, poItem?.itemType);
-          return {
-            itemCode: gi.itemCode,
-            itemName: poItem?.description ?? gi.itemCode,
-            acceptedQty: gi.acceptedQty,
-            rateMinor: poItem ? minorString(poItem.unitPriceMinor) : "0",
-            currency: poItem?.currency ?? "INR",
-            itemType,
-            itemId: poItem?.id,
-          };
-        });
-        await enqueue(tx, {
-          topic: EVENTS.grnAccepted, eventType: EVENTS.grnAccepted,
-          tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
-          payload: {
-            grnId: p.id, poRef: p.poRef, vendorId: p.vendorId, grossMinor: grossMinorStr,
-            // R5: paise as strings so > 2^53 stays exact across the queue boundary.
-            poAmountMinor: poAmountMinor.toString(),
-            grnAmountMinor: grnAmountMinor.toString(),
-            items: enrichedItems,
-          },
-        });
-      } else {
-        await enqueue(tx, {
-          topic: EVENTS.threeWayMatchFailed, eventType: EVENTS.threeWayMatchFailed,
-          tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
-          payload: { grnId: p.id, poRef: p.poRef, vendorId: p.vendorId, reason: "qty_mismatch_or_inspection_failed" },
-        });
-        await enqueue(tx, {
-          topic: EVENTS.grnRejected, eventType: EVENTS.grnRejected,
-          tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
-          payload: { grnId: p.id, poRef: p.poRef, vendorId: p.vendorId, reason: "qty_mismatch_or_inspection_failed" },
-        });
-      }
       await audit(tx, msg, "create", "grn", p.id);
     });
     await cache.invalidate(cache.makeKey(msg.tenantId, "grn", p.id));
+  });
+
+  // DOM-002 — wires the previously-unwired COMMANDS.grnAccept. The route at
+  // PATCH /v1/procurement/grns/:id/accept already existed (grn/routes.ts)
+  // and already published this command, but no consumer ever subscribed to
+  // it — every accept request was silently dead-lettered and the GRN never
+  // actually moved out of whatever status grnCreate had already forced it
+  // into. This is now the real inspection "pass" step: msg.actorId here is
+  // the CALLER of PATCH /accept's own authenticated identity (set from
+  // ctx.actorId in commands.ts, never from a client-supplied field), so it
+  // is genuinely a second, independently-authenticated actor from whoever
+  // ran the earlier CREATE call.
+  queue.subscribe(COMMANDS.grnAccept, async (msg) => {
+    const p = msg.payload as { id: string; tenantId: string; remarks?: string };
+    await inspectGrn(msg, p.id, p.tenantId, "pass", p.remarks ?? null);
+  });
+
+  // DOM-002 — wires the previously-unwired COMMANDS.grnReject the same way:
+  // the real inspection "fail" step, inspector identity from msg.actorId
+  // (the caller of PATCH /reject), never client-supplied.
+  queue.subscribe(COMMANDS.grnReject, async (msg) => {
+    const p = msg.payload as { id: string; tenantId: string; reason: string };
+    await inspectGrn(msg, p.id, p.tenantId, "fail", p.reason ?? null);
   });
 
   // Req 1.2 — GRN partial-delivery amendment. Only receivedQty/acceptedQty
@@ -207,6 +153,135 @@ export function registerGrnConsumers(queue: Queue): void {
     });
     await cache.invalidate(cache.makeKey(msg.tenantId, "grn", p.id));
   });
+}
+
+/**
+ * DOM-002 — the real, second-actor inspection step shared by
+ * COMMANDS.grnAccept ("pass") and COMMANDS.grnReject ("fail"). Runs entirely
+ * under one DB transaction lock so the status check, the SoD check, and the
+ * write are atomic with respect to a concurrent accept/reject on the same
+ * GRN. Everything from here down — three-way-match computation, PO/GRN
+ * amount derivation, and the accepted/rejected outbox events — is unchanged
+ * from what used to run inline inside grnCreate; it has simply moved to
+ * where the inspection verdict actually exists.
+ */
+async function inspectGrn(
+  msg: { tenantId: string; actorId: string; correlationId: string; messageId: string },
+  grnId: string,
+  tenantId: string,
+  result: "pass" | "fail",
+  remarks: string | null,
+): Promise<void> {
+  await db.transaction(async (tx) => {
+    if (!(await markProcessed(tx, msg.messageId))) return;
+    const grn = await repo.findGrnByIdTx(tx, grnId);
+    if (!grn || grn.tenantId !== tenantId) throw new Error(`GRN ${grnId} not found`);
+    assertGrnInspectable(grn);
+    // DOM-002 — separation of duties, re-checked under the DB lock
+    // (defense-in-depth): the route-level check in commands.ts and this
+    // write are not atomic. `grn.createdBy` is the CREATE call's own
+    // actorId, persisted at receive time; `msg.actorId` is THIS
+    // accept/reject call's own actorId. Both are independently
+    // authenticated — neither comes from a client-supplied field.
+    assertDistinctReceiverInspector(grn.createdBy, msg.actorId);
+
+    const items = await repo.findGrnItemsByGrnTx(tx, grnId);
+    const guardItems = items.map((i) => ({
+      orderedQty: i.orderedQty, receivedQty: i.receivedQty, acceptedQty: i.acceptedQty,
+    }));
+    const threeWayMatch = computeThreeWayMatch(guardItems, result);
+
+    await repo.updateGrn(tx, grnId, {
+      status: threeWayMatch ? "accepted" : "rejected",
+      threeWayMatch,
+      updatedBy: msg.actorId,
+    });
+    await repo.insertInspection(tx, {
+      id: randomUUID(), grnId, tenantId,
+      inspectorId: msg.actorId,
+      inspectionDate: new Date().toISOString().slice(0, 10),
+      result, remarks: remarks ?? null,
+      createdBy: msg.actorId, updatedBy: msg.actorId,
+    });
+
+    const poId = grn.poRef.replace(/^procurement_po:/, "");
+    const po = await findPoById(poId, tenantId);
+    const poItems = await findPoItemsByPoId(poId, tenantId);
+    const poItemMap = new Map(poItems.map((pi) => [pi.id, pi]));
+
+    if (threeWayMatch) {
+      await enqueue(tx, {
+        topic: EVENTS.threeWayMatchPassed, eventType: EVENTS.threeWayMatchPassed,
+        tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+        payload: { grnId, poRef: grn.poRef, vendorId: grn.vendorId },
+      });
+      // R7: transport money as exact strings, never Number(bigint paise).
+      const grossMinorStr = po ? minorString(po.totalMinor) : "0";
+
+      // Derive the authoritative PO and GRN(accepted) values server-side from
+      // real PO line prices × GRN accepted qty — never from a caller. These
+      // are persisted to the three-way-match table AND carried on the
+      // grn.accepted event so finance can reconcile invoice↔GRN↔PO (R5).
+      const poAmountMinor = po ? BigInt(po.totalMinor) : 0n;
+      let grnAmountMinor = 0n;
+      for (const gi of items) {
+        const poItem = poItemMap.get(gi.poItemRef);
+        if (poItem) grnAmountMinor += BigInt(poItem.unitPriceMinor) * BigInt(gi.acceptedQty);
+      }
+
+      // Persist a server-DERIVED three-way match (PO vs GRN). The payment gate
+      // reads this table.
+      if (po) {
+        const variancePct = poAmountMinor > 0n
+          ? Number((poAmountMinor > grnAmountMinor ? poAmountMinor - grnAmountMinor : grnAmountMinor - poAmountMinor) * 10000n / poAmountMinor) / 100
+          : 0;
+        const matchStatus = variancePct <= 2 ? "matched" : variancePct <= 5 ? "matched" : "mismatch";
+        const { upsertDerivedMatch } = await import("../three-way-match/repo.js");
+        await upsertDerivedMatch(tx, {
+          id: randomUUID(),
+          tenantId, poId, grnId,
+          poAmountMinor, grnAmountMinor, matchStatus,
+        });
+      }
+      const enrichedItems = items.map((gi) => {
+        const poItem = poItemMap.get(gi.poItemRef);
+        const itemType = inferItemType(gi.itemCode, poItem?.itemType);
+        return {
+          itemCode: gi.itemCode,
+          itemName: poItem?.description ?? gi.itemCode,
+          acceptedQty: gi.acceptedQty,
+          rateMinor: poItem ? minorString(poItem.unitPriceMinor) : "0",
+          currency: poItem?.currency ?? "INR",
+          itemType,
+          itemId: poItem?.id,
+        };
+      });
+      await enqueue(tx, {
+        topic: EVENTS.grnAccepted, eventType: EVENTS.grnAccepted,
+        tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+        payload: {
+          grnId, poRef: grn.poRef, vendorId: grn.vendorId, grossMinor: grossMinorStr,
+          // R5: paise as strings so > 2^53 stays exact across the queue boundary.
+          poAmountMinor: poAmountMinor.toString(),
+          grnAmountMinor: grnAmountMinor.toString(),
+          items: enrichedItems,
+        },
+      });
+    } else {
+      await enqueue(tx, {
+        topic: EVENTS.threeWayMatchFailed, eventType: EVENTS.threeWayMatchFailed,
+        tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+        payload: { grnId, poRef: grn.poRef, vendorId: grn.vendorId, reason: "qty_mismatch_or_inspection_failed" },
+      });
+      await enqueue(tx, {
+        topic: EVENTS.grnRejected, eventType: EVENTS.grnRejected,
+        tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+        payload: { grnId, poRef: grn.poRef, vendorId: grn.vendorId, reason: "qty_mismatch_or_inspection_failed" },
+      });
+    }
+    await audit(tx, msg, result === "pass" ? "accept" : "reject", "grn", grnId);
+  });
+  await cache.invalidate(cache.makeKey(msg.tenantId, "grn", grnId));
 }
 
 async function audit(tx: Parameters<typeof enqueue>[0], msg: { tenantId: string; actorId: string; correlationId: string }, action: string, resourceType: string, resourceId: string): Promise<void> {

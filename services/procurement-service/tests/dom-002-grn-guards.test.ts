@@ -1,17 +1,23 @@
 /**
  * DOM-002 — GRN over-receipt guard was client-controlled and disabled on
- * amend; GRN creation had no separation of duties between receiver and
- * inspector. Regression + sabotage-checked tests for all three sub-bugs
- * fixed in grn/consumer.ts + grn/domain.ts:
+ * amend; GRN creation had no REAL separation of duties between receiver and
+ * inspector (the "inspector" was a client-supplied field on the same
+ * request as create — never a second, independently authenticated actor).
+ * Regression + sabotage-checked tests for all three sub-bugs:
  *
- *   1. orderedQty is now re-derived from the real PO line server-side on
- *      create (never trusted from the client payload) — a client that lies
- *      about orderedQty to hide an over-receipt is rejected.
+ *   1. orderedQty is re-derived from the real PO line server-side on create
+ *      (never trusted from the client payload) — a client that lies about
+ *      orderedQty to hide an over-receipt is rejected.
  *   2. Amend re-derives orderedQty from the GRN line actually persisted at
  *      create time, instead of the hardcoded `orderedQty: 0` that disabled
  *      the over-accept cap entirely on every amendment.
- *   3. The receiving actor (GRN creator) and the inspector must be distinct
- *      actors (assertDistinctReceiverInspector, SOD_VIOLATION) — mirrors
+ *   3. GRN creation (grnCreate) is now a receive-only step: it persists the
+ *      GRN into `under_inspection` with NO inspection verdict and NO
+ *      inspector identity attached. A genuinely separate, independently
+ *      authenticated actor (a different `msg.actorId` on its OWN
+ *      COMMANDS.grnAccept / COMMANDS.grnReject call — never a field inside
+ *      the create payload) must inspect it afterwards
+ *      (assertDistinctReceiverInspector, SOD_VIOLATION) — mirrors
  *      po/amendment-domain.ts's assertDistinctMakerChecker convention.
  *
  * Drives the real consumer (registerGrnConsumers) on a MemoryQueue against
@@ -28,14 +34,14 @@ import { MemoryQueue } from "@civitasone/queue";
 import type { Handler } from "@civitasone/queue";
 import { runWithTenant, withTenantConsumer } from "@civitasone/db";
 import { db, sqlClient } from "../src/shared/db.js";
-import { procurementGrns, procurementGrnItems } from "../src/modules/grn/schema.js";
+import { procurementGrns, procurementGrnItems, procurementInspections } from "../src/modules/grn/schema.js";
 import { procurementPos, procurementPoItems } from "../src/modules/po/schema.js";
 import { registerGrnConsumers } from "../src/modules/grn/consumer.js";
 import { COMMANDS } from "../src/topics.js";
 
 const TENANT    = "9d000000-1111-4000-8000-000000000001";
 const RECEIVER  = "9d000000-2222-4000-8000-000000000001"; // the actor who creates/receives the GRN
-const INSPECTOR = "9d000000-3333-4000-8000-000000000001"; // a genuinely distinct inspector
+const INSPECTOR = "9d000000-3333-4000-8000-000000000001"; // a genuinely distinct, independently-authenticated inspector
 const VENDOR    = "9d000000-4444-4000-8000-000000000001";
 
 const PO_ID     = "9d000000-5555-4000-8000-000000000001";
@@ -85,6 +91,35 @@ async function seedGrnForAmend(grnId: string, lineId: string): Promise<void> {
   }));
 }
 
+/** Publishes a real grnCreate and drains it. Returns the GRN id. */
+async function createGrnViaRealFlow(
+  q: MemoryQueue,
+  overrides: { itemOrderedQty?: number; receivedQty?: number; acceptedQty?: number; grnNo?: string } = {},
+): Promise<string> {
+  const grnId = randomUUID();
+  await q.publish(COMMANDS.grnCreate, msg(COMMANDS.grnCreate, {
+    id: grnId, tenantId: TENANT, grnNo: overrides.grnNo ?? `GRN-${grnId.slice(-8)}`,
+    poRef: `procurement_po:${PO_ID}`, vendorId: VENDOR,
+    items: [{
+      poItemRef: PO_ITEM_ID, itemCode: "LAP-001",
+      orderedQty: overrides.itemOrderedQty ?? REAL_ORDERED_QTY,
+      receivedQty: overrides.receivedQty ?? REAL_ORDERED_QTY,
+      acceptedQty: overrides.acceptedQty ?? REAL_ORDERED_QTY,
+      unit: "nos",
+    }],
+    // DOM-002 — no `inspection` field: grnCreate is receive-only now. There
+    // is deliberately no way to supply an inspector or a verdict here.
+  }, RECEIVER));
+  await q.drain();
+  return grnId;
+}
+
+async function getGrn(grnId: string) {
+  const rows = await runWithTenant(TENANT, () => db.transaction((tx) =>
+    tx.select().from(procurementGrns).where(eq(procurementGrns.id, grnId))));
+  return rows[0] ?? null;
+}
+
 async function wipe(): Promise<void> {
   await runWithTenant(TENANT, () => db.transaction(async (tx) => {
     await tx.delete(procurementGrnItems).where(eq(procurementGrnItems.tenantId, TENANT));
@@ -113,37 +148,26 @@ describe("DOM-002.1 — over-receipt guard uses the real PO-derived orderedQty, 
         // The real PO line only ordered REAL_ORDERED_QTY (5).
         orderedQty: 999, receivedQty: 50, acceptedQty: 50, unit: "nos",
       }],
-      inspection: { inspectorId: INSPECTOR, result: "pass" },
     }, RECEIVER));
     await q.drain();
 
-    const grns = await runWithTenant(TENANT, () => db.transaction((tx) =>
-      tx.select().from(procurementGrns).where(eq(procurementGrns.id, grnId))));
-    expect(grns).toHaveLength(0);
+    expect(await getGrn(grnId)).toBeNull();
     expect(q.dlq.some((d) => d.error.includes("OVER_ACCEPT"))).toBe(true);
   });
 
-  it("accepts a GRN within the real PO-derived quantity (control: guard doesn't over-reject)", async () => {
+  it("receives a GRN within the real PO-derived quantity, landing in under_inspection (control: guard doesn't over-reject)", async () => {
     const q = wire(new MemoryQueue());
     registerGrnConsumers(q);
     await q.start();
 
-    const grnId = randomUUID();
-    await q.publish(COMMANDS.grnCreate, msg(COMMANDS.grnCreate, {
-      id: grnId, tenantId: TENANT, grnNo: "GRN-WITHINBOUNDS-1",
-      poRef: `procurement_po:${PO_ID}`, vendorId: VENDOR,
-      items: [{
-        poItemRef: PO_ITEM_ID, itemCode: "LAP-001",
-        orderedQty: 1, receivedQty: REAL_ORDERED_QTY, acceptedQty: REAL_ORDERED_QTY, unit: "nos",
-      }],
-      inspection: { inspectorId: INSPECTOR, result: "pass" },
-    }, RECEIVER));
-    await q.drain();
+    const grnId = await createGrnViaRealFlow(q, { itemOrderedQty: 1, grnNo: "GRN-WITHINBOUNDS-1" });
 
-    const grns = await runWithTenant(TENANT, () => db.transaction((tx) =>
-      tx.select().from(procurementGrns).where(eq(procurementGrns.id, grnId))));
-    expect(grns).toHaveLength(1);
-    expect(grns[0]?.status).toBe("accepted");
+    const grn = await getGrn(grnId);
+    expect(grn).not.toBeNull();
+    // DOM-002 — create no longer decides accepted/rejected; it lands in
+    // under_inspection awaiting a separate inspector.
+    expect(grn?.status).toBe("under_inspection");
+    expect(grn?.threeWayMatch).toBe(false);
 
     // The persisted orderedQty is the server-derived value (5), not the
     // client's lowball 1 — proves the DB record itself is now trustworthy.
@@ -199,51 +223,92 @@ describe("DOM-002.2 — amend cannot bypass the over-receipt guard", () => {
   });
 });
 
-describe("DOM-002.3 — receiver/inspector separation of duties", () => {
-  it("rejects a GRN where the receiving actor is also the inspector", async () => {
+describe("DOM-002.3 — receiver/inspector separation of duties is a REAL two-actor, two-call check", () => {
+  it("create never decides accepted/rejected — draft/under_inspection is genuinely reachable through the real create flow, not just a direct SQL insert", async () => {
     const q = wire(new MemoryQueue());
     registerGrnConsumers(q);
     await q.start();
 
-    const grnId = randomUUID();
-    await q.publish(COMMANDS.grnCreate, msg(COMMANDS.grnCreate, {
-      id: grnId, tenantId: TENANT, grnNo: "GRN-SELFINSPECT-1",
-      poRef: `procurement_po:${PO_ID}`, vendorId: VENDOR,
-      items: [{
-        poItemRef: PO_ITEM_ID, itemCode: "LAP-001",
-        orderedQty: REAL_ORDERED_QTY, receivedQty: 2, acceptedQty: 2, unit: "nos",
-      }],
-      // Same actor as the message's actorId (RECEIVER) below — self-inspection.
-      inspection: { inspectorId: RECEIVER, result: "pass" },
-    }, RECEIVER));
+    const grnId = await createGrnViaRealFlow(q, { grnNo: "GRN-REACHABLE-1" });
+    const grn = await getGrn(grnId);
+    expect(grn?.status).toBe("under_inspection");
+
+    // No inspection row exists yet — inspection is a wholly separate step.
+    const insp = await runWithTenant(TENANT, () => db.transaction((tx) =>
+      tx.select().from(procurementInspections).where(eq(procurementInspections.grnId, grnId))));
+    expect(insp).toHaveLength(0);
+  });
+
+  it("rejects COMMANDS.grnAccept when the accepting actor is the SAME actor who created the GRN — two independent calls, same identity", async () => {
+    const q = wire(new MemoryQueue());
+    registerGrnConsumers(q);
+    await q.start();
+
+    // Call 1 — an independent create by RECEIVER.
+    const grnId = await createGrnViaRealFlow(q, { grnNo: "GRN-SELFINSPECT-1" });
+    expect((await getGrn(grnId))?.status).toBe("under_inspection");
+
+    // Call 2 — a SEPARATE, independent accept command, but from the SAME
+    // actor (RECEIVER again). This is not a field inside the create
+    // payload — it's a wholly distinct message on its own topic, exactly
+    // like a second, real HTTP request would be.
+    await q.publish(COMMANDS.grnAccept, msg(COMMANDS.grnAccept, { id: grnId, tenantId: TENANT }, RECEIVER));
     await q.drain();
 
-    const grns = await runWithTenant(TENANT, () => db.transaction((tx) =>
-      tx.select().from(procurementGrns).where(eq(procurementGrns.id, grnId))));
-    expect(grns).toHaveLength(0);
+    const grn = await getGrn(grnId);
+    // Self-inspection must be rejected: the GRN stays under_inspection.
+    expect(grn?.status).toBe("under_inspection");
     expect(q.dlq.some((d) => d.error.includes("SOD_VIOLATION"))).toBe(true);
   });
 
-  it("accepts a GRN where the receiver and inspector are distinct actors (control)", async () => {
+  it("accepts COMMANDS.grnAccept when the accepting actor is genuinely different from the creator — two independent, correctly-authenticated calls", async () => {
     const q = wire(new MemoryQueue());
     registerGrnConsumers(q);
     await q.start();
 
-    const grnId = randomUUID();
-    await q.publish(COMMANDS.grnCreate, msg(COMMANDS.grnCreate, {
-      id: grnId, tenantId: TENANT, grnNo: "GRN-DISTINCT-1",
-      poRef: `procurement_po:${PO_ID}`, vendorId: VENDOR,
-      items: [{
-        poItemRef: PO_ITEM_ID, itemCode: "LAP-001",
-        orderedQty: REAL_ORDERED_QTY, receivedQty: 2, acceptedQty: 2, unit: "nos",
-      }],
-      inspection: { inspectorId: INSPECTOR, result: "pass" },
-    }, RECEIVER));
+    // Call 1 — create, authenticated as RECEIVER.
+    const grnId = await createGrnViaRealFlow(q, { grnNo: "GRN-DISTINCT-1" });
+    expect((await getGrn(grnId))?.status).toBe("under_inspection");
+
+    // Call 2 — accept, authenticated as INSPECTOR, a genuinely different
+    // actor, on its own independent command/topic.
+    await q.publish(COMMANDS.grnAccept, msg(COMMANDS.grnAccept, { id: grnId, tenantId: TENANT, remarks: "looks good" }, INSPECTOR));
     await q.drain();
 
-    const grns = await runWithTenant(TENANT, () => db.transaction((tx) =>
-      tx.select().from(procurementGrns).where(eq(procurementGrns.id, grnId))));
-    expect(grns).toHaveLength(1);
-    expect(grns[0]?.status).toBe("accepted");
+    const grn = await getGrn(grnId);
+    expect(grn?.status).toBe("accepted");
+    expect(grn?.threeWayMatch).toBe(true);
+
+    const insp = await runWithTenant(TENANT, () => db.transaction((tx) =>
+      tx.select().from(procurementInspections).where(eq(procurementInspections.grnId, grnId))));
+    expect(insp[0]?.inspectorId).toBe(INSPECTOR);
+    expect(insp[0]?.result).toBe("pass");
+  });
+
+  it("rejects COMMANDS.grnReject when the rejecting actor is the SAME actor who created the GRN", async () => {
+    const q = wire(new MemoryQueue());
+    registerGrnConsumers(q);
+    await q.start();
+
+    const grnId = await createGrnViaRealFlow(q, { grnNo: "GRN-SELFREJECT-1" });
+    await q.publish(COMMANDS.grnReject, msg(COMMANDS.grnReject, { id: grnId, tenantId: TENANT, reason: "damaged" }, RECEIVER));
+    await q.drain();
+
+    expect((await getGrn(grnId))?.status).toBe("under_inspection");
+    expect(q.dlq.some((d) => d.error.includes("SOD_VIOLATION"))).toBe(true);
+  });
+
+  it("accepts COMMANDS.grnReject from a genuinely distinct inspector", async () => {
+    const q = wire(new MemoryQueue());
+    registerGrnConsumers(q);
+    await q.start();
+
+    const grnId = await createGrnViaRealFlow(q, { grnNo: "GRN-REALREJECT-1" });
+    await q.publish(COMMANDS.grnReject, msg(COMMANDS.grnReject, { id: grnId, tenantId: TENANT, reason: "damaged on arrival" }, INSPECTOR));
+    await q.drain();
+
+    const grn = await getGrn(grnId);
+    expect(grn?.status).toBe("rejected");
+    expect(grn?.threeWayMatch).toBe(false);
   });
 });

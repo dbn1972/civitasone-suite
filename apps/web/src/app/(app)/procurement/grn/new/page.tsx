@@ -1,34 +1,21 @@
-import { cookies } from "next/headers";
 import { PageHeader } from "../../../../_components/ds";
-import { COOKIE } from "@/lib/auth/config";
 import { CreateGRNForm } from "./CreateGRNForm";
 
-/** Decode the `sub` (user id) from the access-token JWT so the inspector is the
- * authenticated user rather than a hardcoded UUID. */
-function sessionUserId(): string {
-  const token = cookies().get(COOKIE.ACCESS)?.value;
-  if (!token) return "";
-  try {
-    const parts = token.split(".");
-    if (parts.length < 2) return "";
-    const raw = parts[1].replace(/-/g, "+").replace(/_/g, "/");
-    const padded = raw + "=".repeat((4 - (raw.length % 4)) % 4);
-    const payload = JSON.parse(Buffer.from(padded, "base64").toString("utf8")) as { sub?: string };
-    return typeof payload.sub === "string" ? payload.sub : "";
-  } catch {
-    return "";
-  }
-}
-
+// DOM-002 — this page used to decode the current user's own session token
+// and pass it down as `inspectorId`, so the form could submit an inline
+// inspection verdict "from" the receiving user themselves. Inspection is now
+// a genuinely separate step performed by a different, independently
+// authenticated user from the GRN detail page (see InspectGrnForm.tsx), so
+// this page no longer needs to know who's logged in at all.
 export default function NewGRNPage() {
   return (
     <>
       <PageHeader
         title="New Goods Receipt Note"
-        subtitle="Record received quantities and inspection — three-way match is computed automatically."
+        subtitle="Record received quantities. A separate officer inspects and accepts or rejects the GRN afterwards — three-way match is computed on that decision."
         back="/procurement/grn"
       />
-      <CreateGRNForm inspectorId={sessionUserId()} />
+      <CreateGRNForm />
     </>
   );
 }
