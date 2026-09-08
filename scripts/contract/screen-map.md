@@ -1,17 +1,17 @@
 # Screen Contract Map
 
-Generated: 2026-09-08T14:25:45.912Z
+Generated: 2026-09-08T14:27:59.982Z
 
-**Summary:** 271 WIRED | 0 MISSING | 0 MISMATCH | 562 NO_LOADER | 3 FABRICATED_DATA
+**Summary:** 271 WIRED | 0 MISSING | 0 MISMATCH | 564 NO_LOADER | 1 FABRICATED_DATA
 
 | module | screen | loader | apiPath | upstream | route? | table? | status |
 |--------|--------|--------|---------|----------|--------|--------|--------|
 | admin | /admin/api-monitoring | — | — | — | — | — | — NO_LOADER |
 | admin | /admin/audit-log | getAdminAuditLogEntries | /api/v1/admin/audit-logs | admin → /v1/admin/audit-logs | ✓ `/v1/admin/audit-logs` | ✓ | ✅ WIRED |
-| admin | /admin/bulk-scan | — | — | — | ✗ | — | 🎭 FABRICATED_DATA |
+| admin | /admin/bulk-scan | — | — | — | — | — | — NO_LOADER |
 | admin | /admin/config | — | — | — | — | — | — NO_LOADER |
 | admin | /admin/devices | — | — | — | — | — | — NO_LOADER |
-| admin | /admin/discovery | — | — | — | ✗ | — | 🎭 FABRICATED_DATA |
+| admin | /admin/discovery | — | — | — | — | — | — NO_LOADER |
 | admin | /admin/editions | — | — | — | — | — | — NO_LOADER |
 | admin | /admin/entitlements | — | — | — | — | — | — NO_LOADER |
 | admin | /admin/feature-flags | getAdminFeatureFlagsManage | /api/v1/admin/feature-flags/manage | admin → /v1/admin/feature-flags/manage | ✓ `/v1/admin/feature-flags/manage` | ✓ | ✅ WIRED |

@@ -34,8 +34,8 @@
       "upstream": null,
       "routeHandler": null,
       "tablesPresent": null,
-      "status": "FABRICATED_DATA",
-      "detail": "no loader, but MOCK_JOBS in apps/web/src/app/(app)/admin/bulk-scan/page.tsx:18 looks like 3 hardcoded records"
+      "status": "NO_LOADER",
+      "detail": "navigation hub — no data loader"
     },
     {
       "module": "admin",
@@ -67,8 +67,8 @@
       "upstream": null,
       "routeHandler": null,
       "tablesPresent": null,
-      "status": "FABRICATED_DATA",
-      "detail": "no loader, but MOCK_SERVICES in apps/web/src/app/(app)/admin/discovery/page.tsx:18 looks like 6 hardcoded records"
+      "status": "NO_LOADER",
+      "detail": "navigation hub — no data loader"
     },
     {
       "module": "admin",
@@ -10285,8 +10285,8 @@
     "wired": 271,
     "missing": 0,
     "mismatch": 0,
-    "noLoader": 562,
-    "fabricatedData": 3
+    "noLoader": 564,
+    "fabricatedData": 1
   },
   "linkAudit": {
     "total": 1343,
