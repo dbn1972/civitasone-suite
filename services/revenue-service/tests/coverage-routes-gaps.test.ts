@@ -186,7 +186,7 @@ describe("BBPS routes when BBPS_ENABLED=true", () => {
     expect(res.statusCode).toBe(400);
   });
 
-  it("POST /v1/revenue/bbps/pay-bill returns 202 with valid body", async () => {
+  it("POST /v1/revenue/bbps/pay-bill returns 202 with valid body and role", async () => {
     const res = await app.inject({
       method: "POST",
       url: "/v1/revenue/bbps/pay-bill",

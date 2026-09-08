@@ -3,7 +3,7 @@ import { acceptedResponseSchema } from "@civitasone/schemas/common";
 import type { FastifyInstance } from "fastify";
 import { ZodError } from "zod";
 import { resolveContext, resolvePublicContext, requireRole, resolveCitizenId, HttpError } from "../../shared/context.js";
-import { idParam, tenantQuery, createProfileBody, deleteProfileBody } from "./validators.js";
+import { idParam, tenantQuery, createProfileBody, deleteProfileBody, updateProfileBody } from "./validators.js";
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
 
@@ -17,6 +17,28 @@ export async function portalRoutes(app: FastifyInstance): Promise<void> {
     // P0-3: a citizen's profile id is forced to their actorId; officers may name one.
     const citizenId = resolveCitizenId(ctx, body.citizenId);
     return sendAccepted(reply, acceptedResponseSchema, await commands.createProfile(ctx, { ...body, citizenId }));
+  });
+
+  app.get("/v1/citizen/profiles/:id", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, CITIZEN_ROLES);
+    const { id } = idParam.parse(req.params);
+    // P1-6: a citizen's own profile id equals their actorId (see createProfile);
+    // resolveCitizenId enforces that a bare citizen can only ever pass their own.
+    const targetId = resolveCitizenId(ctx, id);
+    const profile = await queries.getProfile(ctx.tenantId, targetId);
+    if (!profile) throw new HttpError(404, "NOT_FOUND", "profile not found");
+    return reply.send({ data: profile });
+  });
+
+  app.patch("/v1/citizen/profiles/:id", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, CITIZEN_ROLES);
+    const { id } = idParam.parse(req.params);
+    const body = updateProfileBody.parse(req.body);
+    // P0-4: a citizen may only update their own profile; officers may update any.
+    const targetId = resolveCitizenId(ctx, id);
+    return sendAccepted(reply, acceptedResponseSchema, await commands.updateProfile(ctx, targetId, body));
   });
 
   /** DPDP §12: right to erasure — citizen requests deletion of their profile and PII */

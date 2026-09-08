@@ -181,6 +181,9 @@ vi.mock("../src/modules/project/queries.js", () => ({
 vi.mock("../src/modules/project/repo.js", () => ({
   findProjectByIdTx: async () => mockState.queryResult[0] ?? null,
   findMilestoneById: async () => mockState.queryResult[0] ?? null,
+  // DOM-001: delay-forecast/repo.ts now loads a project's real tasks
+  // through this, instead of a hardcoded task-1..task-7 stub.
+  listTasksByProject: async () => mockState.queryResult,
 }));
 
 vi.mock("../src/modules/scheme/commands.js", () => ({
@@ -258,6 +261,11 @@ vi.mock("../src/modules/scheduling/repo.js", () => ({
   // before it queues the delete (F3 async). Gated on queryResult, matching
   // the exists/[] toggling already used by the DELETE describe block below.
   dependencyExists: async () => mockState.queryResult.length > 0,
+  // DOM-001: delay-forecast/repo.ts's critical-path computation reads real
+  // dependency edges through this. No describe block below seeds dependency
+  // data for the delay-forecast tests, so this defaults to no edges —
+  // consistent with the single, dependency-free task those tests seed.
+  getProjectDepsWithLag: async () => [],
 }));
 
 vi.mock("../src/modules/scheduling/evm.js", () => ({
@@ -1499,10 +1507,45 @@ describe("Delay Forecast Routes", () => {
   afterAll(async () => { await app.close(); });
 
   describe("GET /v1/projects/:projectId/delay-forecast", () => {
-    it("returns forecast data", async () => {
+    it("returns forecast data driven by the project's real (mocked-DB) task, not a synthetic task-1..7 stub", async () => {
+      // DOM-001: this route used to run its simulation over a hardcoded
+      // task-1..task-7 array regardless of what's in the DB, so it never
+      // needed a seeded row here. It now loads real tasks via
+      // getProjectTasks()/listTasksByProject() — seed one so the DB-mocked
+      // query returns actual schedule data instead of the endpoint
+      // (correctly) responding 422 INSUFFICIENT_DATA for an empty project.
+      const plannedEnd = "2030-06-15T00:00:00.000Z";
+      mockState.queryResult = [
+        {
+          id: TASK_ID,
+          projectId: PROJECT_ID,
+          tenantId: TENANT_ID,
+          status: "in_progress",
+          plannedStart: "2030-01-01T00:00:00.000Z",
+          plannedEnd,
+          actualStart: "2030-01-01T00:00:00.000Z",
+          actualEnd: null,
+          progressPct: 50,
+          parentTaskId: null,
+        },
+      ];
       const res = await app.inject({ method: "GET", url: `/v1/projects/${PROJECT_ID}/delay-forecast`, headers: { authorization: `Bearer ${ADMIN_TOKEN()}` } });
       expect(res.statusCode).toBe(200);
-      expect(res.json().data).toBeDefined();
+      const { data } = res.json();
+      expect(data).toBeDefined();
+      // Below MIN_COMPLETED_TASKS, the route falls back to the seeded
+      // task's own baseline end date rather than calling ml-service — this
+      // pins the response to the exact real row seeded above.
+      expect(data.p50Date).toBe(plannedEnd);
+      expect(data.p80Date).toBe(plannedEnd);
+      expect(data.p95Date).toBe(plannedEnd);
+    });
+
+    it("returns 422 INSUFFICIENT_DATA for a project with no real tasks (not a fabricated forecast)", async () => {
+      mockState.queryResult = [];
+      const res = await app.inject({ method: "GET", url: `/v1/projects/${PROJECT_ID}/delay-forecast`, headers: { authorization: `Bearer ${ADMIN_TOKEN()}` } });
+      expect(res.statusCode).toBe(422);
+      expect(res.json().error.code).toBe("INSUFFICIENT_DATA");
     });
 
     it("returns 401 without auth", async () => {

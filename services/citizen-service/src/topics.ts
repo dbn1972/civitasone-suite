@@ -12,6 +12,7 @@ export const COMMANDS = {
   grievanceEscalate:       "citizen.grievance.escalate",
   grievanceReopen:         "citizen.grievance.reopen",
   profileDelete:           "citizen.profile.delete",
+  profileUpdate:           "citizen.profile.update",
   rtiFile:                 "citizen.rti.file",
   rtiResponseReceive:      "citizen.rti.response_receive",
   rtiAppeal:               "citizen.rti.appeal",
@@ -77,6 +78,9 @@ export const COMMANDS = {
   draftSave:               "citizen.application.draft_save",
   draftUpdate:             "citizen.application.draft_update",
   draftSubmit:             "citizen.application.draft_submit",
+  // COMP-002 -- generic citizen service-request portal
+  serviceRequestSubmit:    "citizen.service_request.submit",
+  serviceRequestUpdate:    "citizen.service_request.update",
 } as const;
 
 export const EVENTS = {
@@ -106,6 +110,9 @@ export const EVENTS = {
   // SVC-089 appeal, review & revision
   appealFiled:            "citizen.appeal.filed",
   appealDecided:          "citizen.appeal.decided",
+  // COMP-002 -- generic citizen service-request portal
+  serviceRequestSubmitted:      "citizen.service_request.submitted",
+  serviceRequestStatusChanged:  "citizen.service_request.status_changed",
 } as const;
 
 export const CONSUMED_EVENTS = {

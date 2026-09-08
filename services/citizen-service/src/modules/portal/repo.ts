@@ -29,6 +29,15 @@ export async function anonymiseProfile(tx: Writer, id: string, tenantId: string,
   return updated.length;
 }
 
+/** P1-2: tenant-scoped partial update; returns rows affected (0 = not found / wrong tenant). */
+export async function updateProfile(tx: Writer, id: string, tenantId: string, patch: Partial<ProfileInsert>): Promise<number> {
+  const updated = await (tx as typeof db).update(citizenProfiles)
+    .set({ ...patch, updatedAt: new Date() })
+    .where(and(eq(citizenProfiles.id, id), eq(citizenProfiles.tenantId, tenantId)))
+    .returning({ id: citizenProfiles.id });
+  return updated.length;
+}
+
 export async function findProfileById(id: string, tenantId: string): Promise<ProfileRow | null> {
   // P1-6: scope by (id AND tenantId) so an officer summary cannot leak a
   // cross-tenant profile via a citizenId that exists under another tenant.

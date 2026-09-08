@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import type { RequestContext } from "@civitasone/types";
 import { queue } from "../../shared/infra.js";
 import { COMMANDS } from "../../topics.js";
-import type { CreateProfileBody, DeleteProfileBody } from "./validators.js";
+import type { CreateProfileBody, DeleteProfileBody, UpdateProfileBody } from "./validators.js";
 
 export type Accepted = { id: string; status: string; correlationId: string };
 
@@ -18,6 +18,15 @@ export async function createProfile(ctx: RequestContext, body: CreateProfileBody
     payload: { id, tenantId: ctx.tenantId, name: body.name, email: body.email, mobile: body.mobile,
       digilockerToken: body.digilockerToken, address: body.address, ward: body.ward,
       consentGranted: body.consentGranted },
+  });
+  return { id, status: "accepted", correlationId: ctx.correlationId };
+}
+
+export async function updateProfile(ctx: RequestContext, id: string, body: UpdateProfileBody): Promise<Accepted> {
+  await queue.publish(COMMANDS.profileUpdate, {
+    messageId: randomUUID(), type: COMMANDS.profileUpdate,
+    tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
+    payload: { id, tenantId: ctx.tenantId, ...body },
   });
   return { id, status: "accepted", correlationId: ctx.correlationId };
 }
