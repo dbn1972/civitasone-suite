@@ -231,6 +231,86 @@ export async function adminGapRoutes(app: FastifyInstance): Promise<void> {
     return reply.code(status).send(body);
   });
 
+  // ─── User status (suspend/activate) — real, forwarded to identity-service's
+  // own status command (COMP-012 previously filed this as unbuilt; identity-
+  // service already had PATCH /identity/users/:id/status, admin-service just
+  // never proxied it — fixed here as part of COMP-004's admin/users wiring). ───
+  app.patch("/v1/admin/users/:id/status", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, ROLES);
+    const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
+    const statusBody = z.object({
+      status: z.enum(["active", "suspended", "locked", "deactivated"]),
+      reason: z.string().min(3).max(500).optional(),
+    });
+    const parsed = statusBody.safeParse(req.body);
+    if (!parsed.success) {
+      throw new HttpError(400, "VALIDATION_FAILED", parsed.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("; "));
+    }
+    const { status, body } = await callUpstream(req, ctx, "PATCH", identityBaseUrl(), `/identity/users/${id}/status`, parsed.data);
+    if (status < 200 || status >= 300) { const r = relayError(status, body); return reply.code(r.status).send(r.payload); }
+    return reply.code(status).send(body);
+  });
+
+  // ─── Effective roles for a user — real, forwarded to identity-service RBAC ───
+  app.get("/v1/admin/users/:id/roles", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, ROLES);
+    const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
+    const { status, body } = await callUpstream<{ roles?: Array<{ id: string; key: string; name: string }> }>(
+      req, ctx, "GET", identityBaseUrl(), `/identity/rbac/users/${id}/effective`,
+    );
+    if (status < 200 || status >= 300) { const r = relayError(status, body); return reply.code(r.status).send(r.payload); }
+    return reply.send({ data: (body ?? {}).roles ?? [] });
+  });
+
+  // ─── User <-> role grants — real, diffed against identity-service's actual
+  // per-role assign/revoke commands (no bulk "replace a user's roles" command
+  // exists there, so — same pattern as PATCH /v1/admin/roles/:id/permissions
+  // below — this computes the add/remove set and issues one real call per
+  // change). ───
+  app.patch("/v1/admin/users/:id/roles", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, ROLES);
+    const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
+    const parsedBody = z.object({ roleKeys: z.array(z.string()) }).safeParse(req.body);
+    if (!parsedBody.success) {
+      throw new HttpError(400, "VALIDATION_FAILED", "body must be { roleKeys: string[] } — the FULL desired role-key set for this user");
+    }
+    const desired = new Set(parsedBody.data.roleKeys);
+
+    const effectiveRes = await callUpstream<{ roles?: Array<{ id: string; key: string }> }>(
+      req, ctx, "GET", identityBaseUrl(), `/identity/rbac/users/${id}/effective`,
+    );
+    if (effectiveRes.status < 200 || effectiveRes.status >= 300) { const r = relayError(effectiveRes.status, effectiveRes.body); return reply.code(r.status).send(r.payload); }
+    const currentRoles = (effectiveRes.body ?? {}).roles ?? [];
+    const currentByKey = new Map(currentRoles.map((r) => [r.key, r.id]));
+
+    const rolesRes = await callUpstream<Array<{ id: string; key: string }>>(req, ctx, "GET", identityBaseUrl(), "/identity/rbac/roles?limit=200&offset=0");
+    if (rolesRes.status < 200 || rolesRes.status >= 300) { const r = relayError(rolesRes.status, rolesRes.body); return reply.code(r.status).send(r.payload); }
+    const roleIdByKey = new Map((Array.isArray(rolesRes.body) ? rolesRes.body : []).map((r) => [r.key, r.id]));
+
+    const toGrant = [...desired].filter((k) => !currentByKey.has(k));
+    const toRevoke = [...currentByKey.keys()].filter((k) => !desired.has(k));
+
+    const applied: { granted: string[]; revoked: string[]; skipped: string[] } = { granted: [], revoked: [], skipped: [] };
+    for (const key of toGrant) {
+      const roleId = roleIdByKey.get(key);
+      if (!roleId) { applied.skipped.push(key); continue; }
+      const res = await callUpstream(req, ctx, "POST", identityBaseUrl(), `/identity/rbac/roles/${roleId}/assignments`, { userId: id });
+      if (res.status < 200 || res.status >= 300) { const r = relayError(res.status, res.body); return reply.code(r.status).send(r.payload); }
+      applied.granted.push(key);
+    }
+    for (const key of toRevoke) {
+      const roleId = currentByKey.get(key);
+      if (!roleId) { applied.skipped.push(key); continue; }
+      const res = await callUpstream(req, ctx, "DELETE", identityBaseUrl(), `/identity/rbac/roles/${roleId}/assignments/${id}`);
+      if (res.status < 200 || res.status >= 300) { const r = relayError(res.status, res.body); return reply.code(r.status).send(r.payload); }
+      applied.revoked.push(key);
+    }
+    return reply.code(202).send({ userId: id, status: "accepted", ...applied });
+  });
+
   // ─── MFA users — real, mfaEnabled is a genuine column on identity-service's user row ───
   app.get("/v1/admin/mfa/users", async (req, reply) => {
     const ctx = resolveContext(req);
@@ -431,5 +511,54 @@ export async function adminGapRoutes(app: FastifyInstance): Promise<void> {
     );
     if (status < 200 || status >= 300) { const r = relayError(status, body); return reply.code(r.status).send(r.payload); }
     return reply.send(body);
+  });
+
+  const ORG_UNIT_TYPES = ["department", "division", "section", "unit", "branch"] as const;
+
+  // ─── Org hierarchy — create/rename/reparent, real, forwarded to the same
+  // tenant-service org-hierarchy module as the GET above (COMP-004: the web
+  // Org Hierarchy admin page previously edited a purely local tree and PUT a
+  // shape no route ever accepted). tenant-service's own unit-type taxonomy is
+  // flat (department/division/section/unit/branch, cycle-checked on
+  // reparent) — it has no "Ministry" level, so the page's fixed 5-level
+  // Ministry→Unit model was rebuilt around these real types. ───
+  app.post("/v1/admin/org-hierarchy", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, ROLES);
+    const createBody = z.object({
+      name: z.string().min(1).max(200),
+      type: z.enum(ORG_UNIT_TYPES),
+      parentId: z.string().uuid().optional(),
+      headUserId: z.string().uuid().optional(),
+      code: z.string().max(32).optional(),
+    });
+    const parsed = createBody.safeParse(req.body);
+    if (!parsed.success) {
+      throw new HttpError(400, "VALIDATION_FAILED", parsed.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("; "));
+    }
+    const { status, body } = await callUpstream(req, ctx, "POST", tenantServiceBaseUrl(), "/v1/org/hierarchy", parsed.data);
+    if (status < 200 || status >= 300) { const r = relayError(status, body); return reply.code(r.status).send(r.payload); }
+    return reply.code(status).send(body);
+  });
+
+  app.patch("/v1/admin/org-hierarchy/:id", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, ROLES);
+    const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
+    const updateBody = z.object({
+      name: z.string().min(1).max(200).optional(),
+      type: z.enum(ORG_UNIT_TYPES).optional(),
+      parentId: z.string().uuid().nullable().optional(),
+      headUserId: z.string().uuid().nullable().optional(),
+      code: z.string().max(32).nullable().optional(),
+    });
+    const parsed = updateBody.safeParse(req.body);
+    if (!parsed.success) {
+      throw new HttpError(400, "VALIDATION_FAILED", parsed.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("; "));
+    }
+    if (Object.keys(parsed.data).length === 0) throw new HttpError(400, "EMPTY_BODY", "at least one field must be provided");
+    const { status, body } = await callUpstream(req, ctx, "PATCH", tenantServiceBaseUrl(), `/v1/org/hierarchy/${id}`, parsed.data);
+    if (status < 200 || status >= 300) { const r = relayError(status, body); return reply.code(r.status).send(r.payload); }
+    return reply.code(status).send(body);
   });
 }
