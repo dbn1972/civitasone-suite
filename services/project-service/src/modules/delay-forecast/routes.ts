@@ -4,9 +4,18 @@
  * Route:
  *   GET /v1/projects/:projectId/delay-forecast
  *
- * Calls ml-service internally to run Monte Carlo simulation (1000 iterations).
- * Falls back to baseline schedule dates when < 5 completed tasks exist.
- * Emits `ml.prediction.task_high_risk` event when task risk > 0.80.
+ * Calls ml-service internally to run Monte Carlo simulation (1000 iterations)
+ * over the project's REAL tasks (project.project_tasks / task_dependencies —
+ * see ./repo.ts). Falls back to baseline schedule dates when < 5 completed
+ * tasks exist, and responds 422 when the project has no usable schedule
+ * data at all. Emits `ml.prediction.task_high_risk` event when task risk > 0.80.
+ *
+ * DOM-001: this route used to run the simulation over a hardcoded array of
+ * 7 synthetic tasks (task-1..task-7) for EVERY project/tenant, so every
+ * project got an identical, fake forecast. Fixed by loading real tasks —
+ * see ./repo.ts for how the schema's available columns are mapped honestly
+ * onto the simulation's inputs, and the 422 branch below for what happens
+ * when a project genuinely has no schedule data to simulate over.
  *
  * Requirements: 10.1, 10.2, 10.3, 10.4, 10.5, 10.6, 10.7
  */
@@ -19,6 +28,7 @@ import { resolveContext, HttpError } from "../../shared/context.js";
 import { queue } from "../../shared/infra.js";
 import { projectIdParam } from "./validators.js";
 import { predictDelay } from "./adapter.js";
+import { getProjectTasks } from "./repo.js";
 import {
   hasEnoughHistory,
   computeFallbackForecast,
@@ -46,8 +56,21 @@ export async function delayForecastRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     const { projectId } = projectIdParam.parse(req.params);
 
-    // Load project tasks (in production these come from DB)
-    const tasks = getProjectTasks(projectId, ctx.tenantId);
+    // Load the project's REAL tasks and dependencies (DOM-001 — this used
+    // to be a hardcoded array of 7 synthetic tasks for every project).
+    const tasks = await getProjectTasks(projectId, ctx.tenantId);
+
+    // A project with zero tasks, or none with usable planned start/end
+    // dates, has no real schedule data to simulate over. Say so honestly
+    // instead of quietly falling back to a fabricated "now" estimate.
+    const tasksWithScheduleData = tasks.filter((t) => t.baselineDurationMs > 0);
+    if (tasksWithScheduleData.length === 0) {
+      throw new HttpError(
+        422,
+        "INSUFFICIENT_DATA",
+        `project ${projectId} has no tasks with schedule data (planned start/end dates); cannot compute a delay forecast`,
+      );
+    }
 
     // Check if we have enough completed tasks for ML prediction
     if (!hasEnoughHistory(tasks)) {
@@ -166,25 +189,4 @@ function computeLocalForecast(tasks: TaskData[]): DelayForecastResult {
     bottlenecks,
     isFallback: false,
   };
-}
-
-// ── Data Access Stubs ─────────────────────────────────────────────
-// In production, these query the project database. Stubbed for testability.
-
-/**
- * Get project tasks for delay forecasting.
- * In production, queries project DB for task data including SPI metrics.
- */
-function getProjectTasks(_projectId: string, _tenantId: string): TaskData[] {
-  // Default stub: returns tasks with enough data for ML
-  // In production, this queries the scheduling module's task table
-  return [
-    { taskId: "task-1", baselineDurationMs: 86400000, varianceMs: 14400000, dependencies: [], assignedTo: "user-1", isCriticalPath: true, spiHistory: [1.0, 0.95, 0.9], resourceUtilization: 0.6, isCompleted: true, baselineEndDate: new Date(Date.now() + 86400000 * 5).toISOString() },
-    { taskId: "task-2", baselineDurationMs: 172800000, varianceMs: 28800000, dependencies: ["task-1"], assignedTo: "user-1", isCriticalPath: true, spiHistory: [0.9, 0.85, 0.8], resourceUtilization: 0.7, isCompleted: true, baselineEndDate: new Date(Date.now() + 86400000 * 10).toISOString() },
-    { taskId: "task-3", baselineDurationMs: 86400000, varianceMs: 21600000, dependencies: ["task-1"], assignedTo: "user-2", isCriticalPath: false, spiHistory: [1.1, 1.0, 0.95], resourceUtilization: 0.5, isCompleted: true, baselineEndDate: new Date(Date.now() + 86400000 * 8).toISOString() },
-    { taskId: "task-4", baselineDurationMs: 259200000, varianceMs: 43200000, dependencies: ["task-2", "task-3"], assignedTo: "user-1", isCriticalPath: true, spiHistory: [0.8, 0.75, 0.7], resourceUtilization: 0.85, isCompleted: true, baselineEndDate: new Date(Date.now() + 86400000 * 20).toISOString() },
-    { taskId: "task-5", baselineDurationMs: 172800000, varianceMs: 36000000, dependencies: ["task-4"], assignedTo: "user-2", isCriticalPath: true, spiHistory: [0.7, 0.65, 0.6], resourceUtilization: 0.9, isCompleted: true, baselineEndDate: new Date(Date.now() + 86400000 * 30).toISOString() },
-    { taskId: "task-6", baselineDurationMs: 345600000, varianceMs: 57600000, dependencies: ["task-5"], assignedTo: "user-1", isCriticalPath: true, spiHistory: [0.6, 0.55, 0.5], resourceUtilization: 0.95, isCompleted: false, baselineEndDate: new Date(Date.now() + 86400000 * 45).toISOString() },
-    { taskId: "task-7", baselineDurationMs: 172800000, varianceMs: 28800000, dependencies: ["task-5"], assignedTo: "user-3", isCriticalPath: false, spiHistory: [1.0, 0.95, 0.9], resourceUtilization: 0.4, isCompleted: false, baselineEndDate: new Date(Date.now() + 86400000 * 35).toISOString() },
-  ];
 }
