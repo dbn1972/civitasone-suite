@@ -3,10 +3,4 @@
 # The reason after '#' is the first error, which under ON_ERROR_STOP=1 is the
 # one that aborted the file. Only the path before '#' is compared.
 # Regenerate with BOOTSTRAP_WRITE_ALLOWLIST=1 against a throwaway container.
-# Generated: 2026-09-06  Count: 6
-location-service/0011_postgis_spatial.sql                  # extension "postgis" is not available
-location-service/0014_land_cadastral_rls.sql               # extension "postgis" is not available
-location-service/0015_locations_geom_trigger.sql           # extension "postgis" is not available
-location-service/0016_spatial_features.sql                 # extension "postgis" is not available
-location-service/0017_road_network.sql                     # extension "postgis" is not available
-location-service/0019_geo_points.sql                       # extension "postgis" is not available
+# Generated: 2026-09-08  Count: 0
