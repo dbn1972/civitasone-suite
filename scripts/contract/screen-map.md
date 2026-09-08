@@ -1,8 +1,8 @@
 # Screen Contract Map
 
-Generated: 2026-09-08T14:21:42.637Z
+Generated: 2026-09-08T14:25:45.912Z
 
-**Summary:** 269 WIRED | 0 MISSING | 0 MISMATCH | 562 NO_LOADER | 4 FABRICATED_DATA
+**Summary:** 271 WIRED | 0 MISSING | 0 MISMATCH | 562 NO_LOADER | 3 FABRICATED_DATA
 
 | module | screen | loader | apiPath | upstream | route? | table? | status |
 |--------|--------|--------|---------|----------|--------|--------|--------|
@@ -25,7 +25,8 @@ Generated: 2026-09-08T14:21:42.637Z
 | admin | /admin/operators | — | — | — | — | — | — NO_LOADER |
 | admin | /admin/org | getAdminOrgUnits | /api/v1/admin/org-hierarchy | admin → /v1/admin/org-hierarchy | ✓ `/v1/admin/org-hierarchy` | ✓ | ✅ WIRED |
 | admin | /admin | — | — | — | — | — | — NO_LOADER |
-| admin | /admin/role-features | — | — | — | ✗ | — | 🎭 FABRICATED_DATA |
+| admin | /admin/role-features | getAdminRolesList | /api/v1/admin/roles | admin → /v1/admin/roles | ✓ `/v1/admin/roles` | ✓ | ✅ WIRED |
+| admin | /admin/role-features | getRoleFeatureGrants | /api/v1/policy/role-features | policy-v1 → /v1/policy/role-features | ✓ `/v1/policy/role-features` | ✓ | ✅ WIRED |
 | admin | /admin/roles | getAdminRolesList | /api/v1/admin/roles | admin → /v1/admin/roles | ✓ `/v1/admin/roles` | ✓ | ✅ WIRED |
 | admin | /admin/roles | getAdminPermissionsList | /api/v1/admin/permissions | admin → /v1/admin/permissions | ✓ `/v1/admin/permissions` | ✓ | ✅ WIRED |
 | admin | /admin/sa-dashboard | — | — | — | — | — | — NO_LOADER |

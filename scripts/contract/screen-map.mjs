@@ -71,6 +71,7 @@ function resolveGateway(apiPath) {
 const SERVICE_DIR_MAP = {
   'identity': 'identity-service',
   'policy': 'policy-service',
+  'policy-v1': 'policy-service',
   'audit-events': 'audit-service',
   'audit': 'audit-service',
   'notification': 'notification-service',

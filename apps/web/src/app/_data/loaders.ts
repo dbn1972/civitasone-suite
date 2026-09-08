@@ -4875,6 +4875,29 @@ export async function getAdminRoleDetail(id: string): Promise<LoaderResult<Admin
   });
 }
 
+export type RoleFeatureGrant = {
+  id: string;
+  roleName: string;
+  featureKey: string;
+  granted: boolean;
+};
+
+export async function getRoleFeatureGrants(): Promise<LoaderResult<RoleFeatureGrant[]>> {
+  return fetchJson<unknown, RoleFeatureGrant[]>("/api/v1/policy/role-features", [], {
+    telemetryKey: "policy.role-features.list",
+    mapResponse: (p) => {
+      const rows = getArrayPayload(p);
+      if (!rows) return null;
+      return rows.filter(isRecord).map((g) => ({
+        id: String(g.id ?? ""),
+        roleName: String(g.roleName ?? ""),
+        featureKey: String(g.featureKey ?? ""),
+        granted: g.granted !== false,
+      }));
+    },
+  });
+}
+
 // ── Project sub-resource loaders ──────────────────────────────────────────────
 
 export type ProjectEscalationRow = {
