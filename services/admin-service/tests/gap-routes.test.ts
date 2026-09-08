@@ -346,6 +346,34 @@ describe("cross-service routes → identity-service (token-forwarded)", () => {
     expect(create.json().id).toBe(upstreamId);
   });
 
+  it("GET /v1/admin/roles/:id forwards the caller's bearer token and relays the role's real current permissions (COMP-004: backs the admin/roles permissions editor)", async () => {
+    const roleId = "55555555-5555-4555-8555-555555555555";
+    const fetchMock = vi.fn(async (url: string, init: { headers: Record<string, string> }) => {
+      expectForwardsCallerAuth(init);
+      expect(url).toContain(`/identity/rbac/roles/${roleId}`);
+      return jsonResponse(200, { id: roleId, key: "auditor", name: "Auditor", permissions: ["finance.read", "audit.read"] });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const res = await app.inject({ method: "GET", url: `/v1/admin/roles/${roleId}`, headers: authHeader(["platform_admin"]) });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().permissions).toEqual(["finance.read", "audit.read"]);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("GET /v1/admin/roles/:id relays a real identity-service 404 honestly (never fabricates an empty role)", async () => {
+    const fetchMock = vi.fn(async (_url: string, init: { headers: Record<string, string> }) => {
+      expectForwardsCallerAuth(init);
+      return jsonResponse(404, { code: "NOT_FOUND", message: "role not found" });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const res = await app.inject({
+      method: "GET", url: "/v1/admin/roles/66666666-6666-4666-8666-666666666666",
+      headers: authHeader(["platform_admin"]),
+    });
+    expect(res.statusCode).toBe(404);
+    expect(res.json().code).toBe("NOT_FOUND");
+  });
+
   it("PATCH /v1/admin/roles/:id honestly 501s — no update-role-metadata command exists in identity-service", async () => {
     const res = await app.inject({
       method: "PATCH", url: "/v1/admin/roles/33333333-3333-4333-8333-333333333333",

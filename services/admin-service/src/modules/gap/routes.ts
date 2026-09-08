@@ -340,6 +340,21 @@ export async function adminGapRoutes(app: FastifyInstance): Promise<void> {
     return reply.send({ data: rows, meta: pageMeta(q.limit, q.offset, rows.length) });
   });
 
+  // ─── Role detail (incl. current permissions) — real, forwarded to
+  // identity-service RBAC. Added alongside the admin/roles frontend fix
+  // (COMP-004): the permissions-editor page needs a role's CURRENT granted
+  // permissions to render its checkboxes and diff against on save — the
+  // same data PATCH .../permissions already fetches server-side to compute
+  // its own add/remove set, just exposed here for the UI to read first. ───
+  app.get("/v1/admin/roles/:id", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, ROLES);
+    const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
+    const { status, body } = await callUpstream(req, ctx, "GET", identityBaseUrl(), `/identity/rbac/roles/${id}`);
+    if (status < 200 || status >= 300) { const r = relayError(status, body); return reply.code(r.status).send(r.payload); }
+    return reply.send(body);
+  });
+
   app.post("/v1/admin/roles", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ROLES);
