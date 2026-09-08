@@ -50,16 +50,15 @@ const NOT_IMPLEMENTED = (message: string) => ({ code: "NOT_IMPLEMENTED", message
  * service's own sibling modules (compliance, data-export, custom-domains,
  * feature-flags, security-incident), or a peer service's real store reached
  * by forwarding the caller's own bearer token (identity-service RBAC/users,
- * audit-service events, tenant-service quotas) — or (b) honestly returns 501
- * where no real backing exists and building one is out of scope for this
- * single gap (see the PR body for the specific reasoning per route: SSO/IdP
- * provider federation has no real store because identity-service's own SAML
- * config endpoint is itself an unfinished TODO stub, not something safe to
- * build on; the combined security-overview dashboard mixes real fields with
- * one metric — failed-login count — that no service in this platform tracks
- * anywhere; org-hierarchy has no store and a tenant-config table for it is a
- * separate, larger piece of work; role-metadata update has no command in
- * identity-service's RBAC domain at all).
+ * audit-service events, tenant-service quotas, tenant-service org-hierarchy)
+ * — or (b) honestly returns 501 where no real backing exists and building
+ * one is out of scope for this single gap (see the PR body for the specific
+ * reasoning per route: SSO/IdP provider federation has no real store because
+ * identity-service's own SAML config endpoint is itself an unfinished TODO
+ * stub, not something safe to build on; the combined security-overview
+ * dashboard mixes real fields with one metric — failed-login count — that no
+ * service in this platform tracks anywhere; role-metadata update has no
+ * command in identity-service's RBAC domain at all).
  *
  * No route here returns 2xx with fabricated data.
  */
@@ -413,9 +412,24 @@ export async function adminGapRoutes(app: FastifyInstance): Promise<void> {
     return reply.code(501).send(NOT_IMPLEMENTED("no real SSO-provider store exists; identity-service's SAML config route (PUT/GET /v1/identity/saml/config) is itself a TODO stub that persists nothing, so there is nothing honest to relay yet"));
   });
 
+  // ─── Org hierarchy ─── real, forwarded to tenant-service's org-hierarchy module ───
+  // Correction (post-review): the original PR description/comment claimed
+  // "no backing store anywhere in the platform" for org-hierarchy. That was
+  // wrong — tenant-service/src/modules/org-hierarchy is a fully built,
+  // registered module (tenant-service/src/app.ts) with a real `orgUnits`
+  // Drizzle table (tenant.org_units, tenant-scoped) and a real tenant-scoped
+  // read at GET /v1/org/hierarchy. Forwarded here using the exact same
+  // caller's-own-bearer-token pattern as /v1/admin/usage above — NOT the
+  // internal service-account seam — for the same reason: see upstream-
+  // client.ts's module comment for why token-forwarding is the only safe
+  // choice for these cross-service reads.
   app.get("/v1/admin/org-hierarchy", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ROLES);
-    return reply.code(501).send(NOT_IMPLEMENTED("org hierarchy has no backing store anywhere in the platform; a tenant-scoped org-tree table is a real feature, out of scope for this single gap"));
+    const { status, body } = await callUpstream(
+      req, ctx, "GET", tenantServiceBaseUrl(), "/v1/org/hierarchy",
+    );
+    if (status < 200 || status >= 300) { const r = relayError(status, body); return reply.code(r.status).send(r.payload); }
+    return reply.send(body);
   });
 }

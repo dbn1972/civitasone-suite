@@ -42,6 +42,25 @@ function jsonResponse(status: number, body: unknown) {
   } as Response;
 }
 
+/**
+ * Regression guard for the whole cross-service-forward security design
+ * (COMP-001 fix-up, review finding #2): every one of these routes MUST
+ * forward the CALLER's own bearer token to the peer service, never the
+ * x-internal/x-service-secret service-account seam (packages/auth/src/
+ * plugin.ts, permissions.ts) — that seam resolves to a synthetic context
+ * with roles: ["super_admin", "hr_admin", "payroll_admin", "finance_admin"]
+ * (packages/auth/src/context.ts), so using it here would let ANY caller
+ * admin-service itself lets through (tenant_admin included) act with
+ * super_admin authority at the receiving service — a privilege-escalation
+ * bug. Call this on every mocked fetch call's init argument in this file so a future
+ * refactor that reintroduces the seam fails a test, not just a code review.
+ */
+function expectForwardsCallerAuth(init: { headers: Record<string, string> }) {
+  expect(init.headers.authorization).toMatch(/^Bearer /);
+  expect(init.headers["x-internal"]).toBeUndefined();
+  expect(init.headers["x-service-secret"]).toBeUndefined();
+}
+
 let app: FastifyInstance;
 
 beforeAll(async () => {
@@ -223,7 +242,7 @@ describe("cross-service routes → identity-service (token-forwarded)", () => {
   it("GET /v1/admin/users forwards the caller's bearer token and relays real rows", async () => {
     const fetchMock = vi.fn(async (url: string, init: { headers: Record<string, string> }) => {
       expect(url).toContain("/identity/users");
-      expect(init.headers.authorization).toMatch(/^Bearer /);
+      expectForwardsCallerAuth(init);
       expect(init.headers["x-tenant-id"]).toBe(TENANT);
       return jsonResponse(200, [{ id: "u1", tenantId: TENANT, email: "a@gov.in", name: "A", empCode: null, status: "active", mfaEnabled: true, version: 1 }]);
     });
@@ -234,9 +253,12 @@ describe("cross-service routes → identity-service (token-forwarded)", () => {
     expect(res.json().data[0].email).toBe("a@gov.in");
   });
 
-  it("POST /v1/admin/users returns identity-service's real accepted id — not a locally-invented randomUUID()", async () => {
+  it("POST /v1/admin/users forwards the caller's bearer token and returns identity-service's real accepted id — not a locally-invented randomUUID()", async () => {
     const upstreamId = "11111111-1111-4111-8111-111111111111";
-    const fetchMock = vi.fn(async () => jsonResponse(202, { id: upstreamId, status: "accepted", correlationId: "c-1" }));
+    const fetchMock = vi.fn(async (url: string, init: { headers: Record<string, string> }) => {
+      expectForwardsCallerAuth(init);
+      return jsonResponse(202, { id: upstreamId, status: "accepted", correlationId: "c-1" });
+    });
     vi.stubGlobal("fetch", fetchMock);
     const res = await app.inject({
       method: "POST", url: "/v1/admin/users",
@@ -249,7 +271,11 @@ describe("cross-service routes → identity-service (token-forwarded)", () => {
   });
 
   it("POST /v1/admin/users relays a real identity-service failure honestly (never swallows it into a fake 2xx)", async () => {
-    vi.stubGlobal("fetch", vi.fn(async () => jsonResponse(409, { code: "CONFLICT", message: "email already in use" })));
+    const fetchMock = vi.fn(async (_url: string, init: { headers: Record<string, string> }) => {
+      expectForwardsCallerAuth(init);
+      return jsonResponse(409, { code: "CONFLICT", message: "email already in use" });
+    });
+    vi.stubGlobal("fetch", fetchMock);
     const res = await app.inject({
       method: "POST", url: "/v1/admin/users",
       headers: authHeader(["tenant_admin"]),
@@ -259,15 +285,22 @@ describe("cross-service routes → identity-service (token-forwarded)", () => {
     expect(res.json().code).toBe("CONFLICT");
   });
 
-  it("GET /v1/admin/roles and POST /v1/admin/roles relay identity-service's real RBAC store", async () => {
-    const listMock = vi.fn(async () => jsonResponse(200, [{ id: "r1", tenantId: TENANT, key: "auditor", name: "Auditor", description: null, isSystem: false, version: 1 }]));
+  it("GET /v1/admin/roles and POST /v1/admin/roles forward the caller's bearer token and relay identity-service's real RBAC store", async () => {
+    const listMock = vi.fn(async (_url: string, init: { headers: Record<string, string> }) => {
+      expectForwardsCallerAuth(init);
+      return jsonResponse(200, [{ id: "r1", tenantId: TENANT, key: "auditor", name: "Auditor", description: null, isSystem: false, version: 1 }]);
+    });
     vi.stubGlobal("fetch", listMock);
     const list = await app.inject({ method: "GET", url: "/v1/admin/roles", headers: authHeader(["platform_admin"]) });
     expect(list.statusCode).toBe(200);
     expect(list.json().data[0].key).toBe("auditor");
 
     const upstreamId = "22222222-2222-4222-8222-222222222222";
-    vi.stubGlobal("fetch", vi.fn(async () => jsonResponse(202, { id: upstreamId, status: "accepted", correlationId: "c-2" })));
+    const createMock = vi.fn(async (_url: string, init: { headers: Record<string, string> }) => {
+      expectForwardsCallerAuth(init);
+      return jsonResponse(202, { id: upstreamId, status: "accepted", correlationId: "c-2" });
+    });
+    vi.stubGlobal("fetch", createMock);
     const create = await app.inject({
       method: "POST", url: "/v1/admin/roles",
       headers: authHeader(["platform_admin"]),
@@ -289,17 +322,22 @@ describe("cross-service routes → identity-service (token-forwarded)", () => {
     expect(res.json().code).toBe("NOT_IMPLEMENTED");
   });
 
-  it("GET /v1/admin/permissions relays identity-service's real permission list", async () => {
-    vi.stubGlobal("fetch", vi.fn(async () => jsonResponse(200, [{ id: "p1", tenantId: TENANT, key: "finance.read", name: "Read finance", description: null, version: 1 }])));
+  it("GET /v1/admin/permissions forwards the caller's bearer token and relays identity-service's real permission list", async () => {
+    const fetchMock = vi.fn(async (_url: string, init: { headers: Record<string, string> }) => {
+      expectForwardsCallerAuth(init);
+      return jsonResponse(200, [{ id: "p1", tenantId: TENANT, key: "finance.read", name: "Read finance", description: null, version: 1 }]);
+    });
+    vi.stubGlobal("fetch", fetchMock);
     const res = await app.inject({ method: "GET", url: "/v1/admin/permissions", headers: authHeader(["platform_admin"]) });
     expect(res.statusCode).toBe(200);
     expect(res.json().data[0].key).toBe("finance.read");
   });
 
-  it("PATCH /v1/admin/roles/:id/permissions diffs the desired set against the real role and issues real grant/revoke calls", async () => {
+  it("PATCH /v1/admin/roles/:id/permissions forwards the caller's bearer token on every upstream call and diffs the desired set against the real role", async () => {
     const roleId = "44444444-4444-4444-8444-444444444444";
     const calls: Array<{ method: string; url: string; body?: string }> = [];
-    const fetchMock = vi.fn(async (url: string, init: { method: string; body?: string }) => {
+    const fetchMock = vi.fn(async (url: string, init: { method: string; body?: string; headers: Record<string, string> }) => {
+      expectForwardsCallerAuth(init);
       calls.push({ method: init.method, url, body: init.body });
       if (url.endsWith(`/identity/rbac/roles/${roleId}`)) return jsonResponse(200, { id: roleId, permissions: ["finance.read"] });
       if (url.includes("/identity/rbac/permissions")) {
@@ -324,6 +362,9 @@ describe("cross-service routes → identity-service (token-forwarded)", () => {
     const body = res.json();
     expect(body.granted).toEqual(["finance.write"]);
     expect(body.revoked).toEqual(["finance.read"]);
+    // Every one of the >=3 upstream calls this route makes (role read, permission
+    // list, grant/revoke) must have been asserted via expectForwardsCallerAuth above.
+    expect(calls.length).toBeGreaterThanOrEqual(3);
 
     const grantCall = calls.find((c) => c.method === "POST" && c.url.endsWith("/permissions"));
     expect(grantCall).toBeDefined();
@@ -332,11 +373,15 @@ describe("cross-service routes → identity-service (token-forwarded)", () => {
     expect(revokeCall!.url).toContain("perm-finance-read");
   });
 
-  it("GET /v1/admin/mfa/users maps identity-service's real mfaEnabled column, never a fabricated status", async () => {
-    vi.stubGlobal("fetch", vi.fn(async () => jsonResponse(200, [
-      { id: "u1", tenantId: TENANT, email: "mfa-on@gov.in", name: "On", empCode: null, status: "active", mfaEnabled: true, version: 1 },
-      { id: "u2", tenantId: TENANT, email: "mfa-off@gov.in", name: "Off", empCode: null, status: "active", mfaEnabled: false, version: 1 },
-    ])));
+  it("GET /v1/admin/mfa/users forwards the caller's bearer token and maps identity-service's real mfaEnabled column, never a fabricated status", async () => {
+    const fetchMock = vi.fn(async (_url: string, init: { headers: Record<string, string> }) => {
+      expectForwardsCallerAuth(init);
+      return jsonResponse(200, [
+        { id: "u1", tenantId: TENANT, email: "mfa-on@gov.in", name: "On", empCode: null, status: "active", mfaEnabled: true, version: 1 },
+        { id: "u2", tenantId: TENANT, email: "mfa-off@gov.in", name: "Off", empCode: null, status: "active", mfaEnabled: false, version: 1 },
+      ]);
+    });
+    vi.stubGlobal("fetch", fetchMock);
     const res = await app.inject({ method: "GET", url: "/v1/admin/mfa/users", headers: authHeader(["tenant_admin"]) });
     expect(res.statusCode).toBe(200);
     const rows = res.json().data as Array<{ email: string; mfaStatus: string }>;
@@ -349,18 +394,24 @@ describe("cross-service routes → identity-service (token-forwarded)", () => {
 // Audit logs — real, forwarded to audit-service
 // ══════════════════════════════════════════════════════════════════════════
 describe("GET /v1/admin/audit-logs", () => {
-  it("relays audit-service's real event list", async () => {
-    vi.stubGlobal("fetch", vi.fn(async (url: string) => {
+  it("forwards the caller's bearer token and relays audit-service's real event list", async () => {
+    const fetchMock = vi.fn(async (url: string, init: { headers: Record<string, string> }) => {
       expect(url).toContain("/v1/audit/events");
+      expectForwardsCallerAuth(init);
       return jsonResponse(200, [{ id: "e1", actor: "someone@gov.in", action: "role.granted", resource: "role:auditor", outcome: "success", timestamp: "2026-09-01T00:00:00.000Z" }]);
-    }));
+    });
+    vi.stubGlobal("fetch", fetchMock);
     const res = await app.inject({ method: "GET", url: "/v1/admin/audit-logs", headers: authHeader(["super_admin"]) });
     expect(res.statusCode).toBe(200);
     expect(res.json().data[0].action).toBe("role.granted");
   });
 
-  it("relays audit-service's real 403 for a role it restricts — honest, not a fabricated empty 200", async () => {
-    vi.stubGlobal("fetch", vi.fn(async () => jsonResponse(403, { code: "FORBIDDEN", message: "requires one of: audit_officer, audit_admin, super_admin, platform_admin" })));
+  it("forwards the caller's bearer token and relays audit-service's real 403 for a role it restricts — honest, not a fabricated empty 200", async () => {
+    const fetchMock = vi.fn(async (_url: string, init: { headers: Record<string, string> }) => {
+      expectForwardsCallerAuth(init);
+      return jsonResponse(403, { code: "FORBIDDEN", message: "requires one of: audit_officer, audit_admin, super_admin, platform_admin" });
+    });
+    vi.stubGlobal("fetch", fetchMock);
     const res = await app.inject({ method: "GET", url: "/v1/admin/audit-logs", headers: authHeader(["tenant_admin"]) });
     expect(res.statusCode).toBe(403);
   });
@@ -370,15 +421,132 @@ describe("GET /v1/admin/audit-logs", () => {
 // Usage — real, forwarded to tenant-service's quota tracker
 // ══════════════════════════════════════════════════════════════════════════
 describe("GET /v1/admin/usage", () => {
-  it("relays tenant-service's real per-resource quota usage", async () => {
-    vi.stubGlobal("fetch", vi.fn(async (url: string) => {
+  it("forwards the caller's bearer token and relays tenant-service's real per-resource quota usage", async () => {
+    const fetchMock = vi.fn(async (url: string, init: { headers: Record<string, string> }) => {
       expect(url).toContain("/v1/tenant/usage");
+      expectForwardsCallerAuth(init);
       return jsonResponse(200, { tenantId: TENANT, resources: [{ resource: "storage", limit: 1000, used: 342, usagePercent: 34.2, overLimit: false, projectedOverageDate: null }], anyOverLimit: false, anyWarning: false });
-    }));
+    });
+    vi.stubGlobal("fetch", fetchMock);
     const res = await app.inject({ method: "GET", url: "/v1/admin/usage", headers: authHeader(["tenant_admin"]) });
     expect(res.statusCode).toBe(200);
     const rows = res.json().data as Array<{ resource: string; used: number; limit: number }>;
     expect(rows[0]).toMatchObject({ resource: "storage", used: 342, limit: 1000 });
+  });
+});
+
+// ══════════════════════════════════════════════════════════════════════════
+// Org hierarchy — real, forwarded to tenant-service's org-hierarchy module
+// ══════════════════════════════════════════════════════════════════════════
+//
+// COMP-001 fix-up (review finding #1): the original PR's comment/PR-body
+// claimed org-hierarchy "has no backing store anywhere in the platform" and
+// left it 501. That was wrong — tenant-service/src/modules/org-hierarchy is
+// a fully built, registered module with a real tenant-scoped `orgUnits`
+// table and a real `GET /v1/org/hierarchy` read. Two tests below: one in the
+// same mocked-fetch style as every other forwarding route (fast, asserts the
+// forwarding contract), and one genuine integration test that boots a REAL
+// tenant-service instance on a real loopback port, creates a REAL row in its
+// REAL table through its REAL write path, and proves admin-service's route
+// relays that real data end-to-end over a real (unmocked) HTTP hop — not a
+// mocked-fetch assertion.
+describe("GET /v1/admin/org-hierarchy", () => {
+  it("forwards the caller's bearer token and relays tenant-service's real org-unit rows", async () => {
+    const fetchMock = vi.fn(async (url: string, init: { headers: Record<string, string> }) => {
+      expect(url).toContain("/v1/org/hierarchy");
+      expectForwardsCallerAuth(init);
+      expect(init.headers["x-tenant-id"]).toBe(TENANT);
+      return jsonResponse(200, { data: [{ id: "ou1", tenantId: TENANT, name: "Finance Wing", type: "department" }], meta: { total: 1 } });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const res = await app.inject({ method: "GET", url: "/v1/admin/org-hierarchy", headers: authHeader(["tenant_admin"]) });
+    expect(res.statusCode).toBe(200);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(res.json().data[0].name).toBe("Finance Wing");
+  });
+
+  describe("real integration — genuine tenant-service round trip (not mocked fetch)", () => {
+    let tenantApp: FastifyInstance | undefined;
+    let tenantDb: typeof import("../../tenant-service/src/shared/db.js") | undefined;
+    let previousTenantServiceUrl: string | undefined;
+    const ORG_TENANT = "dddddddd-eeee-4000-8000-000000000501";
+    const ORG_ACTOR = "00000000-eeee-4000-8000-000000000502";
+
+    beforeAll(async () => {
+      // tenant-service's own db/queue singletons are created at MODULE-LOAD
+      // time from process.env.DATABASE_URL. This test process is running
+      // under admin-service's vitest env, whose DATABASE_URL points at
+      // civitas_admin — NOT the civitas_tenant database org_units actually
+      // lives in. Swap DATABASE_URL to tenant-service's own DSN for the
+      // instant of the dynamic import (mirrors the technique
+      // packages/db/src/create-tenant-db.basic.test.ts uses), then restore
+      // it — admin-service's own db module was already loaded/bound at the
+      // top of this file under the correct DSN, so this only affects the
+      // freshly-imported tenant-service modules.
+      const savedDbUrl = process.env.DATABASE_URL;
+      process.env.DATABASE_URL =
+        process.env.TENANT_DATABASE_URL_FOR_TEST ??
+        "postgres://tenant_svc:tenant_dev_pw@localhost:5435/civitas_tenant";
+      try {
+        tenantDb = await import("../../tenant-service/src/shared/db.js");
+        const { queue: tenantQueue } = await import("../../tenant-service/src/shared/infra.js");
+        const { registerOrgHierarchyConsumers } = await import("../../tenant-service/src/modules/org-hierarchy/consumer.js");
+        registerOrgHierarchyConsumers(tenantQueue);
+        const { buildApp: buildTenantApp } = await import("../../tenant-service/src/app.js");
+        tenantApp = await buildTenantApp();
+        await tenantApp.listen({ port: 0, host: "127.0.0.1" });
+
+        // Create a REAL org unit through tenant-service's REAL write path
+        // (POST /v1/org/hierarchy → CQRS command → real consumer → real
+        // INSERT into tenant.org_units), never a mocked response.
+        const createToken = signToken({ sub: ORG_ACTOR, tid: ORG_TENANT, roles: ["tenant_admin"], sid: "sess-org" }, SECRET, 3600);
+        const createRes = await tenantApp.inject({
+          method: "POST", url: "/v1/org/hierarchy",
+          headers: { authorization: `Bearer ${createToken}` },
+          payload: { name: "Directorate of Real Data", type: "department" },
+        });
+        if (createRes.statusCode !== 202) {
+          throw new Error(`setup: failed to create real org unit — ${createRes.statusCode} ${createRes.body}`);
+        }
+        // publish() is fire-and-forget; drain() awaits the tracked delivery
+        // (including the consumer's real INSERT) before we read it back.
+        await (tenantQueue as { drain: () => Promise<void> }).drain();
+      } finally {
+        process.env.DATABASE_URL = savedDbUrl;
+      }
+    });
+
+    afterAll(async () => {
+      if (tenantApp) await tenantApp.close();
+      if (tenantDb) await tenantDb.sqlClient.end();
+      if (previousTenantServiceUrl === undefined) delete process.env.TENANT_SERVICE_URL;
+      else process.env.TENANT_SERVICE_URL = previousTenantServiceUrl;
+    });
+
+    it("GET /v1/admin/org-hierarchy relays the real row from tenant-service's real table over a real HTTP hop", async () => {
+      if (!tenantApp) throw new Error("tenant-service test app failed to start in beforeAll");
+      const address = tenantApp.server.address();
+      if (address === null || typeof address === "string") throw new Error("tenant-service test app has no TCP address");
+      previousTenantServiceUrl = process.env.TENANT_SERVICE_URL;
+      process.env.TENANT_SERVICE_URL = `http://127.0.0.1:${address.port}`;
+
+      // Deliberately NOT stubbing global fetch here — admin-service's real
+      // upstream-client.ts makes a real network call to the real
+      // tenant-service instance started above.
+      const res = await app.inject({ method: "GET", url: "/v1/admin/org-hierarchy", headers: { authorization: `Bearer ${signToken({ sub: ORG_ACTOR, tid: ORG_TENANT, roles: ["tenant_admin"], sid: "sess-org" }, SECRET, 3600)}` } });
+      expect(res.statusCode).toBe(200);
+      const rows = res.json().data as Array<{ name: string; type: string; tenantId: string }>;
+      expect(rows.length).toBeGreaterThan(0);
+      const created = rows.find((r) => r.name === "Directorate of Real Data");
+      expect(created).toBeDefined();
+      expect(created!.type).toBe("department");
+      expect(created!.tenantId).toBe(ORG_TENANT);
+      // Cross-tenant isolation, proven end-to-end through the real forward:
+      // a caller from a different tenant must never see this row.
+      const otherTenantRes = await app.inject({ method: "GET", url: "/v1/admin/org-hierarchy", headers: authHeader(["tenant_admin"]) });
+      expect(otherTenantRes.statusCode).toBe(200);
+      expect((otherTenantRes.json().data as Array<{ name: string }>).some((r) => r.name === "Directorate of Real Data")).toBe(false);
+    });
   });
 });
 
@@ -391,7 +559,6 @@ describe("honest 501s (no real backing store in scope)", () => {
     "/v1/admin/security/overview",
     "/v1/admin/idp/providers",
     "/v1/admin/sso/providers",
-    "/v1/admin/org-hierarchy",
   ]) {
     it(`GET ${path} returns 501 NOT_IMPLEMENTED, never a fabricated 2xx`, async () => {
       const res = await app.inject({ method: "GET", url: path, headers: authHeader(["tenant_admin"]) });
