@@ -5,10 +5,14 @@ import { cache } from "../../shared/infra.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
-import { computeThreeWayMatch, assertQtyValid, assertGrnAmendable } from "./domain.js";
+import {
+  computeThreeWayMatch, assertQtyValid, assertGrnAmendable,
+  assertPoItemsResolved, assertGrnLinesResolved, assertDistinctReceiverInspector,
+} from "./domain.js";
 import { minorString } from "@civitasone/schemas/money";
 import { allocateDocNo } from "../../shared/numbering.js";
 import type { GrnItemInsert } from "./schema.js";
+import { findPoById, findPoItemsByPoId } from "../po/repo.js";
 
 const AUDIT_TOPIC = "audit.event.record";
 
@@ -27,14 +31,33 @@ export function registerGrnConsumers(queue: Queue): void {
       inspection: { inspectorId: string; result: string; remarks?: string };
     };
 
-    assertQtyValid(p.items.map((i) => ({
-      orderedQty: i.orderedQty, receivedQty: i.receivedQty, acceptedQty: i.acceptedQty,
-    })));
+    // DOM-002 — separation of duties: the receiving actor (msg.actorId, who
+    // submitted this GRN) must not also be the inspector who determines
+    // accept/reject on it. Checked before any I/O so a violation never
+    // touches the DB.
+    assertDistinctReceiverInspector(msg.actorId, p.inspection.inspectorId);
 
-    const threeWayMatch = computeThreeWayMatch(
-      p.items.map((i) => ({ orderedQty: i.orderedQty, receivedQty: i.receivedQty, acceptedQty: i.acceptedQty })),
-      p.inspection.result
-    );
+    // DOM-002 — re-derive orderedQty from the real PO line server-side.
+    // Previously items[].orderedQty was trusted as-is from the client
+    // payload, so a caller could understate the true ordered quantity (or
+    // simply inflate it to match whatever they claimed to accept) and slip
+    // past the over-accept guard below. A poItemRef that doesn't resolve
+    // against the PO's real items is rejected rather than silently treated
+    // as "unbounded" (see assertPoItemsResolved).
+    const poId = p.poRef.replace(/^procurement_po:/, "");
+    const po = await findPoById(poId, p.tenantId);
+    const poItems = await findPoItemsByPoId(poId, p.tenantId);
+    const poItemMap = new Map(poItems.map((pi) => [pi.id, pi]));
+    assertPoItemsResolved(p.items.map((i) => i.poItemRef), new Set(poItemMap.keys()));
+
+    const guardItems = p.items.map((i) => ({
+      orderedQty: poItemMap.get(i.poItemRef)!.quantity,
+      receivedQty: i.receivedQty,
+      acceptedQty: i.acceptedQty,
+    }));
+    assertQtyValid(guardItems);
+
+    const threeWayMatch = computeThreeWayMatch(guardItems, p.inspection.result);
 
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
@@ -46,10 +69,12 @@ export function registerGrnConsumers(queue: Queue): void {
         threeWayMatch, status: threeWayMatch ? "accepted" : "rejected",
         notes: p.notes ?? null, createdBy: msg.actorId, updatedBy: msg.actorId,
       });
-      const itemRows: GrnItemInsert[] = p.items.map((i) => ({
+      const itemRows: GrnItemInsert[] = p.items.map((i, idx) => ({
         id: randomUUID(), grnId: p.id, tenantId: p.tenantId,
         poItemRef: i.poItemRef, itemCode: i.itemCode,
-        orderedQty: i.orderedQty, receivedQty: i.receivedQty, acceptedQty: i.acceptedQty,
+        // DOM-002: server-derived orderedQty, not the client's i.orderedQty.
+        orderedQty: guardItems[idx]!.orderedQty,
+        receivedQty: i.receivedQty, acceptedQty: i.acceptedQty,
         unit: i.unit, createdBy: msg.actorId, updatedBy: msg.actorId,
       }));
       await repo.insertGrnItems(tx, itemRows);
@@ -66,10 +91,6 @@ export function registerGrnConsumers(queue: Queue): void {
           tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
           payload: { grnId: p.id, poRef: p.poRef, vendorId: p.vendorId },
         });
-        const poId = p.poRef.replace(/^procurement_po:/, "");
-        const po = await import("../po/repo.js").then((m) => m.findPoById(poId, p.tenantId));
-        const poItems = await import("../po/repo.js").then((m) => m.findPoItemsByPoId(poId, p.tenantId));
-        const poItemMap = new Map(poItems.map((pi) => [pi.id, pi]));
         // R7: transport money as exact strings, never Number(bigint paise).
         const grossMinorStr = po ? minorString(po.totalMinor) : "0";
 
@@ -77,6 +98,8 @@ export function registerGrnConsumers(queue: Queue): void {
         // real PO line prices × GRN accepted qty — never from a caller. These
         // are persisted to the three-way-match table AND carried on the
         // grn.accepted event so finance can reconcile invoice↔GRN↔PO (R5).
+        // po / poItemMap are already fetched above (DOM-002) — reused here
+        // rather than re-fetched.
         const poAmountMinor = po ? BigInt(po.totalMinor) : 0n;
         let grnAmountMinor = 0n;
         for (const gi of p.items) {
@@ -153,7 +176,21 @@ export function registerGrnConsumers(queue: Queue): void {
       const grn = await repo.findGrnByIdTx(tx, p.id);
       if (!grn || grn.tenantId !== p.tenantId) throw new Error(`GRN ${p.id} not found`);
       assertGrnAmendable(grn);
-      assertQtyValid(p.lines.map((l) => ({ orderedQty: 0, receivedQty: l.receivedQty, acceptedQty: l.acceptedQty })));
+
+      // DOM-002 — re-derive orderedQty from the GRN line actually persisted
+      // at create time (itself now PO-derived — see the grnCreate handler
+      // above), never from the client. Previously this call always passed
+      // `orderedQty: 0`, which assertQtyValid treats as "no cap", disabling
+      // the over-accept guard on every amendment regardless of the real PO
+      // quantity.
+      const existingItems = await repo.findGrnItemsByGrnTx(tx, p.id);
+      const existingByLine = new Map(existingItems.map((i) => [i.id, i]));
+      assertGrnLinesResolved(p.lines.map((l) => l.lineId), new Set(existingByLine.keys()));
+      assertQtyValid(p.lines.map((l) => ({
+        orderedQty: existingByLine.get(l.lineId)!.orderedQty,
+        receivedQty: l.receivedQty, acceptedQty: l.acceptedQty,
+      })));
+
       for (const line of p.lines) {
         await repo.updateGrnItemQty(tx, line.lineId, p.id, {
           receivedQty: line.receivedQty,

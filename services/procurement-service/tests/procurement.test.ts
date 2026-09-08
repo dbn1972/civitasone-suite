@@ -15,6 +15,7 @@ import { runWithTenant, withTenantConsumer } from "@civitasone/db";
 import { db, sqlClient } from "../src/shared/db.js";
 import { procurementGrns } from "../src/modules/grn/schema.js";
 import { procurementIndents } from "../src/modules/indent/schema.js";
+import { procurementPos, procurementPoItems } from "../src/modules/po/schema.js";
 import { outboxMessages, processed } from "../src/shared/outbox.js";
 import { registerIndentConsumers } from "../src/modules/indent/consumer.js";
 import { registerGrnConsumers }    from "../src/modules/grn/consumer.js";
@@ -37,14 +38,43 @@ const MSG_G1 = "55555555-eeee-4000-8000-000000000003";
 const MSG_G2 = "55555555-eeee-4000-8000-000000000004";
 const MSG_P1 = "55555555-eeee-4000-8000-000000000005";
 
+// DOM-002 — the GRN over-receipt guard now re-derives orderedQty from the
+// real PO line server-side, so the GRN-creation tests below need a real PO +
+// PO item to receive against (previously the poRef/poItemRef were fabricated
+// strings and the guard trusted whatever orderedQty the client sent).
+const PO_GRN_1   = "dddddddd-0000-4000-8000-000000000001";
+const PO_GRN_2   = "dddddddd-1111-4000-8000-000000000001";
+const POITEM_1   = "eeeeeeee-0000-4000-8000-000000000001";
+const POITEM_2   = "eeeeeeee-1111-4000-8000-000000000001";
+
 async function wipe() {
   await runWithTenant(TENANT, () => db.transaction(async (tx) => {
     await tx.delete(outboxMessages).where(eq(outboxMessages.tenantId, TENANT));
     await tx.delete(procurementGrns).where(eq(procurementGrns.tenantId, TENANT));
     await tx.delete(procurementIndents).where(eq(procurementIndents.tenantId, TENANT));
+    await tx.delete(procurementPoItems).where(eq(procurementPoItems.tenantId, TENANT));
+    await tx.delete(procurementPos).where(eq(procurementPos.tenantId, TENANT));
     for (const id of [MSG_I1, MSG_IA, MSG_G1, MSG_G2, MSG_P1]) {
       await tx.delete(processed).where(eq(processed.messageId, id));
     }
+  }));
+}
+
+// DOM-002 — seeds the real PO + PO item each GRN-creation test below
+// receives against, so the server-derived orderedQty matches what the test
+// previously trusted from the client payload.
+async function seedPoForGrn(poId: string, poItemId: string, vendorId: string, quantity: number, unitPriceMinor = 10000n): Promise<void> {
+  await runWithTenant(TENANT, () => db.transaction(async (tx) => {
+    await tx.insert(procurementPos).values({
+      id: poId, tenantId: TENANT, poNo: `PO-GRN-${poId.slice(-4)}`, vendorId,
+      indentRef: "procurement_indent:seed", status: "approved", totalMinor: unitPriceMinor * BigInt(quantity),
+      createdBy: ACTOR, updatedBy: ACTOR,
+    });
+    await tx.insert(procurementPoItems).values({
+      id: poItemId, poId, tenantId: TENANT, itemCode: "LAP-001", description: "Laptop",
+      quantity, unit: "nos", unitPriceMinor,
+      createdBy: ACTOR, updatedBy: ACTOR,
+    });
   }));
 }
 
@@ -180,7 +210,14 @@ describe("GRN domain — three-way match (pure)", () => {
 // ── 4. CQRS wiring — GRN with mismatch ─────────────────────────────────────
 
 describe("GRN consumer — CQRS wiring (integration)", () => {
-  beforeAll(async () => { await wipe(); });
+  beforeAll(async () => {
+    await wipe();
+    // DOM-002 — real PO + PO item fixtures the GRN tests below receive
+    // against; quantity mirrors what the payloads previously sent as a
+    // (now-ignored) client orderedQty, so behaviour is unchanged.
+    await seedPoForGrn(PO_GRN_1, POITEM_1, "aaaaaaaa-1111-4000-8000-000000000001", 10);
+    await seedPoForGrn(PO_GRN_2, POITEM_2, "aaaaaaaa-2222-4000-8000-000000000001", 5);
+  });
   afterAll(async () => { await wipe(); });
 
   it("GRN qty mismatch: three_way_match=false, grnRejected in outbox", async () => {
@@ -197,10 +234,10 @@ describe("GRN consumer — CQRS wiring (integration)", () => {
       schemaVersion: "1.0",
       payload: {
         id: GRN_1, tenantId: TENANT, grnNo: "GRN-001",
-        poRef: "procurement_po:dddddddd-0000-4000-8000-000000000001",
+        poRef: `procurement_po:${PO_GRN_1}`,
         vendorId: "aaaaaaaa-1111-4000-8000-000000000001",
         items: [{
-          poItemRef: "procurement_po_item:eeeeeeee-0000-4000-8000-000000000001",
+          poItemRef: POITEM_1,
           itemCode: "LAP-001", orderedQty: 10, receivedQty: 8, acceptedQty: 8, unit: "nos",
         }],
         // R18: a partial qty (8 of 10) is now a VALID receipt, so the rejection
@@ -241,10 +278,10 @@ describe("GRN consumer — CQRS wiring (integration)", () => {
       schemaVersion: "1.0",
       payload: {
         id: GRN_2, tenantId: TENANT, grnNo: "GRN-002",
-        poRef: "procurement_po:dddddddd-1111-4000-8000-000000000001",
+        poRef: `procurement_po:${PO_GRN_2}`,
         vendorId: "aaaaaaaa-2222-4000-8000-000000000001",
         items: [{
-          poItemRef: "procurement_po_item:eeeeeeee-1111-4000-8000-000000000001",
+          poItemRef: POITEM_2,
           itemCode: "SUP-001", orderedQty: 5, receivedQty: 5, acceptedQty: 5, unit: "nos",
         }],
         inspection: { inspectorId: "ffffffff-1111-4000-8000-000000000001", result: "pass" },

@@ -64,3 +64,46 @@ export function assertGrnAmendable(grn: { status: string }): void {
     throw new DomainError("GRN_NOT_AMENDABLE", `GRN in status '${grn.status}' cannot be amended`);
   }
 }
+
+/**
+ * DOM-002 — a GRN line must reference a real PO line. `orderedQty` can only
+ * be re-derived server-side (never trusted from the client) when every
+ * `poItemRef` on the payload actually resolves against the PO's items; an
+ * unresolved ref is rejected outright rather than silently falling back to
+ * "unbounded" (orderedQty <= 0 disables the over-accept cap in
+ * assertQtyValid/computeThreeWayMatch — the same shape as the :156 bypass).
+ */
+export function assertPoItemsResolved(refs: string[], resolved: ReadonlySet<string>): void {
+  for (const ref of refs) {
+    if (!resolved.has(ref)) {
+      throw new DomainError("PO_ITEM_NOT_FOUND", `po item '${ref}' not found on the referenced purchase order`);
+    }
+  }
+}
+
+/**
+ * DOM-002 — amend must re-derive orderedQty from the GRN line actually
+ * persisted at create time (itself now PO-derived), never from the client.
+ * A lineId that doesn't belong to this GRN is rejected rather than silently
+ * skipped, matching assertPoItemsResolved's stance on unresolved refs.
+ */
+export function assertGrnLinesResolved(lineIds: string[], known: ReadonlySet<string>): void {
+  for (const id of lineIds) {
+    if (!known.has(id)) {
+      throw new DomainError("GRN_ITEM_NOT_FOUND", `grn line '${id}' does not belong to this GRN`);
+    }
+  }
+}
+
+/**
+ * DOM-002 — separation of duties: the actor who received the goods (the GRN
+ * creator) must not be the same actor who inspects/accepts or rejects them.
+ * Mirrors po/amendment-domain.ts's assertDistinctMakerChecker (same
+ * SOD_VIOLATION code), the established maker-checker convention elsewhere in
+ * this service.
+ */
+export function assertDistinctReceiverInspector(receivedBy: string, inspectorId: string): void {
+  if (receivedBy && inspectorId && receivedBy === inspectorId) {
+    throw new DomainError("SOD_VIOLATION", "receiver and inspector must be different actors (self-inspection rejected)");
+  }
+}
