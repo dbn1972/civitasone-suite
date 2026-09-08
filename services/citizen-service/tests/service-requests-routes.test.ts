@@ -114,6 +114,49 @@ describe("COMP-002 POST/GET/PATCH /v1/citizen/requests — real persistence, not
     expect(res.json().code).toBe("FORBIDDEN");
   });
 
+  it("AUTHZ: a citizen cannot set assigneeDepartment via a status-less PATCH (COMP-002 review finding)", async () => {
+    // Regression test for the gap the independent review found: the original
+    // guard only fired `if (body.status && ...)`, so a citizen could PATCH
+    // with ONLY `{ assigneeDepartment }` -- no `status` key at all -- and skip
+    // the check entirely. updateRequestBody only requires ONE OF
+    // status/note/assigneeDepartment, so this body is otherwise valid.
+    const res = await app.inject({
+      method: "PATCH", url: `/v1/citizen/requests/${requestId}`,
+      headers: hdr(tok(TENANT_A, CITIZEN)), payload: { assigneeDepartment: "Roads & Public Works" },
+    });
+    expect(res.statusCode).toBe(403);
+    expect(res.json().code).toBe("FORBIDDEN");
+
+    // And the value must NOT have been persisted -- confirm via a follow-up GET.
+    await new Promise((r) => setTimeout(r, 200));
+    const g = await app.inject({ method: "GET", url: `/v1/citizen/requests/${requestId}`, headers: hdr(tok(TENANT_A, CITIZEN)) });
+    expect(g.statusCode).toBe(200);
+    expect(g.json().data.assigneeDepartment).toBeFalsy();
+  });
+
+  it("AUTHZ: a citizen cannot set note via a status-less PATCH either", async () => {
+    const res = await app.inject({
+      method: "PATCH", url: `/v1/citizen/requests/${requestId}`,
+      headers: hdr(tok(TENANT_A, CITIZEN)), payload: { note: "please expedite" },
+    });
+    expect(res.statusCode).toBe(403);
+    expect(res.json().code).toBe("FORBIDDEN");
+  });
+
+  it("AUTHZ: a citizen cannot smuggle assigneeDepartment in alongside an allowed status", async () => {
+    const res = await app.inject({
+      method: "PATCH", url: `/v1/citizen/requests/${requestId}`,
+      headers: hdr(tok(TENANT_A, CITIZEN)), payload: { status: "cancelled", assigneeDepartment: "Roads & Public Works" },
+    });
+    expect(res.statusCode).toBe(403);
+    expect(res.json().code).toBe("FORBIDDEN");
+
+    await new Promise((r) => setTimeout(r, 200));
+    const g = await app.inject({ method: "GET", url: `/v1/citizen/requests/${requestId}`, headers: hdr(tok(TENANT_A, CITIZEN)) });
+    expect(g.json().data.status).toBe("submitted"); // unchanged -- rejected before reaching the command.
+    expect(g.json().data.assigneeDepartment).toBeFalsy();
+  });
+
   it("PATCH performs a REAL update (not a fabricated {status:'updated'}) — officer resolves it", async () => {
     const res = await app.inject({
       method: "PATCH", url: `/v1/citizen/requests/${requestId}`,

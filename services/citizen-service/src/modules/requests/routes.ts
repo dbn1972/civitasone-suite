@@ -6,7 +6,7 @@ import {
   resolveContext, requireRole, resolveCitizenId, assertOwnership, isOfficer, HttpError,
 } from "../../shared/context.js";
 import {
-  idParam, createRequestBody, updateRequestBody, CITIZEN_SETTABLE_STATUSES,
+  idParam, createRequestBody, updateRequestBody, CITIZEN_SETTABLE_STATUSES, CITIZEN_ALLOWED_UPDATE_KEYS,
 } from "./validators.js";
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
@@ -62,7 +62,15 @@ export async function serviceRequestRoutes(app: FastifyInstance): Promise<void> 
       // P0-1/P0-4: a bare citizen may only update their own request, and only
       // to withdraw it — they cannot set it to under_review/resolved/etc.
       assertOwnership(ctx, current.citizenId);
-      if (body.status && !CITIZEN_SETTABLE_STATUSES.has(body.status)) {
+      // Reject any officer-only field (assigneeDepartment, note) outright --
+      // checked against every key actually present in the body, not gated on
+      // `status` being present. A body containing ONLY e.g. assigneeDepartment
+      // (no status at all) must still be rejected, not silently accepted.
+      const disallowedKeys = Object.keys(body).filter((k) => !CITIZEN_ALLOWED_UPDATE_KEYS.has(k));
+      if (disallowedKeys.length > 0) {
+        throw new HttpError(403, "FORBIDDEN", `citizens may not set: ${disallowedKeys.join(", ")}`);
+      }
+      if (body.status === undefined || !CITIZEN_SETTABLE_STATUSES.has(body.status)) {
         throw new HttpError(403, "FORBIDDEN", "citizens may only cancel their own request");
       }
     }

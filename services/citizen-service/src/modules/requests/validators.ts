@@ -10,6 +10,17 @@ export const REQUEST_STATUSES = [
 /** Statuses a bare citizen may set on their own request via PATCH (self-service withdrawal only). */
 export const CITIZEN_SETTABLE_STATUSES = new Set<string>(["cancelled"]);
 
+/**
+ * The only updateRequestBody keys a bare (non-officer) citizen may ever supply
+ * via PATCH /v1/citizen/requests/:id -- assigneeDepartment (officer-only
+ * department-routing metadata) and note (an officer annotation attached to a
+ * status transition) are excluded. Enforced by checking every key actually
+ * present in the parsed body, not by gating on `status` alone -- a body that
+ * omits `status` entirely (e.g. { assigneeDepartment: "..." }) must still be
+ * rejected for a non-officer caller.
+ */
+export const CITIZEN_ALLOWED_UPDATE_KEYS = new Set<string>(["status"]);
+
 export const createRequestBody = z.object({
   /** P0-3: officer-tier may log a request on behalf of a given citizenId; a bare
    * citizen's id is forced to their own actorId at the route. */
