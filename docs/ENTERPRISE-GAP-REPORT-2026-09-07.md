@@ -26,12 +26,12 @@ Important context for anyone reading recent history: PRs #1076–#1086 (merged t
 |---|---|---|---|---|---|---|
 | A. Build, release & QA truth | 🔴 BLOCKED | 4 | 9 | 5 | 2 | No unit tests on main since 09-06; both release gates fake; DR drill failing 5 weeks, alerts crash |
 | B. Security (beyond tenancy) | 🔴 CRITICAL | 1 | 5 | 6 | 2 | BBPS pay-bill fabrication; 23 tables no RLS; hardcoded candidate-portal secret; no CVE gate |
-| C. Transactional & data integrity | 🟠 HIGH | 0 | 4 | 6 | 2 | 45 deadlock sites / 19 services; two bare-`db.*`-in-tx bugs silently no-op under RLS |
+| C. Transactional & data integrity | 🟠 HIGH | 0 | 5 | 7 | 2 | 45 deadlock sites / 19 services; two bare-`db.*`-in-tx bugs silently no-op under RLS; HRMS audit trail a 100% no-op |
 | D. Domain & functional correctness | 🔴 CRITICAL | 1 | 8 | 6 | 1 | Synthetic Monte Carlo forecasts; GRN over-receipt client-controlled; statutory rules hardcoded |
 | E. Product completeness | 🔴 CRITICAL | 3 | 2 | 3 | 1 | 31 fabricated-success routes; document-service shell; readiness scores 100/100 while blind |
 | F. UX, accessibility, i18n, validation | 🟠 HIGH | 0 | 4 | 6 | 1 | API failure renders as "0 / create your first"; field errors rendered by 1 file; i18n absent |
 | G. Performance & reliability | 🔴 CRITICAL | 1 | 5 | 5 | 0 | Pool math 7× over `max_connections`; 271 tables unindexed; no backoff, DLQ silent |
-| **Total** | | **10** | **37** | **37** | **9** | **93 gaps** |
+| **Total** | | **10** | **38** | **38** | **9** | **95 gaps** |
 
 Priority mapping used throughout: **P0** = exploitable, fabricating, or blocks all other verification; **P1** = correctness/isolation/availability defect on a real path; **P2** = hardening, consistency, or a gap in a control; **P3** = hygiene.
 
@@ -41,10 +41,10 @@ Priority mapping used throughout: **P0** = exploitable, fabricating, or blocks a
 
 Work the waves in order; within a wave, higher priority first. A wave is done when every gap in it is `Fixed` with an independently reviewed PR.
 
-- **Wave 0 — Restore truth (days).** REL-001, REL-002, REL-003, REL-004, REL-005, REL-008, REL-011, REL-019, TX-012. Until this wave is done, no test-based claim about `main` is trustworthy, so it goes first even though nothing in it is user-facing.
+- **Wave 0 — Restore truth (days).** REL-001, REL-002, REL-003, REL-004, REL-005, REL-008, REL-011, REL-019, TX-012. **Status 2026-09-08: done** — all nine closed (REL-001 PR #1095, REL-002/003/004 PR #1091, REL-005 PR #1089, REL-008 PR #1090, REL-011 PR #1088, REL-019 PR #1093, TX-012 investigation PR #1092). TX-013 and TX-014 were discovered as a direct consequence of REL-001 landing (the `Tests` job could finally execute against a real bootstrapped DB) and are queued into Waves 2/3 below rather than reopening Wave 0, since they don't affect whether "CI green" is a trustworthy signal — they're real product defects the signal was finally able to reveal.
 - **Wave 1 — Stop the bleeding (P0).** SEC-001, COMP-001, COMP-002, COMP-003, DOM-001, PERF-001.
-- **Wave 2 — Correctness, isolation, availability (P1).** SEC-002…006, TX-001…003, DOM-002…009, COMP-004, COMP-005, PERF-002…005, PERF-010, UX-001…004, REL-006, REL-007, REL-009, REL-010, REL-012.
-- **Wave 3 — Hardening (P2).** Everything marked P2.
+- **Wave 2 — Correctness, isolation, availability (P1).** SEC-002…006, TX-001…003, TX-013, DOM-002…009, COMP-004, COMP-005, PERF-002…005, PERF-010, UX-001…004, REL-006, REL-007, REL-009, REL-010, REL-012.
+- **Wave 3 — Hardening (P2).** Everything marked P2 (includes TX-014).
 - **Wave 4 — Hygiene (P3).** Everything marked P3.
 
 Dependencies worth knowing: COMP-003 resolves REL-007 (the `documents/eoffice` alias contract failure). REL-001 unblocks REL-013 (coverage thresholds are only enforced by the skipped Coverage Gate). SEC-004 and REL-016 are the same upgrade programme seen from two sides. TX-011 and SEC-014 are "commit the scanner and gate on it" and pay for themselves on the first re-run.
@@ -115,6 +115,8 @@ Columns: **ID · Priority · Title · Evidence (file:line) · Skill · Fix and d
 | TX-010 | P3 | Sentinel-tenant defaults without a sentinel SELECT policy | `admin-service/migrations/0001_init.sql:60,76`, `billing-service/migrations/0001_init.sql:13,29`; readers rely on GUC switching (`admin config/repo.ts:39`, `billing plans/repo.ts:7,17`; a missed reader is recorded at admin `repo.ts:87-93`) | Sentinel-read policy (pattern: asset `0023`, notification `0045`). **DoD:** reading without GUC switch returns platform rows | Open |
 | TX-011 | P2 | Deadlock scanner blind spots | `/tmp/scan_nested_tx_v2.py` (not in repo): ignores `export const … = async` repos, `tenantTransaction/scopedRead` as the *outer* block, and >1-level transitive calls (grant `dashboard/queries.ts:71` found only by a deep scan) | Commit an improved scanner to `scripts/ci/`; gate in Architecture Guard. **DoD:** scanner finds the grant case; baseline 0 after TX-001 | Open |
 | TX-012 | P1 | Unknown whether test suites run with a BYPASSRLS role (would explain TX-002/003 passing) | Not examined by the audit; `packages/db/src/tenant-scope.ts:20` states service roles are NOBYPASSRLS in prod | Verify the test role's attributes in bootstrap; run suites as NOBYPASSRLS. **DoD:** TX-002/003 regression tests fail before fix, pass after | Fixed (investigation) (PR #1092) — good case: `procurement_svc`/`plugin_svc` confirmed NOBYPASSRLS against a fresh bootstrap; live PoC shows FORCE RLS blocks TX-002's exact bug shape. See docs/TX-012-test-role-rls-posture.md. TX-002/TX-003 themselves remain Open. |
+| TX-013 | P1 | HRMS audit trail has been a 100% silent no-op since it was written; no `audit.hr_action_log` table exists anywhere | `hrms-service/src/shared/audit.ts:52-77` (`writeAuditLog`, doc comment "Fire-and-forget: never throws, never delays a response", catch-and-`log.error` only) inserts into `audit.hr_action_log` on every HRMS mutating action; `git grep` across every `services/*/migrations/*.sql` finds zero migrations creating that table in any service — invisible to skill 16's audit-coverage check (T5), which only greps for the `enqueue(tx, AUDIT)` call existing, not whether its target table exists. Discovered only because REL-001 unblocked the `Tests` job: every hrms-service test that mutates data now logs `[audit] write failed` / `relation "audit.hr_action_log" does not exist`. | Add the missing migration; assert on `writeAuditLog` actually persisting in at least one integration test (not just that it doesn't throw). **DoD:** a real HRMS mutation produces a row in `audit.hr_action_log`; CI fails if that regresses | Open |
+| TX-014 | P2 | Two hrms-service workforce-planning dashboard endpoints 500 on every real call; backing tables never migrated | `hrms-service/src/modules/workforce-planning/routes.ts:151-169` (`GET /v1/hrms/workforce/budget` joins `employee.position_budget`, no error handling), `:186` (`employee.employee_profiles`, same file) — same "discovered only once REL-001 unblocked `Tests`" pattern as TX-013; zero migrations create either table in any service | Add the migrations, or 501 the endpoints with `source:"stub"` until they're built (per DOM-015's pattern) — never a route that only 500s. **DoD:** both endpoints return 200 with real data or an honest 501 in a test | Open |
 
 ### D. Domain & functional correctness (skills 01, 02, 12, 13, 14, 15)
 
