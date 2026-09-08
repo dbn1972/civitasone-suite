@@ -1,6 +1,37 @@
 const BASE = "/home/ec2-user/CivitasOne/civitasone-suite";
 const REDIS = "redis://localhost:6381";
-const DB_HOST = "localhost:5435";
+
+// PERF-001: every PM2-managed, DB-backed process (130+ today — see
+// `node -e` / scripts/ops/lib/fleet-topology.mjs for the live count, not a
+// number hardcoded here; that hardcoding is exactly what let this gap
+// regress once already) must go through the Connection_Proxy (PgBouncer,
+// transaction-mode, :6432) rather than opening its own direct connection to
+// Postgres (:5432, exposed on this host as :5435). Direct-per-process pools
+// at the old default (max 10, see packages/db/src/pool.ts) demand well over
+// a thousand backend connections worst-case fleet-wide against Postgres's
+// max_connections=200 — see docs/architecture/CONNECTION-BUDGET.md for the
+// full math. DB_HOST is now the PgBouncer listener. The direct-Postgres host
+// it used to be ("localhost:5435") is what PgBouncer itself proxies to — see
+// the `pgbouncer` service in infra/docker-compose.yml / infra/pgbouncer/
+// pgbouncer.ini — no application code should connect there directly anymore.
+const DB_HOST = "localhost:6432"; // PgBouncer (was "localhost:5435" — direct Postgres)
+
+// PERF-001: applied to every svc()/worker() env below. DB_VIA_PGBOUNCER=true
+// makes packages/db/src/pool.ts's createSqlClient() disable prepared
+// statements (`prepare: false` — required under PgBouncer transaction-mode
+// pooling, since a server-side prepared statement can outlive the specific
+// backend connection it was prepared on) regardless of whether the
+// connection string happens to contain ":6432"/"pgbouncer" literally (a
+// production DATABASE_URL injected from the secret manager may point at an
+// internal DNS name PgBouncer sits behind, e.g. a load balancer, without
+// either substring). DB_POOL_MAX=5 caps each process's own client-side pool
+// now that PgBouncer — not each process — is doing the real connection
+// multiplexing; see docs/architecture/CONNECTION-BUDGET.md for the budget
+// this size was chosen against.
+const PGBOUNCER_ENV = {
+  DB_VIA_PGBOUNCER: "true",
+  DB_POOL_MAX: "5",
+};
 
 // ── Secrets (SEC-1 / SEC-2) ─────────────────────────────────────────────────
 // Secrets are NEVER hardcoded in source control. They are injected at deploy
@@ -339,7 +370,7 @@ function svc(name, port, dbUser, dbName, extra = {}) {
       REDIS_URL: REDIS,
       BIND_HOST: "127.0.0.1",
       ...AWS_ENV,
-      ...(dbUser ? { DATABASE_URL: dbUrl(dbUser, dbName) } : {}),
+      ...(dbUser ? { DATABASE_URL: dbUrl(dbUser, dbName), ...PGBOUNCER_ENV } : {}),
       ...extra,
     },
   };
@@ -364,6 +395,7 @@ function worker(name, dbUser, dbName, extra = {}, scriptFile = "dist/worker.js")
       BIND_HOST: "127.0.0.1",
       ...AWS_ENV,
       DATABASE_URL: dbUrl(dbUser, dbName),
+      ...PGBOUNCER_ENV,
       ...extra,
     },
   };
@@ -650,6 +682,13 @@ module.exports = {
         ...AWS_ENV,
         REDIS_URL: REDIS,
         DATABASE_URL: dbUrl("gateway_svc", "civitas_gateway"),
+        // PERF-001: this app is a hand-rolled object literal, not a svc()
+        // call — it was the ONE DB-backed process in the whole fleet that
+        // PGBOUNCER_ENV didn't reach, because svc()/worker() are the only two
+        // places that spread it in. Found by tests/security/connection-budget
+        // .test.ts's fleet-wide wiring guard, which walks every app with a
+        // DATABASE_URL rather than assuming svc()/worker() cover them all.
+        ...PGBOUNCER_ENV,
         QUEUE_HEALTH_URL: process.env.QUEUE_HEALTH_URL ?? "http://127.0.0.1:3030/health",
         CORS_ORIGIN: process.env.CORS_ORIGIN ?? "http://localhost:3000",
       },

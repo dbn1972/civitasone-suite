@@ -10,12 +10,15 @@
 //
 // It queries `pg_stat_activity` (via the privileged ops DSN), groups the
 // result by `datname`/`application_name`/`client_addr`, cross-references
-// against the known 33 `DATABASE_URL_<SVC>` service identities (see
-// docs/architecture/CONNECTION-BUDGET.md and the port map in
-// .kiro/steering/quick-reference.md), and prints a per-service compliance
-// report. Exits non-zero if ANY service is found bypassing the
-// Connection_Proxy, while still reporting every compliant service
-// individually (never short-circuits on the first violation).
+// against the fleet's actual `DATABASE_URL_<SVC>` service identities — read
+// LIVE off ecosystem.config.js via lib/fleet-topology.mjs, not a hand-copied
+// list (see docs/architecture/CONNECTION-BUDGET.md's "why a hardcoded number
+// regressed PERF-001" note: the previous static 33-service KNOWN_SERVICES
+// array silently went stale as the fleet grew to 65 services and nothing
+// caught it) — and prints a per-service compliance report. Exits non-zero if
+// ANY service is found bypassing the Connection_Proxy, while still reporting
+// every compliant service individually (never short-circuits on the first
+// violation).
 //
 // Connection: no new npm dependency is introduced. Like
 // scripts/ops/restore-drill.sh and scripts/security/verify-evt3-dlq.mjs, this
@@ -43,27 +46,30 @@
 
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
+import { loadFleetTopology } from "./lib/fleet-topology.mjs";
 
 const execFileAsync = promisify(execFile);
 
-// ── 1. Known DB_Backed_Service identities (the canonical 33) ────────────────
-// Mirrors the port map in .kiro/steering/quick-reference.md /
-// docs/architecture/CONNECTION-BUDGET.md — the same 33 services every
-// `DATABASE_URL_<SVC>` override in .env.example is documented against.
-export const KNOWN_SERVICES = [
-  "identity", "tenant", "policy", "audit", "install", "notification", "finance",
-  "procurement", "contract", "estab", "stock", "hrms", "payroll", "project",
-  "asset", "report", "plugin", "theme", "grant", "citizen", "legal", "admin",
-  "billing", "crm", "inventory", "telephony", "helpdesk", "knowledge",
-  "workflow", "queue", "analytics", "location", "gateway",
-];
+// ── 1. Known DB_Backed_Service identities ────────────────────────────────────
+// Derived LIVE from ecosystem.config.js (PERF-001) — see lib/fleet-topology.mjs
+// for why this is no longer a hand-maintained literal.
+const FLEET_TOPOLOGY = loadFleetTopology();
+export const KNOWN_SERVICES = FLEET_TOPOLOGY.serviceNames;
+
+// Real per-service (dbName, envVar) pairs, keyed by PM2 short name — NOT a
+// `civitas_${svc}` naming convention. fleet-topology.mjs's module doc explains
+// why: `ai-agent`'s process name is hyphenated but its actual db user/name/
+// env-var are underscored, so the old convention-only helpers silently
+// produced a database name that would never match a real pg_stat_activity
+// row for it.
+const SERVICE_MAP = new Map(FLEET_TOPOLOGY.services.map((s) => [s.name, s]));
 
 export function dbNameFor(svc) {
-  return `civitas_${svc}`;
+  return SERVICE_MAP.get(svc)?.dbName ?? `civitas_${svc}`;
 }
 
 export function envVarFor(svc) {
-  return `DATABASE_URL_${svc.toUpperCase()}`;
+  return SERVICE_MAP.get(svc)?.envVar ?? `DATABASE_URL_${svc.toUpperCase()}`;
 }
 
 const DEFAULT_PGBOUNCER_HINT = "pgbouncer";
@@ -90,7 +96,7 @@ function isViaProxy(row, pgbouncerHint) {
  * report individually, satisfying Req 6.2's "report every compliant service".
  *
  * @param {Array<object>} rows - pg_stat_activity-shaped rows (grouped or raw)
- * @param {string[]} services - known service short-names (defaults to the 33)
+ * @param {string[]} services - known service short-names (defaults to KNOWN_SERVICES, derived live from ecosystem.config.js)
  * @param {{ pgbouncerHint?: string }} opts
  */
 export function classifyFleet(rows, services = KNOWN_SERVICES, opts = {}) {
@@ -103,7 +109,7 @@ export function classifyFleet(rows, services = KNOWN_SERVICES, opts = {}) {
 
   for (const row of rows ?? []) {
     const svc = dbToService.get(row.datname);
-    if (!svc) continue; // connection to a database outside the known 33 — ignored
+    if (!svc) continue; // connection to a database outside KNOWN_SERVICES — ignored
     const entry = byService.get(svc);
     const count = Number.isFinite(row.count) ? row.count : 1;
     entry.connections += count;

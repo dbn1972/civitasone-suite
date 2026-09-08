@@ -342,6 +342,17 @@ jobs:
       - name: Tenant router adoption guard (Req 1.7)
         run: node scripts/ci/tenant-router-guard.mjs
 
+      # PERF-001 fix-up: a live-reproduced review finding (raw session-level
+      # SET app.tenant_id in two production migrations, surviving onto the next
+      # client through PgBouncer transaction-mode pooling — see
+      # infra/pgbouncer/pgbouncer.ini for the repro). Unit tests first (fixture
+      # coverage for both the tenant-GUC and advisory-lock checks), then the
+      # guard itself against the real tree.
+      - name: Raw session GUC guard unit tests
+        run: pnpm exec vitest run tests/architecture/raw-session-guc-guard.test.ts
+      - name: Raw session GUC guard (PgBouncer transaction-pool leak, PERF-001)
+        run: node scripts/ci/raw-session-guc-guard.mjs
+
   # ─────────────────────────────────────────────
   # Job 4: Web build check
   # ─────────────────────────────────────────────

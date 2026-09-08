@@ -149,12 +149,20 @@ ingress:
     secretName: ""
 
 # Connection_Proxy (PgBouncer) — every service's DATABASE_HOST/PORT above
-# points here. Sizing mirrors docs/architecture/CONNECTION-BUDGET.md.
+# points here. Sizing mirrors docs/architecture/CONNECTION-BUDGET.md (PERF-001).
+# NOTE (PERF-012, filed alongside the PERF-001 fix): templates/pgbouncer.yaml's
+# container env currently sets DATABASE_HOST/DATABASE_PORT/DATABASE_USER/
+# DATABASE_PASSWORD, but the edoburu/pgbouncer image's entrypoint only reads
+# DB_HOST/DB_PORT/DB_USER/DB_PASSWORD (or DATABASE_URL) — none of those names
+# match, so DB_HOST is unset and the container fails its own
+# `${DB_HOST:?...}` startup check. This was not in PERF-001's scope (it's the
+# on-prem/Helm path, not the EC2 PM2 fleet PERF-001 fixes) and is NOT fixed
+# by this sizing change — see the gap report.
 pgbouncer:
   enabled: true
   poolMode: transaction
-  maxClientConn: 500
-  defaultPoolSize: 20
+  maxClientConn: 1000
+  defaultPoolSize: 2
   # Upstream Postgres this pgbouncer instance connects to. Defaults to the
   # bundled `postgresql` sub-chart's generated service name/port below via
   # release-name templating (see templates/pgbouncer.yaml) — override only
