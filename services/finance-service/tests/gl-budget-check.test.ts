@@ -325,4 +325,69 @@ describe("DOM-007 — GL posting path budget check", () => {
       );
     });
   });
+
+  describe("redelivery of an already-posted journal (fixup)", () => {
+    // Independent-review finding: the budget-check block originally ran
+    // BEFORE the pre-existing idempotency short-circuit
+    // (`if (await repo.findJournalByIdTx(tx, journal.id)) return;`) —
+    // the codebase's second line of defense against message redelivery for
+    // every deterministic-journal-id posting path (GL-spine bills/payments/
+    // challans, depreciation, asset disposal, payroll settlement). A
+    // redelivered command (same journal, already posted, but a NEW
+    // messageId — exactly what a real outbox/queue redelivery looks like,
+    // since markProcessed's dedup is messageId-based, not journal-id-based)
+    // would have `insertJournal` correctly no-op, but the budget-check block
+    // ran a second time regardless and silently double-counted
+    // utilised_minor for a journal that was only ever posted once. This
+    // reproduces exactly that scenario against a BUDGET-CONTROLLED head
+    // (unlike recon-invariants.test.ts's I14 redelivery test, whose
+    // budget-repo mock returns no budget row, making any budget check a
+    // no-op there by construction and unable to catch this class of bug).
+    it("does not increment utilised_minor a second time when the same journal is redelivered", async () => {
+      const budgetRow = {
+        id: "budget-row-redelivery", tenantId: TENANT, headId: fakeHeadUuid(EXPENSE_CODE), fy: "2025-26",
+        beMinor: 500_000n, reMinor: 500_000n, allocatedMinor: 500_000n, utilisedMinor: 100_000n,
+        currency: "INR",
+      };
+      findBudgetTxMock.mockImplementation(async (_tx: unknown, headId: string) => {
+        if (headId !== fakeHeadUuid(EXPENSE_CODE)) return null;
+        return { ...budgetRow };
+      });
+      // Mirrors the real guarded UPDATE's effect: mutate utilised_minor
+      // on the shared budgetRow so the test can assert the actual resulting
+      // balance, not just a mock call count.
+      incrementBudgetUtilisedGuardedMock.mockImplementation(
+        async (_tx: unknown, _id: string, requestedMinor: bigint) => {
+          budgetRow.utilisedMinor += requestedMinor;
+          return true;
+        },
+      );
+
+      const q = await buildQueue();
+      const payload = journalPayload({}, 150_000); // fixed journal.id, reused for both publishes
+
+      // Original post: the journal does not exist yet.
+      findJournalByIdTxMock.mockResolvedValueOnce(null);
+      await q.publish(COMMANDS.journalPost, makeMsg(payload));
+      expect(insertJournalMock).toHaveBeenCalledTimes(1);
+      expect(incrementBudgetUtilisedGuardedMock).toHaveBeenCalledTimes(1);
+      expect(budgetRow.utilisedMinor).toBe(250_000n); // 100,000 + 150,000
+
+      // Redelivery: identical journal payload (same journal.id) republished
+      // under a brand-new messageId (a fresh randomUUID() from makeMsg,
+      // exactly as a real queue redelivery would carry) — the journal now
+      // exists, so the idempotency short-circuit must fire.
+      findJournalByIdTxMock.mockResolvedValue({ id: payload.id });
+      await q.publish(COMMANDS.journalPost, makeMsg(payload));
+
+      // insertJournal correctly does not run again...
+      expect(insertJournalMock).toHaveBeenCalledTimes(1);
+      // ...and the budget check must not have run a second time either: this
+      // is the assertion that failed before the reorder fix (the guarded
+      // increment was called twice, doubling utilised_minor for a journal
+      // that was only actually posted once).
+      expect(incrementBudgetUtilisedGuardedMock).toHaveBeenCalledTimes(1);
+      expect(budgetRow.utilisedMinor).toBe(250_000n); // unchanged — NOT 400,000
+    });
+  });
 });

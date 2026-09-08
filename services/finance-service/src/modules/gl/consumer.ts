@@ -91,6 +91,43 @@ async function postJournal(
     // empty journal is noise, not corruption.
     return;
   }
+  const period = journal.postingDate.slice(0, 7);
+  const periodStatus = await getPeriodStatusTx(tx, journal.tenantId, period);
+  if (periodStatus === "hard_close") {
+    throw new Error(`PERIOD_CLOSED: cannot post to hard-closed period ${period}`);
+  }
+  if (periodStatus === "soft_close" && !(["adjustment", "closing"].includes(journal.type))) {
+    throw new Error(`PERIOD_SOFT_CLOSED: only adjustment/closing journals allowed in soft-closed period ${period}`);
+  }
+  // Gapless voucher numbering: if the caller did not supply a voucher number
+  // (or asked for AUTO), allocate a strictly-sequential one under a row lock.
+  let voucherNo = journal.voucherNo;
+  if (!voucherNo || voucherNo.trim() === "" || voucherNo.toUpperCase() === "AUTO") {
+    const fy = fyFromDate(journal.postingDate);
+    const series = (journal.type || "JV").slice(0, 8).toUpperCase();
+    const allocated = await nextVoucherNo(
+      tx as unknown as Parameters<typeof nextVoucherNo>[0],
+      journal.tenantId, fy, series,
+    );
+    voucherNo = allocated.voucherNo;
+  }
+  // Idempotency: a journal id is deterministic for GL-spine postings (keyed off
+  // the source doc). If it already exists, this is a redelivery — skip silently
+  // so bills/payments/receipts never double-post.
+  //
+  // DOM-007 fixup: the budget-check block below MUST run after this
+  // short-circuit, not before it. A redelivered command (same journal.id,
+  // already posted, but a brand-new messageId — exactly what a real
+  // outbox/queue redelivery looks like, since markProcessed's dedup is
+  // messageId-based, not journal-id-based) needs to hit this return and
+  // skip everything downstream, including the budget check. Running the
+  // budget check before this line meant a redelivery — where insertJournal
+  // itself correctly no-ops — still called incrementBudgetUtilisedGuarded /
+  // incrementBudgetUtilisedForced a SECOND time, silently double-counting
+  // utilised_minor for a journal that was only ever posted once. See
+  // tests/gl-budget-check.test.ts's "redelivery of an already-posted
+  // journal (fixup)" regression test.
+  if (await repo.findJournalByIdTx(tx, journal.id)) return;
   // DOM-007: budget check (skill 01 "every commit must call check_budget").
   // Granularity is per budget head (tenant_id, head_id, fy) — the same grain
   // finance_budgets itself is keyed at (UNIQUE(tenant_id, head_id, fy)) and
@@ -156,30 +193,6 @@ async function postJournal(
       }
     }
   }
-  const period = journal.postingDate.slice(0, 7);
-  const periodStatus = await getPeriodStatusTx(tx, journal.tenantId, period);
-  if (periodStatus === "hard_close") {
-    throw new Error(`PERIOD_CLOSED: cannot post to hard-closed period ${period}`);
-  }
-  if (periodStatus === "soft_close" && !(["adjustment", "closing"].includes(journal.type))) {
-    throw new Error(`PERIOD_SOFT_CLOSED: only adjustment/closing journals allowed in soft-closed period ${period}`);
-  }
-  // Gapless voucher numbering: if the caller did not supply a voucher number
-  // (or asked for AUTO), allocate a strictly-sequential one under a row lock.
-  let voucherNo = journal.voucherNo;
-  if (!voucherNo || voucherNo.trim() === "" || voucherNo.toUpperCase() === "AUTO") {
-    const fy = fyFromDate(journal.postingDate);
-    const series = (journal.type || "JV").slice(0, 8).toUpperCase();
-    const allocated = await nextVoucherNo(
-      tx as unknown as Parameters<typeof nextVoucherNo>[0],
-      journal.tenantId, fy, series,
-    );
-    voucherNo = allocated.voucherNo;
-  }
-  // Idempotency: a journal id is deterministic for GL-spine postings (keyed off
-  // the source doc). If it already exists, this is a redelivery — skip silently
-  // so bills/payments/receipts never double-post.
-  if (await repo.findJournalByIdTx(tx, journal.id)) return;
   await repo.insertJournal(tx, {
     id: journal.id, tenantId: journal.tenantId, voucherNo,
     type: journal.type, postingDate: journal.postingDate, lines: journal.lines,
