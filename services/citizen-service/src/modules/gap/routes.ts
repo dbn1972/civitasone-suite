@@ -1,102 +1,58 @@
-import { randomUUID } from "node:crypto";
 import type { FastifyInstance } from "fastify";
 import { resolveContext, requireRole } from "../../shared/context.js";
 
 const ROLES = ["citizen", "citizen_officer", "citizen_admin", "super_admin"];
 
-/** Stub routes for screens awaiting full implementation (contract coverage). */
+/**
+ * COMP-002: the routes that used to live here — POST/GET/PATCH
+ * /v1/citizen/requests(/:id)(/status), GET /v1/citizen/portal/metrics, and
+ * GET/PATCH /v1/citizen/profiles/:id — were fabricated-success stubs (202/200
+ * with no persistence). They are now real: requests are handled by
+ * modules/requests/routes.ts (backed by requests.citizen_requests), and the
+ * profile routes by modules/portal/routes.ts (backed by the pre-existing real
+ * portal.citizen_profiles table). See app.ts registration order.
+ *
+ * What remains here — alerts/notices/surveys — has no genuine backing store
+ * anywhere in this service or a reachable one (checked notification-service's
+ * `alerts` module: that is operational alert-rule/event tooling, not a
+ * citizen-facing public-notice board, and is a different service's database
+ * regardless). Building that store is out of scope for COMP-002, so these
+ * honestly report "not implemented" (501) instead of a fabricated empty list
+ * that would be indistinguishable from a genuinely-queried empty result.
+ * fetchJson() in the web app already treats a non-2xx as source:"error" and
+ * renders an honest empty/error state — see apps/web/src/app/_data/apiClient.ts.
+ */
 export async function citizenGapRoutes(app: FastifyInstance): Promise<void> {
-  // ─── Notification stubs ────────────────────────────────────────────────────
-
   app.get("/v1/citizen/alerts", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ROLES);
-    return reply.send({ data: [], meta: { page: 1, pageSize: 15, total: 0 } });
+    return reply.code(501).send({
+      code: "NOT_IMPLEMENTED",
+      message: "citizen alerts has no backing store yet",
+      correlationId: (req.headers["x-correlation-id"] as string) ?? req.id,
+      retryable: false,
+    });
   });
 
   app.get("/v1/citizen/notices", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ROLES);
-    return reply.send({ data: [], meta: { page: 1, pageSize: 15, total: 0 } });
-  });
-
-  app.get("/v1/citizen/portal/metrics", async (req, reply) => {
-    const ctx = resolveContext(req);
-    requireRole(ctx, ROLES);
-    return reply.send({ data: { totalServices: 0, activeRequests: 0, resolvedThisMonth: 0, avgResolutionDays: 0 } });
+    return reply.code(501).send({
+      code: "NOT_IMPLEMENTED",
+      message: "citizen notices has no backing store yet",
+      correlationId: (req.headers["x-correlation-id"] as string) ?? req.id,
+      retryable: false,
+    });
   });
 
   app.get("/v1/citizen/surveys", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ROLES);
-    return reply.send({ data: [], meta: { page: 1, pageSize: 15, total: 0 } });
-  });
-
-  // ─── Service requests ──────────────────────────────────────────────────────
-
-  app.post("/v1/citizen/requests", async (req, reply) => {
-    const ctx = resolveContext(req);
-    requireRole(ctx, ROLES);
-    return reply.code(202).send({
-      data: {
-        taskId: randomUUID(),
-        id: randomUUID(),
-        tenantId: ctx.tenantId,
-        status: "submitted",
-        message: "Request accepted",
-      },
+    return reply.code(501).send({
+      code: "NOT_IMPLEMENTED",
+      message: "citizen surveys has no backing store yet",
+      correlationId: (req.headers["x-correlation-id"] as string) ?? req.id,
+      retryable: false,
     });
-  });
-
-  app.get("/v1/citizen/requests/:id", async (req, reply) => {
-    const ctx = resolveContext(req);
-    requireRole(ctx, ROLES);
-    const params = req.params as { id: string };
-    return reply.send({
-      data: {
-        id: params.id,
-        tenantId: ctx.tenantId,
-        status: "submitted",
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      },
-    });
-  });
-
-  app.get("/v1/citizen/requests/:id/status", async (req, reply) => {
-    const ctx = resolveContext(req);
-    requireRole(ctx, ROLES);
-    const params = req.params as { id: string };
-    return reply.send({
-      data: {
-        id: params.id,
-        status: "submitted",
-        updatedAt: new Date().toISOString(),
-        history: [],
-      },
-    });
-  });
-
-  app.patch("/v1/citizen/requests/:id", async (req, reply) => {
-    const ctx = resolveContext(req);
-    requireRole(ctx, ROLES);
-    const params = req.params as { id: string };
-    return reply.send({ data: { id: params.id, status: "updated" } });
-  });
-
-  // ─── Citizen profile GET / PATCH ───────────────────────────────────────────
-
-  app.get("/v1/citizen/profiles/:id", async (req, reply) => {
-    const ctx = resolveContext(req);
-    requireRole(ctx, ROLES);
-    const params = req.params as { id: string };
-    return reply.send({ data: { id: params.id, tenantId: ctx.tenantId } });
-  });
-
-  app.patch("/v1/citizen/profiles/:id", async (req, reply) => {
-    const ctx = resolveContext(req);
-    requireRole(ctx, ROLES);
-    const params = req.params as { id: string };
-    return reply.code(202).send({ data: { taskId: randomUUID(), id: params.id } });
   });
 }

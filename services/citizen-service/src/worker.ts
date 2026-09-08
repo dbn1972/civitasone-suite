@@ -21,6 +21,7 @@ import { registerPacksConsumers }       from "./modules/packs/consumer.js";
 import { registerDiscoveryConsumers }   from "./modules/discovery/consumer.js";
 import { registerDocumentsConsumers }   from "./modules/documents/consumer.js";
 import { registerEligibilityConsumers } from "./modules/eligibility/consumer.js";
+import { registerServiceRequestConsumers } from "./modules/requests/consumer.js";
 
 const log = pino({ name: "citizen-worker" });
 
@@ -54,6 +55,7 @@ registerPacksConsumers(queue);
 registerDiscoveryConsumers(queue);
 registerDocumentsConsumers(queue);
 registerEligibilityConsumers(queue);
+registerServiceRequestConsumers(queue);
 
 await queue.start();
 const relay = startRelay(db, queue);

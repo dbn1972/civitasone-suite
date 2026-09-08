@@ -31,6 +31,7 @@ import { intakeRoutes } from "./modules/application/intake-routes.js";
 import { documentsRoutes } from "./modules/documents/routes.js";
 import { appealRoutes } from "./modules/appeal/routes.js";
 import { applicantIdentityRoutes } from "./modules/applicant-identity/routes.js";
+import { serviceRequestRoutes } from "./modules/requests/routes.js";
 
 export async function buildApp(): Promise<FastifyInstance> {
   // P0-6: fail-fast if CITIZEN_PII_KEY is absent/too short so we never boot fail-open.
@@ -87,6 +88,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(applicantIdentityRoutes);
   await app.register(documentsRoutes);
   await app.register(appealRoutes);
+  await app.register(serviceRequestRoutes);
   const { citizenGapRoutes } = await import("./modules/gap/routes.js");
   await app.register(citizenGapRoutes);
 

@@ -32,3 +32,16 @@ export const deleteProfileBody = z.object({
   reason:    safeText({ max: 1000, multiline: true }).optional(),
 });
 export type DeleteProfileBody = z.infer<typeof deleteProfileBody>;
+
+/** P0-1/P0-4: partial update of a citizen's own profile (or, for officers, any). */
+export const updateProfileBody = z.object({
+  name:            safeText({ max: 160 }).optional(),
+  email:           z.string().email().max(254).optional(),
+  mobile:          z.string().min(10).max(16).regex(/^[+0-9 ()-]+$/, "invalid mobile").optional(),
+  address:         safeText({ max: 500, multiline: true }).optional(),
+  ward:            safeText({ max: 80 }).optional(),
+}).refine(
+  (b) => b.name !== undefined || b.email !== undefined || b.mobile !== undefined || b.address !== undefined || b.ward !== undefined,
+  { message: "at least one field is required" },
+);
+export type UpdateProfileBody = z.infer<typeof updateProfileBody>;

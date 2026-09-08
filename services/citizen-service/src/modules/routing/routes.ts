@@ -18,6 +18,7 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { computeRouting } from "./domain.js";
+import * as requestsRepo from "../requests/repo.js";
 
 // ── Request schemas ───────────────────────────────────────────────
 
@@ -47,24 +48,24 @@ interface CitizenRequest {
 }
 
 /**
- * Simulate fetching request text by ID.
- * In production: SELECT text, tenant_id FROM citizen_requests WHERE id = $id
+ * COMP-002: requests.citizen_requests now exists (modules/requests) — this is
+ * a real, tenant-scoped lookup, not a simulated one.
  */
-async function fetchRequestById(_id: string, _tenantId: string): Promise<CitizenRequest | null> {
-  // Placeholder: returns null to indicate "not found" in real DB lookup.
-  // The route will handle this as a 404.
-  // Integration with actual DB is handled when citizen_requests table exists.
-  return null;
+async function fetchRequestById(id: string, tenantId: string): Promise<CitizenRequest | null> {
+  const row = await requestsRepo.findRequestById(id, tenantId);
+  if (!row) return null;
+  return { id: row.id, tenantId: row.tenantId, text: `${row.subject}\n\n${row.description}`, citizenId: row.citizenId };
 }
 
 /**
- * Simulate fetching existing complaints for clustering.
- * In production: SELECT id, text, summary FROM citizen_requests
- *   WHERE tenant_id = $tenantId AND status IN ('open', 'in_progress')
- *   ORDER BY created_at DESC LIMIT 100
+ * COMP-002: real query against requests.citizen_requests for open/in-progress
+ * requests in the tenant, used for similar-complaint clustering.
  */
-async function fetchExistingComplaints(_tenantId: string): Promise<Array<{ id: string; text: string; summary: string }>> {
-  return [];
+async function fetchExistingComplaints(tenantId: string): Promise<Array<{ id: string; text: string; summary: string }>> {
+  const rows = await requestsRepo.listRequestsByTenant(tenantId, 100, 0);
+  return rows
+    .filter((r) => r.status === "submitted" || r.status === "under_review" || r.status === "in_progress")
+    .map((r) => ({ id: r.id, text: `${r.subject}\n\n${r.description}`, summary: r.subject }));
 }
 
 /**
