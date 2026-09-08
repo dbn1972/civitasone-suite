@@ -4,7 +4,7 @@ import { GRNSummaryListSchema } from "@civitasone/schemas/web";
 import type { FastifyInstance } from "fastify";
 import { ZodError } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { createGrnBody, idParam, rejectGrnBody, amendGrnBody } from "./validators.js";
+import { createGrnBody, idParam, acceptGrnBody, rejectGrnBody, amendGrnBody } from "./validators.js";
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
 
@@ -37,22 +37,26 @@ export async function grnRoutes(app: FastifyInstance): Promise<void> {
   });
 
 
+  // DOM-002 — the real inspection "pass" step. inspectorId is NOT part of
+  // the request body: commands.acceptGrn derives it from ctx.actorId (this
+  // call's own authenticated identity) and rejects with 403 SOD_VIOLATION if
+  // it matches the GRN's creator, and with 409 GRN_NOT_INSPECTABLE if the
+  // GRN isn't awaiting inspection. Requires a distinct, independently
+  // authenticated request from whoever created the GRN.
   app.patch("/v1/procurement/grns/:id/accept", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, WAREHOUSE_ROLES);
     const { id } = idParam.parse(req.params);
-    const grn = await queries.getGrn(id, ctx.tenantId);
-    if (!grn) throw new HttpError(404, "NOT_FOUND", "GRN not found");
-    return sendAccepted(reply, acceptedResponseSchema, await commands.acceptGrn(ctx, id));
+    const body = acceptGrnBody.parse(req.body ?? {});
+    return sendAccepted(reply, acceptedResponseSchema, await commands.acceptGrn(ctx, id, body));
   });
 
+  // DOM-002 — the real inspection "fail" step. Same identity rule as accept.
   app.patch("/v1/procurement/grns/:id/reject", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, WAREHOUSE_ROLES);
     const { id } = idParam.parse(req.params);
     const { reason } = rejectGrnBody.parse(req.body);
-    const grn = await queries.getGrn(id, ctx.tenantId);
-    if (!grn) throw new HttpError(404, "NOT_FOUND", "GRN not found");
     return sendAccepted(reply, acceptedResponseSchema, await commands.rejectGrn(ctx, id, reason));
   });
 

@@ -353,7 +353,9 @@ describe("Seniority consumers — coverage", () => {
       messageId: MSG_SEN_GEN, type: COMMANDS.seniorityGenerate,
       tenantId: TENANT, actorId: ACTOR, correlationId: "corr-sen-1", schemaVersion: "1.0",
       payload: {
-        id: "sen-gen-001", tenantId: TENANT,
+        // DOM-004: this is now a real persisted uuid primary key (the
+        // consumer used to be a no-op stub, so any string worked before).
+        id: "cc000009-dddd-4000-8000-000000000077", tenantId: TENANT,
         asOf: "2025-01-01", requestedBy: ACTOR,
       },
     });
@@ -375,8 +377,13 @@ describe("Seniority consumers — coverage", () => {
       messageId: MSG_SEN_APR, type: COMMANDS.seniorityApprove,
       tenantId: TENANT, actorId: ACTOR, correlationId: "corr-sen-2", schemaVersion: "1.0",
       payload: {
-        id: "sen-apr-001", tenantId: TENANT,
-        seniorityListId: "sen-gen-001", approvedBy: ACTOR,
+        // DOM-004: seniorityListId now targets a real uuid column via a
+        // tenant+status-guarded UPDATE. No list with this id exists in
+        // this test (it doesn't seed one), so the update matches zero
+        // rows and the consumer no-ops without emitting an audit event —
+        // this test only asserts idempotency-ledger coverage, not that.
+        id: "cc00000a-dddd-4000-8000-000000000077", tenantId: TENANT,
+        seniorityListId: "cc000009-dddd-4000-8000-000000000077", approvedBy: ACTOR,
       },
     });
 

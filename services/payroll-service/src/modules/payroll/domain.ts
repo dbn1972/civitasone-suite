@@ -189,8 +189,14 @@ export function computeSlip(input: SlipInput): SlipResult {
   // Evaluate remaining structure components (skip BASIC/DA/HRA — handled above).
   for (const c of rawComponents) {
     if (["BASIC", "DA", "HRA"].includes(c.code)) continue;
+    // pctOfBasic takes precedence over fixedMinor when configured and > 0
+    // (REL-009: was previously divided by 100n only, inflating every
+    // percentage-based component 100x). Math.round(pctOfBasic * 100) preserves
+    // 2 decimal places of the percentage as an integer, so the divisor must be
+    // 10_000n: 100 to undo that pre-multiplication, and 100 to convert percent
+    // to a fraction. E.g. pctOfBasic=12.5 -> round(1250) -> basic*1250/10_000.
     const amt = c.pctOfBasic != null && c.pctOfBasic > 0
-      ? roundRupee((basicMinor * BigInt(Math.round(c.pctOfBasic * 100))) / 100n)
+      ? roundRupee((basicMinor * BigInt(Math.round(c.pctOfBasic * 100))) / 10_000n)
       : roundRupee(c.fixedMinor ?? 0n);
     if (amt === 0n) continue;
     (c.type === "earning" ? earnings : deductions).push({ code: c.code, name: c.name, type: c.type, amountMinor: amt });

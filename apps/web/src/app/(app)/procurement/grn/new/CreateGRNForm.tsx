@@ -21,7 +21,17 @@ function emptyLine(): GRNLine {
   return { poItemRef: "", itemCode: "", orderedQty: 0, receivedQty: 0, acceptedQty: 0 };
 }
 
-export function CreateGRNForm({ inspectorId }: { inspectorId: string }) {
+// DOM-002 — this form now only records RECEIPT: what came in against a PO.
+// It no longer collects or submits an inspection verdict. Previously it sent
+// an inline `inspection: { inspectorId, result, remarks }` object on the
+// same POST as create, with `inspectorId` fixed to the current (receiving)
+// user's own session — so "inspection" was never actually performed by a
+// second person, just self-declared in the same call. Inspection (pass/fail
+// + remarks) is now a separate step: a distinct, independently
+// authenticated user opens this GRN afterwards and uses the "Accept" /
+// "Reject" actions on the detail page (see InspectGrnForm.tsx), which call
+// PATCH /grns/:id/accept|reject under their OWN session.
+export function CreateGRNForm() {
   const router = useRouter();
   const [vendors, setVendors] = useState<VendorOption[]>([]);
   const [vendorId, setVendorId] = useState("");
@@ -31,8 +41,6 @@ export function CreateGRNForm({ inspectorId }: { inspectorId: string }) {
   const [poItems, setPoItems] = useState<POItem[]>([]);
   const [receivedDate, setReceivedDate] = useState(new Date().toISOString().slice(0, 10));
   const [lines, setLines] = useState<GRNLine[]>([emptyLine()]);
-  const [inspectionResult, setInspectionResult] = useState<"pass" | "fail" | "pending">("pass");
-  const [remarks, setRemarks] = useState("");
   const [status, setStatus] = useState<"idle" | "submitting" | "accepted" | "error">("idle");
   const [message, setMessage] = useState("");
 
@@ -105,11 +113,6 @@ export function CreateGRNForm({ inspectorId }: { inspectorId: string }) {
       setMessage("Vendor, purchase order and at least one line item are required.");
       return;
     }
-    if (!inspectorId) {
-      setStatus("error");
-      setMessage("Could not determine the inspector from your session. Please sign in again.");
-      return;
-    }
     setStatus("submitting");
     setMessage("");
     const grnNo = `GRN/${new Date().getFullYear()}/${String(Math.floor(Math.random() * 900) + 100)}`;
@@ -126,11 +129,6 @@ export function CreateGRNForm({ inspectorId }: { inspectorId: string }) {
         acceptedQty: Math.max(0, l.acceptedQty),
         unit: "nos",
       })),
-      inspection: {
-        inspectorId,
-        result: inspectionResult,
-        remarks: remarks.trim() || undefined,
-      },
     };
     try {
       const res = await fetch("/api/proxy/v1/procurement/grns", {
@@ -148,7 +146,7 @@ export function CreateGRNForm({ inspectorId }: { inspectorId: string }) {
       let parsed: { id?: string } = {};
       try { parsed = JSON.parse(text) as { id?: string }; } catch { /* ignore */ }
       setStatus("accepted");
-      setMessage("GRN recorded — three-way match computed on acceptance.");
+      setMessage("GRN recorded as received — awaiting inspection by a separate officer before the three-way match is computed.");
       router.push(parsed.id ? `/procurement/grn/${parsed.id}` : "/procurement/grn");
       router.refresh();
     } catch (err) {
@@ -229,21 +227,6 @@ export function CreateGRNForm({ inspectorId }: { inspectorId: string }) {
         </div>
         <button type="button" className="btn ghost sm" onClick={() => setLines((p) => [...p, emptyLine()])} style={{ marginTop: 10, minHeight: 40 }}>+ Add line item</button>
       </fieldset>
-
-      <div className="fields" style={{ marginTop: 12 }}>
-        <label className="field" style={{ background: "#fff", padding: "13px 16px" }}>
-          <span className="label">Inspection result</span>
-          <select value={inspectionResult} onChange={(e) => setInspectionResult(e.target.value as typeof inspectionResult)} style={{ minHeight: 44 }}>
-            <option value="pass">Pass</option>
-            <option value="fail">Fail</option>
-            <option value="pending">Pending</option>
-          </select>
-        </label>
-        <label className="field" style={{ background: "#fff", padding: "13px 16px" }}>
-          <span className="label">Inspection remarks</span>
-          <input value={remarks} onChange={(e) => setRemarks(e.target.value)} style={{ minHeight: 44 }} />
-        </label>
-      </div>
 
       <div role="status" aria-live="polite">
         {message ? (

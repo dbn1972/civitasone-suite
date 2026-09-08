@@ -64,3 +64,71 @@ export function assertGrnAmendable(grn: { status: string }): void {
     throw new DomainError("GRN_NOT_AMENDABLE", `GRN in status '${grn.status}' cannot be amended`);
   }
 }
+
+/**
+ * DOM-002 — a GRN line must reference a real PO line. `orderedQty` can only
+ * be re-derived server-side (never trusted from the client) when every
+ * `poItemRef` on the payload actually resolves against the PO's items; an
+ * unresolved ref is rejected outright rather than silently falling back to
+ * "unbounded" (orderedQty <= 0 disables the over-accept cap in
+ * assertQtyValid/computeThreeWayMatch — the same shape as the :156 bypass).
+ */
+export function assertPoItemsResolved(refs: string[], resolved: ReadonlySet<string>): void {
+  for (const ref of refs) {
+    if (!resolved.has(ref)) {
+      throw new DomainError("PO_ITEM_NOT_FOUND", `po item '${ref}' not found on the referenced purchase order`);
+    }
+  }
+}
+
+/**
+ * DOM-002 — amend must re-derive orderedQty from the GRN line actually
+ * persisted at create time (itself now PO-derived), never from the client.
+ * A lineId that doesn't belong to this GRN is rejected rather than silently
+ * skipped, matching assertPoItemsResolved's stance on unresolved refs.
+ */
+export function assertGrnLinesResolved(lineIds: string[], known: ReadonlySet<string>): void {
+  for (const id of lineIds) {
+    if (!known.has(id)) {
+      throw new DomainError("GRN_ITEM_NOT_FOUND", `grn line '${id}' does not belong to this GRN`);
+    }
+  }
+}
+
+/**
+ * DOM-002 — a GRN can only be inspected (accepted/rejected) while it is
+ * genuinely awaiting inspection. grnCreate persists new GRNs directly into
+ * `under_inspection` (see grn/consumer.ts) — this is the real, reachable
+ * pending state a GRN sits in between being received and being inspected,
+ * not a dead status only reachable by direct SQL insert in tests. Mirrors
+ * assertGrnAmendable's shape/DoD.
+ */
+export function canInspectGrn(grn: { status: string }): boolean {
+  return grn.status === "draft" || grn.status === "under_inspection";
+}
+
+/** Defense-in-depth: the consumer re-checks inspectability under the DB
+ * lock, since the route-level check and the consumer write are not atomic. */
+export function assertGrnInspectable(grn: { status: string }): void {
+  if (!canInspectGrn(grn)) {
+    throw new DomainError("GRN_NOT_INSPECTABLE", `GRN in status '${grn.status}' cannot be inspected`);
+  }
+}
+
+/**
+ * DOM-002 — separation of duties: the actor who received the goods (the GRN
+ * creator, `receivedBy` — persisted as `grn.createdBy` from the CREATE
+ * call's own `msg.actorId`) must not be the same actor who inspects/accepts
+ * or rejects them (`inspectorId` — the ACCEPT/REJECT call's own
+ * `ctx.actorId`/`msg.actorId`). Both identities come from each call's own
+ * independent authentication — never from a client-supplied field in either
+ * request body — so this is a genuine two-person check, not a same-request
+ * string comparison. Mirrors po/amendment-domain.ts's
+ * assertDistinctMakerChecker (same SOD_VIOLATION code), the established
+ * maker-checker convention elsewhere in this service.
+ */
+export function assertDistinctReceiverInspector(receivedBy: string, inspectorId: string): void {
+  if (receivedBy && inspectorId && receivedBy === inspectorId) {
+    throw new DomainError("SOD_VIOLATION", "receiver and inspector must be different actors (self-inspection rejected)");
+  }
+}

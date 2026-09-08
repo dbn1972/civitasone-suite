@@ -6,6 +6,21 @@ import { signToken } from "@civitasone/auth";
 import { buildApp } from "../src/app.js";
 import { sqlClient } from "../src/shared/db.js";
 
+// This suite exercises MIME/scan/size-cap branching, not real S3 wiring — that
+// genuine-retrievability round trip lives in ch19-attachments-storage.localstack.test.ts
+// (gated on AWS_ENDPOINT_URL, mirrors services/queue-service/tests/sqs.localstack.test.ts).
+// Mock @civitasone/storage the same way every other service's non-infra test suite
+// does (see e.g. telephony-service/tests/ivr-recordings.test.ts) so CI, which has
+// no LocalStack in the "test" job, does not need real S3 to run this file. The mock
+// echoes the real key back into the URL so assertions like .toContain("attachments/")
+// stay meaningful.
+vi.mock("@civitasone/storage", () => ({
+  putObject: vi.fn().mockResolvedValue(undefined),
+  presignedGetUrl: vi.fn(async ({ key }: { key: string }) =>
+    `https://s3.mock.local/civitasone-test/${key}?X-Amz-Expires=86400`),
+  getObject: vi.fn().mockResolvedValue(Buffer.from("mock")),
+}));
+
 const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
 const TENANT = "aaaaaaaa-1111-4000-8000-000000190001";
 const ACTOR = "cccccccc-3333-4000-8000-000000190001";
