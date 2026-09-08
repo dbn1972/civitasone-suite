@@ -118,3 +118,33 @@ export async function deleteDependency(dbOrTx: DbLike, id: string, projectId: st
     .returning();
   return result.length > 0;
 }
+
+export interface DepEdgeWithLag {
+  fromTaskId: string;
+  toTaskId: string;
+  depType: string;
+  lagMs: bigint;
+}
+
+/**
+ * Fetch all dependencies for a project including dep type and lag/lead
+ * (used by delay-forecast to run real critical-path analysis over a
+ * project's actual task graph — DOM-001).
+ * Self-contained transaction (unlike getProjectDeps) so callers outside
+ * this module don't need to manage the RLS GUC transaction themselves.
+ */
+export async function getProjectDepsWithLag(projectId: string, tenantId: string): Promise<DepEdgeWithLag[]> {
+  // Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
+  // before this read — a bare db.select() runs with no RLS GUC set.
+  return db.transaction((tx) =>
+    tx
+      .select({
+        fromTaskId: taskDependencies.fromTaskId,
+        toTaskId: taskDependencies.toTaskId,
+        depType: taskDependencies.depType,
+        lagMs: taskDependencies.lagMs,
+      })
+      .from(taskDependencies)
+      .where(and(eq(taskDependencies.projectId, projectId), eq(taskDependencies.tenantId, tenantId))),
+  );
+}

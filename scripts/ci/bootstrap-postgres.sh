@@ -126,6 +126,13 @@ run_bootstrap "$ROOT/infra/db/bootstrap/bootstrap_shop.sql"
 # scripts/dev/migrate-all.mjs already lists it. Same class of gap as
 # shop-service above.
 run_bootstrap "$ROOT/infra/db/bootstrap/bootstrap_recommendation.sql"
+# document-service (COMP-003): full Fastify app + 4 modules (files/folders/
+# workflow/sharing) already existed and was already routed in the gateway
+# registry (/api/v1/documents AND /api/v1/eoffice — see REL-007) and listed
+# in ecosystem.config.js, but no bootstrap file ever created document_svc/
+# civitas_document, so every request that reached it failed to connect.
+# Same class of gap as recommendation-service above.
+run_bootstrap "$ROOT/infra/db/bootstrap/bootstrap_document.sql"
 # sewerage-service had NO bootstrap entry at all (no role, no database) and
 # also had no migrations directory until this pass added one -- see
 # services/sewerage-service/migrations/0001_initial.sql and the SERVICE_DBS
@@ -244,6 +251,11 @@ declare -A SERVICE_DBS=(
   [ai-agent-service]="ai_agent_svc:civitas_ai_agent"
   # recommendation-service: role/db created by bootstrap_recommendation.sql
   # above. Migrations live at services/recommendation-service/migrations/.
+  # document-service (COMP-003): role/db created by bootstrap_document.sql
+  # above. Migrations live at services/document-service/migrations/. Routed
+  # in the gateway as both /api/v1/documents and /api/v1/eoffice (REL-007);
+  # this entry is what makes that route stop 502ing.
+  [document-service]="document_svc:civitas_document"
   # Municipal batch 4 (2026-09-04 CI-wiring pass): 12 municipal services had
   # real migrations but were never added to this map, so their migrations
   # never ran in CI even where a database already existed for them (see

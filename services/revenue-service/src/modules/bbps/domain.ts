@@ -6,6 +6,23 @@
  * The adapter is env-gated: BBPS_ENABLED=true enables the live path.
  * Without it, the stub path returns structured errors.
  *
+ * SEC-001: an earlier version of this fix added a `verifyBbpsCallback`
+ * HMAC-over-raw-body check here (modeled on billing-service's Razorpay
+ * *webhook* verification) and required it on POST /v1/revenue/bbps/pay-bill
+ * alongside a role check. That was wrong: pay-bill is called by
+ * `PayBillForm.tsx`, a staff browser form that legitimately has no access to
+ * a webhook signing secret — requiring both broke every real call. It has
+ * been removed from this route; see routes.ts for the current reasoning.
+ * A REAL BBPS gateway callback, when one exists, should be a separate
+ * PUBLIC/unauthenticated webhook route signed over the genuine raw request
+ * body — follow billing-service's `POST /v1/billing/webhooks/razorpay` +
+ * `verifyWebhookSignature` pattern for that, not this file. (Note also that
+ * `verifyWebhookSignature`'s own "raw body" is actually
+ * `JSON.stringify(req.body)` computed *after* Fastify's JSON parser already
+ * consumed the original bytes — not a genuine raw-body hash. A real BBPS
+ * webhook implementation should capture the true raw body via
+ * `preParsing`/`rawBody` rather than copying that pattern verbatim.)
+ *
  * _Requirements: SVC-134_
  */
 
