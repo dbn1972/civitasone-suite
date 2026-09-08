@@ -303,8 +303,32 @@ function parseLoaders() {
 }
 
 function normalizePath(path) {
-  // Replace template literals ${...} with :param placeholder
-  return path.replace(/\$\{[^}]+\}/g, ':id').replace(/[?].*$/, '');
+  // By the time this runs, every "${...}" interpolation in the source has
+  // already been collapsed (upstream, in parseLoaders) to the literal
+  // placeholder text ":param" (or ":id" for direct calls). Two distinct
+  // source patterns produce that placeholder, and they must be told apart:
+  //
+  //   1. A real path-segment parameter, always preceded by "/" in the
+  //      template, e.g. "/bills/${id}" -> "/bills/:param". This is a genuine
+  //      wildcard path segment and must be kept so route matching still
+  //      treats it as one.
+  //   2. A data-dependent tail fused directly onto the previous path segment
+  //      with no separator, e.g. "/finance/statements${qs}" ->
+  //      "/finance/statements:param", where "qs" builds its own leading "?"
+  //      internally (const qs = fy ? "?fy=${fy}" : ""). Nothing about the
+  //      path changes here -- the whole optional query string lives inside
+  //      the variable -- so this is not a path segment at all and must be
+  //      dropped, not treated as an extra wildcard segment.
+  //
+  // The distinguishing signal is the character immediately before the
+  // placeholder: "/" (or the template's own literal "?", handled by the
+  // trailing strip below) means a real segment; anything else means a fused
+  // non-path tail.
+  let normalized = path.replace(/([^/?]):(?:param|id)\b/g, '$1');
+  // A literal query string still present in the template (e.g. "?:param"
+  // from "?${qs}", or a hardcoded "?active=true") -- strip it and anything
+  // after.
+  return normalized.replace(/[?].*$/, '');
 }
 
 // ── Page.tsx parser ───────────────────────────────────────────────────────────
