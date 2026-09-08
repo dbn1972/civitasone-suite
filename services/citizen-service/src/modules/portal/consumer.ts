@@ -28,6 +28,19 @@ export function registerPortalConsumers(rawQueue: Queue): void {
     });
   });
 
+  queue.subscribe(COMMANDS.profileUpdate, async (msg) => {
+    const p = msg.payload as {
+      id: string; tenantId: string; name?: string; email?: string; mobile?: string; address?: string; ward?: string;
+    };
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+      const { id, tenantId, ...patch } = p;
+      const affected = await repo.updateProfile(tx, id, tenantId, { ...patch, updatedBy: msg.actorId });
+      if (affected === 0) return;
+      await audit(tx, msg, "update", "citizen_profile", id);
+    });
+  });
+
   /** DPDP §12: anonymise PII on erasure request — preserves audit trail. */
   queue.subscribe(COMMANDS.profileDelete, async (msg) => {
     const p = msg.payload as { requestId: string; tenantId: string; citizenId: string; reason: string };

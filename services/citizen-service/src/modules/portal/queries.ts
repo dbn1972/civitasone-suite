@@ -1,6 +1,6 @@
 import { cache } from "../../shared/infra.js";
 import * as repo from "./repo.js";
-import type { ServiceRow } from "./schema.js";
+import type { ServiceRow, ProfileRow } from "./schema.js";
 
 export async function getService(tenantId: string, id: string): Promise<ServiceRow | null> {
   return cache.getOrLoad(
@@ -15,4 +15,8 @@ export async function listServices(tenantId: string): Promise<ServiceRow[]> {
     () => repo.listServices(tenantId),
   );
   return rows ?? [];
+}
+
+export async function getProfile(tenantId: string, id: string): Promise<ProfileRow | null> {
+  return repo.findProfileById(id, tenantId);
 }
