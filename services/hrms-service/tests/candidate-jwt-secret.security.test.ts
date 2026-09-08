@@ -11,17 +11,29 @@
  * via candidate-public-portal-routes.ts. See
  * docs/ENTERPRISE-GAP-REPORT-2026-09-07.md SEC-003.
  *
- * Two things are under test:
- *   1. Fail-closed startup: the module must refuse to load (throw) when
- *      NODE_ENV=production and CANDIDATE_JWT_SECRET is not set, exactly
- *      like resolveQrSecret() in modules/id-cards/routes.ts.
- *   2. Forged-token rejection: a token signed with the OLD hardcoded
+ * FIXUP (this file): the first cut of this fix only checked
+ * `NODE_ENV === "production"` (a deny-list) -- so any value other than the
+ * literal string "production" (unset, "staging", "uat", "qa", ...) still
+ * silently fell back to the same source-visible literal, reproducing the
+ * exact original vulnerability outside the one hardened path. The fix now
+ * uses an ALLOW-LIST: only NODE_ENV === "development" or "test" get the
+ * convenience fallback (and the fallback literal itself is rotated) --
+ * everything else, including no NODE_ENV at all, must have a real secret
+ * configured or the module refuses to load.
+ *
+ * Four things are under test:
+ *   1. Fail-closed startup in production: throws when NODE_ENV=production
+ *      and CANDIDATE_JWT_SECRET is not set.
+ *   2. Fail-closed startup OUTSIDE production too: throws for staging/UAT/QA
+ *      /unset-NODE_ENV -- the exact residual gap this file exists to close.
+ *      Only "development"/"test" are exempt, and only those two.
+ *   3. Forged-token rejection: a token signed with the OLD hardcoded
  *      fallback string must not verify once a real secret is configured.
- *   3. Server-side tenant binding: the token's tenantId claim must come
+ *   4. Server-side tenant binding: the token's tenantId claim must come
  *      from the OTP challenge row the server itself locked and verified,
  *      not be echoed back from client-supplied request input.
  */
-import { describe, it, expect, beforeEach, afterEach, afterAll, vi } from "vitest";
+import { describe, it, expect, afterEach, vi } from "vitest";
 import { createHmac } from "node:crypto";
 
 // candidate-public-auth-routes.ts imports `queue` from shared/infra.ts at
@@ -36,7 +48,9 @@ vi.mock("../src/shared/infra.js", () => ({
 }));
 
 // The exact literal that shipped source-visible in
-// candidate-public-auth-routes.ts before this fix.
+// candidate-public-auth-routes.ts before this fix (and remained the
+// module's own internal fallback -- unrotated -- through the first SEC-003
+// fixup, even though ecosystem.config.js's copy was rotated).
 const OLD_HARDCODED_FALLBACK = "dev-cand-secret-not-for-production";
 const REAL_PROD_SECRET = "sec-003-a-real-rotated-production-secret-value-not-source-visible";
 
@@ -59,14 +73,14 @@ afterEach(() => {
   vi.resetModules();
 });
 
-describe("SEC-003 — CANDIDATE_JWT_SECRET fails closed in production", () => {
+describe("SEC-003 — CANDIDATE_JWT_SECRET fails closed by ALLOW-LIST", () => {
   it("refuses to start (throws at import) in production when CANDIDATE_JWT_SECRET is not set", async () => {
     vi.resetModules();
     process.env.NODE_ENV = "production";
     delete process.env.CANDIDATE_JWT_SECRET;
     await expect(
       import("../src/modules/recruitment/candidate-public-auth-routes.js"),
-    ).rejects.toThrow(/CANDIDATE_JWT_SECRET is required in production/);
+    ).rejects.toThrow(/CANDIDATE_JWT_SECRET is required/);
   });
 
   it("starts fine in production once CANDIDATE_JWT_SECRET is set", async () => {
@@ -77,13 +91,34 @@ describe("SEC-003 — CANDIDATE_JWT_SECRET fails closed in production", () => {
     expect(typeof mod.signCandToken).toBe("function");
   });
 
-  it("does not throw outside production even with no CANDIDATE_JWT_SECRET set (dev/test/CI convenience)", async () => {
-    vi.resetModules();
-    process.env.NODE_ENV = "test";
-    delete process.env.CANDIDATE_JWT_SECRET;
-    const mod = await import("../src/modules/recruitment/candidate-public-auth-routes.js");
-    expect(typeof mod.signCandToken).toBe("function");
-  });
+  // REGRESSION for the reviewer-found residual gap: previously only
+  // NODE_ENV === "production" was denied; every other value (staging, UAT,
+  // QA, unset) silently fell back to the hardcoded literal. Each of these
+  // must now refuse to boot without a real secret.
+  it.each(["staging", "uat", "qa", "preprod", "ci", undefined])(
+    "REGRESSION: refuses to start with NODE_ENV=%s and no CANDIDATE_JWT_SECRET set (previously silently accepted the hardcoded fallback)",
+    async (nodeEnv) => {
+      vi.resetModules();
+      if (nodeEnv === undefined) delete process.env.NODE_ENV; else process.env.NODE_ENV = nodeEnv;
+      delete process.env.CANDIDATE_JWT_SECRET;
+      await expect(
+        import("../src/modules/recruitment/candidate-public-auth-routes.js"),
+      ).rejects.toThrow(/CANDIDATE_JWT_SECRET is required/);
+    },
+  );
+
+  // The ONLY two environments allowed the convenience fallback -- explicit
+  // opt-in, not "anything that isn't literally production".
+  it.each(["development", "test"])(
+    "does NOT throw with NODE_ENV=%s and no CANDIDATE_JWT_SECRET set (declared dev/test convenience, intentionally preserved)",
+    async (nodeEnv) => {
+      vi.resetModules();
+      process.env.NODE_ENV = nodeEnv;
+      delete process.env.CANDIDATE_JWT_SECRET;
+      const mod = await import("../src/modules/recruitment/candidate-public-auth-routes.js");
+      expect(typeof mod.signCandToken).toBe("function");
+    },
+  );
 });
 
 describe("SEC-003 — a token forged with the old hardcoded fallback secret is rejected", () => {
@@ -114,5 +149,20 @@ describe("SEC-003 — a token forged with the old hardcoded fallback secret is r
     // verify path.
     const genuine = signCandToken(claims);
     expect(verifyCandToken(genuine)).toEqual(claims);
+  });
+
+  it("REGRESSION (residual gap): a token forged with the old literal is rejected even in a staging-like deploy with a real secret configured", async () => {
+    vi.resetModules();
+    process.env.NODE_ENV = "staging";
+    process.env.CANDIDATE_JWT_SECRET = REAL_PROD_SECRET;
+    const { verifyCandToken } = await import("../src/modules/recruitment/candidate-public-auth-routes.js");
+    const exp = Math.floor(Date.now() / 1000) + 7 * 24 * 60 * 60;
+    const forged = signWithSecret(OLD_HARDCODED_FALLBACK, {
+      candidateId: "attacker-controlled-id",
+      tenantId: "attacker-controlled-tenant",
+      email: "attacker@evil.example",
+      exp,
+    });
+    expect(verifyCandToken(forged)).toBeNull();
   });
 });
