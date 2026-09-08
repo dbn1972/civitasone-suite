@@ -100,12 +100,35 @@ jobs:
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with: { node-version: '${{ env.NODE_VERSION }}', cache: 'pnpm' }
-      - name: Install Postgres + AWS CLI (dry-run LocalStack verification)
+      - name: Install Postgres client
         run: |
           sudo apt-get update
-          sudo apt-get install -y postgresql-client awscli
-      - run: pnpm install --frozen-lockfile
+          sudo apt-get install -y postgresql-client
+      # The apt `awscli` package was dropped on ubuntu-24.04 runners
+      # ("E: Package 'awscli' has no installation candidate", exit 100) — install
+      # AWS CLI v2 via the official zip installer instead, which works on any
+      # Ubuntu version regardless of distro package-repo churn.
+      - name: Install AWS CLI v2 (official installer)
+        run: |
+          curl -fsSL "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o /tmp/awscliv2.zip
+          unzip -q /tmp/awscliv2.zip -d /tmp
+          sudo /tmp/aws/install --update
+          rm -rf /tmp/awscliv2.zip /tmp/aws
+          aws --version
+      # `if: always()` on install + build below (mirrors nothing else in ci.yml, because
+      # no other workflow pages someone on failure): the drill's whole point is that
+      # scripts/ops/publish-drill-report.mjs and notify-alert-channel.mjs (both `if: always()`
+      # / `if: failure()` further down) import packages/observability/dist/redaction.js etc.
+      # If an earlier step (Postgres/AWS CLI install, Bootstrap Postgres, Backup, Restore)
+      # fails and these two steps are skipped as a result, publish/notify crash with
+      # ERR_MODULE_NOT_FOUND instead of persisting the report and paging on-call — exactly
+      # the failure mode that let this drill fail 5/5 weeks silently (REL-005). Running them
+      # unconditionally guarantees packages/*/dist exists by the time the alert path runs.
+      - name: pnpm install (always) — alert path below needs this even when an earlier step failed
+        if: always()
+        run: pnpm install --frozen-lockfile
       - name: Build packages (observability/storage/queue, used by drill-report scripts)
+        if: always()
         run: pnpm turbo build --filter='./packages/*'
       - name: Bootstrap Postgres (per-service DBs + migrations)
         run: bash scripts/ci/bootstrap-postgres.sh
