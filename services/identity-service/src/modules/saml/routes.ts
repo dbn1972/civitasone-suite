@@ -5,7 +5,7 @@
  * Integrates with Keycloak as the underlying IdP, exposing SAML endpoints
  * for government SSO providers (MeriPehchaan, eSign, DigiLocker).
  *
- * Env vars:
+ * Env vars (fallback only — see DOM-005 note on PUT/GET below):
  *   SAML_ENTITY_ID       — SP entity ID (default: civitasone)
  *   SAML_ACS_URL         — Assertion Consumer Service URL
  *   SAML_IDP_METADATA    — IdP metadata XML URL or inline XML
@@ -14,7 +14,8 @@
  */
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
+import { resolveContext, requireRole } from "../../shared/context.js";
+import * as repo from "./repo.js";
 
 const ADMIN_ROLES = ["identity_admin", "super_admin"];
 
@@ -49,25 +50,56 @@ export async function samlRoutes(app: FastifyInstance): Promise<void> {
     return reply.code(501).send({ code: "NOT_IMPLEMENTED", message: "SAML ACS handler pending full implementation" });
   });
 
-  /** PUT /v1/identity/saml/config — configure SAML SP settings (admin) */
+  /**
+   * PUT /v1/identity/saml/config — configure SAML SP settings (admin)
+   *
+   * DOM-005 fix: this used to return 202 "accepted" without writing the
+   * submitted config anywhere — every "save" was silently discarded. Now
+   * persists a real per-tenant row in saml.tenant_config (RLS-scoped,
+   * migration 0021) and returns 200 with what was actually saved.
+   */
   app.put("/v1/identity/saml/config", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ADMIN_ROLES);
-    const _body = samlConfigBody.parse(req.body);
-    // TODO: persist to tenant_saml_config table, validate IdP metadata
-    return reply.code(202).send({ status: "accepted", message: "SAML configuration saved" });
+    const body = samlConfigBody.parse(req.body);
+    const saved = await repo.upsert(ctx.tenantId, ctx.actorId, body);
+    return reply.code(200).send({
+      entityId: saved.entityId,
+      acsUrl: saved.acsUrl,
+      idpMetadataUrl: saved.idpMetadataUrl ?? undefined,
+      idpMetadataXml: saved.idpMetadataXml ?? undefined,
+      signRequests: saved.signRequests,
+      nameIdFormat: saved.nameIdFormat,
+      updatedAt: saved.updatedAt.toISOString(),
+      version: saved.version,
+    });
   });
 
-  /** GET /v1/identity/saml/config — get current SAML config (admin) */
+  /**
+   * GET /v1/identity/saml/config — get current SAML config (admin)
+   *
+   * DOM-005 fix: this used to echo process.env vars back as if they were the
+   * tenant's stored config (they aren't tenant-scoped and are never written
+   * by PUT). Now reads the real per-tenant row; honestly reports
+   * `configured: false` — not env-var fallbacks — when none has been saved.
+   */
   app.get("/v1/identity/saml/config", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ADMIN_ROLES);
-    // TODO: load from DB
-    return reply.send({
-      entityId: process.env.SAML_ENTITY_ID ?? "civitasone",
-      acsUrl: process.env.SAML_ACS_URL ?? "",
-      signRequests: true,
-      nameIdFormat: "email",
+    const row = await repo.findByTenant(ctx.tenantId);
+    if (!row) {
+      return reply.code(200).send({ configured: false });
+    }
+    return reply.code(200).send({
+      configured: true,
+      entityId: row.entityId,
+      acsUrl: row.acsUrl,
+      idpMetadataUrl: row.idpMetadataUrl ?? undefined,
+      idpMetadataXml: row.idpMetadataXml ?? undefined,
+      signRequests: row.signRequests,
+      nameIdFormat: row.nameIdFormat,
+      updatedAt: row.updatedAt.toISOString(),
+      version: row.version,
     });
   });
 }

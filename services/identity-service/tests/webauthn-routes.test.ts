@@ -6,6 +6,11 @@
  *         /v1/identity/webauthn/credentials, /v1/identity/webauthn/credentials/:id
  *
  * Auth boundary, validation, and happy paths.
+ *
+ * Ownership-enforced, actually-persisting delete is covered in more depth
+ * (seeded rows, cross-user attempts, real row removal) in
+ * tests/webauthn-credentials.route.test.ts — this file keeps the
+ * shape/status-code-only cases.
  */
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { signToken } from "@civitasone/auth";
@@ -214,13 +219,22 @@ describe("WebAuthn — credentials management", () => {
     expect(body.total).toBeDefined();
   });
 
-  it("DELETE /v1/identity/webauthn/credentials/:id → 204", async () => {
+  // DOM-005 fix: this route used to return 204 unconditionally — no
+  // ownership check, no actual deletion, for ANY id (real or not). This test
+  // used to assert that fake 204-for-anything as intended; it now asserts
+  // the corrected, honest behavior: deleting an id with no matching row
+  // (nothing was ever registered for this actor — /register is still
+  // honestly 501, see above) is a 404, not a silent, fabricated success.
+  // Ownership-enforced deletion of a row that DOES exist is covered by
+  // tests/webauthn-credentials.route.test.ts, which seeds real rows.
+  it("DELETE /v1/identity/webauthn/credentials/:id → 404 for a credential that doesn't exist", async () => {
     const res = await app.inject({
       method: "DELETE",
       url: "/v1/identity/webauthn/credentials/11111111-1111-4000-8000-000000000001",
       headers: headers(["super_admin"]),
     });
-    expect(res.statusCode).toBe(204);
+    expect(res.statusCode).toBe(404);
+    expect(res.json().code).toBe("NOT_FOUND");
   });
 
   it("DELETE /v1/identity/webauthn/credentials/:id → 400 for non-uuid", async () => {
