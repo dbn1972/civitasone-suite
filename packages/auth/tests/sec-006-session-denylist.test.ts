@@ -35,6 +35,7 @@ import {
   __setDenylistStoreForTests,
 } from "../src/denylist.js";
 import { MemoryCache, type CacheStore } from "@civitasone/cache";
+import { verifyJwt, verifyToken } from "../src/index.js";
 
 const JWT_SECRET = "sec-006-test-secret";
 const TENANT = "00000000-0000-0000-0000-000000000001";
@@ -337,5 +338,78 @@ describe("SEC-006 integration: real env-derived store (RedisCache when REDIS_URL
     const res = await app.inject({ method: "GET", url: "/v1/probe", headers: { authorization: `Bearer ${token}` } });
     await app.close();
     expect(res.statusCode).toBe(401);
+  });
+});
+
+/**
+ * SEC-006 fixup — coverage gap the review flagged: EVERY test above runs with
+ * `JWT_ALGORITHM=HS256`. Under that config, `verifyJwt`'s own primary branch
+ * (index.ts) already has built-in HS256 support and succeeds directly — so
+ * `plugin.ts`'s `catch`-block HS256 dev-token FALLBACK (plugin.ts:150-165)
+ * is never actually reached by any test above. Confirmed by sabotage: adding
+ * an early `return` right after the fallback's `req.ctx` assignment (bypassing
+ * the denylist check on that path only) left the entire suite passing.
+ *
+ * To genuinely exercise the fallback branch, `verifyJwt`'s PRIMARY attempt
+ * must throw. This block runs with `JWT_ALGORITHM` left at its default
+ * (RS256), so `verifyJwt` attempts RS256/JWKS verification first. An
+ * HS256-signed token has no `kid` in its header, so `getSigningKey()`
+ * (index.ts) rejects immediately with "JWT missing kid header" — no network
+ * call to Keycloak involved, so this is deterministic in CI — and `verifyJwt`
+ * throws. `plugin.ts`'s catch block then falls through to `verifyToken(token,
+ * JWT_SECRET)`, which succeeds for a well-formed HS256 dev token. THAT is the
+ * code path being exercised here, and the sanity test below proves it.
+ */
+describe("SEC-006: denylist check on the HS256 dev-token FALLBACK path (verifyJwt's primary attempt fails first)", () => {
+  let sharedMemoryStore: MemoryCache;
+
+  beforeEach(() => {
+    process.env = {
+      ...ORIGINAL_ENV,
+      NODE_ENV: "test",
+      // Deliberately NOT "HS256" — see the block comment above for why this
+      // is what actually forces execution down plugin.ts's fallback branch.
+      JWT_ALGORITHM: "RS256",
+      JWT_SECRET,
+    };
+    sharedMemoryStore = new MemoryCache();
+    __setDenylistStoreForTests(sharedMemoryStore);
+  });
+
+  afterEach(() => {
+    process.env = { ...ORIGINAL_ENV };
+    __setDenylistStoreForTests(null);
+    vi.restoreAllMocks();
+  });
+
+  it("sanity: this token's primary verifyJwt attempt actually throws, and only the fallback verifyToken succeeds — proving the test below exercises the fallback branch, not the primary path", async () => {
+    const token = signAccessToken("sid-fallback-sanity");
+    await expect(verifyJwt(token)).rejects.toThrow(/kid/i);
+    expect(() => verifyToken(token, JWT_SECRET)).not.toThrow();
+  });
+
+  it("authenticates a valid HS256 dev token via the fallback branch", async () => {
+    const app = await buildApp();
+    const token = signAccessToken("sid-fallback-ok");
+    const res = await app.inject({ method: "GET", url: "/v1/probe", headers: { authorization: `Bearer ${token}` } });
+    await app.close();
+    expect(res.statusCode).toBe(200);
+    expect(res.json().sessionId).toBe("sid-fallback-ok");
+  });
+
+  it("rejects (401) a cryptographically valid, not-yet-expired token authenticated via the FALLBACK branch, once its sid is denylisted", async () => {
+    const sid = "sid-fallback-revoked";
+    const token = signAccessToken(sid);
+    const app = await buildApp();
+
+    const before = await app.inject({ method: "GET", url: "/v1/probe", headers: { authorization: `Bearer ${token}` } });
+    expect(before.statusCode).toBe(200); // sanity: authenticates pre-revoke, via the fallback branch
+
+    await denylistSession(sid);
+
+    const after = await app.inject({ method: "GET", url: "/v1/probe", headers: { authorization: `Bearer ${token}` } });
+    await app.close();
+    expect(after.statusCode).toBe(401);
+    expect(after.json().message).toMatch(/revoked/i);
   });
 });
