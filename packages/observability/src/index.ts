@@ -3,6 +3,12 @@
 // check, and Drill_Scheduler before emitting logs/persisting Drill_Report artifacts.
 export { redactLogPayload, redactReportPayload, type RedactionMode } from "./redaction.js";
 
+// REL-012: PM2 wait_ready/kill_timeout lifecycle helpers — signalReady() and
+// registerGracefulShutdown() are the shared readiness/shutdown primitives every
+// service and worker calls so PM2 knows when a process can actually take
+// traffic/work versus just having started.
+export { signalReady, registerGracefulShutdown, type GracefulShutdownOptions } from "./lifecycle.js";
+
 type AppLike = {
   get: (path: string, handler: (...args: unknown[]) => unknown) => void;
   addHook: (name: string, handler: (...args: unknown[]) => unknown) => void;
