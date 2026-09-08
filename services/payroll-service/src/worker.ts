@@ -1,6 +1,7 @@
 import { pino } from "pino";
 import { sql } from "drizzle-orm";
 import { runWithTenant } from "@civitasone/db";
+import { registerGracefulShutdown, signalReady } from "@civitasone/observability";
 import { db, sqlClient } from "./shared/db.js";
 import { scannerDb } from "./shared/scanner-db.js";
 import { queue } from "./shared/infra.js";
@@ -76,6 +77,11 @@ const purge = startOutboxPurge(scannerDb as unknown as Parameters<typeof startOu
 });
 log.info("payroll-service worker: consumers + outbox relay running");
 
+// PERF-003: tell PM2 (wait_ready in ecosystem.config.js) this worker has
+// finished subscribing every consumer and starting the outbox relay — i.e.
+// it can actually do the job, not just that the process started.
+signalReady();
+
 // G6.4: Partition maintenance — auto-create monthly partitions 3 months ahead.
 // Runs daily. Safe to call repeatedly (idempotent, IF NOT EXISTS guards).
 async function ensurePartitions(): Promise<void> {
@@ -91,16 +97,13 @@ void ensurePartitions();
 const partitionMaint = setInterval(() => void ensurePartitions(), 24 * 60 * 60_000);
 partitionMaint.unref();
 
-async function shutdown(signal: string): Promise<void> {
-  log.info({ signal }, "shutting down");
-  clearInterval(partitionMaint);
-  clearInterval(purge);
-  clearInterval(relay);
-  await queue.stop();
-  await sqlClient.end();
-  log.info("shutdown complete");
-  process.exit(0);
-}
-
-process.on("SIGTERM", () => void shutdown("SIGTERM"));
-process.on("SIGINT",  () => void shutdown("SIGINT"));
+registerGracefulShutdown({
+  cleanup: async () => {
+    clearInterval(partitionMaint);
+    clearInterval(purge);
+    clearInterval(relay);
+    await queue.stop();
+    await sqlClient.end();
+  },
+  logger: log,
+});

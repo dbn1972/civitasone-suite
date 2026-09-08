@@ -1,4 +1,5 @@
 import { pino } from "pino";
+import { registerGracefulShutdown, signalReady } from "@civitasone/observability";
 import { db, sqlClient } from "./shared/db.js";
 import { queue } from "./shared/infra.js";
 import { startRelay } from "./shared/outbox.js";
@@ -86,18 +87,20 @@ kcReconciler.unref?.();
 
 log.info("identity-service worker: consumers + outbox relay + session reaper + kc reconciler running");
 
-async function shutdown(signal: string): Promise<void> {
-  log.info({ signal }, "shutting down");
-  clearInterval(purge);
-  clearInterval(relay);
-  clearInterval(reaper);
-  clearInterval(bgSweeper);
-  clearInterval(kcReconciler);
-  await queue.stop();
-  await sqlClient.end();
-  log.info("shutdown complete");
-  process.exit(0);
-}
+// PERF-003: tell PM2 (wait_ready in ecosystem.config.js) this worker has
+// finished subscribing every consumer and starting its scheduled maintenance
+// loops — i.e. it can actually do the job, not just that the process started.
+signalReady();
 
-process.on("SIGTERM", () => void shutdown("SIGTERM"));
-process.on("SIGINT",  () => void shutdown("SIGINT"));
+registerGracefulShutdown({
+  cleanup: async () => {
+    clearInterval(purge);
+    clearInterval(relay);
+    clearInterval(reaper);
+    clearInterval(bgSweeper);
+    clearInterval(kcReconciler);
+    await queue.stop();
+    await sqlClient.end();
+  },
+  logger: log,
+});
