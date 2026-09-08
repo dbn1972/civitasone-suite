@@ -402,7 +402,168 @@ function deriveScreenName(relPath) {
   return '/' + parts.join('/');
 }
 
+// ── Dead internal link scan (href → page.tsx / route.ts) ───────────────────────
+//
+// COMP-005: the loader-chain checks above only ever look at pages that call a
+// data loader. Plain navigation links (dashboard action cards, hub tiles,
+// marketing footer links, `window.location.href` redirects) point at a URL
+// that is never checked against the actual Next.js route tree, so a typo or a
+// renamed/removed page silently produces a dead link. This scans every
+// `href` (JSX attribute, `Link` prop, or object-literal nav entry) under
+// apps/web/src for an internal path (starts with "/", not "/api/…") and
+// verifies a `page.tsx` or `route.ts` exists somewhere in apps/web/src/app
+// whose derived URL matches it — route groups `(x)`, parallel-route slots
+// `@x`, and dynamic segments `[id]` / `[...slug]` are all accounted for.
+
+const WEB_APP_DIR = join(ROOT, 'apps/web/src/app');
+const WEB_SRC_DIR = join(ROOT, 'apps/web/src');
+
+function collectRouteTemplates() {
+  const templates = [];
+
+  function walk(dir, segmentsSoFar) {
+    let entries;
+    try { entries = readdirSync(dir, { withFileTypes: true }); }
+    catch { return; }
+
+    for (const entry of entries) {
+      if (entry.name === 'node_modules') continue;
+      const fullPath = join(dir, entry.name);
+
+      if (entry.isDirectory()) {
+        // Route groups "(marketing)" and parallel-route slots "@modal" don't
+        // contribute a URL segment — the URL skips straight past them.
+        const isGroup = /^\(.*\)$/.test(entry.name);
+        const isSlot = entry.name.startsWith('@');
+        const nextSegments = (isGroup || isSlot) ? segmentsSoFar : [...segmentsSoFar, entry.name];
+        walk(fullPath, nextSegments);
+      } else if (/^page\.(tsx|jsx|ts|js)$/.test(entry.name) || /^route\.(ts|js)$/.test(entry.name)) {
+        // page.tsx renders a URL; route.ts is a real navigable endpoint too
+        // (e.g. GET /logout redirects through the IdP) — both count.
+        templates.push(segmentsSoFar);
+      }
+    }
+  }
+
+  walk(WEB_APP_DIR, []);
+  walkPublicAssets(templates);
+  return templates;
+}
+
+// Static files under apps/web/public/ are served verbatim at their path
+// (e.g. public/docs/api/openapi.yaml -> /docs/api/openapi.yaml) and are just
+// as real a navigation target as a page.tsx -- a <a href download> to one of
+// them is common (spec downloads, generated PDFs) and must not be flagged.
+function walkPublicAssets(templates) {
+  const PUBLIC_DIR = join(ROOT, 'apps/web/public');
+
+  function walk(dir, segmentsSoFar) {
+    let entries;
+    try { entries = readdirSync(dir, { withFileTypes: true }); }
+    catch { return; }
+
+    for (const entry of entries) {
+      const fullPath = join(dir, entry.name);
+      if (entry.isDirectory()) {
+        walk(fullPath, [...segmentsSoFar, entry.name]);
+      } else {
+        templates.push([...segmentsSoFar, entry.name]);
+      }
+    }
+  }
+
+  walk(PUBLIC_DIR, []);
+}
+
+function routeSegmentType(seg) {
+  if (/^\[\.\.\.[^\]]+\]$/.test(seg) || /^\[\[\.\.\.[^\]]+\]\]$/.test(seg)) return 'multi'; // [...slug], [[...slug]]
+  if (/^\[[^\]]+\]$/.test(seg)) return 'single'; // [id]
+  return 'static';
+}
+
+function hrefPathname(raw) {
+  return raw.split('#')[0].split('?')[0];
+}
+
+function hrefToSegments(pathname) {
+  // A template literal like `/hr/employee/${id}` has already had its `${...}`
+  // collapsed to a sentinel here so the segment is recognised as a wildcard
+  // (we can't know the runtime value statically — never mind matching it).
+  const withSentinel = pathname.replace(/\$\{[^}]*\}/g, '__PARAM__');
+  return withSentinel.split('/').filter(Boolean).map(seg => ({
+    value: seg,
+    isParam: seg.includes('__PARAM__'),
+  }));
+}
+
+function routeMatchesHref(routeSegs, hrefSegs) {
+  let ri = 0, hi = 0;
+  while (ri < routeSegs.length) {
+    const type = routeSegmentType(routeSegs[ri]);
+    if (type === 'multi') return true; // catch-all is always terminal in Next.js; consumes the rest
+    if (hi >= hrefSegs.length) return false;
+    if (type === 'single' || hrefSegs[hi].isParam) { ri++; hi++; continue; } // param on either side: can't disprove
+    if (hrefSegs[hi].value !== routeSegs[ri]) return false; // static vs static: must match literally
+    ri++; hi++;
+  }
+  return hi === hrefSegs.length;
+}
+
+function isInternalNavHref(raw) {
+  if (typeof raw !== 'string') return false;
+  if (!raw.startsWith('/') || raw.startsWith('//')) return false; // relative/hash/mailto/tel/external
+  if (raw.startsWith('/api/')) return false; // gateway call, not a page navigation
+  return true;
+}
+
+function collectHrefs() {
+  const hrefs = [];
+  const hrefRe = /\bhref\s*[:=]\s*\{?\s*["'`]([^"'`]+)["'`]/g;
+
+  function walk(dir) {
+    let entries;
+    try { entries = readdirSync(dir, { withFileTypes: true }); }
+    catch { return; }
+
+    for (const entry of entries) {
+      if (entry.name === 'node_modules') continue;
+      const fullPath = join(dir, entry.name);
+      if (entry.isDirectory()) { walk(fullPath); continue; }
+      if (!/\.(tsx|ts|jsx|js)$/.test(entry.name)) continue;
+      if (/\.(test|stories)\.(tsx|ts|jsx|js)$/.test(entry.name)) continue;
+
+      const src = readFileSync(fullPath, 'utf8');
+      hrefRe.lastIndex = 0;
+      let m;
+      while ((m = hrefRe.exec(src)) !== null) {
+        hrefs.push({ file: relative(ROOT, fullPath), raw: m[1] });
+      }
+    }
+  }
+
+  walk(WEB_SRC_DIR);
+  return hrefs;
+}
+
+function findDeadLinks() {
+  const routeTemplates = collectRouteTemplates();
+  const hrefs = collectHrefs();
+
+  const checked = [];
+  for (const h of hrefs) {
+    if (!isInternalNavHref(h.raw)) continue;
+    const pathname = hrefPathname(h.raw);
+    const hrefSegs = hrefToSegments(pathname);
+    const resolved = routeTemplates.some(rt => routeMatchesHref(rt, hrefSegs));
+    checked.push({ file: h.file, href: h.raw, resolved });
+  }
+
+  const dead = checked.filter(c => !c.resolved);
+  return { total: checked.length, dead };
+}
+
 // ── Status determination ──────────────────────────────────────────────────────
+
 
 function computeStatus(row) {
   if (row.loaders.length === 0) return 'NO_LOADER'; // hub page, no data fetching
@@ -506,9 +667,10 @@ function run() {
   const missing = rows.filter(r => r.status === 'MISSING').length;
   const mismatch = rows.filter(r => r.status === 'MISMATCH').length;
   const noLoader = rows.filter(r => r.status === 'NO_LOADER').length;
+  const linkAudit = findDeadLinks();
 
   if (jsonOnly) {
-    process.stdout.write(JSON.stringify({ rows, counts: { wired, missing, mismatch, noLoader } }, null, 2));
+    process.stdout.write(JSON.stringify({ rows, counts: { wired, missing, mismatch, noLoader }, linkAudit }, null, 2));
     return;
   }
 
@@ -516,7 +678,7 @@ function run() {
   const outDir = join(ROOT, 'scripts/contract');
   mkdirSync(outDir, { recursive: true });
 
-  writeFileSync(join(outDir, 'screen-map.json'), JSON.stringify({ rows, counts: { wired, missing, mismatch, noLoader } }, null, 2));
+  writeFileSync(join(outDir, 'screen-map.json'), JSON.stringify({ rows, counts: { wired, missing, mismatch, noLoader }, linkAudit }, null, 2));
 
   // ── Write Markdown table ─────────────────────────────────────────────────────
   const mdLines = [
@@ -560,6 +722,16 @@ function run() {
     for (const row of rows.filter(r => r.status === 'MISSING' || r.status === 'MISMATCH')) {
       process.stdout.write(`  [${row.status}] ${row.module}${row.screen}  (${row.detail})\n`);
     }
+  }
+
+  process.stdout.write(`  🔗 DEAD LINKS           : ${linkAudit.dead.length} / ${linkAudit.total}\n`);
+  process.stdout.write('\nDEAD INTERNAL LINKS:\n');
+  if (linkAudit.dead.length > 0) {
+    for (const d of linkAudit.dead) {
+      process.stdout.write(`  [DEAD] ${d.file}  href="${d.href}"\n`);
+    }
+  } else {
+    process.stdout.write('  (none)\n');
   }
 
   process.stdout.write('\nOutputs written to scripts/contract/screen-map.json + screen-map.md\n\n');
