@@ -141,6 +141,16 @@ services:
       AUTH_TYPE: scram-sha-256
       AUTH_USER: ${POSTGRES_ADMIN_USER:-civitas_admin}
       AUTH_QUERY: "SELECT rolname, rolpassword FROM pg_authid WHERE rolname=$1"
+      # PERF-001 fix-up: this container previously set neither
+      # SERVER_RESET_QUERY nor SERVER_RESET_QUERY_ALWAYS — meaning DISCARD ALL
+      # never ran between pooled-connection handoffs under POOL_MODE=transaction
+      # (PgBouncer only runs server_reset_query unconditionally in session mode
+      # by default), so any raw session-level SET/temp table/prepared statement
+      # from a client would silently leak onto whichever client the pool handed
+      # that backend connection to next. See infra/pgbouncer/pgbouncer.ini for
+      # the live repro that found this.
+      SERVER_RESET_QUERY: "DISCARD ALL"
+      SERVER_RESET_QUERY_ALWAYS: "1"
     ports:
       - "${PGBOUNCER_HOST_PORT:-6432}:5432"
     depends_on:

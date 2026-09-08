@@ -37,11 +37,29 @@
  * hrms_departments_tenant_id_code_key` even though every writer targets the
  * same fixed ids — the ON CONFLICT (id) target can't save a row that
  * conflicts on a *different* unique index while its conflicting sibling
- * transaction is still in flight and uncommitted. A session-level
- * `pg_advisory_lock` around the whole seed serializes concurrent callers
- * (they queue instead of racing); the redundant re-run this causes for the
- * 2nd/3rd caller is harmless since every statement is idempotent by design
- * (see above).
+ * transaction is still in flight and uncommitted. A `pg_advisory_xact_lock`
+ * around the whole seed serializes concurrent callers (they queue instead
+ * of racing); the redundant re-run this causes for the 2nd/3rd caller is
+ * harmless since every statement is idempotent by design (see above).
+ *
+ * PERF-001 fix-up: the whole seed (lock, `app.tenant_id` GUC, every DELETE/
+ * INSERT/SELECT) now runs inside ONE explicit `sql.begin()` transaction,
+ * using `pg_advisory_xact_lock` (auto-released at commit/rollback) and
+ * `set_config('app.tenant_id', ..., true)` (SET LOCAL semantics) instead of
+ * the previous session-level `pg_advisory_lock`/`pg_advisory_unlock` pair
+ * and `set_config(..., false)`. This fixture only ever runs against the
+ * direct Postgres port (5435), never through PgBouncer, so the previous
+ * session-scoped pair was not reachable by the PgBouncer transaction-pool
+ * leak PERF-001's review found in two production migrations (a raw
+ * session-level `SET app.tenant_id` surviving onto the next pooled client)
+ * — but that was an operational convention, not something the code itself
+ * enforced, and PgBouncer's wildcard-database fix in this same PR makes the
+ * pooled port newly reachable for anything that previously assumed only the
+ * direct port was in play. Moving everything to xact-scoped state removes
+ * the dependency on that convention entirely: the whole critical section
+ * now lives and dies with one transaction, the same pattern
+ * packages/db/src/raw-tenant-guc.ts's `withRawTenantGuc` already uses, and
+ * it is safe unconditionally, pooled or not.
  *
  * DELIBERATELY DOES NOT TOUCH leave.hrms_leave_types, unlike
  * scripts/dev/seed-all.mjs. That script unconditionally deletes and
@@ -119,21 +137,24 @@ export function seedHrmsCoreFixtures(): Promise<HrmsLeaveTypeIds> {
 async function doSeed(): Promise<HrmsLeaveTypeIds> {
   const sql = postgres(DATABASE_URL, { max: 1 });
   try {
-    // Serialize concurrent callers (separate Vitest worker processes each
-    // running their own doSeed()) so they queue instead of racing on the
-    // DELETE-then-INSERT block below. Session-level (not xact-level)
-    // because `max: 1` keeps this whole function on one dedicated
-    // connection/session throughout — released explicitly in `finally`,
-    // and automatically by Postgres if the process dies mid-seed anyway.
-    await sql.unsafe(`select pg_advisory_lock(${SEED_LOCK_KEY})`);
-    try {
+    return await sql.begin(async (tx) => {
+      // Xact-scoped: auto-released at commit/rollback, so a crash mid-seed
+      // can never leave this lock held. Serializes concurrent callers
+      // (separate Vitest worker processes each running their own doSeed())
+      // so they queue instead of racing on the DELETE-then-INSERT block
+      // below — see the file header for why racing produces a spurious
+      // unique-constraint violation.
+      await tx.unsafe(`select pg_advisory_xact_lock(${SEED_LOCK_KEY})`);
+
       // Every hrms-service table this fixture writes to has FORCE ROW LEVEL
       // SECURITY (migrations 0026/0034), so even hrms_svc — which owns these
-      // tables — cannot write without app.tenant_id set for the session. Set
-      // it once; `max: 1` keeps every statement below on this one connection.
-      await sql.unsafe(`select set_config('app.tenant_id', '${T}', false)`);
+      // tables — cannot write without app.tenant_id set. `true` (SET LOCAL
+      // semantics) instead of session-level: scoped to exactly this
+      // transaction, same as pg_advisory_xact_lock above, and safe even if
+      // this connection were ever pooled.
+      await tx.unsafe(`select set_config('app.tenant_id', '${T}', true)`);
 
-      await sql.unsafe(`
+      await tx.unsafe(`
 DELETE FROM employee.hrms_departments WHERE tenant_id = '${T}' AND code IN ('FIN', 'PWD');
 DELETE FROM employee.hrms_designations WHERE tenant_id = '${T}' AND code IN ('IAS', 'STO');
 
@@ -159,7 +180,7 @@ ON CONFLICT (id) DO UPDATE SET full_name = EXCLUDED.full_name, department_id = E
       // leave.hrms_leave_types is NOT touched here — migrations/0005 creates
       // CL/EL per tenant (see the file header for why their ids can't be
       // assumed fixed). Resolve tenant T's ACTUAL CL/EL ids by code instead.
-      const clElRows = (await sql.unsafe(`
+      const clElRows = (await tx.unsafe(`
 SELECT
   (SELECT id FROM leave.hrms_leave_types WHERE tenant_id = '${T}' AND code = 'CL' LIMIT 1) AS cl_id,
   (SELECT id FROM leave.hrms_leave_types WHERE tenant_id = '${T}' AND code = 'EL' LIMIT 1) AS el_id
@@ -176,7 +197,7 @@ SELECT
         );
       }
 
-      await sql.unsafe(`
+      await tx.unsafe(`
 INSERT INTO leave.hrms_leave_allocs (id, tenant_id, employee_id, leave_type_id, fy, total_days, balance_days, created_at, updated_at, created_by, updated_by, version)
 VALUES
   ('eeeeeeee-0001-0000-0000-000000000009', '${T}', 'eeeeeeee-0001-0000-0000-000000000005', '${clId}', '2024-25', 30, 25, now(), now(), '${A}', '${A}', 1),
@@ -242,9 +263,7 @@ ON CONFLICT (id) DO NOTHING;
 `);
 
       return { clLeaveTypeId: clId, elLeaveTypeId: elId };
-    } finally {
-      await sql.unsafe(`select pg_advisory_unlock(${SEED_LOCK_KEY})`);
-    }
+    });
   } finally {
     await sql.end({ timeout: 5 });
   }
