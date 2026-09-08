@@ -64,13 +64,41 @@ async function scopedWriteForTenant<T>(tenantId: string, fn: Parameters<typeof s
 const SYSTEM_ACTOR = "00000000-0000-0000-0000-000000000000";
 const CAND_TOKEN_TTL = 7 * 24 * 60 * 60; // 7 days in seconds
 
-function candSecret(): string {
-  return process.env.CANDIDATE_JWT_SECRET ?? "dev-cand-secret-not-for-production";
+// SEC-003: CANDIDATE_JWT_SECRET must be injected from the secret manager in
+// production (see ecosystem.config.js's CANDIDATE_JWT_SECRET / requireSecret()).
+// The string below is a source-visible dev-only fallback -- this is a PUBLIC
+// careers-portal route, and until this fix the fallback was also silently
+// used in production (CANDIDATE_JWT_SECRET was never wired into
+// ecosystem.config.js/docker-compose/infra/.env, so every real deployment
+// that didn't explicitly export it fell back to this same hardcoded value).
+// Anyone who reads this open-source-visible repo could forge a cand_token
+// for an arbitrary tenantId/candidateId/email -- no OTP required -- and read
+// that candidate's application history via candidate-public-portal-routes.ts.
+// Fail closed (throw at startup) rather than silently falling back,
+// mirroring resolveQrSecret() in modules/id-cards/routes.ts and
+// requireSecret() in ecosystem.config.js. NODE_ENV=test (CI) and
+// NODE_ENV=development (local/this host) are unaffected -- only a process
+// actually started with NODE_ENV=production and no secret injected refuses
+// to boot. Evaluated once at module load (not lazily per-call) so the
+// refusal happens at startup, not on the first request.
+function resolveCandSecret(): string {
+  const configured = process.env.CANDIDATE_JWT_SECRET;
+  if (process.env.NODE_ENV === "production" && (!configured || configured.length === 0)) {
+    throw new Error(
+      "SEC: CANDIDATE_JWT_SECRET is required in production. Inject it from the " +
+        "secret manager (do not hardcode). Refusing to start -- the hardcoded " +
+        "fallback is source-visible and would let anyone who can read this repo " +
+        "forge a valid candidate portal token for any tenant.",
+    );
+  }
+  return configured ?? "dev-cand-secret-not-for-production";
 }
+
+const CAND_SECRET = resolveCandSecret();
 
 export function signCandToken(payload: { candidateId: string; tenantId: string; email: string; exp: number }): string {
   const data = Buffer.from(JSON.stringify(payload)).toString("base64url");
-  const sig = createHmac("sha256", candSecret()).update(data).digest("base64url");
+  const sig = createHmac("sha256", CAND_SECRET).update(data).digest("base64url");
   return `${data}.${sig}`;
 }
 
@@ -79,7 +107,7 @@ export function verifyCandToken(token: string): { candidateId: string; tenantId:
   if (dot < 0) return null;
   const data = token.slice(0, dot);
   const sig = token.slice(dot + 1);
-  const expected = createHmac("sha256", candSecret()).update(data).digest("base64url");
+  const expected = createHmac("sha256", CAND_SECRET).update(data).digest("base64url");
   try {
     if (!timingSafeEqual(Buffer.from(sig), Buffer.from(expected))) return null;
   } catch { return null; }
@@ -259,7 +287,17 @@ export async function candidatePublicAuthRoutes(app: FastifyInstance): Promise<v
       // `already_verified` 422 instead of also succeeding. See
       // otpRepo.markVerified's docstring for the full writeup.
       await otpRepo.markVerified(tx, tenantId, challenge.id, candidateId, "email");
-      return { kind: "valid" as const, challengeId: challenge.id };
+      // SEC-003: return the challenge's OWN tenantId column (read back from
+      // the locked DB row), not the outer `tenantId` closure var that came
+      // straight from the request body, as the value the token gets minted
+      // with. lockLatestChallenge's WHERE clause already filters on
+      // `tenantId` so today the two values coincide whenever a row is
+      // found — but the signed token should be built from server-verified
+      // state, not by re-emitting client input, so a future change to that
+      // filter (or a query path that stops requiring an exact tenant match)
+      // can't silently start signing an attacker-chosen tenantId into a
+      // trusted token again.
+      return { kind: "valid" as const, challengeId: challenge.id, tenantId: challenge.tenantId };
     });
 
     if (outcome.kind === "no_challenge") throw new HttpError(404, "NO_CHALLENGE", "request an OTP first");
@@ -279,7 +317,9 @@ export async function candidatePublicAuthRoutes(app: FastifyInstance): Promise<v
     // recruitment_candidate_public_auth_routes__1 / otp_verify_routes__1
     // going unused when their write became synchronous.
     const exp = Math.floor(Date.now() / 1000) + CAND_TOKEN_TTL;
-    const token = signCandToken({ candidateId, tenantId, email, exp });
+    // SEC-003: outcome.tenantId is the OTP challenge row's own tenantId
+    // column (server-verified), not the raw request-body tenantId.
+    const token = signCandToken({ candidateId, tenantId: outcome.tenantId, email, exp });
 
     return reply.code(200).send({ candidateId, name: fullName ?? email.split("@")[0], token });
   });
