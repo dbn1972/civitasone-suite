@@ -91,6 +91,20 @@ describe("payroll/domain — computeSlip() with rawComponents", () => {
     expect(r.earnings.some(e => e.code === "TA")).toBe(true);
   });
 
+  it("computes pctOfBasic precisely for fractional percentages, taking precedence over fixedMinor (REL-009)", () => {
+    // Regression test for a scaling bug: pctOfBasic must be divided by 10_000
+    // (100 for the percent->fraction conversion, another 100 because the value
+    // is pre-multiplied by 100 to preserve 2 decimal places), not by 100 alone.
+    // 12.5% of 5_000_000 basic = 625_000, not 62_500_000 (100x) and not the
+    // fixedMinor value, which must be ignored once pctOfBasic > 0.
+    const r = computeSlip({
+      basicMinor: 5000000n, pensionScheme: "EPF", taxRegime: "new", fyStartYear: 2025,
+      rawComponents: [{ code: "SPL2", name: "Special", type: "earning", pctOfBasic: 12.5, fixedMinor: 999_999n }],
+    });
+    const spl2 = r.earnings.find(e => e.code === "SPL2");
+    expect(spl2?.amountMinor).toBe(625_000n);
+  });
+
   it("adds fixed deduction", () => {
     const r = computeSlip({
       basicMinor: 5000000n, pensionScheme: "EPF", taxRegime: "new", fyStartYear: 2025,
