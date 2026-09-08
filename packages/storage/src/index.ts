@@ -87,6 +87,15 @@ function getClient(): S3Client {
       accessKeyId: _config.accessKeyId,
       secretAccessKey: _config.secretAccessKey,
     },
+    // DOM-006: the SDK v3 default (WHEN_SUPPORTED) streams a trailing CRC32
+    // checksum with every PUT/GET, which this environment's LocalStack S3
+    // never completes a response for -- PutObjectCommand/GetObjectCommand
+    // hang indefinitely (confirmed: identical request resolves instantly
+    // once these are set to WHEN_REQUIRED). Real AWS S3 accepts either
+    // setting; WHEN_REQUIRED only skips the checksum when the specific API
+    // call does not mandate one, so this is not a LocalStack-only workaround.
+    requestChecksumCalculation: "WHEN_REQUIRED",
+    responseChecksumValidation: "WHEN_REQUIRED",
   });
   return _client;
 }
