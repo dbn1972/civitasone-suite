@@ -1,7 +1,8 @@
 import Link from "next/link";
-import { PageHeader, StatGrid, StatCard, Card, DataTable } from "../../../_components/ds";
+import { PageHeader, StatGrid, StatCard, Card, DataTable, EmptyState, RefreshErrorState } from "../../../_components/ds";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
+import { toHumanError } from "@/lib/messages";
 import { ShiftCard } from "../_components/ShiftCard";
 
 /**
@@ -75,24 +76,25 @@ const COLUMNS: { key: keyof Row & string; label: string; cellType?: "status" }[]
   { key: "status", label: "Status", cellType: "status" },
 ];
 
-// COMP-004 detector note: static reference -- DoPT-standard shift
-// definitions, used only as the fallback when getShifts() (real API call
-// above) returns zero rows. Not a stand-in for the real load.
-const GOVT_SHIFTS: Row[] = [
-  { id: "dopt-general", name: "General Duty", startTime: "09:00", endTime: "17:30", breakDuration: "30 min", workingHours: "8 hrs", applicableTo: "All Cadres (DoPT O.M.)", status: "active" },
-  { id: "dopt-morning", name: "Morning Shift", startTime: "06:00", endTime: "14:00", breakDuration: "30 min", workingHours: "7.5 hrs", applicableTo: "Operational Staff", status: "active" },
-  { id: "dopt-evening", name: "Evening Shift", startTime: "14:00", endTime: "22:00", breakDuration: "30 min", workingHours: "7.5 hrs", applicableTo: "Operational Staff", status: "active" },
-  { id: "dopt-night", name: "Night Shift", startTime: "22:00", endTime: "06:00", breakDuration: "30 min", workingHours: "7.5 hrs", applicableTo: "Essential Services", status: "active" },
-];
-
 export default async function ShiftsPage() {
-  const { data: apiItems, source } = await getShifts();
-  const items = apiItems.length > 0 ? apiItems : GOVT_SHIFTS;
+  const { data: items, source } = await getShifts();
+  // COMP-004 fix-up (round 3): this page used to silently substitute a
+  // hardcoded 4-row GOVT_SHIFTS list whenever the real API call returned
+  // zero rows -- whether that meant a genuine fetch failure (source:
+  // "error") or a tenant that legitimately has no shifts configured yet
+  // (source: "api", []). Both cases rendered identical fake "DoPT-standard"
+  // rows as if they were real tenant data, with the StatCards counting them
+  // and DataSourceBadge's error message showing on top of fake rows in the
+  // error case. Distinguish the two real cases instead -- no fabricated
+  // fallback in either.
+  const errored = source === "error";
 
-  const active = items.filter((i) => i.status === "active").length;
-  const departments = new Set(
-    items.flatMap((i) => i.applicableTo.split(",").map((d) => d.trim())).filter((d) => d && d !== "—"),
-  ).size;
+  const active = errored ? 0 : items.filter((i) => i.status === "active").length;
+  const departments = errored
+    ? 0
+    : new Set(
+        items.flatMap((i) => i.applicableTo.split(",").map((d) => d.trim())).filter((d) => d && d !== "—"),
+      ).size;
 
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
@@ -108,14 +110,13 @@ export default async function ShiftsPage() {
       />
       <DataSourceBadge source={source} />
       <StatGrid>
-        <StatCard icon="🕐" iconBg="#e6f0ff" label="Total Shifts" value={items.length} />
-        <StatCard icon="✅" iconBg="#e6f7f0" label="Active" value={active} />
-        <StatCard icon="👥" iconBg="#fffbe6" label="Departments" value={departments} />
+        <StatCard icon="🕐" iconBg="#e6f0ff" label="Total Shifts" value={errored ? "—" : items.length} />
+        <StatCard icon="✅" iconBg="#e6f7f0" label="Active" value={errored ? "—" : active} />
+        <StatCard icon="👥" iconBg="#fffbe6" label="Departments" value={errored ? "—" : departments} />
         <StatCard icon="⏰" iconBg="#f5f5f5" label="Std Hours" value="8 hrs" />
       </StatGrid>
 
-      {/* Card view for the first 4 shifts */}
-      {items.length > 0 && (
+      {!errored && items.length > 0 && (
         <section aria-label="Shift cards" style={{ marginBottom: 16 }}>
           <div
             style={{
@@ -132,17 +133,26 @@ export default async function ShiftsPage() {
       )}
 
       <Card title="All Shift Definitions">
-        <DataTable<Row>
-          columns={COLUMNS}
-          rows={items}
-          sortable
-          filterable
-          filterPlaceholder="Filter by shift name or department…"
-          pageSize={15}
-          emptyIcon="🕐"
-          emptyTitle="No shifts defined"
-          emptyMessage="Shift schedules (Morning, Evening, Night, General) appear here. Define shifts and assign departments to enable attendance tracking."
-        />
+        {errored ? (
+          <div className="pad">
+            <RefreshErrorState error={toHumanError("load", { area: "shift definitions" })} backHref="/hr" />
+          </div>
+        ) : items.length === 0 ? (
+          <EmptyState
+            icon="🕐"
+            title="No shifts defined"
+            message="Shift schedules (Morning, Evening, Night, General) appear here once your organisation configures them. Nothing is shown because nothing has been configured yet — not because of an error."
+          />
+        ) : (
+          <DataTable<Row>
+            columns={COLUMNS}
+            rows={items}
+            sortable
+            filterable
+            filterPlaceholder="Filter by shift name or department…"
+            pageSize={15}
+          />
+        )}
       </Card>
     </main>
   );

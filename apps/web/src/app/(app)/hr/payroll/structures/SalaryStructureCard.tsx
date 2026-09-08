@@ -19,19 +19,6 @@ export interface SalaryStructureCardProps {
   components: ComponentItem[];
 }
 
-// GoI 7th CPC standard component percentage distribution of gross salary
-// COMP-004 detector note: static reference -- the standard GoI salary-
-// structure percentage breakdown (Basic/DA/HRA/...) is a fixed norm, not
-// per-tenant or per-employee data a backend would serve.
-const GOI_STANDARD_PCT: { label: string; value: number; color: string }[] = [
-  { label: "Basic", value: 50, color: "#4f46e5" },
-  { label: "DA (46%)", value: 23, color: "#06b6d4" },
-  { label: "HRA", value: 10, color: "#10b981" },
-  { label: "TA+Transport", value: 8, color: "#f59e0b" },
-  { label: "Other Allow.", value: 5, color: "#8b5cf6" },
-  { label: "Deductions", value: 4, color: "#ef4444" },
-];
-
 // Infer GoI pay bands from structure name
 function inferPayBands(name: string): string[] {
   const lower = name.toLowerCase();
@@ -70,8 +57,6 @@ function inferPayBands(name: string): string[] {
 }
 
 function buildChartData(components: ComponentItem[]) {
-  if (components.length === 0) return GOI_STANDARD_PCT;
-
   const earnings = components.filter(
     (c) => c.componentType === "earning" || c.componentType === "allowance" || !c.componentType
   );
@@ -80,7 +65,6 @@ function buildChartData(components: ComponentItem[]) {
   const other = components.filter(
     (c) => !["earning", "allowance", "deduction", "employer_contribution"].includes(c.componentType ?? "")
   );
-  const total = components.length;
 
   return [
     { label: `Earnings (${earnings.length})`, value: earnings.length, color: "#4f46e5" },
@@ -92,6 +76,13 @@ function buildChartData(components: ComponentItem[]) {
 
 export function SalaryStructureCard({ name, isDefault, status, components }: SalaryStructureCardProps) {
   const payBands = inferPayBands(name);
+  const hasComponents = components.length > 0;
+  // COMP-004 fix-up (round 3): this card used to substitute a hardcoded
+  // GOI_STANDARD_PCT reference breakdown into the donut chart whenever a
+  // structure's real component list was empty, labelled "GoI standard
+  // distribution shown" as if it described this structure. A structure
+  // with zero components is a real, valid state (not yet configured), so
+  // render that honestly instead of a fabricated percentage chart.
   const chartData = buildChartData(components);
   const isActive = status === "active";
 
@@ -136,9 +127,9 @@ export function SalaryStructureCard({ name, isDefault, status, components }: Sal
         <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: "var(--fg)" }}>{name}</h3>
       </div>
       <p style={{ margin: "0 0 16px", fontSize: 12, color: "var(--fg2)" }}>
-        {components.length > 0
+        {hasComponents
           ? `${components.length} component${components.length !== 1 ? "s" : ""}`
-          : "GoI standard distribution shown"}{" "}
+          : "No components configured yet"}{" "}
         &bull; <span style={{ textTransform: "capitalize" }}>{status}</span>
       </p>
 
@@ -156,7 +147,27 @@ export function SalaryStructureCard({ name, isDefault, status, components }: Sal
           >
             % of Gross
           </p>
-          <Chart type="donut" data={chartData} height={130} />
+          {hasComponents ? (
+            <Chart type="donut" data={chartData} height={130} />
+          ) : (
+            <div
+              style={{
+                width: 130,
+                height: 130,
+                borderRadius: "50%",
+                border: "2px dashed var(--line)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                textAlign: "center",
+                padding: 12,
+                fontSize: 11,
+                color: "var(--fg2)",
+              }}
+            >
+              No components configured
+            </div>
+          )}
         </div>
 
         <div style={{ flex: 1, minWidth: 160, paddingTop: 20 }}>
