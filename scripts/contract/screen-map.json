@@ -7084,8 +7084,8 @@
       "upstream": null,
       "routeHandler": null,
       "tablesPresent": null,
-      "status": "FABRICATED_DATA",
-      "detail": "no loader, but MOCK_ISSUES in apps/web/src/app/(app)/library/page.tsx:34 looks like 9 hardcoded records"
+      "status": "NO_LOADER",
+      "detail": "navigation hub — no data loader"
     },
     {
       "module": "locations",
@@ -10285,8 +10285,8 @@
     "wired": 271,
     "missing": 0,
     "mismatch": 0,
-    "noLoader": 564,
-    "fabricatedData": 1
+    "noLoader": 565,
+    "fabricatedData": 0
   },
   "linkAudit": {
     "total": 1343,

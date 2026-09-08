@@ -1,8 +1,8 @@
 # Screen Contract Map
 
-Generated: 2026-09-08T14:27:59.982Z
+Generated: 2026-09-08T14:30:26.650Z
 
-**Summary:** 271 WIRED | 0 MISSING | 0 MISMATCH | 564 NO_LOADER | 1 FABRICATED_DATA
+**Summary:** 271 WIRED | 0 MISSING | 0 MISMATCH | 565 NO_LOADER | 0 FABRICATED_DATA
 
 | module | screen | loader | apiPath | upstream | route? | table? | status |
 |--------|--------|--------|---------|----------|--------|--------|--------|
@@ -582,7 +582,7 @@ Generated: 2026-09-08T14:27:59.982Z
 | legal | /legal/opinions/new | — | — | — | — | — | — NO_LOADER |
 | legal | /legal/opinions | getLegalOpinions | /api/v1/legal/opinions | legal → /v1/legal/opinions | ✓ `/v1/legal/opinions` | ✓ | ✅ WIRED |
 | legal | /legal | — | — | — | — | — | — NO_LOADER |
-| library | /library | — | — | — | ✗ | — | 🎭 FABRICATED_DATA |
+| library | /library | — | — | — | — | — | — NO_LOADER |
 | locations | /locations/geofences | — | — | — | — | — | — NO_LOADER |
 | locations | /locations/infrastructure | — | — | — | — | — | — NO_LOADER |
 | locations | /locations/jurisdictions | — | — | — | — | — | — NO_LOADER |

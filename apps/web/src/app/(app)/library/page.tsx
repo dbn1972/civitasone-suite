@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { PageHeader } from "../../_components/ds";
 
 type Severity = "critical" | "high" | "medium" | "low" | "info";
@@ -12,7 +12,6 @@ type AuditIssue = {
   severity: Severity;
   category: string;
   remediationSummary: string;
-  affectedCount: number;
 };
 
 const SEVERITY_COLOR: Record<Severity, string> = {
@@ -31,7 +30,21 @@ const SEVERITY_BG: Record<Severity, string> = {
   info: "#f9fafb",
 };
 
-const MOCK_ISSUES: AuditIssue[] = [
+// COMP-004: this page used to fetch GET /v1/audit/library/issues (which
+// doesn't exist anywhere in the platform — grepped every service) and
+// silently fall back to this exact list on failure, so a real network
+// error was indistinguishable from "here is the live issue catalogue."
+//
+// Unlike admin/discovery and admin/bulk-scan (which needed a per-tenant
+// backend that doesn't exist), this content is a genuinely static
+// reference: a fixed catalogue of common UX/accessibility/security/
+// performance finding TYPES with generic remediation guidance — the kind
+// of thing that's the same for every tenant and edited by developers, not
+// admin-entered data. Renamed from MOCK_ISSUES to ISSUE_LIBRARY and the
+// fake fetch/loading-skeleton machinery removed: it is now honestly
+// presented as what it is — a static reference list, not live/tenant data
+// pretending to have loaded from a backend.
+const ISSUE_LIBRARY: AuditIssue[] = [
   {
     id: "1",
     code: "W1",
@@ -39,7 +52,6 @@ const MOCK_ISSUES: AuditIssue[] = [
     severity: "critical",
     category: "Accessibility",
     remediationSummary: "Add descriptive alt attributes to all non-decorative <img> elements.",
-    affectedCount: 14,
   },
   {
     id: "2",
@@ -48,7 +60,6 @@ const MOCK_ISSUES: AuditIssue[] = [
     severity: "high",
     category: "Accessibility",
     remediationSummary: "Ensure text/background contrast ratio meets WCAG 2.2 AA minimum of 4.5:1.",
-    affectedCount: 7,
   },
   {
     id: "3",
@@ -57,7 +68,6 @@ const MOCK_ISSUES: AuditIssue[] = [
     severity: "high",
     category: "Accessibility",
     remediationSummary: "Link every input to a <label> via htmlFor/id or aria-label.",
-    affectedCount: 9,
   },
   {
     id: "4",
@@ -66,7 +76,6 @@ const MOCK_ISSUES: AuditIssue[] = [
     severity: "critical",
     category: "Security",
     remediationSummary: "Implement SameSite=Strict cookies and double-submit token pattern for POST/PUT/DELETE routes.",
-    affectedCount: 3,
   },
   {
     id: "5",
@@ -75,7 +84,6 @@ const MOCK_ISSUES: AuditIssue[] = [
     severity: "medium",
     category: "UX",
     remediationSummary: "Add Next.js loading.tsx siblings or isLoading guard with skeleton placeholders to prevent content flash.",
-    affectedCount: 5,
   },
   {
     id: "6",
@@ -84,7 +92,6 @@ const MOCK_ISSUES: AuditIssue[] = [
     severity: "medium",
     category: "Performance",
     remediationSummary: "Replace key={index} with stable unique identifiers (id, slug, or composite) to prevent reconciliation bugs.",
-    affectedCount: 11,
   },
   {
     id: "7",
@@ -93,7 +100,6 @@ const MOCK_ISSUES: AuditIssue[] = [
     severity: "low",
     category: "Performance",
     remediationSummary: "Debounce search onChange handlers with a 250–350 ms delay before issuing fetch requests.",
-    affectedCount: 4,
   },
   {
     id: "8",
@@ -102,44 +108,23 @@ const MOCK_ISSUES: AuditIssue[] = [
     severity: "medium",
     category: "Accessibility",
     remediationSummary: "Apply :focus-visible outline styles conforming to WCAG 2.4.11 (min 2px offset, non-colour-only).",
-    affectedCount: 22,
   },
 ];
 
 export default function LibraryPage() {
-  const [issues, setIssues] = useState<AuditIssue[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
   const [severityFilter, setSeverityFilter] = useState<string>("all");
   const [search, setSearch] = useState("");
 
-  useEffect(() => {
-    const controller = new AbortController()
-    fetch("/api/v1/audit/library/issues", { signal: controller.signal })
-      .then((r) => r.json())
-      .then((body: { data?: AuditIssue[] }) => {
-        setIssues(body.data ?? MOCK_ISSUES);
-      })
-      .catch((e) => {
-        if (e.name !== 'AbortError') setIssues(MOCK_ISSUES);
-      })
-      .finally(() => {
-        setIsLoading(false);
-      });
-    return () => controller.abort()
-  }, []);
-
-  const filtered = isLoading
-    ? []
-    : issues.filter((iss) => {
-        const matchSev = severityFilter === "all" || iss.severity === severityFilter;
-        const q = search.toLowerCase();
-        const matchSearch =
-          !q ||
-          iss.title.toLowerCase().includes(q) ||
-          iss.code.toLowerCase().includes(q) ||
-          iss.category.toLowerCase().includes(q);
-        return matchSev && matchSearch;
-      });
+  const filtered = ISSUE_LIBRARY.filter((iss) => {
+    const matchSev = severityFilter === "all" || iss.severity === severityFilter;
+    const q = search.toLowerCase();
+    const matchSearch =
+      !q ||
+      iss.title.toLowerCase().includes(q) ||
+      iss.code.toLowerCase().includes(q) ||
+      iss.category.toLowerCase().includes(q);
+    return matchSev && matchSearch;
+  });
 
   const inputStyle: React.CSSProperties = {
     padding: "8px 12px",
@@ -161,152 +146,127 @@ export default function LibraryPage() {
     <main className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
         title="Issue Library"
-        subtitle="Catalogue of UX, accessibility, security, and performance findings with remediation guidance."
+        subtitle="Reference catalogue of common UX, accessibility, security, and performance findings with remediation guidance."
         back="/admin"
       />
 
-      {isLoading ? (
-        /* Skeleton prevents empty-state flash while fetching issues */
-        <div className="animate-pulse" aria-busy="true" aria-label="Loading issue library">
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))",
-              gap: 12,
-              marginBottom: 18,
-            }}
+      <p style={{ margin: "0 0 16px", fontSize: 12.5, color: "var(--ink3)" }}>
+        This is a static reference catalogue — the same for every tenant, maintained by the development
+        team — not a live scan result or per-tenant data.
+      </p>
+
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+          gap: 12,
+          marginBottom: 18,
+        }}
+      >
+        <div>
+          <label htmlFor="library-search" style={labelStyle}>
+            Search issues
+          </label>
+          <input
+            id="library-search"
+            type="search"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Code, title or category…"
+            style={{ ...inputStyle, width: "100%" }}
+          />
+        </div>
+        <div>
+          <label htmlFor="library-severity" style={labelStyle}>
+            Severity
+          </label>
+          <select
+            id="library-severity"
+            value={severityFilter}
+            onChange={(e) => setSeverityFilter(e.target.value)}
+            style={{ ...inputStyle, width: "100%" }}
           >
-            {[1, 2].map((n) => (
-              <div key={n} style={{ height: 44, borderRadius: 8, background: "var(--panel)" }} />
-            ))}
-          </div>
-          <div style={{ display: "grid", gap: 12 }}>
-            {[1, 2, 3, 4, 5, 6].map((n) => (
-              <div key={n} style={{ height: 96, borderRadius: 12, background: "var(--panel)" }} />
-            ))}
-          </div>
+            <option value="all">All severities</option>
+            <option value="critical">Critical</option>
+            <option value="high">High</option>
+            <option value="medium">Medium</option>
+            <option value="low">Low</option>
+            <option value="info">Info</option>
+          </select>
+        </div>
+      </div>
+
+      {filtered.length === 0 ? (
+        <div
+          style={{
+            padding: "40px 24px",
+            textAlign: "center",
+            color: "var(--ink2)",
+            fontSize: 15,
+          }}
+        >
+          No issues match your filters.
         </div>
       ) : (
-        <>
-          {/* Filter bar */}
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
-              gap: 12,
-              marginBottom: 18,
-            }}
-          >
-            <div>
-              <label htmlFor="library-search" style={labelStyle}>
-                Search issues
-              </label>
-              <input
-                id="library-search"
-                type="search"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder="Code, title or category…"
-                style={{ ...inputStyle, width: "100%" }}
-              />
-            </div>
-            <div>
-              <label htmlFor="library-severity" style={labelStyle}>
-                Severity
-              </label>
-              <select
-                id="library-severity"
-                value={severityFilter}
-                onChange={(e) => setSeverityFilter(e.target.value)}
-                style={{ ...inputStyle, width: "100%" }}
-              >
-                <option value="all">All severities</option>
-                <option value="critical">Critical</option>
-                <option value="high">High</option>
-                <option value="medium">Medium</option>
-                <option value="low">Low</option>
-                <option value="info">Info</option>
-              </select>
-            </div>
-          </div>
-
-          {/* Issue cards */}
-          {filtered.length === 0 ? (
-            <div
+        <ul
+          style={{ listStyle: "none", padding: 0, margin: 0, display: "grid", gap: 12 }}
+          aria-label="Audit issues"
+        >
+          {filtered.map((iss) => (
+            <li
+              key={iss.id}
+              className="card"
               style={{
-                padding: "40px 24px",
-                textAlign: "center",
-                color: "var(--ink2)",
-                fontSize: 15,
+                padding: 18,
+                borderLeft: `4px solid ${SEVERITY_COLOR[iss.severity]}`,
               }}
             >
-              No issues match your filters.
-            </div>
-          ) : (
-            <ul
-              style={{ listStyle: "none", padding: 0, margin: 0, display: "grid", gap: 12 }}
-              aria-label="Audit issues"
-            >
-              {filtered.map((iss) => (
-                <li
-                  key={iss.id}
-                  className="card"
+              <div
+                style={{
+                  display: "flex",
+                  gap: 10,
+                  alignItems: "baseline",
+                  flexWrap: "wrap",
+                  marginBottom: 6,
+                }}
+              >
+                <span
                   style={{
-                    padding: 18,
-                    borderLeft: `4px solid ${SEVERITY_COLOR[iss.severity]}`,
+                    fontFamily: "monospace",
+                    fontSize: 12,
+                    fontWeight: 700,
+                    background: "var(--panel)",
+                    padding: "1px 6px",
+                    borderRadius: 4,
                   }}
                 >
-                  <div
-                    style={{
-                      display: "flex",
-                      gap: 10,
-                      alignItems: "baseline",
-                      flexWrap: "wrap",
-                      marginBottom: 6,
-                    }}
-                  >
-                    <span
-                      style={{
-                        fontFamily: "monospace",
-                        fontSize: 12,
-                        fontWeight: 700,
-                        background: "var(--panel)",
-                        padding: "1px 6px",
-                        borderRadius: 4,
-                      }}
-                    >
-                      {iss.code}
-                    </span>
-                    <strong style={{ fontSize: 15 }}>{iss.title}</strong>
-                    <span
-                      style={{
-                        marginLeft: "auto",
-                        fontSize: 12,
-                        fontWeight: 600,
-                        color: SEVERITY_COLOR[iss.severity],
-                        background: SEVERITY_BG[iss.severity],
-                        padding: "2px 8px",
-                        borderRadius: 99,
-                        textTransform: "capitalize",
-                      }}
-                    >
-                      {iss.severity}
-                    </span>
-                  </div>
-                  <p style={{ margin: "0 0 6px", fontSize: 13, color: "var(--ink2)", lineHeight: 1.5 }}>
-                    <span style={{ fontWeight: 600 }}>Remediation:</span> {iss.remediationSummary}
-                  </p>
-                  <div style={{ display: "flex", gap: 12, fontSize: 12, color: "var(--ink2)" }}>
-                    <span>{iss.category}</span>
-                    <span aria-label={`${iss.affectedCount} affected locations`}>
-                      {iss.affectedCount} location{iss.affectedCount !== 1 ? "s" : ""}
-                    </span>
-                  </div>
-                </li>
-              ))}
-            </ul>
-          )}
-        </>
+                  {iss.code}
+                </span>
+                <strong style={{ fontSize: 15 }}>{iss.title}</strong>
+                <span
+                  style={{
+                    marginLeft: "auto",
+                    fontSize: 12,
+                    fontWeight: 600,
+                    color: SEVERITY_COLOR[iss.severity],
+                    background: SEVERITY_BG[iss.severity],
+                    padding: "2px 8px",
+                    borderRadius: 99,
+                    textTransform: "capitalize",
+                  }}
+                >
+                  {iss.severity}
+                </span>
+              </div>
+              <p style={{ margin: "0 0 6px", fontSize: 13, color: "var(--ink2)", lineHeight: 1.5 }}>
+                <span style={{ fontWeight: 600 }}>Remediation:</span> {iss.remediationSummary}
+              </p>
+              <div style={{ display: "flex", gap: 12, fontSize: 12, color: "var(--ink2)" }}>
+                <span>{iss.category}</span>
+              </div>
+            </li>
+          ))}
+        </ul>
       )}
     </main>
   );
