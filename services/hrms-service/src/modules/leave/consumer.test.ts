@@ -33,6 +33,8 @@ const {
   updateLeaveAppMock,
   approveLeaveAppMock,
   debitLeaveBalanceMock,
+  insertLeaveAllocMock,
+  findAccumulationCapInputsTxMock,
 } = vi.hoisted(() => {
   const _mockTx = {
     insert: vi.fn().mockReturnValue({ values: vi.fn().mockResolvedValue(undefined) }),
@@ -66,6 +68,14 @@ const {
   // default to 1 (success) so the "already processed" guard doesn't trip.
   const _approveLeaveAppMock = vi.fn(async () => 1 as any);
   const _debitLeaveBalanceMock = vi.fn(async () => undefined as any);
+  const _insertLeaveAllocMock = vi.fn(async () => undefined as any);
+  // DOM-009: default — no tenant policy configured, leave code "EL" (matches
+  // the default catalog's carryForward:true / maxAccumulation:300), so tests
+  // that don't care about the cap get the pre-fix-equivalent "no lapse"
+  // behavior unless they override it.
+  const _findAccumulationCapInputsTxMock = vi.fn(async () => ({
+    policyRow: null as any, leaveCode: "EL", employeeType: "permanent",
+  }));
   return {
     mockTx: _mockTx,
     dbTransactionFn: _dbTransactionFn as any,
@@ -77,6 +87,8 @@ const {
     updateLeaveAppMock: _updateLeaveAppMock as any,
     approveLeaveAppMock: _approveLeaveAppMock as any,
     debitLeaveBalanceMock: _debitLeaveBalanceMock as any,
+    insertLeaveAllocMock: _insertLeaveAllocMock as any,
+    findAccumulationCapInputsTxMock: _findAccumulationCapInputsTxMock as any,
   };
 });
 
@@ -107,9 +119,12 @@ vi.mock("./repo.js", () => ({
   updateLeaveApp:   (...args: any[]) => updateLeaveAppMock(...args),
   approveLeaveApp:  (...args: any[]) => approveLeaveAppMock(...args),
   debitLeaveBalance: (...args: any[]) => debitLeaveBalanceMock(...args),
+  insertLeaveAlloc: (...args: any[]) => insertLeaveAllocMock(...args),
+  // DOM-009: tx-scoped lookup the leaveAllocate consumer uses to resolve the
+  // tenant's admin-configured (or default) accumulation cap.
+  findAccumulationCapInputsTx: (...args: any[]) => findAccumulationCapInputsTxMock(...args),
   // stubs for type-checker
   insertLeaveType:  vi.fn(async () => undefined),
-  insertLeaveAlloc: vi.fn(async () => undefined),
 }));
 
 // 4. Cache — no-op.
@@ -172,6 +187,10 @@ beforeEach(() => {
 
   // Default: leave app not found (overridden per test).
   findLeaveAppByIdMock.mockResolvedValue(null);
+
+  // DOM-009: default — no tenant policy row, default EL catalog entry
+  // (carryForward:true, maxAccumulation:300) — overridden per test.
+  findAccumulationCapInputsTxMock.mockResolvedValue({ policyRow: null, leaveCode: "EL", employeeType: "permanent" });
 
   // db.transaction re-set to fire the callback by default.
   dbTransactionFn.mockImplementation(async (cb: (tx: unknown) => Promise<void>) => {
@@ -452,6 +471,122 @@ describe("leaveReject command", () => {
     );
     await settle();
     expect(debitLeaveBalanceMock).not.toHaveBeenCalled();
+    await q.stop();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// DOM-009 — leaveAllocate: EL (and any carry-forward-eligible) accumulation
+// cap must actually be enforced (capped + lapsed) when a balance is
+// credited, not merely warned about at apply-time.
+// ---------------------------------------------------------------------------
+describe("leaveAllocate command", () => {
+  it("inserts the allocation unchanged when within the cap (no lapse)", async () => {
+    findAccumulationCapInputsTxMock.mockResolvedValue({
+      policyRow: null, leaveCode: "EL", employeeType: "permanent",
+    });
+    const q = await buildQueue();
+    const allocId = "alloc-within-cap";
+    await q.publish(
+      COMMANDS.leaveAllocate,
+      makeMsg(COMMANDS.leaveAllocate, {
+        id: allocId, tenantId: TENANT, employeeId: EMP, leaveTypeId: LT_ID,
+        fy: "2025-26", totalDays: 200, balanceDays: 200,
+      }),
+    );
+    await settle();
+    expect(insertLeaveAllocMock).toHaveBeenCalledOnce();
+    const inserted = insertLeaveAllocMock.mock.calls[0]![1] as Record<string, unknown>;
+    expect(inserted.totalDays).toBe(200);
+    expect(inserted.balanceDays).toBe(200);
+    const lapse = enqueuedMessages.find((m) => (m.payload as any)?.action === "lapse");
+    expect(lapse).toBeUndefined();
+    await q.stop();
+  });
+
+  it("enforces an admin-edited cap: caps the balance and records a lapse (DoD)", async () => {
+    // HR admin edited this tenant's EL policy down to a 250-day cap via
+    // policy-admin-routes.ts (persisted to hrms_leave_policy_rules). An
+    // allocation crediting the employee to 260 days must be capped to 250,
+    // not silently accepted as it was before this fix.
+    findAccumulationCapInputsTxMock.mockResolvedValue({
+      policyRow: { carryForward: true, maxAccumulation: 250 } as any,
+      leaveCode: "EL",
+      employeeType: "permanent",
+    });
+    const q = await buildQueue();
+    const allocId = "alloc-admin-cap";
+    await q.publish(
+      COMMANDS.leaveAllocate,
+      makeMsg(COMMANDS.leaveAllocate, {
+        id: allocId, tenantId: TENANT, employeeId: EMP, leaveTypeId: LT_ID,
+        fy: "2025-26", totalDays: 260, balanceDays: 260,
+      }),
+    );
+    await settle();
+
+    expect(insertLeaveAllocMock).toHaveBeenCalledOnce();
+    const inserted = insertLeaveAllocMock.mock.calls[0]![1] as Record<string, unknown>;
+    // The actual mutation: capped, not just a warning.
+    expect(inserted.totalDays).toBe(250);
+    expect(inserted.balanceDays).toBe(250);
+
+    // Audit trail for the lapse, matching this file's existing
+    // action/resourceType/resourceId/outcome/metadata audit-event shape.
+    const lapse = enqueuedMessages.find((m) => (m.payload as any)?.action === "lapse");
+    expect(lapse).toBeDefined();
+    const payload = lapse!.payload as Record<string, unknown>;
+    expect(payload.service).toBe("hrms");
+    expect(payload.resourceType).toBe("leave_alloc");
+    expect(payload.resourceId).toBe(allocId);
+    expect(payload.outcome).toBe("success");
+    expect((payload.metadata as Record<string, unknown>).lapsedDays).toBe(10);
+    expect((payload.metadata as Record<string, unknown>).maxAccumulation).toBe(250);
+    await q.stop();
+  });
+
+  it("falls back to the default 300-day EL cap when no tenant policy is configured (parity)", async () => {
+    findAccumulationCapInputsTxMock.mockResolvedValue({
+      policyRow: null, leaveCode: "EL", employeeType: "permanent",
+    });
+    const q = await buildQueue();
+    const allocId = "alloc-default-cap";
+    await q.publish(
+      COMMANDS.leaveAllocate,
+      makeMsg(COMMANDS.leaveAllocate, {
+        id: allocId, tenantId: TENANT, employeeId: EMP, leaveTypeId: LT_ID,
+        fy: "2025-26", totalDays: 310, balanceDays: 310,
+      }),
+    );
+    await settle();
+    const inserted = insertLeaveAllocMock.mock.calls[0]![1] as Record<string, unknown>;
+    expect(inserted.totalDays).toBe(300);
+    expect(inserted.balanceDays).toBe(300);
+    const lapse = enqueuedMessages.find((m) => (m.payload as any)?.action === "lapse");
+    expect((lapse!.payload as any).metadata.lapsedDays).toBe(10);
+    await q.stop();
+  });
+
+  it("does not cap a leave type whose effective policy has carryForward:false", async () => {
+    // CL (Casual Leave) never carries forward — even a totalDays value above
+    // its small default maxAccumulation (8) must not be treated as a lapse;
+    // that cap concept only applies to carry-forward-eligible leave types.
+    findAccumulationCapInputsTxMock.mockResolvedValue({
+      policyRow: null, leaveCode: "CL", employeeType: "permanent",
+    });
+    const q = await buildQueue();
+    await q.publish(
+      COMMANDS.leaveAllocate,
+      makeMsg(COMMANDS.leaveAllocate, {
+        id: "alloc-cl", tenantId: TENANT, employeeId: EMP, leaveTypeId: LT_ID,
+        fy: "2025-26", totalDays: 8, balanceDays: 8,
+      }),
+    );
+    await settle();
+    const inserted = insertLeaveAllocMock.mock.calls[0]![1] as Record<string, unknown>;
+    expect(inserted.totalDays).toBe(8);
+    const lapse = enqueuedMessages.find((m) => (m.payload as any)?.action === "lapse");
+    expect(lapse).toBeUndefined();
     await q.stop();
   });
 });

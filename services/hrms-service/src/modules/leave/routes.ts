@@ -110,6 +110,11 @@ async function enforceCcsLeaveRules(ctx: RequestContext, body: ReturnType<typeof
     serviceStartDate: (emp.dateOfJoining as unknown as string) ?? body.fromDate,
     tenantId,
     isOnProbation: (emp.status ?? "") === "probation",
+    // DOM-009: leaveTypeId + the employee's raw (unnarrowed) employeeType let
+    // validateLeaveRequest look up this tenant's admin-configured policy row
+    // instead of only ever using the hardcoded default catalog.
+    leaveTypeId: body.leaveTypeId,
+    rawEmployeeType: emp.employeeType ?? undefined,
   });
   if (!result.valid) throw new HttpError(422, "LEAVE_RULE_VIOLATION", result.errors.join("; "));
   // BUG-1 fix: hand back the rules-engine's validated day count so the caller
