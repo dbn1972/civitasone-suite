@@ -78,9 +78,57 @@ function parseRegistry() {
   return routes;
 }
 
+// REL-019 honesty pass: the previous version of this function only read ONE
+// file (apps/web/src/app/_data/loaders.ts) and only matched a bare
+// `fetchJson("...")` call — no generic type arguments, no other loader
+// helper, no template-literal path. That combination happened to yield
+// exactly 30 matches, which is where the "checks 30 hardcoded loader paths"
+// framing in the REL-019 gap came from — it wasn't a hand-maintained list,
+// but it was just as blind: it silently missed
+//   (a) every other `<module>/_data/loaders.ts` file in the app (8 of them,
+//       e.g. `documents/_data/loaders.ts` — the exact file COMP-003 names
+//       as one of the 4 pages consuming the unbacked document-service), and
+//   (b) the vast majority of calls even in the ONE file it did read, because
+//       real loaders almost all use `fetchJson<RequestT, ResponseT>(...)`
+//       (generics) and/or a template-literal path
+//       (`` `/api/v1/x/${id}` ``), neither of which the old regex could see.
+// This version dynamically discovers every `**/loaders.ts` file under
+// apps/web/src/app (no hardcoded file list — new module loader files are
+// picked up automatically) and matches every known fetch-helper name
+// (`fetchJson`, `postJson`, `patchJson`, `putJson`, `deleteJson`,
+// `browserJson`), tolerating generics and extracting the static leading
+// segment of a template-literal path (the part before the first `${`,
+// which is exactly what `resolveUpstream`'s prefix match needs).
+//
+// Known limitation, honestly stated: this still only counts loader-side API
+// *call sites*, not "screens with working data" the way
+// `scripts/contract/screen-map.json` does (that tool does real per-screen
+// chain analysis: gateway → route handler → migration table; see REL-008,
+// which is about that map being stale/wrong, not about this count). Fully
+// reconciling this script's method with the screen-map's is a larger job
+// left as a follow-up (see PR description) rather than rushed here.
+const LOADER_HELPER_RE =
+  /\b(?:fetchJson|postJson|patchJson|putJson|deleteJson|browserJson)\s*(?:<[^>(]*>)?\s*\(\s*(?:"([^"]+)"|`([^`]*?)(?:\$\{|`))/g;
+
+function findLoaderFiles(dir, acc = []) {
+  for (const ent of readdirSync(dir, { withFileTypes: true })) {
+    if (ent.name === "node_modules" || ent.name === "dist") continue;
+    const p = join(dir, ent.name);
+    if (ent.isDirectory()) findLoaderFiles(p, acc);
+    else if (ent.name === "loaders.ts") acc.push(p);
+  }
+  return acc;
+}
+
 function parseLoaderPaths() {
-  const src = read("apps/web/src/app/_data/loaders.ts");
-  return [...src.matchAll(/fetchJson\("([^"]+)"/g)].map((m) => m[1]);
+  const paths = [];
+  for (const file of findLoaderFiles(join(ROOT, "apps/web/src/app"))) {
+    const src = readFileSync(file, "utf8");
+    for (const m of src.matchAll(LOADER_HELPER_RE)) {
+      paths.push(m[1] ?? m[2]);
+    }
+  }
+  return paths;
 }
 
 function parseCiJobs() {
