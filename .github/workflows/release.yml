@@ -1,30 +1,47 @@
 name: Release Gate
 
+# REL-002: this used to be `on: push: branches: [main]`, which starts this
+# workflow AT THE SAME TIME as ci.yml (also push:main-triggered) instead of
+# after it. The "Verify CI passed on this SHA" step then asked the GitHub API
+# for CI's conclusion on a run that was still in progress, got back
+# `status: ""` (not yet concluded), treated that as failure, and exited 1 —
+# so every release was blocked structurally, regardless of whether CI
+# actually passed. Last 5 runs all failed this way.
+#
+# Fix: trigger on `workflow_run` for CI's completion instead of racing it.
+# `workflow_run` always uses the *default branch's* copy of this workflow
+# file and does NOT automatically scope to main — CI itself also runs on
+# `develop` pushes and on `pull_request`, so both the branch and the
+# triggering event are checked explicitly below before anything runs.
 on:
-  push:
-    branches: [main]
+  workflow_run:
+    workflows: ["CI"]  # must match ci.yml's `name:` field exactly
+    types: [completed]
 
 jobs:
   release-gate:
     name: Release Readiness
     runs-on: ubuntu-latest
+    # Only proceed for a CI run that (a) concluded successfully, (b) ran
+    # against main, and (c) was itself triggered by a push (not a PR) — a
+    # release is cut from main's post-merge state, never from a PR preview.
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.head_branch == 'main' &&
+      github.event.workflow_run.event == 'push'
     steps:
       - uses: actions/checkout@v4
-        with: { fetch-depth: 0 }
+        with:
+          # Check out the exact commit CI validated, not whatever `main`
+          # points to right now (they can differ if another push landed
+          # while CI was running) and not the default-branch checkout
+          # workflow_run would otherwise give us.
+          ref: ${{ github.event.workflow_run.head_sha }}
+          fetch-depth: 0
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with: { node-version: '22', cache: 'pnpm' }
       - run: pnpm install --frozen-lockfile
-      - name: Verify CI passed on this SHA
-        run: |
-          SHA="${{ github.sha }}"
-          STATUS=$(gh run list --commit "$SHA" --workflow ci.yml --json conclusion --jq '.[0].conclusion' 2>/dev/null || echo "unknown")
-          if [ "$STATUS" != "success" ]; then
-            echo "CI workflow did not pass for $SHA (status: $STATUS). Blocking release."
-            exit 1
-          fi
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: QA readiness score (must be ≥95)
         run: node scripts/qa-readiness-score.mjs --min-score 95
       - name: Production readiness score
@@ -50,10 +67,12 @@ jobs:
     needs: release-gate
     steps:
       - uses: actions/checkout@v4
-        with: { fetch-depth: 0 }
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          fetch-depth: 0
       - name: Create GitHub Release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          VERSION=$(node -p "require(./package.json).version")
-          gh release create "v${VERSION}" --generate-notes --title "CivitasOne v${VERSION}"
+          VERSION=$(node -p "require('./package.json').version")
+          gh release create "v${VERSION}" --target "${{ github.event.workflow_run.head_sha }}" --generate-notes --title "CivitasOne v${VERSION}"
