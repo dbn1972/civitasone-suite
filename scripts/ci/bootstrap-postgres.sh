@@ -529,13 +529,53 @@ fi
 
 # Strip the trailing "# reason" annotation and surrounding whitespace before
 # comparing, so editing a reason never changes the gate's verdict.
-sed 's/#.*//' "$ALLOWLIST" | sed 's/[[:space:]]*$//' | awk 'NF' | sort -u \
+#
+# CONDITIONAL entries (see migration-failure-allowlist.txt's header) are
+# extension-dependent, not tracked debt: it is CORRECT for them to fail on
+# postgres:16-alpine (no postgis) and PASS on postgis/postgis:16-3.4
+# (postgis present), on the SAME unmodified allow-list. A flat diff can't
+# express that a passing allow-listed entry is fine, so CONDITIONAL entries
+# are pulled out of both comparisons below:
+#   - "allowed" (CONDITIONAL + ordinary, path only) still feeds "novel", so a
+#     CONDITIONAL entry observed failing (e.g. on alpine) is expected, not new
+#     breakage.
+#   - "allowed-strict" (CONDITIONAL entries removed) feeds "stale" instead of
+#     "allowed", so a CONDITIONAL entry observed passing (e.g. on postgis)
+#     never trips the "now PASS, remove it" check that a real fix should.
+# Either way, a CONDITIONAL entry's presence in this run's observed failures
+# or observed passes never changes the exit code — only genuinely novel
+# failures and genuinely-fixed ordinary entries still ratchet.
+sed 's/#.*//' "$ALLOWLIST" | sed -E 's/^[[:space:]]*CONDITIONAL:[[:space:]]*//' \
+  | sed 's/[[:space:]]*$//' | awk 'NF' | sort -u \
   > /tmp/bootstrap-failures-allowed.txt
+# `|| true` on both greps below for the same pipefail reason as `awk 'NF'`
+# above: with zero CONDITIONAL entries (or, symmetrically, zero non-CONDITIONAL
+# ones), the grep that finds none of them exits 1, and pipefail would fail the
+# whole pipeline even though every later stage succeeds and an empty result is
+# completely legitimate here.
+{ grep -E '^[[:space:]]*CONDITIONAL:' "$ALLOWLIST" || true; } | sed 's/#.*//' \
+  | sed -E 's/^[[:space:]]*CONDITIONAL:[[:space:]]*//' | sed 's/[[:space:]]*$//' \
+  | awk 'NF' | sort -u > /tmp/bootstrap-failures-conditional.txt
+{ grep -vE '^[[:space:]]*CONDITIONAL:' "$ALLOWLIST" || true; } | sed 's/#.*//' \
+  | sed 's/[[:space:]]*$//' | awk 'NF' | sort -u \
+  > /tmp/bootstrap-failures-allowed-strict.txt
+
 novel=$(comm -23 /tmp/bootstrap-failures-observed.txt /tmp/bootstrap-failures-allowed.txt)
-stale=$(comm -13 /tmp/bootstrap-failures-observed.txt /tmp/bootstrap-failures-allowed.txt)
+stale=$(comm -13 /tmp/bootstrap-failures-observed.txt /tmp/bootstrap-failures-allowed-strict.txt)
 
 echo "──────────────────────────────────────────────────────────────"
 echo "  Migration failures: ${observed_count} observed, $(wc -l < /tmp/bootstrap-failures-allowed.txt | tr -d ' ') allow-listed"
+
+if [ -s /tmp/bootstrap-failures-conditional.txt ]; then
+  echo "  ℹ extension-conditional (excluded from the ratchet, expected to vary by image):"
+  while IFS= read -r entry; do
+    if grep -qxF "$entry" /tmp/bootstrap-failures-observed.txt; then
+      echo "      ${entry} — failed this run (expected without the extension)"
+    else
+      echo "      ${entry} — passed this run (expected with the extension)"
+    fi
+  done < /tmp/bootstrap-failures-conditional.txt
+fi
 
 rc=0
 if [ -n "$novel" ]; then
