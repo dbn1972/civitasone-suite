@@ -109,6 +109,12 @@ describe("gateway contract", () => {
       ["locations", "geofences", "jurisdictions", "hierarchy", "pincodes"],
       // tenant-service: plural /tenants + singular /tenant alias
       ["tenant", "tenant-singular"],
+      // document-service (COMP-003/REL-007): /api/v1/documents is the
+      // canonical prefix; /api/v1/eoffice is an intentional alias onto the
+      // SAME service (upstreamPath rewrites it to /v1/documents — see
+      // registry.ts) so e-Office-branded clients and the document-management
+      // UI share one backend. Not an accidental routing collision.
+      ["documents", "eoffice"],
     ];
 
     const byUpstream = new Map<string, string[]>();
