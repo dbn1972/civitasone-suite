@@ -128,6 +128,10 @@ vi.mock("../src/modules/budget/repo.js", () => ({
   findHeadByCodeTx: (...args: any[]) => findHeadByCodeTxMock(...args),
   findHeadByIdTx: (...args: any[]) => findHeadByIdTxMock(...args),
   findBudget: vi.fn(async () => null),
+  // DOM-007: postJournal() calls findBudgetTx (tx-scoped), not findBudget —
+  // see budget/repo.ts's findBudgetTx doc comment. The settlement journal's
+  // heads (net-payable, bank) are not budget-controlled, so this is a no-op.
+  findBudgetTx: vi.fn(async () => null),
   findSanctionByIdTx: vi.fn(async () => null),
   incrementSanctionUtilisedGuarded: vi.fn(async () => true),
 }));

@@ -9,6 +9,10 @@ import * as queries from "./queries.js";
 
 const FINANCE_ROLES = ["finance_officer", "finance_admin", "super_admin"];
 const READER_ROLES  = [...FINANCE_ROLES, "audit_officer"];
+// DOM-007: posting over a head's budget requires an elevated role, same
+// tier as period-close's hard-close "reopen" — the other GL-core control
+// this codebase already lets an admin bypass, audited, with a reason.
+const BUDGET_OVERRIDE_ROLES = ["finance_admin", "super_admin"];
 
 export async function glRoutes(app: FastifyInstance): Promise<void> {
   // NOTE (flagged for explicit review): this was FINANCE_ROLES (includes
@@ -26,6 +30,14 @@ export async function glRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, FINANCE_ROLES);
     const body = postJournalBody.parse(req.body);
+    // DOM-007: a plain finance_officer cannot self-authorize posting over
+    // budget — only an elevated role can set budgetOverride, checked here
+    // (before the command is even enqueued) so the override on the consumer
+    // side (gl/consumer.ts) can trust the flag without re-deriving roles
+    // from a queue message.
+    if (body.budgetOverride) {
+      requireRole(ctx, BUDGET_OVERRIDE_ROLES);
+    }
     return sendAccepted(reply, acceptedResponseSchema, await commands.postJournal(ctx, body));
   });
 

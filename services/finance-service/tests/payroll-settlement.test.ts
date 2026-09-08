@@ -97,6 +97,12 @@ vi.mock("../src/modules/gl/repo.js", () => ({
 vi.mock("../src/modules/budget/repo.js", () => ({
   findHeadByCodeTx: (...args: any[]) => findHeadByCodeTxMock(...args),
   findHeadByIdTx: vi.fn(async () => ({ id: "head-uuid", code: "0000", name: "Head" })),
+  // DOM-007: postJournal() calls the tx-scoped findBudgetTx (not findBudget —
+  // see budget/repo.ts's doc comment on why). The settlement journal's heads
+  // (net-payable, bank) are not budget-controlled — no finance_budgets row
+  // for this FY — so this is a no-op, same as payroll-gl-consumer.test.ts /
+  // recon-invariants.test.ts.
+  findBudgetTx: vi.fn(async () => null),
 }));
 // gl/consumer.ts's postJournal() imports getPeriodStatusTx from
 // period-close/repo.js (a tx-scoped read), NOT getPeriodStatus from

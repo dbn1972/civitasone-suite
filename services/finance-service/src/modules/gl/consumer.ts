@@ -7,6 +7,7 @@ import { COMMANDS, EVENTS, CONSUMED_EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
 import * as budgetRepo from "../budget/repo.js";
 import { assertJournalBalances } from "./domain.js";
+import { assertBudgetNotExceeded, availableBalance, DomainError } from "../budget/domain.js";
 import { assertDistinctMakerChecker } from "../payments/domain.js";
 import { getPeriodStatusTx } from "../period-close/repo.js";
 import { nextVoucherNo, fyFromDate } from "../hoa/voucher.js";
@@ -47,6 +48,12 @@ type StandardJournal = {
   id: string; tenantId: string; voucherNo: string; type: string;
   postingDate: string; lines: JournalLine[]; reversesId?: string;
   legalEntityId?: string; costCenterId?: string; profitCenterId?: string; operatingUnitId?: string;
+  // DOM-007: explicit, audited override of the per-head budget check below.
+  // Only reachable from POST /v1/finance/journals — gl/routes.ts requires
+  // BUDGET_OVERRIDE_ROLES before a command carrying budgetOverride=true is
+  // ever enqueued, so by the time it reaches this consumer the override is
+  // already authorized; this flag is not itself an authorization check.
+  budgetOverride?: boolean; overrideReason?: string;
 };
 
 async function postJournal(
@@ -107,7 +114,85 @@ async function postJournal(
   // Idempotency: a journal id is deterministic for GL-spine postings (keyed off
   // the source doc). If it already exists, this is a redelivery — skip silently
   // so bills/payments/receipts never double-post.
+  //
+  // DOM-007 fixup: the budget-check block below MUST run after this
+  // short-circuit, not before it. A redelivered command (same journal.id,
+  // already posted, but a brand-new messageId — exactly what a real
+  // outbox/queue redelivery looks like, since markProcessed's dedup is
+  // messageId-based, not journal-id-based) needs to hit this return and
+  // skip everything downstream, including the budget check. Running the
+  // budget check before this line meant a redelivery — where insertJournal
+  // itself correctly no-ops — still called incrementBudgetUtilisedGuarded /
+  // incrementBudgetUtilisedForced a SECOND time, silently double-counting
+  // utilised_minor for a journal that was only ever posted once. See
+  // tests/gl-budget-check.test.ts's "redelivery of an already-posted
+  // journal (fixup)" regression test.
   if (await repo.findJournalByIdTx(tx, journal.id)) return;
+  // DOM-007: budget check (skill 01 "every commit must call check_budget").
+  // Granularity is per budget head (tenant_id, head_id, fy) — the same grain
+  // finance_budgets itself is keyed at (UNIQUE(tenant_id, head_id, fy)) and
+  // the grain grant-service's assertWithinAllocation checks a distribution
+  // against its single allocation. Debit lines only: a budget head is
+  // consumed by expenditure (the debit side); a credit line never draws it
+  // down. Multiple lines against the same head in one entry are summed
+  // before the check so a multi-line journal can't split a single overdraw
+  // across lines to dodge it. A head with no finance_budgets row for this FY
+  // is not budget-controlled — skipped, matching skill 01's posting
+  // algorithm ("UPDATE finance_budgets.consumed (if budget controlled)").
+  {
+    const fy = fyFromDate(journal.postingDate);
+    const perHeadDebit = new Map<string, bigint>();
+    for (const l of journal.lines) {
+      const dr = BigInt(l.debitMinor);
+      if (dr <= 0n) continue;
+      const headId = await resolveHeadIdTx(tx, journal.tenantId, l.accountCode);
+      perHeadDebit.set(headId, (perHeadDebit.get(headId) ?? 0n) + dr);
+    }
+    for (const [headId, requested] of perHeadDebit) {
+      // findBudgetTx (not findBudget) — runs against this already-open tx
+      // instead of opening its own nested transaction. See findBudgetTx's
+      // doc comment in budget/repo.ts.
+      const budget = await budgetRepo.findBudgetTx(
+        tx as Parameters<typeof budgetRepo.findBudgetTx>[0], headId, fy, journal.tenantId,
+      );
+      if (!budget) continue; // head not budget-controlled for this FY
+      const available = availableBalance({ reMinor: budget.reMinor, utilisedMinor: budget.utilisedMinor });
+      if (journal.budgetOverride) {
+        if (requested > available) {
+          // Explicit, audited override — mirrors the period-close "reopen"
+          // convention (elevated role gated upstream + a logged reason) for
+          // the GL core's other bypass-of-a-normal-control action, rather
+          // than inventing a new bypass shape.
+          await enqueue(tx, {
+            topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC,
+            tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+            payload: {
+              service: "finance", action: "post_journal_budget_override", resourceType: "budget",
+              resourceId: budget.id, outcome: "success",
+              headId, fy, requestedMinor: requested.toString(), availableMinor: available.toString(),
+              reason: journal.overrideReason ?? null,
+            },
+          });
+        }
+        await budgetRepo.incrementBudgetUtilisedForced(
+          tx as Parameters<typeof budgetRepo.incrementBudgetUtilisedForced>[0], budget.id, requested, msg.actorId,
+        );
+      } else {
+        assertBudgetNotExceeded(available, requested);
+        const ok = await budgetRepo.incrementBudgetUtilisedGuarded(
+          tx as Parameters<typeof budgetRepo.incrementBudgetUtilisedGuarded>[0], budget.id, requested, msg.actorId,
+        );
+        if (!ok) {
+          // Lost a race to a concurrent posting against the same head between
+          // the read above and this guarded write — re-assert, unauthorized.
+          throw new DomainError(
+            "BUDGET_EXCEEDED",
+            `requested ${requested} paise exceeds available budget for head ${headId} (concurrent posting)`,
+          );
+        }
+      }
+    }
+  }
   await repo.insertJournal(tx, {
     id: journal.id, tenantId: journal.tenantId, voucherNo,
     type: journal.type, postingDate: journal.postingDate, lines: journal.lines,
