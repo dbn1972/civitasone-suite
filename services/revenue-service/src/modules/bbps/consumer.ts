@@ -68,7 +68,19 @@ export function registerBbpsConsumers(queue: Queue): void {
 
       assesseeId = dcb.assesseeId;
 
-      // Validate payment against outstanding
+      // SEC-001: the amount actually posted below is never a bare pass-through
+      // of the caller-declared amountMinor. It is bound against dcb.totalOutstandingMinor
+      // — the assessee's real outstanding balance, re-read fresh inside this
+      // transaction — the same "never trust a client-carried total, always
+      // check it against the authoritative record" principle the finance
+      // GL core applies to its own totals. A claim that is <= 0 or exceeds
+      // the real outstanding balance throws here and the whole transaction
+      // (which has not written anything yet) rolls back — no receipt, no DCB
+      // entry, no bbps_transaction row, no event.
+      //
+      // This bound is defense in depth on top of, not a replacement for, the
+      // role + BBPS-signature gate in routes.ts: this consumer only ever runs
+      // for a command that already passed both of those checks.
       validateBbpsPayment(paymentAmount, dcb.totalOutstandingMinor);
 
       // Insert receipt
