@@ -13,6 +13,9 @@
  * convention for scripts/ci/*.mjs tests living under tests/architecture/.
  */
 import { describe, it, expect } from "vitest";
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+import { dirname, resolve } from "node:path";
 import {
   classifyFleet,
   KNOWN_SERVICES,
@@ -20,6 +23,8 @@ import {
   envVarFor,
   parseCsv,
 } from "../../scripts/ops/verify-pgbouncer-routing.mjs";
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
 
 describe("verify-pgbouncer-routing: classifyFleet — fully compliant fleet", () => {
   it("every service with observed connections is compliant when all route via the pgbouncer hint, and services with zero connections are still reported individually", () => {
@@ -111,7 +116,7 @@ describe("verify-pgbouncer-routing: classifyFleet — empty fleet", () => {
     }
   });
 
-  it("rows referencing a database outside the known 33 services are ignored, not misattributed", () => {
+  it("rows referencing a database outside KNOWN_SERVICES are ignored, not misattributed", () => {
     const rows = [{ datname: "some_unrelated_db", application_name: "node-direct", client_addr: "10.0.0.99", count: 7 }];
     const report = classifyFleet(rows);
     expect(report.overallCompliant).toBe(true);
@@ -126,9 +131,23 @@ describe("verify-pgbouncer-routing: helper functions", () => {
     expect(envVarFor("hrms")).toBe("DATABASE_URL_HRMS");
   });
 
-  it("KNOWN_SERVICES contains exactly the documented 33 services with no duplicates", () => {
-    expect(KNOWN_SERVICES).toHaveLength(33);
-    expect(new Set(KNOWN_SERVICES).size).toBe(33);
+  it("KNOWN_SERVICES has no duplicates and matches ecosystem.config.js's real fleet (PERF-001 regression guard)", () => {
+    expect(KNOWN_SERVICES.length).toBeGreaterThan(0);
+    expect(new Set(KNOWN_SERVICES).size).toBe(KNOWN_SERVICES.length);
+
+    // Independent cross-check: this must NOT reuse fleet-topology.mjs's own
+    // parsing (that would just assert the derivation equals itself). Instead,
+    // re-derive the distinct `civitas_<name>` database set straight off the
+    // raw ecosystem.config.js TEXT via a completely different method (plain
+    // regex, no require()/eval), and assert the two agree. This is the
+    // regression guard for the exact failure mode that let PERF-001 happen:
+    // a hardcoded 33-service literal silently drifting out of sync with a
+    // fleet that grew to 65 — a plain text scan can never "forget" to track
+    // ecosystem.config.js the way a hand-maintained array did.
+    const ecosystemSrc = readFileSync(resolve(__dirname, "../../ecosystem.config.js"), "utf8");
+    const dbNamesInSource = new Set([...ecosystemSrc.matchAll(/civitas_\w+/g)].map((m) => m[0]));
+    const dbNamesFromKnownServices = new Set(KNOWN_SERVICES.map(dbNameFor));
+    expect(dbNamesFromKnownServices).toEqual(dbNamesInSource);
   });
 
   it("a custom pgbouncerHint overrides the default 'pgbouncer' substring match", () => {

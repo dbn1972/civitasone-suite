@@ -76,11 +76,71 @@ services:
     container_name: civitasone-pgbouncer
     restart: unless-stopped
     environment:
-      DATABASE_URL: postgres://${POSTGRES_ADMIN_USER:-civitas_admin}:${POSTGRES_ADMIN_PASSWORD:?POSTGRES_ADMIN_PASSWORD must be set}@civitasone-postgres:5432/postgres
+      # PERF-001: DB_HOST/DB_PORT (not DATABASE_URL) so the edoburu entrypoint
+      # leaves DB_NAME unset and its auto-generated config gets a WILDCARD
+      # `[databases] * = host=... port=...` entry (mirrors infra/pgbouncer/
+      # pgbouncer.ini) — every one of the fleet's 65 civitas_* databases
+      # resolves through it, forwarding each client's own role straight to
+      # Postgres (no `user=` override, so RLS/tenant roles are preserved).
+      #
+      # The PREVIOUS `DATABASE_URL: .../postgres` form is what this container
+      # ran with for the fix's entire "gap window": the entrypoint extracts
+      # the URL's path segment ("postgres") as an EXPLICIT, non-wildcard
+      # `[databases] postgres = ...` entry, so any client requesting a real
+      # service database (civitas_finance, civitas_hrms, ...) would have been
+      # rejected by PgBouncer with "database not configured" the moment
+      # anything actually tried to route through it — i.e. PgBouncer being
+      # "already running" (docker ps) never meant it was usable by the fleet.
+      # Confirmed via `docker inspect` + reading the container's generated
+      # /etc/pgbouncer/pgbouncer.ini before this fix; see
+      # docs/architecture/CONNECTION-BUDGET.md.
+      DB_HOST: civitasone-postgres
+      DB_PORT: "5432"
       POOL_MODE: transaction
-      MAX_CLIENT_CONN: 500
-      DEFAULT_POOL_SIZE: 20
-      AUTH_TYPE: trust
+      # Budget: 132 PM2 processes (130 DB-backed) + up to 19 second "scanner"
+      # (BYPASSRLS) pools (11 wired today), each capped at DB_POOL_MAX=5
+      # client connections (ecosystem.config.js) => (130+19)×5 = 745 worst
+      # case. 1000 leaves ~25% headroom. Exact figures come from
+      # scripts/ops/lib/fleet-topology.mjs, not hand-counted — see
+      # docs/architecture/CONNECTION-BUDGET.md.
+      MAX_CLIENT_CONN: "1000"
+      # Budget: 65 main (user,db) pools (svc+worker share one) + up to 19
+      # scanner-role pools ≈ 84 distinct PgBouncer pools once every scanner
+      # DSN is wired (11/19 today, => 76 pools today). 84 × default_pool_size=2
+      # = 168 real backend connections to Postgres, vs. max_connections=200 —
+      # ~32 headroom for admin/psql/direct migration scripts + Postgres's own
+      # superuser_reserved_connections. See docs/architecture/
+      # CONNECTION-BUDGET.md for why this is deliberately flat/conservative
+      # rather than per-database-tuned (no production pg_stat_activity
+      # telemetry exists yet to tune against).
+      DEFAULT_POOL_SIZE: "2"
+      MIN_POOL_SIZE: "1"
+      RESERVE_POOL_SIZE: "1"
+      # PERF-001: this container's PREVIOUS `AUTH_TYPE: trust` never actually
+      # worked for any real service connection, independent of the wildcard
+      # bug above — civitasone-postgres's pg_hba.conf has
+      # `host all all all scram-sha-256` (every non-local connection needs a
+      # real password), but trust-mode PgBouncer has no client password to
+      # relay upstream, so every server-side login (regardless of which role)
+      # failed auth. "PgBouncer is running" (docker ps) never meant a real
+      # connection could get through it.
+      #
+      # Fix: auth_type=scram-sha-256 + auth_user/auth_query. PgBouncer keeps
+      # ONE bootstrap credential (civitas_admin, below) to run auth_query
+      # on demand against pg_authid for WHATEVER role is actually connecting
+      # (finance_svc, hrms_svc, ...), fetches that role's real SCRAM secret,
+      # and uses it for both the client handshake and the server-side login
+      # AS THAT ROLE — verified end-to-end against an isolated PgBouncer
+      # instance for finance_svc/hrms_svc/identity_svc (each landed on its
+      # own database as its own role, not as civitas_admin) before this was
+      # wired in here. This scales to all 65+ roles without a per-role
+      # userlist.txt entry, and without re-provisioning PgBouncer when a new
+      # service/role is added.
+      DB_USER: ${POSTGRES_ADMIN_USER:-civitas_admin}
+      DB_PASSWORD: ${POSTGRES_ADMIN_PASSWORD:?POSTGRES_ADMIN_PASSWORD must be set}
+      AUTH_TYPE: scram-sha-256
+      AUTH_USER: ${POSTGRES_ADMIN_USER:-civitas_admin}
+      AUTH_QUERY: "SELECT rolname, rolpassword FROM pg_authid WHERE rolname=$1"
     ports:
       - "${PGBOUNCER_HOST_PORT:-6432}:5432"
     depends_on:
