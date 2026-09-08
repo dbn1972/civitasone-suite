@@ -216,6 +216,27 @@ const ID_CARD_QR_SECRET = IS_PROD
   ? requireSecret("ID_CARD_QR_SECRET")
   : (process.env.ID_CARD_QR_SECRET ?? "civitasone-id-card-hmac-secret-change-in-prod");
 
+// -- Candidate portal token secret (SEC-003, anti-forgery) -------------------
+// hrms-service signs/verifies public careers-portal cand_tokens with this
+// HMAC-SHA256 key (modules/recruitment/candidate-public-auth-routes.ts).
+// Previously this var was never wired into any deploy config at all -- the
+// app silently ran on the source-visible hardcoded fallback in routes.ts, in
+// EVERY environment including production, with no way to override it. Same
+// injection contract as ID_CARD_QR_SECRET/DEVICE_TRUST_SECRET: env var from
+// the secret manager in production, fail closed if missing; a fixed
+// non-secret dev value outside production. The dev/non-prod fallback below
+// is a NEW literal (not the historic "dev-cand-secret-not-for-production"
+// that shipped source-visible on the public repo) -- see SEC-003's PR for
+// why: rotating the fallback string itself is the simplest way to make sure
+// no cand_token ever forged (or legitimately issued) against the old,
+// compromised secret keeps verifying once this deploys, in any environment
+// that had been silently running on it. routes.ts itself also fails closed
+// in prod as defense in depth, in case that module is ever started outside
+// this file.
+const CANDIDATE_JWT_SECRET = IS_PROD
+  ? requireSecret("CANDIDATE_JWT_SECRET")
+  : (process.env.CANDIDATE_JWT_SECRET ?? "civitasone-careers-portal-cand-token-dev-secret-2026-09-08");
+
 // -- MFA at-rest encryption key (P0-3) ----------------------------------------
 // identity-service stores TOTP secrets AES-256-GCM-encrypted at rest. The
 // 32-byte key is derived from this secret. Same injection contract as
@@ -419,7 +440,7 @@ module.exports = {
     // ── Establishment & physical assets ───────────────────────────────────────
     svc("estab",        3010, "estab_svc",         "civitas_estab"),
     svc("stock",        3011, "stock_svc",         "civitas_stock"),
-    svc("hrms",         3012, "hrms_svc",          "civitas_hrms", { PII_ENC_KEY, ID_CARD_QR_SECRET }),
+    svc("hrms",         3012, "hrms_svc",          "civitas_hrms", { PII_ENC_KEY, ID_CARD_QR_SECRET, CANDIDATE_JWT_SECRET }),
     svc("payroll",      3013, "payroll_svc",       "civitas_payroll"),
     svc("project",      3014, "project_svc",       "civitas_project"),
     svc("asset",        3015, "asset_svc",         "civitas_asset"),

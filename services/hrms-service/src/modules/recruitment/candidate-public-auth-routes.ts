@@ -64,13 +64,69 @@ async function scopedWriteForTenant<T>(tenantId: string, fn: Parameters<typeof s
 const SYSTEM_ACTOR = "00000000-0000-0000-0000-000000000000";
 const CAND_TOKEN_TTL = 7 * 24 * 60 * 60; // 7 days in seconds
 
-function candSecret(): string {
-  return process.env.CANDIDATE_JWT_SECRET ?? "dev-cand-secret-not-for-production";
+// SEC-003: CANDIDATE_JWT_SECRET must be injected from the secret manager in
+// any environment other than a genuinely-declared local dev/test process
+// (see ecosystem.config.js's CANDIDATE_JWT_SECRET / requireSecret()). The
+// string below is a source-visible dev-only fallback -- this is a PUBLIC
+// careers-portal route, and before the first SEC-003 fix the fallback was
+// also silently used in production (CANDIDATE_JWT_SECRET was never wired
+// into ecosystem.config.js/docker-compose/infra/.env, so every real
+// deployment that didn't explicitly export it fell back to this same
+// hardcoded value). Anyone who reads this open-source-visible repo could
+// forge a cand_token for an arbitrary tenantId/candidateId/email -- no OTP
+// required -- and read that candidate's application history via
+// candidate-public-portal-routes.ts.
+//
+// FAIL CLOSED BY ALLOW-LIST, NOT DENY-LIST. Only NODE_ENV === "development"
+// (a genuinely-declared local dev process) or "test" (vitest/CI, which sets
+// this by default) get the convenience fallback below; every other value --
+// unset, "staging", "uat", "qa", or anything else that isn't explicitly
+// declared dev/test -- refuses to boot without a real secret. The first cut
+// of this fix only checked `NODE_ENV === "production"` (a deny-list), which
+// left every deployment path that isn't launched with NODE_ENV=production
+// via PM2 (staging, UAT, QA, a container started with plain `node`/`docker
+// run`, etc.) still silently signing with this same hardcoded literal --
+// the original vulnerability, unpatched, everywhere except the one
+// explicitly-hardened path. The literal itself is also rotated here (from
+// the historic "dev-cand-secret-not-for-production", which shipped
+// source-visible in a public commit and could plausibly still be relied on
+// by an attacker who read the old source) so the "convenience" dev fallback
+// is no longer a value anyone outside this codebase has ever seen used as a
+// real signing secret.
+//
+// NOTE: resolveQrSecret() (modules/id-cards/routes.ts) and IS_PROD's
+// `NODE_ENV === "production"` check (ecosystem.config.js) still use the
+// deny-list form and carry this identical residual gap. That is a separate,
+// pre-existing, broader pattern issue -- tracked, not fixed here, to keep
+// this change scoped to SEC-003 (candidate portal tokens).
+//
+// Evaluated once at module load (not lazily per-call) so the refusal
+// happens at startup, not on the first request.
+const CAND_SECRET_FALLBACK_ALLOWED_ENVS = new Set(["development", "test"]);
+
+function resolveCandSecret(): string {
+  const configured = process.env.CANDIDATE_JWT_SECRET;
+  if (configured && configured.length > 0) {
+    return configured;
+  }
+  const nodeEnv = process.env.NODE_ENV;
+  if (!CAND_SECRET_FALLBACK_ALLOWED_ENVS.has(nodeEnv ?? "")) {
+    throw new Error(
+      `SEC: CANDIDATE_JWT_SECRET is required outside a declared development/test ` +
+        `environment (NODE_ENV was ${JSON.stringify(nodeEnv ?? null)}). Inject it from the ` +
+        `secret manager (do not hardcode). Refusing to start -- the hardcoded fallback is ` +
+        `source-visible and would let anyone who can read this repo forge a valid ` +
+        `candidate portal token for any tenant.`,
+    );
+  }
+  return "civitasone-hrms-candidate-portal-internal-dev-fallback-2026-09-08";
 }
+
+const CAND_SECRET = resolveCandSecret();
 
 export function signCandToken(payload: { candidateId: string; tenantId: string; email: string; exp: number }): string {
   const data = Buffer.from(JSON.stringify(payload)).toString("base64url");
-  const sig = createHmac("sha256", candSecret()).update(data).digest("base64url");
+  const sig = createHmac("sha256", CAND_SECRET).update(data).digest("base64url");
   return `${data}.${sig}`;
 }
 
@@ -79,7 +135,7 @@ export function verifyCandToken(token: string): { candidateId: string; tenantId:
   if (dot < 0) return null;
   const data = token.slice(0, dot);
   const sig = token.slice(dot + 1);
-  const expected = createHmac("sha256", candSecret()).update(data).digest("base64url");
+  const expected = createHmac("sha256", CAND_SECRET).update(data).digest("base64url");
   try {
     if (!timingSafeEqual(Buffer.from(sig), Buffer.from(expected))) return null;
   } catch { return null; }
@@ -259,7 +315,17 @@ export async function candidatePublicAuthRoutes(app: FastifyInstance): Promise<v
       // `already_verified` 422 instead of also succeeding. See
       // otpRepo.markVerified's docstring for the full writeup.
       await otpRepo.markVerified(tx, tenantId, challenge.id, candidateId, "email");
-      return { kind: "valid" as const, challengeId: challenge.id };
+      // SEC-003: return the challenge's OWN tenantId column (read back from
+      // the locked DB row), not the outer `tenantId` closure var that came
+      // straight from the request body, as the value the token gets minted
+      // with. lockLatestChallenge's WHERE clause already filters on
+      // `tenantId` so today the two values coincide whenever a row is
+      // found — but the signed token should be built from server-verified
+      // state, not by re-emitting client input, so a future change to that
+      // filter (or a query path that stops requiring an exact tenant match)
+      // can't silently start signing an attacker-chosen tenantId into a
+      // trusted token again.
+      return { kind: "valid" as const, challengeId: challenge.id, tenantId: challenge.tenantId };
     });
 
     if (outcome.kind === "no_challenge") throw new HttpError(404, "NO_CHALLENGE", "request an OTP first");
@@ -279,7 +345,9 @@ export async function candidatePublicAuthRoutes(app: FastifyInstance): Promise<v
     // recruitment_candidate_public_auth_routes__1 / otp_verify_routes__1
     // going unused when their write became synchronous.
     const exp = Math.floor(Date.now() / 1000) + CAND_TOKEN_TTL;
-    const token = signCandToken({ candidateId, tenantId, email, exp });
+    // SEC-003: outcome.tenantId is the OTP challenge row's own tenantId
+    // column (server-verified), not the raw request-body tenantId.
+    const token = signCandToken({ candidateId, tenantId: outcome.tenantId, email, exp });
 
     return reply.code(200).send({ candidateId, name: fullName ?? email.split("@")[0], token });
   });

@@ -539,6 +539,15 @@ services:
       PORT: "3012"
       DATABASE_URL: ${DATABASE_URL_HRMS:?per-service least-privilege DSN required (set DATABASE_URL for civitas_hrms; do NOT use the cluster superuser)}
       PII_ENC_KEY: ${PII_ENC_KEY:?}
+      # SEC-003: only the hrms API process signs/verifies public careers-portal
+      # cand_tokens (the worker does not), matching ecosystem.config.js's
+      # svc("hrms", ...)-only wiring. This compose path already sets
+      # NODE_ENV=production fleet-wide (x-svc-env above), so the app-level
+      # fail-closed check in candidate-public-auth-routes.ts would already
+      # refuse to boot without this -- this line fails closed at the
+      # compose/env layer too, before the process even starts, same as
+      # INTERNAL_SERVICE_SECRET/DEVICE_TRUST_SECRET above.
+      CANDIDATE_JWT_SECRET: ${CANDIDATE_JWT_SECRET:?}
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3012/health >/dev/null 2>&1 || exit 1"]
       interval: 20s
