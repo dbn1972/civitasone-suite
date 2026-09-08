@@ -875,14 +875,28 @@ jobs:
       - run: pnpm turbo build --filter='./packages/*'
       - name: Bootstrap Postgres
         run: bash scripts/ci/bootstrap-postgres.sh
+      # REL-004: vitest.config.ts's junit reporter always writes to the same
+      # `evidence/quality-program-junit.xml` regardless of which lane subset
+      # was run, so a second `vitest run` in this job clobbers the first
+      # lane's result. release-gate.mjs also expects one XML file PER LANE,
+      # named so the lane id appears in the filename, sitting directly under
+      # `evidence/<YYYYMMDD>/` (see findLaneArtifact in release-gate.mjs).
+      # So: stamp the date once, then copy the junit output to its
+      # lane-specific evidence filename immediately after each run, before
+      # the next lane overwrites it.
+      - name: Set evidence date stamp
+        run: echo "EVIDENCE_DATE=$(date -u +%Y%m%d)" >> "$GITHUB_ENV"
       - name: Run L3 Schema Integrity gate
         run: |
+          mkdir -p "evidence/${EVIDENCE_DATE}"
           cd tests/quality-program
           npx vitest run L3-data-integrity/ --config vitest.config.ts
+          cp ../../evidence/quality-program-junit.xml "../../evidence/${EVIDENCE_DATE}/L3-data-integrity.xml"
       - name: Run L6 Security gate (crypto + audit immutability)
         run: |
           cd tests/quality-program
           npx vitest run L6-security/ --config vitest.config.ts
+          cp ../../evidence/quality-program-junit.xml "../../evidence/${EVIDENCE_DATE}/L6-security.xml"
         env:
           PII_ENC_KEY: test_pii_encryption_key_32_chars_min
       - name: Upload evidence
@@ -909,18 +923,28 @@ jobs:
         with: { node-version: '${{ env.NODE_VERSION }}', cache: 'pnpm' }
       - run: pnpm install --frozen-lockfile
       - run: pnpm turbo build --filter='./packages/*'
+      # REL-004: see the matching comment in quality-gates-schema — the junit
+      # reporter output must be copied to a lane-specific filename under
+      # evidence/<date>/ right after each run, before the next lane's run
+      # overwrites the shared output file.
+      - name: Set evidence date stamp
+        run: echo "EVIDENCE_DATE=$(date -u +%Y%m%d)" >> "$GITHUB_ENV"
       - name: Run L10 Domain Correctness gate (golden oracles)
         run: |
+          mkdir -p "evidence/${EVIDENCE_DATE}"
           cd tests/quality-program
           npx vitest run L10-domain-correctness/ --config vitest.config.ts
+          cp ../../evidence/quality-program-junit.xml "../../evidence/${EVIDENCE_DATE}/L10-domain-correctness.xml"
       - name: Run L11 Canary gate (gate-validity proof)
         run: |
           cd tests/quality-program
           npx vitest run L11-mutation-canary/ --config vitest.config.ts
+          cp ../../evidence/quality-program-junit.xml "../../evidence/${EVIDENCE_DATE}/L11-mutation-canary.xml"
       - name: Run L8 AI fabrication gate (static, no provider needed)
         run: |
           cd tests/quality-program
           npx vitest run L8-ai-features/no-fabricated-verdicts.test.ts --config vitest.config.ts
+          cp ../../evidence/quality-program-junit.xml "../../evidence/${EVIDENCE_DATE}/L8-ai-features.xml"
       # L0 static checks (gateway-route coverage, documented ports) run without a
       # fleet. QUALITY_ALLOW_OFFLINE lets the port-bound check report UNMEASURED
       # instead of failing on a runner that has no services running.
@@ -928,8 +952,16 @@ jobs:
         run: |
           cd tests/quality-program
           npx vitest run L0-deployment-readiness/ --config vitest.config.ts
+          cp ../../evidence/quality-program-junit.xml "../../evidence/${EVIDENCE_DATE}/L0-deployment-readiness.xml"
         env:
           QUALITY_ALLOW_OFFLINE: '1'
+      - name: Upload evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: quality-l0-l8-l10-l11-evidence
+          path: evidence/
+          retention-days: 14
 
   # ─────────────────────────────────────────────
   # Gate #11 — Mutation testing. BLOCKING.
@@ -962,24 +994,41 @@ jobs:
           name: mutation-report
           path: reports/mutation/
           retention-days: 30
-      - name: Upload evidence
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: quality-l10-l11-evidence
-          path: evidence/
-          retention-days: 14
+      # REL-004 cleanup: this job never writes to evidence/ (Stryker and
+      # mutation-summary.mjs both write to reports/mutation/ only), so this
+      # step previously uploaded an empty/nonexistent evidence/ dir under the
+      # name "quality-l10-l11-evidence" — which also collided with the real
+      # L10/L11 lane evidence now produced by quality-gates-domain
+      # (actions/upload-artifact@v4 errors on a duplicate name within the
+      # same run). The Stryker mutation *score* is a separate, currently
+      # unwired signal — see the REL-004 note in
+      # docs/ENTERPRISE-GAP-REPORT-2026-09-07.md for the follow-up.
 
   # ─────────────────────────────────────────────
   # Release Gate — audits the evidence pack.
   # Treats a lane with no artifact as UNMEASURED and blocks: "pass without an
   # artifact = fail". Informational on PRs (not every lane can run on a PR
   # runner); authoritative on main where the live-stack lanes also execute.
+  #
+  # REL-003: this job used to be structurally incapable of failing — both
+  # `release-gate.mjs` invocations were `|| true`, so a BLOCKED verdict never
+  # surfaced as a red job no matter what the script reported. The PR-runner
+  # invocation below is *deliberately* still `|| true` (kept, not an
+  # oversight): a PR runner has no live stack, so L1/L2/L4/L7 are legitimately
+  # UNMEASURED there and that must not fail every PR. The main-only
+  # enforcement invocation is the one REL-003 fixes — it now propagates the
+  # script's real exit code, so the job goes red exactly when the script
+  # reports BLOCKED.
   # ─────────────────────────────────────────────
   release-gate:
     name: Release Gate (evidence audit)
     runs-on: ubuntu-latest
     needs: [quality-gates-schema, quality-gates-domain]
+    # Kept `always()`: this job must still audit whatever evidence exists —
+    # and correctly report BLOCKED/FAIL — even when an upstream quality-gate
+    # job failed, rather than being silently skipped in exactly the case
+    # where the release most needs blocking. It is no longer a way to mask a
+    # failure, because the job's own outcome now tracks the script's verdict.
     if: always()
     steps:
       - uses: actions/checkout@v4
@@ -990,20 +1039,37 @@ jobs:
         with:
           path: downloaded-evidence
           merge-multiple: true
+        # Kept: with no upstream artifacts (e.g. every quality-gate job
+        # failed before its own `if: always()` upload step), this action
+        # errors outright instead of leaving an empty directory. That would
+        # be a raw step failure with no report attached. Evidence being
+        # absent is exactly the condition release-gate.mjs itself already
+        # models as UNMEASURED/BLOCKED further down — so let it through and
+        # have the script report it, rather than swallowing it here.
         continue-on-error: true
-      - name: Audit evidence pack
+      - name: Audit evidence pack (informational — every PR and push)
         run: |
           mkdir -p downloaded-evidence
           echo "Artifacts present:"
           find downloaded-evidence -name '*.xml' -print || true
-          # Informational on PRs: the live-stack lanes (L1/L2/L4/L7) cannot run
-          # here, so a BLOCKED verdict is expected and must not fail the PR.
+          # Deliberately non-blocking here: the live-stack lanes (L1/L2/L4/L7)
+          # cannot run on a PR runner, so a BLOCKED verdict is expected on
+          # every PR and must not fail it. Main's real enforcement is the
+          # step below.
           node scripts/ci/release-gate.mjs --evidence "$(find downloaded-evidence -type d -name '2*' | head -1 || echo downloaded-evidence)" || true
       - name: Enforce release gate (main only)
         if: github.ref == 'refs/heads/main'
         run: |
-          node scripts/ci/release-gate.mjs --evidence "$(find downloaded-evidence -type d -name '2*' | head -1 || echo downloaded-evidence)" --json > release-gate.json || true
+          EVIDENCE_DIR="$(find downloaded-evidence -type d -name '2*' | head -1 || echo downloaded-evidence)"
+          set +e
+          node scripts/ci/release-gate.mjs --evidence "$EVIDENCE_DIR" --json > release-gate.json
+          STATUS=$?
+          set -e
           cat release-gate.json
+          # This is the actual fix: the step (and therefore the job) now
+          # fails whenever the script reports BLOCKED, instead of always
+          # exiting 0 via a trailing `|| true`.
+          exit "$STATUS"
       - name: Upload release gate report
         if: always()
         uses: actions/upload-artifact@v4
