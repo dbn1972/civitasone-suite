@@ -253,7 +253,21 @@ export async function adminGapRoutes(app: FastifyInstance): Promise<void> {
   });
 
   // ─── Effective roles for a user — real, forwarded to identity-service RBAC ───
-  app.get("/v1/admin/users/:id/roles", async (req, reply) => {
+  //
+  // Deliberately NOT /v1/admin/users/:id/roles: the gateway has a pre-existing,
+  // intentionally-tested route (registry.ts's "admin-users" entry, guarded by
+  // registry.test.ts's "admin-users route maps to /identity/users" case) that
+  // sends the ENTIRE /api/v1/admin/users/* prefix straight to identity-service
+  // at /identity/users/*, bypassing admin-service — including this route —
+  // entirely. identity-service has no /identity/users/:id/roles of its own
+  // (roles live under /identity/rbac/*), so that path 404s at the gateway
+  // before ever reaching this handler. /v1/admin/user-roles/:id falls outside
+  // the shadowed prefix and reaches admin-service via the general /v1/admin
+  // catch-all, same as every other route in this file. (COMP-004: found via
+  // scripts/contract/screen-map.mjs reporting this chain as service-missing
+  // once the web page actually started calling it — see the admin/users
+  // frontend commit.)
+  app.get("/v1/admin/user-roles/:id", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ROLES);
     const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
@@ -268,8 +282,9 @@ export async function adminGapRoutes(app: FastifyInstance): Promise<void> {
   // per-role assign/revoke commands (no bulk "replace a user's roles" command
   // exists there, so — same pattern as PATCH /v1/admin/roles/:id/permissions
   // below — this computes the add/remove set and issues one real call per
-  // change). ───
-  app.patch("/v1/admin/users/:id/roles", async (req, reply) => {
+  // change). Same /v1/admin/users/* gateway-shadow reason as the GET above
+  // for why this is /user-roles/:id and not /users/:id/roles. ───
+  app.patch("/v1/admin/user-roles/:id", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ROLES);
     const { id } = z.object({ id: z.string().uuid() }).parse(req.params);

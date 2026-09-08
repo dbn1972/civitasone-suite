@@ -107,6 +107,13 @@ const SERVICE_DIR_MAP = {
   'tenant': 'tenant-service',
   'sync': 'identity-service',
   'devices': 'identity-service',
+  // COMP-004: registry.ts's "admin-users" entry is a pre-existing,
+  // intentionally-tested shortcut (registry.test.ts) that sends
+  // /api/v1/admin/users/* straight to identity-service, bypassing
+  // admin-service — same shape as the sync/devices aliases above, just
+  // previously missing from this map, which made every such chain read as
+  // 'service-missing' even though the real identity-service route exists.
+  'admin-users': 'identity-service',
   'queue': 'queue-service',
 };
 
@@ -562,6 +569,99 @@ function findDeadLinks() {
   return { total: checked.length, dead };
 }
 
+// ── Fabricated-data detection (COMP-004) ────────────────────────────────────
+//
+// The loader-chain checks above only run for pages that call a real data
+// loader. A page with ZERO loaders was always classified as a harmless
+// "navigation hub" (NO_LOADER) — but that is exactly the shape every
+// COMP-004 offender had: a `page.tsx` (or a client component it renders)
+// with no loader import at all, and instead a hardcoded array of
+// record-shaped object literals (MOCK_USERS, INITIAL_FLAGS, INITIAL_JOBS,
+// INITIAL_GRANTS, the old admin/roles INITIAL_MATRIX/ROLES, ...) standing in
+// for real backend data. This heuristic tells those two NO_LOADER shapes
+// apart: a genuine hub page (dashboard tiles, a nav menu) has no such
+// literal; a fabricated-data page does.
+//
+// Heuristic (regex-based, matching this script's existing style — not a
+// full TS parser): find a module-scope `const NAME = [` (or `const NAME:
+// Type[] = [`) whose name starts uppercase (this codebase's own convention
+// for these constants — MOCK_*, INITIAL_*, and plain screaming-case lists
+// like ROLES/PRESETS/FEATURE_KEYS all match), walk to the matching `]`, and
+// count how many object-literal entries are inside and how many `key:`
+// pairs they carry in total. Real record data consistently carries 3+
+// fields per entry (id/name/email/status/...); short 2-field config lists
+// (nav links, cron presets) fall under the threshold on purpose, so this
+// does not fire on every constant array in the app — only ones dense enough
+// to plausibly be standing in for a real dataset.
+function findMatchingBracket(src, openIdx, openCh, closeCh) {
+  let depth = 0;
+  for (let i = openIdx; i < src.length; i++) {
+    if (src[i] === openCh) depth++;
+    else if (src[i] === closeCh) {
+      depth--;
+      if (depth === 0) return i;
+    }
+  }
+  return -1;
+}
+
+const FABRICATED_MIN_ENTRIES = 3;
+const FABRICATED_MIN_FIELDS_PER_ENTRY = 3;
+
+function scanForFabricatedArray(src) {
+  // Scoped to this codebase's own established naming convention for these
+  // exact bugs (every genuine COMP-00x offender found: MOCK_USERS,
+  // MOCK_JOBS, MOCK_SERVICES, MOCK_ISSUES, INITIAL_FLAGS, INITIAL_JOBS,
+  // INITIAL_GRANTS, SAMPLE_HISTORY, ...) rather than every uppercase
+  // module-scope array — a broader match also catches legitimate static UI
+  // config (nav tiles, dashboards' MODULES/CONSOLES lists, default-value
+  // templates) which would turn this into a repo-wide false-positive gate
+  // instead of a targeted one.
+  const declRe = /^const\s+((?:MOCK|INITIAL|SAMPLE|FAKE|DUMMY|STUB)_[A-Z0-9_]*)\s*(?::\s*[^=\n]+)?=\s*\[/gm;
+  let m;
+  while ((m = declRe.exec(src)) !== null) {
+    const openIdx = m.index + m[0].length - 1; // index of the '['
+    const closeIdx = findMatchingBracket(src, openIdx, '[', ']');
+    if (closeIdx === -1) continue;
+    const body = src.slice(openIdx + 1, closeIdx);
+    const entries = (body.match(/\{/g) || []).length;
+    const colons = (body.match(/:/g) || []).length;
+    if (entries >= FABRICATED_MIN_ENTRIES && colons >= entries * FABRICATED_MIN_FIELDS_PER_ENTRY) {
+      return { name: m[1], entries, line: src.slice(0, m.index).split('\n').length };
+    }
+  }
+  return null;
+}
+
+// Follows same-directory relative imports one level deep (`from "./Xxx"`) so
+// a thin page.tsx that delegates its render to a co-located client component
+// (the AdminUsersManager/FeatureFlagsManager split pattern this same gap
+// fix uses) still gets its fabricated data caught, not just single-file
+// pages.
+function detectFabricatedData(pageFilePath) {
+  const filesToScan = [pageFilePath];
+  try {
+    const src = readFileSync(pageFilePath, 'utf8');
+    const relImportRe = /from\s+["']\.\/([A-Za-z0-9_-]+)["']/g;
+    let im;
+    const dir = dirname(pageFilePath);
+    while ((im = relImportRe.exec(src)) !== null) {
+      for (const ext of ['.tsx', '.ts']) {
+        const candidate = join(dir, `${im[1]}${ext}`);
+        if (existsSync(candidate)) { filesToScan.push(candidate); break; }
+      }
+    }
+  } catch { /* page file unreadable — fall through with just itself */ }
+
+  for (const file of filesToScan) {
+    if (!existsSync(file)) continue;
+    const src = readFileSync(file, 'utf8');
+    const hit = scanForFabricatedArray(src);
+    if (hit) return { ...hit, file: relative(ROOT, file) };
+  }
+  return null;
+}
+
 // ── Status determination ──────────────────────────────────────────────────────
 
 
@@ -597,7 +697,10 @@ function run() {
     const calledLoaders = parsePageLoaders(page.filePath, loaderMap);
 
     if (calledLoaders.length === 0) {
-      // Hub / nav page — no loaders
+      // Hub / nav page — no loaders. Distinguish a genuine hub from a page
+      // that's fabricating what looks like a real dataset instead of
+      // loading one (COMP-004).
+      const fabricated = detectFabricatedData(page.filePath);
       rows.push({
         module,
         screen: screenName,
@@ -606,8 +709,10 @@ function run() {
         upstream: null,
         routeHandler: null,
         tablesPresent: null,
-        status: 'NO_LOADER',
-        detail: 'navigation hub — no data loader',
+        status: fabricated ? 'FABRICATED_DATA' : 'NO_LOADER',
+        detail: fabricated
+          ? `no loader, but ${fabricated.name} in ${fabricated.file}:${fabricated.line} looks like ${fabricated.entries} hardcoded records`
+          : 'navigation hub — no data loader',
       });
       continue;
     }
@@ -667,10 +772,11 @@ function run() {
   const missing = rows.filter(r => r.status === 'MISSING').length;
   const mismatch = rows.filter(r => r.status === 'MISMATCH').length;
   const noLoader = rows.filter(r => r.status === 'NO_LOADER').length;
+  const fabricatedData = rows.filter(r => r.status === 'FABRICATED_DATA').length;
   const linkAudit = findDeadLinks();
 
   if (jsonOnly) {
-    process.stdout.write(JSON.stringify({ rows, counts: { wired, missing, mismatch, noLoader }, linkAudit }, null, 2));
+    process.stdout.write(JSON.stringify({ rows, counts: { wired, missing, mismatch, noLoader, fabricatedData }, linkAudit }, null, 2));
     return;
   }
 
@@ -678,7 +784,7 @@ function run() {
   const outDir = join(ROOT, 'scripts/contract');
   mkdirSync(outDir, { recursive: true });
 
-  writeFileSync(join(outDir, 'screen-map.json'), JSON.stringify({ rows, counts: { wired, missing, mismatch, noLoader }, linkAudit }, null, 2));
+  writeFileSync(join(outDir, 'screen-map.json'), JSON.stringify({ rows, counts: { wired, missing, mismatch, noLoader, fabricatedData }, linkAudit }, null, 2));
 
   // ── Write Markdown table ─────────────────────────────────────────────────────
   const mdLines = [
@@ -686,7 +792,7 @@ function run() {
     '',
     `Generated: ${new Date().toISOString()}`,
     '',
-    `**Summary:** ${wired} WIRED | ${missing} MISSING | ${mismatch} MISMATCH | ${noLoader} NO_LOADER`,
+    `**Summary:** ${wired} WIRED | ${missing} MISSING | ${mismatch} MISMATCH | ${noLoader} NO_LOADER | ${fabricatedData} FABRICATED_DATA`,
     '',
     '| module | screen | loader | apiPath | upstream | route? | table? | status |',
     '|--------|--------|--------|---------|----------|--------|--------|--------|',
@@ -698,7 +804,7 @@ function run() {
     const upstream = row.upstream ?? '—';
     const routeCheck = row.routeHandler ? `✓ \`${row.routeHandler}\`` : row.status === 'NO_LOADER' ? '—' : '✗';
     const tableCheck = row.tablesPresent === null ? '—' : row.tablesPresent ? '✓' : '✗';
-    const statusEmoji = { WIRED: '✅', MISSING: '❌', MISMATCH: '⚠️', NO_LOADER: '—' }[row.status] ?? row.status;
+    const statusEmoji = { WIRED: '✅', MISSING: '❌', MISMATCH: '⚠️', NO_LOADER: '—', FABRICATED_DATA: '🎭' }[row.status] ?? row.status;
 
     mdLines.push(`| ${row.module} | ${row.screen} | ${loader} | ${apiPath} | ${upstream} | ${routeCheck} | ${tableCheck} | ${statusEmoji} ${row.status} |`);
   }
@@ -715,11 +821,12 @@ function run() {
   process.stdout.write(`  ❌ MISSING              : ${missing}\n`);
   process.stdout.write(`  ⚠️  MISMATCH             : ${mismatch}\n`);
   process.stdout.write(`  —  NO_LOADER (hub pages): ${noLoader}\n`);
+  process.stdout.write(`  🎭 FABRICATED_DATA        : ${fabricatedData}\n`);
   process.stdout.write('────────────────────────────────────────────────────────\n');
 
-  if (missing > 0 || mismatch > 0) {
+  if (missing > 0 || mismatch > 0 || fabricatedData > 0) {
     process.stdout.write('\nBROKEN CHAINS:\n');
-    for (const row of rows.filter(r => r.status === 'MISSING' || r.status === 'MISMATCH')) {
+    for (const row of rows.filter(r => r.status === 'MISSING' || r.status === 'MISMATCH' || r.status === 'FABRICATED_DATA')) {
       process.stdout.write(`  [${row.status}] ${row.module}${row.screen}  (${row.detail})\n`);
     }
   }

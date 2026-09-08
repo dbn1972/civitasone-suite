@@ -14,13 +14,17 @@
     {
       "module": "admin",
       "screen": "/admin/audit-log",
-      "loaders": [],
-      "apiPaths": [],
-      "upstream": null,
-      "routeHandler": null,
-      "tablesPresent": null,
-      "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "loaders": [
+        "getAdminAuditLogEntries"
+      ],
+      "apiPaths": [
+        "/api/v1/admin/audit-logs"
+      ],
+      "upstream": "admin → /v1/admin/audit-logs",
+      "routeHandler": "/v1/admin/audit-logs",
+      "tablesPresent": true,
+      "status": "WIRED",
+      "detail": "ok"
     },
     {
       "module": "admin",
@@ -30,8 +34,8 @@
       "upstream": null,
       "routeHandler": null,
       "tablesPresent": null,
-      "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "status": "FABRICATED_DATA",
+      "detail": "no loader, but MOCK_JOBS in apps/web/src/app/(app)/admin/bulk-scan/page.tsx:18 looks like 3 hardcoded records"
     },
     {
       "module": "admin",
@@ -63,8 +67,8 @@
       "upstream": null,
       "routeHandler": null,
       "tablesPresent": null,
-      "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "status": "FABRICATED_DATA",
+      "detail": "no loader, but MOCK_SERVICES in apps/web/src/app/(app)/admin/discovery/page.tsx:18 looks like 6 hardcoded records"
     },
     {
       "module": "admin",
@@ -91,13 +95,17 @@
     {
       "module": "admin",
       "screen": "/admin/feature-flags",
-      "loaders": [],
-      "apiPaths": [],
-      "upstream": null,
-      "routeHandler": null,
-      "tablesPresent": null,
-      "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "loaders": [
+        "getAdminFeatureFlagsManage"
+      ],
+      "apiPaths": [
+        "/api/v1/admin/feature-flags/manage"
+      ],
+      "upstream": "admin → /v1/admin/feature-flags/manage",
+      "routeHandler": "/v1/admin/feature-flags/manage",
+      "tablesPresent": true,
+      "status": "WIRED",
+      "detail": "ok"
     },
     {
       "module": "admin",
@@ -190,13 +198,17 @@
     {
       "module": "admin",
       "screen": "/admin/org",
-      "loaders": [],
-      "apiPaths": [],
-      "upstream": null,
-      "routeHandler": null,
-      "tablesPresent": null,
-      "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "loaders": [
+        "getAdminOrgUnits"
+      ],
+      "apiPaths": [
+        "/api/v1/admin/org-hierarchy"
+      ],
+      "upstream": "admin → /v1/admin/org-hierarchy",
+      "routeHandler": "/v1/admin/org-hierarchy",
+      "tablesPresent": true,
+      "status": "WIRED",
+      "detail": "ok"
     },
     {
       "module": "admin",
@@ -217,19 +229,38 @@
       "upstream": null,
       "routeHandler": null,
       "tablesPresent": null,
-      "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "status": "FABRICATED_DATA",
+      "detail": "no loader, but INITIAL_GRANTS in apps/web/src/app/(app)/admin/role-features/page.tsx:24 looks like 16 hardcoded records"
     },
     {
       "module": "admin",
       "screen": "/admin/roles",
-      "loaders": [],
-      "apiPaths": [],
-      "upstream": null,
-      "routeHandler": null,
-      "tablesPresent": null,
-      "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "loaders": [
+        "getAdminRolesList"
+      ],
+      "apiPaths": [
+        "/api/v1/admin/roles"
+      ],
+      "upstream": "admin → /v1/admin/roles",
+      "routeHandler": "/v1/admin/roles",
+      "tablesPresent": true,
+      "status": "WIRED",
+      "detail": "ok"
+    },
+    {
+      "module": "admin",
+      "screen": "/admin/roles",
+      "loaders": [
+        "getAdminPermissionsList"
+      ],
+      "apiPaths": [
+        "/api/v1/admin/permissions"
+      ],
+      "upstream": "admin → /v1/admin/permissions",
+      "routeHandler": "/v1/admin/permissions",
+      "tablesPresent": true,
+      "status": "WIRED",
+      "detail": "ok"
     },
     {
       "module": "admin",
@@ -245,13 +276,17 @@
     {
       "module": "admin",
       "screen": "/admin/scheduled-jobs",
-      "loaders": [],
-      "apiPaths": [],
-      "upstream": null,
-      "routeHandler": null,
-      "tablesPresent": null,
-      "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "loaders": [
+        "getAdminScheduledJobs"
+      ],
+      "apiPaths": [
+        "/api/v1/admin/scheduled-jobs"
+      ],
+      "upstream": "admin → /v1/admin/scheduled-jobs",
+      "routeHandler": "/v1/admin/scheduled-jobs",
+      "tablesPresent": true,
+      "status": "WIRED",
+      "detail": "ok"
     },
     {
       "module": "admin",
@@ -330,13 +365,32 @@
     {
       "module": "admin",
       "screen": "/admin/users",
-      "loaders": [],
-      "apiPaths": [],
-      "upstream": null,
-      "routeHandler": null,
-      "tablesPresent": null,
-      "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "loaders": [
+        "getAdminUsersList"
+      ],
+      "apiPaths": [
+        "/api/v1/admin/users"
+      ],
+      "upstream": "admin-users → /identity/users/",
+      "routeHandler": "/identity/users",
+      "tablesPresent": true,
+      "status": "WIRED",
+      "detail": "ok"
+    },
+    {
+      "module": "admin",
+      "screen": "/admin/users",
+      "loaders": [
+        "getAdminRolesList"
+      ],
+      "apiPaths": [
+        "/api/v1/admin/roles"
+      ],
+      "upstream": "admin → /v1/admin/roles",
+      "routeHandler": "/v1/admin/roles",
+      "tablesPresent": true,
+      "status": "WIRED",
+      "detail": "ok"
     },
     {
       "module": "ai",
@@ -7011,8 +7065,8 @@
       "upstream": null,
       "routeHandler": null,
       "tablesPresent": null,
-      "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "status": "FABRICATED_DATA",
+      "detail": "no loader, but MOCK_ISSUES in apps/web/src/app/(app)/library/page.tsx:34 looks like 9 hardcoded records"
     },
     {
       "module": "locations",
@@ -10209,10 +10263,11 @@
     }
   ],
   "counts": {
-    "wired": 261,
+    "wired": 269,
     "missing": 0,
     "mismatch": 0,
-    "noLoader": 572
+    "noLoader": 562,
+    "fabricatedData": 4
   },
   "linkAudit": {
     "total": 1343,

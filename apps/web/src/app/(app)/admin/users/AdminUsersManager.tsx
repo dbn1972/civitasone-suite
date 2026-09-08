@@ -56,7 +56,11 @@ function EditRolesSheet({
     let cancelled = false;
     setLoading(true);
     setError(null);
-    fetch(`/api/proxy/v1/admin/users/${userId}/roles`)
+    // Deliberately /admin/user-roles/, not /admin/users/:id/roles — the
+    // gateway's admin-users entry shadows the whole /v1/admin/users/* prefix
+    // straight to identity-service, which has no matching route there (see
+    // gap/routes.ts's comment on the admin-service handler for this).
+    fetch(`/api/proxy/v1/admin/user-roles/${userId}`)
       .then((res) => res.json())
       .then((body: { data?: Array<{ key: string }> }) => {
         if (cancelled) return;
@@ -83,7 +87,14 @@ function EditRolesSheet({
   async function save() {
     setBusy(true);
     setError(null);
-    const result = await callApi(`/${safeUser.id}/roles`, "PATCH", { roleKeys: [...selected] });
+    const res = await fetch(`/api/proxy/v1/admin/user-roles/${safeUser.id}`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ roleKeys: [...selected] }),
+    });
+    const result = res.ok
+      ? { ok: true as const }
+      : { ok: false as const, message: (await res.json().catch(() => ({}))).message ?? `HTTP ${res.status}` };
     setBusy(false);
     if (!result.ok) { setError(result.message ?? "Save failed"); return; }
     onClose();

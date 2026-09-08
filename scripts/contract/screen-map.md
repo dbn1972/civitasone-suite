@@ -1,20 +1,20 @@
 # Screen Contract Map
 
-Generated: 2026-09-08T10:39:37.812Z
+Generated: 2026-09-08T14:21:42.637Z
 
-**Summary:** 261 WIRED | 0 MISSING | 0 MISMATCH | 572 NO_LOADER
+**Summary:** 269 WIRED | 0 MISSING | 0 MISMATCH | 562 NO_LOADER | 4 FABRICATED_DATA
 
 | module | screen | loader | apiPath | upstream | route? | table? | status |
 |--------|--------|--------|---------|----------|--------|--------|--------|
 | admin | /admin/api-monitoring | — | — | — | — | — | — NO_LOADER |
-| admin | /admin/audit-log | — | — | — | — | — | — NO_LOADER |
-| admin | /admin/bulk-scan | — | — | — | — | — | — NO_LOADER |
+| admin | /admin/audit-log | getAdminAuditLogEntries | /api/v1/admin/audit-logs | admin → /v1/admin/audit-logs | ✓ `/v1/admin/audit-logs` | ✓ | ✅ WIRED |
+| admin | /admin/bulk-scan | — | — | — | ✗ | — | 🎭 FABRICATED_DATA |
 | admin | /admin/config | — | — | — | — | — | — NO_LOADER |
 | admin | /admin/devices | — | — | — | — | — | — NO_LOADER |
-| admin | /admin/discovery | — | — | — | — | — | — NO_LOADER |
+| admin | /admin/discovery | — | — | — | ✗ | — | 🎭 FABRICATED_DATA |
 | admin | /admin/editions | — | — | — | — | — | — NO_LOADER |
 | admin | /admin/entitlements | — | — | — | — | — | — NO_LOADER |
-| admin | /admin/feature-flags | — | — | — | — | — | — NO_LOADER |
+| admin | /admin/feature-flags | getAdminFeatureFlagsManage | /api/v1/admin/feature-flags/manage | admin → /v1/admin/feature-flags/manage | ✓ `/v1/admin/feature-flags/manage` | ✓ | ✅ WIRED |
 | admin | /admin/gateway-config | — | — | — | — | — | — NO_LOADER |
 | admin | /admin/gateway-routes | — | — | — | — | — | — NO_LOADER |
 | admin | /admin/gateways | — | — | — | — | — | — NO_LOADER |
@@ -23,19 +23,21 @@ Generated: 2026-09-08T10:39:37.812Z
 | admin | /admin/metering | — | — | — | — | — | — NO_LOADER |
 | admin | /admin/onboarding | — | — | — | — | — | — NO_LOADER |
 | admin | /admin/operators | — | — | — | — | — | — NO_LOADER |
-| admin | /admin/org | — | — | — | — | — | — NO_LOADER |
+| admin | /admin/org | getAdminOrgUnits | /api/v1/admin/org-hierarchy | admin → /v1/admin/org-hierarchy | ✓ `/v1/admin/org-hierarchy` | ✓ | ✅ WIRED |
 | admin | /admin | — | — | — | — | — | — NO_LOADER |
-| admin | /admin/role-features | — | — | — | — | — | — NO_LOADER |
-| admin | /admin/roles | — | — | — | — | — | — NO_LOADER |
+| admin | /admin/role-features | — | — | — | ✗ | — | 🎭 FABRICATED_DATA |
+| admin | /admin/roles | getAdminRolesList | /api/v1/admin/roles | admin → /v1/admin/roles | ✓ `/v1/admin/roles` | ✓ | ✅ WIRED |
+| admin | /admin/roles | getAdminPermissionsList | /api/v1/admin/permissions | admin → /v1/admin/permissions | ✓ `/v1/admin/permissions` | ✓ | ✅ WIRED |
 | admin | /admin/sa-dashboard | — | — | — | — | — | — NO_LOADER |
-| admin | /admin/scheduled-jobs | — | — | — | — | — | — NO_LOADER |
+| admin | /admin/scheduled-jobs | getAdminScheduledJobs | /api/v1/admin/scheduled-jobs | admin → /v1/admin/scheduled-jobs | ✓ `/v1/admin/scheduled-jobs` | ✓ | ✅ WIRED |
 | admin | /admin/settings | — | — | — | — | — | — NO_LOADER |
 | admin | /admin/tech-admin | — | — | — | — | — | — NO_LOADER |
 | admin | /admin/tenant-provision | — | — | — | — | — | — NO_LOADER |
 | admin | /admin/tenants/[id] | getAdminTenantDetail | /api/v1/admin/tenants/:param | admin → /v1/admin/tenants/:param | ✓ `/v1/admin/tenants/:id` | ✓ | ✅ WIRED |
 | admin | /admin/tenants/[id] | getAdminTenantModules | /api/v1/admin/tenants/:param/config | admin → /v1/admin/tenants/:param/config | ✓ `/v1/admin/tenants/:id/config` | ✓ | ✅ WIRED |
 | admin | /admin/tenants | — | — | — | — | — | — NO_LOADER |
-| admin | /admin/users | — | — | — | — | — | — NO_LOADER |
+| admin | /admin/users | getAdminUsersList | /api/v1/admin/users | admin-users → /identity/users/ | ✓ `/identity/users` | ✓ | ✅ WIRED |
+| admin | /admin/users | getAdminRolesList | /api/v1/admin/roles | admin → /v1/admin/roles | ✓ `/v1/admin/roles` | ✓ | ✅ WIRED |
 | ai | /ai/agents | — | — | — | — | — | — NO_LOADER |
 | ai | /ai/chat/[id] | getChatConversation | /api/v1/ai/chat | ai → /v1/ai/chat | ✓ `/v1/ai/chat` | ✓ | ✅ WIRED |
 | ai | /ai/chat/[id] | getChatTranscript | /api/v1/ai/chat/:param/history | ai → /v1/ai/chat/:param/history | ✓ `/v1/ai/chat/:conversationId/history` | ✓ | ✅ WIRED |
@@ -579,7 +581,7 @@ Generated: 2026-09-08T10:39:37.812Z
 | legal | /legal/opinions/new | — | — | — | — | — | — NO_LOADER |
 | legal | /legal/opinions | getLegalOpinions | /api/v1/legal/opinions | legal → /v1/legal/opinions | ✓ `/v1/legal/opinions` | ✓ | ✅ WIRED |
 | legal | /legal | — | — | — | — | — | — NO_LOADER |
-| library | /library | — | — | — | — | — | — NO_LOADER |
+| library | /library | — | — | — | ✗ | — | 🎭 FABRICATED_DATA |
 | locations | /locations/geofences | — | — | — | — | — | — NO_LOADER |
 | locations | /locations/infrastructure | — | — | — | — | — | — NO_LOADER |
 | locations | /locations/jurisdictions | — | — | — | — | — | — NO_LOADER |
