@@ -1,10 +1,33 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
 import { pino } from "pino";
-import { resolveContext, HttpError } from "../../shared/context.js";
+import { ZodError } from "zod";
+import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { createStreamSubscriber, type StreamSubscriber } from "./subscriber.js";
+import { publishNotificationBody } from "./validators.js";
 import * as repo from "./repo.js";
 
 const log = pino({ name: "stream:sse" });
+
+/**
+ * SEC-005: POST /notifications/publish is documented as internal-only (see
+ * below) — it lets the caller push an arbitrary notification, including its
+ * recipient, to any user in the tenant. It must never be reachable by an
+ * ordinary authenticated tenant user.
+ *
+ * "Genuine internal caller" here means the same contract every other
+ * internal-only route in this codebase relies on (packages/auth/src/plugin.ts
+ * and context.ts): the gateway does NOT forward x-internal/x-service-secret
+ * from end-user requests, so a request carrying `x-internal: "1"` plus a
+ * `x-service-secret` matching INTERNAL_SERVICE_SECRET is a real
+ * service-to-service call, and authPlugin stamps it with `actorType:
+ * "service_account"` and `roles` including `super_admin`. Mirroring the
+ * pattern already used by loyalty-service's `/v1/loyalty/accrue` and
+ * tenant-service's `/v1/quotas/increment`, we gate on that role set rather
+ * than inventing a bespoke check — this also lets a genuine human
+ * `super_admin` trigger the route directly if that's ever needed, without
+ * requiring a second code path.
+ */
+const INTERNAL_ROLES = ["super_admin", "service_account"];
 
 /** 30 minutes idle timeout in milliseconds */
 const IDLE_TIMEOUT_MS = 30 * 60 * 1000;
@@ -125,21 +148,27 @@ export async function streamRoutes(app: FastifyInstance): Promise<void> {
 
   /**
    * POST /v1/notifications/publish — Publish a notification to a user.
-   * Used internally by consumers to push notifications in real-time.
-   * Persists notification for offline delivery and publishes via Redis pub/sub.
+   * Internal use only — see INTERNAL_ROLES above. Used by consumers to push
+   * notifications in real-time. Persists notification for offline delivery
+   * and publishes via Redis pub/sub.
    */
   app.post("/notifications/publish", async (req: FastifyRequest, reply: FastifyReply) => {
     const ctx = resolveContext(req);
-    const body = req.body as {
-      userId: string;
-      type: string;
-      title: string;
-      body?: string;
-      metadata?: Record<string, unknown>;
-    };
+    requireRole(ctx, INTERNAL_ROLES);
 
-    if (!body.userId || !body.type || !body.title) {
-      throw new HttpError(400, "VALIDATION_FAILED", "userId, type, and title are required");
+    // NOTE: this service's app-level Zod error handler does not reliably run
+    // for every route encapsulation (see other modules, e.g. bounces/routes.ts,
+    // which add their own local setErrorHandler for the same reason) — catch
+    // explicitly here rather than relying on it, mirroring the HttpError(400, …)
+    // this route already threw for validation failures before this fix.
+    let body: ReturnType<typeof publishNotificationBody.parse>;
+    try {
+      body = publishNotificationBody.parse(req.body);
+    } catch (err) {
+      if (err instanceof ZodError) {
+        throw new HttpError(400, "VALIDATION_FAILED", "userId, type, and title are required");
+      }
+      throw err;
     }
 
     // Persist notification for offline recipients
@@ -168,7 +197,7 @@ export async function streamRoutes(app: FastifyInstance): Promise<void> {
 
     await publisher.publish(channel, payload);
 
-    return reply.code(202).send({ data: { id: notification.id } });
+    return reply.code(201).send({ data: { id: notification.id } });
   });
 
   /**

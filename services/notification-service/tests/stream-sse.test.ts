@@ -7,7 +7,7 @@
  * Note: SSE endpoint tests use actual HTTP connections since reply.hijack()
  * prevents Fastify inject from resolving. We test SSE via a brief listen.
  */
-import { describe, it, expect, afterAll, afterEach, beforeEach } from "vitest";
+import { describe, it, expect, afterAll, afterEach, beforeEach, vi } from "vitest";
 import http from "node:http";
 import { signToken } from "@civitasone/auth";
 import { buildApp } from "../src/app.js";
@@ -22,12 +22,33 @@ const TENANT_B = "bbbbbbbb-2222-4000-8000-000000000067";
 const USER_A = "cccccccc-3333-4000-8000-000000000067";
 const USER_B = "dddddddd-4444-4000-8000-000000000067";
 
+// SEC-005: /notifications/publish is internal-only now. Fixtures that need to
+// seed a notification call it as a genuine internal caller (x-internal:1 +
+// x-service-secret matching INTERNAL_SERVICE_SECRET), the same contract every
+// other internal-only route in this codebase relies on
+// (packages/auth/src/plugin.ts).
+const INTERNAL_SECRET = "test_internal_secret_for_sec005_32ch";
+
 function token(tenantId = TENANT_A, userId = USER_A, roles = ["employee"]) {
   return signToken({ sub: userId, tid: tenantId, roles, sid: "sess-sse-001" }, SECRET);
 }
 
+function internalHeaders(tenantId = TENANT_A) {
+  return {
+    "x-internal": "1",
+    "x-service-secret": INTERNAL_SECRET,
+    "x-tenant-id": tenantId,
+    "content-type": "application/json",
+  };
+}
+
 beforeEach(() => {
   clearMemorySubscribers();
+  vi.stubEnv("INTERNAL_SERVICE_SECRET", INTERNAL_SECRET);
+});
+
+afterEach(() => {
+  vi.unstubAllEnvs();
 });
 
 afterAll(async () => {
@@ -125,15 +146,12 @@ describe("GET /notifications/stream — SSE endpoint", () => {
 });
 
 describe("POST /notifications/publish — notification persistence and pub/sub", () => {
-  it("returns 202 and persists notification", async () => {
+  it("returns 201 and persists notification for a genuine internal caller", async () => {
     const app = await buildApp();
     const res = await app.inject({
       method: "POST",
       url: "/notifications/publish",
-      headers: {
-        authorization: `Bearer ${token()}`,
-        "content-type": "application/json",
-      },
+      headers: internalHeaders(),
       payload: {
         userId: USER_A,
         type: "approval.assigned",
@@ -143,13 +161,17 @@ describe("POST /notifications/publish — notification persistence and pub/sub",
       },
     });
     await app.close();
-    expect(res.statusCode).toBe(202);
+    expect(res.statusCode).toBe(201);
     const json = res.json();
     expect(json.data.id).toBeDefined();
     expect(typeof json.data.id).toBe("string");
   });
 
-  it("returns 400 with missing required fields", async () => {
+  // SEC-005 DoD: an ordinary authenticated tenant user — even carrying a
+  // real, valid Bearer token — must not be able to publish an arbitrary
+  // notification to any user in the tenant. Only a genuine internal caller
+  // (or a human super_admin) may.
+  it("returns 403 for an authenticated employee-role caller (SEC-005)", async () => {
     const app = await buildApp();
     const res = await app.inject({
       method: "POST",
@@ -158,6 +180,22 @@ describe("POST /notifications/publish — notification persistence and pub/sub",
         authorization: `Bearer ${token()}`,
         "content-type": "application/json",
       },
+      payload: {
+        userId: USER_B,
+        type: "approval.assigned",
+        title: "Forged approval notice",
+      },
+    });
+    await app.close();
+    expect(res.statusCode).toBe(403);
+  });
+
+  it("returns 400 with missing required fields (internal caller, malformed body)", async () => {
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "POST",
+      url: "/notifications/publish",
+      headers: internalHeaders(),
       payload: { userId: USER_A },
     });
     await app.close();
@@ -252,10 +290,7 @@ describe("Tenant isolation — notifications are scoped to tenant+user", () => {
       await app.inject({
         method: "POST",
         url: "/notifications/publish",
-        headers: {
-          authorization: `Bearer ${token(TENANT_A, USER_A)}`,
-          "content-type": "application/json",
-        },
+        headers: internalHeaders(TENANT_A),
         payload: {
           userId: USER_A,
           type: "test.isolation",
@@ -282,10 +317,7 @@ describe("Tenant isolation — notifications are scoped to tenant+user", () => {
       await app.inject({
         method: "POST",
         url: "/notifications/publish",
-        headers: {
-          authorization: `Bearer ${token(TENANT_A, USER_A)}`,
-          "content-type": "application/json",
-        },
+        headers: internalHeaders(TENANT_A),
         payload: {
           userId: USER_A,
           type: "test.user-isolation",
@@ -314,10 +346,7 @@ describe("Offline persistence — notifications persist for offline recipients",
       const publishRes = await app.inject({
         method: "POST",
         url: "/notifications/publish",
-        headers: {
-          authorization: `Bearer ${token(TENANT_A, USER_A)}`,
-          "content-type": "application/json",
-        },
+        headers: internalHeaders(TENANT_A),
         payload: {
           userId: USER_A,
           type: "workflow.task.assigned",
@@ -326,7 +355,7 @@ describe("Offline persistence — notifications persist for offline recipients",
           metadata: { module: "workflow", taskId: "task-42" },
         },
       });
-      expect(publishRes.statusCode).toBe(202);
+      expect(publishRes.statusCode).toBe(201);
 
       // User connects later — should see the persisted notification
       const sseRes = await connectSSE(port, token(TENANT_A, USER_A));
@@ -348,10 +377,7 @@ describe("Offline persistence — notifications persist for offline recipients",
       const publishRes = await app.inject({
         method: "POST",
         url: "/notifications/publish",
-        headers: {
-          authorization: `Bearer ${token(TENANT_A, USER_A)}`,
-          "content-type": "application/json",
-        },
+        headers: internalHeaders(TENANT_A),
         payload: {
           userId: USER_A,
           type: "test.mark-read",

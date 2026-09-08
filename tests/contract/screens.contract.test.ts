@@ -27,9 +27,13 @@ type ScreenRow = {
   detail: string;
 };
 
+type LinkCheck = { file: string; href: string; resolved: boolean };
+type LinkAudit = { total: number; dead: LinkCheck[] };
+
 type ScreenMap = {
   rows: ScreenRow[];
   counts: { wired: number; missing: number; mismatch: number; noLoader: number };
+  linkAudit: LinkAudit;
 };
 
 let screenMap: ScreenMap;
@@ -118,6 +122,57 @@ describe('screen contract map', () => {
     expect(row!.upstream).toBeTruthy();
     expect(row!.routeHandler).toBeTruthy();
     expect(row!.tablesPresent).toBe(true);
+  });
+
+  // COMP-005: static href -> page.tsx/route.ts scan (see scripts/contract/screen-map.mjs
+  // findDeadLinks()). Catches a typo'd or renamed internal link that no loader-chain
+  // check above would ever see, because these are plain navigation, not data fetches.
+  //
+  // KNOWN_EXCEPTIONS is a narrow, ID-tagged, tracked ledger -- not a blanket carve-out.
+  // Each entry is a real dead link the scan correctly found, whose fix is a UI/feature
+  // build (a form wired to an already-existing, validated backend action), not a link
+  // correction, and is out of scope for COMP-005 itself. Filed as COMP-012. Remove an
+  // entry here the same day its page/action ships for real.
+  const KNOWN_EXCEPTIONS: Array<{ file: string; href: string }> = [
+    // COMP-012: grant application approval workflow has no UI -- assign-reviewer, score,
+    // approve, reject and withdraw all PATCH /v1/grants/applications/:id/... routes exist
+    // and are validated server-side (grant-service/src/modules/application/routes.ts),
+    // but no page/form calls them. The dashboard links to sub-routes that were never built.
+    { file: 'apps/web/src/app/(app)/grants/applications/[id]/page.tsx', href: '/grants/applications/${params.id}/assign-reviewer' },
+    { file: 'apps/web/src/app/(app)/grants/applications/[id]/page.tsx', href: '/grants/applications/${params.id}/score' },
+    { file: 'apps/web/src/app/(app)/grants/applications/[id]/page.tsx', href: '/grants/applications/${params.id}/approve' },
+    { file: 'apps/web/src/app/(app)/grants/applications/[id]/page.tsx', href: '/grants/applications/${params.id}/reject' },
+    { file: 'apps/web/src/app/(app)/grants/applications/[id]/page.tsx', href: '/grants/applications/${params.id}/withdraw' },
+    // COMP-012: admin "Reset pwd" has no destination. identity-service already exposes
+    // POST /identity/users/:id/reset-password; no admin-service proxy route or page calls
+    // it. (Note: the neighbouring "Suspend" action has the same problem one layer down --
+    // it calls PATCH /api/proxy/v1/admin/users/:id/suspend, which admin-service also does
+    // not register -- filed alongside COMP-012 since it's the same unbuilt-admin-action
+    // shape, though the href scan itself can't see it: it's a fetch(), not an href.)
+    { file: 'apps/web/src/app/(app)/platform-admin/users/UserManagementPage.tsx', href: '/tenant-admin/users/${user.id}/password-reset' },
+  ];
+
+  it('has no dead internal navigation links beyond the tracked COMP-012 exceptions', () => {
+    const exceptionKeys = new Set(KNOWN_EXCEPTIONS.map(e => `${e.file}::${e.href}`));
+    const unexpected = screenMap.linkAudit.dead.filter(d => !exceptionKeys.has(`${d.file}::${d.href}`));
+
+    if (unexpected.length > 0) {
+      const details = unexpected.map(d => `  [DEAD] ${d.file}  href="${d.href}"`).join('\n');
+      expect.fail(
+        `${unexpected.length} new dead internal link(s) found (not in the tracked exception ledger):\n${details}\n\n` +
+        `Run: node scripts/contract/screen-map.mjs  to see the full report.\n` +
+        `Fix the link, or add it to KNOWN_EXCEPTIONS in this file citing a gap ID.`,
+      );
+    }
+
+    // The ledger itself must stay accurate -- an entry that no longer reproduces means
+    // the underlying page/action shipped and the exception is stale and must be deleted.
+    const stillDead = new Set(screenMap.linkAudit.dead.map(d => `${d.file}::${d.href}`));
+    const stale = KNOWN_EXCEPTIONS.filter(e => !stillDead.has(`${e.file}::${e.href}`));
+    if (stale.length > 0) {
+      const details = stale.map(e => `  ${e.file}  href="${e.href}"`).join('\n');
+      expect.fail(`${stale.length} KNOWN_EXCEPTIONS entry(ies) no longer reproduce -- remove them:\n${details}\n`);
+    }
   });
 
   it('reports wired screen count (informational)', () => {

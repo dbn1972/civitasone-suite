@@ -23,12 +23,30 @@ export async function findById(id: string, tenantId: string): Promise<PluginView
   return toView(row);
 }
 
+export type Writer = Pick<typeof db, "insert" | "update" | "select">;
+
+/**
+ * TX-003 — tenant-scoped sibling of findById(). registry.plugins is under
+ * FORCE ROW LEVEL SECURITY (0003b, 0004) and plugin_svc is NOBYPASSRLS, so a
+ * bare `db.select()` carries no `app.tenant_id` GUC and always returns zero
+ * rows, even for a plugin that genuinely exists. `db.transaction()` sets that
+ * GUC on the transaction handle it hands back (wrapWithTenantGuc, from the
+ * ambient tenant context established by worker.ts's runWithTenant() around
+ * every consumer invocation) — so a read must go through that same `tx`
+ * handle to see anything under FORCE RLS. Route every read that happens
+ * inside an already-open consumer transaction through this, not findById().
+ */
+export async function findByIdTx(tx: Writer, id: string, tenantId: string): Promise<PluginView | null> {
+  const rows = await tx.select().from(plugins).where(eq(plugins.id, id)).limit(1);
+  const row = rows[0];
+  if (!row || row.tenantId !== tenantId) return null;
+  return toView(row);
+}
+
 export async function listByTenant(tenantId: string, limit: number, offset: number): Promise<PluginView[]> {
   const rows = await db.select().from(plugins).where(eq(plugins.tenantId, tenantId)).limit(limit).offset(offset);
   return rows.map(toView);
 }
-
-export type Writer = Pick<typeof db, "insert" | "update" | "select">;
 
 export async function insert(tx: Writer, row: PluginInsert): Promise<void> {
   await tx.insert(plugins).values(row);

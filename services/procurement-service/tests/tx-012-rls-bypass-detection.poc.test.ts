@@ -31,20 +31,25 @@
  * described in TX-012's task: FORCE RLS genuinely binds the test role, so a
  * regression test for TX-002 would actually catch the bug once written.
  *
- * This file is that proof, not that regression test. It exercises the real,
- * currently-buggy `repo.reinstate()` (vendor-blacklist/repo.ts:90-99) and
- * documents its CURRENT (broken) behavior: called the way
- * vendor-blacklist/consumer.ts:83 calls it today — with no tenant context
- * ever wrapping the bare `db.execute` — it silently updates zero rows and
- * returns 0, even though a matching active row exists. That is TX-002 itself,
- * reproduced live against a real NOBYPASSRLS role.
+ * UPDATE (TX-002 fix landed): this file originally exercised the real,
+ * then-buggy `repo.reinstate()` (vendor-blacklist/repo.ts:90-99) directly,
+ * calling it exactly the way vendor-blacklist/consumer.ts:83 called it —
+ * with no tenant context ever wrapping its bare `db.execute` — and asserted
+ * its CURRENT (broken) behavior: 0 rows silently touched. That function has
+ * since been removed and replaced by `repo.reinstateTx(tx, ...)`, which
+ * takes the caller's already-open, GUC-scoped transaction and throws unless
+ * exactly one row is affected (see repo.ts's TX-002 fix doc-comment). The
+ * correct-behavior regression test — asserting `reinstateTx` genuinely
+ * flips the row to 'reinstated', sabotage-checked per report §5 step 4 —
+ * now lives in tests/tx-002-vendor-blacklist-reinstate.test.ts.
  *
- * IMPORTANT — do not treat this file as "the TX-002 fix's regression test."
- * TX-002's own PR should replace/extend this with a test that asserts the
- * CORRECT post-fix behavior (rowCount === 1, throws otherwise) and is
- * sabotage-checked per report §5 step 4. This file intentionally asserts
- * today's incorrect behavior, to prove — for TX-012's purposes — that the
- * infrastructure is capable of noticing it.
+ * This file keeps only the TX-012-specific evidence that does not depend on
+ * application code: proof that FORCE RLS itself, at the Postgres level,
+ * genuinely blocks an unscoped write against this table under the real
+ * `procurement_svc` NOBYPASSRLS role (test 1, unchanged, and a new test 2
+ * that exercises a raw unscoped UPDATE directly against `sqlClient` — the
+ * same shape of connection the old buggy bare-`db.execute` call used —
+ * without going through any application function at all).
  */
 import { describe, it, expect, afterAll } from "vitest";
 import { randomUUID } from "node:crypto";
@@ -92,32 +97,35 @@ describe("TX-012 evidence — RLS is enforced against the real test role (procur
     expect(found?.status).toBe("active");
   });
 
-  it("TX-002 bug shape: bare db.execute reinstate() with no tenant context silently touches 0 rows", async () => {
-    // No runWithTenant() wrapper here — this is exactly how
-    // vendor-blacklist/consumer.ts:83 calls repo.reinstate() today: no
-    // surrounding tenant context, and reinstate() itself never opens a
-    // db.transaction(), so wrapWithTenantGuc has nothing to intercept.
-    const affected = await repo.reinstate(TENANT, VENDOR_ID, ACTOR_ID);
+  it("a raw unscoped UPDATE (no tenant context, no db.transaction()) is silently blocked by FORCE RLS at the Postgres level — independent of any application function", async () => {
+    await clean();
+    await runWithTenant(TENANT, () =>
+      repo.insertBlacklist({
+        tenantId: TENANT,
+        vendorId: VENDOR_ID,
+        reason: "TX-012 PoC seed",
+        blacklistedBy: ACTOR_ID,
+        createdBy: ACTOR_ID,
+        status: "active",
+      }),
+    );
 
-    // Today's (buggy) behavior: silently 0, not a thrown error. If the
-    // connecting role held BYPASSRLS, this would instead return 1 and this
-    // assertion would fail — which is exactly the failure mode TX-012 was
-    // opened to rule out.
-    expect(affected).toBe(0);
+    // Exactly the connection shape the old buggy repo.reinstate() used: a
+    // bare query against the pool-level client, no runWithTenant, no
+    // db.transaction() to trigger wrapWithTenantGuc's SET LOCAL. This
+    // bypasses application code entirely to isolate the DB-level guarantee
+    // TX-012 was opened to verify.
+    const rows = await sqlClient`
+      UPDATE procurement.vendor_blacklist
+         SET status = 'reinstated', reinstated_at = NOW()
+       WHERE tenant_id = ${TENANT}::uuid
+         AND vendor_id = ${VENDOR_ID}::uuid
+         AND status = 'active'
+    `;
+    expect(rows.count).toBe(0);
 
-    // Row must still read back as 'active' — the "vendor flipped, blacklist
-    // row untouched" split-brain state TX-002 describes.
     const stillActive = await runWithTenant(TENANT, () => repo.findActive(TENANT, VENDOR_ID));
     expect(stillActive).not.toBeNull();
     expect(stillActive?.status).toBe("active");
-  });
-
-  it("control: even WITH a tenant context active, bare db.execute still bypasses the GUC (proves the bug is in reinstate() itself, not caller discipline)", async () => {
-    // wrapWithTenantGuc only overrides db.transaction(); it does not, and
-    // cannot, intercept a bare db.execute() call — see
-    // packages/db/src/wrap-tenant-db.ts. So even wrapping the call site in
-    // runWithTenant() does not save it.
-    const affected = await runWithTenant(TENANT, () => repo.reinstate(TENANT, VENDOR_ID, ACTOR_ID));
-    expect(affected).toBe(0);
   });
 });

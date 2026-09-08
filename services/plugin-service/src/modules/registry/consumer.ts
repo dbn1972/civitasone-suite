@@ -58,7 +58,7 @@ export function registerRegistryConsumers(queue: Queue): void {
   queue.subscribe<{ pluginId: string; tenantId: string }>(COMMANDS.pluginEnable, async (msg) => {
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
-      const existing = await repo.findById(msg.payload.pluginId, msg.payload.tenantId);
+      const existing = await repo.findByIdTx(tx, msg.payload.pluginId, msg.payload.tenantId);
       if (!existing) return;
       if (!isValidTransition(existing.state, "enabled")) return;
       await repo.updateState(tx, msg.payload.pluginId, "enabled", msg.actorId);
@@ -71,7 +71,7 @@ export function registerRegistryConsumers(queue: Queue): void {
   queue.subscribe<{ pluginId: string; tenantId: string }>(COMMANDS.pluginDisable, async (msg) => {
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
-      const existing = await repo.findById(msg.payload.pluginId, msg.payload.tenantId);
+      const existing = await repo.findByIdTx(tx, msg.payload.pluginId, msg.payload.tenantId);
       if (!existing) return;
       if (!isValidTransition(existing.state, "disabled")) return;
       await repo.updateState(tx, msg.payload.pluginId, "disabled", msg.actorId);
@@ -84,7 +84,7 @@ export function registerRegistryConsumers(queue: Queue): void {
   queue.subscribe<{ pluginId: string; tenantId: string }>(COMMANDS.pluginUninstall, async (msg) => {
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
-      const existing = await repo.findById(msg.payload.pluginId, msg.payload.tenantId);
+      const existing = await repo.findByIdTx(tx, msg.payload.pluginId, msg.payload.tenantId);
       if (!existing) return;
       if (!isValidTransition(existing.state, "uninstalled")) return;
       await repo.updateState(tx, msg.payload.pluginId, "uninstalled", msg.actorId);
