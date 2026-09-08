@@ -81,7 +81,7 @@ export function registerVendorBlacklistConsumers(queue: Queue): void {
       if (!(await markProcessed(tx, msg.messageId))) return;
       const entry = await repo.findActive(p.tenantId, p.vendorId);
       if (!entry) return;
-      await repo.reinstate(p.tenantId, p.vendorId, msg.actorId);
+      await repo.reinstateTx(tx, p.tenantId, p.vendorId, msg.actorId);
       const vendor = await vendorRepo.findVendorById(p.vendorId, p.tenantId);
       if (vendor) {
         await vendorRepo.updateVendor(tx, p.vendorId, {

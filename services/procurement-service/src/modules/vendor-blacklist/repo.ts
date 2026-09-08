@@ -86,14 +86,48 @@ export async function insertBlacklist(
   return rows[0]!;
 }
 
-/** Reinstate (soft-deactivate) the active blacklist row for a vendor. Returns affected rows. */
-export async function reinstate(tenantId: string, vendorId: string, actorId: string): Promise<number> {
-  const res = await db.execute(sql`
-    UPDATE procurement.vendor_blacklist
-       SET status = 'reinstated', reinstated_at = NOW()
-     WHERE tenant_id = ${tenantId}::uuid
-       AND vendor_id = ${vendorId}::uuid
-       AND status = 'active'
-  `);
-  return (res as unknown as { count?: number }).count ?? (res as unknown as { length: number }).length ?? 0;
+/**
+ * Reinstate (soft-deactivate) the active blacklist row for a vendor, through
+ * the caller's already-open transaction.
+ *
+ * TX-002 fix: the previous `reinstate()` ran a bare `db.execute` with no
+ * `db.transaction()` wrapper of its own. `wrapWithTenantGuc` only
+ * intercepts `.transaction()` calls (packages/db/src/wrap-tenant-db.ts), so
+ * that bare execute checked out a connection with `app.tenant_id` never
+ * set. Under this table's FORCE ROW LEVEL SECURITY, `current_tenant_id()`
+ * was NULL and the UPDATE silently matched 0 rows -- while the caller's
+ * outer transaction (vendor-blacklist/consumer.ts) still flipped the
+ * vendor's status to `registered`, enqueued `procurement.vendor.reinstated`,
+ * and audited success. See docs/TX-012-test-role-rls-posture.md for the live
+ * PoC that reproduced this exact split-brain state.
+ *
+ * Fix: take the caller's `tx` (the same connection the outer
+ * `db.transaction()` already ran `SET LOCAL app.tenant_id` on) instead of
+ * touching the bare `db` object, and assert exactly one row was affected --
+ * throwing instead of silently reporting success on a 0-row match (e.g.
+ * reinstating a vendor that was never actively blacklisted).
+ */
+export async function reinstateTx(
+  tx: Writer,
+  tenantId: string,
+  vendorId: string,
+  actorId: string,
+): Promise<number> {
+  void actorId; // not persisted on this row (matches prior reinstate() behavior); kept for call-site/audit symmetry
+  const rows = await (tx as typeof db).update(vendorBlacklist)
+    .set({ status: "reinstated", reinstatedAt: new Date() })
+    .where(and(
+      eq(vendorBlacklist.tenantId, tenantId),
+      eq(vendorBlacklist.vendorId, vendorId),
+      eq(vendorBlacklist.status, "active"),
+    ))
+    .returning({ id: vendorBlacklist.id });
+
+  const affected = rows.length;
+  if (affected !== 1) {
+    throw new Error(
+      `reinstateTx: expected exactly 1 active blacklist row for vendor ${vendorId} (tenant ${tenantId}), matched ${affected}`,
+    );
+  }
+  return affected;
 }

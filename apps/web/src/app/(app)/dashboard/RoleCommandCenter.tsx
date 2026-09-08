@@ -17,7 +17,7 @@ const CENTERS: Array<{
       { label: "Pending bills", href: "/finance/expenditure/bills", note: "Approve or return for correction", priority: "urgent" },
       { label: "Sanctions queue", href: "/finance/budget/sanctions", note: "Budget availability before spend", priority: "urgent" },
       { label: "Payment run", href: "/finance/payments", note: "Treasury disbursement", priority: "normal" },
-      { label: "Period close", href: "/finance/accounting/period-close", note: "Hard-close readiness", priority: "normal" },
+      { label: "Period close", href: "/finance/period-close", note: "Hard-close readiness", priority: "normal" },
     ],
   },
   {
@@ -47,8 +47,8 @@ const CENTERS: Array<{
     match: (r) => r.some((x) => x.includes("audit")),
     actions: [
       { label: "Open observations", href: "/audit/observations", note: "Compliance follow-up", priority: "urgent" },
-      { label: "Risk register", href: "/audit/risk", note: "Escalated risks", priority: "normal" },
-      { label: "Audit trail export", href: "/audit/trail", note: "Immutable evidence", priority: "normal" },
+      { label: "Risk register", href: "/audit/risk-register", note: "Escalated risks", priority: "normal" },
+      { label: "Audit trail export", href: "/audit/exports", note: "Immutable evidence", priority: "normal" },
     ],
   },
   {
