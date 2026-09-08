@@ -222,6 +222,14 @@ describe("Delay forecast routes — real project data (DOM-001), local computati
   });
 
   it("SABOTAGE CHECK: Project A and Project B — same tenant, different real task durations — produce DIFFERENT forecasts", async () => {
+    // Two ISO timestamps from two calls milliseconds apart always differ by
+    // a few ms regardless of the underlying data — a plain !== comparison
+    // would pass even against the old hardcoded-stub code (a coincidental,
+    // meaningless pass). Anchor both to a single "now" and compare the
+    // resulting day-magnitude instead, which the stub cannot fake: it
+    // always returns the same ~6-day p50 (518,400,000ms, the fixed
+    // task-6+task-7 baseline) no matter which project is queried.
+    const beforeCalls = Date.now();
     const resA = await app.inject({ method: "GET", url: `/v1/projects/${PROJECT_A}/delay-forecast`, headers: authHeaders() });
     const resB = await app.inject({ method: "GET", url: `/v1/projects/${PROJECT_B}/delay-forecast`, headers: authHeaders() });
 
@@ -230,15 +238,16 @@ describe("Delay forecast routes — real project data (DOM-001), local computati
     const bodyA = resA.json();
     const bodyB = resB.json();
 
-    // If the route still ran the simulation over the hardcoded task-1..7
-    // array for every project, these would be byte-for-byte identical no
-    // matter which project is queried. They must not be.
-    expect(bodyA.data.p50Date).not.toBe(bodyB.data.p50Date);
-    expect(bodyA.data.p95Date).not.toBe(bodyB.data.p95Date);
+    const daysFromNow = (iso: string) => (new Date(iso).getTime() - beforeCalls) / 86_400_000;
+    const p50DaysA = daysFromNow(bodyA.data.p50Date);
+    const p50DaysB = daysFromNow(bodyB.data.p50Date);
 
-    // Project B's incomplete task spans 35 real days vs Project A's ~3 real
-    // days combined, so B's forecast must land meaningfully later.
-    expect(new Date(bodyB.data.p50Date).getTime()).toBeGreaterThan(new Date(bodyA.data.p50Date).getTime());
+    // Project A's incomplete tasks total ~3 real days; Project B's total 35
+    // real days. Neither the hardcoded stub's fixed ~6-day forecast, nor a
+    // few ms of jitter between the two calls, can produce this gap.
+    expect(p50DaysA).toBeLessThan(10);
+    expect(p50DaysB).toBeGreaterThan(25);
+    expect(p50DaysB - p50DaysA).toBeGreaterThan(20);
   });
 
   it("falls back to baseline dates for a project with < 5 completed tasks, using its OWN real max planned end date", async () => {
