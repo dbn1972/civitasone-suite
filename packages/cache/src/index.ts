@@ -354,10 +354,66 @@ export class Cache {
   }
 }
 
+/**
+ * SEC-006 fixup: bounded-latency options for the real Redis client.
+ *
+ * `defaultStore()` backs BOTH the tenant-scoped `Cache` class (the hot-path
+ * read-through cache every service consults before Postgres) AND
+ * `sharedStore()` (the SEC-006 session-revocation denylist, which fails open
+ * on a Redis error specifically so a Redis outage never becomes a
+ * full-platform lockout via `authPlugin`).
+ *
+ * Left at ioredis's defaults, a bare `new Redis(url)` does NOT fail fast on
+ * an outage — it fails SLOW: `connectTimeout` defaults to 10000ms,
+ * `maxRetriesPerRequest` defaults to 20 (each queued command waits through
+ * up to 20 reconnect attempts, with the retry delay climbing on each one),
+ * and there is no `commandTimeout` at all. Measured against this exact
+ * client construction during a real Redis outage: the first `.get()` took
+ * 9.68s to reject, the second 32.5s, the third 42.0s — climbing, not
+ * bounded. Every authenticated request awaits `isSessionDenylisted` with no
+ * timeout of its own, so that "fails open" promise was, in practice, "fails
+ * open after tens of seconds of every request hanging" — functionally the
+ * same fleet-wide lockout fail-open exists to avoid, just arriving as
+ * client/load-balancer timeouts instead of explicit 401s.
+ *
+ * Fix, applied at this single choke point so both callers get it:
+ *   - `maxRetriesPerRequest: 1` — one quick attempt, not 20. A command that
+ *     can't complete fails fast instead of waiting through many reconnect
+ *     cycles.
+ *   - `connectTimeout: 1500` — bounds the initial TCP+handshake attempt.
+ *     1.5s is generous next to real intra-VPC/ElastiCache connect times
+ *     (single-digit ms normally) so ordinary jitter won't misfire it, while
+ *     still being a small slice of any request's overall latency budget.
+ *   - `commandTimeout: 1000` — bounds an already-issued command whose reply
+ *     never arrives (e.g. the TCP connection is up but Redis is wedged),
+ *     which `connectTimeout` alone does not cover.
+ *   - `enableOfflineQueue` is deliberately left at its default (`true`),
+ *     NOT disabled. With `maxRetriesPerRequest: 1`, a command issued while
+ *     disconnected still gets one bounded (~1.5s) reconnect attempt before
+ *     failing — enough to ride out a sub-second blip (e.g. a Redis failover
+ *     pause) without an error, while a real outage still fails in ~1.5-2.5s
+ *     total, not tens of seconds. Disabling the offline queue would shave
+ *     that ~1.5s further but makes EVERY command issued during any brief
+ *     disconnect (including ones that would have reconnected in time) fail
+ *     immediately with no retry at all — a worse false-failure rate for the
+ *     hot-path `Cache` reads this same client backs, for a latency win that
+ *     isn't needed: ~2s is already well within the fail-open budget.
+ *
+ * Net worst case for a real outage: ~1.5s (connect) + up to ~1s (command,
+ * if it got that far) plus one bounded retry ≈ low single-digit seconds,
+ * not tens of seconds — and `isSessionDenylisted`'s fail-open catch fires
+ * promptly instead of the request hanging.
+ */
+const REDIS_CLIENT_OPTIONS = {
+  maxRetriesPerRequest: 1,
+  connectTimeout: 1500,
+  commandTimeout: 1000,
+} as const;
+
 function defaultStore(): CacheStore {
   const url = process.env.REDIS_URL;
   if (!url || process.env.CACHE_DRIVER === "memory") return new MemoryCache();
-  return new RedisCache(new Redis(url));
+  return new RedisCache(new Redis(url, REDIS_CLIENT_OPTIONS));
 }
 
 /**

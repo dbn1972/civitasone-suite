@@ -223,6 +223,78 @@ describe("SEC-006: denylistSession / isSessionDenylisted unit behaviour", () => 
 });
 
 /**
+ * SEC-006 fixup — coverage gap the review flagged: unlike the read side
+ * (`isSessionDenylisted`), the write side (`denylistSession`, called from
+ * identity-service's revoke consumer — `services/identity-service/src/
+ * modules/sessions/consumer.ts`) has no try/catch. That is NOT a bug to fix
+ * here: it is the correct behaviour given how this consumer's queue works.
+ *
+ * `services/queue-service/src/bus.ts` (`pollTopic`, ~line 730 onward): a
+ * handler that throws anything other than `NonRetryableError` is treated as
+ * a TRANSIENT failure — the message is left un-deleted, so SQS's visibility
+ * timeout redelivers it, retried up to `SQS_MAX_RECEIVE_COUNT` (default 5)
+ * before it is routed to the topic's dead-letter queue (never silently
+ * dropped either way; see `bus.ts` ~line 762-769). If `denylistSession`
+ * swallowed a Redis error here (mirroring the read side's fail-open), the
+ * revoke would look like it succeeded while the denylist entry was never
+ * written — losing the ONE piece of infra (redelivery-until-success) this
+ * write actually needs, since there is no equivalent "fail open and keep
+ * going" story on the write side the way there is for the read side gating
+ * live requests. Left to throw, a Redis-down revoke instead gets retried
+ * automatically until Redis recovers (or exhausts retries into the DLQ,
+ * where it stays visible for operator replay) — and `denylistSession` is a
+ * plain `SET`, so re-running it on redelivery is idempotent: no risk from
+ * retrying the same sid more than once.
+ *
+ * This test exists only to LOCK IN that contract (propagate, don't swallow)
+ * so a future edit doesn't accidentally add a try/catch that silently
+ * breaks the redelivery story above.
+ */
+describe("SEC-006: denylistSession write-side behaviour when the store is down", () => {
+  afterEach(() => {
+    __setDenylistStoreForTests(null);
+  });
+
+  it("propagates (does not swallow) a store error — required so the queue's redelivery/DLQ retries the revoke instead of losing it", async () => {
+    const brokenStore: CacheStore = {
+      get: vi.fn().mockRejectedValue(new Error("ECONNREFUSED (simulated Redis outage)")),
+      set: vi.fn().mockRejectedValue(new Error("ECONNREFUSED (simulated Redis outage)")),
+      del: vi.fn(),
+      delByPrefix: vi.fn(),
+      incr: vi.fn(),
+    };
+    __setDenylistStoreForTests(brokenStore);
+
+    await expect(denylistSession("sid-revoked-during-outage")).rejects.toThrow(
+      /ECONNREFUSED/,
+    );
+  });
+
+  it("recovers cleanly once the store comes back — a retried revoke after a transient outage still lands", async () => {
+    const brokenStore: CacheStore = {
+      get: vi.fn().mockRejectedValue(new Error("ECONNREFUSED (simulated Redis outage)")),
+      set: vi.fn().mockRejectedValue(new Error("ECONNREFUSED (simulated Redis outage)")),
+      del: vi.fn(),
+      delByPrefix: vi.fn(),
+      incr: vi.fn(),
+    };
+    __setDenylistStoreForTests(brokenStore);
+
+    const sid = "sid-revoked-then-recovered";
+    await expect(denylistSession(sid)).rejects.toThrow(/ECONNREFUSED/);
+
+    // Simulates the queue redelivering the same revoke command after Redis
+    // has recovered — exactly what services/queue-service's visibility-
+    // timeout redelivery does for a handler that threw.
+    const recoveredStore = new MemoryCache();
+    __setDenylistStoreForTests(recoveredStore);
+
+    await expect(denylistSession(sid)).resolves.toBeUndefined();
+    expect(await isSessionDenylisted(sid)).toBe(true);
+  });
+});
+
+/**
  * Unlike every test above (which pins the store via
  * `__setDenylistStoreForTests` so the suite runs without any external
  * dependency), THIS block deliberately does NOT override the store — it lets
