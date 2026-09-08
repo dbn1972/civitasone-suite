@@ -30,6 +30,22 @@ export async function findBudgetByIdTx(tx: Writer, id: string): Promise<BudgetRo
   return rows[0] ?? null;
 }
 
+/**
+ * DOM-007: tx-scoped (headId, fy, tenantId) budget lookup — the variant
+ * gl/consumer.ts's postJournal() must call, NOT findBudget(). findBudget()
+ * opens its own db.transaction via scopedRead; calling that from inside
+ * postJournal's already-open db.transaction would be a nested transaction
+ * acquiring a second pool connection while the first is held (the same
+ * defect class as TX-001 in the gap report). This runs directly against the
+ * caller's tx instead, mirroring findBudgetByIdTx.
+ */
+export async function findBudgetTx(tx: Writer, headId: string, fy: string, tenantId: string): Promise<BudgetRow | null> {
+  const rows = await tx.select().from(financeBudgets)
+    .where(and(eq(financeBudgets.tenantId, tenantId), eq(financeBudgets.headId, headId), eq(financeBudgets.fy, fy)))
+    .limit(1);
+  return rows[0] ?? null;
+}
+
 // ── sanction reads ────────────────────────────────────────────────
 
 export async function findSanctionById(id: string): Promise<SanctionRow | null> {
@@ -187,6 +203,44 @@ export async function incrementSanctionUtilisedGuarded(tx: Exec, id: string, net
     RETURNING id
   `);
   return (rows as unknown as unknown[]).length > 0;
+}
+
+/**
+ * DOM-007: atomic, race-safe budget utilisation for GL posting. Mirrors
+ * incrementSanctionUtilisedGuarded exactly (same guarded-UPDATE shape) but
+ * targets budget.finance_budgets — increments utilised_minor by requested
+ * only if headroom remains (re_minor - utilised_minor >= requested). Returns
+ * true on success, false if a concurrent posting against the same head
+ * consumed the headroom between the caller's assertBudgetNotExceeded() read
+ * and this write (closes the same TOCTOU window lockAllocationByIdTx/
+ * incrementSanctionUtilisedGuarded close for allocations/sanctions).
+ */
+export async function incrementBudgetUtilisedGuarded(tx: Exec, id: string, requestedMinor: bigint, updatedBy: string): Promise<boolean> {
+  const rows = await tx.execute(sql`
+    UPDATE budget.finance_budgets
+       SET utilised_minor = utilised_minor + ${requestedMinor}, updated_by = ${updatedBy}, updated_at = now()
+     WHERE id = ${id}
+       AND re_minor - utilised_minor >= ${requestedMinor}
+    RETURNING id
+  `);
+  return (rows as unknown as unknown[]).length > 0;
+}
+
+/**
+ * DOM-007: unconditional budget utilisation for an explicitly authorized
+ * over-budget post (the audited override path — see gl/consumer.ts). Unlike
+ * incrementBudgetUtilisedGuarded this always applies, since the caller has
+ * already verified the override is authorized (role-gated at the HTTP layer,
+ * see gl/routes.ts BUDGET_OVERRIDE_ROLES) and is about to emit an audit event
+ * recording the overdraw. utilised_minor may exceed re_minor afterwards —
+ * that is the intended, visible effect of an override.
+ */
+export async function incrementBudgetUtilisedForced(tx: Exec, id: string, requestedMinor: bigint, updatedBy: string): Promise<void> {
+  await tx.execute(sql`
+    UPDATE budget.finance_budgets
+       SET utilised_minor = utilised_minor + ${requestedMinor}, updated_by = ${updatedBy}, updated_at = now()
+     WHERE id = ${id}
+  `);
 }
 
 /**

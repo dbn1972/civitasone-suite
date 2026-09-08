@@ -19,6 +19,11 @@ export const postJournalBody = z.object({
   type:        z.enum(["journal", "payment", "receipt", "contra"]),
   postingDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "postingDate must be YYYY-MM-DD"),
   lines:       z.array(journalLine).min(2),
+  // DOM-007: explicit override of the per-head budget check in gl/consumer.ts.
+  // Setting this true requires BUDGET_OVERRIDE_ROLES (gl/routes.ts) — a plain
+  // finance_officer cannot post over budget even by sending this flag.
+  budgetOverride: z.boolean().default(false),
+  overrideReason: z.string().min(1).max(500).optional(),
 }).refine(
   (b) => {
     const td = b.lines.reduce((s, l) => s + l.debitMinor,  0n);
@@ -26,6 +31,9 @@ export const postJournalBody = z.object({
     return td === tc;
   },
   { message: "journal lines must balance: sum(debit) must equal sum(credit)" }
+).refine(
+  (b) => !b.budgetOverride || (b.overrideReason && b.overrideReason.trim().length > 0),
+  { message: "overrideReason is required when budgetOverride is true", path: ["overrideReason"] }
 );
 export type PostJournalBody = z.infer<typeof postJournalBody>;
 
