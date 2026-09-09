@@ -59,11 +59,21 @@ vi.mock("../src/shared/db.js", () => {
     // `tx`SELECT set_config('app.tenant_id', ...)`` — that internal
     // bookkeeping call must not consume a mockReturnValueOnce() queued for
     // the caller's own query, or every "Once"-based test shifts by one call.
+    //
+    // app.ts's onResponse hook also fire-and-forgets shared/audit.ts's
+    // writeAuditLog for every mutating 2xx response, which now runs its
+    // INSERT via withRawTenantGuc(sqlClient, ...) too (TX-013's RLS-GUC
+    // fix) as `tx.unsafe(text, params)` — that must be recognized and
+    // short-circuited the same way set_config is, or it silently steals a
+    // mockResolvedValueOnce() queued for this test's own query. Mirrors
+    // tests/id-cards-routes.test.ts's isAuditInsert handling.
+    const isAuditInsert = (text: unknown) => typeof text === "string" && text.includes("audit.hr_action_log");
     const tx = ((...args: unknown[]) => {
       const [strings] = args as [TemplateStringsArray];
       if (strings?.[0]?.includes("set_config")) return Promise.resolve([]);
       return H.sqlClientQuery(...args);
     }) as typeof sqlClientFn;
+    tx.unsafe = (...a: unknown[]) => (isAuditInsert(a[0]) ? Promise.resolve([]) : H.sqlClientQuery(...a));
     return fn(tx);
   };
   return {
