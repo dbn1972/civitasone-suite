@@ -4,7 +4,7 @@ import { cache } from "../../shared/infra.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import * as repo from "./repo.js";
 import * as filesRepo from "../files/repo.js";
-import { findDfaById } from "../dfa/repo.js";
+import { findDfaByIdTx } from "../dfa/repo.js";
 import { getProvider } from "./providers.js";
 import { assertSigningAllowed, computeDocHash, DomainError, type SignMethod, type SignSubject } from "./domain.js";
 import { COMMANDS } from "./commands.js";
@@ -51,11 +51,11 @@ export function registerEsignConsumers(queue: Queue): void {
       let body: string | null = null;
       let fileId: string | null = null;
       if (p.subjectType === "noting") {
-        const note = await filesRepo.findNotingById(p.subjectId, p.tenantId);
+        const note = await filesRepo.findNotingByIdTx(tx, p.subjectId, p.tenantId);
         if (!note) throw new DomainError("SUBJECT_NOT_FOUND", `noting ${p.subjectId} not found`);
         body = note.body; fileId = note.fileId;
       } else {
-        const dfa = await findDfaById(p.subjectId, p.tenantId);
+        const dfa = await findDfaByIdTx(tx, p.subjectId, p.tenantId);
         if (!dfa) throw new DomainError("SUBJECT_NOT_FOUND", `dfa ${p.subjectId} not found`);
         body = dfa.body; fileId = dfa.fileId ?? null;
       }

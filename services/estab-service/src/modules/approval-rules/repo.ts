@@ -34,6 +34,21 @@ export async function listActiveRulesForSource(tenantId: string, sourceType: str
     .orderBy(asc(estabApprovalRule.minAmountMinor), asc(estabApprovalRule.priority)));
 }
 
+/**
+ * TX-001 — tenant-scoped sibling of findRuleById(). Reads through a
+ * caller-supplied transaction handle so an already-open db.transaction()
+ * (e.g. approvalRuleUpdate's consumer) does not open a second, bare
+ * db.transaction() from inside itself: under pool.max concurrent in-flight
+ * consumer transactions, the nested call has no free connection to open on
+ * and deadlocks the pool silently. Route every read that happens inside an
+ * already-open consumer transaction through this, not findRuleById().
+ */
+export async function findRuleByIdTx(tx: Writer, id: string, tenantId: string): Promise<ApprovalRuleRow | null> {
+  const rows = await tx.select().from(estabApprovalRule)
+    .where(and(eq(estabApprovalRule.id, id), eq(estabApprovalRule.tenantId, tenantId))).limit(1);
+  return rows[0] ?? null;
+}
+
 export async function insertRule(tx: Writer, row: ApprovalRuleInsert): Promise<void> {
   await tx.insert(estabApprovalRule).values(row);
 }
