@@ -1,0 +1,4 @@
+{
+  "_comment": "Ratchet for scripts/ci/raw-status-leak-guard.mjs (UX-003). maxViolations is the live count measured on the fix/ux-003 branch after fixing procurement/planning/new, hr/payroll/CreatePayrollRunForm, citizen/grievances/new, and procurement/indents/new/CreateIndentForm (down from 172 pre-fix). It must only ever move DOWN, in the same PR that fixes the corresponding files — see follow-up gap UX-016 in docs/ENTERPRISE-GAP-REPORT-2026-09-07.md for the tracked remainder.",
+  "maxViolations": 169
+}

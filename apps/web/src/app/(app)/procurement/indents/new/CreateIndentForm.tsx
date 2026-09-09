@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { LineItemsEditor, emptyLineItem, type LineItem } from "../../_components/LineItemsEditor";
 import { trackActivation } from "@/lib/activation";
-import { toHumanError } from "@/lib/messages";
+import { useFormError } from "@/lib/useFormError";
 
 type GfrBand = { id: string; name: string; notes: string; requiresTender: boolean };
 
@@ -21,7 +21,9 @@ export function CreateIndentForm() {
   const [items, setItems] = useState<LineItem[]>([emptyLineItem()]);
   const [modeBand, setModeBand] = useState<GfrBand | null>(null);
   const [status, setStatus] = useState<"idle" | "submitting" | "accepted" | "error">("idle");
+  /** Client-authored copy for pre-submit validation and success — never server text. */
   const [message, setMessage] = useState("");
+  const formError = useFormError("indent");
 
   // Dynamic GFR mode-band lookup when estimatedValue changes
   useEffect(() => {
@@ -49,7 +51,7 @@ export function CreateIndentForm() {
       setMessage("Department, a purpose of at least 3 characters, and at least one complete line item are required.");
       return;
     }
-    setStatus("submitting"); setMessage("");
+    setStatus("submitting"); setMessage(""); formError.clear();
     const body = {
       indentNo,
       department: department.trim(),
@@ -72,9 +74,8 @@ export function CreateIndentForm() {
         body: JSON.stringify(body),
       });
       if (!res.ok) {
-        const human = toHumanError("save", { area: "indent" });
         setStatus("error");
-        setMessage(`${human.what} ${human.next}`);
+        await formError.fromResponse(res, "save");
         return;
       }
       setStatus("accepted");
@@ -82,8 +83,8 @@ export function CreateIndentForm() {
       setMessage("Indent submitted for approval via workflow.");
       router.push("/procurement/indents");
       router.refresh();
-    } catch (err) {
-      setStatus("error"); setMessage(err instanceof Error ? err.message : "Network error");
+    } catch {
+      setStatus("error"); formError.fromException("save");
     }
   }
 
@@ -104,6 +105,9 @@ export function CreateIndentForm() {
         <div className="field" style={{ background: "#fff", padding: "13px 16px" }}>
           <label className="label" htmlFor="department">Department *</label>
           <input id="department" className="inp" value={department} onChange={(e) => setDepartment(e.target.value)} required style={{ minHeight: 44 }} />
+          {formError.fieldError("department") && (
+            <span style={{ fontSize: 12, color: "var(--bad)" }}>{formError.fieldError("department")}</span>
+          )}
         </div>
 
         <div className="field" style={{ background: "#fff", padding: "13px 16px" }}>
@@ -132,6 +136,9 @@ export function CreateIndentForm() {
         <div className="field" style={{ gridColumn: "1 / -1", background: "#fff", padding: "13px 16px" }}>
           <label className="label" htmlFor="purpose">Purpose / justification *</label>
           <textarea id="purpose" className="inp" rows={2} value={purpose} onChange={(e) => setPurpose(e.target.value)} required minLength={3} maxLength={500} placeholder="Why this purchase is needed (minimum 3 characters)" />
+          {formError.fieldError("purpose") && (
+            <span style={{ fontSize: 12, color: "var(--bad)" }}>{formError.fieldError("purpose")}</span>
+          )}
         </div>
       </div>
 
@@ -141,6 +148,11 @@ export function CreateIndentForm() {
         {message ? (
           <p role={status === "error" ? "alert" : undefined} style={{ marginTop: 12, color: status === "error" ? "var(--bad)" : "var(--good)", fontSize: "0.875rem" }}>
             {message}
+          </p>
+        ) : null}
+        {formError.message ? (
+          <p role="alert" style={{ marginTop: 12, color: "var(--bad)", fontSize: "0.875rem" }}>
+            {formError.message}
           </p>
         ) : null}
       </div>
