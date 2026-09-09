@@ -1,6 +1,6 @@
 # OPS-1 (09-T1): Prometheus scrape + alerting for CivitasOne.
 # Scrapes the per-service /metrics endpoints (service_up, http_requests_total,
-# consumer_errors_total, outbox_relay_failures_total, dlq_messages_total).
+# consumer_errors_total, outbox_relay_failures_total, dlq_total).
 #
 # /metrics is guarded by METRICS_TOKEN or internal-IP allowlist. As of 09-T2 the
 # guard is centralized in packages/observability (registerOpsRoutes) so EVERY
