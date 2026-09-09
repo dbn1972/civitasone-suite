@@ -4,6 +4,7 @@
  */
 import { pino } from "pino";
 import { runWithTenant } from "@civitasone/db";
+import { registerGracefulShutdown, signalReady } from "@civitasone/observability";
 import { db, sqlClient } from "./shared/db.js";
 import { queue } from "./shared/infra.js";
 import { startRelay } from "./shared/outbox.js";
@@ -28,14 +29,16 @@ await queue.start();
 const relay = startRelay(db, queue);
 log.info("gateway-service worker: catalogue consumers + outbox relay running");
 
-async function shutdown(signal: string): Promise<void> {
-  log.info({ signal }, "shutting down");
-  clearInterval(relay);
-  await queue.stop();
-  await sqlClient.end();
-  log.info("shutdown complete");
-  process.exit(0);
-}
+// PERF-003: tell PM2 (wait_ready in ecosystem.config.js) this worker has
+// finished subscribing every consumer and starting the outbox relay — i.e.
+// it can actually do the job, not just that the process started.
+signalReady();
 
-process.on("SIGTERM", () => void shutdown("SIGTERM"));
-process.on("SIGINT", () => void shutdown("SIGINT"));
+registerGracefulShutdown({
+  cleanup: async () => {
+    clearInterval(relay);
+    await queue.stop();
+    await sqlClient.end();
+  },
+  logger: log,
+});

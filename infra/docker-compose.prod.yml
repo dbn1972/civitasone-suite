@@ -153,7 +153,7 @@ services:
       DATABASE_URL: ${DATABASE_URL_IDENTITY:?per-service least-privilege DSN required (set DATABASE_URL for civitas_identity; do NOT use the cluster superuser)}
       MFA_ENC_KEY: ${MFA_ENC_KEY:?}
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3001/health >/dev/null 2>&1 || exit 1"]
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3001/ready >/dev/null 2>&1 || exit 1"]  # PERF-003
       interval: 20s
       timeout: 5s
       retries: 5
@@ -399,7 +399,7 @@ services:
       PORT: "3008"
       DATABASE_URL: ${DATABASE_URL_PROCUREMENT:?per-service least-privilege DSN required (set DATABASE_URL for civitas_procurement; do NOT use the cluster superuser)}
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3008/health >/dev/null 2>&1 || exit 1"]
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3008/ready >/dev/null 2>&1 || exit 1"]  # PERF-003
       interval: 20s
       timeout: 5s
       retries: 5
@@ -549,7 +549,7 @@ services:
       # INTERNAL_SERVICE_SECRET/DEVICE_TRUST_SECRET above.
       CANDIDATE_JWT_SECRET: ${CANDIDATE_JWT_SECRET:?}
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3012/health >/dev/null 2>&1 || exit 1"]
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3012/ready >/dev/null 2>&1 || exit 1"]  # PERF-003
       interval: 20s
       timeout: 5s
       retries: 5
@@ -585,7 +585,7 @@ services:
       PORT: "3013"
       DATABASE_URL: ${DATABASE_URL_PAYROLL:?per-service least-privilege DSN required (set DATABASE_URL for civitas_payroll; do NOT use the cluster superuser)}
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3013/health >/dev/null 2>&1 || exit 1"]
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3013/ready >/dev/null 2>&1 || exit 1"]  # PERF-003
       interval: 20s
       timeout: 5s
       retries: 5
@@ -1277,7 +1277,7 @@ services:
     ports:
       - "${GATEWAY_PORT:-8080}:8080"
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8080/health >/dev/null 2>&1 || exit 1"]
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8080/ready >/dev/null 2>&1 || exit 1"]  # PERF-003
       interval: 20s
       timeout: 5s
       retries: 5
