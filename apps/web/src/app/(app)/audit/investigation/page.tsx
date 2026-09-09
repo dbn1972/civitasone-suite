@@ -1,15 +1,19 @@
-import { PageHeader, StatGrid, StatCard, Card, EmptyState } from "@/app/_components/ds";
-import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
+import { PageHeader, StatGrid, StatCard, Card, EmptyState, RefreshErrorState } from "@/app/_components/ds";
 import { getInvestigations } from "@/app/_data/loaders";
+import { useResource } from "@/app/_data/useResource";
+import { toHumanError } from "@/lib/messages";
 import { InvestigationTable } from "./InvestigationTable";
 
 export default async function InvestigationPage() {
-  const { data: investigations, source } = await getInvestigations();
+  const result = await getInvestigations();
+  const { data: investigations, source } = result;
+  const resource = useResource(result);
+  const errored = resource.status === "error";
 
-  const active = investigations.filter((i) => i.status === "in_progress").length;
-  const findingsSubmitted = investigations.filter((i) => i.status === "findings_submitted").length;
-  const closed = investigations.filter((i) => i.status === "closed").length;
-  const total = investigations.length;
+  const active = errored ? null : investigations.filter((i) => i.status === "in_progress").length;
+  const findingsSubmitted = errored ? null : investigations.filter((i) => i.status === "findings_submitted").length;
+  const closed = errored ? null : investigations.filter((i) => i.status === "closed").length;
+  const total = errored ? null : investigations.length;
 
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
@@ -18,16 +22,21 @@ export default async function InvestigationPage() {
         subtitle="Internal investigations with assignment, findings and resolution status."
         back="/audit"
       />
-      <DataSourceBadge source={source} />
 
       <StatGrid>
-        <StatCard icon="🕵️" iconBg="#eef2ff" label="Active Investigations" value={active} />
-        <StatCard icon="📄" iconBg="var(--goodbg)" label="Findings Submitted" value={findingsSubmitted} />
-        <StatCard icon="✅" iconBg="var(--warnbg)" label="Closed" value={closed} />
-        <StatCard icon="📊" iconBg="#fce7ee" label="Total Cases" value={total} />
+        <StatCard icon="🕵️" iconBg="#eef2ff" label="Active Investigations" value={active ?? "—"} />
+        <StatCard icon="📄" iconBg="var(--goodbg)" label="Findings Submitted" value={findingsSubmitted ?? "—"} />
+        <StatCard icon="✅" iconBg="var(--warnbg)" label="Closed" value={closed ?? "—"} />
+        <StatCard icon="📊" iconBg="#fce7ee" label="Total Cases" value={total ?? "—"} />
       </StatGrid>
 
-      {investigations.length === 0 ? (
+      {errored ? (
+        <Card title="Investigation Cases">
+          <div className="pad">
+            <RefreshErrorState error={toHumanError("load", { area: "investigation cases" })} backHref="/audit" />
+          </div>
+        </Card>
+      ) : investigations.length === 0 ? (
         <Card title="Investigation Cases">
           <EmptyState
             icon="🕵️"

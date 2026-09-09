@@ -16,6 +16,8 @@ export { Term } from "./Term";
 export { ErrorState } from "./ErrorState";
 export { RefreshErrorState } from "./RefreshErrorState";
 export type { RefreshErrorStateProps } from "./RefreshErrorState";
+export { Resource } from "./Resource";
+export type { ResourceProps } from "./Resource";
 export { FileUpload } from "./FileUpload";
 export type { UploadedFileMeta } from "./FileUpload";
 export { Avatar } from "./Avatar";
