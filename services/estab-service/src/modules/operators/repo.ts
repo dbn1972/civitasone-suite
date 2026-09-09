@@ -43,6 +43,21 @@ export async function hasActiveOperators(tenantId: string): Promise<boolean> {
   return rows.length > 0;
 }
 
+/**
+ * TX-001 — tenant-scoped sibling of findOperatorById(). Reads through a
+ * caller-supplied transaction handle so an already-open db.transaction()
+ * (e.g. operatorUpdate's consumer) does not open a second, bare
+ * db.transaction() from inside itself: under pool.max concurrent in-flight
+ * consumer transactions, the nested call has no free connection to open on
+ * and deadlocks the pool silently. Route every read that happens inside an
+ * already-open consumer transaction through this, not findOperatorById().
+ */
+export async function findOperatorByIdTx(tx: Writer, id: string, tenantId: string): Promise<OperatorRow | null> {
+  const rows = await tx.select().from(estabFileOperator)
+    .where(and(eq(estabFileOperator.id, id), eq(estabFileOperator.tenantId, tenantId))).limit(1);
+  return rows[0] ?? null;
+}
+
 export async function insertOperator(tx: Writer, row: OperatorInsert): Promise<void> {
   await tx.insert(estabFileOperator).values(row);
 }

@@ -209,7 +209,7 @@ export function registerRecordsConsumers(queue: Queue): void {
     const p = msg.payload as { fileId: string; tenantId: string; naiReference: string; registerNo: string | null; remarks: string | null };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
-      const arch = await repo.findArchivalByFile(p.tenantId, p.fileId);
+      const arch = await repo.findArchivalByFileTx(tx, p.tenantId, p.fileId);
       if (!arch || arch.status === "nai_transferred") return;
       await repo.updateArchival(tx, arch.id, {
         status: "nai_transferred", naiTransferredAt: new Date(),
@@ -254,7 +254,7 @@ export function registerRecordsConsumers(queue: Queue): void {
       // security classification (CSMOP mapping) rather than hardcoded, so a
       // reclassified file's retention schedule stays correct on annual review.
       if (p.decision === "retain" && p.nextReviewDue) {
-        const file = await filesRepo.findFileById(p.fileId, p.tenantId);
+        const file = await filesRepo.findFileByIdTx(tx, p.fileId, p.tenantId);
         const existing = await repo.findRecordTx(tx, p.tenantId, p.fileId);
         const category = file
           ? getRecordCategory(file.fileType, file.classification)

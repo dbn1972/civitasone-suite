@@ -177,6 +177,21 @@ export async function findArchivalByFile(tenantId: string, fileId: string): Prom
   return rows[0] ?? null;
 }
 
+/**
+ * TX-001 — tenant-scoped sibling of findArchivalByFile(). Reads through a
+ * caller-supplied transaction handle so an already-open db.transaction()
+ * (recordNaiTransfer's consumer) does not open a second, bare
+ * db.transaction() from inside itself: under pool.max concurrent in-flight
+ * consumer transactions, the nested call has no free connection to open on
+ * and deadlocks the pool silently. Route every read that happens inside an
+ * already-open consumer transaction through this, not findArchivalByFile().
+ */
+export async function findArchivalByFileTx(tx: Writer, tenantId: string, fileId: string): Promise<ArchivalRow | null> {
+  const rows = await tx.select().from(estabArchival)
+    .where(and(eq(estabArchival.tenantId, tenantId), eq(estabArchival.fileId, fileId))).limit(1);
+  return rows[0] ?? null;
+}
+
 export async function updateArchival(tx: Writer, id: string, patch: Partial<ArchivalInsert>): Promise<void> {
   await tx.update(estabArchival).set(patch).where(eq(estabArchival.id, id));
 }
