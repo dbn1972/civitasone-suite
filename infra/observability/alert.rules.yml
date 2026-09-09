@@ -145,3 +145,17 @@ groups:
         annotations:
           summary: "Transactional outbox relay failing on {{ $labels.service }}"
           description: "{{ $labels.service }} outbox relay has failed {{ $value | humanize }} time(s) in 5m — events may be delayed."
+
+      # PERF-004: a DLQ arrival was previously silent — 0 counter, 0 alert. Any
+      # increase pages the owning team; a poison message being permanently
+      # dropped is never "wait and see", unlike DlqDepthHigh above which needs
+      # sustained depth (this fires on the very first arrival, per-topic/reason).
+      - alert: DlqMessagesAppearing
+        expr: increase(dlq_total[5m]) > 0
+        for: 5m
+        labels:
+          severity: warning
+          team: platform
+        annotations:
+          summary: "Messages dead-lettered on {{ $labels.topic }} ({{ $labels.reason }})"
+          description: "{{ $value | humanize }} message(s) routed to the DLQ for {{ $labels.topic }} (reason={{ $labels.reason }}) in 5m — a message is being permanently dropped after exhausting retries."

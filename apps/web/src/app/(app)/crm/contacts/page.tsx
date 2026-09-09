@@ -1,4 +1,3 @@
-import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { PageHeader, StatCard, StatGrid } from "../../../_components/ds";
 import { MergeButton } from "../../../_components/crm/MergeButton";
 import { LeadFilters } from "../../../_components/crm/LeadFilters";
@@ -57,7 +56,8 @@ export default async function Page({ searchParams }: { searchParams?: SP }) {
         subtitle="Vendor, beneficiary, NGO, and government official contacts — tenant-scoped contact master • संपर्क पंजी"
         back="/crm"
       />
-      {source === "error" && <DataSourceBadge source={source} />}
+      {/* UX-002: the data-source badge now lives in ContactsTable, driven by
+          the same useSeededResource call that produces its rows. */}
       <div role="note" aria-label="Data protection notice" className="flex items-start gap-2.5 mt-2 px-4 py-3 bg-blue-50 border border-blue-200 rounded-lg text-sm text-blue-800">
         <span aria-hidden="true" className="text-base leading-snug">🛡</span>
         <span>Personal data in this registry is protected under the Digital Personal Data Protection Act, 2023. Access is role-scoped and logged.</span>

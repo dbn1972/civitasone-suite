@@ -18,9 +18,12 @@ describe("Contacts list page stat gating (LQ-003)", () => {
   it("shows '—' for every stat card (not fabricated 0s) when the load failed", async () => {
     mocked.mockResolvedValue({ data: [], source: "error" });
     render(await Page({ searchParams: {} }));
-    // All four stat values render em dashes, and the saved-info badge appears.
+    // All four stat values render em dashes, not fabricated 0s.
+    // UX-002: the data-source badge itself now lives inside ContactsTable
+    // (driven by the same useSeededResource call as the table's rows), not
+    // here at the page level — ContactsTable.test.tsx covers that message.
+    // This test only cares that the page's own stat-card gating is honest.
     expect(screen.getAllByText("—").length).toBeGreaterThanOrEqual(4);
-    expect(screen.getByText(/couldn.t load/i)).toBeInTheDocument();
   });
 
   it("shows real counts when the load succeeds", async () => {

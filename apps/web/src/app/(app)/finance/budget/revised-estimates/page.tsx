@@ -35,6 +35,9 @@ export default async function RevisedEstimatesPage() {
 
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
+      {/* UX-002: the data-source badge now lives in RevisedEstimatesTable,
+          driven by the same useSeededResource call that produces its rows —
+          not a second, independent read of `source` here. */}
       <PageHeader
         title="Revised Estimates"
         subtitle="Budget Estimate vs Revised Estimate with variance analysis by head."

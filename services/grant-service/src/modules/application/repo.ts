@@ -1,4 +1,4 @@
-import { eq, and } from "drizzle-orm";
+import { eq, and, inArray } from "drizzle-orm";
 import { runWithTenant } from "@civitasone/db";
 import { db, scopedRead } from "../../shared/db.js";
 import { sql } from "drizzle-orm";
@@ -11,6 +11,22 @@ export async function findApplicationById(id: string, tenantId: string): Promise
     const rows = await tx.select().from(grantApplications)
       .where(and(eq(grantApplications.id, id), eq(grantApplications.tenantId, tenantId))).limit(1);
     return rows[0] ?? null;
+  }));
+}
+
+/**
+ * PERF-005 batch loader: fetches N applications in ONE query instead of one
+ * query per id. Callers building a list of summaries (e.g. disbursement/
+ * queries.ts::listGrantReleases, utilisation/queries.ts::listUtilizationCerts)
+ * should collect the ids they need up front and call this once, then look up
+ * results from the returned array (e.g. via a Map keyed by id) rather than
+ * awaiting findApplicationById in a per-row loop.
+ */
+export async function findApplicationsByIds(ids: string[], tenantId: string): Promise<ApplicationRow[]> {
+  if (ids.length === 0) return [];
+  return runWithTenant(tenantId, () => db.transaction(async (tx) => {
+    return tx.select().from(grantApplications)
+      .where(and(inArray(grantApplications.id, ids), eq(grantApplications.tenantId, tenantId)));
   }));
 }
 

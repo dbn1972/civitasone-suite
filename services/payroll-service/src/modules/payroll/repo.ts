@@ -1,4 +1,4 @@
-import { eq, and, sql } from "drizzle-orm";
+import { eq, and, sql, inArray, count } from "drizzle-orm";
 import { db, scopedRead } from "../../shared/db.js";
 import {
   payrollStructures, payrollComponents, payrollRuns, payrollSlips,
@@ -107,6 +107,23 @@ export async function listComponentsByTenant(tenantId: string, limit: number) {
 export async function listSlipsByRun(runId: string, tenantId: string): Promise<PayrollSlipRow[]> {
   return scopedRead((tx) => tx.select().from(payrollSlips)
     .where(and(eq(payrollSlips.runId, runId), eq(payrollSlips.tenantId, tenantId))));
+}
+
+/**
+ * PERF-005 batch loader: employee-count-per-run computed via SQL COUNT/GROUP
+ * BY across ALL given run ids in one query, instead of fetching every slip
+ * row for every run (listSlipsByRun in a per-run loop) just to read
+ * `.length`. Runs with zero slips are simply absent from the returned Map —
+ * callers should default to 0 on a miss.
+ */
+export async function countSlipsByRunIds(runIds: string[], tenantId: string): Promise<Map<string, number>> {
+  if (runIds.length === 0) return new Map();
+  const rows = await scopedRead((tx) => tx
+    .select({ runId: payrollSlips.runId, employeeCount: count() })
+    .from(payrollSlips)
+    .where(and(inArray(payrollSlips.runId, runIds), eq(payrollSlips.tenantId, tenantId)))
+    .groupBy(payrollSlips.runId));
+  return new Map(rows.map((r) => [r.runId, Number(r.employeeCount)]));
 }
 
 /** M1: transaction-scoped slip read (for computing authoritative run totals). */

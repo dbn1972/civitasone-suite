@@ -1,0 +1,31 @@
+-- bootstrap_pg_stat_statements.sql
+--
+-- PERF-010: pg_stat_statements (Postgres's built-in slow-query capture
+-- extension) was never enabled anywhere in this codebase's Postgres
+-- configuration. infra/postgres/postgresql.conf documented
+-- `shared_preload_libraries = 'pg_stat_statements'`, but nothing actually
+-- passed that file (or the setting) to the running server -- see the
+-- `command:` fix on the `postgres` service in infra/docker-compose.yml /
+-- infra/docker-compose.prod.yml in this same change, which is the other half
+-- of this fix (shared_preload_libraries is a postmaster-start-time GUC; this
+-- file's CREATE EXTENSION is the second, separate step -- the library must
+-- already be preloaded before this can succeed).
+--
+-- Must run as a superuser, against the `postgres` maintenance database,
+-- AFTER the server has actually started with shared_preload_libraries set.
+-- Run it right after bootstrap_admin_role.sql (still connected as the
+-- bootstrapping superuser / $PGDATABASE=postgres at that point in
+-- scripts/ci/bootstrap-postgres.sh) rather than per-service-database: the
+-- extension only needs to exist in ONE database for pg_stat_statements' view
+-- to be queryable there, and the underlying stats collection covers every
+-- database on the cluster regardless of which one the extension was created
+-- in (distinguished by the view's own `dbid` column).
+--
+-- Verified against a fresh postgres:16-alpine container (PERF-010 PR): without
+-- the shared_preload_libraries fix, this statement fails with
+--   ERROR:  pg_stat_statements must be loaded via shared_preload_libraries
+-- After the fix, it succeeds and `SELECT count(*) FROM pg_stat_statements;`
+-- returns real captured query statistics once traffic has run.
+--
+-- Idempotent: safe to re-run.
+CREATE EXTENSION IF NOT EXISTS pg_stat_statements;

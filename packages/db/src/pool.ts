@@ -85,6 +85,45 @@ const jsonTypeOverride: postgres.PostgresType<unknown> = {
   parse: (raw: string): unknown => JSON.parse(raw),
 };
 
+/**
+ * PERF-005 test instrumentation: a process-wide set of listeners notified on
+ * every query issued by ANY postgres-js client created via createSqlClient()
+ * in this process, via postgres-js's own `debug` hook (real driver-level
+ * instrumentation, not a mock). Always wired in (the iteration is a no-op
+ * when empty) so query-count regression tests need no production code path
+ * changes to observe round-trips — they just register/unregister a listener
+ * around the code under test.
+ *
+ * Safe for tests specifically because each test process/service normally
+ * talks to exactly one target Postgres (its own isolated test DB), so "every
+ * client in this process" in practice means "the one client under test".
+ */
+type QueryDebugListener = (connection: number, query: string, params: unknown[]) => void;
+const queryDebugListeners = new Set<QueryDebugListener>();
+
+/** Register a listener invoked once per query executed by any sql client in this process. */
+export function addQueryDebugListener(fn: QueryDebugListener): void {
+  queryDebugListeners.add(fn);
+}
+
+/** Remove a listener previously passed to addQueryDebugListener. */
+export function removeQueryDebugListener(fn: QueryDebugListener): void {
+  queryDebugListeners.delete(fn);
+}
+
+/** Test helper: count queries issued while `fn` runs. */
+export async function countQueriesDuring<T>(fn: () => Promise<T>): Promise<{ result: T; queryCount: number }> {
+  let queryCount = 0;
+  const listener: QueryDebugListener = () => { queryCount++; };
+  addQueryDebugListener(listener);
+  try {
+    const result = await fn();
+    return { result, queryCount };
+  } finally {
+    removeQueryDebugListener(listener);
+  }
+}
+
 /** PgBouncer-aware postgres-js client — use port 6432 or DB_VIA_PGBOUNCER=true. */
 export function createSqlClient(connectionString?: string, overrides?: SqlClientOptions) {
   const url = connectionString ?? process.env.DATABASE_URL;
@@ -108,6 +147,19 @@ export function createSqlClient(connectionString?: string, overrides?: SqlClient
     idle_timeout: overrides?.idle_timeout ?? 20,
     connect_timeout: overrides?.connect_timeout ?? 10,
     types: { json: jsonTypeOverride },
+    // Query-count instrumentation, opt-in only: postgres-js also uses a
+    // truthy `debug` to make thrown errors' query/parameters/stack
+    // properties enumerable (connection.js), so we must NOT flip this on
+    // unconditionally in production — that would start leaking SQL text and
+    // bind parameters into any JSON.stringify()'d/logged error fleet-wide.
+    // DB_QUERY_DEBUG=true is set only by test bootstrap (see
+    // countQueriesDuring() below), never in service env files. When off,
+    // this is `debug: false`, byte-identical to the pre-PERF-005 default.
+    debug: process.env.DB_QUERY_DEBUG === "true"
+      ? (_connection: number, query: string, params: unknown[]) => {
+          for (const listener of queryDebugListeners) listener(_connection, query, params);
+        }
+      : false,
   };
 
   return postgres(url, options);
