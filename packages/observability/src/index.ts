@@ -196,7 +196,14 @@ function formatConsumerHeartbeatMetrics(): string[] {
 // ── OPS-1 (09-T1): outbox relay + DLQ failure metrics ────────────────────────
 
 const outboxRelayFailuresTotal = new Map<string, number>(); // service -> count
-const dlqMessagesTotal = new Map<string, number>();          // topic -> count
+// PERF-004: keyed "topic:reason" so alerting/dashboards can break down DLQ
+// arrivals by cause (max_receive_count_exceeded, non_retryable_error,
+// invalid_envelope, unparseable_body), per skill 07's `dlq_total{eventType,
+// reason}` metric spec. Renamed from the previous topic-only
+// `dlq_messages_total` — nothing else in this repo referenced that name
+// (grepped before renaming), so this is a safe in-place rename rather than
+// an additive metric.
+const dlqTotal = new Map<string, number>();
 const capturedErrorsTotal = new Map<string, number>();       // service -> count
 
 /** Increment outbox_relay_failures_total{service}. */
@@ -204,20 +211,40 @@ export function incrementOutboxRelayFailure(service: string): void {
   outboxRelayFailuresTotal.set(service, (outboxRelayFailuresTotal.get(service) ?? 0) + 1);
 }
 
-/** Increment dlq_messages_total{topic}. */
-export function incrementDlqMessage(topic: string): void {
-  dlqMessagesTotal.set(topic, (dlqMessagesTotal.get(topic) ?? 0) + 1);
+/**
+ * Increment dlq_total{topic,reason} — call every time a message is actually
+ * sent to a dead-letter queue (PERF-004). `reason` should be the same short,
+ * stable string already used for the `dlqReason` message attribute and the
+ * `queue_message_dead_lettered` structured log (e.g.
+ * "max_receive_count_exceeded", "non_retryable_error", "invalid_envelope",
+ * "unparseable_body") so the metric, the log, and the DLQ message itself all
+ * agree on why a message was dropped.
+ */
+export function incrementDlqMessage(topic: string, reason: string = "unknown"): void {
+  const key = `${topic}:${reason}`;
+  dlqTotal.set(key, (dlqTotal.get(key) ?? 0) + 1);
 }
 
 export function getOutboxRelayFailureCount(service: string): number {
   return outboxRelayFailuresTotal.get(service) ?? 0;
 }
-export function getDlqMessageCount(topic: string): number {
-  return dlqMessagesTotal.get(topic) ?? 0;
+
+/**
+ * dlq_total count for `topic`. Pass `reason` to read one reason's count;
+ * omit it to sum across every reason recorded for that topic.
+ */
+export function getDlqMessageCount(topic: string, reason?: string): number {
+  if (reason !== undefined) return dlqTotal.get(`${topic}:${reason}`) ?? 0;
+  let sum = 0;
+  const prefix = `${topic}:`;
+  for (const [key, count] of dlqTotal) {
+    if (key.startsWith(prefix)) sum += count;
+  }
+  return sum;
 }
 export function resetFailureMetrics(): void {
   outboxRelayFailuresTotal.clear();
-  dlqMessagesTotal.clear();
+  dlqTotal.clear();
   capturedErrorsTotal.clear();
 }
 
@@ -230,11 +257,14 @@ function formatFailureMetrics(): string[] {
     lines.push(`outbox_relay_failures_total{service="${service}"} ${count}`);
   }
   lines.push(
-    "# HELP dlq_messages_total Messages routed to a dead-letter queue by topic",
-    "# TYPE dlq_messages_total counter",
+    "# HELP dlq_total Messages routed to a dead-letter queue, by topic and reason",
+    "# TYPE dlq_total counter",
   );
-  for (const [topic, count] of dlqMessagesTotal) {
-    lines.push(`dlq_messages_total{topic="${topic}"} ${count}`);
+  for (const [key, count] of dlqTotal) {
+    const sep = key.lastIndexOf(":");
+    const topic = key.slice(0, sep);
+    const reason = key.slice(sep + 1);
+    lines.push(`dlq_total{topic="${topic}",reason="${reason}"} ${count}`);
   }
   lines.push(
     "# HELP captured_errors_total Failures captured via captureError(), by service",
