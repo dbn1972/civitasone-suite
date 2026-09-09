@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { useFormError } from "@/lib/useFormError";
 
 const PROCUREMENT_METHODS = ["direct_purchase", "gem", "limited_tender", "advertised_tender", "single_tender"] as const;
 const QUARTERS = ["Q1", "Q2", "Q3", "Q4"] as const;
@@ -28,7 +29,9 @@ export default function NewAnnualPlanPage() {
   const [notes, setNotes] = useState("");
   const [lines, setLines] = useState<PlanLine[]>([emptyLine()]);
   const [status, setStatus] = useState<"idle" | "submitting" | "accepted" | "error">("idle");
-  const [message, setMessage] = useState("");
+  /** Client-authored copy for pre-submit validation and success — never server text. */
+  const [clientMessage, setClientMessage] = useState("");
+  const formError = useFormError("annual procurement plan");
 
   function updateLine(i: number, patch: Partial<PlanLine>) {
     setLines((prev) => prev.map((l, idx) => idx === i ? { ...l, ...patch } : l));
@@ -37,9 +40,9 @@ export default function NewAnnualPlanPage() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!title.trim() || !department.trim() || !planYear) {
-      setStatus("error"); setMessage("Year, title, and department are required."); return;
+      setStatus("error"); setClientMessage("Year, title, and department are required."); return;
     }
-    setStatus("submitting"); setMessage("");
+    setStatus("submitting"); setClientMessage(""); formError.clear();
     try {
       const res = await fetch("/api/proxy/v1/procurement/plans", {
         method: "POST",
@@ -56,12 +59,15 @@ export default function NewAnnualPlanPage() {
           })),
         }),
       });
-      const text = await res.text();
-      if (!res.ok) { setStatus("error"); setMessage(text || "Request failed"); return; }
-      setStatus("accepted"); setMessage("Plan submitted. It will appear in the list shortly.");
+      if (!res.ok) {
+        setStatus("error");
+        await formError.fromResponse(res, "save");
+        return;
+      }
+      setStatus("accepted"); setClientMessage("Plan submitted. It will appear in the list shortly.");
       setTimeout(() => router.push("/procurement/planning"), 1200);
-    } catch (err) {
-      setStatus("error"); setMessage(err instanceof Error ? err.message : "Network error");
+    } catch {
+      setStatus("error"); formError.fromException("save");
     }
   }
 
@@ -79,14 +85,23 @@ export default function NewAnnualPlanPage() {
             <div className="field">
               <label className="label" htmlFor="planYear">Financial year (start) *</label>
               <input id="planYear" type="number" className="inp" value={planYear} onChange={(e) => setPlanYear(e.target.value)} min="2020" max="2100" style={{ minHeight: 44 }} required />
+              {formError.fieldError("planYear") && (
+                <span style={{ fontSize: 12, color: "var(--bad)" }}>{formError.fieldError("planYear")}</span>
+              )}
             </div>
             <div className="field">
               <label className="label" htmlFor="dept">Department *</label>
               <input id="dept" className="inp" value={department} onChange={(e) => setDepartment(e.target.value)} style={{ minHeight: 44 }} required />
+              {formError.fieldError("department") && (
+                <span style={{ fontSize: 12, color: "var(--bad)" }}>{formError.fieldError("department")}</span>
+              )}
             </div>
             <div className="field" style={{ gridColumn: "1 / -1" }}>
               <label className="label" htmlFor="title">Plan title *</label>
               <input id="title" className="inp" value={title} onChange={(e) => setTitle(e.target.value)} style={{ minHeight: 44 }} required />
+              {formError.fieldError("title") && (
+                <span style={{ fontSize: 12, color: "var(--bad)" }}>{formError.fieldError("title")}</span>
+              )}
             </div>
             <div className="field" style={{ gridColumn: "1 / -1" }}>
               <label className="label" htmlFor="notes">Notes</label>
@@ -142,7 +157,8 @@ export default function NewAnnualPlanPage() {
           <button type="button" onClick={() => setLines((prev) => [...prev, emptyLine()])} className="btn" style={{ marginTop: 12, fontSize: 13 }}>+ Add line</button>
         </div>
 
-        {message ? <p role={status === "error" ? "alert" : "status"} style={{ marginBottom: 12, color: status === "error" ? "var(--bad)" : "var(--good)", fontSize: 13 }}>{message}</p> : null}
+        {clientMessage ? <p role={status === "error" ? "alert" : "status"} style={{ marginBottom: 12, color: status === "error" ? "var(--bad)" : "var(--good)", fontSize: 13 }}>{clientMessage}</p> : null}
+        {formError.message ? <p role="alert" style={{ marginBottom: 12, color: "var(--bad)", fontSize: 13 }}>{formError.message}</p> : null}
         <div style={{ display: "flex", gap: 8 }}>
           <button type="submit" className="btn primary" style={{ minHeight: 44 }} disabled={status === "submitting"}>
             {status === "submitting" ? "Creating…" : "Create plan"}

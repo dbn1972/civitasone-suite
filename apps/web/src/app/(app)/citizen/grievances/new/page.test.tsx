@@ -120,3 +120,45 @@ describe("RegisterGrievancePage — DPDP 2023 consent gate", () => {
     expect(screen.getByText(/withdraw consent/i)).toBeInTheDocument();
   });
 });
+
+describe("RegisterGrievancePage — server error handling (UX-003)", () => {
+  it("renders inline field-level messages from a fieldErrors response, not just a raw error string", async () => {
+    fetchMock.mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          code: "VALIDATION_FAILED",
+          message: "validation_failed",
+          fieldErrors: [{ field: "subject", message: "Subject must be under 200 characters." }],
+        }),
+        { status: 400, headers: { "content-type": "application/json" } },
+      ),
+    );
+
+    render(<RegisterGrievancePage />);
+    fillRequiredFields();
+    fireEvent.click(screen.getByRole("checkbox"));
+    fireEvent.click(screen.getByRole("button", { name: /register grievance/i }));
+
+    expect(await screen.findByText("Subject must be under 200 characters.")).toBeInTheDocument();
+    expect(mockPush).not.toHaveBeenCalled();
+  });
+
+  it("never surfaces a raw status code or raw server text on failure", async () => {
+    fetchMock.mockResolvedValue(
+      new Response("Internal Server Error\n at Object.<anonymous> (/srv/grievance.js:9:1)", {
+        status: 500,
+        headers: { "content-type": "text/plain" },
+      }),
+    );
+
+    render(<RegisterGrievancePage />);
+    fillRequiredFields();
+    fireEvent.click(screen.getByRole("checkbox"));
+    fireEvent.click(screen.getByRole("button", { name: /register grievance/i }));
+
+    const alert = await screen.findByRole("alert");
+    expect(alert.textContent).not.toMatch(/\b500\b/);
+    expect(alert.textContent).not.toMatch(/Internal Server Error/);
+    expect(alert.textContent).not.toMatch(/at Object\.<anonymous>/);
+  });
+});
