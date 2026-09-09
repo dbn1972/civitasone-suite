@@ -1,4 +1,4 @@
-import { eq, and } from "drizzle-orm";
+import { eq, and, inArray } from "drizzle-orm";
 import { runWithTenant } from "@civitasone/db";
 import { db, scopedRead } from "../../shared/db.js";
 import { grantBeneficiaries, grantBankAccounts, grantAadhaarLinks, type BeneficiaryRow, type BeneficiaryInsert, type BankAccountRow, type BankAccountInsert, type AadhaarLinkRow, type AadhaarLinkInsert } from "./schema.js";
@@ -10,6 +10,19 @@ export async function findBeneficiaryById(id: string, tenantId: string): Promise
     const rows = await tx.select().from(grantBeneficiaries)
       .where(and(eq(grantBeneficiaries.id, id), eq(grantBeneficiaries.tenantId, tenantId))).limit(1);
     return rows[0] ?? null;
+  }));
+}
+
+/**
+ * PERF-005 batch loader: fetches N beneficiaries in ONE query instead of one
+ * query per id. See findApplicationsByIds (application/repo.ts) for the
+ * calling pattern this exists to support.
+ */
+export async function findBeneficiariesByIds(ids: string[], tenantId: string): Promise<BeneficiaryRow[]> {
+  if (ids.length === 0) return [];
+  return runWithTenant(tenantId, () => scopedRead(async (tx) => {
+    return tx.select().from(grantBeneficiaries)
+      .where(and(inArray(grantBeneficiaries.id, ids), eq(grantBeneficiaries.tenantId, tenantId)));
   }));
 }
 
