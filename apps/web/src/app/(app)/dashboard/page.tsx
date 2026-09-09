@@ -4,7 +4,7 @@ import { RoleCommandCenter } from "./RoleCommandCenter";
 import { FirstRunTour } from "./FirstRunTour";
 import { ActivationTracker } from "../../_components/ActivationTracker";
 import { getSessionRoles } from "@/lib/auth/roleGuard";
-import { serverT } from "@/lib/i18n/server";
+import { getTranslations } from "next-intl/server";
 
 const MODULES = [
   { icon: "🏦", label: "Finance", href: "/finance", desc: "Budgets, bills, payments, GL", bg: "#eef2ff", roles: ["finance"] },
@@ -31,8 +31,8 @@ function visibleModules(roles: string[]) {
   return MODULES.filter((m) => m.roles.length === 0 || m.roles.some((prefix) => roles.some((r) => r.includes(prefix))));
 }
 
-export default function DashboardPage() {
-  const t = serverT();
+export default async function DashboardPage() {
+  const t = await getTranslations("home");
   const roles = getSessionRoles();
   const modules = visibleModules(roles);
 
@@ -41,13 +41,13 @@ export default function DashboardPage() {
       <FirstRunTour />
       <ActivationTracker steps={["signin"]} />
       <PageHeader
-        title={t("dashboard.title")}
-        subtitle={t("dashboard.subtitle")}
-        actions={<Link href="/workflow" className="btn primary">{t("dashboard.myApprovals")}</Link>}
+        title={t("title")}
+        subtitle={t("subtitle")}
+        actions={<Link href="/workflow" className="btn primary">{t("myApprovals")}</Link>}
       />
       <Link
         href="/setup"
-        aria-label={t("dashboard.setupBannerTitle")}
+        aria-label={t("setupBannerTitle")}
         style={{ textDecoration: "none", display: "block", marginBottom: 18 }}
       >
         <div
@@ -64,8 +64,8 @@ export default function DashboardPage() {
         >
           <span aria-hidden="true" style={{ fontSize: 22 }}>🚀</span>
           <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontWeight: 700, color: "var(--ink)" }}>{t("dashboard.setupBannerTitle")}</div>
-            <div style={{ fontSize: 13, color: "var(--ink2)" }}>{t("dashboard.setupBannerDesc")}</div>
+            <div style={{ fontWeight: 700, color: "var(--ink)" }}>{t("setupBannerTitle")}</div>
+            <div style={{ fontSize: 13, color: "var(--ink2)" }}>{t("setupBannerDesc")}</div>
           </div>
           <span aria-hidden="true" style={{ color: "var(--primary-d)", fontWeight: 700 }}>→</span>
         </div>
@@ -73,20 +73,20 @@ export default function DashboardPage() {
       <RoleCommandCenter />
       <section aria-labelledby="dash-modules-h">
         <div className="card-h" style={{ marginBottom: 12 }}>
-          <h2 id="dash-modules-h" style={{ margin: 0, fontSize: 15 }}>{t("dashboard.yourModules")}</h2>
+          <h2 id="dash-modules-h" style={{ margin: 0, fontSize: 15 }}>{t("yourModules")}</h2>
         </div>
         {modules.length === 0 ? (
           <div className="card">
             <div className="pad">
               <EmptyState
                 icon="🧭"
-                title={t("dashboard.noModules")}
-                message={t("dashboard.noModulesMsg")}
+                title={t("noModules")}
+                message={t("noModulesMsg")}
               />
             </div>
           </div>
         ) : (
-          <nav aria-label={t("dashboard.yourModules")} className="grid g-4">
+          <nav aria-label={t("yourModules")} className="grid g-4">
             {modules.map(({ icon, label, href, desc, bg }) => (
               <Link key={href} href={href} aria-label={label} style={{ textDecoration: "none", display: "block" }}>
                 <div className="stat" style={{ cursor: "pointer", height: "100%" }}>

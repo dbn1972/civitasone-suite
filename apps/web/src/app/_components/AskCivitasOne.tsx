@@ -6,11 +6,11 @@
  * Opens the AskCivitasOnePanel on click.
  */
 import { useCallback, useState } from "react";
-import { useT } from "@/lib/i18n/LocaleProvider";
+import { useTranslations } from "next-intl";
 import { AskCivitasOnePanel } from "./AskCivitasOnePanel";
 
 export function AskCivitasOne() {
-  const t = useT();
+  const t = useTranslations("assistant");
   const [isOpen, setIsOpen] = useState(false);
 
   const handleOpen = useCallback(() => setIsOpen(true), []);
@@ -23,8 +23,8 @@ export function AskCivitasOne() {
         <button
           type="button"
           onClick={handleOpen}
-          aria-label={t("assistant.title")}
-          title={t("assistant.title")}
+          aria-label={t("title")}
+          title={t("title")}
           style={{
             position: "fixed",
             bottom: 90,
@@ -52,7 +52,7 @@ export function AskCivitasOne() {
           }}
         >
           <span style={{ fontSize: 16 }}>💬</span>
-          <span>{t("assistant.trigger")}</span>
+          <span>{t("trigger")}</span>
         </button>
       )}
 

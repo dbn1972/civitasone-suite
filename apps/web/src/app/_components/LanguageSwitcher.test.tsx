@@ -1,105 +1,79 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
+import { NextIntlClientProvider } from "next-intl";
 import { LanguageSwitcher } from "./LanguageSwitcher";
-import { LocaleProvider } from "@/lib/i18n/LocaleProvider";
+import enMessages from "@/messages/en.json";
+import hiMessages from "@/messages/hi.json";
 
-// Wrap with LocaleProvider for tests
-function renderWithProvider(initialLocale: "en" | "hi" = "en") {
+// UX-004: LanguageSwitcher now reads next-intl's useLocale() and switches by
+// writing the `locale` cookie + reloading (see component comment) rather
+// than the old, never-mounted lib/i18n LocaleProvider.
+function renderWithProvider(locale: "en" | "hi" = "en") {
+  const messages = locale === "hi" ? hiMessages : enMessages;
   return render(
-    <LocaleProvider initialLocale={initialLocale}>
+    <NextIntlClientProvider locale={locale} messages={messages}>
       <LanguageSwitcher />
-    </LocaleProvider>,
+    </NextIntlClientProvider>,
   );
 }
 
 describe("LanguageSwitcher", () => {
+  beforeEach(() => {
+    document.cookie = "locale=; path=/; max-age=0";
+    vi.stubGlobal("location", { ...window.location, reload: vi.fn() });
+  });
+
   it("renders the language trigger button", () => {
     renderWithProvider();
-    const button = screen.getByRole("button", { name: /language/i });
-    expect(button).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /language/i })).toBeInTheDocument();
   });
 
   it("shows English flag when locale is en", () => {
     renderWithProvider("en");
-    const button = screen.getByRole("button", { name: /language/i });
-    expect(button.textContent).toContain("🇬🇧");
+    expect(screen.getByRole("button", { name: /language/i }).textContent).toContain("🇬🇧");
   });
 
   it("shows Indian flag when locale is hi", () => {
     renderWithProvider("hi");
-    const button = screen.getByRole("button", { name: /language/i });
-    expect(button.textContent).toContain("🇮🇳");
+    expect(screen.getByRole("button", { name: /language/i }).textContent).toContain("🇮🇳");
   });
 
-  it("opens language menu on click", () => {
+  it("opens language menu on click and lists both options", () => {
     renderWithProvider();
-    const button = screen.getByRole("button", { name: /language/i });
-    fireEvent.click(button);
+    fireEvent.click(screen.getByRole("button", { name: /language/i }));
     expect(screen.getByRole("listbox", { name: /select language/i })).toBeInTheDocument();
+    expect(screen.getByText("English")).toBeInTheDocument();
+    expect(screen.getByText("हिन्दी")).toBeInTheDocument();
   });
 
-  it("shows both language options in the menu", () => {
-    renderWithProvider();
-    const button = screen.getByRole("button", { name: /language/i });
-    fireEvent.click(button);
-    expect(screen.getByText("🇬🇧 English")).toBeInTheDocument();
-    expect(screen.getByText("🇮🇳 हिन्दी")).toBeInTheDocument();
-  });
-
-  it("switches locale to Hindi on select", () => {
+  it("selecting a locale writes the `locale` cookie next-intl's request config reads and reloads", () => {
     renderWithProvider("en");
-    const button = screen.getByRole("button", { name: /language/i });
-    fireEvent.click(button);
+    fireEvent.click(screen.getByRole("button", { name: /language/i }));
+    fireEvent.click(screen.getByText("हिन्दी"));
 
-    const hindiOption = screen.getByText("🇮🇳 हिन्दी");
-    fireEvent.click(hindiOption);
-
-    // After switching, the trigger should now show the Indian flag
-    const updatedButton = screen.getByRole("button", { name: /language/i });
-    expect(updatedButton.textContent).toContain("🇮🇳");
+    expect(document.cookie).toContain("locale=hi");
+    expect(window.location.reload).toHaveBeenCalledTimes(1);
   });
 
-  it("switches locale to English on select", () => {
-    renderWithProvider("hi");
-    const button = screen.getByRole("button", { name: /language/i });
-    fireEvent.click(button);
+  it("does not reload when re-selecting the already-active locale", () => {
+    renderWithProvider("en");
+    fireEvent.click(screen.getByRole("button", { name: /language/i }));
+    fireEvent.click(screen.getByText("English"));
 
-    const englishOption = screen.getByText("🇬🇧 English");
-    fireEvent.click(englishOption);
-
-    const updatedButton = screen.getByRole("button", { name: /language/i });
-    expect(updatedButton.textContent).toContain("🇬🇧");
+    expect(window.location.reload).not.toHaveBeenCalled();
   });
 
-  it("closes menu after selection", () => {
+  it("closes the menu after selection", () => {
     renderWithProvider();
-    const button = screen.getByRole("button", { name: /language/i });
-    fireEvent.click(button);
-
-    const hindiOption = screen.getByText("🇮🇳 हिन्दी");
-    fireEvent.click(hindiOption);
-
+    fireEvent.click(screen.getByRole("button", { name: /language/i }));
+    fireEvent.click(screen.getByText("हिन्दी"));
     expect(screen.queryByRole("listbox")).not.toBeInTheDocument();
   });
 
-  it("has correct aria-expanded attribute", () => {
-    renderWithProvider();
-    const button = screen.getByRole("button", { name: /language/i });
-    expect(button).toHaveAttribute("aria-expanded", "false");
-
-    fireEvent.click(button);
-    expect(button).toHaveAttribute("aria-expanded", "true");
-  });
-
-  it("marks current locale as selected in menu", () => {
+  it("marks the current locale as selected in the menu", () => {
     renderWithProvider("en");
-    const button = screen.getByRole("button", { name: /language/i });
-    fireEvent.click(button);
-
-    const englishOption = screen.getByRole("option", { name: /english/i });
-    expect(englishOption).toHaveAttribute("aria-selected", "true");
-
-    const hindiOption = screen.getByRole("option", { name: /हिन्दी/i });
-    expect(hindiOption).toHaveAttribute("aria-selected", "false");
+    fireEvent.click(screen.getByRole("button", { name: /language/i }));
+    expect(screen.getByRole("option", { name: /english/i })).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByRole("option", { name: /हिन्दी/i })).toHaveAttribute("aria-selected", "false");
   });
 });

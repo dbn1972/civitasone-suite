@@ -3,10 +3,10 @@ import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { PageHeader, StatGrid, StatCard, Card, DataTable } from "../../../_components/ds";
 import { getLeaveRequestDetails } from "../../../_data/loaders";
 import type { LeaveRequestDetail } from "@civitasone/types";
-import { serverT } from "@/lib/i18n/server";
+import { getTranslations } from "next-intl/server";
 
 export default async function LeaveManagementPage() {
-  const t = serverT();
+  const t = await getTranslations("leave");
   const { data: leaveRequests, source } = await getLeaveRequestDetails();
 
   const total = leaveRequests.length;
@@ -26,8 +26,8 @@ export default async function LeaveManagementPage() {
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
-        title={t("leave.title")}
-        subtitle={t("leave.subtitle")}
+        title={t("title")}
+        subtitle={t("subtitle")}
         back="/hr"
         backLabel="HR"
         help="hr"
@@ -37,8 +37,8 @@ export default async function LeaveManagementPage() {
             <Link href="/hr/leave/history" className="btn">History</Link>
             <Link href="/hr/leave/allocate" className="btn">Allocate</Link>
             <Link href="/hr/leave-policies" className="btn">Policies</Link>
-            <Link href="/hr/leave/approvals" className="btn">{t("leave.approvals")}</Link>
-            <Link href="/hr/leave/apply" className="btn primary">{t("leave.newLeave")}</Link>
+            <Link href="/hr/leave/approvals" className="btn">{t("approvals")}</Link>
+            <Link href="/hr/leave/apply" className="btn primary">{t("newLeave")}</Link>
           </>
         }
       />
@@ -54,12 +54,12 @@ export default async function LeaveManagementPage() {
       )}
 
       <StatGrid>
-        <StatCard icon="📋" iconBg="var(--panel)" label={t("leave.total")} value={total} />
-        <StatCard icon="⏳" iconBg="var(--warnbg)" label={t("leave.pending")} value={pending} />
-        <StatCard icon="✅" iconBg="var(--goodbg)" label={t("leave.approved")} value={approved} />
-        <StatCard icon="❌" iconBg="var(--badbg)" label={t("leave.rejected")} value={rejected} />
+        <StatCard icon="📋" iconBg="var(--panel)" label={t("total")} value={total} />
+        <StatCard icon="⏳" iconBg="var(--warnbg)" label={t("pending")} value={pending} />
+        <StatCard icon="✅" iconBg="var(--goodbg)" label={t("approved")} value={approved} />
+        <StatCard icon="❌" iconBg="var(--badbg)" label={t("rejected")} value={rejected} />
       </StatGrid>
-      <Card title={t("leave.requests")}>
+      <Card title={t("requests")}>
         <DataTable<LeaveRequestDetail>
           columns={columns}
           rows={leaveRequests}

@@ -7,7 +7,7 @@
  */
 import { useCallback, useEffect, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
-import { useT } from "@/lib/i18n/LocaleProvider";
+import { useTranslations } from "next-intl";
 
 const SESSION_KEY = "civitasone.assistant.messages";
 
@@ -57,7 +57,7 @@ function saveMessages(messages: ChatMessage[]) {
 }
 
 export function AskCivitasOnePanel({ onClose }: AskCivitasOnePanelProps) {
-  const t = useT();
+  const t = useTranslations("assistant");
   const pathname = usePathname();
   const [messages, setMessages] = useState<ChatMessage[]>(loadMessages);
   const [input, setInput] = useState("");
@@ -72,7 +72,7 @@ export function AskCivitasOnePanel({ onClose }: AskCivitasOnePanelProps) {
       const welcome: ChatMessage = {
         id: "welcome",
         role: "assistant",
-        content: t("assistant.welcome"),
+        content: t("welcome"),
         timestamp: Date.now(),
       };
       setMessages([welcome]);
@@ -128,7 +128,7 @@ export function AskCivitasOnePanel({ onClose }: AskCivitasOnePanelProps) {
         const offlineMsg: ChatMessage = {
           id: `assistant-${Date.now()}`,
           role: "assistant",
-          content: t("assistant.offlineMsg"),
+          content: t("offlineMsg"),
           timestamp: Date.now(),
         };
         const withOffline = [...updated, offlineMsg];
@@ -151,9 +151,9 @@ export function AskCivitasOnePanel({ onClose }: AskCivitasOnePanelProps) {
         let assistantContent: string;
         if (response.ok) {
           const data = await response.json();
-          assistantContent = data.answer ?? data.response ?? data.message ?? t("assistant.errorMsg");
+          assistantContent = data.answer ?? data.response ?? data.message ?? t("errorMsg");
         } else {
-          assistantContent = t("assistant.errorMsg");
+          assistantContent = t("errorMsg");
         }
 
         const assistantMsg: ChatMessage = {
@@ -169,7 +169,7 @@ export function AskCivitasOnePanel({ onClose }: AskCivitasOnePanelProps) {
         const errorMsg: ChatMessage = {
           id: `assistant-${Date.now()}`,
           role: "assistant",
-          content: t("assistant.errorMsg"),
+          content: t("errorMsg"),
           timestamp: Date.now(),
         };
         const withError = [...updated, errorMsg];
@@ -191,7 +191,7 @@ export function AskCivitasOnePanel({ onClose }: AskCivitasOnePanelProps) {
     <div
       ref={panelRef}
       role="dialog"
-      aria-label={t("assistant.title")}
+      aria-label={t("title")}
       aria-modal="true"
       style={{
         position: "fixed",
@@ -220,11 +220,11 @@ export function AskCivitasOnePanel({ onClose }: AskCivitasOnePanelProps) {
           background: "#f9fafb",
         }}
       >
-        <span style={{ fontWeight: 600, fontSize: 15 }}>{t("assistant.title")}</span>
+        <span style={{ fontWeight: 600, fontSize: 15 }}>{t("title")}</span>
         <button
           type="button"
           onClick={onClose}
-          aria-label={t("assistant.close")}
+          aria-label={t("close")}
           style={{
             border: "none",
             background: "none",
@@ -287,7 +287,7 @@ export function AskCivitasOnePanel({ onClose }: AskCivitasOnePanelProps) {
               fontStyle: "italic",
             }}
           >
-            {t("assistant.thinking")}
+            {t("thinking")}
           </div>
         )}
 
@@ -310,8 +310,8 @@ export function AskCivitasOnePanel({ onClose }: AskCivitasOnePanelProps) {
           type="text"
           value={input}
           onChange={(e) => setInput(e.target.value)}
-          placeholder={t("assistant.placeholder")}
-          aria-label={t("assistant.placeholder")}
+          placeholder={t("placeholder")}
+          aria-label={t("placeholder")}
           disabled={isThinking}
           style={{
             flex: 1,
@@ -325,7 +325,7 @@ export function AskCivitasOnePanel({ onClose }: AskCivitasOnePanelProps) {
         <button
           type="submit"
           disabled={isThinking || !input.trim()}
-          aria-label={t("assistant.send")}
+          aria-label={t("send")}
           style={{
             border: "none",
             background: "#2563eb",
@@ -338,7 +338,7 @@ export function AskCivitasOnePanel({ onClose }: AskCivitasOnePanelProps) {
             opacity: isThinking || !input.trim() ? 0.5 : 1,
           }}
         >
-          {t("assistant.send")}
+          {t("send")}
         </button>
       </form>
     </div>

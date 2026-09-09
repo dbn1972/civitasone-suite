@@ -1,7 +1,7 @@
 import type { NavTile } from "@civitasone/types";
 import { LinkTiles } from "../../_components/LinkTiles";
 import { PageHeader } from "../../_components/ds";
-import { serverT } from "@/lib/i18n/server";
+import { getTranslations } from "next-intl/server";
 
 const adminTiles: NavTile[] = [
   { title: "SA Dashboard", href: "/admin/sa-dashboard", description: "Platform health, revenue and growth" },
@@ -21,11 +21,11 @@ const adminTiles: NavTile[] = [
   { title: "Tenant Admin", href: "/tenant-admin", description: "Per-tenant administration panel" },
 ];
 
-export default function AdminPage() {
-  const t = serverT();
+export default async function AdminPage() {
+  const t = await getTranslations("admin");
   return (
     <main className="page-main" aria-labelledby="page-heading">
-      <PageHeader title={t("admin.title")} subtitle={t("admin.subtitle")} />
+      <PageHeader title={t("title")} subtitle={t("subtitle")} />
       <LinkTiles tiles={adminTiles} columns="four" />
     </main>
   );
