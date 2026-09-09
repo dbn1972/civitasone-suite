@@ -1,6 +1,7 @@
 "use client";
 
 import { DataTable, EmptyState } from "../../../_components/ds";
+import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { formatIndianDate } from "@/lib/formatters";
 import { useSeededResource } from "@/lib/sync/resource";
 
@@ -35,17 +36,12 @@ type ContactRow = {
 };
 
 export function ContactsTable({ contacts, source = "api" }: { contacts: Contact[]; source?: "api" | "error" }) {
-  const { data: rows, fromCache, offline, cachedAt } = useSeededResource<Contact[]>(
+  const { data: rows, provenance, offline, cachedAt } = useSeededResource<Contact[]>(
     "crm.contacts",
     contacts,
     source,
     (d) => d.length === 0,
   );
-
-  const cacheNote =
-    offline || fromCache
-      ? `Showing saved data${cachedAt ? ` from ${new Date(cachedAt).toLocaleString("en-IN")}` : ""}${offline ? " — you're offline" : ""}.`
-      : null;
 
   const tableRows: ContactRow[] = rows.map((c) => ({
     ...(c.id ? { id: c.id } : {}),
@@ -65,11 +61,9 @@ export function ContactsTable({ contacts, source = "api" }: { contacts: Contact[
   return (
     <div className="card">
       <div className="card-h"><h3>Contacts</h3></div>
-      {cacheNote ? (
-        <p role="status" aria-live="polite" style={{ fontSize: 12, color: "#92400e", margin: "0 0 8px", paddingLeft: 12 }}>
-          {cacheNote}
-        </p>
-      ) : null}
+      {/* UX-002: single source of truth — reads the same useSeededResource
+          call as `rows`, so it can never contradict this table. */}
+      <DataSourceBadge provenance={provenance ?? "live"} cachedAt={cachedAt} offline={offline} />
       {tableRows.length === 0 ? (
         <EmptyState icon="▣" title="No contacts yet" message="Add your first contact to get started." />
       ) : (

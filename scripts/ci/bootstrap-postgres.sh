@@ -153,6 +153,15 @@ run_bootstrap "$ROOT/infra/db/bootstrap/bootstrap_shop.sql"
 # scripts/dev/migrate-all.mjs already lists it. Same class of gap as
 # shop-service above.
 run_bootstrap "$ROOT/infra/db/bootstrap/bootstrap_recommendation.sql"
+# field-service: has real migrations (services/field-service/migrations/,
+# 2 files) and is already wired into ecosystem.config.js as both a worker
+# and an svc() entry (port 3046), and field_svc/civitas_field are already
+# listed in scripts/dev/provision-platform-roles.mjs and
+# scripts/dev/migrate-all.mjs for local dev, but no bootstrap file here
+# ever created field_svc/civitas_field, and it was never added to the
+# SERVICE_DBS map below. Same class of gap as recommendation-service
+# above (REL-006).
+run_bootstrap "$ROOT/infra/db/bootstrap/bootstrap_field.sql"
 # document-service (COMP-003): full Fastify app + 4 modules (files/folders/
 # workflow/sharing) already existed and was already routed in the gateway
 # registry (/api/v1/documents AND /api/v1/eoffice — see REL-007) and listed
@@ -278,6 +287,12 @@ declare -A SERVICE_DBS=(
   [ai-agent-service]="ai_agent_svc:civitas_ai_agent"
   # recommendation-service: role/db created by bootstrap_recommendation.sql
   # above. Migrations live at services/recommendation-service/migrations/.
+  [recommendation-service]="recommendation_svc:civitas_recommendation"
+  # field-service: role/db created by bootstrap_field.sql above.
+  # Migrations live at services/field-service/migrations/. Wired into
+  # ecosystem.config.js as both worker("field", ...) and
+  # svc("field", 3046, ...) (REL-006).
+  [field-service]="field_svc:civitas_field"
   # document-service (COMP-003): role/db created by bootstrap_document.sql
   # above. Migrations live at services/document-service/migrations/. Routed
   # in the gateway as both /api/v1/documents and /api/v1/eoffice (REL-007);
