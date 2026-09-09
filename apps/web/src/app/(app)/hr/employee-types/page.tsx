@@ -1,7 +1,7 @@
-import Link from "next/link";
-import { PageHeader, Card, DataTable, EmptyState, StatGrid, StatCard } from "../../../_components/ds";
-import { DataSourceBadge } from "../../../_components/DataSourceBadge";
+import { PageHeader, Card, DataTable, EmptyState, StatGrid, StatCard, RefreshErrorState } from "../../../_components/ds";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
+import { useResource } from "@/app/_data/useResource";
+import { toHumanError } from "@/lib/messages";
 
 type EmpType = {
   id: string; code: string; name: string; description: string | null;
@@ -27,10 +27,14 @@ const PAY_MODE_LABELS: Record<string, string> = {
 };
 
 export default async function EmployeeTypesPage() {
-  const { data: types, source } = await getTypes();
-  const active = types.filter((t) => t.isActive).length;
-  const withPayroll = types.filter((t) => t.eligibleForPayroll).length;
-  const inactive = types.filter((t) => !t.isActive).length;
+  const result = await getTypes();
+  const { data: types } = result;
+  const resource = useResource(result);
+  const errored = resource.status === "error";
+
+  const active = errored ? null : types.filter((t) => t.isActive).length;
+  const withPayroll = errored ? null : types.filter((t) => t.eligibleForPayroll).length;
+  const inactive = errored ? null : types.filter((t) => !t.isActive).length;
 
   const rows = types.map((t) => ({
     ...t,
@@ -51,17 +55,20 @@ export default async function EmployeeTypesPage() {
         backLabel="HR"
         help="hr"
       />
-      <DataSourceBadge source={source} />
 
       <StatGrid>
-        <StatCard icon="👥" iconBg="#e7edfd" label="Total Types" value={types.length} />
-        <StatCard icon="✅" iconBg="#ecfdf3" label="Active" value={active} />
-        <StatCard icon="💰" iconBg="#fffaeb" label="On Payroll" value={withPayroll} />
-        <StatCard icon="🚫" iconBg="#fdecea" label="Inactive" value={inactive} />
+        <StatCard icon="👥" iconBg="#e7edfd" label="Total Types" value={errored ? "—" : types.length} />
+        <StatCard icon="✅" iconBg="#ecfdf3" label="Active" value={active ?? "—"} />
+        <StatCard icon="💰" iconBg="#fffaeb" label="On Payroll" value={withPayroll ?? "—"} />
+        <StatCard icon="🚫" iconBg="#fdecea" label="Inactive" value={inactive ?? "—"} />
       </StatGrid>
 
       <Card title="Employee Type Master">
-        {types.length === 0 ? (
+        {errored ? (
+          <div className="pad">
+            <RefreshErrorState error={toHumanError("load", { area: "employee types" })} backHref="/hr" />
+          </div>
+        ) : types.length === 0 ? (
           <EmptyState
             icon="👥"
             title="No employee types defined"

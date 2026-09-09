@@ -1,6 +1,7 @@
-import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
-import { PageHeader, StatGrid, StatCard, Card } from "@/app/_components/ds";
+import { PageHeader, StatGrid, StatCard, Card, RefreshErrorState } from "@/app/_components/ds";
 import { getFinanceBudgets } from "@/app/_data/loaders";
+import { useResource } from "@/app/_data/useResource";
+import { toHumanError } from "@/lib/messages";
 import { RevisedEstimatesTable, type RevisedEstimateRow } from "./RevisedEstimatesTable";
 
 // getFinanceRevisedEstimates() used to hit /api/v1/finance/budgets/revised-estimates,
@@ -23,10 +24,14 @@ function toRow(b: Awaited<ReturnType<typeof getFinanceBudgets>>["data"][number])
 }
 
 export default async function RevisedEstimatesPage() {
-  const { data: budgets, source } = await getFinanceBudgets();
+  const result = await getFinanceBudgets();
+  const { data: budgets, source } = result;
+  const resource = useResource(result);
+  const errored = resource.status === "error";
   const estimates = budgets.map(toRow);
-  const increased = estimates.filter((e) => e.status === "increased").length;
-  const decreased = estimates.filter((e) => e.status === "decreased").length;
+  const increased = errored ? null : estimates.filter((e) => e.status === "increased").length;
+  const decreased = errored ? null : estimates.filter((e) => e.status === "decreased").length;
+  const total = errored ? null : estimates.length;
 
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
@@ -34,16 +39,21 @@ export default async function RevisedEstimatesPage() {
         title="Revised Estimates"
         subtitle="Budget Estimate vs Revised Estimate with variance analysis by head."
         back="/finance"
-        actions={source === "error" ? <DataSourceBadge source={source} /> : null}
       />
       <StatGrid>
-        <StatCard icon="📊" iconBg="#e7edfd" label="Total Heads" value={estimates.length} />
-        <StatCard icon="📈" iconBg="#ecfdf3" label="Increased" value={increased} />
-        <StatCard icon="📉" iconBg="#fce7ee" label="Decreased" value={decreased} />
-        <StatCard icon="➖" iconBg="#fffaeb" label="No Change" value={estimates.length - increased - decreased} />
+        <StatCard icon="📊" iconBg="#e7edfd" label="Total Heads" value={total ?? "—"} />
+        <StatCard icon="📈" iconBg="#ecfdf3" label="Increased" value={increased ?? "—"} />
+        <StatCard icon="📉" iconBg="#fce7ee" label="Decreased" value={decreased ?? "—"} />
+        <StatCard icon="➖" iconBg="#fffaeb" label="No Change" value={total === null || increased === null || decreased === null ? "—" : total - increased - decreased} />
       </StatGrid>
       <Card title="BE vs RE Variance">
-        <RevisedEstimatesTable estimates={estimates} source={source === "error" ? "error" : "api"} />
+        {errored ? (
+          <div className="pad">
+            <RefreshErrorState error={toHumanError("load", { area: "revised estimates" })} backHref="/finance" />
+          </div>
+        ) : (
+          <RevisedEstimatesTable estimates={estimates} source={source} />
+        )}
       </Card>
     </main>
   );
