@@ -1,5 +1,4 @@
 import Link from "next/link";
-import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { PageHeader, StatGrid, StatCard } from "../../../_components/ds";
 import { getProcurementPOs } from "../../../_data/loaders";
 import { formatMoney } from "@/lib/formatters";
@@ -17,12 +16,7 @@ export default async function OrdersPage() {
       <PageHeader
         title="Purchase Orders"
         subtitle="Operational order book with GRN status and delivery tracking."
-        actions={
-          <>
-            <Link href="/procurement/orders/new" className="btn primary">+ New PO</Link>
-            {source === "error" ? <DataSourceBadge source={source} message="Couldn't load — showing nothing" /> : null}
-          </>
-        }
+        actions={<Link href="/procurement/orders/new" className="btn primary">+ New PO</Link>}
       />
 
       <StatGrid>
