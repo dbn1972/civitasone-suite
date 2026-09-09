@@ -2,7 +2,7 @@
 /**
  * ci-config-guard.mjs — static checks on CI and bootstrap configuration.
  *
- * Both checks exist because a real defect got through, and neither is detectable
+ * All checks exist because a real defect got through, and none is detectable
  * by any test: they are properties of configuration, not of code.
  *
  * ── CHECK 1: every bootstrap SQL file is reachable from the script that runs it
@@ -192,6 +192,106 @@ for (const wf of workflows) {
           `      The check can never pass — it names a role the container does not create.`,
       );
     }
+  }
+}
+
+// ── CHECK 4 ──────────────────────────────────────────────────────────────────
+/**
+ * Every service directory under services/ that has a migrations/ folder
+ * with at least one .sql file must be covered by scripts/ci/bootstrap-postgres.sh
+ * -- either its SERVICE_DBS map
+ * (migrations applied as the service role) or its ADMIN_OWNED_DBS array
+ * (migrations applied as civitas_admin for the admin-owned convention).
+ *
+ * THE DEFECT THIS CATCHES (REL-006)
+ * ----------------------------------
+ * field-service (2 migrations) is wired into ecosystem.config.js as both a
+ * worker and a service, and recommendation-service (8 migrations) already
+ * has a bootstrap file (bootstrap_recommendation.sql) that creates its role
+ * and database -- but neither service had a SERVICE_DBS entry, so the
+ * per-service migration loop in bootstrap-postgres.sh never reached their
+ * migrations directories. Confirmed on a fresh cluster: both databases
+ * either didn't exist (field) or existed but sat empty forever (recommendation),
+ * and neither failure printed anything, because a migration loop that never
+ * iterates a service cannot report an error for it. "Declared but never
+ * provisioned" is invisible to every service's own test suite, which is
+ * exactly what let it stand undetected: recommendation-service alone carries
+ * 15 test files / 1172 tests that already pass once a database is manually
+ * provisioned, none of which run against a real database in CI.
+ *
+ * Deliberately directory-based, not hardcoded to these two names: the same
+ * gap has recurred for shop-service, ai-agent-service, sewerage-service,
+ * document-service and the municipal batches (see the run_bootstrap history
+ * in bootstrap-postgres.sh) -- each time a service grew a migrations/
+ * directory before someone remembered to register it. This check makes the
+ * next occurrence a CI failure instead of a silent no-op.
+ */
+const SERVICES_ROOT = join(REPO_ROOT, "services");
+
+function parseServiceDbsKeys(script) {
+  // declare -A SERVICE_DBS=( ... [service-name]="role:db" ... )
+  const block = script.match(/declare -A SERVICE_DBS=\(([\s\S]*?)\n\)/);
+  if (block === null) return null;
+  return new Set([...block[1].matchAll(/^\s*\[([a-z0-9-]+)\]=/gm)].map((m) => m[1]));
+}
+
+function parseAdminOwnedKeys(script) {
+  // ADMIN_OWNED_DBS=( "court-service:civitas_court:court_svc" ... )
+  const block = script.match(/ADMIN_OWNED_DBS=\(([\s\S]*?)\n\)/);
+  if (block === null) return null;
+  return new Set([...block[1].matchAll(/"([a-z0-9-]+):/g)].map((m) => m[1]));
+}
+
+if (existsSync(BOOTSTRAP_SCRIPT) === false) {
+  failures.push(`bootstrap script not found: ${BOOTSTRAP_SCRIPT}`);
+} else if (existsSync(SERVICES_ROOT) === false) {
+  failures.push(`services directory not found: ${SERVICES_ROOT}`);
+} else {
+  const script = readFileSync(BOOTSTRAP_SCRIPT, "utf8");
+  const serviceDbsKeys = parseServiceDbsKeys(script);
+  const adminOwnedKeys = parseAdminOwnedKeys(script);
+
+  // Guard the guard: a regex that stops matching (e.g. after a reformat) must
+  // fail loudly, not silently report zero services and pass everything.
+  if (serviceDbsKeys === null) {
+    failures.push("could not parse SERVICE_DBS out of bootstrap-postgres.sh — check the regex");
+  } else if (serviceDbsKeys.size < 30) {
+    failures.push(`only ${serviceDbsKeys.size} SERVICE_DBS keys parsed — parser looks broken`);
+  }
+  if (adminOwnedKeys === null) {
+    failures.push("could not parse ADMIN_OWNED_DBS out of bootstrap-postgres.sh — check the regex");
+  }
+
+  if (serviceDbsKeys !== null && adminOwnedKeys !== null) {
+    const migrationServices = readdirSync(SERVICES_ROOT)
+      .filter((d) => existsSync(join(SERVICES_ROOT, d, "migrations")))
+      .filter((d) => {
+        const migDir = join(SERVICES_ROOT, d, "migrations");
+        return readdirSync(migDir).some((f) => f.endsWith(".sql"));
+      })
+      .sort();
+
+    if (migrationServices.length < 30) {
+      failures.push(`only ${migrationServices.length} services with real migrations discovered — discovery looks broken`);
+    }
+
+    const unprovisioned = migrationServices.filter(
+      (s) => serviceDbsKeys.has(s) === false && adminOwnedKeys.has(s) === false,
+    );
+
+    if (unprovisioned.length > 0) {
+      failures.push(
+        `BOOTSTRAP COVERAGE GAP — ${unprovisioned.length} service(s) have real migrations but no\n` +
+          `      entry in SERVICE_DBS or ADMIN_OWNED_DBS in scripts/ci/bootstrap-postgres.sh:\n` +
+          unprovisioned.map((s) => `      ${s}`).join("\n") +
+          `\n      A migration in a directory the bootstrap script never iterates cannot fail --\n` +
+          `      it just never runs, and the service's DB-backed tests silently get no\n` +
+          `      database in CI. Add a SERVICE_DBS (or ADMIN_OWNED_DBS) entry, plus a\n` +
+          `      bootstrap_<service>.sql if the role/database do not exist yet.\n`,
+      );
+    }
+
+    notes.push(`bootstrap coverage: ${migrationServices.length} service(s) with migrations, ${serviceDbsKeys.size} SERVICE_DBS + ${adminOwnedKeys.size} ADMIN_OWNED_DBS entries`);
   }
 }
 

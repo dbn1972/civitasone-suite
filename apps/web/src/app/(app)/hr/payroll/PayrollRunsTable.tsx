@@ -2,6 +2,7 @@
 
 import type { ReactNode } from "react";
 import { DataTable } from "../../../_components/ds";
+import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import type { PayrollRunDetail } from "@civitasone/types";
 import { useSeededResource } from "@/lib/sync/resource";
 import { formatRupees } from "@/lib/formatters";
@@ -17,25 +18,26 @@ const columns: { key: keyof PayrollRunDetail & string; label: string; align?: "l
 ];
 
 export function PayrollRunsTable({ runs, source = "api", canAdminister = false }: { runs: PayrollRunDetail[]; source?: "api" | "error"; canAdminister?: boolean }) {
-  const { data: rows, fromCache, offline, cachedAt } = useSeededResource<PayrollRunDetail[]>(
+  const { data: rows, provenance, offline, cachedAt } = useSeededResource<PayrollRunDetail[]>(
     "hr.payroll.runs",
     runs,
     source,
     (d) => d.length === 0,
   );
 
-  const cacheNote =
-    offline || fromCache
-      ? `Showing saved data${cachedAt ? ` from ${new Date(cachedAt).toLocaleString("en-IN")}` : ""}${offline ? " — you're offline" : ""}.`
-      : null;
-
   return (
     <>
-      {cacheNote ? (
-        <p role="status" aria-live="polite" style={{ fontSize: 12, color: "var(--warn)", margin: "0 0 8px" }}>
-          {cacheNote}
-        </p>
-      ) : null}
+      {/* UX-002: this badge is the ONLY place that reports data provenance for
+          the payroll runs shown below — it reads the same useSeededResource
+          call as `rows`, so it can never disagree with what the table shows.
+          (hr/payroll/page.tsx used to render a second, independent badge from
+          the raw server `source` — removed, since it could contradict this one.) */}
+      <DataSourceBadge
+        provenance={provenance ?? "live"}
+        cachedAt={cachedAt}
+        offline={offline}
+        message={provenance === "error-no-data" ? "Couldn't load payroll runs — showing nothing" : undefined}
+      />
       <DataTable<PayrollRunDetail>
         columns={columns}
         rows={rows}

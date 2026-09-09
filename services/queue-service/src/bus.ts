@@ -11,6 +11,7 @@ import {
   SendMessageCommand,
   ReceiveMessageCommand,
   DeleteMessageCommand,
+  ChangeMessageVisibilityCommand,
   CreateQueueCommand,
   GetQueueUrlCommand,
   GetQueueAttributesCommand,
@@ -413,6 +414,58 @@ export function resolveRequestTimeout(
   return Math.max(value, LONG_POLL_WAIT_MS + 5_000);
 }
 
+/**
+ * PERF-004: retry backoff for a message that failed processing but has not
+ * yet hit SQS_MAX_RECEIVE_COUNT. Without this, a failed message sits at the
+ * queue's default VisibilityTimeout and is redelivered at that same fixed
+ * rate on every subsequent failure — a poison message hammers the handler
+ * (and whatever it calls) as fast as the visibility timeout allows, right up
+ * until it exhausts maxReceiveCount.
+ *
+ * Curve per skill 07 ("Retry with backoff"): exponential, base 1s, factor 2,
+ * capped at 60s, keyed off the message's own ApproximateReceiveCount (SQS's
+ * 1-based count of delivery attempts) — 1s, 2s, 4s, 8s, 16s, 32s, 60s, 60s, ...
+ * Override the base/cap via SQS_BACKOFF_BASE_SECONDS / SQS_BACKOFF_MAX_SECONDS
+ * per skill 07 §"configurable per consumer".
+ */
+export const DEFAULT_SQS_BACKOFF_BASE_SECONDS = 1;
+export const DEFAULT_SQS_BACKOFF_MAX_SECONDS = 60;
+const SQS_BACKOFF_FACTOR = 2;
+
+export function resolveBackoffBaseSeconds(
+  raw: string | undefined = process.env.SQS_BACKOFF_BASE_SECONDS,
+): number {
+  const parsed = Number(raw);
+  if (!Number.isFinite(parsed) || parsed < 1) return DEFAULT_SQS_BACKOFF_BASE_SECONDS;
+  return Math.floor(parsed);
+}
+
+export function resolveBackoffMaxSeconds(
+  raw: string | undefined = process.env.SQS_BACKOFF_MAX_SECONDS,
+): number {
+  const parsed = Number(raw);
+  if (!Number.isFinite(parsed) || parsed < 1) return DEFAULT_SQS_BACKOFF_MAX_SECONDS;
+  return Math.floor(parsed);
+}
+
+/**
+ * Exponential backoff in seconds for a message currently on its `receiveCount`th
+ * delivery attempt (1-based, as SQS reports ApproximateReceiveCount). Pure
+ * function — no env/clock access beyond the optional overrides — so it can be
+ * asserted directly in tests without mocking the SQS client.
+ */
+export function computeBackoffSeconds(
+  receiveCount: number,
+  opts: { baseSeconds?: number; maxSeconds?: number; factor?: number } = {},
+): number {
+  const base = opts.baseSeconds ?? resolveBackoffBaseSeconds();
+  const max = opts.maxSeconds ?? resolveBackoffMaxSeconds();
+  const factor = opts.factor ?? SQS_BACKOFF_FACTOR;
+  const attempt = Math.max(1, Math.floor(receiveCount));
+  const raw = base * Math.pow(factor, attempt - 1);
+  return Math.min(max, Math.round(raw));
+}
+
 /** SQS request handler with an explicit connection ceiling and fail-fast timeouts. */
 export function buildRequestHandler(maxSockets: number = resolveMaxSockets()): NodeHttpHandler {
   return new NodeHttpHandler({
@@ -765,8 +818,24 @@ export class SqsQueue implements Queue {
           if (receiveCount >= this.maxReceiveCount) {
             await this.routeToDlq(topic, sqsMsg.Body ?? "", "max_receive_count_exceeded");
             await this.deleteSqsMessage(url, sqsMsg.ReceiptHandle!);
+            continue;
           }
-          // else: leave the message; visibility timeout will redeliver it.
+          // PERF-004: leave the message, but extend its visibility timeout on an
+          // exponential backoff (1s→60s, keyed off this attempt's receiveCount)
+          // instead of letting it redeliver immediately at the queue's fixed
+          // default. Best-effort: if ChangeMessageVisibility itself fails, the
+          // message still redelivers (at the queue's default timeout) rather
+          // than being lost — never let a backoff-plumbing failure block the
+          // at-least-once guarantee.
+          try {
+            await this.client.send(new ChangeMessageVisibilityCommand({
+              QueueUrl: url,
+              ReceiptHandle: sqsMsg.ReceiptHandle!,
+              VisibilityTimeout: computeBackoffSeconds(receiveCount),
+            }));
+          } catch (err) {
+            this.logHandlerError(topic, msg, receiveCount, err);
+          }
         }
       } catch (err) {
         if (this.polling) {
@@ -812,8 +881,9 @@ export class SqsQueue implements Queue {
           originTopic: { DataType: "String", StringValue: topic },
         },
       }));
-      // OPS-1: DLQ routing is now observable (metric + structured log).
-      incrementDlqMessage(topic);
+      // OPS-1 / PERF-004: DLQ routing is observable (metric + structured log),
+      // broken down by why the message was dead-lettered.
+      incrementDlqMessage(topic, reason);
       // eslint-disable-next-line no-console -- structured operational error log
       console.error(
         JSON.stringify({ level: "error", event: "queue_message_dead_lettered", service: this.service, topic, reason }),

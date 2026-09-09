@@ -1,4 +1,3 @@
-import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
 import { PageHeader, StatGrid, StatCard, Card } from "@/app/_components/ds";
 import { getFinanceVendors } from "@/app/_data/loaders";
 import { VendorsTable } from "./VendorsTable";
@@ -12,11 +11,12 @@ export default async function VendorsPage() {
 
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
+      {/* UX-002: the data-source badge now lives in VendorsTable, driven by
+          the same useSeededResource call that produces its rows. */}
       <PageHeader
         title="Vendor Master"
         subtitle="Registered vendors with PAN, GSTIN, and category classification."
         back="/finance"
-        actions={source === "error" ? <DataSourceBadge source={source} /> : null}
       />
       <StatGrid>
         <StatCard icon="🏢" iconBg="#e7edfd" label="Total Vendors" value={vendors.length} />

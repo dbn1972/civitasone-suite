@@ -1,4 +1,3 @@
-import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { PageHeader, StatGrid, StatCard, Card } from "../../../_components/ds";
 import { getPayrollRunDetails, getPayrollStructures } from "../../../_data/loaders";
 import { formatRupees } from "@/lib/formatters";
@@ -37,7 +36,10 @@ export default async function PayrollPage() {
         subtitle="Monthly salary processing and statutory run status."
         help="payroll"
       />
-      <DataSourceBadge source={source} message="Couldn't load payroll runs — showing nothing" />
+      {/* UX-002: the payroll-runs data-source badge now lives inside
+          PayrollRunsTable, driven by the same useSeededResource call that
+          produces the table's rows — not a second, independent read of
+          `source` here that could disagree with the table's cache state. */}
       {canAdminister && (
         structures.length === 0 ? (
           <Card>
