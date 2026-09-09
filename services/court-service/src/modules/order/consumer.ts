@@ -4,7 +4,11 @@ import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
 import * as configRepo from "../config-registry/repo.js";
-import { DEFAULT_ORDER_TYPES, assertOrderTypeAllowed } from "./domain.js";
+import * as caseRepo from "../case-registry/repo.js";
+import * as hearingRepo from "../hearing/repo.js";
+import {
+  DEFAULT_ORDER_TYPES, assertOrderTypeAllowed, assertCaseOpenForOrder, assertHearingUsableForOrder,
+} from "./domain.js";
 import { effectiveAllowed } from "../config-registry/domain.js";
 
 type RecordOrderPayload = {
@@ -30,6 +34,31 @@ export function registerOrderConsumers(
     const p = msg.payload;
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
+
+      // DOM-003 — the case must exist and must not already be in a
+      // terminal state (disposed/appealed) before an order can be recorded
+      // against it. A real DB read inside THIS transaction, not anything
+      // the client asserts.
+      const theCase = await caseRepo.getCaseForUpdate(tx, p.tenantId, p.caseId);
+      if (!theCase) throw new NonRetryableError(`CASE_NOT_FOUND: ${p.caseId}`);
+      try {
+        assertCaseOpenForOrder(p.caseId, theCase.status);
+      } catch (e) {
+        throw new NonRetryableError((e as Error).message);
+      }
+
+      // DOM-003 — when a hearingId is cited, verify OWNERSHIP and STATE via
+      // a real DB read (never the client's own caseId/hearingId pairing):
+      // the hearing must belong to this case and be `held`.
+      if (p.hearingId) {
+        const hearing = await hearingRepo.getHearingForUpdate(tx, p.tenantId, p.hearingId);
+        try {
+          assertHearingUsableForOrder(p.caseId, p.hearingId, hearing);
+        } catch (e) {
+          throw new NonRetryableError((e as Error).message);
+        }
+      }
+
       // §47 config/metadata: orderType must be in the effective allowed set — the
       // tenant’s configured `order_type` values when any exist (AUTHORITATIVE —
       // REPLACES the defaults), else DEFAULT_ORDER_TYPES.
