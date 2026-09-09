@@ -10,7 +10,7 @@ on:
 
 jobs:
   dependency-audit:
-    name: Dependency Audit
+    name: Dependency Audit (hygiene)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -18,10 +18,32 @@ jobs:
       - uses: actions/setup-node@v4
         with: { node-version: '22', cache: 'pnpm' }
       - run: pnpm install --frozen-lockfile
-      # Prefer the repo's supply-chain hygiene script over raw `pnpm audit`,
-      # which currently fails on transitive Next/postcss advisories tracked
-      # separately for a Next 15 upgrade.
+      # Supply-chain hygiene only (lockfile presence, "*"/"latest" ranges,
+      # workspace: refs, typosquat names) — NOT a vulnerability scan. Real
+      # CVE/SCA scanning is the "CVE / SCA Gate" job below (SEC-004).
       - run: node scripts/ci/dependency-audit.mjs
+
+  # ─────────────────────────────────────────────
+  # SEC-004 — real, blocking CVE/SCA gate.
+  #
+  # Runs `pnpm audit --audit-level=high` for real and FAILS the job on any
+  # unallow-listed CRITICAL/HIGH advisory. Previously this repo ran no CVE scan
+  # at all in CI (the "Dependency Audit" job above only checks hygiene — see its
+  # own comment and skill 19 "security-beyond-tenancy" §2). An expiring
+  # allow-list (scripts/ci/cve-allowlist.json) covers advisories that need a
+  # major-version dependency bump too large to rush into this gate's own PR;
+  # see docs/ENTERPRISE-GAP-REPORT-2026-09-07.md SEC-004 / REL-016 / SEC-018.
+  # ─────────────────────────────────────────────
+  cve-audit-gate:
+    name: CVE / SCA Gate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '22', cache: 'pnpm' }
+      - run: pnpm install --frozen-lockfile
+      - run: node scripts/ci/cve-audit-gate.mjs
 
   secret-scan:
     name: Secret Scan
@@ -35,8 +57,39 @@ jobs:
 
   # ─────────────────────────────────────────────
   # L6 — Container image scanning (Trivy).
-  # Blocks on CRITICAL/HIGH with a known fix. Unfixed CVEs are reported but do
-  # not block, since there is no action available to take.
+  # Blocks on CRITICAL/HIGH with a known fix (ignore-unfixed: true already
+  # strips out every CVE with no available fix — whatever `trivy` reports
+  # below is by definition fixable).
+  #
+  # SEC-004 fixup note (2026-09-09, corrects an earlier, wrong re-review of
+  # this exact step): a prior pass claimed `exit-code: '0'` was deliberately
+  # kept because "flipping it to nonzero today would fail the gate on
+  # findings with no remediation path." That was backwards — since
+  # ignore-unfixed already removes every unfixed finding, `exit-code: '0'`
+  # stacked on top of it meant the gate could never fail even on a fixable
+  # finding. Verified with a real `trivy image` scan (matching this exact
+  # invocation) against all 3 matrix'd images, built from this exact
+  # Dockerfile: the overwhelming majority of what it found were genuinely
+  # fixable (e.g. hrms-service: 13 fixable vs 4 unfixed CRITICAL, 167 fixable
+  # vs 55 unfixed HIGH, before the fixes below).
+  #
+  # Two real fixes landed first (see Dockerfile comments), which resolved
+  # nearly everything Trivy found without needing an allow-list at all:
+  #   - Debian OS-layer CVEs (libgnutls30/libcap2) had already-published
+  #     point-release fixes -> added `apt-get upgrade -y`.
+  #   - The "prune" stage was not actually stripping devDependencies (a pnpm
+  #     quirk), so every runtime image shipped every service's dev/test/build
+  #     tooling (stryker, vitest, eslint, ...) -> rebuilt the stage to install
+  #     fresh, prod-only, instead of inheriting an already-full install.
+  #   - The base image's bundled npm CLI (never invoked at runtime; the
+  #     container runs `node <entry>` directly) carried its own bundled
+  #     tar/pacote/sigstore/ip-address/minimatch/cross-spawn -> removed it.
+  # What's left (`.trivyignore`, repo root) are real, fixable CRITICAL/HIGH
+  # CVEs in packages that already have live, reasoned, expiring entries in
+  # `scripts/ci/cve-allowlist.json` requiring the same fleet-wide major/minor
+  # version bump (fastify/find-my-way/next/drizzle-orm and their own
+  # transitive deps) — tracked under follow-up gap SEC-018, same expiry dates
+  # as the pnpm-audit gate so the two gates don't drift apart.
   # ─────────────────────────────────────────────
   trivy-container:
     name: Trivy Container Scan
@@ -65,10 +118,11 @@ jobs:
           format: table
           severity: CRITICAL,HIGH
           ignore-unfixed: true
-          # OS base CVEs and workspace prune gaps still surface HIGH/CRITICAL;
-          # keep the scan + SARIF upload as evidence, but do not hard-fail the
-          # PR gate until the runtime image is fully hardened.
-          exit-code: '0'
+          # Genuinely blocking now (SEC-004 fixup, see job comment above).
+          # `.trivyignore` (repo root, Trivy's native expiring-ignore file,
+          # picked up automatically) covers the tracked-debt findings that
+          # remain after the real fixes in the Dockerfile.
+          exit-code: '1'
       - name: Trivy full report (SARIF, informational)
         if: always()
         uses: aquasecurity/trivy-action@v0.36.0
@@ -99,6 +153,12 @@ jobs:
   # HTTP surface (headers, cookies, error handling, obvious injection responses)
   # deterministically in CI. A full authenticated ZAP scan against a live stack is
   # a separate nightly concern and is NOT claimed here.
+  #
+  # SEC-004 follow-up note: `continue-on-error: true` on the scan step below
+  # looks non-blocking in isolation, but the explicit "Fail if ZAP reported
+  # FAIL-NEW alerts" step after it greps the report and exits 1 on any real
+  # FAIL-NEW finding — this job DOES already gate on real findings; only the
+  # (broken, third-party) artifact-upload path is swallowed. Left as-is.
   # ─────────────────────────────────────────────
   zap-dast:
     name: ZAP DAST (gateway baseline)

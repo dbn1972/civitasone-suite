@@ -82,7 +82,7 @@ export function registerAssetsConsumers(queue: Queue): void {
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       await repo.updateBooking(tx, p.bookingId, { status: "returned", updatedBy: msg.actorId });
-      const booking = await repo.findBookingById(p.bookingId);
+      const booking = await repo.findBookingByIdTx(tx, p.bookingId);
       if (booking && p.odometerKm != null) {
         await repo.updateVehicle(tx, booking.vehicleId, { odometerKm: p.odometerKm, status: "available", updatedBy: msg.actorId });
       }

@@ -102,11 +102,42 @@ export async function findFileById(id: string, tenantId: string): Promise<FileRo
   return rows[0] ?? null;
 }
 
+/**
+ * TX-001 — tenant-scoped sibling of findFileById(). Reads through a
+ * caller-supplied transaction handle so an already-open db.transaction()
+ * (this service's many files consumers, plus dfa/esign/records consumers
+ * that cross-reference a file) does not open a second, bare
+ * db.transaction() from inside itself: under pool.max concurrent in-flight
+ * consumer transactions, the nested call has no free connection to open on
+ * and deadlocks the pool silently. Route every read that happens inside an
+ * already-open consumer transaction through this, not findFileById().
+ */
+export async function findFileByIdTx(tx: Writer, id: string, tenantId: string): Promise<FileRow | null> {
+  const rows = await tx.select().from(estabFiles)
+    .where(and(eq(estabFiles.id, id), eq(estabFiles.tenantId, tenantId))).limit(1);
+  return rows[0] ?? null;
+}
+
 // Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
 // before this read — a bare db.select() runs with no RLS GUC set.
 export async function findInwardById(id: string, tenantId: string) {
   const rows = await db.transaction((tx) => tx.select().from(estabInward)
     .where(and(eq(estabInward.id, id), eq(estabInward.tenantId, tenantId))).limit(1));
+  return rows[0] ?? null;
+}
+
+/**
+ * TX-001 — tenant-scoped sibling of findInwardById(). Reads through a
+ * caller-supplied transaction handle so an already-open db.transaction()
+ * (inwardOpenFile's consumer) does not open a second, bare db.transaction()
+ * from inside itself: under pool.max concurrent in-flight consumer
+ * transactions, the nested call has no free connection to open on and
+ * deadlocks the pool silently. Route every read that happens inside an
+ * already-open consumer transaction through this, not findInwardById().
+ */
+export async function findInwardByIdTx(tx: Writer, id: string, tenantId: string) {
+  const rows = await tx.select().from(estabInward)
+    .where(and(eq(estabInward.id, id), eq(estabInward.tenantId, tenantId))).limit(1);
   return rows[0] ?? null;
 }
 
@@ -121,6 +152,22 @@ export async function findNotingsByFile(fileId: string): Promise<NotingRow[]> {
 export async function findNotingById(id: string, tenantId: string): Promise<NotingRow | null> {
   const rows = await db.transaction((tx) => tx.select().from(estabNotings)
     .where(and(eq(estabNotings.id, id), eq(estabNotings.tenantId, tenantId))).limit(1));
+  return rows[0] ?? null;
+}
+
+/**
+ * TX-001 — tenant-scoped sibling of findNotingById(). Reads through a
+ * caller-supplied transaction handle so an already-open db.transaction()
+ * (the files consumer's noting handlers, plus esign's consumer signing a
+ * noting) does not open a second, bare db.transaction() from inside itself:
+ * under pool.max concurrent in-flight consumer transactions, the nested
+ * call has no free connection to open on and deadlocks the pool silently.
+ * Route every read that happens inside an already-open consumer
+ * transaction through this, not findNotingById().
+ */
+export async function findNotingByIdTx(tx: Writer, id: string, tenantId: string): Promise<NotingRow | null> {
+  const rows = await tx.select().from(estabNotings)
+    .where(and(eq(estabNotings.id, id), eq(estabNotings.tenantId, tenantId))).limit(1);
   return rows[0] ?? null;
 }
 

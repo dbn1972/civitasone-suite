@@ -50,7 +50,7 @@ export function registerApprovalRuleConsumers(queue: Queue): void {
     let sourceType: string | null = null;
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
-      const existing = await repo.findRuleById(p.id, p.tenantId);
+      const existing = await repo.findRuleByIdTx(tx, p.id, p.tenantId);
       if (!existing) return;
       sourceType = existing.sourceType;
 

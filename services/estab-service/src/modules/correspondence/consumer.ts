@@ -57,7 +57,7 @@ export function registerCorrespondenceConsumers(queue: Queue): void {
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       // Guard: the referenced correspondence must exist on this file/tenant.
-      const corr = await repo.findCorrespondenceById(p.correspondenceId, p.tenantId);
+      const corr = await repo.findCorrespondenceByIdTx(tx, p.correspondenceId, p.tenantId);
       if (!corr || corr.fileId !== p.fileId) {
         await enqueue(tx, {
           topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC,

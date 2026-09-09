@@ -58,7 +58,7 @@ export function registerDfaConsumers(queue: Queue): void {
     const p = msg.payload as { id: string; tenantId: string; patch: UpdateDfaBody };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
-      const cur = await repo.findDfaById(p.id, p.tenantId);
+      const cur = await repo.findDfaByIdTx(tx, p.id, p.tenantId);
       if (!cur || !isEditable(cur.status)) return;
       const patch: Parameters<typeof repo.updateDfa>[2] = { updatedBy: msg.actorId, version: cur.version + 1 };
       if (p.patch.communicationType !== undefined) patch.communicationType = p.patch.communicationType;
@@ -93,7 +93,7 @@ export function registerDfaConsumers(queue: Queue): void {
       const p = msg.payload as { id: string; tenantId: string } & Record<string, unknown>;
       await db.transaction(async (tx) => {
         if (!(await markProcessed(tx, msg.messageId))) return;
-        const cur = await repo.findDfaById(p.id, p.tenantId);
+        const cur = await repo.findDfaByIdTx(tx, p.id, p.tenantId);
         if (!cur || !canTransition(cur.status, to)) return;
         const patch: Parameters<typeof repo.updateDfa>[2] = {
           status: to, updatedBy: msg.actorId, version: cur.version + 1,
@@ -115,7 +115,7 @@ export function registerDfaConsumers(queue: Queue): void {
     const p = msg.payload as { id: string; tenantId: string; reason?: string };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
-      const cur = await repo.findDfaById(p.id, p.tenantId);
+      const cur = await repo.findDfaByIdTx(tx, p.id, p.tenantId);
       if (!cur || !canTransition(cur.status, "returned")) return;
       const reason = String(p.reason ?? "");
       await repo.updateDfa(tx, p.id, {
@@ -139,7 +139,7 @@ export function registerDfaConsumers(queue: Queue): void {
     const p = msg.payload as { id: string; tenantId: string; modality?: string; conditions?: string };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
-      const cur = await repo.findDfaById(p.id, p.tenantId);
+      const cur = await repo.findDfaByIdTx(tx, p.id, p.tenantId);
       if (!cur || !canTransition(cur.status, "approved")) return;
       if (cur.createdBy === msg.actorId) {
         throw new Error("MAKER_CHECKER_VIOLATION: a DFA cannot be approved by its drafter");
@@ -164,7 +164,7 @@ export function registerDfaConsumers(queue: Queue): void {
     const p = msg.payload as { id: string; tenantId: string; mode: string; toAddress: string | null };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
-      const cur = await repo.findDfaById(p.id, p.tenantId);
+      const cur = await repo.findDfaByIdTx(tx, p.id, p.tenantId);
       if (!cur || !canTransition(cur.status, "dispatched")) return;
 
       // H1 — when the tenant mandates e-signature, an unsigned DFA cannot be
