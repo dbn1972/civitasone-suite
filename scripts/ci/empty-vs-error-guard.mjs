@@ -196,6 +196,14 @@ function findContainingStatement(block, node) {
  * looking for evidence that THIS empty-check — not just the file in general —
  * is gated by the loader's error token. See the "gated by" rule in the header
  * comment. Returns true iff such evidence is found.
+ *
+ * KNOWN LIMITATION (tracked in UX-013): stops at the nearest enclosing
+ * function boundary without checking whether that function is itself an
+ * argument to `useResource(...)`/`combineResourceState(...)` -- this repo's
+ * blessed error-handling contract. A page using that contract correctly can
+ * still show as a false-positive violation here (e.g. workflow/page.tsx,
+ * workflow/definitions/page.tsx). Extend this to recognize that call shape
+ * as a valid connection before relying on a zero baseline count.
  */
 function isConnectedToErrorAwareness(emptyCheckNode) {
   let node = emptyCheckNode;
