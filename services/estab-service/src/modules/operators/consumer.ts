@@ -38,7 +38,7 @@ export function registerOperatorConsumers(queue: Queue): void {
     let employeeId: string | null = null;
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
-      const cur = await repo.findOperatorById(p.id, p.tenantId);
+      const cur = await repo.findOperatorByIdTx(tx, p.id, p.tenantId);
       if (!cur) return;
       employeeId = cur.employeeId;
       const patch: Parameters<typeof repo.updateOperator>[2] = { updatedBy: msg.actorId, version: cur.version + 1 };

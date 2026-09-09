@@ -34,9 +34,20 @@ vi.mock("../src/modules/leave/repo.js", async (io) => ({
   ...(await io<Record<string, unknown>>()),
   findApprovedLeaveInMonth: (...a: unknown[]) => findApprovedLeaveMock(...a),
 }));
+// PERF-005: internal/routes.ts's payroll-input feed now calls the batch
+// loader findByEmpsAndMonth (one query for all LOP-eligible employees)
+// instead of findByEmpAndMonth in a per-employee loop. Mock the batch
+// loader's shape (tenantId, employeeIds[], month) -> Map<employeeId, rows[]>
+// by fanning findAttendanceMock's per-call result out across the requested
+// ids, so existing per-employee mock setups (mockResolvedValue/mockReturnValue
+// of an attendance-rows array) keep working unmodified.
 vi.mock("../src/modules/attendance/repo.js", async (io) => ({
   ...(await io<Record<string, unknown>>()),
   findByEmpAndMonth: (...a: unknown[]) => findAttendanceMock(...a),
+  findByEmpsAndMonth: async (_tenantId: string, employeeIds: string[], _month: string) => {
+    const rows = await findAttendanceMock();
+    return new Map(employeeIds.map((id) => [id, rows]));
+  },
 }));
 vi.mock("../src/modules/disciplinary/repo.js", async (io) => ({
   ...(await io<Record<string, unknown>>()),

@@ -42,9 +42,14 @@ export async function internalRoutes(app: FastifyInstance): Promise<void> {
       lopByEmployee.set(leave.employeeId, (lopByEmployee.get(leave.employeeId) ?? 0) + days);
     }
 
+    // PERF-005: was one findByEmpAndMonth query per active, LOP-eligible
+    // employee; now a single batch query across all of them.
+    const lopEligibleIds = active.filter((emp) => !noSalaryLop.has(emp.id)).map((emp) => emp.id);
+    const attendanceByEmployee = await attendanceRepo.findByEmpsAndMonth(ctx.tenantId, lopEligibleIds, q.month);
+
     for (const emp of active) {
       if (noSalaryLop.has(emp.id)) continue;
-      const attRows = await attendanceRepo.findByEmpAndMonth(ctx.tenantId, emp.id, q.month);
+      const attRows = attendanceByEmployee.get(emp.id) ?? [];
       const absentDays = attRows.filter((a) => a.status === "absent" || a.status === "half_day").length;
       if (absentDays > 0) {
         lopByEmployee.set(emp.id, (lopByEmployee.get(emp.id) ?? 0) + absentDays);

@@ -155,7 +155,7 @@ export function registerFilesConsumers(rawQueue: Queue): void {
     };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
-      const existing = await repo.findFileById(p.fileId, p.tenantId);
+      const existing = await repo.findFileByIdTx(tx, p.fileId, p.tenantId);
       if (existing?.status === "closed") {
         await enqueue(tx, {
           topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC,
@@ -193,7 +193,7 @@ export function registerFilesConsumers(rawQueue: Queue): void {
     const p = msg.payload as { fileId: string; notingId: string; tenantId: string };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
-      const noting = await repo.findNotingById(p.notingId, p.tenantId);
+      const noting = await repo.findNotingByIdTx(tx, p.notingId, p.tenantId);
       if (!noting || noting.fileId !== p.fileId || noting.noteStatus !== "draft") return;
 
       await repo.updateNoting(tx, p.notingId, {
@@ -295,7 +295,7 @@ export function registerFilesConsumers(rawQueue: Queue): void {
     const p = msg.payload as { fileId: string; notingId: string; tenantId: string };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
-      const noting = await repo.findNotingById(p.notingId, p.tenantId);
+      const noting = await repo.findNotingByIdTx(tx, p.notingId, p.tenantId);
       if (!noting || noting.fileId !== p.fileId) return;
       // Already-signed notes are immutable (DB trigger also enforces this).
       if (noting.noteStatus === "approved" || noting.eSigned) return;
@@ -331,7 +331,7 @@ export function registerFilesConsumers(rawQueue: Queue): void {
     const p = msg.payload as { fileId: string; tenantId: string; toOfficer: string; remarks?: string };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
-      const existing = await repo.findFileById(p.fileId, p.tenantId);
+      const existing = await repo.findFileByIdTx(tx, p.fileId, p.tenantId);
       if (existing?.status === "closed") {
         await enqueue(tx, {
           topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC,
@@ -382,7 +382,7 @@ export function registerFilesConsumers(rawQueue: Queue): void {
     const p = msg.payload as { fileId: string; tenantId: string; remarks?: string };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
-      const existing = await repo.findFileById(p.fileId, p.tenantId);
+      const existing = await repo.findFileByIdTx(tx, p.fileId, p.tenantId);
       if (!existing || existing.status === "closed") return;
       await repo.insertFileMovement(tx, {
         id: randomUUID(), tenantId: p.tenantId, fileId: p.fileId,
@@ -400,7 +400,7 @@ export function registerFilesConsumers(rawQueue: Queue): void {
     const p = msg.payload as { fileId: string; tenantId: string; reason: string };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
-      const existing = await repo.findFileById(p.fileId, p.tenantId);
+      const existing = await repo.findFileByIdTx(tx, p.fileId, p.tenantId);
       if (!existing || existing.status !== "closed") return;
       await repo.updateFile(tx, p.fileId, { status: "active", updatedBy: msg.actorId });
       await repo.insertFileMovement(tx, {
@@ -418,7 +418,7 @@ export function registerFilesConsumers(rawQueue: Queue): void {
     const p = msg.payload as { id: string; baseFileId: string; tenantId: string; currentWith: string | null };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
-      const base = await repo.findFileById(p.baseFileId, p.tenantId);
+      const base = await repo.findFileByIdTx(tx, p.baseFileId, p.tenantId);
       if (!base) return;
       // The "root" of a volume set is the main file (or the parent of a volume).
       const rootId = base.parentFileId ?? base.id;
@@ -428,7 +428,7 @@ export function registerFilesConsumers(rawQueue: Queue): void {
       `);
       const maxVol = Number((maxRows as unknown as Array<{ max_vol: number | null }>)[0]?.max_vol ?? 1);
       const nextVol = maxVol + 1;
-      const root = rootId === base.id ? base : await repo.findFileById(rootId, p.tenantId);
+      const root = rootId === base.id ? base : await repo.findFileByIdTx(tx, rootId, p.tenantId);
       const baseNo = root?.fileNo ?? base.fileNo;
       await repo.insertFile(tx, {
         id: p.id, tenantId: p.tenantId,
@@ -450,7 +450,7 @@ export function registerFilesConsumers(rawQueue: Queue): void {
     const p = msg.payload as { id: string; baseFileId: string; tenantId: string; subject: string | null; currentWith: string | null };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
-      const base = await repo.findFileById(p.baseFileId, p.tenantId);
+      const base = await repo.findFileByIdTx(tx, p.baseFileId, p.tenantId);
       if (!base) return;
       const rootId = base.parentFileId ?? base.id;
       const maxRows = await tx.execute(sql`
@@ -458,7 +458,7 @@ export function registerFilesConsumers(rawQueue: Queue): void {
         WHERE tenant_id = ${p.tenantId} AND parent_file_id = ${rootId} AND file_type = 'part'
       `);
       const nextPart = Number((maxRows as unknown as Array<{ max_part: number | null }>)[0]?.max_part ?? 0) + 1;
-      const root = rootId === base.id ? base : await repo.findFileById(rootId, p.tenantId);
+      const root = rootId === base.id ? base : await repo.findFileByIdTx(tx, rootId, p.tenantId);
       const baseNo = root?.fileNo ?? base.fileNo;
       await repo.insertFile(tx, {
         id: p.id, tenantId: p.tenantId,
@@ -481,8 +481,8 @@ export function registerFilesConsumers(rawQueue: Queue): void {
     if (p.fileId === p.targetFileId) return;
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
-      const a = await repo.findFileById(p.fileId, p.tenantId);
-      const b = await repo.findFileById(p.targetFileId, p.tenantId);
+      const a = await repo.findFileByIdTx(tx, p.fileId, p.tenantId);
+      const b = await repo.findFileByIdTx(tx, p.targetFileId, p.tenantId);
       if (!a || !b) return;
       const aLinks = Array.from(new Set([...(a.linkedFileIds ?? []), b.id]));
       const bLinks = Array.from(new Set([...(b.linkedFileIds ?? []), a.id]));
@@ -500,7 +500,7 @@ export function registerFilesConsumers(rawQueue: Queue): void {
     assertValidFileType(p.fileType);
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
-      const f = await repo.findFileById(p.fileId, p.tenantId);
+      const f = await repo.findFileByIdTx(tx, p.fileId, p.tenantId);
       if (!f) return;
       await repo.updateFile(tx, p.fileId, { fileType: p.fileType, updatedBy: msg.actorId });
       await audit(tx, msg, "set_type", "file", p.fileId, { fileType: p.fileType });
@@ -561,8 +561,8 @@ export function registerFilesConsumers(rawQueue: Queue): void {
     const p = msg.payload as { tenantId: string; inwardId: string; fileId: string };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
-      const inward = await repo.findInwardById(p.inwardId, p.tenantId);
-      const file = await repo.findFileById(p.fileId, p.tenantId);
+      const inward = await repo.findInwardByIdTx(tx, p.inwardId, p.tenantId);
+      const file = await repo.findFileByIdTx(tx, p.fileId, p.tenantId);
       if (!inward || !file) return;
       await repo.updateInward(tx, p.inwardId, { fileId: p.fileId, fileRef: file.fileNo, status: "attached", updatedBy: msg.actorId });
       await repo.insertInwardMovement(tx, {
@@ -578,7 +578,7 @@ export function registerFilesConsumers(rawQueue: Queue): void {
     const p = msg.payload as { tenantId: string; inwardId: string; reason: string };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
-      const inward = await repo.findInwardById(p.inwardId, p.tenantId);
+      const inward = await repo.findInwardByIdTx(tx, p.inwardId, p.tenantId);
       if (!inward) return;
       await repo.updateInward(tx, p.inwardId, {
         fileId: null, fileRef: null, status: "detached",

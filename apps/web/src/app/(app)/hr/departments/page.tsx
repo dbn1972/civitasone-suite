@@ -1,7 +1,8 @@
 import Link from "next/link";
-import { PageHeader, Card, EmptyState, StatGrid, StatCard } from "../../../_components/ds";
-import { DataSourceBadge } from "../../../_components/DataSourceBadge";
+import { PageHeader, Card, EmptyState, StatGrid, StatCard, RefreshErrorState } from "../../../_components/ds";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
+import { useResource } from "@/app/_data/useResource";
+import { toHumanError } from "@/lib/messages";
 import { DepartmentsTable } from "./DepartmentsTable";
 
 type Dept = {
@@ -38,11 +39,14 @@ const newBtnStyle: React.CSSProperties = {
 };
 
 export default async function DepartmentsPage() {
-  const { data: depts, source } = await getDepartments();
+  const result = await getDepartments();
+  const { data: depts } = result;
+  const resource = useResource(result);
+  const errored = resource.status === "error";
 
-  const rootDepts = depts.filter((d) => !d.parentId).length;
-  const subDepts  = depts.filter((d) => !!d.parentId).length;
-  const withCode  = depts.filter((d) => !!d.code).length;
+  const rootDepts = errored ? null : depts.filter((d) => !d.parentId).length;
+  const subDepts  = errored ? null : depts.filter((d) => !!d.parentId).length;
+  const withCode  = errored ? null : depts.filter((d) => !!d.code).length;
 
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
@@ -91,16 +95,19 @@ export default async function DepartmentsPage() {
         </ol>
       </nav>
 
-      <DataSourceBadge source={source} />
       <StatGrid>
-        <StatCard icon="🗂️" iconBg="#e6f0ff" label="Total Departments" value={depts.length} />
-        <StatCard icon="🌳" iconBg="#e6f7f0" label="Root Departments"  value={rootDepts} />
-        <StatCard icon="🌿" iconBg="#fff7e6" label="Sub-Departments"   value={subDepts} />
-        <StatCard icon="🏷️" iconBg="#f5f5f5" label="With Code"         value={withCode} />
+        <StatCard icon="🗂️" iconBg="#e6f0ff" label="Total Departments" value={errored ? "—" : depts.length} />
+        <StatCard icon="🌳" iconBg="#e6f7f0" label="Root Departments"  value={rootDepts ?? "—"} />
+        <StatCard icon="🌿" iconBg="#fff7e6" label="Sub-Departments"   value={subDepts ?? "—"} />
+        <StatCard icon="🏷️" iconBg="#f5f5f5" label="With Code"         value={withCode ?? "—"} />
       </StatGrid>
 
-      <Card title={`Departments (${depts.length})`}>
-        {depts.length === 0 ? (
+      <Card title={errored ? "Departments" : `Departments (${depts.length})`}>
+        {errored ? (
+          <div className="pad">
+            <RefreshErrorState error={toHumanError("load", { area: "departments" })} backHref="/hr" />
+          </div>
+        ) : depts.length === 0 ? (
           <EmptyState
             icon="🗂️"
             title="No departments yet"

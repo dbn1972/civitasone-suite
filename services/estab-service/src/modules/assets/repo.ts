@@ -26,6 +26,20 @@ export async function findBookingById(id: string): Promise<VehicleBookingRow | n
   return rows[0] ?? null;
 }
 
+/**
+ * TX-001 — tenant-scoped sibling of findBookingById(). Reads through a
+ * caller-supplied transaction handle so an already-open db.transaction()
+ * (e.g. vehicleReturn's consumer) does not open a second, bare
+ * db.transaction() from inside itself: under pool.max concurrent in-flight
+ * consumer transactions, the nested call has no free connection to open on
+ * and deadlocks the pool silently. Route every read that happens inside an
+ * already-open consumer transaction through this, not findBookingById().
+ */
+export async function findBookingByIdTx(tx: Writer, id: string): Promise<VehicleBookingRow | null> {
+  const rows = await tx.select().from(estabVehicleBookings).where(eq(estabVehicleBookings.id, id)).limit(1);
+  return rows[0] ?? null;
+}
+
 export async function insertVehicle(tx: Writer, row: VehicleInsert): Promise<void> {
   await tx.insert(estabVehicles).values(row);
 }

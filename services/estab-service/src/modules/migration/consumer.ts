@@ -33,7 +33,7 @@ export function registerMigrationConsumers(queue: Queue): void {
     const p = msg.payload as LinkPayload;
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
-      const cur = await repo.findMigrationById(p.id, p.tenantId);
+      const cur = await repo.findMigrationByIdTx(tx, p.id, p.tenantId);
       if (!cur) return;
       await repo.updateMigration(tx, p.id, {
         efileId: p.efileId, status: "linked", updatedBy: msg.actorId, version: cur.version + 1,

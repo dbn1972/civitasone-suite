@@ -34,6 +34,27 @@ export async function findCorrespondenceById(
   return rows[0] ?? null;
 }
 
+/**
+ * TX-001 — tenant-scoped sibling of findCorrespondenceById(). Reads through
+ * a caller-supplied transaction handle so an already-open db.transaction()
+ * (e.g. pucMark's consumer) does not open a second, bare db.transaction()
+ * from inside itself: under pool.max concurrent in-flight consumer
+ * transactions, the nested call has no free connection to open on and
+ * deadlocks the pool silently. Route every read that happens inside an
+ * already-open consumer transaction through this, not findCorrespondenceById().
+ */
+export async function findCorrespondenceByIdTx(
+  tx: Writer,
+  id: string,
+  tenantId: string,
+): Promise<CorrespondenceRow | null> {
+  const rows = await tx.select().from(estabCorrespondence).where(and(
+    eq(estabCorrespondence.id, id),
+    eq(estabCorrespondence.tenantId, tenantId),
+  )).limit(1);
+  return rows[0] ?? null;
+}
+
 // ── PUC reads (tenant-scoped) ─────────────────────────────────────────────
 
 // Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id

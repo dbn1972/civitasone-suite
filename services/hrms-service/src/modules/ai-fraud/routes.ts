@@ -10,7 +10,7 @@ import { publishF3Write } from "../../shared/f3-publish.js";
  */
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { eq, and, desc } from "drizzle-orm";
+import { eq, and, desc, inArray, count } from "drizzle-orm";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { db, scopedRead} from "../../shared/db.js";
 import { hrmsFraudAlerts, hrmsEmployeeRiskScores, hrmsRecommendations } from "./schema.js";
@@ -50,14 +50,26 @@ export async function aiFraudRoutes(app: FastifyInstance): Promise<void> {
     }));
     alerts.push(...engine.detectDuplicateBankAccount(bankData));
 
-    // Check ghost employees (simplified: employees with no recent geo-attendance)
+    // Check ghost employees (simplified: employees with no recent geo-attendance).
+    // PERF-005: was one geo-attendance query per candidate employee (N+1, N<=50);
+    // now a single grouped-count query across all 50 ids. Counts computed via
+    // SQL COUNT/GROUP BY, not fetched-then-counted-in-JS.
     const { hrmsGeoAttendance } = await import("../geo-attendance/schema.js");
-    for (const emp of employees.slice(0, 50)) { // limit for performance
-      const attCount = await scopedRead((tx) => tx.select().from(hrmsGeoAttendance)
-        .where(and(eq(hrmsGeoAttendance.tenantId, ctx.tenantId), eq(hrmsGeoAttendance.employeeId, emp.id))));
-      const ghost = engine.detectGhostEmployee(emp.id, attCount.length, true, emp.status);
+    const ghostCandidates = employees.slice(0, 50); // limit for performance
+    const candidateIds = ghostCandidates.map((emp) => emp.id);
+    const attCountRows = candidateIds.length
+      ? await scopedRead((tx) => tx
+          .select({ employeeId: hrmsGeoAttendance.employeeId, attendanceDays: count() })
+          .from(hrmsGeoAttendance)
+          .where(and(eq(hrmsGeoAttendance.tenantId, ctx.tenantId), inArray(hrmsGeoAttendance.employeeId, candidateIds)))
+          .groupBy(hrmsGeoAttendance.employeeId))
+      : [];
+    const attCountByEmployee = new Map(attCountRows.map((r) => [r.employeeId, Number(r.attendanceDays)]));
+    for (const emp of ghostCandidates) {
+      const attendanceDays = attCountByEmployee.get(emp.id) ?? 0;
+      const ghost = engine.detectGhostEmployee(emp.id, attendanceDays, true, emp.status);
       if (ghost) {
-        alerts.push({ alertType: "ghost_employee", severity: "critical", employeeId: ghost.employeeId, description: ghost.reason, evidence: { attendanceDays: attCount.length }, riskScore: ghost.score, mlModel: "ghost_detector_v1" });
+        alerts.push({ alertType: "ghost_employee", severity: "critical", employeeId: ghost.employeeId, description: ghost.reason, evidence: { attendanceDays }, riskScore: ghost.score, mlModel: "ghost_detector_v1" });
       }
     }
 

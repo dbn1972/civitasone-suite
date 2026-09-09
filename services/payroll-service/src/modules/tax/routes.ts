@@ -170,29 +170,32 @@ export async function taxRoutes(app: FastifyInstance): Promise<void> {
     const { startYear } = parseFy(fy);
     const months = fyMonths(startYear);
 
-    // Aggregate annual gross from slips for this employee
+    // Aggregate annual gross from slips for this employee.
+    // PERF-005: was one query per FY month for runs, then one query per run
+    // for slips — up to 12 + (12 * runsPerMonth) round trips. Now: one
+    // inArray() query for all 12 months' runs, then one inArray() query for
+    // all those runs' slips for this employee — 2 queries total regardless
+    // of how many runs/slips exist in the FY.
     let annualGross = 0;
     let annualBasic = 0;
     let annualPfEmployee = 0;
 
-    for (const month of months) {
-      // Find runs for this month
-      const runs = await scopedRead((tx) => tx.select().from(payrollRuns)
-        .where(and(eq(payrollRuns.tenantId, ctx.tenantId), eq(payrollRuns.month, month))));
+    const runs = await scopedRead((tx) => tx.select().from(payrollRuns)
+      .where(and(eq(payrollRuns.tenantId, ctx.tenantId), inArray(payrollRuns.month, months))));
+    const runIds = runs.map((r) => r.id);
 
-      for (const run of runs) {
-        const slips = await scopedRead((tx) => tx.select().from(payrollSlips)
+    const slips = runIds.length
+      ? await scopedRead((tx) => tx.select().from(payrollSlips)
           .where(and(
-            eq(payrollSlips.runId, run.id),
+            inArray(payrollSlips.runId, runIds),
             eq(payrollSlips.employeeId, employeeId),
             eq(payrollSlips.tenantId, ctx.tenantId),
-          )));
-        for (const slip of slips) {
-          annualGross += Number(slip.grossMinor) / 100;
-          annualBasic += Number(slip.basicMinor) / 100;
-          annualPfEmployee += Number(slip.pfEmployeeMinor) / 100;
-        }
-      }
+          )))
+      : [];
+    for (const slip of slips) {
+      annualGross += Number(slip.grossMinor) / 100;
+      annualBasic += Number(slip.basicMinor) / 100;
+      annualPfEmployee += Number(slip.pfEmployeeMinor) / 100;
     }
 
     // Fetch declarations for exemptions under old regime
