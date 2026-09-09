@@ -445,12 +445,12 @@ jobs:
       - run: pnpm turbo build --filter='./packages/*' --filter='./services/gateway-service'
       - name: Generate screen contract map (static analysis)
         run: node scripts/contract/screen-map.mjs
-      - name: Gate — fail on MISSING or MISMATCH screens
+      - name: Gate — fail on MISSING, MISMATCH, or FABRICATED_DATA screens
         run: |
           node -e "
             const fs = require('fs');
             const map = JSON.parse(fs.readFileSync('scripts/contract/screen-map.json', 'utf8'));
-            const broken = map.rows.filter(r => r.status === 'MISSING' || r.status === 'MISMATCH');
+            const broken = map.rows.filter(r => r.status === 'MISSING' || r.status === 'MISMATCH' || r.status === 'FABRICATED_DATA');
             if (broken.length > 0) {
               console.error('BROKEN SCREEN CHAINS:');
               broken.forEach(r => console.error(\`  [\${r.status}] \${r.module}\${r.screen}: \${r.detail}\`));

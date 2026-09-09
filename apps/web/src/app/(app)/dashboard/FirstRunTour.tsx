@@ -23,6 +23,8 @@ type TourStep = {
   body: string;
 };
 
+// COMP-004 detector note: static reference -- fixed onboarding-tour copy
+// (see file header), the same for every user; not data from a backend.
 const STEPS: TourStep[] = [
   {
     icon: "👋",

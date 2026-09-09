@@ -10,6 +10,7 @@ import { describe, it, expect, beforeAll } from 'vitest';
 import { execSync } from 'child_process';
 import { existsSync, readFileSync } from 'fs';
 import { join } from 'path';
+import { scanForFabricatedArray } from '../../scripts/contract/screen-map.mjs';
 
 const ROOT = join(import.meta.dirname, '../..');
 const SCREEN_MAP_PATH = join(ROOT, 'scripts/contract/screen-map.json');
@@ -23,7 +24,7 @@ type ScreenRow = {
   upstream: string | null;
   routeHandler: string | null;
   tablesPresent: boolean | null;
-  status: 'WIRED' | 'MISSING' | 'MISMATCH' | 'NO_LOADER';
+  status: 'WIRED' | 'MISSING' | 'MISMATCH' | 'NO_LOADER' | 'FABRICATED_DATA';
   detail: string;
 };
 
@@ -32,7 +33,7 @@ type LinkAudit = { total: number; dead: LinkCheck[] };
 
 type ScreenMap = {
   rows: ScreenRow[];
-  counts: { wired: number; missing: number; mismatch: number; noLoader: number };
+  counts: { wired: number; missing: number; mismatch: number; noLoader: number; fabricatedData: number };
   linkAudit: LinkAudit;
 };
 
@@ -73,7 +74,11 @@ describe('screen contract map', () => {
   });
 
   it('all loader screens are WIRED', () => {
-    const loaderScreens = screenMap.rows.filter(r => r.status !== 'NO_LOADER');
+    // FABRICATED_DATA screens have no real loader either (same as NO_LOADER) --
+    // they're covered by their own dedicated exception-ledger test below, not
+    // this one, which is about screens that DO call a loader but fail to chain
+    // through to a real route/table.
+    const loaderScreens = screenMap.rows.filter(r => r.status !== 'NO_LOADER' && r.status !== 'FABRICATED_DATA');
     const unwired = loaderScreens.filter(r => r.status !== 'WIRED');
     if (unwired.length > 0) {
       const details = unwired
@@ -175,11 +180,143 @@ describe('screen contract map', () => {
     }
   });
 
+  // COMP-004: fabricated-record-literal scan (see scripts/contract/screen-map.mjs
+  // scanForFabricatedArray()). Broadened in the PR #1116 fix-up round to catch
+  // object literals (not just arrays) and plain UPPER_SNAKE names (not just
+  // MOCK_/INITIAL_/SAMPLE_/FAKE_/DUMMY_/STUB_-prefixed ones) -- the original
+  // prefix-only version missed the pre-fix admin/roles page's own `ROLES`
+  // (unprefixed array) and `INITIAL_MATRIX` (prefixed, but an object) entirely,
+  // and a live second instance (platform-admin/roles) was undetected as a result.
+  //
+  // KNOWN_FABRICATED_DATA_EXCEPTIONS is a narrow, ID-tagged, tracked ledger --
+  // not a blanket carve-out, same pattern as KNOWN_EXCEPTIONS above. Each entry
+  // is a real fabricated-data screen the broadened detector correctly found,
+  // whose fix is a backend/schema build (see the cited gap ID), not a detector
+  // or wiring fix, and is out of scope here. Remove an entry the same day its
+  // backend is built and the page is wired for real.
+  const KNOWN_FABRICATED_DATA_EXCEPTIONS: Array<{ module: string; screen: string }> = [
+    // COMP-013: platform-admin/roles renders a hardcoded role list + permission
+    // matrix; identity-service's real RBAC routes are UUID/DB-row based, not the
+    // string role-key / module:action-key shape this page's UI assumes -- needs
+    // permission rows seeded (or the UI rebuilt around the existing primitives).
+    { module: 'platform-admin', screen: '/platform-admin/roles' },
+    // COMP-014: platform-admin/org-config's DEFAULT_LEVELS models a configurable
+    // hierarchy-LEVEL taxonomy that nothing in the backend stores -- likely
+    // superseded by the already-wired admin/org/OrgHierarchyManager.tsx (real
+    // org-unit CRUD); needs a product decision (remove vs. build a real store).
+    { module: 'platform-admin', screen: '/platform-admin/org-config' },
+    // COMP-015: hr/onboarding/[id]'s document checklist (DEFAULT_DOCUMENTS) is
+    // always the same 6 documents, always "pending" -- hrms-service has no
+    // document-specific concept yet (only generic onboarding-tasks); needs a new
+    // per-employee document-checklist table + routes.
+    { module: 'hr', screen: '/hr/onboarding/[id]' },
+    // COMP-016: projects/schemes/[id]'s SCHEMES catalogue has fields
+    // (nodalOfficer, department, beneficiaries, fundingPattern) that don't exist
+    // in project-service's schema, though the real budget/status/project-list
+    // fields are close to a drop-in reuse of the existing GET .../schemes/:id.
+    { module: 'projects', screen: '/projects/schemes/[id]' },
+  ];
+
+  it('has no unexpected FABRICATED_DATA screens beyond the tracked exception ledger', () => {
+    const exceptionKeys = new Set(KNOWN_FABRICATED_DATA_EXCEPTIONS.map(e => `${e.module}::${e.screen}`));
+    const fabricated = screenMap.rows.filter(r => r.status === 'FABRICATED_DATA');
+    const unexpected = fabricated.filter(r => !exceptionKeys.has(`${r.module}::${r.screen}`));
+
+    if (unexpected.length > 0) {
+      const details = unexpected.map(r => `  [FABRICATED_DATA] ${r.module}${r.screen}  (${r.detail})`).join('\n');
+      expect.fail(
+        `${unexpected.length} new FABRICATED_DATA screen(s) found (not in the tracked exception ledger):\n${details}\n\n` +
+        `Run: node scripts/contract/screen-map.mjs  to see the full report.\n` +
+        `Fix it for real, or add it to KNOWN_FABRICATED_DATA_EXCEPTIONS in this file citing a new gap ID in docs/ENTERPRISE-GAP-REPORT-2026-09-07.md.`,
+      );
+    }
+
+    // The ledger itself must stay accurate -- an entry that no longer reproduces
+    // means the underlying page got wired for real and the exception is stale.
+    const stillFabricated = new Set(fabricated.map(r => `${r.module}::${r.screen}`));
+    const stale = KNOWN_FABRICATED_DATA_EXCEPTIONS.filter(e => !stillFabricated.has(`${e.module}::${e.screen}`));
+    if (stale.length > 0) {
+      const details = stale.map(e => `  ${e.module}${e.screen}`).join('\n');
+      expect.fail(`${stale.length} KNOWN_FABRICATED_DATA_EXCEPTIONS entry(ies) no longer reproduce -- remove them:\n${details}\n`);
+    }
+  });
+
+  describe('scanForFabricatedArray (unit, COMP-004 fix-up regression)', () => {
+    // Sabotage-checked: each of these fixtures reproduces a real shape the
+    // pre-fix-up detector missed (proven against the actual pre-fix
+    // admin/roles/page.tsx at commit 67957267 and the live, still-fabricated
+    // platform-admin/roles/RolePermissionsMatrix.tsx during the PR #1116
+    // fix-up). Reverting scanForFabricatedArray's declRe to the old
+    // `(?:MOCK|INITIAL|SAMPLE|FAKE|DUMMY|STUB)_[A-Z0-9_]*` name filter and its
+    // array-only `=\s*\[` shape match makes every case in this describe block
+    // that isn't already MOCK_/INITIAL_/...-prefixed-and-an-array fail.
+
+    it('catches an unprefixed plain UPPER_SNAKE array name (the pre-fix admin/roles ROLES shape)', () => {
+      const src = `
+const ROLES: RoleDef[] = [
+  { name: "super_admin", label: "Super Admin", description: "Full platform access", system: true },
+  { name: "hr_admin", label: "HR Admin", description: "Full HR module access", system: false },
+  { name: "payroll_admin", label: "Payroll Admin", description: "Full payroll access", system: false },
+];
+`;
+      const hit = scanForFabricatedArray(src);
+      expect(hit).not.toBeNull();
+      expect(hit!.name).toBe('ROLES');
+    });
+
+    it('catches an object-literal record map, not just arrays (the INITIAL_MATRIX / DEFAULTS shape)', () => {
+      const src = `
+const DEFAULTS: Record<string, Record<string, string[]>> = {
+  super_admin: { hr: ["read", "create", "update"], payroll: ["read", "create", "update"] },
+  hr_admin: { hr: ["read", "create"], payroll: ["read"] },
+  payroll_admin: { hr: ["read"], payroll: ["read", "create"] },
+};
+`;
+      const hit = scanForFabricatedArray(src);
+      expect(hit).not.toBeNull();
+      expect(hit!.name).toBe('DEFAULTS');
+    });
+
+    it('does not flag a nav-tile/hub list with an href field', () => {
+      const src = `
+const MODULES = [
+  { icon: "🏦", label: "Finance", href: "/finance", desc: "Budgets, bills, payments", bg: "#eef2ff" },
+  { icon: "👥", label: "HR", href: "/hr", desc: "Employees, attendance", bg: "#f0fdf4" },
+  { icon: "🛒", label: "Procurement", href: "/procurement", desc: "Indents, vendors", bg: "#fff7ed" },
+];
+`;
+      expect(scanForFabricatedArray(src)).toBeNull();
+    });
+
+    it('does not flag an enum-keyed style/label lookup map', () => {
+      const src = `
+const STATUS_CHIP: Record<string, { bg: string; color: string; label: string }> = {
+  pending: { bg: "var(--warnbg)", color: "var(--warn)", label: "Pending" },
+  approved: { bg: "var(--goodbg)", color: "var(--good)", label: "Approved" },
+  rejected: { bg: "var(--badbg)", color: "var(--bad)", label: "Rejected" },
+};
+`;
+      expect(scanForFabricatedArray(src)).toBeNull();
+    });
+
+    it('does not flag a literal marked as a static reference in a comment above it', () => {
+      const src = `
+// This content is a genuinely static reference: fixed for every tenant.
+const GOI_STANDARD_PCT: { label: string; value: number; color: string }[] = [
+  { label: "Basic", value: 50, color: "#4f46e5" },
+  { label: "DA", value: 23, color: "#06b6d4" },
+  { label: "HRA", value: 10, color: "#10b981" },
+];
+`;
+      expect(scanForFabricatedArray(src)).toBeNull();
+    });
+  });
+
   it('reports wired screen count (informational)', () => {
-    const { wired, missing, mismatch, noLoader } = screenMap.counts;
+    const { wired, missing, mismatch, noLoader, fabricatedData } = screenMap.counts;
     // Always passes — just prints the baseline
     console.log(
-      `\nContract baseline: WIRED=${wired}, MISSING=${missing}, MISMATCH=${mismatch}, NO_LOADER=${noLoader}`,
+      `\nContract baseline: WIRED=${wired}, MISSING=${missing}, MISMATCH=${mismatch}, NO_LOADER=${noLoader}, FABRICATED_DATA=${fabricatedData}`,
     );
     expect(typeof wired).toBe('number');
   });

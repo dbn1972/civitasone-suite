@@ -88,6 +88,9 @@ const WITHDRAW_CONFIRM: ConfirmConfig = {
   requireReason: true,
 };
 
+// COMP-004 detector note: static reference -- this is the fixed action-menu
+// (which buttons appear) per recruitment-pipeline stage, a UX/state-machine
+// decision, not data. The applications it acts on are real-loaded above.
 const STAGE_ACTIONS: Record<string, ActionDef[]> = {
   applied: [
     { label: "Shortlist",         key: "shortlist",   variant: "primary" },
