@@ -245,6 +245,19 @@ jobs:
           POSTGRES_ADMIN_USER: civitas
           POSTGRES_ADMIN_PASSWORD: civitas_test
         run: node scripts/ci/schema-drift-guard.mjs
+      # PERF-002: an RLS'd tenant table with no index whose leading column is
+      # tenant_id forces a sequential scan under RLS on every tenant-scoped
+      # query, regardless of any other WHERE clause. The 2026-09-07 audit
+      # found 271 such tables fleet-wide (measured from migration text); this
+      # guard measures the LIVE cluster instead, so a new table lands with a
+      # tenant_id index from day one instead of joining that backlog. Runs
+      # here (not arch-guard) for the same reason as the schema drift guard
+      # above: it needs a live, freshly bootstrapped database.
+      - name: Tenant index guard (RLS tenant tables must have a leading tenant_id index)
+        env:
+          POSTGRES_ADMIN_USER: civitas
+          POSTGRES_ADMIN_PASSWORD: civitas_test
+        run: node scripts/ci/tenant-index-guard.mjs
       - name: Run integration tests
         run: pnpm exec vitest run tests/integration/
 
