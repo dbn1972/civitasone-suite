@@ -84,14 +84,18 @@ describe("SAML routes — full coverage", () => {
     expect(res.statusCode).toBe(403);
   });
 
-  it("PUT /v1/identity/saml/config → 202 for super_admin", async () => {
+  // DOM-005 fix: PUT used to return a fabricated 202 "accepted" without
+  // persisting anything. It now really persists (saml.tenant_config,
+  // migration 0021) and returns 200 with the saved row.
+  it("PUT /v1/identity/saml/config → 200 for super_admin, persists for real", async () => {
     const res = await app.inject({
       method: "PUT", url: "/v1/identity/saml/config",
       headers: headers(["super_admin"]),
       payload: { entityId: "civitasone-test", acsUrl: "https://app.test.gov.in/saml/acs" },
     });
-    expect(res.statusCode).toBe(202);
-    expect(res.json().status).toBe("accepted");
+    expect(res.statusCode).toBe(200);
+    expect(res.json().entityId).toBe("civitasone-test");
+    expect(res.json().acsUrl).toBe("https://app.test.gov.in/saml/acs");
   });
 
   it("GET /v1/identity/saml/config → 401 without token", async () => {
@@ -99,14 +103,21 @@ describe("SAML routes — full coverage", () => {
     expect(res.statusCode).toBe(401);
   });
 
-  it("GET /v1/identity/saml/config → 200 for super_admin", async () => {
+  // DOM-005 fix: GET used to echo process.env vars regardless of what (if
+  // anything) was ever PUT. It now reads the real per-tenant row saved by
+  // the PUT test above (same tenant/token in this file) and reports
+  // configured: true with that exact data.
+  it("GET /v1/identity/saml/config → 200 for super_admin, reflects the real saved config", async () => {
     const res = await app.inject({
       method: "GET", url: "/v1/identity/saml/config",
       headers: headers(["super_admin"]),
     });
     expect(res.statusCode).toBe(200);
-    expect(res.json()).toHaveProperty("entityId");
-    expect(res.json()).toHaveProperty("signRequests");
+    const body = res.json();
+    expect(body.configured).toBe(true);
+    expect(body).toHaveProperty("entityId");
+    expect(body).toHaveProperty("signRequests");
+    expect(body.entityId).toBe("civitasone-test");
   });
 
   it("PUT /v1/identity/saml/config → 400 with invalid body", async () => {
