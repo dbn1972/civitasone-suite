@@ -1,5 +1,7 @@
-import { PageHeader, StatGrid, StatCard, Card } from "../../../_components/ds";
+import { PageHeader, StatGrid, StatCard, Card, RefreshErrorState } from "../../../_components/ds";
 import { getPayrollRunDetails, getPayrollStructures } from "../../../_data/loaders";
+import { useResource } from "../../../_data/useResource";
+import { toHumanError } from "@/lib/messages";
 import { formatRupees } from "@/lib/formatters";
 import { CreatePayrollRunForm } from "./CreatePayrollRunForm";
 import { PayrollRunsTable } from "./PayrollRunsTable";
@@ -14,19 +16,26 @@ export default async function PayrollPage() {
   const roles = getSessionRoles();
   const canAdminister = roles.some((r) => PAYROLL_ADMIN_ROLES.includes(r));
 
-  const [{ data: runs, source }, { data: structures }] = await Promise.all([
+  const [runsResult, { data: structures }] = await Promise.all([
     getPayrollRunDetails(),
     getPayrollStructures(),
   ]);
+  const { data: runs, source } = runsResult;
+  const runsResource = useResource(runsResult);
+  const errored = runsResource.status === "error";
 
-  const totalRuns = runs.length;
-  const totalEmployeesPaid = runs
-    .filter((r) => r.status === "paid" || r.status === "completed")
-    .reduce((sum, r) => sum + r.employeeCount, 0);
-  const totalGross = runs
-    .filter((r) => r.status === "paid" || r.status === "completed")
-    .reduce((sum, r) => sum + r.grossAmount, 0);
-  const pending = runs.filter((r) => r.status === "draft" || r.status === "processing").length;
+  const totalRuns = errored ? null : runs.length;
+  const totalEmployeesPaid = errored
+    ? null
+    : runs
+        .filter((r) => r.status === "paid" || r.status === "completed")
+        .reduce((sum, r) => sum + r.employeeCount, 0);
+  const totalGross = errored
+    ? null
+    : runs
+        .filter((r) => r.status === "paid" || r.status === "completed")
+        .reduce((sum, r) => sum + r.grossAmount, 0);
+  const pending = errored ? null : runs.filter((r) => r.status === "draft" || r.status === "processing").length;
   const existingPeriods = runs.map((r) => r.payPeriod);
 
   return (
@@ -40,7 +49,7 @@ export default async function PayrollPage() {
           PayrollRunsTable, driven by the same useSeededResource call that
           produces the table's rows — not a second, independent read of
           `source` here that could disagree with the table's cache state. */}
-      {canAdminister && (
+      {canAdminister && !errored && (
         structures.length === 0 ? (
           <Card>
             <p style={{ color: "var(--ink2)", fontSize: 14, padding: "12px 20px" }}>
@@ -55,13 +64,19 @@ export default async function PayrollPage() {
         )
       )}
       <StatGrid>
-        <StatCard icon="💰" iconBg="var(--goodbg)" label="Total Runs" value={totalRuns} />
-        <StatCard icon="👥" iconBg="var(--infobg)" label="Employees Paid" value={totalEmployeesPaid.toLocaleString("en-IN")} />
-        <StatCard icon="🏛" iconBg="var(--warnbg)" label="Total Gross" value={formatRupees(totalGross)} />
-        <StatCard icon="📄" iconBg="var(--panel)" label="Pending" value={pending} />
+        <StatCard icon="💰" iconBg="var(--goodbg)" label="Total Runs" value={totalRuns ?? "—"} />
+        <StatCard icon="👥" iconBg="var(--infobg)" label="Employees Paid" value={totalEmployeesPaid === null ? "—" : totalEmployeesPaid.toLocaleString("en-IN")} />
+        <StatCard icon="🏛" iconBg="var(--warnbg)" label="Total Gross" value={totalGross === null ? "—" : formatRupees(totalGross)} />
+        <StatCard icon="📄" iconBg="var(--panel)" label="Pending" value={pending ?? "—"} />
       </StatGrid>
       <Card title="Payroll Runs">
-        <PayrollRunsTable runs={runs} source={source} canAdminister={canAdminister} />
+        {errored ? (
+          <div className="pad">
+            <RefreshErrorState error={toHumanError("load", { area: "payroll runs" })} backHref="/hr" />
+          </div>
+        ) : (
+          <PayrollRunsTable runs={runs} source={source} canAdminister={canAdminister} />
+        )}
       </Card>
     </main>
   );

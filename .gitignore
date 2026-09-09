@@ -20,6 +20,8 @@ apps/web/playwright-report/
 .kiro/
 /test-results/
 .k6-stack-logs/
+.perf-stack-logs/
+.perf-k6-results/
 /archive/
 # Flutter
 .dart_tool/

@@ -24,11 +24,11 @@
 // BASELINE / RATCHET (raw-status-leak-baseline.json):
 // UX-003 fixed 4 sampled forms plus the shared hook in one PR; the other
 // ~137 files (169 violations at the time this guard was written) are
-// tracked as follow-up gap UX-013, not silenced. This guard therefore reads
+// tracked as follow-up gap UX-016, not silenced. This guard therefore reads
 // a checked-in `maxViolations` from raw-status-leak-baseline.json (sitting
 // alongside this script) and only FAILS if the live count exceeds it — i.e.
 // it blocks any NEW leak from landing, without pretending the backlog is
-// clear. Every UX-013 fix must lower that number in the same PR (see
+// clear. Every UX-016 fix must lower that number in the same PR (see
 // tests/architecture/raw-status-leak-guard.test.ts for the sabotage-check
 // that keeps this file itself honest). This is a ratchet that can only move
 // down through a reviewed diff — not the "delete/skip the gate" pattern
@@ -204,7 +204,7 @@ function main() {
     console.log(`  ${RED}Fix: route the failed response through useFormError${RESET}`);
     console.log(`  ${RED}(apps/web/src/lib/useFormError.ts) instead of building the${RESET}`);
     console.log(`  ${RED}message by hand. Suppress a rare false positive with // ${SUPPRESS_COMMENT}.${RESET}`);
-    console.log(`  ${RED}See follow-up gap UX-013 in docs/ENTERPRISE-GAP-REPORT-2026-09-07.md.${RESET}`);
+    console.log(`  ${RED}See follow-up gap UX-016 in docs/ENTERPRISE-GAP-REPORT-2026-09-07.md.${RESET}`);
     console.log("──────────────────────────────────────────────────────────────");
     process.exit(1);
   }
@@ -213,7 +213,7 @@ function main() {
     console.log(`  ${GREEN}✅ PASS — ${allViolations.length} < baseline ${baseline}.${RESET}`);
     console.log(`  ${CYAN}Progress! Lower "maxViolations" in raw-status-leak-baseline.json to ${allViolations.length} to lock it in.${RESET}`);
   } else {
-    console.log(`  ${GREEN}✅ PASS — ${allViolations.length} violation(s), at the tracked baseline (see UX-013).${RESET}`);
+    console.log(`  ${GREEN}✅ PASS — ${allViolations.length} violation(s), at the tracked baseline (see UX-016).${RESET}`);
   }
   console.log("──────────────────────────────────────────────────────────────");
   process.exit(0);

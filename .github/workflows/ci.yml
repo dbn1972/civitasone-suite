@@ -374,6 +374,19 @@ jobs:
       - name: Raw session GUC guard (PgBouncer transaction-pool leak, PERF-001)
         run: node scripts/ci/raw-session-guc-guard.mjs
 
+      # UX-001: fetchJson() never throws (apiClient.ts) — it resolves
+      # { data: empty, source: "error" } on any failure — but the large
+      # majority of page.tsx files decided "nothing to show" from
+      # data.length === 0 alone, never also checking source, so a real
+      # outage rendered identically to a genuinely empty tenant. Unit tests
+      # first (fixture coverage for the checkSource() rule itself), then the
+      # guard against the real tree (ratchet: fails on NEW violations and on
+      # stale baseline entries, see scripts/ci/empty-vs-error-baseline.json).
+      - name: Empty-vs-error guard unit tests (UX-001)
+        run: pnpm exec vitest run tests/architecture/empty-vs-error-guard.test.ts
+      - name: Empty-vs-error guard (fetch failure vs genuinely-empty, UX-001)
+        run: node scripts/ci/empty-vs-error-guard.mjs
+
   # ─────────────────────────────────────────────
   # Job 4: Web build check
   # ─────────────────────────────────────────────
