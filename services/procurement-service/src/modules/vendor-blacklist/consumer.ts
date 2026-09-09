@@ -28,8 +28,12 @@ export function registerVendorBlacklistConsumers(queue: Queue): void {
       // routed through their *Tx siblings: each used to open its own nested
       // db.transaction()/bare execute from inside this already-open one,
       // risking pool exhaustion under load, and — for the write below —
-      // silently running with no app.tenant_id GUC set under FORCE RLS
-      // (the same split-brain shape TX-002 fixed for reinstate() in this file).
+      // committing in its own separate transaction outside this handler's
+      // atomicity boundary, so it could survive a later rollback of the
+      // outer transaction (or vice versa). The GUC itself was still set
+      // (insertBlacklist's own nested db.transaction() gets it applied) —
+      // unlike TX-002's reinstate() bug in this same file, which genuinely
+      // ran with no GUC set at all.
       const vendor = await vendorRepo.findVendorByIdTx(tx, p.vendorId, p.tenantId);
       if (!vendor) throw new Error(`vendor ${p.vendorId} not found`);
       const existing = await repo.findActiveTx(tx, p.tenantId, p.vendorId);

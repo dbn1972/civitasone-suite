@@ -111,10 +111,14 @@ export async function insertBlacklist(
  * argument, even though the function above has supported an optional
  * `writer` param since before this fix (this is a nested WRITE, more
  * dangerous than a nested read: under FORCE RLS it doesn't just risk
- * pool exhaustion, it can silently write with no app.tenant_id GUC set at
- * all — the exact split-brain shape TX-002 fixed for reinstate() in this
- * same file). The capability existed; it just was not being called. This
- * thin, explicitly-named wrapper matches the `...Tx(tx, ...)` convention
+ * pool exhaustion, it commits in its own separate transaction outside the
+ * caller's atomicity boundary, so the write could survive a rollback of
+ * the outer transaction, or vice versa. The GUC itself was still set on
+ * that separate transaction — this is not TX-002's reinstate() bug in
+ * this same file, which genuinely ran with no GUC set at all via a bare
+ * db.execute() outside any transaction). The capability existed; it just
+ * was not being called. This thin, explicitly-named wrapper matches the
+ * `...Tx(tx, ...)` convention
  * used everywhere else in this service (findPoByIdTx, findByIdTx,
  * reinstateTx, findVendorByIdTx) so nested callers are unambiguous about
  * routing through the caller's transaction, rather than relying on every
