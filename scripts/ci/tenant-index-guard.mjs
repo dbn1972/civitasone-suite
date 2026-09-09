@@ -25,7 +25,7 @@
 //
 // RATCHET, NOT A FULL GATE (yet): PERF-002's first tranche fixed 11 of the
 // fleet's 263 currently-measured violations (see docs/ENTERPRISE-GAP-REPORT
-// PERF-002 and its follow-up PERF-015 for the remainder). Failing CI on the
+// PERF-002 and its follow-up PERF-016 for the remainder). Failing CI on the
 // whole backlog immediately would block every unrelated PR fleet-wide, so —
 // exactly like scripts/ci/schema-drift-guard.mjs — known violations are
 // tracked in a baseline file and do not fail the build; the gate is on NEW
@@ -220,7 +220,7 @@ if (WRITE_BASELINE) {
   const entries = violations.map((v) => v.key).sort();
   const baseline = {
     $comment:
-      "TRACKED DEBT, not an approved state. Each entry is an RLS tenant table with no index whose leading column is tenant_id, so it forces a sequential scan under RLS on every tenant-scoped query. The gate fails on NEW violations and on stale entries (fixed but left listed). Burn these down; regenerate with --write-baseline after a real fix, on a freshly bootstrapped cluster. See docs/ENTERPRISE-GAP-REPORT-2026-09-07.md PERF-002 (first tranche) and its follow-up PERF-015 (remainder).",
+      "TRACKED DEBT, not an approved state. Each entry is an RLS tenant table with no index whose leading column is tenant_id, so it forces a sequential scan under RLS on every tenant-scoped query. The gate fails on NEW violations and on stale entries (fixed but left listed). Burn these down; regenerate with --write-baseline after a real fix, on a freshly bootstrapped cluster. See docs/ENTERPRISE-GAP-REPORT-2026-09-07.md PERF-002 (first tranche) and its follow-up PERF-016 (remainder).",
     generatedAt: new Date().toISOString().slice(0, 10),
     knownGaps: allowSkip.size > 0
       ? `Generated with --allow-skip=${[...allowSkip].join(",")}: ${[...allowSkip].join(", ")} database(s) do not exist on any cluster bootstrap-postgres.sh provisions (a bootstrap-config gap, not tenant-indexing debt — tracked separately, not in this file) and could not be checked. If that changes, regenerate without --allow-skip.`
@@ -279,7 +279,7 @@ if (staleEntries.length > 0) {
   failed = true;
 }
 if (!failed) {
-  console.log(`${GREEN}PASS${RESET} — no new violations, baseline is accurate (${knownDebt.length} tracked debt entries remain — see PERF-015).`);
+  console.log(`${GREEN}PASS${RESET} — no new violations, baseline is accurate (${knownDebt.length} tracked debt entries remain — see PERF-016).`);
 }
 
 if (REPORT) {

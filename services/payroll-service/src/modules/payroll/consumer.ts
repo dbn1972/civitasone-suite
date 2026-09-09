@@ -11,10 +11,50 @@ import * as loansRepo from "../loans/repo.js";
 import * as lopRepo from "../integration/lop-repo.js";
 import * as statutoryRepo from "../statutory/repo.js";
 import { sql } from "drizzle-orm";
-import { computeSlip, computePension, assertRunStatusTransition, DomainError, hraSlabPct, roundRupee, isPayrollEligible, type PensionScheme, type CityClass, type RawComponent, type SlipResult } from "./domain.js";
-import { annualTaxFromTaxableMinor, type Regime } from "../tax/engine.js";
+import { computeSlip, computePension, assertRunStatusTransition, DomainError, hraSlabPct, roundRupee, isPayrollEligible, resolveStatutoryConfig, DEFAULT_STATUTORY_CONFIG, type PensionScheme, type CityClass, type RawComponent, type SlipResult, type StatutoryConfig, type StatutoryConfigRow } from "./domain.js";
+import { annualTaxFromTaxableMinor, stdDeduction, type Regime } from "../tax/engine.js";
 import { fetchPayrollInput } from "../../shared/hrms-client.js";
 import { tenantScoped } from "../../shared/tenant-queue.js";
+
+/** DOM-008: sentinel tenant_id for the platform-default statutory config row (see migration 0038). */
+const PLATFORM_TENANT_ID = "00000000-0000-0000-0000-000000000000";
+
+/**
+ * DOM-008: effective-dated PF/ESI/Chapter-VI-A statutory config for a run.
+ * Reads every candidate row (the tenant's own overrides + the platform
+ * default, both filtered to effective_from on/before the run month) in one
+ * query — RLS's additive platform_default_read_policy (migration 0038) makes
+ * the sentinel rows visible alongside the tenant's own. Resolution itself is
+ * the pure resolveStatutoryConfig() in domain.ts. Queried once per run (not
+ * per employee) since tenantId/month are constant across a run's employees.
+ */
+export async function resolveRunStatutoryConfig(tx: typeof db, tenantId: string, month: string): Promise<StatutoryConfig> {
+  const rows = (await tx.execute(sql`
+    SELECT tenant_id, effective_from::text AS effective_from,
+           pf_rate_pct, pf_wage_cap_minor, eps_rate_bps, eps_cap_minor,
+           esi_wage_cap_minor, esi_employee_rate_bps, esi_employer_rate_bps,
+           sec80c_cap_minor, sec80d_cap_minor
+    FROM statutory.statutory_config
+    WHERE tenant_id IN (${tenantId}::uuid, ${PLATFORM_TENANT_ID}::uuid)
+      AND effective_from <= ${month + "-01"}::date
+  `)) as unknown as Array<{
+    tenant_id: string; effective_from: string;
+    pf_rate_pct: number | string; pf_wage_cap_minor: number | string;
+    eps_rate_bps: number | string; eps_cap_minor: number | string;
+    esi_wage_cap_minor: number | string; esi_employee_rate_bps: number | string; esi_employer_rate_bps: number | string;
+    sec80c_cap_minor: number | string; sec80d_cap_minor: number | string;
+  }>;
+  const mapped: StatutoryConfigRow[] = rows.map((r) => ({
+    tenantId: r.tenant_id === PLATFORM_TENANT_ID ? null : r.tenant_id,
+    effectiveFrom: r.effective_from,
+    pfRatePct: BigInt(r.pf_rate_pct), pfWageCapMinor: BigInt(r.pf_wage_cap_minor),
+    epsRateBps: BigInt(r.eps_rate_bps), epsCapMinor: BigInt(r.eps_cap_minor),
+    esiWageCapMinor: BigInt(r.esi_wage_cap_minor),
+    esiEmployeeRateBps: BigInt(r.esi_employee_rate_bps), esiEmployerRateBps: BigInt(r.esi_employer_rate_bps),
+    sec80cCapMinor: BigInt(r.sec80c_cap_minor), sec80dCapMinor: BigInt(r.sec80d_cap_minor),
+  }));
+  return resolveStatutoryConfig(mapped, tenantId, month);
+}
 
 /** Resolve the DA rate (basis points) effective for the run month (Iter1). */
 async function resolveDaRateBps(tenantId: string, month: string): Promise<bigint> {
@@ -969,6 +1009,9 @@ async function processPayrollRun(
   // A tenant-level fallback is kept for employees without a state_code.
   const ptSlabsFallback = await resolvePtSlabs(db, p.tenantId);
   const protectedNetFloorMinor = await resolveProtectedNetFloorMinor(p.tenantId);
+  // DOM-008: effective-dated PF/ESI/80C/80D config, resolved once per run
+  // (tenantId + month are constant across every employee in this run).
+  const statutoryConfig = await resolveRunStatutoryConfig(db, p.tenantId, p.month);
   // Days in the run month (LOP divisor) — 7th CPC uses actual days, not flat 30.
   const daysInMonth = BigInt(new Date(Number(p.month.slice(0, 4)), Number(p.month.slice(5, 7)), 0).getDate());
   let totalGross = 0n;
@@ -1097,6 +1140,7 @@ async function processPayrollRun(
         employeeNo: emp.employeeNo,
         basicMinor,
         month: p.month,
+        statutoryConfig,
         pensionScheme: emp.pensionScheme ?? "NPS",
         ...(eng.statutoryPf != null ? { statutoryPf: eng.statutoryPf } : {}),
         ...(eng.statutoryEsi != null ? { statutoryEsi: eng.statutoryEsi } : {}),
@@ -1266,7 +1310,10 @@ async function processPensionRun(
         month: p.month,
       });
       const annualGross = preview.grossMinor * 12n;
-      const stdDed = regime === "old" ? 5_000_000n : 7_500_000n; // Sec 16 std deduction (paise)
+      // DOM-008: was a third independently hardcoded std-deduction literal;
+      // now sourced from the same payroll.tax_slab_config as the salary path
+      // (domain.ts computeSlip) and fnf/domain.ts.
+      const stdDed = BigInt(stdDeduction(regime, fyStart)) * 100n; // Sec 16 std deduction (paise)
       let annualTaxable = annualGross - stdDed;
       if (annualTaxable < 0n) annualTaxable = 0n;
       const annualTax = annualTaxFromTaxableMinor(annualTaxable, regime, fyStart);
@@ -1323,6 +1370,8 @@ export async function computeAndInsertSlip(
     runId: string; tenantId: string; employeeId: string; employeeNo: string;
     basicMinor: bigint; month: string; pensionScheme?: PensionScheme;
     statutoryPf?: boolean; statutoryEsi?: boolean; statutoryNps?: boolean;
+    /** DOM-008: effective-dated PF/ESI/80C/80D config; omit for DEFAULT_STATUTORY_CONFIG (pre-DOM-008 hardcoded values). */
+    statutoryConfig?: StatutoryConfig;
     daRateBps?: bigint; cityClass?: CityClass; ptMinor?: bigint;
     taxRegime?: "old" | "new"; fyStartYear?: number;
     tdsYtdMinor?: bigint; monthsRemaining?: number; protectedNetFloorMinor?: bigint;
@@ -1331,6 +1380,11 @@ export async function computeAndInsertSlip(
     components?: Array<{ code: string; name: string; type: "earning" | "deduction"; amountMinor: bigint }>;
   },
 ): Promise<SlipResult> {
+  // DOM-008: same config passed to computeSlip, reused below so the
+  // persisted audit-trail rows (payrollPf/payrollEsi percentage columns,
+  // ESI employer amount) reflect the config actually used for this slip
+  // instead of a second, independently hardcoded literal.
+  const statutoryConfig = params.statutoryConfig ?? DEFAULT_STATUTORY_CONFIG;
   const result = computeSlip({
     basicMinor: params.basicMinor,
     daRateBps: params.daRateBps ?? 0n,
@@ -1342,6 +1396,7 @@ export async function computeAndInsertSlip(
     ...(params.monthsRemaining != null ? { monthsRemaining: params.monthsRemaining } : {}),
     ...(params.protectedNetFloorMinor != null ? { protectedNetFloorMinor: params.protectedNetFloorMinor } : {}),
     ...(params.declaration ? { declaration: params.declaration } : {}),
+    ...(params.statutoryConfig ? { statutoryConfig: params.statutoryConfig } : {}),
     rawComponents: params.rawComponents ?? [],
     components: params.components ?? [],
     pensionScheme: params.pensionScheme ?? "NPS",
@@ -1384,7 +1439,10 @@ export async function computeAndInsertSlip(
     await statutoryRepo.insertPf(tx, {
       id: randomUUID(), tenantId: params.tenantId, slipId, employeeId: params.employeeId,
       runId: params.runId, basicMinor: params.basicMinor,
-      empContribPct: "12", erContribPct: "12",
+      // DOM-008: reflect the config actually used (was hardcoded "12"/"12" —
+      // the gap this closes is exactly that these percentage columns were
+      // written but never sourced from anything configurable).
+      empContribPct: String(statutoryConfig.pfRatePct), erContribPct: String(statutoryConfig.pfRatePct),
       empContribMinor: result.pfEmployeeMinor, erContribMinor: result.pfEmployerMinor,
       epsContribMinor: result.epsMinor, epfErContribMinor: result.epfEmployerMinor,
       currency: "INR", period: params.month,
@@ -1396,7 +1454,10 @@ export async function computeAndInsertSlip(
       id: randomUUID(), tenantId: params.tenantId, slipId, employeeId: params.employeeId,
       runId: params.runId, grossMinor: result.grossMinor,
       empContribMinor: result.esiMinor,
-      erContribMinor: (result.grossMinor * 325n) / 10000n,
+      // DOM-008: was a second, independently hardcoded 325n (3.25%) — now the
+      // same config value computeSlip used for esiEmployerMinor, so a tenant
+      // override changes this persisted audit amount too, not just the slip.
+      erContribMinor: (result.grossMinor * statutoryConfig.esiEmployerRateBps) / 10000n,
       currency: "INR", period: params.month,
       createdBy: msg.actorId, updatedBy: msg.actorId,
     });

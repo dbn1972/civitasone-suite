@@ -6,6 +6,10 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 import { randomUUID } from "node:crypto";
 
 const processedIds = new Set<string>();
+// DOM-003 — case/hearing guard fixtures. Default: an open case, no hearing
+// cited. Individual tests override these to exercise the guards.
+let currentCase: { status: string } | undefined = { status: "pending" };
+let currentHearing: { status: string; version: number; caseId: string } | undefined;
 
 vi.mock("../src/shared/db.js", () => ({
   db: { transaction: async (fn: (tx: unknown) => Promise<unknown>) => fn({ __tx: true }) },
@@ -28,6 +32,14 @@ vi.mock("../src/modules/order/repo.js", () => ({
 
 vi.mock("../src/modules/config-registry/repo.js", () => ({
   listActiveKeys: vi.fn(async () => [] as string[]),
+}));
+
+vi.mock("../src/modules/case-registry/repo.js", () => ({
+  getCaseForUpdate: vi.fn(async () => currentCase),
+}));
+
+vi.mock("../src/modules/hearing/repo.js", () => ({
+  getHearingForUpdate: vi.fn(async () => currentHearing),
 }));
 
 vi.mock("../src/topics.js", () => ({
@@ -58,7 +70,12 @@ function recordMsg(id: string, actorId: string, messageId = id) {
 }
 
 describe("order consumer", () => {
-  beforeEach(() => { processedIds.clear(); vi.clearAllMocks(); });
+  beforeEach(() => {
+    processedIds.clear();
+    vi.clearAllMocks();
+    currentCase = { status: "pending" };
+    currentHearing = undefined;
+  });
 
   it("records an order and emits orderRecorded + audit", async () => {
     const { register, deliver } = makeHarness();
@@ -97,6 +114,8 @@ describe("order consumer — config-driven orderType (§47)", () => {
   beforeEach(() => {
     processedIds.clear();
     vi.clearAllMocks();
+    currentCase = { status: "pending" };
+    currentHearing = undefined;
     (configRepo.listActiveKeys as ReturnType<typeof vi.fn>).mockResolvedValue([]);
   });
 
@@ -131,6 +150,122 @@ describe("order consumer — config-driven orderType (§47)", () => {
     const { register, deliver } = makeHarness();
     registerOrderConsumers(register);
     await deliver("court.order.record", mk("interim"));
+    expect(repo.insertOrder).toHaveBeenCalledTimes(1);
+  });
+});
+
+
+/**
+ * DOM-003 — order recording had no case-state or hearing-ownership gate:
+ * an order could be recorded against a case already in a terminal
+ * (disposed/appealed) status, and an order could cite a hearingId with no
+ * verification that the hearing actually belongs to the case being acted
+ * on, or that the hearing had actually concluded (`held`). Both guards run
+ * as real DB reads inside the SAME transaction as the insert (see
+ * caseRepo.getCaseForUpdate / hearingRepo.getHearingForUpdate mocks above)
+ * — never inferred from anything the client submitted.
+ */
+describe("order consumer — DOM-003 case-state and hearing-ownership guards", () => {
+  beforeEach(() => {
+    processedIds.clear();
+    vi.clearAllMocks();
+    currentCase = { status: "pending" };
+    currentHearing = undefined;
+  });
+
+  function mkForCase(caseId: string, hearingId?: string) {
+    const id = randomUUID();
+    return {
+      messageId: id, type: "court.order.record",
+      tenantId: randomUUID(), actorId: randomUUID(), correlationId: "c", schemaVersion: "1.0",
+      payload: {
+        id, caseId, tenantId: randomUUID(),
+        ...(hearingId ? { hearingId } : {}),
+        orderType: "interim", orderText: "Bail granted subject to conditions.", orderDate: "2026-07-10",
+      },
+    };
+  }
+
+  it("rejects recording an order against a case that does not exist", async () => {
+    currentCase = undefined;
+    const { register, deliver } = makeHarness();
+    registerOrderConsumers(register);
+    await expect(deliver("court.order.record", mkForCase(randomUUID()))).rejects.toThrow(/CASE_NOT_FOUND/);
+    expect(repo.insertOrder).not.toHaveBeenCalled();
+  });
+
+  it("rejects recording an order against a case already in a terminal (disposed) state", async () => {
+    currentCase = { status: "disposed" };
+    const { register, deliver } = makeHarness();
+    registerOrderConsumers(register);
+    await expect(deliver("court.order.record", mkForCase(randomUUID()))).rejects.toThrow(/CASE_TERMINAL/);
+    expect(repo.insertOrder).not.toHaveBeenCalled();
+  });
+
+  it("rejects recording an order against a case already in a terminal (appealed) state", async () => {
+    currentCase = { status: "appealed" };
+    const { register, deliver } = makeHarness();
+    registerOrderConsumers(register);
+    await expect(deliver("court.order.record", mkForCase(randomUUID()))).rejects.toThrow(/CASE_TERMINAL/);
+    expect(repo.insertOrder).not.toHaveBeenCalled();
+  });
+
+  it("allows recording an order against a case in a non-terminal state (control)", async () => {
+    currentCase = { status: "pending" };
+    const { register, deliver } = makeHarness();
+    registerOrderConsumers(register);
+    await deliver("court.order.record", mkForCase(randomUUID()));
+    expect(repo.insertOrder).toHaveBeenCalledTimes(1);
+  });
+
+  it("rejects an order that cites a hearing belonging to a DIFFERENT case (foreign hearing)", async () => {
+    const caseId = randomUUID();
+    const foreignCaseId = randomUUID();
+    const hearingId = randomUUID();
+    currentHearing = { status: "held", version: 1, caseId: foreignCaseId };
+    const { register, deliver } = makeHarness();
+    registerOrderConsumers(register);
+    await expect(deliver("court.order.record", mkForCase(caseId, hearingId)))
+      .rejects.toThrow(/HEARING_CASE_MISMATCH/);
+    expect(repo.insertOrder).not.toHaveBeenCalled();
+  });
+
+  it("rejects an order that cites a hearing that has not been held yet (still scheduled)", async () => {
+    const caseId = randomUUID();
+    const hearingId = randomUUID();
+    currentHearing = { status: "scheduled", version: 1, caseId };
+    const { register, deliver } = makeHarness();
+    registerOrderConsumers(register);
+    await expect(deliver("court.order.record", mkForCase(caseId, hearingId)))
+      .rejects.toThrow(/HEARING_NOT_HELD/);
+    expect(repo.insertOrder).not.toHaveBeenCalled();
+  });
+
+  it("rejects an order that cites an unknown hearingId", async () => {
+    const caseId = randomUUID();
+    const hearingId = randomUUID();
+    currentHearing = undefined;
+    const { register, deliver } = makeHarness();
+    registerOrderConsumers(register);
+    await expect(deliver("court.order.record", mkForCase(caseId, hearingId)))
+      .rejects.toThrow(/HEARING_NOT_FOUND/);
+    expect(repo.insertOrder).not.toHaveBeenCalled();
+  });
+
+  it("allows an order citing a hearing that genuinely belongs to this case and is held (control)", async () => {
+    const caseId = randomUUID();
+    const hearingId = randomUUID();
+    currentHearing = { status: "held", version: 1, caseId };
+    const { register, deliver } = makeHarness();
+    registerOrderConsumers(register);
+    await deliver("court.order.record", mkForCase(caseId, hearingId));
+    expect(repo.insertOrder).toHaveBeenCalledTimes(1);
+  });
+
+  it("allows an order with no hearingId cited at all — hearing linkage is optional (control)", async () => {
+    const { register, deliver } = makeHarness();
+    registerOrderConsumers(register);
+    await deliver("court.order.record", mkForCase(randomUUID()));
     expect(repo.insertOrder).toHaveBeenCalledTimes(1);
   });
 });

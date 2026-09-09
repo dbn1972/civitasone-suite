@@ -1,79 +1,16 @@
-"use client";
-
-import { useState } from "react";
 import { PageHeader } from "@/app/_components/ds";
 
-const inputStyle = { width: "100%", padding: "8px 12px", borderRadius: 6, border: "1px solid #d1d5db", fontSize: 14 } as const;
-const labelStyle = { display: "block", fontSize: 13, fontWeight: 600, color: "var(--muted)", marginBottom: 4 } as const;
-
-type ScanJob = {
-  id: string;
-  name: string;
-  domainCount: number;
-  scanType: string;
-  status: "queued" | "running" | "completed" | "failed";
-  createdAt: string;
-};
-
-const MOCK_JOBS: ScanJob[] = [
-  { id: "j1", name: "Ministry portals — Jul 2026", domainCount: 24, scanType: "wcag", status: "completed", createdAt: "2026-07-15" },
-  { id: "j2", name: "State government sites", domainCount: 58, scanType: "full", status: "completed", createdAt: "2026-07-01" },
-  { id: "j3", name: "August sweep — NIC portals", domainCount: 12, scanType: "cwv", status: "running", createdAt: "2026-08-14" },
-];
-
-const STATUS_COLORS: Record<ScanJob["status"], string> = {
-  queued: "#6b7280",
-  running: "#2563eb",
-  completed: "#059669",
-  failed: "#dc2626",
-};
-
+// COMP-004: this page used to render 3 hardcoded MOCK_JOBS as "Recent Jobs"
+// with no fetch attempt at all, alongside a "New Scan Job" form that posted
+// to a plausible-looking POST /v1/admin/bulk-scan. There is no bulk WCAG/
+// CWV/GIGW domain-scan backend anywhere in this platform (grepped
+// admin-service and every other service — nothing registers this route or
+// anything like it) — this is an honest placeholder rather than a wired
+// page, per COMP-004's fix guidance: "wire to real APIs, or convert to
+// explicit placeholders that cannot be mistaken for data." The submit
+// button is disabled rather than left to silently 404 against an endpoint
+// that doesn't exist.
 export default function AdminBulkScanPage() {
-  const [jobName, setJobName] = useState("");
-  const [domainList, setDomainList] = useState("");
-  const [scanType, setScanType] = useState("full");
-  const [schedule, setSchedule] = useState("now");
-  const [notes, setNotes] = useState("");
-  const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState<string | null>(null);
-
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    if (!domainList.trim()) {
-      setError("Please enter at least one domain.");
-      return;
-    }
-    setSubmitting(true);
-    setError(null);
-    setSuccess(null);
-    try {
-      const domains = domainList
-        .split(/[\n,]+/)
-        .map((d) => d.trim())
-        .filter(Boolean);
-      const res = await fetch("/api/v1/admin/bulk-scan", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: jobName, domains, scanType, schedule, notes }),
-      });
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({})) as { message?: string };
-        throw new Error(body.message ?? `Request failed: ${res.status}`);
-      }
-      setSuccess(`Bulk scan job "${jobName}" queued for ${domains.length} domain(s).`);
-      setJobName("");
-      setDomainList("");
-      setScanType("full");
-      setSchedule("now");
-      setNotes("");
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to queue bulk scan.");
-    } finally {
-      setSubmitting(false);
-    }
-  }
-
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
@@ -82,163 +19,57 @@ export default function AdminBulkScanPage() {
         back="/admin"
       />
 
-      {/* New job form */}
+      <div
+        role="status"
+        style={{
+          background: "#fffbeb",
+          border: "1px solid #fde68a",
+          color: "#92400e",
+          borderRadius: 10,
+          padding: "14px 18px",
+          marginBottom: 18,
+          fontSize: 13.5,
+          lineHeight: 1.6,
+        }}
+      >
+        <strong>This feature has no backend yet.</strong> There is no bulk-scan job queue implementation
+        anywhere in the platform. Rather than show a fabricated job history or a "Queue" button that would
+        only ever fail, this page is left as an honest placeholder until that backend is built.
+      </div>
+
       <div className="card" style={{ marginBottom: 20 }}>
         <div className="card-h"><h3>New Scan Job</h3></div>
-        <form onSubmit={handleSubmit} style={{ padding: 20 }}>
-          {error && (
-            <div
-              role="alert"
-              aria-live="polite"
-              style={{ background: "#fef2f2", color: "#b42318", border: "1px solid #fecaca", borderRadius: 8, padding: "10px 14px", marginBottom: 14, fontSize: 13 }}
-            >
-              {error}
-            </div>
-          )}
-          {success && (
-            <div
-              role="status"
-              aria-live="polite"
-              style={{ background: "#ecfdf5", color: "#065f46", border: "1px solid #a7f3d0", borderRadius: 8, padding: "10px 14px", marginBottom: 14, fontSize: 13 }}
-            >
-              {success}
-            </div>
-          )}
-
-          <div style={{ display: "grid", gap: 16, gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", marginBottom: 16 }}>
-            <div>
-              <label htmlFor="bulk-job-name" style={labelStyle}>
-                Job Name *
-              </label>
-              <input
-                id="bulk-job-name"
-                type="text"
-                value={jobName}
-                onChange={(e) => setJobName(e.target.value)}
-                placeholder="e.g. August sweep — Ministry sites"
-                style={inputStyle}
-                required
-                aria-required="true"
-              />
-            </div>
-
-            <div>
-              <label htmlFor="bulk-scan-type" style={labelStyle}>
-                Scan Type *
-              </label>
-              <select
-                id="bulk-scan-type"
-                value={scanType}
-                onChange={(e) => setScanType(e.target.value)}
-                style={inputStyle}
-                required
-                aria-required="true"
-              >
-                <option value="full">Full (WCAG + CWV + UX4G)</option>
-                <option value="wcag">WCAG 2.2 AA only</option>
-                <option value="cwv">Core Web Vitals only</option>
-                <option value="gigw">GIGW 3.0 only</option>
-              </select>
-            </div>
-
-            <div>
-              <label htmlFor="bulk-schedule" style={labelStyle}>
-                Schedule *
-              </label>
-              <select
-                id="bulk-schedule"
-                value={schedule}
-                onChange={(e) => setSchedule(e.target.value)}
-                style={inputStyle}
-                required
-                aria-required="true"
-              >
-                <option value="now">Run immediately</option>
-                <option value="off-peak">Tonight (off-peak)</option>
-                <option value="weekend">This weekend</option>
-              </select>
-            </div>
-          </div>
-
-          <div style={{ marginBottom: 16 }}>
-            <label htmlFor="bulk-domain-list" style={labelStyle}>
-              Domain List * (one per line or comma-separated)
-            </label>
-            <textarea
-              id="bulk-domain-list"
-              value={domainList}
-              onChange={(e) => setDomainList(e.target.value)}
-              placeholder={"india.gov.in\nic.in\nmygov.in"}
-              rows={6}
-              style={{ ...inputStyle, resize: "vertical", fontFamily: "monospace", fontSize: 13 }}
-              required
-              aria-required="true"
-            />
-          </div>
-
-          <div style={{ marginBottom: 18 }}>
-            <label htmlFor="bulk-notes" style={labelStyle}>
-              Notes
-            </label>
-            <textarea
-              id="bulk-notes"
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              placeholder="Optional notes for this scan job…"
-              rows={2}
-              style={{ ...inputStyle, resize: "vertical" }}
-            />
-          </div>
-
+        <div style={{ padding: 20 }}>
+          <p style={{ margin: "0 0 14px", fontSize: 13.5, color: "var(--ink3)" }}>
+            Queueing a bulk scan requires a real scan-job backend, which doesn&apos;t exist yet.
+          </p>
           <button
-            type="submit"
-            disabled={submitting}
+            type="button"
+            disabled
+            title="Bulk scan job queueing has no backend yet"
+            aria-disabled="true"
             style={{
               padding: "10px 28px",
               borderRadius: 8,
-              background: submitting ? "#9ca3af" : "#4f46e5",
+              background: "#9ca3af",
               color: "#fff",
               fontWeight: 600,
               border: "none",
-              cursor: submitting ? "not-allowed" : "pointer",
+              cursor: "not-allowed",
               fontSize: 14,
+              opacity: 0.7,
             }}
           >
-            {submitting ? "Queuing…" : "Queue Bulk Scan"}
+            Queue Bulk Scan
           </button>
-        </form>
+        </div>
       </div>
 
-      {/* Job history */}
       <div className="card">
         <div className="card-h"><h3>Recent Jobs</h3></div>
-        <div style={{ overflowX: "auto" }}>
-          <table className="data-table" role="table" aria-label="Bulk scan job history">
-            <thead>
-              <tr>
-                <th scope="col">Job Name</th>
-                <th scope="col">Domains</th>
-                <th scope="col">Scan Type</th>
-                <th scope="col">Status</th>
-                <th scope="col">Created</th>
-              </tr>
-            </thead>
-            <tbody>
-              {MOCK_JOBS.map((job) => (
-                <tr key={job.id}>
-                  <td><strong>{job.name}</strong></td>
-                  <td>{job.domainCount}</td>
-                  <td>{job.scanType.toUpperCase()}</td>
-                  <td>
-                    <span style={{ color: STATUS_COLORS[job.status], fontWeight: 600, textTransform: "capitalize" }}>
-                      {job.status}
-                    </span>
-                  </td>
-                  <td style={{ color: "#6b7280", fontSize: 13 }}>{job.createdAt}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        <div style={{ padding: 32, textAlign: "center", color: "var(--ink3)" }}>
+          <p style={{ margin: "0 0 4px", fontSize: 14 }}>No job history available.</p>
+          <p style={{ margin: 0, fontSize: 12.5 }}>Nothing is shown here because nothing real can be loaded yet.</p>
         </div>
       </div>
     </main>

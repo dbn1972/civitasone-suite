@@ -7,6 +7,8 @@
 import { eq, and, gte, lte } from "drizzle-orm";
 import { scopedRead } from "../../shared/db.js";
 import { hrmsHolidays } from "../holidays/schema.js";
+import { findTenantLeavePolicy } from "./repo.js";
+import type { LeavePolicyRuleRow } from "./policy-schema.js";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -42,6 +44,23 @@ export interface LeaveValidationInput {
   isOnProbation: boolean;
   gender?: "male" | "female" | "other";
   childrenCount?: number;
+  /**
+   * DOM-009: the leave type's row id, used to look up the tenant's
+   * admin-configured policy (hrms_leave_policy_rules) for this leave type +
+   * employee type. When omitted (or when the tenant has no matching row),
+   * validation falls back to the platform default catalog below, preserving
+   * prior hardcoded-only behavior.
+   */
+  leaveTypeId?: string;
+  /**
+   * DOM-009: the employee's own raw employeeType string, as stored on their
+   * record — this is what an HR admin actually picks when configuring a
+   * policy row via policy-admin-routes.ts, and it may use different
+   * vocabulary than the narrower `employeeType` bucket above (e.g.
+   * "contractual" vs "contract"). Used only to match the tenant policy row;
+   * defaults to `employeeType` when omitted.
+   */
+  rawEmployeeType?: string;
 }
 
 export interface ValidationResult {
@@ -55,6 +74,15 @@ export interface ValidationResult {
 
 // ─── Leave Policy Master ────────────────────────────────────────────────────
 
+/**
+ * Platform DEFAULT leave policy catalog. DOM-009: this used to be the ONLY
+ * source validateLeaveRequest consulted, so an HR admin's edits made through
+ * policy-admin-routes.ts (persisted to hrms_leave_policy_rules) had no effect
+ * on the apply path — a dead-end admin form. It now serves purely as the
+ * fallback used when a tenant has not configured its own policy row for a
+ * given (leaveTypeId, employeeType) combination, preserving prior behavior
+ * for tenants who never customized anything.
+ */
 export const LEAVE_POLICIES: LeavePolicy[] = [
   { code: "CL",   name: "Casual Leave",       maxDaysPerYear: 8,   carryForward: false, maxAccumulation: 8,   encashable: false, countMethod: "calendar",     maxContinuousDays: 8,   minServiceYears: 0, applicableTo: ["permanent", "temporary", "contract", "deputation"], prefixSuffixRule: true,  sandwichRule: true },
   { code: "EL",   name: "Earned Leave",        maxDaysPerYear: 30,  carryForward: true,  maxAccumulation: 300, encashable: true,  countMethod: "working_days", maxContinuousDays: 180, minServiceYears: 1, applicableTo: ["permanent", "deputation"],                          prefixSuffixRule: false, sandwichRule: false },
@@ -67,6 +95,55 @@ export const LEAVE_POLICIES: LeavePolicy[] = [
   { code: "SCL",  name: "Special Casual Leave",maxDaysPerYear: 10,  carryForward: false, maxAccumulation: 10,  encashable: false, countMethod: "calendar",     maxContinuousDays: 10,  minServiceYears: 0, applicableTo: ["permanent", "deputation"],                          prefixSuffixRule: false, sandwichRule: false },
   { code: "CO",   name: "Compensatory Off",    maxDaysPerYear: 0,   carryForward: false, maxAccumulation: 0,   encashable: false, countMethod: "calendar",     maxContinuousDays: 3,   minServiceYears: 0, applicableTo: ["permanent", "temporary", "contract", "deputation"], prefixSuffixRule: false, sandwichRule: false },
 ];
+
+// ─── Tenant-configured policy resolution (DOM-009) ─────────────────────────
+
+/**
+ * Translate a tenant's admin-configured hrms_leave_policy_rules row into the
+ * engine's LeavePolicy shape, layering it over the matching default catalog
+ * entry (for `code`/`name`, which the DB row doesn't carry). `applicableTo`
+ * is narrowed to just this employeeType — the row's existence for exactly
+ * this (leaveTypeId, employeeType) pair already proves eligibility, so R1
+ * below trivially passes for a tenant-configured combination instead of
+ * being gated by the default catalog's narrower bucket list.
+ */
+function tenantPolicyToEngine(row: LeavePolicyRuleRow, fallback: LeavePolicy, employeeType: EmployeeType): LeavePolicy {
+  return {
+    ...fallback,
+    maxDaysPerYear: row.maxDaysPerYear,
+    carryForward: row.carryForward,
+    maxAccumulation: row.maxAccumulation,
+    encashable: row.encashable,
+    countMethod: row.countMethod === "working_days" ? "working_days" : "calendar",
+    maxContinuousDays: row.maxContinuousDays,
+    minServiceYears: Math.ceil(row.minServiceMonths / 12),
+    applicableTo: [employeeType],
+    prefixSuffixRule: row.prefixSuffixRule,
+    sandwichRule: row.sandwichRule,
+  };
+}
+
+export interface AccumulationCap {
+  carryForward: boolean;
+  maxAccumulation: number;
+}
+
+/**
+ * DOM-009 — the effective carry-forward + max-accumulation cap for a leave
+ * type: the tenant's admin-configured policy row wins when one exists;
+ * otherwise the platform default catalog entry for the code (e.g. EL's
+ * hardcoded 300-day cap) preserves prior behavior for tenants who never
+ * customized anything; a code unknown to both (a fully custom leave type
+ * with no policy configured) has no cap enforced — matching the existing
+ * "nothing breaks" fallback this module already uses for engine-unknown
+ * codes elsewhere (see routes.ts's enforceCcsLeaveRules).
+ */
+export function resolveAccumulationCap(policyRow: LeavePolicyRuleRow | null, leaveCode: string): AccumulationCap {
+  if (policyRow) return { carryForward: policyRow.carryForward, maxAccumulation: policyRow.maxAccumulation };
+  const def = LEAVE_POLICIES.find((p) => p.code === leaveCode);
+  if (def) return { carryForward: def.carryForward, maxAccumulation: def.maxAccumulation };
+  return { carryForward: false, maxAccumulation: 0 };
+}
 
 // ─── Holiday-aware date calculations ────────────────────────────────────────
 
@@ -129,11 +206,22 @@ export async function validateLeaveRequest(input: LeaveValidationInput): Promise
   const errors: string[] = [];
   const warnings: string[] = [];
 
-  // Find applicable policy
-  const policy = LEAVE_POLICIES.find(p => p.code === input.leaveCode);
-  if (!policy) {
+  // Find the default (platform catalog) policy — also serves as the guard
+  // against a leave code the engine doesn't know about at all.
+  const defaultPolicy = LEAVE_POLICIES.find(p => p.code === input.leaveCode);
+  if (!defaultPolicy) {
     return { valid: false, errors: [`Unknown leave code: ${input.leaveCode}`], warnings: [], computedDays: 0, holidaysInRange: [], workingDaysInRange: 0 };
   }
+
+  // DOM-009: prefer the tenant's admin-configured policy for this leave type
+  // + employee type; fall back to the platform default catalog above for
+  // tenants who never customized this combination.
+  const tenantRow = input.leaveTypeId
+    ? await findTenantLeavePolicy(input.tenantId, input.leaveTypeId, input.rawEmployeeType ?? input.employeeType)
+    : null;
+  const policy: LeavePolicy = tenantRow
+    ? tenantPolicyToEngine(tenantRow, defaultPolicy, input.employeeType)
+    : defaultPolicy;
 
   // R1: Eligibility by employee type
   if (!policy.applicableTo.includes(input.employeeType)) {
@@ -209,7 +297,11 @@ export async function validateLeaveRequest(input: LeaveValidationInput): Promise
     errors.push(`Exceeds maximum continuous ${policy.name}: ${calendarSpan} calendar days absent > allowed ${policy.maxContinuousDays} days`);
   }
 
-  // R10: Max accumulation warning
+  // R10: Max accumulation warning — informational here (this function only
+  // validates a leave application; it never touches the allocation balance).
+  // DOM-009: the ACTUAL enforcement — capping totalDays/balanceDays and
+  // lapsing the excess — happens where the balance is actually credited
+  // (the leaveAllocate consumer, via resolveAccumulationCap above), not here.
   if (policy.carryForward && input.totalAccumulated > policy.maxAccumulation) {
     warnings.push(`Total accumulated ${policy.code} (${input.totalAccumulated}) exceeds max ${policy.maxAccumulation}. Excess will lapse`);
   }

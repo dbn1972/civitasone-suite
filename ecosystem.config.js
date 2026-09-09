@@ -457,7 +457,7 @@ function worker(name, dbUser, dbName, extra = {}, scriptFile = "dist/worker.js",
 module.exports = {
   apps: [
     // ── Core platform ──────────────────────────────────────────────────────────
-    svc("identity",     3001, "identity_svc",     "civitas_identity", { MFA_ENC_KEY }),
+    svc("identity",     3001, "identity_svc",     "civitas_identity", { MFA_ENC_KEY }, { graceful: true }), // PERF-003
     svc("tenant",       3002, "tenant_svc",        "civitas_tenant"),
     svc("policy",       3003, "policy_svc",        "civitas_policy"),
     svc("audit",        3004, "audit_svc",         "civitas_audit"),
@@ -466,14 +466,14 @@ module.exports = {
 
     // ── Finance & procurement ──────────────────────────────────────────────────
     svc("finance",      3007, "finance_svc",       "civitas_finance", { PII_ENC_KEY: FINANCE_PII_KEY }, { graceful: true }), // REL-012: validated subset
-    svc("procurement",  3008, "procurement_svc",   "civitas_procurement", { PII_ENC_KEY: PROCUREMENT_PII_KEY }),
+    svc("procurement",  3008, "procurement_svc",   "civitas_procurement", { PII_ENC_KEY: PROCUREMENT_PII_KEY }, { graceful: true }), // PERF-003
     svc("contract",     3009, "contract_svc",      "civitas_contract"),
 
     // ── Establishment & physical assets ───────────────────────────────────────
     svc("estab",        3010, "estab_svc",         "civitas_estab"),
     svc("stock",        3011, "stock_svc",         "civitas_stock"),
-    svc("hrms",         3012, "hrms_svc",          "civitas_hrms", { PII_ENC_KEY, ID_CARD_QR_SECRET, CANDIDATE_JWT_SECRET }),
-    svc("payroll",      3013, "payroll_svc",       "civitas_payroll"),
+    svc("hrms",         3012, "hrms_svc",          "civitas_hrms", { PII_ENC_KEY, ID_CARD_QR_SECRET, CANDIDATE_JWT_SECRET }, { graceful: true }), // PERF-003
+    svc("payroll",      3013, "payroll_svc",       "civitas_payroll", {}, { graceful: true }), // PERF-003
     svc("project",      3014, "project_svc",       "civitas_project"),
     svc("asset",        3015, "asset_svc",         "civitas_asset"),
 
@@ -509,12 +509,12 @@ module.exports = {
     worker("procurement",  "procurement_svc",  "civitas_procurement", {
       PII_ENC_KEY: PROCUREMENT_PII_KEY,
       PROCUREMENT_SCANNER_DATABASE_URL: scannerDbUrl("procurement_scanner", "civitas_procurement", "PROCUREMENT_SCANNER_DATABASE_URL"),
-    }),
+    }, "dist/worker.js", { graceful: true }), // PERF-003
     worker("workflow",     "workflow_svc",     "civitas_workflow", { WORKFLOW_SCANNER_DATABASE_URL: scannerDbUrl("workflow_scanner", "civitas_workflow", "WORKFLOW_SCANNER_DATABASE_URL") }),
     worker("payroll",      "payroll_svc",      "civitas_payroll", {
       PAYROLL_SCANNER_DATABASE_URL: scannerDbUrl("payroll_scanner", "civitas_payroll", "PAYROLL_SCANNER_DATABASE_URL"),
-    }),
-    worker("hrms",         "hrms_svc",         "civitas_hrms", { PII_ENC_KEY }),
+    }, "dist/worker.js", { graceful: true }), // PERF-003
+    worker("hrms",         "hrms_svc",         "civitas_hrms", { PII_ENC_KEY }, "dist/worker.js", { graceful: true }), // PERF-003
     worker("grant",        "grant_svc",        "civitas_grant"),
     worker("project",      "project_svc",      "civitas_project"),
     worker("estab",        "estab_svc",        "civitas_estab"),
@@ -537,7 +537,7 @@ module.exports = {
     // ── EVT-1 (04-T1): previously-missing workers now wired. Each ships a real
     //    src/worker.ts (consumers + outbox relay); without these entries their
     //    HTTP commands returned 202 but the async write never applied. ──────────
-    worker("identity",     "identity_svc",     "civitas_identity", { MFA_ENC_KEY }),
+    worker("identity",     "identity_svc",     "civitas_identity", { MFA_ENC_KEY }, "dist/worker.js", { graceful: true }), // PERF-003
     worker("tenant",       "tenant_svc",       "civitas_tenant"),
     worker("policy",       "policy_svc",       "civitas_policy"),
     worker("install",      "install_svc",      "civitas_install"),
@@ -576,7 +576,7 @@ module.exports = {
     worker("court",        "court_svc",        "civitas_court", { COURT_PII_KEY, COURT_SCANNER_DATABASE_URL: scannerDbUrl("court_scanner", "civitas_court", "COURT_SCANNER_DATABASE_URL") }, "dist/worker-main.js"),
     worker("visitor",      "visitor_svc",      "civitas_visitor", { VISITOR_PII_KEY, VISITOR_TENANT_SIGNING_KEY_PEM, VISITOR_SCANNER_DATABASE_URL: scannerDbUrl("visitor_scanner", "civitas_visitor", "VISITOR_SCANNER_DATABASE_URL") }),
     worker("works",        "works_svc",        "civitas_works", { WORKS_SCANNER_DATABASE_URL: scannerDbUrl("works_scanner", "civitas_works", "WORKS_SCANNER_DATABASE_URL") }),
-    worker("revenue",      "revenue_svc",      "civitas_revenue"),
+    worker("revenue",      "revenue_svc",      "civitas_revenue", {}, "dist/worker.js", { graceful: true }), // PERF-003
     worker("inspection",   "inspection_svc",   "civitas_inspection", {
       S3_BUCKET_NAME: process.env.S3_BUCKET_NAME ?? "civitas-inspection",
       S3_ENDPOINT: process.env.S3_ENDPOINT ?? "http://localhost:4566",
@@ -612,7 +612,7 @@ module.exports = {
     worker("vendor",        "vendor_svc",        "civitas_vendor"),
 
     // Gateway catalogue CQRS — mutations publish gateway.catalogue.*; worker applies.
-    worker("gateway",      "gateway_svc",      "civitas_gateway"),
+    worker("gateway",      "gateway_svc",      "civitas_gateway", {}, "dist/worker.js", { graceful: true }), // PERF-003
 
     // ── Infrastructure services ────────────────────────────────────────────────
     // Platform message-bus observability process (F9). Domain services embed the
@@ -654,7 +654,7 @@ module.exports = {
     svc("document",     3049, "document_svc",     "civitas_document"),
     svc("recommendation", 3040, "recommendation_svc", "civitas_recommendation"),
     svc("cdp",         3047, "cdp_svc",         "civitas_cdp"),
-    svc("revenue",      3038, "revenue_svc",      "civitas_revenue"),
+    svc("revenue",      3038, "revenue_svc",      "civitas_revenue", {}, { graceful: true }), // PERF-003
     svc("inspection",   3037, "inspection_svc",   "civitas_inspection", {
       S3_BUCKET_NAME: process.env.S3_BUCKET_NAME ?? "civitas-inspection",
       S3_ENDPOINT: process.env.S3_ENDPOINT ?? "http://localhost:4566",
@@ -723,6 +723,10 @@ module.exports = {
       merge_logs: true,
       restart_delay: 3000,
       max_restarts: 10,
+      // PERF-003: hand-rolled object literal (not svc()), so GRACEFUL_LIFECYCLE
+      // is spread directly rather than via the opts.graceful flag — src/index.ts
+      // now calls signalReady()/registerGracefulShutdown() (@civitasone/observability).
+      ...GRACEFUL_LIFECYCLE,
       env: {
         NODE_ENV: RUNTIME_NODE_ENV,
         PORT: 8080,

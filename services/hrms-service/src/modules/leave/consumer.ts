@@ -9,6 +9,7 @@ import { COMMANDS, EVENTS } from "../../topics.js";
 import { hrmsLeaveApps, hrmsLeaveAllocs } from "./schema.js";
 import * as repo from "./repo.js";
 import { assertSufficientLeaveBalance, assertLeaveAppStatusTransition } from "./domain.js";
+import { resolveAccumulationCap } from "./rules-engine.js";
 import { markLeaveDaysOnAttendance } from "../attendance/leave-sync.js";
 import { tenantScoped } from "../../shared/tenant-queue.js";
 
@@ -35,12 +36,43 @@ export function registerLeaveConsumers(rawQueue: Queue): void {
     const p = msg.payload as { id: string; tenantId: string; employeeId: string; leaveTypeId: string; fy: string; totalDays: number; balanceDays: number };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
+      // DOM-009: the EL (and any carry-forward-eligible) accumulation cap
+      // used to only ever produce a WARNING at apply-time, while this — the
+      // one place a balance is actually credited — let totalDays/balanceDays
+      // grow past it unchecked. Resolve the tenant's admin-configured cap
+      // (falling back to the platform default catalog, e.g. EL's 300-day
+      // cap) and, if this allocation would exceed it, actually cap the
+      // credited amount and record the excess as a lapse.
+      const capInputs = await repo.findAccumulationCapInputsTx(tx, p.tenantId, p.employeeId, p.leaveTypeId);
+      const cap = resolveAccumulationCap(capInputs.policyRow, capInputs.leaveCode);
+      let totalDays = p.totalDays;
+      let balanceDays = p.balanceDays;
+      let lapsedDays = 0;
+      if (cap.carryForward && cap.maxAccumulation > 0 && totalDays > cap.maxAccumulation) {
+        lapsedDays = totalDays - cap.maxAccumulation;
+        totalDays = cap.maxAccumulation;
+        balanceDays = Math.min(balanceDays, cap.maxAccumulation);
+      }
       await repo.insertLeaveAlloc(tx, {
         id: p.id, tenantId: p.tenantId, employeeId: p.employeeId,
-        leaveTypeId: p.leaveTypeId, fy: p.fy, totalDays: p.totalDays, balanceDays: p.totalDays,
+        leaveTypeId: p.leaveTypeId, fy: p.fy, totalDays, balanceDays,
         createdBy: msg.actorId, updatedBy: msg.actorId,
       });
       await audit(tx, msg, "allocate", "leave_alloc", p.id);
+      if (lapsedDays > 0) {
+        await enqueue(tx, {
+          topic: AUDIT, eventType: AUDIT,
+          tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+          payload: {
+            service: "hrms", action: "lapse", resourceType: "leave_alloc", resourceId: p.id, outcome: "success",
+            metadata: {
+              employeeId: p.employeeId, leaveTypeId: p.leaveTypeId, fy: p.fy,
+              requestedTotalDays: p.totalDays, cappedTotalDays: totalDays,
+              maxAccumulation: cap.maxAccumulation, lapsedDays,
+            },
+          },
+        });
+      }
     });
   });
 

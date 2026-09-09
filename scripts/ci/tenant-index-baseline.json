@@ -1,5 +1,5 @@
 {
-  "$comment": "TRACKED DEBT, not an approved state. Each entry is an RLS tenant table with no index whose leading column is tenant_id, so it forces a sequential scan under RLS on every tenant-scoped query. The gate fails on NEW violations and on stale entries (fixed but left listed). Burn these down; regenerate with --write-baseline after a real fix, on a freshly bootstrapped cluster. See docs/ENTERPRISE-GAP-REPORT-2026-09-07.md PERF-002 (first tranche) and its follow-up PERF-015 (remainder).",
+  "$comment": "TRACKED DEBT, not an approved state. Each entry is an RLS tenant table with no index whose leading column is tenant_id, so it forces a sequential scan under RLS on every tenant-scoped query. The gate fails on NEW violations and on stale entries (fixed but left listed). Burn these down; regenerate with --write-baseline after a real fix, on a freshly bootstrapped cluster. See docs/ENTERPRISE-GAP-REPORT-2026-09-07.md PERF-002 (first tranche) and its follow-up PERF-016 (remainder).",
   "generatedAt": "2026-09-08",
   "knownGaps": "Generated with --allow-skip=field: field database(s) do not exist on any cluster bootstrap-postgres.sh provisions (a bootstrap-config gap, not tenant-indexing debt — tracked separately, not in this file) and could not be checked. If that changes, regenerate without --allow-skip.",
   "count": 254,

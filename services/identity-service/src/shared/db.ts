@@ -12,6 +12,8 @@ import { mfaModuleSchema } from "../modules/mfa/schema.js";
 import { apiKeysModuleSchema } from "../modules/apikeys/schema.js";
 import { breakglassModuleSchema } from "../modules/breakglass/schema.js";
 import { schema as devicesSyncSchema } from "../modules/devices/schema.js";
+import { samlModuleSchema } from "../modules/saml/schema.js";
+import { webauthnModuleSchema } from "../modules/webauthn/schema.js";
 import { outboxSchema } from "./outbox.js";
 import { kcReconcileSchema } from "./kc-reconcile.js";
 
@@ -23,6 +25,8 @@ const SCHEMA = {
   ...apiKeysModuleSchema,
   ...breakglassModuleSchema,
   ...devicesSyncSchema,
+  ...samlModuleSchema,
+  ...webauthnModuleSchema,
   ...outboxSchema,
   ...kcReconcileSchema,
 };
