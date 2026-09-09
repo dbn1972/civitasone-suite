@@ -39,8 +39,29 @@ ARG SERVICE
 RUN pnpm --filter "@civitasone/${SERVICE}..." run build
 
 # ── prune: produce a production-only node_modules for the runtime ────────────
-FROM deps AS prune
+# NOTE (SEC-004 fixup): this stage used to be `FROM deps` — which already has
+# the FULL (dev+prod) node_modules installed on disk — and ran
+# `pnpm install --frozen-lockfile --prod` on top of it. That does NOT
+# retroactively remove devDependencies already present (confirmed: adding an
+# explicit `pnpm prune --prod` afterwards *also* left them, since pnpm's
+# workspace-wide prune did not touch the already-linked .pnpm store content in
+# this version). The fix is to never let a full dev install happen in this
+# stage's history: build it fresh, independently of `deps`, from just the
+# lockfile + manifests, so `--prod` genuinely never resolves devDependencies.
+# Without this, every runtime image shipped every service's dev/test/build
+# tooling (stryker, vitest, eslint, ...) — confirmed via a live Trivy scan of
+# the actual `civitasone/*-service:scan` images built from this Dockerfile,
+# which turned up ~70 avoidable HIGH/CRITICAL node-pkg CVE findings per image,
+# all traceable to this one gap.
+FROM node:${NODE_VERSION}-bookworm-slim AS prune
+ENV PNPM_HOME=/pnpm
+ENV PATH=$PNPM_HOME:$PATH
+RUN corepack enable && corepack prepare pnpm@9.0.0 --activate
 WORKDIR /repo
+COPY pnpm-lock.yaml pnpm-workspace.yaml package.json turbo.json tsconfig.base.json ./
+COPY packages ./packages
+COPY services ./services
+COPY apps ./apps
 RUN --mount=type=cache,id=pnpm,target=/pnpm/store \
     pnpm install --frozen-lockfile --prod --ignore-scripts || pnpm install --no-frozen-lockfile --prod --ignore-scripts
 
@@ -55,9 +76,24 @@ ENV NODE_ENV=production \
     SERVICE_DIR=/repo/services/${SERVICE} \
     SERVICE_ENTRY=${ENTRY}
 # tini for proper signal handling; wget for the healthcheck.
+# SEC-004 fixup: also apply available Debian point-release security updates
+# (apt-get upgrade) — a live Trivy scan found fixed-but-unapplied CRITICAL/HIGH
+# CVEs in the base image's libgnutls30/libcap2 packages (e.g. CVE-2026-33845),
+# each with a point-release fix already published in the same Debian 12
+# release. This is a same-release patch bump, not a base-image major upgrade.
 RUN apt-get update \
+ && apt-get upgrade -y \
  && apt-get install -y --no-install-recommends tini wget \
  && rm -rf /var/lib/apt/lists/*
+# SEC-004 fixup: strip the npm CLI bundled into the base node image. It is
+# never invoked at runtime (the container runs `node <entry>` directly; pnpm
+# is only used at build time, in a different stage) but its own bundled
+# dependencies (tar, pacote, sigstore, ip-address, minimatch, ...) still show
+# up as real, fixable CRITICAL/HIGH CVEs in a Trivy scan of the shipped image.
+# Removing unused CLI tooling from a runtime image is standard hardening, and
+# a live Trivy scan confirmed it also eliminates this whole finding category.
+RUN rm -rf /usr/local/lib/node_modules/npm \
+           /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/corepack
 WORKDIR /repo
 # Bring in the pruned (prod-only) workspace node_modules + package manifests,
 # then overlay the compiled dist output from the build stage.
