@@ -14,25 +14,49 @@
 // tenant with genuinely zero rows render pixel-identical: zero stat cards, a
 // cheerful "create your first…" prompt.
 //
-// CHECK: for every apps/web/src/app/**/page.tsx, if the file contains an
-// empty-check (`.length === 0`, the most common shape; `Object.keys(x).length
-// === 0` matches too) then the file must ALSO show evidence that it branches
-// on the loader's error token somewhere — any of:
-//   source === "error" | status === "error" | errored (identifier)
+// CHECK: for every apps/web/src/app/**/page.tsx, for each empty-check
+// (`.length === 0`, the most common shape; `Object.keys(x).length === 0`
+// matches too), the file must show evidence that THAT SPECIFIC empty-check is
+// actually gated by the loader's error token — not merely that an
+// error-aware token exists *somewhere* in the file. "Gated by" means one of:
+//   - an enclosing ternary/`if` whose OWN test (or whose sibling branch, e.g.
+//     an `<ErrorState>`/`<RefreshErrorState>` rendered in the branch not
+//     containing the empty-check) references the error token, at any level
+//     of nesting outward from the empty-check up to the component boundary;
+//   - an earlier sibling `if (<error token>) { return/throw … }` in the same
+//     enclosing block (an early-return guard covers everything after it).
+// The error token is any of:
+//   source === "error" | status === "error" | \berrored\b
 //   useResource(...) | combineResourceState(...)
 //   <ErrorState | <RefreshErrorState
-// A file with an empty-check and none of the above is a violation: it cannot
-// be telling a real outage apart from a genuinely empty tenant.
 //
-// This is a file-level heuristic, not full data-flow analysis — it cannot see
-// whether the error-aware token is actually wired to the SAME empty-check's
-// branch, only that the file shows awareness of the distinction somewhere.
-// That is deliberate: it matches how the gap register itself measured the
-// backlog (page.tsx file count), it has zero false negatives that matter (a
-// file with the empty-check and no error-aware token anywhere is worth a
-// look, full stop), and it stays maintainable as a ~150-line grep instead of
-// a bespoke TS AST/data-flow rule — the same tradeoff every other scripts/ci
-// guard in this repo makes (see money-precision-guard.mjs, arch-guard.mjs).
+// PRIOR VERSION OF THIS CHECK (fixed 2026-09 after an independent review of
+// PR #1127): used `ERROR_AWARE_RE.test(source)` — the error token anywhere in
+// the WHOLE FILE suppressed every empty-check in that file. That produced a
+// real false negative: `citizen/grievances/page.tsx`,
+// `finance/budget/revised-estimates/page.tsx`, and `workflow/page.tsx` each
+// had an error-aware token completely disconnected from their actual
+// empty-check (e.g. `actions={source === "error" ? <DataSourceBadge/> :
+// null}` in a page header, gating nothing, while the real
+// `results.length === 0` empty-check a few lines away in a different JSX
+// subtree had no error handling at all) — exactly the UX-001 bug, missed by
+// the guard meant to catch it. Confirmed two ways: running the file-level
+// version against the true pre-fix parent commit found 58 violations, not
+// the 61 actually present; toggling the file-level check off entirely (i.e.
+// always requiring a *local* check) went from 50 violations to 0 detected as
+// "clean by file-level co-occurrence" — proving the file-level test, not the
+// empty-check regex, was the mechanism hiding real bugs.
+//
+// This version parses each file with the TypeScript compiler API (already a
+// project dependency; no other scripts/ci guard needed real TSX AST analysis
+// before this one — money-precision-guard.mjs and arch-guard.mjs stay
+// text/regex-based because their checks genuinely are file-shape questions,
+// not "does this specific branch gate that specific branch" questions) and
+// requires the error token to be structurally connected to the specific
+// empty-check it's supposed to protect, per the "gated by" rule above. It is
+// still not full data-flow analysis (it does not trace a boolean through
+// arbitrary helper functions), but it is no longer fooled by an error token
+// that merely coexists in the file.
 //
 // Suppress a specific line with a `// ux-001-ok: <reason>` comment on the
 // same line as the empty-check, for the rare page whose empty-check has
@@ -61,6 +85,7 @@
 import { readdirSync, statSync, readFileSync, writeFileSync, existsSync } from "node:fs";
 import { join, relative, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
+import ts from "typescript";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = join(__dirname, "..", "..");
@@ -96,9 +121,123 @@ function* walkPageFiles(dir) {
 }
 
 const EMPTY_CHECK_RE = /\.length\s*===\s*0/g;
+// `\berrored\b` is word-bounded (not just `errored`) so this can't match
+// inside an unrelated identifier like `erroredItems` once it's scoped down
+// to a single conditional's test/branch text instead of the whole file.
 const ERROR_AWARE_RE =
-  /source\s*===\s*"error"|status\s*===\s*"error"|errored|useResource\s*\(|combineResourceState\s*\(|<ErrorState|<RefreshErrorState/i;
+  /source\s*===\s*"error"|status\s*===\s*"error"|\berrored\b|useResource\s*\(|combineResourceState\s*\(|<ErrorState|<RefreshErrorState/i;
 const SUPPRESS_RE = /ux-001-ok/;
+
+function isFunctionBoundary(node) {
+  return (
+    ts.isFunctionDeclaration(node) ||
+    ts.isFunctionExpression(node) ||
+    ts.isArrowFunction(node) ||
+    ts.isMethodDeclaration(node) ||
+    ts.isSourceFile(node)
+  );
+}
+
+function isEmptyCheckBinaryExpr(node) {
+  if (!ts.isBinaryExpression(node)) return false;
+  if (node.operatorToken.kind !== ts.SyntaxKind.EqualsEqualsEqualsToken) return false;
+  EMPTY_CHECK_RE.lastIndex = 0;
+  return EMPTY_CHECK_RE.test(node.getText());
+}
+
+/** Does `ifStmt`'s `then` branch unconditionally exit (return/throw) without
+ * descending into a nested function (a nested function's own return doesn't
+ * exit the outer scope)? Used to recognise `if (<error token>) return …;` as
+ * an early-return guard covering everything after it in the same block. */
+function branchExits(stmt) {
+  let exits = false;
+  (function visit(node) {
+    if (exits || !node) return;
+    if (ts.isReturnStatement(node) || ts.isThrowStatement(node)) {
+      exits = true;
+      return;
+    }
+    if (isFunctionBoundary(node)) return; // don't cross into a nested function
+    ts.forEachChild(node, visit);
+  })(stmt);
+  return exits;
+}
+
+function textHasErrorToken(node) {
+  return !!node && ERROR_AWARE_RE.test(node.getText());
+}
+
+function ifStatementIsErrorGuardWithExit(ifStmt) {
+  return textHasErrorToken(ifStmt.expression) && branchExits(ifStmt.thenStatement);
+}
+
+/** Within `block`, is there an `if (<error token>) { return/throw }` sibling
+ * statement strictly before `beforeStatement`? Such a guard covers every
+ * statement after it in the same block, including a `return (<jsx>)` further
+ * down that contains our empty-check. */
+function hasEarlyReturnGuardBefore(block, beforeStatement) {
+  const idx = block.statements.indexOf(beforeStatement);
+  if (idx <= 0) return false;
+  for (let i = 0; i < idx; i++) {
+    const stmt = block.statements[i];
+    if (ts.isIfStatement(stmt) && ifStatementIsErrorGuardWithExit(stmt)) return true;
+  }
+  return false;
+}
+
+/** Find the direct statement-list child of `block` that contains (or is)
+ * `node`, so we can locate it among its siblings. */
+function findContainingStatement(block, node) {
+  return block.statements.find((s) => s.getStart() <= node.getStart() && s.getEnd() >= node.getEnd());
+}
+
+/**
+ * Walk up from `emptyCheckNode` to its enclosing component/function boundary,
+ * looking for evidence that THIS empty-check — not just the file in general —
+ * is gated by the loader's error token. See the "gated by" rule in the header
+ * comment. Returns true iff such evidence is found.
+ */
+function isConnectedToErrorAwareness(emptyCheckNode) {
+  let node = emptyCheckNode;
+
+  while (node.parent) {
+    const parent = node.parent;
+
+    if (ts.isConditionalExpression(parent)) {
+      if (textHasErrorToken(parent.condition)) return true;
+      // The branch NOT containing `node` is a sibling render path of the same
+      // ternary — e.g. `errored ? <RefreshErrorState/> : (…our empty-check…)`
+      // already matches via `condition` above, but also cover
+      // `hasError ? <ErrorState/> : (…our empty-check…)` where the JSX
+      // component name itself (not the condition's own text) is the signal.
+      const sibling = parent.whenTrue.getStart() <= node.getStart() && parent.whenTrue.getEnd() >= node.getEnd()
+        ? parent.whenFalse
+        : parent.whenTrue;
+      if (textHasErrorToken(sibling)) return true;
+    }
+
+    if (ts.isIfStatement(parent)) {
+      if (textHasErrorToken(parent.expression)) return true;
+      const inThen = parent.thenStatement.getStart() <= node.getStart() && parent.thenStatement.getEnd() >= node.getEnd();
+      const otherBranch = inThen ? parent.elseStatement : parent.thenStatement;
+      if (textHasErrorToken(otherBranch)) return true;
+    }
+
+    if (ts.isBinaryExpression(parent) && parent.operatorToken.kind === ts.SyntaxKind.AmpersandAmpersandToken) {
+      if (textHasErrorToken(parent.left)) return true;
+    }
+
+    if (ts.isBlock(parent)) {
+      const stmt = findContainingStatement(parent, node);
+      if (stmt && hasEarlyReturnGuardBefore(parent, stmt)) return true;
+    }
+
+    if (isFunctionBoundary(parent)) break;
+    node = parent;
+  }
+
+  return false;
+}
 
 /**
  * Pure check, exported for fixture-based unit tests (see
@@ -108,25 +247,42 @@ const SUPPRESS_RE = /ux-001-ok/;
  * strings instead of requiring real fixture files on disk.
  *
  * Returns the list of offending {line, snippet} empty-checks, or null when
- * the source is clean (no empty-check at all, or an empty-check paired with
- * evidence of error-token awareness anywhere in the file).
+ * the source is clean (no empty-check at all, or every empty-check is
+ * individually gated by the loader's error token per isConnectedToErrorAwareness()).
  */
 export function checkSource(source) {
+  const sourceFile = ts.createSourceFile("page.tsx", source, ts.ScriptTarget.Latest, /* setParentNodes */ true, ts.ScriptKind.TSX);
   const lines = source.split("\n");
-  const emptyCheckLines = [];
 
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i];
-    EMPTY_CHECK_RE.lastIndex = 0;
-    if (EMPTY_CHECK_RE.test(line) && !SUPPRESS_RE.test(line)) {
-      emptyCheckLines.push({ line: i + 1, snippet: line.trim().slice(0, 140) });
+  // line (0-based) -> { line: 1-based, snippet, connected }
+  const byLine = new Map();
+
+  (function visit(node) {
+    if (isEmptyCheckBinaryExpr(node)) {
+      const { line } = sourceFile.getLineAndCharacterOfPosition(node.getStart());
+      const lineText = lines[line] ?? "";
+      if (!SUPPRESS_RE.test(lineText)) {
+        const connected = isConnectedToErrorAwareness(node);
+        const existing = byLine.get(line);
+        if (!existing) {
+          byLine.set(line, { line: line + 1, snippet: lineText.trim().slice(0, 140), connected });
+        } else if (connected) {
+          // Any connected occurrence on the same line clears it.
+          existing.connected = true;
+        }
+      }
     }
-  }
+    ts.forEachChild(node, visit);
+  })(sourceFile);
 
-  if (emptyCheckLines.length === 0) return null;
-  if (ERROR_AWARE_RE.test(source)) return null;
+  if (byLine.size === 0) return null;
 
-  return emptyCheckLines;
+  const emptyCheckLines = [...byLine.values()]
+    .filter((entry) => !entry.connected)
+    .sort((a, b) => a.line - b.line)
+    .map(({ line, snippet }) => ({ line, snippet }));
+
+  return emptyCheckLines.length === 0 ? null : emptyCheckLines;
 }
 
 function analyzeFile(filePath) {
@@ -166,7 +322,7 @@ function writeBaseline(files) {
       "fails on NEW violations and on stale entries (fixed but left listed). " +
       "Burn these down; regenerate with --write-baseline after a real fix. " +
       "See docs/ENTERPRISE-GAP-REPORT-2026-09-07.md UX-001 (first tranche) " +
-      "and its follow-up (UX-012) for the remainder.",
+      "and its follow-up (UX-013) for the remainder.",
     generatedAt: new Date().toISOString().slice(0, 10),
     knownViolations: sorted,
   };

@@ -158,4 +158,170 @@ export default async function WidgetsPage() {
     // ...but the sabotaged version (core check disabled) does not.
     expect(sabotagedCheckSource(source)).toBeNull();
   });
+
+  // ───────────────────────────────────────────────────────────────────────
+  // 2026-09 regression coverage: an independent review of PR #1127 found the
+  // file-level `ERROR_AWARE_RE.test(source)` check could be fooled by an
+  // error-aware token that exists in the file but gates nothing related to
+  // the actual empty-check — exactly the bug this guard exists to catch.
+  // `citizen/grievances/page.tsx` and `workflow/page.tsx` (2 of the 3 pages
+  // the review named) had this precise shape: `actions={source === "error"
+  // ? <DataSourceBadge .../> : null}` on a <PageHeader>, wired to nothing,
+  // next to a `.length === 0` check in an unrelated <Card> that had no error
+  // handling at all. Fixed by requiring the error token to be structurally
+  // connected to the SPECIFIC empty-check (same conditional test, sibling
+  // branch of the same ternary/if, or an earlier same-block early-return
+  // guard) rather than merely present anywhere in the file.
+  // ───────────────────────────────────────────────────────────────────────
+  it("[false-negative regression] flags a disconnected error-aware token (PR #1127 review bug shape)", () => {
+    const source = `
+import { PageHeader, Card, EmptyState, StatGrid, StatCard } from "../../_components/ds";
+import { DataSourceBadge } from "../../_components/DataSourceBadge";
+import { getWidgets } from "../../_data/loaders";
+
+export default async function WidgetsPage() {
+  const { data: widgets, source } = await getWidgets();
+
+  return (
+    <main>
+      <PageHeader
+        title="Widgets"
+        actions={source === "error" ? <DataSourceBadge source={source} /> : null}
+      />
+      <StatGrid>
+        <StatCard label="Total" value={widgets.length} />
+      </StatGrid>
+      <Card>
+        {widgets.length === 0 ? (
+          <EmptyState title="No widgets yet" message="Create your first widget." />
+        ) : (
+          <p>{widgets.length} widgets</p>
+        )}
+      </Card>
+    </main>
+  );
+}
+`;
+
+    // The improved, structurally-aware check flags it: the error-aware token
+    // in the PageHeader's \`actions\` prop shares no conditional ancestor
+    // with the empty-check in the Card below it.
+    const violations = checkSource(source);
+    expect(violations).not.toBeNull();
+    expect(violations.length).toBe(1);
+    expect(violations[0].snippet).toContain("widgets.length === 0");
+
+    // Reproduce the OLD (file-level) algorithm this guard shipped with in
+    // PR #1127, to prove it really would have missed this exact fixture —
+    // this is the false negative the independent review demonstrated.
+    function oldFileLevelCheckSource(src) {
+      const EMPTY_CHECK_RE_OLD = /\.length\s*===\s*0/g;
+      const ERROR_AWARE_RE_OLD =
+        /source\s*===\s*"error"|status\s*===\s*"error"|errored|useResource\s*\(|combineResourceState\s*\(|<ErrorState|<RefreshErrorState/i;
+      const lines = src.split("\n");
+      const emptyCheckLines = [];
+      for (let i = 0; i < lines.length; i++) {
+        EMPTY_CHECK_RE_OLD.lastIndex = 0;
+        if (EMPTY_CHECK_RE_OLD.test(lines[i])) emptyCheckLines.push(lines[i]);
+      }
+      if (emptyCheckLines.length === 0) return null;
+      if (ERROR_AWARE_RE_OLD.test(src)) return null; // <-- the bug: file-level, not scoped
+      return emptyCheckLines;
+    }
+    expect(oldFileLevelCheckSource(source)).toBeNull();
+  });
+
+  it("does not flag the same shape once the header badge and the empty-check share the same gating ternary", () => {
+    const source = `
+import { PageHeader, Card, EmptyState, StatGrid, StatCard, RefreshErrorState } from "../../_components/ds";
+import { DataSourceBadge } from "../../_components/DataSourceBadge";
+import { getWidgets } from "../../_data/loaders";
+
+export default async function WidgetsPage() {
+  const { data: widgets, source } = await getWidgets();
+  const errored = source === "error";
+
+  return (
+    <main>
+      <PageHeader title="Widgets" actions={errored ? <DataSourceBadge source={source} /> : null} />
+      <StatGrid>
+        <StatCard label="Total" value={errored ? "—" : widgets.length} />
+      </StatGrid>
+      <Card>
+        {errored ? (
+          <RefreshErrorState error="Could not load widgets" />
+        ) : widgets.length === 0 ? (
+          <EmptyState title="No widgets yet" message="Create your first widget." />
+        ) : (
+          <p>{widgets.length} widgets</p>
+        )}
+      </Card>
+    </main>
+  );
+}
+`;
+    expect(checkSource(source)).toBeNull();
+  });
+
+  it("does not flag a page using an early-return error guard before an unrelated later empty-check", () => {
+    const source = `
+import { PageHeader, Card, EmptyState, StatGrid, StatCard, ErrorState } from "../../_components/ds";
+import { getWidgets } from "../../_data/loaders";
+
+export default async function WidgetsPage() {
+  const result = await getWidgets();
+  if (result.source === "error") {
+    return <ErrorState message="Could not load widgets" />;
+  }
+  const widgets = result.data;
+
+  return (
+    <main>
+      <PageHeader title="Widgets" />
+      <StatGrid>
+        <StatCard label="Total" value={widgets.length} />
+      </StatGrid>
+      <Card>
+        {widgets.length === 0 ? (
+          <EmptyState title="No widgets yet" message="Create your first widget." />
+        ) : (
+          <p>{widgets.length} widgets</p>
+        )}
+      </Card>
+    </main>
+  );
+}
+`;
+    expect(checkSource(source)).toBeNull();
+  });
+
+  it("still flags an unrelated early-return that doesn't check the error token", () => {
+    const source = `
+import { PageHeader, Card, EmptyState, StatGrid, StatCard } from "../../_components/ds";
+import { getWidgets } from "../../_data/loaders";
+
+export default async function WidgetsPage() {
+  const result = await getWidgets();
+  if (!result) {
+    return null;
+  }
+  const widgets = result.data;
+
+  return (
+    <main>
+      <Card>
+        {widgets.length === 0 ? (
+          <EmptyState title="No widgets yet" message="Create your first widget." />
+        ) : (
+          <p>{widgets.length} widgets</p>
+        )}
+      </Card>
+    </main>
+  );
+}
+`;
+    const violations = checkSource(source);
+    expect(violations).not.toBeNull();
+    expect(violations.length).toBe(1);
+  });
 });
