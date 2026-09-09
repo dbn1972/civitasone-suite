@@ -10,7 +10,7 @@ on:
 
 jobs:
   dependency-audit:
-    name: Dependency Audit
+    name: Dependency Audit (hygiene)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -18,10 +18,32 @@ jobs:
       - uses: actions/setup-node@v4
         with: { node-version: '22', cache: 'pnpm' }
       - run: pnpm install --frozen-lockfile
-      # Prefer the repo's supply-chain hygiene script over raw `pnpm audit`,
-      # which currently fails on transitive Next/postcss advisories tracked
-      # separately for a Next 15 upgrade.
+      # Supply-chain hygiene only (lockfile presence, "*"/"latest" ranges,
+      # workspace: refs, typosquat names) — NOT a vulnerability scan. Real
+      # CVE/SCA scanning is the "CVE / SCA Gate" job below (SEC-004).
       - run: node scripts/ci/dependency-audit.mjs
+
+  # ─────────────────────────────────────────────
+  # SEC-004 — real, blocking CVE/SCA gate.
+  #
+  # Runs `pnpm audit --audit-level=high` for real and FAILS the job on any
+  # unallow-listed CRITICAL/HIGH advisory. Previously this repo ran no CVE scan
+  # at all in CI (the "Dependency Audit" job above only checks hygiene — see its
+  # own comment and skill 19 "security-beyond-tenancy" §2). An expiring
+  # allow-list (scripts/ci/cve-allowlist.json) covers advisories that need a
+  # major-version dependency bump too large to rush into this gate's own PR;
+  # see docs/ENTERPRISE-GAP-REPORT-2026-09-07.md SEC-004 / REL-016 / SEC-018.
+  # ─────────────────────────────────────────────
+  cve-audit-gate:
+    name: CVE / SCA Gate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '22', cache: 'pnpm' }
+      - run: pnpm install --frozen-lockfile
+      - run: node scripts/ci/cve-audit-gate.mjs
 
   secret-scan:
     name: Secret Scan
@@ -37,6 +59,13 @@ jobs:
   # L6 — Container image scanning (Trivy).
   # Blocks on CRITICAL/HIGH with a known fix. Unfixed CVEs are reported but do
   # not block, since there is no action available to take.
+  #
+  # SEC-004 follow-up note: kept non-blocking deliberately. The documented
+  # reason below (OS base-image CVEs with no available fix, on only 3/~50
+  # service images) still holds — flipping exit-code to nonzero today would
+  # fail the gate on findings with no remediation path, making it noise rather
+  # than signal. Tracked as part of the SEC-018 follow-up (harden the runtime
+  # image, then flip this to blocking) rather than done here.
   # ─────────────────────────────────────────────
   trivy-container:
     name: Trivy Container Scan
@@ -99,6 +128,12 @@ jobs:
   # HTTP surface (headers, cookies, error handling, obvious injection responses)
   # deterministically in CI. A full authenticated ZAP scan against a live stack is
   # a separate nightly concern and is NOT claimed here.
+  #
+  # SEC-004 follow-up note: `continue-on-error: true` on the scan step below
+  # looks non-blocking in isolation, but the explicit "Fail if ZAP reported
+  # FAIL-NEW alerts" step after it greps the report and exits 1 on any real
+  # FAIL-NEW finding — this job DOES already gate on real findings; only the
+  # (broken, third-party) artifact-upload path is swallowed. Left as-is.
   # ─────────────────────────────────────────────
   zap-dast:
     name: ZAP DAST (gateway baseline)
