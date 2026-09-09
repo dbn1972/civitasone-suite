@@ -49,7 +49,15 @@ test.describe('Procurement', () => {
 
   test('vendor list shows seeded vendor', async ({ page }) => {
     await page.goto('/procurement/vendors');
-    await expect(page.getByRole('link', { name: /Bharat Electronics/i })).toBeVisible();
+    // REL-010: this is not a link. DataTable (ds/DataTable.tsx) only makes the
+    // FIRST column a clickable <a>, and gives it an aria-label built from that
+    // column's own value ("Open <vendorCode>") -- here that's "Open
+    // VEN-BEL-001", not the vendor name. "Name" is the table's second column,
+    // rendered as plain cell text. Asserting on text (which is how the vendor
+    // actually surfaces) rather than link role/name matches what's really
+    // rendered; see UX-015 in the gap report for the row-link-naming pattern
+    // this reveals across every rowHref/rowLinkKey DataTable.
+    await expect(page.getByText(/Bharat Electronics/i)).toBeVisible();
   });
 
   test('vendor detail shows vendor name', async ({ page }) => {
@@ -99,7 +107,20 @@ test.describe('Procurement', () => {
 
   test('list pages show search toolbar', async ({ page }) => {
     await page.goto('/procurement/indents');
-    await expect(page.getByRole('searchbox', { name: /search list/i })).toBeVisible();
+    // REL-010: two compounding issues, both now fixed. (1) The indents fixture
+    // in e2e/global-setup.ts was `[]`; procurement/indents/page.tsx only
+    // renders the filterable DataTable (and its toolbar) when rows.length > 0,
+    // so this toolbar was never in the DOM at all — see the fixture comment.
+    // (2) Even with rows present, DataTable's filter input (ds/DataTable.tsx)
+    // is a plain `<input type="text">`, which the accessibility tree exposes
+    // as role "textbox", not "searchbox" — that role requires
+    // `type="search"`. Its accessible name is the page's own
+    // `filterPlaceholder` prop, not a fixed "search list" string. Asserting
+    // the real role/name here rather than the aspirational one; filed as
+    // UX-014 in the gap report (DataTable's filter isn't marked up as a
+    // semantic search field anywhere it's used, unlike the one genuine
+    // `type="search"` input in hr/directory/DirectoryClient.tsx).
+    await expect(page.getByRole('textbox', { name: /filter by indent/i })).toBeVisible();
   });
 
   test('procurement dashboard shows KPI cards', async ({ page }) => {

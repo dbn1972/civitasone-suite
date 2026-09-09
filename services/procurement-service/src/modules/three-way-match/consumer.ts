@@ -29,17 +29,23 @@ export function registerThreeWayMatchConsumers(queue: Queue): void {
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
 
-      const po = await poRepo.findPoById(p.poId, p.tenantId);
+      // TX-001 (procurement) — all four reads below used to be bare
+      // (non-tx) calls that each opened their OWN nested db.transaction()
+      // from inside this already-open one: under concurrent load, one
+      // logical unit of work could hold two pool connections at once,
+      // exhausting the pool and deadlocking it. Routed through the *Tx
+      // siblings so every read shares this transaction's connection.
+      const po = await poRepo.findPoByIdTx(tx, p.poId, p.tenantId);
       if (!po) throw new Error(`PO ${p.poId} not found`);
-      const grn = await grnRepo.findGrnById(p.grnId);
+      const grn = await grnRepo.findGrnByIdTx(tx, p.grnId);
       if (!grn || grn.tenantId !== p.tenantId) throw new Error(`GRN ${p.grnId} not found`);
 
       const grnPoId = grn.poRef.replace(/^procurement_po:/, "");
       if (grnPoId !== p.poId) throw new Error("GRN does not belong to the supplied PO");
 
-      const poItems = await poRepo.findPoItemsByPoId(p.poId, p.tenantId);
+      const poItems = await poRepo.findPoItemsByPoIdTx(tx, p.poId, p.tenantId);
       const poItemMap = new Map(poItems.map((pi) => [pi.id, pi]));
-      const grnItems = await grnRepo.findGrnItemsByGrnId(p.grnId);
+      const grnItems = await grnRepo.findGrnItemsByGrnTx(tx, p.grnId);
 
       const poAmountMinor = BigInt(po.totalMinor);
       let grnAmountMinor = 0n;

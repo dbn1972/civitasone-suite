@@ -32,7 +32,7 @@
     "fastify": "^4.27.0",
     "ioredis": "^5.4.0",
     "mjml": "5.4.0",
-    "nodemailer": "^9.0.1",
+    "nodemailer": "^9.1.0",
     "pino": "^8.21.0",
     "postgres": "^3.4.0",
     "zod": "^3.23.0"

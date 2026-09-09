@@ -47,6 +47,22 @@ export async function listDfa(
     .filter((r) => (filter.fileId ? r.fileId === filter.fileId : true));
 }
 
+/**
+ * TX-001 — tenant-scoped sibling of findDfaById(). Reads through a
+ * caller-supplied transaction handle so an already-open db.transaction()
+ * (dfaUpdate / the status-transition consumers / dfaReturn / dfaApprove /
+ * dfaDispatch) does not open a second, bare db.transaction() from inside
+ * itself: under pool.max concurrent in-flight consumer transactions, the
+ * nested call has no free connection to open on and deadlocks the pool
+ * silently. Route every read that happens inside an already-open consumer
+ * transaction through this, not findDfaById().
+ */
+export async function findDfaByIdTx(tx: Writer, id: string, tenantId: string): Promise<DfaRow | null> {
+  const rows = await tx.select().from(estabDfa)
+    .where(and(eq(estabDfa.id, id), eq(estabDfa.tenantId, tenantId))).limit(1);
+  return rows[0] ?? null;
+}
+
 export async function insertDfa(tx: Writer, row: DfaInsert): Promise<void> {
   await tx.insert(estabDfa).values(row);
 }

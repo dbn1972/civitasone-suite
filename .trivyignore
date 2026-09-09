@@ -1,0 +1,94 @@
+# SEC-004 Trivy container-scan allow-list.
+#
+# .trivyignore is Trivy's native expiring-ignore mechanism (default ignorefile
+# path, picked up automatically by `trivy image` with no extra flag). An entry
+# with `exp:YYYY-MM-DD` stops applying once that date passes — the finding it
+# covers starts failing the "Trivy scan (fail on fixable CRITICAL/HIGH)" step
+# again. This mirrors scripts/ci/cve-allowlist.json's expiring-allow-list
+# convention (SEC-004): tracked debt, not a blanket approval.
+#
+# Generated 2026-09-09 by building the 3 matrix'd images
+# (gateway-service/finance-service/hrms-service) from this exact Dockerfile
+# and running the exact CI scan (`trivy image --severity CRITICAL,HIGH
+# --ignore-unfixed`) against each. Two real, quick fixes were made first
+# (see Dockerfile comments) and removed the vast majority of what Trivy found:
+#   - Debian OS-layer CRITICAL/HIGH CVEs (libgnutls30, libcap2) had
+#     already-published point-release fixes; added `apt-get upgrade -y`.
+#     Result: 6 -> 0 OS CVEs per image.
+#   - The "prune" stage was not actually producing a production-only
+#     node_modules (pnpm quirk: `pnpm install --prod` on top of an
+#     already-fully-installed node_modules does not retroactively strip
+#     devDependencies) — every runtime image shipped every service's
+#     dev/test/build tooling. Rebuilt the stage to install fresh. Result:
+#     stryker/vitest/eslint/turbo/prettier and ~40 transitive dev-tooling CVEs
+#     gone per image.
+#   - The base node image's bundled npm CLI (never invoked at runtime) carried
+#     its own bundled tar/pacote/sigstore/ip-address/minimatch/cross-spawn.
+#     Removed it. Result: that whole category gone per image.
+#
+# What's left below (identical across all 3 images) are real, fixable
+# CRITICAL/HIGH CVEs in packages that ARE genuine production dependencies
+# (fastify, find-my-way, next, drizzle-orm) or their own transitive deps
+# (brace-expansion, browserslist, fast-uri, js-yaml). Every one of these
+# packages already has a live, reasoned, expiring entry in
+# scripts/ci/cve-allowlist.json (the pnpm-audit-based SEC-004 gate) requiring
+# the same fleet-wide major/minor version bump, tracked under follow-up gap
+# SEC-018. This file reuses those exact expiry dates so the two gates
+# (pnpm-audit CVE gate and this Trivy scan) stay honest and in sync rather
+# than drifting.
+#
+# NOTE: cve-allowlist.json's reason text for brace-expansion/browserslist/
+# fast-uri/js-yaml previously said "not shipped in any runtime image" (dev-
+# tooling only). This Trivy scan disproves that for these 4 — they ARE
+# present in the shipped runtime image as transitive production dependencies.
+# Corrected in cve-allowlist.json's reason text in this same fixup; the
+# remediation path (SEC-018, same expiry) is unchanged.
+
+# fastify 4.29.1 -> needs >=5.7.2 (SEC-018, tied to REL-016)
+CVE-2026-25223 exp:2026-11-08
+
+# find-my-way 8.2.2 -> needs >=9.7.0, depends on fastify's major (SEC-018)
+CVE-2026-47219 exp:2026-11-08
+
+# drizzle-orm 0.30.10 -> needs >=0.45.2 (SEC-018, tied to REL-016)
+CVE-2026-39356 exp:2026-11-08
+
+# next 14.2.35 -> needs >=15.5.24, 10 GHSAs incl. 2 critical RCEs (SEC-018)
+CVE-2026-75604 exp:2026-11-08
+GHSA-2xp9-vwfh-vxw4 exp:2026-11-08
+CVE-2026-44573 exp:2026-11-08
+CVE-2026-44578 exp:2026-11-08
+CVE-2026-64641 exp:2026-11-08
+CVE-2026-64645 exp:2026-11-08
+CVE-2026-64649 exp:2026-11-08
+GHSA-8h8q-6873-q5fj exp:2026-11-08
+GHSA-h25m-26qc-wcjf exp:2026-11-08
+GHSA-q4gf-8mx6-v5v3 exp:2026-11-08
+
+# brace-expansion (transitive) -- real patch/minor fix exists but multiple
+# co-installed major-version lines need per-major pnpm.overrides (SEC-018)
+CVE-2026-13149 exp:2026-10-09
+CVE-2026-14257 exp:2026-10-09
+CVE-2026-69152 exp:2026-10-09
+
+# browserslist (transitive) -- real patch/minor fix, same per-major-line
+# caveat as brace-expansion above (SEC-018)
+CVE-2026-73088 exp:2026-10-09
+CVE-2026-73089 exp:2026-10-09
+
+# fast-uri (transitive) -- real patch/minor fix, same per-major-line caveat
+# as brace-expansion above (SEC-018)
+CVE-2026-13676 exp:2026-10-09
+CVE-2026-16221 exp:2026-10-09
+CVE-2026-18446 exp:2026-10-09
+CVE-2026-6321 exp:2026-10-09
+CVE-2026-6322 exp:2026-10-09
+CVE-2026-75975 exp:2026-10-09
+CVE-2026-76172 exp:2026-10-09
+CVE-2026-75899 exp:2026-10-09
+
+# js-yaml (transitive) -- real patch/minor fix, same per-major-line caveat
+# as brace-expansion above (SEC-018)
+CVE-2026-59869 exp:2026-10-09
+CVE-2026-84375 exp:2026-10-09
+GHSA-5p4m-2wfm-xmqj exp:2026-10-09

@@ -37,3 +37,18 @@ export async function findReferenceById(id: string, tenantId: string): Promise<R
     .where(and(eq(estabReference.id, id), eq(estabReference.tenantId, tenantId))).limit(1));
   return rows[0] ?? null;
 }
+
+/**
+ * TX-001 — tenant-scoped sibling of findReferenceById(). Reads through a
+ * caller-supplied transaction handle so an already-open db.transaction()
+ * (e.g. referenceRemove's consumer) does not open a second, bare
+ * db.transaction() from inside itself: under pool.max concurrent in-flight
+ * consumer transactions, the nested call has no free connection to open on
+ * and deadlocks the pool silently. Route every read that happens inside an
+ * already-open consumer transaction through this, not findReferenceById().
+ */
+export async function findReferenceByIdTx(tx: Writer, id: string, tenantId: string): Promise<ReferenceRow | null> {
+  const rows = await tx.select().from(estabReference)
+    .where(and(eq(estabReference.id, id), eq(estabReference.tenantId, tenantId))).limit(1);
+  return rows[0] ?? null;
+}

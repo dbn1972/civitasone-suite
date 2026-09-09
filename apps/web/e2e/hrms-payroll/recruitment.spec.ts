@@ -29,7 +29,15 @@ test.describe('Recruitment', () => {
       await page.goto('/hr/recruitment');
       await expect(page.getByText(/total vacancies/i)).toBeVisible();
       await expect(page.getByText(/open now/i)).toBeVisible();
-      await expect(page.getByText(/published/i)).toBeVisible();
+      // REL-010: with real job-openings data (e2e/global-setup.ts fixture),
+      // the openings table's own status pill can also read literally
+      // "published" (see 'shows correct status for openings' below), so
+      // /published/i now legitimately matches two different, both-real
+      // pieces of UI: the "Published (Public)" stat label and a row's status
+      // pill. `.first()` is the stat label -- StatGrid renders before the
+      // table in hr/recruitment/page.tsx, so DOM order makes this safe, not
+      // just convenient.
+      await expect(page.getByText(/published/i).first()).toBeVisible();
       await expect(page.getByText(/applications received/i)).toBeVisible();
     });
 
@@ -112,6 +120,34 @@ test.describe('Recruitment', () => {
       if (await firstRow.isVisible()) {
         const link = firstRow.getByRole('link').first();
         if (await link.isVisible()) {
+          // REL-010: hr/recruitment/[id]/page.tsx is a client component that
+          // fetches its own data via
+          // `/api/proxy/v1/hrms/job-openings?limit=200`
+          // (apps/web/src/app/(app)/hr/recruitment/[id]/page.tsx:273) and
+          // finds the matching id client-side -- but setupHrmsPage()'s
+          // authenticate() helper installs a blanket
+          // `page.route('**/api/proxy/**', ...) => {}` stub
+          // (e2e/helpers/auth.ts), meant for an unrelated background sync
+          // call, that also swallows this fetch. That was never visible as a
+          // problem here because the list this test clicks through was
+          // always empty (`/api/v1/hrms/job-openings` fixture in
+          // global-setup.ts was `[]`), so `firstRow.isVisible()` was always
+          // false and the detail page was never actually reached. Now that
+          // the list has a real row, this override -- built from the id the
+          // row itself links to, and registered after setupHrmsPage's so it
+          // wins per Playwright's last-registration-wins rule -- gives the
+          // detail page's own fetch a matching record instead of the blanket
+          // `{}`, so this test can exercise the click-through it was written
+          // to test.
+          const href = await link.getAttribute('href');
+          const id = href?.split('/').filter(Boolean).pop();
+          await page.route('**/api/proxy/v1/hrms/job-openings*', (route) =>
+            route.fulfill({
+              status: 200,
+              contentType: 'application/json',
+              body: JSON.stringify([{ ...fixtures.jobOpenings[0], id }]),
+            }),
+          );
           await link.click();
           await expect(page.locator('#page-heading')).toBeVisible();
         } else {

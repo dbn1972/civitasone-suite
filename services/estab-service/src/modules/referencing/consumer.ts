@@ -42,7 +42,7 @@ export function registerReferencingConsumers(queue: Queue): void {
     const p = msg.payload as { referenceId: string; tenantId: string };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
-      const existing = await repo.findReferenceById(p.referenceId, p.tenantId);
+      const existing = await repo.findReferenceByIdTx(tx, p.referenceId, p.tenantId);
       if (!existing) return;
       await repo.deleteReference(tx, p.referenceId, p.tenantId);
       await enqueue(tx, audit(msg, "reference.remove", p.referenceId, { fileId: existing.fileId }));

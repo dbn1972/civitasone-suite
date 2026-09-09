@@ -13,7 +13,7 @@ import {
 import { minorString } from "@civitasone/schemas/money";
 import { allocateDocNo } from "../../shared/numbering.js";
 import type { GrnItemInsert } from "./schema.js";
-import { findPoById, findPoItemsByPoId } from "../po/repo.js";
+import { findPoById, findPoItemsByPoId, findPoByIdTx, findPoItemsByPoIdTx } from "../po/repo.js";
 
 const AUDIT_TOPIC = "audit.event.record";
 
@@ -204,9 +204,16 @@ async function inspectGrn(
       createdBy: msg.actorId, updatedBy: msg.actorId,
     });
 
+    // TX-001 (procurement) — discovered auditing three-way-match/consumer.ts's
+    // fix for the same bug class: these two reads sat inside inspectGrn's
+    // already-open db.transaction() (line above) but were bare, non-tx
+    // calls that each opened their own nested db.transaction(), same
+    // pool-deadlock-under-load shape as three-way-match's four sites. Not
+    // in the gap report's evidence column for this file — found by direct
+    // review, not the heuristic scanner (which also missed it; see PR body).
     const poId = grn.poRef.replace(/^procurement_po:/, "");
-    const po = await findPoById(poId, tenantId);
-    const poItems = await findPoItemsByPoId(poId, tenantId);
+    const po = await findPoByIdTx(tx, poId, tenantId);
+    const poItems = await findPoItemsByPoIdTx(tx, poId, tenantId);
     const poItemMap = new Map(poItems.map((pi) => [pi.id, pi]));
 
     if (threeWayMatch) {
