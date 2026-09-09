@@ -97,7 +97,15 @@ export const CURATED_ROUTES: RouteSpec[] = [
   { path: "/meeting", persona: "superadmin", archetype: "hub" },
   { path: "/projects", persona: "superadmin", archetype: "hub" },
   { path: "/reports", persona: "superadmin", archetype: "hub" },
-  { path: "/stock", persona: "superadmin", archetype: "hub" },
+  // REL-010: `/stock` was removed from here, not renamed to `/inventory` --
+  // `/inventory` is already the entry two lines up. next.config.mjs
+  // permanently redirects `/stock` -> `/inventory` on purpose (legacy route,
+  // requirement 1.7), so this was always going to fail a11y.spec.ts's own
+  // `assertLandedOnRequestedRoute` (C1) check, which exists specifically to
+  // catch a route silently landing somewhere else — it can't tell an
+  // intentional legacy redirect from the auth-redirect-to-/dashboard failure
+  // mode it was written for, and auditing `/stock` post-redirect would just
+  // re-audit the exact same rendered page `/inventory` already covers.
   { path: "/telephony", persona: "superadmin", archetype: "hub" },
   { path: "/visitor", persona: "superadmin", archetype: "hub" },
   { path: "/workflow", persona: "superadmin", archetype: "hub" },

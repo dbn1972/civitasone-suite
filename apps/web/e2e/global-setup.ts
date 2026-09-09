@@ -133,7 +133,18 @@ const FIXTURES: Record<string, unknown> = {
   },
 
   '/api/v1/hrms/leave-applications': { data: [] },
-  '/api/v1/hrms/leave-requests': [],
+  // REL-010: was `[]` — every /hr/leave E2E run always hit the DataTable's
+  // empty state, whose "View approvals" action then duplicated the page
+  // header's own "Approvals" link (both getByRole('link', {name:/approval/i}))
+  // -- a strict-mode violation that looked like a rendering bug but was really
+  // this fixture never having been populated. Shape matches
+  // LeaveRequestDetailSchema (packages/schemas/src/web.ts) -- `appliedAt` is
+  // required there, which the old empty array trivially satisfied and this
+  // one must not skip.
+  '/api/v1/hrms/leave-requests': [
+    { id: 'lr-e2e-001', employeeId: 'emp-001', employeeName: 'Ravi Kumar', leaveType: 'Casual Leave', fromDate: '2024-07-15', toDate: '2024-07-16', days: 2, status: 'approved', reason: 'Personal work', appliedAt: '2024-07-10T09:00:00Z' },
+    { id: 'lr-e2e-002', employeeId: 'emp-002', employeeName: 'Priya Singh', leaveType: 'Earned Leave', fromDate: '2024-08-01', toDate: '2024-08-05', days: 5, status: 'pending', reason: 'Family vacation', appliedAt: '2024-07-20T09:00:00Z' },
+  ],
   '/api/v1/hrms/attendance/summary': { data: [] },
   '/api/v1/hrms/attendance': [
     { id: 'att-001', employeeId: 'emp-001', employeeName: 'Ravi Kumar', date: '2024-07-15', status: 'present', department: 'IT', checkIn: '09:00', checkOut: '18:00', hoursWorked: 9 },
@@ -145,7 +156,18 @@ const FIXTURES: Record<string, unknown> = {
     { id: 'reg-001', employeeId: 'emp-003', employeeName: 'Ankit Verma', date: '2024-07-10', requestedStatus: 'present', reason: 'Was on field duty', requestedAt: '2024-07-11T09:00:00Z', status: 'pending' },
   ],
   '/api/v1/hrms/dashboard': { headcount: 2, attendanceTodayPct: 95, pendingLeaves: 0, payrollDue: 0 },
-  '/api/v1/hrms/job-openings': [],
+  // REL-010: was `[]`. hr/recruitment/page.tsx (a server component; page.route()
+  // in the per-test spec files never reaches its SSR fetch) always saw an empty
+  // list, so the openings table's EmptyState rendered instead of real rows --
+  // "displays job openings table" found no <tbody tr>, and its message text
+  // ("...appear here once published.") duplicated the "Published (Public)"
+  // stat label for getByText(/published/i). `status` here matches the raw
+  // values apps/web/e2e/hrms-payroll/fixtures.ts already used for this
+  // module's other (browser-fetch) tests -- kept in step, not renamed.
+  '/api/v1/hrms/job-openings': [
+    { id: 'job-e2e-001', jobTitle: 'Senior Software Engineer', department: 'IT', vacancies: 3, status: 'published', applicationsReceived: 28, postedDate: '2024-07-01', applicationDeadline: '2024-08-31' },
+    { id: 'job-e2e-002', jobTitle: 'Accounts Officer', department: 'Finance', vacancies: 1, status: 'open', applicationsReceived: 15, postedDate: '2024-07-10', applicationDeadline: '2024-08-15' },
+  ],
   '/api/v1/hrms/appraisals': [],
   '/api/v1/hrms/training-programs': [],
   '/api/v1/hrms/org-chart': [],
@@ -225,9 +247,28 @@ const FIXTURES: Record<string, unknown> = {
   '/api/v1/procurement/pos': { data: [] },
   '/api/v1/procurement/approvals': { data: [] },
   '/api/v1/procurement/dashboard': { pendingIndents: 0, activePOs: 0, grnsThisMonth: 0, contractRenewalsDue: 0 },
-  '/api/v1/procurement/indents': [],
+  // REL-010: was `[]`. procurement/indents/page.tsx only renders the
+  // filterable DataTable (and its search/filter toolbar) when rows.length > 0;
+  // an empty list renders EmptyState instead, so "list pages show search
+  // toolbar" was looking for an input that was never in the DOM at all --
+  // not a selector-naming problem on its own.
+  '/api/v1/procurement/indents': [
+    // estimatedAmount is minor units (paise, see lib/formatters.ts
+    // formatMoney) -- chosen so its formatted rupee text never contains
+    // "500", which "indents list loads without server error" greps for as a
+    // stand-in for a leaked HTTP 500 (UX-003).
+    { id: '11111111-0001-0000-0000-000000000001', indentNo: 'IND/2024/0001', requestedBy: 'Ravi Kumar', department: 'IT', itemCount: 3, estimatedAmount: 3200000, requestDate: '2024-07-01', requiredByDate: '2024-07-20', status: 'pending_approval' },
+  ],
   '/api/v1/procurement/rfqs': [],
-  '/api/v1/procurement/grns': [],
+  // REL-010: was `[]`. procurement/grn/page.tsx follows the same
+  // render-EmptyState-when-empty pattern as indents above; its EmptyState
+  // repeats the header's "+ New GRN" CTA verbatim, which is how "GRN page
+  // loads without error" hit a strict-mode "resolved to 2 elements" — both
+  // links are real, both go to the same place, and the underlying cause was
+  // this list never having a row to end that empty state.
+  '/api/v1/procurement/grns': [
+    { id: '11111111-0002-0000-0000-000000000005', grnNo: 'GRN/2024/0005', poRef: 'PO-2024-001', vendor: 'Bharat Electronics', receivedDate: '2024-08-05', itemCount: 2, totalValue: 450000, status: 'accepted', threeWayMatch: true },
+  ],
   '/api/v1/procurement/tenders': [],
 
   // CRM contacts — crmContactsListSchema = paginatedSchema(crmContactApiSchema)
@@ -875,13 +916,24 @@ const FIXTURES: Record<string, unknown> = {
     address: 'New Delhi',
   },
 
-  '/api/v1/procurement/grn/11111111-0002-0000-0000-000000000005': {
+  // REL-010: was registered at the singular `/grn/<id>` -- getProcurementGRNById
+  // (apps/web/src/app/_data/loaders.ts) fetches the plural `/grns/<id>`, so this
+  // fixture was never actually served; the GRN detail page always fell back to
+  // its "GRN not found" empty state, which has no "three-way match" text at
+  // all. Also fixed the shape to match what mapProcurementGRNDetail
+  // (apiMappers.ts) reads: `status` must be one of GRN_STATUSES or it silently
+  // resets to "draft", and `threeWayMatch` must be a boolean or it's discarded
+  // (the old object value would have been dropped even if the path had matched).
+  '/api/v1/procurement/grns/11111111-0002-0000-0000-000000000005': {
     id: '11111111-0002-0000-0000-000000000005',
-    status: 'three-way-match-passed',
+    grnNo: 'GRN/2024/0005',
+    status: 'accepted',
     poRef: 'PO-2024-001',
+    vendor: 'Bharat Electronics',
+    receivedDate: '2024-08-05',
     invoiceRef: 'INV-2024-001',
     items: [],
-    threeWayMatch: { status: 'passed', description: 'three-way match verified' },
+    threeWayMatch: true,
   },
 
 

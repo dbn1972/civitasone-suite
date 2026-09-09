@@ -606,14 +606,27 @@ jobs:
       # list page renders an empty state — so axe would audit shells with no
       # DataTable, no rows and no controls, and report them clean. The spec now
       # asserts data arrived, so this mock is required for the gate to pass.
+      #
+      # REL-010: both servers below used to be started as a bare `command &`
+      # with a one-time readiness wait and nothing watching them afterwards.
+      # CI observed the web server die mid-run (`ERR_CONNECTION_REFUSED` on
+      # the request right after the `/stock` test), which then cascaded into
+      # a wall of unrelated-looking connection-refused failures instead of one
+      # clear diagnostic. scripts/ci/run-with-watchdog.sh keeps the same
+      # readiness wait but also supervises the process for the rest of the
+      # job: one automatic restart with a loud log message, and a hard,
+      # clearly-labelled failure (not a silent retry loop) if it dies again.
       - name: Start mock gateway
         run: |
-          node scripts/ci/start-mock-gateway.mjs > mock-gateway.log 2>&1 &
-          npx --yes wait-on http://localhost:8080 --timeout 60000
+          chmod +x scripts/ci/run-with-watchdog.sh
+          scripts/ci/run-with-watchdog.sh mock-gateway 8080 \
+            /tmp/mock-gateway.pid /tmp/mock-gateway.watchdog-status mock-gateway.log \
+            -- node scripts/ci/start-mock-gateway.mjs
       - name: Start web
         run: |
-          pnpm --filter @civitasone/web run start > web-server.log 2>&1 &
-          npx --yes wait-on tcp:localhost:3000 --timeout 120000
+          scripts/ci/run-with-watchdog.sh web 3000 \
+            /tmp/web-server.pid /tmp/web-server.watchdog-status web-server.log \
+            -- pnpm --filter @civitasone/web run start
         env:
           # NOTE: the app reads CIVITASONE_API_BASE_URL / NEXT_PUBLIC_API_BASE_URL.
           # `NEXT_PUBLIC_API_BASE` (used by the web-build job) is read by nothing.
@@ -627,6 +640,37 @@ jobs:
         env:
           CI: true
           JWT_SECRET: civitasone-dev-secret
+      # REL-010: runs regardless of the test step's own result, because a
+      # restart mid-run can leave the suite passing on a server that still
+      # flapped, which is worth knowing about even on green. `crashed_twice`
+      # or `restart_failed` fails the job here explicitly with a named cause,
+      # rather than letting it stand as an unexplained bundle of
+      # connection-refused test failures.
+      - name: Check web server health
+        if: always()
+        run: |
+          web_status=$(cat /tmp/web-server.watchdog-status 2>/dev/null || echo "unknown")
+          gw_status=$(cat /tmp/mock-gateway.watchdog-status 2>/dev/null || echo "unknown")
+          echo "web server watchdog status: $web_status"
+          echo "mock gateway watchdog status: $gw_status"
+          fail=0
+          for label_status in "web:$web_status" "mock-gateway:$gw_status"; do
+            label="${label_status%%:*}"; status="${label_status#*:}"
+            case "$status" in
+              ok) ;;
+              restarted)
+                echo "::warning::$label crashed once during this run and was restarted by the watchdog — see ${label}.log / ${label}-server.log for why." ;;
+              restart_failed)
+                echo "::error::$label crashed and the watchdog's restart never became reachable — treating as a hard failure, not a flaky one."
+                fail=1 ;;
+              crashed_twice)
+                echo "::error::$label crashed twice (including after one watchdog restart) — this is a real server-stability problem, not test flakiness."
+                fail=1 ;;
+              *)
+                echo "::warning::$label watchdog status file missing/unreadable ($status) — cannot confirm the server stayed up for this whole run." ;;
+            esac
+          done
+          exit $fail
       - name: Upload a11y traces and server logs on failure
         if: failure()
         uses: actions/upload-artifact@v4
