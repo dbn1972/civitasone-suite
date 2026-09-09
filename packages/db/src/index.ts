@@ -18,7 +18,7 @@ export function createDb<TSchema extends Record<string, unknown>>(
   return drizzle(client, { schema });
 }
 
-export { createSqlClient } from "./pool.js";
+export { createSqlClient, countQueriesDuring, addQueryDebugListener, removeQueryDebugListener } from "./pool.js";
 export {
   TenantRouter,
   envTenantResolver,

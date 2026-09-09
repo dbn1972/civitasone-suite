@@ -56,6 +56,33 @@ echo "→ $ROOT/infra/db/bootstrap/bootstrap_admin_role.sql"
 psql -h "$PGHOST" -p "$PGPORT" -U "$PGUSER" -d "$PGDATABASE" -v ON_ERROR_STOP=1 \
      -v admin_pw="$ADMIN_PW" -f "$ROOT/infra/db/bootstrap/bootstrap_admin_role.sql"
 
+# PERF-010: pg_stat_statements was never enabled anywhere in this codebase's
+# Postgres configuration. Must run as this same bootstrapping superuser,
+# against $PGDATABASE (postgres), and AFTER the server has actually started
+# with shared_preload_libraries=pg_stat_statements (see the postgres service
+# `command:` in infra/docker-compose.yml / infra/docker-compose.prod.yml --
+# that half of the fix cannot be done from SQL, since it is a
+# postmaster-start-time GUC). See bootstrap_pg_stat_statements.sql for the
+# fresh-container verification this was tested against.
+#
+# Deliberately BEST-EFFORT here, not run_bootstrap's fatal ON_ERROR_STOP=1:
+# this same script also runs against ci.yml's / dr-drill.yml's plain
+# `postgres:16-alpine` GitHub Actions SERVICE containers, and GitHub Actions
+# `services:` has no `command:` field -- there is no way for those jobs to
+# pass shared_preload_libraries at server start. Making this fatal would
+# have broken every existing CI job that calls this script the moment this
+# line was added. Where the server WAS started with the library preloaded
+# (infra/docker-compose.yml's postgres service, or scripts/perf/'s CI job,
+# both fixed in this same change), this succeeds and pg_stat_statements
+# actually captures. Where it wasn't (today's plain CI service containers),
+# this warns and the rest of the bootstrap proceeds exactly as before.
+echo "→ $ROOT/infra/db/bootstrap/bootstrap_pg_stat_statements.sql (best-effort)"
+if ! psql -h "$PGHOST" -p "$PGPORT" -U "$PGUSER" -d "$PGDATABASE" -v ON_ERROR_STOP=1 \
+     -f "$ROOT/infra/db/bootstrap/bootstrap_pg_stat_statements.sql" 2>/tmp/pg-stat-statements-bootstrap.err; then
+  echo "⚠ pg_stat_statements not enabled on this Postgres (shared_preload_libraries not set at server start -- expected on a plain CI service container, see the comment above). Continuing without it:"
+  cat /tmp/pg-stat-statements-bootstrap.err
+fi
+
 run_bootstrap "$ROOT/infra/db/bootstrap/bootstrap.generated.sql"
 run_bootstrap "$ROOT/infra/db/bootstrap/bootstrap_new_services.sql"
 # refund-service is in the SERVICE_DBS migration loop below (its own
@@ -126,6 +153,15 @@ run_bootstrap "$ROOT/infra/db/bootstrap/bootstrap_shop.sql"
 # scripts/dev/migrate-all.mjs already lists it. Same class of gap as
 # shop-service above.
 run_bootstrap "$ROOT/infra/db/bootstrap/bootstrap_recommendation.sql"
+# field-service: has real migrations (services/field-service/migrations/,
+# 2 files) and is already wired into ecosystem.config.js as both a worker
+# and an svc() entry (port 3046), and field_svc/civitas_field are already
+# listed in scripts/dev/provision-platform-roles.mjs and
+# scripts/dev/migrate-all.mjs for local dev, but no bootstrap file here
+# ever created field_svc/civitas_field, and it was never added to the
+# SERVICE_DBS map below. Same class of gap as recommendation-service
+# above (REL-006).
+run_bootstrap "$ROOT/infra/db/bootstrap/bootstrap_field.sql"
 # document-service (COMP-003): full Fastify app + 4 modules (files/folders/
 # workflow/sharing) already existed and was already routed in the gateway
 # registry (/api/v1/documents AND /api/v1/eoffice — see REL-007) and listed
@@ -251,6 +287,12 @@ declare -A SERVICE_DBS=(
   [ai-agent-service]="ai_agent_svc:civitas_ai_agent"
   # recommendation-service: role/db created by bootstrap_recommendation.sql
   # above. Migrations live at services/recommendation-service/migrations/.
+  [recommendation-service]="recommendation_svc:civitas_recommendation"
+  # field-service: role/db created by bootstrap_field.sql above.
+  # Migrations live at services/field-service/migrations/. Wired into
+  # ecosystem.config.js as both worker("field", ...) and
+  # svc("field", 3046, ...) (REL-006).
+  [field-service]="field_svc:civitas_field"
   # document-service (COMP-003): role/db created by bootstrap_document.sql
   # above. Migrations live at services/document-service/migrations/. Routed
   # in the gateway as both /api/v1/documents and /api/v1/eoffice (REL-007);

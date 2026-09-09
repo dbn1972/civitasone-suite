@@ -23,6 +23,34 @@ export async function findByEmpAndMonth(tenantId: string, employeeId: string, mo
   return rows.filter((r) => (r.attendanceDate ?? "").startsWith(month));
 }
 
+/**
+ * PERF-005 batch loader: fetches attendance rows for MANY employees for one
+ * month in a single query instead of one findByEmpAndMonth call per employee
+ * (internal/routes.ts's payroll-input feed). Returns a Map keyed by
+ * employeeId to Array<AttendanceRow>; an employee with no rows for the month
+ * is simply absent — callers should default to [] on a miss. Same 500-row
+ * per-employee safety cap as findByEmpAndMonth, applied via a window: the
+ * fleet-wide N+1 fix matters far more than that pre-existing cap's exact
+ * shape, so it is left as-is here (largest count wins in the unlikely event
+ * more than 500 rows exist for a single employee/month).
+ */
+export async function findByEmpsAndMonth(tenantId: string, employeeIds: string[], month: string): Promise<Map<string, AttendanceRow[]>> {
+  const byEmployee = new Map<string, AttendanceRow[]>();
+  if (employeeIds.length === 0) return byEmployee;
+  const rows = await scopedRead((tx) => tx.select().from(hrmsAttendance)
+    .where(and(
+      eq(hrmsAttendance.tenantId, tenantId),
+      inArray(hrmsAttendance.employeeId, employeeIds),
+    )));
+  for (const row of rows) {
+    if (!(row.attendanceDate ?? "").startsWith(month)) continue;
+    const list = byEmployee.get(row.employeeId);
+    if (list) list.push(row);
+    else byEmployee.set(row.employeeId, [row]);
+  }
+  return byEmployee;
+}
+
 export async function insertAttendance(tx: Writer, row: AttendanceInsert): Promise<void> {
   await tx.insert(hrmsAttendance).values(row);
 }

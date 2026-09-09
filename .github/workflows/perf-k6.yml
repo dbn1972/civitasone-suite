@@ -1,0 +1,133 @@
+name: Perf k6 Suite (manual)
+
+# PERF-010: a REAL, RUNNABLE CI entry point for the tier-0/1 k6 sanity suite
+# (scripts/perf/) added by that gap's fix. Deliberately workflow_dispatch
+# ONLY -- there is no `schedule:` trigger here. docs/operations/SLO-SLI-RUNBOOKS.md
+# describes a "nightly suite against staging"; this workflow is neither of
+# those things yet:
+#   - it runs against a fresh, ephemeral docker-compose'd LOCAL stack on the
+#     runner (infra/docker-compose.yml), not staging -- there is no staging
+#     environment reachable from this repo/session to validate against;
+#   - it is dispatched by a human, not a cron schedule -- turning this into
+#     a real nightly-against-staging job is real infra/ops work (a staging
+#     environment to point at, secrets, on-call ownership for a new alert
+#     surface) that is out of scope for this PR. See the PERF-010 gap-report
+#     entry and its filed follow-up for what's still needed there.
+#
+# What this DOES prove, every time someone runs it: the k6 scripts are real,
+# they build the 4 target services from source, boot them against a REAL
+# docker-compose'd Postgres with pg_stat_statements actually enabled (this
+# uses infra/docker-compose.yml directly -- the same file this PR fixed --
+# rather than a GitHub Actions `services:` container, specifically because
+# `services:` has no `command:` field and cannot pass
+# shared_preload_libraries at server start; see scripts/ci/bootstrap-postgres.sh's
+# comment on why that step is best-effort everywhere else in CI), run real
+# HTTP traffic through each, and fail the job if the dev-scale thresholds in
+# each script are not met. QUEUE_DRIVER=memory here (not sqs/LocalStack) so
+# this runner is self-contained -- the real SQS/LocalStack-backed hang this
+# gap's PR description documents finding on the shared dev host is a
+# separate, already-broken piece of shared infrastructure, not something
+# this self-contained CI run depends on or re-validates.
+
+on:
+  workflow_dispatch:
+    inputs:
+      k6_duration:
+        description: 'Override each k6 scenario''s duration (e.g. "20s"). Leave blank to use each script''s own default.'
+        type: string
+        default: ''
+
+env:
+  NODE_VERSION: '20'
+  POSTGRES_ADMIN_PASSWORD: civitas_ci_test_pw
+  KC_DB_PASSWORD: unused-in-this-workflow
+  KC_ADMIN_PASSWORD: unused-in-this-workflow
+  PGHOST: localhost
+  PGPORT: '5435'
+  PGUSER: civitas_admin
+  PGPASSWORD: civitas_ci_test_pw
+  PGDATABASE: postgres
+  QUEUE_DRIVER: memory
+  REDIS_URL: redis://localhost:6381
+  JWT_ALGORITHM: HS256
+  JWT_SECRET: civitasone-dev-secret
+
+jobs:
+  perf-k6:
+    name: Build fleet + run k6 suite
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '${{ env.NODE_VERSION }}', cache: 'pnpm' }
+
+      - name: Install k6
+        run: |
+          curl -sSL https://dl.k6.io/key.gpg | sudo gpg --dearmor -o /usr/share/keyrings/k6-archive-keyring.gpg
+          echo "deb [signed-by=/usr/share/keyrings/k6-archive-keyring.gpg] https://dl.k6.io/deb stable main" | sudo tee /etc/apt/sources.list.d/k6.list
+          sudo apt-get update -q
+          sudo apt-get install -y k6
+
+      - name: Start Postgres + Redis via infra/docker-compose.yml
+        working-directory: infra
+        run: |
+          docker compose -p perf010ci -f docker-compose.yml up -d postgres redis
+          echo "Waiting for postgres to report healthy..."
+          for i in $(seq 1 30); do
+            status="$(docker inspect -f '{{.State.Health.Status}}' civitasone-postgres 2>/dev/null || echo "starting")"
+            if [ "$status" = "healthy" ]; then echo "postgres healthy"; break; fi
+            sleep 2
+            if [ "$i" -eq 30 ]; then echo "postgres never became healthy"; docker logs civitasone-postgres; exit 1; fi
+          done
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile=false
+
+      - name: Build target services
+        run: |
+          pnpm turbo run build \
+            --filter=@civitasone/gateway-service \
+            --filter=@civitasone/identity-service \
+            --filter=@civitasone/finance-service \
+            --filter=@civitasone/hrms-service
+
+      - name: Bootstrap Postgres (roles/dbs, incl. pg_stat_statements)
+        run: bash scripts/ci/bootstrap-postgres.sh
+
+      - name: Verify pg_stat_statements is capturing real query stats
+        run: |
+          PGPASSWORD="$PGPASSWORD" psql -h "$PGHOST" -p "$PGPORT" -U "$PGUSER" -d postgres -c \
+            "SELECT extname, extversion FROM pg_extension WHERE extname = 'pg_stat_statements';"
+          PGPASSWORD="$PGPASSWORD" psql -h "$PGHOST" -p "$PGPORT" -U "$PGUSER" -d postgres -c \
+            "SELECT count(*) AS statements_captured FROM pg_stat_statements;"
+
+      - name: Start identity/finance/hrms/gateway
+        run: bash scripts/perf/start-stack.sh
+
+      - name: Run k6 suite
+        env:
+          PERF_DURATION: ${{ inputs.k6_duration }}
+        run: bash scripts/perf/run-k6-suite.sh
+
+      - name: Upload k6 results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: perf-k6-results
+          path: .perf-k6-results/
+          retention-days: 30
+
+      - name: Upload service logs (for triage on failure)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: perf-stack-logs
+          path: .perf-stack-logs/
+          retention-days: 14
+
+      - name: Tear down compose stack
+        if: always()
+        working-directory: infra
+        run: docker compose -p perf010ci -f docker-compose.yml down -v

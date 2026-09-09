@@ -54,7 +54,20 @@ services:
     image: postgres:16-alpine
     container_name: civitasone-postgres
     restart: unless-stopped
-    command: ["postgres", "-c", "shared_buffers=256MB", "-c", "effective_cache_size=768MB", "-c", "work_mem=8MB", "-c", "max_connections=200", "-c", "log_min_duration_statement=200"]
+    # PERF-010: infra/postgres/postgresql.conf documents
+    # `shared_preload_libraries = 'pg_stat_statements'`, but that file is only
+    # bind-mounted read-only at /etc/postgresql/postgresql.conf below -- this
+    # command array is what the postgres:16-alpine entrypoint actually runs
+    # with, and it never referenced that file or the setting. Verified on a
+    # fresh container before this fix: `SHOW shared_preload_libraries;` came
+    # back empty and `CREATE EXTENSION pg_stat_statements;` failed with
+    # "pg_stat_statements must be loaded via shared_preload_libraries" -- i.e.
+    # slow-query capture had been dark since this compose file was written,
+    # despite the conf file appearing to enable it. shared_preload_libraries
+    # is a postmaster-start-time GUC (restart required, no reload), so it has
+    # to be on this command line like the other tuning flags -- CREATE
+    # EXTENSION alone cannot turn it on.
+    command: ["postgres", "-c", "shared_buffers=256MB", "-c", "effective_cache_size=768MB", "-c", "work_mem=8MB", "-c", "max_connections=200", "-c", "log_min_duration_statement=200", "-c", "shared_preload_libraries=pg_stat_statements", "-c", "pg_stat_statements.track=all", "-c", "pg_stat_statements.max=5000"]
     environment:
       POSTGRES_USER: ${POSTGRES_ADMIN_USER:-civitas_admin}
       POSTGRES_PASSWORD: ${POSTGRES_ADMIN_PASSWORD:?POSTGRES_ADMIN_PASSWORD must be set}

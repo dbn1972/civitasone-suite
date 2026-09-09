@@ -27,6 +27,26 @@ export async function findInstallmentsByApplication(applicationId: string, tenan
         .limit(limit)));
 }
 
+/**
+ * PERF-005 batch loader: fetches N installments in ONE query instead of one
+ * query per id (see findInstallmentById for the single-row variant, and
+ * disbursement/queries.ts::listGrantReleases for the calling pattern).
+ */
+export async function findInstallmentsByIds(ids: string[], tenantId: string): Promise<InstallmentRow[]> {
+  if (ids.length === 0) return [];
+  return runWithTenant(tenantId, () => scopedRead(async (tx) => {
+    return tx.select().from(grantInstallments)
+      .where(and(inArray(grantInstallments.id, ids), eq(grantInstallments.tenantId, tenantId)));
+  }));
+}
+
+/**
+ * PERF-005: was one query per installment (N+1) to fetch each installment's
+ * disbursements; now a single inArray() query across all installment ids for
+ * this application, matching the tenant scope explicitly (the old per-id loop
+ * relied only on installment.tenantId already being enforced by the first
+ * query and never re-checked grantDisbursements.tenantId at all).
+ */
 export async function findDisbursementsByApplicationId(applicationId: string, tenantId: string): Promise<DisbursementRow[]> {
   return runWithTenant(tenantId, () => scopedRead(async (tx) => {
     const installments = await tx.select().from(grantInstallments)
@@ -34,12 +54,8 @@ export async function findDisbursementsByApplicationId(applicationId: string, te
       .limit(500);
     if (!installments.length) return [];
     const ids = installments.map((i) => i.id);
-    const all: DisbursementRow[] = [];
-    for (const id of ids) {
-      const rows = await tx.select().from(grantDisbursements).where(eq(grantDisbursements.installmentId, id)).limit(500);
-      all.push(...rows);
-    }
-    return all;
+    return tx.select().from(grantDisbursements)
+      .where(and(inArray(grantDisbursements.installmentId, ids), eq(grantDisbursements.tenantId, tenantId)));
   }));
 }
 

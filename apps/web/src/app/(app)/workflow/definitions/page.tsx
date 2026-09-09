@@ -1,6 +1,7 @@
-import Link from "next/link";
-import { PageHeader, Card, DataTable, EmptyState, StatGrid, StatCard } from "../../../_components/ds";
-import { fetchJson } from "@/app/_data/apiClient";
+import { PageHeader, Card, DataTable, EmptyState, StatGrid, StatCard, RefreshErrorState } from "../../../_components/ds";
+import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
+import { combineResourceState } from "@/app/_data/useResource";
+import { toHumanError } from "@/lib/messages";
 
 type Definition = {
   id: string;
@@ -12,31 +13,42 @@ type Definition = {
   version?: number;
 } & Record<string, unknown>;
 
-async function getDefinitions(): Promise<Definition[]> {
-  const r = await fetchJson<unknown, Definition[]>("/api/v1/workflow/definitions", [], {
+async function getDefinitions(): Promise<LoaderResult<Definition[]>> {
+  return fetchJson<unknown, Definition[]>("/api/v1/workflow/definitions", [], {
     telemetryKey: "workflow.definitions",
     mapResponse: (p) => {
       const arr = Array.isArray(p) ? p : (p as { data?: Definition[] })?.data;
       return Array.isArray(arr) ? arr as Definition[] : null;
     },
   });
-  return r.data;
 }
 
-async function getTemplates(): Promise<Definition[]> {
-  const r = await fetchJson<unknown, Definition[]>("/api/v1/workflow/templates", [], {
+async function getTemplates(): Promise<LoaderResult<Definition[]>> {
+  return fetchJson<unknown, Definition[]>("/api/v1/workflow/templates", [], {
     telemetryKey: "workflow.templates",
     mapResponse: (p) => {
       const arr = Array.isArray(p) ? p : (p as { data?: Definition[] })?.data;
       return Array.isArray(arr) ? arr as Definition[] : null;
     },
   });
-  return r.data;
 }
 
 export default async function WorkflowDefinitionsPage() {
-  const [definitions, templates] = await Promise.all([getDefinitions(), getTemplates()]);
-  const active = definitions.filter((d) => d.status === "active" || d.status === "deployed").length;
+  const [definitionsResult, templatesResult] = await Promise.all([getDefinitions(), getTemplates()]);
+  const definitions = definitionsResult.data;
+  const templates = templatesResult.data;
+  // getDefinitions()/getTemplates() used to return only r.data, discarding
+  // LoaderResult's source entirely — a failure on either endpoint was
+  // indistinguishable from a tenant with zero workflows configured. Combine
+  // both sources: either one erroring means the page genuinely could not
+  // load, not that there is nothing to show (UX-001).
+  const resource = combineResourceState(
+    [definitionsResult, templatesResult],
+    definitions,
+    (d) => d.length === 0,
+  );
+  const errored = resource.status === "error";
+  const active = errored ? null : definitions.filter((d) => d.status === "active" || d.status === "deployed").length;
 
   return (
     <main className="page-main" aria-labelledby="page-heading">
@@ -48,13 +60,17 @@ export default async function WorkflowDefinitionsPage() {
       />
 
       <StatGrid>
-        <StatCard icon="🔁" iconBg="#e7edfd" label="Total Workflows" value={definitions.length} />
-        <StatCard icon="✅" iconBg="#ecfdf3" label="Active" value={active} />
-        <StatCard icon="📋" iconBg="#fffaeb" label="Templates" value={templates.length} />
+        <StatCard icon="🔁" iconBg="#e7edfd" label="Total Workflows" value={errored ? "—" : definitions.length} />
+        <StatCard icon="✅" iconBg="#ecfdf3" label="Active" value={active ?? "—"} />
+        <StatCard icon="📋" iconBg="#fffaeb" label="Templates" value={errored ? "—" : templates.length} />
       </StatGrid>
 
       <Card title="Your approval workflows">
-        {definitions.length === 0 ? (
+        {errored ? (
+          <div className="pad">
+            <RefreshErrorState error={toHumanError("load", { area: "approval workflows" })} backHref="/workflow" />
+          </div>
+        ) : definitions.length === 0 ? (
           <EmptyState
             icon="🔁"
             title="No approval workflows configured"
@@ -79,7 +95,7 @@ export default async function WorkflowDefinitionsPage() {
         )}
       </Card>
 
-      {templates.length > 0 && (
+      {!errored && templates.length > 0 && (
         <Card title="Templates (ready to use)">
           <div className="pad">
             <p style={{ color: "var(--mut)", fontSize: 13.5, marginBottom: 12 }}>

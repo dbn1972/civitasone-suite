@@ -1,42 +1,76 @@
-export type DataSource = "api" | "error";
+import type { ReactNode } from "react";
+import type { DataProvenance } from "@/lib/sync/resource";
 
-interface DataSourceBadgeProps {
-  source: DataSource;
+export type DataSource = "api" | "error";
+export type { DataProvenance };
+
+type LegacySourceProps = {
   /**
-   * Copy shown for the "error" state.
-   *
-   * The default is deliberately honest: `source` is produced exclusively by
-   * `fetchJson()` (src/app/_data/apiClient.ts), whose `LoaderSource` type is
-   * the same two-value `"api" | "error"` union as this component's. On EVERY
-   * failure branch it returns `{ data: empty, source: "error" }` — the empty
-   * fallback the caller passed, never a cached payload. There is no
-   * stale-cache path anywhere in the fetch layer, so the badge must never
-   * imply saved/cached data is on screen.
-   *
-   * Pass `message` only to say something MORE specific and equally truthful
-   * for a particular surface (e.g. `message="Couldn't load claims"`). If a
-   * future loader ever adds a real stale-cache path, give it a third source
-   * value rather than overloading "error" for two different meanings.
+   * The plain, non-caching two-value shape `fetchJson()` (src/app/_data/apiClient.ts)
+   * has always produced. Use this ONLY when nothing downstream of this badge
+   * ever falls back to a cached copy for the same data — if it does (any
+   * screen paired with a `useSeededResource`-backed table/list), use the
+   * `provenance` prop below instead, fed by that SAME hook call, so the two
+   * can never disagree about what's on screen (UX-002).
    */
+  source: DataSource;
   message?: string;
+  provenance?: never;
+  cachedAt?: never;
+  offline?: never;
+};
+
+type ProvenanceProps = {
+  /**
+   * The single source of truth for data provenance, as derived by
+   * `useSeededResource` (src/lib/sync/resource.ts). Pass the SAME value the
+   * paired table/list is rendering from — never a separately-derived
+   * `source`/`fromCache` pair — so the badge and the data it's describing
+   * are guaranteed to agree.
+   */
+  provenance: DataProvenance;
+  /** ISO timestamp of the cached copy, when `provenance === "cached"`. */
+  cachedAt?: string | null;
+  offline?: boolean;
+  /** Override for the "error-no-data" message only; "cached" builds its own honest, non-contradictory copy. */
+  message?: string;
+  source?: never;
+};
+
+type DataSourceBadgeProps = LegacySourceProps | ProvenanceProps;
+
+const badgeClassName =
+  "inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-800";
+
+function Badge({ children }: { children: ReactNode }) {
+  return (
+    <span className={badgeClassName} role="status">
+      {children}
+    </span>
+  );
 }
 
 /**
- * Tells the clerk, in plain words, when live data couldn't be reached. When
- * everything is healthy we show nothing — the clerk doesn't need to be told
- * the system is working. Requirement 5.2 (no "API unavailable" / "Live API"
- * wording). The copy states the truth: the load failed and nothing real is
- * shown — it must not claim saved/cached data is being displayed.
+ * Tells the clerk, in plain words, when live data couldn't be reached — and,
+ * when a cached copy is being shown instead, says exactly that (never both
+ * "showing nothing" and "showing saved data" for the same failed fetch;
+ * UX-002). When everything is healthy we show nothing — the clerk doesn't
+ * need to be told the system is working. Requirement 5.2 (no "API
+ * unavailable" / "Live API" wording).
  */
-export function DataSourceBadge({ source, message }: DataSourceBadgeProps) {
-  if (source !== "error") return null;
+export function DataSourceBadge(props: DataSourceBadgeProps) {
+  if (props.provenance !== undefined) {
+    const { provenance, cachedAt, offline, message } = props;
+    if (provenance === "live") return null;
+    if (provenance === "cached") {
+      const when = cachedAt ? ` from ${new Date(cachedAt).toLocaleString("en-IN")}` : "";
+      const offlineNote = offline ? " — you're offline" : "";
+      return <Badge>{message ?? `Showing saved data${when} — could not refresh${offlineNote}.`}</Badge>;
+    }
+    // "error-no-data": nothing loaded and nothing cached — say so plainly.
+    return <Badge>{message ?? "Couldn't load — showing nothing"}</Badge>;
+  }
 
-  return (
-    <span
-      className="inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-800"
-      role="status"
-    >
-      {message ?? "Couldn't load — showing nothing"}
-    </span>
-  );
+  if (props.source !== "error") return null;
+  return <Badge>{props.message ?? "Couldn't load — showing nothing"}</Badge>;
 }

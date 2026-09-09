@@ -55,7 +55,7 @@ test.describe('Procurement', () => {
     // VEN-BEL-001", not the vendor name. "Name" is the table's second column,
     // rendered as plain cell text. Asserting on text (which is how the vendor
     // actually surfaces) rather than link role/name matches what's really
-    // rendered; see UX-013 in the gap report for the row-link-naming pattern
+    // rendered; see UX-015 in the gap report for the row-link-naming pattern
     // this reveals across every rowHref/rowLinkKey DataTable.
     await expect(page.getByText(/Bharat Electronics/i)).toBeVisible();
   });
@@ -117,7 +117,7 @@ test.describe('Procurement', () => {
     // `type="search"`. Its accessible name is the page's own
     // `filterPlaceholder` prop, not a fixed "search list" string. Asserting
     // the real role/name here rather than the aspirational one; filed as
-    // UX-012 in the gap report (DataTable's filter isn't marked up as a
+    // UX-014 in the gap report (DataTable's filter isn't marked up as a
     // semantic search field anywhere it's used, unlike the one genuine
     // `type="search"` input in hr/directory/DirectoryClient.tsx).
     await expect(page.getByRole('textbox', { name: /filter by indent/i })).toBeVisible();
