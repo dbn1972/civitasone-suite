@@ -159,4 +159,32 @@ export const payrollTdsNonSalary = statutorySchema.table("payroll_tds_nonsalary"
   createdBy:        uuid("created_by").notNull(),
 });
 
-export const schema = { payrollPf, payrollEsi, payrollTds, payrollGratuity, payrollGpf, payrollNps, payrollTdsChallan, payrollTdsNonSalary };
+/**
+ * DOM-008: effective-dated, tenant-overridable PF/ESI/EPS statutory rates and
+ * Chapter VI-A (80C/80D) caps. `tenantId` uses this codebase's sentinel-
+ * zero-UUID platform-default convention (see notification-service schema /
+ * migration 0045) rather than a nullable column — see migration 0038 for the
+ * RLS rationale. Resolved effective-dated (latest `effectiveFrom` on/before
+ * the payroll period) by `resolveStatutoryConfig()` in payroll/domain.ts.
+ */
+export const statutoryConfig = statutorySchema.table("statutory_config", {
+  id:                 uuid("id").primaryKey().defaultRandom(),
+  tenantId:           uuid("tenant_id").notNull(), // '00000000-...-000000000000' = platform default
+  effectiveFrom:      date("effective_from").notNull(),
+  pfRatePct:          integer("pf_rate_pct").notNull().default(12),
+  pfWageCapMinor:     bigint("pf_wage_cap_minor", { mode: "bigint" }).notNull().default(1_500_000n),
+  epsRateBps:         integer("eps_rate_bps").notNull().default(833),
+  epsCapMinor:        bigint("eps_cap_minor", { mode: "bigint" }).notNull().default(125_000n),
+  esiWageCapMinor:    bigint("esi_wage_cap_minor", { mode: "bigint" }).notNull().default(2_100_000n),
+  esiEmployeeRateBps: integer("esi_employee_rate_bps").notNull().default(75),
+  esiEmployerRateBps: integer("esi_employer_rate_bps").notNull().default(325),
+  sec80cCapMinor:     bigint("sec80c_cap_minor", { mode: "bigint" }).notNull().default(15_000_000n),
+  sec80dCapMinor:     bigint("sec80d_cap_minor", { mode: "bigint" }).notNull().default(7_500_000n),
+  createdAt:          timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  createdBy:          uuid("created_by").notNull(),
+});
+
+export type StatutoryConfigRow = typeof statutoryConfig.$inferSelect;
+export type StatutoryConfigInsert = typeof statutoryConfig.$inferInsert;
+
+export const schema = { payrollPf, payrollEsi, payrollTds, payrollGratuity, payrollGpf, payrollNps, payrollTdsChallan, payrollTdsNonSalary, statutoryConfig };

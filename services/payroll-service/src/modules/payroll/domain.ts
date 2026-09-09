@@ -1,4 +1,4 @@
-import { hraExemptionMinor, annualTaxFromTaxableMinor, trueUpTdsMinor, type Regime } from "../tax/engine.js";
+import { hraExemptionMinor, annualTaxFromTaxableMinor, trueUpTdsMinor, stdDeduction, type Regime } from "../tax/engine.js";
 
 /** Employee tax declaration inputs for old-regime exemptions (annual paise). */
 export interface TaxDeclarationInput {
@@ -79,6 +79,14 @@ export interface SlipInput {
   protectedNetFloorMinor?: bigint;
   /** Sec 10(5) LTC exemption total for this employee in the current FY (paise). */
   ltcExemptTotalMinor?: bigint;
+  /**
+   * DOM-008: effective-dated PF/ESI/Chapter-VI-A statutory config. Optional —
+   * defaults to DEFAULT_STATUTORY_CONFIG, byte-identical to the pre-DOM-008
+   * hardcoded constants, so every existing caller that omits this field keeps
+   * computing exactly what it always has. Callers with DB access should
+   * resolve the effective row via resolveStatutoryConfig() first.
+   */
+  statutoryConfig?: StatutoryConfig;
 }
 
 /** Deduction codes treated as "recovery" — subject to the protected-net floor. */
@@ -122,10 +130,78 @@ export interface SlipResult {
   recoveryCarryForwardMinor: bigint;
 }
 
-const PF_PCT      = 12n;
-const PF_WAGE_CAP = 1_500_000n;  // EPF/EPS wage ceiling: 15000 INR
-const EPS_CAP     = 125_000n;    // EPS max: 1250 INR (8.33% of 15000)
-const ESI_CAP     = 2_100_000n;  // ESI gross ceiling: 21000 INR
+/**
+ * DOM-008: PF/ESI/EPS rates and Chapter VI-A caps used to be hardcoded here,
+ * and the tenant-override columns in statutory/schema.ts (empContribPct etc.)
+ * were written on every slip but never read back — changing a rate required a
+ * code deploy. Now config-driven via `statutory.statutory_config` (see
+ * migration 0038): tenant_id uses this codebase's sentinel-zero-UUID
+ * platform-default convention (see notification-service migration 0045),
+ * effective-dated rows, resolved by resolveStatutoryConfig() below. The
+ * `statutoryConfig` field on SlipInput is OPTIONAL and defaults to exactly
+ * these values, so every existing/omitting caller (all current tests, and
+ * any caller not yet updated) computes byte-identical output to before.
+ */
+export interface StatutoryConfig {
+  pfRatePct: bigint;          // employee AND employer EPF rate, e.g. 12n = 12%
+  pfWageCapMinor: bigint;     // EPF/EPS wage ceiling, paise (₹15,000 = 1_500_000n)
+  epsRateBps: bigint;         // EPS rate, basis points, e.g. 833n = 8.33%
+  epsCapMinor: bigint;        // EPS employer-portion monthly cap, paise (₹1,250 = 125_000n)
+  esiWageCapMinor: bigint;    // ESI applicability gross ceiling, paise (₹21,000 = 2_100_000n)
+  esiEmployeeRateBps: bigint; // e.g. 75n = 0.75%
+  esiEmployerRateBps: bigint; // e.g. 325n = 3.25%
+  sec80cCapMinor: bigint;     // Chapter VI-A Sec 80C cap, paise (₹1,50,000 = 15_000_000n)
+  sec80dCapMinor: bigint;     // Chapter VI-A Sec 80D cap, paise (₹75,000 = 7_500_000n)
+}
+
+/** The exact values that were hardcoded pre-DOM-008 — never change silently. */
+export const DEFAULT_STATUTORY_CONFIG: StatutoryConfig = {
+  pfRatePct: 12n,
+  pfWageCapMinor: 1_500_000n,
+  epsRateBps: 833n,
+  epsCapMinor: 125_000n,
+  esiWageCapMinor: 2_100_000n,
+  esiEmployeeRateBps: 75n,
+  esiEmployerRateBps: 325n,
+  sec80cCapMinor: 15_000_000n,
+  sec80dCapMinor: 7_500_000n,
+};
+
+/** A `statutory.statutory_config` row as loaded from the DB; `tenantId: null` means platform default (DB sentinel zero-UUID mapped to null at the repo boundary). */
+export interface StatutoryConfigRow extends StatutoryConfig {
+  tenantId: string | null;
+  effectiveFrom: string; // YYYY-MM-DD
+}
+
+/**
+ * Effective-dated, pure resolution: the tenant's own latest override with
+ * `effectiveFrom` on/before `periodMonth` (YYYY-MM) wins; else the platform
+ * default's latest row on/before it; else the literal DEFAULT_STATUTORY_CONFIG
+ * (belt-and-suspenders — migration 0038 always seeds a platform-default row,
+ * so this last fallback should never be reached in practice, but computeSlip
+ * must never throw for a missing config row in a payroll run).
+ */
+export function resolveStatutoryConfig(rows: StatutoryConfigRow[], tenantId: string, periodMonth: string): StatutoryConfig {
+  const onOrBefore = `${periodMonth}-01`;
+  const eligible = rows.filter((r) => r.effectiveFrom <= onOrBefore);
+  const latest = (candidates: StatutoryConfigRow[]): StatutoryConfigRow | undefined =>
+    candidates.reduce<StatutoryConfigRow | undefined>((best, r) => (!best || r.effectiveFrom > best.effectiveFrom ? r : best), undefined);
+  const picked = latest(eligible.filter((r) => r.tenantId === tenantId))
+    ?? latest(eligible.filter((r) => r.tenantId === null));
+  if (!picked) return DEFAULT_STATUTORY_CONFIG;
+  // Strip the row-only fields (tenantId, effectiveFrom) so the result is
+  // always a plain StatutoryConfig, identical in shape whether it came from a
+  // resolved row or the DEFAULT_STATUTORY_CONFIG fallback above.
+  const {
+    pfRatePct, pfWageCapMinor, epsRateBps, epsCapMinor, esiWageCapMinor,
+    esiEmployeeRateBps, esiEmployerRateBps, sec80cCapMinor, sec80dCapMinor,
+  } = picked;
+  return {
+    pfRatePct, pfWageCapMinor, epsRateBps, epsCapMinor, esiWageCapMinor,
+    esiEmployeeRateBps, esiEmployerRateBps, sec80cCapMinor, sec80dCapMinor,
+  };
+}
+
 const GPF_PCT     = 10n;
 const NPS_EMP_PCT = 10n;
 const NPS_ER_PCT  = 14n;
@@ -170,6 +246,7 @@ export function computeSlip(input: SlipInput): SlipResult {
     monthsRemaining,
     protectedNetFloorMinor = 0n,
     ltcExemptTotalMinor = 0n,
+    statutoryConfig = DEFAULT_STATUTORY_CONFIG,
   } = input;
 
   const earnings: PayComponent[] = [];
@@ -229,19 +306,19 @@ export function computeSlip(input: SlipInput): SlipResult {
     npsEmployerMinor = pct(pensionBase, NPS_ER_PCT);
   } else if (statutoryPf) {
     // Engagement gate: no EPF/EPS for a type whose policy excludes provident fund.
-    const pfWage    = pensionBase > PF_WAGE_CAP ? PF_WAGE_CAP : pensionBase;
-    pfEmployeeMinor = pct(pfWage, PF_PCT);
-    pfEmployerMinor = pct(pfWage, PF_PCT);
-    const epsWage   = pensionBase > PF_WAGE_CAP ? PF_WAGE_CAP : pensionBase;
-    epsMinor        = roundRupee((epsWage * 833n) / 10000n);
-    if (epsMinor > EPS_CAP) epsMinor = EPS_CAP;
+    const pfWage    = pensionBase > statutoryConfig.pfWageCapMinor ? statutoryConfig.pfWageCapMinor : pensionBase;
+    pfEmployeeMinor = pct(pfWage, statutoryConfig.pfRatePct);
+    pfEmployerMinor = pct(pfWage, statutoryConfig.pfRatePct);
+    const epsWage   = pensionBase > statutoryConfig.pfWageCapMinor ? statutoryConfig.pfWageCapMinor : pensionBase;
+    epsMinor        = roundRupee((epsWage * statutoryConfig.epsRateBps) / 10000n);
+    if (epsMinor > statutoryConfig.epsCapMinor) epsMinor = statutoryConfig.epsCapMinor;
     epfEmployerMinor = pfEmployerMinor - epsMinor;
   }
 
   // Engagement gate: ESI only when the type's policy allows it AND under the cap.
-  const esiApplicable    = statutoryEsi && grossMinor <= ESI_CAP;
-  const esiMinor         = esiApplicable ? roundRupee((grossMinor * 75n) / 10000n) : 0n;
-  const esiEmployerMinor = esiApplicable ? roundRupee((grossMinor * 325n) / 10000n) : 0n;
+  const esiApplicable    = statutoryEsi && grossMinor <= statutoryConfig.esiWageCapMinor;
+  const esiMinor         = esiApplicable ? roundRupee((grossMinor * statutoryConfig.esiEmployeeRateBps) / 10000n) : 0n;
+  const esiEmployerMinor = esiApplicable ? roundRupee((grossMinor * statutoryConfig.esiEmployerRateBps) / 10000n) : 0n;
 
   const pt = roundRupee(ptMinor);
   if (pt > 0n) deductions.push({ code: "PT", name: "Professional Tax", type: "deduction", amountMinor: pt });
@@ -258,17 +335,24 @@ export function computeSlip(input: SlipInput): SlipResult {
   const otherSrcMinor   = declaration.otherSourcesIncomeMinor ?? 0n;
   const extraIncome     = perqMinor + prevEmpSalMinor + otherSrcMinor;
   let annualTaxableMinor: bigint;
+  // DOM-008: standard deduction now sourced from payroll.tax_slab_config (the
+  // same FY-versioned config fnf/domain.ts and tax/routes.ts already read via
+  // stdDeduction()) instead of a second literal that had to be kept in sync by
+  // hand. stdDeduction() throws UnconfiguredFyError for an unregistered
+  // (regime, FY) exactly like annualTaxFromTaxableMinor() below already does
+  // for this same pair, so this adds no new failure mode.
+  const stdDeductionMinor = BigInt(stdDeduction(taxRegime, fyStartYear)) * 100n;
   if (taxRegime === "old") {
     const salaryHraAnnual   = (basicMinor + daMinor) * 12n;
     const hraReceivedAnnual = hraMinor * 12n;
     const rentAnnual        = declaration.rentPaidAnnualMinor ?? 0n;
     const hraExempt = hraExemptionMinor(salaryHraAnnual, hraReceivedAnnual, rentAnnual, cityClass === "X");
-    const d80c = declaration.ded80cMinor ?? 0n; const c80c = d80c > 15_000_000n ? 15_000_000n : d80c;
-    const d80d = declaration.ded80dMinor ?? 0n; const c80d = d80d > 7_500_000n ? 7_500_000n : d80d;
+    const d80c = declaration.ded80cMinor ?? 0n; const c80c = d80c > statutoryConfig.sec80cCapMinor ? statutoryConfig.sec80cCapMinor : d80c;
+    const d80d = declaration.ded80dMinor ?? 0n; const c80d = d80d > statutoryConfig.sec80dCapMinor ? statutoryConfig.sec80dCapMinor : d80d;
     const other = declaration.otherDedMinor ?? 0n;
-    annualTaxableMinor = annualGross + extraIncome - 5_000_000n - hraExempt - c80c - c80d - other - pt * 12n - ltcExemptTotalMinor;
+    annualTaxableMinor = annualGross + extraIncome - stdDeductionMinor - hraExempt - c80c - c80d - other - pt * 12n - ltcExemptTotalMinor;
   } else {
-    annualTaxableMinor = annualGross + extraIncome - 7_500_000n - ltcExemptTotalMinor; // new regime: standard deduction + LTC exempt
+    annualTaxableMinor = annualGross + extraIncome - stdDeductionMinor - ltcExemptTotalMinor; // new regime: standard deduction + LTC exempt
   }
   if (annualTaxableMinor < 0n) annualTaxableMinor = 0n;
   const annualTaxMinor = annualTaxFromTaxableMinor(annualTaxableMinor, taxRegime, fyStartYear);
