@@ -1,8 +1,9 @@
 import Link from "next/link";
-import { DataSourceBadge } from "../../../_components/DataSourceBadge";
-import { PageHeader, StatCard, StatGrid, EmptyState } from "../../../_components/ds";
+import { PageHeader, StatCard, StatGrid, EmptyState, RefreshErrorState } from "../../../_components/ds";
 import { getGrievances } from "../_data";
 import type { GrievanceSummary } from "../_data";
+import { useResource } from "../../../_data/useResource";
+import { toHumanError } from "@/lib/messages";
 import { GrievancesTable, type GrievanceRow } from "./GrievancesTable";
 import { getTranslations } from "next-intl/server";
 
@@ -21,14 +22,19 @@ const CLOSED_STATUSES = new Set(["resolved", "closed", "disposed"]);
 
 export default async function GrievancesPage() {
   const t = await getTranslations("grievances");
-  const { data: grievances, source } = await getGrievances();
+  const result = await getGrievances();
+  const { data: grievances } = result;
+  const resource = useResource(result);
+  const errored = resource.status === "error";
 
-  const total = grievances.length;
-  const pending = grievances.filter(
-    (g) => g.status === "pending" || g.status === "registered" || g.status === "under_review" || g.status === "assigned",
-  ).length;
-  const escalated = grievances.filter((g) => g.status === "escalated").length;
-  const resolved = grievances.filter((g) => CLOSED_STATUSES.has(g.status.toLowerCase())).length;
+  const total = errored ? null : grievances.length;
+  const pending = errored
+    ? null
+    : grievances.filter(
+        (g) => g.status === "pending" || g.status === "registered" || g.status === "under_review" || g.status === "assigned",
+      ).length;
+  const escalated = errored ? null : grievances.filter((g) => g.status === "escalated").length;
+  const resolved = errored ? null : grievances.filter((g) => CLOSED_STATUSES.has(g.status.toLowerCase())).length;
 
   const rows: GrievanceRow[] = grievances.map((g: GrievanceSummary) => ({
     id: g.id,
@@ -51,15 +57,23 @@ export default async function GrievancesPage() {
           </Link>
         }
       />
-      {source === "error" && <DataSourceBadge source={source} />}
       <StatGrid>
-        <StatCard icon="📋" iconBg="#eff6ff" label={t("total")} value={total.toLocaleString("en-IN")} />
-        <StatCard icon="⏳" iconBg="#fffaeb" label={t("pending")} value={pending.toLocaleString("en-IN")} />
-        <StatCard icon="🔺" iconBg="#fef3f2" label={t("escalated")} value={escalated.toLocaleString("en-IN")} />
-        <StatCard icon="✅" iconBg="#ecfdf3" label={t("resolved")} value={resolved.toLocaleString("en-IN")} />
+        <StatCard icon="📋" iconBg="#eff6ff" label={t("total")} value={total === null ? "—" : total.toLocaleString("en-IN")} />
+        <StatCard icon="⏳" iconBg="#fffaeb" label={t("pending")} value={pending === null ? "—" : pending.toLocaleString("en-IN")} />
+        <StatCard icon="🔺" iconBg="#fef3f2" label={t("escalated")} value={escalated === null ? "—" : escalated.toLocaleString("en-IN")} />
+        <StatCard icon="✅" iconBg="#ecfdf3" label={t("resolved")} value={resolved === null ? "—" : resolved.toLocaleString("en-IN")} />
       </StatGrid>
       <div className="card" style={{ marginTop: 18 }}>
-        {grievances.length === 0 ? (
+        {errored ? (
+          <>
+            <div className="card-h">
+              <h3>{t("grievances.tableTitle")}</h3>
+            </div>
+            <div className="pad">
+              <RefreshErrorState error={toHumanError("load", { area: "grievances" })} />
+            </div>
+          </>
+        ) : grievances.length === 0 ? (
           <>
             <div className="card-h">
               <h3>{t("tableTitle")}</h3>

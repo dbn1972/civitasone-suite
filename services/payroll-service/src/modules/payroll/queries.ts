@@ -56,20 +56,25 @@ export async function getRun(id: string, tenantId: string): Promise<PayrollRunRo
   return repo.findRunById(id, tenantId);
 }
 
+/**
+ * PERF-005: was Promise.all(rows.map(...)) calling listSlipsByRun per run —
+ * classic N+1-via-Promise.all (concurrent, but still N round trips, and each
+ * one fetched full slip rows just to read `.length`). Now: the run list plus
+ * exactly one grouped-count query across all run ids, regardless of N.
+ */
 export async function listRuns(tenantId: string, limit: number) {
   const rows = await repo.listRunsByTenant(tenantId, limit);
-  return Promise.all(rows.map(async (r) => {
-    const slips = await repo.listSlipsByRun(r.id, tenantId);
-    return {
-      id: r.id,
-      runDate: new Date(r.createdAt as unknown as string).toISOString().slice(0, 10),
-      payPeriod: r.month,
-      employeeCount: slips.length,
-      grossAmount: Number(r.totalGrossMinor) / 100,
-      netAmount: Number(r.totalNetMinor) / 100,
-      deductions: Math.max(0, Number(r.totalGrossMinor - r.totalNetMinor) / 100),
-      status: mapRunStatus(r.status),
-    };
+  const runIds = rows.map((r) => r.id);
+  const employeeCountByRun = await repo.countSlipsByRunIds(runIds, tenantId);
+  return rows.map((r) => ({
+    id: r.id,
+    runDate: new Date(r.createdAt as unknown as string).toISOString().slice(0, 10),
+    payPeriod: r.month,
+    employeeCount: employeeCountByRun.get(r.id) ?? 0,
+    grossAmount: Number(r.totalGrossMinor) / 100,
+    netAmount: Number(r.totalNetMinor) / 100,
+    deductions: Math.max(0, Number(r.totalGrossMinor - r.totalNetMinor) / 100),
+    status: mapRunStatus(r.status),
   }));
 }
 

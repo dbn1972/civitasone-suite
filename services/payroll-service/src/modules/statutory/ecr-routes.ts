@@ -1,6 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { eq, and } from "drizzle-orm";
+import { eq, and, inArray } from "drizzle-orm";
 import { db, scopedRead } from "../../shared/db.js";
 import { payrollPf } from "./schema.js";
 import { payrollSlips } from "../payroll/schema.js";
@@ -42,12 +42,18 @@ export async function ecrRoutes(app: FastifyInstance): Promise<void> {
     const input = await fetchPayrollInput(ctx.tenantId, month);
     const master = new Map(input.employees.map((e) => [e.id, e]));
 
+    // PERF-005: was one query per PF record to fetch its slip (N+1); now a
+    // single inArray() query across all slip ids for this period.
+    const slipIds = [...new Set(pfRecords.map((pf) => pf.slipId))];
+    const slipRows = slipIds.length
+      ? await scopedRead((tx) => tx.select().from(payrollSlips)
+          .where(and(inArray(payrollSlips.id, slipIds), eq(payrollSlips.tenantId, ctx.tenantId))))
+      : [];
+    const slipById = new Map(slipRows.map((s) => [s.id, s]));
+
     const lines: string[] = [];
     for (const pf of pfRecords) {
-      const slipRows = await scopedRead((tx) => tx.select().from(payrollSlips)
-        .where(and(eq(payrollSlips.id, pf.slipId), eq(payrollSlips.tenantId, ctx.tenantId)))
-        .limit(1));
-      const slip = slipRows[0];
+      const slip = slipById.get(pf.slipId);
       const emp = master.get(pf.employeeId);
 
       const grossWages = slip ? Math.round(Number(slip.grossMinor) / 100) : 0;

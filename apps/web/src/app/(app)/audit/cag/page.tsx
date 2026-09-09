@@ -1,15 +1,19 @@
-import { PageHeader, StatGrid, StatCard, Card, EmptyState } from "@/app/_components/ds";
-import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
+import { PageHeader, StatGrid, StatCard, Card, EmptyState, RefreshErrorState } from "@/app/_components/ds";
 import { getCagParas } from "@/app/_data/loaders";
+import { useResource } from "@/app/_data/useResource";
+import { toHumanError } from "@/lib/messages";
 import { CagTable } from "./CagTable";
 
 export default async function CagPage() {
-  const { data: paras, source } = await getCagParas();
+  const result = await getCagParas();
+  const { data: paras, source } = result;
+  const resource = useResource(result);
+  const errored = resource.status === "error";
 
-  const totalParas = paras.reduce((sum, p) => sum + p.totalParas, 0);
-  const settled = paras.reduce((sum, p) => sum + p.settled, 0);
-  const pending = paras.reduce((sum, p) => sum + p.pending, 0);
-  const departments = new Set(paras.map((p) => p.department)).size;
+  const totalParas = errored ? null : paras.reduce((sum, p) => sum + p.totalParas, 0);
+  const settled = errored ? null : paras.reduce((sum, p) => sum + p.settled, 0);
+  const pending = errored ? null : paras.reduce((sum, p) => sum + p.pending, 0);
+  const departments = errored ? null : new Set(paras.map((p) => p.department)).size;
 
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
@@ -18,16 +22,21 @@ export default async function CagPage() {
         subtitle="Comptroller and Auditor General audit paragraphs and settlement tracking."
         back="/audit"
       />
-      <DataSourceBadge source={source} />
 
       <StatGrid>
-        <StatCard icon="📜" iconBg="#eef2ff" label="Total Paras" value={totalParas} />
-        <StatCard icon="✅" iconBg="var(--goodbg)" label="Settled" value={settled} />
-        <StatCard icon="⏳" iconBg="var(--warnbg)" label="Pending" value={pending} />
-        <StatCard icon="🏛️" iconBg="#fce7ee" label="Departments" value={departments} />
+        <StatCard icon="📜" iconBg="#eef2ff" label="Total Paras" value={totalParas ?? "—"} />
+        <StatCard icon="✅" iconBg="var(--goodbg)" label="Settled" value={settled ?? "—"} />
+        <StatCard icon="⏳" iconBg="var(--warnbg)" label="Pending" value={pending ?? "—"} />
+        <StatCard icon="🏛️" iconBg="#fce7ee" label="Departments" value={departments ?? "—"} />
       </StatGrid>
 
-      {paras.length === 0 ? (
+      {errored ? (
+        <Card title="CAG Audit Paragraphs">
+          <div className="pad">
+            <RefreshErrorState error={toHumanError("load", { area: "CAG audit paragraphs" })} backHref="/audit" />
+          </div>
+        </Card>
+      ) : paras.length === 0 ? (
         <Card title="CAG Audit Paragraphs">
           <EmptyState
             icon="📜"
