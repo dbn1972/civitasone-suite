@@ -24,12 +24,22 @@ export function registerVendorBlacklistConsumers(queue: Queue): void {
     };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
-      const vendor = await vendorRepo.findVendorById(p.vendorId, p.tenantId);
+      // TX-001 (procurement) — all bare (non-tx) reads/write in this handler
+      // routed through their *Tx siblings: each used to open its own nested
+      // db.transaction()/bare execute from inside this already-open one,
+      // risking pool exhaustion under load, and — for the write below —
+      // committing in its own separate transaction outside this handler's
+      // atomicity boundary, so it could survive a later rollback of the
+      // outer transaction (or vice versa). The GUC itself was still set
+      // (insertBlacklist's own nested db.transaction() gets it applied) —
+      // unlike TX-002's reinstate() bug in this same file, which genuinely
+      // ran with no GUC set at all.
+      const vendor = await vendorRepo.findVendorByIdTx(tx, p.vendorId, p.tenantId);
       if (!vendor) throw new Error(`vendor ${p.vendorId} not found`);
-      const existing = await repo.findActive(p.tenantId, p.vendorId);
+      const existing = await repo.findActiveTx(tx, p.tenantId, p.vendorId);
       if (existing) return; // idempotent
 
-      await repo.insertBlacklist({
+      await repo.insertBlacklistTx(tx, {
 
         id: p.id,
         tenantId: p.tenantId,
@@ -79,10 +89,13 @@ export function registerVendorBlacklistConsumers(queue: Queue): void {
     const p = msg.payload as { id: string; tenantId: string; vendorId: string };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
-      const entry = await repo.findActive(p.tenantId, p.vendorId);
+      // TX-001 (procurement) — findActive/findVendorById routed through
+      // their *Tx siblings for the same nested-tx reason as the add handler
+      // above; reinstateTx itself was already fixed under TX-002.
+      const entry = await repo.findActiveTx(tx, p.tenantId, p.vendorId);
       if (!entry) return;
       await repo.reinstateTx(tx, p.tenantId, p.vendorId, msg.actorId);
-      const vendor = await vendorRepo.findVendorById(p.vendorId, p.tenantId);
+      const vendor = await vendorRepo.findVendorByIdTx(tx, p.vendorId, p.tenantId);
       if (vendor) {
         await vendorRepo.updateVendor(tx, p.vendorId, {
           vendorType: "registered",
@@ -129,9 +142,11 @@ export function registerVendorBlacklistConsumers(queue: Queue): void {
     };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
-      const existing = await repo.findActiveCentralByPan(p.pan);
+      // TX-001 (procurement) — same nested-tx fix as the add/reinstate
+      // handlers above.
+      const existing = await repo.findActiveCentralByPanTx(tx, p.pan);
       if (existing) return;
-      await repo.insertBlacklist({
+      await repo.insertBlacklistTx(tx, {
 
         id: p.id,
         tenantId: p.tenantId,

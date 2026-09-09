@@ -28,6 +28,26 @@ export async function findPoByIdTx(tx: Writer, id: string, tenantId: string): Pr
 }
 
 /**
+ * TX-001 (procurement) — tenant-scoped sibling of findPoItemsByPoId(), for
+ * callers already inside an open db.transaction() (three-way-match/consumer.ts,
+ * grn/consumer.ts's inspectGrn). The bare findPoItemsByPoId() above opens its
+ * OWN nested db.transaction() from inside the caller's already-open one,
+ * which under load can deadlock the pool (two connections held by one
+ * logical unit of work) and, independent of pooling, never inherits the
+ * outer transaction's app.tenant_id GUC — see po/repo.ts's findPoByIdTx doc
+ * history / TX-002 for the RLS failure mode this shape produces. Route every
+ * nested caller through this instead.
+ */
+export async function findPoItemsByPoIdTx(
+  tx: Writer,
+  poId: string,
+  tenantId: string,
+): Promise<(typeof procurementPoItems.$inferSelect)[]> {
+  return (tx as typeof db).select().from(procurementPoItems)
+    .where(and(eq(procurementPoItems.poId, poId), eq(procurementPoItems.tenantId, tenantId)));
+}
+
+/**
  * Read a PO row under a FOR UPDATE row lock so concurrent amendment approvals
  * serialise on this row and can never both derive a new total from the same
  * pre-image (lost update). Caller MUST run inside a transaction. Tenant-scoped:

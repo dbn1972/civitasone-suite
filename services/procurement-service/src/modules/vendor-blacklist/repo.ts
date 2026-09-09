@@ -24,6 +24,25 @@ export async function findActive(tenantId: string, vendorId: string): Promise<Ve
   return rows[0] ?? null;
 }
 
+/**
+ * TX-001 (procurement) — tenant-scoped sibling of findActive(), for callers
+ * already inside an open db.transaction() (vendor-blacklist/consumer.ts's
+ * add and reinstate handlers). The bare findActive() above opens its own
+ * nested db.transaction() from inside the caller's, the same
+ * pool-deadlock-under-load shape TX-002/TX-003 fixed elsewhere in this
+ * service. Returns the full row (unlike isBlacklistedTx's boolean), since
+ * both call sites need `entry`/`existing` for their own logic afterward.
+ */
+export async function findActiveTx(tx: Writer, tenantId: string, vendorId: string): Promise<VendorBlacklistRow | null> {
+  const rows = await (tx as typeof db).select().from(vendorBlacklist)
+    .where(and(
+      eq(vendorBlacklist.tenantId, tenantId),
+      eq(vendorBlacklist.vendorId, vendorId),
+      eq(vendorBlacklist.status, "active"),
+    )).limit(1);
+  return rows[0] ?? null;
+}
+
 /** Tenant-scoped active-blacklist check usable INSIDE a transaction. */
 export async function isBlacklistedTx(tx: Writer, tenantId: string, vendorId: string): Promise<boolean> {
   const rows = await (tx as typeof db).select({ id: vendorBlacklist.id }).from(vendorBlacklist)
@@ -84,6 +103,45 @@ export async function insertBlacklist(
   }
   const rows = await db.transaction((tx) => tx.insert(vendorBlacklist).values(row).returning());
   return rows[0]!;
+}
+
+/**
+ * TX-001 (procurement) — vendor-blacklist/consumer.ts's add and
+ * central-debar handlers called `insertBlacklist({...})` with NO second
+ * argument, even though the function above has supported an optional
+ * `writer` param since before this fix (this is a nested WRITE, more
+ * dangerous than a nested read: under FORCE RLS it doesn't just risk
+ * pool exhaustion, it commits in its own separate transaction outside the
+ * caller's atomicity boundary, so the write could survive a rollback of
+ * the outer transaction, or vice versa. The GUC itself was still set on
+ * that separate transaction — this is not TX-002's reinstate() bug in
+ * this same file, which genuinely ran with no GUC set at all via a bare
+ * db.execute() outside any transaction). The capability existed; it just
+ * was not being called. This thin, explicitly-named wrapper matches the
+ * `...Tx(tx, ...)` convention
+ * used everywhere else in this service (findPoByIdTx, findByIdTx,
+ * reinstateTx, findVendorByIdTx) so nested callers are unambiguous about
+ * routing through the caller's transaction, rather than relying on every
+ * call site remembering to pass the optional param correctly.
+ */
+export async function insertBlacklistTx(tx: Writer, row: VendorBlacklistInsert): Promise<VendorBlacklistRow> {
+  return insertBlacklist(row, tx);
+}
+
+/**
+ * TX-001 (procurement) — tenant-scoped sibling of findActiveCentralByPan(),
+ * for the vendorCentralDebar consumer handler, which called it bare from
+ * inside an already-open db.transaction() (same nested-tx shape as
+ * findActiveTx above).
+ */
+export async function findActiveCentralByPanTx(tx: Writer, pan: string): Promise<VendorBlacklistRow | null> {
+  const rows = await (tx as typeof db).select().from(vendorBlacklist)
+    .where(and(
+      eq(vendorBlacklist.scope, "central"),
+      eq(vendorBlacklist.status, "active"),
+      sql`upper(${vendorBlacklist.pan}) = upper(${pan})`,
+    )).limit(1);
+  return rows[0] ?? null;
 }
 
 /**
