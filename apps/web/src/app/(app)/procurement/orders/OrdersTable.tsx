@@ -2,6 +2,7 @@
 
 import { useMemo } from "react";
 import { Card, DataTable, EmptyState } from "../../../_components/ds";
+import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { useSeededResource } from "@/lib/sync/resource";
 import { formatIndianDate } from "@/lib/formatters";
 
@@ -39,7 +40,7 @@ type OrderRow = {
 } & Record<string, unknown>;
 
 export function OrdersTable({ orders, source = "api" }: { orders: Order[]; source?: "api" | "error" }) {
-  const { data: rows, fromCache, offline, cachedAt } = useSeededResource<Order[]>(
+  const { data: rows, provenance, offline, cachedAt } = useSeededResource<Order[]>(
     "procurement.orders",
     orders,
     source,
@@ -61,18 +62,18 @@ export function OrdersTable({ orders, source = "api" }: { orders: Order[]; sourc
     [rows],
   );
 
-  const cacheNote =
-    offline || fromCache
-      ? `Showing saved data${cachedAt ? ` from ${new Date(cachedAt).toLocaleString("en-IN")}` : ""}${offline ? " — you're offline" : ""}.`
-      : null;
-
   return (
     <Card title="Purchase orders">
-      {cacheNote ? (
-        <p role="status" aria-live="polite" style={{ fontSize: 12, color: "#92400e", margin: "0", padding: "8px 16px 0" }}>
-          {cacheNote}
-        </p>
-      ) : null}
+      {/* UX-002: single source of truth — reads the same useSeededResource
+          call as `rows`/`tableRows`, so it can never contradict this table
+          (including the "no purchase orders found" empty state right below,
+          which now only fires on a genuinely empty result, live or cached). */}
+      <DataSourceBadge
+        provenance={provenance ?? "live"}
+        cachedAt={cachedAt}
+        offline={offline}
+        message={provenance === "error-no-data" ? "Couldn't load — showing nothing" : undefined}
+      />
       {tableRows.length === 0 ? (
         <EmptyState icon="📦" title="No purchase orders found" message="Issue a PO to get started." />
       ) : (

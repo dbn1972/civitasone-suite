@@ -1,4 +1,3 @@
-import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
 import { PageHeader, StatGrid, StatCard, Card } from "@/app/_components/ds";
 import { getFinanceBudgets } from "@/app/_data/loaders";
 import { RevisedEstimatesTable, type RevisedEstimateRow } from "./RevisedEstimatesTable";
@@ -30,11 +29,13 @@ export default async function RevisedEstimatesPage() {
 
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
+      {/* UX-002: the data-source badge now lives in RevisedEstimatesTable,
+          driven by the same useSeededResource call that produces its rows —
+          not a second, independent read of `source` here. */}
       <PageHeader
         title="Revised Estimates"
         subtitle="Budget Estimate vs Revised Estimate with variance analysis by head."
         back="/finance"
-        actions={source === "error" ? <DataSourceBadge source={source} /> : null}
       />
       <StatGrid>
         <StatCard icon="📊" iconBg="#e7edfd" label="Total Heads" value={estimates.length} />
