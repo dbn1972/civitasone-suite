@@ -4646,6 +4646,258 @@ export async function getAdminTenantModules(id: string): Promise<LoaderResult<Ad
   });
 }
 
+// ── Admin: users / roles / permissions / audit logs / scheduled jobs / feature
+// flags (COMP-004) — every loader below reads a route COMP-001 already made
+// real (users/roles/permissions/audit-logs/org-hierarchy in admin-service's
+// gap/routes.ts) or that ships fully built in its own admin-service module
+// (feature-flags/manage, scheduled-jobs). No mock fallback. ──────────────────
+
+export type AdminUserSummary = {
+  id: string;
+  email: string;
+  name: string;
+  empCode: string | null;
+  status: "active" | "suspended" | "locked" | "deactivated";
+  mfaEnabled: boolean;
+};
+
+export async function getAdminUsersList(): Promise<LoaderResult<AdminUserSummary[]>> {
+  return fetchJson<unknown, AdminUserSummary[]>("/api/v1/admin/users?limit=200", [], {
+    telemetryKey: "admin.users.list",
+    mapResponse: (p) => {
+      const rows = getArrayPayload(p);
+      if (!rows) return null;
+      return rows.filter(isRecord).map((u) => ({
+        id: String(u.id ?? ""),
+        email: String(u.email ?? ""),
+        name: String(u.name ?? ""),
+        empCode: toText(u.empCode),
+        status: (["active", "suspended", "locked", "deactivated"].includes(String(u.status)) ? u.status : "active") as AdminUserSummary["status"],
+        mfaEnabled: u.mfaEnabled === true,
+      }));
+    },
+  });
+}
+
+export type AdminRoleSummary = {
+  id: string;
+  key: string;
+  name: string;
+  description: string | null;
+  isSystem: boolean;
+};
+
+export async function getAdminRolesList(): Promise<LoaderResult<AdminRoleSummary[]>> {
+  return fetchJson<unknown, AdminRoleSummary[]>("/api/v1/admin/roles?limit=200", [], {
+    telemetryKey: "admin.roles.list",
+    mapResponse: (p) => {
+      const rows = getArrayPayload(p);
+      if (!rows) return null;
+      return rows.filter(isRecord).map((r) => ({
+        id: String(r.id ?? ""),
+        key: String(r.key ?? ""),
+        name: String(r.name ?? r.key ?? ""),
+        description: toText(r.description),
+        isSystem: r.isSystem === true,
+      }));
+    },
+  });
+}
+
+export type AdminPermissionSummary = {
+  id: string;
+  key: string;
+  name: string;
+  description: string | null;
+};
+
+export async function getAdminPermissionsList(): Promise<LoaderResult<AdminPermissionSummary[]>> {
+  return fetchJson<unknown, AdminPermissionSummary[]>("/api/v1/admin/permissions?limit=200", [], {
+    telemetryKey: "admin.permissions.list",
+    mapResponse: (p) => {
+      const rows = getArrayPayload(p);
+      if (!rows) return null;
+      return rows.filter(isRecord).map((perm) => ({
+        id: String(perm.id ?? ""),
+        key: String(perm.key ?? ""),
+        name: String(perm.name ?? perm.key ?? ""),
+        description: toText(perm.description),
+      }));
+    },
+  });
+}
+
+export type AdminAuditLogEntry = {
+  id: string;
+  actor: string;
+  action: string;
+  resource: string | null;
+  outcome: "success" | "failure";
+  timestamp: string;
+};
+
+export async function getAdminAuditLogEntries(): Promise<LoaderResult<AdminAuditLogEntry[]>> {
+  return fetchJson<unknown, AdminAuditLogEntry[]>("/api/v1/admin/audit-logs?limit=200", [], {
+    telemetryKey: "admin.audit-logs.list",
+    mapResponse: (p) => {
+      const rows = getArrayPayload(p);
+      if (!rows) return null;
+      return rows.filter(isRecord).map((e) => ({
+        id: String(e.id ?? ""),
+        actor: String(e.actor ?? "system"),
+        action: String(e.action ?? ""),
+        resource: toText(e.resource),
+        outcome: e.outcome === "failure" ? "failure" : "success",
+        timestamp: String(e.timestamp ?? ""),
+      }));
+    },
+  });
+}
+
+export type AdminScheduledJob = {
+  id: string;
+  name: string;
+  description: string;
+  cronExpression: string;
+  timezone: string;
+  targetService: string;
+  targetCommand: string;
+  payload: Record<string, unknown>;
+  enabled: boolean;
+  lastRunAt: string | null;
+  lastRunStatus: "success" | "failed" | "running" | "never_run";
+  nextRunAt: string | null;
+};
+
+export async function getAdminScheduledJobs(): Promise<LoaderResult<AdminScheduledJob[]>> {
+  return fetchJson<unknown, AdminScheduledJob[]>("/api/v1/admin/scheduled-jobs", [], {
+    telemetryKey: "admin.scheduled-jobs.list",
+    mapResponse: (p) => {
+      const rows = getArrayPayload(p);
+      if (!rows) return null;
+      return rows.filter(isRecord).map((j) => ({
+        id: String(j.id ?? ""),
+        name: String(j.name ?? ""),
+        description: String(j.description ?? ""),
+        cronExpression: String(j.cronExpression ?? ""),
+        timezone: String(j.timezone ?? "Asia/Kolkata"),
+        targetService: String(j.targetService ?? ""),
+        targetCommand: String(j.targetCommand ?? ""),
+        payload: isRecord(j.payload) ? j.payload : {},
+        enabled: j.enabled === true,
+        lastRunAt: toText(j.lastRunAt),
+        lastRunStatus: (["success", "failed", "running", "never_run"].includes(String(j.lastRunStatus)) ? j.lastRunStatus : "never_run") as AdminScheduledJob["lastRunStatus"],
+        nextRunAt: toText(j.nextRunAt),
+      }));
+    },
+  });
+}
+
+export type AdminFeatureFlagRow = {
+  id: string;
+  key: string;
+  name: string;
+  description: string;
+  enabled: boolean;
+  rolloutPercent: number;
+  targetSegments: string[];
+  killSwitch: boolean;
+  owner: string;
+};
+
+export async function getAdminFeatureFlagsManage(): Promise<LoaderResult<AdminFeatureFlagRow[]>> {
+  return fetchJson<unknown, AdminFeatureFlagRow[]>("/api/v1/admin/feature-flags/manage", [], {
+    telemetryKey: "admin.feature-flags.manage",
+    mapResponse: (p) => {
+      const rows = getArrayPayload(p);
+      if (!rows) return null;
+      return rows.filter(isRecord).map((f) => ({
+        id: String(f.id ?? ""),
+        key: String(f.key ?? ""),
+        name: String(f.name ?? ""),
+        description: String(f.description ?? ""),
+        enabled: f.enabled === true,
+        rolloutPercent: typeof f.rolloutPercent === "number" ? f.rolloutPercent : 0,
+        targetSegments: Array.isArray(f.targetSegments) ? f.targetSegments.map(String) : [],
+        killSwitch: f.killSwitch === true,
+        owner: String(f.owner ?? ""),
+      }));
+    },
+  });
+}
+
+export type AdminOrgUnit = {
+  id: string;
+  tenantId: string;
+  name: string;
+  type: "department" | "division" | "section" | "unit" | "branch";
+  parentId: string | null;
+  headUserId: string | null;
+  code: string | null;
+};
+
+export async function getAdminOrgUnits(): Promise<LoaderResult<AdminOrgUnit[]>> {
+  return fetchJson<unknown, AdminOrgUnit[]>("/api/v1/admin/org-hierarchy", [], {
+    telemetryKey: "admin.org-hierarchy.units",
+    mapResponse: (p) => {
+      const rows = getArrayPayload(p);
+      if (!rows) return null;
+      const ORG_UNIT_TYPES = ["department", "division", "section", "unit", "branch"];
+      return rows.filter(isRecord).map((u) => ({
+        id: String(u.id ?? ""),
+        tenantId: String(u.tenantId ?? ""),
+        name: String(u.name ?? ""),
+        type: (ORG_UNIT_TYPES.includes(String(u.type)) ? u.type : "unit") as AdminOrgUnit["type"],
+        parentId: toText(u.parentId),
+        headUserId: toText(u.headUserId),
+        code: toText(u.code),
+      }));
+    },
+  });
+}
+
+export type AdminRoleDetail = AdminRoleSummary & { permissionKeys: string[] };
+
+export async function getAdminRoleDetail(id: string): Promise<LoaderResult<AdminRoleDetail | null>> {
+  return fetchJson<unknown, AdminRoleDetail | null>(`/api/v1/admin/roles/${id}`, null, {
+    telemetryKey: "admin.roles.detail",
+    mapResponse: (p) => {
+      if (!isRecord(p)) return null;
+      return {
+        id: String(p.id ?? ""),
+        key: String(p.key ?? ""),
+        name: String(p.name ?? p.key ?? ""),
+        description: toText(p.description),
+        isSystem: p.isSystem === true,
+        permissionKeys: Array.isArray(p.permissions) ? p.permissions.map(String) : [],
+      };
+    },
+  });
+}
+
+export type RoleFeatureGrant = {
+  id: string;
+  roleName: string;
+  featureKey: string;
+  granted: boolean;
+};
+
+export async function getRoleFeatureGrants(): Promise<LoaderResult<RoleFeatureGrant[]>> {
+  return fetchJson<unknown, RoleFeatureGrant[]>("/api/v1/policy/role-features", [], {
+    telemetryKey: "policy.role-features.list",
+    mapResponse: (p) => {
+      const rows = getArrayPayload(p);
+      if (!rows) return null;
+      return rows.filter(isRecord).map((g) => ({
+        id: String(g.id ?? ""),
+        roleName: String(g.roleName ?? ""),
+        featureKey: String(g.featureKey ?? ""),
+        granted: g.granted !== false,
+      }));
+    },
+  });
+}
+
 // ── Project sub-resource loaders ──────────────────────────────────────────────
 
 export type ProjectEscalationRow = {

@@ -17,6 +17,7 @@ import type { FastifyInstance } from "fastify";
 import { randomBytes, randomUUID } from "node:crypto";
 import { z } from "zod";
 import { resolveContext, HttpError } from "../../shared/context.js";
+import * as repo from "./repo.js";
 
 const RP_ID = process.env.WEBAUTHN_RP_ID ?? "localhost";
 const RP_NAME = process.env.WEBAUTHN_RP_NAME ?? "CivitasOne";
@@ -119,7 +120,10 @@ export async function webauthnRoutes(app: FastifyInstance): Promise<void> {
     // reasonably believe they had working passwordless/MFA-equivalent auth
     // when no credential was ever verified or persisted. TODO (real fix):
     // decode attestationObject, verify challenge matches clientDataJSON,
-    // extract public key, store credential in a webauthn_credentials table.
+    // extract public key, store credential in webauthn.credentials (the
+    // table now exists — migration 0021, DOM-005 — but the crypto
+    // verification itself is still unimplemented; storing an unverified
+    // "credential" would just move the fabrication one step, not fix it).
     // Until that lands, be honest about it the same way /authenticate already
     // is, instead of lying about success.
     void body;
@@ -177,15 +181,47 @@ export async function webauthnRoutes(app: FastifyInstance): Promise<void> {
   /** List registered passkeys for current user */
   app.get("/v1/identity/webauthn/credentials", async (req, reply) => {
     const ctx = resolveContext(req);
-    // TODO: query webauthn_credentials table by actorId
-    return reply.send({ data: [], total: 0 });
+    const rows = await repo.listByOwner(ctx.tenantId, ctx.actorId);
+    return reply.send({
+      data: rows.map((r) => ({
+        id: r.id,
+        deviceName: r.deviceName ?? undefined,
+        createdAt: r.createdAt.toISOString(),
+        lastUsedAt: r.lastUsedAt ? r.lastUsedAt.toISOString() : undefined,
+      })),
+      total: rows.length,
+    });
   });
 
-  /** Delete a passkey */
+  /**
+   * Delete a passkey.
+   *
+   * DOM-005 fix: this used to return 204 without deleting anything and
+   * without checking who owns the credential — any authenticated caller
+   * could "delete" (i.e. no-op on) any credential id. Ownership is now
+   * verified from the authenticated request context (ctx.actorId), never
+   * from a client-supplied field, and the delete is scoped to
+   * (tenant_id, id, user_id) at the SQL layer so a mismatch matches zero
+   * rows rather than relying on an app-layer check alone.
+   */
   app.delete("/v1/identity/webauthn/credentials/:id", async (req, reply) => {
     const ctx = resolveContext(req);
     const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
-    // TODO: soft-delete credential
+
+    const existing = await repo.findById(ctx.tenantId, id);
+    // Not found, or found but not owned by the caller: 404 either way, so the
+    // response doesn't reveal whether a credential exists that belongs to
+    // someone else.
+    if (!existing || existing.userId !== ctx.actorId) {
+      throw new HttpError(404, "NOT_FOUND", "credential not found");
+    }
+
+    const deleted = await repo.deleteByIdForOwner(ctx.tenantId, id, ctx.actorId);
+    if (deleted === 0) {
+      // Raced with a concurrent delete of the same row between the check
+      // above and here.
+      throw new HttpError(404, "NOT_FOUND", "credential not found");
+    }
     return reply.code(204).send();
   });
 }

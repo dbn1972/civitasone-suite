@@ -112,6 +112,24 @@ export async function getCaseById(tenantId: string, id: string): Promise<CaseRow
 }
 
 /**
+ * DOM-003 — single-row, uncached, tx-scoped status read for a guard check
+ * made INSIDE another module's write transaction (order/consumer.ts's
+ * recordOrder), mirroring hearing/repo.ts's getHearingForUpdate: never rely
+ * on the read-through cache (which is only invalidated by THIS service's own
+ * case-lifecycle consumer and could be stale) or on anything the client
+ * asserts about the case's status.
+ */
+export async function getCaseForUpdate(
+  tx: Writer, tenantId: string, id: string,
+): Promise<{ status: string } | undefined> {
+  const rows = await tx.select({ status: cases.status })
+    .from(cases)
+    .where(and(eq(cases.tenantId, tenantId), eq(cases.id, id)))
+    .limit(1);
+  return rows[0];
+}
+
+/**
  * Tenant-scoped parties lookup. The tenant predicate is explicit (defense in
  * depth alongside RLS): without it, a caseId belonging to another tenant
  * could leak that tenant's parties (PII) if RLS were ever misconfigured or

@@ -6,6 +6,10 @@ type EscalationRow = {
   escalatesAfter: string;
 };
 
+// COMP-004 detector note: this is a static reference table (GFR 2017
+// delegation-of-financial-powers thresholds), the same for every tenant and
+// edited by developers, not admin-entered data -- see the EscalationRulesPage
+// doc comment below. Not a stand-in for a backend load.
 const ESCALATION_ROWS: EscalationRow[] = [
   { estimatedValue: "Up to ₹1,00,000", approvingAuthority: "Procurement Officer", escalatesAfter: "2 working days" },
   { estimatedValue: "₹1,00,000 – ₹10,00,000", approvingAuthority: "Procurement Admin", escalatesAfter: "3 working days" },

@@ -3,6 +3,7 @@
  */
 import { createHash } from "node:crypto";
 import { deterministicId, COURT_NAMESPACE } from "../court-registry/domain.js";
+import { isTerminal, type CaseStatus } from "../case-lifecycle/domain.js";
 
 /**
  * The set of allowed order-type categories is NOT hardcoded here: orderType is
@@ -81,5 +82,45 @@ export const DEFAULT_ORDER_TYPES = [
 export function assertOrderTypeAllowed(orderType: string, allowed: ReadonlySet<string>): void {
   if (!allowed.has(orderType)) {
     throw new Error(`INVALID_ORDER_TYPE: ${orderType} is not an allowed order type for this tenant`);
+  }
+}
+
+/**
+ * DOM-003 — a case in a terminal status (disposed/appealed -- see
+ * case-lifecycle/domain.ts's isTerminal, the existing single source of truth
+ * for this, previously unused anywhere in the order/hearing paths) can never
+ * have a NEW order recorded against it: recording an order is a live
+ * judicial act, and a case that's already closed can't receive one. Reject
+ * explicitly (CASE_TERMINAL) rather than silently accepting it.
+ */
+export function assertCaseOpenForOrder(caseId: string, status: string): void {
+  if (isTerminal(status as CaseStatus)) {
+    throw new Error(`CASE_TERMINAL: cannot record an order against case ${caseId} in terminal status '${status}'`);
+  }
+}
+
+/**
+ * DOM-003 — when an order cites a hearingId, that hearing must genuinely
+ * belong to the SAME case the order is being recorded against (never trust
+ * the client's own caseId/hearingId pairing -- a caller could otherwise
+ * attribute an order to a hearing that actually took place on a completely
+ * different case), and the hearing itself must already be `held` (see
+ * hearing/domain.ts's HEARING_STATUSES) -- an order is only ever issued off
+ * the back of a hearing that has actually concluded, never one that is
+ * merely scheduled, or that was adjourned/cancelled instead of held.
+ */
+export function assertHearingUsableForOrder(
+  caseId: string,
+  hearingId: string,
+  hearing: { caseId: string; status: string } | undefined,
+): void {
+  if (!hearing) {
+    throw new Error(`HEARING_NOT_FOUND: ${hearingId}`);
+  }
+  if (hearing.caseId !== caseId) {
+    throw new Error(`HEARING_CASE_MISMATCH: hearing ${hearingId} does not belong to case ${caseId}`);
+  }
+  if (hearing.status !== "held") {
+    throw new Error(`HEARING_NOT_HELD: hearing ${hearingId} is not in 'held' status (found '${hearing.status}')`);
   }
 }

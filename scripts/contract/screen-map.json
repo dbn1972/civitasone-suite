@@ -14,13 +14,17 @@
     {
       "module": "admin",
       "screen": "/admin/audit-log",
-      "loaders": [],
-      "apiPaths": [],
-      "upstream": null,
-      "routeHandler": null,
-      "tablesPresent": null,
-      "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "loaders": [
+        "getAdminAuditLogEntries"
+      ],
+      "apiPaths": [
+        "/api/v1/admin/audit-logs"
+      ],
+      "upstream": "admin → /v1/admin/audit-logs",
+      "routeHandler": "/v1/admin/audit-logs",
+      "tablesPresent": true,
+      "status": "WIRED",
+      "detail": "ok"
     },
     {
       "module": "admin",
@@ -91,13 +95,17 @@
     {
       "module": "admin",
       "screen": "/admin/feature-flags",
-      "loaders": [],
-      "apiPaths": [],
-      "upstream": null,
-      "routeHandler": null,
-      "tablesPresent": null,
-      "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "loaders": [
+        "getAdminFeatureFlagsManage"
+      ],
+      "apiPaths": [
+        "/api/v1/admin/feature-flags/manage"
+      ],
+      "upstream": "admin → /v1/admin/feature-flags/manage",
+      "routeHandler": "/v1/admin/feature-flags/manage",
+      "tablesPresent": true,
+      "status": "WIRED",
+      "detail": "ok"
     },
     {
       "module": "admin",
@@ -190,13 +198,17 @@
     {
       "module": "admin",
       "screen": "/admin/org",
-      "loaders": [],
-      "apiPaths": [],
-      "upstream": null,
-      "routeHandler": null,
-      "tablesPresent": null,
-      "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "loaders": [
+        "getAdminOrgUnits"
+      ],
+      "apiPaths": [
+        "/api/v1/admin/org-hierarchy"
+      ],
+      "upstream": "admin → /v1/admin/org-hierarchy",
+      "routeHandler": "/v1/admin/org-hierarchy",
+      "tablesPresent": true,
+      "status": "WIRED",
+      "detail": "ok"
     },
     {
       "module": "admin",
@@ -212,24 +224,62 @@
     {
       "module": "admin",
       "screen": "/admin/role-features",
-      "loaders": [],
-      "apiPaths": [],
-      "upstream": null,
-      "routeHandler": null,
-      "tablesPresent": null,
-      "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "loaders": [
+        "getAdminRolesList"
+      ],
+      "apiPaths": [
+        "/api/v1/admin/roles"
+      ],
+      "upstream": "admin → /v1/admin/roles",
+      "routeHandler": "/v1/admin/roles",
+      "tablesPresent": true,
+      "status": "WIRED",
+      "detail": "ok"
+    },
+    {
+      "module": "admin",
+      "screen": "/admin/role-features",
+      "loaders": [
+        "getRoleFeatureGrants"
+      ],
+      "apiPaths": [
+        "/api/v1/policy/role-features"
+      ],
+      "upstream": "policy-v1 → /v1/policy/role-features",
+      "routeHandler": "/v1/policy/role-features",
+      "tablesPresent": true,
+      "status": "WIRED",
+      "detail": "ok"
     },
     {
       "module": "admin",
       "screen": "/admin/roles",
-      "loaders": [],
-      "apiPaths": [],
-      "upstream": null,
-      "routeHandler": null,
-      "tablesPresent": null,
-      "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "loaders": [
+        "getAdminRolesList"
+      ],
+      "apiPaths": [
+        "/api/v1/admin/roles"
+      ],
+      "upstream": "admin → /v1/admin/roles",
+      "routeHandler": "/v1/admin/roles",
+      "tablesPresent": true,
+      "status": "WIRED",
+      "detail": "ok"
+    },
+    {
+      "module": "admin",
+      "screen": "/admin/roles",
+      "loaders": [
+        "getAdminPermissionsList"
+      ],
+      "apiPaths": [
+        "/api/v1/admin/permissions"
+      ],
+      "upstream": "admin → /v1/admin/permissions",
+      "routeHandler": "/v1/admin/permissions",
+      "tablesPresent": true,
+      "status": "WIRED",
+      "detail": "ok"
     },
     {
       "module": "admin",
@@ -245,13 +295,17 @@
     {
       "module": "admin",
       "screen": "/admin/scheduled-jobs",
-      "loaders": [],
-      "apiPaths": [],
-      "upstream": null,
-      "routeHandler": null,
-      "tablesPresent": null,
-      "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "loaders": [
+        "getAdminScheduledJobs"
+      ],
+      "apiPaths": [
+        "/api/v1/admin/scheduled-jobs"
+      ],
+      "upstream": "admin → /v1/admin/scheduled-jobs",
+      "routeHandler": "/v1/admin/scheduled-jobs",
+      "tablesPresent": true,
+      "status": "WIRED",
+      "detail": "ok"
     },
     {
       "module": "admin",
@@ -330,13 +384,32 @@
     {
       "module": "admin",
       "screen": "/admin/users",
-      "loaders": [],
-      "apiPaths": [],
-      "upstream": null,
-      "routeHandler": null,
-      "tablesPresent": null,
-      "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "loaders": [
+        "getAdminUsersList"
+      ],
+      "apiPaths": [
+        "/api/v1/admin/users"
+      ],
+      "upstream": "admin-users → /identity/users/",
+      "routeHandler": "/identity/users",
+      "tablesPresent": true,
+      "status": "WIRED",
+      "detail": "ok"
+    },
+    {
+      "module": "admin",
+      "screen": "/admin/users",
+      "loaders": [
+        "getAdminRolesList"
+      ],
+      "apiPaths": [
+        "/api/v1/admin/roles"
+      ],
+      "upstream": "admin → /v1/admin/roles",
+      "routeHandler": "/v1/admin/roles",
+      "tablesPresent": true,
+      "status": "WIRED",
+      "detail": "ok"
     },
     {
       "module": "ai",
@@ -5178,8 +5251,8 @@
       "upstream": null,
       "routeHandler": null,
       "tablesPresent": null,
-      "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "status": "FABRICATED_DATA",
+      "detail": "no loader, but DEFAULT_DOCUMENTS in apps/web/src/app/(app)/hr/onboarding/[id]/page.tsx:59 looks like 6 hardcoded records"
     },
     {
       "module": "hr",
@@ -7482,8 +7555,8 @@
       "upstream": null,
       "routeHandler": null,
       "tablesPresent": null,
-      "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "status": "FABRICATED_DATA",
+      "detail": "no loader, but DEFAULT_LEVELS in apps/web/src/app/(app)/platform-admin/org-config/OrgConfigPage.tsx:16 looks like 5 hardcoded records"
     },
     {
       "module": "platform-admin",
@@ -7504,8 +7577,8 @@
       "upstream": null,
       "routeHandler": null,
       "tablesPresent": null,
-      "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "status": "FABRICATED_DATA",
+      "detail": "no loader, but ROLES in apps/web/src/app/(app)/platform-admin/roles/RolePermissionsMatrix.tsx:7 looks like 9 hardcoded records"
     },
     {
       "module": "platform-admin",
@@ -8460,8 +8533,8 @@
       "upstream": null,
       "routeHandler": null,
       "tablesPresent": null,
-      "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "status": "FABRICATED_DATA",
+      "detail": "no loader, but SCHEMES in apps/web/src/app/(app)/projects/schemes/[id]/page.tsx:21 looks like 11 hardcoded records"
     },
     {
       "module": "projects",
@@ -10209,10 +10282,11 @@
     }
   ],
   "counts": {
-    "wired": 261,
+    "wired": 271,
     "missing": 0,
     "mismatch": 0,
-    "noLoader": 572
+    "noLoader": 561,
+    "fabricatedData": 4
   },
   "linkAudit": {
     "total": 1343,

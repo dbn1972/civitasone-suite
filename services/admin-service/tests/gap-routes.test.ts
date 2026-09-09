@@ -346,6 +346,34 @@ describe("cross-service routes → identity-service (token-forwarded)", () => {
     expect(create.json().id).toBe(upstreamId);
   });
 
+  it("GET /v1/admin/roles/:id forwards the caller's bearer token and relays the role's real current permissions (COMP-004: backs the admin/roles permissions editor)", async () => {
+    const roleId = "55555555-5555-4555-8555-555555555555";
+    const fetchMock = vi.fn(async (url: string, init: { headers: Record<string, string> }) => {
+      expectForwardsCallerAuth(init);
+      expect(url).toContain(`/identity/rbac/roles/${roleId}`);
+      return jsonResponse(200, { id: roleId, key: "auditor", name: "Auditor", permissions: ["finance.read", "audit.read"] });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const res = await app.inject({ method: "GET", url: `/v1/admin/roles/${roleId}`, headers: authHeader(["platform_admin"]) });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().permissions).toEqual(["finance.read", "audit.read"]);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("GET /v1/admin/roles/:id relays a real identity-service 404 honestly (never fabricates an empty role)", async () => {
+    const fetchMock = vi.fn(async (_url: string, init: { headers: Record<string, string> }) => {
+      expectForwardsCallerAuth(init);
+      return jsonResponse(404, { code: "NOT_FOUND", message: "role not found" });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const res = await app.inject({
+      method: "GET", url: "/v1/admin/roles/66666666-6666-4666-8666-666666666666",
+      headers: authHeader(["platform_admin"]),
+    });
+    expect(res.statusCode).toBe(404);
+    expect(res.json().code).toBe("NOT_FOUND");
+  });
+
   it("PATCH /v1/admin/roles/:id honestly 501s — no update-role-metadata command exists in identity-service", async () => {
     const res = await app.inject({
       method: "PATCH", url: "/v1/admin/roles/33333333-3333-4333-8333-333333333333",
@@ -405,6 +433,70 @@ describe("cross-service routes → identity-service (token-forwarded)", () => {
     expect(JSON.parse(grantCall!.body!)).toEqual({ permissionId: "perm-finance-write" });
     const revokeCall = calls.find((c) => c.method === "DELETE");
     expect(revokeCall!.url).toContain("perm-finance-read");
+  });
+
+  it("GET /v1/admin/user-roles/:id forwards the caller's bearer token and relays the user's real effective roles (not /v1/admin/users/:id/roles — see route comment for why)", async () => {
+    const userId = "77777777-7777-4777-8777-777777777777";
+    const fetchMock = vi.fn(async (url: string, init: { headers: Record<string, string> }) => {
+      expectForwardsCallerAuth(init);
+      expect(url).toContain(`/identity/rbac/users/${userId}/effective`);
+      return jsonResponse(200, { roles: [{ id: "role-1", key: "hr_admin", name: "HR Admin" }] });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const res = await app.inject({ method: "GET", url: `/v1/admin/user-roles/${userId}`, headers: authHeader(["tenant_admin"]) });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().data).toEqual([{ id: "role-1", key: "hr_admin", name: "HR Admin" }]);
+  });
+
+  it("PATCH /v1/admin/user-roles/:id diffs the desired role-key set against the user's real effective roles and issues one real assign/revoke call per change", async () => {
+    const userId = "88888888-8888-4888-8888-888888888888";
+    const calls: Array<{ method: string; url: string; body?: string }> = [];
+    const fetchMock = vi.fn(async (url: string, init: { method: string; body?: string; headers: Record<string, string> }) => {
+      expectForwardsCallerAuth(init);
+      calls.push({ method: init.method, url, body: init.body });
+      if (url.endsWith(`/identity/rbac/users/${userId}/effective`)) {
+        return jsonResponse(200, { roles: [{ id: "role-hr", key: "hr_staff" }] });
+      }
+      if (url.includes("/identity/rbac/roles?")) {
+        return jsonResponse(200, [
+          { id: "role-hr", key: "hr_staff" },
+          { id: "role-fin", key: "finance_admin" },
+        ]);
+      }
+      if (init.method === "POST" && url.endsWith("/assignments")) return jsonResponse(202, { id: userId, status: "accepted", correlationId: "c-5" });
+      if (init.method === "DELETE") return jsonResponse(202, { id: userId, status: "accepted", correlationId: "c-6" });
+      throw new Error(`unexpected upstream call: ${init.method} ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const res = await app.inject({
+      method: "PATCH", url: `/v1/admin/user-roles/${userId}`,
+      headers: authHeader(["tenant_admin"]),
+      // desired = {finance_admin} — must grant finance_admin and revoke hr_staff
+      payload: { roleKeys: ["finance_admin"] },
+    });
+    expect(res.statusCode).toBe(202);
+    const body = res.json();
+    expect(body.granted).toEqual(["finance_admin"]);
+    expect(body.revoked).toEqual(["hr_staff"]);
+
+    const grantCall = calls.find((c) => c.method === "POST" && c.url.endsWith("/assignments"));
+    expect(grantCall).toBeDefined();
+    expect(grantCall!.url).toContain("role-fin");
+    expect(JSON.parse(grantCall!.body!)).toEqual({ userId });
+    const revokeCall = calls.find((c) => c.method === "DELETE");
+    expect(revokeCall!.url).toContain("role-hr");
+    expect(revokeCall!.url).toContain(userId);
+  });
+
+  it("PATCH /v1/admin/user-roles/:id rejects a body missing roleKeys instead of silently no-op-ing", async () => {
+    const res = await app.inject({
+      method: "PATCH", url: "/v1/admin/user-roles/99999999-9999-4999-8999-999999999999",
+      headers: authHeader(["tenant_admin"]),
+      payload: {},
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().code).toBe("VALIDATION_FAILED");
   });
 
   it("GET /v1/admin/mfa/users forwards the caller's bearer token and maps identity-service's real mfaEnabled column, never a fabricated status", async () => {

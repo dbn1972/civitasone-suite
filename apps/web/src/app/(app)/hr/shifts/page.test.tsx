@@ -6,7 +6,7 @@ vi.mock("@/app/_data/apiClient", () => ({
   fetchJson: (...args: unknown[]) => fetchJsonMock(...args),
 }));
 vi.mock("next/navigation", () => ({
-  useRouter: () => ({ push: vi.fn() }),
+  useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }),
 }));
 
 import ShiftsPage from "./page";
@@ -35,11 +35,38 @@ describe("ShiftsPage", () => {
     expect(screen.getByText("Active")).toBeInTheDocument();
   });
 
-  it("falls back to government standard shifts when API returns empty", async () => {
+  // COMP-004 fix-up (round 3): the page used to silently substitute a
+  // hardcoded 4-row "GOVT_SHIFTS" fallback (fake IDs like "dopt-general")
+  // whenever the real API returned zero rows, whether that meant a genuine
+  // tenant with no shifts configured (source: "api", []) or a real fetch
+  // failure (source: "error"). These two tests prove neither case renders
+  // that fabricated data any more.
+  it("shows an honest empty state when a tenant genuinely has no shifts (source: api, [])", async () => {
     fetchJsonMock.mockResolvedValue({ data: [], source: "api" });
     render(await ShiftsPage());
-    expect(screen.getAllByText("General Duty").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("09:00").length).toBeGreaterThan(0);
+    expect(screen.getByText("No shifts defined")).toBeInTheDocument();
+    // None of the fabricated GOVT_SHIFTS rows/ids ever render.
+    expect(screen.queryByText("General Duty")).not.toBeInTheDocument();
+    expect(screen.queryByText("Morning Shift")).not.toBeInTheDocument();
+    expect(screen.queryByText("Evening Shift")).not.toBeInTheDocument();
+    expect(screen.queryByText(/dopt-/)).not.toBeInTheDocument();
+    // Honest zero counts, not counts derived from fake rows.
+    expect(screen.getAllByText("0").length).toBeGreaterThan(0);
+  });
+
+  it("shows the error state with no fake rows underneath on a real fetch failure (source: error)", async () => {
+    fetchJsonMock.mockResolvedValue({ data: [], source: "error" });
+    render(await ShiftsPage());
+    // The error UI is shown...
+    expect(screen.getByText("Couldn't load — showing nothing")).toBeInTheDocument();
+    // ...and nothing else claims to be real data underneath it: no fake
+    // rows, and no honest-empty-state message either (that would wrongly
+    // imply the load succeeded and the tenant just has no shifts).
+    expect(screen.queryByText("General Duty")).not.toBeInTheDocument();
+    expect(screen.queryByText(/dopt-/)).not.toBeInTheDocument();
+    expect(screen.queryByText("No shifts defined")).not.toBeInTheDocument();
+    // StatCards show "—" rather than a fabricated 0 or a count of fake rows.
+    expect(screen.getAllByText("—").length).toBeGreaterThan(0);
   });
 
   it("shows link to shift change requests", async () => {

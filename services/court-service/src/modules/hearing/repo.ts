@@ -13,8 +13,12 @@ export async function insertHearing(tx: Writer, row: HearingInsert): Promise<voi
 
 export async function getHearingForUpdate(
   tx: Writer, tenantId: string, id: string,
-): Promise<{ status: string; version: number } | undefined> {
-  const rows = await tx.select({ status: hearings.status, version: hearings.version })
+): Promise<{ status: string; version: number; caseId: string } | undefined> {
+  // caseId is included alongside status/version (DOM-003) so a caller that
+  // needs to verify hearing OWNERSHIP -- e.g. order/consumer.ts's recordOrder,
+  // confirming a cited hearingId genuinely belongs to the case an order is
+  // being recorded against -- doesn't need a second query.
+  const rows = await tx.select({ status: hearings.status, version: hearings.version, caseId: hearings.caseId })
     .from(hearings)
     .where(and(eq(hearings.tenantId, tenantId), eq(hearings.id, id)))
     .limit(1);

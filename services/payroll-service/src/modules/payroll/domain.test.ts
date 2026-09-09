@@ -18,6 +18,11 @@ import {
   additionalPensionPct,
   DomainError,
   roundRupee,
+  DEFAULT_STATUTORY_CONFIG,
+  resolveStatutoryConfig,
+  type StatutoryConfig,
+  type StatutoryConfigRow,
+  type SlipInput,
 } from "./domain.js";
 
 // ---------------------------------------------------------------------------
@@ -318,5 +323,128 @@ describe("computeGratuity", () => {
   it("exactly at cap boundary — does not exceed ₹20 lakh", () => {
     const result = computeGratuity(30, inr(1_000_000)); // almost certain to exceed cap
     expect(result).toBeLessThanOrEqual(inr(20_00_000));
+  });
+});
+
+// ---------------------------------------------------------------------------
+// DOM-008 — statutory config: parity, override, effective-dating
+// ---------------------------------------------------------------------------
+//
+// Before DOM-008, PF 12% / wage cap ₹15,000 / EPS 8.33% capped ₹1,250 / ESI
+// ₹21,000 threshold at 0.75%/3.25% and the 80C/80D caps were hardcoded
+// directly in computeSlip. They are now read from an optional
+// `statutoryConfig` field on SlipInput that defaults to DEFAULT_STATUTORY_CONFIG
+// — the exact values that were hardcoded. This section proves three things
+// required by DOM-008's DoD ("changing a cap without a deploy changes the
+// computed slip") without weakening anything: (1) omitting the field is
+// byte-identical to the pre-fix hardcoded behaviour for every existing
+// caller/test, (2) supplying a different config actually changes the slip,
+// (3) the effective-dating resolution picks the right row.
+describe("DOM-008 — statutory config parity (no config vs. explicit DEFAULT_STATUTORY_CONFIG)", () => {
+  // Representative inputs spanning every PF/ESI/80C/80D boundary named in the
+  // gap's evidence: below/at/above the PF wage cap, just below/above the ESI
+  // gross threshold, and old-regime with 80C/80D declarations that exceed
+  // their caps (exercises the clamping branches, not just the pass-through).
+  const cases: Array<{ name: string; input: SlipInput }> = [
+    { name: "basic below PF wage cap (₹10,000)", input: { basicMinor: inr(10_000), daRateBps: 0n } },
+    { name: "basic exactly at PF wage cap (₹15,000)", input: { basicMinor: inr(15_000), daRateBps: 0n } },
+    { name: "basic above PF wage cap (₹20,000)", input: { basicMinor: inr(20_000), daRateBps: 0n } },
+    { name: "gross just below ESI threshold (Z-class, ₹15,000 basic)", input: { basicMinor: inr(15_000), daRateBps: 0n, cityClass: "Z" } },
+    { name: "gross above ESI threshold (X-class, ₹20,000 basic)", input: { basicMinor: inr(20_000), daRateBps: 0n, cityClass: "X" } },
+    {
+      name: "old regime, 80C/80D both over cap",
+      input: {
+        basicMinor: inr(40_000), daRateBps: 2000n, cityClass: "X", taxRegime: "old", fyStartYear: 2025,
+        declaration: { ded80cMinor: inr(300_000), ded80dMinor: inr(150_000), rentPaidAnnualMinor: inr(240_000) },
+        monthsRemaining: 6, tdsYtdMinor: 0n,
+      },
+    },
+    { name: "new regime, high earner", input: { basicMinor: inr(80_000), daRateBps: 0n, taxRegime: "new", fyStartYear: 2025, monthsRemaining: 3, tdsYtdMinor: inr(50_000) } },
+    { name: "GPF pension scheme (PF/ESI config irrelevant but must still match)", input: { basicMinor: inr(30_000), daRateBps: 0n, pensionScheme: "GPF" } },
+  ];
+
+  for (const { name, input } of cases) {
+    it(`${name}: identical result with statutoryConfig omitted vs. explicit default`, () => {
+      const withoutConfig = computeSlip(input);
+      const withExplicitDefault = computeSlip({ ...input, statutoryConfig: { ...DEFAULT_STATUTORY_CONFIG } });
+      expect(withExplicitDefault).toEqual(withoutConfig);
+    });
+  }
+});
+
+describe("DOM-008 — statutory config override changes the computed slip (the literal DoD)", () => {
+  it("raising the PF wage cap increases PF/EPS for a basic above the old cap", () => {
+    const basic = inr(20_000); // above the default ₹15,000 cap
+    const before = computeSlip({ basicMinor: basic, daRateBps: 0n });
+    const raisedCap: StatutoryConfig = { ...DEFAULT_STATUTORY_CONFIG, pfWageCapMinor: inr(25_000) };
+    const after = computeSlip({ basicMinor: basic, daRateBps: 0n, statutoryConfig: raisedCap });
+    // No deploy happened — only the config object changed — and the slip changed.
+    expect(after.pfEmployeeMinor).toBeGreaterThan(before.pfEmployeeMinor);
+    expect(after.pfEmployeeMinor).toBe(roundRupee((basic * 12n) / 100n)); // now uncapped at 20,000
+    expect(after.netPayMinor).toBeLessThan(before.netPayMinor);
+  });
+
+  it("lowering the ESI wage cap below gross drops ESI to 0", () => {
+    const basic = inr(15_000);
+    const before = computeSlip({ basicMinor: basic, daRateBps: 0n, cityClass: "Z" });
+    expect(before.esiMinor).toBeGreaterThan(0n); // sanity: ESI applies by default here
+    const loweredCap: StatutoryConfig = { ...DEFAULT_STATUTORY_CONFIG, esiWageCapMinor: inr(10_000) };
+    const after = computeSlip({ basicMinor: basic, daRateBps: 0n, cityClass: "Z", statutoryConfig: loweredCap });
+    expect(after.esiMinor).toBe(0n);
+    expect(after.esiEmployerMinor).toBe(0n);
+  });
+
+  it("changing the PF rate changes both employee and employer PF", () => {
+    const basic = inr(10_000);
+    const before = computeSlip({ basicMinor: basic, daRateBps: 0n });
+    const higherRate: StatutoryConfig = { ...DEFAULT_STATUTORY_CONFIG, pfRatePct: 15n };
+    const after = computeSlip({ basicMinor: basic, daRateBps: 0n, statutoryConfig: higherRate });
+    expect(after.pfEmployeeMinor).toBe(roundRupee((basic * 15n) / 100n));
+    expect(after.pfEmployeeMinor).toBeGreaterThan(before.pfEmployeeMinor);
+  });
+
+  it("lowering the 80C cap (old regime) increases taxable income", () => {
+    const input: SlipInput = {
+      basicMinor: inr(40_000), daRateBps: 0n, taxRegime: "old", fyStartYear: 2025,
+      declaration: { ded80cMinor: inr(150_000) }, // at the default cap exactly
+      monthsRemaining: 12, tdsYtdMinor: 0n,
+    };
+    const before = computeSlip(input);
+    const loweredCap: StatutoryConfig = { ...DEFAULT_STATUTORY_CONFIG, sec80cCapMinor: inr(50_000) };
+    const after = computeSlip({ ...input, statutoryConfig: loweredCap });
+    expect(after.annualTaxableMinor).toBeGreaterThan(before.annualTaxableMinor);
+  });
+});
+
+describe("DOM-008 — effective-dated resolution (resolveStatutoryConfig)", () => {
+  const platformOld: StatutoryConfigRow = { ...DEFAULT_STATUTORY_CONFIG, tenantId: null, effectiveFrom: "2000-01-01" };
+  const platformNew: StatutoryConfigRow = { ...DEFAULT_STATUTORY_CONFIG, pfWageCapMinor: inr(21_000), tenantId: null, effectiveFrom: "2026-04-01" };
+  const tenantOverride: StatutoryConfigRow = { ...DEFAULT_STATUTORY_CONFIG, pfWageCapMinor: inr(99_000), tenantId: "tenant-a", effectiveFrom: "2025-01-01" };
+  const rows = [platformOld, platformNew, tenantOverride];
+
+  it("picks the platform default row effective on/before the period when the tenant has no override", () => {
+    const cfg = resolveStatutoryConfig(rows, "tenant-b", "2025-06");
+    expect(cfg.pfWageCapMinor).toBe(platformOld.pfWageCapMinor);
+  });
+
+  it("picks the LATEST platform default row on/before the period, not just any matching row", () => {
+    const cfg = resolveStatutoryConfig(rows, "tenant-b", "2026-06");
+    expect(cfg.pfWageCapMinor).toBe(platformNew.pfWageCapMinor);
+  });
+
+  it("a tenant's own override wins over the platform default, even an older one", () => {
+    const cfg = resolveStatutoryConfig(rows, "tenant-a", "2025-06");
+    expect(cfg.pfWageCapMinor).toBe(tenantOverride.pfWageCapMinor);
+  });
+
+  it("a tenant override effective AFTER the period is not used; falls back to platform default", () => {
+    const futureOverride: StatutoryConfigRow = { ...DEFAULT_STATUTORY_CONFIG, pfWageCapMinor: inr(50_000), tenantId: "tenant-a", effectiveFrom: "2027-01-01" };
+    const cfg = resolveStatutoryConfig([...rows, futureOverride], "tenant-a", "2025-06");
+    expect(cfg.pfWageCapMinor).toBe(tenantOverride.pfWageCapMinor); // the 2025-01-01 row, not the 2027 one
+  });
+
+  it("falls back to the literal DEFAULT_STATUTORY_CONFIG when no row matches at all", () => {
+    const cfg = resolveStatutoryConfig([], "tenant-z", "2025-06");
+    expect(cfg).toEqual(DEFAULT_STATUTORY_CONFIG);
   });
 });
