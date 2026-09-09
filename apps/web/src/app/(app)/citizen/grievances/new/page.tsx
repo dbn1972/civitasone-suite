@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { PageHeader } from "../../../../_components/ds";
+import { useFormError } from "@/lib/useFormError";
 
 const CATEGORIES = [
   { value: "service_delivery", label: "Service Delivery" },
@@ -21,7 +22,9 @@ export default function RegisterGrievancePage() {
   const [applicantName, setApplicantName] = useState("");
   const [dpdpConsent, setDpdpConsent] = useState(false);
   const [status, setStatus] = useState<"idle" | "submitting" | "error">("idle");
+  /** Client-authored copy for pre-submit validation (field presence, consent gate) — never server text. */
   const [message, setMessage] = useState("");
+  const formError = useFormError("grievance");
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -37,6 +40,7 @@ export default function RegisterGrievancePage() {
     }
     setStatus("submitting");
     setMessage("");
+    formError.clear();
     const body = {
       subject: subject.trim(),
       description: description.trim(),
@@ -49,17 +53,16 @@ export default function RegisterGrievancePage() {
         headers: { "content-type": "application/json" },
         body: JSON.stringify(body),
       });
-      const text = await res.text();
       if (!res.ok) {
         setStatus("error");
-        setMessage(text || `Request failed (${res.status})`);
+        await formError.fromResponse(res, "save");
         return;
       }
       router.push("/citizen/grievances");
       router.refresh();
-    } catch (err) {
+    } catch {
       setStatus("error");
-      setMessage(err instanceof Error ? err.message : "Network error");
+      formError.fromException("save");
     }
   }
 
@@ -91,6 +94,9 @@ export default function RegisterGrievancePage() {
               style={{ minHeight: 44 }}
               placeholder="Full name of the complainant"
             />
+            {formError.fieldError("complainantName") && (
+              <span style={{ fontSize: 12, color: "var(--bad)" }}>{formError.fieldError("complainantName")}</span>
+            )}
           </div>
           <div className="field" style={{ background: "#fff", padding: "13px 16px" }}>
             <label className="label" htmlFor="category">
@@ -110,6 +116,9 @@ export default function RegisterGrievancePage() {
                 </option>
               ))}
             </select>
+            {formError.fieldError("category") && (
+              <span style={{ fontSize: 12, color: "var(--bad)" }}>{formError.fieldError("category")}</span>
+            )}
           </div>
           <div className="field" style={{ background: "#fff", padding: "13px 16px" }}>
             <label className="label" htmlFor="subject">
@@ -124,6 +133,9 @@ export default function RegisterGrievancePage() {
               style={{ minHeight: 44 }}
               placeholder="Brief description of the grievance"
             />
+            {formError.fieldError("subject") && (
+              <span style={{ fontSize: 12, color: "var(--bad)" }}>{formError.fieldError("subject")}</span>
+            )}
           </div>
           <div
             className="field"
@@ -141,6 +153,9 @@ export default function RegisterGrievancePage() {
               required
               placeholder="Provide full details of the grievance, including dates and parties involved."
             />
+            {formError.fieldError("description") && (
+              <span style={{ fontSize: 12, color: "var(--bad)" }}>{formError.fieldError("description")}</span>
+            )}
           </div>
         </div>
 
@@ -214,6 +229,11 @@ export default function RegisterGrievancePage() {
               }}
             >
               {message}
+            </p>
+          ) : null}
+          {formError.message ? (
+            <p role="alert" style={{ marginTop: 12, color: "var(--bad)", fontSize: "0.875rem" }}>
+              {formError.message}
             </p>
           ) : null}
         </div>

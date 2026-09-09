@@ -77,4 +77,53 @@ describe("CreateIndentForm — purpose is required and actually sent (regression
     expect(alert.textContent).not.toMatch(/VALIDATION_FAILED/);
     expect(alert.textContent).toMatch(/couldn't save/i);
   });
+
+  // UX-003: the shared useFormError hook must render the backend's per-field
+  // fieldErrors inline, not just the generic toHumanError summary line.
+  it("renders inline field-level messages from a fieldErrors response, not just a raw error string", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          code: "VALIDATION_FAILED",
+          message: "validation_failed",
+          fieldErrors: [{ field: "department", message: "Department must be a recognised office code." }],
+        }),
+        { status: 400, headers: { "content-type": "application/json" } },
+      ),
+    );
+    render(<CreateIndentForm />);
+    await fillOneLineItem();
+    fireEvent.change(screen.getByLabelText("Purpose / justification *"), {
+      target: { value: "Replenish office stationery for Q3" },
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Submit for approval" }));
+
+    expect(
+      await screen.findByText("Department must be a recognised office code."),
+    ).toBeInTheDocument();
+  });
+
+  // UX-003: never show a raw HTTP status code or raw server error text, even
+  // for a non-JSON / plain-text failure body.
+  it("never surfaces a raw status code or raw server text on a plain-text 500", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response("Internal Server Error\n at Object.<anonymous> (/srv/indent.js:12:3)", {
+        status: 500,
+        headers: { "content-type": "text/plain" },
+      }),
+    );
+    render(<CreateIndentForm />);
+    await fillOneLineItem();
+    fireEvent.change(screen.getByLabelText("Purpose / justification *"), {
+      target: { value: "Replenish office stationery for Q3" },
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Submit for approval" }));
+
+    const alert = await screen.findByRole("alert");
+    expect(alert.textContent).not.toMatch(/\b500\b/);
+    expect(alert.textContent).not.toMatch(/Internal Server Error/);
+    expect(alert.textContent).not.toMatch(/at Object\.<anonymous>/);
+  });
 });

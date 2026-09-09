@@ -6,6 +6,7 @@ import { useId, useState } from "react";
 import { ConfirmDialog } from "../../../_components/ds";
 import { useToast } from "@/app/_components/ds/Toast";
 import { trackActivation } from "@/lib/activation";
+import { useFormError } from "@/lib/useFormError";
 
 type Structure = { id: string; name: string };
 
@@ -36,8 +37,9 @@ export function CreatePayrollRunForm({ structures, existingPeriods = [] }: Props
   const [message, setMessage] = useState<string | null>(null);
   const [tone, setTone] = useState<"good" | "bad">("good");
   const [confirmOpen, setConfirmOpen] = useState(false);
-  const [fieldErrors, setFieldErrors] = useState<{runNo?: string; structureId?: string; month?: string}>({});
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [dialogError, setDialogError] = useState<string | undefined>();
+  const formError = useFormError("payroll run");
 
   const runNoId = useId();
   const structId = useId();
@@ -70,20 +72,24 @@ export function CreatePayrollRunForm({ structures, existingPeriods = [] }: Props
   async function createRun() {
     setBusy(true);
     setDialogError(undefined);
+    formError.clear();
     try {
       const res = await fetch("/api/proxy/v1/payroll/runs", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ runNo, month, structureId }),
       });
-      const text = await res.text();
       if (!res.ok) {
-        let errMsg: string;
-        try { const pErr = JSON.parse(text); errMsg = pErr.message || pErr.error || text; }
-        catch { errMsg = text; }
-        setDialogError(errMsg || `Create failed (${res.status})`);
+        const resolved = await formError.fromResponse(res, "save");
+        // Merge server field errors into the same state the pre-submit
+        // client validation already renders inline (runNo/structureId/month).
+        if (Object.keys(resolved.fieldErrors).length > 0) {
+          setFieldErrors((prev) => ({ ...prev, ...resolved.fieldErrors }));
+        }
+        setDialogError(resolved.message);
         return;
       }
+      const text = await res.text();
       const body = text ? (JSON.parse(text) as { id?: string }) : {};
       setConfirmOpen(false);
       trackActivation("first_transaction");
@@ -95,8 +101,8 @@ export function CreatePayrollRunForm({ structures, existingPeriods = [] }: Props
         setMessage("Payroll run created.");
         router.refresh();
       }
-    } catch (err) {
-      setDialogError(err instanceof Error ? err.message : "Network error. Please try again.");
+    } catch {
+      setDialogError(formError.fromException("save").message);
     } finally {
       setBusy(false);
     }
@@ -105,7 +111,7 @@ export function CreatePayrollRunForm({ structures, existingPeriods = [] }: Props
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setMessage(null);
-    const errors: {runNo?: string; structureId?: string; month?: string} = {};
+    const errors: Record<string, string> = {};
     if (!runNo.trim()) errors.runNo = "Run number is required.";
     if (!structureId) errors.structureId = "Pay structure is required.";
     if (!month) errors.month = "Month is required.";
@@ -150,6 +156,7 @@ export function CreatePayrollRunForm({ structures, existingPeriods = [] }: Props
                 <option key={i + 1} value={i + 1}>{name}</option>
               ))}
             </select>
+            {fieldErrors.month && <span style={{ fontSize: 12, color: "var(--bad)" }}>{fieldErrors.month}</span>}
           </div>
           {/* Year select */}
           <div style={{ display: "grid", gap: 6 }}>

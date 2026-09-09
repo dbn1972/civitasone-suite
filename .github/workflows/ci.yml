@@ -319,6 +319,14 @@ jobs:
       # database, so nothing else can see this.
       - name: Test ledger poison guard (hardcoded messageIds must be cleared)
         run: node scripts/ci/test-ledger-poison-guard.mjs
+      # UX-003: clerks were shown raw HTTP status codes and raw server text
+      # (`Request failed (${res.status})`) instead of the catalogued
+      # toHumanError copy. Fixture tests first (sabotage-checked — see the
+      # UX-003 PR description), then the guard against the real tree.
+      - name: Raw status-leak guard unit tests
+        run: pnpm exec vitest run tests/architecture/raw-status-leak-guard.test.ts
+      - name: Raw status-leak guard (no raw status codes / "Request failed" copy, UX-003)
+        run: node scripts/ci/raw-status-leak-guard.mjs
       - name: Check no cross-service DB joins
         run: |
           # L1 rule: no service may import another service's schema
