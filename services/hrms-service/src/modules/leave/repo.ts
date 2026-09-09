@@ -4,6 +4,8 @@ import {
   hrmsLeaveTypes, hrmsLeaveAllocs, hrmsLeaveApps,
   type LeaveAppRow, type LeaveAllocRow,
 } from "./schema.js";
+import { hrmsLeavePolicyRules, type LeavePolicyRuleRow } from "./policy-schema.js";
+import { hrmsEmployees } from "../employee/schema.js";
 
 export type Writer = Pick<typeof db, "insert" | "update" | "select">;
 
@@ -159,4 +161,67 @@ export async function creditLeaveBalance(tx: Writer, allocId: string, days: numb
       updatedAt: new Date(),
     })
     .where(eq(hrmsLeaveAllocs.id, allocId));
+}
+
+// ─── DOM-009: tenant-configured leave policy lookups ───────────────────────
+// Reads the real, admin-editable `hrms_leave_policy_rules` table (already
+// written to by policy-admin-routes.ts / f3-consumer.ts) so the apply path
+// and the allocation/credit path stop substituting the hardcoded
+// rules-engine.ts catalog for every tenant. Two variants, matching every
+// other dual-lookup pair in this file: a `scopedRead`-based one for route
+// handlers / rules-engine.ts (not already inside a transaction), and a
+// `...Tx` one that reads through a caller-supplied `tx` for consumers that
+// are already inside a db.transaction() — see
+// .claude/skills/16-production-readiness-audit.md section 1 for why a nested
+// scopedRead() inside an open transaction can deadlock the pool under load.
+
+export async function findTenantLeavePolicy(
+  tenantId: string, leaveTypeId: string, employeeType: string,
+): Promise<LeavePolicyRuleRow | null> {
+  const rows = await scopedRead((tx) => tx.select().from(hrmsLeavePolicyRules)
+    .where(and(
+      eq(hrmsLeavePolicyRules.tenantId, tenantId),
+      eq(hrmsLeavePolicyRules.leaveTypeId, leaveTypeId),
+      eq(hrmsLeavePolicyRules.employeeType, employeeType),
+      eq(hrmsLeavePolicyRules.isActive, true),
+    )).limit(1));
+  return rows[0] ?? null;
+}
+
+/** Tx-scoped variant of findTenantLeavePolicy -- see note above. */
+export async function findTenantLeavePolicyTx(
+  tx: Writer, tenantId: string, leaveTypeId: string, employeeType: string,
+): Promise<LeavePolicyRuleRow | null> {
+  const rows = await (tx as typeof db).select().from(hrmsLeavePolicyRules)
+    .where(and(
+      eq(hrmsLeavePolicyRules.tenantId, tenantId),
+      eq(hrmsLeavePolicyRules.leaveTypeId, leaveTypeId),
+      eq(hrmsLeavePolicyRules.employeeType, employeeType),
+      eq(hrmsLeavePolicyRules.isActive, true),
+    )).limit(1);
+  return rows[0] ?? null;
+}
+
+/**
+ * DOM-009 — resolve the raw ingredients the EL-cap decision needs for one
+ * allocation: the employee's own employeeType (as stored on their record —
+ * this is the same free-text value an HR admin picks when configuring a
+ * policy row, which may differ from the rules-engine's narrower default
+ * EmployeeType bucket), the leave type's code (for the platform-default
+ * fallback catalog in rules-engine.ts), and the tenant's admin-configured
+ * policy row for that (tenantId, leaveTypeId, employeeType) combination, if
+ * one exists. Tx-scoped: called from inside the leaveAllocate consumer's own
+ * open transaction, so it must read through that same `tx` (see the
+ * nested-transaction-deadlock note above) rather than opening a second one.
+ */
+export async function findAccumulationCapInputsTx(
+  tx: Writer, tenantId: string, employeeId: string, leaveTypeId: string,
+): Promise<{ policyRow: LeavePolicyRuleRow | null; leaveCode: string; employeeType: string }> {
+  const [emp] = await (tx as typeof db).select({ employeeType: hrmsEmployees.employeeType })
+    .from(hrmsEmployees).where(eq(hrmsEmployees.id, employeeId)).limit(1);
+  const employeeType = emp?.employeeType ?? "permanent";
+  const [lt] = await (tx as typeof db).select({ code: hrmsLeaveTypes.code })
+    .from(hrmsLeaveTypes).where(eq(hrmsLeaveTypes.id, leaveTypeId)).limit(1);
+  const policyRow = await findTenantLeavePolicyTx(tx, tenantId, leaveTypeId, employeeType);
+  return { policyRow, leaveCode: lt?.code ?? "", employeeType };
 }
