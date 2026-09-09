@@ -56,6 +56,33 @@ echo "→ $ROOT/infra/db/bootstrap/bootstrap_admin_role.sql"
 psql -h "$PGHOST" -p "$PGPORT" -U "$PGUSER" -d "$PGDATABASE" -v ON_ERROR_STOP=1 \
      -v admin_pw="$ADMIN_PW" -f "$ROOT/infra/db/bootstrap/bootstrap_admin_role.sql"
 
+# PERF-010: pg_stat_statements was never enabled anywhere in this codebase's
+# Postgres configuration. Must run as this same bootstrapping superuser,
+# against $PGDATABASE (postgres), and AFTER the server has actually started
+# with shared_preload_libraries=pg_stat_statements (see the postgres service
+# `command:` in infra/docker-compose.yml / infra/docker-compose.prod.yml --
+# that half of the fix cannot be done from SQL, since it is a
+# postmaster-start-time GUC). See bootstrap_pg_stat_statements.sql for the
+# fresh-container verification this was tested against.
+#
+# Deliberately BEST-EFFORT here, not run_bootstrap's fatal ON_ERROR_STOP=1:
+# this same script also runs against ci.yml's / dr-drill.yml's plain
+# `postgres:16-alpine` GitHub Actions SERVICE containers, and GitHub Actions
+# `services:` has no `command:` field -- there is no way for those jobs to
+# pass shared_preload_libraries at server start. Making this fatal would
+# have broken every existing CI job that calls this script the moment this
+# line was added. Where the server WAS started with the library preloaded
+# (infra/docker-compose.yml's postgres service, or scripts/perf/'s CI job,
+# both fixed in this same change), this succeeds and pg_stat_statements
+# actually captures. Where it wasn't (today's plain CI service containers),
+# this warns and the rest of the bootstrap proceeds exactly as before.
+echo "→ $ROOT/infra/db/bootstrap/bootstrap_pg_stat_statements.sql (best-effort)"
+if ! psql -h "$PGHOST" -p "$PGPORT" -U "$PGUSER" -d "$PGDATABASE" -v ON_ERROR_STOP=1 \
+     -f "$ROOT/infra/db/bootstrap/bootstrap_pg_stat_statements.sql" 2>/tmp/pg-stat-statements-bootstrap.err; then
+  echo "⚠ pg_stat_statements not enabled on this Postgres (shared_preload_libraries not set at server start -- expected on a plain CI service container, see the comment above). Continuing without it:"
+  cat /tmp/pg-stat-statements-bootstrap.err
+fi
+
 run_bootstrap "$ROOT/infra/db/bootstrap/bootstrap.generated.sql"
 run_bootstrap "$ROOT/infra/db/bootstrap/bootstrap_new_services.sql"
 # refund-service is in the SERVICE_DBS migration loop below (its own
