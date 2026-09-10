@@ -48,6 +48,19 @@ services:
       interval: 10s
       timeout: 5s
       retries: 12
+    # PERF-018: this fleet runs 1,483+ SQS queues across 31 services; the
+    # container was previously running with an undocumented, ad-hoc 1GiB
+    # `docker update` memory cap (never set here in compose) that left it
+    # pinned at ~99.7% RSS (1021Mi/1Gi). The localstackdata volume itself is
+    # <1MB on disk, ruling out disk-backed message/data buildup -- the
+    # pressure is in-process bookkeeping for a large queue count, not a
+    # growing backlog. Under that pressure even read-only `awslocal sqs`
+    # calls hang indefinitely (reproduced live while investigating this gap),
+    # matching the gap's own queue.publish-hang symptom. Codifying an
+    # explicit, larger limit here so it is IaC-governed instead of invisible
+    # host-side drift.
+    mem_limit: 3g
+    mem_reservation: 768m
     networks: [civitasone]
 
   postgres:

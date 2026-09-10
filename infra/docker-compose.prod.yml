@@ -96,6 +96,11 @@ services:
       timeout: 10s
       retries: 10
       start_period: 30s
+    # PERF-018: same undersized/undocumented memory cap found on the shared
+    # dev fleet (docker-compose.yml) applies here in principle -- codify an
+    # explicit bound proactively so prod never inherits the same ad-hoc drift.
+    mem_limit: 3g
+    mem_reservation: 768m
 
   pgbouncer:
     image: edoburu/pgbouncer:1.21.0
