@@ -45,12 +45,13 @@ export function registerVersionsConsumers(queue: Queue): void {
       if (!(await markProcessed(tx, msg.messageId))) return;
       const p = msg.payload as { id: string; documentId: string; versionId: string; changeNote: string; tenantId: string };
 
-      // Get the version being restored
-      const sourceVersion = await repo.getById(p.tenantId, p.versionId);
+      // Get the version being restored -- TX-001: routed through the Tx
+      // sibling since we are already inside db.transaction() above.
+      const sourceVersion = await repo.getByIdTx(tx, p.tenantId, p.versionId);
       if (!sourceVersion) return;
 
       // Create a new version that copies the restored version's S3 key
-      const nextVersionNo = (await repo.getLatestVersionNo(p.tenantId, p.documentId)) + 1;
+      const nextVersionNo = (await repo.getLatestVersionNoTx(tx, p.tenantId, p.documentId)) + 1;
       await repo.insert(tx, {
         id: p.id,
         tenantId: p.tenantId,
