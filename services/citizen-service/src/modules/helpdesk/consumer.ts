@@ -119,7 +119,7 @@ export function registerHelpdeskConsumers(rawQueue: Queue): void {
       if (!(await markProcessed(tx, msg.messageId))) return;
       const ticket = await repo.findTicketByIdTx(tx, p.ticketId, msg.tenantId);
       if (!ticket) return;
-      const level = (await repo.countEscalationsForTicket(p.tenantId, p.ticketId)) + 1;
+      const level = (await repo.countEscalationsForTicketTx(tx, p.tenantId, p.ticketId)) + 1;
       await repo.insertEscalation(tx, {
         id: p.id,
         tenantId: p.tenantId,
@@ -149,7 +149,7 @@ export function registerHelpdeskConsumers(rawQueue: Queue): void {
       if (!ticket) return;
       if (computeSlaStatus(ticket) !== "breached") return;
       if (ticket.status === "closed" || ticket.status === "resolved") return;
-      const level = (await repo.countEscalationsForTicket(p.tenantId, p.ticketId)) + 1;
+      const level = (await repo.countEscalationsForTicketTx(tx, p.tenantId, p.ticketId)) + 1;
       await repo.insertEscalation(tx, {
         tenantId: p.tenantId, ticketId: p.ticketId, escalatedBy: msg.actorId,
         reason: "auto_escalation: SLA breached", level,
