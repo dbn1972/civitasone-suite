@@ -62,6 +62,24 @@ export async function getStepDefinitions(wizardId: string, tenantId: string): Pr
   });
 }
 
+/**
+ * TX-001 -- tenant-scoped sibling of getStepDefinitions(). Reads through a
+ * caller-supplied transaction handle so an already-open db.transaction()
+ * (orchestrator/consumer.ts's stepStart/stepComplete/stepSkip handlers, and
+ * resolveDag() which they call while inside that transaction) does not open
+ * a second, bare db.transaction() from inside itself: under pool.max
+ * concurrent in-flight consumer transactions, the nested call has no free
+ * connection to open on and deadlocks the pool silently. Route every read
+ * that happens inside an already-open consumer transaction through this,
+ * not getStepDefinitions().
+ */
+export async function getStepDefinitionsTx(tx: Writer, wizardId: string, tenantId: string): Promise<StepDefRow[]> {
+  return tx
+    .select()
+    .from(stepDefinitions)
+    .where(and(eq(stepDefinitions.wizardId, wizardId), eq(stepDefinitions.tenantId, tenantId)));
+}
+
 export async function insertStepDefinitions(tx: Writer, rows: StepDefInsert[]): Promise<void> {
   if (rows.length === 0) return;
   await tx.insert(stepDefinitions).values(rows);
@@ -77,6 +95,24 @@ export async function getStepExecutions(wizardId: string, tenantId: string): Pro
       .from(stepExecutions)
       .where(and(eq(stepExecutions.wizardId, wizardId), eq(stepExecutions.tenantId, tenantId)));
   });
+}
+
+/**
+ * TX-001 -- tenant-scoped sibling of getStepExecutions(). Reads through a
+ * caller-supplied transaction handle so an already-open db.transaction()
+ * (orchestrator/consumer.ts's stepStart/stepComplete/stepSkip handlers, and
+ * resolveDag() which they call while inside that transaction) does not open
+ * a second, bare db.transaction() from inside itself: under pool.max
+ * concurrent in-flight consumer transactions, the nested call has no free
+ * connection to open on and deadlocks the pool silently. Route every read
+ * that happens inside an already-open consumer transaction through this,
+ * not getStepExecutions().
+ */
+export async function getStepExecutionsTx(tx: Writer, wizardId: string, tenantId: string): Promise<StepExecRow[]> {
+  return tx
+    .select()
+    .from(stepExecutions)
+    .where(and(eq(stepExecutions.wizardId, wizardId), eq(stepExecutions.tenantId, tenantId)));
 }
 
 export async function insertStepExecutions(tx: Writer, rows: StepExecInsert[]): Promise<void> {
