@@ -111,7 +111,9 @@ export function registerOrchestratorConsumers(queue: Queue): void {
         startedAt: new Date(),
       });
 
-      const defs = await repo.getStepDefinitions(wizardId, msg.tenantId);
+      // TX-001: nested inside this handler's outer db.transaction() -- must
+      // route through the Tx sibling, not the bare (self-transacting) original.
+      const defs = await repo.getStepDefinitionsTx(tx, wizardId, msg.tenantId);
       const def = defs.find((d) => d.stepKey === stepKey);
       if (def?.handlerType === DOMAIN_PACK_ACTIVATE_HANDLER) {
         const cfg = (def.config ?? {}) as { domainPackKey?: string; packKeys?: string[] };
@@ -175,8 +177,10 @@ export function registerOrchestratorConsumers(queue: Queue): void {
       await emit(tx, msg, EVENTS.stepCompleted, { wizardId, stepKey }, "step_completed", wizardId);
 
       // Check if wizard is now complete
-      const defs = await repo.getStepDefinitions(wizardId, msg.tenantId);
-      const execs = await repo.getStepExecutions(wizardId, msg.tenantId);
+      // TX-001: nested inside this handler's outer db.transaction() -- must
+      // route through the Tx siblings, not the bare (self-transacting) originals.
+      const defs = await repo.getStepDefinitionsTx(tx, wizardId, msg.tenantId);
+      const execs = await repo.getStepExecutionsTx(tx, wizardId, msg.tenantId);
       const stepDefs: StepDef[] = defs.map((d) => ({ stepKey: d.stepKey, isRequired: d.isRequired, dependsOn: d.dependsOn ?? [] }));
       const stepExecs: StepExec[] = execs.map((e) => ({ stepKey: e.stepKey, status: e.status as StepExec["status"] }));
 
@@ -205,8 +209,10 @@ export function registerOrchestratorConsumers(queue: Queue): void {
       await emit(tx, msg, EVENTS.stepSkipped, { wizardId, stepKey }, "step_skipped", wizardId);
 
       // Check if wizard is now complete
-      const defs = await repo.getStepDefinitions(wizardId, msg.tenantId);
-      const execs = await repo.getStepExecutions(wizardId, msg.tenantId);
+      // TX-001: nested inside this handler's outer db.transaction() -- must
+      // route through the Tx siblings, not the bare (self-transacting) originals.
+      const defs = await repo.getStepDefinitionsTx(tx, wizardId, msg.tenantId);
+      const execs = await repo.getStepExecutionsTx(tx, wizardId, msg.tenantId);
       const stepDefs: StepDef[] = defs.map((d) => ({ stepKey: d.stepKey, isRequired: d.isRequired, dependsOn: d.dependsOn ?? [] }));
       const stepExecs: StepExec[] = execs.map((e) => ({ stepKey: e.stepKey, status: e.status as StepExec["status"] }));
 
@@ -223,9 +229,14 @@ export function registerOrchestratorConsumers(queue: Queue): void {
 /**
  * After a step completes/skips, resolve the DAG and unblock ready steps.
  */
+// TX-001: resolveDag() always runs from inside a caller's outer
+// db.transaction() (stepComplete/stepSkip) -- its reads must route through
+// the Tx siblings, not the bare (self-transacting) originals, or the nested
+// call has no free pool connection under pool.max concurrent handlers and
+// deadlocks silently.
 async function resolveDag(tx: repo.Writer, tenantId: string, wizardId: string, _actorId: string): Promise<void> {
-  const defs = await repo.getStepDefinitions(wizardId, tenantId);
-  const execs = await repo.getStepExecutions(wizardId, tenantId);
+  const defs = await repo.getStepDefinitionsTx(tx, wizardId, tenantId);
+  const execs = await repo.getStepExecutionsTx(tx, wizardId, tenantId);
 
   const stepDefs: StepDef[] = defs.map((d) => ({
     stepKey: d.stepKey,
