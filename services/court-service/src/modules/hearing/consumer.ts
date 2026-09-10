@@ -5,7 +5,10 @@ import { COMMANDS, EVENTS } from "../../topics.js";
 import { hearings } from "./schema.js";
 import * as repo from "./repo.js";
 import * as configRepo from "../config-registry/repo.js";
-import { assertTransition, DEFAULT_HEARING_PURPOSES, assertHearingPurposeAllowed } from "./domain.js";
+import * as caseRepo from "../case-registry/repo.js";
+import {
+  assertTransition, DEFAULT_HEARING_PURPOSES, assertHearingPurposeAllowed, assertCaseOpenForHearing,
+} from "./domain.js";
 import { effectiveAllowed } from "../config-registry/domain.js";
 
 type ScheduleHearingPayload = {
@@ -41,6 +44,19 @@ export function registerHearingConsumers(
     const p = msg.payload;
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
+
+      // DOM-003 — the case must exist and must not already be in a terminal
+      // state (disposed/appealed) before a hearing can be scheduled against
+      // it. A real DB read inside THIS transaction, not anything the client
+      // asserts. Mirrors order/consumer.ts's recordOrder guard (#1119).
+      const theCase = await caseRepo.getCaseForUpdate(tx, p.tenantId, p.caseId);
+      if (!theCase) throw new NonRetryableError(`CASE_NOT_FOUND: ${p.caseId}`);
+      try {
+        assertCaseOpenForHearing(p.caseId, theCase.status);
+      } catch (e) {
+        throw new NonRetryableError((e as Error).message);
+      }
+
       // §47 config/metadata: purpose is OPTIONAL — validate ONLY when present
       // against the effective allowed set: the tenant’s configured `hearing_purpose`
       // values when any exist (AUTHORITATIVE — REPLACES the defaults), else
@@ -86,6 +102,17 @@ export function registerHearingConsumers(
       const current = await repo.getHearingForUpdate(tx, p.tenantId, p.hearingId);
       if (!current) throw new NonRetryableError(`HEARING_NOT_FOUND: ${p.hearingId}`);
       if (current.status === "adjourned") return; // already adjourned; no-op
+
+      // DOM-003 — the hearing's OWN case (read off the hearing row itself,
+      // never anything the client asserts) must not already be terminal
+      // (disposed/appealed) before this hearing can be adjourned.
+      const theCase = await caseRepo.getCaseForUpdate(tx, p.tenantId, current.caseId);
+      if (!theCase) throw new NonRetryableError(`CASE_NOT_FOUND: ${current.caseId}`);
+      try {
+        assertCaseOpenForHearing(current.caseId, theCase.status);
+      } catch (e) {
+        throw new NonRetryableError((e as Error).message);
+      }
 
       if (current.version !== p.expectedVersion) {
         throw new NonRetryableError(
@@ -133,6 +160,17 @@ export function registerHearingConsumers(
       const current = await repo.getHearingForUpdate(tx, p.tenantId, p.hearingId);
       if (!current) throw new NonRetryableError(`HEARING_NOT_FOUND: ${p.hearingId}`);
       if (current.status === p.outcome) return; // already in target state; no-op
+
+      // DOM-003 — the hearing's OWN case (read off the hearing row itself,
+      // never anything the client asserts) must not already be terminal
+      // (disposed/appealed) before this hearing's outcome can be recorded.
+      const theCase = await caseRepo.getCaseForUpdate(tx, p.tenantId, current.caseId);
+      if (!theCase) throw new NonRetryableError(`CASE_NOT_FOUND: ${current.caseId}`);
+      try {
+        assertCaseOpenForHearing(current.caseId, theCase.status);
+      } catch (e) {
+        throw new NonRetryableError((e as Error).message);
+      }
 
       if (current.version !== p.expectedVersion) {
         throw new NonRetryableError(

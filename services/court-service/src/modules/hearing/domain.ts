@@ -3,6 +3,7 @@
  * No I/O.
  */
 import { deterministicId, COURT_NAMESPACE } from "../court-registry/domain.js";
+import { isTerminal, type CaseStatus } from "../case-lifecycle/domain.js";
 
 export const HEARING_STATUSES = ["scheduled", "held", "adjourned", "cancelled"] as const;
 export type HearingStatus = typeof HEARING_STATUSES[number];
@@ -55,5 +56,31 @@ export const DEFAULT_HEARING_PURPOSES = [
 export function assertHearingPurposeAllowed(purpose: string, allowed: ReadonlySet<string>): void {
   if (!allowed.has(purpose)) {
     throw new Error(`INVALID_HEARING_PURPOSE: ${purpose} is not an allowed hearing purpose for this tenant`);
+  }
+}
+
+/**
+ * DOM-003 (hearing-side) — mirrors order/domain.ts's assertCaseOpenForOrder:
+ * a case in a terminal status (disposed/appealed -- see case-lifecycle/domain.ts's
+ * isTerminal, the same single source of truth the order-side fix (#1119) uses)
+ * can never have a hearing scheduled against it, nor an existing hearing on it
+ * adjourned or have its outcome recorded -- all three are live judicial acts
+ * against a case that's already closed. Reject explicitly (CASE_TERMINAL)
+ * rather than silently accepting it.
+ *
+ * Unlike an order (which cites a hearingId by cross-reference and so needs a
+ * separate "does this hearing belong to this case" ownership check -- see
+ * assertHearingUsableForOrder), a hearing IS the case-scoped row: its caseId
+ * comes either directly off the client payload at schedule time (never a
+ * second, independently-suppliable id) or, for adjourn/record-outcome, off
+ * the hearing row itself as read from the DB (hearingRepo.getHearingForUpdate),
+ * never from anything the client asserts. There is no cross-reference to
+ * mismatch, so no separate ownership guard is needed here.
+ */
+export function assertCaseOpenForHearing(caseId: string, status: string): void {
+  if (isTerminal(status as CaseStatus)) {
+    throw new Error(
+      `CASE_TERMINAL: cannot schedule, adjourn, or record an outcome for a hearing against case ${caseId} in terminal status '${status}'`,
+    );
   }
 }
