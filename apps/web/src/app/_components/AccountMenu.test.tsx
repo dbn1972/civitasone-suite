@@ -1,10 +1,20 @@
 import { describe, it, expect, vi } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render as rtlRender, screen, fireEvent } from "@testing-library/react";
+import { NextIntlClientProvider } from "next-intl";
 import { AccountMenu } from "./AccountMenu";
+import enMessages from "@/messages/en.json";
 
 vi.mock("@/lib/sync/logout", () => ({
   performLogout: vi.fn().mockResolvedValue(undefined),
 }));
+
+// UX-004: AccountMenu renders LanguageSwitcher, which now reads next-intl's
+// useLocale() instead of the old (never-mounted) lib/i18n LocaleProvider —
+// so every render here needs the same NextIntlClientProvider the real root
+// layout supplies.
+function render(ui: React.ReactElement) {
+  return rtlRender(<NextIntlClientProvider locale="en" messages={enMessages}>{ui}</NextIntlClientProvider>);
+}
 
 describe("AccountMenu", () => {
   it("renders account button with avatar", () => {

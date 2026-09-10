@@ -5,7 +5,7 @@ import type { GrievanceSummary } from "../_data";
 import { useResource } from "../../../_data/useResource";
 import { toHumanError } from "@/lib/messages";
 import { GrievancesTable, type GrievanceRow } from "./GrievancesTable";
-import { serverT } from "@/lib/i18n/server";
+import { getTranslations } from "next-intl/server";
 
 const TODAY = new Date().toISOString().slice(0, 10);
 
@@ -21,7 +21,7 @@ function daysRemaining(dueDate: string | null | undefined, today: string): numbe
 const CLOSED_STATUSES = new Set(["resolved", "closed", "disposed"]);
 
 export default async function GrievancesPage() {
-  const t = serverT();
+  const t = await getTranslations("grievances");
   const result = await getGrievances();
   const { data: grievances } = result;
   const resource = useResource(result);
@@ -49,19 +49,19 @@ export default async function GrievancesPage() {
   return (
     <>
       <PageHeader
-        title={t("grievances.title")}
-        subtitle={t("grievances.subtitle")}
+        title={t("title")}
+        subtitle={t("subtitle")}
         actions={
           <Link href="/citizen/grievances/new" className="btn primary">
-            {t("grievances.register")}
+            {t("register")}
           </Link>
         }
       />
       <StatGrid>
-        <StatCard icon="📋" iconBg="#eff6ff" label={t("grievances.total")} value={total === null ? "—" : total.toLocaleString("en-IN")} />
-        <StatCard icon="⏳" iconBg="#fffaeb" label={t("grievances.pending")} value={pending === null ? "—" : pending.toLocaleString("en-IN")} />
-        <StatCard icon="🔺" iconBg="#fef3f2" label={t("grievances.escalated")} value={escalated === null ? "—" : escalated.toLocaleString("en-IN")} />
-        <StatCard icon="✅" iconBg="#ecfdf3" label={t("grievances.resolved")} value={resolved === null ? "—" : resolved.toLocaleString("en-IN")} />
+        <StatCard icon="📋" iconBg="#eff6ff" label={t("total")} value={total === null ? "—" : total.toLocaleString("en-IN")} />
+        <StatCard icon="⏳" iconBg="#fffaeb" label={t("pending")} value={pending === null ? "—" : pending.toLocaleString("en-IN")} />
+        <StatCard icon="🔺" iconBg="#fef3f2" label={t("escalated")} value={escalated === null ? "—" : escalated.toLocaleString("en-IN")} />
+        <StatCard icon="✅" iconBg="#ecfdf3" label={t("resolved")} value={resolved === null ? "—" : resolved.toLocaleString("en-IN")} />
       </StatGrid>
       <div className="card" style={{ marginTop: 18 }}>
         {errored ? (
@@ -76,18 +76,18 @@ export default async function GrievancesPage() {
         ) : grievances.length === 0 ? (
           <>
             <div className="card-h">
-              <h3>{t("grievances.tableTitle")}</h3>
+              <h3>{t("tableTitle")}</h3>
             </div>
             <EmptyState
               icon="📋"
-              title={t("grievances.emptyTitle")}
-              message={t("grievances.emptyMsg")}
+              title={t("emptyTitle")}
+              message={t("emptyMsg")}
             />
           </>
         ) : (
           <>
             <div className="card-h">
-              <h3>{t("grievances.tableTitle")}</h3>
+              <h3>{t("tableTitle")}</h3>
             </div>
             <GrievancesTable rows={rows} />
           </>

@@ -1,26 +1,34 @@
 "use client";
 
 /**
- * Language switcher dropdown for the TopBar.
- * Shows current language flag; on click, toggles between English and Hindi.
+ * Language switcher dropdown for the TopBar (mounted via AccountMenu).
+ *
+ * UX-004: previously drove `@/lib/i18n/LocaleProvider`, whose <LocaleProvider>
+ * was never mounted anywhere in the app tree — so this control looked wired
+ * but `setLocale` was a silent no-op. It now drives next-intl directly: on
+ * selection it writes the `locale` cookie next-intl's request config reads
+ * (src/i18n/request.ts) and reloads, so the root layout re-resolves the
+ * locale server-side and both `<html lang>` and every translated string
+ * update together.
  */
 import { useCallback, useRef, useState, useEffect } from "react";
-import { useLocale } from "@/lib/i18n/LocaleProvider";
-import { LOCALE_LABELS, SUPPORTED_LOCALES, type Locale } from "@/lib/i18n";
+import { useLocale } from "next-intl";
+import { LOCALE_COOKIE, LOCALE_LABELS, SUPPORTED_LOCALES, type SupportedLocale } from "@/i18n/config";
 
 export function LanguageSwitcher() {
-  const { locale, setLocale } = useLocale();
+  const locale = useLocale() as SupportedLocale;
   const [open, setOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
 
   const handleSelect = useCallback(
-    (newLocale: Locale) => {
-      setLocale(newLocale);
+    (newLocale: SupportedLocale) => {
       setOpen(false);
-      triggerRef.current?.focus();
+      if (newLocale === locale) return;
+      document.cookie = `${LOCALE_COOKIE}=${newLocale};path=/;max-age=31536000;SameSite=Lax`;
+      window.location.reload();
     },
-    [setLocale],
+    [locale],
   );
 
   // Close on Escape or click outside

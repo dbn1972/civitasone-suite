@@ -6,7 +6,7 @@ import { BudgetChart } from "./BudgetChart";
 import { PrintExportButton } from "../_components/PrintExportButton";
 import { FyFilter } from "../_components/FyFilter";
 import { formatMoney } from "@/lib/formatters";
-import { serverT } from "@/lib/i18n/server";
+import { getTranslations } from "next-intl/server";
 
 const QUICK_LINKS = [
   { label: "Budget Formulation", href: "/finance/budget/formulation", icon: "📝" },
@@ -22,18 +22,18 @@ const QUICK_LINKS = [
 ];
 
 export default async function FinanceDashboardPage() {
-  const t = serverT();
+  const t = await getTranslations("financeDashboard");
   const { data, source } = await getFinanceDashboard();
 
   return (
     <>
       <PageHeader
-        title={t("finance.title")}
-        subtitle={t("finance.subtitle")}
+        title={t("title")}
+        subtitle={t("subtitle")}
         actions={
           <>
             <FyFilter />
-            <PrintExportButton label={t("finance.exportMis")} documentTitle="Finance MIS" />
+            <PrintExportButton label={t("exportMis")} documentTitle="Finance MIS" />
             {source === "error" ? <DataSourceBadge source={source} /> : null}
           </>
         }
@@ -43,7 +43,7 @@ export default async function FinanceDashboardPage() {
         <StatCard
           icon="💰"
           iconBg="#e7edfd"
-          label={t("finance.budgetUtilisation")}
+          label={t("budgetUtilisation")}
           value={`${data.budgetUtilisationPct.toFixed(1)}%`}
           delta="Approved"
           up={false}
@@ -51,7 +51,7 @@ export default async function FinanceDashboardPage() {
         <StatCard
           icon="📤"
           iconBg="#eff6ff"
-          label={t("finance.expenditureYtd")}
+          label={t("expenditureYtd")}
           value={formatMoney(data.totalExpenditure)}
           delta={`${data.budgetUtilisationPct.toFixed(1)}%`}
           up={true}
@@ -59,26 +59,26 @@ export default async function FinanceDashboardPage() {
         <StatCard
           icon="📥"
           iconBg="#ecfdf3"
-          label={t("finance.paymentsMtd")}
-          value={`${data.paymentsThisMonth} ${t("finance.paymentsThisMonth")}`}
+          label={t("paymentsMtd")}
+          value={`${data.paymentsThisMonth} ${t("paymentsThisMonth")}`}
           up={true}
         />
         <StatCard
           icon="⏳"
           iconBg="#fffaeb"
-          label={t("finance.pendingApprovals")}
+          label={t("pendingApprovals")}
           value={data.pendingSanctions}
           up={false}
         />
       </StatGrid>
 
-      <Card title={t("finance.budgetChart")}>
+      <Card title={t("budgetChart")}>
         <div style={{ padding: 16 }}>
           <BudgetChart utilisationPct={data.budgetUtilisationPct} expenditure={data.totalExpenditure} />
         </div>
       </Card>
 
-      <Card title={t("finance.modules")}>
+      <Card title={t("modules")}>
         <div className="grid g-4" style={{ padding: "16px", gap: "12px" }}>
           {QUICK_LINKS.map((link) => (
             <Link

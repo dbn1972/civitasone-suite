@@ -1,14 +1,147 @@
 {
-  "nav": {
-    "dashboard": "Dashboard",
-    "employees": "Employees",
-    "leave": "Leave",
-    "attendance": "Attendance",
-    "payroll": "Payroll",
-    "recruitment": "Recruitment",
-    "onboarding": "Onboarding",
-    "reports": "Reports",
-    "settings": "Settings"
+  "action": {
+    "save": "Save",
+    "cancel": "Cancel",
+    "submit": "Submit",
+    "approve": "Approve",
+    "reject": "Reject",
+    "sendForApproval": "Send for approval",
+    "tryAgain": "Try again",
+    "goBack": "Go back",
+    "openHelp": "Open help",
+    "create": "Create",
+    "update": "Update",
+    "delete": "Delete",
+    "confirm": "Confirm",
+    "close": "Close",
+    "download": "Download",
+    "upload": "Upload",
+    "share": "Share",
+    "duplicate": "Duplicate",
+    "archive": "Archive",
+    "restore": "Restore",
+    "assign": "Assign",
+    "forward": "Forward",
+    "returnForRevision": "Return for revision",
+    "markComplete": "Mark as complete",
+    "send": "Send",
+    "apply": "Apply",
+    "reset": "Reset",
+    "continue": "Continue",
+    "skip": "Skip",
+    "next": "Next",
+    "previous": "Previous",
+    "finish": "Finish",
+    "invite": "Invite",
+    "revoke": "Revoke",
+    "enable": "Enable",
+    "disable": "Disable"
+  },
+  "admin": {
+    "title": "Platform Administration",
+    "subtitle": "Super admin tools for tenant management, billing, and platform operations."
+  },
+  "analytics": {
+    "title": "Data & Analytics",
+    "subtitle": "Saved dashboards and safe, whitelisted query runs over the analytics service's own data."
+  },
+  "assets": {
+    "title": "Assets",
+    "inventory": "Inventory",
+    "maintenance": "Maintenance",
+    "disposal": "Disposal",
+    "transfer": "Transfer"
+  },
+  "assistant": {
+    "title": "Ask CivitasOne",
+    "placeholder": "Type your question…",
+    "send": "Send",
+    "close": "Close assistant",
+    "thinking": "Thinking…",
+    "offlineMsg": "I'm not available offline. Try the Help Centre for common questions.",
+    "welcome": "Hi! I can help you with questions about this module. What would you like to know?",
+    "errorMsg": "Sorry, I couldn't get a response. Please try again.",
+    "trigger": "Ask"
+  },
+  "attendance": {
+    "title": "Attendance",
+    "present": "Present",
+    "absent": "Absent",
+    "onLeave": "On Leave",
+    "total": "Total Records",
+    "regularisation": "Regularisation",
+    "approve": "Approve",
+    "reject": "Reject",
+    "markPresent": "Mark Present",
+    "regularise": "Regularise Request",
+    "viewHistory": "View History",
+    "late": "Late"
+  },
+  "auth": {
+    "signIn": "Sign in",
+    "signOut": "Sign out",
+    "profile": "My profile",
+    "switchTenant": "Switch organisation"
+  },
+  "common": {
+    "search": "Search",
+    "filter": "Filter",
+    "export": "Export",
+    "print": "Print",
+    "new": "New",
+    "edit": "Edit",
+    "delete": "Delete",
+    "view": "View",
+    "all": "All",
+    "none": "None",
+    "yes": "Yes",
+    "no": "No",
+    "or": "or",
+    "and": "and",
+    "of": "of",
+    "page": "Page",
+    "rows": "rows",
+    "showing": "Showing",
+    "total": "Total",
+    "actions": "Actions",
+    "name": "Name",
+    "email": "Email",
+    "phone": "Phone",
+    "date": "Date",
+    "amount": "Amount",
+    "description": "Description",
+    "remarks": "Remarks",
+    "attachments": "Attachments",
+    "history": "History",
+    "details": "Details",
+    "summary": "Summary",
+    "more": "More",
+    "less": "Less",
+    "selectAll": "Select all",
+    "clearAll": "Clear all",
+    "noOptions": "No options",
+    "optional": "Optional",
+    "required": "Required",
+    "loading": "Loading",
+    "error": "Error",
+    "save": "Save",
+    "cancel": "Cancel",
+    "submit": "Submit",
+    "confirm": "Confirm",
+    "back": "Back",
+    "next": "Next",
+    "download": "Download",
+    "close": "Close",
+    "skipToContent": "Skip to content"
+  },
+  "crm": {
+    "title": "Citizen Services",
+    "grievances": "Grievances",
+    "requests": "Requests",
+    "complaints": "Complaints",
+    "status": "Status",
+    "resolved": "Resolved",
+    "open": "Open"
   },
   "dashboard": {
     "title": "HR Dashboard",
@@ -44,28 +177,154 @@
     "actions": "Actions",
     "empty": "No employees found"
   },
+  "error": {
+    "load": {
+      "what": "We couldn't load this information.",
+      "next": "Check your internet connection and try again."
+    },
+    "save": {
+      "what": "We couldn't save your information.",
+      "next": "Nothing was changed. Please try again in a moment."
+    },
+    "offline": {
+      "what": "You're offline right now.",
+      "next": "You can keep viewing saved information. We'll reconnect when your internet is back."
+    },
+    "unknownStatus": {
+      "what": "We couldn't check the status of this information.",
+      "next": "Please refresh in a moment, or open help if it keeps happening."
+    },
+    "generic": {
+      "what": "Something went wrong.",
+      "next": "Please try again, or open help if it keeps happening."
+    },
+    "supportRef": "If you contact support, quote this code:"
+  },
+  "finance": {
+    "title": "Finance",
+    "budget": "Budget",
+    "expenditure": "Expenditure",
+    "challan": "Challan",
+    "sanctions": "Sanctions",
+    "reports": "Reports",
+    "approved": "Approved",
+    "pending": "Pending",
+    "rejected": "Rejected"
+  },
+  "financeDashboard": {
+    "title": "Financial Management",
+    "subtitle": "Budget, expenditure, receipts and treasury — one governed view.",
+    "budgetUtilisation": "Budget Utilisation (FY)",
+    "expenditureYtd": "Expenditure (YTD)",
+    "paymentsMtd": "Payments (MTD)",
+    "pendingApprovals": "Pending Approvals",
+    "budgetChart": "Budget Utilisation",
+    "modules": "Finance Modules",
+    "exportMis": "Export MIS",
+    "paymentsThisMonth": "payments this month"
+  },
+  "grievances": {
+    "title": "Grievances",
+    "subtitle": "CPGRAMS-style grievance register with 30-day lifecycle.",
+    "register": "+ Register Grievance",
+    "total": "Total",
+    "pending": "Pending",
+    "escalated": "Escalated",
+    "resolved": "Resolved",
+    "tableTitle": "Grievance Register",
+    "emptyTitle": "No grievances filed",
+    "emptyMsg": "Grievances filed under the CPGRAMS-style system will appear here."
+  },
+  "home": {
+    "title": "Command Center",
+    "subtitle": "What is happening, what needs action, and what to do next — filtered to your role.",
+    "myApprovals": "My approvals",
+    "setupBannerTitle": "New here? Finish setting up your workspace",
+    "setupBannerDesc": "A few quick steps to get your office ready — pick up where you left off.",
+    "yourModules": "Your modules",
+    "noModules": "No modules assigned yet",
+    "noModulesMsg": "Your account does not have any modules enabled. Contact your tenant administrator to request access."
+  },
+  "lang": {
+    "switch": "Language",
+    "en": "English",
+    "hi": "हिन्दी"
+  },
   "leave": {
     "title": "Leave Management",
-    "apply": "Apply for Leave",
-    "balance": "Leave Balance",
+    "subtitle": "Review and process employee leave requests.",
+    "approvals": "Approvals",
+    "newLeave": "+ New Leave",
+    "total": "Total",
     "pending": "Pending Requests",
     "approved": "Approved",
     "rejected": "Rejected",
+    "requests": "Leave Requests",
+    "apply": "Apply for Leave",
+    "balance": "Leave Balance",
     "empty": "No leave requests"
   },
-  "attendance": {
-    "title": "Attendance",
-    "present": "Present",
-    "absent": "Absent",
-    "onLeave": "On Leave",
-    "total": "Total Records",
-    "regularisation": "Regularisation",
-    "approve": "Approve",
-    "reject": "Reject",
-    "markPresent": "Mark Present",
-    "regularise": "Regularise Request",
-    "viewHistory": "View History",
-    "late": "Late"
+  "misc": {
+    "darkMode": "Dark mode",
+    "lightMode": "Light mode",
+    "version": "Version",
+    "copyright": "© CivitasOne",
+    "helpCentre": "Help Centre",
+    "whatsNew": "What's new",
+    "shortcuts": "Keyboard shortcuts"
+  },
+  "msg": {
+    "noRecords": "No records found",
+    "loading": "Loading…",
+    "offline": "You're offline",
+    "offlineDetail": "You can keep viewing saved information. We'll reconnect when your internet is back.",
+    "feedbackPrompt": "Was this helpful?",
+    "feedbackThanks": "Thanks for your feedback!",
+    "savedSuccessfully": "Saved successfully",
+    "deletedSuccessfully": "Deleted successfully",
+    "submittedSuccessfully": "Submitted successfully",
+    "approvedSuccessfully": "Approved successfully",
+    "rejectedSuccessfully": "Rejected successfully",
+    "copied": "Copied to clipboard",
+    "unsavedChanges": "You have unsaved changes. Are you sure you want to leave?",
+    "confirmDelete": "Are you sure you want to delete this? This action cannot be undone.",
+    "requestReceived": "Your request was received.",
+    "processingNow": "It's being processed now and will appear here shortly.",
+    "sessionExpired": "Your session has expired. Please sign in again.",
+    "permissionDenied": "You don't have permission to access this.",
+    "pageNotFound": "This page doesn't exist.",
+    "somethingWentWrong": "Something went wrong.",
+    "tryAgainOrHelp": "Please try again, or open help if it keeps happening.",
+    "checkConnection": "Check your internet connection and try again."
+  },
+  "nav": {
+    "dashboard": "Dashboard",
+    "finance": "Finance",
+    "hr": "HR & Payroll",
+    "procurement": "Procurement",
+    "contracts": "Contracts",
+    "assets": "Assets",
+    "inventory": "Inventory",
+    "projects": "Projects",
+    "grants": "Grants",
+    "citizen": "Citizen Services",
+    "legal": "Legal",
+    "helpdesk": "Helpdesk",
+    "reports": "Reports",
+    "analytics": "Analytics",
+    "settings": "Settings",
+    "admin": "Administration",
+    "notifications": "Notifications",
+    "knowledge": "Knowledge Base",
+    "workflow": "Workflows",
+    "billing": "Billing",
+    "establishment": "Establishment",
+    "employees": "Employees",
+    "leave": "Leave",
+    "attendance": "Attendance",
+    "payroll": "Payroll",
+    "recruitment": "Recruitment",
+    "onboarding": "Onboarding"
   },
   "payroll": {
     "title": "Payroll",
@@ -83,37 +342,6 @@
     "pending": "Pending",
     "rejected": "Rejected"
   },
-  "common": {
-    "loading": "Loading",
-    "error": "Error",
-    "save": "Save",
-    "cancel": "Cancel",
-    "submit": "Submit",
-    "confirm": "Confirm",
-    "back": "Back",
-    "next": "Next",
-    "search": "Search",
-    "filter": "Filter",
-    "export": "Export",
-    "download": "Download",
-    "yes": "Yes",
-    "no": "No",
-    "delete": "Delete",
-    "edit": "Edit",
-    "view": "View",
-    "close": "Close"
-  },
-  "finance": {
-    "title": "Finance",
-    "budget": "Budget",
-    "expenditure": "Expenditure",
-    "challan": "Challan",
-    "sanctions": "Sanctions",
-    "reports": "Reports",
-    "approved": "Approved",
-    "pending": "Pending",
-    "rejected": "Rejected"
-  },
   "procurement": {
     "title": "Procurement",
     "tenders": "Tenders",
@@ -122,20 +350,75 @@
     "vendors": "Vendors",
     "contracts": "Contracts"
   },
-  "crm": {
-    "title": "Citizen Services",
-    "grievances": "Grievances",
-    "requests": "Requests",
-    "complaints": "Complaints",
-    "status": "Status",
-    "resolved": "Resolved",
-    "open": "Open"
+  "setup": {
+    "title": "Setup Wizard",
+    "progress": "Setup Progress",
+    "complete": "Setup complete!",
+    "step1": {
+      "title": "Tell us about your office",
+      "explanation": "Add your office name, address, and a few basic details so everything is labelled correctly.",
+      "cta": "Add office details"
+    },
+    "step2": {
+      "title": "Add your branch offices",
+      "explanation": "Add your head office first, then add branches under it. You can pick which office each branch reports to.",
+      "cta": "Add offices"
+    },
+    "step3": {
+      "title": "Set up departments",
+      "explanation": "Create the teams in your office so you can sort people and work by department.",
+      "cta": "Add departments"
+    },
+    "step4": {
+      "title": "Invite your team",
+      "explanation": "Add the people who will use the system and choose what each person can do.",
+      "cta": "Invite people"
+    },
+    "step5": {
+      "title": "Choose the parts you use",
+      "explanation": "Turn on only the parts you use — Finance, HR, Procurement. You can change this any time.",
+      "cta": "Choose modules"
+    },
+    "step6": {
+      "title": "Set your financial year and accounts",
+      "explanation": "Pick the financial year you're working in and set up the list of account heads money is recorded against.",
+      "cta": "Set up accounts"
+    },
+    "step7": {
+      "title": "Set up leave rules",
+      "explanation": "Decide the kinds of leave and how many days each person gets, so leave requests work correctly.",
+      "cta": "Add leave rules"
+    },
+    "step8": {
+      "title": "Set up pay structure",
+      "explanation": "Set the salary parts (basic, allowances, deductions) so payroll can be run correctly.",
+      "cta": "Set up pay"
+    }
   },
-  "assets": {
-    "title": "Assets",
-    "inventory": "Inventory",
-    "maintenance": "Maintenance",
-    "disposal": "Disposal",
-    "transfer": "Transfer"
+  "stat": {
+    "total": "Total",
+    "pending": "Pending",
+    "approved": "Approved",
+    "rejected": "Rejected",
+    "escalated": "Escalated",
+    "resolved": "Resolved"
+  },
+  "status": {
+    "active": "Active",
+    "pending": "Pending",
+    "draft": "Draft",
+    "approved": "Approved",
+    "rejected": "Rejected",
+    "completed": "Completed",
+    "inProgress": "In progress",
+    "onHold": "On hold",
+    "cancelled": "Cancelled",
+    "overdue": "Overdue",
+    "scheduled": "Scheduled",
+    "closed": "Closed",
+    "open": "Open",
+    "expired": "Expired",
+    "submitted": "Submitted",
+    "underReview": "Under review"
   }
 }
