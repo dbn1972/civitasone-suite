@@ -27,7 +27,7 @@ export function registerAuditConsumers(rawQueue: Queue): void {
       // inserts can both read the same `latest` row and fork the hash chain.
       // pg_advisory_xact_lock auto-releases at COMMIT/ROLLBACK.
       await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${msg.tenantId}))`);
-      const latest = await repo.findLatestForTenant(msg.tenantId);
+      const latest = await repo.findLatestForTenantTx(tx, msg.tenantId);
       const id = randomUUID();
       const now = new Date().toISOString();
       // CERT-In §4: capture actor IP, user agent, and field-level old/new values when provided.

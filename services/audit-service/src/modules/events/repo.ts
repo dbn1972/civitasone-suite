@@ -56,6 +56,29 @@ export async function findLatestForTenant(tenantId: string): Promise<AuditEventV
   return rows[0] ? toView(rows[0]) : null;
 }
 
+/**
+ * TX-001: sibling of findLatestForTenant() that reads through an
+ * already-open transaction (`tx`) instead of opening its own via
+ * db.transaction(). Call this -- never the bare findLatestForTenant() --
+ * from inside an outer db.transaction() block (events/consumer.ts's
+ * per-message handler; this file's own writeEvent()). The bare call nests a
+ * second db.transaction() inside the first, each needing its own pool
+ * connection; under concurrent load (N in-flight outer transactions using
+ * up to pool.max connections, each then blocking on a second connection for
+ * the nested read that will never free) this deadlocks the whole pool.
+ * Safe to skip the runWithTenant()/GUC dance findLatestForTenant() does for
+ * its own db.transaction(): both call sites pass the SAME tenantId that is
+ * already the outer transaction's ambient tenant, so app.tenant_id is
+ * already correct on `tx`.
+ */
+export async function findLatestForTenantTx(tx: Writer, tenantId: string): Promise<AuditEventView | null> {
+  const rows = await (tx as typeof db).select().from(auditEvents)
+    .where(eq(auditEvents.tenantId, tenantId))
+    .orderBy(desc(auditEvents.occurredAt))
+    .limit(1);
+  return rows[0] ? toView(rows[0]) : null;
+}
+
 export async function listEvents(tenantId: string, from: Date, to: Date, type?: string, limit = 50, offset = 0): Promise<AuditEventView[]> {
   const conditions = [
     eq(auditEvents.tenantId, tenantId),
@@ -111,7 +134,7 @@ export async function writeEvent(
   return db.transaction(async (tx) => {
     // Serialize per-tenant chain appends (mirrors consumer).
     await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${tenantId}))`);
-    const latest = await findLatestForTenant(tenantId);
+    const latest = await findLatestForTenantTx(tx, tenantId);
     const id = randomUUID();
     const now = new Date().toISOString();
     const retainUntil = new Date(Date.now() + 180 * 86400 * 1000);
