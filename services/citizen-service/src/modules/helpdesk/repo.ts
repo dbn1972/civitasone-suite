@@ -111,12 +111,21 @@ export async function insertEscalation(tx: Writer, row: EscalationInsert): Promi
   await tx.insert(ticketEscalations).values(row);
 }
 
-export async function countEscalationsForTicket(tenantId: string, ticketId: string): Promise<number> {
-  // Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
-  // before this read — a bare db.select() runs with no RLS GUC set.
-  const [row] = await db.transaction((tx) => tx
+/**
+ * TX-001 — tenant-scoped sibling of countEscalationsForTicket(). Reads
+ * through a caller-supplied Writer (typically the outer consumer tx) instead
+ * of opening its own db.transaction() — a nested consumer.ts call site must
+ * route the already-open consumer transaction through this, not
+ * countEscalationsForTicket().
+ */
+export async function countEscalationsForTicketTx(tx: Writer, tenantId: string, ticketId: string): Promise<number> {
+  const [row] = await (tx as typeof db)
     .select({ count: sql<number>`count(*)::int` })
     .from(ticketEscalations)
-    .where(and(eq(ticketEscalations.tenantId, tenantId), eq(ticketEscalations.ticketId, ticketId))));
+    .where(and(eq(ticketEscalations.tenantId, tenantId), eq(ticketEscalations.ticketId, ticketId)));
   return row?.count ?? 0;
+}
+
+export async function countEscalationsForTicket(tenantId: string, ticketId: string): Promise<number> {
+  return db.transaction((tx) => countEscalationsForTicketTx(tx, tenantId, ticketId));
 }

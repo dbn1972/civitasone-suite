@@ -88,8 +88,18 @@ export async function updateRefund(tx: Writer, id: string, tenantId: string, pat
     .where(and(eq(feeRefunds.id, id), eq(feeRefunds.tenantId, tenantId)));
 }
 
-export async function listRefundsByPayment(tenantId: string, paymentId: string): Promise<RefundRow[]> {
-  return db.transaction((tx) => tx.select().from(feeRefunds)
+/**
+ * TX-001 — tenant-scoped sibling of listRefundsByPayment(). Reads through a
+ * caller-supplied Writer (typically the outer consumer tx) instead of opening
+ * its own db.transaction() — a nested consumer.ts call site must route the
+ * already-open consumer transaction through this, not listRefundsByPayment().
+ */
+export async function listRefundsByPaymentTx(tx: Writer, tenantId: string, paymentId: string): Promise<RefundRow[]> {
+  return (tx as typeof db).select().from(feeRefunds)
     .where(and(eq(feeRefunds.tenantId, tenantId), eq(feeRefunds.paymentId, paymentId)))
-    .orderBy(desc(feeRefunds.createdAt)));
+    .orderBy(desc(feeRefunds.createdAt));
+}
+
+export async function listRefundsByPayment(tenantId: string, paymentId: string): Promise<RefundRow[]> {
+  return db.transaction((tx) => listRefundsByPaymentTx(tx, tenantId, paymentId));
 }
