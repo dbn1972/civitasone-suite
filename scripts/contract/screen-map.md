@@ -1,8 +1,8 @@
 # Screen Contract Map
 
-Generated: 2026-09-08T15:50:25.587Z
+Generated: 2026-09-10T18:13:49.938Z
 
-**Summary:** 271 WIRED | 0 MISSING | 0 MISMATCH | 561 NO_LOADER | 4 FABRICATED_DATA
+**Summary:** 273 WIRED | 0 MISSING | 0 MISMATCH | 561 NO_LOADER | 3 FABRICATED_DATA
 
 | module | screen | loader | apiPath | upstream | route? | table? | status |
 |--------|--------|--------|---------|----------|--------|--------|--------|
@@ -625,7 +625,8 @@ Generated: 2026-09-08T15:50:25.587Z
 | platform-admin | /platform-admin/audit-log | getTenantAuditLog | /api/v1/audit/events | audit → /v1/audit/events | ✓ `/v1/audit/events` | ✓ | ✅ WIRED |
 | platform-admin | /platform-admin/org-config | — | — | — | ✗ | — | 🎭 FABRICATED_DATA |
 | platform-admin | /platform-admin | — | — | — | — | — | — NO_LOADER |
-| platform-admin | /platform-admin/roles | — | — | — | ✗ | — | 🎭 FABRICATED_DATA |
+| platform-admin | /platform-admin/roles | getAdminRolesList | /api/v1/admin/roles | admin → /v1/admin/roles | ✓ `/v1/admin/roles` | ✓ | ✅ WIRED |
+| platform-admin | /platform-admin/roles | getAdminPermissionsList | /api/v1/admin/permissions | admin → /v1/admin/permissions | ✓ `/v1/admin/permissions` | ✓ | ✅ WIRED |
 | platform-admin | /platform-admin/system-settings | — | — | — | — | — | — NO_LOADER |
 | platform-admin | /platform-admin/tenant-config | — | — | — | — | — | — NO_LOADER |
 | platform-admin | /platform-admin/users | getAdminUsers | /api/identity/users | identity → /identity/users | ✓ `/identity/users` | ✓ | ✅ WIRED |
