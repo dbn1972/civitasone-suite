@@ -3,8 +3,18 @@
  * the engine's in-memory registry. Called once at boot (HTTP app + worker) and
  * may be re-called to refresh after a config change. A `to: null` slab bound is
  * mapped to Infinity (the open-ended top slab).
+ *
+ * DOM-008 (completing #1117): tax_slab_config is now tenant-scoped (migration
+ * 0039). This boot-time load must see every tenant's rows + the platform
+ * default in one query, so it uses scopedPlatformRead() (the
+ * `app.platform_bypass` GUC pattern, migration 0037/0039's
+ * platform_bypass_read_policy) rather than scopedRead() — this is a trusted,
+ * no-user-input, server-boot-only read, never reachable from a request.
+ * Each row is registered under its own tenantId (registerTaxConfig()'s new
+ * optional 4th param), so getTaxConfig() can resolve tenant-first with
+ * platform-default fallback at compute time.
  */
-import { db, scopedRead } from "../../shared/db.js";
+import { scopedPlatformRead } from "../../shared/db.js";
 import { taxSlabConfig } from "./schema.js";
 import {
   registerTaxConfig, type Regime, type TaxSlab, type SurchargeBand,
@@ -13,7 +23,7 @@ import {
 interface RawSlab { from: number; to: number | null; rate: number }
 
 export async function loadTaxConfig(): Promise<number> {
-  const rows = await scopedRead((tx) => tx.select().from(taxSlabConfig));
+  const rows = await scopedPlatformRead((tx) => tx.select().from(taxSlabConfig));
   for (const r of rows) {
     const slabs: TaxSlab[] = (r.slabs as RawSlab[]).map((s) => ({
       from: s.from,
@@ -29,7 +39,7 @@ export async function loadTaxConfig(): Promise<number> {
       rebateIncomeCap: Number(r.rebateIncomeCap),
       rebateMax: Number(r.rebateMax),
       surchargeBands,
-    });
+    }, r.tenantId);
   }
   return rows.length;
 }

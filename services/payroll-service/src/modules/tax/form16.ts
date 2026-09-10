@@ -117,7 +117,8 @@ export async function buildForm16(tenantId: string, employeeId: string, fy: stri
   const extraIncome        = perquisites + prevEmployerSalary + otherSourcesIncome;
 
   const taxableIncome = Math.max(0, Math.round((grossSalary + extraIncome - standardDeduction - hraExempt - totalChapterViA) / 10) * 10);
-  const tax = computeTax(taxableIncome, regime, startYear);
+  // DOM-008 (completing #1117): resolved for this employee's own tenant.
+  const tax = computeTax(taxableIncome, regime, startYear, tenantId);
   const totalTaxLiability = tax.totalTax;
   // Total TDS credited = deducted by this employer + reported prev-employer TDS.
   const totalTdsCredited = Math.round(totalTdsDeducted) + Math.round(prevEmployerTds);
