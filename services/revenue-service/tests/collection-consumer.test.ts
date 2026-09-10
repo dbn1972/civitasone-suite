@@ -84,7 +84,7 @@ vi.mock("../src/modules/collection/domain.js", () => ({
 }));
 
 vi.mock("../src/modules/collection/repo.js", () => ({
-  getDemandBalance: (...args: any[]) => mockGetDemandBalance(...args),
+  getDemandBalanceTx: (...args: any[]) => mockGetDemandBalance(...args),
 }));
 
 vi.mock("drizzle-orm", () => ({
