@@ -1313,10 +1313,11 @@ async function processPensionRun(
       // DOM-008: was a third independently hardcoded std-deduction literal;
       // now sourced from the same payroll.tax_slab_config as the salary path
       // (domain.ts computeSlip) and fnf/domain.ts.
-      const stdDed = BigInt(stdDeduction(regime, fyStart)) * 100n; // Sec 16 std deduction (paise)
+      // DOM-008 (completing #1117): resolved for this pensioner's own tenant.
+      const stdDed = BigInt(stdDeduction(regime, fyStart, p.tenantId)) * 100n; // Sec 16 std deduction (paise)
       let annualTaxable = annualGross - stdDed;
       if (annualTaxable < 0n) annualTaxable = 0n;
-      const annualTax = annualTaxFromTaxableMinor(annualTaxable, regime, fyStart);
+      const annualTax = annualTaxFromTaxableMinor(annualTaxable, regime, fyStart, p.tenantId);
       const tdsMinor = (annualTax / 100n / 12n) * 100n; // even monthly spread, rupee-rounded
 
       const result = computePension({
@@ -1392,6 +1393,10 @@ export async function computeAndInsertSlip(
     ptMinor: params.ptMinor ?? 0n,
     taxRegime: params.taxRegime ?? "new",
     fyStartYear: params.fyStartYear ?? 2025,
+    // DOM-008 (completing #1117): resolve payroll.tax_slab_config for this
+    // employee's own tenant, same tenant-first/platform-default-fallback
+    // resolution engine.ts's getTaxConfig() already does for statutoryConfig.
+    taxTenantId: params.tenantId,
     ...(params.tdsYtdMinor != null ? { tdsYtdMinor: params.tdsYtdMinor } : {}),
     ...(params.monthsRemaining != null ? { monthsRemaining: params.monthsRemaining } : {}),
     ...(params.protectedNetFloorMinor != null ? { protectedNetFloorMinor: params.protectedNetFloorMinor } : {}),

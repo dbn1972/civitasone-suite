@@ -125,13 +125,14 @@ export async function taxRoutes(app: FastifyInstance): Promise<void> {
         const other = Number(dec.otherDeductions) / 100;
         exemptions = s80c + s80d + hra + other;
       }
-      try { exemptions += stdDeduction(regime, startYear); }
+      // DOM-008 (completing #1117): resolved for the requesting tenant.
+      try { exemptions += stdDeduction(regime, startYear, ctx.tenantId); }
       catch (err) { if (err instanceof UnconfiguredFyError) throw new HttpError(422, "FY_NOT_CONFIGURED", err.message); throw err; }
 
       const grossIncome = Math.round(grossByEmployee.get(employeeId) ?? 0);
       const taxableIncome = Math.round(Math.max(0, grossIncome - exemptions) / 10) * 10;
       let tax;
-      try { tax = computeTax(taxableIncome, regime, startYear); }
+      try { tax = computeTax(taxableIncome, regime, startYear, ctx.tenantId); }
       catch (err) { if (err instanceof UnconfiguredFyError) throw new HttpError(422, "FY_NOT_CONFIGURED", err.message); throw err; }
 
       const identity = identityById.get(employeeId);
@@ -216,10 +217,11 @@ export async function taxRoutes(app: FastifyInstance): Promise<void> {
         const other = Number(dec.otherDeductions) / 100;
         exemptions = s80c + s80d + hra + other;
       }
-      try { exemptions += stdDeduction("old", startYear); }
+      // DOM-008 (completing #1117): resolved for the requesting tenant.
+      try { exemptions += stdDeduction("old", startYear, ctx.tenantId); }
       catch (err) { if (err instanceof UnconfiguredFyError) throw new HttpError(422, "FY_NOT_CONFIGURED", err.message); throw err; }
     } else {
-      try { exemptions = stdDeduction("new", startYear); }
+      try { exemptions = stdDeduction("new", startYear, ctx.tenantId); }
       catch (err) { if (err instanceof UnconfiguredFyError) throw new HttpError(422, "FY_NOT_CONFIGURED", err.message); throw err; }
     }
 
@@ -227,7 +229,7 @@ export async function taxRoutes(app: FastifyInstance): Promise<void> {
     const taxableIncome = Math.round(Math.max(0, annualGross - exemptions) / 10) * 10;
     let r;
     try {
-      r = computeTax(taxableIncome, selectedRegime, startYear);
+      r = computeTax(taxableIncome, selectedRegime, startYear, ctx.tenantId);
     } catch (err) {
       // P2: an unconfigured FY must FAIL clearly, not silently default to a wrong year.
       if (err instanceof UnconfiguredFyError) {

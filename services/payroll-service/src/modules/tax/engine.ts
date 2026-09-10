@@ -8,7 +8,19 @@
  * An UNCONFIGURED (regime, FY) raises UnconfiguredFyError instead of silently
  * falling back to a wrong year. Callers must loadTaxConfig() once at boot
  * (worker + HTTP app) before invoking compute paths.
+ *
+ * DOM-008 (completing #1117): also tenant-overridable, mirroring the
+ * platform-default-sentinel + tenant-override pattern PR #1117 built for
+ * PF/EPS/ESI/80C/80D (statutory.statutory_config / domain.ts's
+ * resolveStatutoryConfig()). Every public function below takes an OPTIONAL
+ * trailing `tenantId`, defaulting to PLATFORM_DEFAULT_TENANT_ID — omitting it
+ * (every pre-existing caller and test) resolves exactly as before. When a
+ * tenantId IS supplied, getTaxConfig() prefers that tenant's own (regime, FY)
+ * row and falls back to the platform default's row for the same (regime,
+ * FY) — no separate effective-dating is needed here because (regime, FY)
+ * IS the effective-dating axis for income-tax slabs.
  */
+export const PLATFORM_DEFAULT_TENANT_ID = "00000000-0000-0000-0000-000000000000";
 export interface TaxSlab { from: number; to: number; rate: number }
 export type Regime = "old" | "new";
 
@@ -32,13 +44,18 @@ export class UnconfiguredFyError extends Error {
   }
 }
 
-// In-memory registry: key `${regime}:${startYear}` -> FyTaxConfig.
+// In-memory registry: key `${tenantId}:${regime}:${startYear}` -> FyTaxConfig.
+// `tenantId` is always PLATFORM_DEFAULT_TENANT_ID for a platform-default row.
 const REGISTRY = new Map<string, FyTaxConfig>();
-const key = (regime: Regime, startYear: number) => `${regime}:${startYear}`;
+const key = (tenantId: string, regime: Regime, startYear: number) => `${tenantId}:${regime}:${startYear}`;
 
-/** Register/overwrite a single (regime, FY) config (used by the DB loader and tests). */
-export function registerTaxConfig(regime: Regime, startYear: number, cfg: FyTaxConfig): void {
-  REGISTRY.set(key(regime, startYear), cfg);
+/**
+ * Register/overwrite a single (tenantId, regime, FY) config (used by the DB
+ * loader and tests). `tenantId` defaults to the platform default so every
+ * pre-DOM-008 call site (registering the global config) is unchanged.
+ */
+export function registerTaxConfig(regime: Regime, startYear: number, cfg: FyTaxConfig, tenantId: string = PLATFORM_DEFAULT_TENANT_ID): void {
+  REGISTRY.set(key(tenantId, regime, startYear), cfg);
 }
 
 /** True once at least one config has been registered. */
@@ -46,19 +63,29 @@ export function isTaxConfigLoaded(): boolean {
   return REGISTRY.size > 0;
 }
 
-/** Look up config or throw UnconfiguredFyError. */
-export function getTaxConfig(regime: Regime, startYear: number): FyTaxConfig {
-  const cfg = REGISTRY.get(key(regime, startYear));
+/**
+ * Look up config: the tenant's own (regime, FY) row wins if registered, else
+ * the platform default's row for that same (regime, FY), else
+ * UnconfiguredFyError. Omitting `tenantId` (or passing the platform-default
+ * sentinel) looks up only the platform default, byte-identical to pre-DOM-008
+ * behaviour.
+ */
+export function getTaxConfig(regime: Regime, startYear: number, tenantId: string = PLATFORM_DEFAULT_TENANT_ID): FyTaxConfig {
+  if (tenantId !== PLATFORM_DEFAULT_TENANT_ID) {
+    const tenantCfg = REGISTRY.get(key(tenantId, regime, startYear));
+    if (tenantCfg) return tenantCfg;
+  }
+  const cfg = REGISTRY.get(key(PLATFORM_DEFAULT_TENANT_ID, regime, startYear));
   if (!cfg) throw new UnconfiguredFyError(regime, startYear);
   return cfg;
 }
 
-export function slabsFor(regime: Regime, startYear: number): TaxSlab[] {
-  return getTaxConfig(regime, startYear).slabs;
+export function slabsFor(regime: Regime, startYear: number, tenantId: string = PLATFORM_DEFAULT_TENANT_ID): TaxSlab[] {
+  return getTaxConfig(regime, startYear, tenantId).slabs;
 }
 
-export function stdDeduction(regime: Regime, startYear: number): number {
-  return getTaxConfig(regime, startYear).stdDeduction;
+export function stdDeduction(regime: Regime, startYear: number, tenantId: string = PLATFORM_DEFAULT_TENANT_ID): number {
+  return getTaxConfig(regime, startYear, tenantId).stdDeduction;
 }
 
 function slabTax(taxableIncome: number, slabs: TaxSlab[]): { tax: number; breakdown: Array<{ slab: string; taxableAmount: number; tax: number }> } {
@@ -87,8 +114,8 @@ function surchargeRate(totalIncome: number, bands: SurchargeBand[]): number {
   return rate;
 }
 
-export function computeTax(taxableIncome: number, regime: Regime, startYear: number) {
-  const cfg = getTaxConfig(regime, startYear);
+export function computeTax(taxableIncome: number, regime: Regime, startYear: number, tenantId: string = PLATFORM_DEFAULT_TENANT_ID) {
+  const cfg = getTaxConfig(regime, startYear, tenantId);
   const slabs = cfg.slabs;
   const { tax: rawSlab, breakdown } = slabTax(taxableIncome, slabs);
   const baseTax = Math.round(rawSlab);
@@ -110,10 +137,10 @@ export function computeTax(taxableIncome: number, regime: Regime, startYear: num
 }
 
 /** Monthly TDS (in paise) for a payroll run: project annual taxable, compute tax, spread /12. */
-export function monthlyTdsMinor(annualGrossMinor: bigint, regime: Regime, startYear: number): bigint {
+export function monthlyTdsMinor(annualGrossMinor: bigint, regime: Regime, startYear: number, tenantId: string = PLATFORM_DEFAULT_TENANT_ID): bigint {
   const annualGrossRupees = Number(annualGrossMinor) / 100;
-  const taxable = Math.round(Math.max(0, annualGrossRupees - stdDeduction(regime, startYear)) / 10) * 10;
-  const annualTax = computeTax(taxable, regime, startYear).totalTax;
+  const taxable = Math.round(Math.max(0, annualGrossRupees - stdDeduction(regime, startYear, tenantId)) / 10) * 10;
+  const annualTax = computeTax(taxable, regime, startYear, tenantId).totalTax;
   const monthlyRupees = Math.round(annualTax / 12);
   return BigInt(monthlyRupees) * 100n;
 }
@@ -128,14 +155,14 @@ export function hraExemptionMinor(salaryAnnualMinor: bigint, hraReceivedAnnualMi
 }
 
 /** Full annual income tax (paise) from a precomputed ANNUAL TAXABLE income. */
-export function annualTaxFromTaxableMinor(annualTaxableMinor: bigint, regime: Regime, startYear: number): bigint {
+export function annualTaxFromTaxableMinor(annualTaxableMinor: bigint, regime: Regime, startYear: number, tenantId: string = PLATFORM_DEFAULT_TENANT_ID): bigint {
   const taxableRupees = Math.round(Math.max(0, Number(annualTaxableMinor) / 100) / 10) * 10; // Sec 288A
-  return BigInt(computeTax(taxableRupees, regime, startYear).totalTax) * 100n;
+  return BigInt(computeTax(taxableRupees, regime, startYear, tenantId).totalTax) * 100n;
 }
 
 /** Monthly TDS (paise) from a precomputed ANNUAL TAXABLE income (flat /12). */
-export function monthlyTdsFromTaxableMinor(annualTaxableMinor: bigint, regime: Regime, startYear: number): bigint {
-  return annualTaxFromTaxableMinor(annualTaxableMinor, regime, startYear) / 100n / 12n * 100n;
+export function monthlyTdsFromTaxableMinor(annualTaxableMinor: bigint, regime: Regime, startYear: number, tenantId: string = PLATFORM_DEFAULT_TENANT_ID): bigint {
+  return annualTaxFromTaxableMinor(annualTaxableMinor, regime, startYear, tenantId) / 100n / 12n * 100n;
 }
 
 /**

@@ -4,6 +4,7 @@
  * Reviewed for correctness (schema wiring), not style, per this service's PR.
  * See packages/db/src/create-tenant-db.ts for the createTenantDb() contract.
  */
+import { sql } from "drizzle-orm";
 import { createTenantDb } from "@civitasone/db";
 import { schema as payrollModule }    from "../modules/payroll/schema.js";
 import { schema as loansModule }      from "../modules/loans/schema.js";
@@ -43,4 +44,30 @@ export type Db = typeof db;
 type ScopedTx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 export function scopedRead<T>(fn: (tx: ScopedTx) => Promise<T>): Promise<T> {
   return db.transaction(fn as Parameters<typeof db.transaction>[0]) as Promise<T>;
+}
+
+/**
+ * DOM-008 (completing #1117): run a genuinely cross-tenant SELECT (the
+ * trusted boot-time load of payroll.tax_slab_config into the in-memory tax
+ * engine registry — config.ts's loadTaxConfig() — which must see every
+ * tenant's rows plus the platform default in one query) with the
+ * `app.platform_bypass` GUC set for the transaction, per the additional
+ * permissive SELECT-only RLS policy in migration
+ * 0039_tax_slab_config_tenant_scope.sql. Mirrors audit-service's
+ * scopedPlatformRead / migration 0021 and this service's own migration 0037
+ * exactly.
+ *
+ * SECURITY: this must ONLY be called from trusted server-side code with no
+ * user-supplied input — never derived from a request header/param/JWT claim.
+ * It is SELECT-only by policy design: INSERT/UPDATE/DELETE on tax_slab_config
+ * remain governed solely by the strict tenant-match policy, so this can never
+ * let a write skip tenant scoping.
+ */
+export function scopedPlatformRead<T>(fn: (tx: ScopedTx) => Promise<T>): Promise<T> {
+  return db.transaction(async (tx) => {
+    await (tx as unknown as { execute: (q: unknown) => Promise<unknown> }).execute(
+      sql`SELECT set_config('app.platform_bypass', 'true', true)`,
+    );
+    return fn(tx);
+  }) as Promise<T>;
 }

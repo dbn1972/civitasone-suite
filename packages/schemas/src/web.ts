@@ -1288,7 +1288,7 @@ export const GranteeSummarySchema = z.object({
   id: z.string(),
   granteeCode: z.string(),
   name: z.string(),
-  type: z.enum(["ngo", "government", "institution", "individual"]),
+  type: z.enum(["individual", "institution", "society", "mission"]),
   registrationNo: z.string().optional(),
   panNo: z.string().optional(),
   contactPerson: z.string().optional(),

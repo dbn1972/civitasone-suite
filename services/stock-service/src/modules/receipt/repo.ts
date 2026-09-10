@@ -1,4 +1,4 @@
-import { eq, and, gt, asc, sql } from "drizzle-orm";
+import { eq, and, gt, asc, sql, inArray } from "drizzle-orm";
 import { db } from "../../shared/db.js";
 import { stockReceipts } from "./schema.js";
 
@@ -26,13 +26,15 @@ export async function lockAvailableQty(
   const lockedIds = lockedRows.map((r) => r.id);
 
   // Step 2: Aggregate over the now-locked rows (no FOR UPDATE here).
-  const sumResult = await (tx as typeof db).execute(sql`
-    SELECT COALESCE(SUM(remaining_qty), 0)::int AS available
-    FROM entry.stock_receipts
-    WHERE id = ANY(${lockedIds}::uuid[])
-  `);
-  const rows = sumResult as unknown as Array<{ available: number }>;
-  return Number(rows[0]?.available ?? 0);
+  // Uses drizzle's inArray() query-builder helper rather than interpolating
+  // lockedIds into a raw `sql` ANY(...) template -- postgres.js binds a plain
+  // JS array as a single scalar parameter, not a Postgres array literal, which
+  // throws "malformed array literal" (22P02) on every call that matches a row.
+  const sumResult = await (tx as typeof db)
+    .select({ available: sql<number>`COALESCE(SUM(${stockReceipts.remainingQty}), 0)::int` })
+    .from(stockReceipts)
+    .where(inArray(stockReceipts.id, lockedIds));
+  return Number(sumResult[0]?.available ?? 0);
 }
 
 export async function consumeFIFO(
