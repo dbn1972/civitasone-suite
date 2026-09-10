@@ -136,9 +136,30 @@ const BUG_FIXED_AT = new Date("2026-09-08T13:31:25Z"); // PR #1110 / commit 564f
 // check below would misfire on every single slip with a LOP/loan/arrears/
 // bonus/reimbursement line (confirmed against the 1,088-slip shared dev DB:
 // 266 false NO_CURRENT_CONFIG hits, all LOP, before this set was added).
+//
+// "PT" (Professional Tax) is likewise pushed directly onto a salary slip's
+// `deductions` array in domain.ts's computeSlip() (`deductions.push({ code:
+// "PT", ... })`, ~line 333) from the ptMinor input param -- it is a
+// per-employee statutory amount computed inline, never a payroll_components
+// row. PT is a near-universal Indian statutory deduction, so leaving it out
+// would misfire on almost every real slip.
+//
+// The pensioner-slip vocabulary -- BASIC_PENSION/ADDL_PENSION/DR/FMA
+// (earnings) and COMMUTATION/TDS (deductions) -- comes entirely from
+// domain.ts's computePension(), which is a wholly separate computation path
+// from computeSlip()/payroll_components: consumer.ts's pension run handler
+// takes computePension()'s `result.earnings`/`result.deductions` verbatim
+// (`allComps = [...result.earnings, ...result.deductions]`) and writes them
+// straight into payroll_slips.components via repo.insertSlip(), with no
+// payroll_components lookup anywhere in that path. TDS also appears here
+// (pension TDS is stored as a slip component; salary-slip TDS is not -- it
+// is tracked in a separate statutory table instead) -- included for the
+// pension case since it can land in `components` there.
 const EXCLUDED_CODES = new Set([
   "BASIC", "DA", "HRA",
   "LOP", "LOAN_EMI", "ARREAR", "ARREAR_RECOVERY", "BONUS", "REIMB",
+  "PT",
+  "BASIC_PENSION", "ADDL_PENSION", "DR", "FMA", "COMMUTATION", "TDS",
 ]);
 
 function roundRupee(x) {
