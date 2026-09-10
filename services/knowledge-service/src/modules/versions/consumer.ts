@@ -18,11 +18,24 @@ export function registerVersionsConsumers(queue: Queue): void {
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       const p = msg.payload;
+
+      // TX-016: the producer (versions/commands.ts) precomputes versionNo
+      // via getLatestVersionNo() + 1 OUTSIDE any transaction, purely to
+      // prime the optimistic cache entry below -- it is never returned to
+      // the caller (see the Accepted return type) and is not authoritative.
+      // Two versionCreate/versionRestore commands racing on the same
+      // document can carry the identical precomputed number. Lock and
+      // recompute here, inside the transaction, exactly as versionRestore
+      // does, so the persisted number is always correct regardless of what
+      // the payload says.
+      await repo.lockVersionSeq(tx, p.tenantId, p.documentId);
+      const versionNo = (await repo.getLatestVersionNoTx(tx, p.tenantId, p.documentId)) + 1;
+
       await repo.insert(tx, {
         id: p.id,
         tenantId: p.tenantId,
         documentId: p.documentId,
-        versionNo: p.versionNo,
+        versionNo,
         s3Key: p.s3Key,
         sizeBytes: p.sizeBytes,
         changeNote: p.changeNote,
@@ -33,7 +46,7 @@ export function registerVersionsConsumers(queue: Queue): void {
       await emit(tx, msg, EVENTS.versionCreated, {
         versionId: p.id,
         documentId: p.documentId,
-        versionNo: p.versionNo,
+        versionNo,
       }, "create", p.id);
     });
     await cache.put(keyFor(msg.tenantId, msg.payload.id), msg.payload);
@@ -50,7 +63,11 @@ export function registerVersionsConsumers(queue: Queue): void {
       const sourceVersion = await repo.getByIdTx(tx, p.tenantId, p.versionId);
       if (!sourceVersion) return;
 
-      // Create a new version that copies the restored version's S3 key
+      // Create a new version that copies the restored version's S3 key.
+      // TX-016: lock version-number allocation for this document before
+      // reading the latest number -- see repo.lockVersionSeq() for why a
+      // row-level lock cannot substitute for this.
+      await repo.lockVersionSeq(tx, p.tenantId, p.documentId);
       const nextVersionNo = (await repo.getLatestVersionNoTx(tx, p.tenantId, p.documentId)) + 1;
       await repo.insert(tx, {
         id: p.id,
