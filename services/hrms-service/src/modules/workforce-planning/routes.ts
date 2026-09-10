@@ -149,57 +149,38 @@ export async function workforcePlanningRoutes(app: FastifyInstance): Promise<voi
   });
 
   // Position budget vs actual filled
+  //
+  // TX-014: `employee.position_budget` has no migration in any service (see
+  // ENTERPRISE-GAP-REPORT-2026-09-07.md) — this used to be a raw query that
+  // 500'd on every real call (PostgresError 42P01, "relation ... does not
+  // exist"). Per the gap's DoD, and the DOM-015 stub convention (see
+  // recruitment/external-seams-routes.ts), an honest 501 replaces the
+  // 500 until the table is actually built and backfilled.
   app.get("/v1/hrms/workforce/budget", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, READER_ROLES);
 
-    const rows = await sqlClient`
-      SELECT
-        d.name AS department,
-        COALESCE(pb.sanctioned_positions, 0)::int AS sanctioned,
-        COUNT(e.id)::int AS filled,
-        GREATEST(COALESCE(pb.sanctioned_positions, 0) - COUNT(e.id)::int, 0)::int AS vacant
-      FROM employee.hrms_departments d
-      LEFT JOIN employee.position_budget pb
-        ON pb.department_id = d.id AND pb.tenant_id = d.tenant_id
-      LEFT JOIN employee.hrms_employees e
-        ON e.department_id = d.id AND e.tenant_id = d.tenant_id AND e.status != 'separated'
-      WHERE d.tenant_id = ${ctx.tenantId}
-      GROUP BY d.name, pb.sanctioned_positions
-      ORDER BY d.name
-    `;
-
-    return reply.send({ data: rows });
+    return reply.code(501).send({
+      code: "NOT_BUILT",
+      source: "stub",
+      message: "position budget is not available — employee.position_budget has no migration yet",
+    });
   });
 
   // Diversity — SC/ST/OBC/EWS/PH composition vs mandate
+  //
+  // TX-014: same defect as /budget above — `employee.employee_profiles` has
+  // no migration in any service, so this always 500'd. Honest 501 stub
+  // until the table exists.
   app.get("/v1/hrms/workforce/diversity", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, READER_ROLES);
 
-    const rows = await sqlClient`
-      SELECT
-        COALESCE(ep.category, 'General') AS category,
-        COUNT(*)::int AS count,
-        ROUND(COUNT(*)::numeric * 100.0 / NULLIF(SUM(COUNT(*)) OVER(), 0), 2) AS percentage
-      FROM employee.hrms_employees e
-      LEFT JOIN employee.employee_profiles ep
-        ON ep.employee_id = e.id AND ep.tenant_id = e.tenant_id
-      WHERE e.tenant_id = ${ctx.tenantId} AND e.status != 'separated'
-      GROUP BY ep.category
-      ORDER BY count DESC
-    `;
-
-    // Mandated percentages per GOI reservation policy
-    const mandates = [
-      { category: "SC", mandatedPct: 15 },
-      { category: "ST", mandatedPct: 7.5 },
-      { category: "OBC", mandatedPct: 27 },
-      { category: "EWS", mandatedPct: 10 },
-      { category: "PH", mandatedPct: 4 },
-    ];
-
-    return reply.send({ data: { composition: rows, mandates } });
+    return reply.code(501).send({
+      code: "NOT_BUILT",
+      source: "stub",
+      message: "diversity composition is not available — employee.employee_profiles has no migration yet",
+    });
   });
 
   app.setErrorHandler((err, req, reply) => {
