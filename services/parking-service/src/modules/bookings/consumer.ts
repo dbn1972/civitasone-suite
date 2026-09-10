@@ -122,7 +122,7 @@ export function registerBookingConsumers(rawQueue: Queue): void {
     let updated: Awaited<ReturnType<typeof repo.updateStatus>> = null;
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
-      const booking = await repo.findById(p.id, msg.tenantId);
+      const booking = await repo.findByIdTx(tx, p.id, msg.tenantId);
       // Was: `if (!booking?.entryTime) return;` only — catches "never entered"
       // but NOT "already exited": entryTime stays set after a first exit, so a
       // second recordExit on an already-completed booking would recompute
@@ -132,7 +132,7 @@ export function registerBookingConsumers(rawQueue: Queue): void {
       // = ["active"] in the atomic UPDATE guard below now closes that: a second
       // recordExit finds status is no longer "active" and updateStatus no-ops.
       if (!booking?.entryTime) return;
-      const facility = await facilitiesRepo.findById(booking.facilityId, msg.tenantId);
+      const facility = await facilitiesRepo.findByIdTx(tx, booking.facilityId, msg.tenantId);
       const exitTime = new Date();
       const durationMinutes = Math.round((exitTime.getTime() - booking.entryTime.getTime()) / 60000);
       // Was: hardcoded "Placeholder: Rs 20/hr" flat rate, ignoring the facility's
