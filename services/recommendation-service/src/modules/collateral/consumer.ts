@@ -77,7 +77,7 @@ export async function handleDetachCollateral(
     const fresh = await markProcessed(tx, msg.messageId);
     if (!fresh) return;
 
-    const existing = await repo.findById(p.linkId, msg.tenantId);
+    const existing = await repo.findByIdTx(tx, p.linkId, msg.tenantId);
     if (!existing) return;
     recommendationId = existing.recommendationId;
 
