@@ -126,6 +126,11 @@ vi.mock("../src/modules/steps/repo.js", () => ({
 // override this mock directly (see "execution advance — auto-chains...").
 vi.mock("../src/modules/journeys/repo.js", () => ({
   findById: (...a: unknown[]) => H.journeyFindByIdMock(...a),
+  // TX-001: the executions consumer's auto-chain now reads through the
+  // caller's already-open tx (findByIdTx) instead of opening its own nested
+  // transaction (findById) -- see executions/consumer.ts. Both route to the
+  // same fixture so existing findById-based test setup keeps working.
+  findByIdTx: (_tx: unknown, ...a: unknown[]) => H.journeyFindByIdMock(...a),
 }));
 
 vi.mock("../src/modules/executions/repo.js", () => ({

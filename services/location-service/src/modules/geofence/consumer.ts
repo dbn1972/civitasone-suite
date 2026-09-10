@@ -52,7 +52,11 @@ export function registerGeofenceConsumers(queue: Queue): void {
   queue.subscribe<{ geofenceId: string; lat: number; lng: number }>(COMMANDS.geofenceCheck, async (msg) => {
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
-      const geofence = await repo.findById(msg.payload.geofenceId, msg.tenantId);
+      // TX-001: nested inside this handler's outer db.transaction() -- must
+      // route through the Tx sibling, not the bare (self-transacting via
+      // scopedRead) original, or the nested call deadlocks the pool under
+      // pool.max concurrent in-flight consumer transactions.
+      const geofence = await repo.findByIdTx(tx, msg.payload.geofenceId, msg.tenantId);
       if (!geofence) return;
 
       const distance = haversineDistance(msg.payload.lat, msg.payload.lng, geofence.centerLat, geofence.centerLng);

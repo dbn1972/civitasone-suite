@@ -58,7 +58,7 @@ export function registerProtocolConsumers(rawQueue: Queue): void {
     };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
-      const existing = await repo.findById(p.id, msg.tenantId);
+      const existing = await repo.findByIdTx(tx, p.id, msg.tenantId);
       if (!existing) return;
       const ok = await repo.update(tx, p.id, msg.tenantId, { ...p.patch, updatedBy: msg.actorId }, p.version);
       if (!ok) return;

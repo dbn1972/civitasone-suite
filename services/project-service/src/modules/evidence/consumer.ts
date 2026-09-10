@@ -20,7 +20,12 @@ export function registerEvidenceConsumers(rawQueue: Queue): void {
     };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
-      const milestone = await projectRepo.findMilestoneById(p.milestoneId, p.tenantId);
+      // TX-001 — findMilestoneById() opens its own bare db.transaction();
+      // called from inside this already-open consumer transaction, that
+      // nested call has no free pool connection under pool.max concurrent
+      // in-flight consumers and deadlocks the pool silently. Route through
+      // the existing findMilestoneByIdTx(tx, ...) sibling instead.
+      const milestone = await projectRepo.findMilestoneByIdTx(tx, p.milestoneId, p.tenantId);
       if (!milestone) return;
       await repo.insertTx(tx, {
         id: p.id,
