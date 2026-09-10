@@ -47,6 +47,14 @@ export async function getGrn(id: string, tenantId: string): Promise<Record<strin
   };
 }
 
+/**
+ * PERF-019: the item-count portion was N+1 — one findGrnItemsByGrnId call
+ * PER GRN row (concurrent via Promise.all, but still N round trips, and
+ * fetched full item rows just to take .length). Now a single grouped-count
+ * query across all GRN ids, computed via SQL COUNT/GROUP BY instead of
+ * fetched-then-counted-in-JS. Response shape and per-row field mapping are
+ * unchanged from the original loop.
+ */
 export async function listGrns(tenantId: string, limit: number, offset: number) {
   const rows = await cache.getOrLoad(
     cache.makeKey(tenantId, "grns", `list:${limit}:${offset}`),
@@ -56,13 +64,7 @@ export async function listGrns(tenantId: string, limit: number, offset: number) 
   const grnRows = rows ?? [];
   const vendors = await vendorRepo.listVendorsByTenant(tenantId, 500);
   const vendorNameById = new Map(vendors.map((v) => [v.id, v.name]));
-  const itemCounts = await Promise.all(
-    grnRows.map(async (row) => {
-      const items = await repo.findGrnItemsByGrnId(row.id);
-      return [row.id, items.length] as const;
-    }),
-  );
-  const countById = new Map(itemCounts);
+  const countById = await repo.countItemsByGrnIds(grnRows.map((row) => row.id));
 
   return grnRows.map((row) => ({
     id: row.id,

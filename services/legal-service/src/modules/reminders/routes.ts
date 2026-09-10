@@ -29,15 +29,33 @@ export async function reminderRoutes(app: FastifyInstance): Promise<void> {
     const nowDate = now.toISOString().slice(0, 10);
     const thirtyDaysDate = thirtyDays.toISOString().slice(0, 10);
 
-    const rows = await db.select().from(legalHearings).where(and(
+    // Pre-existing bug found while writing this route's PERF-019 regression
+    // test (unrelated to the N+1 fix below, but in the same handler and
+    // blocking that fix's own verification): this was a BARE db.select(),
+    // not wrapped in db.transaction() — every other read in this repo
+    // wraps so wrapWithTenantGuc() can inject app.tenant_id before the
+    // query runs (see the repeated comment across hearings/repo.ts,
+    // cases/repo.ts, etc: "a bare db.select() runs with no RLS GUC set").
+    // With RLS default-deny and no GUC set, this route always returned 0
+    // rows for every tenant, regardless of data present. Fixed the same way
+    // as every other read site in this codebase.
+    const rows = await db.transaction((tx) => tx.select().from(legalHearings).where(and(
       eq(legalHearings.tenantId, ctx.tenantId),
       gte(legalHearings.hearingDate, nowDate),
       lte(legalHearings.hearingDate, thirtyDaysDate),
       eq(legalHearings.status, "scheduled"),
-    )).limit(100);
+    )).limit(100));
 
-    const data = await Promise.all(rows.map(async (h) => {
-      const legalCase = await caseRepo.findCaseById(h.caseId);
+    // PERF-019: was N+1 — one findCaseById call PER upcoming-hearing row
+    // (concurrent via Promise.all, but still N round trips). Now: the
+    // hearings query plus exactly 1 batch query total regardless of row
+    // count. Response shape and per-row field mapping are unchanged.
+    const caseIds = [...new Set(rows.map((h) => h.caseId))];
+    const cases = await caseRepo.findCasesByIds(caseIds);
+    const caseById = new Map(cases.map((c) => [c.id, c]));
+
+    const data = rows.map((h) => {
+      const legalCase = caseById.get(h.caseId);
       return {
         id: h.id,
         caseId: h.caseId,
@@ -50,7 +68,7 @@ export async function reminderRoutes(app: FastifyInstance): Promise<void> {
         status: h.status,
         daysUntilHearing: Math.ceil((new Date(h.hearingDate.toString()).getTime() - now.getTime()) / 86400000),
       };
-    }));
+    });
 
     return reply.send({ data, total: data.length });
   });

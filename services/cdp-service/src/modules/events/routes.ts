@@ -60,9 +60,21 @@ export async function eventRoutes(app: FastifyInstance): Promise<void> {
     const results: Array<{ index: number; id: string; status: "accepted" | "rejected"; reason?: string }> = [];
     let accepted = 0;
 
+    // PERF-019: the profile-lookup portion was N+1 — one findById call PER
+    // event in the batch. Now a single batch fetch (findById already had a
+    // findByIds sibling — see profiles/repo.ts) up front, looked up per event
+    // via a Map. The per-event ingestEvent() call below is a write (each
+    // event is its own outbox/commit unit) and is intentionally left as one
+    // call per event, unchanged — batching writes is out of scope for
+    // PERF-019 (see docs/ENTERPRISE-GAP-REPORT-2026-09-07.md's PERF-005/019
+    // rows: batch loaders target reads, not per-row writes).
+    const profileIds = [...new Set(body.events.map((ev) => ev.profileId))];
+    const profiles = await profilesRepo.findByIds(profileIds, ctx.tenantId);
+    const profileById = new Map(profiles.map((p) => [p.id, p]));
+
     for (let i = 0; i < body.events.length; i++) {
       const ev = body.events[i]!;
-      const profile = await profilesRepo.findById(ev.profileId, ctx.tenantId);
+      const profile = profileById.get(ev.profileId);
       if (!profile || profile.profileType === "merged") {
         results.push({ index: i, id: "", status: "rejected", reason: "profile not found" });
         continue;
