@@ -6,7 +6,7 @@ import { COMMANDS, EVENTS, SERVICE } from "../../topics.js";
 import { receipts, refunds, adjustments } from "./schema.js";
 import { dcbEntries } from "../assessment/schema.js";
 import { validateReceipt, validateRefund, validateAdjustment, assertMakerChecker } from "./domain.js";
-import { getDemandBalance } from "./repo.js";
+import { getDemandBalanceTx } from "./repo.js";
 import { eq, and } from "drizzle-orm";
 
 export function registerCollectionConsumers(queue: Queue): void {
@@ -29,7 +29,7 @@ export function registerCollectionConsumers(queue: Queue): void {
       const amount = BigInt(amountMinor);
 
       // Load demand balance
-      const balance = await getDemandBalance(msg.tenantId, demandId);
+      const balance = await getDemandBalanceTx(tx, msg.tenantId, demandId);
 
       // Domain validation
       validateReceipt(
@@ -163,7 +163,7 @@ export function registerCollectionConsumers(queue: Queue): void {
 
       if (approve) {
         // Insert DCB entry (type: refund) — balance increases by refund amount
-        const balance = await getDemandBalance(msg.tenantId, refund.assesseeId);
+        const balance = await getDemandBalanceTx(tx, msg.tenantId, refund.assesseeId);
         const newBalance = balance + refund.amountMinor;
         await tx.insert(dcbEntries).values({
           tenantId: msg.tenantId,
@@ -228,7 +228,7 @@ export function registerCollectionConsumers(queue: Queue): void {
       if (!(await markProcessed(tx, msg.messageId))) return;
 
       // Load from-demand balance
-      const fromBalance = await getDemandBalance(msg.tenantId, fromDemandId);
+      const fromBalance = await getDemandBalanceTx(tx, msg.tenantId, fromDemandId);
 
       // Domain validation
       validateAdjustment({ assesseeId, fromDemandId, toDemandId, amountMinor: amount, reason }, fromBalance);
@@ -259,7 +259,7 @@ export function registerCollectionConsumers(queue: Queue): void {
       });
 
       // Insert DCB entry: credit target (increase balance)
-      const toBalance = await getDemandBalance(msg.tenantId, toDemandId);
+      const toBalance = await getDemandBalanceTx(tx, msg.tenantId, toDemandId);
       const newToBalance = toBalance + amount;
       await tx.insert(dcbEntries).values({
         tenantId: msg.tenantId,

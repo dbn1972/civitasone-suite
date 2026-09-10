@@ -8,7 +8,7 @@ import { bbpsTransactions } from "./schema.js";
 import { receipts } from "../collection/schema.js";
 import { dcbEntries } from "../assessment/schema.js";
 import { buildFetchBillResponse, validateBbpsPayment } from "./domain.js";
-import { getDcbOutstanding } from "./repo.js";
+import { getDcbOutstandingTx } from "./repo.js";
 
 export function registerBbpsConsumers(queue: Queue): void {
   // ── bbpsFetchBill ─────────────────────────────────────────────────────────
@@ -19,7 +19,7 @@ export function registerBbpsConsumers(queue: Queue): void {
       const { assesseeIdentifier } = msg.payload as { assesseeIdentifier: string };
 
       // Get DCB outstanding for the assessee
-      const dcb = await getDcbOutstanding(msg.tenantId, assesseeIdentifier);
+      const dcb = await getDcbOutstandingTx(tx, msg.tenantId, assesseeIdentifier);
       if (!dcb) return;
 
       // Build fetch-bill response (throws DomainError if no outstanding)
@@ -64,7 +64,7 @@ export function registerBbpsConsumers(queue: Queue): void {
       if (!(await markProcessed(tx, msg.messageId))) return;
 
       // Get DCB outstanding
-      const dcb = await getDcbOutstanding(msg.tenantId, assesseeIdentifier);
+      const dcb = await getDcbOutstandingTx(tx, msg.tenantId, assesseeIdentifier);
       if (!dcb) return;
 
       assesseeId = dcb.assesseeId;

@@ -104,7 +104,7 @@ vi.mock("../src/modules/bbps/domain.js", () => ({
 }));
 
 vi.mock("../src/modules/bbps/repo.js", () => ({
-  getDcbOutstanding: (...args: any[]) => mockGetDcbOutstanding(...args),
+  getDcbOutstandingTx: (...args: any[]) => mockGetDcbOutstanding(...args),
 }));
 
 // ── Import under test ─────────────────────────────────────────────────────────
