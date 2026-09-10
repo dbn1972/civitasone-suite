@@ -65,7 +65,7 @@ export function registerAssetConsumers(rawQueue: Queue): void {
     let applied = false;
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
-      const existing = await repo.findById(p.id, msg.tenantId);
+      const existing = await repo.findByIdTx(tx, p.id, msg.tenantId);
       if (!existing) return;
       const history = (existing.maintenanceHistory ?? []) as Record<string, unknown>[];
       history.push({ ...p.maintenanceEntry, recordedAt: new Date().toISOString(), recordedBy: msg.actorId });
