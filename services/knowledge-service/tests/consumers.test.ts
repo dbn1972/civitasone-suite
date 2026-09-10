@@ -71,6 +71,9 @@ vi.mock("../src/modules/versions/repo.js", () => ({
   // through the caller's already-open tx) instead of the bare functions above.
   getByIdTx: vi.fn().mockResolvedValue({ id: "v1", tenantId: "t1", documentId: "d1", versionNo: 1, s3Key: "key.pdf", sizeBytes: 100, changeNote: "", createdBy: "a", createdAt: new Date() }),
   getLatestVersionNoTx: vi.fn().mockResolvedValue(1),
+  // TX-016: both handlers now lock version-number allocation before reading
+  // getLatestVersionNoTx.
+  lockVersionSeq: vi.fn().mockResolvedValue(undefined),
   toView: vi.fn((r: unknown) => r),
 }));
 

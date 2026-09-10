@@ -1,4 +1,4 @@
-import { eq, and, desc } from "drizzle-orm";
+import { eq, and, desc, sql } from "drizzle-orm";
 import { db, scopedRead } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
 import { documentVersions, type DocumentVersionRow, type DocumentVersionInsert, type DocumentVersionView } from "./schema.js";
@@ -55,6 +55,7 @@ export async function getLatestVersionNo(tenantId: string, documentId: string): 
 }
 
 export type Writer = Pick<typeof db, "insert" | "update" | "select">;
+export type LockingTx = Writer & Pick<typeof db, "execute">;
 
 /*
  * TX-001 -- tenant-scoped sibling of getById()/getLatestVersionNo(). Both are
@@ -88,3 +89,32 @@ export async function getLatestVersionNoTx(tx: Writer, tenantId: string, documen
 export async function insert(tx: Writer, row: DocumentVersionInsert): Promise<void> {
   await tx.insert(documentVersions).values(row);
 }
+
+/*
+ * TX-016 -- serialize concurrent version-number allocation per document.
+ * getLatestVersionNoTx() + 1 (above) is a plain read-then-insert with no
+ * lock: two concurrent versionRestore/versionCreate consumer transactions
+ * for the SAME document can both read the same latest versionNo and then
+ * race the unique (tenant_id, document_id, version_no) index on insert --
+ * one loses and errors the whole command into the DLQ instead of getting
+ * a distinct version number.
+ *
+ * document_versions has no stable "latest" row to lock (it is append-only:
+ * once a new version lands, whatever row a concurrent caller locked is no
+ * longer latest, so SELECT ... FOR UPDATE against it serializes nothing),
+ * and document_id carries no FK to a documents row either (see
+ * migrations/0011_missing_module_tables.sql) -- there is no physical row
+ * guaranteed to exist that represents "this document" to lock. A
+ * session-scoped advisory lock keyed on (tenantId, documentId) needs
+ * neither: same pattern as hrms-service ledger balance lock
+ * (services/hrms-service/src/modules/cpf/repo.ts, lockedBalance()).
+ * pg_advisory_xact_lock auto-releases at transaction end (commit or
+ * rollback), so a crashed/rolled-back handler can never leave it held.
+ *
+ * Call this BEFORE getLatestVersionNoTx() in the same transaction, for
+ * every command that allocates a version number for a document.
+ */
+export async function lockVersionSeq(tx: LockingTx, tenantId: string, documentId: string): Promise<void> {
+  await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtextextended(${tenantId}::text || ':' || ${documentId}::text, 0))`);
+}
+
