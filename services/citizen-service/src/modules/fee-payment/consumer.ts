@@ -281,7 +281,7 @@ export function registerFeePaymentConsumers(rawQueue: Queue): void {
       const pay = await repo.findPaymentByIdTx(tx, p.paymentId, p.tenantId);
       if (!pay || !isRefundable(pay.status)) return;
       if (p.amount > Number(pay.amount)) return;
-      const existing = await repo.listRefundsByPayment(p.tenantId, p.paymentId);
+      const existing = await repo.listRefundsByPaymentTx(tx, p.tenantId, p.paymentId);
       if (existing.some((r) => r.status === "requested")) return;
       await repo.insertRefund(tx, {
         id: p.id, tenantId: p.tenantId, paymentId: p.paymentId, amount: p.amount,

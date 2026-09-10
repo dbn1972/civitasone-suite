@@ -79,6 +79,10 @@ vi.mock("../src/modules/fee-payment/repo.js", () => ({
   findRefundByIdTx: vi.fn(),
   updateRefund: vi.fn(),
   listRefundsByPayment: vi.fn(),
+  // TX-001: refundRequest now routes through the Tx sibling instead of the
+  // bare function -- keep both mocked so this factory stays correct even if
+  // a future test in this file starts exercising that command.
+  listRefundsByPaymentTx: vi.fn(),
 }));
 vi.mock("../src/modules/catalogue/repo.js", () => ({
   findPublishedByServiceIdTx: (...args: unknown[]) => findPublishedByServiceIdTxMock(...args),
