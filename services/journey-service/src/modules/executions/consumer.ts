@@ -162,7 +162,7 @@ export function registerExecutionConsumers(rawQueue: Queue): void {
         // first step (whose context a caller supplies explicitly on the manual
         // execute-step call). A condition_check step beyond position 0 cannot
         // see enrollment-time attributes yet — tracked separately, not fixed here.
-        const journey = await journeyRepo.findById(p.journeyId, msg.tenantId);
+        const journey = await journeyRepo.findByIdTx(tx, p.journeyId, msg.tenantId);
         const next = journey ? resolveStep(journey.steps, nextIndex) : null;
         if (!next) {
           throw new Error(

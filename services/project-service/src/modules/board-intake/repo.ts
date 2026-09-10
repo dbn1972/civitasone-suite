@@ -36,6 +36,23 @@ export async function findById(tenantId: string, id: string): Promise<BoardDecis
   return rows[0] ?? null;
 }
 
+/**
+ * TX-001 — tenant-scoped sibling of findById(). Reads through a
+ * caller-supplied transaction handle so an already-open db.transaction()
+ * (boardIntakeAccept / boardIntakeReject in consumer.ts) does not open a
+ * second, bare db.transaction() from inside itself: under pool.max
+ * concurrent in-flight consumer transactions, the nested call has no free
+ * connection to open on and deadlocks the pool silently. Route every read
+ * that happens inside an already-open consumer transaction through this,
+ * not findById().
+ */
+export async function findByIdTx(tx: Writer, tenantId: string, id: string): Promise<BoardDecisionIntakeRow | null> {
+  const rows = await tx.select().from(projectBoardDecisionIntake)
+    .where(and(eq(projectBoardDecisionIntake.tenantId, tenantId), eq(projectBoardDecisionIntake.id, id)))
+    .limit(1);
+  return rows[0] ?? null;
+}
+
 export async function listByStatus(
   tenantId: string, status = "pending_review", limit = 200,
 ): Promise<BoardDecisionIntakeRow[]> {

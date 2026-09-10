@@ -19,6 +19,21 @@ export async function findById(id: string, tenantId: string): Promise<AssetRow |
   return rows[0] ?? null;
 }
 
+// TX-001 -- same lookup as findById, but against an already-open transaction
+// (tx) instead of opening its own via scopedRead(). For callers that already
+// hold a transaction -- e.g. assets/consumer.ts's RECORD_MAINTENANCE handler,
+// which reads the existing asset from inside its own db.transaction() before
+// appending to maintenanceHistory -- and must not nest a second, independent
+// db.transaction() inside the first: under pool.max concurrent in-flight
+// consumer transactions, the nested call has no free connection to open on
+// and deadlocks the pool silently. Mirrors complaints/repo.ts's and
+// tree_requests/repo.ts's findByIdTx, the established pattern in this
+// service for this exact need.
+export async function findByIdTx(tx: ScopedTx, id: string, tenantId: string): Promise<AssetRow | null> {
+  const rows = await tx.select().from(parksAssets).where(and(eq(parksAssets.id, id), eq(parksAssets.tenantId, tenantId))).limit(1);
+  return rows[0] ?? null;
+}
+
 export async function findByCode(code: string, tenantId: string): Promise<AssetRow | null> {
   const rows = await scopedRead((tx) =>
     tx.select().from(parksAssets).where(and(eq(parksAssets.assetCode, code), eq(parksAssets.tenantId, tenantId))).limit(1),
