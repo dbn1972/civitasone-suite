@@ -195,11 +195,6 @@ describe('screen contract map', () => {
   // or wiring fix, and is out of scope here. Remove an entry the same day its
   // backend is built and the page is wired for real.
   const KNOWN_FABRICATED_DATA_EXCEPTIONS: Array<{ module: string; screen: string }> = [
-    // COMP-013: platform-admin/roles renders a hardcoded role list + permission
-    // matrix; identity-service's real RBAC routes are UUID/DB-row based, not the
-    // string role-key / module:action-key shape this page's UI assumes -- needs
-    // permission rows seeded (or the UI rebuilt around the existing primitives).
-    { module: 'platform-admin', screen: '/platform-admin/roles' },
     // COMP-014: platform-admin/org-config's DEFAULT_LEVELS models a configurable
     // hierarchy-LEVEL taxonomy that nothing in the backend stores -- likely
     // superseded by the already-wired admin/org/OrgHierarchyManager.tsx (real
