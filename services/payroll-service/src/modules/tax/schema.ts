@@ -28,8 +28,23 @@ export type TaxDeclarationRow = typeof taxDeclarations.$inferSelect;
 export type TaxDeclarationInsert = typeof taxDeclarations.$inferInsert;
 
 
+/**
+ * DOM-008 (completing #1117): FY-versioned income-tax slab config, now also
+ * tenant-overridable. `tenantId` uses this codebase's existing sentinel-
+ * zero-UUID platform-default convention (see statutory.statutory_config /
+ * migration 0038, and notification-service migrations 0003/0044/0045) —
+ * a real tenant_id for an override row, '00000000-0000-0000-0000-000000000000'
+ * for the platform default. `(fyStartYear, regime)` already gives FY-level
+ * effective-dating for tax slabs (a Union Budget changes slabs per FY, never
+ * mid-year), so adding a redundant effective_from date column would encode
+ * nothing a new FY row doesn't already express; the composite uniqueness is
+ * now `(tenant_id, fy_start_year, regime)`. Resolved by engine.ts's
+ * getTaxConfig(): a tenant's own row for (regime, FY) wins, else the platform
+ * default's row, else UnconfiguredFyError — see migration 0039.
+ */
 export const taxSlabConfig = payrollSchema.table("tax_slab_config", {
   id:              uuid("id").primaryKey().defaultRandom(),
+  tenantId:        uuid("tenant_id").notNull(), // '00000000-...-000000000000' = platform default
   fyStartYear:     integer("fy_start_year").notNull(),
   regime:          varchar("regime", { length: 4 }).notNull(),
   slabs:           jsonb("slabs").notNull(),
@@ -38,6 +53,7 @@ export const taxSlabConfig = payrollSchema.table("tax_slab_config", {
   rebateMax:       bigint("rebate_max", { mode: "bigint" }).notNull().default(0n),
   surchargeBands:  jsonb("surcharge_bands").notNull(),
   createdAt:       timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  createdBy:       uuid("created_by"),
 });
 
 export const perquisiteComponents = payrollSchema.table("perquisite_components", {

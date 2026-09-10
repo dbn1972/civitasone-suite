@@ -1,4 +1,4 @@
-import { hraExemptionMinor, annualTaxFromTaxableMinor, trueUpTdsMinor, stdDeduction, type Regime } from "../tax/engine.js";
+import { hraExemptionMinor, annualTaxFromTaxableMinor, trueUpTdsMinor, stdDeduction, PLATFORM_DEFAULT_TENANT_ID, type Regime } from "../tax/engine.js";
 
 /** Employee tax declaration inputs for old-regime exemptions (annual paise). */
 export interface TaxDeclarationInput {
@@ -66,6 +66,14 @@ export interface SlipInput {
   /** Income-tax regime + FY start year for monthly TDS (defaults: new / 2025). */
   taxRegime?: Regime;
   fyStartYear?: number;
+  /**
+   * DOM-008 (completing #1117): tenant to resolve payroll.tax_slab_config
+   * for (stdDeduction()/annualTaxFromTaxableMinor() below). Omit for the
+   * platform default (pre-DOM-008 behaviour, byte-identical) — engine.ts's
+   * getTaxConfig() falls back to the platform default automatically even
+   * when supplied, if the tenant has no override for this (regime, FY).
+   */
+  taxTenantId?: string;
   /** Old-regime declaration (HRA rent, 80C, 80D, other Chapter VI-A). */
   declaration?: TaxDeclarationInput;
   /** Sec 192 true-up: TDS already deducted YTD this FY + months left (incl. this one). */
@@ -247,6 +255,7 @@ export function computeSlip(input: SlipInput): SlipResult {
     protectedNetFloorMinor = 0n,
     ltcExemptTotalMinor = 0n,
     statutoryConfig = DEFAULT_STATUTORY_CONFIG,
+    taxTenantId = PLATFORM_DEFAULT_TENANT_ID,
   } = input;
 
   const earnings: PayComponent[] = [];
@@ -341,7 +350,7 @@ export function computeSlip(input: SlipInput): SlipResult {
   // hand. stdDeduction() throws UnconfiguredFyError for an unregistered
   // (regime, FY) exactly like annualTaxFromTaxableMinor() below already does
   // for this same pair, so this adds no new failure mode.
-  const stdDeductionMinor = BigInt(stdDeduction(taxRegime, fyStartYear)) * 100n;
+  const stdDeductionMinor = BigInt(stdDeduction(taxRegime, fyStartYear, taxTenantId)) * 100n;
   if (taxRegime === "old") {
     const salaryHraAnnual   = (basicMinor + daMinor) * 12n;
     const hraReceivedAnnual = hraMinor * 12n;
@@ -355,7 +364,7 @@ export function computeSlip(input: SlipInput): SlipResult {
     annualTaxableMinor = annualGross + extraIncome - stdDeductionMinor - ltcExemptTotalMinor; // new regime: standard deduction + LTC exempt
   }
   if (annualTaxableMinor < 0n) annualTaxableMinor = 0n;
-  const annualTaxMinor = annualTaxFromTaxableMinor(annualTaxableMinor, taxRegime, fyStartYear);
+  const annualTaxMinor = annualTaxFromTaxableMinor(annualTaxableMinor, taxRegime, fyStartYear, taxTenantId);
   const tdsMinor = monthsRemaining != null
     ? trueUpTdsMinor(annualTaxMinor, tdsYtdMinor ?? 0n, monthsRemaining)         // Sec 192 true-up
     : (annualTaxMinor / 100n / 12n) * 100n;                                       // flat /12 fallback

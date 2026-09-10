@@ -167,7 +167,8 @@ export function computeFnfSettlement(input: FnfInput): FnfResult {
 
   // Step 5: Annual taxable income for the FY
   const totalSalaryIncomeMinor = input.salaryYtdMinor + totalTaxableOnSeparationMinor;
-  const stdDed = BigInt(stdDeduction(input.taxRegime, input.fyStartYear)) * 100n; // convert rupees to paise
+  // DOM-008 (completing #1117): resolved for this employee's own tenant.
+  const stdDed = BigInt(stdDeduction(input.taxRegime, input.fyStartYear, input.tenantId)) * 100n; // convert rupees to paise
   const chapterViA = input.taxRegime === "old"
     ? input.deductions80cMinor + input.deductions80dMinor + input.otherDeductionsMinor
     : 0n; // New regime: no Ch VI-A deductions
@@ -177,7 +178,7 @@ export function computeFnfSettlement(input: FnfInput): FnfResult {
 
   // Step 6: Compute annual tax (convert paise to rupees for the engine, then back)
   const taxableRupees = Math.round(Math.max(0, Number(annualTaxableMinor) / 100) / 10) * 10; // Sec 288A rounding
-  const taxResult = computeTax(taxableRupees, input.taxRegime, input.fyStartYear);
+  const taxResult = computeTax(taxableRupees, input.taxRegime, input.fyStartYear, input.tenantId);
   const annualTaxMinor = BigInt(taxResult.totalTax) * 100n;
 
   // Step 7: TDS on separation = annual tax − YTD TDS
