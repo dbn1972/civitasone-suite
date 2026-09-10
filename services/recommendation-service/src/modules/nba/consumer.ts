@@ -83,7 +83,7 @@ export async function handleNbaAccept(msg: CommandEnvelope<NbaAcceptPayload>): P
   let applied = false;
   await db.transaction(async (tx) => {
     if (!(await markProcessed(tx, msg.messageId))) return;
-    const existing = await repo.findById(p.id, msg.tenantId);
+    const existing = await repo.findByIdTx(tx, p.id, msg.tenantId);
     if (!existing) return;
     const ok = await repo.updateStatus(
       tx,
@@ -128,7 +128,7 @@ export async function handleNbaReject(msg: CommandEnvelope<NbaRejectPayload>): P
   let applied = false;
   await db.transaction(async (tx) => {
     if (!(await markProcessed(tx, msg.messageId))) return;
-    const existing = await repo.findById(p.id, msg.tenantId);
+    const existing = await repo.findByIdTx(tx, p.id, msg.tenantId);
     if (!existing) return;
     const ok = await repo.updateStatus(
       tx,
