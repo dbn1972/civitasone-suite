@@ -68,7 +68,7 @@ export function registerEntryConsumers(queue: Queue): void {
         // Update valuation + ledger for destination warehouse
         if (isReceipt || isAdjustment || (isTransfer && p.toWarehouseId)) {
           const dest = isTransfer ? (p.toWarehouseId ?? warehouseId) : warehouseId;
-          const current = await repo.getValuationRate(p.tenantId, item.itemId, dest);
+          const current = await repo.getValuationRateTx(tx, p.tenantId, item.itemId, dest);
           const newRate = isReceipt
             ? weightedAvgRate(
                 { qty: current.qty, rateMinor: current.rateMinor },
@@ -92,7 +92,7 @@ export function registerEntryConsumers(queue: Queue): void {
         if (isIssue || (isTransfer && p.fromWarehouseId)) {
           const src = p.fromWarehouseId ?? warehouseId;
           await receiptRepo.consumeFIFO(tx, p.tenantId, item.itemId, src, item.qty);
-          const current = await repo.getValuationRate(p.tenantId, item.itemId, src);
+          const current = await repo.getValuationRateTx(tx, p.tenantId, item.itemId, src);
           const newQty = current.qty - item.qty;
           await repo.upsertValuationRate(tx, p.tenantId, item.itemId, src, newQty, current.rateMinor, item.currency ?? "INR");
           const ledgerRow: LedgerInsert = {
