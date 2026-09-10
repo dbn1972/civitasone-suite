@@ -67,6 +67,10 @@ vi.mock("../src/modules/versions/repo.js", () => ({
   insert: vi.fn().mockResolvedValue(undefined),
   getById: vi.fn().mockResolvedValue({ id: "v1", tenantId: "t1", documentId: "d1", versionNo: 1, s3Key: "key.pdf", sizeBytes: 100, changeNote: "", createdBy: "a", createdAt: new Date() }),
   getLatestVersionNo: vi.fn().mockResolvedValue(1),
+  // TX-001: versionRestore now reads through these Tx siblings (routed
+  // through the caller's already-open tx) instead of the bare functions above.
+  getByIdTx: vi.fn().mockResolvedValue({ id: "v1", tenantId: "t1", documentId: "d1", versionNo: 1, s3Key: "key.pdf", sizeBytes: 100, changeNote: "", createdBy: "a", createdAt: new Date() }),
+  getLatestVersionNoTx: vi.fn().mockResolvedValue(1),
   toView: vi.fn((r: unknown) => r),
 }));
 
