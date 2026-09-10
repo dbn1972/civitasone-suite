@@ -25,6 +25,24 @@ export async function findById(id: string, tenantId: string): Promise<GeofenceVi
   return toView(row);
 }
 
+/**
+ * TX-001 -- tenant-scoped sibling of findById(). scopedRead() (shared/db.ts)
+ * is itself a db.transaction() under the hood (needed so the RLS GUC is set
+ * on the read). Calling findById() from inside an already-open
+ * db.transaction() (geofence/consumer.ts's geofenceCheck handler) therefore
+ * opens a SECOND, nested db.transaction() from inside the first: under
+ * pool.max concurrent in-flight consumer transactions, the nested call has
+ * no free pool connection to open on and deadlocks the pool silently. Route
+ * every read that happens inside an already-open consumer transaction
+ * through this, not findById().
+ */
+export async function findByIdTx(tx: Writer, id: string, tenantId: string): Promise<GeofenceView | null> {
+  const rows = await tx.select().from(geofences).where(eq(geofences.id, id)).limit(1);
+  const row = rows[0];
+  if (!row || row.tenantId !== tenantId) return null;
+  return toView(row);
+}
+
 export async function listByTenant(tenantId: string, limit: number, offset: number): Promise<GeofenceView[]> {
   const rows = await scopedRead((tx) => tx.select().from(geofences)
     .where(eq(geofences.tenantId, tenantId))

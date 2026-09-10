@@ -66,7 +66,7 @@ export function registerBoardIntakeConsumers(queue: Queue): void {
     await runWithTenant(msg.tenantId, async () => {
       await db.transaction(async (tx) => {
         if (!(await markProcessed(tx, msg.messageId))) return;
-        const row = await repo.findById(p.tenantId, p.id);
+        const row = await repo.findByIdTx(tx, p.tenantId, p.id);
         if (!row || row.status !== "pending_review") return;
         await repo.review(tx, p.tenantId, p.id, "accepted", msg.actorId, p.note ?? null, row.version);
         await audit(tx, msg, "intake_accept", p.id, {});
@@ -80,7 +80,7 @@ export function registerBoardIntakeConsumers(queue: Queue): void {
     await runWithTenant(msg.tenantId, async () => {
       await db.transaction(async (tx) => {
         if (!(await markProcessed(tx, msg.messageId))) return;
-        const row = await repo.findById(p.tenantId, p.id);
+        const row = await repo.findByIdTx(tx, p.tenantId, p.id);
         if (!row || row.status !== "pending_review") return;
         await repo.review(tx, p.tenantId, p.id, "rejected", msg.actorId, p.note, row.version);
         await audit(tx, msg, "intake_reject", p.id, {});
