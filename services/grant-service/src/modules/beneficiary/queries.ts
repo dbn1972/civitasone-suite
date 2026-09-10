@@ -2,10 +2,10 @@ import { cache } from "../../shared/infra.js";
 import * as repo from "./repo.js";
 import type { BeneficiaryRow } from "./schema.js";
 
-function mapBeneficiaryType(type: string): "ngo" | "government" | "institution" | "individual" {
-  if (type === "ngo") return "ngo";
-  if (type === "government") return "government";
+function mapBeneficiaryType(type: string): "individual" | "institution" | "society" | "mission" {
   if (type === "institution") return "institution";
+  if (type === "society") return "society";
+  if (type === "mission") return "mission";
   return "individual";
 }
 

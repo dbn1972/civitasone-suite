@@ -1352,7 +1352,7 @@ export type GranteeSummary = {
   id: string;
   granteeCode: string;
   name: string;
-  type: "ngo" | "government" | "institution" | "individual";
+  type: "individual" | "institution" | "society" | "mission";
   registrationNo?: string;
   panNo?: string;
   contactPerson?: string;

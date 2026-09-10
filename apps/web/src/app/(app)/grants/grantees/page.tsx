@@ -6,7 +6,9 @@ import { GranteesTable } from "./GranteesTable";
 export default async function GranteesPage() {
   const { data: grantees, source } = await getGrantees();
 
-  const ngos = grantees.filter((g) => g.type === "ngo").length;
+  // "NGO/Trust/Society" grantees are recorded as type "society" or "mission"
+  // (grant_beneficiaries_type_check allows individual/institution/society/mission — see DOM-022).
+  const ngos = grantees.filter((g) => g.type === "society" || g.type === "mission").length;
   const totalActiveGrants = grantees.reduce((s, g) => s + g.activeGrants, 0);
   const avgCompliance =
     grantees.length > 0
