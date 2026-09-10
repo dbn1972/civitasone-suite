@@ -84,7 +84,12 @@ export function registerRedemptionConsumers(rawQueue: Queue): void {
       if (!ok) return;
       applied = true;
       if (p.enrolmentId) {
-        const enrolment = await enrolmentRepo.findById(p.enrolmentId, msg.tenantId);
+        // TX-001: was enrolmentRepo.findById(), a bare read that opens its own
+        // db.transaction() via scopedRead() -- nested inside this consumer's
+        // already-open outer tx, that has no free pool connection to open on
+        // under pool.max concurrent in-flight voidRedemption commands and
+        // deadlocks the pool silently. Route through the outer tx instead.
+        const enrolment = await enrolmentRepo.findByIdTx(tx, p.enrolmentId, msg.tenantId);
         if (enrolment) {
           await enrolmentRepo.adjustBalance(
             tx,

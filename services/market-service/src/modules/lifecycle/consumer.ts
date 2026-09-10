@@ -210,7 +210,7 @@ export function registerLifecycleConsumers(rawQueue: Queue): void {
       // admin could fully submit, approve, and "complete" an eviction, and the
       // target allotment's status (and, for transfers, its allottee) never
       // changed — the stall never actually freed up for reallotment.
-      const request = await repo.findById(p.id, msg.tenantId);
+      const request = await repo.findByIdTx(tx, p.id, msg.tenantId);
       if (!request) return;
       const targetAllotmentStatus =
         request.requestType === "transfer" ? "transferred" :
