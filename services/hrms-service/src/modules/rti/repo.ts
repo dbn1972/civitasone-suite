@@ -29,15 +29,19 @@ type RtiSet = Partial<Pick<
 >>;
 
 /**
- * Guarded RTI state transition. Only flips status when current status is in
- * `from`; bumps version + updatedAt. Returns the updated row, or null on guard
- * rejection (wrong state / not found).
+ * Guarded RTI state transition, run against an ALREADY-OPEN transaction.
+ * TX-001: this is the variant callers that already hold a `tx` (e.g. the F3
+ * leftover consumer's outer `db.transaction()`) must use -- it never opens
+ * its own transaction, so it can't nest one inside another and deadlock the
+ * pool under concurrent load. Only flips status when current status is in
+ * `from`; bumps version + updatedAt. Returns the updated row, or null on
+ * guard rejection (wrong state / not found).
  */
-export async function transitionRti(
-  tenantId: string, id: string, actorId: string,
+export async function transitionRtiTx(
+  tx: Writer, tenantId: string, id: string, actorId: string,
   opts: { from: string[]; to: string; set?: RtiSet },
 ): Promise<RtiRow | null> {
-  const rows = await db.transaction((tx) => tx.update(hrmsRtiRequests)
+  const rows = await tx.update(hrmsRtiRequests)
     .set({
       ...opts.set,
       status: opts.to,
@@ -50,6 +54,19 @@ export async function transitionRti(
       eq(hrmsRtiRequests.tenantId, tenantId),
       inArray(hrmsRtiRequests.status, opts.from),
     ))
-    .returning());
+    .returning();
   return rows[0] ?? null;
+}
+
+/**
+ * Guarded RTI state transition for callers with NO already-open transaction
+ * (e.g. `routes.ts`/tests calling this standalone). Opens its own
+ * transaction and delegates to `transitionRtiTx` -- never call this from
+ * inside another transaction, use `transitionRtiTx(tx, ...)` there instead.
+ */
+export async function transitionRti(
+  tenantId: string, id: string, actorId: string,
+  opts: { from: string[]; to: string; set?: RtiSet },
+): Promise<RtiRow | null> {
+  return db.transaction((tx) => transitionRtiTx(tx, tenantId, id, actorId, opts));
 }
