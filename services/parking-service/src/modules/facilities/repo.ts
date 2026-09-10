@@ -11,6 +11,25 @@ export async function findById(id: string, tenantId: string): Promise<FacilityRo
   return rows[0] ?? null;
 }
 
+/**
+ * TX-001 -- tenant-scoped sibling of findById(). Reads through a
+ * caller-supplied transaction handle so an already-open db.transaction()
+ * (bookings consumer's recordExit, which cross-reads a facility's tariff to
+ * compute the exit fee; also this module's own updateFacility handler
+ * shares the pattern for any future in-transaction lookup) does not open a
+ * second, bare db.transaction() from inside itself via scopedRead(): under
+ * pool.max concurrent in-flight consumer transactions, the nested call has
+ * no free connection to open on and deadlocks the pool silently. Route
+ * every read that happens inside an already-open consumer transaction
+ * through this, not findById().
+ */
+export async function findByIdTx(tx: ScopedTx, id: string, tenantId: string): Promise<FacilityRow | null> {
+  const rows = await tx.select().from(parkingFacilities)
+    .where(and(eq(parkingFacilities.id, id), eq(parkingFacilities.tenantId, tenantId)))
+    .limit(1);
+  return rows[0] ?? null;
+}
+
 export async function list(
   tenantId: string,
   opts: { status?: string | undefined; page?: number | undefined; pageSize?: number | undefined } = {},
