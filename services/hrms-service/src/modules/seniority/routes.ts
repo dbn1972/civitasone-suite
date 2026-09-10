@@ -11,14 +11,34 @@
  *      with at least `minQualifyingYears` of qualifying service in the grade
  *      (measured from date_of_joining, or confirmation_date if present) as of
  *      `asOf` (default today). Returns eligible + ineligible buckets.
+ *
+ *  POST /v1/hrms/seniority/generate
+ *      DOM-019: publishes `hrms.seniority.generate` so `seniority/consumer.ts`
+ *      persists a point-in-time snapshot (hrms_seniority_lists +
+ *      hrms_seniority_list_entries). Before this route existed, that consumer
+ *      (and DOM-004's real-persistence fix to it) was unreachable — nothing
+ *      in the fleet ever published the command.
+ *
+ *  POST /v1/hrms/seniority/:id/approve
+ *      DOM-019: publishes `hrms.seniority.approve` for the generated list
+ *      `:id`. Same unreachable-consumer gap as generate above.
  */
+import { randomUUID } from "node:crypto";
 import type { FastifyInstance } from "fastify";
 import { z, ZodError } from "zod";
+import { acceptedResponseSchema } from "@civitasone/schemas/common";
+import { sendAccepted } from "@civitasone/schemas/validate";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { db } from "../../shared/db.js";
+import { queue } from "../../shared/infra.js";
+import { COMMANDS } from "../../topics.js";
 import { buildSeniority } from "./engine.js";
 
 const READER_ROLES = ["hr_admin", "hr_officer", "super_admin", "manager"];
+// Generate/approve are write actions that create an auditable, persisted
+// snapshot — gated to HR admin/officer (+ super_admin), not the broader
+// read-only "manager" role that can see the live GET views above.
+const HR_ROLES = ["hr_admin", "hr_officer", "super_admin"];
 
 export async function seniorityRoutes(app: FastifyInstance): Promise<void> {
   app.get("/v1/hrms/seniority", async (req, reply) => {
@@ -59,6 +79,47 @@ export async function seniorityRoutes(app: FastifyInstance): Promise<void> {
       eligibleCount: eligible.length, ineligibleCount: ineligible.length,
       eligible, ineligible,
     });
+  });
+
+  app.post("/v1/hrms/seniority/generate", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, HR_ROLES);
+    const body = z.object({
+      departmentId: z.string().uuid().optional(),
+      designationId: z.string().uuid().optional(),
+      asOf: z.string().optional(),
+    }).parse(req.body ?? {});
+    const id = randomUUID();
+    const asOf = body.asOf ?? new Date().toISOString().slice(0, 10);
+    await queue.publish(COMMANDS.seniorityGenerate, {
+      messageId: id, type: COMMANDS.seniorityGenerate,
+      tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
+      payload: {
+        id, tenantId: ctx.tenantId,
+        departmentId: body.departmentId, designationId: body.designationId,
+        asOf, requestedBy: ctx.actorId,
+      },
+    });
+    return sendAccepted(reply, acceptedResponseSchema, { id, status: "accepted", correlationId: ctx.correlationId });
+  });
+
+  app.post("/v1/hrms/seniority/:id/approve", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, HR_ROLES);
+    const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
+    const body = z.object({
+      remarks: z.string().max(2000).optional(),
+    }).parse(req.body ?? {});
+    const messageId = randomUUID();
+    await queue.publish(COMMANDS.seniorityApprove, {
+      messageId, type: COMMANDS.seniorityApprove,
+      tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
+      payload: {
+        id: messageId, tenantId: ctx.tenantId,
+        seniorityListId: id, approvedBy: ctx.actorId, remarks: body.remarks,
+      },
+    });
+    return sendAccepted(reply, acceptedResponseSchema, { id, status: "accepted", correlationId: ctx.correlationId });
   });
 
   app.setErrorHandler((err, req, reply) => {
