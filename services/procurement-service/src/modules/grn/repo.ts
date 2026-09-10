@@ -1,4 +1,4 @@
-import { eq, and, count, sql } from "drizzle-orm";
+import { eq, and, count, sql, inArray } from "drizzle-orm";
 import { db } from "../../shared/db.js";
 import { procurementGrns, procurementGrnItems, procurementInspections, type GrnRow, type GrnInsert, type GrnItemInsert } from "./schema.js";
 
@@ -29,6 +29,26 @@ export async function findGrnItemsByGrnId(grnId: string): Promise<(typeof procur
   // Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
   // before this read — a bare db.select() runs with no RLS GUC set.
   return db.transaction((tx) => tx.select().from(procurementGrnItems).where(eq(procurementGrnItems.grnId, grnId)));
+}
+
+/**
+ * PERF-019 batch loader: was one COUNT-via-fetched-rows query per GRN (N+1,
+ * in grn/queries.ts::listGrns, via Promise.all(findGrnItemsByGrnId)). Now a
+ * single grouped-count query across all GRN ids, mirroring PERF-005 tranche
+ * 1's ai-fraud/routes.ts ghost-employee fix (SQL COUNT/GROUP BY instead of
+ * fetched-then-counted). Returns a Map keyed by grnId; a GRN with 0 items is
+ * simply absent — callers should default to 0 on a miss.
+ */
+export async function countItemsByGrnIds(grnIds: string[]): Promise<Map<string, number>> {
+  const byGrn = new Map<string, number>();
+  if (grnIds.length === 0) return byGrn;
+  const rows = await db.transaction((tx) => tx
+    .select({ grnId: procurementGrnItems.grnId, count: sql<number>`count(*)::int` })
+    .from(procurementGrnItems)
+    .where(inArray(procurementGrnItems.grnId, grnIds))
+    .groupBy(procurementGrnItems.grnId));
+  for (const row of rows) byGrn.set(row.grnId, row.count);
+  return byGrn;
 }
 
 export async function findInspectionByGrnId(grnId: string): Promise<(typeof procurementInspections.$inferSelect) | null> {

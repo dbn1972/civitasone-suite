@@ -1,4 +1,4 @@
-import { eq, and, lt, sql, or, isNull } from "drizzle-orm";
+import { eq, and, lt, sql, or, isNull, inArray } from "drizzle-orm";
 import { db } from "../../shared/db.js";
 import {
   citizenTickets, citizenTicketNotes, ticketEscalations,
@@ -26,6 +26,25 @@ export async function listNotes(ticketId: string) {
   // Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
   // before this read — a bare db.select() runs with no RLS GUC set.
   return db.transaction((tx) => tx.select().from(citizenTicketNotes).where(eq(citizenTicketNotes.ticketId, ticketId)));
+}
+
+/**
+ * PERF-019 batch loader: was one query per ticket (N+1, in
+ * helpdesk/queries.ts::listTicketDetails). Now a single inArray() query
+ * across all ticket ids, grouped in memory. Returns a Map keyed by
+ * ticketId; a ticket with no notes is simply absent — callers should
+ * default to [] on a miss.
+ */
+export async function listNotesByTicketIds(ticketIds: string[]): Promise<Map<string, Awaited<ReturnType<typeof listNotes>>>> {
+  const byTicket = new Map<string, Awaited<ReturnType<typeof listNotes>>>();
+  if (ticketIds.length === 0) return byTicket;
+  const rows = await db.transaction((tx) => tx.select().from(citizenTicketNotes).where(inArray(citizenTicketNotes.ticketId, ticketIds)));
+  for (const row of rows) {
+    const list = byTicket.get(row.ticketId);
+    if (list) list.push(row);
+    else byTicket.set(row.ticketId, [row]);
+  }
+  return byTicket;
 }
 
 export async function listTicketsByTenant(

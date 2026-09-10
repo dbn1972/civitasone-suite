@@ -115,6 +115,11 @@ export async function listTickets(
   );
 }
 
+/**
+ * PERF-019: was N+1 — one listNotes call PER ticket row. Now: the tickets
+ * query plus exactly 1 batch query total regardless of row count. Response
+ * shape and per-row field mapping are unchanged from the original loop.
+ */
 export async function listTicketDetails(
   tenantId: string,
   limit: number,
@@ -122,12 +127,11 @@ export async function listTicketDetails(
   citizenId?: string,
 ): Promise<TicketDetail[]> {
   const rows = await repo.listTicketsByTenant(tenantId, undefined, limit, slaStatus, citizenId);
-  const details: TicketDetail[] = [];
-  for (const row of rows) {
-    const notes = await repo.listNotes(row.id);
-    details.push(toDetail(row, notes));
-  }
-  return details;
+
+  const ticketIds = rows.map((row) => row.id);
+  const notesByTicketId = await repo.listNotesByTicketIds(ticketIds);
+
+  return rows.map((row) => toDetail(row, notesByTicketId.get(row.id) ?? []));
 }
 
 export async function getMetrics(tenantId: string): Promise<Array<{ label: string; value: string; note?: string }>> {

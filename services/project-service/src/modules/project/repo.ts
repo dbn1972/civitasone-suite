@@ -1,4 +1,4 @@
-import { eq, and, desc } from "drizzle-orm";
+import { eq, and, desc, inArray } from "drizzle-orm";
 import { scannerDb } from "../../shared/scanner-db.js";
 import { db } from "../../shared/db.js";
 import {
@@ -14,6 +14,18 @@ export async function findProjectById(id: string, tenantId: string): Promise<Pro
   const rows = await db.transaction((tx) => tx.select().from(projectProjects)
     .where(and(eq(projectProjects.id, id), eq(projectProjects.tenantId, tenantId))).limit(1));
   return rows[0] ?? null;
+}
+
+/**
+ * PERF-019 batch loader: fetches N projects in ONE query instead of one query
+ * per id (see project/queries.ts::listMilestoneSummaries for the calling
+ * pattern this exists to support — mirrors PERF-005 tranche 1's
+ * findApplicationsByIds/findBeneficiariesByIds pattern in grant-service).
+ */
+export async function findProjectsByIds(ids: string[], tenantId: string): Promise<ProjectRow[]> {
+  if (ids.length === 0) return [];
+  return db.transaction((tx) => tx.select().from(projectProjects)
+    .where(and(inArray(projectProjects.id, ids), eq(projectProjects.tenantId, tenantId))));
 }
 
 export async function findProjectByIdTx(tx: Writer, id: string, tenantId: string): Promise<ProjectRow | null> {

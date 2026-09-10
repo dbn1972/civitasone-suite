@@ -1,4 +1,4 @@
-import { eq, and, sql } from "drizzle-orm";
+import { eq, and, sql, inArray } from "drizzle-orm";
 import { db } from "../../shared/db.js";
 import { projectProjects } from "../project/schema.js";
 import {
@@ -15,6 +15,18 @@ export async function findSchemeById(id: string, tenantId: string): Promise<Sche
   const rows = await db.transaction((tx) => tx.select().from(projectSchemes)
     .where(and(eq(projectSchemes.id, id), eq(projectSchemes.tenantId, tenantId))).limit(1));
   return rows[0] ?? null;
+}
+
+/**
+ * PERF-019 batch loader: fetches N schemes in ONE query instead of one query
+ * per id (see project/queries.ts::listProjectSummaries for the calling
+ * pattern this exists to support — mirrors PERF-005 tranche 1's
+ * findApplicationsByIds/findBeneficiariesByIds pattern in grant-service).
+ */
+export async function findSchemesByIds(ids: string[], tenantId: string): Promise<SchemeRow[]> {
+  if (ids.length === 0) return [];
+  return db.transaction((tx) => tx.select().from(projectSchemes)
+    .where(and(inArray(projectSchemes.id, ids), eq(projectSchemes.tenantId, tenantId))));
 }
 
 export async function findSchemeByIdTx(tx: Writer, id: string, tenantId: string): Promise<SchemeRow | null> {
@@ -145,4 +157,26 @@ export async function countProjectsByScheme(schemeId: string, tenantId: string):
     .from(projectProjects)
     .where(and(eq(projectProjects.schemeId, schemeId), eq(projectProjects.tenantId, tenantId))));
   return row?.count ?? 0;
+}
+
+/**
+ * PERF-019 batch loader: was one COUNT query per scheme (N+1, in
+ * scheme/queries.ts::listSchemeSummaries). Now a single grouped-count query
+ * across all scheme ids, mirroring PERF-005 tranche 1's ai-fraud/routes.ts
+ * ghost-employee fix (SQL COUNT/GROUP BY instead of fetched-then-counted).
+ * Returns a Map keyed by schemeId; a scheme with 0 projects is simply absent
+ * — callers should default to 0 on a miss.
+ */
+export async function countProjectsBySchemeIds(schemeIds: string[], tenantId: string): Promise<Map<string, number>> {
+  const byScheme = new Map<string, number>();
+  if (schemeIds.length === 0) return byScheme;
+  const rows = await db.transaction((tx) => tx
+    .select({ schemeId: projectProjects.schemeId, count: sql<number>`count(*)::int` })
+    .from(projectProjects)
+    .where(and(inArray(projectProjects.schemeId, schemeIds), eq(projectProjects.tenantId, tenantId)))
+    .groupBy(projectProjects.schemeId));
+  for (const row of rows) {
+    if (row.schemeId) byScheme.set(row.schemeId, row.count);
+  }
+  return byScheme;
 }
