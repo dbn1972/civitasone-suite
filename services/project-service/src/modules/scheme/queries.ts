@@ -25,25 +25,32 @@ export async function getScheme(id: string, tenantId: string): Promise<SchemeRow
   );
 }
 
+/**
+ * PERF-019: was N+1 — one countProjectsByScheme COUNT query PER scheme row.
+ * Now: the outer list (possibly cache-served) plus exactly 1 grouped-count
+ * query total regardless of row count. Response shape and per-row field
+ * mapping are unchanged from the original loop.
+ */
 export async function listSchemeSummaries(tenantId: string, limit: number) {
   const rows = await cache.getOrLoad(
     cache.makeKey(tenantId, "schemes", `list:${limit}`),
     () => repo.listSchemesByTenant(tenantId, limit),
   );
-  const summaries = [];
-  for (const row of rows ?? []) {
-    summaries.push({
-      id: row.id,
-      schemeCode: row.code,
-      name: row.name,
-      fundingType: mapFundingType(row.type),
-      totalAllocation: minorToAmount(row.totalOutlayMinor),
-      releasedAmount: minorToAmount(row.releasedMinor),
-      projectCount: await repo.countProjectsByScheme(row.id, tenantId),
-      status: (row.status === "completed" ? "completed" : row.status === "discontinued" ? "discontinued" : "active") as "active" | "completed" | "discontinued",
-    });
-  }
-  return summaries;
+  const list = rows ?? [];
+
+  const schemeIds = list.map((row) => row.id);
+  const projectCountBySchemeId = await repo.countProjectsBySchemeIds(schemeIds, tenantId);
+
+  return list.map((row) => ({
+    id: row.id,
+    schemeCode: row.code,
+    name: row.name,
+    fundingType: mapFundingType(row.type),
+    totalAllocation: minorToAmount(row.totalOutlayMinor),
+    releasedAmount: minorToAmount(row.releasedMinor),
+    projectCount: projectCountBySchemeId.get(row.id) ?? 0,
+    status: (row.status === "completed" ? "completed" : row.status === "discontinued" ? "discontinued" : "active") as "active" | "completed" | "discontinued",
+  }));
 }
 
 export async function listFundReleaseSummaries(tenantId: string, limit: number) {

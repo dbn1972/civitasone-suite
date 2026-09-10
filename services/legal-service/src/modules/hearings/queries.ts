@@ -9,15 +9,26 @@ function mapHearingStatus(status: string): "scheduled" | "completed" | "adjourne
   return "scheduled";
 }
 
+/**
+ * PERF-019: was N+1 — one findCaseById call PER hearing row. Now: the outer
+ * list (possibly cache-served) plus exactly 1 batch query total regardless
+ * of row count. Response shape and per-row field mapping are unchanged from
+ * the original loop.
+ */
 export async function listHearingSummaries(tenantId: string, limit: number) {
   const rows = await cache.getOrLoad(
     cache.makeKey(tenantId, "hearings", `list:${limit}`),
     () => repo.listHearingsByTenant(tenantId, limit),
   );
-  const summaries = [];
-  for (const row of rows ?? []) {
-    const legalCase = await caseRepo.findCaseById(row.caseId);
-    summaries.push({
+  const list = rows ?? [];
+
+  const caseIds = [...new Set(list.map((row) => row.caseId))];
+  const cases = await caseRepo.findCasesByIds(caseIds);
+  const caseById = new Map(cases.map((c) => [c.id, c]));
+
+  return list.map((row) => {
+    const legalCase = caseById.get(row.caseId);
+    return {
       id: row.id,
       caseId: row.caseId,
       caseNo: legalCase?.caseNo ?? row.caseId,
@@ -27,20 +38,30 @@ export async function listHearingSummaries(tenantId: string, limit: number) {
       purpose: row.purpose ?? undefined,
       nextDate: row.nextDate?.toString(),
       status: mapHearingStatus(row.status),
-    });
-  }
-  return summaries;
+    };
+  });
 }
 
+/**
+ * PERF-019: was N+1 — one findCaseById call PER court-order row. Now: the
+ * outer list (possibly cache-served) plus exactly 1 batch query total
+ * regardless of row count. Response shape and per-row field mapping are
+ * unchanged from the original loop.
+ */
 export async function listCourtOrderSummaries(tenantId: string, limit: number) {
   const rows = await cache.getOrLoad(
     cache.makeKey(tenantId, "court_orders", `list:${limit}`),
     () => repo.listOrdersByTenant(tenantId, limit),
   );
-  const summaries = [];
-  for (const row of rows ?? []) {
-    const legalCase = await caseRepo.findCaseById(row.caseId);
-    summaries.push({
+  const list = rows ?? [];
+
+  const caseIds = [...new Set(list.map((row) => row.caseId))];
+  const cases = await caseRepo.findCasesByIds(caseIds);
+  const caseById = new Map(cases.map((c) => [c.id, c]));
+
+  return list.map((row) => {
+    const legalCase = caseById.get(row.caseId);
+    return {
       id: row.id,
       caseId: row.caseId,
       caseNo: legalCase?.caseNo ?? row.caseId,
@@ -50,7 +71,6 @@ export async function listCourtOrderSummaries(tenantId: string, limit: number) {
       complianceRequired: Boolean(row.direction),
       department: row.deptRef ?? undefined,
       status: "pending" as const,
-    });
-  }
-  return summaries;
+    };
+  });
 }

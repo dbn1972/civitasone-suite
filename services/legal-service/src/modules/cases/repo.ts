@@ -1,4 +1,4 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { db } from "../../shared/db.js";
 import { legalCases, legalParties, type CaseRow, type CaseInsert } from "./schema.js";
 
@@ -8,6 +8,19 @@ export async function findCaseById(id: string): Promise<CaseRow | null> {
   const rows = await db.transaction(async (tx) =>
     tx.select().from(legalCases).where(eq(legalCases.id, id)).limit(1));
   return rows[0] ?? null;
+}
+
+/**
+ * PERF-019 batch loader: fetches N cases in ONE query instead of one query
+ * per id (see hearings/queries.ts::listHearingSummaries/listCourtOrderSummaries
+ * and reminders/routes.ts's upcoming-hearings route for the calling pattern
+ * this exists to support). Note: findCaseById is NOT tenant-scoped in this
+ * repo (case rows are keyed by id only), so neither is this loader — callers
+ * already reach a caseId only via a tenant-scoped hearing/order/reminder row.
+ */
+export async function findCasesByIds(ids: string[]): Promise<CaseRow[]> {
+  if (ids.length === 0) return [];
+  return db.transaction((tx) => tx.select().from(legalCases).where(inArray(legalCases.id, ids)));
 }
 
 export async function findCaseByIdTx(tx: Writer, id: string): Promise<CaseRow | null> {

@@ -748,7 +748,11 @@ describe("POST /v1/cdp/events", () => {
 
 describe("POST /v1/cdp/events/batch", () => {
   it("202 — batch ingest accepts events", async () => {
-    H.profileFindByIdMock.mockResolvedValue(makeProfile());
+    // PERF-019: this route now batches its profile lookups via
+    // profilesRepo.findByIds() (one query for the whole batch) instead of
+    // calling findById() once per event — mock the plural loader, not the
+    // singular one, to match.
+    H.profileFindByIdsMock.mockResolvedValue([makeProfile()]);
     const app = await buildApp();
     const r = await app.inject({
       method: "POST", url: "/v1/cdp/events/batch",
@@ -768,7 +772,9 @@ describe("POST /v1/cdp/events/batch", () => {
   });
 
   it("422 — all events rejected", async () => {
-    H.profileFindByIdMock.mockResolvedValue(null);
+    // PERF-019: see the "202" test above — findByIds() is what this route
+    // now calls; an empty result means no profile is found for any event.
+    H.profileFindByIdsMock.mockResolvedValue([]);
     const app = await buildApp();
     const r = await app.inject({
       method: "POST", url: "/v1/cdp/events/batch",

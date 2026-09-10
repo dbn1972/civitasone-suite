@@ -7572,13 +7572,32 @@
     {
       "module": "platform-admin",
       "screen": "/platform-admin/roles",
-      "loaders": [],
-      "apiPaths": [],
-      "upstream": null,
-      "routeHandler": null,
-      "tablesPresent": null,
-      "status": "FABRICATED_DATA",
-      "detail": "no loader, but ROLES in apps/web/src/app/(app)/platform-admin/roles/RolePermissionsMatrix.tsx:7 looks like 9 hardcoded records"
+      "loaders": [
+        "getAdminRolesList"
+      ],
+      "apiPaths": [
+        "/api/v1/admin/roles"
+      ],
+      "upstream": "admin → /v1/admin/roles",
+      "routeHandler": "/v1/admin/roles",
+      "tablesPresent": true,
+      "status": "WIRED",
+      "detail": "ok"
+    },
+    {
+      "module": "platform-admin",
+      "screen": "/platform-admin/roles",
+      "loaders": [
+        "getAdminPermissionsList"
+      ],
+      "apiPaths": [
+        "/api/v1/admin/permissions"
+      ],
+      "upstream": "admin → /v1/admin/permissions",
+      "routeHandler": "/v1/admin/permissions",
+      "tablesPresent": true,
+      "status": "WIRED",
+      "detail": "ok"
     },
     {
       "module": "platform-admin",
@@ -10282,11 +10301,11 @@
     }
   ],
   "counts": {
-    "wired": 271,
+    "wired": 273,
     "missing": 0,
     "mismatch": 0,
     "noLoader": 561,
-    "fabricatedData": 4
+    "fabricatedData": 3
   },
   "linkAudit": {
     "total": 1343,

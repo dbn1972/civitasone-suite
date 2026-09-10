@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { RequestContext } from "@civitasone/types";
-import { db } from "../../shared/db.js";
+import { scopedRead } from "../../shared/db.js";
 import { queue } from "../../shared/infra.js";
 import { COMMANDS } from "../../topics.js";
 import { HttpError } from "../../shared/context.js";
@@ -37,7 +37,7 @@ export async function createRole(ctx: RequestContext, body: CreateRoleBody): Pro
   // SEC C2: reject reserved/system keys (unless unconditional authority) and
   // keys outside the allowed namespace format.
   try { assertKeyAllowed(ctx.roles, [body.key]); } catch (err) { mapDomainError(err); }
-  const existing = await repo.findRoleByKey(db, ctx.tenantId, body.key);
+  const existing = await scopedRead((tx) => repo.findRoleByKey(tx, ctx.tenantId, body.key));
   if (existing) throw new HttpError(409, "CONFLICT", `role key '${body.key}' already exists`);
   const id = randomUUID();
   await queue.publish(COMMANDS.rbacCreateRole, {
@@ -62,10 +62,20 @@ export async function createPermission(ctx: RequestContext, body: CreatePermissi
 }
 
 // ── role <-> permission ──────────────────────────────────────────────────
+// COMP-013 fix-up: every lookup in this file used to pass the raw `db`
+// export straight into repo.find*, instead of `scopedRead`. Under this
+// service's NOBYPASSRLS role that read runs with no app.tenant_id GUC set,
+// so RLS fail-closes to zero rows no matter what the app-layer tenantId
+// filter says (see shared/db.ts) -- every one of these lookups always
+// returned null, so grantPermission/revokePermission/assignRole/revokeRole
+// (and createRole's duplicate-key check) always 404'd on a real, existing
+// role/permission. Live-verified against the running identity-service
+// before this fix: a known-good role id came back 404 from GET
+// /identity/rbac/roles/:id, which shares this exact bug via queries.ts.
 export async function grantPermission(ctx: RequestContext, roleId: string, permissionId: string): Promise<Accepted> {
-  const role = await repo.findRoleById(db, ctx.tenantId, roleId);
+  const role = await scopedRead((tx) => repo.findRoleById(tx, ctx.tenantId, roleId));
   if (!role) throw new HttpError(404, "NOT_FOUND", "role not found");
-  const perm = await repo.findPermissionById(db, ctx.tenantId, permissionId);
+  const perm = await scopedRead((tx) => repo.findPermissionById(tx, ctx.tenantId, permissionId));
   if (!perm) throw new HttpError(404, "NOT_FOUND", "permission not found");
 
   // Anti-self-escalation: to add a permission to a role, the caller must hold it.
@@ -88,7 +98,7 @@ export async function grantPermission(ctx: RequestContext, roleId: string, permi
 }
 
 export async function revokePermission(ctx: RequestContext, roleId: string, permissionId: string): Promise<Accepted> {
-  const role = await repo.findRoleById(db, ctx.tenantId, roleId);
+  const role = await scopedRead((tx) => repo.findRoleById(tx, ctx.tenantId, roleId));
   if (!role) throw new HttpError(404, "NOT_FOUND", "role not found");
   const messageId = randomUUID();
   await queue.publish(COMMANDS.rbacRevokePermission, {
@@ -101,11 +111,11 @@ export async function revokePermission(ctx: RequestContext, roleId: string, perm
 
 // ── role <-> user ──────────────────────────────────────────────────────────
 export async function assignRole(ctx: RequestContext, roleId: string, userId: string, reason?: string): Promise<Accepted> {
-  const role = await repo.findRoleById(db, ctx.tenantId, roleId);
+  const role = await scopedRead((tx) => repo.findRoleById(tx, ctx.tenantId, roleId));
   if (!role) throw new HttpError(404, "NOT_FOUND", "role not found");
 
   // Anti-self-escalation: caller must be able to confer everything the role grants.
-  const roleperms = await repo.permissionKeysForRole(db, ctx.tenantId, roleId);
+  const roleperms = await scopedRead((tx) => repo.permissionKeysForRole(tx, ctx.tenantId, roleId));
   try {
     assertCanConfer(ctx.roles, await callerPermissions(ctx), roleperms);
   } catch (err) { mapDomainError(err); }
@@ -121,11 +131,11 @@ export async function assignRole(ctx: RequestContext, roleId: string, userId: st
 }
 
 export async function revokeRole(ctx: RequestContext, roleId: string, userId: string, reason?: string): Promise<Accepted> {
-  const role = await repo.findRoleById(db, ctx.tenantId, roleId);
+  const role = await scopedRead((tx) => repo.findRoleById(tx, ctx.tenantId, roleId));
   if (!role) throw new HttpError(404, "NOT_FOUND", "role not found");
   // Caller must have authority over the role to revoke it too (no privilege via revoke side-effects).
   if (!hasUnconditionalAuthority(ctx.roles)) {
-    const roleperms = await repo.permissionKeysForRole(db, ctx.tenantId, roleId);
+    const roleperms = await scopedRead((tx) => repo.permissionKeysForRole(tx, ctx.tenantId, roleId));
     try {
       assertCanConfer(ctx.roles, await callerPermissions(ctx), roleperms);
     } catch (err) { mapDomainError(err); }

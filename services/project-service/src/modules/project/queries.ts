@@ -76,14 +76,20 @@ export async function listProjects(
   return result ?? [];
 }
 
+/**
+ * PERF-019: was N+1 — one findSchemeById call PER project row. Now: the
+ * list query plus exactly 1 batch query total regardless of row count.
+ * Response shape and per-row field mapping are unchanged from the original
+ * loop.
+ */
 export async function listProjectSummaries(tenantId: string, limit: number): Promise<ProjectSummary[]> {
   const rows = await listProjects(tenantId, undefined, 1, limit);
-  const summaries: ProjectSummary[] = [];
-  for (const row of rows) {
-    const scheme = row.schemeId ? await schemeRepo.findSchemeById(row.schemeId, tenantId) : null;
-    summaries.push(mapProjectRow(row, scheme?.name));
-  }
-  return summaries;
+
+  const schemeIds = [...new Set(rows.map((row) => row.schemeId).filter((id): id is string => Boolean(id)))];
+  const schemes = await schemeRepo.findSchemesByIds(schemeIds, tenantId);
+  const schemeById = new Map(schemes.map((s) => [s.id, s]));
+
+  return rows.map((row) => mapProjectRow(row, row.schemeId ? schemeById.get(row.schemeId)?.name : undefined));
 }
 
 export async function getProjectDetail(id: string, tenantId: string) {
@@ -114,23 +120,30 @@ export async function getProjectDetail(id: string, tenantId: string) {
   };
 }
 
+/**
+ * PERF-019: was N+1 — one findProjectById call PER milestone row. Now: the
+ * outer list (possibly cache-served) plus exactly 1 batch query total
+ * regardless of row count. Response shape and per-row field mapping are
+ * unchanged from the original loop.
+ */
 export async function listMilestoneSummaries(tenantId: string, limit: number) {
   const rows = await cache.getOrLoad(
     cache.makeKey(tenantId, "milestones", `list:${limit}`),
     () => repo.listMilestonesByTenant(tenantId, limit),
   );
-  const summaries = [];
-  for (const row of rows ?? []) {
-    const project = await repo.findProjectById(row.projectId, tenantId);
-    summaries.push({
-      id: row.id,
-      projectId: row.projectId,
-      projectName: project?.name ?? row.projectId,
-      title: row.name,
-      dueDate: row.plannedDate.toString(),
-      completedDate: row.actualDate?.toString(),
-      status: (row.status === "completed" ? "completed" : row.status === "delayed" ? "delayed" : "pending") as "pending" | "completed" | "delayed",
-    });
-  }
-  return summaries;
+  const list = rows ?? [];
+
+  const projectIds = [...new Set(list.map((row) => row.projectId))];
+  const projects = await repo.findProjectsByIds(projectIds, tenantId);
+  const projectById = new Map(projects.map((p) => [p.id, p]));
+
+  return list.map((row) => ({
+    id: row.id,
+    projectId: row.projectId,
+    projectName: projectById.get(row.projectId)?.name ?? row.projectId,
+    title: row.name,
+    dueDate: row.plannedDate.toString(),
+    completedDate: row.actualDate?.toString(),
+    status: (row.status === "completed" ? "completed" : row.status === "delayed" ? "delayed" : "pending") as "pending" | "completed" | "delayed",
+  }));
 }
