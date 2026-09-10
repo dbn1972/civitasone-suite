@@ -45,27 +45,32 @@ export function registerF3_rti_Consumers(queue: Queue): void {
             break;
           }
           case "rti_routes__1": {
-            await repo.transitionRti(p.tenantId, id, msg.actorId, {
+            // TX-001: was repo.transitionRti(), a bare call that opens its
+            // own db.transaction() -- nested inside this consumer's already-
+            // open outer tx, that has no free pool connection to open on
+            // under pool.max concurrent in-flight rti-transition commands
+            // and deadlocks the pool silently. Route through the outer tx.
+            await repo.transitionRtiTx(tx, p.tenantId, id, msg.actorId, {
               from: ["filed"], to: "assigned", set: { pioId: body.pioId },
             });
             break;
           }
           case "rti_routes__2": {
-            await repo.transitionRti(p.tenantId, id, msg.actorId, {
+            await repo.transitionRtiTx(tx, p.tenantId, id, msg.actorId, {
               from: ["filed", "assigned"], to: "responded",
               set: { responseText: body.responseText, respondedDate: body.respondedDate },
             });
             break;
           }
           case "rti_routes__3": {
-            await repo.transitionRti(p.tenantId, id, msg.actorId, {
+            await repo.transitionRtiTx(tx, p.tenantId, id, msg.actorId, {
               from: ["responded"], to: "appealed",
               set: { appealText: body.appealText, appealDate: body.appealDate },
             });
             break;
           }
           case "rti_routes__4": {
-            await repo.transitionRti(p.tenantId, id, msg.actorId, {
+            await repo.transitionRtiTx(tx, p.tenantId, id, msg.actorId, {
               from: ["responded", "appealed"], to: "closed",
               set: { closedDate: body.closedDate },
             });
