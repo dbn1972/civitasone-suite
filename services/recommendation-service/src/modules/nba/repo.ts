@@ -37,6 +37,26 @@ export async function findById(id: string, tenantId: string): Promise<Recommenda
   return rows[0] ?? null;
 }
 
+/**
+ * Tx-scoped sibling of findById — for callers that already hold an outer
+ * db.transaction() (e.g. a queue consumer). Reuses the caller's connection
+ * instead of opening a nested one via scopedRead()'s own db.transaction(),
+ * which under pool.max concurrent outer transactions deadlocks the pool
+ * (TX-001). Non-nested (HTTP query-path) callers keep using findById.
+ */
+export async function findByIdTx(
+  tx: ScopedTx,
+  id: string,
+  tenantId: string,
+): Promise<RecommendationRow | null> {
+  const rows = await tx
+    .select()
+    .from(recommendations)
+    .where(and(eq(recommendations.id, id), eq(recommendations.tenantId, tenantId)))
+    .limit(1);
+  return rows[0] ?? null;
+}
+
 export interface ProfileListFilters {
   /** Restrict to a single delivery channel. */
   channel?: string;

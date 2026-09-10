@@ -35,6 +35,26 @@ export async function findById(id: string, tenantId: string): Promise<Collateral
   return rows[0] ?? null;
 }
 
+/**
+ * Tx-scoped sibling of findById — for callers that already hold an outer
+ * db.transaction() (e.g. a queue consumer). Reuses the caller's connection
+ * instead of opening a nested one via scopedRead()'s own db.transaction(),
+ * which under pool.max concurrent outer transactions deadlocks the pool
+ * (TX-001). Non-nested (HTTP query-path) callers keep using findById.
+ */
+export async function findByIdTx(
+  tx: ScopedTx,
+  id: string,
+  tenantId: string,
+): Promise<CollateralLinkRow | null> {
+  const rows = await tx
+    .select()
+    .from(collateralLinks)
+    .where(and(eq(collateralLinks.id, id), eq(collateralLinks.tenantId, tenantId)))
+    .limit(1);
+  return rows[0] ?? null;
+}
+
 /** Ordered deck for a recommendation — ordinal ascending, id as the stable tie-break. */
 export async function listByRecommendation(
   tenantId: string,
