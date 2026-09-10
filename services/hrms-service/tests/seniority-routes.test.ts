@@ -1,16 +1,27 @@
 /**
- * DOM-019 regression: `hrms.seniority.generate` / `hrms.seniority.approve`
- * had a real, correct consumer (fixed under DOM-004) but no producer
- * anywhere in the fleet — no route, no scheduled job, nothing ever called
- * `queue.publish` for either command, so the consumer was unreachable in
- * production.
+ * Seniority + DPC eligibility routes — comprehensive coverage:
  *
- * These tests prove the full path now works end-to-end through a real HTTP
- * caller: POST /v1/hrms/seniority/generate and POST
- * /v1/hrms/seniority/:id/approve publish the commands, the real consumer
- * (registered here exactly as worker.ts does in production) processes them,
- * and the result is a real, queryable row in the database — not just an
- * accepted HTTP response.
+ *  - GET /v1/hrms/seniority, GET /v1/hrms/dpc/eligibility: ranking
+ *    correctness, tie-break-by-merit-grade, department/designation
+ *    filtering, and boundary validation (restored here after PR #1163
+ *    accidentally dropped this suite while rewriting the file for the
+ *    DOM-019 producer tests below — these GET routes were NOT touched by
+ *    that PR, so the coverage is re-seeded against the real DB in the same
+ *    end-to-end style the rest of this file now uses, rather than reverting
+ *    to the old mocked-db.js approach).
+ *
+ *  - DOM-019 regression: `hrms.seniority.generate` / `hrms.seniority.approve`
+ *    had a real, correct consumer (fixed under DOM-004) but no producer
+ *    anywhere in the fleet — no route, no scheduled job, nothing ever called
+ *    `queue.publish` for either command, so the consumer was unreachable in
+ *    production.
+ *
+ *    These tests prove the full path now works end-to-end through a real HTTP
+ *    caller: POST /v1/hrms/seniority/generate and POST
+ *    /v1/hrms/seniority/:id/approve publish the commands, the real consumer
+ *    (registered here exactly as worker.ts does in production) processes them,
+ *    and the result is a real, queryable row in the database — not just an
+ *    accepted HTTP response.
  */
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { signToken } from "@civitasone/auth";
@@ -20,6 +31,7 @@ import { queue } from "../src/shared/infra.js";
 import { runWithTenant } from "@civitasone/db";
 import type { MemoryQueue } from "@civitasone/queue";
 import { hrmsEmployees, hrmsDepartments, hrmsDesignations } from "../src/modules/employee/schema.js";
+import { hrmsAppraisals } from "../src/modules/appraisals/schema.js";
 import { hrmsSeniorityLists, hrmsSeniorityListEntries } from "../src/modules/seniority/schema.js";
 import { registerSeniorityConsumers } from "../src/modules/seniority/consumer.js";
 import { buildApp } from "../src/app.js";
@@ -78,9 +90,546 @@ async function seedOrg() {
   }));
 }
 
-beforeAll(async () => { await wipe(); await seedOrg(); });
-afterAll(async () => { await wipe(); await sqlClient.end(); });
+beforeAll(async () => { await wipe(); await seedOrg(); await wipeReadFixtures(); await seedReadFixtures(); });
+afterAll(async () => { await wipe(); await wipeReadFixtures(); await sqlClient.end(); });
 
+/* ═══════════════════════════════════════════════════════════════════════════
+   Fixtures for the restored GET-route regression coverage below. Isolated
+   under their own tenant so ranking/tie-break/filter assertions can't be
+   perturbed by the DOM-019 producer fixtures (or each other) sharing the
+   same real database.
+   ═══════════════════════════════════════════════════════════════════════════ */
+const TENANT_R  = "44444444-aaaa-4000-8000-0000000000d9";
+const DEPT_R       = "77777777-cccc-4000-8000-0000000000d9";
+const OTHER_DEPT_R  = "77777777-dddd-4000-8000-0000000000d9";
+const TIE_DEPT_R    = "77777777-eeee-4000-8000-0000000000d9";
+const EMPTY_DEPT_R  = "77777777-ffff-4000-8000-0000000000d9"; // never assigned to any employee
+const DESIG_R       = "88888888-cccc-4000-8000-0000000000d9";
+const OTHER_DESIG_R = "88888888-dddd-4000-8000-0000000000d9";
+
+const EMP1_R        = "22222222-1111-4000-8000-0000000000d9"; // DOJ 2015, DOB 1980 -> rank 1
+const EMP2_R        = "22222222-2222-4000-8000-0000000000d9"; // DOJ 2020 -> rank last
+const EMP3_R        = "22222222-3333-4000-8000-0000000000d9"; // DOJ 2015 (tie w/ EMP1), DOB 1982 -> rank 2
+const EMP_SEP_R     = "22222222-4444-4000-8000-0000000000d9"; // status separated -> excluded
+const EMP_OTHERDEPT_R  = "22222222-5555-4000-8000-0000000000d9";
+const EMP_OTHERDESIG_R = "22222222-6666-4000-8000-0000000000d9";
+const EMP_A_R       = "22222222-7777-4000-8000-0000000000d9"; // tie-break: lower merit grade
+const EMP_B_R       = "22222222-8888-4000-8000-0000000000d9"; // tie-break: higher merit grade -> ranked first
+
+const tokR = (roles = ["hr_admin"]) => signToken({ sub: ACTOR, tid: TENANT_R, roles, sid: "s" }, SECRET);
+const authR = (roles = ["hr_admin"]) => ({ authorization: `Bearer ${tokR(roles)}` });
+
+async function wipeReadFixtures() {
+  await runWithTenant(TENANT_R, () => db.transaction(async (tx) => {
+    await tx.delete(hrmsAppraisals).where(eq(hrmsAppraisals.tenantId, TENANT_R));
+    await tx.delete(hrmsEmployees).where(eq(hrmsEmployees.tenantId, TENANT_R));
+    await tx.delete(hrmsDepartments).where(eq(hrmsDepartments.tenantId, TENANT_R));
+    await tx.delete(hrmsDesignations).where(eq(hrmsDesignations.tenantId, TENANT_R));
+  }));
+}
+
+async function seedReadFixtures() {
+  await runWithTenant(TENANT_R, () => db.transaction(async (tx) => {
+    await tx.insert(hrmsDepartments).values([
+      { id: DEPT_R, tenantId: TENANT_R, code: "DEPT-R", name: "Read-coverage Dept", createdBy: ACTOR, updatedBy: ACTOR },
+      { id: OTHER_DEPT_R, tenantId: TENANT_R, code: "DEPT-R-OTHER", name: "Other Dept", createdBy: ACTOR, updatedBy: ACTOR },
+      { id: TIE_DEPT_R, tenantId: TENANT_R, code: "DEPT-R-TIE", name: "Tie-break Dept", createdBy: ACTOR, updatedBy: ACTOR },
+    ]);
+    await tx.insert(hrmsDesignations).values([
+      { id: DESIG_R, tenantId: TENANT_R, code: "DESIG-R", name: "Read-coverage Designation", createdBy: ACTOR, updatedBy: ACTOR },
+      { id: OTHER_DESIG_R, tenantId: TENANT_R, code: "DESIG-R-OTHER", name: "Other Designation", createdBy: ACTOR, updatedBy: ACTOR },
+    ]);
+    await tx.insert(hrmsEmployees).values([
+      {
+        id: EMP1_R, tenantId: TENANT_R, employeeNo: "EMP-R-001", fullName: "Alice Senior",
+        departmentId: DEPT_R, designationId: DESIG_R, dateOfJoining: "2015-03-01",
+        dateOfBirth: "1980-06-15", confirmationDate: "2015-09-01", status: "confirmed",
+        createdBy: ACTOR, updatedBy: ACTOR,
+      },
+      {
+        id: EMP2_R, tenantId: TENANT_R, employeeNo: "EMP-R-002", fullName: "Bob Junior",
+        departmentId: DEPT_R, designationId: DESIG_R, dateOfJoining: "2020-07-01",
+        dateOfBirth: "1990-01-10", confirmationDate: "2021-01-01", status: "confirmed",
+        createdBy: ACTOR, updatedBy: ACTOR,
+      },
+      {
+        id: EMP3_R, tenantId: TENANT_R, employeeNo: "EMP-R-003", fullName: "Charlie Same",
+        departmentId: DEPT_R, designationId: DESIG_R, dateOfJoining: "2015-03-01",
+        dateOfBirth: "1982-08-20", confirmationDate: "2015-09-01", status: "confirmed",
+        createdBy: ACTOR, updatedBy: ACTOR,
+      },
+      {
+        id: EMP_SEP_R, tenantId: TENANT_R, employeeNo: "EMP-R-004", fullName: "Dave Gone",
+        departmentId: DEPT_R, designationId: DESIG_R, dateOfJoining: "2010-01-01",
+        dateOfBirth: "1975-01-01", status: "separated",
+        createdBy: ACTOR, updatedBy: ACTOR,
+      },
+      {
+        id: EMP_OTHERDEPT_R, tenantId: TENANT_R, employeeNo: "EMP-R-005", fullName: "Eve Other",
+        departmentId: OTHER_DEPT_R, designationId: DESIG_R, dateOfJoining: "2016-01-01",
+        dateOfBirth: "1983-01-01", status: "confirmed",
+        createdBy: ACTOR, updatedBy: ACTOR,
+      },
+      {
+        id: EMP_OTHERDESIG_R, tenantId: TENANT_R, employeeNo: "EMP-R-006", fullName: "Frank Other",
+        departmentId: DEPT_R, designationId: OTHER_DESIG_R, dateOfJoining: "2016-01-01",
+        dateOfBirth: "1983-01-01", status: "confirmed",
+        createdBy: ACTOR, updatedBy: ACTOR,
+      },
+      {
+        id: EMP_A_R, tenantId: TENANT_R, employeeNo: "EMP-R-00A", fullName: "Alpha",
+        departmentId: TIE_DEPT_R, designationId: DESIG_R, dateOfJoining: "2018-01-01",
+        dateOfBirth: "1985-05-05", status: "confirmed",
+        createdBy: ACTOR, updatedBy: ACTOR,
+      },
+      {
+        id: EMP_B_R, tenantId: TENANT_R, employeeNo: "EMP-R-00B", fullName: "Beta",
+        departmentId: TIE_DEPT_R, designationId: DESIG_R, dateOfJoining: "2018-01-01",
+        dateOfBirth: "1985-05-05", status: "confirmed",
+        createdBy: ACTOR, updatedBy: ACTOR,
+      },
+    ]);
+    await tx.insert(hrmsAppraisals).values([
+      {
+        tenantId: TENANT_R, employeeId: EMP_A_R, appraisalPeriod: "2024-25",
+        overallGrade: "6.00", createdBy: ACTOR, updatedBy: ACTOR,
+      },
+      {
+        tenantId: TENANT_R, employeeId: EMP_B_R, appraisalPeriod: "2024-25",
+        overallGrade: "9.00", createdBy: ACTOR, updatedBy: ACTOR,
+      },
+    ]);
+  }));
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   GET /v1/hrms/seniority (restored — see file header)
+   ═══════════════════════════════════════════════════════════════════════════ */
+describe("GET /v1/hrms/seniority", () => {
+  it("200 — returns ranked seniority list", async () => {
+    const app = await buildApp();
+    const r = await app.inject({
+      method: "GET",
+      url: `/v1/hrms/seniority?departmentId=${DEPT_R}&designationId=${DESIG_R}`,
+      headers: authR(),
+    });
+    expect(r.statusCode).toBe(200);
+    const body = r.json();
+    expect(body.data).toBeDefined();
+    expect(body.count).toBeGreaterThan(0);
+    expect(body.asOf).toBeDefined();
+    // EMP1 joined 2015-03-01 with DOB 1980 → rank 1 (older than EMP3 with same join date)
+    expect(body.data[0].employeeNo).toBe("EMP-R-001");
+    expect(body.data[0].rank).toBe(1);
+    // EMP3 same join date but younger → rank 2
+    expect(body.data[1].employeeNo).toBe("EMP-R-003");
+    expect(body.data[1].rank).toBe(2);
+    // EMP2 joined later → rank 3
+    expect(body.data[2].employeeNo).toBe("EMP-R-002");
+    expect(body.data[2].rank).toBe(3);
+    // Separated employees excluded
+    expect(body.data.every((d: { employeeNo: string }) => d.employeeNo !== "EMP-R-004")).toBe(true);
+    await app.close();
+  });
+
+  it("200 — filters by departmentId", async () => {
+    const app = await buildApp();
+    const r = await app.inject({
+      method: "GET",
+      url: `/v1/hrms/seniority?departmentId=${DEPT_R}`,
+      headers: authR(),
+    });
+    expect(r.statusCode).toBe(200);
+    const body = r.json();
+    expect(body.data.every((d: { departmentId: string }) => d.departmentId === DEPT_R)).toBe(true);
+    expect(body.data.some((d: { employeeNo: string }) => d.employeeNo === "EMP-R-005")).toBe(false);
+    await app.close();
+  });
+
+  it("200 — filters by designationId", async () => {
+    const app = await buildApp();
+    const r = await app.inject({
+      method: "GET",
+      url: `/v1/hrms/seniority?designationId=${DESIG_R}`,
+      headers: authR(),
+    });
+    expect(r.statusCode).toBe(200);
+    const body = r.json();
+    expect(body.data.every((d: { designationId: string }) => d.designationId === DESIG_R)).toBe(true);
+    expect(body.data.some((d: { employeeNo: string }) => d.employeeNo === "EMP-R-006")).toBe(false);
+    await app.close();
+  });
+
+  it("200 — accepts asOf date parameter", async () => {
+    const app = await buildApp();
+    const r = await app.inject({
+      method: "GET",
+      url: "/v1/hrms/seniority?asOf=2024-01-01",
+      headers: authR(),
+    });
+    expect(r.statusCode).toBe(200);
+    expect(r.json().asOf).toBe("2024-01-01");
+    await app.close();
+  });
+
+  it("200 — empty list when no employees match", async () => {
+    const app = await buildApp();
+    const r = await app.inject({
+      method: "GET",
+      url: `/v1/hrms/seniority?departmentId=${EMPTY_DEPT_R}`,
+      headers: authR(),
+    });
+    expect(r.statusCode).toBe(200);
+    expect(r.json().count).toBe(0);
+    expect(r.json().data).toHaveLength(0);
+    await app.close();
+  });
+
+  it("200 — tie-break by merit grade DESC when DOJ and DOB equal", async () => {
+    const app = await buildApp();
+    const r = await app.inject({
+      method: "GET",
+      url: `/v1/hrms/seniority?departmentId=${TIE_DEPT_R}`,
+      headers: authR(),
+    });
+    expect(r.statusCode).toBe(200);
+    const body = r.json();
+    // Higher merit grade → ranked first when DOJ and DOB are tied
+    expect(body.data[0].employeeNo).toBe("EMP-R-00B");
+    expect(body.data[1].employeeNo).toBe("EMP-R-00A");
+    await app.close();
+  });
+
+  it("400 — invalid departmentId (not a UUID)", async () => {
+    const app = await buildApp();
+    const r = await app.inject({
+      method: "GET",
+      url: "/v1/hrms/seniority?departmentId=not-a-uuid",
+      headers: authR(),
+    });
+    expect(r.statusCode).toBe(400);
+    expect(r.json().code).toBe("VALIDATION_FAILED");
+    await app.close();
+  });
+
+  it("400 — invalid designationId (not a UUID)", async () => {
+    const app = await buildApp();
+    const r = await app.inject({
+      method: "GET",
+      url: "/v1/hrms/seniority?designationId=xyz",
+      headers: authR(),
+    });
+    expect(r.statusCode).toBe(400);
+    expect(r.json().code).toBe("VALIDATION_FAILED");
+    await app.close();
+  });
+
+  it("401 — no auth header", async () => {
+    const app = await buildApp();
+    const r = await app.inject({
+      method: "GET",
+      url: "/v1/hrms/seniority",
+    });
+    expect(r.statusCode).toBe(401);
+    await app.close();
+  });
+
+  it("403 — insufficient role (employee)", async () => {
+    const app = await buildApp();
+    const r = await app.inject({
+      method: "GET",
+      url: "/v1/hrms/seniority",
+      headers: authR(["employee"]),
+    });
+    expect(r.statusCode).toBe(403);
+    expect(r.json().code).toBe("FORBIDDEN");
+    await app.close();
+  });
+
+  it("403 — insufficient role (viewer)", async () => {
+    const app = await buildApp();
+    const r = await app.inject({
+      method: "GET",
+      url: "/v1/hrms/seniority",
+      headers: authR(["viewer"]),
+    });
+    expect(r.statusCode).toBe(403);
+    await app.close();
+  });
+
+  it("200 — hr_officer can access", async () => {
+    const app = await buildApp();
+    const r = await app.inject({
+      method: "GET",
+      url: "/v1/hrms/seniority",
+      headers: authR(["hr_officer"]),
+    });
+    expect(r.statusCode).toBe(200);
+    await app.close();
+  });
+
+  it("200 — super_admin can access", async () => {
+    const app = await buildApp();
+    const r = await app.inject({
+      method: "GET",
+      url: "/v1/hrms/seniority",
+      headers: authR(["super_admin"]),
+    });
+    expect(r.statusCode).toBe(200);
+    await app.close();
+  });
+
+  it("200 — manager can access", async () => {
+    const app = await buildApp();
+    const r = await app.inject({
+      method: "GET",
+      url: "/v1/hrms/seniority",
+      headers: authR(["manager"]),
+    });
+    expect(r.statusCode).toBe(200);
+    await app.close();
+  });
+});
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   GET /v1/hrms/dpc/eligibility (restored — see file header)
+   ═══════════════════════════════════════════════════════════════════════════ */
+describe("GET /v1/hrms/dpc/eligibility", () => {
+  it("200 — returns eligible and ineligible buckets", async () => {
+    const app = await buildApp();
+    const r = await app.inject({
+      method: "GET",
+      url: "/v1/hrms/dpc/eligibility?minQualifyingYears=5",
+      headers: authR(),
+    });
+    expect(r.statusCode).toBe(200);
+    const body = r.json();
+    expect(body.eligible).toBeDefined();
+    expect(body.ineligible).toBeDefined();
+    expect(body.eligibleCount).toBeDefined();
+    expect(body.ineligibleCount).toBeDefined();
+    expect(body.minQualifyingYears).toBe(5);
+    expect(body.asOf).toBeDefined();
+    expect(body.eligibleCount + body.ineligibleCount).toBe(body.eligible.length + body.ineligible.length);
+    await app.close();
+  });
+
+  it("200 — eligible employees get eligibilityRank field", async () => {
+    const app = await buildApp();
+    const r = await app.inject({
+      method: "GET",
+      url: "/v1/hrms/dpc/eligibility?minQualifyingYears=3",
+      headers: authR(),
+    });
+    expect(r.statusCode).toBe(200);
+    const body = r.json();
+    if (body.eligible.length > 0) {
+      expect(body.eligible[0].eligibilityRank).toBe(1);
+    }
+    await app.close();
+  });
+
+  it("200 — defaults minQualifyingYears to 5", async () => {
+    const app = await buildApp();
+    const r = await app.inject({
+      method: "GET",
+      url: "/v1/hrms/dpc/eligibility",
+      headers: authR(),
+    });
+    expect(r.statusCode).toBe(200);
+    expect(r.json().minQualifyingYears).toBe(5);
+    await app.close();
+  });
+
+  it("200 — filters by departmentId", async () => {
+    const app = await buildApp();
+    const r = await app.inject({
+      method: "GET",
+      url: `/v1/hrms/dpc/eligibility?departmentId=${DEPT_R}`,
+      headers: authR(),
+    });
+    expect(r.statusCode).toBe(200);
+    const body = r.json();
+    const allEmployees = [...body.eligible, ...body.ineligible];
+    expect(allEmployees.every((d: { departmentId: string }) => d.departmentId === DEPT_R)).toBe(true);
+    await app.close();
+  });
+
+  it("200 — filters by designationId", async () => {
+    const app = await buildApp();
+    const r = await app.inject({
+      method: "GET",
+      url: `/v1/hrms/dpc/eligibility?designationId=${DESIG_R}`,
+      headers: authR(),
+    });
+    expect(r.statusCode).toBe(200);
+    const body = r.json();
+    const allEmployees = [...body.eligible, ...body.ineligible];
+    expect(allEmployees.every((d: { designationId: string }) => d.designationId === DESIG_R)).toBe(true);
+    await app.close();
+  });
+
+  it("200 — accepts custom asOf date", async () => {
+    const app = await buildApp();
+    const r = await app.inject({
+      method: "GET",
+      url: "/v1/hrms/dpc/eligibility?asOf=2024-01-01&minQualifyingYears=8",
+      headers: authR(),
+    });
+    expect(r.statusCode).toBe(200);
+    const body = r.json();
+    expect(body.asOf).toBe("2024-01-01");
+    expect(body.minQualifyingYears).toBe(8);
+    await app.close();
+  });
+
+  it("200 — high minQualifyingYears puts everyone ineligible", async () => {
+    const app = await buildApp();
+    const r = await app.inject({
+      method: "GET",
+      url: "/v1/hrms/dpc/eligibility?minQualifyingYears=40",
+      headers: authR(),
+    });
+    expect(r.statusCode).toBe(200);
+    const body = r.json();
+    expect(body.eligibleCount).toBe(0);
+    expect(body.ineligibleCount).toBeGreaterThan(0);
+    await app.close();
+  });
+
+  it("200 — zero minQualifyingYears puts everyone eligible", async () => {
+    const app = await buildApp();
+    const r = await app.inject({
+      method: "GET",
+      url: "/v1/hrms/dpc/eligibility?minQualifyingYears=0",
+      headers: authR(),
+    });
+    expect(r.statusCode).toBe(200);
+    const body = r.json();
+    expect(body.eligibleCount).toBeGreaterThan(0);
+    expect(body.ineligibleCount).toBe(0);
+    await app.close();
+  });
+
+  it("400 — invalid departmentId (not a UUID)", async () => {
+    const app = await buildApp();
+    const r = await app.inject({
+      method: "GET",
+      url: "/v1/hrms/dpc/eligibility?departmentId=bad-id",
+      headers: authR(),
+    });
+    expect(r.statusCode).toBe(400);
+    expect(r.json().code).toBe("VALIDATION_FAILED");
+    await app.close();
+  });
+
+  it("400 — invalid designationId (not a UUID)", async () => {
+    const app = await buildApp();
+    const r = await app.inject({
+      method: "GET",
+      url: "/v1/hrms/dpc/eligibility?designationId=nope",
+      headers: authR(),
+    });
+    expect(r.statusCode).toBe(400);
+    expect(r.json().code).toBe("VALIDATION_FAILED");
+    await app.close();
+  });
+
+  it("400 — minQualifyingYears exceeds max (40)", async () => {
+    const app = await buildApp();
+    const r = await app.inject({
+      method: "GET",
+      url: "/v1/hrms/dpc/eligibility?minQualifyingYears=41",
+      headers: authR(),
+    });
+    expect(r.statusCode).toBe(400);
+    expect(r.json().code).toBe("VALIDATION_FAILED");
+    await app.close();
+  });
+
+  it("400 — minQualifyingYears negative", async () => {
+    const app = await buildApp();
+    const r = await app.inject({
+      method: "GET",
+      url: "/v1/hrms/dpc/eligibility?minQualifyingYears=-1",
+      headers: authR(),
+    });
+    expect(r.statusCode).toBe(400);
+    expect(r.json().code).toBe("VALIDATION_FAILED");
+    await app.close();
+  });
+
+  it("401 — no auth header", async () => {
+    const app = await buildApp();
+    const r = await app.inject({
+      method: "GET",
+      url: "/v1/hrms/dpc/eligibility",
+    });
+    expect(r.statusCode).toBe(401);
+    await app.close();
+  });
+
+  it("403 — insufficient role (employee)", async () => {
+    const app = await buildApp();
+    const r = await app.inject({
+      method: "GET",
+      url: "/v1/hrms/dpc/eligibility",
+      headers: authR(["employee"]),
+    });
+    expect(r.statusCode).toBe(403);
+    expect(r.json().code).toBe("FORBIDDEN");
+    await app.close();
+  });
+
+  it("403 — insufficient role (viewer)", async () => {
+    const app = await buildApp();
+    const r = await app.inject({
+      method: "GET",
+      url: "/v1/hrms/dpc/eligibility",
+      headers: authR(["viewer"]),
+    });
+    expect(r.statusCode).toBe(403);
+    await app.close();
+  });
+
+  it("200 — hr_officer can access", async () => {
+    const app = await buildApp();
+    const r = await app.inject({
+      method: "GET",
+      url: "/v1/hrms/dpc/eligibility",
+      headers: authR(["hr_officer"]),
+    });
+    expect(r.statusCode).toBe(200);
+    await app.close();
+  });
+
+  it("200 — super_admin can access", async () => {
+    const app = await buildApp();
+    const r = await app.inject({
+      method: "GET",
+      url: "/v1/hrms/dpc/eligibility",
+      headers: authR(["super_admin"]),
+    });
+    expect(r.statusCode).toBe(200);
+    await app.close();
+  });
+
+  it("200 — manager can access", async () => {
+    const app = await buildApp();
+    const r = await app.inject({
+      method: "GET",
+      url: "/v1/hrms/dpc/eligibility",
+      headers: authR(["manager"]),
+    });
+    expect(r.statusCode).toBe(200);
+    await app.close();
+  });
+});
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   POST /v1/hrms/seniority/generate + /approve — DOM-019 producer wired to
+   the real DOM-004 consumer
+   ═══════════════════════════════════════════════════════════════════════════ */
 describe("POST /v1/hrms/seniority/generate — DOM-019 producer wired to the real DOM-004 consumer", () => {
   it("202s, publishes the command, and the consumer persists a real snapshot", async () => {
     const app = await buildApp();
