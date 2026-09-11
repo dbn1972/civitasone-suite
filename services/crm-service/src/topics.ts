@@ -441,6 +441,13 @@ export const EVENTS = {
   documentAlert: "crm.document.alert",
   /** Gap 4: priority flag added/removed on a contact. Payload: { contactId, flag, action: 'added'|'removed' }. */
   contactFlagged: "crm.contact.flagged",
+  // -- TX-004: Campaign approval workflow (audit trail) --
+  /** A pending campaign was submitted for approval (fires once, idempotently, on redelivery-safe consumption). */
+  campaignSubmittedForApproval: "crm.campaign.submitted_for_approval",
+  /** A pending campaign was approved. */
+  campaignApproved: "crm.campaign.approved",
+  /** A pending campaign was rejected, optionally with a reason. */
+  campaignRejected: "crm.campaign.rejected",
 } as const;
 
 /** Topics consumed from other services (cross-service stitching). */

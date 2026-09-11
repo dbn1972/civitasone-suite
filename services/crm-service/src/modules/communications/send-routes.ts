@@ -18,6 +18,7 @@ import { resolveContext, requireRole, HttpError } from "../../shared/context.js"
 import { commandId } from "../../shared/idempotency.js";
 import { scopedRead } from "../../shared/db.js";
 import { COMMANDS } from "../../topics.js";
+import { publishCrmCommand } from "../../shared/residual-publish.js";
 import * as sendCommands from "./send-commands.js";
 import { sendCommunicationBody, bulkSendCommunicationBody } from "./send-validators.js";
 import { getApprovalThreshold } from "./campaign-approval-routes.js";
@@ -163,6 +164,12 @@ export async function sendRoutes(app: FastifyInstance): Promise<void> {
                   ${body.scheduledAt ?? null}, ${ctx.actorId})
         `);
       });
+
+      // TX-004: publish the submit-for-approval command so the campaign
+      // approval consumer can leave a real audit trail (idempotent on
+      // redelivery via the command's derived messageId).
+      const submitCmdId = commandId(ctx, `${COMMANDS.submitCampaignForApproval}:${campaignId}`);
+      await publishCrmCommand(ctx, COMMANDS.submitCampaignForApproval, submitCmdId, { campaignId });
 
       return reply.code(202).send({
         id: campaignId,
