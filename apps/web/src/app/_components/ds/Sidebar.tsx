@@ -13,6 +13,7 @@ import {
   ScanSearch, Gavel,
   Bot, Truck, Star, Archive, Dna, Compass, Sparkles,
   TrendingUp, BookMarked, ScrollText, MessageCircleQuestion, Bell, CreditCard, Building, Shield, Wrench,
+  Diamond, ChevronDown,
   LucideIcon,
 } from "lucide-react";
 
@@ -181,7 +182,14 @@ export function Sidebar({ enabledModules, userName, userRole }: SidebarProps = {
   return (
     <aside id="app-sidebar" className="sb">
       <div className="sb-brand">
-        <div className="sb-logo" aria-hidden="true">◈</div>
+        {/*
+          Diamond icon, not a "◈" text glyph: axe's color-contrast rule cannot
+          reliably measure contrast for decorative Unicode symbol characters
+          (reported as "nonBmp" / non-text content) and treats that as an
+          undecided, blocking result. An SVG icon isn't subject to that
+          text-contrast heuristic.
+        */}
+        <div className="sb-logo" aria-hidden="true"><Diamond size={18} color="#fff" /></div>
         <div>
           <div className="sb-bn">CivitasOne</div>
           <div className="sb-bs">Enterprise Suite</div>
@@ -202,7 +210,16 @@ export function Sidebar({ enabledModules, userName, userRole }: SidebarProps = {
                 style={{ width: "100%", textAlign: "left", background: "none", border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 10px" }}
               >
                 <span>{group}</span>
-                <span aria-hidden="true" style={{ fontSize: 10, opacity: 0.5, transition: "transform 160ms", transform: actuallyCollapsed ? "rotate(-90deg)" : "rotate(0deg)" }}>▾</span>
+                {/*
+                  ChevronDown icon, not a "▾" text glyph: axe's color-contrast
+                  rule cannot reliably measure contrast for decorative Unicode
+                  symbol characters (reported as "nonBmp" / non-text content)
+                  and treats that as an undecided, blocking result. An SVG
+                  icon isn't subject to that text-contrast heuristic.
+                */}
+                <span aria-hidden="true" style={{ display: "inline-flex", opacity: 0.5, transition: "transform 160ms", transform: actuallyCollapsed ? "rotate(-90deg)" : "rotate(0deg)" }}>
+                  <ChevronDown size={12} />
+                </span>
               </button>
               {!actuallyCollapsed && items.map(({ icon: Icon, label, href }) => (
                 <Link

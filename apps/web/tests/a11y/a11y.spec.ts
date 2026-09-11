@@ -105,7 +105,10 @@ function assertLandedOnRequestedRoute(
   persona: string,
 ): void {
   const landed = new URL(page.url()).pathname.replace(/\/$/, "") || "/";
-  const want = requested.replace(/\/$/, "") || "/";
+  // `requested` may carry a query string (e.g. "/auth/login?error=unknown",
+  // used to reach a route's only locally-renderable state without following
+  // its normal redirect) -- compare pathnames only, same as `landed` above.
+  const want = requested.split("?")[0].replace(/\/$/, "") || "/";
   expect(
     landed,
     `${requested} REDIRECTED to ${landed} as ${persona}.\n` +

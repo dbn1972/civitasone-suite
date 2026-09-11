@@ -60,7 +60,7 @@ test.describe('HR', () => {
   test('leave application form shows all required fields', async ({ page }) => {
     await page.goto('/hr/leave/apply');
     await expect(page.getByRole('heading', { name: /leave/i })).toBeVisible();
-    await expect(page.getByLabel(/employee id/i)).toBeVisible();
+    await expect(page.getByLabel('Employee', { exact: true })).toBeVisible();
     await expect(page.getByLabel(/leave type/i)).toBeVisible();
     await expect(page.getByLabel(/from date/i)).toBeVisible();
     await expect(page.getByLabel(/to date/i)).toBeVisible();

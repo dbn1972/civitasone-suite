@@ -18,7 +18,7 @@ describe("CreateGRNForm — required-field ARIA (Req 3.5)", () => {
   });
 
   it("marks the Purchase order and Vendor selects as aria-required", async () => {
-    render(<CreateGRNForm inspectorId="user-1" />);
+    render(<CreateGRNForm />);
     const poSelect = await screen.findByLabelText("Purchase order *");
     const vendorSelect = await screen.findByLabelText("Vendor *");
     expect(poSelect).toHaveAttribute("aria-required", "true");
@@ -26,7 +26,7 @@ describe("CreateGRNForm — required-field ARIA (Req 3.5)", () => {
   });
 
   it("points required fields at the error message via aria-describedby once a validation error is shown", async () => {
-    render(<CreateGRNForm inspectorId="user-1" />);
+    render(<CreateGRNForm />);
     const poSelect = await screen.findByLabelText("Purchase order *");
     expect(poSelect).not.toHaveAttribute("aria-describedby");
 
