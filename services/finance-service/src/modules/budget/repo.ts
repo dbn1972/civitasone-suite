@@ -181,6 +181,21 @@ export async function findHeadByCodeTx(tx: Writer, tenantId: string, code: strin
   return rows[0] ?? null;
 }
 
+/**
+ * DOM-010: does this head have any children in the chart-of-accounts
+ * hierarchy? A head with at least one other head pointing at it via
+ * parentId is a group/summary ("parent") account — posting to it directly
+ * would corrupt roll-up totals for its children. Tx-scoped (mirrors
+ * findBudgetTx/findHeadByIdTx above) so gl/consumer.ts's postJournal can
+ * call this from inside its own already-open transaction.
+ */
+export async function hasChildHeadsTx(tx: Writer, headId: string): Promise<boolean> {
+  const rows = await (tx as typeof db).select({ id: financeHeads.id }).from(financeHeads)
+    .where(eq(financeHeads.parentId, headId))
+    .limit(1);
+  return rows.length > 0;
+}
+
 export async function updateHead(tx: Writer, id: string, patch: Partial<HeadRow>): Promise<void> {
   await tx.update(financeHeads).set({ ...patch, updatedAt: new Date() }).where(eq(financeHeads.id, id));
 }
