@@ -26,6 +26,25 @@
  * does NOT certify every current rate below is still correct at the moment
  * you read this. Re-verify against the live Finance Act / CBDT
  * notifications before relying on it for an actual statutory filing.
+ *
+ * POST-MERGE FIX (reviewer finding on PR #1172, Sep 2026): this file's own
+ * warning above -- "several commission/rent-adjacent sections were cut from
+ * 5%->2% effective 2024-10-01" -- was written but never actually applied to
+ * the 194H entry, so the exact stale-rate bug this file exists to prevent
+ * was reintroduced for that one section (5% still accepted post-2024-10-01;
+ * the correct 2% rejected). Fixed below. HIGH confidence: the Finance Act
+ * (No. 2), 2024 cut to Section 194H (commission/brokerage) TDS from 5% to
+ * 2% w.e.f. 2024-10-01 is widely documented and not in dispute.
+ *
+ * The rest of this table was re-audited against the same 2024-10-01 cut
+ * (which statutorily applied to sections carrying a bare 5% rate -- 194H,
+ * 194D, 194DA, 194G, 194IB, 194M): none of 194C (1%/2%), 194I (2%/10%),
+ * 194J (2%/10%), 194A (10%), 194B (30%), 206AA (20%), or 197 (0%) carry a
+ * 5% slab, so none of them were subject to this cut and none needed a
+ * matching fix. 194D/194DA/194G/194IB/194M are NOT in this table at all
+ * (out of scope for a vendor-payment TDS module) and are not addressed
+ * here -- flagged only so a future editor doesn't assume this audit covered
+ * sections this table doesn't contain.
  */
 
 export interface TdsRateSlab {
@@ -48,6 +67,10 @@ const COVID_FROM = "2020-05-14";
 const COVID_TO = "2021-03-31";
 const COVID_NOTE = "COVID-19 relief rate (Section 194C(6)... economic package); lapsed 2021-03-31 — not valid for current-date deductions";
 
+const RATE_CUT_2024_10_01 = "2024-10-01";
+const RATE_CUT_2024_NOTE =
+  "Finance (No. 2) Act, 2024 cut 194H from 5% to 2%, effective 2024-10-01 -- HIGH confidence, widely documented";
+
 export const TDS_SECTIONS: readonly TdsSectionDef[] = [
   {
     section: "194C",
@@ -62,7 +85,8 @@ export const TDS_SECTIONS: readonly TdsSectionDef[] = [
     section: "194H",
     label: "Commission or brokerage",
     slabs: [
-      { ratePct: 5, effectiveFrom: "2010-07-01" },
+      { ratePct: 5, effectiveFrom: "2010-07-01", effectiveTo: "2024-09-30" },
+      { ratePct: 2, effectiveFrom: RATE_CUT_2024_10_01, note: RATE_CUT_2024_NOTE },
     ],
   },
   {

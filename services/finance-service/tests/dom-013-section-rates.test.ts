@@ -70,8 +70,8 @@ describe("DOM-013 — current statutory rates remain valid for their section", (
     expect(isValidTdsRateForSection("194J", 2, "2026-09-11")).toBe(true);
     expect(isValidTdsRateForSection("194J", 10, "2026-09-11")).toBe(true);
   });
-  it("194H accepts 5%", () => {
-    expect(isValidTdsRateForSection("194H", 5, "2026-09-11")).toBe(true);
+  it("194H accepts 2% for a current-date deduction (post 2024-10-01 Finance Act cut)", () => {
+    expect(isValidTdsRateForSection("194H", 2, "2026-09-11")).toBe(true);
   });
   it("194A accepts 10%", () => {
     expect(isValidTdsRateForSection("194A", 10, "2026-09-11")).toBe(true);
@@ -81,6 +81,31 @@ describe("DOM-013 — current statutory rates remain valid for their section", (
   });
   it("197 nil-deduction certificate accepts 0%", () => {
     expect(isValidTdsRateForSection("197", 0, "2026-09-11")).toBe(true);
+  });
+});
+
+describe("PR #1172 reviewer finding — 194H commission/brokerage TDS cut 5%->2% eff. 2024-10-01 (Finance (No. 2) Act, 2024)", () => {
+  it("reviewer repro: 2% for 194H on a current-date deduction was incorrectly rejected pre-fix", () => {
+    expect(isValidTdsRateForSection("194H", 2, "2026-09-11")).toBe(true);
+  });
+
+  it("the old 5% rate is no longer valid for a current-date deduction", () => {
+    expect(isValidTdsRateForSection("194H", 5, "2026-09-11")).toBe(false);
+  });
+
+  it("5% was still correct the day before the cut took effect", () => {
+    expect(isValidTdsRateForSection("194H", 5, "2024-09-30")).toBe(true);
+    expect(isValidTdsRateForSection("194H", 2, "2024-09-30")).toBe(false);
+  });
+
+  it("2% becomes valid, and 5% stops being valid, exactly on the effective date", () => {
+    expect(isValidTdsRateForSection("194H", 2, "2024-10-01")).toBe(true);
+    expect(isValidTdsRateForSection("194H", 5, "2024-10-01")).toBe(false);
+  });
+
+  it("5% remains correct for a historical deduction made before the cut", () => {
+    expect(isValidTdsRateForSection("194H", 5, "2015-06-01")).toBe(true);
+    expect(isValidTdsRateForSection("194H", 2, "2015-06-01")).toBe(false);
   });
 });
 
