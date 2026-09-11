@@ -19,7 +19,7 @@ import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { randomUUID } from "node:crypto";
 import { SYSTEM_TEMPLATE_IDS } from "@civitasone/events";
 
-const PGPORT = process.env.BUILDING_TEST_PGPORT ?? "5442";
+const PGPORT = process.env.BUILDING_TEST_PGPORT ?? "5435";
 const BUILDING_DSN = `postgres://building_svc:building_dev_pw@localhost:${PGPORT}/civitas_building`;
 const NOTIFICATION_DSN = `postgres://notification_svc:notification_dev_pw@localhost:${PGPORT}/civitas_notification`;
 

@@ -23,19 +23,29 @@ describe("StatCard", () => {
   });
 
   it("renders delta with up indicator when up is true", () => {
-    render(<StatCard icon="📈" label="Growth" value="12%" delta="+5%" up />);
+    const { container } = render(<StatCard icon="📈" label="Growth" value="12%" delta="+5%" up />);
     expect(screen.getByText(/\+5%/)).toBeInTheDocument();
-    // C-06: the glyph itself is aria-hidden (↑, not ▲); the accessible name lives
-    // on the wrapper's aria-label instead.
-    const deltaEl = screen.getByLabelText("Increase of +5%");
+    // C-06/WCAG: the glyph is an aria-hidden icon, not a "↑" text character
+    // (axe's color-contrast rule can't measure a decorative Unicode glyph).
+    // There's no aria-label on the wrapper either (a <div> has no role that
+    // permits one) — the accessible name instead comes from visually-hidden
+    // text ("Increase of ") immediately before the visible delta value, so
+    // assert on the rendered text rather than an ARIA label association.
+    const deltaEl = container.querySelector(".delta");
     expect(deltaEl).toHaveClass("delta", "up");
+    expect(deltaEl).not.toHaveAttribute("aria-label");
+    expect(deltaEl?.textContent?.replace(/\s+/g, " ").trim()).toBe("Increase of +5%");
+    expect(deltaEl?.querySelector(".sr-only")?.textContent).toBe("Increase of ");
   });
 
   it("renders delta with down indicator when up is false", () => {
-    render(<StatCard icon="📉" label="Decline" value="8%" delta="-3%" up={false} />);
+    const { container } = render(<StatCard icon="📉" label="Decline" value="8%" delta="-3%" up={false} />);
     expect(screen.getByText(/-3%/)).toBeInTheDocument();
-    const deltaEl = screen.getByLabelText("Decrease of -3%");
+    const deltaEl = container.querySelector(".delta");
     expect(deltaEl).toHaveClass("delta", "down");
+    expect(deltaEl).not.toHaveAttribute("aria-label");
+    expect(deltaEl?.textContent?.replace(/\s+/g, " ").trim()).toBe("Decrease of -3%");
+    expect(deltaEl?.querySelector(".sr-only")?.textContent).toBe("Decrease of ");
   });
 
   it("does not render delta when not provided", () => {

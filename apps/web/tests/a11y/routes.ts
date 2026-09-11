@@ -118,6 +118,18 @@ export const CURATED_ROUTES: RouteSpec[] = [
 
 /** Unauthenticated routes — these are the first thing any user meets. */
 export const PUBLIC_ROUTES: { path: string; archetype: RouteSpec["archetype"] }[] = [
-  { path: "/auth/login", archetype: "form" },
+  // "/auth/login" redirects straight to the Keycloak IdP when hit with no
+  // "?error=", by design (see apps/web/src/app/auth/login/page.tsx -- the
+  // interstitial was deliberately removed there). That redirect target is a
+  // third-party, Keycloak-hosted page this gate cannot and should not audit,
+  // and CI never provisions a reachable IdP -- only a REST mock gateway --
+  // so a bare "/auth/login" request always ends in a cross-origin navigation
+  // failure (net::ERR_CONNECTION_REFUSED), which also aborts whatever test
+  // runs next in the same worker (observed: the following "/auth/forgot"
+  // test, which renders correctly in isolation, failing the same way). The
+  // "?error=" variant is this app's own code (LoginClient.tsx) and the only
+  // state of this route that ever renders locally, so that is what the gate
+  // audits.
+  { path: "/auth/login?error=unknown", archetype: "form" },
   { path: "/auth/forgot", archetype: "form" },
 ];
