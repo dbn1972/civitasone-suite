@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
+import { ArrowLeft } from "lucide-react";
 
 interface PageHeaderProps {
   title: string;
@@ -15,7 +16,17 @@ export function PageHeader({ title, subtitle, actions, back, backLabel, help }: 
   return (
     <>
       {back && (
-        <span className="back">← <Link href={back}>{backLabel ?? 'Back'}</Link></span>
+        <span className="back">
+          {/*
+            An icon, not a "←" text glyph: axe's color-contrast rule cannot
+            reliably measure contrast for decorative Unicode arrow characters
+            (reported as "nonBmp" / non-text content) and treats that as an
+            undecided, blocking result. An SVG icon isn't subject to that
+            text-contrast heuristic.
+          */}
+          <ArrowLeft aria-hidden="true" size={14} />
+          <Link href={back}>{backLabel ?? 'Back'}</Link>
+        </span>
       )}
       <div className="ph">
         <div>

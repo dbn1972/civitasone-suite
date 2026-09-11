@@ -6,6 +6,7 @@
  */
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { X } from "lucide-react";
 import { CURRENT_VERSION, getLatestEntry, hasUnseenUpdate } from "@/lib/changelog";
 
 const STORAGE_KEY = "civitasone.lastSeenVersion";
@@ -50,8 +51,13 @@ export function WhatsNewBanner() {
         justifyContent: "space-between",
         gap: 12,
         padding: "8px 16px",
+        // Solid background, not a gradient: axe's color-contrast rule cannot
+        // determine a definite ratio through a background-image/gradient
+        // ("bgGradient"), so it reports the text on top as an undecided,
+        // blocking result. A flat color makes the ratio decidable — both
+        // original gradient stops were near-white, so this keeps the same
+        // look.
         background: "#eff6ff",
-        backgroundImage: "linear-gradient(90deg, #eff6ff, #f0fdf4)",
         borderBottom: "1px solid #e0e7ff",
         fontSize: 14,
       }}
@@ -73,13 +79,21 @@ export function WhatsNewBanner() {
           border: "none",
           background: "none",
           cursor: "pointer",
-          fontSize: 18,
           lineHeight: 1,
           color: "#6b7280",
           padding: 4,
+          display: "inline-flex",
         }}
       >
-        ✕
+        {/*
+          Icon, not a "✕" text glyph: axe's color-contrast rule cannot
+          reliably measure contrast for decorative Unicode symbol characters
+          (reported as "nonBmp" / non-text content) and treats that as an
+          undecided, blocking result. An SVG icon isn't subject to that
+          text-contrast heuristic. The accessible name still comes from
+          aria-label above.
+        */}
+        <X aria-hidden="true" size={18} />
       </button>
     </div>
   );
