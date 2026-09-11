@@ -45,7 +45,7 @@ async function drainOutbox(db: unknown, queue: { publish: (...a: never[]) => unk
   return total;
 }
 
-const PGPORT = process.env.ROADCUT_TEST_PGPORT ?? "5443";
+const PGPORT = process.env.ROADCUT_TEST_PGPORT ?? "5435";
 const ROADCUT_DSN = `postgres://roadcut_svc:roadcut_dev_pw@localhost:${PGPORT}/civitas_roadcut`;
 const NOTIFICATION_DSN = `postgres://notification_svc:notification_dev_pw@localhost:${PGPORT}/civitas_notification`;
 

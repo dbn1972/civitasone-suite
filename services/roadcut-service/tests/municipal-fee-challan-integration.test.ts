@@ -63,7 +63,7 @@ async function drainOutbox(db: unknown, queue: MemoryQueue, service: string): Pr
 // Matches the CI/nightly convention (.github/workflows/nightly.yml uses
 // finance_svc@.../civitas_finance on the standing dev container's port);
 // this test's own bootstrap container is addressed via ROADCUT_TEST_PGPORT.
-const PGPORT = process.env.ROADCUT_TEST_PGPORT ?? "5443";
+const PGPORT = process.env.ROADCUT_TEST_PGPORT ?? "5435";
 const ROADCUT_DSN = `postgres://roadcut_svc:roadcut_dev_pw@localhost:${PGPORT}/civitas_roadcut`;
 const FINANCE_DSN = `postgres://finance_svc:finance_dev_pw@localhost:${PGPORT}/civitas_finance`;
 
