@@ -9,6 +9,7 @@ import { cache } from '../../shared/infra.js';
 import { enqueue, markProcessed } from '../../shared/outbox.js';
 import { SERVICE } from '../../topics.js';
 import { tradeLicenses } from './schema.js';
+import { assertPaymentWithinOutstanding } from './domain.js';
 
 const TL_CREATE  = 'revenue.trade_license.create';
 const TL_RENEW   = 'revenue.trade_license.renew';
@@ -165,8 +166,14 @@ export function registerTradeLicenseConsumers(queue: Queue): void {
 
       const paid = BigInt(p.amountMinor as string);
       const current = BigInt(rows[0]!.feePaidMinor ?? '0');
-      const newPaid = current + paid;
       const fee = BigInt(rows[0]!.feeMinor ?? '0');
+
+      // TX-008: reject a payment that would push feePaidMinor past feeMinor
+      // instead of silently accepting whatever amountMinor the client sent
+      // — there was previously no cap here at all.
+      assertPaymentWithinOutstanding(fee, current, paid);
+
+      const newPaid = current + paid;
       const newStatus = newPaid >= fee ? 'active' : 'pending';
 
       await tx

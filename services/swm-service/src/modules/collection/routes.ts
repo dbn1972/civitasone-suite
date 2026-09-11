@@ -14,13 +14,18 @@ const listQuery = z.object({
   status: z.string().optional(),
 });
 
+// TX-008: feeMinor intentionally NOT accepted here. The fee is always
+// server-derived from wasteType (see domain.ts calculateFeeMinor, called
+// from the consumer) — a client can no longer set its own price by sending
+// a feeMinor field, matching the calculateFeeMinor() convention used by
+// every other priced module in this codebase (advertisement-service,
+// building-service, crematorium-service, asset-service water-connections).
 const requestBody = z.object({
   wasteType: z.enum(["construction_debris", "garden_waste", "e_waste", "hazardous", "bulky_item"]),
   estimatedQuantity: z.string().max(128).optional(),
   address: z.record(z.unknown()).optional(),
   preferredDate: z.string().optional(),
   preferredSlot: z.string().max(24).optional(),
-  feeMinor: z.number().int().nonnegative().optional(),
 });
 
 const scheduleBody = z.object({ vehicleId: z.string().min(1), version: z.number().int().positive() });
@@ -48,7 +53,7 @@ export async function collectionRoutes(app: FastifyInstance): Promise<void> {
     return reply.code(202).send(await commands.requestCollection(ctx, {
       wasteType: body.wasteType, estimatedQuantity: body.estimatedQuantity ?? null,
       address: body.address ?? null, preferredDate: body.preferredDate ?? null,
-      preferredSlot: body.preferredSlot ?? null, feeMinor: body.feeMinor ?? null,
+      preferredSlot: body.preferredSlot ?? null,
     }));
   });
 

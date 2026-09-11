@@ -164,3 +164,32 @@ describe("field-task /complete — transition-validation regression (bug fix)", 
     expect(res.statusCode).toBe(404);
   });
 });
+
+describe("TX-008: fee is server-derived, never client-priced", () => {
+  it("ignores an attacker-supplied feeMinor and persists the server-computed fee for the wasteType", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/swm/collection-requests",
+      headers: hdr(ACTOR_A, TENANT_A, ["swm_user"]),
+      // hazardous's real rate table fee is Rs 10,000 (feeMinor 1000000).
+      // The attacker tries to self-price the request at 1 paisa.
+      payload: { wasteType: "hazardous", feeMinor: 1 },
+    });
+    expect(res.statusCode).toBe(202);
+    const id = (res.json() as { id: string }).id;
+
+    let get: Awaited<ReturnType<typeof app.inject>> | undefined;
+    await waitFor(async () => {
+      get = await app.inject({ method: "GET", url: `/v1/swm/collection-requests/${id}`, headers: hdr() });
+      return get.statusCode === 200;
+    });
+
+    // The persisted fee is never the attacker-controlled value — it is always
+    // whatever calculateFeeMinor(wasteType) computes server-side, regardless
+    // of what the client sent (or whether it sent feeMinor at all — the
+    // field is rejected by the zod schema in routes.ts as an unknown key
+    // would be if strict, but here it's simply dropped before publishing).
+    expect(get!.json().data.feeMinor).toBe(1000000);
+    expect(get!.json().data.feeMinor).not.toBe(1);
+  });
+});

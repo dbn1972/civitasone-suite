@@ -6,6 +6,7 @@ import { writeAudit } from "../../shared/audit.js";
 import { tenantScoped } from "../../shared/tenant-queue.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
+import { calculateFeeMinor, type GeneratorType, type WasteCategory } from "./domain.js";
 
 const log = pino({ name: "swm.bulk_generators.consumer" });
 
@@ -18,13 +19,17 @@ export function registerBulkGeneratorConsumers(rawQueue: Queue): void {
 
   queue.subscribe(COMMANDS.bulkGeneratorRegister, async (msg) => {
     const p = msg.payload as any;
+    // TX-008: feeMinor is always server-derived from generatorType +
+    // category — any feeMinor a caller might smuggle into the payload is
+    // ignored, never trusted. This is the only place the fee is computed.
+    const feeMinor = calculateFeeMinor(p.generatorType as GeneratorType, p.category as WasteCategory);
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       await repo.insert(tx, {
         id: p.id, tenantId: msg.tenantId, registrationNumber: p.registrationNumber,
         generatorName: p.generatorName, generatorType: p.generatorType,
         address: p.address, estimatedWasteKgPerDay: p.estimatedWasteKgPerDay,
-        category: p.category, status: "registered", feeMinor: p.feeMinor,
+        category: p.category, status: "registered", feeMinor,
         createdBy: msg.actorId, updatedBy: msg.actorId,
       });
       await enqueue(tx, {

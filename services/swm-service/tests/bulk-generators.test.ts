@@ -89,3 +89,61 @@ describe("bulk generator lifecycle: register -> update -> suspend", () => {
     expect(res.statusCode).toBe(403);
   });
 });
+
+describe("TX-008: fee is server-derived, never client-priced", () => {
+  it("ignores an attacker-supplied feeMinor on register and persists the server-computed fee", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/swm/bulk-generators",
+      headers: hdr(ACTOR_A, TENANT_A, ["swm_admin"]),
+      // hospital + mixed's real rate table fee is Rs 25,000 (feeMinor 2500000).
+      // The attacker tries to self-price the registration at 1 paisa.
+      payload: { generatorName: "City Hospital", generatorType: "hospital", category: "mixed", feeMinor: 1 },
+    });
+    expect(res.statusCode).toBe(202);
+    const id = (res.json() as { id: string }).id;
+
+    let get: Awaited<ReturnType<typeof app.inject>> | undefined;
+    await waitFor(async () => {
+      get = await app.inject({ method: "GET", url: `/v1/swm/bulk-generators/${id}`, headers: hdr() });
+      return get.statusCode === 200;
+    });
+
+    expect(get!.json().data.feeMinor).toBe(2500000);
+    expect(get!.json().data.feeMinor).not.toBe(1);
+  });
+
+  it("ignores an attacker-supplied feeMinor on the patch/update route too", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/swm/bulk-generators",
+      headers: hdr(ACTOR_A, TENANT_A, ["swm_admin"]),
+      payload: { generatorName: "Grand Market", generatorType: "market", category: "wet" },
+    });
+    expect(res.statusCode).toBe(202);
+    const id = (res.json() as { id: string }).id;
+    await waitFor(async () => {
+      const get = await app.inject({ method: "GET", url: `/v1/swm/bulk-generators/${id}`, headers: hdr() });
+      return get.statusCode === 200;
+    });
+
+    const patch = await app.inject({
+      method: "PATCH",
+      url: `/v1/swm/bulk-generators/${id}`,
+      headers: hdr(),
+      // market + wet's real fee is 600000; try to overwrite it via patch.
+      payload: { feeMinor: 1, version: 1 },
+    });
+    // feeMinor is not a recognized field on updateBody, so it is dropped by
+    // zod before it ever reaches the patch object — nothing to apply, but
+    // the route still accepts the (now-empty) patch, which still bumps the
+    // optimistic-lock version.
+    expect(patch.statusCode).toBe(202);
+    let get: Awaited<ReturnType<typeof app.inject>> | undefined;
+    await waitFor(async () => {
+      get = await app.inject({ method: "GET", url: `/v1/swm/bulk-generators/${id}`, headers: hdr() });
+      return get.json().data.version === 2;
+    });
+    expect(get!.json().data.feeMinor).toBe(600000);
+  });
+});
