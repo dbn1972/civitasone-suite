@@ -8,6 +8,7 @@
  */
 import { useCallback, useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
+import { X } from "lucide-react";
 
 const STORAGE_PREFIX = "civitasone.feedback.";
 const HIDE_DURATION_MS = 24 * 60 * 60 * 1000; // 24h
@@ -135,9 +136,28 @@ export function FeedbackWidget() {
           <button
             onClick={dismiss}
             aria-label="Dismiss feedback prompt"
-            style={{ border: "none", background: "none", cursor: "pointer", fontSize: 18, color: "#9ca3af", padding: "0 0 0 4px", lineHeight: 1 }}
+            style={{
+              border: "none",
+              background: "none",
+              cursor: "pointer",
+              // #9ca3af (gray-400) measured 2.53:1 on white — below the 4.5:1
+              // AA minimum. #6b7280 (gray-500) is the same muted-icon color
+              // already used for WhatsNewBanner's passing dismiss button
+              // (~4.8:1 on white).
+              color: "#6b7280",
+              padding: "0 0 0 4px",
+              lineHeight: 1,
+              display: "inline-flex",
+            }}
           >
-            ×
+            {/*
+              Icon, not a "×" text glyph: a single decorative character reads
+              as ambiguous "short text content" to axe's color-contrast rule,
+              which treats that as an undecided, blocking result regardless of
+              the actual color. An SVG icon isn't subject to that heuristic.
+              The accessible name still comes from aria-label above.
+            */}
+            <X aria-hidden="true" size={16} />
           </button>
         </div>
       ) : (
