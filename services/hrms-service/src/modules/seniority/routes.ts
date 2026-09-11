@@ -45,7 +45,7 @@ import { and, eq } from "drizzle-orm";
 import { acceptedResponseSchema } from "@civitasone/schemas/common";
 import { sendAccepted } from "@civitasone/schemas/validate";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { db } from "../../shared/db.js";
+import { db, scopedRead } from "../../shared/db.js";
 import { queue } from "../../shared/infra.js";
 import { COMMANDS } from "../../topics.js";
 import { buildSeniority } from "./engine.js";
@@ -128,12 +128,12 @@ export async function seniorityRoutes(app: FastifyInstance): Promise<void> {
       remarks: z.string().max(2000).optional(),
     }).parse(req.body ?? {});
 
-    const [existing] = await db.select().from(hrmsSeniorityLists)
+    const [existing] = await scopedRead((tx) => tx.select().from(hrmsSeniorityLists)
       .where(and(
         eq(hrmsSeniorityLists.tenantId, ctx.tenantId),
         eq(hrmsSeniorityLists.id, id),
       ))
-      .limit(1);
+      .limit(1));
     if (!existing) {
       throw new HttpError(404, "SENIORITY_LIST_NOT_FOUND", "seniority list not found");
     }
