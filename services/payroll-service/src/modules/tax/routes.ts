@@ -9,6 +9,7 @@ import { taxDeclarations } from "./schema.js";
 import { exemptionCeilings } from "../fnf/schema.js";
 import { buildForm16 } from "./form16.js";
 import { computeTax, stdDeduction, UnconfiguredFyError } from "./engine.js";
+import { resolveRunStatutoryConfig } from "../payroll/consumer.js";
 import { HrmsUnavailableError, fetchPayrollInput } from "../../shared/hrms-client.js";
 import { acceptedResponseSchema } from "@civitasone/schemas/common";
 import { sendAccepted } from "@civitasone/schemas/validate";
@@ -57,6 +58,32 @@ function currentFy(): string {
   const now = new Date();
   const startYear = now.getUTCMonth() + 1 >= 4 ? now.getUTCFullYear() : now.getUTCFullYear() - 1;
   return `${startYear}-${String((startYear + 1) % 100).padStart(2, "0")}`;
+}
+
+/**
+ * DOM-020: this route independently hardcoded the Sec 80D cap at Rs 50,000
+ * in two places, disagreeing with DOM-008's config-driven `sec80dCapMinor`
+ * (domain.ts, platform default Rs 75,000) -- a tenant's override via the
+ * statutory_config table was honored in payroll TDS but silently ignored
+ * here. Resolve the same effective-dated config domain.ts uses instead of a
+ * literal. FY-scoped (not run-scoped), so resolve as of the FY's last month
+ * (March of startYear+1), matching this file's other FY-snapshot reads.
+ */
+async function resolveSec80dCapRupees(tenantId: string, startYear: number): Promise<number> {
+  // Must run through scopedRead() -- the wrapped-transaction helper that is
+  // the only place this service's tenant-GUC wrapper (packages/db) sets the
+  // RLS session variable from the request-scoped AsyncLocalStorage context
+  // (see this file's own scopedRead() calls above, and shared/db.ts's doc
+  // comment). Resolving the config on a bare, unscoped connection runs with
+  // no tenant GUC set, so the tenant-isolation policy fails closed and only
+  // the platform-default sentinel row is visible -- silently reintroducing
+  // the exact bug this fix closes. Using the transaction API directly here
+  // (instead of this existing wrapper) would also trip this service's own
+  // CQRS route-boundary guard (f3-leftover-payroll-cqrs.test.ts), which is
+  // exactly why every read in this file, this one included, goes through
+  // scopedRead() rather than opening one itself.
+  const cfg = await scopedRead((tx) => resolveRunStatutoryConfig(tx, tenantId, `${startYear + 1}-03`));
+  return Number(cfg.sec80dCapMinor) / 100;
 }
 
 export async function taxRoutes(app: FastifyInstance): Promise<void> {
@@ -113,6 +140,11 @@ export async function taxRoutes(app: FastifyInstance): Promise<void> {
       else throw err;
     }
 
+    // DOM-020: was hardcoded 50000 here, disagreeing with domain.ts's
+    // config-driven sec80dCapMinor and silently ignoring a tenant's 80D
+    // override. Resolve once for the FY.
+    const sec80dCapRupees = await resolveSec80dCapRupees(ctx.tenantId, startYear);
+
     const data = [];
     for (const employeeId of employeeIds) {
       const dec = decByEmployee.get(employeeId) ?? null;
@@ -120,7 +152,7 @@ export async function taxRoutes(app: FastifyInstance): Promise<void> {
       let exemptions = 0;
       if (regime === "old" && dec) {
         const s80c = Math.min(Number(dec.section80c) / 100, 150000);
-        const s80d = Math.min(Number(dec.section80d) / 100, 50000);
+        const s80d = Math.min(Number(dec.section80d) / 100, sec80dCapRupees);
         const hra = Number(dec.hraClaimed) / 100;
         const other = Number(dec.otherDeductions) / 100;
         exemptions = s80c + s80d + hra + other;
@@ -211,8 +243,13 @@ export async function taxRoutes(app: FastifyInstance): Promise<void> {
         .limit(1));
       const dec = decRows[0] ?? null;
       if (dec) {
-        const s80c = Math.min(Number(dec.section80c) / 100, 150000); // 80C cap ₹1.5L
-        const s80d = Math.min(Number(dec.section80d) / 100, 50000);  // 80D cap ₹50K
+        // DOM-020: 80D cap was hardcoded 50000 (stale -- domain.ts's
+        // config-driven sec80dCapMinor is the source of truth and a
+        // tenant's override wasn't respected here). Resolved once, so this
+        // route agrees with the payslip for the same tenant/FY.
+        const sec80dCapRupees = await resolveSec80dCapRupees(ctx.tenantId, startYear);
+        const s80c = Math.min(Number(dec.section80c) / 100, 150000); // 80C cap Rs 1.5L
+        const s80d = Math.min(Number(dec.section80d) / 100, sec80dCapRupees);
         const hra = Number(dec.hraClaimed) / 100;
         const other = Number(dec.otherDeductions) / 100;
         exemptions = s80c + s80d + hra + other;

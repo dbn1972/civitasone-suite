@@ -11,7 +11,6 @@ export interface RegisterInput {
   address: Record<string, unknown> | null;
   estimatedWasteKgPerDay: number | null;
   category: string;
-  feeMinor: number | null;
 }
 
 export async function registerGenerator(ctx: RequestContext, body: RegisterInput): Promise<Accepted> {

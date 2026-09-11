@@ -6,6 +6,7 @@ import { writeAudit } from "../../shared/audit.js";
 import { tenantScoped } from "../../shared/tenant-queue.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
+import { calculateFeeMinor, type WasteType } from "./domain.js";
 
 const log = pino({ name: "swm.collection.consumer" });
 
@@ -18,6 +19,10 @@ export function registerCollectionConsumers(rawQueue: Queue): void {
 
   queue.subscribe(COMMANDS.collectionRequest, async (msg) => {
     const p = msg.payload as any;
+    // TX-008: feeMinor is always server-derived from wasteType — any
+    // feeMinor a caller might smuggle into the payload is ignored, never
+    // trusted. This is the only place the fee is computed.
+    const feeMinor = calculateFeeMinor(p.wasteType as WasteType);
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       await repo.insertRequest(tx, {
@@ -25,7 +30,7 @@ export function registerCollectionConsumers(rawQueue: Queue): void {
         requestedBy: p.requestedBy, wasteType: p.wasteType,
         estimatedQuantity: p.estimatedQuantity, address: p.address,
         preferredDate: p.preferredDate, preferredSlot: p.preferredSlot,
-        status: "requested", feeMinor: p.feeMinor,
+        status: "requested", feeMinor,
         createdBy: msg.actorId, updatedBy: msg.actorId,
       });
       await enqueue(tx, {

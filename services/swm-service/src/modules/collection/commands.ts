@@ -11,7 +11,6 @@ export interface CollectionRequestInput {
   address: Record<string, unknown> | null;
   preferredDate: string | null;
   preferredSlot: string | null;
-  feeMinor: number | null;
 }
 
 export async function requestCollection(ctx: RequestContext, body: CollectionRequestInput): Promise<Accepted> {

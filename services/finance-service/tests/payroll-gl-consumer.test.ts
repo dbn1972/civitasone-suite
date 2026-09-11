@@ -134,6 +134,8 @@ vi.mock("../src/modules/budget/repo.js", () => ({
   findBudgetTx: vi.fn(async () => null),
   findSanctionByIdTx: vi.fn(async () => null),
   incrementSanctionUtilisedGuarded: vi.fn(async () => true),
+  // DOM-010: leaf-account guard — none of these heads have children.
+  hasChildHeadsTx: vi.fn(async () => false),
 }));
 
 vi.mock("../src/modules/period-close/routes.js", () => ({
