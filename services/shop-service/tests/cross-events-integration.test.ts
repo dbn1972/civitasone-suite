@@ -75,9 +75,9 @@ function tenantWrappedQueue(): MemoryQueue {
 }
 
 const FINANCE_URL = process.env.SHOP_TEST_FINANCE_DATABASE_URL
-  ?? "postgres://finance_svc:finance_dev_pw@localhost:5443/civitas_finance";
+  ?? "postgres://finance_svc:finance_dev_pw@localhost:5435/civitas_finance";
 const NOTIFICATION_URL = process.env.SHOP_TEST_NOTIFICATION_DATABASE_URL
-  ?? "postgres://notification_svc:notification_dev_pw@localhost:5443/civitas_notification";
+  ?? "postgres://notification_svc:notification_dev_pw@localhost:5435/civitas_notification";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let finance: any;
