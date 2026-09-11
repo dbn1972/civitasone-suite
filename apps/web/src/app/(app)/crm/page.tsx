@@ -79,7 +79,7 @@ export default async function Page() {
 					<section key={section.heading} aria-labelledby={"crm-section-" + section.heading.toLowerCase().replace(/\s+/g, "-")}>
 						<h2
 							id={"crm-section-" + section.heading.toLowerCase().replace(/\s+/g, "-")}
-							className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-3 px-1"
+							className="text-xs font-semibold uppercase tracking-wide text-slate-600 mb-3 px-1"
 						>
 							{section.heading}
 						</h2>

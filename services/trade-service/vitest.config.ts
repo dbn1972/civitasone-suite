@@ -18,7 +18,7 @@ export default defineConfig({
       JWT_SECRET: "test_secret_for_civitasone_32chr",
       DATABASE_URL:
         process.env.DATABASE_URL ??
-        "postgres://trade_svc:trade_dev_pw@localhost:5995/civitas_trade",
+        "postgres://trade_svc:trade_dev_pw@localhost:5435/civitas_trade",
       QUEUE_DRIVER: "memory",
       CACHE_DRIVER: "memory",
     },
