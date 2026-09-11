@@ -20,6 +20,16 @@ export default defineConfig({
     env: {
       JWT_ALGORITHM: "HS256",
       JWT_SECRET: "test_secret_for_civitasone_32chr",
+      // Added: market-service is provisioned in CI (bootstrap-postgres.sh
+      // SERVICE_DBS -- role market_svc, db civitas_market, port 5435,
+      // matching every other service SERVICE_DBS entry), but this config
+      // never set DATABASE_URL, so a real-DB test (e.g. a nested-tx-deadlock
+      // regression test) fails with createTenantDb: DATABASE_URL is required
+      // (or pass poolDsn) instead of exercising the real database CI already
+      // migrates for this service.
+      DATABASE_URL:
+        process.env.DATABASE_URL ??
+        "postgres://market_svc:market_dev_pw@localhost:5435/civitas_market",
       QUEUE_DRIVER: "memory",
       CACHE_DRIVER: "memory",
     },
