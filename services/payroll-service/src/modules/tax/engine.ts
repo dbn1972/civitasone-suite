@@ -19,6 +19,21 @@
  * row and falls back to the platform default's row for the same (regime,
  * FY) — no separate effective-dating is needed here because (regime, FY)
  * IS the effective-dating axis for income-tax slabs.
+ *
+ * DOM-014: slab / rebate / surcharge / marginal-relief / cess were previously
+ * computed as `Math.round(rupees * floatRate)` — floating-point rupee
+ * arithmetic, the same class of bug the finance gl-service comment at
+ * `gl/queries.ts:71` warns against ("Number(minor)/100 ... float-precision
+ * loss"). computeTax() keeps its existing Number-rupees public signature
+ * (every caller — routes.ts, form16.ts, fnf/domain.ts — and the pinned tests
+ * in engine-money.test.ts depend on it, and no real (regime, FY) slab table
+ * comes close to Number.MAX_SAFE_INTEGER rupees), but every internal step now
+ * computes in bigint paise using integer basis-point rates (`bpsOf`) and
+ * round-half-up minor-unit rounding (`roundRupeeMinor` / `roundTenRupeesMinor`),
+ * so no slab/surcharge/cess amount is ever produced by float multiplication.
+ * `monthlyTdsMinor`, `annualTaxFromTaxableMinor` and `trueUpTdsMinor` (which
+ * convert bigint paise down to the engine's rupee inputs, or bigint TDS
+ * spreads) are converted the same way.
  */
 export const PLATFORM_DEFAULT_TENANT_ID = "00000000-0000-0000-0000-000000000000";
 export interface TaxSlab { from: number; to: number; rate: number }
@@ -88,61 +103,126 @@ export function stdDeduction(regime: Regime, startYear: number, tenantId: string
   return getTaxConfig(regime, startYear, tenantId).stdDeduction;
 }
 
-function slabTax(taxableIncome: number, slabs: TaxSlab[]): { tax: number; breakdown: Array<{ slab: string; taxableAmount: number; tax: number }> } {
-  let remaining = taxableIncome, total = 0;
+// ─────────────────────── DOM-014: exact bigint-minor-unit helpers ───────────────────────
+
+/**
+ * A slab/surcharge/cess `rate` (e.g. 0.30, 0.04) as integer basis points
+ * (e.g. 3000n, 400n). Config rates are at most 4 decimal digits (percentages
+ * to 2dp), so this round-trips exactly — no rate in `payroll.tax_slab_config`
+ * or the seeded test fixtures needs finer resolution.
+ */
+function bpsOf(rate: number): bigint {
+  return BigInt(Math.round(rate * 10000));
+}
+
+/** Round bigint paise to the nearest rupee (100 paise), half-up, symmetric on sign. */
+export function roundRupeeMinor(x: bigint): bigint {
+  if (x < 0n) return -roundRupeeMinor(-x);
+  return ((x + 50n) / 100n) * 100n;
+}
+
+/** Round bigint paise to the nearest 10 rupees (1000 paise) — Sec 288A/288B. */
+export function roundTenRupeesMinor(x: bigint): bigint {
+  if (x < 0n) return -roundTenRupeesMinor(-x);
+  return ((x + 500n) / 1000n) * 1000n;
+}
+
+/** Round-half-up bigint division (both operands positive), returned as bigint. */
+function divRoundBig(a: bigint, b: bigint): bigint {
+  return (a + b / 2n) / b;
+}
+
+const maxBig = (a: bigint, b: bigint): bigint => (a > b ? a : b);
+const minBig = (a: bigint, b: bigint): bigint => (a < b ? a : b);
+
+/**
+ * Progressive slab tax over `taxableIncomeMinor` (paise), exact bigint
+ * arithmetic throughout — no `Math.round(rupees * floatRate)`. Each slab's
+ * tax is rounded to the nearest paisa before summing (bigint addition never
+ * accumulates error, so this is strictly more precise than the previous
+ * float-sum-then-round-once approach), then the total is rounded to the
+ * nearest rupee by the caller exactly as before.
+ */
+function slabTax(taxableIncomeMinor: bigint, slabs: TaxSlab[]): { taxMinor: bigint; breakdown: Array<{ slab: string; taxableAmount: number; tax: number }> } {
+  let remaining = taxableIncomeMinor, totalMinor = 0n;
   const breakdown: Array<{ slab: string; taxableAmount: number; tax: number }> = [];
   for (const s of slabs) {
-    if (remaining <= 0) break;
-    const width = s.to === Infinity ? remaining : s.to - s.from;
-    const inSlab = Math.min(remaining, width);
-    total += inSlab * s.rate;
-    breakdown.push({ slab: s.to === Infinity ? `>${(s.from / 100000).toFixed(0)}L` : `${(s.from / 100000).toFixed(1)}L-${(s.to / 100000).toFixed(1)}L`, taxableAmount: inSlab, tax: Math.round(inSlab * s.rate) });
-    remaining -= inSlab;
+    if (remaining <= 0n) break;
+    const fromMinor = BigInt(s.from) * 100n;
+    const widthMinor = s.to === Infinity ? remaining : BigInt(s.to) * 100n - fromMinor;
+    const inSlabMinor = minBig(remaining, widthMinor);
+    const bps = bpsOf(s.rate);
+    const slabTaxMinor = divRoundBig(inSlabMinor * bps, 10000n);
+    totalMinor += slabTaxMinor;
+    breakdown.push({
+      slab: s.to === Infinity ? `>${(s.from / 100000).toFixed(0)}L` : `${(s.from / 100000).toFixed(1)}L-${(s.to / 100000).toFixed(1)}L`,
+      taxableAmount: Number(inSlabMinor / 100n),
+      tax: Number(roundRupeeMinor(slabTaxMinor) / 100n),
+    });
+    remaining -= inSlabMinor;
   }
-  return { tax: total, breakdown };
+  return { taxMinor: totalMinor, breakdown };
 }
 
-function rebate87A(taxableIncome: number, slabTaxAmt: number, cfg: FyTaxConfig): number {
-  return taxableIncome <= cfg.rebateIncomeCap ? Math.min(slabTaxAmt, cfg.rebateMax) : 0;
+function rebate87A(taxableIncomeMinor: bigint, baseTaxMinor: bigint, cfg: FyTaxConfig): bigint {
+  return taxableIncomeMinor <= BigInt(cfg.rebateIncomeCap) * 100n
+    ? minBig(baseTaxMinor, BigInt(cfg.rebateMax) * 100n)
+    : 0n;
 }
 
-function surchargeRate(totalIncome: number, bands: SurchargeBand[]): number {
-  let rate = 0;
+/** Highest applicable surcharge rate (as bigint basis points) for total income. */
+function surchargeRateBps(totalIncomeMinor: bigint, bands: SurchargeBand[]): bigint {
+  let bps = 0n;
   for (const b of bands) {
-    if (totalIncome > b.above) rate = b.rate;
+    if (totalIncomeMinor > BigInt(b.above) * 100n) bps = bpsOf(b.rate);
   }
-  return rate;
+  return bps;
 }
 
 export function computeTax(taxableIncome: number, regime: Regime, startYear: number, tenantId: string = PLATFORM_DEFAULT_TENANT_ID) {
   const cfg = getTaxConfig(regime, startYear, tenantId);
   const slabs = cfg.slabs;
-  const { tax: rawSlab, breakdown } = slabTax(taxableIncome, slabs);
-  const baseTax = Math.round(rawSlab);
-  const rebate = rebate87A(taxableIncome, baseTax, cfg);
-  const afterRebate = Math.max(0, baseTax - rebate);
-  let surcharge = Math.round(afterRebate * surchargeRate(taxableIncome, cfg.surchargeBands));
+  const taxableIncomeMinor = BigInt(Math.round(taxableIncome)) * 100n;
+
+  const { taxMinor: rawSlabMinor, breakdown } = slabTax(taxableIncomeMinor, slabs);
+  const baseTaxMinor = roundRupeeMinor(rawSlabMinor);
+  const rebateMinor = rebate87A(taxableIncomeMinor, baseTaxMinor, cfg);
+  const afterRebateMinor = maxBig(0n, baseTaxMinor - rebateMinor);
+  let surchargeMinor = roundRupeeMinor(divRoundBig(afterRebateMinor * surchargeRateBps(taxableIncomeMinor, cfg.surchargeBands), 10000n));
+
   // Marginal relief at each surcharge threshold.
   for (const b of cfg.surchargeBands) {
-    const th = b.above;
-    if (taxableIncome > th) {
-      const slabAtTh = Math.round(slabTax(th, slabs).tax);
-      const excess = taxableIncome - th;
-      if (afterRebate + surcharge > slabAtTh + excess) surcharge = Math.max(0, slabAtTh + excess - afterRebate);
+    const thMinor = BigInt(b.above) * 100n;
+    if (taxableIncomeMinor > thMinor) {
+      const slabAtThMinor = roundRupeeMinor(slabTax(thMinor, slabs).taxMinor);
+      const excessMinor = taxableIncomeMinor - thMinor;
+      if (afterRebateMinor + surchargeMinor > slabAtThMinor + excessMinor) {
+        surchargeMinor = maxBig(0n, slabAtThMinor + excessMinor - afterRebateMinor);
+      }
     }
   }
-  const cess = Math.round((afterRebate + surcharge) * 0.04);
-  const total = Math.round((afterRebate + surcharge + cess) / 10) * 10;
-  return { baseTax, rebate, surcharge, cess, totalTax: total, slabBreakdown: breakdown };
+
+  const cessMinor = roundRupeeMinor(divRoundBig((afterRebateMinor + surchargeMinor) * 400n, 10000n)); // 4% cess
+  const totalMinor = roundTenRupeesMinor(afterRebateMinor + surchargeMinor + cessMinor);
+
+  return {
+    baseTax: Number(baseTaxMinor / 100n),
+    rebate: Number(rebateMinor / 100n),
+    surcharge: Number(surchargeMinor / 100n),
+    cess: Number(cessMinor / 100n),
+    totalTax: Number(totalMinor / 100n),
+    slabBreakdown: breakdown,
+  };
 }
 
 /** Monthly TDS (in paise) for a payroll run: project annual taxable, compute tax, spread /12. */
 export function monthlyTdsMinor(annualGrossMinor: bigint, regime: Regime, startYear: number, tenantId: string = PLATFORM_DEFAULT_TENANT_ID): bigint {
-  const annualGrossRupees = Number(annualGrossMinor) / 100;
-  const taxable = Math.round(Math.max(0, annualGrossRupees - stdDeduction(regime, startYear, tenantId)) / 10) * 10;
-  const annualTax = computeTax(taxable, regime, startYear, tenantId).totalTax;
-  const monthlyRupees = Math.round(annualTax / 12);
-  return BigInt(monthlyRupees) * 100n;
+  const stdDeductionMinor = BigInt(stdDeduction(regime, startYear, tenantId)) * 100n;
+  const taxableMinor = roundTenRupeesMinor(maxBig(0n, annualGrossMinor - stdDeductionMinor));
+  const taxable = Number(taxableMinor / 100n);
+  const annualTaxMinor = BigInt(computeTax(taxable, regime, startYear, tenantId).totalTax) * 100n;
+  const monthlyMinor = roundRupeeMinor(divRoundBig(annualTaxMinor, 12n));
+  return monthlyMinor;
 }
 
 /** Sec 10(13A) HRA exemption (annual, paise) = least of: HRA received, rent - 10% salary, 50%/40% salary. */
@@ -156,7 +236,8 @@ export function hraExemptionMinor(salaryAnnualMinor: bigint, hraReceivedAnnualMi
 
 /** Full annual income tax (paise) from a precomputed ANNUAL TAXABLE income. */
 export function annualTaxFromTaxableMinor(annualTaxableMinor: bigint, regime: Regime, startYear: number, tenantId: string = PLATFORM_DEFAULT_TENANT_ID): bigint {
-  const taxableRupees = Math.round(Math.max(0, Number(annualTaxableMinor) / 100) / 10) * 10; // Sec 288A
+  const taxableMinor = roundTenRupeesMinor(maxBig(0n, annualTaxableMinor)); // Sec 288A
+  const taxableRupees = Number(taxableMinor / 100n);
   return BigInt(computeTax(taxableRupees, regime, startYear, tenantId).totalTax) * 100n;
 }
 
@@ -174,8 +255,7 @@ export function trueUpTdsMinor(annualTaxMinor: bigint, tdsDeductedYtdMinor: bigi
   if (balance <= 0n) return 0n;
   const m = monthsRemaining < 1 ? 1 : monthsRemaining;
   if (m === 1) return balance; // final month: full residual
-  const perMonthRupees = Math.round(Number(balance) / 100 / m);
-  return BigInt(perMonthRupees) * 100n;
+  return roundRupeeMinor(divRoundBig(balance, BigInt(m)));
 }
 
 export function fyStartYearForMonth(month: string): number {
