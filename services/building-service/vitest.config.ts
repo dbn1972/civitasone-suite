@@ -16,6 +16,15 @@ export default defineConfig({
     env: {
       JWT_ALGORITHM: "HS256",
       JWT_SECRET: "test_secret_for_civitasone_32chr",
+      // Added: building-service is provisioned in CI (bootstrap-postgres.sh
+      // SERVICE_DBS -- role building_svc, db civitas_building, port 5435,
+      // matching every other services SERVICE_DBS entry) but this config
+      // never set DATABASE_URL, so any real-DB test (src/modules/*/consumer.test.ts,
+      // tests/rls-isolation.test.ts, tests/nested-tx-regression.test.ts) failed
+      // with createTenantDb: DATABASE_URL is required (or pass poolDsn).
+      DATABASE_URL:
+        process.env.DATABASE_URL ??
+        "postgres://building_svc:building_dev_pw@localhost:5435/civitas_building",
       QUEUE_DRIVER: "memory",
       CACHE_DRIVER: "memory",
       // Required by notification-service's real deliveries consumer

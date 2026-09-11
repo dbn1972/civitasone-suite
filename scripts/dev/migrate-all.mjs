@@ -117,6 +117,11 @@ const SERVICES = [
   // Architecture Guard CI gate) failed on main before this fix.
   { name: "sewerage-service",     db: "civitas_sewerage" },
   { name: "swm-service",          db: "civitas_swm" },
+  // document-service gained migrations/*.sql in PR #1101 (COMP-003/REL-007) and
+  // was added to scripts/ci/bootstrap-postgres.sh's SERVICE_DBS map there, but
+  // not here, so tests/ops/migrate-all-inventory.test.ts (Architecture Guard)
+  // failed on main.
+  { name: "document-service",     db: "civitas_document" },
 ];
 
 let applied = 0;
