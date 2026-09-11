@@ -77,7 +77,13 @@ export function SeniorityListActions({ canAdminister }: { canAdminister: boolean
       });
       setApproveOpen(false);
       setTone("good");
-      setMessage(`Seniority list ${generatedId} approved.`);
+      // DOM-023 fix: a 202 here only means the approve command was queued --
+      // the consumer's status-guarded UPDATE can still silently no-op (see
+      // routes.ts). Don't claim "approved" as a done fact; state what we
+      // actually know, matching generate's "queued" phrasing below.
+      setMessage(
+        `Seniority list approval submitted (list ID ${generatedId}). It will be confirmed shortly.`,
+      );
       setGeneratedId(null);
       router.refresh();
     } catch (err) {

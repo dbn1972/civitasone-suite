@@ -22,10 +22,26 @@
  *  POST /v1/hrms/seniority/:id/approve
  *      DOM-019: publishes `hrms.seniority.approve` for the generated list
  *      `:id`. Same unreachable-consumer gap as generate above.
+ *
+ *      DOM-023 fix: the consumer's status-guarded UPDATE silently no-ops
+ *      (log warning only, no error surfaced anywhere) when `:id` doesn't
+ *      exist for this tenant or is no longer in "generated" status -- e.g. a
+ *      double-approve, approving a stale/already-approved id, or a race with
+ *      the generate consumer. A bare 202 can't tell the caller which of
+ *      those happened, so this route now pre-checks the list's current state
+ *      synchronously before publishing and rejects with a real 404/422 for
+ *      the two common cases, mirroring the read-check-then-publish idiom CRM
+ *      uses for its own pending-state approvals
+ *      (campaign-approval-routes.ts: getPendingCampaign + status check
+ *      before publish). The actual mutation still happens asynchronously in
+ *      the consumer -- this closes the two known silent-no-op cases, not
+ *      every possible race -- so the frontend still treats the 202 as
+ *      "submitted", not "confirmed done" (see SeniorityListActions.tsx).
  */
 import { randomUUID } from "node:crypto";
 import type { FastifyInstance } from "fastify";
 import { z, ZodError } from "zod";
+import { and, eq } from "drizzle-orm";
 import { acceptedResponseSchema } from "@civitasone/schemas/common";
 import { sendAccepted } from "@civitasone/schemas/validate";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
@@ -33,6 +49,7 @@ import { db } from "../../shared/db.js";
 import { queue } from "../../shared/infra.js";
 import { COMMANDS } from "../../topics.js";
 import { buildSeniority } from "./engine.js";
+import { hrmsSeniorityLists } from "./schema.js";
 
 const READER_ROLES = ["hr_admin", "hr_officer", "super_admin", "manager"];
 // Generate/approve are write actions that create an auditable, persisted
@@ -110,6 +127,20 @@ export async function seniorityRoutes(app: FastifyInstance): Promise<void> {
     const body = z.object({
       remarks: z.string().max(2000).optional(),
     }).parse(req.body ?? {});
+
+    const [existing] = await db.select().from(hrmsSeniorityLists)
+      .where(and(
+        eq(hrmsSeniorityLists.tenantId, ctx.tenantId),
+        eq(hrmsSeniorityLists.id, id),
+      ))
+      .limit(1);
+    if (!existing) {
+      throw new HttpError(404, "SENIORITY_LIST_NOT_FOUND", "seniority list not found");
+    }
+    if (existing.status !== "generated") {
+      throw new HttpError(422, "INVALID_STATUS", `seniority list is already ${existing.status}`);
+    }
+
     const messageId = randomUUID();
     await queue.publish(COMMANDS.seniorityApprove, {
       messageId, type: COMMANDS.seniorityApprove,

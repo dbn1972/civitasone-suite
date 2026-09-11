@@ -97,8 +97,15 @@ describe("SeniorityListActions", () => {
     fireEvent.click(screen.getByRole("button", { name: "Approve" }));
 
     await waitFor(() => {
-      expect(screen.getByText(`Seniority list ${listId} approved.`)).toBeInTheDocument();
+      // DOM-023 fix: a 202 only means the approve command was queued, not
+      // that the consumer's status-guarded UPDATE actually matched a row
+      // (it silently no-ops otherwise -- see routes.ts/consumer.ts). The
+      // copy must not assert "approved" as a confirmed, completed fact.
+      expect(
+        screen.getByText(`Seniority list approval submitted (list ID ${listId}). It will be confirmed shortly.`),
+      ).toBeInTheDocument();
     });
+    expect(screen.queryByText(`Seniority list ${listId} approved.`)).not.toBeInTheDocument();
 
     const [url, init] = fetchSpy.mock.calls[1] as [string, RequestInit];
     expect(url).toBe(`/api/proxy/v1/hrms/seniority/${listId}/approve`);
@@ -132,5 +139,34 @@ describe("SeniorityListActions", () => {
     expect(
       screen.getByRole("button", { name: `Approve List ${listId.slice(0, 8)}…` }),
     ).toBeInTheDocument();
+  });
+
+  it("DOM-023: a backend 422 (list already approved / no longer matches) surfaces as a real error, never as a fabricated success", async () => {
+    const listId = "44444444-4444-4444-4444-444444444444";
+    vi.spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(new Response(JSON.stringify({ id: listId, status: "accepted" }), { status: 202 }))
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({ code: "INVALID_STATUS", message: "seniority list is already approved" }),
+          { status: 422 },
+        ),
+      );
+
+    render(<SeniorityListActions canAdminister={true} />);
+    fireEvent.click(screen.getByRole("button", { name: "Generate Seniority List" }));
+    await waitFor(() => expect(screen.getByText("Generate a new seniority list?")).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: "Generate" }));
+    await waitFor(() => expect(screen.getByText(new RegExp(listId))).toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole("button", { name: `Approve List ${listId.slice(0, 8)}…` }));
+    await waitFor(() => expect(screen.getByText("Approve this seniority list?")).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: "Approve" }));
+
+    await waitFor(() => {
+      expect(screen.getByText(/INVALID_STATUS: seniority list is already approved/)).toBeInTheDocument();
+    });
+    // Must never show any approval-submitted/approved copy on this path.
+    expect(screen.queryByText(/approval submitted/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/approved\./)).not.toBeInTheDocument();
   });
 });
