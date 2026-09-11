@@ -12,11 +12,17 @@ export function formatIndianDate(isoDate: string | null | undefined): string {
  * rupees rather than minor units (e.g. payroll-runs grossAmount/netAmount). Do NOT
  * pass a rupee value to formatMoney() — that treats it as paise and shows 100x too small.
  *
- *   formatRupees(90000) -> "₹90,000.00"
+ * UX-006: null/undefined/non-finite is MISSING data, not a real zero — it renders
+ * "—" (same convention as formatBps/formatIndianDate), never a fabricated ₹0.00.
+ *
+ *   formatRupees(90000)   -> "₹90,000.00"
+ *   formatRupees(null)    -> "—"
+ *   formatRupees(NaN)     -> "—"
  */
-export function formatRupees(rupees: number | string): string {
+export function formatRupees(rupees: number | string | null | undefined): string {
+  if (rupees === null || rupees === undefined || rupees === "") return "—";
   const n = typeof rupees === "number" ? rupees : Number(rupees);
-  if (!Number.isFinite(n)) return "₹0.00";
+  if (!Number.isFinite(n)) return "—";
   return n.toLocaleString("en-IN", { style: "currency", currency: "INR", minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
@@ -25,27 +31,41 @@ export function formatRupees(rupees: number | string): string {
  * grouping and exactly 2 decimal places. Paise-correct: works on bigint, number,
  * or numeric string without floating-point drift on the rupee/paise split.
  *
- *   formatMoney(123456789n) -> "₹12,34,567.89"
- *   formatMoney(100)        -> "₹1.00"
- *   formatMoney("-2550")    -> "-₹25.50"
+ * UX-006: null/undefined/empty/unparseable is MISSING data, not a real zero — it
+ * renders "—" (same convention as formatBps/formatIndianDate), never a fabricated
+ * ₹0.00 that would be indistinguishable from a genuine zero-rupee amount.
+ *
+ *   formatMoney(123456789n)  -> "₹12,34,567.89"
+ *   formatMoney(100)         -> "₹1.00"
+ *   formatMoney("-2550")     -> "-₹25.50"
+ *   formatMoney(null)        -> "—"
+ *   formatMoney(undefined)   -> "—"
+ *   formatMoney("garbage")   -> "—"
  */
-export function formatMoney(minorUnits: bigint | number | string): string {
+export function formatMoney(minorUnits: bigint | number | string | null | undefined): string {
+  if (minorUnits === null || minorUnits === undefined || minorUnits === "") return "—";
+
   let minor: bigint;
   try {
     if (typeof minorUnits === "bigint") {
       minor = minorUnits;
     } else if (typeof minorUnits === "number") {
+      if (!Number.isFinite(minorUnits)) return "—";
       // Round to the nearest paisa to absorb any float imprecision before BigInt.
       minor = BigInt(Math.round(minorUnits));
     } else {
       const trimmed = minorUnits.trim();
-      // Accept plain integer strings; fall back to rounding for decimal/float strings.
-      minor = /^[+-]?\d+$/.test(trimmed)
-        ? BigInt(trimmed)
-        : BigInt(Math.round(Number(trimmed) || 0));
+      if (trimmed === "") return "—";
+      if (/^[+-]?\d+$/.test(trimmed)) {
+        minor = BigInt(trimmed);
+      } else {
+        const n = Number(trimmed);
+        if (!Number.isFinite(n)) return "—";
+        minor = BigInt(Math.round(n));
+      }
     }
   } catch {
-    return "₹0.00";
+    return "—";
   }
 
   const negative = minor < 0n;
@@ -66,6 +86,27 @@ export function formatMoney(minorUnits: bigint | number | string): string {
 
   const paiseStr = paise.toString().padStart(2, "0");
   return `${negative ? "-" : ""}₹${grouped}.${paiseStr}`;
+}
+
+/**
+ * UX-006 type guard: safely convert a MINOR-units (paise) field to a plain
+ * rupee `number` for arithmetic/comparisons or a form-input default — WITHOUT
+ * silently turning missing data into a real-looking 0. Prefer this over a bare
+ * `Number(x.someMinor) / 100`, which maps both `null` and unparseable input to
+ * 0 (a value indistinguishable from an actual zero amount downstream). Returns
+ * `null` for null/undefined/non-finite so callers can propagate "missing"
+ * instead of computing on a fabricated zero.
+ *
+ *   minorToRupeesOrNull(12345)    -> 123.45
+ *   minorToRupeesOrNull(null)     -> null
+ *   minorToRupeesOrNull(undefined)-> null
+ *   minorToRupeesOrNull("abc")    -> null
+ */
+export function minorToRupeesOrNull(minor: bigint | number | string | null | undefined): number | null {
+  if (minor === null || minor === undefined || minor === "") return null;
+  const n = typeof minor === "bigint" ? Number(minor) : typeof minor === "number" ? minor : Number(minor);
+  if (!Number.isFinite(n)) return null;
+  return n / 100;
 }
 
 /**
