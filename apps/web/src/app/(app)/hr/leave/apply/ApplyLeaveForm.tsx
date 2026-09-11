@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { EmployeeSummary } from "@civitasone/types";
 import { fetchOrQueue } from "@/lib/sync/requestQueue";
@@ -207,239 +206,223 @@ export function ApplyLeaveForm({ employees, initialEmployeeId }: Props) {
 
   const days = calcDays();
 
+  // The page shell (landmark <main>, page <h1>, subtitle, and "back to Leave"
+  // link) is already rendered once by page.tsx via the shared <PageHeader>
+  // design-system component. This component used to duplicate all of that —
+  // its own <main>, its own breadcrumb nav, and its own "Apply for Leave" <h1>
+  // — producing two <main> landmarks and two identical page headings on the
+  // same page (caught by e2e/hr.spec.ts: getByRole('heading', { name: /leave/i })
+  // resolved to 2 elements). Keep only the form itself here.
   return (
-    <main className="min-h-screen bg-slate-50 p-6 md:p-8">
-      <section className="mx-auto max-w-2xl space-y-5">
-        <nav aria-label="Breadcrumb" className="text-sm text-slate-600">
-          <Link href="/hr" className="hover:text-slate-900">
-            HR
-          </Link>
-          <span className="mx-2">/</span>
-          <Link href="/hr/leave" className="hover:text-slate-900">
-            Leave
-          </Link>
-          <span className="mx-2">/</span>
-          <span className="text-slate-900">Apply</span>
-        </nav>
-
-        <header>
-          <h1 className="text-3xl font-semibold text-slate-900">
-            Apply for Leave
-          </h1>
-          <p className="mt-1 text-sm text-slate-600">
-            Submit a leave request for approval.
-          </p>
-        </header>
-
-        <form
-          onSubmit={handleSubmit}
-          className="space-y-4 rounded-xl border border-slate-200 bg-white p-6 shadow-sm"
-          noValidate
-        >
-          {/* Employee selector (not validated — always has a default) */}
-          <div>
-            <label
-              htmlFor="leave-employee"
-              className="block text-sm font-medium text-slate-700 mb-1"
-            >
-              Employee
-            </label>
-            <select
-              id="leave-employee"
-              value={employeeId}
-              onChange={(e) => setEmployeeId(e.target.value)}
-              className={fieldCls}
-            >
-              {employees.length === 0 ? (
-                <option value="">No employees loaded</option>
-              ) : (
-                employees.map((emp) => (
-                  <option key={emp.id} value={emp.id}>
-                    {emp.name} ({emp.department})
-                  </option>
-                ))
-              )}
-            </select>
-          </div>
-
-          {/* Leave Type — validated: required */}
-          <div>
-            <label
-              htmlFor="leave-type"
-              className="block text-sm font-medium text-slate-700 mb-1"
-            >
-              Leave Type{" "}
-              <span aria-hidden="true" className="text-red-500">
-                *
-              </span>
-            </label>
-            <select
-              id="leave-type"
-              value={fields.allocId.value}
-              onChange={fields.allocId.onChange}
-              onBlur={fields.allocId.onBlur}
-              disabled={!leaveContext?.allocations.length}
-              aria-invalid={!!fields.allocId.error}
-              aria-describedby={
-                fields.allocId.error ? "leave-type-error" : undefined
-              }
-              className={`${fieldCls} disabled:opacity-60`}
-            >
-              {!leaveContext?.allocations.length ? (
-                <option value="">No leave allocations</option>
-              ) : (
-                <>
-                  <option value="">Select a leave type…</option>
-                  {leaveContext.allocations.map((a) => (
-                    <option key={a.id} value={a.id}>
-                      {a.leaveTypeName} ({a.balanceDays} days balance)
-                    </option>
-                  ))}
-                </>
-              )}
-            </select>
-            {fields.allocId.error && (
-              <p id="leave-type-error" className={errorCls} role="alert">
-                {fields.allocId.error}
-              </p>
-            )}
-          </div>
-
-          {/* Date range — both required; toDate must be >= fromDate */}
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label
-                htmlFor="leave-from"
-                className="block text-sm font-medium text-slate-700 mb-1"
-              >
-                From Date{" "}
-                <span aria-hidden="true" className="text-red-500">
-                  *
-                </span>
-              </label>
-              <input
-                id="leave-from"
-                type="date"
-                value={fields.fromDate.value}
-                onChange={fields.fromDate.onChange}
-                onBlur={fields.fromDate.onBlur}
-                aria-invalid={!!fields.fromDate.error}
-                aria-describedby={
-                  fields.fromDate.error ? "leave-from-error" : undefined
-                }
-                className={fieldCls}
-              />
-              {fields.fromDate.error && (
-                <p id="leave-from-error" className={errorCls} role="alert">
-                  {fields.fromDate.error}
-                </p>
-              )}
-            </div>
-
-            <div>
-              <label
-                htmlFor="leave-to"
-                className="block text-sm font-medium text-slate-700 mb-1"
-              >
-                To Date{" "}
-                <span aria-hidden="true" className="text-red-500">
-                  *
-                </span>
-              </label>
-              <input
-                id="leave-to"
-                type="date"
-                value={fields.toDate.value}
-                onChange={fields.toDate.onChange}
-                onBlur={fields.toDate.onBlur}
-                aria-invalid={!!fields.toDate.error}
-                aria-describedby={
-                  fields.toDate.error ? "leave-to-error" : undefined
-                }
-                className={fieldCls}
-              />
-              {fields.toDate.error && (
-                <p id="leave-to-error" className={errorCls} role="alert">
-                  {fields.toDate.error}
-                </p>
-              )}
-            </div>
-          </div>
-
-          {days > 0 ? (
-            <p className="text-sm text-slate-600">
-              Duration:{" "}
-              <span className="font-semibold text-slate-900">
-                {days} day{days !== 1 ? "s" : ""}
-              </span>
-            </p>
-          ) : null}
-
-          {/* Reason — required, min 20 chars */}
-          <div>
-            <label
-              htmlFor="leave-reason"
-              className="block text-sm font-medium text-slate-700 mb-1"
-            >
-              Reason{" "}
-              <span aria-hidden="true" className="text-red-500">
-                *
-              </span>
-              <span className="ml-1 font-normal text-slate-500">
-                (min. 20 characters)
-              </span>
-            </label>
-            <textarea
-              id="leave-reason"
-              value={fields.reason.value}
-              onChange={fields.reason.onChange}
-              onBlur={fields.reason.onBlur}
-              rows={3}
-              placeholder="Briefly describe the reason for leave"
-              aria-invalid={!!fields.reason.error}
-              aria-describedby={
-                fields.reason.error ? "leave-reason-error" : undefined
-              }
-              className={`${fieldCls} resize-none`}
-            />
-            {fields.reason.error && (
-              <p id="leave-reason-error" className={errorCls} role="alert">
-                {fields.reason.error}
-              </p>
-            )}
-            {!fields.reason.error && fields.reason.value.length > 0 && (
-              <p className="mt-1 text-xs text-slate-400">
-                {fields.reason.value.trim().length} / 20+ chars
-              </p>
-            )}
-          </div>
-
-          <button
-            type="submit"
-            disabled={
-              status === "submitting" ||
-              status === "loading" ||
-              employees.length === 0
-            }
-            className="rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-500 disabled:opacity-60"
+    <section className="mx-auto max-w-2xl space-y-5">
+      <form
+        onSubmit={handleSubmit}
+        className="space-y-4 rounded-xl border border-slate-200 bg-white p-6 shadow-sm"
+        noValidate
+      >
+        {/* Employee selector (not validated — always has a default) */}
+        <div>
+          <label
+            htmlFor="leave-employee"
+            className="block text-sm font-medium text-slate-700 mb-1"
           >
-            {status === "submitting" ? "Submitting…" : "Submit Leave Request"}
-          </button>
+            Employee
+          </label>
+          <select
+            id="leave-employee"
+            value={employeeId}
+            onChange={(e) => setEmployeeId(e.target.value)}
+            className={fieldCls}
+          >
+            {employees.length === 0 ? (
+              <option value="">No employees loaded</option>
+            ) : (
+              employees.map((emp) => (
+                <option key={emp.id} value={emp.id}>
+                  {emp.name} ({emp.department})
+                </option>
+              ))
+            )}
+          </select>
+        </div>
 
-          {message ? (
-            <p
-              role={status === "error" ? "alert" : "status"}
-              aria-live={status === "error" ? "assertive" : "polite"}
-              className={`text-sm ${status === "error" ? "text-red-600" : "text-emerald-700"}`}
-            >
-              <span className="font-semibold">
-                {status === "error" ? "Error: " : ""}
-              </span>
-              {message}
+        {/* Leave Type — validated: required */}
+        <div>
+          <label
+            htmlFor="leave-type"
+            className="block text-sm font-medium text-slate-700 mb-1"
+          >
+            Leave Type{" "}
+            <span aria-hidden="true" className="text-red-500">
+              *
+            </span>
+          </label>
+          <select
+            id="leave-type"
+            value={fields.allocId.value}
+            onChange={fields.allocId.onChange}
+            onBlur={fields.allocId.onBlur}
+            disabled={!leaveContext?.allocations.length}
+            aria-invalid={!!fields.allocId.error}
+            aria-describedby={
+              fields.allocId.error ? "leave-type-error" : undefined
+            }
+            className={`${fieldCls} disabled:opacity-60`}
+          >
+            {!leaveContext?.allocations.length ? (
+              <option value="">No leave allocations</option>
+            ) : (
+              <>
+                <option value="">Select a leave type…</option>
+                {leaveContext.allocations.map((a) => (
+                  <option key={a.id} value={a.id}>
+                    {a.leaveTypeName} ({a.balanceDays} days balance)
+                  </option>
+                ))}
+              </>
+            )}
+          </select>
+          {fields.allocId.error && (
+            <p id="leave-type-error" className={errorCls} role="alert">
+              {fields.allocId.error}
             </p>
-          ) : null}
-        </form>
-      </section>
-    </main>
+          )}
+        </div>
+
+        {/* Date range — both required; toDate must be >= fromDate */}
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label
+              htmlFor="leave-from"
+              className="block text-sm font-medium text-slate-700 mb-1"
+            >
+              From Date{" "}
+              <span aria-hidden="true" className="text-red-500">
+                *
+              </span>
+            </label>
+            <input
+              id="leave-from"
+              type="date"
+              value={fields.fromDate.value}
+              onChange={fields.fromDate.onChange}
+              onBlur={fields.fromDate.onBlur}
+              aria-invalid={!!fields.fromDate.error}
+              aria-describedby={
+                fields.fromDate.error ? "leave-from-error" : undefined
+              }
+              className={fieldCls}
+            />
+            {fields.fromDate.error && (
+              <p id="leave-from-error" className={errorCls} role="alert">
+                {fields.fromDate.error}
+              </p>
+            )}
+          </div>
+
+          <div>
+            <label
+              htmlFor="leave-to"
+              className="block text-sm font-medium text-slate-700 mb-1"
+            >
+              To Date{" "}
+              <span aria-hidden="true" className="text-red-500">
+                *
+              </span>
+            </label>
+            <input
+              id="leave-to"
+              type="date"
+              value={fields.toDate.value}
+              onChange={fields.toDate.onChange}
+              onBlur={fields.toDate.onBlur}
+              aria-invalid={!!fields.toDate.error}
+              aria-describedby={
+                fields.toDate.error ? "leave-to-error" : undefined
+              }
+              className={fieldCls}
+            />
+            {fields.toDate.error && (
+              <p id="leave-to-error" className={errorCls} role="alert">
+                {fields.toDate.error}
+              </p>
+            )}
+          </div>
+        </div>
+
+        {days > 0 ? (
+          <p className="text-sm text-slate-600">
+            Duration:{" "}
+            <span className="font-semibold text-slate-900">
+              {days} day{days !== 1 ? "s" : ""}
+            </span>
+          </p>
+        ) : null}
+
+        {/* Reason — required, min 20 chars */}
+        <div>
+          <label
+            htmlFor="leave-reason"
+            className="block text-sm font-medium text-slate-700 mb-1"
+          >
+            Reason{" "}
+            <span aria-hidden="true" className="text-red-500">
+              *
+            </span>
+            <span className="ml-1 font-normal text-slate-500">
+              (min. 20 characters)
+            </span>
+          </label>
+          <textarea
+            id="leave-reason"
+            value={fields.reason.value}
+            onChange={fields.reason.onChange}
+            onBlur={fields.reason.onBlur}
+            rows={3}
+            placeholder="Briefly describe the reason for leave"
+            aria-invalid={!!fields.reason.error}
+            aria-describedby={
+              fields.reason.error ? "leave-reason-error" : undefined
+            }
+            className={`${fieldCls} resize-none`}
+          />
+          {fields.reason.error && (
+            <p id="leave-reason-error" className={errorCls} role="alert">
+              {fields.reason.error}
+            </p>
+          )}
+          {!fields.reason.error && fields.reason.value.length > 0 && (
+            <p className="mt-1 text-xs text-slate-400">
+              {fields.reason.value.trim().length} / 20+ chars
+            </p>
+          )}
+        </div>
+
+        <button
+          type="submit"
+          disabled={
+            status === "submitting" ||
+            status === "loading" ||
+            employees.length === 0
+          }
+          className="rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-500 disabled:opacity-60"
+        >
+          {status === "submitting" ? "Submitting…" : "Submit Leave Request"}
+        </button>
+
+        {message ? (
+          <p
+            role={status === "error" ? "alert" : "status"}
+            aria-live={status === "error" ? "assertive" : "polite"}
+            className={`text-sm ${status === "error" ? "text-red-600" : "text-emerald-700"}`}
+          >
+            <span className="font-semibold">
+              {status === "error" ? "Error: " : ""}
+            </span>
+            {message}
+          </p>
+        ) : null}
+      </form>
+    </section>
   );
 }
