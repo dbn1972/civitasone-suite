@@ -1,5 +1,5 @@
 import {
-  pgSchema, uuid, text, integer, bigint, char, varchar, timestamp,
+  pgSchema, uuid, text, integer, bigint, char, varchar, timestamp, type AnyPgColumn,
 } from "drizzle-orm/pg-core";
 
 export const budgetSchema = pgSchema("budget");
@@ -12,6 +12,13 @@ export const financeHeads = budgetSchema.table("finance_heads", {
   name:           text("name").notNull(),
   level:          integer("level").notNull(),        // 0=major 1=minor 2=sub
   classification: text("classification"),
+  // DOM-010: self-referencing parent, so a head can express its place in the
+  // chart-of-accounts hierarchy. NULL for every pre-existing head (nobody's
+  // parent) — additive and behaviourally inert until a hierarchy is actually
+  // built. gl/consumer.ts's leaf-account guard rejects a posting whose head
+  // has at least one other head pointing at it via parentId (a group/summary
+  // account), instead of silently letting a posting corrupt roll-up totals.
+  parentId:       uuid("parent_id").references((): AnyPgColumn => financeHeads.id),
   createdAt:      timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt:      timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   createdBy:      uuid("created_by").notNull(),
