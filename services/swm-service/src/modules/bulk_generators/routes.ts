@@ -14,20 +14,22 @@ const listQuery = z.object({
   status: z.string().optional(),
 });
 
+// TX-008: feeMinor intentionally NOT accepted here on register or update.
+// The fee is always server-derived from generatorType + category (see
+// domain.ts calculateFeeMinor, called from the consumer) — a client can no
+// longer set or overwrite its own price via a feeMinor field.
 const registerBody = z.object({
   generatorName: z.string().min(1).max(128),
   generatorType: z.enum(["hotel", "restaurant", "mall", "hospital", "market"]),
   address: z.record(z.unknown()).optional(),
   estimatedWasteKgPerDay: z.number().int().positive().optional(),
   category: z.enum(["wet", "dry", "mixed"]),
-  feeMinor: z.number().int().nonnegative().optional(),
 });
 
 const updateBody = z.object({
   generatorName: z.string().min(1).max(128).optional(),
   estimatedWasteKgPerDay: z.number().int().positive().optional(),
   category: z.enum(["wet", "dry", "mixed"]).optional(),
-  feeMinor: z.number().int().nonnegative().optional(),
   version: z.number().int().positive(),
 });
 
@@ -41,7 +43,7 @@ export async function bulkGeneratorRoutes(app: FastifyInstance): Promise<void> {
     return reply.code(202).send(await commands.registerGenerator(ctx, {
       generatorName: body.generatorName, generatorType: body.generatorType,
       address: body.address ?? null, estimatedWasteKgPerDay: body.estimatedWasteKgPerDay ?? null,
-      category: body.category, feeMinor: body.feeMinor ?? null,
+      category: body.category,
     }));
   });
 
@@ -74,7 +76,6 @@ export async function bulkGeneratorRoutes(app: FastifyInstance): Promise<void> {
     if (body.generatorName !== undefined) patch.generatorName = body.generatorName;
     if (body.estimatedWasteKgPerDay !== undefined) patch.estimatedWasteKgPerDay = body.estimatedWasteKgPerDay;
     if (body.category !== undefined) patch.category = body.category;
-    if (body.feeMinor !== undefined) patch.feeMinor = body.feeMinor;
     return reply.code(202).send(await commands.updateGenerator(ctx, id, patch, body.version));
   });
 
