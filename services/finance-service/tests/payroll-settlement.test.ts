@@ -103,6 +103,8 @@ vi.mock("../src/modules/budget/repo.js", () => ({
   // for this FY — so this is a no-op, same as payroll-gl-consumer.test.ts /
   // recon-invariants.test.ts.
   findBudgetTx: vi.fn(async () => null),
+  // DOM-010: leaf-account guard — the settlement journal's heads have no children.
+  hasChildHeadsTx: vi.fn(async () => false),
 }));
 // gl/consumer.ts's postJournal() imports getPeriodStatusTx from
 // period-close/repo.js (a tx-scoped read), NOT getPeriodStatus from

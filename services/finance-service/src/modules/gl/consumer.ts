@@ -93,23 +93,20 @@ async function postJournal(
   }
   const period = journal.postingDate.slice(0, 7);
   const periodStatus = await getPeriodStatusTx(tx, journal.tenantId, period);
+  if (periodStatus === "unknown") {
+    // DOM-010: fail CLOSED on a period the system does not even recognise
+    // (e.g. a malformed/garbled YYYY-MM sliced from a bad postingDate)
+    // instead of silently treating it as open. getPeriodStatusTx only
+    // returns "unknown" for a period string that isn't shaped like a real
+    // period at all — a well-formed period with simply no close record yet
+    // is still correctly "open" and unaffected by this check.
+    throw new Error(`PERIOD_UNKNOWN: cannot post to unrecognized period '${period}'`);
+  }
   if (periodStatus === "hard_close") {
     throw new Error(`PERIOD_CLOSED: cannot post to hard-closed period ${period}`);
   }
   if (periodStatus === "soft_close" && !(["adjustment", "closing"].includes(journal.type))) {
     throw new Error(`PERIOD_SOFT_CLOSED: only adjustment/closing journals allowed in soft-closed period ${period}`);
-  }
-  // Gapless voucher numbering: if the caller did not supply a voucher number
-  // (or asked for AUTO), allocate a strictly-sequential one under a row lock.
-  let voucherNo = journal.voucherNo;
-  if (!voucherNo || voucherNo.trim() === "" || voucherNo.toUpperCase() === "AUTO") {
-    const fy = fyFromDate(journal.postingDate);
-    const series = (journal.type || "JV").slice(0, 8).toUpperCase();
-    const allocated = await nextVoucherNo(
-      tx as unknown as Parameters<typeof nextVoucherNo>[0],
-      journal.tenantId, fy, series,
-    );
-    voucherNo = allocated.voucherNo;
   }
   // Idempotency: a journal id is deterministic for GL-spine postings (keyed off
   // the source doc). If it already exists, this is a redelivery — skip silently
@@ -127,7 +124,43 @@ async function postJournal(
   // utilised_minor for a journal that was only ever posted once. See
   // tests/gl-budget-check.test.ts's "redelivery of an already-posted
   // journal (fixup)" regression test.
+  //
+  // DOM-010 fixup: gapless voucher-number allocation used to run BEFORE
+  // this short-circuit. A retried/redelivered command (or a duplicate
+  // client request that races a redelivery) would allocate — and
+  // permanently burn — a brand-new sequential voucher number for a journal
+  // that was then discovered, one line down, to already exist and get
+  // skipped. The number is gone forever (the counter never rolls back),
+  // leaving a hole in what is supposed to be a gapless sequence. Voucher
+  // allocation now happens AFTER this idempotency check, so a message this
+  // short-circuit ends never touches the counter at all.
   if (await repo.findJournalByIdTx(tx, journal.id)) return;
+  // Gapless voucher numbering: if the caller did not supply a voucher number
+  // (or asked for AUTO), allocate a strictly-sequential one under a row lock.
+  let voucherNo = journal.voucherNo;
+  if (!voucherNo || voucherNo.trim() === "" || voucherNo.toUpperCase() === "AUTO") {
+    const fy = fyFromDate(journal.postingDate);
+    const series = (journal.type || "JV").slice(0, 8).toUpperCase();
+    const allocated = await nextVoucherNo(
+      tx as unknown as Parameters<typeof nextVoucherNo>[0],
+      journal.tenantId, fy, series,
+    );
+    voucherNo = allocated.voucherNo;
+  }
+  // DOM-010: leaf-account guard. A head with children in the
+  // chart-of-accounts hierarchy (finance_heads.parent_id pointing at it) is
+  // a group/summary account — posting to it directly would silently corrupt
+  // roll-up totals for its children. Checked for every line, debit or
+  // credit, not just the debit-only set the budget check below cares about.
+  for (const l of journal.lines) {
+    const headId = await resolveHeadIdTx(tx, journal.tenantId, l.accountCode);
+    if (await budgetRepo.hasChildHeadsTx(tx as Parameters<typeof budgetRepo.hasChildHeadsTx>[0], headId)) {
+      throw new DomainError(
+        "NOT_LEAF_ACCOUNT",
+        `cannot post to non-leaf account '${l.accountCode}' — it has child accounts in the chart of accounts`,
+      );
+    }
+  }
   // DOM-007: budget check (skill 01 "every commit must call check_budget").
   // Granularity is per budget head (tenant_id, head_id, fy) — the same grain
   // finance_budgets itself is keyed at (UNIQUE(tenant_id, head_id, fy)) and
