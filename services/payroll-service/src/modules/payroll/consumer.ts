@@ -1462,7 +1462,11 @@ export async function computeAndInsertSlip(
       // DOM-008: was a second, independently hardcoded 325n (3.25%) — now the
       // same config value computeSlip used for esiEmployerMinor, so a tenant
       // override changes this persisted audit amount too, not just the slip.
-      erContribMinor: (result.grossMinor * statutoryConfig.esiEmployerRateBps) / 10000n,
+      // DOM-020: was recomputed here without roundRupee() (computeSlip's
+      // esiEmployerMinor does round), diverging from the slip for most gross
+      // amounts — persist the slip's own rounded figure instead of
+      // recomputing it, so the audit row can never disagree with the slip.
+      erContribMinor: result.esiEmployerMinor,
       currency: "INR", period: params.month,
       createdBy: msg.actorId, updatedBy: msg.actorId,
     });

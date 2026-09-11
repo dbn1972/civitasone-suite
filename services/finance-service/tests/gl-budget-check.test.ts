@@ -122,6 +122,8 @@ vi.mock("../src/modules/budget/repo.js", () => ({
   incrementSanctionUtilisedGuarded: vi.fn(async () => true),
   incrementBudgetUtilisedGuarded: (...args: any[]) => incrementBudgetUtilisedGuardedMock(...args),
   incrementBudgetUtilisedForced: (...args: any[]) => incrementBudgetUtilisedForcedMock(...args),
+  // DOM-010: leaf-account guard — none of these heads have children.
+  hasChildHeadsTx: vi.fn(async () => false),
 }));
 
 vi.mock("../src/modules/period-close/repo.js", () => ({
