@@ -26,14 +26,23 @@ export default defineConfig({
     ...devices["Desktop Chrome"],
     // Width 1280 sits above the documented 1024px responsive floor.
     //
-    // Height is deliberately 2000, not a realistic 900: the sidebar is a long
-    // scrollable nav, and at 900px its lower items are clipped. axe then cannot
-    // compute their background and returns them as `incomplete` ("partially
-    // obscured by another element") rather than pass/fail. Since this gate treats
-    // undecided-at-serious-impact as blocking, a short viewport manufactured ~50
-    // undecidable checks that were measurement artifacts rather than defects. A
-    // tall viewport makes the contrast computation decidable, which is the point.
-    viewport: { width: 1280, height: 2000 },
+    // Height is deliberately tall, not a realistic 900: the sidebar is a long
+    // scrollable nav, and at a short viewport its lower items are clipped. axe
+    // then cannot compute their background and returns them as `incomplete`
+    // ("partially obscured by another element") rather than pass/fail. Since
+    // this gate treats undecided-at-serious-impact as blocking, a short
+    // viewport manufactured undecidable checks that were measurement
+    // artifacts rather than defects. A tall viewport makes the contrast
+    // computation decidable, which is the point.
+    //
+    // 2000 (the previous value) stopped being enough once the nav grew past
+    // it: measured .sb-brand + .sb-nav.scrollHeight + .sb-foot is ~2491px
+    // with every group expanded (the default, fresh-session state), which
+    // left the bottom PLATFORM group clipped by `.sb-nav`'s own
+    // `overflow: auto` and reported as undecided color-contrast on any route
+    // not already in the baseline (e.g. /approvals, /finance/dashboard).
+    // 2800 clears that with headroom for further nav growth.
+    viewport: { width: 1280, height: 2800 },
     ignoreHTTPSErrors: true,
     screenshot: "only-on-failure",
     trace: "retain-on-failure",
