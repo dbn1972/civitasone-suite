@@ -1,8 +1,9 @@
 import { pino } from "pino";
-import type { Queue } from "@civitasone/queue";
+import { NonRetryableError, type Queue } from "@civitasone/queue";
 import { db } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
+import { isValidGstRate, VALID_GST_RATES } from "./gst-rates.js";
 
 const log = pino({ name: "finance.gst.consumer" });
 
@@ -16,6 +17,15 @@ export function registerGstConsumers(queue: Queue): void {
       gstType: string; direction: "input" | "output"; taxableMinor: number;
       taxMinor: number; ratePct: number; hsnCode?: string; period: string;
     };
+    // DOM-013: ratePct used to be inserted unchecked -- reject anything
+    // outside the standard GST slabs (CGST/SGST checked against the halved
+    // slab, IGST against the full slab; see gst-rates.ts) before it reaches
+    // the ledger.
+    if (!isValidGstRate(p.ratePct, p.gstType)) {
+      throw new NonRetryableError(
+        `GST_RATE_INVALID: ${p.ratePct}% is not a valid ${p.gstType} rate (standard slabs: ${VALID_GST_RATES.join(", ")}; CGST/SGST use half the slab)`
+      );
+    }
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       const { sql } = await import("drizzle-orm");

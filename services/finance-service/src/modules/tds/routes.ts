@@ -7,6 +7,7 @@ import { scopedRead } from "../../shared/db.js";
 import { queue } from "../../shared/infra.js";
 import { COMMANDS } from "../../topics.js";
 import { decryptPii } from "../../shared/pii-crypto.js";
+import { TDS_SECTION_CODES, isValidTdsRateForSection } from "./section-rates.js";
 
 const FINANCE_ROLES = ["finance_officer", "finance_admin", "super_admin"];
 
@@ -55,12 +56,18 @@ export async function vendorTdsRoutes(app: FastifyInstance): Promise<void> {
       pan: z.string().max(10).optional(),
       billId: z.string().uuid().optional(),
       paymentId: z.string().uuid().optional(),
-      section: z.string().max(10).default("194C"),
+      // DOM-013: was `z.string().max(10)` free text -- any junk value was
+      // accepted and stored. Now a controlled reference to real Income-tax
+      // Act TDS sections (see section-rates.ts).
+      section: z.enum(TDS_SECTION_CODES).default("194C"),
       grossAmountMinor: z.number().int().positive(),
-      tdsRatePct: z.number().refine(
-        r => ([0, 1, 1.5, 2, 5, 7.5, 10, 20, 30] as readonly number[]).includes(r),
-        { message: "tdsRatePct must be a statutory rate: 0, 1, 1.5, 2, 5, 7.5, 10, 20, 30%" }
-      ).default(2),
+      // DOM-013: `tdsRatePct` used to be checked against a flat list of
+      // numbers with no link to `section` or the deduction date, so a
+      // lapsed COVID-19-era concessional rate (1.5% / 7.5%) could be picked
+      // for a section on a current-date deduction. The section+date-aware
+      // check below is applied in the object-level .refine() once both
+      // fields and `deductionDate` are available.
+      tdsRatePct: z.number().default(2),
       tdsAmountMinor: z.number().int().min(0),
       surchargeMinor: z.number().int().min(0).default(0),
       cessMinor: z.number().int().min(0).default(0),
@@ -68,7 +75,14 @@ export async function vendorTdsRoutes(app: FastifyInstance): Promise<void> {
       deductionDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
       quarter: z.enum(["Q1", "Q2", "Q3", "Q4"]),
       fy: z.string().regex(/^\d{4}-\d{2}$/),
-    }).parse(req.body);
+    }).refine(
+      (b) => isValidTdsRateForSection(b.section, b.tdsRatePct, b.deductionDate),
+      {
+        message: "tdsRatePct is not a valid statutory rate for this section on the given deduction date " +
+          "(e.g. a pre-2021-04-01 COVID-19 concessional rate cannot be used for a current-date deduction)",
+        path: ["tdsRatePct"],
+      }
+    ).parse(req.body);
 
     const id = randomUUID();
     await queue.publish(COMMANDS.tdsDeductionRecord, {
