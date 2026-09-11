@@ -133,6 +133,130 @@ describe("TX-006 — DB rejects a direct-SQL unbalanced journal (bypassing the a
   });
 });
 
+describe("TX-006 — UPDATE that moves a line between journals validates BOTH journals", () => {
+  // Regression coverage for a gap an independent reviewer found in this PR:
+  // the trigger's original v_journal_id := COALESCE(NEW.journal_id,
+  // OLD.journal_id) always resolves to NEW.journal_id on an UPDATE (NEW is
+  // never null there), so re-assigning a line's journal_id only ever
+  // re-validated the DESTINATION journal. The SOURCE journal a line moved
+  // OUT of was never re-checked, so a transaction could leave it
+  // permanently unbalanced while still committing cleanly. Fixed by having
+  // the trigger validate OLD.journal_id too whenever it differs from
+  // NEW.journal_id.
+
+  it("moving lines out of a balanced journal, leaving the source unbalanced: DB rejects at commit", async () => {
+    const journalA = randomUUID();
+    const journalB = randomUUID();
+    await seedHeadAndJournal(journalA, `TX006-A-${journalA.slice(0, 8)}`);
+    await seedHeadAndJournal(journalB, `TX006-B-${journalB.slice(0, 8)}`);
+
+    const line1 = randomUUID(); // stays in A: debit 100000
+    const line2 = randomUUID(); // moves to B: credit 60000
+    const line3 = randomUUID(); // moves to B: credit 40000
+
+    // Seed A balanced: debit 100000 vs credit (60000 + 40000) = 100000.
+    await scoped(TEST_TENANT, async (tx: any) => {
+      await tx.execute(sql`
+        INSERT INTO gl.finance_journal_lines
+          (id, tenant_id, journal_id, head_id, debit_minor, credit_minor, posting_date, journal_type)
+        VALUES (${line1}::uuid, ${TEST_TENANT}::uuid, ${journalA}::uuid, ${HEAD_ID}::uuid, 100000, 0, '2026-09-11', 'journal')
+      `);
+      await tx.execute(sql`
+        INSERT INTO gl.finance_journal_lines
+          (id, tenant_id, journal_id, head_id, debit_minor, credit_minor, posting_date, journal_type)
+        VALUES (${line2}::uuid, ${TEST_TENANT}::uuid, ${journalA}::uuid, ${HEAD_ID}::uuid, 0, 60000, '2026-09-11', 'journal')
+      `);
+      await tx.execute(sql`
+        INSERT INTO gl.finance_journal_lines
+          (id, tenant_id, journal_id, head_id, debit_minor, credit_minor, posting_date, journal_type)
+        VALUES (${line3}::uuid, ${TEST_TENANT}::uuid, ${journalA}::uuid, ${HEAD_ID}::uuid, 0, 40000, '2026-09-11', 'journal')
+      `);
+    });
+
+    // Move line2 + line3 into B via UPDATE journal_id, adding a compensating
+    // debit-100000 line to B so the DESTINATION stays balanced. If only the
+    // destination is validated, this commits — leaving A with a lone
+    // debit-100000/credit-0 line, permanently unbalanced.
+    await expect(
+      scoped(TEST_TENANT, async (tx: any) => {
+        await tx.execute(sql`
+          UPDATE gl.finance_journal_lines SET journal_id = ${journalB}::uuid WHERE id = ${line2}::uuid
+        `);
+        await tx.execute(sql`
+          UPDATE gl.finance_journal_lines SET journal_id = ${journalB}::uuid WHERE id = ${line3}::uuid
+        `);
+        await tx.execute(sql`
+          INSERT INTO gl.finance_journal_lines
+            (id, tenant_id, journal_id, head_id, debit_minor, credit_minor, posting_date, journal_type)
+          VALUES (gen_random_uuid(), ${TEST_TENANT}::uuid, ${journalB}::uuid, ${HEAD_ID}::uuid, 100000, 0, '2026-09-11', 'journal')
+        `);
+      })
+    ).rejects.toThrow(/JOURNAL_UNBALANCED/);
+
+    // Whole transaction rolled back: A is untouched and still balanced.
+    const rowsA = (await scoped(TEST_TENANT, (tx: any) => tx.execute(sql`
+      SELECT COALESCE(SUM(debit_minor),0)::bigint AS dr, COALESCE(SUM(credit_minor),0)::bigint AS cr
+      FROM gl.finance_journal_lines WHERE journal_id = ${journalA}::uuid
+    `))) as unknown as { dr: string; cr: string }[];
+    expect(BigInt(rowsA[0]!.dr)).toBe(BigInt(rowsA[0]!.cr));
+    expect(BigInt(rowsA[0]!.dr)).toBe(100000n);
+  });
+
+  it("moving all lines from one journal to another, both ends up balanced: allowed", async () => {
+    const journalA = randomUUID();
+    const journalB = randomUUID();
+    await seedHeadAndJournal(journalA, `TX006-A-${journalA.slice(0, 8)}`);
+    await seedHeadAndJournal(journalB, `TX006-B-${journalB.slice(0, 8)}`);
+
+    const line1 = randomUUID();
+    const line2 = randomUUID();
+
+    // Seed A balanced: debit 80000 vs credit 80000. B starts with no lines
+    // (trivially balanced: 0 == 0).
+    await scoped(TEST_TENANT, async (tx: any) => {
+      await tx.execute(sql`
+        INSERT INTO gl.finance_journal_lines
+          (id, tenant_id, journal_id, head_id, debit_minor, credit_minor, posting_date, journal_type)
+        VALUES (${line1}::uuid, ${TEST_TENANT}::uuid, ${journalA}::uuid, ${HEAD_ID}::uuid, 80000, 0, '2026-09-11', 'journal')
+      `);
+      await tx.execute(sql`
+        INSERT INTO gl.finance_journal_lines
+          (id, tenant_id, journal_id, head_id, debit_minor, credit_minor, posting_date, journal_type)
+        VALUES (${line2}::uuid, ${TEST_TENANT}::uuid, ${journalA}::uuid, ${HEAD_ID}::uuid, 0, 80000, '2026-09-11', 'journal')
+      `);
+    });
+
+    // Move BOTH lines from A to B: A ends up empty (0 == 0, balanced) and B
+    // ends up with the exact same balanced pair (80000 == 80000). Both the
+    // source and destination validate cleanly, so the tx should commit.
+    await expect(
+      scoped(TEST_TENANT, async (tx: any) => {
+        await tx.execute(sql`
+          UPDATE gl.finance_journal_lines SET journal_id = ${journalB}::uuid WHERE id = ${line1}::uuid
+        `);
+        await tx.execute(sql`
+          UPDATE gl.finance_journal_lines SET journal_id = ${journalB}::uuid WHERE id = ${line2}::uuid
+        `);
+        return "committed";
+      })
+    ).resolves.toBe("committed");
+
+    const rowsA = (await scoped(TEST_TENANT, (tx: any) => tx.execute(sql`
+      SELECT COALESCE(SUM(debit_minor),0)::bigint AS dr, COALESCE(SUM(credit_minor),0)::bigint AS cr
+      FROM gl.finance_journal_lines WHERE journal_id = ${journalA}::uuid
+    `))) as unknown as { dr: string; cr: string }[];
+    expect(BigInt(rowsA[0]!.dr)).toBe(0n);
+    expect(BigInt(rowsA[0]!.cr)).toBe(0n);
+
+    const rowsB = (await scoped(TEST_TENANT, (tx: any) => tx.execute(sql`
+      SELECT COALESCE(SUM(debit_minor),0)::bigint AS dr, COALESCE(SUM(credit_minor),0)::bigint AS cr
+      FROM gl.finance_journal_lines WHERE journal_id = ${journalB}::uuid
+    `))) as unknown as { dr: string; cr: string }[];
+    expect(BigInt(rowsB[0]!.dr)).toBe(BigInt(rowsB[0]!.cr));
+    expect(BigInt(rowsB[0]!.dr)).toBe(80000n);
+  });
+});
+
 describe("TX-006 — existing app-level assertJournalBalances() guard is unaffected", () => {
   it("still accepts a balanced set of lines", () => {
     expect(() =>

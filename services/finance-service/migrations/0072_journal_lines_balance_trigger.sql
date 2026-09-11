@@ -21,25 +21,46 @@
 -- Additive, idempotent, forward-only. Function runs as invoker; finance_svc
 -- already holds SELECT on gl.finance_journal_lines (granted in 0030), which
 -- is all the aggregate query needs.
+--
+-- gl.check_journal_balance(journal_id) is the single-journal validator,
+-- factored out so it can be invoked once per affected journal_id. This
+-- matters for UPDATE: a row can move from one journal to another by
+-- changing journal_id (e.g. re-assigning a line to a different voucher).
+-- COALESCE(NEW.journal_id, OLD.journal_id) always resolves to NEW on an
+-- UPDATE (NEW is never null there), so a naive single-journal check only
+-- ever re-validates the DESTINATION journal and never the SOURCE journal
+-- the row left — a transaction can move lines out of a balanced journal,
+-- leaving it permanently unbalanced with no error raised. The trigger
+-- function below validates BOTH journal_id values whenever they differ.
 
-CREATE OR REPLACE FUNCTION gl.check_journal_lines_balanced() RETURNS trigger AS $$
+CREATE OR REPLACE FUNCTION gl.check_journal_balance(p_journal_id uuid) RETURNS void AS $$
 DECLARE
-  v_journal_id uuid;
-  v_dr         bigint;
-  v_cr         bigint;
+  v_dr bigint;
+  v_cr bigint;
 BEGIN
-  v_journal_id := COALESCE(NEW.journal_id, OLD.journal_id);
-
   SELECT COALESCE(SUM(debit_minor), 0), COALESCE(SUM(credit_minor), 0)
     INTO v_dr, v_cr
     FROM gl.finance_journal_lines
-   WHERE journal_id = v_journal_id;
+   WHERE journal_id = p_journal_id;
 
   IF v_dr <> v_cr THEN
     RAISE EXCEPTION
       'JOURNAL_UNBALANCED: journal % lines do not balance (debit=%, credit=%)',
-      v_journal_id, v_dr, v_cr
+      p_journal_id, v_dr, v_cr
       USING ERRCODE = 'check_violation';
+  END IF;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE FUNCTION gl.check_journal_lines_balanced() RETURNS trigger AS $$
+BEGIN
+  IF TG_OP = 'UPDATE' AND OLD.journal_id IS DISTINCT FROM NEW.journal_id THEN
+    -- Row moved between journals: both the journal it left (OLD) and the
+    -- journal it joined (NEW) must independently balance.
+    PERFORM gl.check_journal_balance(OLD.journal_id);
+    PERFORM gl.check_journal_balance(NEW.journal_id);
+  ELSE
+    PERFORM gl.check_journal_balance(COALESCE(NEW.journal_id, OLD.journal_id));
   END IF;
 
   RETURN NULL; -- ignored: AFTER trigger
