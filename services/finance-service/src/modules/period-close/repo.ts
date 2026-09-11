@@ -4,6 +4,19 @@ import { financePeriodClose, financePeriodReopenLog } from "./schema.js";
 
 export type Writer = Pick<typeof db, "insert" | "update" | "select">;
 
+/**
+ * DOM-010: a period string must have the shape of an actual accounting
+ * period (YYYY-MM, month 01-12) before its status is even looked up.
+ * getPeriodStatusDb/getPeriodStatusTx below used to fall back to "open" for
+ * ANY period with no finance_period_close row — including a malformed or
+ * garbled period (e.g. derived by slicing a bad postingDate) that was never
+ * a real period to begin with. That let a bogus period sail through as if
+ * it were a legitimately-open one. A well-formed period with simply no
+ * close record yet is still correctly "open" (nobody has closed it) and is
+ * unaffected by this check.
+ */
+const PERIOD_RE = /^\d{4}-(0[1-9]|1[0-2])$/;
+
 export async function findPeriodClose(tenantId: string, period: string) {
   const rows = await scopedRead((tx) => tx.select().from(financePeriodClose).where(and(
     eq(financePeriodClose.tenantId, tenantId),
@@ -74,14 +87,16 @@ export async function isPeriodHardClosedDb(tenantId: string, period: string): Pr
   return row?.status === "hard_close";
 }
 
-/** Period status: 'open' | 'soft_close' | 'hard_close'. */
+/** Period status: 'open' | 'soft_close' | 'hard_close' | 'unknown'. */
 export async function getPeriodStatusDb(tenantId: string, period: string): Promise<string> {
+  if (!PERIOD_RE.test(period)) return "unknown";
   const row = await findPeriodClose(tenantId, period);
   return row?.status ?? "open";
 }
 
 /** Tx-scoped period status — reads inside the caller's transaction so the check is serialised with the write. */
 export async function getPeriodStatusTx(tx: any, tenantId: string, period: string): Promise<string> {
+  if (!PERIOD_RE.test(period)) return "unknown";
   const rows = await tx.select()
     .from(financePeriodClose)
     .where(and(eq(financePeriodClose.tenantId, tenantId), eq(financePeriodClose.period, period)))

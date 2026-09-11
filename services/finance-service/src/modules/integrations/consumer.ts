@@ -33,8 +33,23 @@ export function registerIntegrationConsumers(queue: Queue): void {
       schemeCode?: string;
       ddoCode?: string;
     };
-    await db.transaction(async (tx) => {
-      if (!(await markProcessed(tx, msg.messageId))) return;
+    const pfmsBatchId = randomUUID();
+    const batchType = p.payrollRunId ? "salary" : p.disbursementId ? "grant" : "scheme";
+    const resourceId = p.payrollRunId ?? p.disbursementId ?? p.pfmsTxnId;
+
+    // TX-007: every DB write (idempotency mark, tenant-config read, the batch
+    // row, the downstream paymentMade event, the audit record) commits in ONE
+    // transaction, same as every other handler in this file -- the batch is
+    // always inserted with submissionStatus "pending" here. The NACH file
+    // write + SFTP egress below run AFTER this transaction commits, never
+    // while a DB connection/transaction is held open, so a slow or hanging
+    // PFMS SFTP gateway can no longer extend a lock hold time, risk a
+    // transaction timeout, or starve the pool under load. If the upload
+    // succeeds, a separate follow-up write flips the row to "file_sent"; if
+    // it fails, the row is left "pending" for manual/scheduled retry -- the
+    // batch/audit/event records are never lost, since they already committed.
+    const prepared = await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return null;
       // Tx-scoped read: this handler already holds an open db.transaction, so
       // the scopedRead-based getTenantConfig must not be called here -- see
       // getTenantConfigTx's doc comment (pfms/repo.ts) for the pool-
@@ -42,37 +57,6 @@ export function registerIntegrationConsumers(queue: Queue): void {
       const cfg = await pfmsRepo.getTenantConfigTx(tx, msg.tenantId);
       const agencyCode = (p.agencyCode ?? cfg?.agencyCode ?? "AG001").toUpperCase();
       const ddoCode = (p.ddoCode ?? cfg?.defaultDdo ?? "DDO123456").toUpperCase();
-      const pfmsBatchId = randomUUID();
-      const batchType = p.payrollRunId ? "salary" : p.disbursementId ? "grant" : "scheme";
-      // ── NACH file generation + SFTP egress ─────────────────────────────────
-      // Resolve real beneficiaries for this PFMS batch (may be empty on first
-      // insert since payments rows are linked later; we build from payload).
-      const nachRow: BankFileRow = {
-        ifsc: p.beneficiaryBankRef?.split(":")[0] ?? "",
-        accountNo: p.beneficiaryBankRef?.split(":")[1] ?? "",
-        accountName: agencyCode,
-        amountMinor: BigInt(p.amountMinor),
-        narration: `${p.mode}/${p.pfmsTxnId}`.slice(0, 25),
-        paymentDate: new Date().toISOString().slice(0, 10),
-      };
-      const nachContent = generateNACHFile([nachRow], {
-        originatorCode: agencyCode,
-        fileSequenceNo: 1,
-      });
-      const nachFileName = `NACH_${pfmsBatchId}_${Date.now()}.txt`;
-      const localPath = join(tmpdir(), nachFileName);
-      await writeFile(localPath, nachContent, "utf-8");
-      log.info({ pfmsBatchId, nachFileName }, "NACH file generated");
-
-      // Upload to SFTP gateway — skipped silently if SFTP_HOST is not set.
-      await uploadBankFile(localPath, nachFileName).catch((err: unknown) => {
-        log.error({ err, pfmsBatchId }, "SFTP upload failed — batch remains in pending state");
-        // Do not rethrow: let the batch stay pending for manual retry.
-      });
-
-      // Clean up temp file (best-effort).
-      await unlink(localPath).catch(() => undefined);
-
       await pfmsRepo.insertPfmsBatch(tx, {
         id: pfmsBatchId,
         tenantId: msg.tenantId,
@@ -84,7 +68,7 @@ export function registerIntegrationConsumers(queue: Queue): void {
         agencyCode,
         schemeCode: p.schemeCode?.toUpperCase() ?? null,
         ddoCode,
-        submissionStatus: process.env["SFTP_HOST"] ? "file_sent" : "pending",
+        submissionStatus: "pending",
         status: "initiated",
         createdBy: msg.actorId,
         updatedBy: msg.actorId,
@@ -101,9 +85,54 @@ export function registerIntegrationConsumers(queue: Queue): void {
           outcome: "success",
         },
       });
-      const resourceId = p.payrollRunId ?? p.disbursementId ?? p.pfmsTxnId;
       await audit(tx, msg, "eft_disbursement", "payment", resourceId);
+      return { agencyCode };
     });
+    if (!prepared) return;
+
+    // ── NACH file generation + SFTP egress — OUTSIDE the DB transaction ─────
+    // Resolve real beneficiaries for this PFMS batch (may be empty on first
+    // insert since payments rows are linked later; we build from payload).
+    const nachRow: BankFileRow = {
+      ifsc: p.beneficiaryBankRef?.split(":")[0] ?? "",
+      accountNo: p.beneficiaryBankRef?.split(":")[1] ?? "",
+      accountName: prepared.agencyCode,
+      amountMinor: BigInt(p.amountMinor),
+      narration: `${p.mode}/${p.pfmsTxnId}`.slice(0, 25),
+      paymentDate: new Date().toISOString().slice(0, 10),
+    };
+    const nachContent = generateNACHFile([nachRow], {
+      originatorCode: prepared.agencyCode,
+      fileSequenceNo: 1,
+    });
+    const nachFileName = `NACH_${pfmsBatchId}_${Date.now()}.txt`;
+    const localPath = join(tmpdir(), nachFileName);
+    await writeFile(localPath, nachContent, "utf-8");
+    log.info({ pfmsBatchId, nachFileName }, "NACH file generated");
+
+    // Upload to SFTP gateway — skipped silently if SFTP_HOST is not set. No DB
+    // transaction is open while this network call runs (TX-007): a slow or
+    // hanging PFMS gateway can no longer hold a connection/lock or exhaust
+    // the pool.
+    const uploaded = await uploadBankFile(localPath, nachFileName)
+      .then(() => true)
+      .catch((err: unknown) => {
+        log.error({ err, pfmsBatchId }, "SFTP upload failed — batch remains in pending state");
+        // Do not rethrow: let the batch stay pending for manual retry.
+        return false;
+      });
+
+    // Clean up temp file (best-effort).
+    await unlink(localPath).catch(() => undefined);
+
+    // Record the upload outcome in its own follow-up write, separate from the
+    // transaction above -- this is the only DB write that ever runs after the
+    // SFTP call, and it is a fresh transaction, not the original one held open.
+    if (uploaded) {
+      await db.transaction(async (tx2) => {
+        await pfmsRepo.updatePfmsBatch(tx2, pfmsBatchId, { submissionStatus: "file_sent" });
+      });
+    }
   }, { visibilityTimeout: 300 });
 
   /** procurement.grn.accepted → draft vendor bill with PO/GRN refs for 3-way match */
