@@ -30,4 +30,5 @@ registerGracefulShutdown({
     await sqlClient.end(); // close DB pool
   },
   logger: app.log,
+  server: app.server,
 });
