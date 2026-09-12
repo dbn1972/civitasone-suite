@@ -36,4 +36,22 @@ describe("RevisedEstimatesPage", () => {
     expect(screen.getAllByText("—").length).toBeGreaterThan(0);
     expect(screen.queryByText("0")).not.toBeInTheDocument();
   });
+
+  // UX-006: `toRow()` used to compute BE/RE via `Number(b.beMinor) / 100`,
+  // which turns a missing beMinor into a real-looking 0 and an unparseable
+  // one into NaN -- rendered as a fabricated "₹0.00" either way. A row with
+  // null/missing beMinor must render "—" for BE and Variance %, never ₹0.00.
+  it("renders an honest '—' for a row with a missing beMinor, never a fabricated ₹0.00 (UX-006)", async () => {
+    fetchJsonMock.mockResolvedValue({
+      data: [
+        { id: "b1", majorHead: "2210", subHead: "Health", beMinor: 10000000, reMinor: 12000000 },
+        { id: "b2", majorHead: "2211", subHead: "Family Welfare", beMinor: null, reMinor: 5000000 },
+      ],
+      source: "api",
+    });
+    render(await RevisedEstimatesPage());
+    expect(screen.getByText("2211")).toBeInTheDocument();
+    expect(screen.queryByText("₹0.00")).not.toBeInTheDocument();
+    expect(screen.getAllByText("—").length).toBeGreaterThan(0);
+  });
 });

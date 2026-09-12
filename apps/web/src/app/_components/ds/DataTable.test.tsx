@@ -46,6 +46,30 @@ describe("DataTable", () => {
     expect(screen.getByText("₹1,500.00")).toBeInTheDocument();
   });
 
+  // UX-006: a missing amount (null/undefined field, e.g. an API error or a
+  // mapping gap) must render as an honest "—", never as a fabricated ₹0.00
+  // that's indistinguishable from a genuine zero-rupee row. This is a
+  // fleet-wide guard — every page using cellType:"amount" funnels through
+  // this one cellValue() path.
+  it("renders an em-dash (not ₹0.00) for a null/undefined amount cellType", () => {
+    const rowsWithMissing = [
+      ...rows,
+      { id: "PO-004", name: "Missing Amount", amount: null as unknown as number, status: "draft" },
+      { id: "PO-005", name: "Undefined Amount", amount: undefined as unknown as number, status: "draft" },
+    ];
+    render(<DataTable columns={columns} rows={rowsWithMissing} />);
+    const dashCells = screen.getAllByText("—");
+    expect(dashCells.length).toBe(2);
+    expect(screen.queryByText("₹0.00")).not.toBeInTheDocument();
+  });
+
+  it("still renders a genuine zero amount as ₹0.00, distinct from missing", () => {
+    const rowsWithZero = [{ id: "PO-006", name: "Free Sample", amount: 0, status: "approved" }];
+    render(<DataTable columns={columns} rows={rowsWithZero} />);
+    expect(screen.getByText("₹0.00")).toBeInTheDocument();
+    expect(screen.queryByText("—")).not.toBeInTheDocument();
+  });
+
   it("shows empty state when no rows", () => {
     render(
       <DataTable

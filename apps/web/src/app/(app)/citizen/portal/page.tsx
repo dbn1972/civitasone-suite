@@ -1,13 +1,9 @@
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { PageHeader, StatGrid, StatCard } from "../../../_components/ds";
 import { getCitizenPortal } from "../../../_data/loaders";
-import { PortalTable } from "./PortalTable";
 
 export default async function CitizenPortalPage() {
   const { data: metrics, source } = await getCitizenPortal();
-
-  const onTrack = metrics.filter((m) => m.status === "On Track").length;
-  const improved = metrics.filter((m) => m.status === "Improved").length;
 
   return (
     <>
@@ -18,13 +14,31 @@ export default async function CitizenPortalPage() {
       />
 
       <StatGrid>
-        <StatCard icon="👥" iconBg="#eef2ff" label="Registered Citizens" value="1,24,580" />
-        <StatCard icon="📋" iconBg="#ecfdf3" label="Active Requests" value="2,341" />
-        <StatCard icon="📈" iconBg="#fffaeb" label="On Track" value={onTrack} />
-        <StatCard icon="🔼" iconBg="#fce7ee" label="Improved" value={improved} />
+        <StatCard
+          icon="🗂️"
+          iconBg="#eef2ff"
+          label="Published Services"
+          value={metrics.totalServices.toLocaleString("en-IN")}
+        />
+        <StatCard
+          icon="📋"
+          iconBg="#ecfdf3"
+          label="Active Requests"
+          value={metrics.activeRequests.toLocaleString("en-IN")}
+        />
+        <StatCard
+          icon="✅"
+          iconBg="#fffaeb"
+          label="Resolved This Month"
+          value={metrics.resolvedThisMonth.toLocaleString("en-IN")}
+        />
+        <StatCard
+          icon="⏱️"
+          iconBg="#fce7ee"
+          label="Avg. Resolution Days"
+          value={metrics.avgResolutionDays.toLocaleString("en-IN")}
+        />
       </StatGrid>
-
-      <PortalTable metrics={metrics} source={source} />
     </>
   );
 }

@@ -2,12 +2,13 @@
 
 import { useId, useState } from "react";
 import { useRouter } from "next/navigation";
+import { minorToRupeesOrNull } from "@/lib/formatters";
 
 interface ProposalData {
   id: string;
   status: string;
   description: string;
-  estimatedCostMinor: string | number | bigint;
+  estimatedCostMinor: string | number | bigint | null | undefined;
   district?: string | null;
   taluka?: string | null;
   village?: string | null;
@@ -75,7 +76,12 @@ function ProposalEditForm({
   const formId = useId();
   const router = useRouter();
 
-  const rupeesStr = String(Math.round(Number(proposal.estimatedCostMinor) / 100));
+  // UX-006: `Number(proposal.estimatedCostMinor) / 100` turned a missing cost
+  // into a fabricated "0" pre-filled in an editable field the operator might
+  // submit unchanged, silently zeroing out a real proposal's cost. Missing/
+  // unparseable data now leaves the field blank so it's obviously unset.
+  const estimatedCostRupees = minorToRupeesOrNull(proposal.estimatedCostMinor);
+  const rupeesStr = estimatedCostRupees === null ? "" : String(Math.round(estimatedCostRupees));
 
   const [description, setDescription] = useState(proposal.description);
   const [costRupees, setCostRupees] = useState(rupeesStr);

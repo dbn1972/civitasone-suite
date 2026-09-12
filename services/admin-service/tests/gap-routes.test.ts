@@ -435,6 +435,61 @@ describe("cross-service routes → identity-service (token-forwarded)", () => {
     expect(revokeCall!.url).toContain("perm-finance-read");
   });
 
+  it("PATCH /v1/admin/roles/:id/permissions (COMP-011): a mixed success/failure request continues applying every remaining change and reports exactly what succeeded, what failed, and why — instead of aborting on the first failure and discarding partial state", async () => {
+    const roleId = "55555555-5555-4555-8555-555555555555";
+    const calls: Array<{ method: string; url: string }> = [];
+    const fetchMock = vi.fn(async (url: string, init: { method: string; body?: string; headers: Record<string, string> }) => {
+      expectForwardsCallerAuth(init);
+      calls.push({ method: init.method, url });
+      if (url.endsWith(`/identity/rbac/roles/${roleId}`)) {
+        return jsonResponse(200, { id: roleId, permissions: ["finance.read", "hr.read"] });
+      }
+      if (url.includes("/identity/rbac/permissions")) {
+        return jsonResponse(200, [
+          { id: "perm-finance-read", key: "finance.read" },
+          { id: "perm-finance-write", key: "finance.write" },
+          { id: "perm-hr-read", key: "hr.read" },
+        ]);
+      }
+      // Grant of finance.write FAILS (identity-service's own self-escalation
+      // guard rejecting it, e.g.) — this must NOT stop the revoke below from
+      // being attempted.
+      if (init.method === "POST" && url.endsWith("/permissions")) {
+        return jsonResponse(403, { code: "SELF_ESCALATION_DENIED", message: "caller cannot grant a permission it does not itself hold" });
+      }
+      // Revoke of hr.read SUCCEEDS.
+      if (init.method === "DELETE") return jsonResponse(202, { id: roleId, status: "accepted", correlationId: "c-9" });
+      throw new Error(`unexpected upstream call: ${init.method} ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const res = await app.inject({
+      method: "PATCH", url: `/v1/admin/roles/${roleId}/permissions`,
+      headers: authHeader(["platform_admin"]),
+      // current = {finance.read, hr.read}, desired = {finance.read, finance.write}
+      // => must attempt: grant finance.write (FAILS), revoke hr.read (SUCCEEDS)
+      payload: { permissionKeys: ["finance.read", "finance.write"] },
+    });
+
+    // Real partial state, not a bare relayed upstream error: 207, not the
+    // upstream's raw 403, and not the old behaviour's 202-looks-like-success.
+    expect(res.statusCode).toBe(207);
+    const body = res.json();
+    expect(body.status).toBe("partial");
+    expect(body.granted).toEqual([]);
+    expect(body.revoked).toEqual(["hr.read"]);
+    expect(body.failed).toEqual([
+      { key: "finance.write", action: "grant", status: 403, code: "SELF_ESCALATION_DENIED", message: "caller cannot grant a permission it does not itself hold" },
+    ]);
+
+    // The revoke call must have actually happened — proves the failed grant
+    // did not abort the rest of the batch (the old code `return`ed on the
+    // first non-2xx, so the DELETE call was never made at all).
+    const revokeCall = calls.find((c) => c.method === "DELETE");
+    expect(revokeCall).toBeDefined();
+    expect(revokeCall!.url).toContain("perm-hr-read");
+  });
+
   it("GET /v1/admin/user-roles/:id forwards the caller's bearer token and relays the user's real effective roles (not /v1/admin/users/:id/roles — see route comment for why)", async () => {
     const userId = "77777777-7777-4777-8777-777777777777";
     const fetchMock = vi.fn(async (url: string, init: { headers: Record<string, string> }) => {

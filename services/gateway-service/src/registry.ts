@@ -63,16 +63,13 @@ export const SERVICE_ROUTES: ServiceRoute[] = [
   { name: "visitor",     prefix: "/api/v1/visitor",   upstream: upstream("visitor", 3035) },
   { name: "inspection",  prefix: "/api/v1/inspection", upstream: upstream("inspection", 3037) },
   { name: "works",       prefix: "/api/v1/works",    upstream: upstream("works", 3036) },
-  // Previously absent: both services were built and tested but had NO gateway
-  // route, so every request 404'd and no client could reach them. revenue-service
-  // has the fleet's highest line coverage (99.6%) and was entirely unreachable.
+  // revenue-service and metadata-service.
   { name: "revenue",     prefix: "/api/v1/revenue",  upstream: upstream("revenue", 3038) },
   { name: "metadata",    prefix: "/api/v1/metadata", upstream: upstream("metadata", 3039) },
   // Customer-engagement platform services (generic — client-specific behaviour
-  // lives in services/adapters/*). These were built and tested but had NO
-  // gateway route, so every request 404'd and no client could reach them.
-  // Ports: recommendation 3040, ai-agent 3041, journey 3045, field 3046,
-  // cdp 3047, loyalty 3048 (catalogue 3044). Keep ecosystem.config.js in sync.
+  // lives in services/adapters/*). Ports: recommendation 3040, ai-agent 3041,
+  // journey 3045, field 3046, cdp 3047, loyalty 3048 (catalogue 3044).
+  // Keep ecosystem.config.js in sync.
   { name: "cdp",             prefix: "/api/v1/cdp",             upstream: upstream("cdp", 3047) },
   { name: "catalogue",       prefix: "/api/v1/catalogue",       upstream: upstream("catalogue", 3044) },
   { name: "journeys",        prefix: "/api/v1/journeys",        upstream: upstream("journey", 3045) },
@@ -92,9 +89,7 @@ export const SERVICE_ROUTES: ServiceRoute[] = [
   { name: "sync",         prefix: "/api/v1/sync",      upstream: upstream("identity", 3001), upstreamPath: "/v1/sync" },
   { name: "devices",      prefix: "/api/v1/devices",   upstream: upstream("identity", 3001), upstreamPath: "/v1/devices" },
   { name: "queue",        prefix: "/api/v1/queue",     upstream: upstream("queue", 3030), upstreamPath: "/v1/queue" },
-  // Municipal Sec5 services — see ecosystem.config.js for full history. All 17
-  // now typecheck/build clean (re-verified 2026-08-27 after main picked up
-  // #757/#761/#762 and others fixing the defects that blocked the other 14).
+  // Municipal Sec5 services — see ecosystem.config.js for full history.
   { name: "advertisement", prefix: "/api/v1/advertisement", upstream: upstream("advertisement", 3073) },
   { name: "animal",        prefix: "/api/v1/animal",        upstream: upstream("animal", 3082) },
   { name: "building",      prefix: "/api/v1/building",      upstream: upstream("building", 3071) },

@@ -14,6 +14,7 @@ import { registerTenderConsumers } from "./modules/tender/consumer.js";
 import { registerExecutionConsumers } from "./modules/execution/consumer.js";
 import { registerBillingConsumers } from "./modules/billing/consumer.js";
 import { registerContractorConsumers } from "./modules/contractor/consumer.js";
+import { assertPiiKeyConfigured } from "./shared/pii-crypto.js";
 
 const log = pino({ name: "works-worker" });
 
@@ -33,6 +34,9 @@ function assertScannerConfigured(): void {
 }
 
 assertScannerConfigured();
+// SEC-011: fail-fast if PII_ENC_KEY is missing, so the worker never runs
+// fail-open on contractor PAN (DPDP Act) — mirrors procurement-service/worker.ts.
+assertPiiKeyConfigured();
 
 // Wrap queue.subscribe to set tenant context from message
 {

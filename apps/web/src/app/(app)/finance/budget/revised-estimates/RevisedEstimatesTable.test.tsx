@@ -74,4 +74,33 @@ describe("RevisedEstimatesTable — UX-002 (single source of truth for data prov
     expect(screen.queryByText(/Showing saved data/i)).not.toBeInTheDocument();
     expect(screen.getByText("No estimates")).toBeInTheDocument();
   });
+
+  // UX-006: budgetEstimate/revisedEstimate/variancePct are `null` when the
+  // source row was missing BE/RE -- must render "—", never a fabricated
+  // "₹0.00" or "0.0%" that looks like a real zero-value head.
+  it("renders '—' (not ₹0.00 / 0.0%) for a row with missing BE/RE (UX-006)", () => {
+    const rowWithMissingBe: RevisedEstimateRow[] = [
+      {
+        id: "be-2",
+        headCode: "2211",
+        description: "Family Welfare",
+        budgetEstimate: null,
+        revisedEstimate: 50000,
+        variancePct: null,
+        status: "unknown",
+      },
+    ];
+    mockedHook.mockReturnValue({
+      data: rowWithMissingBe as never,
+      fromCache: false,
+      offline: false,
+      cachedAt: null,
+      provenance: "live",
+    } as never);
+    render(<RevisedEstimatesTable estimates={rowWithMissingBe} source="api" />);
+
+    expect(screen.queryByText("₹0.00")).not.toBeInTheDocument();
+    expect(screen.queryByText("0.0%")).not.toBeInTheDocument();
+    expect(screen.getAllByText("—").length).toBeGreaterThanOrEqual(2); // BE cell + Variance % cell
+  });
 });
