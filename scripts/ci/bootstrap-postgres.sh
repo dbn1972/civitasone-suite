@@ -35,7 +35,20 @@ PGDATABASE="${PGDATABASE:-postgres}"
 # See REL-022. Cleaned up on any exit path (success, failure, or early
 # `set -e` abort) via the trap below.
 MIGRATION_OUT="$(mktemp "${TMPDIR:-/tmp}/bootstrap-migration-out.$$.XXXXXX")"
-trap 'rm -f "$MIGRATION_OUT"' EXIT
+# The migration-failure reconciliation block further below (novel/stale
+# ratchet that sets this script's exit code) previously had the SAME
+# problem MIGRATION_OUT above was fixed for, just one stage later in the
+# pipeline: it read and wrote FOUR shared, non-namespaced hardcoded paths
+# (/tmp/bootstrap-failures-{observed,allowed,conditional,allowed-strict}.txt).
+# Two concurrent invocations racing on those files could have one run's
+# exit code and reported novel/stale failures reflect the OTHER run's
+# allow-list/observed-failures state -- the same class of bug as REL-022,
+# left open by the fix above. One PID-scoped directory holds all of this
+# script's own-process scratch files (those four, plus the pg_stat_statements
+# best-effort stderr capture below) so a single trap cleans up everything on
+# any exit path.
+SCRATCH_DIR="$(mktemp -d "${TMPDIR:-/tmp}/bootstrap-scratch.$$.XXXXXX")"
+trap 'rm -f "$MIGRATION_OUT"; rm -rf "$SCRATCH_DIR"' EXIT
 
 echo "Waiting for Postgres at ${PGHOST}:${PGPORT}..."
 for i in $(seq 1 30); do
@@ -91,9 +104,9 @@ psql -h "$PGHOST" -p "$PGPORT" -U "$PGUSER" -d "$PGDATABASE" -v ON_ERROR_STOP=1 
 # this warns and the rest of the bootstrap proceeds exactly as before.
 echo "→ $ROOT/infra/db/bootstrap/bootstrap_pg_stat_statements.sql (best-effort)"
 if ! psql -h "$PGHOST" -p "$PGPORT" -U "$PGUSER" -d "$PGDATABASE" -v ON_ERROR_STOP=1 \
-     -f "$ROOT/infra/db/bootstrap/bootstrap_pg_stat_statements.sql" 2>/tmp/pg-stat-statements-bootstrap.err; then
+     -f "$ROOT/infra/db/bootstrap/bootstrap_pg_stat_statements.sql" 2>"$SCRATCH_DIR/pg-stat-statements-bootstrap.err"; then
   echo "⚠ pg_stat_statements not enabled on this Postgres (shared_preload_libraries not set at server start -- expected on a plain CI service container, see the comment above). Continuing without it:"
-  cat /tmp/pg-stat-statements-bootstrap.err
+  cat "$SCRATCH_DIR/pg-stat-statements-bootstrap.err"
 fi
 
 run_bootstrap "$ROOT/infra/db/bootstrap/bootstrap.generated.sql"
@@ -568,8 +581,8 @@ psql -h "$PGHOST" -p "$PGPORT" -U "$ADMIN_USER" -d civitas_inspection \
 ALLOWLIST="$ROOT/scripts/ci/migration-failure-allowlist.txt"
 
 printf '%s\n' "${MIGRATION_FAILURES[@]+"${MIGRATION_FAILURES[@]}"}" \
-  | awk 'NF' | sort -u > /tmp/bootstrap-failures-observed.txt
-observed_count=$(wc -l < /tmp/bootstrap-failures-observed.txt | tr -d ' ')
+  | awk 'NF' | sort -u > "$SCRATCH_DIR/failures-observed.txt"
+observed_count=$(wc -l < "$SCRATCH_DIR/failures-observed.txt" | tr -d ' ')
 
 if [ "${BOOTSTRAP_WRITE_ALLOWLIST:-0}" = "1" ]; then
   {
@@ -614,7 +627,7 @@ fi
 # failures and genuinely-fixed ordinary entries still ratchet.
 sed 's/#.*//' "$ALLOWLIST" | sed -E 's/^[[:space:]]*CONDITIONAL:[[:space:]]*//' \
   | sed 's/[[:space:]]*$//' | awk 'NF' | sort -u \
-  > /tmp/bootstrap-failures-allowed.txt
+  > "$SCRATCH_DIR/failures-allowed.txt"
 # `|| true` on both greps below for the same pipefail reason as `awk 'NF'`
 # above: with zero CONDITIONAL entries (or, symmetrically, zero non-CONDITIONAL
 # ones), the grep that finds none of them exits 1, and pipefail would fail the
@@ -622,26 +635,26 @@ sed 's/#.*//' "$ALLOWLIST" | sed -E 's/^[[:space:]]*CONDITIONAL:[[:space:]]*//' 
 # completely legitimate here.
 { grep -E '^[[:space:]]*CONDITIONAL:' "$ALLOWLIST" || true; } | sed 's/#.*//' \
   | sed -E 's/^[[:space:]]*CONDITIONAL:[[:space:]]*//' | sed 's/[[:space:]]*$//' \
-  | awk 'NF' | sort -u > /tmp/bootstrap-failures-conditional.txt
+  | awk 'NF' | sort -u > "$SCRATCH_DIR/failures-conditional.txt"
 { grep -vE '^[[:space:]]*CONDITIONAL:' "$ALLOWLIST" || true; } | sed 's/#.*//' \
   | sed 's/[[:space:]]*$//' | awk 'NF' | sort -u \
-  > /tmp/bootstrap-failures-allowed-strict.txt
+  > "$SCRATCH_DIR/failures-allowed-strict.txt"
 
-novel=$(comm -23 /tmp/bootstrap-failures-observed.txt /tmp/bootstrap-failures-allowed.txt)
-stale=$(comm -13 /tmp/bootstrap-failures-observed.txt /tmp/bootstrap-failures-allowed-strict.txt)
+novel=$(comm -23 "$SCRATCH_DIR/failures-observed.txt" "$SCRATCH_DIR/failures-allowed.txt")
+stale=$(comm -13 "$SCRATCH_DIR/failures-observed.txt" "$SCRATCH_DIR/failures-allowed-strict.txt")
 
 echo "──────────────────────────────────────────────────────────────"
-echo "  Migration failures: ${observed_count} observed, $(wc -l < /tmp/bootstrap-failures-allowed.txt | tr -d ' ') allow-listed"
+echo "  Migration failures: ${observed_count} observed, $(wc -l < "$SCRATCH_DIR/failures-allowed.txt" | tr -d ' ') allow-listed"
 
-if [ -s /tmp/bootstrap-failures-conditional.txt ]; then
+if [ -s "$SCRATCH_DIR/failures-conditional.txt" ]; then
   echo "  ℹ extension-conditional (excluded from the ratchet, expected to vary by image):"
   while IFS= read -r entry; do
-    if grep -qxF "$entry" /tmp/bootstrap-failures-observed.txt; then
+    if grep -qxF "$entry" "$SCRATCH_DIR/failures-observed.txt"; then
       echo "      ${entry} — failed this run (expected without the extension)"
     else
       echo "      ${entry} — passed this run (expected with the extension)"
     fi
-  done < /tmp/bootstrap-failures-conditional.txt
+  done < "$SCRATCH_DIR/failures-conditional.txt"
 fi
 
 rc=0
