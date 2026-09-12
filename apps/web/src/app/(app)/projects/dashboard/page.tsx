@@ -1,4 +1,3 @@
-import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { getProjectsDashboard, getProjects, getSchemes } from "../../../_data/loaders";
 import {
   PageHeader,
@@ -6,9 +5,11 @@ import {
   StatCard,
   Card,
   EmptyState,
+  RefreshErrorState,
 } from "@/app/_components/ds";
 import { formatMoney } from "@/lib/formatters";
 import { DashboardProjectsTable, type DashboardProjectRow } from "./DashboardProjectsTable";
+import { toHumanError } from "@/lib/messages";
 
 export default async function ProjectsDashboardPage() {
   const [dashResult, projResult, schemeResult] = await Promise.all([
@@ -20,6 +21,9 @@ export default async function ProjectsDashboardPage() {
   const { data, source } = dashResult;
   const projects = projResult.data;
   const schemes = schemeResult.data;
+  // UX-013: this was already checking all 3 sources (unlike the disbursement
+  // page's equivalent flag) -- it just wasn't wired to anything before. Now
+  // it gates both the stat cards and the Projects table's empty-check.
   const anyError =
     source === "error" || projResult.source === "error" || schemeResult.source === "error";
 
@@ -43,25 +47,28 @@ export default async function ProjectsDashboardPage() {
         title="PMU Dashboard"
         subtitle="Real-time project monitoring — schemes, funds and delays."
       />
-      {anyError && <DataSourceBadge source="error" />}
       <StatGrid>
-        <StatCard icon="🏛️" iconBg="#eef0fe" label="Schemes" value={schemes.length} />
-        <StatCard icon="📁" iconBg="#eff6ff" label="Projects" value={data.totalProjects.toLocaleString("en-IN")} />
+        <StatCard icon="🏛️" iconBg="#eef0fe" label="Schemes" value={anyError ? "—" : schemes.length} />
+        <StatCard icon="📁" iconBg="#eff6ff" label="Projects" value={anyError ? "—" : data.totalProjects.toLocaleString("en-IN")} />
         <StatCard
           icon="💰"
           iconBg="#ecfdf3"
           label="Outlay (FY)"
-          value={`₹${outlayInCrores.toLocaleString("en-IN")} Cr`}
+          value={anyError ? "—" : `₹${outlayInCrores.toLocaleString("en-IN")} Cr`}
         />
         <StatCard
           icon="🔴"
           iconBg="#fef3f2"
           label="Delayed (Red)"
-          value={data.delayed.toLocaleString("en-IN")}
+          value={anyError ? "—" : data.delayed.toLocaleString("en-IN")}
         />
       </StatGrid>
       <Card title="Projects">
-        {rows.length === 0 ? (
+        {anyError ? (
+          <div className="pad">
+            <RefreshErrorState error={toHumanError("load", { area: "projects" })} />
+          </div>
+        ) : rows.length === 0 ? (
           <EmptyState
             icon="📁"
             title="No projects yet"

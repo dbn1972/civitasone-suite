@@ -64,6 +64,14 @@ describe("PayrollRunsPage", () => {
     const ui = await PayrollRunsPage();
     render(ui);
 
-    expect(screen.getByText("Couldn't load payroll runs — showing nothing")).toBeInTheDocument();
+    // UX-013: this page used to show the exact same "showing nothing" badge
+    // whether the fetch failed or a tenant genuinely had zero runs, with the
+    // "No payroll runs found" / "Create first run" prompt rendered
+    // underneath either way. A real fetch failure now shows the
+    // RefreshErrorState contract (retry/back/help) instead, and the
+    // tenant-facing create-your-first-run prompt no longer appears for an
+    // outage it has nothing to do with.
+    expect(screen.getByText("We couldn't load this payroll runs.")).toBeInTheDocument();
+    expect(screen.queryByText("No payroll runs found.")).not.toBeInTheDocument();
   });
 });

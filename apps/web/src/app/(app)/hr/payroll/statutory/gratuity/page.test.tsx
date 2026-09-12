@@ -30,10 +30,15 @@ describe("GratuityPage", () => {
     expect(screen.getByText("No gratuity records")).toBeInTheDocument();
   });
 
-  it("shows the saved-information badge when the loader errors", async () => {
+  it("shows the error state — not the honest-empty prompt — when the loader errors", async () => {
+    // UX-013: replaces the old floating "Couldn't load — showing nothing"
+    // badge, which coexisted with (and never gated) the register's own
+    // .length === 0 check below it — a real outage and a tenant with zero
+    // gratuity records rendered the same "No gratuity records" prompt.
     fetchJsonMock.mockResolvedValue({ data: [], source: "error" });
     const ui = await GratuityPage();
     render(ui);
-    expect(screen.getByText("Couldn't load — showing nothing")).toBeInTheDocument();
+    expect(screen.getByText("We couldn't load this gratuity records.")).toBeInTheDocument();
+    expect(screen.queryByText("No gratuity records")).not.toBeInTheDocument();
   });
 });

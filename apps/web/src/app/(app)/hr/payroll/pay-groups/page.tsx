@@ -1,8 +1,9 @@
-import { PageHeader, StatGrid, StatCard, Card, EmptyState } from "../../../../_components/ds";
-import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
+import { PageHeader, StatGrid, StatCard, Card, EmptyState, RefreshErrorState } from "../../../../_components/ds";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import { CreatePayGroupForm } from "./CreatePayGroupForm";
 import { PayGroupCard } from "./PayGroupCard";
+import { useResource } from "@/app/_data/useResource";
+import { toHumanError } from "@/lib/messages";
 
 type Row = {
   id: string;
@@ -27,12 +28,14 @@ async function getData(): Promise<LoaderResult<Row[]>> {
 }
 
 export default async function PayGroupsPage() {
-  const { data: groups, source } = await getData();
+  const result = await getData();
+  const { data: groups } = result;
+  const resource = useResource(result);
+  const errored = resource.status === "error";
 
-  const activeCount = groups.filter((g) => g.status === "active").length;
-  const monthlyCount = groups.filter((g) => g.frequency === "monthly").length;
-  const inactiveCount = groups.filter((g) => g.status !== "active").length;
-  const totalEmployees = groups.reduce((s, g) => s + (Number(g.employeeCount) || 0), 0);
+  const activeCount = errored ? null : groups.filter((g) => g.status === "active").length;
+  const monthlyCount = errored ? null : groups.filter((g) => g.frequency === "monthly").length;
+  const inactiveCount = errored ? null : groups.filter((g) => g.status !== "active").length;
 
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
@@ -41,18 +44,23 @@ export default async function PayGroupsPage() {
         subtitle="Groups of employees paid on a common schedule (monthly, bi-weekly, or weekly)."
         back="/hr/payroll"
       />
-      <DataSourceBadge source={source} message="Couldn't load — showing nothing" />
 
       <StatGrid>
-        <StatCard icon="👥" iconBg="var(--infobg)" label="Total Pay Groups" value={groups.length} />
-        <StatCard icon="✅" iconBg="var(--goodbg)" label="Active" value={activeCount} />
-        <StatCard icon="📅" iconBg="var(--warnbg)" label="Monthly Groups" value={monthlyCount} />
-        <StatCard icon="⏸️" iconBg="var(--panel)" label="Inactive" value={inactiveCount} />
+        <StatCard icon="👥" iconBg="var(--infobg)" label="Total Pay Groups" value={errored ? "—" : groups.length} />
+        <StatCard icon="✅" iconBg="var(--goodbg)" label="Active" value={activeCount ?? "—"} />
+        <StatCard icon="📅" iconBg="var(--warnbg)" label="Monthly Groups" value={monthlyCount ?? "—"} />
+        <StatCard icon="⏸️" iconBg="var(--panel)" label="Inactive" value={inactiveCount ?? "—"} />
       </StatGrid>
 
       <CreatePayGroupForm />
 
-      {groups.length === 0 ? (
+      {errored ? (
+        <Card title="Pay Groups">
+          <div className="pad">
+            <RefreshErrorState error={toHumanError("load", { area: "pay groups" })} backHref="/hr/payroll" />
+          </div>
+        </Card>
+      ) : groups.length === 0 ? (
         <Card title="Pay Groups">
           <EmptyState
             icon="👥"

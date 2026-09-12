@@ -1,10 +1,10 @@
-import { PageHeader, StatGrid, StatCard, Card, EmptyState } from "../../../../_components/ds";
+import { PageHeader, StatGrid, StatCard, Card, EmptyState, RefreshErrorState } from "../../../../_components/ds";
 import { SkeletonTable } from "../../../../_components/ds";
-import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import { CreateStructureForm } from "./CreateStructureForm";
 import { SalaryStructureCard } from "./SalaryStructureCard";
 import { ComponentGrid } from "./ComponentGrid";
+import { toHumanError } from "@/lib/messages";
 
 type Row = {
   id: string;
@@ -43,11 +43,17 @@ async function getComponents(): Promise<LoaderResult<ComponentRow[]>> {
 }
 
 export default async function PayStructuresPage() {
-  const [{ data: structures, source: structuresSource }, { data: rawComponents, source: componentsSource }] =
-    await Promise.all([getData(), getComponents()]);
+  const [structuresResult, componentsResult] = await Promise.all([getData(), getComponents()]);
+  const { data: structures, source: structuresSource } = structuresResult;
+  const { data: rawComponents, source: componentsSource } = componentsResult;
 
-  const active = structures.filter((s) => s.status === "active").length;
-  const defaultCount = structures.filter((s) => s.isDefault).length;
+  // Independent loaders, independently gated: a components-endpoint outage
+  // must not blank out the structures list (and vice versa).
+  const structuresErrored = structuresSource === "error";
+  const componentsErrored = componentsSource === "error";
+
+  const active = structuresErrored ? null : structures.filter((s) => s.status === "active").length;
+  const defaultCount = structuresErrored ? null : structures.filter((s) => s.isDefault).length;
 
   const componentsByStructure = rawComponents.reduce<Record<string, ComponentRow[]>>((acc, c) => {
     const key = c.structureId ?? "__unassigned__";
@@ -56,8 +62,6 @@ export default async function PayStructuresPage() {
     return acc;
   }, {});
 
-  const hasError = structuresSource === "error" || componentsSource === "error";
-
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
@@ -65,18 +69,22 @@ export default async function PayStructuresPage() {
         subtitle="Define earning and deduction components that make up an employee's pay."
         back="/hr/payroll"
       />
-      {hasError && <DataSourceBadge source="error" message="Couldn't load — showing nothing" />}
-
       <StatGrid>
-        <StatCard icon="🧱" iconBg="var(--infobg)" label="Total Structures" value={structures.length} />
-        <StatCard icon="✅" iconBg="var(--goodbg)" label="Active" value={active} />
-        <StatCard icon="⭐" iconBg="var(--warnbg)" label="Default" value={defaultCount} />
-        <StatCard icon="🧩" iconBg="var(--panel)" label="Components" value={rawComponents.length} />
+        <StatCard icon="🧱" iconBg="var(--infobg)" label="Total Structures" value={structuresErrored ? "—" : structures.length} />
+        <StatCard icon="✅" iconBg="var(--goodbg)" label="Active" value={active ?? "—"} />
+        <StatCard icon="⭐" iconBg="var(--warnbg)" label="Default" value={defaultCount ?? "—"} />
+        <StatCard icon="🧩" iconBg="var(--panel)" label="Components" value={componentsErrored ? "—" : rawComponents.length} />
       </StatGrid>
 
       <CreateStructureForm />
 
-      {structures.length === 0 ? (
+      {structuresErrored ? (
+        <Card title="Pay Structures">
+          <div className="pad">
+            <RefreshErrorState error={toHumanError("load", { area: "pay structures" })} backHref="/hr/payroll" />
+          </div>
+        </Card>
+      ) : structures.length === 0 ? (
         <Card title="Pay Structures">
           <EmptyState
             icon="🧱"
