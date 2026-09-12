@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useTranslations } from "next-intl";
 
 const inputStyle = { width: "100%", padding: 8, minHeight: 44, marginBottom: 8, borderRadius: 8, border: "1px solid var(--line)" } as const;
 const labelStyle = { display: "block", fontSize: 12, color: "var(--muted)", marginBottom: 4, fontWeight: 600 } as const;
@@ -20,6 +21,7 @@ interface VerifyResult {
  * token embedded in the certificate's QR code to confirm authenticity.
  */
 export function CertificateVerify() {
+  const t = useTranslations("citizenCertificates");
   const [token, setToken] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -45,11 +47,11 @@ export function CertificateVerify() {
   return (
     <div className="card">
       <form onSubmit={verify} className="pad" style={{ maxWidth: 620 }}>
-        <h4 style={{ marginTop: 0 }}>Verify a certificate</h4>
-        <label htmlFor="verify-token" style={labelStyle}>Verification token (from QR code)</label>
-        <input id="verify-token" value={token} onChange={(e) => setToken(e.target.value)} style={inputStyle} placeholder="paste token" />
+        <h4 style={{ marginTop: 0 }}>{t("verifyFormTitle")}</h4>
+        <label htmlFor="verify-token" style={labelStyle}>{t("verifyTokenLabel")}</label>
+        <input id="verify-token" value={token} onChange={(e) => setToken(e.target.value)} style={inputStyle} placeholder={t("verifyTokenPlaceholder")} />
         <button type="submit" className="btn primary" style={{ minHeight: 44 }} disabled={busy || !token}>
-          {busy ? "Verifying…" : "Verify"}
+          {busy ? t("verifying") : t("verify")}
         </button>
         {error ? <p role="alert" style={{ color: "#b42318", fontSize: 13 }}>{error}</p> : null}
       </form>
@@ -61,11 +63,11 @@ export function CertificateVerify() {
           </div>
           {result.found ? (
             <dl style={{ fontSize: 13, marginTop: 12 }}>
-              <div><strong>Number:</strong> {result.certNo}</div>
-              <div><strong>Type:</strong> {result.certType}</div>
-              <div><strong>Status:</strong> {result.status}</div>
-              <div><strong>Valid to:</strong> {result.validTo || "—"}</div>
-              <div style={{ wordBreak: "break-all" }}><strong>Payload hash:</strong> {result.payloadHash}</div>
+              <div><strong>{t("resultNumber")}</strong> {result.certNo}</div>
+              <div><strong>{t("resultType")}</strong> {result.certType}</div>
+              <div><strong>{t("resultStatus")}</strong> {result.status}</div>
+              <div><strong>{t("resultValidTo")}</strong> {result.validTo || "—"}</div>
+              <div style={{ wordBreak: "break-all" }}><strong>{t("resultPayloadHash")}</strong> {result.payloadHash}</div>
             </dl>
           ) : null}
         </div>

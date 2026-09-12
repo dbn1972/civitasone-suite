@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useTranslations } from "next-intl";
 
 const inputStyle = { width: "100%", padding: 8, minHeight: 44, marginBottom: 8, borderRadius: 8, border: "1px solid var(--line)" } as const;
 const labelStyle = { display: "block", fontSize: 12, color: "var(--muted)", marginBottom: 4, fontWeight: 600 } as const;
@@ -11,6 +12,7 @@ interface Uploaded { id: string; verificationStatus: string; providerStatus?: st
 
 /** SVC-084 — upload / DigiLocker fetch + required-document checklist. */
 export function DocumentPanel() {
+  const t = useTranslations("citizenDocuments");
   const [serviceId, setServiceId] = useState("");
   const [applicationId, setApplicationId] = useState("");
   const [docType, setDocType] = useState("");
@@ -50,16 +52,16 @@ export function DocumentPanel() {
     <div style={{ display: "grid", gap: 16 }}>
       <div className="card">
         <div className="pad" style={{ maxWidth: 640 }}>
-          <h4 style={{ marginTop: 0 }}>Submit a document</h4>
-          <label htmlFor="d-svc" style={labelStyle}>Service ID (UUID)</label>
+          <h4 style={{ marginTop: 0 }}>{t("submitFormTitle")}</h4>
+          <label htmlFor="d-svc" style={labelStyle}>{t("serviceIdLabel")}</label>
           <input id="d-svc" value={serviceId} onChange={(e) => setServiceId(e.target.value)} style={inputStyle} />
-          <label htmlFor="d-app" style={labelStyle}>Application ID (UUID, optional)</label>
+          <label htmlFor="d-app" style={labelStyle}>{t("applicationIdLabel")}</label>
           <input id="d-app" value={applicationId} onChange={(e) => setApplicationId(e.target.value)} style={inputStyle} />
-          <label htmlFor="d-type" style={labelStyle}>Document type</label>
-          <input id="d-type" value={docType} onChange={(e) => setDocType(e.target.value)} style={inputStyle} placeholder="id_proof" />
+          <label htmlFor="d-type" style={labelStyle}>{t("docTypeLabel")}</label>
+          <input id="d-type" value={docType} onChange={(e) => setDocType(e.target.value)} style={inputStyle} placeholder={t("docTypePlaceholder")} />
           <div style={{ display: "flex", gap: 8 }}>
-            <button type="button" className="btn primary" style={{ minHeight: 44 }} disabled={busy || !docType || !serviceId} onClick={() => upload("upload")}>Upload</button>
-            <button type="button" className="btn" style={{ minHeight: 44 }} disabled={busy || !docType || !serviceId} onClick={() => upload("digilocker")}>Fetch from DigiLocker</button>
+            <button type="button" className="btn primary" style={{ minHeight: 44 }} disabled={busy || !docType || !serviceId} onClick={() => upload("upload")}>{t("upload")}</button>
+            <button type="button" className="btn" style={{ minHeight: 44 }} disabled={busy || !docType || !serviceId} onClick={() => upload("digilocker")}>{t("fetchDigilocker")}</button>
           </div>
           {uploaded ? (
             <div className="pad" style={{ marginTop: 12, background: "var(--surface, #f8fafc)", borderRadius: 8, fontSize: 13 }}>
@@ -73,8 +75,8 @@ export function DocumentPanel() {
 
       <div className="card">
         <form onSubmit={loadChecklist} className="pad" style={{ maxWidth: 640 }}>
-          <h4 style={{ marginTop: 0 }}>Required-document checklist</h4>
-          <button type="submit" className="btn" style={{ minHeight: 44 }} disabled={busy || !serviceId}>Load checklist</button>
+          <h4 style={{ marginTop: 0 }}>{t("checklistTitle")}</h4>
+          <button type="submit" className="btn" style={{ minHeight: 44 }} disabled={busy || !serviceId}>{t("loadChecklist")}</button>
           {checklist ? (
             <div style={{ marginTop: 12 }}>
               <div style={{ fontSize: 12, color: "var(--muted)", marginBottom: 8 }}>

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useTranslations } from "next-intl";
 
 const inputStyle = { width: "100%", padding: 8, minHeight: 44, marginBottom: 8, borderRadius: 8, border: "1px solid var(--line)" } as const;
 const labelStyle = { display: "block", fontSize: 12, color: "var(--muted)", marginBottom: 4, fontWeight: 600 } as const;
@@ -9,6 +10,7 @@ interface Filed { id: string; status: string; filingDeadline: string }
 
 /** SVC-089 — file an appeal against a decision within the filing window. */
 export function AppealPanel() {
+  const t = useTranslations("citizenAppeals");
   const [applicationId, setApplicationId] = useState("");
   const [grounds, setGrounds] = useState("");
   const [decisionDate, setDecisionDate] = useState("");
@@ -37,17 +39,17 @@ export function AppealPanel() {
   return (
     <div className="card">
       <form onSubmit={file} className="pad" style={{ maxWidth: 640 }}>
-        <h4 style={{ marginTop: 0 }}>File an appeal</h4>
-        <label htmlFor="ap-app" style={labelStyle}>Application ID (UUID, optional)</label>
+        <h4 style={{ marginTop: 0 }}>{t("formTitle")}</h4>
+        <label htmlFor="ap-app" style={labelStyle}>{t("applicationId")}</label>
         <input id="ap-app" value={applicationId} onChange={(e) => setApplicationId(e.target.value)} style={inputStyle} />
-        <label htmlFor="ap-date" style={labelStyle}>Decision date</label>
+        <label htmlFor="ap-date" style={labelStyle}>{t("decisionDate")}</label>
         <input id="ap-date" type="date" value={decisionDate} onChange={(e) => setDecisionDate(e.target.value)} style={inputStyle} />
-        <label htmlFor="ap-win" style={labelStyle}>Filing window (days)</label>
+        <label htmlFor="ap-win" style={labelStyle}>{t("filingWindow")}</label>
         <input id="ap-win" type="number" value={windowDays} onChange={(e) => setWindowDays(e.target.value)} style={inputStyle} />
-        <label htmlFor="ap-grounds" style={labelStyle}>Grounds for appeal</label>
+        <label htmlFor="ap-grounds" style={labelStyle}>{t("grounds")}</label>
         <textarea id="ap-grounds" value={grounds} onChange={(e) => setGrounds(e.target.value)} style={{ ...inputStyle, minHeight: 96 }} />
         <button type="submit" className="btn primary" style={{ minHeight: 44 }} disabled={busy || !grounds || !decisionDate}>
-          {busy ? "Filing…" : "File appeal"}
+          {busy ? t("filing") : t("submit")}
         </button>
         {filed ? (
           <div role="status" className="pad" style={{ marginTop: 12, background: "#ecfdf3", borderRadius: 8 }}>

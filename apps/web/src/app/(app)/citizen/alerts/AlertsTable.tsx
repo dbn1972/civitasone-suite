@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
+import { useTranslations } from "next-intl";
 import { Card, DataTable, EmptyState } from "../../../_components/ds";
 import { useSeededResource } from "@/lib/sync/resource";
 import type { CitizenAlert } from "../../../_data/loaders";
@@ -15,6 +16,7 @@ type AlertRow = {
 } & Record<string, unknown>;
 
 export function AlertsTable({ alerts, source = "api" }: { alerts: CitizenAlert[]; source?: "api" | "error" }) {
+  const t = useTranslations("citizenAlerts");
   const { data: rows, fromCache, offline, cachedAt } = useSeededResource<CitizenAlert[]>(
     "citizen.alerts",
     alerts,
@@ -41,29 +43,29 @@ export function AlertsTable({ alerts, source = "api" }: { alerts: CitizenAlert[]
       : null;
 
   return (
-    <Card title="Alerts & Notifications">
+    <Card title={t("tableTitle")}>
       {cacheNote ? (
         <p role="status" aria-live="polite" style={{ fontSize: 12, color: "#92400e", margin: "0", padding: "8px 16px 0" }}>
           {cacheNote}
         </p>
       ) : null}
       {tableRows.length === 0 ? (
-        <EmptyState icon="🔔" title="No alerts published" message="Public alerts and notifications will appear here once published." />
+        <EmptyState icon="🔔" title={t("emptyTitle")} message={t("emptyMessage")} />
       ) : (
         <DataTable<AlertRow>
           rows={tableRows}
           sortable
           filterable
-          filterPlaceholder="Search title, category, audience…"
+          filterPlaceholder={t("filterPlaceholder")}
           pageSize={15}
           exportable
           exportFilename="citizen-alerts"
           columns={[
-            { key: "title", label: "Title" },
-            { key: "category", label: "Category" },
-            { key: "publishedDate", label: "Published" },
-            { key: "targetAudience", label: "Target Audience" },
-            { key: "status", label: "Status", cellType: "status" },
+            { key: "title", label: t("colTitle") },
+            { key: "category", label: t("colCategory") },
+            { key: "publishedDate", label: t("colPublished") },
+            { key: "targetAudience", label: t("colAudience") },
+            { key: "status", label: t("colStatus"), cellType: "status" },
           ]}
         />
       )}

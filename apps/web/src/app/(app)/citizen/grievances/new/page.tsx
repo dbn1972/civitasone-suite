@@ -3,18 +3,12 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { useTranslations } from "next-intl";
 import { PageHeader } from "../../../../_components/ds";
 import { useFormError } from "@/lib/useFormError";
 
-const CATEGORIES = [
-  { value: "service_delivery", label: "Service Delivery" },
-  { value: "corruption", label: "Corruption" },
-  { value: "personnel", label: "Personnel" },
-  { value: "infrastructure", label: "Infrastructure" },
-  { value: "other", label: "Other" },
-] as const;
-
 export default function RegisterGrievancePage() {
+  const t = useTranslations("grievances");
   const router = useRouter();
   const [subject, setSubject] = useState("");
   const [description, setDescription] = useState("");
@@ -25,6 +19,14 @@ export default function RegisterGrievancePage() {
   /** Client-authored copy for pre-submit validation (field presence, consent gate) — never server text. */
   const [message, setMessage] = useState("");
   const formError = useFormError("grievance");
+
+  const CATEGORIES = [
+    { value: "service_delivery", label: "Service Delivery" },
+    { value: "corruption", label: "Corruption" },
+    { value: "personnel", label: "Personnel" },
+    { value: "infrastructure", label: "Infrastructure" },
+    { value: "other", label: "Other" },
+  ] as const;
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -69,8 +71,8 @@ export default function RegisterGrievancePage() {
   return (
     <>
       <PageHeader
-        title="Register Grievance"
-        subtitle="File a new grievance under the CPGRAMS-style system. Response within 30 days."
+        title={t("registerFormTitle")}
+        subtitle={t("registerFormSubtitle")}
         back="/citizen/grievances"
         backLabel="Grievances"
       />
@@ -83,7 +85,7 @@ export default function RegisterGrievancePage() {
         <div className="fields">
           <div className="field" style={{ gridColumn: "1 / -1", background: "#fff", padding: "13px 16px" }}>
             <label className="label" htmlFor="applicantName">
-              Applicant name *
+              {t("applicantNameLabel")}
             </label>
             <input
               id="applicantName"
@@ -92,7 +94,7 @@ export default function RegisterGrievancePage() {
               onChange={(e) => setApplicantName(e.target.value)}
               required
               style={{ minHeight: 44 }}
-              placeholder="Full name of the complainant"
+              placeholder={t("applicantNamePlaceholder")}
             />
             {formError.fieldError("complainantName") && (
               <span style={{ fontSize: 12, color: "var(--bad)" }}>{formError.fieldError("complainantName")}</span>
@@ -100,7 +102,7 @@ export default function RegisterGrievancePage() {
           </div>
           <div className="field" style={{ background: "#fff", padding: "13px 16px" }}>
             <label className="label" htmlFor="category">
-              Category *
+              {t("categoryLabel")}
             </label>
             <select
               id="category"
@@ -122,7 +124,7 @@ export default function RegisterGrievancePage() {
           </div>
           <div className="field" style={{ background: "#fff", padding: "13px 16px" }}>
             <label className="label" htmlFor="subject">
-              Subject *
+              {t("subjectLabel")}
             </label>
             <input
               id="subject"
@@ -131,7 +133,7 @@ export default function RegisterGrievancePage() {
               onChange={(e) => setSubject(e.target.value)}
               required
               style={{ minHeight: 44 }}
-              placeholder="Brief description of the grievance"
+              placeholder={t("subjectPlaceholder")}
             />
             {formError.fieldError("subject") && (
               <span style={{ fontSize: 12, color: "var(--bad)" }}>{formError.fieldError("subject")}</span>
@@ -142,7 +144,7 @@ export default function RegisterGrievancePage() {
             style={{ gridColumn: "1 / -1", background: "#fff", padding: "13px 16px" }}
           >
             <label className="label" htmlFor="description">
-              Description *
+              {t("descriptionLabel")}
             </label>
             <textarea
               id="description"
@@ -151,7 +153,7 @@ export default function RegisterGrievancePage() {
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               required
-              placeholder="Provide full details of the grievance, including dates and parties involved."
+              placeholder={t("descriptionPlaceholder")}
             />
             {formError.fieldError("description") && (
               <span style={{ fontSize: 12, color: "var(--bad)" }}>{formError.fieldError("description")}</span>
@@ -175,16 +177,18 @@ export default function RegisterGrievancePage() {
             id="dpdp-notice-heading"
             style={{ margin: "0 0 6px 0", fontWeight: 600, fontSize: "0.875rem", color: "#7a5200" }}
           >
-            Data Protection Notice — DPDP Act 2023
+            {t("dpdpNoticeTitle")}
           </p>
           <p style={{ margin: "0 0 10px 0", fontSize: "0.8125rem", color: "#5c4000", lineHeight: 1.5 }}>
-            Your personal data (name, contact details, and grievance description) will be processed
-            solely for grievance redressal as authorised under{" "}
-            <strong>Section 4(a) of the Digital Personal Data Protection Act, 2023</strong>. It will
-            be retained for <strong>180 days</strong> from the date of resolution and may be shared
-            with the concerned government department or statutory body for redressal purposes only.
-            You may withdraw consent at any time by contacting{" "}
-            <a href="mailto:dpo@gov.in" style={{ color: "#7a5200" }}>dpo@gov.in</a>.
+            {t.rich("dpdpNoticeBody", {
+              section: (chunks) => <strong>{chunks}</strong>,
+              days: (chunks) => <strong>{chunks}</strong>,
+              email: (chunks) => (
+                <a href="mailto:dpo@gov.in" style={{ color: "#7a5200" }}>
+                  {chunks}
+                </a>
+              ),
+            })}
           </p>
           <label
             style={{
@@ -212,8 +216,7 @@ export default function RegisterGrievancePage() {
               style={{ marginTop: 3, width: 18, height: 18, flexShrink: 0, cursor: "pointer" }}
             />
             <span id="dpdp-consent-desc">
-              I consent to the processing of my personal data for grievance redressal as per{" "}
-              <strong>DPDP Act 2023 §4(a)</strong>. *
+              {t.rich("consentCheckboxLabel", { short: (chunks) => <strong>{chunks}</strong> })}
             </span>
           </label>
         </div>
@@ -246,10 +249,10 @@ export default function RegisterGrievancePage() {
             disabled={!dpdpConsent || status === "submitting"}
             aria-disabled={!dpdpConsent || status === "submitting"}
           >
-            {status === "submitting" ? "Submitting…" : "Register grievance"}
+            {status === "submitting" ? t("submitting") : t("registerButton")}
           </button>
           <Link href="/citizen/grievances" className="btn ghost" style={{ minHeight: 44 }}>
-            Cancel
+            {t("cancel")}
           </Link>
         </div>
       </form>

@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { useTranslations } from "next-intl";
 import { StatusPill } from "@/app/_components/ds";
 import type { PublishedServiceRuntime } from "../_data/runtimeApi";
 import { channelDisabledMessage, formatFee, isChannelAllowed, listDraftsForService } from "../_data/runtimeApi";
@@ -11,15 +12,15 @@ interface Props {
   counterMode?: boolean;
 }
 
-const CHANNEL_LABELS: Record<string, string> = {
-  portal: "Portal",
-  mobile: "Mobile",
-  counter: "Counter / CSC",
-  whatsapp: "WhatsApp",
-  api: "API",
-};
-
 export function ServicePageClient({ service, counterMode = false }: Props) {
+  const t = useTranslations("citizenServices");
+  const CHANNEL_LABELS: Record<string, string> = {
+    portal: t("channelPortal"),
+    mobile: t("channelMobile"),
+    counter: t("channelCounter"),
+    whatsapp: t("channelWhatsapp"),
+    api: t("channelApi"),
+  };
   const [draftBanner, setDraftBanner] = useState<string | null>(null);
   const channel = counterMode ? "counter" : "portal";
   const channelOk = isChannelAllowed(service.channels, channel);
@@ -42,7 +43,7 @@ export function ServicePageClient({ service, counterMode = false }: Props) {
       ) : null}
 
       <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
-        <StatusPill status="published" label="Open for applications" />
+        <StatusPill status="published" label={t("openForApplications")} />
         {service.channels.map((ch) => (
           <span
             key={ch}
@@ -69,31 +70,30 @@ export function ServicePageClient({ service, counterMode = false }: Props) {
         }}
       >
         <div>
-          <dt style={{ fontSize: 12, color: "var(--mut)", margin: 0 }}>Fee</dt>
+          <dt style={{ fontSize: 12, color: "var(--mut)", margin: 0 }}>{t("fee")}</dt>
           <dd style={{ margin: "4px 0 0", fontSize: 18, fontWeight: 700 }}>
             {formatFee(service.feeFromMinor, service.feeCurrency)}
           </dd>
         </div>
         <div>
-          <dt style={{ fontSize: 12, color: "var(--mut)", margin: 0 }}>Time to decide</dt>
+          <dt style={{ fontSize: 12, color: "var(--mut)", margin: 0 }}>{t("timeToDecide")}</dt>
           <dd style={{ margin: "4px 0 0", fontSize: 18, fontWeight: 700 }}>
             {service.slaDays
               ? `${service.slaDays} working day${service.slaDays === 1 ? "" : "s"}`
-              : "As per office schedule"}
+              : t("asPerOfficeSchedule")}
           </dd>
         </div>
       </dl>
 
       {service.slaDays ? (
         <p style={{ margin: 0, fontSize: 13, color: "var(--ink2)" }}>
-          SLA promise: offices aim to decide within <strong>{service.slaDays} working days</strong> of
-          submission (counted from the day your application is received).
+          {t("slaPromise", { days: service.slaDays })}
         </p>
       ) : null}
 
       {service.requiredDocuments.length > 0 ? (
         <div>
-          <strong style={{ fontSize: 14 }}>Documents needed</strong>
+          <strong style={{ fontSize: 14 }}>{t("documentsNeeded")}</strong>
           <ul style={{ listStyle: "none", margin: "10px 0 0", padding: 0, display: "grid", gap: 8 }}>
             {service.requiredDocuments.map((d) => (
               <li
@@ -127,10 +127,10 @@ export function ServicePageClient({ service, counterMode = false }: Props) {
                         borderRadius: 4,
                       }}
                     >
-                      Required
+                      {t("required")}
                     </span>
                   ) : (
-                    <span style={{ marginLeft: 8, fontSize: 11, color: "var(--mut)" }}>Optional</span>
+                    <span style={{ marginLeft: 8, fontSize: 11, color: "var(--mut)" }}>{t("optional")}</span>
                   )}
                 </span>
               </li>
@@ -139,7 +139,7 @@ export function ServicePageClient({ service, counterMode = false }: Props) {
         </div>
       ) : (
         <p style={{ margin: 0, fontSize: 13, color: "var(--mut)" }}>
-          No documents are required to start — the office may ask for evidence during review.
+          {t("noDocumentsNeeded")}
         </p>
       )}
 
@@ -156,7 +156,7 @@ export function ServicePageClient({ service, counterMode = false }: Props) {
         >
           Continue where you left off —{" "}
           <Link href={applyHref} style={{ fontWeight: 600, color: "var(--warn-fg)" }}>
-            Resume draft
+            {t("resumeDraft")}
           </Link>
         </div>
       ) : null}
@@ -168,11 +168,11 @@ export function ServicePageClient({ service, counterMode = false }: Props) {
           className="btn primary"
           style={{ minHeight: 44, textAlign: "center", fontSize: 16 }}
         >
-          {draftBanner ? "Resume application" : "Apply now"}
+          {draftBanner ? t("resumeApplication") : t("applyNow")}
         </Link>
       ) : (
         <button type="button" className="btn primary" style={{ minHeight: 44 }} disabled aria-disabled="true">
-          Apply now
+          {t("applyNow")}
         </button>
       )}
     </div>

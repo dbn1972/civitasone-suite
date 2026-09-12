@@ -1,6 +1,7 @@
 "use client";
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { PageHeader, EmptyState, StatusPill, ActionButton } from "@/app/_components/ds";
 import { formatIndianDate } from "@/lib/formatters";
 
@@ -29,6 +30,7 @@ const inputStyle = { width: "100%", padding: 8, minHeight: 44, marginBottom: 8, 
 const labelStyle = { display: "block", fontSize: 12, color: "var(--muted)", marginBottom: 4, fontWeight: 600 } as const;
 
 export function RequestDetailClient({ id }: { id: string }) {
+  const t = useTranslations("citizenRequests");
   const router = useRouter();
   const [grievance, setGrievance] = useState<Grievance | null>(null);
   const [loading, setLoading] = useState(true);
@@ -114,8 +116,8 @@ export function RequestDetailClient({ id }: { id: string }) {
   if (loading) {
     return (
       <>
-        <PageHeader title="Service Request" back="/citizen/requests" backLabel="Service Requests" />
-        <p role="status" aria-live="polite" className="pad" style={{ color: "var(--muted)" }}>Loading request…</p>
+        <PageHeader title={t("detailTitle")} back="/citizen/requests" backLabel={t("detailBack")} />
+        <p role="status" aria-live="polite" className="pad" style={{ color: "var(--muted)" }}>{t("loadingDetail")}</p>
       </>
     );
   }
@@ -123,10 +125,10 @@ export function RequestDetailClient({ id }: { id: string }) {
   if (loadError) {
     return (
       <>
-        <PageHeader title="Service Request" back="/citizen/requests" backLabel="Service Requests" />
+        <PageHeader title={t("detailTitle")} back="/citizen/requests" backLabel={t("detailBack")} />
         <div className="card"><div className="pad">
           <p role="alert" aria-live="assertive" style={{ color: "#b42318" }}>{loadError}</p>
-          <button className="btn ghost" style={{ minHeight: 44 }} onClick={() => void load()}>Try again</button>
+          <button className="btn ghost" style={{ minHeight: 44 }} onClick={() => void load()}>{t("tryAgain")}</button>
         </div></div>
       </>
     );
@@ -135,8 +137,8 @@ export function RequestDetailClient({ id }: { id: string }) {
   if (!grievance) {
     return (
       <>
-        <PageHeader title="Service Request" back="/citizen/requests" backLabel="Service Requests" />
-        <EmptyState icon="📨" title="Request not found" message="This grievance does not exist or you do not have access to it." />
+        <PageHeader title={t("detailTitle")} back="/citizen/requests" backLabel={t("detailBack")} />
+        <EmptyState icon="📨" title={t("notFoundTitle")} message={t("notFoundMessage")} />
       </>
     );
   }
@@ -150,46 +152,46 @@ export function RequestDetailClient({ id }: { id: string }) {
         title={grievance.subject}
         subtitle={`${requestNo} · ${grievance.category}`}
         back="/citizen/requests"
-        backLabel="Service Requests"
+        backLabel={t("detailBack")}
         actions={
           <>
             <button type="button" className="btn ghost" style={{ minHeight: 44 }} onClick={() => setShowAction((s) => !s)}>
-              Add action
+              {t("addAction")}
             </button>
             {!isResolved && (
               <ActionButton
-                label="Resolve"
+                label={t("resolve")}
                 requireReason
                 reasonLabel="Resolution note"
                 confirmTitle="Mark this grievance resolved?"
                 confirmDescription="The citizen will be notified. The action is recorded in the audit trail."
-                confirmLabel="Resolve"
+                confirmLabel={t("resolve")}
                 onConfirm={resolve}
                 onSuccess={() => afterMutate("Resolution submitted.")}
               />
             )}
             {!isResolved && (
               <ActionButton
-                label="Escalate"
+                label={t("escalate")}
                 className="btn danger"
                 danger
                 requireReason
                 reasonLabel="Reason for escalation"
                 confirmTitle="Escalate this grievance?"
                 confirmDescription="This raises the grievance to the next level under the CPGRAMS escalation matrix."
-                confirmLabel="Escalate"
+                confirmLabel={t("escalate")}
                 onConfirm={escalate}
                 onSuccess={() => afterMutate("Escalation submitted.")}
               />
             )}
             {isResolved && (
               <ActionButton
-                label="Reopen"
+                label={t("reopen")}
                 requireReason
                 reasonLabel="Reason for reopening"
                 confirmTitle="Reopen this grievance?"
                 confirmDescription="CPGRAMS allows reopening a resolved grievance within 30 days of resolution."
-                confirmLabel="Reopen"
+                confirmLabel={t("reopen")}
                 onConfirm={reopen}
                 onSuccess={() => afterMutate("Reopen request submitted.")}
               />
@@ -203,18 +205,18 @@ export function RequestDetailClient({ id }: { id: string }) {
       <div className="grid g-main" style={{ alignItems: "start" }}>
         <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
           <div className="card">
-            <div className="card-h"><h3>Request Details</h3></div>
+            <div className="card-h"><h3>{t("requestDetailsTitle")}</h3></div>
             <div className="fields">
-              <div className="fld"><div className="l">Request No</div><div className="v">{requestNo}</div></div>
-              <div className="fld"><div className="l">Category</div><div className="v">{grievance.category}</div></div>
-              <div className="fld"><div className="l">Status</div><div className="v"><StatusPill status={grievance.status} /></div></div>
-              <div className="fld"><div className="l">Priority</div><div className="v">{grievance.priority}</div></div>
-              {grievance.departmentRef && <div className="fld"><div className="l">Department</div><div className="v">{grievance.departmentRef}</div></div>}
-              <div className="fld"><div className="l">Filed</div><div className="v">{formatIndianDate(grievance.createdAt)}</div></div>
-              <div className="fld"><div className="l">Last Updated</div><div className="v">{formatIndianDate(grievance.updatedAt)}</div></div>
+              <div className="fld"><div className="l">{t("colRequestNoField")}</div><div className="v">{requestNo}</div></div>
+              <div className="fld"><div className="l">{t("categoryField")}</div><div className="v">{grievance.category}</div></div>
+              <div className="fld"><div className="l">{t("statusField")}</div><div className="v"><StatusPill status={grievance.status} /></div></div>
+              <div className="fld"><div className="l">{t("priorityField")}</div><div className="v">{grievance.priority}</div></div>
+              {grievance.departmentRef && <div className="fld"><div className="l">{t("departmentField")}</div><div className="v">{grievance.departmentRef}</div></div>}
+              <div className="fld"><div className="l">{t("filedField")}</div><div className="v">{formatIndianDate(grievance.createdAt)}</div></div>
+              <div className="fld"><div className="l">{t("lastUpdatedField")}</div><div className="v">{formatIndianDate(grievance.updatedAt)}</div></div>
             </div>
             <div className="pad">
-              <div style={labelStyle}>Description</div>
+              <div style={labelStyle}>{t("descriptionField")}</div>
               <p style={{ margin: 0, whiteSpace: "pre-wrap" }}>{grievance.description}</p>
             </div>
           </div>
@@ -222,18 +224,18 @@ export function RequestDetailClient({ id }: { id: string }) {
           {showAction && (
             <div className="card">
               <form onSubmit={addAction} className="pad" style={{ maxWidth: 520 }}>
-                <h4 style={{ marginTop: 0 }}>Record an action</h4>
-                <label htmlFor="grievance-action-type" style={labelStyle}>Action type</label>
+                <h4 style={{ marginTop: 0 }}>{t("recordActionTitle")}</h4>
+                <label htmlFor="grievance-action-type" style={labelStyle}>{t("actionTypeLabel")}</label>
                 <select id="grievance-action-type" value={actionForm.actionType} onChange={(e) => setActionForm({ ...actionForm, actionType: e.target.value })} style={inputStyle}>
-                  <option value="comment">Comment</option>
-                  <option value="acknowledged">Acknowledged</option>
-                  <option value="forwarded">Forwarded</option>
-                  <option value="info_sought">Information sought</option>
+                  <option value="comment">{t("actionComment")}</option>
+                  <option value="acknowledged">{t("actionAcknowledged")}</option>
+                  <option value="forwarded">{t("actionForwarded")}</option>
+                  <option value="info_sought">{t("actionInfoSought")}</option>
                 </select>
-                <label htmlFor="grievance-action-note" style={labelStyle}>Note</label>
-                <textarea id="grievance-action-note" value={actionForm.note} onChange={(e) => setActionForm({ ...actionForm, note: e.target.value })} placeholder="Add context for this action" rows={3} style={{ ...inputStyle, minHeight: 88 }} />
+                <label htmlFor="grievance-action-note" style={labelStyle}>{t("noteLabel")}</label>
+                <textarea id="grievance-action-note" value={actionForm.note} onChange={(e) => setActionForm({ ...actionForm, note: e.target.value })} placeholder={t("notePlaceholder")} rows={3} style={{ ...inputStyle, minHeight: 88 }} />
                 <button type="submit" className="btn primary" disabled={busy} style={{ minHeight: 44 }}>{busy ? "Saving…" : "Save action"}</button>
-                <button type="button" className="btn ghost" style={{ marginLeft: 8, minHeight: 44 }} onClick={() => setShowAction(false)}>Cancel</button>
+                <button type="button" className="btn ghost" style={{ marginLeft: 8, minHeight: 44 }} onClick={() => setShowAction(false)}>{t("cancel")}</button>
                 {formError ? <p role="alert" aria-live="assertive" style={{ fontSize: 13, color: "#b42318", marginTop: 8 }}>{formError}</p> : null}
               </form>
             </div>
@@ -242,10 +244,10 @@ export function RequestDetailClient({ id }: { id: string }) {
 
         <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
           <div className="card">
-            <div className="card-h"><h3>Action History</h3></div>
+            <div className="card-h"><h3>{t("actionHistoryTitle")}</h3></div>
             <div className="pad">
               {grievance.actions.length === 0 ? (
-                <p style={{ color: "var(--muted)", margin: 0 }}>No actions recorded yet.</p>
+                <p style={{ color: "var(--muted)", margin: 0 }}>{t("noActions")}</p>
               ) : (
                 <ul className="tl">
                   {grievance.actions.map((a) => (

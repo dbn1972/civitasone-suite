@@ -1,5 +1,6 @@
 "use client";
 import { useState } from "react";
+import { useTranslations } from "next-intl";
 import { DataTable, Segmented, EmptyState } from "@/app/_components/ds";
 import { formatIndianDate } from "@/lib/formatters";
 
@@ -19,17 +20,18 @@ interface Props {
 
 const SEG_OPTIONS = ["All", "Grievance", "Service", "Breached"];
 
-const COLUMNS = [
-  { key: "requestNo" as const, label: "Request No" },
-  { key: "citizenName" as const, label: "Citizen Name" },
-  { key: "serviceType" as const, label: "Service Type" },
-  { key: "submittedAt" as const, label: "Submitted" },
-  { key: "citizenPhone" as const, label: "Phone" },
-  { key: "status" as const, label: "Status", cellType: "status" as const },
-];
-
 export function CitizenRequestsClient({ requests }: Props) {
+  const t = useTranslations("citizenRequests");
   const [active, setActive] = useState("All");
+
+  const COLUMNS = [
+    { key: "requestNo" as const, label: t("colRequestNo") },
+    { key: "citizenName" as const, label: t("colCitizenName") },
+    { key: "serviceType" as const, label: t("colServiceType") },
+    { key: "submittedAt" as const, label: t("colSubmitted") },
+    { key: "citizenPhone" as const, label: t("colPhone") },
+    { key: "status" as const, label: t("colStatus"), cellType: "status" as const },
+  ];
 
   const filtered =
     active === "Grievance"
@@ -49,13 +51,13 @@ export function CitizenRequestsClient({ requests }: Props) {
   return (
     <div className="card">
       <div className="card-h">
-        <h3>Grievances &amp; service requests</h3>
-        <div role="group" aria-label="Filter by request type">
+        <h3>{t("tableTitle")}</h3>
+        <div role="group" aria-label={t("filterAriaLabel")}>
           <Segmented value={active} onChange={setActive} options={SEG_OPTIONS} />
         </div>
       </div>
       {requests.length === 0 ? (
-        <EmptyState icon="📨" title="No service requests" message="Citizen requests will appear here once submitted." />
+        <EmptyState icon="📨" title={t("emptyTitle")} message={t("emptyMessage")} />
       ) : (
         <DataTable
           columns={COLUMNS}

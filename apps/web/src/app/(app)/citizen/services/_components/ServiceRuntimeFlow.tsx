@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useTranslations } from "next-intl";
 import { FormRenderer } from "@/app/_components/ds/designer/FormRenderer";
 import type { FormDesignState } from "@/app/_components/ds/designer/formTypes";
 import { ErrorState } from "@/app/_components/ds";
@@ -45,9 +46,10 @@ function JourneyRail({
   steps: { id: RuntimeJourneyStep; label: string }[];
   active: RuntimeJourneyStep;
 }) {
+  const t = useTranslations("citizenServices");
   const activeIdx = Math.max(0, steps.findIndex((s) => s.id === active));
   return (
-    <nav aria-label="Application steps" style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
+    <nav aria-label={t("applicationSteps")} style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
       {steps.map((step, idx) => {
         const done = idx < activeIdx;
         const current = idx === activeIdx;
@@ -80,6 +82,7 @@ function JourneyRail({
 }
 
 export function ServiceRuntimeFlow({ service, counterMode = false, assistedBy = null }: ServiceRuntimeFlowProps) {
+  const t = useTranslations("citizenServices");
   const design = service.formDesign;
   const hasFee = service.feeFromMinor != null;
   const journey = useMemo(() => journeyStepsForService(hasFee), [hasFee]);
@@ -279,7 +282,7 @@ export function ServiceRuntimeFlow({ service, counterMode = false, assistedBy = 
           }}
           role="status"
         >
-          Counter mode — assisting applicant
+          {t("counterModeNotice")}
           {assistedBy ? ` (operator ${assistedBy.slice(0, 8)}…)` : ""}
         </div>
       ) : null}
@@ -316,11 +319,11 @@ export function ServiceRuntimeFlow({ service, counterMode = false, assistedBy = 
             <div style={{ display: "flex", gap: 8 }}>
               {sectionIndex > 0 ? (
                 <button type="button" className="btn" style={{ minHeight: 44 }} onClick={() => setSectionIndex((i) => i - 1)}>
-                  Back
+                  {t("back")}
                 </button>
               ) : null}
               <button type="button" className="btn primary" style={{ minHeight: 44 }} onClick={onNextSection}>
-                {sectionIndex < visibleSectionCount - 1 ? "Next section" : "Review answers"}
+                {sectionIndex < visibleSectionCount - 1 ? t("nextSection") : t("reviewAnswers")}
               </button>
             </div>
           </div>
@@ -331,7 +334,7 @@ export function ServiceRuntimeFlow({ service, counterMode = false, assistedBy = 
         <ReviewPanel
           design={design}
           values={values}
-          continueLabel={hasFee ? "Continue to fee" : "Submit application"}
+          continueLabel={hasFee ? t("continueToFee") : t("submitApplicationButton")}
           onEditSection={(idx) => { setSectionIndex(idx); setStep("form"); }}
           onContinue={() => {
             if (hasFee) setStep("fee");
@@ -344,11 +347,9 @@ export function ServiceRuntimeFlow({ service, counterMode = false, assistedBy = 
 
       {step === "fee" ? (
         <div className="card pad" style={{ display: "grid", gap: 14 }}>
-          <h3 style={{ margin: 0 }}>Fee summary</h3>
+          <h3 style={{ margin: 0 }}>{t("feeSummaryTitle")}</h3>
           <p style={{ margin: 0, fontSize: 13, color: "var(--mut)" }}>
-            Review the demand lines below. For Test runs, sandbox capture posts a receipt and GL journal when no live
-            gateway key is configured. Counter/offline payments remain available to officers; otherwise you may also
-            receive a payment link or counter slip when the office raises the demand.
+            {t("feeSummaryNote")}
           </p>
           <ul style={{ margin: 0, padding: 0, listStyle: "none", display: "grid", gap: 8 }}>
             {demandLines.map((line) => (
@@ -383,14 +384,14 @@ export function ServiceRuntimeFlow({ service, counterMode = false, assistedBy = 
               fontSize: 13,
             }}
           >
-            <strong>How you can pay</strong>
-            <span>Counter / CSC — pay at the desk when asked.</span>
-            <span>Online — SMS or WhatsApp payment link after the office raises the demand.</span>
+            <strong>{t("howYouCanPay")}</strong>
+            <span>{t("payCounter")}</span>
+            <span>{t("payOnline")}</span>
           </div>
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-            <button type="button" className="btn" style={{ minHeight: 44 }} onClick={() => setStep("review")}>Back</button>
+            <button type="button" className="btn" style={{ minHeight: 44 }} onClick={() => setStep("review")}>{t("back")}</button>
             <button type="button" className="btn primary" style={{ minHeight: 44 }} disabled={busy} onClick={() => void onSubmit()}>
-              {busy ? "Submitting…" : "Pay (sandbox) & submit"}
+              {busy ? t("submitting") : t("paySandboxAndSubmit")}
             </button>
           </div>
           {error ? <p role="alert" style={{ color: "var(--bad-fg)", fontSize: 13, margin: 0 }}>{error}</p> : null}
@@ -399,8 +400,8 @@ export function ServiceRuntimeFlow({ service, counterMode = false, assistedBy = 
 
       {step === "submitted" && trackingNo ? (
         <div className="card pad" style={{ textAlign: "center", display: "grid", gap: 14 }}>
-          <p style={{ margin: 0, fontSize: 14, color: "var(--good-fg)", fontWeight: 600 }}>Application submitted</p>
-          <p style={{ margin: 0, fontSize: 12, color: "var(--mut)" }}>Your tracking number</p>
+          <p style={{ margin: 0, fontSize: 14, color: "var(--good-fg)", fontWeight: 600 }}>{t("applicationSubmitted")}</p>
+          <p style={{ margin: 0, fontSize: 12, color: "var(--mut)" }}>{t("yourTrackingNumber")}</p>
           <p
             style={{
               margin: 0,
@@ -414,14 +415,14 @@ export function ServiceRuntimeFlow({ service, counterMode = false, assistedBy = 
             {trackingNo}
           </p>
           <button type="button" className="btn" style={{ minHeight: 44 }} onClick={() => void copyTracking()}>
-            {copied ? "Copied" : "Copy tracking number"}
+            {copied ? t("copied") : t("copyTrackingNumber")}
           </button>
           {expectedBy ? (
             <p style={{ margin: 0, fontSize: 14 }}>
-              Expected decision by <strong>{expectedBy}</strong>
+              {t("expectedDecisionBy", { date: expectedBy })}
               {service.slaDays ? (
                 <span style={{ display: "block", fontSize: 12, color: "var(--mut)", marginTop: 4 }}>
-                  ({service.slaDays} working days from today)
+                  {t("workingDaysFromToday", { days: service.slaDays })}
                 </span>
               ) : null}
             </p>
@@ -431,7 +432,7 @@ export function ServiceRuntimeFlow({ service, counterMode = false, assistedBy = 
             className="btn primary"
             style={{ minHeight: 44 }}
           >
-            Track status
+            {t("trackStatus")}
           </Link>
         </div>
       ) : null}
@@ -456,15 +457,16 @@ function ReviewPanel({
   busy: boolean;
   error: string | null;
 }) {
+  const t = useTranslations("citizenServices");
   return (
     <div className="card pad" style={{ display: "grid", gap: 16 }}>
-      <h3 style={{ margin: 0 }}>Review your answers</h3>
+      <h3 style={{ margin: 0 }}>{t("reviewYourAnswers")}</h3>
       {design.sections.map((sec, idx) => (
         <div key={sec.id} style={{ borderTop: "1px solid var(--line)", paddingTop: 12 }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
             <strong>{sec.label}</strong>
             <button type="button" className="btn ghost" style={{ minHeight: 36 }} onClick={() => onEditSection(idx)}>
-              Edit
+              {t("edit")}
             </button>
           </div>
           <dl style={{ margin: "8px 0 0", display: "grid", gap: 6 }}>
@@ -482,7 +484,7 @@ function ReviewPanel({
         </div>
       ))}
       <button type="button" className="btn primary" style={{ minHeight: 44 }} disabled={busy} onClick={onContinue}>
-        {busy ? "Submitting…" : continueLabel}
+        {busy ? t("submitting") : continueLabel}
       </button>
       {error ? <p role="alert" style={{ color: "var(--bad-fg)", fontSize: 13, margin: 0 }}>{error}</p> : null}
     </div>

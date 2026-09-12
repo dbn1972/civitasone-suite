@@ -67,7 +67,7 @@ export default async function GrievancesPage() {
         {errored ? (
           <>
             <div className="card-h">
-              <h3>{t("grievances.tableTitle")}</h3>
+              <h3>{t("tableTitle")}</h3>
             </div>
             <div className="pad">
               <RefreshErrorState error={toHumanError("load", { area: "grievances" })} />

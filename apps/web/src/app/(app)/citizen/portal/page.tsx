@@ -1,15 +1,17 @@
+import { getTranslations } from "next-intl/server";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { PageHeader, StatGrid, StatCard } from "../../../_components/ds";
 import { getCitizenPortal } from "../../../_data/loaders";
 
 export default async function CitizenPortalPage() {
+  const t = await getTranslations("citizenPortal");
   const { data: metrics, source } = await getCitizenPortal();
 
   return (
     <>
       <PageHeader
-        title="Citizen Portal Overview"
-        subtitle="Key metrics and performance indicators for citizen engagement."
+        title={t("pageTitle")}
+        subtitle={t("pageSubtitle")}
         actions={source === "error" ? <DataSourceBadge source={source} /> : null}
       />
 
@@ -17,25 +19,25 @@ export default async function CitizenPortalPage() {
         <StatCard
           icon="🗂️"
           iconBg="#eef2ff"
-          label="Published Services"
+          label={t("statPublishedServices")}
           value={metrics.totalServices.toLocaleString("en-IN")}
         />
         <StatCard
           icon="📋"
           iconBg="#ecfdf3"
-          label="Active Requests"
+          label={t("statActiveRequests")}
           value={metrics.activeRequests.toLocaleString("en-IN")}
         />
         <StatCard
           icon="✅"
           iconBg="#fffaeb"
-          label="Resolved This Month"
+          label={t("statResolvedThisMonth")}
           value={metrics.resolvedThisMonth.toLocaleString("en-IN")}
         />
         <StatCard
           icon="⏱️"
           iconBg="#fce7ee"
-          label="Avg. Resolution Days"
+          label={t("statAvgResolutionDays")}
           value={metrics.avgResolutionDays.toLocaleString("en-IN")}
         />
       </StatGrid>

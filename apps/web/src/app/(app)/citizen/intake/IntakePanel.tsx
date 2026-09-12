@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useTranslations } from "next-intl";
 
 const inputStyle = { width: "100%", padding: 8, minHeight: 44, marginBottom: 8, borderRadius: 8, border: "1px solid var(--line)" } as const;
 const labelStyle = { display: "block", fontSize: 12, color: "var(--muted)", marginBottom: 4, fontWeight: 600 } as const;
@@ -11,6 +12,7 @@ interface Track { trackingNo: string; status: string; channel: string; applicati
 
 /** SVC-082 — draft → submit (acknowledgement + tracking) → track. */
 export function IntakePanel() {
+  const t = useTranslations("citizenIntake");
   const [serviceId, setServiceId] = useState("");
   const [channel, setChannel] = useState("portal");
   const [busy, setBusy] = useState(false);
@@ -57,33 +59,33 @@ export function IntakePanel() {
     <div style={{ display: "grid", gap: 16 }}>
       <div className="card">
         <form onSubmit={saveDraft} className="pad" style={{ maxWidth: 620 }}>
-          <h4 style={{ marginTop: 0 }}>New application draft</h4>
-          <label htmlFor="in-svc" style={labelStyle}>Service ID (UUID)</label>
+          <h4 style={{ marginTop: 0 }}>{t("draftFormTitle")}</h4>
+          <label htmlFor="in-svc" style={labelStyle}>{t("serviceIdLabel")}</label>
           <input id="in-svc" value={serviceId} onChange={(e) => setServiceId(e.target.value)} style={inputStyle} placeholder="00000000-0000-4000-8000-000000000000" />
-          <label htmlFor="in-ch" style={labelStyle}>Channel</label>
+          <label htmlFor="in-ch" style={labelStyle}>{t("channelLabel")}</label>
           <select id="in-ch" value={channel} onChange={(e) => setChannel(e.target.value)} style={inputStyle}>
-            <option value="portal">Portal (self-service)</option>
-            <option value="mobile">Mobile</option>
-            <option value="counter">Counter (assisted)</option>
-            <option value="assisted">Assisted</option>
-            <option value="whatsapp">WhatsApp</option>
+            <option value="portal">{t("channelPortal")}</option>
+            <option value="mobile">{t("channelMobile")}</option>
+            <option value="counter">{t("channelCounter")}</option>
+            <option value="assisted">{t("channelAssisted")}</option>
+            <option value="whatsapp">{t("channelWhatsapp")}</option>
             <option value="api">API</option>
           </select>
           <p style={{ fontSize: 12, color: "var(--muted)", marginTop: -4, marginBottom: 8 }}>
-            Disallowed channels are rejected by the server when the published service does not enable them (FN-24).
+            {t("channelNote")}
           </p>
           <button type="submit" className="btn primary" style={{ minHeight: 44 }} disabled={busy || !serviceId}>
-            {busy ? "Saving…" : "Save draft"}
+            {busy ? t("saving") : t("saveDraft")}
           </button>
           {draft ? (
             <div className="pad" style={{ marginTop: 12, background: "var(--surface, #f8fafc)", borderRadius: 8 }}>
               Draft saved ({draft.channel}{draft.assistedBy ? `, assisted by ${draft.assistedBy}` : ""}).{" "}
-              <button type="button" className="btn" style={{ minHeight: 40 }} onClick={submitDraft} disabled={busy}>Submit for acknowledgement</button>
+              <button type="button" className="btn" style={{ minHeight: 40 }} onClick={submitDraft} disabled={busy}>{t("submitForAck")}</button>
             </div>
           ) : null}
           {ack ? (
             <div role="status" className="pad" style={{ marginTop: 12, background: "#ecfdf3", borderRadius: 8 }}>
-              Acknowledged. Tracking number <strong>{ack.trackingNo}</strong> — status {ack.status}.
+              {t("ackPrefix")} <strong>{ack.trackingNo}</strong> — status {ack.status}.
             </div>
           ) : null}
           {error ? <p role="alert" style={{ color: "#b42318", fontSize: 13 }}>{error}</p> : null}
@@ -92,10 +94,10 @@ export function IntakePanel() {
 
       <div className="card">
         <form onSubmit={doTrack} className="pad" style={{ maxWidth: 620 }}>
-          <h4 style={{ marginTop: 0 }}>Track an application</h4>
-          <label htmlFor="in-track" style={labelStyle}>Tracking number</label>
-          <input id="in-track" value={trackNo} onChange={(e) => setTrackNo(e.target.value)} style={inputStyle} placeholder="CIT-2026-XXXXXXXX" />
-          <button type="submit" className="btn" style={{ minHeight: 44 }} disabled={busy || !trackNo}>Track</button>
+          <h4 style={{ marginTop: 0 }}>{t("trackFormTitle")}</h4>
+          <label htmlFor="in-track" style={labelStyle}>{t("trackingNumberLabel")}</label>
+          <input id="in-track" value={trackNo} onChange={(e) => setTrackNo(e.target.value)} style={inputStyle} placeholder={t("trackingNumberPlaceholder")} />
+          <button type="submit" className="btn" style={{ minHeight: 44 }} disabled={busy || !trackNo}>{t("track")}</button>
           {track ? (
             <div className="pad" style={{ marginTop: 12 }}>
               <strong>{track.trackingNo}</strong> — status {track.status} ({track.channel})

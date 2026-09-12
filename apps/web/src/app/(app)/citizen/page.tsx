@@ -1,4 +1,5 @@
 import type { NavTile } from "@civitasone/types";
+import { getTranslations } from "next-intl/server";
 import { LinkTiles } from "../../_components/LinkTiles";
 import { PageShell } from "../../_components/PageShell";
 
@@ -13,9 +14,10 @@ const citizenTiles: NavTile[] = [
   { title: "Surveys", href: "/citizen/surveys" },
 ];
 
-export default function Page() {
+export default async function Page() {
+  const t = await getTranslations("citizen");
   return (
-    <PageShell title="Citizen Services" description="Grievances, service requests, and RTI applications." help="citizen">
+    <PageShell title={t("title")} description={t("description")} help="citizen">
       <LinkTiles tiles={citizenTiles} />
     </PageShell>
   );
