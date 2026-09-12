@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useTranslations } from "next-intl";
 
 const inputStyle = { width: "100%", padding: 8, minHeight: 44, marginBottom: 8, borderRadius: 8, border: "1px solid var(--line)" } as const;
 const labelStyle = { display: "block", fontSize: 12, color: "var(--muted)", marginBottom: 4, fontWeight: 600 } as const;
@@ -10,6 +11,7 @@ interface Result { outcome: string; reasons: Reason[]; reviewStatus: string }
 
 /** SVC-083 — run an eligibility check against a published rule set. */
 export function EligibilityCheck() {
+  const t = useTranslations("citizenEligibility");
   const [serviceId, setServiceId] = useState("");
   const [subject, setSubject] = useState('{\n  "age": 65,\n  "income_proof": "x"\n}');
   const [busy, setBusy] = useState(false);
@@ -44,13 +46,13 @@ export function EligibilityCheck() {
   return (
     <div className="card">
       <form onSubmit={run} className="pad" style={{ maxWidth: 620 }}>
-        <h4 style={{ marginTop: 0 }}>Check eligibility</h4>
-        <label htmlFor="elig-service" style={labelStyle}>Service ID (UUID)</label>
+        <h4 style={{ marginTop: 0 }}>{t("formTitle")}</h4>
+        <label htmlFor="elig-service" style={labelStyle}>{t("serviceIdLabel")}</label>
         <input id="elig-service" value={serviceId} onChange={(e) => setServiceId(e.target.value)} style={inputStyle} placeholder="00000000-0000-4000-8000-000000000000" />
-        <label htmlFor="elig-subject" style={labelStyle}>Applicant attributes (JSON)</label>
+        <label htmlFor="elig-subject" style={labelStyle}>{t("subjectLabel")}</label>
         <textarea id="elig-subject" value={subject} onChange={(e) => setSubject(e.target.value)} style={{ ...inputStyle, minHeight: 120, fontFamily: "monospace" }} />
         <button type="submit" className="btn primary" style={{ minHeight: 44 }} disabled={busy || !serviceId}>
-          {busy ? "Checking…" : "Run check"}
+          {busy ? t("checking") : t("runCheck")}
         </button>
         {error ? <p role="alert" style={{ color: "#b42318", fontSize: 13 }}>{error}</p> : null}
       </form>

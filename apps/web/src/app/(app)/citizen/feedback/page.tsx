@@ -1,19 +1,21 @@
+import { getTranslations } from "next-intl/server";
 import { PageHeader, EmptyState } from "../../../_components/ds";
 
-export default function CitizenFeedbackPage() {
+export default async function CitizenFeedbackPage() {
+  const t = await getTranslations("citizenFeedback");
   return (
     <>
       <PageHeader
-        title="Citizen Feedback"
-        subtitle="Feedback and suggestions submitted by citizens."
+        title={t("pageTitle")}
+        subtitle={t("pageSubtitle")}
         back="/citizen"
         backLabel="Citizen Services"
       />
       <div className="card">
         <EmptyState
           icon="💬"
-          title="No feedback yet"
-          message="Citizen feedback submissions will appear here once the feedback module is enabled."
+          title={t("emptyTitle")}
+          message={t("emptyMessage")}
         />
       </div>
     </>

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useTranslations } from "next-intl";
 
 const inputStyle = { width: "100%", padding: 8, minHeight: 44, marginBottom: 8, borderRadius: 8, border: "1px solid var(--line)" } as const;
 const labelStyle = { display: "block", fontSize: 12, color: "var(--muted)", marginBottom: 4, fontWeight: 600 } as const;
@@ -13,6 +14,7 @@ interface Match { id: string; serviceId: string; outcome: string; strength?: str
  * (the API returns 403 CONSENT_REQUIRED, surfaced here).
  */
 export function DiscoveryPanel() {
+  const t = useTranslations("citizenDiscovery");
   const [citizenId, setCitizenId] = useState("");
   const [profile, setProfile] = useState('{\n  "age": 65,\n  "income_proof": "x"\n}');
   const [busy, setBusy] = useState(false);
@@ -57,13 +59,13 @@ export function DiscoveryPanel() {
   return (
     <div className="card">
       <form onSubmit={run} className="pad" style={{ maxWidth: 620 }}>
-        <label htmlFor="disc-citizen" style={labelStyle}>Citizen ID (UUID)</label>
+        <label htmlFor="disc-citizen" style={labelStyle}>{t("citizenIdLabel")}</label>
         <input id="disc-citizen" value={citizenId} onChange={(e) => setCitizenId(e.target.value)} style={inputStyle} placeholder="00000000-0000-4000-8000-000000000000" />
-        <label htmlFor="disc-profile" style={labelStyle}>Citizen profile (JSON)</label>
+        <label htmlFor="disc-profile" style={labelStyle}>{t("profileLabel")}</label>
         <textarea id="disc-profile" value={profile} onChange={(e) => setProfile(e.target.value)} style={{ ...inputStyle, minHeight: 120, fontFamily: "monospace" }} />
         <div style={{ display: "flex", gap: 8 }}>
-          <button type="button" className="btn" style={{ minHeight: 44 }} disabled={busy || !citizenId} onClick={grant}>Grant consent</button>
-          <button type="submit" className="btn primary" style={{ minHeight: 44 }} disabled={busy || !citizenId}>{busy ? "Running…" : "Run discovery"}</button>
+          <button type="button" className="btn" style={{ minHeight: 44 }} disabled={busy || !citizenId} onClick={grant}>{t("grantConsent")}</button>
+          <button type="submit" className="btn primary" style={{ minHeight: 44 }} disabled={busy || !citizenId}>{busy ? t("running") : t("runDiscovery")}</button>
         </div>
         {message ? <p role="status" style={{ color: "#067647", fontSize: 13 }}>{message}</p> : null}
         {error ? <p role="alert" style={{ color: "#b42318", fontSize: 13 }}>{error}</p> : null}
@@ -71,7 +73,7 @@ export function DiscoveryPanel() {
 
       {matches.length > 0 ? (
         <div className="pad" style={{ borderTop: "1px solid var(--line)" }}>
-          <strong style={{ fontSize: 13 }}>Likely-eligible services</strong>
+          <strong style={{ fontSize: 13 }}>{t("likelyEligible")}</strong>
           <ul style={{ marginTop: 8, fontSize: 13 }}>
             {matches.map((m) => (
               <li key={m.id}>{m.serviceId} — {m.outcome}{m.strength ? ` (${m.strength})` : ""}</li>

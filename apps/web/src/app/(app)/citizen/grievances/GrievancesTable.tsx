@@ -1,5 +1,6 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import { DataTable } from "../../../_components/ds";
 
 export interface GrievanceRow extends Record<string, unknown> {
@@ -14,39 +15,53 @@ export interface GrievanceRow extends Record<string, unknown> {
 
 const CLOSED_STATUSES = new Set(["resolved", "closed", "disposed"]);
 
+type ClockLabels = {
+  closed: string;
+  overdueBy: (count: number) => string;
+  dueToday: string;
+  daysLeft: (count: number) => string;
+};
+
 /** Statutory clock cell — colour AND text (never colour alone, WCAG 1.4.1). */
-function clockCell(row: GrievanceRow) {
+function clockCell(row: GrievanceRow, labels: ClockLabels) {
   if (CLOSED_STATUSES.has(row.status.toLowerCase())) {
-    return <span style={{ color: "var(--muted)" }}>Closed</span>;
+    return <span style={{ color: "var(--muted)" }}>{labels.closed}</span>;
   }
   const n = row.daysLeft;
   if (n === null) return <span style={{ color: "var(--muted)" }}>—</span>;
   if (n < 0) {
     return (
       <span style={{ color: "#b42318", fontWeight: 600 }}>
-        {`Overdue by ${Math.abs(n)} day${Math.abs(n) === 1 ? "" : "s"}`}
+        {labels.overdueBy(Math.abs(n))}
       </span>
     );
   }
-  if (n === 0) return <span style={{ color: "#b42318", fontWeight: 600 }}>Due today</span>;
+  if (n === 0) return <span style={{ color: "#b42318", fontWeight: 600 }}>{labels.dueToday}</span>;
   const color = n <= 7 ? "#b54708" : "#067647";
   return (
     <span style={{ color, fontWeight: n <= 7 ? 600 : 400 }}>
-      {`${n} day${n === 1 ? "" : "s"} left`}
+      {labels.daysLeft(n)}
     </span>
   );
 }
 
 export function GrievancesTable({ rows }: { rows: GrievanceRow[] }) {
+  const t = useTranslations("grievances");
+  const labels: ClockLabels = {
+    closed: t("closed"),
+    overdueBy: (count) => t("overdueBy", { count }),
+    dueToday: t("dueToday"),
+    daysLeft: (count) => t("daysLeft", { count }),
+  };
   return (
     <DataTable<GrievanceRow>
       columns={[
-        { key: "grievanceNo", label: "Grievance No" },
-        { key: "subject", label: "Subject" },
-        { key: "complainantName", label: "Complainant" },
-        { key: "category", label: "Category" },
-        { key: "status", label: "Status", cellType: "status" },
-        { key: "daysLeft", label: "Days Left", render: clockCell },
+        { key: "grievanceNo", label: t("colGrievanceNo") },
+        { key: "subject", label: t("colSubject") },
+        { key: "complainantName", label: t("colComplainant") },
+        { key: "category", label: t("colCategory") },
+        { key: "status", label: t("colStatus"), cellType: "status" },
+        { key: "daysLeft", label: t("colDaysLeft"), render: (row: GrievanceRow) => clockCell(row, labels) },
       ]}
       rows={rows}
       sortable

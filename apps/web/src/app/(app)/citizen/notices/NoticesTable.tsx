@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
+import { useTranslations } from "next-intl";
 import { Card, DataTable, EmptyState } from "../../../_components/ds";
 import { useSeededResource } from "@/lib/sync/resource";
 import type { CitizenNotice } from "../../../_data/loaders";
@@ -16,6 +17,7 @@ type NoticeRow = {
 } & Record<string, unknown>;
 
 export function NoticesTable({ notices, source = "api" }: { notices: CitizenNotice[]; source?: "api" | "error" }) {
+  const t = useTranslations("citizenNotices");
   const { data: rows, fromCache, offline, cachedAt } = useSeededResource<CitizenNotice[]>(
     "citizen.notices",
     notices,
@@ -43,30 +45,30 @@ export function NoticesTable({ notices, source = "api" }: { notices: CitizenNoti
       : null;
 
   return (
-    <Card title="Notice Board">
+    <Card title={t("tableTitle")}>
       {cacheNote ? (
         <p role="status" aria-live="polite" style={{ fontSize: 12, color: "#92400e", margin: "0", padding: "8px 16px 0" }}>
           {cacheNote}
         </p>
       ) : null}
       {tableRows.length === 0 ? (
-        <EmptyState icon="📰" title="No notices published" message="Statutory and informational notices will appear here once published." />
+        <EmptyState icon="📰" title={t("emptyTitle")} message={t("emptyMessage")} />
       ) : (
         <DataTable<NoticeRow>
           rows={tableRows}
           sortable
           filterable
-          filterPlaceholder="Search notice no, subject, department…"
+          filterPlaceholder={t("filterPlaceholder")}
           pageSize={15}
           exportable
           exportFilename="citizen-notices"
           columns={[
-            { key: "noticeNo", label: "Notice No." },
-            { key: "subject", label: "Subject" },
-            { key: "department", label: "Department" },
-            { key: "published", label: "Published" },
-            { key: "expiry", label: "Expiry" },
-            { key: "type", label: "Type", cellType: "status" },
+            { key: "noticeNo", label: t("colNoticeNo") },
+            { key: "subject", label: t("colSubject") },
+            { key: "department", label: t("colDepartment") },
+            { key: "published", label: t("colPublished") },
+            { key: "expiry", label: t("colExpiry") },
+            { key: "type", label: t("colType"), cellType: "status" },
           ]}
         />
       )}

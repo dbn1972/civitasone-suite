@@ -9,6 +9,27 @@ vi.mock("./CertificateVerify", () => ({
   CertificateVerify: () => null,
 }));
 
+// See citizen/grievances/page.test.tsx for the full explanation: next-intl/server
+// resolves to a throwing guard under plain Vitest (no `react-server` condition),
+// a pre-existing, unrelated gap. Minimal same-shape mock here too.
+vi.mock("next-intl/server", async () => {
+  const messages = (await import("@/messages/en.json")).default as Record<string, unknown>;
+  function resolve(obj: unknown, dotted: string): unknown {
+    return dotted.split(".").reduce<unknown>((acc, k) => (acc && typeof acc === "object" ? (acc as Record<string, unknown>)[k] : undefined), obj);
+  }
+  return {
+    getTranslations: async (namespace?: string) => {
+      const scope = namespace ? resolve(messages, namespace) : messages;
+      return (key: string) => {
+        const found = resolve(scope, key);
+        return typeof found === "string" ? found : key;
+      };
+    },
+    getLocale: async () => "en",
+    getMessages: async () => messages,
+  };
+});
+
 import CertificatesPage from "./page";
 
 const MOCK_CERTS = [

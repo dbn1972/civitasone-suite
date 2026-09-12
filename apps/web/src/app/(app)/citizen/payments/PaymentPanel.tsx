@@ -2,12 +2,14 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 
 const inputStyle = { width: "100%", padding: 8, minHeight: 44, marginBottom: 8, borderRadius: 8, border: "1px solid var(--line)" } as const;
 const labelStyle = { display: "block", fontSize: 12, color: "var(--muted)", marginBottom: 4, fontWeight: 600 } as const;
 
 /** SVC-085 — compute a fee then record an offline payment (issues a receipt). */
 export function PaymentPanel({ schedules }: { schedules: Array<{ id: string; name: string }> }) {
+  const t = useTranslations("citizenPayments");
   const router = useRouter();
   const [scheduleId, setScheduleId] = useState(schedules[0]?.id ?? "");
   const [applicationId, setApplicationId] = useState("");
@@ -38,16 +40,16 @@ export function PaymentPanel({ schedules }: { schedules: Array<{ id: string; nam
   return (
     <div className="card">
       <form onSubmit={record} className="pad" style={{ maxWidth: 620 }}>
-        <h4 style={{ marginTop: 0 }}>Record offline payment</h4>
-        <label htmlFor="pay-schedule" style={labelStyle}>Fee schedule</label>
+        <h4 style={{ marginTop: 0 }}>{t("formTitle")}</h4>
+        <label htmlFor="pay-schedule" style={labelStyle}>{t("scheduleLabel")}</label>
         <select id="pay-schedule" value={scheduleId} onChange={(e) => setScheduleId(e.target.value)} style={inputStyle}>
-          {schedules.length === 0 ? <option value="">No schedules</option> : null}
+          {schedules.length === 0 ? <option value="">{t("noSchedules")}</option> : null}
           {schedules.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
         </select>
-        <label htmlFor="pay-app" style={labelStyle}>Application ID (UUID)</label>
+        <label htmlFor="pay-app" style={labelStyle}>{t("applicationIdLabel")}</label>
         <input id="pay-app" value={applicationId} onChange={(e) => setApplicationId(e.target.value)} style={inputStyle} placeholder="00000000-0000-4000-8000-000000000000" />
         <button type="submit" className="btn primary" style={{ minHeight: 44 }} disabled={busy || !scheduleId || !applicationId}>
-          {busy ? "Recording…" : "Record & issue receipt"}
+          {busy ? t("recording") : t("recordAndIssue")}
         </button>
         {message ? <p role="status" style={{ color: "#067647", fontSize: 13 }}>{message}</p> : null}
         {error ? <p role="alert" style={{ color: "#b42318", fontSize: 13 }}>{error}</p> : null}

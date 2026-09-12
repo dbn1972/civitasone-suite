@@ -1,3 +1,4 @@
+import { getTranslations } from "next-intl/server";
 import { PageHeader, RefreshErrorState } from "../../../_components/ds";
 import { getEligibilityRuleSets } from "../../../_data/citizenGaps";
 import { EligibilityCheck } from "./EligibilityCheck";
@@ -6,6 +7,7 @@ import { toHumanError } from "@/lib/messages";
 
 /** SVC-083 — Eligibility & entitlement determination. */
 export default async function EligibilityPage() {
+  const t = await getTranslations("citizenEligibility");
   const result = await getEligibilityRuleSets();
   const { data: ruleSets } = result;
   const resource = useResource(result);
@@ -15,15 +17,15 @@ export default async function EligibilityPage() {
   return (
     <>
       <PageHeader
-        title="Eligibility & Entitlement"
-        subtitle="Versioned rule sets (maker-checker publish) and applicant eligibility checks."
+        title={t("pageTitle")}
+        subtitle={t("pageSubtitle")}
       />
 
       <EligibilityCheck />
 
       <div className="card" style={{ marginTop: 16 }}>
         <div className="pad" style={{ borderBottom: "1px solid var(--line)", display: "flex", justifyContent: "space-between" }}>
-          <strong>Rule sets</strong>
+          <strong>{t("listTitle")}</strong>
           <span style={{ fontSize: 12, color: "var(--muted)" }}>{published ?? "—"} published</span>
         </div>
         {errored ? (
@@ -31,16 +33,16 @@ export default async function EligibilityPage() {
             <RefreshErrorState error={toHumanError("load", { area: "eligibility rule sets" })} />
           </div>
         ) : ruleSets.length === 0 ? (
-          <div className="pad" style={{ color: "var(--muted)" }}>No rule sets defined yet.</div>
+          <div className="pad" style={{ color: "var(--muted)" }}>{t("empty")}</div>
         ) : (
           <div style={{ overflowX: "auto" }}>
             <table style={{ width: "100%", borderCollapse: "collapse" }}>
               <thead>
                 <tr style={{ textAlign: "left", fontSize: 12, color: "var(--muted)" }}>
-                  <th scope="col" style={{ padding: 8 }}>Name</th>
-                  <th scope="col" style={{ padding: 8 }}>Version</th>
-                  <th scope="col" style={{ padding: 8 }}>Rules</th>
-                  <th scope="col" style={{ padding: 8 }}>Status</th>
+                  <th scope="col" style={{ padding: 8 }}>{t("colName")}</th>
+                  <th scope="col" style={{ padding: 8 }}>{t("colVersion")}</th>
+                  <th scope="col" style={{ padding: 8 }}>{t("colRules")}</th>
+                  <th scope="col" style={{ padding: 8 }}>{t("colStatus")}</th>
                 </tr>
               </thead>
               <tbody>

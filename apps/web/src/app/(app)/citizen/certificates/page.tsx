@@ -1,3 +1,4 @@
+import { getTranslations } from "next-intl/server";
 import { PageHeader, RefreshErrorState } from "../../../_components/ds";
 import { getCertificates } from "../../../_data/citizenGaps";
 import { CertificateVerify } from "./CertificateVerify";
@@ -6,6 +7,7 @@ import { toHumanError } from "@/lib/messages";
 
 /** SVC-086 — Certificate, licence & permit issuance + public QR verify. */
 export default async function CertificatesPage() {
+  const t = await getTranslations("citizenCertificates");
   const result = await getCertificates();
   const { data: certs } = result;
   const resource = useResource(result);
@@ -17,15 +19,15 @@ export default async function CertificatesPage() {
   return (
     <>
       <PageHeader
-        title="Certificates & Licences"
-        subtitle="Maker-checker issuance with gapless numbering, signed output and QR verification."
+        title={t("pageTitle")}
+        subtitle={t("pageSubtitle")}
       />
 
       <CertificateVerify />
 
       <div className="card" style={{ marginTop: 16 }}>
         <div className="pad" style={{ borderBottom: "1px solid var(--line)", display: "flex", justifyContent: "space-between" }}>
-          <strong>Issued certificates</strong>
+          <strong>{t("listTitle")}</strong>
           <span style={{ fontSize: 12, color: "var(--muted)" }}>{active ?? "—"} active</span>
         </div>
         {errored ? (
@@ -33,17 +35,17 @@ export default async function CertificatesPage() {
             <RefreshErrorState error={toHumanError("load", { area: "certificates" })} />
           </div>
         ) : certs.length === 0 ? (
-          <div className="pad" style={{ color: "var(--muted)" }}>No certificates issued yet.</div>
+          <div className="pad" style={{ color: "var(--muted)" }}>{t("empty")}</div>
         ) : (
           <div style={{ overflowX: "auto" }}>
             <table style={{ width: "100%", borderCollapse: "collapse" }}>
               <thead>
                 <tr style={{ textAlign: "left", fontSize: 12, color: "var(--muted)" }}>
-                  <th scope="col" style={{ padding: 8 }}>Certificate No.</th>
-                  <th scope="col" style={{ padding: 8 }}>Type</th>
-                  <th scope="col" style={{ padding: 8 }}>Status</th>
-                  <th scope="col" style={{ padding: 8 }}>Valid to</th>
-                  <th scope="col" style={{ padding: 8 }}>Verify token</th>
+                  <th scope="col" style={{ padding: 8 }}>{t("colCertNo")}</th>
+                  <th scope="col" style={{ padding: 8 }}>{t("colType")}</th>
+                  <th scope="col" style={{ padding: 8 }}>{t("colStatus")}</th>
+                  <th scope="col" style={{ padding: 8 }}>{t("colValidTo")}</th>
+                  <th scope="col" style={{ padding: 8 }}>{t("colVerifyToken")}</th>
                 </tr>
               </thead>
               <tbody>

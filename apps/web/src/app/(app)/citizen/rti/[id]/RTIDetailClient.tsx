@@ -1,6 +1,7 @@
 "use client";
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { PageHeader, EmptyState, StatusPill, ActionButton } from "@/app/_components/ds";
 import { formatIndianDate } from "@/lib/formatters";
 
@@ -28,18 +29,20 @@ const labelStyle = { display: "block", fontSize: 12, color: "var(--muted)", marg
 
 /** RTI Act 2005 §7 — 30-day statutory clock, colour + TEXT (WCAG 1.4.1). */
 function StatutoryClock({ deadline, closed }: { deadline: string; closed: boolean }) {
+  const t = useTranslations("citizenRti");
   const d = new Date(deadline);
-  if (isNaN(d.getTime())) return <span style={{ color: "var(--muted)" }}>No deadline on record</span>;
-  if (closed) return <span style={{ color: "var(--muted)" }}>Disposed — clock stopped</span>;
+  if (isNaN(d.getTime())) return <span style={{ color: "var(--muted)" }}>{t("noDeadline")}</span>;
+  if (closed) return <span style={{ color: "var(--muted)" }}>{t("disposed")}</span>;
   const today = new Date(); today.setHours(0, 0, 0, 0);
   const days = Math.round((d.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
-  if (days < 0) return <strong style={{ color: "#b42318" }}>{`Overdue by ${Math.abs(days)} day${Math.abs(days) === 1 ? "" : "s"} (statutory breach)`}</strong>;
-  if (days === 0) return <strong style={{ color: "#b42318" }}>Due today</strong>;
+  if (days < 0) return <strong style={{ color: "#b42318" }}>{t("overdueBreach", { count: Math.abs(days) })}</strong>;
+  if (days === 0) return <strong style={{ color: "#b42318" }}>{t("dueToday")}</strong>;
   const color = days <= 5 ? "#b54708" : "#067647";
-  return <strong style={{ color }}>{`${days} day${days === 1 ? "" : "s"} remaining`}</strong>;
+  return <strong style={{ color }}>{t("daysRemaining", { count: days })}</strong>;
 }
 
 export function RTIDetailClient({ id }: { id: string }) {
+  const t = useTranslations("citizenRti");
   const router = useRouter();
   const [rti, setRti] = useState<RtiDetail | null>(null);
   const [loading, setLoading] = useState(true);
@@ -111,8 +114,8 @@ export function RTIDetailClient({ id }: { id: string }) {
   if (loading) {
     return (
       <>
-        <PageHeader title="RTI Application" back="/citizen/rti" backLabel="RTI Applications" />
-        <p role="status" aria-live="polite" className="pad" style={{ color: "var(--muted)" }}>Loading RTI application…</p>
+        <PageHeader title={t("detailTitle")} back="/citizen/rti" backLabel={t("detailBack")} />
+        <p role="status" aria-live="polite" className="pad" style={{ color: "var(--muted)" }}>{t("loadingDetail")}</p>
       </>
     );
   }
@@ -120,10 +123,10 @@ export function RTIDetailClient({ id }: { id: string }) {
   if (loadError) {
     return (
       <>
-        <PageHeader title="RTI Application" back="/citizen/rti" backLabel="RTI Applications" />
+        <PageHeader title={t("detailTitle")} back="/citizen/rti" backLabel={t("detailBack")} />
         <div className="card"><div className="pad">
           <p role="alert" aria-live="assertive" style={{ color: "#b42318" }}>{loadError}</p>
-          <button className="btn ghost" style={{ minHeight: 44 }} onClick={() => void load()}>Try again</button>
+          <button className="btn ghost" style={{ minHeight: 44 }} onClick={() => void load()}>{t("tryAgain")}</button>
         </div></div>
       </>
     );
@@ -132,8 +135,8 @@ export function RTIDetailClient({ id }: { id: string }) {
   if (!rti) {
     return (
       <>
-        <PageHeader title="RTI Application" back="/citizen/rti" backLabel="RTI Applications" />
-        <EmptyState icon="📄" title="RTI application not found" message="This application does not exist or you do not have access to it." />
+        <PageHeader title={t("detailTitle")} back="/citizen/rti" backLabel={t("detailBack")} />
+        <EmptyState icon="📄" title={t("notFoundTitle")} message={t("notFoundMessage")} />
       </>
     );
   }
@@ -146,23 +149,23 @@ export function RTIDetailClient({ id }: { id: string }) {
         title={rti.subject}
         subtitle={`${rti.rtiNo} · RTI Act 2005`}
         back="/citizen/rti"
-        backLabel="RTI Applications"
+        backLabel={t("detailBack")}
         actions={
           <>
             {rti.responses.length === 0 && (
               <ActionButton
-                label="Record response"
+                label={t("recordResponse")}
                 requireReason
                 reasonLabel="Response document URL (https://…)"
                 confirmTitle="Record the PIO response?"
                 confirmDescription="Provide the URL of the uploaded response document. This disposes the application under §7 and stops the statutory clock."
-                confirmLabel="Record response"
+                confirmLabel={t("recordResponse")}
                 onConfirm={respond}
                 onSuccess={() => afterMutate("Response submitted.")}
               />
             )}
             <button type="button" className="btn ghost" style={{ minHeight: 44 }} onClick={() => setShowAppeal((s) => !s)}>
-              File appeal
+              {t("fileAppeal")}
             </button>
           </>
         }
@@ -173,16 +176,16 @@ export function RTIDetailClient({ id }: { id: string }) {
       <div className="grid g-main" style={{ alignItems: "start" }}>
         <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
           <div className="card">
-            <div className="card-h"><h3>Application Details</h3></div>
+            <div className="card-h"><h3>{t("applicationDetailsTitle")}</h3></div>
             <div className="fields">
-              <div className="fld"><div className="l">RTI No</div><div className="v">{rti.rtiNo}</div></div>
-              <div className="fld"><div className="l">Status</div><div className="v"><StatusPill status={rti.statusLabel ?? rti.status} /></div></div>
-              <div className="fld"><div className="l">Filed</div><div className="v">{formatIndianDate(rti.createdAt)}</div></div>
-              <div className="fld"><div className="l">Statutory Deadline</div><div className="v">{formatIndianDate(rti.deadline)}</div></div>
-              <div className="fld"><div className="l">30-day Clock</div><div className="v"><StatutoryClock deadline={rti.deadline} closed={closed} /></div></div>
+              <div className="fld"><div className="l">{t("colRtiNoField")}</div><div className="v">{rti.rtiNo}</div></div>
+              <div className="fld"><div className="l">{t("statusField")}</div><div className="v"><StatusPill status={rti.statusLabel ?? rti.status} /></div></div>
+              <div className="fld"><div className="l">{t("filedField")}</div><div className="v">{formatIndianDate(rti.createdAt)}</div></div>
+              <div className="fld"><div className="l">{t("statutoryDeadlineField")}</div><div className="v">{formatIndianDate(rti.deadline)}</div></div>
+              <div className="fld"><div className="l">{t("clockField")}</div><div className="v"><StatutoryClock deadline={rti.deadline} closed={closed} /></div></div>
             </div>
             <div className="pad">
-              <div style={labelStyle}>Information sought</div>
+              <div style={labelStyle}>{t("infoSoughtField")}</div>
               <p style={{ margin: 0, whiteSpace: "pre-wrap" }}>{rti.description}</p>
             </div>
           </div>
@@ -190,16 +193,16 @@ export function RTIDetailClient({ id }: { id: string }) {
           {showAppeal && (
             <div className="card">
               <form onSubmit={fileAppeal} className="pad" style={{ maxWidth: 560 }}>
-                <h4 style={{ marginTop: 0 }}>File an appeal</h4>
-                <label htmlFor="rti-appeal-type" style={labelStyle}>Appeal type</label>
+                <h4 style={{ marginTop: 0 }}>{t("fileAppealFormTitle")}</h4>
+                <label htmlFor="rti-appeal-type" style={labelStyle}>{t("appealTypeLabel")}</label>
                 <select id="rti-appeal-type" value={appeal.appealType} onChange={(e) => setAppeal({ ...appeal, appealType: e.target.value })} style={inputStyle}>
-                  <option value="first">First Appeal (§19(1))</option>
-                  <option value="cic">CIC / Second Appeal (§19(3))</option>
+                  <option value="first">{t("appealFirst")}</option>
+                  <option value="cic">{t("appealCic")}</option>
                 </select>
-                <label htmlFor="rti-appeal-grounds" style={labelStyle}>Grounds for appeal</label>
-                <textarea id="rti-appeal-grounds" required value={appeal.grounds} onChange={(e) => setAppeal({ ...appeal, grounds: e.target.value })} placeholder="State the grounds for this appeal" rows={4} style={{ ...inputStyle, minHeight: 100 }} />
-                <button type="submit" className="btn primary" disabled={busy} style={{ minHeight: 44 }}>{busy ? "Submitting…" : "Submit appeal"}</button>
-                <button type="button" className="btn ghost" style={{ marginLeft: 8, minHeight: 44 }} onClick={() => setShowAppeal(false)}>Cancel</button>
+                <label htmlFor="rti-appeal-grounds" style={labelStyle}>{t("appealGroundsLabel")}</label>
+                <textarea id="rti-appeal-grounds" required value={appeal.grounds} onChange={(e) => setAppeal({ ...appeal, grounds: e.target.value })} placeholder={t("appealGroundsPlaceholder")} rows={4} style={{ ...inputStyle, minHeight: 100 }} />
+                <button type="submit" className="btn primary" disabled={busy} style={{ minHeight: 44 }}>{busy ? t("submitting") : t("submitAppeal")}</button>
+                <button type="button" className="btn ghost" style={{ marginLeft: 8, minHeight: 44 }} onClick={() => setShowAppeal(false)}>{t("cancel")}</button>
                 {formError ? <p role="alert" aria-live="assertive" style={{ fontSize: 13, color: "#b42318", marginTop: 8 }}>{formError}</p> : null}
               </form>
             </div>
@@ -208,15 +211,15 @@ export function RTIDetailClient({ id }: { id: string }) {
 
         <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
           <div className="card">
-            <div className="card-h"><h3>Responses</h3></div>
+            <div className="card-h"><h3>{t("responsesTitle")}</h3></div>
             <div className="pad">
               {rti.responses.length === 0 ? (
-                <p style={{ color: "var(--muted)", margin: 0 }}>No response recorded yet.</p>
+                <p style={{ color: "var(--muted)", margin: 0 }}>{t("noResponse")}</p>
               ) : (
                 <ul className="tl">
                   {rti.responses.map((r) => (
                     <li key={r.id} className="done">
-                      <div className="t"><a href={r.responseUrl} target="_blank" rel="noopener noreferrer">Response document</a></div>
+                      <div className="t"><a href={r.responseUrl} target="_blank" rel="noopener noreferrer">{t("responseDocument")}</a></div>
                       <div className="d">{formatIndianDate(r.respondedAt)}</div>
                     </li>
                   ))}
@@ -225,15 +228,15 @@ export function RTIDetailClient({ id }: { id: string }) {
             </div>
           </div>
           <div className="card">
-            <div className="card-h"><h3>Appeals</h3></div>
+            <div className="card-h"><h3>{t("appealsTitle")}</h3></div>
             <div className="pad">
               {rti.appeals.length === 0 ? (
-                <p style={{ color: "var(--muted)", margin: 0 }}>No appeals filed.</p>
+                <p style={{ color: "var(--muted)", margin: 0 }}>{t("noAppeals")}</p>
               ) : (
                 <ul className="tl">
                   {rti.appeals.map((a) => (
                     <li key={a.id} className="cur">
-                      <div className="t">{a.appealType === "cic" ? "CIC / Second appeal" : "First appeal"} — {a.status}</div>
+                      <div className="t">{a.appealType === "cic" ? t("appealCicShort") : t("appealFirstShort")} — {a.status}</div>
                       <div className="d">{formatIndianDate(a.createdAt)}</div>
                     </li>
                   ))}

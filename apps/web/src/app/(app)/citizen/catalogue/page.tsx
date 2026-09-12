@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { getTranslations } from "next-intl/server";
 import { PageHeader, RefreshErrorState } from "../../../_components/ds";
 import { getCatalogueServices } from "../../../_data/citizenPartials";
 import { useResource } from "../../../_data/useResource";
@@ -6,6 +7,7 @@ import { toHumanError } from "@/lib/messages";
 
 /** SVC-081 — Government service catalogue (versioned, published services). */
 export default async function CataloguePage() {
+  const t = await getTranslations("citizenCatalogue");
   const result = await getCatalogueServices();
   const { data: services } = result;
   const resource = useResource(result);
@@ -15,13 +17,13 @@ export default async function CataloguePage() {
   return (
     <>
       <PageHeader
-        title="Service Catalogue"
-        subtitle="Published, versioned service definitions — owner, channels, required documents and SLA."
+        title={t("pageTitle")}
+        subtitle={t("pageSubtitle")}
       />
 
       <div className="card">
         <div className="pad" style={{ borderBottom: "1px solid var(--line)", display: "flex", justifyContent: "space-between" }}>
-          <strong>Published services</strong>
+          <strong>{t("listTitle")}</strong>
           <span style={{ fontSize: 12, color: "var(--muted)" }}>{totalAvailable ?? "—"} available</span>
         </div>
         {errored ? (
@@ -29,18 +31,17 @@ export default async function CataloguePage() {
             <RefreshErrorState error={toHumanError("load", { area: "service catalogue" })} />
           </div>
         ) : services.length === 0 ? (
-          <div className="pad" style={{ color: "var(--muted)" }}>No published services yet.</div>
+          <div className="pad" style={{ color: "var(--muted)" }}>{t("empty")}</div>
         ) : (
           <div style={{ overflowX: "auto" }}>
             <table style={{ width: "100%", borderCollapse: "collapse" }}>
               <thead>
                 <tr style={{ textAlign: "left", fontSize: 12, color: "var(--muted)" }}>
-                  <th scope="col" style={{ padding: 8 }}>Service</th>
-                  <th scope="col" style={{ padding: 8 }}>Owner</th>
-                  <th scope="col" style={{ padding: 8 }}>Version</th>
-                  <th scope="col" style={{ padding: 8 }}>Channels</th>
-                  <th scope="col" style={{ padding: 8 }}>Documents</th>
-                  <th scope="col" style={{ padding: 8 }}>SLA</th>
+                  <th scope="col" style={{ padding: 8 }}>{t("colService")}</th>
+                  <th scope="col" style={{ padding: 8 }}>{t("colOwner")}</th>
+                  <th scope="col" style={{ padding: 8 }}>{t("colVersion")}</th>
+                  <th scope="col" style={{ padding: 8 }}>{t("colChannels")}</th>
+                  <th scope="col" style={{ padding: 8 }}>{t("colDocuments")}</th>
                 </tr>
               </thead>
               <tbody>

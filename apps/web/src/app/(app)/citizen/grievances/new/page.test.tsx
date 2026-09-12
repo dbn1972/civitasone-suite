@@ -1,5 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { render as rtlRender, screen, fireEvent, waitFor } from "@testing-library/react";
+import { NextIntlClientProvider } from "next-intl";
+import enMessages from "@/messages/en.json";
 import RegisterGrievancePage from "./page";
 
 // ── router mock ──────────────────────────────────────────────────────────────
@@ -13,6 +15,13 @@ vi.mock("next/navigation", () => ({
 vi.mock("../../../../_components/ds", () => ({
   PageHeader: ({ title }: { title: string }) => <h1>{title}</h1>,
 }));
+
+// UX-017: the form now reads next-intl's useTranslations() for every label —
+// every render here needs the same NextIntlClientProvider the real root
+// layout supplies (same convention as AccountMenu.test.tsx / LanguageSwitcher.test.tsx).
+function render(ui: React.ReactElement) {
+  return rtlRender(<NextIntlClientProvider locale="en" messages={enMessages}>{ui}</NextIntlClientProvider>);
+}
 
 const fetchMock = vi.fn();
 

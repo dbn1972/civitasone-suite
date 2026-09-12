@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { getTranslations } from "next-intl/server";
 import { Card, PageHeader } from "@/app/_components/ds";
 import { fetchJson } from "@/app/_data/apiClient";
 import { parsePublishedService } from "../_data/runtimeApi";
@@ -25,6 +26,7 @@ async function loadService(serviceKey: string) {
 
 /** FN-13 — published service landing page (mobile-first). */
 export default async function ServicePage({ params, searchParams }: Props) {
+  const t = await getTranslations("citizenServices");
   const { data: service, source } = await loadService(params.serviceKey);
   if (!service || source === "error") notFound();
 
@@ -37,7 +39,7 @@ export default async function ServicePage({ params, searchParams }: Props) {
         subtitle={service.description}
         actions={
           <Link href="/citizen/catalogue" className="btn ghost" style={{ minHeight: 44 }}>
-            ← Catalogue
+            {t("backToCatalogue")}
           </Link>
         }
       />
@@ -54,7 +56,7 @@ export default async function ServicePage({ params, searchParams }: Props) {
               fontSize: 13,
             }}
           >
-            Counter / CSC mode — you are assisting an applicant at the desk.
+            {t("counterModeNotice")}
           </div>
         ) : null}
 

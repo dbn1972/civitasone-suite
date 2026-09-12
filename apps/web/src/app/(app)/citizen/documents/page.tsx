@@ -1,13 +1,15 @@
+import { getTranslations } from "next-intl/server";
 import { PageHeader } from "../../../_components/ds";
 import { DocumentPanel } from "./DocumentPanel";
 
 /** SVC-084 — Document submission & verification. */
-export default function DocumentsPage() {
+export default async function DocumentsPage() {
+  const t = await getTranslations("citizenDocuments");
   return (
     <>
       <PageHeader
-        title="Documents & Verification"
-        subtitle="Upload or fetch documents (DigiLocker), see the required-document checklist and verification status."
+        title={t("pageTitle")}
+        subtitle={t("pageSubtitle")}
       />
       <DocumentPanel />
     </>

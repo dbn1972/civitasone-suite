@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { getTranslations } from "next-intl/server";
 import { PageHeader } from "@/app/_components/ds";
 import { TrackClient } from "../../../_components/TrackClient";
 
@@ -7,15 +8,16 @@ interface Props {
 }
 
 /** FN-13 — application tracking with StatusTimeline. */
-export default function ServiceTrackPage({ params }: Props) {
+export default async function ServiceTrackPage({ params }: Props) {
+  const t = await getTranslations("citizenServices");
   return (
     <>
       <PageHeader
-        title="Track application"
-        subtitle="Follow your application progress"
+        title={t("trackPageTitle")}
+        subtitle={t("trackPageSubtitle")}
         actions={
           <Link href={`/citizen/services/${params.serviceKey}`} className="btn ghost" style={{ minHeight: 44 }}>
-            ← Service
+            {t("backToService")}
           </Link>
         }
       />

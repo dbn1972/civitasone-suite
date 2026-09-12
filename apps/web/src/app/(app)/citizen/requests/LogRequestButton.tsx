@@ -1,11 +1,13 @@
 "use client";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 
 const inputStyle = { width: "100%", padding: 8, minHeight: 44, marginBottom: 8, borderRadius: 8, border: "1px solid var(--line)" } as const;
 const labelStyle = { display: "block", fontSize: 12, color: "var(--muted)", marginBottom: 4, fontWeight: 600 } as const;
 
 export function LogRequestButton() {
+  const t = useTranslations("citizenRequests");
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -39,27 +41,27 @@ export function LogRequestButton() {
   return (
     <>
       <button type="button" className="btn primary" style={{ minHeight: 44 }} onClick={() => setOpen((o) => !o)}>
-        Log Request
+        {t("logRequest")}
       </button>
       {open && (
         <div className="card" style={{ marginTop: 16 }}>
           <form onSubmit={submit} className="pad" style={{ maxWidth: 560 }}>
-            <h4 style={{ marginTop: 0 }}>Log a service request / grievance</h4>
-            <label htmlFor="new-request-category" style={labelStyle}>Category</label>
+            <h4 style={{ marginTop: 0 }}>{t("logFormTitle")}</h4>
+            <label htmlFor="new-request-category" style={labelStyle}>{t("category")}</label>
             <select id="new-request-category" value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })} style={inputStyle}>
-              <option value="grievance">Grievance</option>
-              <option value="water">Water supply</option>
-              <option value="sanitation">Sanitation</option>
-              <option value="roads">Roads</option>
-              <option value="electricity">Electricity</option>
-              <option value="other">Other</option>
+              <option value="grievance">{t("categoryGrievance")}</option>
+              <option value="water">{t("categoryWater")}</option>
+              <option value="sanitation">{t("categorySanitation")}</option>
+              <option value="roads">{t("categoryRoads")}</option>
+              <option value="electricity">{t("categoryElectricity")}</option>
+              <option value="other">{t("categoryOther")}</option>
             </select>
-            <label htmlFor="new-request-subject" style={labelStyle}>Subject</label>
-            <input id="new-request-subject" required value={form.subject} onChange={(e) => setForm({ ...form, subject: e.target.value })} placeholder="Short summary" style={inputStyle} />
-            <label htmlFor="new-request-description" style={labelStyle}>Description</label>
-            <textarea id="new-request-description" required value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} placeholder="Describe the issue" rows={4} style={{ ...inputStyle, minHeight: 100 }} />
-            <button type="submit" className="btn primary" disabled={busy} style={{ minHeight: 44 }}>{busy ? "Submitting…" : "Submit request"}</button>
-            <button type="button" className="btn ghost" style={{ marginLeft: 8, minHeight: 44 }} onClick={() => setOpen(false)}>Cancel</button>
+            <label htmlFor="new-request-subject" style={labelStyle}>{t("subject")}</label>
+            <input id="new-request-subject" required value={form.subject} onChange={(e) => setForm({ ...form, subject: e.target.value })} placeholder={t("subjectPlaceholder")} style={inputStyle} />
+            <label htmlFor="new-request-description" style={labelStyle}>{t("description")}</label>
+            <textarea id="new-request-description" required value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} placeholder={t("descriptionPlaceholder")} rows={4} style={{ ...inputStyle, minHeight: 100 }} />
+            <button type="submit" className="btn primary" disabled={busy} style={{ minHeight: 44 }}>{busy ? t("submitting") : t("submitRequest")}</button>
+            <button type="button" className="btn ghost" style={{ marginLeft: 8, minHeight: 44 }} onClick={() => setOpen(false)}>{t("cancel")}</button>
           </form>
         </div>
       )}

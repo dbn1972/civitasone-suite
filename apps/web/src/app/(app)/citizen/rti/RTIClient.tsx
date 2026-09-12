@@ -1,5 +1,6 @@
 "use client";
 import { useState } from "react";
+import { useTranslations } from "next-intl";
 import { DataTable, Segmented, EmptyState, ConfirmDialog } from "@/app/_components/ds";
 import { formatIndianDate } from "@/lib/formatters";
 
@@ -50,29 +51,44 @@ interface Row extends Record<string, unknown> {
   firstAppeal: string;
 }
 
+type ClockLabels = {
+  closed: string;
+  overdueBy: (count: number) => string;
+  dueToday: string;
+  daysLeft: (count: number) => string;
+};
+
 /** Statutory clock cell — colour AND text (never colour alone, WCAG 1.4.1). */
-function clockCell(row: Row) {
+function clockCell(row: Row, labels: ClockLabels) {
   if (row.closed) {
-    return <span style={{ color: "var(--muted)" }}>Closed</span>;
+    return <span style={{ color: "var(--muted)" }}>{labels.closed}</span>;
   }
   const n = row.daysLeft;
   if (n === null) return <span style={{ color: "var(--muted)" }}>—</span>;
   if (n < 0) {
-    return <span style={{ color: "#b42318", fontWeight: 600 }}>{`Overdue by ${Math.abs(n)} day${Math.abs(n) === 1 ? "" : "s"}`}</span>;
+    return <span style={{ color: "#b42318", fontWeight: 600 }}>{labels.overdueBy(Math.abs(n))}</span>;
   }
   if (n === 0) {
-    return <span style={{ color: "#b42318", fontWeight: 600 }}>Due today</span>;
+    return <span style={{ color: "#b42318", fontWeight: 600 }}>{labels.dueToday}</span>;
   }
   const color = n <= 5 ? "#b54708" : "#067647";
-  return <span style={{ color, fontWeight: n <= 5 ? 600 : 400 }}>{`${n} day${n === 1 ? "" : "s"} left`}</span>;
+  return <span style={{ color, fontWeight: n <= 5 ? 600 : 400 }}>{labels.daysLeft(n)}</span>;
 }
 
 
 export function RTIClient({ rtis, today }: Props) {
+  const t = useTranslations("citizenRti");
   const [active, setActive] = useState("All");
   const [transferId, setTransferId] = useState<string | null>(null);
   const [transferBusy, setTransferBusy] = useState(false);
   const [transferError, setTransferError] = useState<string | undefined>(undefined);
+
+  const labels: ClockLabels = {
+    closed: t("closed"),
+    overdueBy: (count) => t("overdueBy", { count }),
+    dueToday: t("dueToday"),
+    daysLeft: (count) => t("daysLeft", { count }),
+  };
 
   async function handleTransfer(toAuthority: string | undefined) {
     if (!transferId || !toAuthority?.trim()) return;
@@ -128,18 +144,18 @@ export function RTIClient({ rtis, today }: Props) {
   }));
 
   const COLUMNS = [
-    { key: "rtiNo" as const, label: "RTI No" },
-    { key: "applicantName" as const, label: "Applicant" },
-    { key: "subject" as const, label: "Subject" },
-    { key: "publicAuthority" as const, label: "Public Authority" },
-    { key: "filedDate" as const, label: "Filed" },
-    { key: "deadlineDate" as const, label: "Deadline" },
-    { key: "daysLeft" as const, label: "Statutory Clock", render: clockCell },
-    { key: "status" as const, label: "Status", cellType: "status" as const },
-    { key: "firstAppeal" as const, label: "1st Appeal?" },
+    { key: "rtiNo" as const, label: t("colRtiNo") },
+    { key: "applicantName" as const, label: t("colApplicant") },
+    { key: "subject" as const, label: t("colSubject") },
+    { key: "publicAuthority" as const, label: t("colPublicAuthority") },
+    { key: "filedDate" as const, label: t("colFiled") },
+    { key: "deadlineDate" as const, label: t("colDeadline") },
+    { key: "daysLeft" as const, label: t("colStatutoryClock"), render: (row: Row) => clockCell(row, labels) },
+    { key: "status" as const, label: t("colStatus"), cellType: "status" as const },
+    { key: "firstAppeal" as const, label: t("colFirstAppeal") },
     {
       key: "id" as const,
-      label: "Actions",
+      label: t("colActions"),
       render: (row: Row) =>
         TRANSFERABLE.has(row.status) ? (
           <button
@@ -150,9 +166,9 @@ export function RTIClient({ rtis, today }: Props) {
               setTransferError(undefined);
               setTransferId(row.id);
             }}
-            aria-label={`Transfer RTI ${row.rtiNo} to another public authority`}
+            aria-label={t("transferAriaLabel", { rtiNo: row.rtiNo })}
           >
-            Transfer
+            {t("transfer")}
           </button>
         ) : null,
     },
@@ -161,13 +177,13 @@ export function RTIClient({ rtis, today }: Props) {
   return (
     <div className="card">
       <div className="card-h">
-        <h3>Application List</h3>
-        <div role="group" aria-label="Filter RTI applications">
+        <h3>{t("applicationListTitle")}</h3>
+        <div role="group" aria-label={t("filterAriaLabel")}>
           <Segmented value={active} onChange={setActive} options={SEG_OPTIONS} />
         </div>
       </div>
       {rtis.length === 0 ? (
-        <EmptyState icon="📄" title="No RTI applications" message="Applications filed under RTI Act 2005 will appear here." />
+        <EmptyState icon="📄" title={t("emptyTitle")} message={t("emptyMessage")} />
       ) : (
         <DataTable
           columns={COLUMNS}
@@ -181,9 +197,9 @@ export function RTIClient({ rtis, today }: Props) {
       )}
       <ConfirmDialog
         open={transferId !== null}
-        title="Transfer RTI (§6(3))"
-        description="Transfer this application to the competent public authority within 5 days as required by the RTI Act 2005."
-        confirmLabel="Transfer"
+        title={t("transferDialogTitle")}
+        description={t("transferDialogDescription")}
+        confirmLabel={t("transfer")}
         requireReason
         reasonLabel="Transfer to (public authority name)"
         busy={transferBusy}
