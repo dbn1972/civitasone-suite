@@ -80,7 +80,7 @@ test.describe('Workforce Operations — S16', () => {
       page,
     }) => {
       await page.goto('/hr/workforce/wfh');
-      const form = page.getByRole('form', { name: 'Work-From-Home request form' });
+      const form = page.getByRole('form', { name: 'Work From Home request form' });
       await expect(form).toBeVisible();
       await expect(form.getByLabel('Employee ID (UUID)')).toBeVisible();
       await expect(form.getByLabel(/From Date/)).toBeVisible();
@@ -90,7 +90,7 @@ test.describe('Workforce Operations — S16', () => {
     test('dedicated /wfh/new route renders the WFH request form', async ({ page }) => {
       await page.goto('/hr/workforce/wfh/new');
       // Standalone page or redirect to list — the WFH form must be present.
-      const form = page.getByRole('form', { name: 'Work-From-Home request form' });
+      const form = page.getByRole('form', { name: 'Work From Home request form' });
       await expect(form).toBeVisible();
       await expect(form.getByLabel('Employee ID (UUID)')).toBeVisible();
       await expect(form.getByLabel(/From Date/)).toBeVisible();
@@ -153,7 +153,7 @@ test.describe('Workforce Operations — S16', () => {
     test('page heading "Shift Definitions" is visible', async ({ page }) => {
       await page.goto('/hr/shifts');
       await expect(
-        page.getByRole('heading', { name: 'Shift Definitions' }),
+        page.getByRole('heading', { name: 'Shift Definitions', exact: true }),
       ).toBeVisible();
     });
 
@@ -168,7 +168,12 @@ test.describe('Workforce Operations — S16', () => {
     }) => {
       await page.goto('/hr/shifts');
       // "General Duty" is part of the DoPT standard shift seed (09:00-17:30 Mon-Fri)
-      await expect(page.getByText('General Duty')).toBeVisible();
+      // Fixture data intentionally appears twice (the shift-cards preview AND
+      // the full table below it) -- scope to the cards region so this only
+      // asserts the card, not an ambiguous whole-page text match.
+      await expect(
+        page.getByRole('region', { name: 'Shift cards' }).getByText('General Duty'),
+      ).toBeVisible();
     });
 
     test('shift table renders with Shift Name column header', async ({ page }) => {
@@ -193,8 +198,8 @@ test.describe('Workforce Operations — S16', () => {
       page,
     }) => {
       await page.goto('/hr/workforce/staffing-plan');
-      await expect(page.getByText('Sanctioned Posts')).toBeVisible();
-      await expect(page.getByText('Filled Positions')).toBeVisible();
+      await expect(page.getByText('Sanctioned Posts', { exact: true })).toBeVisible();
+      await expect(page.getByText('Filled Positions', { exact: true })).toBeVisible();
     });
 
     test('staffing plan table renders Department and Filled column headers', async ({
