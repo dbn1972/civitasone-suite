@@ -76,7 +76,7 @@ test.describe('Workforce Operations — S16', () => {
     test('WFH form renders with employee selector and date pickers', async ({ page }) => {
       await page.goto('/hr/workforce/wfh/new');
       await expect(
-        page.getByRole('form', { name: 'Work-From-Home request form' }),
+        page.getByRole('form', { name: 'Work From Home request form' }),
       ).toBeVisible();
       // Employee selector
       await expect(page.getByLabel('Employee ID (UUID)')).toBeVisible();
@@ -138,7 +138,7 @@ test.describe('Workforce Operations — S16', () => {
     test('page heading "Shift Definitions" is visible', async ({ page }) => {
       await page.goto('/hr/shifts');
       await expect(
-        page.getByRole('heading', { name: 'Shift Definitions' }),
+        page.getByRole('heading', { name: 'Shift Definitions', exact: true }),
       ).toBeVisible();
     });
 
@@ -152,7 +152,12 @@ test.describe('Workforce Operations — S16', () => {
     test('at least one shift card is visible (DoPT General Duty seeded)', async ({ page }) => {
       await page.goto('/hr/shifts');
       // "General Duty" is part of the GoI standard shift seed data
-      await expect(page.getByText('General Duty')).toBeVisible();
+      // Fixture data intentionally appears twice (the shift-cards preview AND
+      // the full table below it) -- scope to the cards region so this only
+      // asserts the card, not an ambiguous whole-page text match.
+      await expect(
+        page.getByRole('region', { name: 'Shift cards' }).getByText('General Duty'),
+      ).toBeVisible();
     });
   });
 

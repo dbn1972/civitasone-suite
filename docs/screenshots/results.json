@@ -1,5 +1,5 @@
 {
-  "capturedAt": "2026-06-27T08:54:09.110Z",
+  "capturedAt": "2026-09-12T04:20:35.970Z",
   "tenant": "District Industries Centre (DIC) — Trial",
   "results": {
     "Dashboard": [
@@ -112,7 +112,7 @@
       {
         "label": "Dashboard",
         "path": "/crm/dashboard",
-        "file": "crm/dashboard.png"
+        "file": null
       }
     ],
     "Audit": [

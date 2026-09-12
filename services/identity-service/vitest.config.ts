@@ -1,6 +1,18 @@
 import { defineConfig } from "vitest/config";
 export default defineConfig({
   test: {
+    // REL-024: buildApp() registers 11+ route modules (users, rbac, sessions,
+    // mfa, devices, sync, api-keys, break-glass, saml, scim, webauthn) and
+    // legitimately takes >10s to complete when the CI test job runs all
+    // ~115 packages concurrently via turbo test --continue against one
+    // shared Postgres container (verified: every file here passes 100% in
+    // isolation -- 34/34 files, 416/416 tests -- so this is CI-load
+    // contention hitting vitest's 10s default hookTimeout, not a code bug).
+    // saml-config.route.test.ts and sessions-apikeys-routes.test.ts were the
+    // two observed victims ("Hook timed out in 10000ms" in beforeAll's
+    // buildApp() call); raised for the whole file since any beforeAll here
+    // can be scheduled at the same contention point.
+    hookTimeout: 30_000,
     env: {
       JWT_ALGORITHM: "HS256",
       JWT_SECRET: "test_secret_for_civitasone_32chr",

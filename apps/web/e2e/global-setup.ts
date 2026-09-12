@@ -169,8 +169,72 @@ const FIXTURES: Record<string, unknown> = {
     { id: 'job-e2e-002', jobTitle: 'Accounts Officer', department: 'Finance', vacancies: 1, status: 'open', applicationsReceived: 15, postedDate: '2024-07-10', applicationDeadline: '2024-08-15' },
   ],
   '/api/v1/hrms/appraisals': [],
+  // REL-023: missing entirely -- /hr/workforce/wfh always rendered its
+  // DataTable's EmptyState (no columnheaders at all in that state).
+  '/api/v1/hrms/wfh-requests': [
+    { id: 'wfh-e2e-001', employeeId: 'EMP-0001', employeeName: 'Kavita Sharma', department: 'Finance',
+      fromDate: '2026-09-15', toDate: '2026-09-16', days: '2', reason: 'Childcare', status: 'approved' },
+    { id: 'wfh-e2e-002', employeeId: 'EMP-0002', employeeName: 'Rohit Verma', department: 'IT',
+      fromDate: '2026-09-20', toDate: '2026-09-20', days: '1', reason: 'Medical follow-up', status: 'pending' },
+  ],
+  // REL-023: missing entirely -- /hr/workforce/overtime rendered EmptyState,
+  // whose own "+ New Request" CTA duplicates the PageHeader's "+ New Request"
+  // link (the exact REL-010 duplicate-CTA pattern), and the empty-state h4
+  // "No overtime requests yet" collides with the page's own h1 under a
+  // substring-matching getByRole('heading', {name:'Overtime Requests'}).
+  // Envelope is { data: [...] } -- this loader has no bare-array fallback.
+  '/api/v1/hrms/overtime-requests': {
+    data: [
+      { id: 'ot-e2e-001', employeeId: 'EMP-0003', requestDate: '2026-09-10', hoursRequested: '3.5',
+        reason: 'Month-end closing', status: 'pending', approvedBy: null, approvedAt: null },
+      { id: 'ot-e2e-002', employeeId: 'EMP-0004', requestDate: '2026-09-08', hoursRequested: '2',
+        reason: 'Server migration window', status: 'approved', approvedBy: 'EMP-0010', approvedAt: '2026-09-09' },
+    ],
+  },
+  // REL-023: missing entirely -- /hr/workforce/staffing-plan only renders its
+  // role="region" aria-label="Staffing plan table" wrapper (and the real
+  // <table>) when items.length > 0; with no fixture it fell back to a plain
+  // DataTable empty state instead, so the test's region locator never matched.
+  '/api/v1/hrms/staffing-plan': [
+    { id: 'sp-e2e-001', department: 'Finance', cadre: 'Group A', sanctionedPosts: 40, filled: 34, vacant: 6,
+      fillPercentage: 85, lastReview: '2026-06-30', status: 'active' },
+    { id: 'sp-e2e-002', department: 'IT', cadre: 'Group B', sanctionedPosts: 20, filled: 12, vacant: 8,
+      fillPercentage: 60, lastReview: '2026-06-30', status: 'active' },
+  ],
+  // REL-023: missing entirely. Note this is intentionally a *test fixture*,
+  // not a production fallback -- COMP-004 (see hr/shifts/page.tsx) deliberately
+  // removed a hardcoded GOVT_SHIFTS fallback the app used to fabricate when the
+  // real API returned zero rows; the E2E spec's "GoI standard shifts seeded"
+  // comment predates that removal and needs its own mock-gateway data now.
+  '/api/v1/hrms/shifts': [
+    { id: 'shift-e2e-001', name: 'General Duty', startTime: '09:00', endTime: '17:30', breakMinutes: 30,
+      workingMinutes: 480, applicableTo: 'All Departments', status: 'active' },
+    { id: 'shift-e2e-002', name: 'Morning Shift', startTime: '06:00', endTime: '14:00', breakMinutes: 30,
+      workingMinutes: 450, applicableTo: 'Security, Facilities', status: 'active' },
+  ],
   '/api/v1/hrms/training-programs': [],
-  '/api/v1/hrms/org-chart': [],
+  // REL-023: was `[]` -- no fixture at all meant OrgChartClient always
+  // rendered zero <li role="treeitem">, failing every org-chart E2E
+  // assertion (tree renders, keyboard nav) regardless of the page's own
+  // logic. Nested tree matching OrgChartNode { id, name, designation,
+  // department, reportsTo, children }.
+  '/api/v1/hrms/org-chart': [
+    {
+      id: 'oc-001', name: 'Ananya Krishnan', designation: 'Secretary', department: 'Administration', reportsTo: null,
+      children: [
+        {
+          id: 'oc-002', name: 'Vikram Seth', designation: 'Joint Secretary', department: 'Finance', reportsTo: 'oc-001',
+          children: [
+            { id: 'oc-003', name: 'Priya Menon', designation: 'Deputy Secretary', department: 'Finance', reportsTo: 'oc-002', children: [] },
+          ],
+        },
+        {
+          id: 'oc-004', name: 'Rajesh Nambiar', designation: 'Joint Secretary', department: 'IT', reportsTo: 'oc-001',
+          children: [],
+        },
+      ],
+    },
+  ],
   '/api/v1/hrms/onboarding': [
     { id: 'ob-001', employee: 'Sunita Rao', department: 'Finance', joiningDate: '2026-08-11',
       reportingManager: 'CFO Mahesh Iyer', officeLocation: 'Block C, Udyog Bhavan, New Delhi - 110 001',
