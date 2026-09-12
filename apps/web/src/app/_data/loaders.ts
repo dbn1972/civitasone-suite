@@ -3222,21 +3222,50 @@ export async function getRTIApplications(): Promise<LoaderResult<RTISummary[]>> 
 
 // Citizen — Portal, Alerts, Notices, Surveys
 
-export type CitizenPortalMetric = {
-  id: string;
-  metric: string;
-  category: string;
-  currentMonth: string;
-  previousMonth: string;
-  change: string;
-  status: string;
+// The route (citizen-service requests/routes.ts, GET /v1/citizen/portal/metrics)
+// returns a single real-metrics object -- { data: { totalServices, activeRequests,
+// resolvedThisMonth, avgResolutionDays } } -- not a row list. COMP-010: this loader
+// used to route the payload through getArrayPayload() expecting an array of
+// per-metric rows, which never matched this object and always fell back to
+// source:"error" with empty data. Parse the real object shape directly instead.
+export type CitizenPortalMetrics = {
+  totalServices: number;
+  activeRequests: number;
+  resolvedThisMonth: number;
+  avgResolutionDays: number;
 };
 
-export async function getCitizenPortal(): Promise<LoaderResult<CitizenPortalMetric[]>> {
-  return fetchJson<unknown, CitizenPortalMetric[]>("/api/v1/citizen/portal/metrics", [], {
+const CITIZEN_PORTAL_METRICS_EMPTY: CitizenPortalMetrics = {
+  totalServices: 0,
+  activeRequests: 0,
+  resolvedThisMonth: 0,
+  avgResolutionDays: 0,
+};
+
+export function mapCitizenPortalMetrics(payload: unknown): CitizenPortalMetrics | null {
+  const data = isRecord(payload) ? payload.data : null;
+  if (
+    !isRecord(data) ||
+    typeof data.totalServices !== "number" ||
+    typeof data.activeRequests !== "number" ||
+    typeof data.resolvedThisMonth !== "number" ||
+    typeof data.avgResolutionDays !== "number"
+  ) {
+    return null;
+  }
+  return {
+    totalServices: data.totalServices,
+    activeRequests: data.activeRequests,
+    resolvedThisMonth: data.resolvedThisMonth,
+    avgResolutionDays: data.avgResolutionDays,
+  };
+}
+
+export async function getCitizenPortal(): Promise<LoaderResult<CitizenPortalMetrics>> {
+  return fetchJson<unknown, CitizenPortalMetrics>("/api/v1/citizen/portal/metrics", CITIZEN_PORTAL_METRICS_EMPTY, {
     revalidateSeconds: 60,
     telemetryKey: "citizen.portal",
-    mapResponse: (p) => getArrayPayload(p) as CitizenPortalMetric[] | null,
+    mapResponse: mapCitizenPortalMetrics,
   });
 }
 

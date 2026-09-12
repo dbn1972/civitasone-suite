@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { mapContractsListRows } from "./loaders";
+import { mapContractsListRows, mapCitizenPortalMetrics } from "./loaders";
 
 // Real GET /v1/contract/contracts response shape, captured live from the
 // running contract-service dev stack (see fix/contract-frontend-field-mapping
@@ -79,5 +79,62 @@ describe("mapContractsListRows", () => {
     expect(mapContractsListRows(null)).toBeNull();
     expect(mapContractsListRows("not json")).toBeNull();
     expect(mapContractsListRows({ unrelated: true })).toBeNull();
+  });
+});
+
+// COMP-010: real GET /v1/citizen/portal/metrics response shape, from
+// citizen-service requests/routes.ts + requests/queries.ts getPortalMetrics()
+// -- a single real-metrics object, not an array of per-metric rows.
+const REAL_PORTAL_METRICS_ENVELOPE = {
+  data: {
+    totalServices: 42,
+    activeRequests: 17,
+    resolvedThisMonth: 128,
+    avgResolutionDays: 3.4,
+  },
+};
+
+describe("mapCitizenPortalMetrics", () => {
+  it("maps the real citizen-service portal-metrics envelope (object, not a row array)", () => {
+    // Regression for COMP-010: the loader previously ran this payload through
+    // getArrayPayload(), which only recognizes arrays / {data:[...]}  /
+    // {items:[...]}. Since payload.data here is an object, getArrayPayload
+    // always returned null, so the page always rendered source:"error" with
+    // zero metrics regardless of what the backend sent.
+    expect(mapCitizenPortalMetrics(REAL_PORTAL_METRICS_ENVELOPE)).toEqual({
+      totalServices: 42,
+      activeRequests: 17,
+      resolvedThisMonth: 128,
+      avgResolutionDays: 3.4,
+    });
+  });
+
+  it("accepts a tenant with genuinely zero metrics (not treated as missing data)", () => {
+    const result = mapCitizenPortalMetrics({
+      data: { totalServices: 0, activeRequests: 0, resolvedThisMonth: 0, avgResolutionDays: 0 },
+    });
+    expect(result).toEqual({ totalServices: 0, activeRequests: 0, resolvedThisMonth: 0, avgResolutionDays: 0 });
+    expect(result).not.toBeNull();
+  });
+
+  it("returns null for an array payload (the old, never-matching shape)", () => {
+    expect(mapCitizenPortalMetrics({ data: [{ metric: "x" }] })).toBeNull();
+  });
+
+  it("returns null when a required numeric field is missing or the wrong type", () => {
+    expect(
+      mapCitizenPortalMetrics({ data: { totalServices: 1, activeRequests: 2, resolvedThisMonth: 3 } }),
+    ).toBeNull();
+    expect(
+      mapCitizenPortalMetrics({
+        data: { totalServices: "1", activeRequests: 2, resolvedThisMonth: 3, avgResolutionDays: 4 },
+      }),
+    ).toBeNull();
+  });
+
+  it("returns null for a payload that isn't a recognizable metrics object at all", () => {
+    expect(mapCitizenPortalMetrics(null)).toBeNull();
+    expect(mapCitizenPortalMetrics("not json")).toBeNull();
+    expect(mapCitizenPortalMetrics({ unrelated: true })).toBeNull();
   });
 });
