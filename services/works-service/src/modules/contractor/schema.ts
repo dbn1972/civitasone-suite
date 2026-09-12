@@ -6,6 +6,9 @@
  */
 import { sql } from "drizzle-orm";
 import { pgSchema, uuid, varchar, integer, text, boolean, timestamp, check } from "drizzle-orm/pg-core";
+// SEC-011: contractor PAN is encrypted at rest (AES-256-GCM envelope) via the
+// same app-layer customType pattern used by procurement-service/hrms-service.
+import { encryptedText } from "../../shared/pii-crypto.js";
 
 const works = pgSchema("works");
 
@@ -15,7 +18,8 @@ export const contractors = works.table("contractors", {
   name:            varchar("name", { length: 256 }).notNull(),
   registrationNo:  varchar("registration_no", { length: 64 }),
   classId:         uuid("class_id"),
-  pan:             varchar("pan", { length: 10 }),
+  /** SEC-011: encrypted at rest — see shared/pii-crypto.ts. Column type is text (ciphertext ~80+ chars). */
+  pan:             encryptedText("pan"),
   gst:             varchar("gst", { length: 15 }),
   email:           varchar("email", { length: 256 }),
   phone:           varchar("phone", { length: 20 }),
