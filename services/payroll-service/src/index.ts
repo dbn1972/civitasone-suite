@@ -17,4 +17,5 @@ registerGracefulShutdown({
     await sqlClient.end();
   },
   logger: app.log,
+  server: app.server,
 });

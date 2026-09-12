@@ -15,4 +15,5 @@ registerGracefulShutdown({
     await app.close();
   },
   logger: app.log,
+  server: app.server,
 });

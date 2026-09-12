@@ -97,4 +97,58 @@ describe("registerGracefulShutdown", () => {
     expect(logger.error).toHaveBeenCalled();
     vi.useRealTimers();
   });
+
+  // PERF-003 follow-up: Fastify's forceCloseConnections defaults to 'idle'
+  // on Node >=19, which sweeps idle keep-alive sockets exactly ONCE, at the
+  // instant close() runs. A socket that is mid-request at that instant and
+  // goes idle a moment later (ordinary keep-alive) is never revisited, so
+  // shutdown hangs until forceExitMs. When `server` is supplied, we must
+  // re-run closeIdleConnections() on an interval for the duration of the
+  // shutdown window so that gap is closed — and the interval must stop once
+  // cleanup finishes, so it doesn't leak past process exit.
+  it("re-sweeps idle connections on an interval while cleanup is pending, and stops once done", async () => {
+    vi.useFakeTimers();
+    let resolveCleanup: () => void = () => {};
+    const cleanup = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          resolveCleanup = resolve;
+        }),
+    );
+    const closeIdleConnections = vi.fn();
+    const exit = vi.spyOn(process, "exit").mockImplementation((() => undefined) as unknown as typeof process.exit);
+
+    registerGracefulShutdown({
+      cleanup,
+      server: { closeIdleConnections },
+      idleSweepIntervalMs: 100,
+      forceExitMs: 10_000,
+    });
+    process.emit("SIGTERM");
+    await vi.advanceTimersByTimeAsync(0);
+
+    // Swept once immediately when shutdown starts (mirrors Fastify's own
+    // one-shot sweep — safe on its own but not sufficient by itself).
+    expect(closeIdleConnections).toHaveBeenCalledTimes(1);
+
+    // A connection that was mid-request at the first sweep and goes idle
+    // afterwards must be caught by a later tick, not missed forever.
+    await vi.advanceTimersByTimeAsync(350);
+    expect(closeIdleConnections.mock.calls.length).toBeGreaterThanOrEqual(4);
+
+    const callsBeforeDone = closeIdleConnections.mock.calls.length;
+    resolveCleanup();
+    // Not flush(): it uses real setImmediate, which vi.useFakeTimers() also
+    // fakes, so it would never settle on its own — advance fake timers by 0
+    // to let the cleanup-resolution microtasks/continuation run instead.
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(exit).toHaveBeenCalledWith(0);
+
+    // No further sweeps once shutdown has completed (no leaked interval).
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(closeIdleConnections.mock.calls.length).toBe(callsBeforeDone);
+
+    vi.useRealTimers();
+  });
 });
