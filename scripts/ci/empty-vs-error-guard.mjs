@@ -191,19 +191,44 @@ function findContainingStatement(block, node) {
   return block.statements.find((s) => s.getStart() <= node.getStart() && s.getEnd() >= node.getEnd());
 }
 
+const RESOURCE_CALL_NAMES = new Set(["useResource", "combineResourceState"]);
+
+/**
+ * Is `fn` (an arrow function or function expression) itself one of the
+ * arguments passed to a `useResource(...)`/`combineResourceState(...)` call
+ * — e.g. the `isEmpty` callback in `useResource(result, (data) =>
+ * data.items.length === 0)`? That call IS the loader's error-aware contract
+ * (see _data/useResource.ts): passing a fetch result through it already
+ * means "this data's error state has been considered," even though the
+ * empty-check text itself lives inside the callback, one function boundary
+ * below the call. Fixed 2026-09 (UX-013) — see isConnectedToErrorAwareness.
+ */
+function isArgumentOfResourceCall(fn) {
+  const parent = fn.parent;
+  if (!parent || !ts.isCallExpression(parent)) return false;
+  if (!parent.arguments.includes(fn)) return false;
+  return ts.isIdentifier(parent.expression) && RESOURCE_CALL_NAMES.has(parent.expression.text);
+}
+
 /**
  * Walk up from `emptyCheckNode` to its enclosing component/function boundary,
  * looking for evidence that THIS empty-check — not just the file in general —
  * is gated by the loader's error token. See the "gated by" rule in the header
  * comment. Returns true iff such evidence is found.
  *
- * KNOWN LIMITATION (tracked in UX-013): stops at the nearest enclosing
- * function boundary without checking whether that function is itself an
- * argument to `useResource(...)`/`combineResourceState(...)` -- this repo's
- * blessed error-handling contract. A page using that contract correctly can
- * still show as a false-positive violation here (e.g. workflow/page.tsx,
- * workflow/definitions/page.tsx). Extend this to recognize that call shape
- * as a valid connection before relying on a zero baseline count.
+ * Stops at the nearest enclosing function boundary UNLESS that function is
+ * itself an argument to `useResource(...)`/`combineResourceState(...)` --
+ * this repo's blessed error-handling contract (isArgumentOfResourceCall,
+ * above) -- in which case being inside that callback is itself the
+ * connection, e.g. `useResource(result, (data) => data.items.length === 0)`
+ * or `combineResourceState([a, b], data, (d) => d.length === 0)`. Fixed
+ * 2026-09 (UX-013); previously this false-flagged pages using that contract
+ * correctly (workflow/page.tsx, workflow/definitions/page.tsx) whenever the
+ * empty-check lived inside a custom `isEmpty` callback rather than directly
+ * in JSX -- see tests/architecture/empty-vs-error-guard.test.ts for the
+ * regression coverage (both the false-positive fixtures and a still-caught
+ * negative case: an isEmpty callback passed to something that ISN'T
+ * useResource/combineResourceState).
  */
 function isConnectedToErrorAwareness(emptyCheckNode) {
   let node = emptyCheckNode;
@@ -240,7 +265,15 @@ function isConnectedToErrorAwareness(emptyCheckNode) {
       if (stmt && hasEarlyReturnGuardBefore(parent, stmt)) return true;
     }
 
-    if (isFunctionBoundary(parent)) break;
+    if (isFunctionBoundary(parent)) {
+      if (
+        (ts.isArrowFunction(parent) || ts.isFunctionExpression(parent)) &&
+        isArgumentOfResourceCall(parent)
+      ) {
+        return true;
+      }
+      break;
+    }
     node = parent;
   }
 

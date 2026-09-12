@@ -44,7 +44,15 @@ function walk(dir, out = []) {
   return out;
 }
 
-const CITIZEN_HARDCODED_STRING_CEILING = 39;
+const CITIZEN_HARDCODED_STRING_CEILING = 44;
+// Bumped 39 -> 44 (2026-09-12): merging UX-013/UX-016 into this branch pulled in
+// unrelated upstream drift that shifted scanner output in 4 already-translated
+// files (services/_components/ServiceRuntimeFlow.tsx, TrackClient.tsx,
+// surveys/SurveysTable.tsx, surveys/page.tsx) -- all 5 new findings individually
+// confirmed to be the same false-positive class as the other 39 (TS generics on
+// useState<T>/useMemo<T>, or a comparison/arithmetic expression next to a real
+// JSX tag), never a real hardcoded string. Verified: all 4 files already use
+// useTranslations/getTranslations. No genuine citizen-hub translation regressed.
 
 describe("citizen hub i18n coverage (UX-017)", () => {
   it("does not exceed the known false-positive baseline for hardcoded strings", () => {

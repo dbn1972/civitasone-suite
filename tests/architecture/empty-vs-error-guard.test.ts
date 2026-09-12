@@ -324,4 +324,161 @@ export default async function WidgetsPage() {
     expect(violations).not.toBeNull();
     expect(violations.length).toBe(1);
   });
+
+  // ───────────────────────────────────────────────────────────────────────
+  // UX-013: the connectivity walk used to stop at the nearest enclosing
+  // function boundary unconditionally, so a `.length === 0` check written
+  // inside a custom `isEmpty` callback passed to useResource()/
+  // combineResourceState() — this repo's own blessed error-handling
+  // contract — false-flagged as a violation, because the walk never noticed
+  // that the callback's enclosing CALL was the connection. Two real pages
+  // hit this before the fix: workflow/page.tsx (`useResource(result, (data)
+  // => Object.keys(data.instancesByStatus).length === 0 && ...)`) and
+  // workflow/definitions/page.tsx (`combineResourceState([...], data, (d) =>
+  // d.length === 0)`). Fixtures below are simplified but structurally
+  // identical to those two files.
+  // ───────────────────────────────────────────────────────────────────────
+  it("[UX-013] does not flag a .length === 0 inside a custom isEmpty callback passed to useResource() (workflow/page.tsx shape)", () => {
+    const source = `
+import { PageHeader, Card, EmptyState, StatGrid, StatCard, RefreshErrorState } from "../../_components/ds";
+import { getAnalyticsSummary } from "./_data/workflowData";
+import { useResource } from "../../_data/useResource";
+import { toHumanError } from "@/lib/messages";
+
+export default async function WorkflowHubPage() {
+  const result = await getAnalyticsSummary();
+  const { data: a } = result;
+  const resource = useResource(result, (data) => Object.keys(data.instancesByStatus).length === 0 && data.totalInstances === 0);
+  const errored = resource.status === "error";
+
+  return (
+    <>
+      {errored ? (
+        <RefreshErrorState error={toHumanError("load", { area: "workflow analytics" })} />
+      ) : (
+        <StatGrid>
+          <StatCard label="Total instances" value={a.totalInstances} />
+        </StatGrid>
+      )}
+    </>
+  );
+}
+`;
+    expect(checkSource(source)).toBeNull();
+  });
+
+  it("[UX-013] does not flag a .length === 0 inside a custom isEmpty callback passed to combineResourceState() (workflow/definitions/page.tsx shape)", () => {
+    const source = `
+import { PageHeader, Card, DataTable, EmptyState, RefreshErrorState } from "../../../_components/ds";
+import { fetchJson } from "@/app/_data/apiClient";
+import { combineResourceState } from "@/app/_data/useResource";
+import { toHumanError } from "@/lib/messages";
+
+export default async function WorkflowDefinitionsPage() {
+  const definitionsResult = await fetchJson("/api/v1/workflow/definitions", []);
+  const templatesResult = await fetchJson("/api/v1/workflow/templates", []);
+  const definitions = definitionsResult.data;
+  const resource = combineResourceState(
+    [definitionsResult, templatesResult],
+    definitions,
+    (d) => d.length === 0,
+  );
+  const errored = resource.status === "error";
+
+  return (
+    <Card>
+      {errored ? (
+        <RefreshErrorState error={toHumanError("load", { area: "approval workflows" })} />
+      ) : definitions.length === 0 ? (
+        <EmptyState title="No approval workflows configured" />
+      ) : (
+        <DataTable rows={definitions} />
+      )}
+    </Card>
+  );
+}
+`;
+    expect(checkSource(source)).toBeNull();
+  });
+
+  it("[UX-013 negative control] STILL flags a .length === 0 inside a callback passed to something that is NOT useResource/combineResourceState", () => {
+    // Same shape as the fixtures above — a `.length === 0` inside an inline
+    // callback argument — but the callee is an unrelated function. Proves
+    // the fix recognizes the specific useResource/combineResourceState call
+    // shape rather than blanket-exempting "any empty-check inside any
+    // callback," which would reopen the exact false-negative PR #1127's
+    // review caught.
+    const source = `
+import { PageHeader, Card, EmptyState } from "../../_components/ds";
+import { getWidgets } from "../../_data/loaders";
+import { memoize } from "../../_lib/memoize";
+
+export default async function WidgetsPage() {
+  const result = await getWidgets();
+  const { data: widgets } = result;
+  const isEmpty = memoize((data) => data.length === 0);
+
+  return (
+    <Card>
+      {isEmpty(widgets) ? (
+        <EmptyState title="No widgets yet" message="Create your first widget." />
+      ) : (
+        <p>{widgets.length} widgets</p>
+      )}
+    </Card>
+  );
+}
+`;
+    const violations = checkSource(source);
+    expect(violations).not.toBeNull();
+    expect(violations.length).toBe(1);
+  });
+
+  it("[UX-013 sabotage] the negative control above is caught BECAUSE isArgumentOfResourceCall name-checks the callee — a version that treated ANY wrapping call as connected would miss it", () => {
+    // Reuses the negative-control fixture (memoize-wrapped isEmpty
+    // predicate) from the previous test. The real, shipped check flags it —
+    // asserted again here for a self-contained before/after. A sabotaged
+    // connectivity rule that treats "this .length === 0 sits inside some
+    // arrow function passed to some call" as sufficient — without checking
+    // that the call is actually named useResource/combineResourceState —
+    // would NOT flag it, because it has that exact shape one level of
+    // indirection down (`memoize((data) => data.length === 0)`). This is
+    // precisely the kind of coexistence-not-connection false negative PR
+    // #1127's review caught for the file-level check; the callee name check
+    // is what keeps this fix from reopening the same hole one layer deeper.
+    const source = `
+import { PageHeader, Card, EmptyState } from "../../_components/ds";
+import { getWidgets } from "../../_data/loaders";
+import { memoize } from "../../_lib/memoize";
+
+export default async function WidgetsPage() {
+  const result = await getWidgets();
+  const { data: widgets } = result;
+  const isEmpty = memoize((data) => data.length === 0);
+
+  return (
+    <Card>
+      {isEmpty(widgets) ? (
+        <EmptyState title="No widgets yet" message="Create your first widget." />
+      ) : (
+        <p>{widgets.length} widgets</p>
+      )}
+    </Card>
+  );
+}
+`;
+    // The real rule flags it (callee "memoize" isn't a blessed name)...
+    const violations = checkSource(source);
+    expect(violations).not.toBeNull();
+    expect(violations.length).toBe(1);
+
+    // ...but a sabotaged rule that doesn't check WHICH call wraps the
+    // callback — only that some call does — would call this "connected" and
+    // miss it, because the shape (`<ident>((data) => ...length === 0)`)
+    // matches regardless of the callee's name.
+    function sabotagedTreatsAnyWrappingCallAsConnected(src) {
+      return /\w+\s*\(\s*[^;]*=>\s*[^;]*\.length\s*===\s*0/.test(src);
+    }
+    expect(sabotagedTreatsAnyWrappingCallAsConnected(source)).toBe(true);
+  });
 });

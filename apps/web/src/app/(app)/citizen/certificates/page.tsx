@@ -1,21 +1,26 @@
 import { getTranslations } from "next-intl/server";
-import { PageHeader } from "../../../_components/ds";
-import { DataSourceBadge } from "../../../_components/DataSourceBadge";
+import { PageHeader, RefreshErrorState } from "../../../_components/ds";
 import { getCertificates } from "../../../_data/citizenGaps";
 import { CertificateVerify } from "./CertificateVerify";
+import { useResource } from "../../../_data/useResource";
+import { toHumanError } from "@/lib/messages";
 
 /** SVC-086 — Certificate, licence & permit issuance + public QR verify. */
 export default async function CertificatesPage() {
   const t = await getTranslations("citizenCertificates");
-  const { data: certs, source } = await getCertificates();
-  const active = certs.filter((c) => c.status === "active" || c.status === "amended" || c.status === "renewed").length;
+  const result = await getCertificates();
+  const { data: certs } = result;
+  const resource = useResource(result);
+  const errored = resource.status === "error";
+  const active = errored
+    ? null
+    : certs.filter((c) => c.status === "active" || c.status === "amended" || c.status === "renewed").length;
 
   return (
     <>
       <PageHeader
         title={t("pageTitle")}
         subtitle={t("pageSubtitle")}
-        actions={source === "error" ? <DataSourceBadge source={source} /> : null}
       />
 
       <CertificateVerify />
@@ -23,9 +28,13 @@ export default async function CertificatesPage() {
       <div className="card" style={{ marginTop: 16 }}>
         <div className="pad" style={{ borderBottom: "1px solid var(--line)", display: "flex", justifyContent: "space-between" }}>
           <strong>{t("listTitle")}</strong>
-          <span style={{ fontSize: 12, color: "var(--muted)" }}>{active} active</span>
+          <span style={{ fontSize: 12, color: "var(--muted)" }}>{active ?? "—"} active</span>
         </div>
-        {certs.length === 0 ? (
+        {errored ? (
+          <div className="pad">
+            <RefreshErrorState error={toHumanError("load", { area: "certificates" })} />
+          </div>
+        ) : certs.length === 0 ? (
           <div className="pad" style={{ color: "var(--muted)" }}>{t("empty")}</div>
         ) : (
           <div style={{ overflowX: "auto" }}>

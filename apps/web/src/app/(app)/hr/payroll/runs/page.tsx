@@ -1,7 +1,8 @@
 import Link from "next/link";
-import { PageHeader, StatusPill } from "../../../../_components/ds";
-import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
+import { PageHeader, StatusPill, RefreshErrorState } from "../../../../_components/ds";
 import { getPayrollRunDetails } from "@/app/_data/loaders";
+import { useResource } from "@/app/_data/useResource";
+import { toHumanError } from "@/lib/messages";
 
 const fmtRupees = (n: number) =>
   "₹" + n.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -18,7 +19,10 @@ export default async function PayrollRunsPage() {
   // working /hr/payroll root page already uses successfully, and pointed the
   // empty-state CTA at that same working page, where the real
   // CreatePayrollRunForm lives.
-  const { data: runs, source } = await getPayrollRunDetails();
+  const result = await getPayrollRunDetails();
+  const { data: runs } = result;
+  const resource = useResource(result);
+  const errored = resource.status === "error";
 
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
@@ -28,9 +32,12 @@ export default async function PayrollRunsPage() {
         back="/hr/payroll"
         backLabel="Payroll"
       />
-      <DataSourceBadge source={source} message="Couldn't load payroll runs — showing nothing" />
 
-      {runs.length === 0 ? (
+      {errored ? (
+        <div className="card" style={{ padding: 32 }}>
+          <RefreshErrorState error={toHumanError("load", { area: "payroll runs" })} backHref="/hr/payroll" />
+        </div>
+      ) : runs.length === 0 ? (
         <div className="card" style={{ padding: 32, textAlign: "center" }}>
           <p style={{ color: "var(--ink2)", fontSize: 15, marginBottom: 14 }}>No payroll runs found.</p>
           <Link href="/hr/payroll" className="btn primary">

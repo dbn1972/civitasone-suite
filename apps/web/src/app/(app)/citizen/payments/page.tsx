@@ -1,27 +1,34 @@
 import { getTranslations } from "next-intl/server";
-import { PageHeader } from "../../../_components/ds";
-import { DataSourceBadge } from "../../../_components/DataSourceBadge";
+import { PageHeader, RefreshErrorState } from "../../../_components/ds";
 import { getFeeSchedules } from "../../../_data/citizenGaps";
 import { PaymentPanel } from "./PaymentPanel";
+import { useResource } from "../../../_data/useResource";
+import { toHumanError } from "@/lib/messages";
 
 /** SVC-085 — Service fee & payment handling. */
 export default async function PaymentsPage() {
   const t = await getTranslations("citizenPayments");
-  const { data: schedules, source } = await getFeeSchedules();
+  const result = await getFeeSchedules();
+  const { data: schedules } = result;
+  const resource = useResource(result);
+  const errored = resource.status === "error";
 
   return (
     <>
       <PageHeader
         title={t("pageTitle")}
         subtitle={t("pageSubtitle")}
-        actions={source === "error" ? <DataSourceBadge source={source} /> : null}
       />
 
       <PaymentPanel schedules={schedules.map((s) => ({ id: s.id, name: s.name }))} />
 
       <div className="card" style={{ marginTop: 16 }}>
         <div className="pad" style={{ borderBottom: "1px solid var(--line)" }}><strong>{t("listTitle")}</strong></div>
-        {schedules.length === 0 ? (
+        {errored ? (
+          <div className="pad">
+            <RefreshErrorState error={toHumanError("load", { area: "fee schedules" })} />
+          </div>
+        ) : schedules.length === 0 ? (
           <div className="pad" style={{ color: "var(--muted)" }}>{t("empty")}</div>
         ) : (
           <div style={{ overflowX: "auto" }}>

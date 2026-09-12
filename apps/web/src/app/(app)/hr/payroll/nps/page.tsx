@@ -1,7 +1,8 @@
-import { PageHeader, Card, DataTable, EmptyState, StatGrid, StatCard } from "../../../../_components/ds";
-import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
+import { PageHeader, Card, DataTable, EmptyState, StatGrid, StatCard, RefreshErrorState } from "../../../../_components/ds";
 import { getNpsStatements } from "../../../../_data/loaders";
 import { Chart } from "../../../../_components/Chart";
+import { useResource } from "../../../../_data/useResource";
+import { toHumanError } from "@/lib/messages";
 
 type NpsRow = {
   id: string;
@@ -21,7 +22,10 @@ function projectCorpus(totalContribMinor: number, yearsRemaining: number): numbe
 }
 
 export default async function NpsStatementsPage() {
-  const { data: rows, source } = await getNpsStatements();
+  const result = await getNpsStatements();
+  const { data: rows } = result;
+  const resource = useResource(result);
+  const errored = resource.status === "error";
 
   const tableRows: NpsRow[] = rows.map((r) => ({
     id: r.id,
@@ -32,7 +36,9 @@ export default async function NpsStatementsPage() {
     er: r.erContribMinor ?? 0,
   }));
 
-  const uniqueEmps = new Set(tableRows.map((r) => r.employeeId)).size;
+  const uniqueEmps = errored ? null : new Set(tableRows.map((r) => r.employeeId)).size;
+  // Raw (not gated): tableRows is already [] on a real fetch failure, so
+  // these stay true 0s — projectCorpus() below needs a real number either way.
   const totalEmp = tableRows.reduce((s, r) => s + (Number(r.emp) || 0), 0);
   const totalEr = tableRows.reduce((s, r) => s + (Number(r.er) || 0), 0);
   const totalCorpus = totalEmp + totalEr; // simplified: total accumulated so far
@@ -64,13 +70,12 @@ export default async function NpsStatementsPage() {
         subtitle="National Pension System contributions — 10% employee + 14% employer (GoI 2019 amendment)."
         back="/hr/payroll"
       />
-      <DataSourceBadge source={source} message="Couldn't load — showing nothing" />
 
       <StatGrid>
-        <StatCard icon="📋" iconBg="var(--infobg)" label="Statements" value={tableRows.length} />
-        <StatCard icon="👥" iconBg="var(--goodbg)" label="Employees" value={uniqueEmps} />
-        <StatCard icon="🧑" iconBg="var(--warnbg)" label="Total Employee (10%)" value={formatMoney(totalEmp)} />
-        <StatCard icon="🏛️" iconBg="var(--panel)" label="Total Employer (14%)" value={formatMoney(totalEr)} />
+        <StatCard icon="📋" iconBg="var(--infobg)" label="Statements" value={errored ? "—" : tableRows.length} />
+        <StatCard icon="👥" iconBg="var(--goodbg)" label="Employees" value={uniqueEmps ?? "—"} />
+        <StatCard icon="🧑" iconBg="var(--warnbg)" label="Total Employee (10%)" value={errored ? "—" : formatMoney(totalEmp)} />
+        <StatCard icon="🏛️" iconBg="var(--panel)" label="Total Employer (14%)" value={errored ? "—" : formatMoney(totalEr)} />
       </StatGrid>
 
       {/* NPS Corpus Dashboard */}
@@ -95,7 +100,7 @@ export default async function NpsStatementsPage() {
             Accumulated Corpus
           </p>
           <p style={{ margin: "0 0 4px", fontSize: 26, fontWeight: 800, color: "var(--fg)" }}>
-            {formatMoney(totalCorpus)}
+            {errored ? "—" : formatMoney(totalCorpus)}
           </p>
           <p style={{ margin: 0, fontSize: 12, color: "var(--fg2)" }}>
             Employee + Employer contributions (all periods)
@@ -137,7 +142,7 @@ export default async function NpsStatementsPage() {
             Projected Corpus at Retirement
           </p>
           <p style={{ margin: "0 0 2px", fontSize: 22, fontWeight: 800, color: "#16a34a" }}>
-            {formatMoney(projectedCorpus)}
+            {errored ? "—" : formatMoney(projectedCorpus)}
           </p>
           <p style={{ margin: 0, fontSize: 11, color: "#14532d" }}>
             @9.5% p.a. over {AVG_YEARS_TO_RETIRE} yrs (illustrative — PFRDA median). Not a guarantee.
@@ -153,7 +158,11 @@ export default async function NpsStatementsPage() {
       )}
 
       <Card title="NPS Ledger">
-        {tableRows.length === 0 ? (
+        {errored ? (
+          <div className="pad">
+            <RefreshErrorState error={toHumanError("load", { area: "NPS statements" })} backHref="/hr/payroll" />
+          </div>
+        ) : tableRows.length === 0 ? (
           <EmptyState
             icon="🏦"
             title="No NPS statements"
