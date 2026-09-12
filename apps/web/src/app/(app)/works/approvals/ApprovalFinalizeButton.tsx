@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { ConfirmDialog, useToast } from "@/app/_components/ds";
+import { useFormError } from "@/lib/useFormError";
 
 interface ApprovalFinalizeButtonProps {
   id: string;
@@ -37,6 +38,7 @@ export function ApprovalFinalizeButton({
   // record is NOT finalized yet — a consumer applies it asynchronously — so we
   // must not claim it is done. We show a truthful "pending" state instead.
   const [submitted, setSubmitted] = useState(false);
+  const formError = useFormError(TYPE_LABEL[type].toLowerCase());
 
   // Derived from the server-provided status on every render, so a refresh that
   // has picked up the applied change flips this to the real finalized state
@@ -96,17 +98,15 @@ export function ApprovalFinalizeButton({
     if (busy) return;
     setBusy(true);
     setErrorMessage("");
+    formError.clear();
     try {
       const res = await fetch(
         `/api/proxy/v1/works/approvals/${type}/${id}/finalize`,
         { method: "POST" },
       );
       if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        setErrorMessage(
-          (data as { message?: string }).message ??
-            `Finalize failed (${res.status})`,
-        );
+        const resolved = await formError.fromResponse(res, "save");
+        setErrorMessage(resolved.message);
         return;
       }
       // HTTP 202 Accepted: the finalize is queued, not applied. Tell the truth
@@ -119,7 +119,7 @@ export function ApprovalFinalizeButton({
       );
       setTimeout(() => router.refresh(), 800);
     } catch {
-      setErrorMessage("Network error — could not submit. Please try again.");
+      setErrorMessage(formError.fromException("save").message);
     } finally {
       setBusy(false);
     }

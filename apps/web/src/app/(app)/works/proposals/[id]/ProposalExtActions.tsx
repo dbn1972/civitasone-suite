@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useToast } from "@/app/_components/ds/Toast";
 import { PROPOSAL_WRITE_ROLES } from "@/lib/auth/workRoles";
 import { ConfirmDialog, useConfirmAction } from "@/app/_components/ds";
+import { useFormError } from "@/lib/useFormError";
 
 
 interface ProposalExtActionsProps {
@@ -102,22 +103,25 @@ function SplitProposalForm({
     id: string;
     workNumber?: string;
   } | null>(null);
+  const formError = useFormError("proposal split");
 
   // Splitting is irreversible — it creates a new, permanent child work record —
   // so the POST is gated behind an accessible ConfirmDialog (maker-checker).
   const { open, busy, error, trigger, cancel, confirm } = useConfirmAction({
     onConfirm: async () => {
+      formError.clear();
       const res = await fetch("/api/proxy/v1/works/proposals/split", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ parentWorkId: workId, description }),
       });
-      const data = (await res.json().catch(() => ({}))) as Record<string, unknown>;
       if (!res.ok) {
-        throw new Error((data?.message as string) ?? `Request failed (${res.status})`);
+        const resolved = await formError.fromResponse(res, "save");
+        throw new Error(resolved.message);
       }
 
       // Capture child work info from response envelope (best-effort)
+      const data = (await res.json().catch(() => ({}))) as Record<string, unknown>;
       const inner = (data?.data ?? data) as Record<string, unknown>;
       const childId =
         (inner?.id as string | undefined) ??
@@ -218,6 +222,9 @@ function SplitProposalForm({
             rows={4}
             style={{ ...inputStyle, minHeight: 96, resize: "vertical" }}
           />
+          {formError.fieldError("description") && (
+            <span style={{ fontSize: 12, color: "var(--bad)" }}>{formError.fieldError("description")}</span>
+          )}
         </div>
         <SubmitBtn busy={busy} label="Split Proposal" />
       </form>
@@ -252,11 +259,13 @@ function MapCOAForm({
   const [subHead, setSubHead] = useState("");
   const [detailHead, setDetailHead] = useState("");
   const [objectHead, setObjectHead] = useState("");
+  const formError = useFormError("chart-of-accounts mapping");
 
   // COA mapping is append-only — the API has no update/delete for it, so a
   // wrong mapping becomes permanent history. Gate it behind ConfirmDialog.
   const { open, busy, error, trigger, cancel, confirm } = useConfirmAction({
     onConfirm: async () => {
+      formError.clear();
       const payload: Record<string, string> = { workId, majorHead };
       if (subMajorHead) payload.subMajorHead = subMajorHead;
       if (minorHead)    payload.minorHead    = minorHead;
@@ -270,8 +279,8 @@ function MapCOAForm({
         body: JSON.stringify(payload),
       });
       if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        throw new Error((data as { message?: string }).message ?? `Request failed (${res.status})`);
+        const resolved = await formError.fromResponse(res, "save");
+        throw new Error(resolved.message);
       }
       toast.success("COA mapped.");
     },
@@ -285,6 +294,7 @@ function MapCOAForm({
 
   const optionalInput = (
     label: string,
+    field: string,
     value: string,
     onChange: (v: string) => void,
     placeholder: string,
@@ -299,6 +309,9 @@ function MapCOAForm({
         onChange={(e) => onChange(e.target.value)}
         style={{ ...inputStyle, minHeight: "auto" }}
       />
+      {formError.fieldError(field) && (
+        <span style={{ fontSize: 12, color: "var(--bad)" }}>{formError.fieldError(field)}</span>
+      )}
     </div>
   );
 
@@ -318,13 +331,16 @@ function MapCOAForm({
             onChange={(e) => setMajorHead(e.target.value)}
             style={{ ...inputStyle, minHeight: "auto" }}
           />
+          {formError.fieldError("majorHead") && (
+            <span style={{ fontSize: 12, color: "var(--bad)" }}>{formError.fieldError("majorHead")}</span>
+          )}
         </div>
         <div style={gridStyle}>
-          {optionalInput("Sub-Major Head", subMajorHead, setSubMajorHead, "e.g. 01")}
-          {optionalInput("Minor Head",     minorHead,    setMinorHead,    "e.g. 800")}
-          {optionalInput("Sub Head",       subHead,      setSubHead,      "e.g. 01")}
-          {optionalInput("Detail Head",    detailHead,   setDetailHead,   "e.g. 01")}
-          {optionalInput("Object Head",    objectHead,   setObjectHead,   "e.g. 26")}
+          {optionalInput("Sub-Major Head", "subMajorHead", subMajorHead, setSubMajorHead, "e.g. 01")}
+          {optionalInput("Minor Head",     "minorHead",    minorHead,    setMinorHead,    "e.g. 800")}
+          {optionalInput("Sub Head",       "subHead",      subHead,      setSubHead,      "e.g. 01")}
+          {optionalInput("Detail Head",    "detailHead",   detailHead,   setDetailHead,   "e.g. 01")}
+          {optionalInput("Object Head",    "objectHead",   objectHead,   setObjectHead,   "e.g. 26")}
         </div>
         <SubmitBtn busy={busy} label="Map COA" />
       </form>
@@ -357,11 +373,13 @@ function MapOfficeForm({
   const [subDivisionId, setSubDivisionId] = useState("");
   const [sectionId, setSectionId]       = useState("");
   const [isNodal, setIsNodal]           = useState(false);
+  const formError = useFormError("office mapping");
 
   // Office mapping is append-only — the API has no update/delete for it, so a
   // wrong mapping becomes permanent history. Gate it behind ConfirmDialog.
   const { open, busy, error, trigger, cancel, confirm } = useConfirmAction({
     onConfirm: async () => {
+      formError.clear();
       const payload: Record<string, unknown> = { workId, divisionId, isNodal };
       if (subDivisionId) payload.subDivisionId = subDivisionId;
       if (sectionId)     payload.sectionId     = sectionId;
@@ -372,8 +390,8 @@ function MapOfficeForm({
         body: JSON.stringify(payload),
       });
       if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        throw new Error((data as { message?: string }).message ?? `Request failed (${res.status})`);
+        const resolved = await formError.fromResponse(res, "save");
+        throw new Error(resolved.message);
       }
       toast.success("Office mapped.");
     },
@@ -400,6 +418,9 @@ function MapOfficeForm({
             onChange={(e) => setDivisionId(e.target.value)}
             style={{ ...inputStyle, minHeight: "auto" }}
           />
+          {formError.fieldError("divisionId") && (
+            <span style={{ fontSize: 12, color: "var(--bad)" }}>{formError.fieldError("divisionId")}</span>
+          )}
         </div>
         <div style={fieldGroup}>
           <label style={labelStyle}>Sub-Division ID</label>
@@ -410,6 +431,9 @@ function MapOfficeForm({
             onChange={(e) => setSubDivisionId(e.target.value)}
             style={{ ...inputStyle, minHeight: "auto" }}
           />
+          {formError.fieldError("subDivisionId") && (
+            <span style={{ fontSize: 12, color: "var(--bad)" }}>{formError.fieldError("subDivisionId")}</span>
+          )}
         </div>
         <div style={fieldGroup}>
           <label style={labelStyle}>Section ID</label>
@@ -420,6 +444,9 @@ function MapOfficeForm({
             onChange={(e) => setSectionId(e.target.value)}
             style={{ ...inputStyle, minHeight: "auto" }}
           />
+          {formError.fieldError("sectionId") && (
+            <span style={{ fontSize: 12, color: "var(--bad)" }}>{formError.fieldError("sectionId")}</span>
+          )}
         </div>
         <div style={{ ...fieldGroup, display: "flex", alignItems: "center", gap: 8 }}>
           <input

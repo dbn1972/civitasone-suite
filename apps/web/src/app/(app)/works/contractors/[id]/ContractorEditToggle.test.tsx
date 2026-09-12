@@ -62,17 +62,58 @@ describe("ContractorEditToggle — clearing a field actually sends the clear", (
     expect(body).toEqual({ phone: "9000000000" });
   });
 
-  it("shows the real backend error instead of a false success when a clear is actually invalid (e.g. PAN)", async () => {
-    fetchMock.mockResolvedValue({
-      ok: false,
-      status: 400,
-      json: async () => ({ message: "invalid request" }),
-    });
+  // UX-016: this used to show the backend's raw top-level `message` verbatim
+  // ("invalid request") — the same class of leak useFormError closes
+  // fleet-wide (UX-003). It must now report failure honestly (no false
+  // success) with a clerk-safe catalogued message, never the raw text.
+  it("shows a clerk-safe error instead of a false success when a clear is actually invalid (e.g. PAN)", async () => {
+    fetchMock.mockResolvedValue(
+      new Response(JSON.stringify({ message: "invalid request" }), {
+        status: 400,
+        headers: { "content-type": "application/json" },
+      }),
+    );
     openEditForm();
     fireEvent.change(screen.getByLabelText(/^PAN$/), { target: { value: "" } });
     fireEvent.click(screen.getByRole("button", { name: /save changes/i }));
 
-    await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent("invalid request"));
+    await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent(/couldn't save/i));
+    expect(screen.getByRole("alert").textContent).not.toMatch(/invalid request/);
     expect(screen.queryByText("Contractor updated.")).not.toBeInTheDocument();
+  });
+
+  it("renders an inline field-level message from a fieldErrors response next to the offending field", async () => {
+    fetchMock.mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          code: "VALIDATION_FAILED",
+          message: "validation_failed",
+          fieldErrors: [{ field: "pan", message: "PAN must be exactly 10 characters." }],
+        }),
+        { status: 400, headers: { "content-type": "application/json" } },
+      ),
+    );
+    openEditForm();
+    fireEvent.change(screen.getByLabelText(/^PAN$/), { target: { value: "SHORT" } });
+    fireEvent.click(screen.getByRole("button", { name: /save changes/i }));
+
+    expect(await screen.findByText("PAN must be exactly 10 characters.")).toBeInTheDocument();
+  });
+
+  it("never surfaces a raw HTTP status code or raw server text on a plain-text failure", async () => {
+    fetchMock.mockResolvedValue(
+      new Response("Internal Server Error\n at Object.<anonymous> (/srv/works.js:20:4)", {
+        status: 500,
+        headers: { "content-type": "text/plain" },
+      }),
+    );
+    openEditForm();
+    fireEvent.change(screen.getByLabelText(/Phone/), { target: { value: "9000000000" } });
+    fireEvent.click(screen.getByRole("button", { name: /save changes/i }));
+
+    const alert = await screen.findByRole("alert");
+    expect(alert.textContent).not.toMatch(/\b500\b/);
+    expect(alert.textContent).not.toMatch(/Internal Server Error/);
+    expect(alert.textContent).not.toMatch(/at Object\.<anonymous>/);
   });
 });

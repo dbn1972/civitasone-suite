@@ -3,6 +3,7 @@
 import { useId, useState } from "react";
 import { useRouter } from "next/navigation";
 import { minorToRupeesOrNull } from "@/lib/formatters";
+import { useFormError } from "@/lib/useFormError";
 
 interface ProposalData {
   id: string;
@@ -92,10 +93,12 @@ function ProposalEditForm({
 
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ text: string; ok: boolean } | null>(null);
+  const formError = useFormError("proposal");
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setMsg(null);
+    formError.clear();
 
     const patch: Record<string, unknown> = {};
     if (description !== proposal.description) patch.description = description;
@@ -122,19 +125,18 @@ function ProposalEditForm({
         body: JSON.stringify(patch),
       });
       if (!res.ok) {
-        const d = await res.json().catch(() => ({}));
-        throw new Error(
-          (d as { message?: string }).message ?? `Update failed (${res.status})`,
-        );
+        const resolved = await formError.fromResponse(res, "save");
+        setMsg({ text: resolved.message, ok: false });
+        return;
       }
       setMsg({ text: "Proposal updated.", ok: true });
       setTimeout(() => {
         router.refresh();
         onClose();
       }, 800);
-    } catch (err) {
+    } catch {
       setMsg({
-        text: err instanceof Error ? err.message : "Network error.",
+        text: formError.fromException("save").message,
         ok: false,
       });
     } finally {
@@ -185,6 +187,9 @@ function ProposalEditForm({
             required
             style={{ ...inputStyle, minHeight: 88, resize: "vertical" }}
           />
+          {formError.fieldError("description") && (
+            <span style={{ fontSize: 12, color: "var(--bad)" }}>{formError.fieldError("description")}</span>
+          )}
         </div>
 
         <div
@@ -207,6 +212,9 @@ function ProposalEditForm({
               onChange={(e) => setCostRupees(e.target.value)}
               style={inputStyle}
             />
+            {formError.fieldError("estimatedCostMinor") && (
+              <span style={{ fontSize: 12, color: "var(--bad)" }}>{formError.fieldError("estimatedCostMinor")}</span>
+            )}
           </div>
           <div style={fieldWrap}>
             <label htmlFor={`${formId}-district`} style={labelStyle}>
@@ -220,6 +228,9 @@ function ProposalEditForm({
               onChange={(e) => setDistrict(e.target.value)}
               style={inputStyle}
             />
+            {formError.fieldError("district") && (
+              <span style={{ fontSize: 12, color: "var(--bad)" }}>{formError.fieldError("district")}</span>
+            )}
           </div>
           <div style={fieldWrap}>
             <label htmlFor={`${formId}-taluka`} style={labelStyle}>
@@ -233,6 +244,9 @@ function ProposalEditForm({
               onChange={(e) => setTaluka(e.target.value)}
               style={inputStyle}
             />
+            {formError.fieldError("taluka") && (
+              <span style={{ fontSize: 12, color: "var(--bad)" }}>{formError.fieldError("taluka")}</span>
+            )}
           </div>
           <div style={fieldWrap}>
             <label htmlFor={`${formId}-village`} style={labelStyle}>
@@ -246,6 +260,9 @@ function ProposalEditForm({
               onChange={(e) => setVillage(e.target.value)}
               style={inputStyle}
             />
+            {formError.fieldError("village") && (
+              <span style={{ fontSize: 12, color: "var(--bad)" }}>{formError.fieldError("village")}</span>
+            )}
           </div>
         </div>
 
@@ -261,6 +278,9 @@ function ProposalEditForm({
             maxLength={2048}
             style={{ ...inputStyle, minHeight: 66, resize: "vertical" }}
           />
+          {formError.fieldError("remarks") && (
+            <span style={{ fontSize: 12, color: "var(--bad)" }}>{formError.fieldError("remarks")}</span>
+          )}
         </div>
 
         <div style={{ display: "flex", gap: 10 }}>

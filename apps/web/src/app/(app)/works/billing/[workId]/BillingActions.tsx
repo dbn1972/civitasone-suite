@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { ConfirmDialog, useToast, Card } from "@/app/_components/ds";
+import { useFormError } from "@/lib/useFormError";
 
 type BillItem = { id: string; billNo: string; status: string };
 
@@ -48,11 +49,13 @@ export function BillingActions({ bills }: BillingActionsProps) {
   } | null>(null);
   const [billBusy, setBillBusy] = useState(false);
   const [billError, setBillError] = useState("");
+  const billFormError = useFormError("bill");
 
   async function handleBillFinalize() {
     if (!billDialog) return;
     setBillBusy(true);
     setBillError("");
+    billFormError.clear();
     try {
       const res = await fetch(
         `/api/proxy/v1/works/billing/bills/${billDialog.billId}/finalize`,
@@ -63,7 +66,8 @@ export function BillingActions({ bills }: BillingActionsProps) {
         },
       );
       if (!res.ok) {
-        setBillError(await res.text().catch(() => "Request failed"));
+        const resolved = await billFormError.fromResponse(res, "save");
+        setBillError(resolved.message);
         return;
       }
       toast.success(
@@ -72,7 +76,7 @@ export function BillingActions({ bills }: BillingActionsProps) {
       setBillDialog(null);
       setTimeout(() => router.refresh(), 600);
     } catch {
-      setBillError("Network error. Please try again.");
+      setBillError(billFormError.fromException("save").message);
     } finally {
       setBillBusy(false);
     }
@@ -84,6 +88,7 @@ export function BillingActions({ bills }: BillingActionsProps) {
   const [mbDialog, setMbDialog] = useState(false);
   const [mbBusy, setMbBusy] = useState(false);
   const [mbError, setMbError] = useState("");
+  const mbFormError = useFormError("measurement book");
 
   function openMbDialog(e: React.FormEvent) {
     e.preventDefault();
@@ -96,6 +101,7 @@ export function BillingActions({ bills }: BillingActionsProps) {
     if (!mbId.trim()) return;
     setMbBusy(true);
     setMbError("");
+    mbFormError.clear();
     try {
       const res = await fetch(
         `/api/proxy/v1/works/billing/mb/${mbId.trim()}/finalize`,
@@ -106,7 +112,8 @@ export function BillingActions({ bills }: BillingActionsProps) {
         },
       );
       if (!res.ok) {
-        setMbError(await res.text().catch(() => "Request failed"));
+        const resolved = await mbFormError.fromResponse(res, "save");
+        setMbError(resolved.message);
         return;
       }
       toast.success(`MB advanced to ${statusLabel(mbNextStatus)}.`);
@@ -114,7 +121,7 @@ export function BillingActions({ bills }: BillingActionsProps) {
       setMbId("");
       setTimeout(() => router.refresh(), 600);
     } catch {
-      setMbError("Network error. Please try again.");
+      setMbError(mbFormError.fromException("save").message);
     } finally {
       setMbBusy(false);
     }

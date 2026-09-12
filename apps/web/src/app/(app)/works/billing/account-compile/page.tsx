@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { PageHeader, Card } from "@/app/_components/ds";
 import { useToast } from "@/app/_components/ds/Toast";
+import { useFormError } from "@/lib/useFormError";
 
 const inputStyle: React.CSSProperties = {
   width: "100%",
@@ -43,10 +44,12 @@ export default function AccountCompilePage() {
   const [busy, setBusy]             = useState(false);
   const [error, setError]           = useState<string | null>(null);
   const [done, setDone]             = useState(false);
+  const formError = useFormError("account compile");
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
+    formError.clear();
 
     if (!submittedTo.trim()) {
       setError("Submitted To is required.");
@@ -65,20 +68,17 @@ export default function AccountCompilePage() {
         }),
       });
 
-      const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        setError(
-          (data as { message?: string }).message ??
-            `Request failed (${res.status})`,
-        );
+        const resolved = await formError.fromResponse(res, "save");
+        setError(resolved.message);
         return;
       }
 
       toast.success("Account compile initiated.");
       setDone(true);
       setTimeout(() => router.push("/works/billing"), 1200);
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Network error.");
+    } catch {
+      setError(formError.fromException("save").message);
     } finally {
       setBusy(false);
     }

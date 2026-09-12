@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { ConfirmDialog, useToast, Card } from "@/app/_components/ds";
+import { useFormError } from "@/lib/useFormError";
 
 interface TenderActionsProps {
   tenderId: string;
@@ -26,11 +27,13 @@ export function TenderActions({ tenderId, workId, awardId }: TenderActionsProps)
   const [quotedAmountRs, setQuotedAmountRs] = useState("");
   const [quotedPercentage, setQuotedPercentage] = useState("");
   const [aboveBelow, setAboveBelow] = useState<AboveBelow>("at_par");
+  const quotFormError = useFormError("quotation");
 
   async function handleAddQuotation(e: React.FormEvent) {
     e.preventDefault();
     setQuotBusy(true);
     setQuotError("");
+    quotFormError.clear();
     try {
       const body: Record<string, unknown> = { tenderId, contractorName, method };
       if (method === "item_rate") {
@@ -45,7 +48,8 @@ export function TenderActions({ tenderId, workId, awardId }: TenderActionsProps)
         body: JSON.stringify(body),
       });
       if (!res.ok) {
-        setQuotError(await res.text().catch(() => "Request failed"));
+        const resolved = await quotFormError.fromResponse(res, "save");
+        setQuotError(resolved.message);
         return;
       }
       toast.success("Quotation submitted.");
@@ -55,7 +59,7 @@ export function TenderActions({ tenderId, workId, awardId }: TenderActionsProps)
       setQuotOpen(false);
       setTimeout(() => router.refresh(), 600);
     } catch {
-      setQuotError("Network error. Please try again.");
+      setQuotError(quotFormError.fromException("save").message);
     } finally {
       setQuotBusy(false);
     }
@@ -71,6 +75,7 @@ export function TenderActions({ tenderId, workId, awardId }: TenderActionsProps)
   const [workPeriodDays, setWorkPeriodDays] = useState("");
   const [billMode, setBillMode] = useState("RA");
   const [acceptedAmountRs, setAcceptedAmountRs] = useState("");
+  const awardFormError = useFormError("work award");
 
   async function handleCreateAward(e: React.FormEvent) {
     e.preventDefault();
@@ -80,6 +85,7 @@ export function TenderActions({ tenderId, workId, awardId }: TenderActionsProps)
     }
     setAwardBusy(true);
     setAwardError("");
+    awardFormError.clear();
     try {
       const body: Record<string, unknown> = {
         workId,
@@ -96,14 +102,15 @@ export function TenderActions({ tenderId, workId, awardId }: TenderActionsProps)
         body: JSON.stringify(body),
       });
       if (!res.ok) {
-        setAwardError(await res.text().catch(() => "Request failed"));
+        const resolved = await awardFormError.fromResponse(res, "save");
+        setAwardError(resolved.message);
         return;
       }
       toast.success("Work award submitted. It will be recorded once processed.");
       setAwardOpen(false);
       setTimeout(() => router.refresh(), 600);
     } catch {
-      setAwardError("Network error. Please try again.");
+      setAwardError(awardFormError.fromException("save").message);
     } finally {
       setAwardBusy(false);
     }
@@ -116,6 +123,7 @@ export function TenderActions({ tenderId, workId, awardId }: TenderActionsProps)
   const [doDialog, setDoDialog] = useState(false);
   const [doBusy, setDoBusy] = useState(false);
   const [doError, setDoError] = useState("");
+  const finalizeFormError = useFormError("award finalization");
 
   async function handleAwardFinalize(level: "dao" | "do") {
     if (!awardId) return;
@@ -124,20 +132,22 @@ export function TenderActions({ tenderId, workId, awardId }: TenderActionsProps)
     const setDialogOpen = level === "dao" ? setDaoDialog : setDoDialog;
     setDialogBusy(true);
     setDialogError("");
+    finalizeFormError.clear();
     try {
       const res = await fetch(
         `/api/proxy/v1/works/tenders/award/${awardId}/${level}-finalize`,
         { method: "POST" },
       );
       if (!res.ok) {
-        setDialogError(await res.text().catch(() => "Request failed"));
+        const resolved = await finalizeFormError.fromResponse(res, "save");
+        setDialogError(resolved.message);
         return;
       }
       toast.success(`Award ${level.toUpperCase()} finalization submitted. It will show as finalized once processed.`);
       setDialogOpen(false);
       setTimeout(() => router.refresh(), 600);
     } catch {
-      setDialogError("Network error. Please try again.");
+      setDialogError(finalizeFormError.fromException("save").message);
     } finally {
       setDialogBusy(false);
     }
@@ -174,6 +184,9 @@ export function TenderActions({ tenderId, workId, awardId }: TenderActionsProps)
                   onChange={(e) => setContractorName(e.target.value)}
                   placeholder="Enter contractor name"
                 />
+                {quotFormError.fieldError("contractorName") && (
+                  <span style={{ fontSize: 12, color: "var(--bad)" }}>{quotFormError.fieldError("contractorName")}</span>
+                )}
               </div>
               <div>
                 <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: "var(--ink3)", marginBottom: 4 }}>
@@ -201,6 +214,9 @@ export function TenderActions({ tenderId, workId, awardId }: TenderActionsProps)
                   onChange={(e) => setQuotedAmountRs(e.target.value)}
                   placeholder="0.00"
                 />
+                {quotFormError.fieldError("quotedAmountMinor") && (
+                  <span style={{ fontSize: 12, color: "var(--bad)" }}>{quotFormError.fieldError("quotedAmountMinor")}</span>
+                )}
               </div>
             ) : (
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, maxWidth: 560 }}>
@@ -217,6 +233,9 @@ export function TenderActions({ tenderId, workId, awardId }: TenderActionsProps)
                     onChange={(e) => setQuotedPercentage(e.target.value)}
                     placeholder="0.00"
                   />
+                  {quotFormError.fieldError("quotedPercentage") && (
+                    <span style={{ fontSize: 12, color: "var(--bad)" }}>{quotFormError.fieldError("quotedPercentage")}</span>
+                  )}
                 </div>
                 <div>
                   <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: "var(--ink3)", marginBottom: 4 }}>
@@ -279,6 +298,9 @@ export function TenderActions({ tenderId, workId, awardId }: TenderActionsProps)
                     onChange={(e) => setAwardContractor(e.target.value)}
                     placeholder="Awarded contractor"
                   />
+                  {awardFormError.fieldError("contractorName") && (
+                    <span style={{ fontSize: 12, color: "var(--bad)" }}>{awardFormError.fieldError("contractorName")}</span>
+                  )}
                 </div>
                 <div>
                   <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: "var(--ink3)", marginBottom: 4 }}>
@@ -294,18 +316,30 @@ export function TenderActions({ tenderId, workId, awardId }: TenderActionsProps)
                     onChange={(e) => setAcceptedAmountRs(e.target.value)}
                     placeholder="0.00"
                   />
+                  {awardFormError.fieldError("acceptedAmountMinor") && (
+                    <span style={{ fontSize: 12, color: "var(--bad)" }}>{awardFormError.fieldError("acceptedAmountMinor")}</span>
+                  )}
                 </div>
                 <div>
                   <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: "var(--ink3)", marginBottom: 4 }}>Agreement Number</label>
                   <input className="input" value={agreementNo} onChange={(e) => setAgreementNo(e.target.value)} placeholder="Optional" />
+                  {awardFormError.fieldError("agreementNumber") && (
+                    <span style={{ fontSize: 12, color: "var(--bad)" }}>{awardFormError.fieldError("agreementNumber")}</span>
+                  )}
                 </div>
                 <div>
                   <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: "var(--ink3)", marginBottom: 4 }}>Work Order Number</label>
                   <input className="input" value={workOrderNo} onChange={(e) => setWorkOrderNo(e.target.value)} placeholder="Optional" />
+                  {awardFormError.fieldError("workOrderNumber") && (
+                    <span style={{ fontSize: 12, color: "var(--bad)" }}>{awardFormError.fieldError("workOrderNumber")}</span>
+                  )}
                 </div>
                 <div>
                   <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: "var(--ink3)", marginBottom: 4 }}>Work Period (days)</label>
                   <input className="input" type="number" min="1" value={workPeriodDays} onChange={(e) => setWorkPeriodDays(e.target.value)} placeholder="Optional" />
+                  {awardFormError.fieldError("workPeriodDays") && (
+                    <span style={{ fontSize: 12, color: "var(--bad)" }}>{awardFormError.fieldError("workPeriodDays")}</span>
+                  )}
                 </div>
                 <div>
                   <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: "var(--ink3)", marginBottom: 4 }}>Bill Mode</label>
