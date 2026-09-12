@@ -53,7 +53,11 @@ function cellValue<T extends Record<string, unknown>>(col: Column<T>, row: T): R
   if (col.render) return col.render(row);
   if (col.cellType === "status") return <StatusPill status={String(row[col.key] ?? "")} />;
   if (col.cellType === "amount") {
-    return formatMoney((row[col.key] ?? 0) as bigint | number | string);
+    // UX-006: pass the raw value through — formatMoney() itself renders "—"
+    // for null/undefined/non-finite, distinct from a genuine ₹0.00. Coercing
+    // missing data to 0 here (the old `?? 0`) made a fetch/mapping gap look
+    // like a real zero-rupee amount across every cellType:"amount" column.
+    return formatMoney(row[col.key] as bigint | number | string | null | undefined);
   }
   return String(row[col.key] ?? "");
 }

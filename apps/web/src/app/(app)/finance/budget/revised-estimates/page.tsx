@@ -2,6 +2,7 @@ import { PageHeader, StatGrid, StatCard, Card, RefreshErrorState } from "@/app/_
 import { getFinanceBudgets } from "@/app/_data/loaders";
 import { useResource } from "@/app/_data/useResource";
 import { toHumanError } from "@/lib/messages";
+import { minorToRupeesOrNull } from "@/lib/formatters";
 import { RevisedEstimatesTable, type RevisedEstimateRow } from "./RevisedEstimatesTable";
 
 // getFinanceRevisedEstimates() used to hit /api/v1/finance/budgets/revised-estimates,
@@ -9,9 +10,15 @@ import { RevisedEstimatesTable, type RevisedEstimateRow } from "./RevisedEstimat
 // Estimate (reMinor) are real columns on the same budget row getFinanceBudgets()
 // already reads — this derives the BE-vs-RE view from that real data instead.
 function toRow(b: Awaited<ReturnType<typeof getFinanceBudgets>>["data"][number]): RevisedEstimateRow {
-  const be = Number(b.beMinor) / 100;
-  const re = Number(b.reMinor) / 100;
-  const variancePct = be > 0 ? ((re - be) / be) * 100 : 0;
+  // UX-006: `Number(b.beMinor) / 100` silently turned a missing/null beMinor
+  // into a real-looking 0 (Number(null) === 0) and an unparseable one into NaN
+  // that formatRupees() used to paper over as "₹0.00" too — both indistinguishable
+  // from a genuine zero budget. minorToRupeesOrNull() propagates "missing" as
+  // `null` instead so the table can render an honest "—" for BE/RE/Variance.
+  const be = minorToRupeesOrNull(b.beMinor);
+  const re = minorToRupeesOrNull(b.reMinor);
+  const bothKnown = be !== null && re !== null;
+  const variancePct = bothKnown ? (be > 0 ? ((re - be) / be) * 100 : 0) : null;
   return {
     id: b.id,
     headCode: b.majorHead,
@@ -19,7 +26,7 @@ function toRow(b: Awaited<ReturnType<typeof getFinanceBudgets>>["data"][number])
     budgetEstimate: be,
     revisedEstimate: re,
     variancePct,
-    status: re > be ? "increased" : re < be ? "decreased" : "no_change",
+    status: !bothKnown ? "unknown" : re > be ? "increased" : re < be ? "decreased" : "no_change",
   };
 }
 

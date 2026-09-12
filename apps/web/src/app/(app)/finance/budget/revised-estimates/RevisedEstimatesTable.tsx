@@ -8,10 +8,12 @@ export type RevisedEstimateRow = {
   id: string;
   headCode: string;
   description: string;
-  budgetEstimate: number;
-  revisedEstimate: number;
-  variancePct: number;
-  status: "increased" | "decreased" | "no_change";
+  // UX-006: null means BE/RE was missing/unparseable on the source row --
+  // rendered as an honest "—", never coerced to a fabricated 0.
+  budgetEstimate: number | null;
+  revisedEstimate: number | null;
+  variancePct: number | null;
+  status: "increased" | "decreased" | "no_change" | "unknown";
 };
 
 // DataTable's generic requires an index signature; RevisedEstimateRow is a
@@ -36,9 +38,10 @@ export function RevisedEstimatesTable({ estimates, source = "api" }: { estimates
           // formatMoney(), which would treat them as paise and show 100x too
           // small. Previously rendered as bare unformatted numbers (no ₹, no
           // Indian digit grouping, no fixed 2dp).
-          { key: "budgetEstimate", label: "BE", align: "right", render: (r) => formatRupees(r.budgetEstimate as number) },
-          { key: "revisedEstimate", label: "RE", align: "right", render: (r) => formatRupees(r.revisedEstimate as number) },
-          { key: "variancePct", label: "Variance %", align: "right", render: (r) => `${(r.variancePct as number).toFixed(1)}%` },
+          { key: "budgetEstimate", label: "BE", align: "right", render: (r) => formatRupees(r.budgetEstimate as number | null) },
+          { key: "revisedEstimate", label: "RE", align: "right", render: (r) => formatRupees(r.revisedEstimate as number | null) },
+          // UX-006: variancePct is null when BE/RE was missing — show "—", not "NaN%"/"0.0%".
+          { key: "variancePct", label: "Variance %", align: "right", render: (r) => (r.variancePct == null ? "—" : `${(r.variancePct as number).toFixed(1)}%`) },
           { key: "status", label: "Status", cellType: "status" },
         ]}
         rows={rows}

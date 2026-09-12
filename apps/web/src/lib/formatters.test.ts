@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { formatMoney, formatIndianDate } from "./formatters";
+import { formatMoney, formatIndianDate, minorToRupeesOrNull } from "./formatters";
 
 // ---------------------------------------------------------------------------
 // formatMoney -- converts minor units (paise) to INR string with Indian grouping
@@ -34,8 +34,35 @@ describe("formatMoney", () => {
     expect(formatMoney("-2550")).toBe("-\u20b925.50");
   });
 
-  it("returns INR 0.00 for invalid input", () => {
-    expect(formatMoney("not-a-number")).toBe("\u20b90.00");
+  it("returns an em-dash for invalid input, never a fabricated \u20b90.00 (UX-006)", () => {
+    expect(formatMoney("not-a-number")).toBe("\u2014");
+  });
+
+  // ---------------------------------------------------------------------------
+  // UX-006: missing money must render as an honest "\u2014", never as \u20b90.00 --
+  // a real zero amount and a missing/error value must stay visually distinct.
+  // ---------------------------------------------------------------------------
+  it("returns an em-dash for null (UX-006: missing, not zero)", () => {
+    expect(formatMoney(null)).toBe("\u2014");
+  });
+
+  it("returns an em-dash for undefined (UX-006: missing, not zero)", () => {
+    expect(formatMoney(undefined)).toBe("\u2014");
+  });
+
+  it("returns an em-dash for an empty string (UX-006: missing, not zero)", () => {
+    expect(formatMoney("")).toBe("\u2014");
+  });
+
+  it("returns an em-dash for non-finite numeric input (UX-006: missing, not zero)", () => {
+    expect(formatMoney(Number.NaN)).toBe("\u2014");
+    expect(formatMoney(Number.POSITIVE_INFINITY)).toBe("\u2014");
+  });
+
+  it("keeps a genuine zero amount as \u20b90.00, distinct from missing data", () => {
+    expect(formatMoney(0)).toBe("\u20b90.00");
+    expect(formatMoney(0)).not.toBe(formatMoney(null));
+    expect(formatMoney(0)).not.toBe(formatMoney(undefined));
   });
 
   it("pads single-digit paise with leading zero", () => {
@@ -92,9 +119,41 @@ describe("formatRupees (input already in rupees)", () => {
     expect(formatRupees(90000)).toBe("₹90,000.00");
     expect(formatRupees(90000)).not.toBe("₹900.00");
   });
-  it("handles string input and non-finite safely", () => {
+  it("handles string input safely", () => {
     expect(formatRupees("1234.5")).toBe("₹1,234.50");
-    expect(formatRupees(Number.NaN)).toBe("₹0.00");
+  });
+
+  it("returns an em-dash for non-finite/missing input, never a fabricated ₹0.00 (UX-006)", () => {
+    expect(formatRupees(Number.NaN)).toBe("—");
+    expect(formatRupees(null)).toBe("—");
+    expect(formatRupees(undefined)).toBe("—");
+    expect(formatRupees("")).toBe("—");
+  });
+
+  it("keeps a genuine zero amount as ₹0.00, distinct from missing data", () => {
+    expect(formatRupees(0)).toBe("₹0.00");
+    expect(formatRupees(0)).not.toBe(formatRupees(null));
+  });
+});
+
+describe("minorToRupeesOrNull (UX-006 type guard for arithmetic on *Minor fields)", () => {
+  it("converts minor units to a rupee number", () => {
+    expect(minorToRupeesOrNull(12345)).toBeCloseTo(123.45);
+    expect(minorToRupeesOrNull("90000")).toBeCloseTo(900);
+    expect(minorToRupeesOrNull(100n)).toBeCloseTo(1);
+  });
+
+  it("returns null for missing/invalid input instead of a fabricated 0", () => {
+    expect(minorToRupeesOrNull(null)).toBeNull();
+    expect(minorToRupeesOrNull(undefined)).toBeNull();
+    expect(minorToRupeesOrNull("")).toBeNull();
+    expect(minorToRupeesOrNull("garbage")).toBeNull();
+    expect(minorToRupeesOrNull(Number.NaN)).toBeNull();
+  });
+
+  it("distinguishes a genuine zero from missing data", () => {
+    expect(minorToRupeesOrNull(0)).toBe(0);
+    expect(minorToRupeesOrNull(0)).not.toBeNull();
   });
 });
 
