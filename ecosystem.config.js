@@ -639,12 +639,12 @@ module.exports = {
 
     svc("analytics",    3031, "analytics_svc",    "civitas_analytics"),
     svc("ml",           3032, "ml_svc",           "civitas_ml"),
-    svc("meeting",      3033, "meeting_svc",      "civitas_meeting", { MEETING_PII_KEY }),
+    svc("meeting",      3033, "meeting_svc",      "civitas_meeting", { MEETING_PII_KEY }, { graceful: true }), // PERF-015
     svc("court",        3034, "court_svc",        "civitas_court", { COURT_PII_KEY }, { graceful: true }), // REL-012: validated subset
-    svc("visitor",      3035, "visitor_svc",      "civitas_visitor", { VISITOR_PII_KEY }),
+    svc("visitor",      3035, "visitor_svc",      "civitas_visitor", { VISITOR_PII_KEY }, { graceful: true }), // PERF-015
     // Previously absent from this file entirely, so they could never be started.
     // Boot-probed 2026-07-27: works listens cleanly with no extra config.
-    svc("works",        3036, "works_svc",        "civitas_works"),
+    svc("works",        3036, "works_svc",        "civitas_works", {}, { graceful: true }), // PERF-015
     svc("metadata",     3039, "metadata_svc",     "civitas_metadata"),
     svc("ai-agent",     3041, "ai_agent_svc",     "civitas_ai_agent"),
     svc("field",        3046, "field_svc",        "civitas_field"),
@@ -660,7 +660,7 @@ module.exports = {
       S3_ENDPOINT: process.env.S3_ENDPOINT ?? "http://localhost:4566",
       S3_REGION: process.env.S3_REGION ?? "ap-south-1",
       HRMS_SERVICE_URL: "http://127.0.0.1:3012",
-    }),
+    }, { graceful: true }), // PERF-015
     svc("location",     4012, "location_svc",     "civitas_location"),
 
     // ── Municipal Sec5 services (BRD Section 5) ─────────────────────────────────
