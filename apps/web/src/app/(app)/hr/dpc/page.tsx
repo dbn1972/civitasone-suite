@@ -1,8 +1,16 @@
 import { PageHeader, StatGrid, StatCard, Card, DataTable, Tabs } from "../../../_components/ds";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { fetchJson } from "@/app/_data/apiClient";
+import { getSessionRoles } from "@/lib/auth/roleGuard";
 import { PromotionBatchView } from "./_components/PromotionBatchView";
+import { SeniorityListActions } from "./_components/SeniorityListActions";
 import type { PromotionRow } from "../promotion/_components/PromotionCard";
+
+// DOM-023: mirrors the backend's HR_ROLES guard exactly
+// (services/hrms-service/src/modules/seniority/routes.ts) for the
+// generate/approve write actions -- the broader read-only "manager" role
+// that can see the live GET views above is intentionally excluded.
+const SENIORITY_ADMIN_ROLES = ["hr_admin", "hr_officer", "super_admin"];
 
 type EligibleRow = {
   employeeId: string;
@@ -47,6 +55,9 @@ async function getBatchPromotions(): Promise<PromotionRow[]> {
 }
 
 export default async function DpcPage() {
+  const roles = getSessionRoles();
+  const canAdministerSeniority = roles.some((r) => SENIORITY_ADMIN_ROLES.includes(r));
+
   const [{ data, source }, batchPromotions] = await Promise.all([getData(), getBatchPromotions()]);
   const { asOf, eligibleCount, ineligibleCount, eligible, ineligible } = data ?? {
     asOf: "—", eligibleCount: 0, ineligibleCount: 0, eligible: [], ineligible: [],
@@ -72,6 +83,8 @@ export default async function DpcPage() {
         actions={<span />}
       />
       <DataSourceBadge source={source} message="Couldn't load — showing nothing" />
+
+      <SeniorityListActions canAdminister={canAdministerSeniority} />
 
       <StatGrid>
         <StatCard icon="📋" iconBg="#e6f0ff" label="Eligible Officers"  value={eligibleCount} />

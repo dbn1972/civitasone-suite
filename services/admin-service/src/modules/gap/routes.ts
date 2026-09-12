@@ -417,6 +417,22 @@ export async function adminGapRoutes(app: FastifyInstance): Promise<void> {
   // ─── Role <-> permission grants — real, diffed against identity-service's
   // actual grant/revoke commands (no bulk "replace" command exists there, so
   // this computes the add/remove set and issues one real call per change). ───
+  //
+  // COMP-011 fix: identity-service exposes no bulk/transactional grant-set
+  // command (see comment above), so there is no upstream transaction to wrap
+  // this in — the DoD's other option applies instead: best-effort application
+  // with explicit partial-state reporting. Previously, the first failed
+  // upstream call `return`ed immediately with only THAT call's raw error,
+  // silently discarding which grants/revokes had already applied and which
+  // of the remaining ones were never attempted — the caller had no way to
+  // know the role's real resulting permission set. Now every change is
+  // attempted (a failure no longer aborts the rest), and the response always
+  // reports the true partial state: `granted`/`revoked`/`skipped` (as
+  // before) plus a new `failed` array naming exactly which key/action pairs
+  // did not apply and why. Status is 202 "accepted" only when nothing
+  // failed; otherwise 207 "partial" — the caller must inspect `failed`
+  // (never assume `desired` was fully applied just because the request
+  // didn't throw).
   app.patch("/v1/admin/roles/:id/permissions", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ROLES);
@@ -439,22 +455,43 @@ export async function adminGapRoutes(app: FastifyInstance): Promise<void> {
     const toGrant = [...desired].filter((k) => !current.has(k));
     const toRevoke = [...current].filter((k) => !desired.has(k));
 
-    const applied: { granted: string[]; revoked: string[]; skipped: string[] } = { granted: [], revoked: [], skipped: [] };
+    const applied: {
+      granted: string[]; revoked: string[]; skipped: string[];
+      failed: Array<{ key: string; action: "grant" | "revoke"; status: number; code: string; message: string }>;
+    } = { granted: [], revoked: [], skipped: [], failed: [] };
+
+    function describeFailure(res: { status: number; body: unknown }): { status: number; code: string; message: string } {
+      const r = relayError(res.status, res.body);
+      const payload = r.payload as { code?: string; message?: string } | undefined;
+      return {
+        status: r.status,
+        code: payload?.code ?? "UPSTREAM_ERROR",
+        message: payload?.message ?? "upstream error",
+      };
+    }
+
     for (const key of toGrant) {
       const permId = idByKey.get(key);
       if (!permId) { applied.skipped.push(key); continue; }
       const res = await callUpstream(req, ctx, "POST", identityBaseUrl(), `/identity/rbac/roles/${id}/permissions`, { permissionId: permId });
-      if (res.status < 200 || res.status >= 300) { const r = relayError(res.status, res.body); return reply.code(r.status).send(r.payload); }
+      if (res.status < 200 || res.status >= 300) {
+        applied.failed.push({ key, action: "grant", ...describeFailure(res) });
+        continue;
+      }
       applied.granted.push(key);
     }
     for (const key of toRevoke) {
       const permId = idByKey.get(key);
       if (!permId) { applied.skipped.push(key); continue; }
       const res = await callUpstream(req, ctx, "DELETE", identityBaseUrl(), `/identity/rbac/roles/${id}/permissions/${permId}`);
-      if (res.status < 200 || res.status >= 300) { const r = relayError(res.status, res.body); return reply.code(r.status).send(r.payload); }
+      if (res.status < 200 || res.status >= 300) {
+        applied.failed.push({ key, action: "revoke", ...describeFailure(res) });
+        continue;
+      }
       applied.revoked.push(key);
     }
-    return reply.code(202).send({ roleId: id, status: "accepted", ...applied });
+    const status = applied.failed.length > 0 ? "partial" : "accepted";
+    return reply.code(applied.failed.length > 0 ? 207 : 202).send({ roleId: id, status, ...applied });
   });
 
   // ─── Audit logs — real, forwarded to audit-service's real event log ───

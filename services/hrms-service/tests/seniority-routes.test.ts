@@ -755,4 +755,51 @@ describe("POST /v1/hrms/seniority/:id/approve — DOM-019 producer wired to the 
     expect(r.statusCode).toBe(400);
     await app.close();
   });
+
+  // DOM-023: before this fix, approving a nonexistent or already-approved
+  // list still 202'd -- the consumer's status-guarded UPDATE silently
+  // no-op'd (log warning only) and the frontend showed a fabricated
+  // "approved" success. The route now pre-checks the list's state and
+  // rejects these two cases synchronously instead of publishing blind.
+
+  it("404 — approving a seniority list id that doesn't exist for this tenant", async () => {
+    const app = await buildApp();
+    const r = await app.inject({
+      method: "POST", url: "/v1/hrms/seniority/99999999-9999-9999-9999-999999999999/approve",
+      headers: auth(), payload: {},
+    });
+    expect(r.statusCode).toBe(404);
+    expect(r.json().code).toBe("SENIORITY_LIST_NOT_FOUND");
+    await app.close();
+  });
+
+  it("422 — approving a list that is no longer in 'generated' status (already approved)", async () => {
+    const genApp = await buildApp();
+    const genRes = await genApp.inject({
+      method: "POST", url: "/v1/hrms/seniority/generate",
+      headers: auth(), payload: { departmentId: DEPT_1, asOf: "2026-09-10" },
+    });
+    const listId = genRes.json().id as string;
+    await genApp.close();
+    await drain();
+
+    const firstApproveApp = await buildApp();
+    const first = await firstApproveApp.inject({
+      method: "POST", url: `/v1/hrms/seniority/${listId}/approve`,
+      headers: auth(), payload: {},
+    });
+    expect(first.statusCode).toBe(202);
+    await firstApproveApp.close();
+    await drain();
+
+    const secondApproveApp = await buildApp();
+    const second = await secondApproveApp.inject({
+      method: "POST", url: `/v1/hrms/seniority/${listId}/approve`,
+      headers: auth(), payload: {},
+    });
+    expect(second.statusCode).toBe(422);
+    expect(second.json().code).toBe("INVALID_STATUS");
+    expect(second.json().message).toMatch(/already approved/);
+    await secondApproveApp.close();
+  });
 });
