@@ -86,9 +86,39 @@ function getSigningKey(header: jwt.JwtHeader): Promise<string> {
  * shared development secret was used to forge a super_admin token.
  * In production we verify exclusively against the Keycloak JWKS (RS256); any
  * attempt to run HS256 in prod is a fatal misconfiguration, not a silent fallback.
+ *
+ * SEC-017: this used to be a DENY-list (`NODE_ENV === "production"`), which
+ * means the strict checks below (forbid HS256, require JWT_AUDIENCE) only
+ * armed when NODE_ENV was the exact literal string "production" -- staging,
+ * UAT, QA, preprod, CI misconfigured without NODE_ENV, or a typo
+ * ("productoin") all evaluated isProduction() to false and silently ran with
+ * the insecure dev posture, identical to the class of bug SEC-003 fixed for
+ * CANDIDATE_JWT_SECRET (see candidate-public-auth-routes.ts's
+ * resolveCandSecret()). Every service in this repo runs with the NODE_ENV
+ * ecosystem.config.js injects as RUNTIME_NODE_ENV (default "production" --
+ * see ecosystem.config.js's IS_PROD, fixed the same way in the same commit),
+ * so an unset/mistyped/new-environment-name value here reached this function
+ * directly.
+ *
+ * Fixed as an ALLOW-list: only a process explicitly declared "development"
+ * or "test" is exempt from the strict checks; every other value -- unset,
+ * "staging", "uat", "qa", "preprod", a typo -- now fails closed exactly
+ * like "production" did. This function is the single choke point for every
+ * current call site (resolveAlgorithm's HS256 forbid, verifyJwt's audience
+ * requirement) AND every future one -- no caller needs to change.
+ *
+ * NOTE (residual, not fixed here -- same bug class, different call sites,
+ * kept out of scope to keep this change reviewable): context.ts's own
+ * `process.env.NODE_ENV === "production"` check (tenant-header fallback),
+ * this file's toRequestContext `NODE_ENV === "production" ? undefined :
+ * headerTenantId` check, and plugin.ts's two `NODE_ENV !== "production"`
+ * checks do NOT call isProduction() and are NOT touched by this fix -- they
+ * carry the identical deny-list gap and should be migrated to this same
+ * allow-list in a follow-up.
  */
+const PROD_FALLBACK_ALLOWED_ENVS = new Set(["development", "test"]);
 function isProduction(): boolean {
-  return process.env.NODE_ENV === "production";
+  return !PROD_FALLBACK_ALLOWED_ENVS.has(process.env.NODE_ENV ?? "");
 }
 
 function resolveAlgorithm(): "RS256" | "HS256" {

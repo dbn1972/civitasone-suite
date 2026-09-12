@@ -24,6 +24,19 @@ SUPERUSER_PW="$PGPASSWORD"
 # cluster, independent of whatever POSTGRES_DB is set to.
 PGDATABASE="${PGDATABASE:-postgres}"
 
+# Each invocation writes migration output to its own private scratch file
+# (mktemp, further scoped by $$, this script's PID) instead of a shared
+# hardcoded /tmp path. Concurrent invocations of this script on the same
+# host (common: multiple CI/dev agents bootstrapping separate ephemeral
+# Postgres instances at once) previously all wrote to and grepped the SAME
+# /tmp/bootstrap-migration-out.txt, so one process's grep could read
+# another process's output mid-write or after it was overwritten, and
+# report a false migration pass/failure that belonged to a different run.
+# See REL-022. Cleaned up on any exit path (success, failure, or early
+# `set -e` abort) via the trap below.
+MIGRATION_OUT="$(mktemp "${TMPDIR:-/tmp}/bootstrap-migration-out.$$.XXXXXX")"
+trap 'rm -f "$MIGRATION_OUT"' EXIT
+
 echo "Waiting for Postgres at ${PGHOST}:${PGPORT}..."
 for i in $(seq 1 30); do
   if pg_isready -h "$PGHOST" -p "$PGPORT" -U "$PGUSER" >/dev/null 2>&1; then
@@ -408,12 +421,12 @@ for svc in $(printf '%s\n' "${!SERVICE_DBS[@]}" | sort); do
     fi
     if ! PGOPTIONS="$(scanner_role_guc_options "$f")" PGPASSWORD="$run_pw" \
          psql -h "$PGHOST" -p "$PGPORT" -U "$run_as" -d "$db" -v ON_ERROR_STOP=1 -f "$f" \
-         2>&1 | tee /tmp/bootstrap-migration-out.txt | grep -v '^$'; then :; fi
-    if grep -q '^psql:.*ERROR:' /tmp/bootstrap-migration-out.txt; then
+         2>&1 | tee "$MIGRATION_OUT" | grep -v '^$'; then :; fi
+    if grep -q '^psql:.*ERROR:' "$MIGRATION_OUT"; then
       echo "⚠ Migration failed for $svc/$(basename "$f") — DB integration tests for this service may fail in CI."
       MIGRATION_FAILURES+=("$svc/$(basename "$f")")
       # First error only: with ON_ERROR_STOP=1 it is the one that aborted the file.
-      MIGRATION_FAILURE_REASONS+=("$svc/$(basename "$f")|$(sed -n 's/^psql:.*ERROR:  //p' /tmp/bootstrap-migration-out.txt | head -1 | cut -c1-110)")
+      MIGRATION_FAILURE_REASONS+=("$svc/$(basename "$f")|$(sed -n 's/^psql:.*ERROR:  //p' "$MIGRATION_OUT" | head -1 | cut -c1-110)")
     fi
   done
 done
@@ -496,11 +509,11 @@ for entry in "${ADMIN_OWNED_DBS[@]}"; do
       echo "Applying $(basename "$f") → $db ($svc, admin-run)"
     fi
     if ! PGPASSWORD="$run_pw" psql -h "$PGHOST" -p "$PGPORT" -U "$run_as" -d "$db" \
-         -v ON_ERROR_STOP=1 -f "$f" > /tmp/bootstrap-migration-out.txt 2>&1; then
+         -v ON_ERROR_STOP=1 -f "$f" > "$MIGRATION_OUT" 2>&1; then
       echo "⚠ Migration failed for $svc/$(basename "$f")"
       svc_failed=$((svc_failed + 1))
       MIGRATION_FAILURES+=("$svc/$(basename "$f")")
-      MIGRATION_FAILURE_REASONS+=("$svc/$(basename "$f")|$(sed -n 's/^psql:.*ERROR:  //p' /tmp/bootstrap-migration-out.txt | head -1 | cut -c1-110)")
+      MIGRATION_FAILURE_REASONS+=("$svc/$(basename "$f")|$(sed -n 's/^psql:.*ERROR:  //p' "$MIGRATION_OUT" | head -1 | cut -c1-110)")
     fi
   done
   # Re-assert USAGE/DML on schemas the migrations created. Ownership stays admin.
