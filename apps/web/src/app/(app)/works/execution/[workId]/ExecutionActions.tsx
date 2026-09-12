@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { ConfirmDialog, useToast, Card } from "@/app/_components/ds";
+import { useFormError } from "@/lib/useFormError";
 
 interface ExecutionActionsProps {
   workId: string;
@@ -19,10 +20,12 @@ export function ExecutionActions({ workId }: ExecutionActionsProps) {
   const [physDialog, setPhysDialog] = useState(false);
   const [physBusy, setPhysBusy] = useState(false);
   const [physError, setPhysError] = useState("");
+  const physFormError = useFormError("physical completion certificate");
 
   async function handlePhysicalComplete() {
     setPhysBusy(true);
     setPhysError("");
+    physFormError.clear();
     try {
       const body: Record<string, unknown> = { workId };
       if (completionDate) body.completionDate = completionDate;
@@ -32,14 +35,15 @@ export function ExecutionActions({ workId }: ExecutionActionsProps) {
         body: JSON.stringify(body),
       });
       if (!res.ok) {
-        setPhysError(await res.text().catch(() => "Request failed"));
+        const resolved = await physFormError.fromResponse(res, "save");
+        setPhysError(resolved.message);
         return;
       }
       toast.success("Work physically marked as complete.");
       setPhysDialog(false);
       setTimeout(() => router.refresh(), 600);
     } catch {
-      setPhysError("Network error. Please try again.");
+      setPhysError(physFormError.fromException("save").message);
     } finally {
       setPhysBusy(false);
     }
@@ -50,10 +54,12 @@ export function ExecutionActions({ workId }: ExecutionActionsProps) {
   const [closureDialog, setClosureDialog] = useState(false);
   const [closureBusy, setClosureBusy] = useState(false);
   const [closureError, setClosureError] = useState("");
+  const closureFormError = useFormError("work closure");
 
   async function handleClosure() {
     setClosureBusy(true);
     setClosureError("");
+    closureFormError.clear();
     try {
       const res = await fetch("/api/proxy/v1/works/execution/close", {
         method: "POST",
@@ -61,14 +67,15 @@ export function ExecutionActions({ workId }: ExecutionActionsProps) {
         body: JSON.stringify({ workId, closureType }),
       });
       if (!res.ok) {
-        setClosureError(await res.text().catch(() => "Request failed"));
+        const resolved = await closureFormError.fromResponse(res, "save");
+        setClosureError(resolved.message);
         return;
       }
       toast.success(`Work closed (${closureType}).`);
       setClosureDialog(false);
       setTimeout(() => router.refresh(), 600);
     } catch {
-      setClosureError("Network error. Please try again.");
+      setClosureError(closureFormError.fromException("save").message);
     } finally {
       setClosureBusy(false);
     }

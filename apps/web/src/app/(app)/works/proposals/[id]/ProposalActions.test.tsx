@@ -62,4 +62,20 @@ describe("ProposalActions", () => {
     );
     expect(container).not.toHaveTextContent("DAO Finalize");
   });
+
+  // UX-016: this dialog used to fall back to
+  // `await res.text().catch(() => "Request failed")` verbatim on failure —
+  // the same class of raw-text leak useFormError closes fleet-wide (UX-003).
+  it("shows a clerk-safe message, never the raw server text, when DAO-finalize fails", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response("Request failed", { status: 500 }),
+    );
+
+    renderWithToast(<ProposalActions id={ID} status="submitted" roles={["works_admin"]} />);
+    fireEvent.click(screen.getByRole("button", { name: "DAO Finalize" }));
+    fireEvent.click(screen.getByRole("button", { name: "Finalize" }));
+
+    await waitFor(() => expect(screen.getByText(/couldn't save/i)).toBeInTheDocument());
+    expect(screen.queryByText(/^Request failed$/)).not.toBeInTheDocument();
+  });
 });

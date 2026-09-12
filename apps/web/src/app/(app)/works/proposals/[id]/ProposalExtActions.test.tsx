@@ -78,6 +78,55 @@ describe("ProposalExtActions", () => {
 
       expect(await screen.findByText("✅ Split created")).toBeInTheDocument();
     });
+
+    // UX-016: onConfirm used to `throw new Error((data?.message as string) ??
+    // \`Request failed (${res.status})\`)`, and useConfirmAction surfaced
+    // that raw text/status verbatim as the dialog's error — the same class
+    // of leak useFormError closes fleet-wide (UX-003).
+    it("shows a clerk-safe dialog error, never the raw HTTP status, when the split request fails", async () => {
+      vi.spyOn(globalThis, "fetch").mockResolvedValue(
+        new Response(JSON.stringify({}), { status: 409, headers: { "content-type": "application/json" } }),
+      );
+      renderWithToast(<ProposalExtActions workId={WORK_ID} roles={["works_admin"]} />);
+
+      openSection("Split Proposal");
+      fireEvent.change(screen.getByPlaceholderText("Describe the sub-work scope"), {
+        target: { value: "Bridge approach road — sub-work" },
+      });
+      fireEvent.click(screen.getByRole("button", { name: "Split Proposal" }));
+
+      const dialog = screen.getByRole("alertdialog");
+      fireEvent.click(within(dialog).getByRole("button", { name: "Confirm Split" }));
+
+      const errorText = await within(dialog).findByText(/couldn't save/i);
+      expect(errorText).toBeInTheDocument();
+      expect(within(dialog).queryByText(/409/)).not.toBeInTheDocument();
+    });
+
+    it("renders an inline field-level message from a fieldErrors response", async () => {
+      vi.spyOn(globalThis, "fetch").mockResolvedValue(
+        new Response(
+          JSON.stringify({
+            code: "VALIDATION_FAILED",
+            message: "validation_failed",
+            fieldErrors: [{ field: "description", message: "Description must be at least 10 characters." }],
+          }),
+          { status: 400, headers: { "content-type": "application/json" } },
+        ),
+      );
+      renderWithToast(<ProposalExtActions workId={WORK_ID} roles={["works_admin"]} />);
+
+      openSection("Split Proposal");
+      fireEvent.change(screen.getByPlaceholderText("Describe the sub-work scope"), {
+        target: { value: "short" },
+      });
+      fireEvent.click(screen.getByRole("button", { name: "Split Proposal" }));
+
+      const dialog = screen.getByRole("alertdialog");
+      fireEvent.click(within(dialog).getByRole("button", { name: "Confirm Split" }));
+
+      expect(await screen.findByText("Description must be at least 10 characters.")).toBeInTheDocument();
+    });
   });
 
   describe("Map COA (append-only — no update/delete endpoint, so a wrong mapping is permanent)", () => {

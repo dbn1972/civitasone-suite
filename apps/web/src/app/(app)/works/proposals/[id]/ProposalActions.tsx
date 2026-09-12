@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { ConfirmDialog, useToast } from "@/app/_components/ds";
 import { PROPOSAL_WRITE_ROLES } from "@/lib/auth/workRoles";
+import { useFormError } from "@/lib/useFormError";
 
 
 interface ProposalActionsProps {
@@ -18,6 +19,7 @@ export function ProposalActions({ id, status, roles }: ProposalActionsProps) {
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
+  const formError = useFormError("proposal");
 
   if (!roles.some((r) => (PROPOSAL_WRITE_ROLES as readonly string[]).includes(r))) return null;
 
@@ -27,13 +29,14 @@ export function ProposalActions({ id, status, roles }: ProposalActionsProps) {
   async function handleFinalize() {
     setBusy(true);
     setErrorMessage("");
+    formError.clear();
     try {
       const res = await fetch(`/api/proxy/v1/works/proposals/${id}/dao-finalize`, {
         method: "POST",
       });
       if (!res.ok) {
-        const text = await res.text().catch(() => "Request failed");
-        setErrorMessage(text);
+        const resolved = await formError.fromResponse(res, "save");
+        setErrorMessage(resolved.message);
         return;
       }
       // HTTP 202 Accepted — the DAO-finalize is queued, not yet applied, so we
@@ -43,7 +46,7 @@ export function ProposalActions({ id, status, roles }: ProposalActionsProps) {
       setOpen(false);
       setTimeout(() => router.refresh(), 600);
     } catch {
-      setErrorMessage("Network error. Please try again.");
+      setErrorMessage(formError.fromException("save").message);
     } finally {
       setBusy(false);
     }

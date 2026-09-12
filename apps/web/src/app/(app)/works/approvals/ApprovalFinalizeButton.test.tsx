@@ -73,7 +73,13 @@ describe("ApprovalFinalizeButton", () => {
     expect(screen.queryByRole("button", { name: "Finalize AA" })).not.toBeInTheDocument();
   });
 
-  it("surfaces a server error inside the dialog without claiming success", async () => {
+  // UX-016: this dialog used to echo the backend's raw top-level `message`
+  // straight to the officer ("Cannot finalize: current status is
+  // 'submitted'") — the same class of leak useFormError was built to close
+  // fleet-wide (UX-003). It must now show the catalogued, clerk-safe summary
+  // instead, never the raw backend text, while still honestly reporting the
+  // failure (no false success/pending state).
+  it("surfaces a clerk-safe error inside the dialog, never the raw backend message, without claiming success", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(
       new Response(JSON.stringify({ message: "Cannot finalize: current status is 'submitted'" }), { status: 422 }),
     );
@@ -82,10 +88,27 @@ describe("ApprovalFinalizeButton", () => {
     fireEvent.click(screen.getByRole("button", { name: "Finalize AA" }));
     fireEvent.click(screen.getByRole("button", { name: "Finalize" }));
 
-    await waitFor(() =>
-      expect(screen.getByText("Cannot finalize: current status is 'submitted'")).toBeInTheDocument(),
-    );
+    await waitFor(() => expect(screen.getByText(/couldn't save/i)).toBeInTheDocument());
+    expect(screen.queryByText(/Cannot finalize: current status is 'submitted'/)).not.toBeInTheDocument();
     expect(screen.queryByText("⏳ Finalization pending")).not.toBeInTheDocument();
     expect(screen.queryByText("✓ Finalized")).not.toBeInTheDocument();
+  });
+
+  it("never surfaces a raw HTTP status code or raw server text on a plain-text failure", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response("Internal Server Error\n at Object.<anonymous> (/srv/works.js:9:1)", {
+        status: 500,
+        headers: { "content-type": "text/plain" },
+      }),
+    );
+
+    renderWithToast(<ApprovalFinalizeButton id={AA_ID} type="ts" status="draft" />);
+    fireEvent.click(screen.getByRole("button", { name: "Finalize TS" }));
+    fireEvent.click(screen.getByRole("button", { name: "Finalize" }));
+
+    const message = await screen.findByText(/couldn't save/i);
+    expect(message.textContent).not.toMatch(/\b500\b/);
+    expect(message.textContent).not.toMatch(/Internal Server Error/);
+    expect(message.textContent).not.toMatch(/at Object\.<anonymous>/);
   });
 });

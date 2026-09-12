@@ -2,6 +2,7 @@
 
 import { useId, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useFormError } from "@/lib/useFormError";
 
 interface ContractorData {
   id: string;
@@ -82,10 +83,12 @@ function ContractorEditForm({
 
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ text: string; ok: boolean } | null>(null);
+  const formError = useFormError("contractor");
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setMsg(null);
+    formError.clear();
 
     // Bug fix (works-deep-verify, MEDIUM/L3): every optional field below used
     // to send `value || undefined` — so clearing a field to "" silently
@@ -121,19 +124,18 @@ function ContractorEditForm({
         body: JSON.stringify(patch),
       });
       if (!res.ok) {
-        const d = await res.json().catch(() => ({}));
-        throw new Error(
-          (d as { message?: string }).message ?? `Update failed (${res.status})`,
-        );
+        const resolved = await formError.fromResponse(res, "save");
+        setMsg({ text: resolved.message, ok: false });
+        return;
       }
       setMsg({ text: "Contractor updated.", ok: true });
       setTimeout(() => {
         router.refresh();
         onClose();
       }, 800);
-    } catch (err) {
+    } catch {
       setMsg({
-        text: err instanceof Error ? err.message : "Network error.",
+        text: formError.fromException("save").message,
         ok: false,
       });
     } finally {
@@ -191,6 +193,9 @@ function ContractorEditForm({
               onChange={(e) => setName(e.target.value)}
               style={inputStyle}
             />
+            {formError.fieldError("name") && (
+              <span style={{ fontSize: 12, color: "var(--bad)" }}>{formError.fieldError("name")}</span>
+            )}
           </div>
 
           <div style={fieldWrap}>
@@ -205,6 +210,9 @@ function ContractorEditForm({
               onChange={(e) => setRegistrationNo(e.target.value)}
               style={inputStyle}
             />
+            {formError.fieldError("registrationNo") && (
+              <span style={{ fontSize: 12, color: "var(--bad)" }}>{formError.fieldError("registrationNo")}</span>
+            )}
           </div>
           <div style={fieldWrap}>
             <label htmlFor={`${formId}-pan`} style={labelStyle}>
@@ -219,6 +227,9 @@ function ContractorEditForm({
               placeholder="AAAPZ1234C"
               style={inputStyle}
             />
+            {formError.fieldError("pan") && (
+              <span style={{ fontSize: 12, color: "var(--bad)" }}>{formError.fieldError("pan")}</span>
+            )}
           </div>
           <div style={fieldWrap}>
             <label htmlFor={`${formId}-gst`} style={labelStyle}>
@@ -232,6 +243,9 @@ function ContractorEditForm({
               onChange={(e) => setGst(e.target.value.toUpperCase())}
               style={inputStyle}
             />
+            {formError.fieldError("gst") && (
+              <span style={{ fontSize: 12, color: "var(--bad)" }}>{formError.fieldError("gst")}</span>
+            )}
           </div>
           <div style={fieldWrap}>
             <label htmlFor={`${formId}-email`} style={labelStyle}>
@@ -245,6 +259,9 @@ function ContractorEditForm({
               onChange={(e) => setEmail(e.target.value)}
               style={inputStyle}
             />
+            {formError.fieldError("email") && (
+              <span style={{ fontSize: 12, color: "var(--bad)" }}>{formError.fieldError("email")}</span>
+            )}
           </div>
           <div style={fieldWrap}>
             <label htmlFor={`${formId}-phone`} style={labelStyle}>
@@ -258,6 +275,9 @@ function ContractorEditForm({
               onChange={(e) => setPhone(e.target.value)}
               style={inputStyle}
             />
+            {formError.fieldError("phone") && (
+              <span style={{ fontSize: 12, color: "var(--bad)" }}>{formError.fieldError("phone")}</span>
+            )}
           </div>
 
           <div style={{ ...fieldWrap, gridColumn: "1 / -1" }}>
@@ -272,6 +292,9 @@ function ContractorEditForm({
               onChange={(e) => setAddress(e.target.value)}
               style={{ ...inputStyle, minHeight: 88, resize: "vertical" }}
             />
+            {formError.fieldError("address") && (
+              <span style={{ fontSize: 12, color: "var(--bad)" }}>{formError.fieldError("address")}</span>
+            )}
           </div>
         </div>
 

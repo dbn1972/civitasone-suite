@@ -49,3 +49,48 @@ describe("TenderActions — award finalization", () => {
     );
   });
 });
+
+/**
+ * UX-016: each of the three independent actions here (quotation, award,
+ * award-finalize) used to fall back to
+ * `await res.text().catch(() => "Request failed")` verbatim on failure —
+ * the same class of raw-text leak useFormError closes fleet-wide (UX-003).
+ */
+describe("TenderActions — UX-016 clerk-safe errors", () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+    refreshMock.mockReset();
+  });
+
+  it("shows a clerk-safe message, never the raw server text, when adding a quotation fails", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("Request failed", { status: 500 }));
+    renderWithToast(<TenderActions tenderId={TENDER_ID} workId="w1" awardId={null} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "+ Add Quotation" }));
+    fireEvent.change(screen.getByPlaceholderText("Enter contractor name"), {
+      target: { value: "ACME Builders" },
+    });
+    fireEvent.change(screen.getByPlaceholderText("0.00"), { target: { value: "50000" } });
+    fireEvent.click(screen.getByRole("button", { name: "Submit Quotation" }));
+
+    await waitFor(() => expect(screen.getByText(/couldn't save/i)).toBeInTheDocument());
+    expect(screen.queryByText(/^Request failed$/)).not.toBeInTheDocument();
+  });
+
+  it("shows a clerk-safe message, never the raw HTTP status, when creating an award fails", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({}), { status: 409, headers: { "content-type": "application/json" } }),
+    );
+    renderWithToast(<TenderActions tenderId={TENDER_ID} workId="w1" awardId={null} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "+ Create Award" }));
+    fireEvent.change(screen.getByPlaceholderText("Awarded contractor"), {
+      target: { value: "ACME Builders" },
+    });
+    fireEvent.change(screen.getByPlaceholderText("0.00"), { target: { value: "500000" } });
+    fireEvent.click(screen.getByRole("button", { name: "Create Award" }));
+
+    await waitFor(() => expect(screen.getByText(/couldn't save/i)).toBeInTheDocument());
+    expect(screen.queryByText(/409/)).not.toBeInTheDocument();
+  });
+});
