@@ -3,6 +3,7 @@ import { PageHeader, Card, StatGrid, StatCard, StatusPill, EmptyState } from "@/
 import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
 import { formatMoney, formatIndianDate } from "@/lib/formatters";
 import { getApplicationById } from "../../_data";
+import { ApplicationActions } from "./ApplicationActions";
 
 const STATUS_ACTIONS: Record<string, string[]> = {
   submitted:    ["assign-reviewer", "score", "approve", "reject"],
@@ -25,11 +26,6 @@ export default async function ApplicationDetailPage({ params }: { params: { id: 
   }
 
   const actions = STATUS_ACTIONS[application.status] ?? [];
-  const canApprove  = actions.includes("approve");
-  const canReject   = actions.includes("reject");
-  const canWithdraw = actions.includes("withdraw");
-  const canScore    = actions.includes("score");
-  const canAssign   = actions.includes("assign-reviewer");
 
   return (
     <>
@@ -134,55 +130,9 @@ export default async function ApplicationDetailPage({ params }: { params: { id: 
         </dl>
       </Card>
 
-      {(canApprove || canReject || canWithdraw || canScore || canAssign) && (
+      {actions.length > 0 && (
         <Card title="Actions" padding>
-          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-            {canAssign && (
-              <a
-                href={`/grants/applications/${params.id}/assign-reviewer`}
-                className="btn"
-              >
-                Assign Reviewer
-              </a>
-            )}
-            {canScore && (
-              <a
-                href={`/grants/applications/${params.id}/score`}
-                className="btn"
-              >
-                Submit Evaluation
-              </a>
-            )}
-            {canApprove && (
-              <a
-                href={`/grants/applications/${params.id}/approve`}
-                className="btn primary"
-              >
-                Approve Application
-              </a>
-            )}
-            {canReject && (
-              <a
-                href={`/grants/applications/${params.id}/reject`}
-                className="btn"
-                style={{ color: "var(--bad)" }}
-              >
-                Reject
-              </a>
-            )}
-            {canWithdraw && (
-              <a
-                href={`/grants/applications/${params.id}/withdraw`}
-                className="btn"
-                style={{ color: "var(--warn)" }}
-              >
-                Withdraw
-              </a>
-            )}
-          </div>
-          <p style={{ fontSize: 12, color: "var(--ink2)", marginTop: 8 }}>
-            Actions are async — changes take effect after processing (usually within seconds).
-          </p>
+          <ApplicationActions applicationId={params.id} actions={actions} />
         </Card>
       )}
 

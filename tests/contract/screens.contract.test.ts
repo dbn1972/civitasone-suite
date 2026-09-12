@@ -138,24 +138,15 @@ describe('screen contract map', () => {
   // build (a form wired to an already-existing, validated backend action), not a link
   // correction, and is out of scope for COMP-005 itself. Filed as COMP-012. Remove an
   // entry here the same day its page/action ships for real.
-  const KNOWN_EXCEPTIONS: Array<{ file: string; href: string }> = [
-    // COMP-012: grant application approval workflow has no UI -- assign-reviewer, score,
-    // approve, reject and withdraw all PATCH /v1/grants/applications/:id/... routes exist
-    // and are validated server-side (grant-service/src/modules/application/routes.ts),
-    // but no page/form calls them. The dashboard links to sub-routes that were never built.
-    { file: 'apps/web/src/app/(app)/grants/applications/[id]/page.tsx', href: '/grants/applications/${params.id}/assign-reviewer' },
-    { file: 'apps/web/src/app/(app)/grants/applications/[id]/page.tsx', href: '/grants/applications/${params.id}/score' },
-    { file: 'apps/web/src/app/(app)/grants/applications/[id]/page.tsx', href: '/grants/applications/${params.id}/approve' },
-    { file: 'apps/web/src/app/(app)/grants/applications/[id]/page.tsx', href: '/grants/applications/${params.id}/reject' },
-    { file: 'apps/web/src/app/(app)/grants/applications/[id]/page.tsx', href: '/grants/applications/${params.id}/withdraw' },
-    // COMP-012: admin "Reset pwd" has no destination. identity-service already exposes
-    // POST /identity/users/:id/reset-password; no admin-service proxy route or page calls
-    // it. (Note: the neighbouring "Suspend" action has the same problem one layer down --
-    // it calls PATCH /api/proxy/v1/admin/users/:id/suspend, which admin-service also does
-    // not register -- filed alongside COMP-012 since it's the same unbuilt-admin-action
-    // shape, though the href scan itself can't see it: it's a fetch(), not an href.)
-    { file: 'apps/web/src/app/(app)/platform-admin/users/UserManagementPage.tsx', href: '/tenant-admin/users/${user.id}/password-reset' },
-  ];
+  // COMP-012 fixed: assign-reviewer/score/approve/reject/withdraw are now real
+  // dialogs wired to the existing validated grant-service PATCH routes
+  // (ApplicationActions.tsx), and admin "Reset pwd" is now a real action
+  // (UserManagementPage.tsx confirmReset) hitting identity-service's already-
+  // registered POST /identity/users/:id/reset-password. The neighbouring
+  // "Suspend" action's wrong-route bug (POST .../suspend, which never existed)
+  // was fixed alongside it -- it now PATCHes the real .../status route. The
+  // ledger is empty: no tracked exceptions remain.
+  const KNOWN_EXCEPTIONS: Array<{ file: string; href: string }> = [];
 
   it('has no dead internal navigation links beyond the tracked COMP-012 exceptions', () => {
     const exceptionKeys = new Set(KNOWN_EXCEPTIONS.map(e => `${e.file}::${e.href}`));

@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ConfirmDialog } from "@/app/_components/ds";
 import { useSeededResource } from "@/lib/sync/resource";
+import { errorMessageFromResponse } from "@/lib/api/browserClient";
 
 /* ─── Types ──────────────────────────────────────────────────────────── */
 type PlatformUser = {
@@ -81,6 +82,7 @@ export function UserManagementPage({ users: seed, source = "api" }: { users: Pla
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [page, setPage] = useState(0);
   const [suspendTarget, setSuspendTarget] = useState<PlatformUser | null>(null);
+  const [resetTarget, setResetTarget] = useState<PlatformUser | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
@@ -116,14 +118,48 @@ export function UserManagementPage({ users: seed, source = "api" }: { users: Pla
     setBusy(true);
     setError("");
     try {
-      await fetch(`/api/proxy/v1/admin/users/${suspendTarget.id}/suspend`, {
-        method: "POST",
+      // PATCH .../status with { status: "suspended" } — NOT POST .../suspend.
+      // identity-service (routes.ts) registers `PATCH /identity/users/:id/status`
+      // (statusBody: status enum incl. "suspended"); it has never registered a
+      // `/suspend` sub-route. The admin-users gateway prefix rewrites
+      // /api/v1/admin/users/* straight to identity-service's /identity/users/*,
+      // so the old POST .../suspend 404'd every time — the confirm dialog
+      // always "succeeded" (the failure was swallowed by .catch(() => null))
+      // while no user was ever actually suspended. See COMP-012.
+      const res = await fetch(`/api/proxy/v1/admin/users/${suspendTarget.id}/status`, {
+        method: "PATCH",
         headers: { "content-type": "application/json" },
-      }).catch(() => null);
+        body: JSON.stringify({ status: "suspended" }),
+      });
+      if (!res.ok) throw new Error(await errorMessageFromResponse(res));
       setSuspendTarget(null);
       router.refresh();
     } catch {
       setError("Could not suspend user.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function confirmReset() {
+    if (!resetTarget) return;
+    setBusy(true);
+    setError("");
+    try {
+      // POST .../reset-password — already registered server-side
+      // (identity-service routes.ts: `POST /identity/users/:id/reset-password`,
+      // 202 Accepted, records an audit event + best-effort Keycloak
+      // UPDATE_PASSWORD action). The UI previously linked to
+      // /tenant-admin/users/:id/password-reset, a page that was never built
+      // (dead link). See COMP-012.
+      const res = await fetch(`/api/proxy/v1/admin/users/${resetTarget.id}/reset-password`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+      });
+      if (!res.ok) throw new Error(await errorMessageFromResponse(res));
+      setResetTarget(null);
+    } catch {
+      setError("Could not start a password reset for this user.");
     } finally {
       setBusy(false);
     }
@@ -236,7 +272,9 @@ export function UserManagementPage({ users: seed, source = "api" }: { users: Pla
                         Suspend
                       </button>
                     )}
-                    <a href={`/tenant-admin/users/${user.id}/password-reset`} className="btn ghost sm" style={{ fontSize: 11 }}>Reset pwd</a>
+                    <button type="button" className="btn ghost sm" style={{ fontSize: 11 }} onClick={() => setResetTarget(user)}>
+                      Reset pwd
+                    </button>
                   </div>
                 </td>
               </tr>
@@ -264,6 +302,17 @@ export function UserManagementPage({ users: seed, source = "api" }: { users: Pla
         errorMessage={error || undefined}
         onConfirm={() => void confirmSuspend()}
         onCancel={() => { if (!busy) setSuspendTarget(null); }}
+      />
+
+      <ConfirmDialog
+        open={!!resetTarget}
+        title={`Reset password for ${resetTarget?.name ?? resetTarget?.email ?? "user"}?`}
+        description="A password-reset request will be recorded and sent to Keycloak. The user will need to set a new password on next sign-in."
+        confirmLabel="Reset password"
+        busy={busy}
+        errorMessage={error || undefined}
+        onConfirm={() => void confirmReset()}
+        onCancel={() => { if (!busy) setResetTarget(null); }}
       />
     </div>
   );
