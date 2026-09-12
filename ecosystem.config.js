@@ -38,7 +38,30 @@ const PGBOUNCER_ENV = {
 // time from the host environment / secret manager. In production we fail closed:
 // if a required secret is missing the process config refuses to build rather
 // than silently falling back to a public dev value.
-const IS_PROD = (process.env.NODE_ENV ?? "production") === "production";
+//
+// SEC-017: this used to be a DENY-list (`NODE_ENV === "production"` with an
+// unset NODE_ENV defaulting to "production"). That default made an *unset*
+// NODE_ENV safe, but anything set to a truthy value other than the literal
+// "production" -- "staging", "uat", "qa", "preprod", a typo like
+// "productoin" -- still evaluated to false and silently fell through to the
+// dev-fallback secret for every one of the 8 secrets this const gates
+// (DEVICE_TRUST_SECRET, JWT_SECRET, VISITOR_TENANT_SIGNING_KEY_PEM,
+// PII_ENC_KEY, ID_CARD_QR_SECRET, MFA_ENC_KEY, CITIZEN_PII_KEY, CRM_PII_KEY)
+// plus dbUrl()/scannerDbUrl()/piiKey(). Identical bug class to SEC-003's
+// resolveCandSecret() (services/hrms-service/.../candidate-public-auth-routes.ts),
+// fixed there the same way.
+//
+// Fixed as an ALLOW-list: only NODE_ENV exactly "development" or "test" is
+// exempt from the fail-closed/prod posture; every other value -- unset,
+// "staging", "uat", "qa", "preprod", a typo -- is treated as requiring real
+// secrets. Unset already failed closed under the old code too (its
+// `?? "production"` default happened to cover that one case) -- this
+// preserves that, while closing the gap for every named non-production
+// environment the old literal-string comparison missed. This is the single
+// choke point for every current IS_PROD call site in this file AND every
+// future one -- no call site needs to change.
+const IS_PROD_FALLBACK_ALLOWED_ENVS = new Set(["development", "test"]);
+const IS_PROD = !IS_PROD_FALLBACK_ALLOWED_ENVS.has(process.env.NODE_ENV ?? "");
 
 function requireSecret(name) {
   const v = process.env[name];
