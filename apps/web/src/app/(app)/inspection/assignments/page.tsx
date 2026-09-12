@@ -1,13 +1,17 @@
 import Link from "next/link";
-import { PageHeader, EmptyState } from "@/app/_components/ds";
-import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
+import { PageHeader, EmptyState, RefreshErrorState } from "@/app/_components/ds";
 import { getInspectionAssignments } from "../_data/loaders";
 import { AssignmentActions } from "./AssignmentActions";
+import { useResource } from "@/app/_data/useResource";
+import { toHumanError } from "@/lib/messages";
 
 export const dynamic = "force-dynamic";
 
 export default async function Page() {
-  const { data, source } = await getInspectionAssignments();
+  const result = await getInspectionAssignments();
+  const { data } = result;
+  const resource = useResource(result);
+  const errored = resource.status === "error";
   return (
     <main className="wrap">
       <nav aria-label="Breadcrumb" style={{ fontSize: 13, marginBottom: 8 }}>
@@ -16,9 +20,10 @@ export default async function Page() {
         <span aria-current="page">Assignments</span>
       </nav>
       <PageHeader title="Assignments" back="/inspection" />
-      {source === "error" && <DataSourceBadge source={source} />}
       <AssignmentActions />
-      {data.length === 0 ? (
+      {errored ? (
+        <RefreshErrorState error={toHumanError("load", { area: "assignments" })} backHref="/inspection" />
+      ) : data.length === 0 ? (
         <EmptyState icon="📭" title="No records" message="No assignments returned from the API." />
       ) : (
         <div className="card">

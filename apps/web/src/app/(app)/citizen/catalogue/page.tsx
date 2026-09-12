@@ -1,26 +1,34 @@
 import Link from "next/link";
-import { PageHeader } from "../../../_components/ds";
-import { DataSourceBadge } from "../../../_components/DataSourceBadge";
+import { PageHeader, RefreshErrorState } from "../../../_components/ds";
 import { getCatalogueServices } from "../../../_data/citizenPartials";
+import { useResource } from "../../../_data/useResource";
+import { toHumanError } from "@/lib/messages";
 
 /** SVC-081 — Government service catalogue (versioned, published services). */
 export default async function CataloguePage() {
-  const { data: services, source } = await getCatalogueServices();
+  const result = await getCatalogueServices();
+  const { data: services } = result;
+  const resource = useResource(result);
+  const errored = resource.status === "error";
+  const totalAvailable = errored ? null : services.length;
 
   return (
     <>
       <PageHeader
         title="Service Catalogue"
         subtitle="Published, versioned service definitions — owner, channels, required documents and SLA."
-        actions={source === "error" ? <DataSourceBadge source={source} /> : null}
       />
 
       <div className="card">
         <div className="pad" style={{ borderBottom: "1px solid var(--line)", display: "flex", justifyContent: "space-between" }}>
           <strong>Published services</strong>
-          <span style={{ fontSize: 12, color: "var(--muted)" }}>{services.length} available</span>
+          <span style={{ fontSize: 12, color: "var(--muted)" }}>{totalAvailable ?? "—"} available</span>
         </div>
-        {services.length === 0 ? (
+        {errored ? (
+          <div className="pad">
+            <RefreshErrorState error={toHumanError("load", { area: "service catalogue" })} />
+          </div>
+        ) : services.length === 0 ? (
           <div className="pad" style={{ color: "var(--muted)" }}>No published services yet.</div>
         ) : (
           <div style={{ overflowX: "auto" }}>

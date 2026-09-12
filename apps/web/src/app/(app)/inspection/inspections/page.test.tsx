@@ -47,4 +47,18 @@ describe("InspectionsPage", () => {
 
     expect(screen.getByText(/No inspections returned/)).toBeInTheDocument();
   });
+
+  // UX-013: a real fetch failure must show the error state, not the same
+  // "No inspections returned" prompt a genuinely empty tenant gets — those
+  // used to render pixel-identical because the page checked `data.length
+  // === 0` without also looking at `source`.
+  it("shows the error state — not the empty-state prompt — on a real fetch failure (source: error)", async () => {
+    fetchJsonMock.mockResolvedValueOnce({ data: [], source: "error" });
+
+    const ui = await InspectionsPage();
+    render(ui);
+
+    expect(screen.getByText("We couldn't load this inspections.")).toBeInTheDocument();
+    expect(screen.queryByText(/No inspections returned/)).not.toBeInTheDocument();
+  });
 });

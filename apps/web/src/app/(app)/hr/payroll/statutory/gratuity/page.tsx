@@ -1,8 +1,9 @@
-import { PageHeader, StatGrid, StatCard, Card, DataTable, EmptyState } from "../../../../../_components/ds";
-import { DataSourceBadge } from "../../../../../_components/DataSourceBadge";
+import { PageHeader, StatGrid, StatCard, Card, DataTable, EmptyState, RefreshErrorState } from "../../../../../_components/ds";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import { formatMoney } from "@/lib/formatters";
 import { GratuityCalculator } from "./GratuityCalculator";
+import { useResource } from "@/app/_data/useResource";
+import { toHumanError } from "@/lib/messages";
 
 type GratuityRow = {
   id: string;
@@ -23,9 +24,12 @@ async function getData(): Promise<LoaderResult<GratuityRow[]>> {
 }
 
 export default async function GratuityPage() {
-  const { data: rows, source } = await getData();
+  const result = await getData();
+  const { data: rows } = result;
+  const resource = useResource(result);
+  const errored = resource.status === "error";
   const totalGratuityMinor = rows.reduce((s, r) => s + Number(r.gratuityMinor ?? 0), 0);
-  const settledRecords = rows.filter((r) => r.status === "settled" || r.status === "paid").length;
+  const settledRecords = errored ? null : rows.filter((r) => r.status === "settled" || r.status === "paid").length;
   const avgYears =
     rows.length > 0
       ? (rows.reduce((s, r) => s + Number(r.yearsOfService || 0), 0) / rows.length).toFixed(1)
@@ -50,19 +54,22 @@ export default async function GratuityPage() {
         subtitle="Gratuity computation on separation (Payment of Gratuity Act, 1972)."
         back="/hr/payroll/statutory"
       />
-      <DataSourceBadge source={source} message="Couldn't load — showing nothing" />
 
       <StatGrid>
-        <StatCard icon="🎖️" iconBg="var(--infobg)" label="Gratuity Records" value={rows.length} />
-        <StatCard icon="💰" iconBg="var(--warnbg)" label="Total Gratuity Computed" value={formatMoney(totalGratuityMinor)} />
-        <StatCard icon="✅" iconBg="var(--goodbg)" label="Settled / Paid" value={settledRecords} />
-        <StatCard icon="📅" iconBg="var(--panel)" label="Avg Years of Service" value={avgYears} />
+        <StatCard icon="🎖️" iconBg="var(--infobg)" label="Gratuity Records" value={errored ? "—" : rows.length} />
+        <StatCard icon="💰" iconBg="var(--warnbg)" label="Total Gratuity Computed" value={errored ? "—" : formatMoney(totalGratuityMinor)} />
+        <StatCard icon="✅" iconBg="var(--goodbg)" label="Settled / Paid" value={settledRecords ?? "—"} />
+        <StatCard icon="📅" iconBg="var(--panel)" label="Avg Years of Service" value={errored ? "—" : avgYears} />
       </StatGrid>
 
       <GratuityCalculator />
 
       <Card title="Gratuity Register">
-        {rows.length === 0 ? (
+        {errored ? (
+          <div className="pad">
+            <RefreshErrorState error={toHumanError("load", { area: "gratuity records" })} backHref="/hr/payroll/statutory" />
+          </div>
+        ) : rows.length === 0 ? (
           <EmptyState
             icon="🎖️"
             title="No gratuity records"

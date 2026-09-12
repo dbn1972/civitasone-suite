@@ -1,13 +1,17 @@
 import Link from "next/link";
-import { PageHeader, EmptyState } from "@/app/_components/ds";
-import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
+import { PageHeader, EmptyState, RefreshErrorState } from "@/app/_components/ds";
 import { getInspectionCapas } from "../_data/loaders";
 import { CapaRowAction } from "./CapaActions";
+import { useResource } from "@/app/_data/useResource";
+import { toHumanError } from "@/lib/messages";
 
 export const dynamic = "force-dynamic";
 
 export default async function Page() {
-  const { data, source } = await getInspectionCapas();
+  const result = await getInspectionCapas();
+  const { data } = result;
+  const resource = useResource(result);
+  const errored = resource.status === "error";
   return (
     <main className="wrap">
       <nav aria-label="Breadcrumb" style={{ fontSize: 13, marginBottom: 8 }}>
@@ -16,8 +20,9 @@ export default async function Page() {
         <span aria-current="page">CAPA</span>
       </nav>
       <PageHeader title="CAPA" back="/inspection" />
-      {source === "error" && <DataSourceBadge source={source} />}
-      {data.length === 0 ? (
+      {errored ? (
+        <RefreshErrorState error={toHumanError("load", { area: "CAPA records" })} backHref="/inspection" />
+      ) : data.length === 0 ? (
         <EmptyState icon="📭" title="No records" message="No CAPA records returned from the API." />
       ) : (
         <div className="card">

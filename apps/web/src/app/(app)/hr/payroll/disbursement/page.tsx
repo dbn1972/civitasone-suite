@@ -1,6 +1,7 @@
-import { PageHeader, StatGrid, StatCard, Card, EmptyState } from "../../../../_components/ds";
+import { PageHeader, StatGrid, StatCard, Card, EmptyState, RefreshErrorState } from "../../../../_components/ds";
 import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
+import { toHumanError } from "@/lib/messages";
 import { BankFileWizard, type DscConfig } from "./BankFileWizard";
 import { NachMandateForm } from "./NachMandateForm";
 import { NachReturnForm } from "./NachReturnForm";
@@ -95,10 +96,15 @@ export default async function DisbursementPage() {
     ? { subjectCn: rawDsc.subjectCn, notAfter: rawDsc.notAfter, sha256Fingerprint: rawDsc.sha256Fingerprint }
     : null;
 
-  const anyError =
-    runsResult.source === "error" ||
-    sponsorResult.source === "error" ||
-    dscResult.source === "error";
+  // UX-013: each stat/section below is gated on the specific loader it
+  // actually depends on (not one page-wide flag) — a DSC-config outage must
+  // not blank out the runs/transfers numbers that loaded fine, and vice
+  // versa. `anyError` is kept (now including transfersResult, which the
+  // original check omitted) only for the summary badge.
+  const runsErrored = runsResult.source === "error";
+  const transfersErrored = transfersResult.source === "error";
+  const dscErrored = dscResult.source === "error";
+  const anyError = runsErrored || sponsorResult.source === "error" || dscErrored || transfersErrored;
 
   // NOTE: PayrollRunDetailSchema's grossAmount/netAmount are already RUPEES.
   // Do NOT use cellType:"amount" here (that would divide by 100 again).
@@ -108,8 +114,8 @@ export default async function DisbursementPage() {
     maximumFractionDigits: 2,
   });
 
-  const credited = transfers.filter((t) => t.status === "credited").length;
-  const failed = transfers.filter((t) => t.status === "failed").length;
+  const credited = transfersErrored ? null : transfers.filter((t) => t.status === "credited").length;
+  const failed = transfersErrored ? null : transfers.filter((t) => t.status === "failed").length;
 
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
@@ -121,14 +127,14 @@ export default async function DisbursementPage() {
       {anyError && <DataSourceBadge source="error" message="Couldn't load — showing nothing" />}
 
       <StatGrid>
-        <StatCard icon="🏦" iconBg="var(--infobg)" label="Runs Ready for Disbursement" value={eligibleRuns.length} />
-        <StatCard icon="✅" iconBg="var(--goodbg)" label="Transfers Credited" value={credited} />
-        <StatCard icon="⚠️" iconBg={failed > 0 ? "var(--badbg)" : "var(--line2)"} label="Transfers Failed" value={failed} />
+        <StatCard icon="🏦" iconBg="var(--infobg)" label="Runs Ready for Disbursement" value={runsErrored ? "—" : eligibleRuns.length} />
+        <StatCard icon="✅" iconBg="var(--goodbg)" label="Transfers Credited" value={credited ?? "—"} />
+        <StatCard icon="⚠️" iconBg={failed && failed > 0 ? "var(--badbg)" : "var(--line2)"} label="Transfers Failed" value={failed ?? "—"} />
         <StatCard
           icon="🔐"
           iconBg="var(--warnbg)"
           label="DSC Status"
-          value={dscConfig ? "Active" : "Not configured"}
+          value={dscErrored ? "—" : dscConfig ? "Active" : "Not configured"}
         />
       </StatGrid>
 
@@ -155,7 +161,11 @@ export default async function DisbursementPage() {
       </Card>
 
       <Card title="NACH Return File">
-        {eligibleRuns.length === 0 ? (
+        {runsErrored ? (
+          <div className="pad">
+            <RefreshErrorState error={toHumanError("load", { area: "payroll runs" })} backHref="/hr/payroll" />
+          </div>
+        ) : eligibleRuns.length === 0 ? (
           <EmptyState
             icon="↩️"
             title="No runs to reconcile"

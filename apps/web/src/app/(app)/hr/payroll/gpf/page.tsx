@@ -1,7 +1,8 @@
-import { PageHeader, Card, DataTable, EmptyState, StatGrid, StatCard } from "../../../../_components/ds";
-import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
+import { PageHeader, Card, DataTable, EmptyState, StatGrid, StatCard, RefreshErrorState } from "../../../../_components/ds";
 import { getGpfStatements } from "../../../../_data/loaders";
 import { Chart } from "../../../../_components/Chart";
+import { useResource } from "../../../../_data/useResource";
+import { toHumanError } from "@/lib/messages";
 
 type GpfRow = {
   id: string;
@@ -19,7 +20,10 @@ function projectGpfCorpus(totalMinor: number, yearsRemaining: number): number {
 }
 
 export default async function GpfStatementsPage() {
-  const { data: rows, source } = await getGpfStatements();
+  const result = await getGpfStatements();
+  const { data: rows } = result;
+  const resource = useResource(result);
+  const errored = resource.status === "error";
 
   const tableRows: GpfRow[] = rows.map((r) => ({
     id: r.id,
@@ -29,8 +33,11 @@ export default async function GpfStatementsPage() {
     contrib: r.empContribMinor ?? 0,
   }));
 
-  const uniqueEmps = new Set(tableRows.map((r) => r.employeeId)).size;
-  const uniquePeriods = new Set(tableRows.map((r) => r.period)).size;
+  const uniqueEmps = errored ? null : new Set(tableRows.map((r) => r.employeeId)).size;
+  const uniquePeriods = errored ? null : new Set(tableRows.map((r) => r.period)).size;
+  // Raw (not gated): tableRows is already [] on a real fetch failure (the
+  // loader's empty fallback), so this stays a true 0 rather than needing a
+  // null placeholder — projectGpfCorpus() below needs a real number either way.
   const totalContrib = tableRows.reduce((s, r) => s + (Number(r.contrib) || 0), 0);
 
   const formatMoney = (minor: number) =>
@@ -59,13 +66,12 @@ export default async function GpfStatementsPage() {
         subtitle="General Provident Fund contributions — interest @ 7.1% p.a. (GoI Q1 FY 2026-27)."
         back="/hr/payroll"
       />
-      <DataSourceBadge source={source} message="Couldn't load — showing nothing" />
 
       <StatGrid>
-        <StatCard icon="📋" iconBg="var(--infobg)" label="Statements" value={tableRows.length} />
-        <StatCard icon="👥" iconBg="var(--goodbg)" label="Employees" value={uniqueEmps} />
-        <StatCard icon="💰" iconBg="var(--warnbg)" label="Total Contributions" value={formatMoney(totalContrib)} />
-        <StatCard icon="📅" iconBg="var(--panel)" label="Periods" value={uniquePeriods} />
+        <StatCard icon="📋" iconBg="var(--infobg)" label="Statements" value={errored ? "—" : tableRows.length} />
+        <StatCard icon="👥" iconBg="var(--goodbg)" label="Employees" value={uniqueEmps ?? "—"} />
+        <StatCard icon="💰" iconBg="var(--warnbg)" label="Total Contributions" value={errored ? "—" : formatMoney(totalContrib)} />
+        <StatCard icon="📅" iconBg="var(--panel)" label="Periods" value={uniquePeriods ?? "—"} />
       </StatGrid>
 
       {/* GPF Corpus Dashboard */}
@@ -89,7 +95,7 @@ export default async function GpfStatementsPage() {
             Accumulated Corpus
           </p>
           <p style={{ margin: "0 0 4px", fontSize: 26, fontWeight: 800, color: "var(--fg)" }}>
-            {formatMoney(totalContrib)}
+            {errored ? "—" : formatMoney(totalContrib)}
           </p>
           <p style={{ margin: 0, fontSize: 12, color: "var(--fg2)" }}>
             All employee GPF contributions (all periods)
@@ -129,7 +135,7 @@ export default async function GpfStatementsPage() {
             Projected Value at Retirement
           </p>
           <p style={{ margin: "0 0 2px", fontSize: 22, fontWeight: 800, color: "#1d4ed8" }}>
-            {formatMoney(projectedCorpus)}
+            {errored ? "—" : formatMoney(projectedCorpus)}
           </p>
           <p style={{ margin: 0, fontSize: 11, color: "#1e40af" }}>
             @7.1% p.a. over {AVG_YEARS_TO_RETIRE} yrs (compound). Illustrative only.
@@ -144,7 +150,11 @@ export default async function GpfStatementsPage() {
       )}
 
       <Card title="GPF Ledger">
-        {tableRows.length === 0 ? (
+        {errored ? (
+          <div className="pad">
+            <RefreshErrorState error={toHumanError("load", { area: "GPF statements" })} backHref="/hr/payroll" />
+          </div>
+        ) : tableRows.length === 0 ? (
           <EmptyState
             icon="🏦"
             title="No GPF statements"
