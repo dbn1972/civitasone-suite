@@ -236,7 +236,11 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
-  await q.stop();
+  // q is only assigned after the TX-017 freshness guard in beforeAll; if the
+  // guard throws (as designed, on a non-fresh database), q stays undefined --
+  // guard here so that expected failure surfaces cleanly instead of being
+  // masked by a second, unrelated "Cannot read properties of undefined" here.
+  if (q) await q.stop();
   await financeSqlClient.end({ timeout: 5 });
   await notificationSqlClient.end({ timeout: 5 });
   await tradeSqlClient.end({ timeout: 5 });
