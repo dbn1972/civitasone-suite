@@ -9,6 +9,7 @@ import * as repo from "./repo.js";
 import * as registerRepo from "../register/repo.js";
 import { computeMonthlyDep, generatePeriods, applyDepreciationPosting } from "./domain.js";
 import { uuidV5 } from "../../shared/ids.js";
+import { captureError } from "@civitasone/observability";
 
 const AUDIT_TOPIC = "audit.event.record";
 const GL_TOPIC    = "finance.gl.post";
@@ -27,7 +28,29 @@ export function registerDepreciationConsumers(rawQueue: Queue): void {
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       const asset = await registerRepo.findAssetByIdTx(tx, p.assetId, p.tenantId);
-      if (!asset) return;
+      if (!asset) {
+        // REL-026: this guard used to return silently on a miss, dropping an
+        // entire dual-book depreciation schedule (company SLM + statutory WDV)
+        // with zero operator-visible signal. captureError() is this codebase's
+        // single place where an otherwise-invisible failure becomes visible --
+        // structured log + Prometheus counter (alertable via
+        // CapturedErrorsAppearing) + optional Sentry forward when configured --
+        // the same primitive packages/outbox's relayOnce() already uses for its
+        // own "silent under load" class of bug (OPS-1).
+        //
+        // Deliberately logging-only: a genuine miss here is a product/domain
+        // question (retry? dead-letter? alert-and-skip forever?) that needs a
+        // real decision, not a mechanical default invented at this call site.
+        captureError(
+          new Error("asset_dep_schedule: assetId not found for dual-book schedule create"),
+          {
+            service: "asset-service", topic: COMMANDS.depSchedule,
+            messageId: msg.messageId, scheduleId: p.id,
+            assetId: p.assetId, tenantId: p.tenantId, depBook,
+          },
+        );
+        return;
+      }
       const usefulLifeYears = asset.usefulLifeYears;
       const ratePercent = depBook === "statutory" ? 25 : Number(asset.depRate);
       const startDate = p.startDate;
@@ -130,6 +153,22 @@ export function registerDepreciationConsumers(rawQueue: Queue): void {
               bookValueMinor,
               accumulatedDepMinor,
               msg.actorId
+            );
+          } else {
+            // REL-026: same "never silent" requirement as the depSchedule guard
+            // above. A missing asset here means the company book value never
+            // advances for this entry (the GL post below still fires), which is
+            // exactly the kind of drift that must be operator-visible, not a
+            // quiet no-op. Logging only -- see the comment on the depSchedule
+            // guard above for why this deliberately stops short of a retry/
+            // dead-letter policy.
+            captureError(
+              new Error("asset_dep_run: assetId not found for company book-value update"),
+              {
+                service: "asset-service", topic: COMMANDS.depRun,
+                messageId: msg.messageId, entryId: entry.id,
+                assetId: entry.assetId, tenantId: p.tenantId, period: entry.period,
+              },
             );
           }
         }
