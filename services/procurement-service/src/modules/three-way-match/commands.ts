@@ -12,6 +12,8 @@ export async function runThreeWayMatch(
     grnId: string;
     invoiceId?: string | undefined;
     invoiceAmountMinor?: number | undefined;
+    /** DOM-027: audited invoice reference. Required by the callers (routes.ts) whenever invoice info is present. */
+    invoiceRef?: string | undefined;
   },
 ): Promise<Accepted> {
   const id = randomUUID();

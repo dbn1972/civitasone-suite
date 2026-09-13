@@ -12,6 +12,12 @@ export const threeWayMatch = procurementSchema.table("three_way_match", {
   poAmountMinor:      bigint("po_amount_minor", { mode: "bigint" }).notNull().default(0n),
   grnAmountMinor:     bigint("grn_amount_minor", { mode: "bigint" }).notNull().default(0n),
   invoiceAmountMinor: bigint("invoice_amount_minor", { mode: "bigint" }),
+  // DOM-027: audited invoice reference (POST body field of the same name on
+  // both /v1/procurement/three-way-match and /v1/procurement/matches/invoice
+  // -- see routes.ts). Nullable: historical rows predate this column, and a
+  // PO+GRN-only match (no invoice attached yet) never carries one. Added by
+  // migration 0035; length matches both endpoints' z.string().max(128).
+  invoiceRef:         varchar("invoice_ref", { length: 128 }),
   matchStatus:        varchar("match_status", { length: 16 }).notNull().default("pending"),
   variancePct:        numeric("variance_pct", { precision: 5, scale: 2 }),
   autoMatched:        boolean("auto_matched").notNull().default(false),
