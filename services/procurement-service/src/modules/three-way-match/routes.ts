@@ -42,6 +42,13 @@ function toApi(r: ThreeWayMatchRow): Record<string, unknown> {
     variancePct: r.variancePct,
     autoMatched: r.autoMatched,
     createdAt: r.createdAt,
+    // DOM-011: per-axis computed variance + the threshold actually applied
+    // at match time (see schema.ts/migration 0033).
+    qtyVariancePct: r.qtyVariancePct,
+    priceVariancePct: r.priceVariancePct,
+    qtyTolerancePct: r.qtyTolerancePct,
+    priceTolerancePct: r.priceTolerancePct,
+    totalTolerancePct: r.totalTolerancePct,
   };
 }
 

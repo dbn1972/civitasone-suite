@@ -183,6 +183,48 @@ export function registerCheckInConsumers(queue: Queue): void {
         throw new NonRetryableError(`pass '${p.passId}' has been revoked`);
       }
 
+      // GAP FIX (DOM-012 — check-in ignores pass validity window): exactly
+      // the same bypass shape as the gate/location/area scope and
+      // revocation fixes above. POST /v1/visitor/passes/verify (routes.ts)
+      // rejects an expired or not-yet-active pass via the QR JWT's own
+      // exp/nbf claims (see check-in/domain.ts's verifyQrForGate ->
+      // PASS_EXPIRED / PASS_NOT_YET_VALID, driven by classifyQrError) —
+      // but that endpoint is only advisory (SYNCHRONOUS, read-only,
+      // Requirement 5.1); POST /v1/visitor/check-ins never requires it to
+      // have been called first, and this consumer is what actually COMMITS
+      // the check-in. Until now it never read digitalPasses.validFrom /
+      // validUntil at all, so an employee-role caller who knew a
+      // passId+gateId could check in a pass outside its validity window —
+      // before it starts, or long after it ended — by hitting this
+      // endpoint directly and skipping verify entirely. overstayDetect
+      // (below in this same file) only catches a pass that is ALREADY
+      // checked_in and has since drifted past validUntil; it does nothing
+      // to stop the check-in itself from being admitted in the first
+      // place.
+      //
+      // Hoisted `timestamp` (previously computed just before the checkIns
+      // insert, now computed here and reused unchanged below) so the
+      // window check compares against the claimed check-in moment, not
+      // wall-clock now — an offline-recorded check-in synced later, whose
+      // `timestamp` actually fell inside the window at the time, must not
+      // be rejected just because it's being processed after validUntil has
+      // since passed. Boundaries are inclusive (< / >, not <= / >=),
+      // matching this module's own isOverstayed() convention: a pass is
+      // valid exactly at validFrom and exactly at validUntil. Fail closed:
+      // NonRetryableError, the same convention the checks above established
+      // for this exact commit path.
+      const timestamp = p.timestamp ? new Date(p.timestamp) : new Date();
+      if (timestamp.getTime() < pass.validFrom.getTime()) {
+        throw new NonRetryableError(
+          `pass '${p.passId}' is not yet valid (validFrom=${pass.validFrom.toISOString()}, check-in at ${timestamp.toISOString()})`,
+        );
+      }
+      if (timestamp.getTime() > pass.validUntil.getTime()) {
+        throw new NonRetryableError(
+          `pass '${p.passId}' has expired (validUntil=${pass.validUntil.toISOString()}, check-in at ${timestamp.toISOString()})`,
+        );
+      }
+
       // Visit request is loaded here (rather than later, as it was before)
       // so the identity/blacklist gate below can run BEFORE any check-in
       // side effect is written.
@@ -247,8 +289,6 @@ export function registerCheckInConsumers(queue: Queue): void {
       }
 
       const nextStatus = domainCheckIn(pass.status as CheckInStatus, { passType: pass.passType as never });
-
-      const timestamp = p.timestamp ? new Date(p.timestamp) : new Date();
 
       await tx.insert(checkIns).values({
         tenantId: msg.tenantId,

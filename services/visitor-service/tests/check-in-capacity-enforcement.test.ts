@@ -130,6 +130,9 @@ beforeEach(() => {
   passRow = {
     id: PASS_ID, tenantId: TENANT, locationId: LOCATION_ID, visitRequestId: VISIT_REQUEST_ID,
     status: "active", passType: "single", permittedAreas: [],
+    // Wide-open window (DOM-012) — this file tests capacity enforcement,
+    // not the validity-window check, so keep the pass comfortably valid.
+    validFrom: new Date("2020-01-01T00:00:00.000Z"), validUntil: new Date("2099-12-31T23:59:59.000Z"),
   };
   visitRow = {
     id: VISIT_REQUEST_ID, tenantId: TENANT, hostEmployeeId: "host-1", visitorName: "Visitor",
