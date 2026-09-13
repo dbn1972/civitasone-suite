@@ -6,7 +6,7 @@
 CREATE SCHEMA IF NOT EXISTS simplified;
 
 -- Simplified accounts table (flat chart for MSME tenants)
-CREATE TABLE simplified.accounts (
+CREATE TABLE IF NOT EXISTS simplified.accounts (
   id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   tenant_id   UUID NOT NULL,
   code        VARCHAR(8) NOT NULL,
@@ -24,7 +24,7 @@ CREATE TABLE simplified.accounts (
 );
 
 -- Simplified transactions (the user-friendly view of what happened)
-CREATE TABLE simplified.transactions (
+CREATE TABLE IF NOT EXISTS simplified.transactions (
   id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   tenant_id       UUID NOT NULL,
   type            VARCHAR(32) NOT NULL CHECK (type IN (
@@ -49,10 +49,10 @@ CREATE TABLE simplified.transactions (
 );
 
 -- Indexes for tenant-scoped queries
-CREATE INDEX idx_simplified_accounts_tenant ON simplified.accounts (tenant_id);
-CREATE INDEX idx_simplified_txn_tenant_date ON simplified.transactions (tenant_id, posting_date DESC);
-CREATE INDEX idx_simplified_txn_tenant_type ON simplified.transactions (tenant_id, type);
-CREATE INDEX idx_simplified_txn_journal     ON simplified.transactions (journal_id) WHERE journal_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_simplified_accounts_tenant ON simplified.accounts (tenant_id);
+CREATE INDEX IF NOT EXISTS idx_simplified_txn_tenant_date ON simplified.transactions (tenant_id, posting_date DESC);
+CREATE INDEX IF NOT EXISTS idx_simplified_txn_tenant_type ON simplified.transactions (tenant_id, type);
+CREATE INDEX IF NOT EXISTS idx_simplified_txn_journal     ON simplified.transactions (journal_id) WHERE journal_id IS NOT NULL;
 
 -- RLS policies (tenant isolation)
 

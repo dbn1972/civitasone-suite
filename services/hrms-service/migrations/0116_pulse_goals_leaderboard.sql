@@ -13,7 +13,7 @@ CREATE TABLE IF NOT EXISTS hrms.pulse_surveys (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   expires_at TIMESTAMPTZ
 );
-CREATE INDEX idx_pulse_surveys_tenant ON hrms.pulse_surveys (tenant_id, is_active, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_pulse_surveys_tenant ON hrms.pulse_surveys (tenant_id, is_active, created_at DESC);
 
 CREATE TABLE IF NOT EXISTS hrms.pulse_responses (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -25,7 +25,7 @@ CREATE TABLE IF NOT EXISTS hrms.pulse_responses (
   responded_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   UNIQUE (survey_id, respondent_id) -- one response per person per survey
 );
-CREATE INDEX idx_pulse_responses_survey ON hrms.pulse_responses (survey_id);
+CREATE INDEX IF NOT EXISTS idx_pulse_responses_survey ON hrms.pulse_responses (survey_id);
 
 -- ─── Goals / OKR ───────────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS hrms.goals (
@@ -44,7 +44,7 @@ CREATE TABLE IF NOT EXISTS hrms.goals (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
-CREATE INDEX idx_goals_tenant_employee ON hrms.goals (tenant_id, employee_id, status);
+CREATE INDEX IF NOT EXISTS idx_goals_tenant_employee ON hrms.goals (tenant_id, employee_id, status);
 
 CREATE TABLE IF NOT EXISTS hrms.goal_checkins (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -55,7 +55,7 @@ CREATE TABLE IF NOT EXISTS hrms.goal_checkins (
   note TEXT NOT NULL DEFAULT '',
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
-CREATE INDEX idx_goal_checkins_goal ON hrms.goal_checkins (goal_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_goal_checkins_goal ON hrms.goal_checkins (goal_id, created_at DESC);
 
 -- ─── Gamified Leaderboard ──────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS hrms.leaderboard_points (
@@ -67,8 +67,8 @@ CREATE TABLE IF NOT EXISTS hrms.leaderboard_points (
   source_id UUID, -- ID of kudos/goal/survey that triggered points
   awarded_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
-CREATE INDEX idx_leaderboard_tenant ON hrms.leaderboard_points (tenant_id, employee_id);
-CREATE INDEX idx_leaderboard_month ON hrms.leaderboard_points (tenant_id, awarded_at DESC);
+CREATE INDEX IF NOT EXISTS idx_leaderboard_tenant ON hrms.leaderboard_points (tenant_id, employee_id);
+CREATE INDEX IF NOT EXISTS idx_leaderboard_month ON hrms.leaderboard_points (tenant_id, awarded_at DESC);
 
 -- Materialized view for fast leaderboard queries (refresh periodically via scheduler)
 CREATE TABLE IF NOT EXISTS hrms.leaderboard_totals (
