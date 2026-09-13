@@ -105,6 +105,27 @@ export async function jwtEdgeVerify(
     } else {
       delete headers["x-tenant-id"];
     }
+
+    // SEC-021: mirror the same trust/absence handling for the actor identity.
+    // api-key-auth.ts already sets x-actor-id (from the key's ownerId) on its
+    // own path; this file — the JWT path ordinary browser/session users go
+    // through — never touched x-actor-id at all, so every audit-log row
+    // written for a JWT-authenticated request (createAuditHook in hrms-service
+    // and elsewhere reads the actor off this header) had a missing/null actor.
+    // The verified token's `sub` claim is the platform's user-id claim (every
+    // signToken call site in this repo mints `{ sub, tid, roles, sid }`; see
+    // packages/auth/src/index.ts's CivitasJwtPayload). As with tid above,
+    // `sub` is only TYPED as required — verifyJwt's return is a type
+    // assertion over a decoded token, not a runtime-validated one, so a
+    // verified token could in principle still carry no sub. Set-when-present /
+    // delete-when-absent, not a blanket overwrite, so a client-supplied
+    // x-actor-id header can never survive on a token that carries no actor
+    // claim (same fail-closed reasoning as x-tenant-id above).
+    if (payload.sub) {
+      headers["x-actor-id"] = payload.sub;
+    } else {
+      delete headers["x-actor-id"];
+    }
   } catch (err) {
     const message =
       err instanceof Error ? err.message : "token verification failed";

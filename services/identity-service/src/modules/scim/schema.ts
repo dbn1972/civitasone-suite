@@ -1,7 +1,9 @@
 import { pgSchema, uuid, varchar, integer, timestamp } from "drizzle-orm/pg-core";
 
 // SEC-007: per-tenant SCIM bearer tokens. See migrations/0022_scim_per_tenant_tokens.sql
-// for the full rationale (including why this table deliberately carries no RLS policy).
+// for the full rationale. SEC-025 (migrations/0024_sec025_scim_tokens_rls.sql) added FORCE RLS:
+// a permissive SELECT-by-hash policy (needed for tenant-blind token lookup) plus tenant-scoped
+// write policies -- see token-repo.ts for the runWithTenant wrapping this requires.
 export const scimSchemaNs = pgSchema("scim");
 
 export const scimTokens = scimSchemaNs.table("scim_tokens", {

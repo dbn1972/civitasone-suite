@@ -166,8 +166,15 @@ export async function castVoteTx(
   if (!decision) return { notFound: true as const };
 
   // one-vote-per-voter idempotency
+  // REL-032: filters on decisionId + tenantId + voterId, matching the
+  // tenantId scoping listVotes/findDecisionWithVotes already use -- see the
+  // recompute-tally query below for the full defense-in-depth rationale.
   const existing = await tx.select().from(committeeVotes)
-    .where(and(eq(committeeVotes.decisionId, decisionId), eq(committeeVotes.voterId, voterId))).limit(1);
+    .where(and(
+      eq(committeeVotes.decisionId, decisionId),
+      eq(committeeVotes.tenantId, tenantId),
+      eq(committeeVotes.voterId, voterId),
+    )).limit(1);
   let duplicate = false;
   let lateVote = false;
   if (existing[0]) {
@@ -210,8 +217,17 @@ export async function castVoteTx(
     lateVote = true;
   }
 
+  // REL-032: this recompute-tally query used to filter by decisionId only,
+  // unlike listVotes/findDecisionWithVotes (its siblings in this file), which
+  // both also filter by tenantId. decisionId is already tenant-scoped by the
+  // locked-decision read above and committee_votes carries a FORCE RLS
+  // tenant_isolation_policy (migration 0028_workflow_engine_100.sql), so this
+  // was not a live cross-tenant read -- RLS independently verified as the
+  // real backstop (see tests/rel-032-tenant-filter-rls.test.ts). Added for
+  // defense-in-depth consistency with the other two queries in this
+  // function, matching this file's own established convention.
   const votes = await tx.select().from(committeeVotes)
-    .where(eq(committeeVotes.decisionId, decisionId));
+    .where(and(eq(committeeVotes.decisionId, decisionId), eq(committeeVotes.tenantId, tenantId)));
   const tally = tallyQuorum({
     rule: decision.rule as QuorumRule,
     totalMembers: decision.totalMembers,
