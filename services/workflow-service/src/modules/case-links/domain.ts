@@ -180,3 +180,52 @@ export function planMerge(sourceIds: string[], targetId: string): MergePlan {
   if (new Set(sourceIds).size !== sourceIds.length) errors.push("DUPLICATE_SOURCES");
   return { allowed: errors.length === 0, errors };
 }
+
+/**
+ * PERF-021 (Site B) -- same error-collection contract as validateLink() above
+ * (collects every violation, never short-circuits), but takes pre-computed,
+ * DB-derived flags for the three data-dependent checks instead of a full
+ * `existing: CaseLink[]` array.
+ *
+ * Why this exists alongside validateLink() rather than replacing it:
+ * createLinkChecked() (repo.ts) used to fetch EVERY case_links row for the
+ * tenant just so validateLink() could walk it in JS -- a full-tenant fetch on
+ * every link-creation write. It now computes the same three booleans with
+ * targeted indexed EXISTS queries (DUPLICATE_LINK, DUPLICATE_OF_A_DUPLICATE)
+ * and a recursive CTE over just the containment subgraph (CYCLE_DETECTED),
+ * then calls this function to assemble the identical error set. validateLink()
+ * is untouched and still used by: (a) case-links-domain.test.ts's direct
+ * pure-function tests, and (b) routes.ts's synchronous best-effort pre-check,
+ * which already has the full `existing` array in hand via allLinks() and
+ * isn't the race-safe authoritative path (that's createLinkChecked, guarded by
+ * the FOR UPDATE locks below it).
+ */
+export interface LinkGuardChecks {
+  fromCaseId: string;
+  toCaseId: string;
+  type: LinkType;
+  /** A case_links row already exists with this exact (fromCaseId, toCaseId, type). */
+  isDuplicate: boolean;
+  /** Only consulted when type === "duplicate_of": toCaseId is itself already the
+   *  "from" side of an existing duplicate_of link (already a duplicate of
+   *  something else), so it cannot become the canonical target of a new one. */
+  targetIsAlreadyADuplicate: boolean;
+  /** Adding this link's containment edge would close a cycle in the existing
+   *  parent_child/split_from/merged_from containment subgraph (or the edge is
+   *  a same-node self-loop). False for link types with no containment edge
+   *  (related, duplicate_of). */
+  wouldCreateCycle: boolean;
+}
+
+export function assembleLinkGuardResult(input: LinkGuardChecks): GuardResult {
+  const errors: string[] = [];
+  const { fromCaseId, toCaseId, type, isDuplicate, targetIsAlreadyADuplicate, wouldCreateCycle: cycles } = input;
+
+  if (!LINK_TYPES.includes(type)) errors.push("UNKNOWN_LINK_TYPE");
+  if (fromCaseId === toCaseId) errors.push("SELF_LINK");
+  if (isDuplicate) errors.push("DUPLICATE_LINK");
+  if (type === "duplicate_of" && targetIsAlreadyADuplicate) errors.push("DUPLICATE_OF_A_DUPLICATE");
+  if (cycles) errors.push("CYCLE_DETECTED");
+
+  return { allowed: errors.length === 0, errors };
+}
