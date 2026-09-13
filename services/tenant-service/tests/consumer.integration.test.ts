@@ -13,6 +13,17 @@
  * Test 3 — quotas pre-accept validation: tenant.tenant_quota.upsert for a tenantId
  *   that doesn't exist is rejected (retried, then DLQ'd), not silently applied as an
  *   orphan tenant.tenant_quotas row. See consumer.ts's tenantQuotaUpsert handler.
+ *
+ * Test 4 — tenants_status_check (migration 0024): the DB CHECK constraint on
+ *   tenant.tenants.status must match the app's real six-state machine. This test
+ *   opens with a preflight that fails loud when DATABASE_URL points at a database
+ *   that predates migration 0024 (e.g. a reused/stale local Postgres, or the shared
+ *   long-lived dev instance vitest.config.ts's DATABASE_URL fallback targets when
+ *   the env var isn't set) — see REL-030's gap-report entry. A stale database is
+ *   not a code regression; it reads as one without the preflight, because the raw
+ *   Postgres CHECK-violation from a stale constraint looks identical to a genuine
+ *   assertion failure. Always point DATABASE_URL at a cluster freshly bootstrapped
+ *   via scripts/ci/bootstrap-postgres.sh before trusting a failure here.
  */
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { MemoryQueue } from "@civitasone/queue";
@@ -217,6 +228,31 @@ describe("tenant consumer — integration (real Postgres)", () => {
   }, 15_000);
 
   it("tenants_status_check (migration 0024) allows the full six-state domain machine, not just draft/active/suspended", async () => {
+    // Preflight (see REL-030 and the "Test 4" note above): confirm the CHECK
+    // constraint itself already reflects migration 0024 before asserting against
+    // it. Without this, a stale/pre-0024 database fails the assertions below with
+    // a bare Postgres CHECK-violation that is indistinguishable from a genuine
+    // regression — it is neither. Re-bootstrap a FRESH cluster (scripts/ci/
+    // bootstrap-postgres.sh against a disposable container) and re-point
+    // DATABASE_URL at it if this throws.
+    const [constraint] = await sqlClient<{ definition: string }[]>`
+      SELECT pg_get_constraintdef(oid) AS definition
+      FROM pg_constraint
+      WHERE conrelid = 'tenant.tenants'::regclass AND conname = 'tenants_status_check'
+    `;
+    const missing = ["restricted", "offboarding", "archived"].filter(
+      (status) => !constraint?.definition?.includes(`'${status}'`),
+    );
+    if (missing.length > 0) {
+      throw new Error(
+        `tenants_status_check does not allow [${missing.join(", ")}] on this DATABASE_URL ` +
+          `(current definition: ${constraint?.definition ?? "<constraint not found>"}). ` +
+          "This database predates migration 0024 — re-bootstrap a FRESH cluster via " +
+          "scripts/ci/bootstrap-postgres.sh against a disposable container and re-point " +
+          "DATABASE_URL at it. This is an environment problem, not a code regression.",
+      );
+    }
+
     await tenantSelect(CHECK_TENANT_ID, (tx) =>
       tx.insert(tenants).values({
         id: CHECK_TENANT_ID,
