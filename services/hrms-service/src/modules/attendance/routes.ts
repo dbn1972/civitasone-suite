@@ -163,10 +163,16 @@ export async function attendanceRoutes(app: FastifyInstance): Promise<void> {
   app.get("/v1/hrms/shift-requests", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, [...HR_ROLES, "manager"]);
-    const rows = await db.select().from(hrmsShiftChangeRequests)
-      .where(eq(hrmsShiftChangeRequests.tenantId, ctx.tenantId))
-      .orderBy(desc(hrmsShiftChangeRequests.createdAt))
-      .limit(200);
+    // SEC-010: attendance.hrms_shift_change_requests is now FORCE RLS'd. A
+    // bare db.select() runs with no app.tenant_id GUC set, which would fail
+    // closed to zero rows for every tenant (see shared/db.ts's scopedRead
+    // doc comment) — read inside the tenant transaction instead.
+    const rows = await scopedRead((tx) =>
+      tx.select().from(hrmsShiftChangeRequests)
+        .where(eq(hrmsShiftChangeRequests.tenantId, ctx.tenantId))
+        .orderBy(desc(hrmsShiftChangeRequests.createdAt))
+        .limit(200),
+    );
     const employees = await employeeRepo.listByTenant(ctx.tenantId, 500, 0);
     const empMap = new Map(employees.map((e) => [e.id, e]));
     return reply.send({ data: rows.map((r) => ({
@@ -185,10 +191,14 @@ export async function attendanceRoutes(app: FastifyInstance): Promise<void> {
   app.get("/v1/hrms/wfh-requests", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, [...HR_ROLES, "manager"]);
-    const rows = await db.select().from(hrmsWfhRequests)
-      .where(eq(hrmsWfhRequests.tenantId, ctx.tenantId))
-      .orderBy(desc(hrmsWfhRequests.createdAt))
-      .limit(200);
+    // SEC-010: attendance.hrms_wfh_requests is now FORCE RLS'd — same reasoning
+    // as GET /v1/hrms/shift-requests above.
+    const rows = await scopedRead((tx) =>
+      tx.select().from(hrmsWfhRequests)
+        .where(eq(hrmsWfhRequests.tenantId, ctx.tenantId))
+        .orderBy(desc(hrmsWfhRequests.createdAt))
+        .limit(200),
+    );
     const employees = await employeeRepo.listByTenant(ctx.tenantId, 500, 0);
     const empMap = new Map(employees.map((e) => [e.id, e]));
     return reply.send({ data: rows.map((r) => ({

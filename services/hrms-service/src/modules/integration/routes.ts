@@ -6,23 +6,59 @@
 import type { FastifyInstance } from "fastify";
 import { z, ZodError } from "zod";
 import { randomUUID } from "node:crypto";
+import { sql } from "drizzle-orm";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { sqlPool } from "../../shared/db.js";
+import { db, scopedRead } from "../../shared/db.js";
 
 const ADMIN_ROLES = ["hr_admin", "super_admin", "platform_admin"];
+
+// SEC-010: employee.integrations / employee.integration_sync_log are now
+// FORCE RLS'd. This module has no Drizzle schema for either table (they were
+// always accessed via raw SQL), so these routes used sqlPool.query() — a bare
+// pool-tier client with no app.tenant_id GUC (see shared/db.ts's doc comment
+// on scopedRead). Under FORCE RLS that fails closed: every SELECT would
+// silently return zero rows and every INSERT/UPDATE would be rejected by
+// WITH CHECK. Fixed by running the same raw SQL text inside scopedRead() / a
+// transaction, which sets the GUC via wrapWithTenantGuc — same remedy as
+// TX-002/TX-003 ("route through tx") and 0135's audit.ts companion fix,
+// applied here to raw SQL instead of the query builder because no Drizzle
+// schema exists for these two tables.
+//
+// F3 CQRS boundary note (tests/f3-leftover-hrms-cqrs.test.ts): the two
+// transaction-wrapped writes below (create, sync) are pre-existing
+// synchronous writes, unchanged in kind by this migration — the original
+// code awaited `sqlPool.query(INSERT/UPDATE ...)` synchronously in the same
+// route handler; that scanner just never recognised sqlPool as a
+// Drizzle/write call. Converting either to the async publishF3Write pattern
+// is out of scope for a same-file RLS fix and would change response
+// semantics: POST /integrations echoes the row's own id/status back in its
+// 201 body, and the sync endpoint must answer 404/422 synchronously from the
+// row's *current* state. See KNOWN_INTENTIONAL_SYNC_WRITES in that test file.
+//
+// tx.execute(sql`...`) on this driver resolves to the row array directly
+// (not a `{ rows }` wrapper — see shared/db.ts's sqlPool comment on the
+// postgres-js client shape). Normalised defensively so this keeps working
+// across the pending drizzle-orm 0.30.10 -> 0.45.2 upgrade (SEC-018) even if
+// that changes.
+function rowsOf<T = Record<string, unknown>>(result: unknown): T[] {
+  if (Array.isArray(result)) return result as T[];
+  const withRows = result as { rows?: T[] } | undefined;
+  return withRows?.rows ?? [];
+}
 
 export async function integrationRoutes(app: FastifyInstance): Promise<void> {
   // List configured integrations for a tenant
   app.get("/v1/hrms/integrations", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ADMIN_ROLES);
-    const { rows } = await sqlPool.query(
-      `SELECT id, name, type, status, last_sync_at, config
-       FROM employee.integrations
-       WHERE tenant_id = $1 ORDER BY name`,
-      [ctx.tenantId],
+    const result = await scopedRead((tx) =>
+      tx.execute(sql`
+        SELECT id, name, type, status, last_sync_at, config
+        FROM employee.integrations
+        WHERE tenant_id = ${ctx.tenantId} ORDER BY name
+      `),
     );
-    return reply.send({ data: rows });
+    return reply.send({ data: rowsOf(result) });
   });
 
   // Create/register a new integration
@@ -36,10 +72,11 @@ export async function integrationRoutes(app: FastifyInstance): Promise<void> {
     }).parse(req.body);
 
     const id = randomUUID();
-    await sqlPool.query(
-      `INSERT INTO employee.integrations (id, tenant_id, name, type, config, status, created_by)
-       VALUES ($1, $2, $3, $4, $5, 'active', $6)`,
-      [id, ctx.tenantId, body.name, body.type, JSON.stringify(body.config), ctx.actorId],
+    await db.transaction((tx) =>
+      tx.execute(sql`
+        INSERT INTO employee.integrations (id, tenant_id, name, type, config, status, created_by)
+        VALUES (${id}, ${ctx.tenantId}, ${body.name}, ${body.type}, ${JSON.stringify(body.config)}, 'active', ${ctx.actorId})
+      `),
     );
     return reply.code(201).send({ data: { id, ...body, status: "active" } });
   });
@@ -49,18 +86,22 @@ export async function integrationRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, ADMIN_ROLES);
     const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
-    const { rows } = await sqlPool.query(
-      `SELECT id, type, status FROM employee.integrations WHERE id = $1 AND tenant_id = $2`,
-      [id, ctx.tenantId],
-    );
-    if (!rows[0]) throw new HttpError(404, "NOT_FOUND", "Integration not found");
-    if (rows[0].status !== "active") throw new HttpError(422, "INACTIVE", "Integration is not active");
 
-    // Record sync attempt
-    await sqlPool.query(
-      `UPDATE employee.integrations SET last_sync_at = NOW() WHERE id = $1`,
-      [id],
-    );
+    // Check + update in one tenant-scoped transaction (also closes a
+    // pre-existing TOCTOU gap between the two previously-separate queries).
+    await db.transaction(async (tx) => {
+      const result = await tx.execute(sql`
+        SELECT id, type, status FROM employee.integrations WHERE id = ${id} AND tenant_id = ${ctx.tenantId}
+      `);
+      const row = rowsOf<{ id: string; type: string; status: string }>(result)[0];
+      if (!row) throw new HttpError(404, "NOT_FOUND", "Integration not found");
+      if (row.status !== "active") throw new HttpError(422, "INACTIVE", "Integration is not active");
+
+      // Record sync attempt
+      await tx.execute(sql`
+        UPDATE employee.integrations SET last_sync_at = NOW() WHERE id = ${id}
+      `);
+    });
     return reply.code(202).send({ data: { id, syncStatus: "initiated", initiatedAt: new Date().toISOString() } });
   });
 
@@ -69,14 +110,15 @@ export async function integrationRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, ADMIN_ROLES);
     const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
-    const { rows } = await sqlPool.query(
-      `SELECT id, status, records_synced, errors, started_at, completed_at
-       FROM employee.integration_sync_log
-       WHERE integration_id = $1 AND tenant_id = $2
-       ORDER BY started_at DESC LIMIT 50`,
-      [id, ctx.tenantId],
+    const result = await scopedRead((tx) =>
+      tx.execute(sql`
+        SELECT id, status, records_synced, errors, started_at, completed_at
+        FROM employee.integration_sync_log
+        WHERE integration_id = ${id} AND tenant_id = ${ctx.tenantId}
+        ORDER BY started_at DESC LIMIT 50
+      `),
     );
-    return reply.send({ data: rows });
+    return reply.send({ data: rowsOf(result) });
   });
 
   app.setErrorHandler((err, req, reply) => {

@@ -2,6 +2,15 @@
  * Integration module route-level tests — comprehensive coverage:
  * happy paths, 400 validation, 401 unauthenticated, 403 forbidden,
  * 404 not found, 422 business rule violation.
+ *
+ * SEC-010: employee.integrations / employee.integration_sync_log are now
+ * FORCE RLS'd, so the routes moved off the bare sqlPool.query() pool client
+ * onto scopedRead()/db.transaction() + tx.execute(sql`...`) (see
+ * src/modules/integration/routes.ts). Mocks updated accordingly: H.poolQuery
+ * -> H.execute, resolving to a plain row array (the shape the routes'
+ * rowsOf() helper expects from this driver) instead of sqlPool's
+ * `{ rows, rowCount }` bridge shape. Assertions on status codes and response
+ * bodies are unchanged from before this migration.
  */
 import { describe, it, expect, beforeEach, afterAll, vi } from "vitest";
 import { signToken } from "@civitasone/auth";
@@ -16,7 +25,6 @@ const H = vi.hoisted(() => ({
   update: vi.fn(),
   insert: vi.fn(),
   execute: vi.fn(),
-  poolQuery: vi.fn(),
 }));
 
 vi.mock("../src/shared/db.js", () => {
@@ -43,7 +51,6 @@ vi.mock("../src/shared/db.js", () => {
     db: { transaction: async (cb: (tx: typeof mockTx) => Promise<unknown>) => cb(mockTx), execute: (q: unknown) => H.execute(q) },
     scopedRead: async (fn: (tx: typeof mockTx) => Promise<unknown>) => fn(mockTx),
     sqlClient: { end: async () => {} },
-    sqlPool: { query: async (...args: unknown[]) => H.poolQuery(...args) },
   };
 });
 
@@ -71,7 +78,6 @@ beforeEach(() => {
   H.insert.mockResolvedValue(undefined);
   H.update.mockResolvedValue(undefined);
   H.execute.mockResolvedValue([]);
-  H.poolQuery.mockResolvedValue({ rows: [], rowCount: 0 });
 });
 
 afterAll(async () => {
@@ -83,12 +89,9 @@ afterAll(async () => {
 
 describe("GET /v1/hrms/integrations", () => {
   it("200 — returns integration list", async () => {
-    H.poolQuery.mockResolvedValue({
-      rows: [
-        { id: INT_ID, name: "eHRMS Sync", type: "ehrms", status: "active", last_sync_at: null, config: {} },
-      ],
-      rowCount: 1,
-    });
+    H.execute.mockResolvedValue([
+      { id: INT_ID, name: "eHRMS Sync", type: "ehrms", status: "active", last_sync_at: null, config: {} },
+    ]);
     const app = await buildApp();
     const r = await app.inject({
       method: "GET",
@@ -102,7 +105,7 @@ describe("GET /v1/hrms/integrations", () => {
   });
 
   it("200 — empty list when no integrations", async () => {
-    H.poolQuery.mockResolvedValue({ rows: [], rowCount: 0 });
+    H.execute.mockResolvedValue([]);
     const app = await buildApp();
     const r = await app.inject({
       method: "GET",
@@ -115,7 +118,7 @@ describe("GET /v1/hrms/integrations", () => {
   });
 
   it("200 — super_admin can access", async () => {
-    H.poolQuery.mockResolvedValue({ rows: [], rowCount: 0 });
+    H.execute.mockResolvedValue([]);
     const app = await buildApp();
     const r = await app.inject({
       method: "GET",
@@ -127,7 +130,7 @@ describe("GET /v1/hrms/integrations", () => {
   });
 
   it("200 — platform_admin can access", async () => {
-    H.poolQuery.mockResolvedValue({ rows: [], rowCount: 0 });
+    H.execute.mockResolvedValue([]);
     const app = await buildApp();
     const r = await app.inject({
       method: "GET",
@@ -181,7 +184,7 @@ describe("POST /v1/hrms/integrations", () => {
   };
 
   it("201 — creates a new integration", async () => {
-    H.poolQuery.mockResolvedValue({ rows: [], rowCount: 1 });
+    H.execute.mockResolvedValue([]);
     const app = await buildApp();
     const r = await app.inject({
       method: "POST",
@@ -199,7 +202,7 @@ describe("POST /v1/hrms/integrations", () => {
   });
 
   it("201 — creates with minimal body (no config)", async () => {
-    H.poolQuery.mockResolvedValue({ rows: [], rowCount: 1 });
+    H.execute.mockResolvedValue([]);
     const app = await buildApp();
     const r = await app.inject({
       method: "POST",
@@ -212,7 +215,7 @@ describe("POST /v1/hrms/integrations", () => {
   });
 
   it("201 — each integration type is valid", async () => {
-    H.poolQuery.mockResolvedValue({ rows: [], rowCount: 1 });
+    H.execute.mockResolvedValue([]);
     const app = await buildApp();
     for (const type of ["ehrms", "pfms_payroll", "digilocker", "biometric", "custom"]) {
       const r = await app.inject({
@@ -314,10 +317,10 @@ describe("POST /v1/hrms/integrations", () => {
 
 describe("POST /v1/hrms/integrations/:id/sync", () => {
   it("202 — triggers sync for active integration", async () => {
-    // First query: lookup integration, second query: update last_sync_at
-    H.poolQuery
-      .mockResolvedValueOnce({ rows: [{ id: INT_ID, type: "ehrms", status: "active" }], rowCount: 1 })
-      .mockResolvedValueOnce({ rows: [], rowCount: 1 });
+    // First tx.execute: lookup integration, second tx.execute: update last_sync_at
+    H.execute
+      .mockResolvedValueOnce([{ id: INT_ID, type: "ehrms", status: "active" }])
+      .mockResolvedValueOnce([]);
     const app = await buildApp();
     const r = await app.inject({
       method: "POST",
@@ -365,7 +368,7 @@ describe("POST /v1/hrms/integrations/:id/sync", () => {
   });
 
   it("404 — integration not found", async () => {
-    H.poolQuery.mockResolvedValueOnce({ rows: [], rowCount: 0 });
+    H.execute.mockResolvedValueOnce([]);
     const app = await buildApp();
     const r = await app.inject({
       method: "POST",
@@ -378,7 +381,7 @@ describe("POST /v1/hrms/integrations/:id/sync", () => {
   });
 
   it("422 — inactive integration cannot sync", async () => {
-    H.poolQuery.mockResolvedValueOnce({ rows: [{ id: INT_ID, type: "ehrms", status: "inactive" }], rowCount: 1 });
+    H.execute.mockResolvedValueOnce([{ id: INT_ID, type: "ehrms", status: "inactive" }]);
     const app = await buildApp();
     const r = await app.inject({
       method: "POST",
@@ -395,12 +398,9 @@ describe("POST /v1/hrms/integrations/:id/sync", () => {
 
 describe("GET /v1/hrms/integrations/:id/history", () => {
   it("200 — returns sync history", async () => {
-    H.poolQuery.mockResolvedValue({
-      rows: [
-        { id: "sh1", status: "completed", records_synced: 150, errors: 0, started_at: "2026-07-01T10:00:00Z", completed_at: "2026-07-01T10:05:00Z" },
-      ],
-      rowCount: 1,
-    });
+    H.execute.mockResolvedValue([
+      { id: "sh1", status: "completed", records_synced: 150, errors: 0, started_at: "2026-07-01T10:00:00Z", completed_at: "2026-07-01T10:05:00Z" },
+    ]);
     const app = await buildApp();
     const r = await app.inject({
       method: "GET",
@@ -414,7 +414,7 @@ describe("GET /v1/hrms/integrations/:id/history", () => {
   });
 
   it("200 — empty history", async () => {
-    H.poolQuery.mockResolvedValue({ rows: [], rowCount: 0 });
+    H.execute.mockResolvedValue([]);
     const app = await buildApp();
     const r = await app.inject({
       method: "GET",

@@ -387,6 +387,22 @@ jobs:
       - name: Empty-vs-error guard (fetch failure vs genuinely-empty, UX-001)
         run: node scripts/ci/empty-vs-error-guard.mjs
 
+      # SEC-010: tables created after an RLS isolation sweep (hrms
+      # hrms_wfh_requests/hrms_shift_change_requests/hrms_audit_log/
+      # integrations/integration_sync_log; admin reconciliation_breaks/
+      # results; workflow dmn_tables) never got row-level security at all —
+      # not even ENABLE — because this fleet's convention has been "create
+      # the table now, RLS it in a later sweep migration." Pure migration-text
+      # analysis (no live DB needed, unlike tenant-index-guard above), so it
+      # runs here rather than in the Bootstrap Postgres job. Unit tests first
+      # (fixture coverage for findTenantTableViolations() itself), then the
+      # guard against the real tree (ratchet: fails on NEW violations and on
+      # stale baseline entries, see scripts/ci/tenant-table-rls-baseline.json).
+      - name: Tenant table RLS guard unit tests (SEC-010)
+        run: pnpm exec vitest run tests/architecture/tenant-table-rls-guard.test.ts
+      - name: Tenant table RLS guard (new CREATE TABLE + tenant_id must carry RLS in the same migration, SEC-010)
+        run: node scripts/ci/tenant-table-rls-guard.mjs
+
   # ─────────────────────────────────────────────
   # Job 4: Web build check
   # ─────────────────────────────────────────────
