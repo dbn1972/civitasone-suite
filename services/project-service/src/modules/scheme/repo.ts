@@ -159,6 +159,39 @@ export async function countProjectsByScheme(schemeId: string, tenantId: string):
   return row?.count ?? 0;
 }
 
+export type SchemeProjectRow = {
+  id: string;
+  code: string;
+  name: string;
+  status: string;
+  dprCostMinor: bigint;
+};
+
+/**
+ * COMP-016: sibling to countProjectsByScheme above (same schemeId+tenantId
+ * where-clause on projectProjects) but returns the rows a scheme-detail page
+ * actually renders instead of just their count. dprCostMinor is the same
+ * "budget" column project/queries.ts::listProjectSummaries maps a project's
+ * own totalBudget from — kept in minor units (not run through
+ * minorToAmount()) so the caller can send it straight through as a string,
+ * same convention as getSchemeDetail's own money fields.
+ */
+export async function listProjectsByScheme(schemeId: string, tenantId: string, limit = 100): Promise<SchemeProjectRow[]> {
+  // Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
+  // before this read — a bare db.select() runs with no RLS GUC set.
+  return db.transaction((tx) => tx
+    .select({
+      id: projectProjects.id,
+      code: projectProjects.code,
+      name: projectProjects.name,
+      status: projectProjects.status,
+      dprCostMinor: projectProjects.dprCostMinor,
+    })
+    .from(projectProjects)
+    .where(and(eq(projectProjects.schemeId, schemeId), eq(projectProjects.tenantId, tenantId)))
+    .limit(limit));
+}
+
 /**
  * PERF-019 batch loader: was one COUNT query per scheme (N+1, in
  * scheme/queries.ts::listSchemeSummaries). Now a single grouped-count query

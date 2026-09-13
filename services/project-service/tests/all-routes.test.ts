@@ -158,6 +158,7 @@ vi.mock("@civitasone/schemas/web", () => ({
   MilestoneSummaryListSchema: { parse: (d: unknown) => d },
   FundReleaseSummaryListSchema: { parse: (d: unknown) => d },
   SchemeSummaryListSchema: { parse: (d: unknown) => d },
+  SchemeDetailSchema: { parse: (d: unknown) => d },
   ProjectsDashboardSchema: { parse: (d: unknown) => d },
 }));
 
@@ -195,6 +196,7 @@ vi.mock("../src/modules/scheme/commands.js", () => ({
 
 vi.mock("../src/modules/scheme/queries.js", () => ({
   getScheme: async (id: string) => mockState.queryResult[0] ?? null,
+  getSchemeDetail: async (id: string) => (mockState.queryResult[0] ? { ...mockState.queryResult[0], projects: [] } : null),
   listSchemeSummaries: async () => ({ data: mockState.queryResult, meta: { total: mockState.countResult } }),
   listFundReleaseSummaries: async () => ({ data: mockState.queryResult, meta: { total: mockState.countResult } }),
 }));
