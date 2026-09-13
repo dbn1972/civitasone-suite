@@ -7,6 +7,17 @@ export const createSchemeBody = z.object({
   fundingPattern:    z.string().min(1).max(32).default("100"),
   totalOutlayMinor:  z.number().int().nonnegative().default(0),
   sanctionRef:       z.string().optional(),
+  // COMP-016 follow-up (migration 0021): pure-display fields with no
+  // scheme-domain meaning (see the matching comment on scheme/schema.ts's
+  // projectSchemes.nodalOfficer). Optional with no default, like
+  // sanctionRef above — the backing columns are nullable with no DEFAULT,
+  // so an unset field should persist as NULL ("not recorded"), never a
+  // fabricated 0/empty-string value.
+  nodalOfficer:      z.string().max(255).optional(),
+  department:        z.string().max(255).optional(),
+  beneficiaries:     z.number().int().nonnegative().optional(),
+  startDate:         z.string().optional(),
+  endDate:           z.string().optional(),
 });
 export type CreateSchemeBody = z.infer<typeof createSchemeBody>;
 

@@ -17,6 +17,10 @@ export function registerSchemeConsumers(queue: Queue): void {
     const p = msg.payload as {
       id: string; tenantId: string; code: string; name: string; type?: string;
       fundingPattern?: string; totalOutlayMinor?: number; sanctionRef?: string;
+      // COMP-016 follow-up (migration 0021): pure-display fields, see the
+      // matching comment on scheme/schema.ts's projectSchemes.nodalOfficer.
+      nodalOfficer?: string; department?: string; beneficiaries?: number;
+      startDate?: string; endDate?: string;
     };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
@@ -25,6 +29,15 @@ export function registerSchemeConsumers(queue: Queue): void {
         type: p.type ?? "css", fundingPattern: p.fundingPattern ?? "100",
         totalOutlayMinor: BigInt(p.totalOutlayMinor ?? 0),
         sanctionRef: p.sanctionRef ?? null,
+        // Persisted as NULL (not fabricated) when the caller doesn't supply
+        // them — same ?? null convention as sanctionRef above, and the same
+        // convention project/consumer.ts's COMMANDS.projectCreate handler
+        // already uses for its own optional startDate/endDate.
+        nodalOfficer: p.nodalOfficer ?? null,
+        department: p.department ?? null,
+        beneficiaries: p.beneficiaries ?? null,
+        startDate: p.startDate ?? null,
+        endDate: p.endDate ?? null,
         createdBy: msg.actorId, updatedBy: msg.actorId,
       });
       await enqueue(tx, {
