@@ -18,11 +18,22 @@ const ADMIN_ROLES = ["hr_admin", "super_admin", "platform_admin"];
 // pool-tier client with no app.tenant_id GUC (see shared/db.ts's doc comment
 // on scopedRead). Under FORCE RLS that fails closed: every SELECT would
 // silently return zero rows and every INSERT/UPDATE would be rejected by
-// WITH CHECK. Fixed by running the same raw SQL text inside
-// scopedRead()/db.transaction(), which set the GUC via wrapWithTenantGuc —
-// same remedy as TX-002/TX-003 ("route through tx") and 0135's audit.ts
-// companion fix, applied here to raw SQL instead of the query builder because
-// no Drizzle schema exists for these two tables.
+// WITH CHECK. Fixed by running the same raw SQL text inside scopedRead() / a
+// transaction, which sets the GUC via wrapWithTenantGuc — same remedy as
+// TX-002/TX-003 ("route through tx") and 0135's audit.ts companion fix,
+// applied here to raw SQL instead of the query builder because no Drizzle
+// schema exists for these two tables.
+//
+// F3 CQRS boundary note (tests/f3-leftover-hrms-cqrs.test.ts): the two
+// transaction-wrapped writes below (create, sync) are pre-existing
+// synchronous writes, unchanged in kind by this migration — the original
+// code awaited `sqlPool.query(INSERT/UPDATE ...)` synchronously in the same
+// route handler; that scanner just never recognised sqlPool as a
+// Drizzle/write call. Converting either to the async publishF3Write pattern
+// is out of scope for a same-file RLS fix and would change response
+// semantics: POST /integrations echoes the row's own id/status back in its
+// 201 body, and the sync endpoint must answer 404/422 synchronously from the
+// row's *current* state. See KNOWN_INTENTIONAL_SYNC_WRITES in that test file.
 //
 // tx.execute(sql`...`) on this driver resolves to the row array directly
 // (not a `{ rows }` wrapper — see shared/db.ts's sqlPool comment on the

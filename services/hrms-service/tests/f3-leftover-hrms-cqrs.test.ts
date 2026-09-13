@@ -79,6 +79,23 @@ const SYNC_WRITE = /\b(?:db|tx)\.(?:insert|update|delete|execute)\s*\(|\bdb\.tra
  *   (tests/manpower-routes.test.ts's roster-count assertion caught this).
  *   Making the write itself synchronous is the only way the immediate
  *   read-back can observe what was just submitted.
+ * - integration/routes.ts:75 (`db.transaction(...)` for POST
+ *   /v1/hrms/integrations) and :92 (`db.transaction(...)` for POST
+ *   /v1/hrms/integrations/:id/sync). SEC-010: employee.integrations /
+ *   employee.integration_sync_log went from no RLS to FORCE RLS, so these
+ *   two writes (previously bare `sqlPool.query()` calls, invisible to this
+ *   scanner since sqlPool isn't a Drizzle/repo call) had to move behind
+ *   wrapWithTenantGuc to still work at all — this scanner just started
+ *   seeing writes that were already synchronous before the RLS fix, not new
+ *   ones. Both are the same shape as the version-guard cases above: the
+ *   create route echoes the row's own id/status back in its 201 body, and
+ *   the sync route must answer 404 (not found) vs 422 (inactive) vs 202
+ *   synchronously from that row's *current* state — through publishF3Write
+ *   either would report success/200-family before the consumer confirms the
+ *   row exists or is active, the same "decide and durable write must be one
+ *   step" problem as the OTP case above. Re-architecting this module onto
+ *   the async F3 pattern is a real option but out of scope for a same-file
+ *   RLS migration; see the matching comment in integration/routes.ts itself.
  */
 const KNOWN_INTENTIONAL_SYNC_WRITES = new Set<string>([
   "recruitment/otp-verify-routes.ts:96",
@@ -88,6 +105,8 @@ const KNOWN_INTENTIONAL_SYNC_WRITES = new Set<string>([
   "recruitment/interview-recording-routes.ts:74",
   "recruitment/interview-response-routes.ts:103",
   "manpower-planning/routes.ts:176",
+  "integration/routes.ts:75",
+  "integration/routes.ts:92",
 ]);
 
 describe("F3 leftover hrms CQRS route boundary", () => {
