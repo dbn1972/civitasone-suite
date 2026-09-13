@@ -8,7 +8,7 @@ import * as repo from "./repo.js";
 import { computeNextRetryAt, shouldRetry } from "./retry.js";
 import {
   resolvePreferredChannel,
-  resolveChannelWithDefault,
+  resolveChannelWithDefaultTx,
   sendWithFallback,
   CHANNEL_NONE,
 } from "./channel.js";
@@ -156,9 +156,15 @@ async function processSend(msg: CommandEnvelope<SendPayload>): Promise<void> {
     // who has NOT opted out and expressed no preference.
     const prefResolution = resolvePreferredChannel(prefs, p.eventType, p.channel);
     const optedOut = prefResolution.optedOut;
+    // TX-018: routed through the *Tx sibling, threading this handler's own
+    // already-open `tx` through instead of resolveChannelWithDefault()
+    // opening its own nested scopedRead()/db.transaction() (transitively, via
+    // getDefaultChannel() -> repo.findDefaultChannel()) from inside this
+    // already-open one — see resolveChannelWithDefaultTx()'s doc comment
+    // (deliveries/channel.ts).
     const channel = optedOut
       ? CHANNEL_NONE
-      : await resolveChannelWithDefault(msg.tenantId, prefs, p.eventType, p.channel ?? template?.channel);
+      : await resolveChannelWithDefaultTx(tx, msg.tenantId, prefs, p.eventType, p.channel ?? template?.channel);
     const { preferred, fallbacks } = resolvePreferredChannel(prefs, p.eventType, optedOut ? undefined : channel);
 
     // P1-1: a fully opted-out recipient → record a `skipped` delivery on channel

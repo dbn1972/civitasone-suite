@@ -3,6 +3,7 @@ import type { PrefView } from "../templates/domain.js";
 import type { SendParams } from "../../adapters/types.js";
 import { getAdapter } from "../../adapters/index.js";
 import * as channelQueries from "../channels/queries.js";
+import type { Writer } from "../channels/repo.js";
 
 /** Sentinel channel meaning "recipient opted out — do not send on any channel". */
 export const CHANNEL_NONE = "none";
@@ -70,6 +71,34 @@ export async function resolveChannelWithDefault(
   if (getAdapter(preferred)) return preferred;
 
   const defaultChannel = await channelQueries.getDefaultChannel(tenantId, preferred);
+  if (defaultChannel?.enabled && getAdapter(defaultChannel.type)) return defaultChannel.type;
+
+  return "email";
+}
+
+/**
+ * TX-018 — tenant-scoped sibling of resolveChannelWithDefault(). Threads the
+ * caller's tx through to channelQueries.getDefaultChannelTx() instead of
+ * channelQueries.getDefaultChannel() opening its own scopedRead() (via
+ * repo.findDefaultChannel()) from inside an already-open outer
+ * db.transaction() (deliveries/consumer.ts's send handler): under pool.max
+ * concurrent in-flight consumer transactions, the nested call has no free
+ * connection to open on and deadlocks the pool silently. Route every call
+ * that happens inside an already-open consumer transaction through this,
+ * not resolveChannelWithDefault().
+ */
+export async function resolveChannelWithDefaultTx(
+  tx: Writer,
+  tenantId: string,
+  prefs: PrefView[],
+  eventType: string | undefined,
+  explicit?: string,
+): Promise<string> {
+  const { preferred, optedOut } = resolvePreferredChannel(prefs, eventType, explicit);
+  if (optedOut) return CHANNEL_NONE;
+  if (getAdapter(preferred)) return preferred;
+
+  const defaultChannel = await channelQueries.getDefaultChannelTx(tx, tenantId, preferred);
   if (defaultChannel?.enabled && getAdapter(defaultChannel.type)) return defaultChannel.type;
 
   return "email";
