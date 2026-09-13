@@ -17,7 +17,24 @@ export async function sessionRoutes(app: FastifyInstance): Promise<void> {
     if (ctx.tenantId !== body.tenantId) {
       throw new HttpError(403, "FORBIDDEN", "tenant mismatch");
     }
-    if (ctx.actorId !== body.userId) requireRole(ctx, SESSION_ADMIN);
+    const isSelfService = ctx.actorId === body.userId;
+    if (!isSelfService) requireRole(ctx, SESSION_ADMIN);
+
+    // SEC-015: a self-created session row must be keyed by the caller's OWN
+    // verified Keycloak session (sid) -- that correlation is the entire
+    // reason this row exists (SEC-006's denylist revokes by sid). Derived
+    // from ctx (populated by authPlugin from the independently-verified
+    // bearer token), never trusted from the request body. An admin creating
+    // a session record for someone ELSE has no way to know that other
+    // user's sid, so this requirement is scoped to the self-service path
+    // only; that path is unchanged (random id) since nothing real exercises
+    // it today (see SEC-015's gap-report row).
+    if (isSelfService) {
+      if (!ctx.sessionId || !sessionIdParam.shape.id.safeParse(ctx.sessionId).success) {
+        throw new HttpError(400, "MISSING_SESSION_ID", "access token has no sid claim");
+      }
+      return sendAccepted(reply, acceptedResponseSchema, await commands.createSession(ctx, body, ctx.sessionId));
+    }
     return sendAccepted(reply, acceptedResponseSchema, await commands.createSession(ctx, body));
   });
 

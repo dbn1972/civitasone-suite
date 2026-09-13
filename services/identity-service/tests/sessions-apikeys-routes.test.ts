@@ -16,8 +16,15 @@ const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
 const TENANT = "aaaaaaaa-1111-4000-8000-000000000099";
 const ACTOR = "a0000000-0000-4000-8000-0000000000aa";
 
+// SEC-015: sid must be a real uuid -- POST /identity/sessions now requires
+// that for the self-service path (sessions.sessions.id is a uuid column, and
+// routes.ts fails closed with 400 rather than let a non-uuid sid reach the
+// consumer/DB as a silent async failure). "sess-1" was a fine placeholder
+// before that constraint existed; the "POST ... → 202 with valid token" case
+// below is exactly the self-service path (sub === payload.userId) SEC-015
+// added the requirement for.
 function token(roles: string[] = ["super_admin"], tid = TENANT, sub = ACTOR): string {
-  return signToken({ sub, tid, roles, sid: "sess-1" } as never, SECRET);
+  return signToken({ sub, tid, roles, sid: "5e551014-0000-4000-8000-00000000005e" } as never, SECRET);
 }
 const headers = (roles?: string[], tid?: string, sub?: string) => ({
   authorization: `Bearer ${token(roles, tid, sub)}`,

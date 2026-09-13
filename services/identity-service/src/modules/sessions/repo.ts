@@ -34,8 +34,16 @@ export async function findById(tenantId: string, id: string): Promise<SessionVie
 
 export type Writer = Pick<typeof db, "insert" | "update" | "select">;
 
+// SEC-015: idempotent by id. `id` now frequently comes from the caller's
+// Keycloak `sid` (see commands.ts createSession), and the SAME sid can
+// legitimately trigger a second createSession command -- e.g. Keycloak SSO
+// silently reissuing a fresh access token for a still-live session, or the
+// EVT-4 messageId dedup (also keyed off this same id, in _inbox.processed)
+// having already aged out for a long-lived session. Without this, a repeat
+// insert for a known id would throw on the primary-key conflict and crash
+// consumer processing for what is actually a benign no-op.
 export async function insert(tx: Writer, row: SessionInsert): Promise<void> {
-  await tx.insert(sessions).values(row);
+  await tx.insert(sessions).values(row).onConflictDoNothing({ target: sessions.id });
 }
 
 export async function update(tx: Writer, tenantId: string, id: string, patch: Partial<SessionInsert>): Promise<void> {

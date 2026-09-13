@@ -6,8 +6,19 @@ import type { CreateSessionBody } from "./validators.js";
 
 export type Accepted = { id: string; status: string; correlationId: string };
 
-export async function createSession(ctx: RequestContext, body: CreateSessionBody): Promise<Accepted> {
-  const id = randomUUID();
+// SEC-015: `id` defaults to a random uuid (pre-existing behaviour, still used
+// by the admin-creates-a-session-for-another-user path, which has no way to
+// know that other user's Keycloak `sid`). The self-service login path
+// (routes.ts, ctx.actorId === body.userId) instead passes the caller's own
+// verified `sid` explicitly, so the row this creates is the one SEC-006's
+// denylist can actually correlate a revoke against. Reusing `id` as
+// `messageId` is deliberate, not incidental: it's this codebase's existing
+// EVT-4 idempotency pattern (see idempotentId's doc-comment) -- a repeat
+// createSession call for the same sid (e.g. Keycloak SSO silently reissuing
+// a fresh access token for an existing session on a second /authorize
+// round-trip) dedupes at the consumer via _inbox.processed instead of
+// attempting a second insert.
+export async function createSession(ctx: RequestContext, body: CreateSessionBody, id: string = randomUUID()): Promise<Accepted> {
   const expiresAt = new Date(Date.now() + body.ttlSeconds * 1000).toISOString();
   await queue.publish(COMMANDS.createSession, {
     messageId: id, type: COMMANDS.createSession, tenantId: ctx.tenantId, actorId: ctx.actorId,
