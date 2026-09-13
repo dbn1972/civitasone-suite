@@ -252,6 +252,21 @@ describe("sandbox refresh consumer — happy path", () => {
     expect(rows[0]?.last_refresh_at).not.toBeNull();
   });
 
+  it("DOM-029: stamps the environment row's own stub indicator, matching the job row's", async () => {
+    const { sandbox, job } = await queuedJob([], [{ tableName: "t", fieldName: "f" }]);
+    await handleSandboxRefreshExecute(message(job.id, sandbox.id));
+    const envRows = await asTenant((sql) => sql<Array<{ last_refresh_data_movement: string | null }>>`
+      SELECT last_refresh_data_movement FROM sandbox.sandbox_environments WHERE id = ${sandbox.id}`);
+    const jobRows = await asTenant((sql) => sql<Array<{ data_movement: string }>>`
+      SELECT data_movement FROM sandbox.refresh_jobs WHERE id = ${job.id}`);
+    // The environment row's own stub indicator must exist and must agree with
+    // the job row's -- an operator reading the environment alone (without
+    // cross-referencing job history) needs the same honest signal.
+    expect(envRows[0]?.last_refresh_data_movement).not.toBeNull();
+    expect(envRows[0]?.last_refresh_data_movement).toBe(jobRows[0]?.data_movement);
+    expect(envRows[0]?.last_refresh_data_movement).toBe("stubbed");
+  });
+
   it("publishes the completion event and an audit record on the outbox", async () => {
     const { sandbox, job } = await queuedJob([], [{ tableName: "t", fieldName: "f" }]);
     await handleSandboxRefreshExecute(message(job.id, sandbox.id));

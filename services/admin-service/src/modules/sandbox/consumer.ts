@@ -117,6 +117,11 @@ export async function handleSandboxRefreshExecute(msg: RefreshExecuteMessage): P
         if (sandbox) {
           await repo.updateSandboxStatus(w, msg.tenantId, sandbox.id, sandbox.version, {
             status: "ready", lastRefreshAt: now, updatedBy: msg.actorId,
+            // DOM-029: mirror the job row's own honest dataMovement signal onto
+            // the environment row, so an operator reading the environment's
+            // status alone (not the job history) still sees whether this
+            // refresh actually moved data or was stubbed.
+            lastRefreshDataMovement: outcome.moved,
           });
         }
 
