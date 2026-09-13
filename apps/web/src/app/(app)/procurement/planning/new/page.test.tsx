@@ -7,6 +7,7 @@ vi.mock("next/navigation", () => ({
 }));
 
 import NewAnnualPlanPage from "./page";
+import { estimatedValueRupees } from "./estimatedValueRupees";
 
 function fillRequiredFields() {
   fireEvent.change(screen.getByLabelText(/financial year/i), { target: { value: "2027" } });
@@ -75,5 +76,28 @@ describe("NewAnnualPlanPage — server error handling (UX-003)", () => {
       "/api/proxy/v1/procurement/plans",
       expect.objectContaining({ method: "POST" }),
     );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// UX-018: estimatedValueMinor is always a real number in this form today (it's
+// local state seeded by emptyLine()/updateLine(), never hydrated from a fetched
+// row), so this is a defensive guard rather than a fix for a currently-reachable
+// bug. Test the guard directly: it must never let a missing value reach the
+// input as NaN, and 0 (not "—") is the correct fallback for an editable field.
+// ---------------------------------------------------------------------------
+describe("estimatedValueRupees (UX-018 defensive guard)", () => {
+  it("falls back to 0, never NaN, for a missing minor value", () => {
+    expect(estimatedValueRupees(null)).toBe(0);
+    expect(estimatedValueRupees(undefined)).toBe(0);
+    expect(Number.isNaN(estimatedValueRupees(null))).toBe(false);
+  });
+
+  it("converts a real minor value to rupees", () => {
+    expect(estimatedValueRupees(12345)).toBeCloseTo(123.45);
+  });
+
+  it("keeps a genuine zero as 0", () => {
+    expect(estimatedValueRupees(0)).toBe(0);
   });
 });

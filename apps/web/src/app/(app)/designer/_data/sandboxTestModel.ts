@@ -3,6 +3,7 @@
  */
 
 import type { TestRunStep, TestStepStatus } from "@/app/_components/ds/designer";
+import { minorToRupeesOrNull } from "@/lib/formatters";
 
 export const DEFAULT_SANDBOX_STEPS: TestRunStep[] = [
   { id: "form", label: "Intake form validates", status: "pending" },
@@ -68,12 +69,18 @@ export function resolveThreePartError(input: {
   };
 }
 
-export function formatPaise(amountMinor: number, currency = "INR"): string {
-  const rupees = (amountMinor / 100).toLocaleString("en-IN", {
+export function formatPaise(amountMinor: number | null | undefined, currency = "INR"): string {
+  // UX-018: amountMinor is non-nullable by type (DemandLineArtifact/JournalPreviewArtifact
+  // both default it to 0 in parseDemandLines/parseJournalPreview), but this helper is
+  // exported and could be called directly with an unchecked API value — guard anyway
+  // rather than let a future caller silently show "₹NaN" or a fabricated "₹0.00".
+  const rupees = minorToRupeesOrNull(amountMinor);
+  if (rupees === null) return "—";
+  const formatted = rupees.toLocaleString("en-IN", {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   });
-  return currency === "INR" ? `₹${rupees}` : `${rupees} ${currency}`;
+  return currency === "INR" ? `₹${formatted}` : `${formatted} ${currency}`;
 }
 
 export function parseDemandLines(artifacts?: Record<string, unknown> | null): DemandLineArtifact[] {
