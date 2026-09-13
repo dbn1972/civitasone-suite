@@ -1,0 +1,36 @@
+-- 0023_scanner_apikeys_verify.sql — SEC-024: grant identity_scanner read
+-- access to apikeys.api_keys.
+--
+-- WHY: apikeys.api_keys carries FORCE ROW LEVEL SECURITY (migrations
+-- 0012/0013) with a `tenant_id = current_tenant_id()` policy.
+-- apikeys/repo.ts#findBySecretHash is documented as "NOT tenant-scoped
+-- because the key carries identity" -- its whole purpose is to discover a
+-- key's tenant from the raw secret alone, with no tenant known in advance.
+-- Under FORCE RLS with the app.tenant_id GUC unset (the only possible state
+-- before the tenant is discovered), that lookup matches zero rows for every
+-- key, always -- verified empirically, and already flagged by migration
+-- 0022's header comment (SEC-007 SCIM tokens), which hit the identical
+-- problem for scim.scim_tokens and shipped that table without RLS instead.
+--
+-- apikeys.api_keys instead KEEPS its RLS here (defense-in-depth for every
+-- OTHER, already tenant-scoped query in apikeys/repo.ts -- findById,
+-- listByTenant, updateLifecycle, audit -- exactly as migration 0022's
+-- comment notes apikeys/repo.ts already layers in application code); this
+-- migration extends the existing identity_scanner BYPASSRLS role (migration
+-- 0020, currently granted only on sessions.sessions / breakglass.grants for
+-- the identical "discover cross-tenant, then write per-tenant under
+-- runWithTenant()" pattern) to cover this table too. Read-only:
+-- identity_scanner still cannot write api_keys, so RLS continues to govern
+-- every mutation (see modules/apikeys/commands.ts#verifyApiKey, SEC-024,
+-- which wraps its touchLastUsed/audit writes in
+-- runWithTenant(row.tenantId, ...) using the tenant this scan discovers).
+--
+-- Safe for the same reason migration 0022 gives for scim.scim_tokens:
+-- secret_hash is a SHA-256 of 32 bytes of CSPRNG entropy
+-- (apikeys/domain.ts#generateSecret) -- not enumerable or guessable, so a
+-- scanner-role SELECT by exact hash discloses nothing an attacker could not
+-- already leverage by simply presenting that same live secret; every OTHER
+-- query against this table stays tenant-filtered in application code.
+
+GRANT USAGE ON SCHEMA apikeys TO identity_scanner;
+GRANT SELECT ON apikeys.api_keys TO identity_scanner;
