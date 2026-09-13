@@ -31,7 +31,7 @@ import type { FastifyInstance } from "fastify";
 import { randomUUID } from "node:crypto";
 import { ZodError } from "zod";
 import { CircuitBreakerOpenError } from "@civitasone/circuit-breaker";
-import { resolveContext, HttpError } from "../../shared/context.js";
+import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { queue } from "../../shared/infra.js";
 import { subscriptionIdParam, revenueForecastQuery } from "./validators.js";
 import { predictChurn } from "./adapter.js";
@@ -65,6 +65,7 @@ export async function churnRoutes(app: FastifyInstance): Promise<void> {
    */
   app.get("/v1/billing/subscriptions/:id/churn-risk", async (req, reply) => {
     const ctx = resolveContext(req);
+    requireRole(ctx, BILLING_ROLES);
     const { id } = subscriptionIdParam.parse(req.params);
 
     // Extract features for this subscription (simulated — in production would query DB)
@@ -135,6 +136,7 @@ export async function churnRoutes(app: FastifyInstance): Promise<void> {
    */
   app.get("/v1/billing/revenue/forecast", async (req, reply) => {
     const ctx = resolveContext(req);
+    requireRole(ctx, BILLING_ROLES);
     const { horizon } = revenueForecastQuery.parse(req.query);
     const horizonMonths = Number(horizon) as 3 | 6 | 12;
 
@@ -169,6 +171,7 @@ export async function churnRoutes(app: FastifyInstance): Promise<void> {
    */
   app.get("/v1/billing/revenue/cohorts", async (req, reply) => {
     const ctx = resolveContext(req);
+    requireRole(ctx, BILLING_ROLES);
 
     const subscriptions = getCohortData(ctx.tenantId);
     const cohorts = computeCohortAnalysis(subscriptions);
