@@ -1,4 +1,4 @@
-import { pgSchema, uuid, text, integer, bigint, char, varchar, numeric, timestamp } from "drizzle-orm/pg-core";
+import { pgSchema, uuid, text, integer, bigint, char, varchar, numeric, timestamp, date } from "drizzle-orm/pg-core";
 
 export const schemeSchema = pgSchema("scheme");
 
@@ -13,6 +13,18 @@ export const projectSchemes = schemeSchema.table("project_schemes", {
   releasedMinor:     bigint("released_minor", { mode: "bigint" }).notNull().default(0n),
   utilisedMinor:     bigint("utilised_minor", { mode: "bigint" }).notNull().default(0n),
   sanctionRef:       text("sanction_ref"),
+  // COMP-016 follow-up (migration 0021): 5 pure-display fields for
+  // apps/web's /projects/schemes/[id] page. None of the five bears on any
+  // scheme domain rule (allocation, disbursement, RAG, etc.) — the page
+  // used to render them from a hardcoded catalogue because no column for
+  // any of them existed anywhere in this schema; see PR #1240 (COMP-016),
+  // which left "add columns vs. drop from the UI" as an explicitly open
+  // product/schema decision rather than deciding it unilaterally.
+  nodalOfficer:      text("nodal_officer"),
+  department:        text("department"),
+  beneficiaries:     integer("beneficiaries"),
+  startDate:         date("start_date"),
+  endDate:           date("end_date"),
   status:            varchar("status", { length: 24 }).notNull().default("active"),
   createdAt:         timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt:         timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),

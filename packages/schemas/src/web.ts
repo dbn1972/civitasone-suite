@@ -1262,6 +1262,13 @@ export const SchemeDetailSchema = z.object({
   utilisationPct: z.number(),
   status: z.enum(["active", "completed", "discontinued"]),
   projects: z.array(SchemeDetailProjectSchema),
+  // COMP-016 follow-up (migration 0021): see SchemeDetail in
+  // packages/types/src/index.ts for why these 5 are optional, not nullable.
+  nodalOfficer: z.string().optional(),
+  department: z.string().optional(),
+  beneficiaries: z.number().optional(),
+  startDate: z.string().optional(),
+  endDate: z.string().optional(),
 });
 
 // Grants schemas

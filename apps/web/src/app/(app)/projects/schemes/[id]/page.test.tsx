@@ -64,20 +64,50 @@ describe("SchemeDetailPage", () => {
     expect(screen.queryByText("Lucknow")).not.toBeInTheDocument();
   });
 
-  it("renders the fields with no backing column as an honest '—', never an invented value", async () => {
+  it("renders the 5 optional detail fields as an honest '—' when the loader omits them, never an invented value", async () => {
     getSchemeDetailMock.mockResolvedValue({ data: SCHEME, source: "api" });
 
     const ui = await SchemeDetailPage({ params: Promise.resolve({ id: "s1" }) });
     render(ui);
 
     // Beneficiaries stat, Department, Nodal Officer, Start Date, End Date:
-    // none has a backing column anywhere in project-service's schema
-    // (COMP-016) -- pending a product/schema decision, they render as "—",
-    // never a fabricated value like the old fixture's 45200 beneficiaries or
-    // "Shri R.K. Gautam, IAS".
+    // migration 0021 (COMP-016 follow-up) added real columns for all five,
+    // but they stay genuinely optional -- SCHEME above is a fixture that
+    // simply doesn't set any of them, exactly like a real scheme that
+    // predates the migration. Never a fabricated value like the old
+    // fixture's 45200 beneficiaries or "Shri R.K. Gautam, IAS".
     expect(screen.getAllByText("—").length).toBeGreaterThanOrEqual(5);
     expect(screen.queryByText("45,200")).not.toBeInTheDocument();
     expect(screen.queryByText("45200")).not.toBeInTheDocument();
+  });
+
+  // COMP-016 follow-up (migration 0021): the counterpart to the case above
+  // -- when the loader DOES supply real values for these 5 fields, the page
+  // must render the real values, not fall back to "—".
+  it("renders real values for the 5 optional detail fields when the loader supplies them", async () => {
+    getSchemeDetailMock.mockResolvedValue({
+      data: {
+        ...SCHEME,
+        nodalOfficer: "Shri Test Officer",
+        department: "Test Department of Testing",
+        beneficiaries: 4200,
+        startDate: "2024-04-01",
+        endDate: "2026-03-31",
+      },
+      source: "api",
+    });
+
+    const ui = await SchemeDetailPage({ params: Promise.resolve({ id: "s1" }) });
+    render(ui);
+
+    expect(screen.getByText("Shri Test Officer")).toBeInTheDocument();
+    expect(screen.getByText("Test Department of Testing")).toBeInTheDocument();
+    expect(screen.getByText("4,200")).toBeInTheDocument();
+    expect(screen.getByText("2024-04-01")).toBeInTheDocument();
+    expect(screen.getByText("2026-03-31")).toBeInTheDocument();
+    // SCHEME already sets sanctionRef, so with all 5 of these also set, no
+    // field on the page should be falling back to "—" at all.
+    expect(screen.queryByText("—")).not.toBeInTheDocument();
   });
 
   it("shows an honest empty state instead of fake data when no record is found", async () => {

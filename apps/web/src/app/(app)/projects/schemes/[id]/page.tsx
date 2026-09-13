@@ -12,14 +12,15 @@ import { toHumanError } from "@/lib/messages";
 // getSchemeDetail(id), the detail counterpart to the already-real
 // getSchemes() the sibling /projects/schemes list page uses.
 //
-// nodalOfficer, department, beneficiaries, and the scheme's start/end dates
-// are rendered as "--" rather than deleted or invented: none of the five has
-// a backing column anywhere in project-service's schema today (verified
-// directly against scheme/schema.ts and project/schema.ts). Whether to add
-// them (new columns/migration) or drop them from the UI for good is a
-// product/schema decision, tracked open in the COMP-016 row of
-// docs/ENTERPRISE-GAP-REPORT-2026-09-07.md -- not something this fix decides
-// unilaterally in either direction.
+// COMP-016 follow-up (migration 0021): nodalOfficer, department,
+// beneficiaries and the scheme's start/end dates were rendered as "--"
+// because none of the five had a backing column anywhere in
+// project-service's schema — deliberately left as an open product/schema
+// decision rather than resolved unilaterally in either direction. That
+// decision is now: add the columns. All five are still genuinely optional
+// (existing schemes predate the migration and have no value for any of
+// them), so each one falls back to the same honest "--" exactly when
+// getSchemeDetail() omits it — never a fabricated value.
 export default async function SchemeDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const result = await getSchemeDetail(id);
@@ -78,19 +79,22 @@ export default async function SchemeDetailPage({ params }: { params: Promise<{ i
         <StatCard icon="📋" iconBg="#eff6ff" label="Total Projects" value={scheme.projects.length} />
         <StatCard icon="💰" iconBg="#ecfdf3" label="Budget" value={formatMoney(scheme.totalOutlayMinor)} />
         <StatCard icon="📈" iconBg="#fffaeb" label="Utilized %" value={`${scheme.utilisationPct}%`} />
-        {/* Beneficiaries: no backing column anywhere in project-service's schema -- see file header comment. */}
-        <StatCard icon="👥" iconBg="#f1f5f9" label="Beneficiaries" value="—" />
+        {/* != null, not ??: a recorded-but-zero beneficiary count (0) is a
+            real value, not an absent one, and must not fall back to "--". */}
+        <StatCard
+          icon="👥" iconBg="#f1f5f9" label="Beneficiaries"
+          value={scheme.beneficiaries != null ? scheme.beneficiaries.toLocaleString("en-IN") : "—"}
+        />
       </StatGrid>
 
       <Card title="Scheme Details" padding>
         <dl style={{ display: "grid", gridTemplateColumns: "180px 1fr", gap: "10px 16px", fontSize: 14, margin: 0 }}>
           <dt style={{ fontWeight: 500, color: "var(--muted)" }}>Scheme Code</dt>
           <dd style={{ margin: 0 }}>{scheme.schemeCode}</dd>
-          {/* Department, Nodal Officer, Start Date, End Date: no backing column -- see file header comment. */}
           <dt style={{ fontWeight: 500, color: "var(--muted)" }}>Department</dt>
-          <dd style={{ margin: 0 }}>—</dd>
+          <dd style={{ margin: 0 }}>{scheme.department ?? "—"}</dd>
           <dt style={{ fontWeight: 500, color: "var(--muted)" }}>Nodal Officer</dt>
-          <dd style={{ margin: 0 }}>—</dd>
+          <dd style={{ margin: 0 }}>{scheme.nodalOfficer ?? "—"}</dd>
           <dt style={{ fontWeight: 500, color: "var(--muted)" }}>Funding Pattern</dt>
           <dd style={{ margin: 0 }}>{scheme.fundingPattern}</dd>
           <dt style={{ fontWeight: 500, color: "var(--muted)" }}>Sanction Ref</dt>
@@ -98,9 +102,9 @@ export default async function SchemeDetailPage({ params }: { params: Promise<{ i
           <dt style={{ fontWeight: 500, color: "var(--muted)" }}>Released</dt>
           <dd style={{ margin: 0 }}>{formatMoney(scheme.releasedMinor)}</dd>
           <dt style={{ fontWeight: 500, color: "var(--muted)" }}>Start Date</dt>
-          <dd style={{ margin: 0 }}>—</dd>
+          <dd style={{ margin: 0 }}>{scheme.startDate ?? "—"}</dd>
           <dt style={{ fontWeight: 500, color: "var(--muted)" }}>End Date</dt>
-          <dd style={{ margin: 0 }}>—</dd>
+          <dd style={{ margin: 0 }}>{scheme.endDate ?? "—"}</dd>
         </dl>
       </Card>
 

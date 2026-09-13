@@ -83,14 +83,15 @@ export type SchemeDetail = {
  * page already relies on (formatMoney(scheme.budgetMinor) called directly on
  * a "Minor"-suffixed field).
  *
- * nodalOfficer, department and beneficiaries are deliberately absent from
- * this DTO: no column for any of the three exists anywhere in
- * project-service's schema (verified directly against scheme/schema.ts and
- * project/schema.ts, not just asserted) -- see the COMP-016 row in
- * docs/ENTERPRISE-GAP-REPORT-2026-09-07.md for the still-open product/schema
- * decision on those three. Same story for the scheme's own start/end dates
- * (also shown by the old hardcoded page, also no backing column) -- the
- * frontend renders all of these as an honest "--", never invented values.
+ * COMP-016 follow-up (migration 0021): nodalOfficer, department,
+ * beneficiaries, startDate and endDate used to be deliberately absent from
+ * this DTO -- no column for any of the five existed anywhere in
+ * project-service's schema, tracked as an open product/schema decision in
+ * the COMP-016 row of docs/ENTERPRISE-GAP-REPORT-2026-09-07.md. That
+ * decision is now: add the columns (migration 0021 on scheme.project_schemes,
+ * all 5 nullable). getScheme()/repo.findSchemeById's bare `select()` already
+ * returns them on SchemeRow with no code change needed here for the read --
+ * only the DTO-shaping below is new.
  */
 export async function getSchemeDetail(id: string, tenantId: string): Promise<SchemeDetail | null> {
   const row = await getScheme(id, tenantId);
@@ -129,6 +130,15 @@ export async function getSchemeDetail(id: string, tenantId: string): Promise<Sch
       status: p.status,
       budgetMinor: (p.dprCostMinor ?? 0n).toString(),
     })),
+    // COMP-016 follow-up (migration 0021): same "omit the key" convention as
+    // sanctionRef above, but checked with `!= null`, not truthiness --
+    // beneficiaries=0 is a real, meaningful recorded value (not "absent")
+    // that a truthy check would silently drop.
+    ...(row.nodalOfficer != null ? { nodalOfficer: row.nodalOfficer } : {}),
+    ...(row.department != null ? { department: row.department } : {}),
+    ...(row.beneficiaries != null ? { beneficiaries: row.beneficiaries } : {}),
+    ...(row.startDate != null ? { startDate: row.startDate } : {}),
+    ...(row.endDate != null ? { endDate: row.endDate } : {}),
   };
 }
 
