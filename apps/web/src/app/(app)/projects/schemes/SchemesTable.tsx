@@ -1,7 +1,7 @@
 "use client";
 
 import { DataTable } from "@/app/_components/ds";
-import { formatMoney } from "@/lib/formatters";
+import { formatRupees } from "@/lib/formatters";
 import type { SchemeSummary } from "@civitasone/types";
 
 export type SchemeRow = SchemeSummary & Record<string, unknown>;
@@ -22,16 +22,28 @@ const COLUMNS: {
   },
   { key: "fundingType", label: "Funding Type" },
   {
+    // COMP-017: totalAllocation/releasedAmount come from project-service's
+    // listSchemeSummaries(), which deliberately returns whole-RUPEE numbers
+    // (its minorToAmount() helper) -- see SchemeSummarySchema in
+    // packages/schemas/src/web.ts (`totalAllocation: z.number()`) and the
+    // "Deliberately NOT SchemeSummary & {...}" comment on SchemeDetail in
+    // packages/types/src/index.ts, which documents this as the list
+    // response's own settled convention, distinct from the detail
+    // response's minor-unit-string one. formatMoney() expects MINOR units
+    // (paise) per its own docstring and was under-displaying every
+    // allocation/released figure here 100x. formatRupees() is this repo's
+    // existing formatter for exactly this "API field already in rupees"
+    // convention (see its docstring and apps/web/src/lib/formatters.test.ts).
     key: "totalAllocation",
     label: "Allocation",
     align: "right",
-    render: (r) => formatMoney(r.totalAllocation as number),
+    render: (r) => formatRupees(r.totalAllocation as number),
   },
   {
     key: "releasedAmount",
     label: "Released",
     align: "right",
-    render: (r) => formatMoney(r.releasedAmount as number),
+    render: (r) => formatRupees(r.releasedAmount as number),
   },
   { key: "projectCount", label: "Projects #", align: "right" },
   { key: "status", label: "Status", cellType: "status" },

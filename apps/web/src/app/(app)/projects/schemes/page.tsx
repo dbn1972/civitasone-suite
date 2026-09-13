@@ -1,6 +1,6 @@
 import { getSchemes } from "../../../_data/loaders";
 import { PageHeader, StatGrid, StatCard, Card, EmptyState, RefreshErrorState } from "@/app/_components/ds";
-import { formatMoney } from "@/lib/formatters";
+import { formatRupees } from "@/lib/formatters";
 import { SchemesTable, type SchemeRow } from "./SchemesTable";
 import { useResource } from "@/app/_data/useResource";
 import { toHumanError } from "@/lib/messages";
@@ -26,8 +26,15 @@ export default async function SchemesPage() {
       <StatGrid>
         <StatCard icon="📋" iconBg="#eef0fe" label="Total" value={errored ? "—" : schemes.length} />
         <StatCard icon="✅" iconBg="#ecfdf3" label="Active" value={active ?? "—"} />
-        <StatCard icon="💰" iconBg="#eff6ff" label="Total Allocation" value={totalAllocation === null ? "—" : formatMoney(totalAllocation)} />
-        <StatCard icon="📤" iconBg="#fffaeb" label="Released" value={totalReleased === null ? "—" : formatMoney(totalReleased)} />
+        {/* COMP-017: totalAllocation/releasedAmount are whole-rupee numbers
+            (project-service's listSchemeSummaries() / SchemeSummarySchema),
+            not minor units -- formatMoney() was treating this dashboard sum
+            as paise and under-displaying it 100x. formatRupees() matches
+            the per-row fix in SchemesTable.tsx (see its column defs for the
+            full rationale); this stat card sums the same already-rupee
+            fields each row renders. */}
+        <StatCard icon="💰" iconBg="#eff6ff" label="Total Allocation" value={totalAllocation === null ? "—" : formatRupees(totalAllocation)} />
+        <StatCard icon="📤" iconBg="#fffaeb" label="Released" value={totalReleased === null ? "—" : formatRupees(totalReleased)} />
       </StatGrid>
       <Card title="Schemes">
         {errored ? (
