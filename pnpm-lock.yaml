@@ -4028,6 +4028,9 @@ importers:
       '@civitasone/search':
         specifier: workspace:*
         version: link:../../packages/search
+      '@civitasone/storage':
+        specifier: workspace:*
+        version: link:../../packages/storage
       '@civitasone/types':
         specifier: workspace:*
         version: link:../../packages/types

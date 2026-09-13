@@ -23,6 +23,23 @@ import type { CallView } from "./schema.js";
 
 export type Accepted = { id: string; status: string; correlationId: string };
 
+/**
+ * DOM-015: `createCall`'s carrier interaction (below) used to return the exact
+ * same `{id, status, correlationId}` shape whether an outbound call was really
+ * dialed through Twilio/Exotel, silently skipped because no carrier is
+ * configured (the default — `TELEPHONY_CARRIER` unset ⇒ "mock"), or attempted
+ * and failed. A caller had no field to inspect and could not tell a live call
+ * from a no-op. `carrier-adapter.ts` already tags its own `DialResponse` with
+ * `carrier: "mock" | "twilio" | "exotel"` — this was simply never forwarded.
+ * `carrierMode` below surfaces that honestly, inside the `data` envelope
+ * (the only part of `acceptedResponseSchema` that is `.passthrough()`; extra
+ * top-level fields are stripped by `sendAccepted`'s zod validation).
+ */
+export type CarrierMode = "live" | "mock" | "dial_failed" | "not_applicable";
+export type CreateCallAccepted = Accepted & {
+  data: { id: string; carrierMode: CarrierMode; carrier?: string };
+};
+
 function publish(ctx: RequestContext, type: string, messageId: string, payload: Record<string, unknown>): Promise<string> {
   return queue.publish(type, {
     messageId,
@@ -44,7 +61,7 @@ async function invalidate(ctx: RequestContext, id: string): Promise<void> {
   await cache.invalidateResource(ctx.tenantId, RESOURCE);
 }
 
-export async function createCall(ctx: RequestContext, body: CreateCallBody): Promise<Accepted> {
+export async function createCall(ctx: RequestContext, body: CreateCallBody): Promise<CreateCallAccepted> {
   const id = randomUUID();
   const status = INITIAL_STATUS[body.direction];
   const nowIso = new Date().toISOString();
@@ -92,7 +109,12 @@ export async function createCall(ctx: RequestContext, body: CreateCallBody): Pro
 
   // For outbound calls, invoke the carrier adapter to actually place the call.
   // Env-gated: when carrier is unconfigured (mock mode), the call is recorded
-  // but no actual dialing occurs.
+  // but no actual dialing occurs. `carrierMode` (returned below) always says
+  // honestly which of these happened — never a bare "accepted" that reads the
+  // same for a live dial and a no-op.
+  let carrierMode: CarrierMode = "not_applicable";
+  let carrier: string | undefined;
+
   if (body.direction === "outbound" && body.calleeNumber) {
     if (isCarrierConfigured()) {
       try {
@@ -101,6 +123,8 @@ export async function createCall(ctx: RequestContext, body: CreateCallBody): Pro
           to: body.calleeNumber,
           recordCall: true,
         });
+        carrierMode = "live";
+        carrier = dialResult.carrier;
         // The carrier's callId is stored by the consumer via a subsequent event
         await publish(ctx, COMMANDS.ringCall, randomUUID(), {
           id, tenantId: ctx.tenantId, carrierCallId: dialResult.carrierCallId,
@@ -108,11 +132,19 @@ export async function createCall(ctx: RequestContext, body: CreateCallBody): Pro
       } catch {
         // Carrier failure — call is recorded as queued but not connected
         // Consumer will handle timeout/abandonment
+        carrierMode = "dial_failed";
       }
+    } else {
+      carrierMode = "mock";
     }
   }
 
-  return { id, status: "accepted", correlationId: ctx.correlationId };
+  return {
+    id,
+    status: "accepted",
+    correlationId: ctx.correlationId,
+    data: { id, carrierMode, ...(carrier ? { carrier } : {}) },
+  };
 }
 
 export async function ringCall(ctx: RequestContext, id: string, body: RingCallBody): Promise<Accepted> {
