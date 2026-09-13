@@ -34,5 +34,5 @@ CREATE TABLE IF NOT EXISTS hrms.ai_prediction_log (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX idx_ai_prediction_tenant ON hrms.ai_prediction_log (tenant_id, plugin_id, created_at DESC);
-CREATE INDEX idx_ai_prediction_outcome ON hrms.ai_prediction_log (tenant_id, plugin_id, outcome) WHERE outcome IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_ai_prediction_tenant ON hrms.ai_prediction_log (tenant_id, plugin_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_ai_prediction_outcome ON hrms.ai_prediction_log (tenant_id, plugin_id, outcome) WHERE outcome IS NOT NULL;
