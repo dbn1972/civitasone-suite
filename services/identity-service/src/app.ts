@@ -17,7 +17,7 @@ import { syncRoutes } from "./modules/sync/routes.js";
 import { apiKeyRoutes } from "./modules/apikeys/routes.js";
 import { breakGlassRoutes } from "./modules/breakglass/routes.js";
 import { samlRoutes } from "./modules/saml/routes.js";
-import { scimRoutes } from "./modules/scim/routes.js";
+import { scimRoutes, scimTokenRoutes } from "./modules/scim/routes.js";
 import { webauthnRoutes } from "./modules/webauthn/routes.js";
 
 export async function buildApp(): Promise<FastifyInstance> {
@@ -59,6 +59,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(breakGlassRoutes);
   await app.register(samlRoutes);
   await app.register(scimRoutes);
+  await app.register(scimTokenRoutes);
   await app.register(webauthnRoutes);
 
   const { govIntegrationRoutes } = await import("./modules/gov-integrations/routes.js");

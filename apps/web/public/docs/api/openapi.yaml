@@ -3490,8 +3490,6 @@ paths:
                 $ref: "#/components/schemas/ScimListResponse"
         "401":
           description: Missing or invalid SCIM bearer token
-        "503":
-          description: SCIM is not configured (SCIM_BEARER_TOKEN not set)
       security:
         - scimBearerToken: []
     post:
@@ -3523,8 +3521,6 @@ paths:
                 $ref: "#/components/schemas/ScimError"
         "401":
           description: Missing or invalid SCIM bearer token
-        "503":
-          description: SCIM is not configured
       security:
         - scimBearerToken: []
 
@@ -3563,8 +3559,6 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ScimError"
-        "503":
-          description: SCIM is not configured
       security:
         - scimBearerToken: []
     put:
@@ -3608,8 +3602,6 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ScimError"
-        "503":
-          description: SCIM is not configured
       security:
         - scimBearerToken: []
     patch:
@@ -3654,8 +3646,6 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ScimError"
-        "503":
-          description: SCIM is not configured
       security:
         - scimBearerToken: []
     delete:
@@ -3690,8 +3680,6 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ScimError"
-        "503":
-          description: SCIM is not configured
       security:
         - scimBearerToken: []
 
@@ -15753,10 +15741,16 @@ components:
       type: http
       scheme: bearer
       description: |
-        Static bearer token for SCIM 2.0 provisioning endpoints.
-        Set via SCIM_BEARER_TOKEN environment variable on the identity-service.
-        Separate from Keycloak user JWTs — used only by external IdPs
-        (Azure AD, Okta, Google Workspace, MeriPehchaan).
+        Per-tenant bearer token for SCIM 2.0 provisioning endpoints (SEC-007).
+        Each token is bound to exactly one tenant server-side at issuance —
+        POST /identity/scim-tokens (platform_admin/super_admin/tenant_admin)
+        — and every SCIM request is scoped to that bound tenant regardless
+        of any x-tenant-id header the caller sends. A legacy deployment that
+        still sets SCIM_BEARER_TOKEN + SCIM_TENANT_ID gets that one token
+        auto-bound to SCIM_TENANT_ID at service startup for backward
+        compatibility; new integrations should use the per-tenant issuance
+        endpoint instead. Separate from Keycloak user JWTs — used only by
+        external IdPs (Azure AD, Okta, Google Workspace, MeriPehchaan).
 
   parameters:
     LimitParam:
