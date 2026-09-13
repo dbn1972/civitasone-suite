@@ -14,6 +14,7 @@ import { acceptedResponseSchema } from "@civitasone/schemas/common";
 import { sendAccepted } from "@civitasone/schemas/validate";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { scopedRead } from "../../shared/db.js";
+import { resolveRunStatutoryConfig } from "./consumer.js";
 import * as commands from "./commands.js";
 
 const PAYROLL_ROLES = ["payroll_admin", "payroll_officer", "super_admin"];
@@ -277,6 +278,7 @@ export async function gapRoutes(app: FastifyInstance): Promise<void> {
     const now = new Date();
     const fyStart = now.getMonth() >= 3 ? now.getFullYear() : now.getFullYear() - 1;
     const fy = `${fyStart}-${String((fyStart + 1) % 100).padStart(2, "0")}`;
+    const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
 
     const decRows = (await scopedRead((tx) => tx.execute(sql`
       SELECT section_80c, section_80d, other_deductions, rent_paid_minor, regime
@@ -286,8 +288,17 @@ export async function gapRoutes(app: FastifyInstance): Promise<void> {
     `))) as unknown as Array<{ section_80c: string; section_80d: string; other_deductions: string; rent_paid_minor: string; regime: string }>;
     const dec = decRows[0];
 
+    // DOM-025: cap80d was independently hardcoded at Rs 50,000 (paise),
+    // disagreeing with domain.ts's config-driven sec80dCapMinor (DOM-008's
+    // platform default Rs 75,000) and silently ignoring a tenant's 80D
+    // override -- same bug class DOM-020 fixed in tax/routes.ts. Resolve
+    // the same effective-dated config through scopedRead(), as of the
+    // current month (this route advises on the in-progress FY's
+    // remaining headroom, not a closed FY snapshot).
+    const { sec80dCapMinor } = await scopedRead((tx) => resolveRunStatutoryConfig(tx, ctx.tenantId, currentMonth));
+
     const cap80c = 15000000n; // ₹1.5L in paise
-    const cap80d = 5000000n;  // ₹50K in paise
+    const cap80d = sec80dCapMinor;
     const used80c = dec ? BigInt(dec.section_80c) : 0n;
     const used80d = dec ? BigInt(dec.section_80d) : 0n;
     const remaining80c = cap80c - used80c > 0n ? cap80c - used80c : 0n;

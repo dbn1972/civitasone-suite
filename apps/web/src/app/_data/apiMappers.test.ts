@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { getArrayPayload, parseMinor, parsePaiseFromDisplay, mapProcurementPOListItems, mapProcurementVendorDetails, mapProcurementIndentSummaries, mapCrmAccounts, mapCrmAccountNodes, mapSrnDetail, mapGoodsReturnDetail, mapCycleCountDetail } from "./apiMappers";
+import { getArrayPayload, parseMinor, parsePaiseFromDisplay, mapProcurementPOListItems, mapProcurementVendorDetails, mapProcurementIndentSummaries, mapCrmAccounts, mapCrmAccountNodes, mapSrnDetail, mapGoodsReturnDetail, mapCycleCountDetail, mapPurchaseOrderSummaries } from "./apiMappers";
 
 describe("mapCrmAccounts", () => {
   it("maps the accounts payload including hierarchy and contact count", () => {
@@ -103,19 +103,36 @@ describe("parseMinor", () => {
     expect(parseMinor("5000")).toBe(5000);
   });
 
-  it("returns 0 for non-finite number", () => {
-    expect(parseMinor(NaN)).toBe(0);
-    expect(parseMinor(Infinity)).toBe(0);
+  // ---------------------------------------------------------------------------
+  // UX-019: missing/unparseable input must return `null`, never a fabricated 0 --
+  // a real zero amount and a missing/error value must stay distinguishable to
+  // callers (same null-vs-zero convention UX-006 established for formatMoney).
+  // ---------------------------------------------------------------------------
+  it("returns null for non-finite number (UX-019: missing, not zero)", () => {
+    expect(parseMinor(NaN)).toBeNull();
+    expect(parseMinor(Infinity)).toBeNull();
   });
 
-  it("returns 0 for non-numeric string", () => {
-    expect(parseMinor("not-a-number")).toBe(0);
+  it("returns null for non-numeric string (UX-019: missing, not zero)", () => {
+    expect(parseMinor("not-a-number")).toBeNull();
   });
 
-  it("returns 0 for null/undefined/object", () => {
-    expect(parseMinor(null)).toBe(0);
-    expect(parseMinor(undefined)).toBe(0);
-    expect(parseMinor({})).toBe(0);
+  it("returns null for null/undefined/object (UX-019: missing, not zero)", () => {
+    expect(parseMinor(null)).toBeNull();
+    expect(parseMinor(undefined)).toBeNull();
+    expect(parseMinor({})).toBeNull();
+  });
+
+  it("returns null for an empty or whitespace-only string (UX-019: missing, not zero)", () => {
+    expect(parseMinor("")).toBeNull();
+    expect(parseMinor("   ")).toBeNull();
+  });
+
+  it("keeps a genuine zero distinct from missing data (UX-019)", () => {
+    expect(parseMinor(0)).toBe(0);
+    expect(parseMinor("0")).toBe(0);
+    expect(parseMinor(0)).not.toBeNull();
+    expect(parseMinor(null)).not.toBe(parseMinor(0));
   });
 
   it("handles negative numbers", () => {
@@ -502,5 +519,69 @@ describe("mapCycleCountDetail", () => {
       createdAt: "—",
       version: 1,
     });
+  });
+});
+
+describe("mapPurchaseOrderSummaries", () => {
+  it("maps a PO with a positive totalMinor to a formatted amount", () => {
+    const mapped = mapPurchaseOrderSummaries([
+      { id: "po-1", vendor: "BSNL", totalMinor: 124000000, status: "Pending" },
+    ]);
+    expect(mapped).toEqual([{ id: "po-1", vendor: "BSNL", amountDisplay: "₹12,40,000.00", status: "Pending" }]);
+  });
+
+  it("prefers an API-provided amountDisplay string over computing from totalMinor", () => {
+    const mapped = mapPurchaseOrderSummaries([
+      { id: "po-1", vendor: "BSNL", amountDisplay: "Rs 12,40,000", totalMinor: 999, status: "Pending" },
+    ]);
+    expect(mapped?.[0]?.amountDisplay).toBe("Rs 12,40,000");
+  });
+
+  // ---------------------------------------------------------------------------
+  // UX-019: parseMinor() used to conflate "missing" and "zero" (both parsed to
+  // 0), and this mapper's `!amountDisplay` drop check then silently discarded
+  // a row whose totalMinor was a genuine zero -- indistinguishable here from a
+  // row whose totalMinor was actually missing/unparseable. The two cases must
+  // now stay distinguishable: a real zero renders "₹0.00"; missing/unparseable
+  // renders "—" -- neither one may vanish from the list.
+  // ---------------------------------------------------------------------------
+  it("renders a PO with a genuine zero amount as ₹0.00, not dropped and not '—' (UX-019)", () => {
+    const mapped = mapPurchaseOrderSummaries([
+      { id: "po-zero", vendor: "Zero Vendor", totalMinor: 0, status: "Approved" },
+    ]);
+    expect(mapped).toHaveLength(1);
+    expect(mapped?.[0]).toEqual({ id: "po-zero", vendor: "Zero Vendor", amountDisplay: "₹0.00", status: "Approved" });
+    expect(mapped?.[0]?.amountDisplay).not.toBe("—");
+  });
+
+  it("renders a PO with a missing/unparseable amount as '—', not dropped and not a fabricated ₹0.00 (UX-019)", () => {
+    const missingTotalMinor = mapPurchaseOrderSummaries([
+      { id: "po-missing", vendor: "Missing Vendor", status: "Review" },
+    ]);
+    const unparseableTotalMinor = mapPurchaseOrderSummaries([
+      { id: "po-bad", vendor: "Bad Vendor", totalMinor: "not-a-number", status: "Rejected" },
+    ]);
+
+    expect(missingTotalMinor).toHaveLength(1);
+    expect(missingTotalMinor?.[0]).toEqual({ id: "po-missing", vendor: "Missing Vendor", amountDisplay: "—", status: "Review" });
+    expect(missingTotalMinor?.[0]?.amountDisplay).not.toBe("₹0.00");
+
+    expect(unparseableTotalMinor).toHaveLength(1);
+    expect(unparseableTotalMinor?.[0]?.amountDisplay).toBe("—");
+  });
+
+  it("still drops rows missing id, vendor, or a recognised status", () => {
+    const mapped = mapPurchaseOrderSummaries([
+      { vendor: "No Id", totalMinor: 100, status: "Pending" },
+      { id: "po-2", totalMinor: 100, status: "Pending" },
+      { id: "po-3", vendor: "No Status", totalMinor: 100 },
+      { id: "po-4", vendor: "Bad Status", totalMinor: 100, status: "Cancelled" },
+    ]);
+    expect(mapped).toEqual([]);
+  });
+
+  it("returns null for invalid input", () => {
+    expect(mapPurchaseOrderSummaries(null)).toBeNull();
+    expect(mapPurchaseOrderSummaries("not a list")).toBeNull();
   });
 });
