@@ -15,6 +15,7 @@
  */
 import { pgSchema, uuid, text, varchar, jsonb, timestamp } from "drizzle-orm/pg-core";
 import type { RequestContext } from "@civitasone/types";
+import { runWithTenant } from "@civitasone/db";
 import { db } from "./db.js";
 
 const employeeSchema = pgSchema("employee");
@@ -96,14 +97,41 @@ export function createAuditHook() {
     const actionMap: Record<string, string> = { POST: "create", PATCH: "update", PUT: "replace", DELETE: "delete" };
     const action = actionMap[method] ?? method.toLowerCase();
 
-    await auditLog(db, {
-      tenantId,
-      actorId,
-      action,
-      resourceType,
-      ...(resourceId !== undefined ? { resourceId } : {}),
-      correlationId: (req.headers["x-correlation-id"] as string | undefined) ?? req.id,
-      ...(() => { const ip = (req.headers["x-forwarded-for"] as string | undefined) ?? (req.headers["x-real-ip"] as string | undefined); return ip !== undefined ? { ipAddress: ip } : {}; })(),
-    });
+    // SEC-010: employee.hrms_audit_log is now FORCE RLS'd. This hook used to
+    // call auditLog(db, {...}) directly -- a bare, non-transactional insert
+    // with no app.tenant_id GUC, which FORCE RLS's WITH CHECK now rejects on
+    // EVERY mutating request fleet-wide (auditLog's own try/catch swallows
+    // the error, so this failure would otherwise be completely silent --
+    // no crash, no visible symptom, just a service-wide-disabled audit
+    // trail). This hook runs as a Fastify onResponse callback, not inline
+    // inside a route handler, so it cannot rely on ambient AsyncLocalStorage
+    // tenant context surviving from an earlier hook -- explicitly
+    // establish it with runWithTenant, the documented pattern for exactly
+    // this "worker/hook, not a request handler" shape (see
+    // packages/db/src/tenant-context.ts's own doc comment). db.transaction
+    // inside that scope then has wrapWithTenantGuc set the GUC, same as
+    // every scopedRead()/db.transaction() call elsewhere in this service.
+    try {
+      await runWithTenant(tenantId, () =>
+        db.transaction((tx) =>
+          auditLog(tx, {
+            tenantId,
+            actorId,
+            action,
+            resourceType,
+            ...(resourceId !== undefined ? { resourceId } : {}),
+            correlationId: (req.headers["x-correlation-id"] as string | undefined) ?? req.id,
+            ...(() => { const ip = (req.headers["x-forwarded-for"] as string | undefined) ?? (req.headers["x-real-ip"] as string | undefined); return ip !== undefined ? { ipAddress: ip } : {}; })(),
+          }),
+        ),
+      );
+    } catch (err) {
+      // Belt-and-suspenders: auditLog() already catches the insert itself,
+      // but this also guards the transaction/GUC setup around it. Audit
+      // must never block or fail the response it's describing.
+      const { pino: pinoFactory } = await import("pino");
+      const log = pinoFactory({ name: "hrms-audit-log" });
+      log.error({ err }, "failed to open tenant-scoped transaction for audit log hook");
+    }
   };
 }

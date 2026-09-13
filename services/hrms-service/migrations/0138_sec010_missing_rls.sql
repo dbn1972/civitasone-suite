@@ -28,11 +28,24 @@
 --     (bare pool-tier client, no GUC). Under FORCE RLS the INSERT/UPDATE would
 --     fail closed (WITH CHECK violation) and the SELECTs would silently return
 --     zero rows. Converted to db.transaction()-scoped queries.
---   - employee.hrms_audit_log has NO current callers anywhere in hrms-service
---     (checked: no insert/select of hrmsAuditLog outside its own definition
---     file) -- FORCE RLS here carries zero regression risk today, but note it
---     is dead code, same class of gap as TX-013 (audit.hr_action_log) before
---     that migration; flagged, not fixed here (out of SEC-010's scope).
+--   - employee.hrms_audit_log DOES have a real, high-frequency caller that an
+--     earlier pass of this migration incorrectly claimed didn't exist: an
+--     initial grep for direct auditLog() call sites (deliberately excluding
+--     shared/audit-log.ts itself) missed that the same file also exports
+--     createAuditHook(), registered GLOBALLY at app.ts's
+--     `app.addHook("onResponse", createAuditHook())` -- it fires on every
+--     successful (< 400) POST/PATCH/PUT/DELETE across the entire service.
+--     Its call site (audit-log.ts) passed the bare `db` client (no
+--     app.tenant_id GUC) into auditLog()'s insert -- under FORCE RLS that
+--     failed WITH CHECK on every single mutating request, invisibly, since
+--     auditLog() itself catches and only logs all errors. Exact same failure
+--     class as TX-013 (audit.hr_action_log) before that migration, just
+--     caught before merge instead of after. Fixed in this PR: the hook now
+--     routes through runWithTenant()/db.transaction(), mirroring the
+--     scopedRead()/db.transaction() pattern used everywhere else in this
+--     file. Regression test: tests/sec-010-hrms-audit-log.integration.test.ts
+--     (real app.inject() mutation, asserts a real row lands in the table,
+--     same DoD rigor as tests/tx-013-audit-hr-action-log.integration.test.ts).
 -- Additive + idempotent. Safe to re-run.
 -- Rollback: ALTER TABLE <table> DISABLE ROW LEVEL SECURITY; then
 --           DROP POLICY tenant_isolation_policy ON <table>; for each table below.
