@@ -403,6 +403,21 @@ jobs:
       - name: Tenant table RLS guard (new CREATE TABLE + tenant_id must carry RLS in the same migration, SEC-010)
         run: node scripts/ci/tenant-table-rls-guard.mjs
 
+      # TX-011: replaces the ad-hoc, not-checked-in scan_nested_tx_v2.py
+      # TX-001's sweep used, closing its 3 documented blind spots (arrow-
+      # const repo functions, tenantTransaction()/scopedRead() as the OUTER
+      # wrapper, and transitive nesting >1 call deep). Pure source-text
+      # analysis (no live DB needed), so it runs here like the guards above.
+      # Unit tests first (fixture coverage incl. both real fleet cases this
+      # gap cites, in pre-fix and post-fix shape), then the guard against
+      # the real tree (ratchet: fails on NEW violations and on stale
+      # baseline entries, see scripts/ci/nested-tx-baseline.json — 3 genuine
+      # pre-existing sites TX-001's own sweep missed, filed as TX-018).
+      - name: Nested-transaction guard unit tests (TX-011)
+        run: pnpm exec vitest run tests/architecture/nested-tx-guard.test.ts
+      - name: Nested-transaction guard (no db.transaction()/tenantTransaction()/scopedRead() nested inside another, directly or transitively, TX-011)
+        run: node scripts/ci/nested-tx-guard.mjs
+
   # ─────────────────────────────────────────────
   # Job 4: Web build check
   # ─────────────────────────────────────────────
