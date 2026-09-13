@@ -1,25 +1,12 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { ConfirmDialog } from "@/app/_components/ds";
+import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
+import type { OrgHierarchyLevel } from "@/app/_data/loaders";
 
 /* ─── Types ─────────────────────────────────────────────────────────── */
-type OrgLevel = {
-  id: string;
-  order: number;
-  label: string;
-  description: string;
-  examples: string;
-  color: string;
-};
-
-const DEFAULT_LEVELS: OrgLevel[] = [
-  { id: "ministry",   order: 1, label: "Ministry",   description: "Top-level governance body (central ministry)", examples: "Ministry of Finance, Ministry of Home Affairs", color: "#1e40af" },
-  { id: "department", order: 2, label: "Department",  description: "Functional department under a ministry", examples: "Department of Revenue, DOPT", color: "#065f46" },
-  { id: "division",   order: 3, label: "Division",    description: "Operational division within a department", examples: "Direct Taxes Division", color: "#7c3aed" },
-  { id: "section",    order: 4, label: "Section",     description: "Working section within a division", examples: "Section-I (Policy), Accounts Section", color: "#b45309" },
-  { id: "unit",       order: 5, label: "Unit",        description: "Smallest addressable unit — maps to cost centre", examples: "Pay & Accounts Unit, Records Unit", color: "#be185d" },
-];
+type OrgLevel = OrgHierarchyLevel;
 
 function badge(color: string, text: string) {
   return (
@@ -33,8 +20,17 @@ const inp: React.CSSProperties = { width: "100%", padding: "7px 10px", borderRad
 const lbl: React.CSSProperties = { display: "block", fontSize: 11.5, fontWeight: 650, color: "var(--ink2)", marginBottom: 3 };
 
 /* ─── Drag-to-reorder list ──────────────────────────────────────────── */
-export function OrgConfigPage() {
-  const [levels, setLevels] = useState<OrgLevel[]>(DEFAULT_LEVELS);
+// COMP-014: this page used to seed its entire editable state from a
+// hardcoded DEFAULT_LEVELS constant (never loaded, never saved for real —
+// PUT /v1/admin/org-hierarchy had no PUT route, and the failure was hidden
+// behind an unconditional "Org hierarchy saved." notice). It now receives
+// the tenant's REAL configured levels from the server (page.tsx's loader,
+// GET /v1/admin/org-hierarchy-levels — a new, dedicated backend for this
+// hierarchy-LEVEL-taxonomy concept, deliberately distinct from
+// /v1/admin/org-hierarchy's real org-unit-INSTANCE CRUD), and saves through
+// the matching real PUT, checking the response instead of assuming success.
+export function OrgConfigPage({ initialLevels, source }: { initialLevels: OrgLevel[]; source: "api" | "error" }) {
+  const [levels, setLevels] = useState<OrgLevel[]>(initialLevels);
   const [editId, setEditId] = useState<string | null>(null);
   const [draft, setDraft] = useState<OrgLevel | null>(null);
   const [busy, setBusy] = useState(false);
@@ -95,21 +91,37 @@ export function OrgConfigPage() {
     setLevels((prev) => prev.map((l) => l.id === draft.id ? { ...draft } : l));
     setEditId(null);
     setDraft(null);
-    setNotice(`"${draft.label}" updated.`);
+    setNotice(`"${draft.label}" updated. Click Save order to persist.`);
   }
 
   async function persistOrder() {
     setBusy(true);
     setError("");
     try {
-      await fetch("/api/proxy/v1/admin/org-hierarchy", {
+      const res = await fetch("/api/proxy/v1/admin/org-hierarchy-levels", {
         method: "PUT",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify(levels.map((l) => ({ id: l.id, order: l.order, label: l.label }))),
-      }).catch(() => null);
+        // Full shape (id/order/label/description/examples/color) — the
+        // pre-fix request sent only {id, order, label}, so an edited
+        // description/examples/color was silently discarded even when the
+        // save itself "succeeded".
+        body: JSON.stringify({
+          levels: levels.map((l) => ({
+            id: l.id, order: l.order, label: l.label,
+            description: l.description, examples: l.examples, color: l.color,
+          })),
+        }),
+      });
+      if (!res.ok) {
+        // A resolved non-2xx response never rejects fetch()'s promise, so a
+        // bare `.catch()` (the pre-fix code) never sees it — this explicit
+        // res.ok check is the actual fix for the silent-failure bug.
+        const body = await res.json().catch(() => ({}) as { message?: string });
+        throw new Error(body.message ?? `Save failed (HTTP ${res.status})`);
+      }
       setNotice("Org hierarchy saved.");
-    } catch {
-      setError("Could not save order.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not save order.");
     } finally {
       setBusy(false);
       setConfirmSave(false);
@@ -118,6 +130,7 @@ export function OrgConfigPage() {
 
   return (
     <div>
+      <DataSourceBadge source={source} message="Couldn't load the org hierarchy configuration — showing nothing" />
       {notice ? (
         <p role="status" aria-live="polite" style={{ fontSize: 12.5, color: "var(--good, #027a48)", marginBottom: 12, padding: "8px 12px", background: "var(--goodbg, #ecfdf3)", borderRadius: 8 }}>
           {notice}
@@ -131,7 +144,7 @@ export function OrgConfigPage() {
       <div className="card" style={{ marginBottom: 16 }}>
         <div className="card-h">
           <h3 style={{ margin: 0 }}>Indian Government Org Structure</h3>
-          <button type="button" className="btn primary sm" onClick={() => setConfirmSave(true)} disabled={busy}>
+          <button type="button" className="btn primary sm" onClick={() => setConfirmSave(true)} disabled={busy || levels.length === 0}>
             {busy ? "Saving…" : "Save order"}
           </button>
         </div>
@@ -139,6 +152,11 @@ export function OrgConfigPage() {
           Drag rows to reorder reporting levels. Click Edit to rename or update descriptions.
         </p>
 
+        {levels.length === 0 ? (
+          <p style={{ padding: 16, color: "var(--ink3, var(--ink2))", fontSize: 13 }}>
+            {source === "error" ? "Couldn't load the org hierarchy configuration." : "No hierarchy levels configured yet."}
+          </p>
+        ) : (
         <div style={{ overflowX: "auto" }}>
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13.5 }}>
             <thead>
@@ -216,6 +234,7 @@ export function OrgConfigPage() {
             </tbody>
           </table>
         </div>
+        )}
       </div>
 
       {/* Hierarchy flow diagram */}
@@ -239,7 +258,7 @@ export function OrgConfigPage() {
       <ConfirmDialog
         open={confirmSave}
         title="Save org hierarchy order?"
-        description="This will update the reporting structure for the entire platform. Existing units are not renamed or deleted."
+        description="This will update the organisation hierarchy configuration for your tenant. Existing units are not renamed or deleted."
         confirmLabel="Save order"
         busy={busy}
         onConfirm={() => void persistOrder()}

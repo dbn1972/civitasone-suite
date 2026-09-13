@@ -186,16 +186,6 @@ describe('screen contract map', () => {
   // or wiring fix, and is out of scope here. Remove an entry the same day its
   // backend is built and the page is wired for real.
   const KNOWN_FABRICATED_DATA_EXCEPTIONS: Array<{ module: string; screen: string }> = [
-    // COMP-014: platform-admin/org-config's DEFAULT_LEVELS models a configurable
-    // hierarchy-LEVEL taxonomy that nothing in the backend stores -- likely
-    // superseded by the already-wired admin/org/OrgHierarchyManager.tsx (real
-    // org-unit CRUD); needs a product decision (remove vs. build a real store).
-    { module: 'platform-admin', screen: '/platform-admin/org-config' },
-    // COMP-015: hr/onboarding/[id]'s document checklist (DEFAULT_DOCUMENTS) is
-    // always the same 6 documents, always "pending" -- hrms-service has no
-    // document-specific concept yet (only generic onboarding-tasks); needs a new
-    // per-employee document-checklist table + routes.
-    { module: 'hr', screen: '/hr/onboarding/[id]' },
     // COMP-016: projects/schemes/[id]'s SCHEMES catalogue has fields
     // (nodalOfficer, department, beneficiaries, fundingPattern) that don't exist
     // in project-service's schema, though the real budget/status/project-list

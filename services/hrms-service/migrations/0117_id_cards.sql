@@ -55,11 +55,11 @@ CREATE TABLE IF NOT EXISTS hrms.id_cards (
   UNIQUE (tenant_id, card_number)
 );
 
-CREATE INDEX idx_id_cards_tenant_holder ON hrms.id_cards (tenant_id, holder_name);
-CREATE INDEX idx_id_cards_tenant_type ON hrms.id_cards (tenant_id, card_type, status);
-CREATE INDEX idx_id_cards_employee ON hrms.id_cards (tenant_id, employee_id) WHERE employee_id IS NOT NULL;
-CREATE INDEX idx_id_cards_vendor ON hrms.id_cards (tenant_id, vendor_id) WHERE vendor_id IS NOT NULL;
-CREATE INDEX idx_id_cards_qr ON hrms.id_cards (qr_payload);
+CREATE INDEX IF NOT EXISTS idx_id_cards_tenant_holder ON hrms.id_cards (tenant_id, holder_name);
+CREATE INDEX IF NOT EXISTS idx_id_cards_tenant_type ON hrms.id_cards (tenant_id, card_type, status);
+CREATE INDEX IF NOT EXISTS idx_id_cards_employee ON hrms.id_cards (tenant_id, employee_id) WHERE employee_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_id_cards_vendor ON hrms.id_cards (tenant_id, vendor_id) WHERE vendor_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_id_cards_qr ON hrms.id_cards (qr_payload);
 
 -- Verification log — every time a card is scanned at a gate
 CREATE TABLE IF NOT EXISTS hrms.id_card_verifications (
@@ -74,5 +74,5 @@ CREATE TABLE IF NOT EXISTS hrms.id_card_verifications (
   longitude DOUBLE PRECISION
 );
 
-CREATE INDEX idx_verifications_card ON hrms.id_card_verifications (card_id, verified_at DESC);
-CREATE INDEX idx_verifications_tenant ON hrms.id_card_verifications (tenant_id, verified_at DESC);
+CREATE INDEX IF NOT EXISTS idx_verifications_card ON hrms.id_card_verifications (card_id, verified_at DESC);
+CREATE INDEX IF NOT EXISTS idx_verifications_tenant ON hrms.id_card_verifications (tenant_id, verified_at DESC);

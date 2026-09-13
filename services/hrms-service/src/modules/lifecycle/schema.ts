@@ -201,4 +201,29 @@ export const hrmsEmployeeHolds = lifecycleSchema.table("hrms_employee_holds", {
 export type EmployeeHoldRow = typeof hrmsEmployeeHolds.$inferSelect;
 export type EmployeeHoldInsert = typeof hrmsEmployeeHolds.$inferInsert;
 
-export const schema = { hrmsTransfers, hrmsPromotions, hrmsSeparations, hrmsBgvChecks, hrmsOnboardingTasks, hrmsBuddyAssignments, hrmsMandatoryDocConfigs, hrmsPropertyReturns, hrmsEmployeeEducation, hrmsEmployeeEmploymentHistory, hrmsPolicyAcknowledgements, hrmsEmployeeHolds };
+// COMP-015: real per-employee onboarding document checklist status (received/
+// verified), replacing the frontend's hardcoded DEFAULT_DOCUMENTS placeholder
+// that showed the same 6 documents, always "pending", for every employee.
+// Required-ness and the document-type catalogue itself still come from
+// hrms_mandatory_doc_configs (T21, above) -- this table holds only the part
+// that is genuinely per-employee: what THIS employee has actually submitted
+// or had verified. One row per (tenant, employee, doc type) -- see
+// hrms_onbdoc_emp_doctype_uq in the migration, which onboarding-routes.ts's
+// mark-received/verify handlers upsert against.
+export const hrmsOnboardingDocuments = lifecycleSchema.table("hrms_onboarding_documents", {
+  id:            uuid("id").primaryKey().defaultRandom(),
+  tenantId:      uuid("tenant_id").notNull(),
+  employeeId:    uuid("employee_id").notNull(),
+  docType:       varchar("doc_type", { length: 64 }).notNull(),
+  status:        varchar("status", { length: 16 }).notNull().default("pending"),
+  receivedAt:    timestamp("received_at", { withTimezone: true }),
+  verifiedBy:    uuid("verified_by"),
+  verifiedAt:    timestamp("verified_at", { withTimezone: true }),
+  createdAt:     timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt:     timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  createdBy:     uuid("created_by").notNull(),
+  version:       integer("version").notNull().default(1),
+});
+export type OnboardingDocumentRow = typeof hrmsOnboardingDocuments.$inferSelect;
+
+export const schema = { hrmsTransfers, hrmsPromotions, hrmsSeparations, hrmsBgvChecks, hrmsOnboardingTasks, hrmsBuddyAssignments, hrmsMandatoryDocConfigs, hrmsPropertyReturns, hrmsEmployeeEducation, hrmsEmployeeEmploymentHistory, hrmsPolicyAcknowledgements, hrmsEmployeeHolds, hrmsOnboardingDocuments };
