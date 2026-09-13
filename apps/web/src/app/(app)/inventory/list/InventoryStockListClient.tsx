@@ -64,6 +64,7 @@ export function InventoryStockListClient({ items }: Props) {
           rows={rows as unknown as Record<string, unknown>[]}
           rowLinkPrefix="/stock/"
           rowLinkKey="id"
+          identifyingColumnKey="name"
           sortable
           filterable
           filterPlaceholder="Filter stock items…"

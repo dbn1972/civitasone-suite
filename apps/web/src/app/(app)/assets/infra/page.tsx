@@ -56,6 +56,7 @@ export default async function InfraAssetsPage() {
             rows={rows}
             rowLinkKey="id"
             rowLinkPrefix="/assets/"
+            identifyingColumnKey="name"
             sortable
             filterable
             filterPlaceholder="Filter infrastructure…"

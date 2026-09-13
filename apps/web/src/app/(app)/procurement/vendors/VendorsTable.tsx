@@ -75,6 +75,7 @@ export function VendorsTable({ vendors, source = "api" }: { vendors: Vendor[]; s
         <DataTable<VendorRow>
           rows={tableRows}
           rowHref={(row) => `/procurement/vendors/${row.id}`}
+          identifyingColumnKey="name"
           sortable
           filterable
           filterPlaceholder="Search name, code, GSTIN…"

@@ -71,6 +71,7 @@ export default async function FixedAssetsPage() {
             rows={rows}
             rowLinkKey="id"
             rowLinkPrefix="/assets/"
+            identifyingColumnKey="name"
             sortable
             filterable
             filterPlaceholder="Filter fixed assets…"

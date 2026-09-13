@@ -79,6 +79,7 @@ export function AssetsTable({ assets, source = "api" }: { assets: Asset[]; sourc
           rows={filtered}
           rowLinkKey="id"
           rowLinkPrefix="/assets/"
+          identifyingColumnKey="name"
           sortable
           filterable
           filterPlaceholder="Filter assets…"

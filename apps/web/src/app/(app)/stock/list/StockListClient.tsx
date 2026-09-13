@@ -57,6 +57,7 @@ export function StockListClient({ items }: Props) {
           rows={rows as unknown as Record<string, unknown>[]}
           rowLinkPrefix="/stock/"
           rowLinkKey="id"
+          identifyingColumnKey="name"
           sortable
           filterable
           pageSize={15}
