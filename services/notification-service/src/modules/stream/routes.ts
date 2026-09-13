@@ -1,7 +1,7 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
 import { pino } from "pino";
 import { ZodError } from "zod";
-import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
+import { resolveContext, requireInternalOrRoles, HttpError } from "../../shared/context.js";
 import { createStreamSubscriber, type StreamSubscriber } from "./subscriber.js";
 import { publishNotificationBody } from "./validators.js";
 import * as repo from "./repo.js";
@@ -20,14 +20,27 @@ const log = pino({ name: "stream:sse" });
  * from end-user requests, so a request carrying `x-internal: "1"` plus a
  * `x-service-secret` matching INTERNAL_SERVICE_SECRET is a real
  * service-to-service call, and authPlugin stamps it with `actorType:
- * "service_account"` and `roles` including `super_admin`. Mirroring the
- * pattern already used by loyalty-service's `/v1/loyalty/accrue` and
- * tenant-service's `/v1/quotas/increment`, we gate on that role set rather
- * than inventing a bespoke check — this also lets a genuine human
- * `super_admin` trigger the route directly if that's ever needed, without
- * requiring a second code path.
+ * "service_account"`.
+ *
+ * SEC-016 (supersedes the SEC-005-era note this replaced): this route used
+ * to gate on `requireRole(ctx, ["super_admin", "service_account"])`. That
+ * looked like it required either role, but `"service_account"` is never
+ * actually present in `ctx.roles` — only `ctx.actorType` carries it (see
+ * packages/auth/src/context.ts). So the array's real (and only) effective
+ * gate was `super_admin`, a role an ordinary human admin can hold — meaning
+ * any human `super_admin` could push an arbitrary, sender-spoofed
+ * notification to any user in the tenant, exactly the reachability SEC-005
+ * set out to close. That was a deliberate choice at the time (see PR #1106),
+ * reasoned as a convenient human escape hatch; this review overrides that
+ * call and closes it, since no legitimate human workflow was found that
+ * requires calling this route directly rather than through a real
+ * user-facing action. There is no other role this route needs to grant to a
+ * human, so it now checks the genuine internal-caller signal
+ * (`ctx.actorType === "service_account"`) directly and rejects every human
+ * caller, `super_admin` included. If a documented human escape hatch is
+ * ever wanted here, it should be re-added explicitly and deliberately, not
+ * resurrected as a side effect of some other role check.
  */
-const INTERNAL_ROLES = ["super_admin", "service_account"];
 
 /** 30 minutes idle timeout in milliseconds */
 const IDLE_TIMEOUT_MS = 30 * 60 * 1000;
@@ -148,13 +161,13 @@ export async function streamRoutes(app: FastifyInstance): Promise<void> {
 
   /**
    * POST /v1/notifications/publish — Publish a notification to a user.
-   * Internal use only — see INTERNAL_ROLES above. Used by consumers to push
+   * Internal use only — see the SEC-016 note above. Used by consumers to push
    * notifications in real-time. Persists notification for offline delivery
    * and publishes via Redis pub/sub.
    */
   app.post("/notifications/publish", async (req: FastifyRequest, reply: FastifyReply) => {
     const ctx = resolveContext(req);
-    requireRole(ctx, INTERNAL_ROLES);
+    requireInternalOrRoles(ctx, []);
 
     // NOTE: this service's app-level Zod error handler does not reliably run
     // for every route encapsulation (see other modules, e.g. bounces/routes.ts,

@@ -5,13 +5,25 @@
 import type { FastifyInstance } from "fastify";
 import { sendAccepted } from "@civitasone/schemas/validate";
 import { acceptedResponseSchema } from "@civitasone/schemas/common";
-import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
+import { resolveContext, requireRole, requireInternalOrRoles, HttpError } from "../../shared/context.js";
 import { quotaSetBody, quotaIncrementBody, quotaCheckBody, tenantIdParam, resourceParam } from "./validators.js";
 import * as commands from "./commands.js";
 import { cache } from "../../shared/infra.js";
 import * as repo from "./repo.js";
 
 const PLATFORM_ADMIN = ["platform_admin", "super_admin"];
+// SEC-016: the two "internal service calls" routes below used to gate on
+// `requireRole(ctx, [...PLATFORM_ADMIN, "service_account"])`. The
+// "service_account" entry never actually matches ctx.roles (see
+// shared/context.ts's requireInternalOrRoles), so their real gate was
+// PLATFORM_ADMIN alone — including bare `super_admin`, a role a human can
+// hold, on routes documented as internal-only. `platform_admin` is kept: it's
+// the same distinct human role already relied on one route above (`POST
+// /v1/quotas`, "platform admin only") for the strictly more powerful SET
+// operation, so allowing it here too is not a new grant. A genuine internal
+// caller is now recognised via ctx.actorType directly instead of the dead
+// "service_account" string.
+const INTERNAL_INCREMENT_ROLES = ["platform_admin"];
 const RESOURCE = "quota";
 
 export async function quotaRoutes(app: FastifyInstance): Promise<void> {
@@ -24,10 +36,10 @@ export async function quotaRoutes(app: FastifyInstance): Promise<void> {
     return sendAccepted(reply, acceptedResponseSchema, res);
   });
 
-  // INCREMENT usage — internal service calls (require platform_admin or service_account)
+  // INCREMENT usage — internal service calls, or platform_admin (see SEC-016 note above)
   app.post("/v1/quotas/increment", async (req, reply) => {
     const ctx = resolveContext(req);
-    requireRole(ctx, [...PLATFORM_ADMIN, "service_account"]);
+    requireInternalOrRoles(ctx, INTERNAL_INCREMENT_ROLES);
     const body = quotaIncrementBody.parse(req.body);
     const res = await commands.quotaIncrement(ctx, body);
     return sendAccepted(reply, acceptedResponseSchema, res);
@@ -90,10 +102,10 @@ export async function quotaRoutes(app: FastifyInstance): Promise<void> {
     return reply.send({ tenantId: ctx.tenantId, resources, anyOverLimit, anyWarning });
   });
 
-  // POST increment usage — internal service calls (require elevated role)
+  // POST increment usage — internal service calls, or platform_admin (see SEC-016 note above)
   app.post("/v1/tenant/usage/increment", async (req, reply) => {
     const ctx = resolveContext(req);
-    requireRole(ctx, [...PLATFORM_ADMIN, "service_account"]);
+    requireInternalOrRoles(ctx, INTERNAL_INCREMENT_ROLES);
     const body = quotaIncrementBody.parse(req.body);
     const res = await commands.quotaIncrement(ctx, body);
     return sendAccepted(reply, acceptedResponseSchema, res);

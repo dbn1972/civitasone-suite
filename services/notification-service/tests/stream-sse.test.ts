@@ -219,6 +219,53 @@ describe("POST /notifications/publish — notification persistence and pub/sub",
   });
 });
 
+// SEC-016: /notifications/publish is documented as internal-only. It used to
+// gate on `requireRole(ctx, ["super_admin", "service_account"])`, but
+// "service_account" is never actually present in ctx.roles — only
+// ctx.actorType carries it — so the array's real (and only) effective gate
+// was bare `super_admin`, a role an ordinary human admin can hold. That let
+// any human super_admin push an arbitrary, sender-spoofed notification to
+// any user in the tenant, exactly the reachability SEC-005 set out to close.
+describe("POST /notifications/publish — SEC-016 internal-only gate", () => {
+  it("returns 403 for a human super_admin token (no longer an implicit escape hatch)", async () => {
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "POST",
+      url: "/notifications/publish",
+      headers: {
+        authorization: `Bearer ${token(TENANT_A, USER_A, ["super_admin"])}`,
+        "content-type": "application/json",
+      },
+      payload: {
+        userId: USER_B,
+        type: "approval.assigned",
+        title: "Forged approval notice from a human super_admin",
+      },
+    });
+    await app.close();
+    expect(res.statusCode).toBe(403);
+  });
+
+  it("still returns 201 for a genuine internal service-to-service caller", async () => {
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "POST",
+      url: "/notifications/publish",
+      headers: internalHeaders(),
+      payload: {
+        userId: USER_A,
+        type: "approval.assigned",
+        title: "New approval request (internal caller)",
+        body: "You have a new leave approval pending",
+        metadata: { module: "hrms", entityId: "leave-sec016" },
+      },
+    });
+    await app.close();
+    expect(res.statusCode).toBe(201);
+    expect(res.json().data.id).toBeDefined();
+  });
+});
+
 describe("POST /notifications/stream/mark-read", () => {
   it("returns 200 when marking all as read", async () => {
     const app = await buildApp();
