@@ -1,8 +1,8 @@
 # Screen Contract Map
 
-Generated: 2026-09-11T10:13:46.456Z
+Generated: 2026-09-13T03:42:35.898Z
 
-**Summary:** 273 WIRED | 0 MISSING | 0 MISMATCH | 561 NO_LOADER | 3 FABRICATED_DATA
+**Summary:** 273 WIRED | 0 MISSING | 0 MISMATCH | 563 NO_LOADER | 2 FABRICATED_DATA
 
 | module | screen | loader | apiPath | upstream | route? | table? | status |
 |--------|--------|--------|---------|----------|--------|--------|--------|
@@ -427,7 +427,7 @@ Generated: 2026-09-11T10:13:46.456Z
 | hr | /hr/locations/new | — | — | — | — | — | — NO_LOADER |
 | hr | /hr/locations | — | — | — | — | — | — NO_LOADER |
 | hr | /hr/medical | — | — | — | — | — | — NO_LOADER |
-| hr | /hr/onboarding/[id] | — | — | — | ✗ | — | 🎭 FABRICATED_DATA |
+| hr | /hr/onboarding/[id] | — | — | — | — | — | — NO_LOADER |
 | hr | /hr/onboarding | — | — | — | — | — | — NO_LOADER |
 | hr | /hr/org-chart | getOrgChart | /api/v1/hrms/org-chart | hrms → /v1/hrms/org-chart | ✓ `/v1/hrms/org-chart` | ✓ | ✅ WIRED |
 | hr | /hr/orgchart | getOrgChart | /api/v1/hrms/org-chart | hrms → /v1/hrms/org-chart | ✓ `/v1/hrms/org-chart` | ✓ | ✅ WIRED |
@@ -514,6 +514,7 @@ Generated: 2026-09-11T10:13:46.456Z
 | hr | /hr/workforce/overtime | — | — | — | — | — | — NO_LOADER |
 | hr | /hr/workforce | — | — | — | — | — | — NO_LOADER |
 | hr | /hr/workforce/staffing-plan | — | — | — | — | — | — NO_LOADER |
+| hr | /hr/workforce/wfh/new | — | — | — | — | — | — NO_LOADER |
 | hr | /hr/workforce/wfh | — | — | — | — | — | — NO_LOADER |
 | hr | /hr/workforce/work-summary | — | — | — | — | — | — NO_LOADER |
 | identity | /identity/api-keys | — | — | — | — | — | — NO_LOADER |

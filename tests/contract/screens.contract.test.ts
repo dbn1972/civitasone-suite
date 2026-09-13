@@ -191,11 +191,6 @@ describe('screen contract map', () => {
     // superseded by the already-wired admin/org/OrgHierarchyManager.tsx (real
     // org-unit CRUD); needs a product decision (remove vs. build a real store).
     { module: 'platform-admin', screen: '/platform-admin/org-config' },
-    // COMP-015: hr/onboarding/[id]'s document checklist (DEFAULT_DOCUMENTS) is
-    // always the same 6 documents, always "pending" -- hrms-service has no
-    // document-specific concept yet (only generic onboarding-tasks); needs a new
-    // per-employee document-checklist table + routes.
-    { module: 'hr', screen: '/hr/onboarding/[id]' },
     // COMP-016: projects/schemes/[id]'s SCHEMES catalogue has fields
     // (nodalOfficer, department, beneficiaries, fundingPattern) that don't exist
     // in project-service's schema, though the real budget/status/project-list
