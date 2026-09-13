@@ -24,6 +24,7 @@ import { registerScreenManifestRoute } from "./screen-manifest.js";
 import { registerSearchRoute } from "./search-route.js";
 import { proxyFetch, getBreakerStates } from "./upstream-proxy.js";
 import { jwtEdgeVerify } from "./jwt-edge.js";
+import type { CivitasJwtPayload } from "@civitasone/auth";
 import { canonicalisePath, BAD_PATH_RESPONSE } from "./path-guard.js";
 import { PUBLIC_PREFIXES } from "./public-prefixes.js";
 import {
@@ -67,6 +68,45 @@ function verifyInternalSecret(req: FastifyRequest): boolean {
     Buffer.from(secret, "utf8"),
     Buffer.from(expected, "utf8"),
   );
+}
+
+/**
+ * SEC-008: rate-limit key for the per-tenant tier, derived ONLY from a
+ * server-verified tenant identity — never from the raw x-tenant-id header a
+ * client controls. Resolution order, each source verified before it is
+ * trusted:
+ *
+ *   1. req.jwtPayload.tid — set by jwtEdgeVerify from the cryptographically
+ *      verified JWT. This is the normal authenticated-browser/session path.
+ *   2. x-tenant-id header, but ONLY when req.apiKeyAuthenticated is true.
+ *      That flag is set by apiKeyPreHandler itself — a client cannot set it;
+ *      it is a boolean the server assigns, not derived from any header — and
+ *      is only ever set after apiKeyPreHandler resolves the presented
+ *      x-api-key against identity-service and OVERWRITES x-tenant-id with the
+ *      verified record's tenantId in that same step. By the time this
+ *      keyGenerator runs (preHandler stage, after apiKeyPreHandler), the
+ *      header no longer reflects anything the client supplied.
+ *   3. req.ip — pre-authentication traffic only: public allow-listed routes,
+ *      a request jwtEdgeVerify let through in "audit" mode after a FAILED
+ *      verification, or a deployment running with GATEWAY_JWT_EDGE_VERIFY=off.
+ *      None of these carry a verified tenant identity, so IP is the only safe
+ *      key — trusting the header here would silently reopen the exact hole
+ *      this fix closes, for precisely the traffic an attacker would send it
+ *      on. Namespaced ("tenant:"/"ip:") so an IP string can never collide
+ *      with a tenant id in the underlying store.
+ */
+function verifiedTenantRateLimitKey(req: FastifyRequest): string {
+  const jwtTid = (req as FastifyRequest & { jwtPayload?: CivitasJwtPayload })
+    .jwtPayload?.tid;
+  if (jwtTid) return `tenant:${jwtTid}`;
+
+  if ((req as FastifyRequest & { apiKeyAuthenticated?: boolean })
+    .apiKeyAuthenticated) {
+    const verified = req.headers["x-tenant-id"];
+    if (typeof verified === "string" && verified) return `tenant:${verified}`;
+  }
+
+  return `ip:${req.ip ?? "unknown"}`;
 }
 
 async function proxyHandler(
@@ -355,13 +395,38 @@ export async function buildApp(): Promise<FastifyInstance> {
   });
 
   // SC-5: Per-tenant rate limit (second tier, registered after the global one).
-  // keyGenerator identifies the tenant from x-tenant-id header; falls back to
-  // req.ip for unauthenticated / no-tenant traffic so they stay under the global
-  // 1 000 req/min limit rather than getting an extra 200/min allowance.
+  //
+  // SEC-008 fix: the key MUST come from a server-verified tenant identity, never
+  // from the raw client-supplied x-tenant-id header. The old keyGenerator read
+  // req.headers["x-tenant-id"] directly — any authenticated caller could set
+  // that header to a victim tenant's id to (a) burn the victim's 200/min budget,
+  // or (b) mint a fresh fake tenant id per request to shard its OWN traffic
+  // across unlimited buckets and evade the limit entirely. Neither required
+  // forging a JWT: the header was never checked against anything.
+  //
+  // hook: "preHandler" is required, not cosmetic. @fastify/rate-limit defaults
+  // to running its check at the "onRequest" lifecycle stage, which fires BEFORE
+  // this gateway's own preHandler hooks (apiKeyPreHandler, jwtEdgeVerify) —
+  // i.e. before any verification has happened. Moving this tier's check to
+  // "preHandler" makes it run AFTER those, so req.jwtPayload (set by
+  // jwtEdgeVerify from the verified token) and req.apiKeyAuthenticated (set by
+  // apiKeyPreHandler only once it verifies the key against identity-service)
+  // are populated by the time the key is computed. Fastify always runs global
+  // preHandler hooks (added via app.addHook, below) before a route's own
+  // preHandler array (which is what config.rateLimit on a route attaches to,
+  // see the /api/* route further down), regardless of source-file order, so
+  // this ordering is guaranteed rather than incidental.
+  //
+  // global: false means this tier applies to NO route automatically — a route
+  // must opt in via config.rateLimit (see /api/* below). That opt-in is part
+  // of this fix too: on main today this tier is registered but never actually
+  // applied to any route (the proxy's /api/* had no config.rateLimit), so it
+  // was inert even before considering the keyGenerator bug. See SEC-008 in the
+  // gap report for how that was confirmed.
   await app.register(rateLimit, {
     global: false,
-    keyGenerator: (req) =>
-      (req.headers["x-tenant-id"] as string) || (req.ip ?? "unknown"),
+    hook: "preHandler",
+    keyGenerator: verifiedTenantRateLimitKey,
     max: Number(process.env.GATEWAY_RATE_LIMIT_TENANT_MAX ?? 200),
     timeWindow: "1 minute",
     ...(rateLimitClient ? { redis: rateLimitClient } : {}),
@@ -533,6 +598,13 @@ export async function buildApp(): Promise<FastifyInstance> {
   app.route({
     method: ["GET", "POST", "PUT", "PATCH", "DELETE"],
     url: "/api/*",
+    // SEC-008: opts into the per-tenant tier registered above (global: false,
+    // so no route gets it automatically — @fastify/rate-limit only applies a
+    // global:false registration to routes that declare config.rateLimit).
+    // The empty object inherits that registration's keyGenerator/max/
+    // timeWindow/hook unchanged; this is what makes the tier actually run
+    // against real traffic instead of being registered but inert.
+    config: { rateLimit: {} },
     handler: proxyHandler,
   });
 
