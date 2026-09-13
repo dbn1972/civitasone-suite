@@ -1238,6 +1238,39 @@ export const SchemeSummarySchema = z.object({
 });
 export const SchemeSummaryListSchema = z.array(SchemeSummarySchema);
 
+// COMP-016: GET /v1/projects/schemes/:id response shape. See
+// packages/types/src/index.ts's SchemeDetail for why this is not just
+// SchemeSummarySchema.extend({...}) -- different money-unit convention
+// (minor-unit strings, not converted rupee numbers).
+export const SchemeDetailProjectSchema = z.object({
+  id: z.string(),
+  code: z.string(),
+  name: z.string(),
+  status: z.string(),
+  budgetMinor: z.string(),
+});
+export const SchemeDetailSchema = z.object({
+  id: z.string(),
+  schemeCode: z.string(),
+  name: z.string(),
+  fundingType: z.enum(["central", "state", "centrally_sponsored", "external"]),
+  fundingPattern: z.string(),
+  sanctionRef: z.string().optional(),
+  totalOutlayMinor: z.string(),
+  releasedMinor: z.string(),
+  utilisedMinor: z.string(),
+  utilisationPct: z.number(),
+  status: z.enum(["active", "completed", "discontinued"]),
+  projects: z.array(SchemeDetailProjectSchema),
+  // COMP-016 follow-up (migration 0021): see SchemeDetail in
+  // packages/types/src/index.ts for why these 5 are optional, not nullable.
+  nodalOfficer: z.string().optional(),
+  department: z.string().optional(),
+  beneficiaries: z.number().optional(),
+  startDate: z.string().optional(),
+  endDate: z.string().optional(),
+});
+
 // Grants schemas
 export const GrantsDashboardSchema = z.object({
   totalGrants: z.number().default(0),

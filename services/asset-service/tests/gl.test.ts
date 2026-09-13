@@ -77,6 +77,37 @@ function envelope(type: string, tenantId: string, label: string, payload: Record
 
 async function drain(ms = 400): Promise<void> { await new Promise<void>((r) => setTimeout(r, ms)); }
 
+/**
+ * REL-026: poll `check()` until it returns a truthy result, instead of trusting
+ * a fixed drain() sleep to be long enough. A dual-book schedule commit is
+ * ~60 sequential monthly-period inserts (one full transaction per book); with
+ * relayOutbox correctly scoped to just this test's own asset (no cross-test
+ * outbox pollution -- see relayOutbox's own doc comment), that comfortably
+ * finishes inside a fixed drain(700) when this file runs alone, but can still
+ * lose the race under AMBIENT concurrent DB load from the rest of the suite
+ * (observed: `pnpm test`'s full 21-file/315-test run occasionally left one
+ * book's commit landing just after a fixed-drain assertion point, even though
+ * this file alone never reproduced it in dozens of runs). Polling for the
+ * actual expected state removes the race instead of widening a guess at how
+ * slow "slow" can get.
+ */
+async function waitFor<T>(
+  check: () => Promise<T | undefined | null | false>,
+  opts: { timeoutMs?: number; intervalMs?: number; label?: string } = {},
+): Promise<T> {
+  const timeoutMs = opts.timeoutMs ?? 5000;
+  const intervalMs = opts.intervalMs ?? 50;
+  const deadline = Date.now() + timeoutMs;
+  for (;;) {
+    const result = await check();
+    if (result) return result;
+    if (Date.now() >= deadline) {
+      throw new Error(`waitFor timed out after ${timeoutMs}ms${opts.label ? ` waiting for: ${opts.label}` : ""}`);
+    }
+    await new Promise((r) => setTimeout(r, intervalMs));
+  }
+}
+
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
 /**
@@ -100,12 +131,32 @@ async function glMessages(tenantId: string): Promise<GlPayload[]> {
  * dep-schedule commands) to the transactional OUTBOX, not directly onto the
  * queue. Production runs a relay that drains the outbox onto the bus; under
  * MemoryQueue we pump it manually here so the downstream consumer actually runs.
- * Republishes pending rows of `topics` for `tenantId`, then marks them published.
+ * Republishes pending rows of `topics` for `tenantId`, scoped to `assetIds`.
+ *
+ * REL-026: `assetIds` is REQUIRED, not an optional narrowing filter. Every
+ * `assetCreate` (direct register OR GRN capitalization) unconditionally
+ * enqueues dual-book depSchedule commands as a normal side effect -- so the
+ * "Acquisition GL" tests above leave 2 never-relayed `asset.dep.schedule` rows
+ * sitting in the outbox for A_ACQ. Before this fix, relayOutbox selected EVERY
+ * pending row for `tenantId`+`topics` with no further scoping, so this test's
+ * own relay call also swept up and republished those 2 stale A_ACQ rows
+ * alongside this test's 2 fresh ones -- quadrupling the concurrent DB work
+ * (4 schedules x ~60 monthly-period inserts each) the fixed drain() budget
+ * below has to absorb. Root-caused by direct timing instrumentation: on this
+ * host, only 1 of the 4 concurrent handler transactions had committed by the
+ * time the assertion ran (measured ~717ms after relay start, matching the
+ * drain(500)+drain(700) budget) -- the other 3, including BOTH of this test's
+ * own A_DEP_A rows, committed 250-450ms later, after the assertion had already
+ * read an empty result. Scoping to the specific asset(s) this test just
+ * created removes the stale rows from the batch entirely; the isolated
+ * (unpolluted) 2-row case was already comfortably inside the drain budget
+ * (confirmed: this test passes in ~1.26s when run alone via `-t`).
  */
-async function relayOutbox(q: MemoryQueue, tenantId: string, topics: string[]): Promise<void> {
+async function relayOutbox(q: MemoryQueue, tenantId: string, topics: string[], assetIds: string[]): Promise<void> {
   const rows = (await asTenant(tenantId, (tx) =>
     tx.select().from(outboxMessages).where(eq(outboxMessages.tenantId, tenantId))))
-    .filter((r) => topics.includes(r.topic));
+    .filter((r) => topics.includes(r.topic))
+    .filter((r) => assetIds.includes((r.payload as { assetId?: string }).assetId ?? ""));
   for (const row of rows) {
     await q.publish(row.topic, {
       messageId: row.id, type: row.eventType, tenantId: row.tenantId, actorId: row.actorId,
@@ -239,14 +290,48 @@ describe("Dual-book schedules — company SLM + statutory WDV", () => {
       depRate: 20, depMethod: "SLM", currency: "INR", acquisitionDate: "2024-01-01",
     }));
     await drain(500);
-    await relayOutbox(q, TENANT_A, [COMMANDS.depSchedule]); // pump dep-schedule commands
-    await drain(700);
-    await q.stop();
 
-    const schedules = await asTenant(TENANT_A, (tx) =>
-      tx.select().from(assetDepSchedules).where(eq(assetDepSchedules.assetId, A_DEP_A)));
+    // REL-026 regression proof: the "Acquisition GL" describe block above already
+    // created A_ACQ, and every assetCreate unconditionally enqueues a dual-book
+    // depSchedule pair (register/consumer.ts's enqueueDualDepSchedules) -- but
+    // neither of those tests ever relays or drains them. Confirm that pollution
+    // is real (not hypothetical) before proving the fix excludes it: A_ACQ must
+    // still have pending depSchedule outbox rows sitting here, unrelayed.
+    const pendingBeforeRelay = await asTenant(TENANT_A, (tx) =>
+      tx.select().from(outboxMessages).where(eq(outboxMessages.tenantId, TENANT_A)));
+    const pendingDepScheduleAssetIds = pendingBeforeRelay
+      .filter((r) => r.topic === COMMANDS.depSchedule)
+      .map((r) => (r.payload as { assetId?: string }).assetId);
+    expect(pendingDepScheduleAssetIds).toContain(A_ACQ);
+
+    await relayOutbox(q, TENANT_A, [COMMANDS.depSchedule], [A_DEP_A]); // pump dep-schedule commands for THIS asset only (REL-026)
+    // REL-026: poll for both books instead of a fixed drain() -- see waitFor's
+    // doc comment for why a fixed sleep here is a race, not just conservative.
+    const schedules = await waitFor(
+      async () => {
+        const rows = await asTenant(TENANT_A, (tx) =>
+          tx.select().from(assetDepSchedules).where(eq(assetDepSchedules.assetId, A_DEP_A)));
+        return rows.length >= 2 ? rows : undefined;
+      },
+      { label: "A_DEP_A company(SLM) + statutory(WDV) dep schedules" },
+    );
+    await q.stop();
     const books = schedules.map((s) => `${s.depBook}:${s.method}`).sort();
     expect(books).toEqual(["company:SLM", "statutory:WDV"]);
+
+    // REL-026 regression proof, part 2: A_ACQ's still-pending rows (confirmed
+    // above) must NOT have been swept into this relay call and turned into
+    // schedules. Before the fix, relayOutbox selected every pending row for
+    // (tenantId, topic) with no further scoping, so this call also relayed
+    // A_ACQ's 2 stale rows alongside A_DEP_A's 2 fresh ones -- 4 concurrent
+    // dual-book handler transactions (~60 monthly-period inserts each)
+    // competing for the same drain(700) budget, instead of 2. This assertion
+    // is deliberately independent of that timing race: A_ACQ's rows are either
+    // relayed (bug) or not (fix) -- not merely slow -- so it holds regardless
+    // of host speed.
+    const acqSchedules = await asTenant(TENANT_A, (tx) =>
+      tx.select().from(assetDepSchedules).where(eq(assetDepSchedules.assetId, A_ACQ)));
+    expect(acqSchedules).toHaveLength(0);
 
     // SLM entries reconcile to (cost - salvage); last book value lands on salvage.
     const companySched = schedules.find((s) => s.depBook === "company")!;
@@ -315,13 +400,19 @@ describe("Tenant isolation — depRun is tenant-scoped", () => {
       depRate: 20, depMethod: "SLM", currency: "INR", acquisitionDate: "2024-01-01",
     }));
     await drain(500);
-    await relayOutbox(q, TENANT_B, [COMMANDS.depSchedule]); // pump B's dep-schedule commands
-    await drain(700);
-
-    const bEntry = (await asTenant(TENANT_B, (tx) =>
-      tx.select().from(assetDepEntries).where(eq(assetDepEntries.assetId, A_DEP_B))))
-      .filter((e) => e.depBook === "company")
-      .sort((a, b) => a.period.localeCompare(b.period))[0]!;
+    await relayOutbox(q, TENANT_B, [COMMANDS.depSchedule], [A_DEP_B]); // pump B's dep-schedule commands for THIS asset only (REL-026)
+    // REL-026: poll for B's company-book entries instead of a fixed drain() --
+    // same race as the dual-book test above (see waitFor's doc comment).
+    const bEntry = await waitFor(
+      async () => {
+        const rows = (await asTenant(TENANT_B, (tx) =>
+          tx.select().from(assetDepEntries).where(eq(assetDepEntries.assetId, A_DEP_B))))
+          .filter((e) => e.depBook === "company")
+          .sort((a, b) => a.period.localeCompare(b.period));
+        return rows[0];
+      },
+      { label: "A_DEP_B company-book dep entries" },
+    );
 
     // run depreciation for TENANT_A for B's period — must NOT touch B.
     await q.publish(COMMANDS.depRun, envelope(COMMANDS.depRun, TENANT_A, "deprun-iso-1", {

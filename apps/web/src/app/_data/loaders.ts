@@ -113,6 +113,7 @@ import type {
   MilestoneSummary,
   FundReleaseSummary,
   SchemeSummary,
+  SchemeDetail,
   GrantsDashboard,
   GrantSummary,
   GrantDetail,
@@ -284,6 +285,7 @@ import {
   MilestoneSummaryListSchema,
   FundReleaseSummaryListSchema,
   SchemeSummaryListSchema,
+  SchemeDetailSchema,
   GrantsDashboardSchema,
   GrantSummaryListSchema,
   GrantDetailSchema,
@@ -3381,6 +3383,19 @@ export async function getSchemes(): Promise<LoaderResult<SchemeSummary[]>> {
     telemetryKey: "projects.schemes",
     responseSchema: SchemeSummaryListSchema,
     mapResponse: (p) => getArrayPayload(p) as SchemeSummary[] | null,
+  });
+}
+
+// COMP-016: projects/schemes/[id] used to render an 11-entry hardcoded
+// SCHEMES catalogue instead of calling any loader at all. This is the real
+// per-id counterpart to getSchemes() above, against the same already-real
+// GET /v1/projects/schemes/:id route.
+export async function getSchemeDetail(id: string): Promise<LoaderResult<SchemeDetail | null>> {
+  return fetchJson<unknown, SchemeDetail | null>(`/api/v1/project/schemes/${id}`, null, {
+    revalidateSeconds: 60,
+    telemetryKey: "projects.scheme-detail",
+    responseSchema: SchemeDetailSchema,
+    mapResponse: (p) => (isRecord(p) ? (p as SchemeDetail) : null),
   });
 }
 

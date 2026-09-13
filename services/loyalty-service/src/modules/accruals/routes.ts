@@ -1,13 +1,23 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
+import { resolveContext, requireRole, requireInternalOrRoles, HttpError } from "../../shared/context.js";
 import * as repo from "./repo.js";
 import * as enrolmentRepo from "../enrolments/repo.js";
 import { validateAccrual } from "./domain.js";
 import { canAccrue } from "../enrolments/domain.js";
 import * as commands from "./commands.js";
 
-const INTERNAL_ROLES = ["loyalty_admin", "super_admin", "service_account"];
+// SEC-016: this used to be `requireRole(ctx, ["loyalty_admin", "super_admin",
+// "service_account"])`. The "service_account" entry never actually matches
+// (it's never present in ctx.roles — see shared/context.ts's
+// requireInternalOrRoles), so the array's real gate for a non-loyalty_admin
+// caller was bare `super_admin`, letting any human super_admin trigger an
+// arbitrary points accrual — a route otherwise meant for internal
+// service-to-service calls. `loyalty_admin` is a distinct, separately
+// legitimate human role (e.g. customer-service manual adjustments) and stays;
+// bare `super_admin` no longer suffices on its own, and a genuine internal
+// caller is now recognised via ctx.actorType directly.
+const ACCRUE_ROLES = ["loyalty_admin"];
 const READ_ROLES = ["loyalty_user", "loyalty_admin", "super_admin"];
 
 const listQuery = z.object({
@@ -28,7 +38,7 @@ const accrueBody = z.object({
 export async function accrualRoutes(app: FastifyInstance): Promise<void> {
   app.post("/v1/loyalty/accrue", async (req, reply) => {
     const ctx = resolveContext(req);
-    requireRole(ctx, INTERNAL_ROLES);
+    requireInternalOrRoles(ctx, ACCRUE_ROLES);
     const body = accrueBody.parse(req.body);
 
     const enrolment = await enrolmentRepo.findById(body.enrolmentId, ctx.tenantId);

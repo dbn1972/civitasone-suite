@@ -1307,6 +1307,55 @@ export type SchemeSummary = {
   status: "active" | "completed" | "discontinued";
 };
 
+export type SchemeDetailProject = {
+  id: string;
+  code: string;
+  name: string;
+  status: string;
+  budgetMinor: string;
+};
+
+/**
+ * COMP-016: real per-tenant scheme-detail shape (GET /v1/projects/schemes/:id).
+ * Deliberately NOT `SchemeSummary & {...}` -- SchemeSummary's totalAllocation/
+ * releasedAmount are whole-rupee numbers (project-service's minorToAmount()),
+ * while this detail response keeps money in MINOR units as strings so
+ * formatMoney() on the frontend can format it directly (see the loader/page
+ * for why: the list page's own SchemesTable.tsx passes a minorToAmount()'d
+ * rupee number straight into formatMoney(), which treats a bare number as
+ * paise and under-displays every figure 100x -- this shape sidesteps that
+ * unit mismatch rather than repeating it).
+ *
+ * COMP-016 follow-up (migration 0021): nodalOfficer, department,
+ * beneficiaries, startDate and endDate used to be deliberately absent here --
+ * no column for any of the five existed anywhere in project-service's schema,
+ * and adding them was an open product/schema decision this type explicitly
+ * declined to paper over with invented fields. That decision is now: add the
+ * columns. All five stay `?: T` (never `T | null`): under this repo's
+ * exactOptionalPropertyTypes, that means "absent or T", matching
+ * sanctionRef's existing convention above and getSchemeDetail()'s existing
+ * "omit the key when there's no value" pattern -- unchanged for these five.
+ */
+export type SchemeDetail = {
+  id: string;
+  schemeCode: string;
+  name: string;
+  fundingType: "central" | "state" | "centrally_sponsored" | "external";
+  fundingPattern: string;
+  sanctionRef?: string;
+  totalOutlayMinor: string;
+  releasedMinor: string;
+  utilisedMinor: string;
+  utilisationPct: number;
+  status: "active" | "completed" | "discontinued";
+  projects: SchemeDetailProject[];
+  nodalOfficer?: string;
+  department?: string;
+  beneficiaries?: number;
+  startDate?: string;
+  endDate?: string;
+};
+
 export type GrantsDashboard = {
   totalGrants: number;
   disbursedAmount: number;

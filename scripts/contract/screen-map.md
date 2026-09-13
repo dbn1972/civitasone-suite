@@ -1,8 +1,8 @@
 # Screen Contract Map
 
-Generated: 2026-09-13T03:42:35.898Z
+Generated: 2026-09-13T10:29:19.367Z
 
-**Summary:** 273 WIRED | 0 MISSING | 0 MISMATCH | 563 NO_LOADER | 2 FABRICATED_DATA
+**Summary:** 275 WIRED | 0 MISSING | 0 MISMATCH | 563 NO_LOADER | 0 FABRICATED_DATA
 
 | module | screen | loader | apiPath | upstream | route? | table? | status |
 |--------|--------|--------|---------|----------|--------|--------|--------|
@@ -624,7 +624,7 @@ Generated: 2026-09-13T03:42:35.898Z
 | notifications | /notifications/templates/[id] | — | — | — | — | — | — NO_LOADER |
 | notifications | /notifications/templates | — | — | — | — | — | — NO_LOADER |
 | platform-admin | /platform-admin/audit-log | getTenantAuditLog | /api/v1/audit/events | audit → /v1/audit/events | ✓ `/v1/audit/events` | ✓ | ✅ WIRED |
-| platform-admin | /platform-admin/org-config | — | — | — | ✗ | — | 🎭 FABRICATED_DATA |
+| platform-admin | /platform-admin/org-config | getOrgHierarchyLevels | /api/v1/admin/org-hierarchy-levels | admin → /v1/admin/org-hierarchy-levels | ✓ `/v1/admin/org-hierarchy-levels` | ✓ | ✅ WIRED |
 | platform-admin | /platform-admin | — | — | — | — | — | — NO_LOADER |
 | platform-admin | /platform-admin/roles | getAdminRolesList | /api/v1/admin/roles | admin → /v1/admin/roles | ✓ `/v1/admin/roles` | ✓ | ✅ WIRED |
 | platform-admin | /platform-admin/roles | getAdminPermissionsList | /api/v1/admin/permissions | admin → /v1/admin/permissions | ✓ `/v1/admin/permissions` | ✓ | ✅ WIRED |
@@ -699,7 +699,7 @@ Generated: 2026-09-13T03:42:35.898Z
 | projects | /projects/milestones | getMilestones | /api/v1/project/milestones | project → /v1/projects/milestones | ✓ `/v1/projects/milestones` | ✓ | ✅ WIRED |
 | projects | /projects/new | — | — | — | — | — | — NO_LOADER |
 | projects | /projects | — | — | — | — | — | — NO_LOADER |
-| projects | /projects/schemes/[id] | — | — | — | ✗ | — | 🎭 FABRICATED_DATA |
+| projects | /projects/schemes/[id] | getSchemeDetail | /api/v1/project/schemes/:param | project → /v1/projects/schemes/:param | ✓ `/v1/projects/schemes/:id` | ✓ | ✅ WIRED |
 | projects | /projects/schemes | getSchemes | /api/v1/project/schemes | project → /v1/projects/schemes | ✓ `/v1/projects/:id` | ✓ | ✅ WIRED |
 | projects | /projects/utilization | — | — | — | — | — | — NO_LOADER |
 | projects | /projects/wbs | getProjectWbs | /api/v1/projects/wbs | projects → /v1/projects/wbs | ✓ `/v1/projects/wbs` | ✓ | ✅ WIRED |
