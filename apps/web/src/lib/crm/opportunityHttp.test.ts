@@ -26,7 +26,7 @@ describe("opportunity HTTP client (OP-001..006)", () => {
     expect((await op.getPipelines()).source).toBe("error");
   });
 
-  it("pipeline CRUD posts/puts/deletes and throws the server code on failure", async () => {
+  it("pipeline CRUD posts/puts/deletes and throws a clerk-safe message on failure, never the server's raw code/message (UX-020)", async () => {
     fetchMock.mockResolvedValueOnce(res({ id: "p1" }, { status: 201 }));
     await expect(op.createPipeline({ name: "A", stages: [], enabled: true })).resolves.toBeUndefined();
     fetchMock.mockResolvedValueOnce(res({}, { status: 200 }));
@@ -34,7 +34,9 @@ describe("opportunity HTTP client (OP-001..006)", () => {
     fetchMock.mockResolvedValueOnce(res({}, { status: 200 }));
     await expect(op.deletePipeline("p1")).resolves.toBeUndefined();
     fetchMock.mockResolvedValueOnce(res({ code: "CONFLICT", message: "in use" }, { status: 409 }));
-    await expect(op.deletePipeline("p1")).rejects.toThrow(/CONFLICT/);
+    await expect(op.deletePipeline("p1")).rejects.toThrow(/couldn't save/i);
+    fetchMock.mockResolvedValueOnce(res({ code: "CONFLICT", message: "in use" }, { status: 409 }));
+    await expect(op.deletePipeline("p1")).rejects.not.toThrow(/CONFLICT/);
   });
 
   it("createOpportunity surfaces a 422 MANDATORY_STAGE_FIELDS_MISSING as MandatoryFieldsError", async () => {
@@ -50,7 +52,9 @@ describe("opportunity HTTP client (OP-001..006)", () => {
     fetchMock.mockResolvedValueOnce(res({ code: "MANDATORY_STAGE_FIELDS_MISSING", fields: ["nextStep"] }, { status: 422 }));
     await expect(op.changeOpportunityStage("d1", "propose", 1)).rejects.toBeInstanceOf(op.MandatoryFieldsError);
     fetchMock.mockResolvedValueOnce(res({ code: "FORBIDDEN", message: "no" }, { status: 403 }));
-    await expect(op.changeOpportunityStage("d1", "propose", 1)).rejects.toThrow(/FORBIDDEN/);
+    await expect(op.changeOpportunityStage("d1", "propose", 1)).rejects.toThrow(/couldn't save/i);
+    fetchMock.mockResolvedValueOnce(res({ code: "FORBIDDEN", message: "no" }, { status: 403 }));
+    await expect(op.changeOpportunityStage("d1", "propose", 1)).rejects.not.toThrow(/FORBIDDEN/);
   });
 
   it("changeOpportunityStage PATCHes the dedicated stage route with the version", async () => {

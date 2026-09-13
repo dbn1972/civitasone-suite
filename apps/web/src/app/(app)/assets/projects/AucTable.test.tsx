@@ -47,7 +47,7 @@ describe("AucTable", () => {
     expect(refreshMock).toHaveBeenCalled();
   });
 
-  it("surfaces the server's error code/message on failure", async () => {
+  it("surfaces a clerk-safe message on failure, never the server's raw code/message (UX-020)", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(
       new Response(JSON.stringify({ code: "NOT_FOUND", message: "AUC not found" }), { status: 404 }),
     );
@@ -59,9 +59,12 @@ describe("AucTable", () => {
     fireEvent.change(screen.getByLabelText(/Reason/), { target: { value: "Authorised by finance controller" } });
     fireEvent.click(screen.getByText("Capitalize to fixed asset"));
 
+    // status 404 -> kind "load", not "save" (this is the one file in the UX-020
+    // batch where the fixture's status actually maps to the "load" catalogue entry).
     await waitFor(() => {
-      expect(screen.getByText(/NOT_FOUND: AUC not found/)).toBeInTheDocument();
+      expect(screen.getByText(/couldn't load/i)).toBeInTheDocument();
     });
+    expect(screen.queryByText(/NOT_FOUND: AUC not found/)).not.toBeInTheDocument();
     expect(refreshMock).not.toHaveBeenCalled();
   });
 });

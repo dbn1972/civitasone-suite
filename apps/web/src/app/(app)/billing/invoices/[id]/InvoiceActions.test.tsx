@@ -39,7 +39,7 @@ describe("InvoiceActions", () => {
     expect(refreshMock).toHaveBeenCalled();
   });
 
-  it("surfaces a server error when IRN generation fails", async () => {
+  it("surfaces a clerk-safe message when IRN generation fails, never the server's raw code/message (UX-020)", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(
       new Response(JSON.stringify({ code: "INTEGRATION_DISABLED", message: "GSTN integration is not available" }), {
         status: 503,
@@ -53,8 +53,9 @@ describe("InvoiceActions", () => {
     fireEvent.click(screen.getByRole("button", { name: "Generate IRN" }));
 
     await waitFor(() => {
-      expect(screen.getByText(/INTEGRATION_DISABLED: GSTN integration is not available/)).toBeInTheDocument();
+      expect(screen.getByText(/couldn't save/i)).toBeInTheDocument();
     });
+    expect(screen.queryByText(/INTEGRATION_DISABLED: GSTN integration is not available/)).not.toBeInTheDocument();
   });
 
   const generatedEInvoice: EInvoiceStatus = {

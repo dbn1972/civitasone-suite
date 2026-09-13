@@ -27,7 +27,7 @@ describe("FetchBillForm", () => {
     });
   });
 
-  it("surfaces a server error (error path)", async () => {
+  it("surfaces a clerk-safe error, never the server's raw code/message (error path) (UX-020)", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(
       new Response(JSON.stringify({ error: { code: "BBPS_DISABLED", message: "BBPS not enabled" } }), { status: 403 }),
     );
@@ -37,7 +37,8 @@ describe("FetchBillForm", () => {
     fireEvent.click(screen.getByRole("button", { name: "Fetch Bill" }));
 
     await waitFor(() => {
-      expect(screen.getByText(/BBPS_DISABLED: BBPS not enabled/)).toBeInTheDocument();
+      expect(screen.getByText(/couldn't save/i)).toBeInTheDocument();
     });
+    expect(screen.queryByText(/BBPS_DISABLED: BBPS not enabled/)).not.toBeInTheDocument();
   });
 });

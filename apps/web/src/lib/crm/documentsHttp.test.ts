@@ -64,7 +64,11 @@ describe("documents HTTP client (DM-001)", () => {
     fetchMock.mockResolvedValueOnce(res({ code: "E", message: "no" }, { status: 400 }));
     await expect(
       dm.presignUpload({ subjectType: "contact", subjectId: "c1", filename: "a.pdf", mimeType: "application/pdf" }),
-    ).rejects.toThrow(/E/);
+    ).rejects.toThrow(/couldn't save/i);
+    fetchMock.mockResolvedValueOnce(res({ code: "E", message: "no" }, { status: 400 }));
+    await expect(
+      dm.presignUpload({ subjectType: "contact", subjectId: "c1", filename: "a.pdf", mimeType: "application/pdf" }),
+    ).rejects.not.toThrow(/E/);
   });
 
   it("uploadToStorage PUTs bytes and surfaces storage failures", async () => {
@@ -97,7 +101,11 @@ describe("documents HTTP client (DM-001)", () => {
     fetchMock.mockResolvedValueOnce(res({ code: "E", message: "bad" }, { status: 400 }));
     await expect(
       dm.confirmDocument({ subjectType: "contact", subjectId: "c1", title: "x", filename: "x", storageKey: "k", mimeType: "m", sizeBytes: 1 }),
-    ).rejects.toThrow(/E/);
+    ).rejects.toThrow(/couldn't save/i);
+    fetchMock.mockResolvedValueOnce(res({ code: "E", message: "bad" }, { status: 400 }));
+    await expect(
+      dm.confirmDocument({ subjectType: "contact", subjectId: "c1", title: "x", filename: "x", storageKey: "k", mimeType: "m", sizeBytes: 1 }),
+    ).rejects.not.toThrow(/E/);
   });
 
   it("getDownloadUrl returns url, blocks 403 infected, and errors on missing url", async () => {
@@ -115,7 +123,9 @@ describe("documents HTTP client (DM-001)", () => {
     fetchMock.mockResolvedValueOnce(res({}, { status: 200 }));
     await expect(dm.deleteDocument("d1")).resolves.toBeUndefined();
     fetchMock.mockResolvedValueOnce(res({ code: "E", message: "no" }, { status: 500 }));
-    await expect(dm.deleteDocument("d1")).rejects.toThrow(/E/);
+    await expect(dm.deleteDocument("d1")).rejects.toThrow(/couldn't save/i);
+    fetchMock.mockResolvedValueOnce(res({ code: "E", message: "no" }, { status: 500 }));
+    await expect(dm.deleteDocument("d1")).rejects.not.toThrow(/E/);
   });
 });
 
@@ -141,7 +151,9 @@ describe("document-types + verify (DM-002)", () => {
     fetchMock.mockResolvedValueOnce(res({}, { status: 200 }));
     await expect(dm.deleteDocumentType("t1")).resolves.toBeUndefined();
     fetchMock.mockResolvedValueOnce(res({ code: "E", message: "no" }, { status: 400 }));
-    await expect(dm.createDocumentType(type)).rejects.toThrow(/E/);
+    await expect(dm.createDocumentType(type)).rejects.toThrow(/couldn't save/i);
+    fetchMock.mockResolvedValueOnce(res({ code: "E", message: "no" }, { status: 400 }));
+    await expect(dm.createDocumentType(type)).rejects.not.toThrow(/E/);
   });
 
   it("verifyDocument posts status + reason", async () => {
@@ -152,7 +164,9 @@ describe("document-types + verify (DM-002)", () => {
     const body = JSON.parse(fetchMock.mock.calls[1][1].body);
     expect(body).toMatchObject({ status: "rejected", reason: "blurry scan" });
     fetchMock.mockResolvedValueOnce(res({ code: "E", message: "no" }, { status: 409 }));
-    await expect(dm.verifyDocument("d1", "verified")).rejects.toThrow(/E/);
+    await expect(dm.verifyDocument("d1", "verified")).rejects.toThrow(/couldn't save/i);
+    fetchMock.mockResolvedValueOnce(res({ code: "E", message: "no" }, { status: 409 }));
+    await expect(dm.verifyDocument("d1", "verified")).rejects.not.toThrow(/E/);
   });
 });
 

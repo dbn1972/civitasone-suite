@@ -43,7 +43,7 @@ describe("CreateReimbursementForm", () => {
     expect(refreshMock).toHaveBeenCalled();
   });
 
-  it("surfaces a server error on the confirm dialog (error path)", async () => {
+  it("surfaces a clerk-safe error on the confirm dialog, never the server's raw code/status (error path) (UX-020)", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(null, { status: 400 }));
 
     render(<CreateReimbursementForm />);
@@ -56,7 +56,8 @@ describe("CreateReimbursementForm", () => {
     fireEvent.click(screen.getByText("Submit claim"));
 
     await waitFor(() => {
-      expect(screen.getByText(/API_ERROR: 400/)).toBeInTheDocument();
+      expect(screen.getByText(/couldn't save/i)).toBeInTheDocument();
     });
+    expect(screen.queryByText(/API_ERROR: 400/)).not.toBeInTheDocument();
   });
 });

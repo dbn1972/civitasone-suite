@@ -241,13 +241,15 @@ describe("loaders + mutations", () => {
     expect(body.dueAt).toBe("2026-05-02T10:00:00Z");
   });
 
-  it("createActivity maps deal->dealId and throws server error", async () => {
+  it("createActivity maps deal->dealId and throws a clerk-safe message on failure, never the server's raw code/message (UX-020)", async () => {
     fetchMock.mockResolvedValueOnce(res({}, 200));
     await createActivity({ type: "note", subjectType: "deal", subjectId: "d1", text: "hi" });
     const body = JSON.parse((fetchMock.mock.calls[0][1] as RequestInit).body as string);
     expect(body.dealId).toBe("d1");
     fetchMock.mockResolvedValueOnce(res({ code: "BAD", message: "no" }, 400));
-    await expect(createActivity({ type: "note", subjectType: "contact", subjectId: "c1", text: "x" })).rejects.toThrow(/BAD/);
+    await expect(createActivity({ type: "note", subjectType: "contact", subjectId: "c1", text: "x" })).rejects.toThrow(/couldn't save/i);
+    fetchMock.mockResolvedValueOnce(res({ code: "BAD", message: "no" }, 400));
+    await expect(createActivity({ type: "note", subjectType: "contact", subjectId: "c1", text: "x" })).rejects.not.toThrow(/BAD/);
   });
 
   it("communications, addresses, roles, relationships, escalation, overdue, linked loaders gate errors", async () => {

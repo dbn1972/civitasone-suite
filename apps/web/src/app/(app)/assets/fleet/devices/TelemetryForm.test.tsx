@@ -44,7 +44,7 @@ describe("TelemetryForm", () => {
     });
   });
 
-  it("surfaces a server error (error path)", async () => {
+  it("surfaces a clerk-safe message, never a raw status code (UX-020)", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(null, { status: 500 }));
 
     render(<TelemetryForm />);
@@ -52,7 +52,8 @@ describe("TelemetryForm", () => {
     fireEvent.click(screen.getByRole("button", { name: "Log Telemetry" }));
 
     await waitFor(() => {
-      expect(screen.getByText(/API_ERROR: 500/)).toBeInTheDocument();
+      expect(screen.getByText(/couldn't save/i)).toBeInTheDocument();
     });
+    expect(screen.queryByText(/API_ERROR/)).not.toBeInTheDocument();
   });
 });

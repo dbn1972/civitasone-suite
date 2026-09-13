@@ -55,7 +55,8 @@ describe("OpeningBalanceForm", () => {
     fireEvent.click(screen.getByText("Save opening balances"));
 
     await waitFor(() => {
-      expect(screen.getByText(/API_ERROR: 500/)).toBeInTheDocument();
+      expect(screen.getByText(/couldn't save/i)).toBeInTheDocument();
     });
+    expect(screen.queryByText(/API_ERROR/)).not.toBeInTheDocument();
   });
 });

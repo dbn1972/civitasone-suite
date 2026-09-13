@@ -85,7 +85,8 @@ describe("BatchesPanel", () => {
     fireEvent.click(within(dialog).getByText("Download"));
 
     await waitFor(() => {
-      expect(within(dialog).getByText(/API_ERROR: 400/)).toBeInTheDocument();
+      expect(within(dialog).getByText(/couldn't save/i)).toBeInTheDocument();
     });
+    expect(within(dialog).queryByText(/API_ERROR/)).not.toBeInTheDocument();
   });
 });

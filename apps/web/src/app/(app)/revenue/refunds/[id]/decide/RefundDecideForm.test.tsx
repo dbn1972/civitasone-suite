@@ -81,7 +81,7 @@ describe("RefundDecideForm", () => {
     expect(screen.getByText("Reject refund")).toBeEnabled();
   });
 
-  it("surfaces the real server code on a maker-checker violation (error path)", async () => {
+  it("surfaces a clerk-safe error on a maker-checker violation, never the server's raw code/message (error path, UX-020)", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(
       new Response(
         JSON.stringify({ error: { code: "MAKER_CHECKER_VIOLATION", message: "Checker cannot be the same person as the maker (separation of duties)" } }),
@@ -97,7 +97,8 @@ describe("RefundDecideForm", () => {
     fireEvent.click(screen.getByText("Reject refund"));
 
     await waitFor(() => {
-      expect(screen.getByText(/MAKER_CHECKER_VIOLATION/)).toBeInTheDocument();
+      expect(screen.getByText(/couldn't save/i)).toBeInTheDocument();
     });
+    expect(screen.queryByText(/MAKER_CHECKER_VIOLATION|separation of duties/)).not.toBeInTheDocument();
   });
 });

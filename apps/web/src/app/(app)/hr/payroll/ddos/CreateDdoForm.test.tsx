@@ -51,7 +51,8 @@ describe("CreateDdoForm", () => {
     fireEvent.click(screen.getByText("Confirm save"));
 
     await waitFor(() => {
-      expect(screen.getByText(/API_ERROR: 500/)).toBeInTheDocument();
+      expect(screen.getByText(/couldn't save/i)).toBeInTheDocument();
     });
+    expect(screen.queryByText(/API_ERROR/)).not.toBeInTheDocument();
   });
 });

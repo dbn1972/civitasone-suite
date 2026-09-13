@@ -48,7 +48,8 @@ describe("NachReturnForm", () => {
     fireEvent.click(screen.getByText("Process file"));
 
     await waitFor(() => {
-      expect(screen.getByText(/API_ERROR: 400/)).toBeInTheDocument();
+      expect(screen.getByText(/couldn't save/i)).toBeInTheDocument();
     });
+    expect(screen.queryByText(/API_ERROR/)).not.toBeInTheDocument();
   });
 });

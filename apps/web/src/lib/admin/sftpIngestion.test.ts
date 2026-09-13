@@ -267,11 +267,12 @@ describe("triggerIngestion", () => {
     expect(fetchMock).toHaveBeenCalledWith("v1/admin/integrations/sftp/staging/ingest", { method: "POST", body: "{}" });
   });
 
-  it("surfaces the server error on a non-ok response", async () => {
+  it("surfaces a clerk-safe error on a non-ok response, never the server's raw code/message (UX-020)", async () => {
     fetchMock.mockResolvedValue(res({ code: "DISABLED", message: "connector off" }, 409));
     const out = await triggerIngestion("sftp", "prod");
     expect(out.ok).toBe(false);
-    expect(out.error).toContain("connector off");
+    expect(out.error).toMatch(/couldn't save/i);
+    expect(out.error).not.toMatch(/DISABLED|connector off/);
   });
 
   it("reports an error when the fetch throws", async () => {

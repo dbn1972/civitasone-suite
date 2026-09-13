@@ -51,7 +51,13 @@ describe("EcrGeneratorForm", () => {
     fireEvent.click(screen.getByText("Confirm & Download"));
 
     await waitFor(() => {
-      expect(screen.getByText(/API_ERROR: 404/)).toBeInTheDocument();
+      // UX-020: errorMessageFromResponse no longer falls back to
+      // "API_ERROR: <status>" — that was the same raw-status-leak bug class
+      // UX-003/UX-016 close elsewhere, just via this shared helper. A 404
+      // now maps to the catalogued "couldn't load" message.
+      expect(screen.getByText(/couldn't load/i)).toBeInTheDocument();
     });
+    expect(screen.queryByText(/API_ERROR/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/\b404\b/)).not.toBeInTheDocument();
   });
 });

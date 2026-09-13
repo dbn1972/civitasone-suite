@@ -49,7 +49,8 @@ describe("AddBookForm", () => {
     fireEvent.click(screen.getByRole("button", { name: "Add Book" }));
 
     await waitFor(() => {
-      expect(screen.getByText(/VALIDATION_FAILED: invalid request/)).toBeInTheDocument();
+      expect(screen.getByText(/couldn't save/i)).toBeInTheDocument();
     });
+    expect(screen.queryByText(/VALIDATION_FAILED/)).not.toBeInTheDocument();
   });
 });

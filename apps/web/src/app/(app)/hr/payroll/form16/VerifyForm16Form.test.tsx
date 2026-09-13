@@ -47,7 +47,8 @@ describe("VerifyForm16Form", () => {
     fireEvent.click(screen.getByRole("button", { name: "Verify signature" }));
 
     await waitFor(() => {
-      expect(screen.getByText(/API_ERROR: 400/)).toBeInTheDocument();
+      expect(screen.getByText(/couldn't save/i)).toBeInTheDocument();
     });
+    expect(screen.queryByText(/API_ERROR/)).not.toBeInTheDocument();
   });
 });

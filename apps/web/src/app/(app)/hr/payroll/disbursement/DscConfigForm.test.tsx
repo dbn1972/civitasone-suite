@@ -65,8 +65,9 @@ describe("DscConfigForm", () => {
     fireEvent.click(screen.getByText("Upload certificate"));
 
     await waitFor(() => {
-      expect(screen.getByText(/API_ERROR: 400/)).toBeInTheDocument();
+      expect(screen.getByText(/couldn't save/i)).toBeInTheDocument();
     });
+    expect(screen.queryByText(/API_ERROR/)).not.toBeInTheDocument();
   });
 
   it("removes the certificate on confirm (happy path)", async () => {
@@ -94,8 +95,9 @@ describe("DscConfigForm", () => {
     fireEvent.click(screen.getByText("Remove certificate"));
 
     await waitFor(() => {
-      expect(screen.getByText(/API_ERROR: 500/)).toBeInTheDocument();
+      expect(screen.getByText(/couldn't save/i)).toBeInTheDocument();
     });
+    expect(screen.queryByText(/API_ERROR/)).not.toBeInTheDocument();
     // The upload form's shared error paragraph must NOT also show the delete error.
     expect(screen.queryByText("Select a P12 file and enter its passphrase.")).not.toBeInTheDocument();
   });

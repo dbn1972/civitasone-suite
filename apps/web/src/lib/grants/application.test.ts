@@ -69,10 +69,13 @@ describe("grant application actions (COMP-012)", () => {
     );
   });
 
-  it("surfaces the server's code:message on failure instead of swallowing it", async () => {
+  it("throws a clerk-safe message on failure instead of swallowing it, never the server's raw code:message (UX-020)", async () => {
     mockFetchOnce(422, { code: "VALIDATION_FAILED", message: "financialScore must be <= 100" });
     await expect(
       scoreApplication("app-1", { reviewerRef: "rev-1", technicalScore: 80, financialScore: 999 }),
-    ).rejects.toThrow("VALIDATION_FAILED: financialScore must be <= 100");
+    ).rejects.toThrow(/couldn't save/i);
+    await expect(
+      scoreApplication("app-1", { reviewerRef: "rev-1", technicalScore: 80, financialScore: 999 }),
+    ).rejects.not.toThrow(/VALIDATION_FAILED|financialScore must be/);
   });
 });

@@ -36,7 +36,7 @@ describe("CondemnationWorkflow", () => {
     expect(screen.getAllByLabelText(/^Survey ID/)[0]).toHaveValue(SURVEY_ID);
   });
 
-  it("surfaces a server error when creating a survey fails (error path)", async () => {
+  it("surfaces a clerk-safe message when creating a survey fails, never the server's raw code/message (UX-020)", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(
       new Response(JSON.stringify({ code: "VALIDATION_FAILED", message: "assetId not found" }), { status: 400 }),
     );
@@ -52,8 +52,9 @@ describe("CondemnationWorkflow", () => {
     fireEvent.click(screen.getByRole("button", { name: "Create survey" }));
 
     await waitFor(() => {
-      expect(screen.getByText(/VALIDATION_FAILED: assetId not found/)).toBeInTheDocument();
+      expect(screen.getByText(/couldn't save/i)).toBeInTheDocument();
     });
+    expect(screen.queryByText(/VALIDATION_FAILED: assetId not found/)).not.toBeInTheDocument();
   });
 
   it("blocks submit until every required field is valid, focusing the first invalid field", () => {

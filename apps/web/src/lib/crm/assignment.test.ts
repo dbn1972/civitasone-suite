@@ -134,12 +134,14 @@ describe("assignment client calls", () => {
     expect(fetchMock.mock.calls[1][0]).toBe("v1/crm/contacts/c1/transfer");
     expect(JSON.parse((fetchMock.mock.calls[1][1] as RequestInit).body as string)).toEqual({ toOwnerId: "u2", reason: "reorg" });
   });
-  it("updateAgentCapacity PUTs capacity; delete throws surfaced message on !ok", async () => {
+  it("updateAgentCapacity PUTs capacity; delete throws a clerk-safe message on failure, never the server's raw code/message (UX-020)", async () => {
     fetchMock.mockResolvedValueOnce(res({}, 200));
     await updateAgentCapacity("a1", { maxLeads: 5, available: true, onLeave: false });
     expect((fetchMock.mock.calls[0][1] as RequestInit).method).toBe("PATCH");
     fetchMock.mockResolvedValueOnce(res({ code: "BOOM", message: "no" }, 400));
-    await expect(deleteEscalationRule("e1")).rejects.toThrow(/BOOM/);
+    await expect(deleteEscalationRule("e1")).rejects.toThrow(/couldn't save/i);
+    fetchMock.mockResolvedValueOnce(res({ code: "BOOM", message: "no" }, 400));
+    await expect(deleteEscalationRule("e1")).rejects.not.toThrow(/BOOM/);
   });
 });
 
@@ -159,7 +161,9 @@ describe("assignment CRUD wrappers (paths, methods, error propagation)", () => {
     await deleteAssignmentRule("r1");
     expect((fetchMock.mock.calls[2][1] as RequestInit).method).toBe("DELETE");
     fetchMock.mockResolvedValueOnce(res({ code: "X", message: "y" }, 500));
-    await expect(createAssignmentRule(rule)).rejects.toThrow(/X/);
+    await expect(createAssignmentRule(rule)).rejects.toThrow(/couldn't save/i);
+    fetchMock.mockResolvedValueOnce(res({ code: "X", message: "y" }, 500));
+    await expect(createAssignmentRule(rule)).rejects.not.toThrow(/X/);
   });
 
   it("assignment-log loader returns api data and error source", async () => {
@@ -193,7 +197,9 @@ describe("assignment CRUD wrappers (paths, methods, error propagation)", () => {
     await deleteResource("branches", "b1");
     expect((fetchMock.mock.calls.at(-1)![1] as RequestInit).method).toBe("DELETE");
     fetchMock.mockResolvedValueOnce(res({ code: "E", message: "m" }, 400));
-    await expect(createResource("branches", body)).rejects.toThrow(/E/);
+    await expect(createResource("branches", body)).rejects.toThrow(/couldn't save/i);
+    fetchMock.mockResolvedValueOnce(res({ code: "E", message: "m" }, 400));
+    await expect(createResource("branches", body)).rejects.not.toThrow(/E/);
   });
 
   it("agents loader (ok/error) + capacity error propagation", async () => {
@@ -205,7 +211,9 @@ describe("assignment CRUD wrappers (paths, methods, error propagation)", () => {
     fetchMock.mockRejectedValueOnce(new Error("net"));
     expect((await getAgents()).source).toBe("error");
     fetchMock.mockResolvedValueOnce(res({ code: "CAP", message: "bad" }, 422));
-    await expect(updateAgentCapacity("a1", { maxLeads: 1, available: true, onLeave: false })).rejects.toThrow(/CAP/);
+    await expect(updateAgentCapacity("a1", { maxLeads: 1, available: true, onLeave: false })).rejects.toThrow(/couldn't save/i);
+    fetchMock.mockResolvedValueOnce(res({ code: "CAP", message: "bad" }, 422));
+    await expect(updateAgentCapacity("a1", { maxLeads: 1, available: true, onLeave: false })).rejects.not.toThrow(/CAP/);
   });
 
   it("escalation rules: get (ok/error) + create/update paths + accept path", async () => {

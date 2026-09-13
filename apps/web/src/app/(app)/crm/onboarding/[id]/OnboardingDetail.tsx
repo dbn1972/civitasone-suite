@@ -9,8 +9,10 @@
  *     satisfied is shown but DISABLED with the reason, so the clerk sees why
  *     it is unavailable. Cancelling requires a reason (≥10 chars) captured in
  *     the ConfirmDialog. Every advance is confirmed before it is sent, and any
- *     backend 422 (illegal transition / KYC gate / version conflict) is
- *     surfaced verbatim — never swallowed. After a mutation the case reloads.
+ *     backend 422 (illegal transition / KYC gate / version conflict) is never
+ *     swallowed — but since UX-020 it is also never shown raw: advanceStage
+ *     rejects with a clerk-safe catalogued message (errorMessageFromResponse),
+ *     not the backend's own code/text. After a mutation the case reloads.
  *
  * Read is gated on source==="error": a failed load renders the saved-info badge
  * and an explicit message, never a fabricated blank case as fact.
@@ -196,7 +198,10 @@ export function OnboardingDetail({ id }: { id: string }) {
         setStageTarget("");
         reload();
       } catch (e) {
-        // Surface the BE 422 (INVALID_TRANSITION / KYC_NOT_VERIFIED) verbatim.
+        // Never silent — but since UX-020, e.message is already the
+        // clerk-safe catalogued string errorMessageFromResponse built, not
+        // the backend's raw 422 code/text (INVALID_TRANSITION /
+        // KYC_NOT_VERIFIED).
         setStageError(e instanceof Error ? e.message : "Could not change the stage.");
       } finally {
         setStageBusy(false);
