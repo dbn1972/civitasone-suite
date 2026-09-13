@@ -1307,6 +1307,46 @@ export type SchemeSummary = {
   status: "active" | "completed" | "discontinued";
 };
 
+export type SchemeDetailProject = {
+  id: string;
+  code: string;
+  name: string;
+  status: string;
+  budgetMinor: string;
+};
+
+/**
+ * COMP-016: real per-tenant scheme-detail shape (GET /v1/projects/schemes/:id).
+ * Deliberately NOT `SchemeSummary & {...}` -- SchemeSummary's totalAllocation/
+ * releasedAmount are whole-rupee numbers (project-service's minorToAmount()),
+ * while this detail response keeps money in MINOR units as strings so
+ * formatMoney() on the frontend can format it directly (see the loader/page
+ * for why: the list page's own SchemesTable.tsx passes a minorToAmount()'d
+ * rupee number straight into formatMoney(), which treats a bare number as
+ * paise and under-displays every figure 100x -- this shape sidesteps that
+ * unit mismatch rather than repeating it).
+ *
+ * nodalOfficer, department and beneficiaries are deliberately absent: no
+ * column for any of the three exists anywhere in project-service's schema
+ * today (verified against services/project-service/src/modules/scheme/
+ * schema.ts and .../project/schema.ts), and adding them is a product/schema
+ * decision, not something this type should paper over with invented fields.
+ */
+export type SchemeDetail = {
+  id: string;
+  schemeCode: string;
+  name: string;
+  fundingType: "central" | "state" | "centrally_sponsored" | "external";
+  fundingPattern: string;
+  sanctionRef?: string;
+  totalOutlayMinor: string;
+  releasedMinor: string;
+  utilisedMinor: string;
+  utilisationPct: number;
+  status: "active" | "completed" | "discontinued";
+  projects: SchemeDetailProject[];
+};
+
 export type GrantsDashboard = {
   totalGrants: number;
   disbursedAmount: number;

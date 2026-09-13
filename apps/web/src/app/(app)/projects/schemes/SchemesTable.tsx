@@ -46,6 +46,11 @@ export function SchemesTable({ rows }: { rows: SchemeRow[] }) {
       filterable
       filterPlaceholder="Filter schemes…"
       pageSize={15}
+      // COMP-016: rows had no way to reach /projects/schemes/[id] at all until
+      // now -- that page previously only ever rendered a hardcoded catalogue,
+      // so linking to it was pointless. Now that it renders the real scheme,
+      // wire the real per-tenant id straight through.
+      rowHref={(r) => `/projects/schemes/${r.id}`}
     />
   );
 }

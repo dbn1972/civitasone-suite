@@ -185,13 +185,16 @@ describe('screen contract map', () => {
   // whose fix is a backend/schema build (see the cited gap ID), not a detector
   // or wiring fix, and is out of scope here. Remove an entry the same day its
   // backend is built and the page is wired for real.
-  const KNOWN_FABRICATED_DATA_EXCEPTIONS: Array<{ module: string; screen: string }> = [
-    // COMP-016: projects/schemes/[id]'s SCHEMES catalogue has fields
-    // (nodalOfficer, department, beneficiaries, fundingPattern) that don't exist
-    // in project-service's schema, though the real budget/status/project-list
-    // fields are close to a drop-in reuse of the existing GET .../schemes/:id.
-    { module: 'projects', screen: '/projects/schemes/[id]' },
-  ];
+  // COMP-016 (projects/schemes/[id]) was the last entry here -- removed: the
+  // page now calls getSchemeDetail() against the real GET .../schemes/:id
+  // route (name/code/budget/utilisation/fundingPattern/project-list are all
+  // real). nodalOfficer/department/beneficiaries still have no backing
+  // column in project-service's schema, but the page renders them as an
+  // honest "--" rather than a hardcoded catalogue, so screen-map.mjs no
+  // longer classifies this screen FABRICATED_DATA -- see the COMP-016 row in
+  // docs/ENTERPRISE-GAP-REPORT-2026-09-07.md for the still-open product/
+  // schema decision on those three fields.
+  const KNOWN_FABRICATED_DATA_EXCEPTIONS: Array<{ module: string; screen: string }> = [];
 
   it('has no unexpected FABRICATED_DATA screens beyond the tracked exception ledger', () => {
     const exceptionKeys = new Set(KNOWN_FABRICATED_DATA_EXCEPTIONS.map(e => `${e.module}::${e.screen}`));

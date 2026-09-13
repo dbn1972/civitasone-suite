@@ -1,6 +1,6 @@
 import { sendAccepted, sendValidated } from "@civitasone/schemas/validate";
 import { acceptedResponseSchema, listQuerySchema } from "@civitasone/schemas/common";
-import { FundReleaseSummaryListSchema, SchemeSummaryListSchema } from "@civitasone/schemas/web";
+import { FundReleaseSummaryListSchema, SchemeSummaryListSchema, SchemeDetailSchema } from "@civitasone/schemas/web";
 import type { FastifyInstance } from "fastify";
 import { ZodError } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
@@ -26,9 +26,9 @@ export async function schemeRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, READER_ROLES);
     const { id } = schemeIdParam.parse(req.params);
-    const scheme = await queries.getScheme(id, ctx.tenantId);
+    const scheme = await queries.getSchemeDetail(id, ctx.tenantId);
     if (!scheme) throw new HttpError(404, "NOT_FOUND", "scheme not found");
-    return reply.send(scheme);
+    return sendValidated(reply, SchemeDetailSchema, scheme);
   });
 
   app.get("/v1/projects/schemes", async (req, reply) => {
