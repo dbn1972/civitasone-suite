@@ -5,12 +5,20 @@
  * GET /v1/notification/channels/analytics/campaigns/:id — campaign-specific metrics
  *
  * Read endpoints — direct DB read + cache (no CQRS needed).
+ *
+ * DOM-015: both endpoints used to return a hardcoded all-zero object as a
+ * plain 200 — indistinguishable from a tenant that genuinely has zero
+ * delivery/engagement activity, and (for the per-campaign endpoint) identical
+ * for a real campaign id and a made-up one. `./analytics-repo.js` now computes
+ * every field with a real COUNT against the tables that already record it;
+ * see its header comment for which tables and why they were already real.
  */
 import type { FastifyInstance } from "fastify";
 import { z, ZodError } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { cache } from "../../shared/infra.js";
-import { readScoped } from "../../shared/db.js";
+import * as repo from "./analytics-repo.js";
+import type { ChannelAnalyticsSummary, CampaignChannelMetrics } from "./analytics-repo.js";
 
 const ALLOWED_ROLES = ["notification_admin", "super_admin", "tenant_admin", "platform_admin", "analytics_viewer"];
 
@@ -18,44 +26,13 @@ const campaignIdParam = z.object({
   id: z.string().uuid(),
 });
 
-interface AnalyticsSummary {
-  totalDelivered: number;
-  opened: number;
-  clicked: number;
-  bounced: number;
-  campaignCount: number;
-  conversationCount: number;
-}
-
-interface CampaignMetrics {
-  campaignId: string;
-  totalDelivered: number;
-  opened: number;
-  clicked: number;
-  bounced: number;
-  failed: number;
-}
-
 export async function channelAnalyticsRoutes(app: FastifyInstance): Promise<void> {
   app.get("/v1/notification/channels/analytics/summary", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ALLOWED_ROLES);
 
     const cacheKey = `notification:${ctx.tenantId}:analytics:summary`;
-    const summary = await cache.getOrLoad<AnalyticsSummary>(cacheKey, async () => {
-      return readScoped<AnalyticsSummary>(ctx.tenantId, async (_tx) => {
-        // In production, this would aggregate from deliveries/campaigns tables.
-        // Returning zero-state for now; consumer will populate analytics tables.
-        return {
-          totalDelivered: 0,
-          opened: 0,
-          clicked: 0,
-          bounced: 0,
-          campaignCount: 0,
-          conversationCount: 0,
-        };
-      });
-    });
+    const summary = await cache.getOrLoad<ChannelAnalyticsSummary>(cacheKey, () => repo.getChannelAnalyticsSummary(ctx.tenantId));
     return reply.send({ data: summary });
   });
 
@@ -65,19 +42,10 @@ export async function channelAnalyticsRoutes(app: FastifyInstance): Promise<void
     const { id } = campaignIdParam.parse(req.params);
 
     const cacheKey = `notification:${ctx.tenantId}:analytics:campaign:${id}`;
-    const metrics = await cache.getOrLoad<CampaignMetrics>(cacheKey, async () => {
-      return readScoped<CampaignMetrics>(ctx.tenantId, async (_tx) => {
-        // Placeholder — consumer will populate real metrics
-        return {
-          campaignId: id,
-          totalDelivered: 0,
-          opened: 0,
-          clicked: 0,
-          bounced: 0,
-          failed: 0,
-        };
-      });
-    });
+    const metrics = await cache.getOrLoad<CampaignChannelMetrics | null>(cacheKey, () => repo.getCampaignChannelMetrics(ctx.tenantId, id));
+    if (!metrics) {
+      throw new HttpError(404, "NOT_FOUND", "campaign not found");
+    }
     return reply.send({ data: metrics });
   });
 

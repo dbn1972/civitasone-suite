@@ -9,6 +9,22 @@
  * Falls back to rule-based/linear extrapolation when ML is unavailable.
  *
  * Emits `ml.prediction.churn_risk_high` event when probability > 0.70.
+ *
+ * DOM-015: every number in every response below is computed from the "Data
+ * Access Stubs" at the bottom of this file (`getSubscriptionFeatures`,
+ * `getMrrHistory`, `getMonthlyChurnRate`, `getMonthlyExpansionRate`,
+ * `getCohortData`) — the SAME canned input for every subscription/tenant,
+ * never a real query. That was true even on the "real ML" path: `predictChurn`
+ * genuinely calls ml-service, but on manufactured features, so its answer is
+ * no more meaningful than the fallback's. Wiring these to real billing data
+ * (real payment-delay/usage/support-ticket signals, real MRR history from
+ * `revenue`/`invoices`/`payments`, a real definition of monthly churn/
+ * expansion rate) is a product/data-modelling decision, not a mechanical
+ * fix — tracked separately in the gap report rather than guessed at here.
+ * Per DOM-015's DoD, every response is instead marked unambiguously with
+ * `dataSource: "stub"` (mirroring the `source: "stub"` convention used
+ * elsewhere in this codebase, e.g. hrms-service's recruitment external-seams)
+ * so no caller can mistake this for real churn/revenue data.
  */
 
 import type { FastifyInstance } from "fastify";
@@ -34,6 +50,11 @@ import {
 
 const CHURN_HIGH_EVENT = "ml.prediction.churn_risk_high";
 const BILLING_ROLES = ["billing_admin", "finance_admin", "tenant_admin", "super_admin", "platform_admin"];
+
+// DOM-015: unconditional today — every data-access function below is a stub,
+// so every response is honestly flagged. Flip per-response once a real query
+// path exists (see the module doc comment above).
+const DATA_SOURCE = "stub" as const;
 
 export async function churnRoutes(app: FastifyInstance): Promise<void> {
   /**
@@ -101,6 +122,7 @@ export async function churnRoutes(app: FastifyInstance): Promise<void> {
         factors: result.factors,
         riskLevel: result.riskLevel,
         isFallback,
+        dataSource: DATA_SOURCE,
       },
     });
   });
@@ -135,6 +157,7 @@ export async function churnRoutes(app: FastifyInstance): Promise<void> {
         churnImpact: forecast.churnImpact,
         expansionImpact: forecast.expansionImpact,
         cashFlowProjection: forecast.cashFlowProjection,
+        dataSource: DATA_SOURCE,
       },
     });
   });
@@ -150,7 +173,7 @@ export async function churnRoutes(app: FastifyInstance): Promise<void> {
     const subscriptions = getCohortData(ctx.tenantId);
     const cohorts = computeCohortAnalysis(subscriptions);
 
-    return reply.send({ data: { cohorts } });
+    return reply.send({ data: { cohorts, dataSource: DATA_SOURCE } });
   });
 
   // Error handler for this plugin scope
@@ -172,6 +195,11 @@ export async function churnRoutes(app: FastifyInstance): Promise<void> {
 
 // ── Data Access Stubs ─────────────────────────────────────────────
 // In production, these query the database. Stubbed here for testability.
+// DOM-015: this is exactly the fabrication the gap flags — every caller of
+// the three routes above gets these same canned numbers back today. Every
+// response is now marked `dataSource: "stub"` (see DATA_SOURCE above) so
+// that is no longer silent; replacing the bodies below with real queries is
+// tracked as separate, scoped follow-up work (see the module doc comment).
 
 /**
  * Get subscription features for churn scoring.
