@@ -143,3 +143,117 @@ describe("tenant-table-rls-guard: findTenantTableViolations()", () => {
     expect(violations[0].table).toBe("admin.reconciliation_breaks");
   });
 });
+
+describe("tenant-table-rls-guard: SEC-022 — ALTER TABLE ... ADD COLUMN tenant_id", () => {
+  it("flags a table CREATEd without tenant_id that is later ALTERed in the SAME file to add tenant_id, with no RLS anywhere (the SEC-022 blind spot)", () => {
+    const sql = `
+      CREATE TABLE billing.subscriptions (
+        id uuid PRIMARY KEY,
+        plan_code varchar(64) NOT NULL
+      );
+      ALTER TABLE billing.subscriptions ADD COLUMN tenant_id uuid;
+    `;
+    const violations = findTenantTableViolations(sql);
+    expect(violations).toHaveLength(1);
+    expect(violations[0].table).toBe("billing.subscriptions");
+    expect(violations[0].missing).toEqual([
+      "ENABLE ROW LEVEL SECURITY",
+      "FORCE ROW LEVEL SECURITY",
+      "CREATE POLICY",
+    ]);
+  });
+
+  it("flags the same shape across TWO files when the caller threads knownTables between them (cross-file blind spot), resolving the bare ALTER reference back to the CREATE's qualified name", () => {
+    const knownTables = new Map();
+    const fileA_createOnly = `
+      CREATE TABLE billing.legacy_accounts (
+        id uuid PRIMARY KEY,
+        name varchar(200) NOT NULL
+      );
+    `;
+    const fileB_alterOnlyLater = `
+      ALTER TABLE legacy_accounts ADD COLUMN tenant_id uuid;
+    `;
+    expect(findTenantTableViolations(fileA_createOnly, knownTables)).toHaveLength(0);
+    const violations = findTenantTableViolations(fileB_alterOnlyLater, knownTables);
+    expect(violations).toHaveLength(1);
+    expect(violations[0].table).toBe("billing.legacy_accounts");
+    expect(violations[0].missing).toEqual([
+      "ENABLE ROW LEVEL SECURITY",
+      "FORCE ROW LEVEL SECURITY",
+      "CREATE POLICY",
+    ]);
+  });
+
+  it("does not flag ALTER TABLE ... ADD COLUMN tenant_id when the guard has no CREATE TABLE record for that table anywhere (avoids false positives on tables outside its knowledge)", () => {
+    const sql = `
+      ALTER TABLE some_unknown_schema.mystery_table ADD COLUMN tenant_id uuid;
+    `;
+    expect(findTenantTableViolations(sql)).toHaveLength(0);
+  });
+
+  it("passes the SEC-022 shape when ENABLE + FORCE + CREATE POLICY are added in the same file as the ALTER (mirrors the two real fleet migrations found while fixing this: admin-service 0014_webhook_lifecycle.sql, payroll-service 0039_tax_slab_config_tenant_scope.sql)", () => {
+    const sql = `
+      CREATE TABLE webhooks.webhook_deliveries (
+        id uuid PRIMARY KEY,
+        webhook_id uuid NOT NULL
+      );
+      ALTER TABLE webhooks.webhook_deliveries ADD COLUMN IF NOT EXISTS tenant_id uuid;
+      ALTER TABLE webhooks.webhook_deliveries ENABLE ROW LEVEL SECURITY;
+      ALTER TABLE webhooks.webhook_deliveries FORCE ROW LEVEL SECURITY;
+      CREATE POLICY tenant_isolation_policy ON webhooks.webhook_deliveries
+        USING (tenant_id = current_tenant_id());
+    `;
+    expect(findTenantTableViolations(sql)).toHaveLength(0);
+  });
+
+  it("does not false-positive on ADD COLUMN parent_tenant_id via ALTER (mirrors the CREATE TABLE guard's same whole-column-name rule)", () => {
+    const sql = `
+      CREATE TABLE org.branches (
+        id uuid PRIMARY KEY
+      );
+      ALTER TABLE org.branches ADD COLUMN parent_tenant_id uuid;
+    `;
+    expect(findTenantTableViolations(sql)).toHaveLength(0);
+  });
+
+  it("finds tenant_id among multiple comma-separated ADD COLUMN clauses in one ALTER statement (the payroll-service 0039 shape)", () => {
+    const sql = `
+      CREATE TABLE payroll.tax_slab_config (
+        id uuid PRIMARY KEY,
+        fy_start_year integer NOT NULL
+      );
+      ALTER TABLE payroll.tax_slab_config
+        ADD COLUMN IF NOT EXISTS tenant_id UUID NOT NULL DEFAULT '00000000-0000-0000-0000-000000000000',
+        ADD COLUMN IF NOT EXISTS created_by UUID;
+    `;
+    const violations = findTenantTableViolations(sql);
+    expect(violations).toHaveLength(1);
+    expect(violations[0].table).toBe("payroll.tax_slab_config");
+  });
+
+  it("also catches the bare `ADD tenant_id` form (COLUMN is optional in Postgres' own grammar)", () => {
+    const sql = `
+      CREATE TABLE crm.leads (
+        id uuid PRIMARY KEY
+      );
+      ALTER TABLE crm.leads ADD tenant_id uuid;
+    `;
+    const violations = findTenantTableViolations(sql);
+    expect(violations).toHaveLength(1);
+    expect(violations[0].table).toBe("crm.leads");
+  });
+
+  it("does not double-count a redundant `ADD COLUMN IF NOT EXISTS tenant_id` when the CREATE TABLE itself already has tenant_id and is already flagged", () => {
+    const sql = `
+      CREATE TABLE hr.timesheets (
+        id uuid PRIMARY KEY,
+        tenant_id uuid NOT NULL
+      );
+      ALTER TABLE hr.timesheets ADD COLUMN IF NOT EXISTS tenant_id uuid;
+    `;
+    const violations = findTenantTableViolations(sql);
+    expect(violations).toHaveLength(1);
+    expect(violations[0].table).toBe("hr.timesheets");
+  });
+});

@@ -41,6 +41,35 @@
 // (see below). This is the "create now, RLS later" ratchet is *closed*, not
 // the backlog erased.
 //
+// SEC-022 EXTENSION: a table can also gain its tenant_id column via a LATER
+// `ALTER TABLE ... ADD COLUMN tenant_id`, against a table that already exists
+// (CREATEd earlier — in this same migration file, or in an earlier one for
+// the same service). The original check above only ever looked at a CREATE
+// TABLE's own column list, so this shape was completely invisible: a table
+// created without tenant_id, then ALTERed later to add it, was never flagged
+// as needing RLS no matter how it ended up. Fixed by additionally scanning
+// each file's `ALTER TABLE ... ADD COLUMN` statements for a real `tenant_id`
+// addition (same whole-column-name rule as the CREATE TABLE check, so
+// `ADD COLUMN parent_tenant_id` still doesn't count) against a table this
+// guard has already seen CREATEd — tracked in a `knownTables` map threaded
+// across one service's migration files in sorted (chronological) order by
+// `main()` below; a bare `findTenantTableViolations(sqlText)` call (every
+// existing unit test) gets a fresh, private map and is unaffected. The
+// ALTER's own file is held to the identical same-file-RLS requirement as a
+// CREATE-TABLE-time tenant_id. At the time of this fix, two real fleet
+// migrations exercise this exact shape — admin-service's
+// 0004b_missing_module_tables.sql / 0014_webhook_lifecycle.sql
+// (webhooks.webhook_deliveries) and payroll-service's
+// 0012_p1_challan_taxcfg_perq_26q.sql / 0039_tax_slab_config_tenant_scope.sql
+// (payroll.tax_slab_config) — both already carry ENABLE + FORCE + CREATE
+// POLICY in the same file as their ADD COLUMN, so both pass clean under the
+// new check and the baseline needs no new entries for them. (This corrects
+// this gap's original evidence, which read no such pattern anywhere in the
+// fleet today — see docs/ENTERPRISE-GAP-REPORT-2026-09-07.md SEC-022 for the
+// full correction; the underlying blind spot was real, it just hadn't yet
+// been exercised by a live *vulnerability*, only by two already-careful
+// migrations.)
+//
 // Usage:
 //   node scripts/ci/tenant-table-rls-guard.mjs                 # guard: exit 1 on
 //                                                                # new/stale baseline entries
@@ -88,13 +117,33 @@ function stripSqlComments(text) {
 const escapeRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 // ── 2. Find every CREATE TABLE whose column list has a `tenant_id` column,
-//    and check whether THIS file also RLS-protects it. Exported for unit
-//    testing (see tests/architecture/tenant-table-rls-guard.test.ts). ───────
-export function findTenantTableViolations(sqlText) {
+//    and check whether THIS file also RLS-protects it. SEC-022: also find
+//    every `ALTER TABLE ... ADD COLUMN tenant_id` against a table already
+//    known to exist (this file's own CREATE TABLEs, or an earlier migration
+//    file via the caller-threaded `knownTables`) and hold its own file to
+//    the same same-file-RLS bar. Exported for unit testing (see
+//    tests/architecture/tenant-table-rls-guard.test.ts). `knownTables` is an
+//    optional Map(bare lowercase table name -> canonical name as first
+//    seen); a bare call with no second argument (every existing unit test)
+//    gets a fresh, private map, so behaviour for anything that doesn't
+//    itself contain a cross-referencing ALTER is unchanged. ───────────────
+export function findTenantTableViolations(sqlText, knownTables = new Map()) {
   const text = stripSqlComments(sqlText);
   const createTableRe = /CREATE TABLE\s+(?:IF NOT EXISTS\s+)?"?([A-Za-z_][\w]*(?:\.[A-Za-z_][\w]*)?)"?\s*\(/gi;
   const violations = [];
+  const flaggedTables = new Set(); // bare lowercase names already pushed as a violation in this call
   let match;
+
+  const buildRef = (tableName, bare) =>
+    tableName === bare ? escapeRe(bare) : `(?:${escapeRe(tableName)}|${escapeRe(bare)})`;
+
+  // Same-file RLS check, shared by the CREATE TABLE and ALTER TABLE paths
+  // below: does `text` carry ENABLE + FORCE + a CREATE POLICY for `ref`?
+  const checkRls = (ref) => ({
+    hasEnable: new RegExp(`ALTER TABLE\\s+(?:ONLY\\s+)?${ref}\\s+ENABLE ROW LEVEL SECURITY`, "i").test(text),
+    hasForce: new RegExp(`ALTER TABLE\\s+(?:ONLY\\s+)?${ref}\\s+FORCE ROW LEVEL SECURITY`, "i").test(text),
+    hasPolicy: new RegExp(`CREATE POLICY\\s+\\S+\\s+ON\\s+${ref}\\b`, "i").test(text),
+  });
 
   while ((match = createTableRe.exec(text)) !== null) {
     const tableName = match[1];
@@ -110,6 +159,15 @@ export function findTenantTableViolations(sqlText) {
     }
     const body = text.slice(match.index + match[0].length, i - 1);
 
+    const bare = tableName.includes(".") ? tableName.slice(tableName.indexOf(".") + 1) : tableName;
+    const bareKey = bare.toLowerCase();
+    // Register this table as known — for the ALTER scan below (this same
+    // file) and, via the caller-threaded map, for any later migration file
+    // — regardless of whether it has tenant_id yet, since a table without
+    // one is exactly what the ALTER scan needs to recognize. First writer
+    // (the actual CREATE TABLE) wins the canonical spelling.
+    if (!knownTables.has(bareKey)) knownTables.set(bareKey, tableName);
+
     // Whole-column-name match: `tenant_id` must start a column definition
     // (right after `(` or a `,`), not merely appear as a suffix of another
     // column like `parent_tenant_id`.
@@ -119,12 +177,8 @@ export function findTenantTableViolations(sqlText) {
     // The table may be referenced schema-qualified at creation but bare in
     // the ALTER/POLICY statements (or vice versa, if search_path resolves
     // it) — accept either spelling.
-    const bare = tableName.includes(".") ? tableName.slice(tableName.indexOf(".") + 1) : tableName;
-    const ref = tableName === bare ? escapeRe(bare) : `(?:${escapeRe(tableName)}|${escapeRe(bare)})`;
-
-    const hasEnable = new RegExp(`ALTER TABLE\\s+(?:ONLY\\s+)?${ref}\\s+ENABLE ROW LEVEL SECURITY`, "i").test(text);
-    const hasForce = new RegExp(`ALTER TABLE\\s+(?:ONLY\\s+)?${ref}\\s+FORCE ROW LEVEL SECURITY`, "i").test(text);
-    const hasPolicy = new RegExp(`CREATE POLICY\\s+\\S+\\s+ON\\s+${ref}\\b`, "i").test(text);
+    const ref = buildRef(tableName, bare);
+    const { hasEnable, hasForce, hasPolicy } = checkRls(ref);
 
     if (!(hasEnable && hasForce && hasPolicy)) {
       violations.push({
@@ -135,8 +189,49 @@ export function findTenantTableViolations(sqlText) {
           !hasPolicy && "CREATE POLICY",
         ].filter(Boolean),
       });
+      flaggedTables.add(bareKey);
     }
   }
+
+  // ── SEC-022: `ALTER TABLE ... ADD COLUMN tenant_id` against a table
+  //    already known to exist. Each ALTER TABLE statement's full clause list
+  //    (up to its terminating `;`) is captured in one go so a multi-column
+  //    `ADD COLUMN foo ..., ADD COLUMN tenant_id ...` on a single statement
+  //    is still found regardless of which comma-separated clause it's in.
+  //    `COLUMN` is optional, matching Postgres' own grammar. Same
+  //    whole-column-name guard as above, so `ADD COLUMN parent_tenant_id`
+  //    still doesn't count. ────────────────────────────────────────────────
+  const alterTableRe = /ALTER TABLE\s+(?:ONLY\s+)?"?([A-Za-z_][\w]*(?:\.[A-Za-z_][\w]*)?)"?\s+([^;]*);/gi;
+  const addsTenantIdRe = /ADD\s+(?:COLUMN\s+)?(?:IF NOT EXISTS\s+)?"?tenant_id"?(\s|,|$)/i;
+  let alterMatch;
+
+  while ((alterMatch = alterTableRe.exec(text)) !== null) {
+    const tableName = alterMatch[1];
+    const clause = alterMatch[2];
+    if (!addsTenantIdRe.test(clause)) continue;
+
+    const bare = tableName.includes(".") ? tableName.slice(tableName.indexOf(".") + 1) : tableName;
+    const bareKey = bare.toLowerCase();
+    if (!knownTables.has(bareKey)) continue; // not a table this guard has seen CREATEd anywhere
+    if (flaggedTables.has(bareKey)) continue; // already flagged via the CREATE TABLE path above
+
+    const canonical = knownTables.get(bareKey);
+    const ref = buildRef(tableName, bare);
+    const { hasEnable, hasForce, hasPolicy } = checkRls(ref);
+
+    if (!(hasEnable && hasForce && hasPolicy)) {
+      violations.push({
+        table: canonical,
+        missing: [
+          !hasEnable && "ENABLE ROW LEVEL SECURITY",
+          !hasForce && "FORCE ROW LEVEL SECURITY",
+          !hasPolicy && "CREATE POLICY",
+        ].filter(Boolean),
+      });
+      flaggedTables.add(bareKey);
+    }
+  }
+
   return violations;
 }
 
@@ -160,10 +255,26 @@ function main() {
   const files = discoverMigrationFiles();
   const allViolations = []; // { key, file, table, missing }
 
+  // SEC-022: a table can gain tenant_id via a later ALTER TABLE ... ADD
+  // COLUMN rather than at CREATE TABLE time, possibly in a later migration
+  // file than the one that created the table. Track known tables per
+  // service, across that service's files in sorted (chronological, by this
+  // fleet's zero-padded migration-number convention) order — each service
+  // owns its own schema/tables, so cross-service table-name reuse (e.g. two
+  // services both happening to have a `settings` table) must never be
+  // conflated into one shared registry.
+  let knownTables = new Map();
+  let currentService = null;
+
   for (const file of files) {
     const rel = relative(REPO_ROOT, file);
+    const svc = rel.split("/")[1]; // services/<svc>/migrations/<file>.sql
+    if (svc !== currentService) {
+      currentService = svc;
+      knownTables = new Map();
+    }
     const source = readFileSync(file, "utf8");
-    for (const v of findTenantTableViolations(source)) {
+    for (const v of findTenantTableViolations(source, knownTables)) {
       allViolations.push({ key: `${rel}::${v.table}`, file: rel, ...v });
     }
   }

@@ -50,9 +50,10 @@ async function resolveScimTenant(req: {
   if (!presented) throw new HttpError(401, "UNAUTHENTICATED", "Missing bearer token");
 
   const hash = sha256Hex(presented);
-  // No transaction wrapper needed: scim.scim_tokens deliberately carries no
-  // RLS policy (migration 0022), so there is no app.tenant_id GUC for a
-  // transaction to set here — see token-repo.ts's findBySecretHash for why.
+  // findBySecretHash needs no transaction/GUC: scim.scim_tokens's SELECT
+  // policy is deliberately permissive regardless of tenant (migration 0024,
+  // SEC-025) — see token-repo.ts's findBySecretHash for why. The row's own
+  // tenant is not known until AFTER this lookup succeeds.
   const row = await tokenRepo.findBySecretHash(db, hash);
   if (!row || !isUsable(row)) {
     throw new HttpError(401, "UNAUTHENTICATED", "Invalid SCIM bearer token");
@@ -71,7 +72,13 @@ async function resolveScimTenant(req: {
     );
   }
 
-  await tokenRepo.touchLastUsed(db, row.id, new Date());
+  // SEC-025: scim.scim_tokens's UPDATE policy (migration 0024) now requires
+  // tenant_id = current_tenant_id() — touchLastUsed sets that GUC internally
+  // (token-repo.ts) using row.tenantId, just resolved above. Without it, the
+  // touch would silently affect zero rows under FORCE RLS (see migration
+  // 0024's own header comment on why a migration without this companion
+  // app-code fix is not sufficient).
+  await tokenRepo.touchLastUsed(row.tenantId, row.id, new Date());
   return row.tenantId;
 }
 
@@ -95,7 +102,10 @@ async function bootstrapLegacyScimToken(): Promise<void> {
   if (existing) return;
 
   try {
-    await tokenRepo.insert(db, {
+    // SEC-025: INSERT now requires tenant_id = current_tenant_id() (migration
+    // 0024) — insert() sets that GUC internally from row.tenantId
+    // (token-repo.ts), same reasoning as resolveScimTenant's touchLastUsed.
+    await tokenRepo.insert({
       tenantId: legacyTenant,
       name: "legacy env-configured token (SCIM_BEARER_TOKEN)",
       tokenPrefix: "legacy_env",
@@ -386,7 +396,19 @@ export async function scimRoutes(app: FastifyInstance): Promise<void> {
  * SEC-007 — admin-facing lifecycle management for per-tenant SCIM tokens.
  * Normal JWT/ctx auth (NOT the SCIM bearer scheme) — an admin can only ever
  * issue/list/revoke tokens for their OWN tenant (ctx.tenantId), mirroring
- * apikeys/routes.ts's apiKeyRoutes.
+ * apikeys/routes.ts's apiKeyRoutes. requireRole(ctx, ADMIN) gates all three
+ * routes below to platform_admin/super_admin/tenant_admin (SEC-025 adds the
+ * negative-role regression test for this).
+ *
+ * SEC-025: the two writes here (insert, revoke) set the app.tenant_id GUC
+ * internally (token-repo.ts wraps each write in its own tenant-scoped
+ * transaction) so scim.scim_tokens's tenant-scoped INSERT/UPDATE policies
+ * (migration 0024) see the right tenant — a real DB-level backstop now
+ * exists if this application-code tenant scoping ever had a bug. Wrapped
+ * inside token-repo.ts rather than here so this file's own source stays
+ * free of direct synchronous Drizzle write calls — see
+ * f3-b2-mfa-scim-cqrs.test.ts's "scim routes have zero sync drizzle writes"
+ * guard.
  */
 export async function scimTokenRoutes(app: FastifyInstance): Promise<void> {
   app.post("/identity/scim-tokens", async (req, reply) => {
@@ -398,7 +420,11 @@ export async function scimTokenRoutes(app: FastifyInstance): Promise<void> {
     const id = randomUUID();
     const expiresAt = body.expiresAt ? new Date(body.expiresAt) : null;
 
-    await tokenRepo.insert(db, {
+    // SEC-025: INSERT now requires tenant_id = current_tenant_id() (migration
+    // 0024) — insert() sets that GUC internally from row.tenantId
+    // (token-repo.ts), matching ctx.tenantId (an admin can only ever mint a
+    // token for their own tenant, per this route's own doc comment above).
+    await tokenRepo.insert({
       id,
       tenantId: ctx.tenantId,
       name: body.name,
@@ -426,6 +452,9 @@ export async function scimTokenRoutes(app: FastifyInstance): Promise<void> {
     const { id } = scimTokenIdParam.parse(req.params);
     const existing = await tokenRepo.findById(ctx.tenantId, id);
     if (!existing) throw new HttpError(404, "NOT_FOUND", "scim token not found");
+    // SEC-025: UPDATE now requires tenant_id = current_tenant_id() (migration
+    // 0024) — revoke() sets that GUC internally (token-repo.ts) from the
+    // ctx.tenantId passed in, the only tenant this admin may revoke for.
     await tokenRepo.revoke(ctx.tenantId, id);
     return reply.send({ id, status: "revoked" });
   });
