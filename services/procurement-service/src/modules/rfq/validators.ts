@@ -37,3 +37,9 @@ export const rfqRespondBody = z.object({
   remarks:       z.string().max(1000).optional(),
 });
 export type RfqRespondBody = z.infer<typeof rfqRespondBody>;
+
+/** DOM-011: award a closed RFQ to one of its submitted responses. */
+export const awardRfqBody = z.object({
+  responseId: z.string().uuid(),
+});
+export type AwardRfqBody = z.infer<typeof awardRfqBody>;
