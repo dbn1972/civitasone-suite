@@ -139,13 +139,29 @@ async function proxyHandler(
       .send({ code: "NOT_FOUND", message: "no upstream for path" });
   }
 
-  // Enforce authentication for all non-public routes
+  // Enforce authentication for all non-public routes.
+  //
+  // SEC-023: this used to test ONLY for a literal `Authorization: Bearer`
+  // header, so a request already authenticated via the api-key path (no
+  // Authorization header at all, by design — see api-key-auth.ts) was wrongly
+  // 401'd on every non-public route. req.apiKeyAuthenticated is a
+  // server-set-only flag: apiKeyPreHandler (a global preHandler that always
+  // runs before this route handler, see its registration above) sets it ONLY
+  // after it has verified the presented x-api-key against identity-service
+  // and injected the verified tenant/actor headers itself — a client cannot
+  // set it directly. An already-verified api-key request therefore now
+  // satisfies this gate on its own; a request with NEITHER a verified api key
+  // NOR a Bearer header is still rejected exactly as before.
   const isPublic = PUBLIC_PREFIXES.some(
     (p) => pathname === p || pathname.startsWith(p + "/"),
   );
   if (!isPublic) {
+    const apiKeyAuthenticated = (
+      req as FastifyRequest & { apiKeyAuthenticated?: boolean }
+    ).apiKeyAuthenticated;
     const auth = req.headers["authorization"];
-    if (!auth || !auth.toLowerCase().startsWith("bearer ")) {
+    const hasBearer = !!auth && auth.toLowerCase().startsWith("bearer ");
+    if (!apiKeyAuthenticated && !hasBearer) {
       return reply
         .code(401)
         .send({
