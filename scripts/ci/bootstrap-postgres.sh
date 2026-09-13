@@ -466,6 +466,21 @@ EVIDENCE_SUITE_DBS=(
   "procurement-service:civitas_procurement:procurement_svc"
   "contract-service:civitas_contract:contract_svc"
   "finance-service:civitas_finance:finance_svc"
+  # PERF-020: bootstrap.generated.sql's REVOKE ALL ON DATABASE ... FROM
+  # PUBLIC hardening actually covers all 8 foundational-service databases
+  # (tenant/identity/policy/audit/finance/procurement/notification/billing),
+  # not just finance+procurement -- these 6 were simply never added here, so
+  # civitas_admin got `FATAL: permission denied for database`, not a schema
+  # error, on every one of them (confirmed live on a fresh cluster). That
+  # blocked any admin-readonly fleet-wide tool -- e.g. it forced PERF-016's
+  # baseline regeneration to hand-edit tenant-index-baseline.json instead of
+  # running a real --write-baseline.
+  "tenant-service:civitas_tenant:tenant_svc"
+  "identity-service:civitas_identity:identity_svc"
+  "policy-service:civitas_policy:policy_svc"
+  "audit-service:civitas_audit:audit_svc"
+  "notification-service:civitas_notification:notification_svc"
+  "billing-service:civitas_billing:billing_svc"
 )
 for entry in "${EVIDENCE_SUITE_DBS[@]}"; do
   IFS=: read -r svc db role <<< "$entry"
