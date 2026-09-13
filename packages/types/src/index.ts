@@ -1326,11 +1326,15 @@ export type SchemeDetailProject = {
  * paise and under-displays every figure 100x -- this shape sidesteps that
  * unit mismatch rather than repeating it).
  *
- * nodalOfficer, department and beneficiaries are deliberately absent: no
- * column for any of the three exists anywhere in project-service's schema
- * today (verified against services/project-service/src/modules/scheme/
- * schema.ts and .../project/schema.ts), and adding them is a product/schema
- * decision, not something this type should paper over with invented fields.
+ * COMP-016 follow-up (migration 0021): nodalOfficer, department,
+ * beneficiaries, startDate and endDate used to be deliberately absent here --
+ * no column for any of the five existed anywhere in project-service's schema,
+ * and adding them was an open product/schema decision this type explicitly
+ * declined to paper over with invented fields. That decision is now: add the
+ * columns. All five stay `?: T` (never `T | null`): under this repo's
+ * exactOptionalPropertyTypes, that means "absent or T", matching
+ * sanctionRef's existing convention above and getSchemeDetail()'s existing
+ * "omit the key when there's no value" pattern -- unchanged for these five.
  */
 export type SchemeDetail = {
   id: string;
@@ -1345,6 +1349,11 @@ export type SchemeDetail = {
   utilisationPct: number;
   status: "active" | "completed" | "discontinued";
   projects: SchemeDetailProject[];
+  nodalOfficer?: string;
+  department?: string;
+  beneficiaries?: number;
+  startDate?: string;
+  endDate?: string;
 };
 
 export type GrantsDashboard = {
