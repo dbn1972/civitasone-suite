@@ -288,16 +288,19 @@ export async function gapRoutes(app: FastifyInstance): Promise<void> {
     `))) as unknown as Array<{ section_80c: string; section_80d: string; other_deductions: string; rent_paid_minor: string; regime: string }>;
     const dec = decRows[0];
 
-    // DOM-025: cap80d was independently hardcoded at Rs 50,000 (paise),
-    // disagreeing with domain.ts's config-driven sec80dCapMinor (DOM-008's
-    // platform default Rs 75,000) and silently ignoring a tenant's 80D
-    // override -- same bug class DOM-020 fixed in tax/routes.ts. Resolve
-    // the same effective-dated config through scopedRead(), as of the
-    // current month (this route advises on the in-progress FY's
-    // remaining headroom, not a closed FY snapshot).
-    const { sec80dCapMinor } = await scopedRead((tx) => resolveRunStatutoryConfig(tx, ctx.tenantId, currentMonth));
+    // DOM-025/DOM-026: cap80c and cap80d were independently hardcoded (Rs
+    // 1.5L / Rs 50,000, paise), disagreeing with domain.ts's config-driven
+    // sec80cCapMinor/sec80dCapMinor (DOM-008's platform defaults Rs 1.5L /
+    // Rs 75,000) and silently ignoring a tenant's override -- same bug class
+    // DOM-020 fixed in tax/routes.ts. Resolve the same effective-dated
+    // config through scopedRead(), as of the current month (this route
+    // advises on the in-progress FY's remaining headroom, not a closed FY
+    // snapshot). DOM-025 fixed cap80d first; DOM-026 destructures the
+    // sibling sec80cCapMinor field from this SAME already-fetched config
+    // object -- zero extra DB round-trips.
+    const { sec80cCapMinor, sec80dCapMinor } = await scopedRead((tx) => resolveRunStatutoryConfig(tx, ctx.tenantId, currentMonth));
 
-    const cap80c = 15000000n; // ₹1.5L in paise
+    const cap80c = sec80cCapMinor;
     const cap80d = sec80dCapMinor;
     const used80c = dec ? BigInt(dec.section_80c) : 0n;
     const used80d = dec ? BigInt(dec.section_80d) : 0n;

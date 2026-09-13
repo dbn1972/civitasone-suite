@@ -61,15 +61,22 @@ function currentFy(): string {
 }
 
 /**
- * DOM-020: this route independently hardcoded the Sec 80D cap at Rs 50,000
- * in two places, disagreeing with DOM-008's config-driven `sec80dCapMinor`
- * (domain.ts, platform default Rs 75,000) -- a tenant's override via the
+ * DOM-020/DOM-026: this route independently hardcoded the Sec 80C and 80D
+ * caps (Rs 1,50,000 / Rs 50,000) in several places, disagreeing with
+ * DOM-008's config-driven `sec80cCapMinor`/`sec80dCapMinor` (domain.ts,
+ * platform defaults Rs 1,50,000 / Rs 75,000) -- a tenant's override via the
  * statutory_config table was honored in payroll TDS but silently ignored
  * here. Resolve the same effective-dated config domain.ts uses instead of a
- * literal. FY-scoped (not run-scoped), so resolve as of the FY's last month
- * (March of startYear+1), matching this file's other FY-snapshot reads.
+ * literal, in ONE call so both caps come from the identical config row (no
+ * extra round-trip per cap). FY-scoped (not run-scoped), so resolve as of
+ * the FY's last month (March of startYear+1), matching this file's other
+ * FY-snapshot reads.
+ *
+ * DOM-020 originally added this as `resolveSec80dCapRupees` (80D only);
+ * DOM-026 folds in the sibling 80C cap rather than issuing a second,
+ * redundant `resolveRunStatutoryConfig()` call per site.
  */
-async function resolveSec80dCapRupees(tenantId: string, startYear: number): Promise<number> {
+async function resolveDeductionCapsRupees(tenantId: string, startYear: number): Promise<{ sec80cCapRupees: number; sec80dCapRupees: number }> {
   // Must run through scopedRead() -- the wrapped-transaction helper that is
   // the only place this service's tenant-GUC wrapper (packages/db) sets the
   // RLS session variable from the request-scoped AsyncLocalStorage context
@@ -83,7 +90,7 @@ async function resolveSec80dCapRupees(tenantId: string, startYear: number): Prom
   // exactly why every read in this file, this one included, goes through
   // scopedRead() rather than opening one itself.
   const cfg = await scopedRead((tx) => resolveRunStatutoryConfig(tx, tenantId, `${startYear + 1}-03`));
-  return Number(cfg.sec80dCapMinor) / 100;
+  return { sec80cCapRupees: Number(cfg.sec80cCapMinor) / 100, sec80dCapRupees: Number(cfg.sec80dCapMinor) / 100 };
 }
 
 export async function taxRoutes(app: FastifyInstance): Promise<void> {
@@ -140,10 +147,10 @@ export async function taxRoutes(app: FastifyInstance): Promise<void> {
       else throw err;
     }
 
-    // DOM-020: was hardcoded 50000 here, disagreeing with domain.ts's
-    // config-driven sec80dCapMinor and silently ignoring a tenant's 80D
-    // override. Resolve once for the FY.
-    const sec80dCapRupees = await resolveSec80dCapRupees(ctx.tenantId, startYear);
+    // DOM-020/DOM-026: was hardcoded 150000/50000 here, disagreeing with
+    // domain.ts's config-driven sec80cCapMinor/sec80dCapMinor and silently
+    // ignoring a tenant's 80C/80D override. Resolve once for the FY.
+    const { sec80cCapRupees, sec80dCapRupees } = await resolveDeductionCapsRupees(ctx.tenantId, startYear);
 
     const data = [];
     for (const employeeId of employeeIds) {
@@ -151,7 +158,7 @@ export async function taxRoutes(app: FastifyInstance): Promise<void> {
       const regime = (dec?.regime ?? "new") as "old" | "new";
       let exemptions = 0;
       if (regime === "old" && dec) {
-        const s80c = Math.min(Number(dec.section80c) / 100, 150000);
+        const s80c = Math.min(Number(dec.section80c) / 100, sec80cCapRupees);
         const s80d = Math.min(Number(dec.section80d) / 100, sec80dCapRupees);
         const hra = Number(dec.hraClaimed) / 100;
         const other = Number(dec.otherDeductions) / 100;
@@ -173,7 +180,7 @@ export async function taxRoutes(app: FastifyInstance): Promise<void> {
         employee: identity?.fullName ?? employeeId,
         department: identity?.departmentId ?? "-",
         grossIncome: String(grossIncome),
-        deductions80C: String(regime === "old" && dec ? Math.min(Number(dec.section80c) / 100, 150000) : 0),
+        deductions80C: String(regime === "old" && dec ? Math.min(Number(dec.section80c) / 100, sec80cCapRupees) : 0),
         otherDeductions: String(regime === "old" && dec ? Number(dec.otherDeductions) / 100 : 0),
         taxableIncome: String(taxableIncome),
         taxPayable: String(tax.totalTax),
@@ -243,12 +250,12 @@ export async function taxRoutes(app: FastifyInstance): Promise<void> {
         .limit(1));
       const dec = decRows[0] ?? null;
       if (dec) {
-        // DOM-020: 80D cap was hardcoded 50000 (stale -- domain.ts's
-        // config-driven sec80dCapMinor is the source of truth and a
+        // DOM-020/DOM-026: 80C/80D caps were hardcoded 150000/50000 (stale
+        // -- domain.ts's config-driven caps are the source of truth and a
         // tenant's override wasn't respected here). Resolved once, so this
         // route agrees with the payslip for the same tenant/FY.
-        const sec80dCapRupees = await resolveSec80dCapRupees(ctx.tenantId, startYear);
-        const s80c = Math.min(Number(dec.section80c) / 100, 150000); // 80C cap Rs 1.5L
+        const { sec80cCapRupees, sec80dCapRupees } = await resolveDeductionCapsRupees(ctx.tenantId, startYear);
+        const s80c = Math.min(Number(dec.section80c) / 100, sec80cCapRupees); // 80C cap, tenant-resolved
         const s80d = Math.min(Number(dec.section80d) / 100, sec80dCapRupees);
         const hra = Number(dec.hraClaimed) / 100;
         const other = Number(dec.otherDeductions) / 100;
