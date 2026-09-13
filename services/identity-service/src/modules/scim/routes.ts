@@ -1,36 +1,117 @@
 /**
  * SCIM 2.0 module — mutations are CQRS (publish → 202); GETs remain sync reads.
+ *
+ * SEC-007: tenant scoping for every SCIM operation is resolved SOLELY from
+ * the presented bearer token (resolveScimTenant, below) — a per-tenant
+ * credential bound server-side at issuance in scim.scim_tokens. The
+ * client-supplied x-tenant-id header plays NO role in that decision; it is
+ * only read to log a mismatch. Previously this module used one global
+ * SCIM_BEARER_TOKEN for every tenant and trusted x-tenant-id (falling back
+ * to SCIM_TENANT_ID, then a hardcoded default) to pick which tenant's data
+ * an operation touched — so any holder of the one global token could
+ * provision/deprovision users in ANY tenant. See
+ * docs/ENTERPRISE-GAP-REPORT-2026-09-07.md SEC-007.
  */
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { timingSafeEqual } from "node:crypto";
-import { HttpError } from "../../shared/context.js";
-import { scopedRead } from "../../shared/db.js";
+import { randomUUID } from "node:crypto";
+import { HttpError, resolveContext, requireRole } from "../../shared/context.js";
+import { db, scopedRead } from "../../shared/db.js";
 import { users } from "../users/schema.js";
 import { eq, and, ilike } from "drizzle-orm";
 import * as commands from "./commands.js";
+import * as tokenRepo from "./token-repo.js";
+import { sha256Hex, generateScimSecret, isUsable } from "./token-domain.js";
+import { issueScimTokenBody, scimTokenIdParam } from "./token-validators.js";
+import type { ScimTokenRow } from "./schema.js";
 
-const SCIM_TOKEN = process.env.SCIM_BEARER_TOKEN ?? "";
 const SCIM_SCHEMA_USER = "urn:ietf:params:scim:schemas:core:2.0:User";
-const SCIM_TENANT_ID = process.env.SCIM_TENANT_ID ?? "";
+const ADMIN = ["platform_admin", "super_admin", "tenant_admin"];
 
-function requireScimAuth(req: { headers: Record<string, string | string[] | undefined> }): void {
-  if (!SCIM_TOKEN) throw new HttpError(503, "SCIM_DISABLED", "SCIM is not configured (set SCIM_BEARER_TOKEN)");
+// Mirrors commands.ts's SCIM_SYSTEM_ACTOR_ID sentinel convention — used only
+// for the one-time legacy-token migration row (see bootstrapLegacyScimToken),
+// which has no human actor.
+const SCIM_LEGACY_ACTOR_ID = "00000000-0000-0000-0000-000000000001";
+
+/**
+ * SEC-007 — resolve which tenant a SCIM request may act on, from the
+ * presented bearer token alone. Throws 401 if the token is missing, unknown,
+ * revoked, or expired. The x-tenant-id header (if present) is NEVER trusted
+ * for this decision — it is only compared, after the fact, purely to log a
+ * mismatch signal (a misconfigured client, or an attempted attack).
+ */
+async function resolveScimTenant(req: {
+  headers: Record<string, string | string[] | undefined>;
+  log: { warn: (obj: Record<string, unknown>, msg: string) => void };
+}): Promise<string> {
   const auth = req.headers.authorization as string | undefined;
   if (!auth?.startsWith("Bearer ")) throw new HttpError(401, "UNAUTHENTICATED", "Missing bearer token");
-  const provided = auth.slice(7);
-  if (provided.length !== SCIM_TOKEN.length) throw new HttpError(401, "UNAUTHENTICATED", "Invalid SCIM bearer token");
-  try {
-    if (!timingSafeEqual(Buffer.from(provided), Buffer.from(SCIM_TOKEN))) {
-      throw new HttpError(401, "UNAUTHENTICATED", "Invalid SCIM bearer token");
-    }
-  } catch {
+  const presented = auth.slice(7);
+  if (!presented) throw new HttpError(401, "UNAUTHENTICATED", "Missing bearer token");
+
+  const hash = sha256Hex(presented);
+  // No transaction wrapper needed: scim.scim_tokens deliberately carries no
+  // RLS policy (migration 0022), so there is no app.tenant_id GUC for a
+  // transaction to set here — see token-repo.ts's findBySecretHash for why.
+  const row = await tokenRepo.findBySecretHash(db, hash);
+  if (!row || !isUsable(row)) {
     throw new HttpError(401, "UNAUTHENTICATED", "Invalid SCIM bearer token");
   }
+
+  const claimedTenant = req.headers["x-tenant-id"] as string | undefined;
+  if (claimedTenant && claimedTenant !== row.tenantId) {
+    req.log.warn(
+      {
+        event: "scim_tenant_header_mismatch",
+        tokenId: row.id,
+        boundTenantId: row.tenantId,
+        claimedTenant,
+      },
+      "SEC-007: x-tenant-id header ignored — does not match this SCIM token's server-bound tenant",
+    );
+  }
+
+  await tokenRepo.touchLastUsed(db, row.id, new Date());
+  return row.tenantId;
 }
 
-function tenantId(req: { headers: Record<string, string | string[] | undefined> }): string {
-  return (req.headers["x-tenant-id"] as string) || SCIM_TENANT_ID || "00000000-0000-0000-0000-000000000001";
+/**
+ * One-time, idempotent migration path: if a deployment still configures the
+ * legacy single-tenant env vars (SCIM_BEARER_TOKEN + SCIM_TENANT_ID), seed a
+ * scim.scim_tokens row binding that exact token to that exact tenant, so
+ * existing integrations keep working WITHOUT ever trusting a client header
+ * again — this legacy token is now correctly scoped to the one tenant it was
+ * configured for, not every tenant. New tenants (or a rotation off the env
+ * var) should use POST /identity/scim-tokens (scimTokenRoutes) instead.
+ * No-ops when either var is unset, or when a row for that hash already exists.
+ */
+async function bootstrapLegacyScimToken(): Promise<void> {
+  const legacyToken = process.env.SCIM_BEARER_TOKEN;
+  const legacyTenant = process.env.SCIM_TENANT_ID;
+  if (!legacyToken || !legacyTenant) return;
+
+  const hash = sha256Hex(legacyToken);
+  const existing = await tokenRepo.findBySecretHash(db, hash);
+  if (existing) return;
+
+  try {
+    await tokenRepo.insert(db, {
+      tenantId: legacyTenant,
+      name: "legacy env-configured token (SCIM_BEARER_TOKEN)",
+      tokenPrefix: "legacy_env",
+      secretHash: hash,
+      status: "active",
+      createdBy: SCIM_LEGACY_ACTOR_ID,
+    });
+  } catch (err) {
+    // Benign race: two instances of this service starting up concurrently
+    // can both pass the `existing` check above before either inserts. The
+    // unique index on secret_hash (migration 0022) makes the loser's insert
+    // fail rather than duplicate the row — which is exactly the outcome we
+    // want, so swallow ONLY that specific, expected error.
+    const code = (err as { code?: string } | null)?.code;
+    if (code !== "23505") throw err;
+  }
 }
 
 function correlationId(req: { headers: Record<string, string | string[] | undefined>; id?: string }): string {
@@ -65,7 +146,22 @@ function toScimUser(row: {
   };
 }
 
+function toScimTokenView(row: ScimTokenRow) {
+  return {
+    id: row.id,
+    name: row.name,
+    tokenPrefix: row.tokenPrefix,
+    status: row.status,
+    lastUsedAt: row.lastUsedAt ? row.lastUsedAt.toISOString() : null,
+    expiresAt: row.expiresAt ? row.expiresAt.toISOString() : null,
+    createdAt: row.createdAt.toISOString(),
+    revokedAt: row.revokedAt ? row.revokedAt.toISOString() : null,
+  };
+}
+
 export async function scimRoutes(app: FastifyInstance): Promise<void> {
+  await bootstrapLegacyScimToken();
+
   app.get("/v1/identity/scim/ServiceProviderConfig", async (_req, reply) => {
     return reply.send({
       schemas: ["urn:ietf:params:scim:schemas:core:2.0:ServiceProviderConfig"],
@@ -82,8 +178,7 @@ export async function scimRoutes(app: FastifyInstance): Promise<void> {
   });
 
   app.get("/v1/identity/scim/Users", async (req, reply) => {
-    requireScimAuth(req);
-    const tid = tenantId(req);
+    const tid = await resolveScimTenant(req);
     const query = req.query as { filter?: string; startIndex?: string; count?: string };
     const startIndex = Math.max(1, Number(query.startIndex) || 1);
     const count = Math.min(200, Math.max(1, Number(query.count) || 50));
@@ -122,8 +217,7 @@ export async function scimRoutes(app: FastifyInstance): Promise<void> {
   });
 
   app.get("/v1/identity/scim/Users/:id", async (req, reply) => {
-    requireScimAuth(req);
-    const tid = tenantId(req);
+    const tid = await resolveScimTenant(req);
     const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
     const [row] = await scopedRead((tx) =>
       tx
@@ -143,8 +237,7 @@ export async function scimRoutes(app: FastifyInstance): Promise<void> {
   });
 
   app.post("/v1/identity/scim/Users", async (req, reply) => {
-    requireScimAuth(req);
-    const tid = tenantId(req);
+    const tid = await resolveScimTenant(req);
     const body = req.body as {
       userName?: string;
       name?: { formatted?: string; givenName?: string; familyName?: string };
@@ -172,8 +265,7 @@ export async function scimRoutes(app: FastifyInstance): Promise<void> {
   });
 
   app.put("/v1/identity/scim/Users/:id", async (req, reply) => {
-    requireScimAuth(req);
-    const tid = tenantId(req);
+    const tid = await resolveScimTenant(req);
     const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
     const body = req.body as {
       userName?: string;
@@ -220,8 +312,7 @@ export async function scimRoutes(app: FastifyInstance): Promise<void> {
   });
 
   app.patch("/v1/identity/scim/Users/:id", async (req, reply) => {
-    requireScimAuth(req);
-    const tid = tenantId(req);
+    const tid = await resolveScimTenant(req);
     const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
     const body = req.body as { Operations?: Array<{ op: string; path?: string; value?: unknown }> };
 
@@ -268,8 +359,7 @@ export async function scimRoutes(app: FastifyInstance): Promise<void> {
   });
 
   app.delete("/v1/identity/scim/Users/:id", async (req, reply) => {
-    requireScimAuth(req);
-    const tid = tenantId(req);
+    const tid = await resolveScimTenant(req);
     const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
 
     const [existing] = await scopedRead((tx) =>
@@ -289,5 +379,54 @@ export async function scimRoutes(app: FastifyInstance): Promise<void> {
 
     await commands.scimDeleteUser(tid, correlationId(req), id);
     return reply.code(202).send({ id, status: "accepted" });
+  });
+}
+
+/**
+ * SEC-007 — admin-facing lifecycle management for per-tenant SCIM tokens.
+ * Normal JWT/ctx auth (NOT the SCIM bearer scheme) — an admin can only ever
+ * issue/list/revoke tokens for their OWN tenant (ctx.tenantId), mirroring
+ * apikeys/routes.ts's apiKeyRoutes.
+ */
+export async function scimTokenRoutes(app: FastifyInstance): Promise<void> {
+  app.post("/identity/scim-tokens", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, ADMIN);
+    const body = issueScimTokenBody.parse(req.body);
+
+    const { tokenPrefix, fullToken, secretHash } = generateScimSecret();
+    const id = randomUUID();
+    const expiresAt = body.expiresAt ? new Date(body.expiresAt) : null;
+
+    await tokenRepo.insert(db, {
+      id,
+      tenantId: ctx.tenantId,
+      name: body.name,
+      tokenPrefix,
+      secretHash,
+      status: "active",
+      expiresAt,
+      createdBy: ctx.actorId,
+    });
+
+    // Plaintext returned exactly once; never persisted or logged.
+    return reply.code(201).send({ id, tokenPrefix, token: fullToken, status: "active" });
+  });
+
+  app.get("/identity/scim-tokens", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, ADMIN);
+    const rows = await tokenRepo.listByTenant(ctx.tenantId);
+    return reply.send(rows.map(toScimTokenView));
+  });
+
+  app.post("/identity/scim-tokens/:id/revoke", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, ADMIN);
+    const { id } = scimTokenIdParam.parse(req.params);
+    const existing = await tokenRepo.findById(ctx.tenantId, id);
+    if (!existing) throw new HttpError(404, "NOT_FOUND", "scim token not found");
+    await tokenRepo.revoke(ctx.tenantId, id);
+    return reply.send({ id, status: "revoked" });
   });
 }
