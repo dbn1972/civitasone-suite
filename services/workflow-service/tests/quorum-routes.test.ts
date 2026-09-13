@@ -87,6 +87,30 @@ describe("CAP-026 unanimous decision", () => {
     const r2 = await castVoteAndWaitForTally(app, id, randomUUID(), "reject", 2);
     await app.close();
     expect(r2.tally.outcome).toBe("reject");
+    // REL-025: this rule/outcome combination (reject via unanimity-broken,
+    // rather than majority approve) was never asserted here, so a status-
+    // persistence regression specific to the reject path could have hidden
+    // behind a passing test. Investigated as part of REL-025 and found to
+    // already pass reliably (repeated local runs against an isolated,
+    // freshly migrated Postgres) -- asserted permanently so it stays proven.
+    expect(r2.decision.status).toBe("decided");
+  });
+});
+
+describe("CAP-026 threshold decision", () => {
+  it("settles the instant the threshold is met", async () => {
+    const app = await buildApp();
+    const id = await openDecision(app, { subject: "Emergency spend", rule: "threshold", threshold: 2, totalMembers: 4 });
+    await castVoteAndWaitForTally(app, id, randomUUID(), "approve", 1);
+    const r2 = await castVoteAndWaitForTally(app, id, randomUUID(), "approve", 2);
+    await app.close();
+    expect(r2.tally.decided).toBe(true);
+    expect(r2.tally.outcome).toBe("approve");
+    // REL-025's DoD covers all three rules (majority/unanimous/threshold);
+    // this was the one rule with no test at all for the decided-status
+    // transition. Investigated as part of REL-025 and found to already pass
+    // reliably -- asserted permanently so it stays proven.
+    expect(r2.decision.status).toBe("decided");
   });
 });
 

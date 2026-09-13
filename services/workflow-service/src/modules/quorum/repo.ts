@@ -64,6 +64,55 @@ export async function listVotes(decisionId: string, tenantId: string): Promise<C
     .orderBy(asc(committeeVotes.createdAt)));
 }
 
+export interface DecisionWithVotes {
+  decision: CommitteeDecisionRow;
+  votes: CommitteeVoteRow[];
+}
+
+/**
+ * REL-025 root cause and fix: findDecision() + listVotes() as two independent
+ * scopedRead() calls are two independent READ COMMITTED statements. Under
+ * concurrent load, a castVoteTx() commit landing in the gap between them
+ * makes the second statement (votes) observe a later snapshot than the
+ * first (decision) already read -- so a tally freshly computed from those
+ * votes can legitimately show `decided: true` while `decision.status` is
+ * still the pre-decision "open" row the first statement fetched a moment
+ * earlier. Both reads are correct in isolation; they are just not reads of
+ * the SAME moment.
+ *
+ * Confirmed live: castVoteTx's own write path is atomic and correct (traced
+ * with logging on the exact 3rd/deciding vote -- the UPDATE always ran,
+ * matched its `WHERE status = 'open'` predicate, returned the row with
+ * status="decided", and the surrounding db.transaction() committed cleanly,
+ * every single time). The inconsistency was reproducible ONLY when this
+ * service's full test suite ran concurrently with ~90 other files against
+ * the same disposable Postgres (roughly 3 of 4 runs; never in 40+ runs of
+ * this file alone with zero contention) -- exactly the shape of contention
+ * `turbo test --continue` produces in CI, which is consistent with the
+ * bug's origin in a full-suite CI run.
+ *
+ * Fix: read the decision and its votes as ONE statement pair inside a
+ * REPEATABLE READ transaction, which pins a single snapshot for the whole
+ * transaction (unlike READ COMMITTED's default of a fresh snapshot per
+ * statement) -- so `votes` can never reflect a commit that `decision`
+ * missed. Bypasses scopedRead() (which does not accept an isolation-level
+ * override) and calls db.transaction() directly; wrapWithTenantGuc's
+ * override already forwards this second argument to the underlying
+ * driver, so the tenant GUC is still set first exactly as scopedRead does.
+ */
+export async function findDecisionWithVotes(id: string, tenantId: string): Promise<DecisionWithVotes | null> {
+  return db.transaction(async (tx) => {
+    const rows = await tx.select().from(committeeDecisions)
+      .where(and(eq(committeeDecisions.id, id), eq(committeeDecisions.tenantId, tenantId))).limit(1);
+    const decision = rows[0];
+    if (!decision) return null;
+    const votes = await tx.select().from(committeeVotes)
+      .where(and(eq(committeeVotes.decisionId, id), eq(committeeVotes.tenantId, tenantId)))
+      .orderBy(asc(committeeVotes.createdAt));
+    return { decision, votes };
+  }, { isolationLevel: "repeatable read" });
+}
+
 export interface VoteResult {
   tally: QuorumTally;
   decision: CommitteeDecisionRow;
@@ -113,6 +162,19 @@ export async function castVoteTx(
   if (existing[0]) {
     duplicate = true;
   } else if (decision.status === "open") {
+    // REL-025 investigation note: this `status === "open"` guard means a vote
+    // from a member who had not yet voted, arriving AFTER the decision row's
+    // own lock is acquired but after some OTHER concurrent vote already
+    // tipped the tally and flipped status to "decided", is silently dropped
+    // here -- never inserted, not flagged `duplicate`, no error surfaced.
+    // Verified live (5 concurrent distinct-voter votes on one majority-5
+    // decision, 10/10 trials): the decided transition itself is reliable,
+    // but only the votes that land before the flip are ever persisted; the
+    // late ones vanish with no record of who cast them or what they chose.
+    // Whether that is the intended contract (a decision is final, stop
+    // recording) or a gap (record every cast vote for audit even after the
+    // decision settles) is a product call this investigation did not make
+    // unilaterally -- see docs/ENTERPRISE-GAP-REPORT-2026-09-07.md REL-025.
     await tx.insert(committeeVotes).values({ tenantId, decisionId, voterId, vote, reason });
   }
 

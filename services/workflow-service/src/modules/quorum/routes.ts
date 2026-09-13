@@ -31,14 +31,17 @@ export async function quorumRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req); requireRole(ctx, ROLES);
     const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
     const body = z.object({ vote: z.enum(["approve", "reject", "abstain"]), reason: z.string().max(512).nullable().optional() }).parse(req.body);
-    const existing = await repo.findDecision(id, ctx.tenantId);
-    if (!existing) throw new HttpError(404, "NOT_FOUND", "committee decision not found");
+    // REL-025: read decision+votes from ONE consistent snapshot (see
+    // findDecisionWithVotes doc) instead of two independent statements --
+    // otherwise this pre-check's own tally could show a stale status too.
+    const found = await repo.findDecisionWithVotes(id, ctx.tenantId);
+    if (!found) throw new HttpError(404, "NOT_FOUND", "committee decision not found");
+    const { decision: existing, votes } = found;
     // Synchronous pre-check: a repeat vote from the same actor is a pure
     // read-only no-op (repo.castVote's own idempotency guard would just
     // report `duplicate: true` without writing), so there is no reason to
     // round-trip it through the queue -- answer it immediately with the
     // CURRENT tally, exactly like the pre-CQRS synchronous response did.
-    const votes = await repo.listVotes(id, ctx.tenantId);
     const alreadyVoted = votes.some((v) => v.voterId === ctx.actorId);
     if (alreadyVoted) {
       const tally = tallyQuorum({
@@ -55,9 +58,12 @@ export async function quorumRoutes(app: FastifyInstance): Promise<void> {
   app.get("/v1/workflow/committee-decisions/:id", async (req, reply) => {
     const ctx = resolveContext(req); requireRole(ctx, ROLES);
     const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
-    const decision = await repo.findDecision(id, ctx.tenantId);
-    if (!decision) throw new HttpError(404, "NOT_FOUND", "committee decision not found");
-    const votes = await repo.listVotes(id, ctx.tenantId);
+    // REL-025: see findDecisionWithVotes doc -- decision and votes must come
+    // from one consistent snapshot or a freshly-settled tally can be paired
+    // with a decision row read a moment before it flipped to "decided".
+    const found = await repo.findDecisionWithVotes(id, ctx.tenantId);
+    if (!found) throw new HttpError(404, "NOT_FOUND", "committee decision not found");
+    const { decision, votes } = found;
     const tally = tallyQuorum({ rule: decision.rule as QuorumRule, totalMembers: decision.totalMembers, threshold: decision.threshold, votes: votes.map((v) => v.vote as VoteChoice) });
     return reply.send({ data: { decision, votes, tally } });
   });
