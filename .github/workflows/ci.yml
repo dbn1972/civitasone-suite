@@ -258,6 +258,39 @@ jobs:
           POSTGRES_ADMIN_USER: civitas
           POSTGRES_ADMIN_PASSWORD: civitas_test
         run: node scripts/ci/tenant-index-guard.mjs
+      # PERF-022: the guard above runs as POSTGRES_ADMIN_USER=civitas, the
+      # bootstrapping SUPERUSER — it bypasses bootstrap.generated.sql's
+      # REVOKE ALL ON DATABASE ... FROM PUBLIC hardening entirely, so it
+      # passes regardless of whether civitas_admin (the role
+      # scripts/ci/bootstrap-postgres.sh's EVIDENCE_SUITE_DBS loop and
+      # infra/db/bootstrap/grant_admin_readonly.sql actually grant CONNECT
+      # to) can reach these databases at all. That is exactly how PERF-020's
+      # CONNECT-privilege bug went uncaught by CI in the first place — this
+      # step re-runs the SAME guard as civitas_admin itself, in
+      # --write-baseline mode purely to reuse its existing "refuse to write
+      # when any database is unreachable" check (mirrors
+      # scripts/ci/schema-drift-guard.mjs's identical mechanism, and is
+      # exactly what PERF-020's own review ran by hand to prove its fix) —
+      # a real, live CONNECT-privilege assertion, not a restatement of the
+      # ratchet above. The regenerated baseline is reverted immediately
+      # since only the exit code (reachability) matters here, not its
+      # content — the real ratchet gate already ran as civitas above.
+      #
+      # Scoped to tenant-index-guard.mjs only: schema-drift-guard.mjs has a
+      # separate, pre-existing, PERF-022-unrelated defect (ai-agent-service
+      # resolves to the wrong database name — civitas_ai-agent instead of
+      # civitas_ai_agent — so it always reports one unrelated skip
+      # regardless of role or grants), which would make an equivalent step
+      # for it permanently fail for a reason having nothing to do with
+      # civitas_admin's grants. Flagged separately rather than fixed here
+      # (out of scope for PERF-022) or silently worked around.
+      - name: Tenant index guard — civitas_admin reachability (PERF-022)
+        env:
+          POSTGRES_ADMIN_USER: civitas_admin
+          POSTGRES_ADMIN_PASSWORD: civitas_test
+        run: |
+          node scripts/ci/tenant-index-guard.mjs --write-baseline
+          git checkout -- scripts/ci/tenant-index-baseline.json
       - name: Run integration tests
         run: pnpm exec vitest run tests/integration/
 
@@ -417,6 +450,22 @@ jobs:
         run: pnpm exec vitest run tests/architecture/nested-tx-guard.test.ts
       - name: Nested-transaction guard (no db.transaction()/tenantTransaction()/scopedRead() nested inside another, directly or transitively, TX-011)
         run: node scripts/ci/nested-tx-guard.mjs
+
+      # PERF-022: PERF-020 fixed civitas_admin's CONNECT privilege on 6
+      # REVOKE-ALL-hardened databases by adding 6 entries to
+      # scripts/ci/bootstrap-postgres.sh's EVIDENCE_SUITE_DBS array, but
+      # nothing enforced that list against silently shrinking again — the
+      # superuser-run guards in the Integration Tests job never exercise
+      # civitas_admin's actual grants at all (a superuser bypasses REVOKE
+      # ALL FROM PUBLIC entirely), so CI's gate could not have caught
+      # PERF-020's original bug, and could not catch a future regression of
+      # the same shape either. Pure text analysis (no live DB needed), so
+      # it runs here like the guards above; see integration-tests' "civitas_
+      # admin reachability" step for the live, end-to-end half of this fix.
+      - name: Evidence-suite DBs guard unit tests (PERF-022)
+        run: pnpm exec vitest run tests/architecture/evidence-suite-dbs-guard.test.ts
+      - name: Evidence-suite DBs guard (EVIDENCE_SUITE_DBS must not shrink, PERF-022)
+        run: node scripts/ci/evidence-suite-dbs-guard.mjs
 
   # ─────────────────────────────────────────────
   # Job 4: Web build check
