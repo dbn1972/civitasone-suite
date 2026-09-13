@@ -1304,7 +1304,7 @@ export type SchemeSummary = {
   totalAllocation: number;
   releasedAmount: number;
   projectCount: number;
-  status: "active" | "completed" | "discontinued";
+  status: "active" | "completed" | "cancelled";
 };
 
 export type SchemeDetailProject = {
@@ -1347,7 +1347,7 @@ export type SchemeDetail = {
   releasedMinor: string;
   utilisedMinor: string;
   utilisationPct: number;
-  status: "active" | "completed" | "discontinued";
+  status: "active" | "completed" | "cancelled";
   projects: SchemeDetailProject[];
   nodalOfficer?: string;
   department?: string;

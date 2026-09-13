@@ -1234,7 +1234,7 @@ export const SchemeSummarySchema = z.object({
   totalAllocation: z.number(),
   releasedAmount: z.number().default(0),
   projectCount: z.number().default(0),
-  status: z.enum(["active", "completed", "discontinued"]),
+  status: z.enum(["active", "completed", "cancelled"]),
 });
 export const SchemeSummaryListSchema = z.array(SchemeSummarySchema);
 
@@ -1260,7 +1260,7 @@ export const SchemeDetailSchema = z.object({
   releasedMinor: z.string(),
   utilisedMinor: z.string(),
   utilisationPct: z.number(),
-  status: z.enum(["active", "completed", "discontinued"]),
+  status: z.enum(["active", "completed", "cancelled"]),
   projects: z.array(SchemeDetailProjectSchema),
   // COMP-016 follow-up (migration 0021): see SchemeDetail in
   // packages/types/src/index.ts for why these 5 are optional, not nullable.

@@ -1,14 +1,6 @@
 {
   "$comment": "TRACKED DEBT, not an approved state. Each entry is a call site inside an open tenantTransaction()/scopedRead()/db.transaction() scope that directly or transitively (via 1+ local function calls) opens ANOTHER one of those, which can deadlock the connection pool under concurrent load the same way TX-001's 84 real sites did. TX-001's own DoD claims 0 genuine sites remain fleet-wide after its sweep, so this file's expected baseline is empty; if this list is non-empty, treat every entry as a real, separate finding to review (fix it, or if it's a scanner false positive, fix the scanner) -- never as something to silently absorb into the ratchet to make CI pass. See docs/ENTERPRISE-GAP-REPORT-2026-09-07.md TX-011 and TX-001. Regenerate with --write-baseline only after confirming any newly-absent entry is a real, reviewed fix.",
   "generatedAt": "2026-09-13",
-  "count": 7,
-  "entries": [
-    "finance-service/src/modules/gl/consumer.ts:296",
-    "finance-service/src/modules/gl/consumer.ts:340",
-    "finance-service/src/modules/gl/consumer.ts:356",
-    "finance-service/src/modules/gl/consumer.ts:429",
-    "finance-service/src/modules/gl/consumer.ts:469",
-    "notification-service/src/modules/deliveries/consumer.ts:161",
-    "visitor-service/src/modules/visit-request/consumer.ts:448"
-  ]
+  "count": 0,
+  "entries": []
 }

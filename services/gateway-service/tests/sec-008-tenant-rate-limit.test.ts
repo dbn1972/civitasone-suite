@@ -201,20 +201,21 @@ describe("SEC-008: per-tenant rate limit is keyed on the verified JWT tid, not t
     // since apiKeyPreHandler is a global preHandler too). Stub both fetch
     // destinations: the identity-service key lookup and the upstream proxy.
     //
-    // Hits a PUBLIC route rather than /api/v1/finance/bills. This is
-    // deliberate, not incidental: apiKeyPreHandler is unconditional (it runs
-    // regardless of route publicness) so it still authenticates and injects
-    // the verified tenant here, but proxyHandler's OWN separate auth check
-    // (app.ts, "Enforce authentication for all non-public routes") only ever
-    // looks for a literal `Authorization: Bearer` header and never consults
-    // req.apiKeyAuthenticated — so on any NON-public route an api-key-only
-    // request 401s there regardless of this fix. That is a real, separate,
-    // pre-existing bug (the api-key auth feature cannot reach any non-public
-    // proxied route today) — out of SEC-008's scope, flagged in the PR
-    // description rather than silently fixed here. A public route sidesteps
-    // it cleanly since proxyHandler skips that check entirely for isPublic
-    // paths, letting this test isolate and prove the rate-limit keyGenerator
-    // behavior on its own.
+    // Hits a PUBLIC route rather than /api/v1/finance/bills. At the time
+    // this test was written that was load-bearing, not just tidy: proxyHandler's
+    // OWN separate auth check (app.ts, "Enforce authentication for all
+    // non-public routes") only ever looked for a literal `Authorization:
+    // Bearer` header and never consulted req.apiKeyAuthenticated, so on any
+    // NON-public route an api-key-only request 401'd there regardless of this
+    // fix (SEC-023, out of SEC-008's scope, flagged in the PR description
+    // rather than silently fixed here). SEC-023 has since been fixed (see the
+    // gap report) — proxyHandler now accepts an already-verified api-key
+    // request on non-public routes too, exercised end-to-end by the
+    // companion test below and by sec-023-apikey-nonpublic-auth.test.ts.
+    // Kept on a public route here anyway: it isolates the rate-limit
+    // keyGenerator behavior from proxyHandler's auth gate and the upstream
+    // proxy call entirely, so this test's own failure mode stays limited to
+    // "does the limiter key correctly," independent of either.
     vi.stubGlobal("fetch", async (url: string) => {
       if (url.includes("/internal/apikeys/verify")) {
         return new Response(
@@ -258,19 +259,24 @@ describe("SEC-008: per-tenant rate limit is keyed on the verified JWT tid, not t
     expect(codes).toEqual([200, 200, 200, 429]);
   });
 
-  it("the rate limiter engages correctly for the api-key path on a REAL non-public business route too — SEC-023's separate Bearer-only gate only changes the final response code (401 instead of 200), it does not stop this preHandler from running or from keying on the verified tenant", async () => {
+  it("the rate limiter engages correctly for the api-key path on a REAL non-public business route too — now that SEC-023 is fixed, an in-scope api-key-only request actually reaches the upstream (200), and the tier still 429s once the tenant's budget is exhausted", async () => {
     // Companion to the test above. That one deliberately targets a PUBLIC
     // route to isolate the keyGenerator from SEC-023 (proxyHandler's own
-    // auth check, which 401s an api-key-only request on any non-public
-    // route since it only ever looks for a literal Authorization: Bearer
-    // header). This test instead hits /api/v1/finance/bills directly to
+    // auth check). This test instead hits /api/v1/finance/bills directly to
     // confirm SEC-023 doesn't also mask or bypass the rate limiter itself:
     // the tier is wired as a route-level preHandler (config.rateLimit),
     // which runs BEFORE proxyHandler (the actual route handler, where
-    // SEC-023's check lives) — so it still executes, still increments the
-    // real tenant's bucket, and still 429s once exhausted, even though every
-    // individual under-budget request goes on to get a 401 from SEC-023's
-    // unrelated bug rather than a 200.
+    // SEC-023's check lives) — so it still executes and still increments the
+    // real tenant's bucket regardless of what proxyHandler later decides.
+    //
+    // SEC-023 fixed (this campaign, see gap report): proxyHandler's gate now
+    // also accepts an already-verified api-key request
+    // (req.apiKeyAuthenticated), so every under-budget request below reaches
+    // the upstream and gets 200 — previously (main, pre-fix) each of these
+    // got a 401 from that gate instead, even though the limiter itself was
+    // already keying and counting correctly either way. Sabotage-checked:
+    // reverting ONLY the app.ts SEC-023 fix while keeping this expectation
+    // reproduces the old [401, 401, 401, 429] here.
     vi.stubGlobal("fetch", async (url: string) => {
       if (url.includes("/internal/apikeys/verify")) {
         return new Response(
@@ -311,11 +317,12 @@ describe("SEC-008: per-tenant rate limit is keyed on the verified JWT tid, not t
 
     // First MAX requests pass the rate limiter (keyed correctly on the
     // verified tenant A regardless of the different spoofed header each
-    // time) and reach proxyHandler, which 401s them for lacking a Bearer
-    // header (SEC-023, untouched by this fix). The next request exceeds the
-    // budget and the rate limiter itself returns 429 before proxyHandler —
-    // and therefore SEC-023's check — ever runs.
-    expect(codes).toEqual([401, 401, 401, 429]);
+    // time), reach proxyHandler, and now that SEC-023 is fixed correctly get
+    // through its auth gate on the verified api-key alone (no Authorization
+    // header sent) to the upstream, which the stub answers with 200. The
+    // next request exceeds the budget and the rate limiter itself returns
+    // 429 before proxyHandler — and therefore SEC-023's gate — ever runs.
+    expect(codes).toEqual([200, 200, 200, 429]);
   });
 
   it("GATEWAY_JWT_EDGE_VERIFY=off: with no verified identity available for ANY request, a spoofed x-tenant-id header still has no effect — traffic correctly collapses to one shared IP bucket instead of splitting into attacker-chosen buckets", async () => {
