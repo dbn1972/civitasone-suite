@@ -44,7 +44,7 @@ export type SchemeDetail = {
   releasedMinor: string;
   utilisedMinor: string;
   utilisationPct: number;
-  status: "active" | "completed" | "discontinued";
+  status: "active" | "completed" | "cancelled";
   projects: SchemeDetailProject[];
 };
 
@@ -122,7 +122,7 @@ export async function getSchemeDetail(id: string, tenantId: string): Promise<Sch
     releasedMinor: (row.releasedMinor ?? 0n).toString(),
     utilisedMinor: utilised.toString(),
     utilisationPct,
-    status: (row.status === "completed" ? "completed" : row.status === "discontinued" ? "discontinued" : "active") as "active" | "completed" | "discontinued",
+    status: (row.status === "completed" ? "completed" : row.status === "cancelled" ? "cancelled" : "active") as "active" | "completed" | "cancelled",
     projects: projectRows.map((p) => ({
       id: p.id,
       code: p.code,
@@ -166,7 +166,7 @@ export async function listSchemeSummaries(tenantId: string, limit: number) {
     totalAllocation: minorToAmount(row.totalOutlayMinor),
     releasedAmount: minorToAmount(row.releasedMinor),
     projectCount: projectCountBySchemeId.get(row.id) ?? 0,
-    status: (row.status === "completed" ? "completed" : row.status === "discontinued" ? "discontinued" : "active") as "active" | "completed" | "discontinued",
+    status: (row.status === "completed" ? "completed" : row.status === "cancelled" ? "cancelled" : "active") as "active" | "completed" | "cancelled",
   }));
 }
 
