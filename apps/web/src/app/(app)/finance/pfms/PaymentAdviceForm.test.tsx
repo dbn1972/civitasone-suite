@@ -66,8 +66,9 @@ describe("PaymentAdviceForm", () => {
     fireEvent.click(screen.getByText("Generate advice"));
 
     await waitFor(() => {
-      expect(screen.getByText(/API_ERROR: 400/)).toBeInTheDocument();
+      expect(screen.getByText(/couldn't save/i)).toBeInTheDocument();
     });
+    expect(screen.queryByText(/API_ERROR/)).not.toBeInTheDocument();
   });
 
   it("looks up a payment advice status", async () => {

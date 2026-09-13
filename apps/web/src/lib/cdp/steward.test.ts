@@ -91,7 +91,7 @@ describe("decideMerge", () => {
     expect("reason" in body).toBe(false);
   });
 
-  it("throws with the server's real code and message on a race (already decided)", async () => {
+  it("throws a clerk-safe message on a race (already decided), never the server's raw code/message (UX-020)", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(
       new Response(
         JSON.stringify({ code: "ALREADY_DECIDED", message: "merge request is already approved" }),
@@ -99,8 +99,9 @@ describe("decideMerge", () => {
       ),
     );
 
-    await expect(decideMerge(CANDIDATE.id, "approve")).rejects.toThrow(
-      "ALREADY_DECIDED: merge request is already approved",
+    await expect(decideMerge(CANDIDATE.id, "approve")).rejects.toThrow(/couldn't save/i);
+    await expect(decideMerge(CANDIDATE.id, "approve")).rejects.not.toThrow(
+      /ALREADY_DECIDED|already approved/,
     );
   });
 });

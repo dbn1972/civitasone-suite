@@ -62,7 +62,7 @@ describe("GstnConsole", () => {
     });
   });
 
-  it("surfaces an INTEGRATION_DISABLED error from the server", async () => {
+  it("surfaces a clerk-safe message on failure, never the server's raw INTEGRATION_DISABLED code (UX-020)", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(
       new Response(
         JSON.stringify({ error: { code: "INTEGRATION_DISABLED", message: "GSTN integration is not available" } }),
@@ -80,8 +80,9 @@ describe("GstnConsole", () => {
     fireEvent.click(lastButtonNamed("Submit Return"));
 
     await waitFor(() => {
-      expect(screen.getByText(/INTEGRATION_DISABLED: GSTN integration is not available/)).toBeInTheDocument();
+      expect(screen.getByText(/couldn't save/i)).toBeInTheDocument();
     });
+    expect(screen.queryByText(/INTEGRATION_DISABLED: GSTN integration is not available/)).not.toBeInTheDocument();
   });
 
   it("switches to the Verify GSTIN tab and verifies a GSTIN", async () => {

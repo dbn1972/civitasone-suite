@@ -11,7 +11,10 @@
  * list / zero as fact. The stage + KYC helpers MIRROR the backend state machine
  * (services/crm-service/src/modules/onboarding/domain.ts) so the UI only offers
  * legal actions — but the backend remains the source of truth: an illegal or
- * KYC-gated transition still returns 422 and that reason is surfaced verbatim.
+ * KYC-gated transition still returns 422, and that failure is never silent —
+ * advanceStage/recordKyc reject and the caller shows a clerk-safe catalogued
+ * message (errorMessageFromResponse, UX-020), not the backend's raw 422
+ * code/reason text.
  */
 import { browserFetch, errorMessageFromResponse } from "@/lib/api/browserClient";
 
@@ -301,9 +304,12 @@ export interface AdvanceStageInput {
 /**
  * Advance the stage. The backend enforces the state machine AND the KYC gate: an
  * illegal transition or a premature completion returns 422 with the allowed set
- * / KYC reason in the body — errorMessageFromResponse surfaces it verbatim
- * ("INVALID_TRANSITION: cannot move from …" / "KYC_NOT_VERIFIED: …"). We never
- * swallow it.
+ * / KYC reason in the body ("INVALID_TRANSITION: cannot move from …" /
+ * "KYC_NOT_VERIFIED: …"). We never swallow that failure, but since UX-020 we
+ * also never show it raw — errorMessageFromResponse maps it to a clerk-safe
+ * catalogued message instead (docs/ENTERPRISE-GAP-REPORT-2026-09-07.md
+ * UX-003/UX-016/UX-020: an internal state-machine code is still developer
+ * phrasing, the same bug class those gaps close everywhere else).
  */
 export async function advanceStage(id: string, input: AdvanceStageInput): Promise<MutationResult> {
   const body: Record<string, unknown> = { toStage: input.toStage };
@@ -326,7 +332,9 @@ export interface RecordKycInput {
 /**
  * Record a KYC outcome. The backend enforces the KYC lifecycle (an illegal
  * status move returns 422 INVALID_KYC_TRANSITION with the allowed set) and
- * requires an approver role for verified/rejected (403). Surface either verbatim.
+ * requires an approver role for verified/rejected (403). Neither failure is
+ * swallowed, but per UX-020 neither is shown raw either — see advanceStage
+ * above.
  */
 export async function recordKyc(id: string, input: RecordKycInput): Promise<MutationResult> {
   const body: Record<string, unknown> = { status: input.status };

@@ -45,7 +45,7 @@ describe("AssesseeCreateForm", () => {
     expect(refreshMock).toHaveBeenCalled();
   });
 
-  it("surfaces a server error on the confirm dialog (error path)", async () => {
+  it("surfaces a clerk-safe error on the confirm dialog, never the server's raw code/message (error path) (UX-020)", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(
       new Response(JSON.stringify({ error: { code: "VALIDATION_FAILED", message: "identifierNo is required" } }), { status: 400 }),
     );
@@ -58,7 +58,8 @@ describe("AssesseeCreateForm", () => {
     fireEvent.click(screen.getByText("Register assessee"));
 
     await waitFor(() => {
-      expect(screen.getByText(/VALIDATION_FAILED: identifierNo is required/)).toBeInTheDocument();
+      expect(screen.getByText(/couldn't save/i)).toBeInTheDocument();
     });
+    expect(screen.queryByText(/VALIDATION_FAILED: identifierNo is required/)).not.toBeInTheDocument();
   });
 });

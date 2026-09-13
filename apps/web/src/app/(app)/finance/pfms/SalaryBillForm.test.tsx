@@ -70,8 +70,9 @@ describe("SalaryBillForm", () => {
     fireEvent.click(screen.getByText("Submit salary bill"));
 
     await waitFor(() => {
-      expect(screen.getByText(/API_ERROR: 500/)).toBeInTheDocument();
+      expect(screen.getByText(/couldn't save/i)).toBeInTheDocument();
     });
+    expect(screen.queryByText(/API_ERROR/)).not.toBeInTheDocument();
   });
 
   it("shows a fallback message and disables the select when no departments are available", () => {

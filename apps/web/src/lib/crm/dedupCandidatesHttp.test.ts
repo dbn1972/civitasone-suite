@@ -33,8 +33,10 @@ describe("dedupCandidates HTTP client (DQ-001)", () => {
     expect(JSON.parse(init.body as string)).toEqual({ primaryId: "left-1", duplicateId: "right-2" });
   });
 
-  it("mergeDedupPair surfaces the server's error message on failure", async () => {
+  it("mergeDedupPair throws a clerk-safe message on failure, never the server's raw code/message (UX-020)", async () => {
     fetchMock.mockResolvedValueOnce(res({ code: "NOT_FOUND", message: "contact not found" }, { status: 404 }));
-    await expect(dedup.mergeDedupPair("left-1", "right-2")).rejects.toThrow(/NOT_FOUND/);
+    await expect(dedup.mergeDedupPair("left-1", "right-2")).rejects.toThrow(/couldn't load/i);
+    fetchMock.mockResolvedValueOnce(res({ code: "NOT_FOUND", message: "contact not found" }, { status: 404 }));
+    await expect(dedup.mergeDedupPair("left-1", "right-2")).rejects.not.toThrow(/NOT_FOUND|contact not found/);
   });
 });

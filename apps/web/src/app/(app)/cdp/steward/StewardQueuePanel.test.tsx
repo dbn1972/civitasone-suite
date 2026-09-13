@@ -95,7 +95,7 @@ describe("StewardQueuePanel", () => {
     expect(screen.getByText("Submitted…")).toBeInTheDocument();
   });
 
-  it("requires a reason before Reject's confirm is enabled, and surfaces a real server error on failure", async () => {
+  it("requires a reason before Reject's confirm is enabled, and surfaces a clerk-safe message on failure, never the server's raw code (UX-020)", async () => {
     const fetchSpy = vi.spyOn(globalThis, "fetch");
     fetchSpy.mockResolvedValueOnce(queueResponse());
 
@@ -125,7 +125,8 @@ describe("StewardQueuePanel", () => {
     );
     fireEvent.click(dialogConfirm);
 
-    await waitFor(() => expect(within(dialog).getByText(/ALREADY_DECIDED/)).toBeInTheDocument());
+    await waitFor(() => expect(within(dialog).getByText(/couldn't save/i)).toBeInTheDocument());
+    expect(within(dialog).queryByText(/ALREADY_DECIDED/)).not.toBeInTheDocument();
     // The dialog stays open on failure so the steward can retry or cancel — nothing silently swallowed.
     expect(screen.getByText("Reject this merge suggestion?")).toBeInTheDocument();
   });

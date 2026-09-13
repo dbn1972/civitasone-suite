@@ -43,7 +43,7 @@ describe("ForecastPanel", () => {
     expect(screen.getByText("85%")).toBeInTheDocument();
   });
 
-  it("surfaces a server error (error path)", async () => {
+  it("surfaces a clerk-safe error, never the server's raw code/message (error path) (UX-020)", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(
       new Response(JSON.stringify({ error: { code: "VALIDATION_FAILED", message: "bad request" } }), { status: 400 }),
     );
@@ -52,7 +52,8 @@ describe("ForecastPanel", () => {
     fireEvent.click(screen.getByRole("button", { name: "Run Forecast" }));
 
     await waitFor(() => {
-      expect(screen.getByText(/VALIDATION_FAILED: bad request/)).toBeInTheDocument();
+      expect(screen.getByText(/couldn't save/i)).toBeInTheDocument();
     });
+    expect(screen.queryByText(/VALIDATION_FAILED: bad request/)).not.toBeInTheDocument();
   });
 });

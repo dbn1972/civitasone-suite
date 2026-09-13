@@ -90,9 +90,10 @@ describe("client calls", () => {
     expect(out[0].id).toBe("x");
     expect(fetchMock.mock.calls[0][0]).toContain("v1/crm/contacts/duplicate-check");
   });
-  it("duplicateCheck throws a coded message on failure", async () => {
-    fetchMock.mockResolvedValueOnce(fail(500, { code: "OOPS", message: "boom" }));
-    await expect(duplicateCheck({})).rejects.toThrow(/OOPS: boom/);
+  it("duplicateCheck throws a clerk-safe message on failure, never the server's raw code/message (UX-020)", async () => {
+    fetchMock.mockResolvedValue(fail(500, { code: "OOPS", message: "boom" }));
+    await expect(duplicateCheck({})).rejects.toThrow(/couldn't save/i);
+    await expect(duplicateCheck({})).rejects.not.toThrow(/OOPS|boom/);
   });
   it("getDedupRules returns source:error on failure (no fabricated data)", async () => {
     fetchMock.mockResolvedValueOnce(fail(503, {}));
@@ -114,9 +115,10 @@ describe("client calls", () => {
     await saveDedupRules([{ field: "email", matchType: "exact", weight: 1, threshold: 0.9, enabled: true }]);
     expect(fetchMock.mock.calls[0][1]).toMatchObject({ method: "PUT" });
   });
-  it("saveDedupRules throws on failure", async () => {
-    fetchMock.mockResolvedValueOnce(fail(400, { code: "BAD", message: "nope" }));
-    await expect(saveDedupRules([])).rejects.toThrow(/BAD/);
+  it("saveDedupRules throws a clerk-safe message on failure, never the server's raw code/message (UX-020)", async () => {
+    fetchMock.mockResolvedValue(fail(400, { code: "BAD", message: "nope" }));
+    await expect(saveDedupRules([])).rejects.toThrow(/couldn't save/i);
+    await expect(saveDedupRules([])).rejects.not.toThrow(/BAD|nope/);
   });
   it("mergeEntities posts primary+duplicate to the right entity path", async () => {
     fetchMock.mockResolvedValueOnce({ ok: true, status: 202, json: async () => ({}), clone: () => ({ json: async () => ({}) }) });
@@ -124,9 +126,10 @@ describe("client calls", () => {
     expect(fetchMock.mock.calls[0][0]).toContain("v1/crm/accounts/merge");
     expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({ primaryId: "p1", duplicateId: "d1" });
   });
-  it("mergeEntities throws on failure", async () => {
-    fetchMock.mockResolvedValueOnce(fail(409, { code: "CONFLICT", message: "busy" }));
-    await expect(mergeEntities("contacts", "a", "b")).rejects.toThrow(/CONFLICT/);
+  it("mergeEntities throws a clerk-safe message on failure, never the server's raw code/message (UX-020)", async () => {
+    fetchMock.mockResolvedValue(fail(409, { code: "CONFLICT", message: "busy" }));
+    await expect(mergeEntities("contacts", "a", "b")).rejects.toThrow(/couldn't save/i);
+    await expect(mergeEntities("contacts", "a", "b")).rejects.not.toThrow(/CONFLICT|busy/);
   });
   it("getDataQuality returns source:api on success", async () => {
     fetchMock.mockResolvedValueOnce(ok({ counts: { missing: 1, invalid: 2, stale: 3 }, records: [], distribution: [] }));

@@ -67,8 +67,9 @@ describe("SeniorityListActions", () => {
     fireEvent.click(screen.getByRole("button", { name: "Generate" }));
 
     await waitFor(() => {
-      expect(screen.getByText(/HR admin role required\./)).toBeInTheDocument();
+      expect(screen.getByText(/couldn't save/i)).toBeInTheDocument();
     });
+    expect(screen.queryByText(/HR admin role required/)).not.toBeInTheDocument();
     // Failure must stay visible in the dialog, not disappear silently, and
     // must not fabricate a success message or reveal the Approve action.
     expect(screen.queryByText(/Seniority list generation queued/)).not.toBeInTheDocument();
@@ -132,8 +133,9 @@ describe("SeniorityListActions", () => {
     fireEvent.click(screen.getByRole("button", { name: "Approve" }));
 
     await waitFor(() => {
-      expect(screen.getByText(/API_ERROR: 500/)).toBeInTheDocument();
+      expect(screen.getByText(/couldn't save/i)).toBeInTheDocument();
     });
+    expect(screen.queryByText(/API_ERROR/)).not.toBeInTheDocument();
     // The list is still pending approval -- the action must stay available,
     // not be silently consumed on a failed attempt.
     expect(
@@ -163,8 +165,9 @@ describe("SeniorityListActions", () => {
     fireEvent.click(screen.getByRole("button", { name: "Approve" }));
 
     await waitFor(() => {
-      expect(screen.getByText(/INVALID_STATUS: seniority list is already approved/)).toBeInTheDocument();
+      expect(screen.getByText(/couldn't save/i)).toBeInTheDocument();
     });
+    expect(screen.queryByText(/INVALID_STATUS/)).not.toBeInTheDocument();
     // Must never show any approval-submitted/approved copy on this path.
     expect(screen.queryByText(/approval submitted/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/approved\./)).not.toBeInTheDocument();

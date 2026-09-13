@@ -73,19 +73,26 @@ describe("OnboardingDetail (P1-9)", () => {
     expect(await screen.findByText(/Case moved to "Documents submitted"/i)).toBeInTheDocument();
   });
 
-  it("surfaces the backend 422 KYC-gate reason verbatim (never silent)", async () => {
+  it("shows a clerk-safe message on a 422 KYC-gate rejection (never silent, never the raw backend code/text — UX-020)", async () => {
     // provisioning + verified so the Completed option is enabled and selectable,
     // but the BE still rejects (proves the UI trusts the BE, not just its mirror).
+    // UX-020: advanceStage (apps/web/src/lib/crm/onboarding.ts) now rejects
+    // with the clerk-safe catalogued message errorMessageFromResponse builds,
+    // not the backend's raw "KYC_NOT_VERIFIED: ..." text — see
+    // onboarding.test.ts for that mapping. This test only needs to prove
+    // OnboardingDetail still shows *some* message (never silent) and never
+    // the pre-UX-020 raw code, whatever the exact rejection text.
     vi.mocked(onb.getOnboardingCase).mockResolvedValue({ data: caseAt("provisioning", "verified"), source: "api" });
     vi.mocked(onb.advanceStage).mockRejectedValue(
-      new Error("KYC_NOT_VERIFIED: onboarding cannot be completed while KYC is 'submitted' — it must be 'verified'"),
+      new Error("We couldn't save your information. Nothing was changed. Please try again in a moment."),
     );
     render(<OnboardingDetail id="c1" />);
     fireEvent.change(await screen.findByLabelText(/move to/i), { target: { value: "completed" } });
     fireEvent.click(screen.getByRole("button", { name: /apply stage change/i }));
     const dialog = await screen.findByRole("alertdialog");
     fireEvent.click(within(dialog).getByRole("button", { name: /confirm change/i }));
-    expect((await screen.findAllByText(/KYC_NOT_VERIFIED/)).length).toBeGreaterThan(0);
+    expect((await screen.findAllByText(/couldn't save/i)).length).toBeGreaterThan(0);
+    expect(screen.queryByText(/KYC_NOT_VERIFIED/)).not.toBeInTheDocument();
   });
 
   it("cancelling requires a reason in the dialog before it will submit", async () => {

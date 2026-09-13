@@ -62,7 +62,8 @@ describe("CreateCorrectionForm", () => {
     fireEvent.click(screen.getByText("Record correction"));
 
     await waitFor(() => {
-      expect(screen.getByText(/API_ERROR: 422/)).toBeInTheDocument();
+      expect(screen.getByText(/couldn't save/i)).toBeInTheDocument();
     });
+    expect(screen.queryByText(/API_ERROR/)).not.toBeInTheDocument();
   });
 });

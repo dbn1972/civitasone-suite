@@ -190,24 +190,38 @@ describe("onboarding HTTP client", () => {
     });
   });
 
-  it("advanceStage surfaces the 422 KYC-gate reason verbatim (never swallowed)", async () => {
-    fetchMock.mockResolvedValueOnce(
+  it("advanceStage throws a clerk-safe message on a 422 KYC-gate rejection, never the server's raw code/message (UX-020)", async () => {
+    // UX-020: this test used to assert the opposite — that the raw
+    // "KYC_NOT_VERIFIED: onboarding cannot be completed..." text was shown
+    // verbatim, on the theory that a silently-swallowed error is worse than
+    // a raw one. errorMessageFromResponse (apps/web/src/lib/api/
+    // browserClient.ts) now closes that same gap the way useFormError
+    // already does elsewhere: a clerk-safe catalogued message, still never
+    // silent, never the raw code/message. See docs/ENTERPRISE-GAP-REPORT-
+    // 2026-09-07.md UX-020.
+    fetchMock.mockResolvedValue(
       res(
         { code: "KYC_NOT_VERIFIED", message: "onboarding cannot be completed while KYC is 'submitted' — it must be 'verified'" },
         { status: 422 },
       ),
     );
-    await expect(onb.advanceStage("c1", { toStage: "completed" })).rejects.toThrow(/KYC_NOT_VERIFIED/);
+    await expect(onb.advanceStage("c1", { toStage: "completed" })).rejects.toThrow(/couldn't save/i);
+    await expect(onb.advanceStage("c1", { toStage: "completed" })).rejects.not.toThrow(
+      /KYC_NOT_VERIFIED|must be 'verified'/,
+    );
   });
 
-  it("advanceStage surfaces the 422 INVALID_TRANSITION allowed-set reason", async () => {
-    fetchMock.mockResolvedValueOnce(
+  it("advanceStage throws a clerk-safe message on a 422 INVALID_TRANSITION rejection, never the raw allowed-set text (UX-020)", async () => {
+    fetchMock.mockResolvedValue(
       res({ code: "INVALID_TRANSITION", message: "cannot move from 'initiated' to 'completed' (allowed: documents_submitted, cancelled)" }, { status: 422 }),
     );
-    await expect(onb.advanceStage("c1", { toStage: "completed" })).rejects.toThrow(/allowed: documents_submitted/);
+    await expect(onb.advanceStage("c1", { toStage: "completed" })).rejects.toThrow(/couldn't save/i);
+    await expect(onb.advanceStage("c1", { toStage: "completed" })).rejects.not.toThrow(
+      /INVALID_TRANSITION|allowed: documents_submitted/,
+    );
   });
 
-  it("recordKyc returns accepted on 202 and surfaces a 422 INVALID_KYC_TRANSITION", async () => {
+  it("recordKyc returns accepted on 202 and throws a clerk-safe message on a 422 INVALID_KYC_TRANSITION, never the raw code (UX-020)", async () => {
     fetchMock.mockResolvedValueOnce(res({ accepted: true }, { status: 202 }));
     const r = await onb.recordKyc("c1", { status: "verified", reference: "REF-9", version: 2 });
     expect(r.accepted).toBe(true);
@@ -216,9 +230,10 @@ describe("onboarding HTTP client", () => {
       reference: "REF-9",
       version: 2,
     });
-    fetchMock.mockResolvedValueOnce(
+    fetchMock.mockResolvedValue(
       res({ code: "INVALID_KYC_TRANSITION", message: "cannot move KYC from 'verified' to 'submitted' (allowed: )" }, { status: 422 }),
     );
-    await expect(onb.recordKyc("c1", { status: "submitted" })).rejects.toThrow(/INVALID_KYC_TRANSITION/);
+    await expect(onb.recordKyc("c1", { status: "submitted" })).rejects.toThrow(/couldn't save/i);
+    await expect(onb.recordKyc("c1", { status: "submitted" })).rejects.not.toThrow(/INVALID_KYC_TRANSITION/);
   });
 });

@@ -62,7 +62,8 @@ describe("GenerateForm16Form", () => {
     fireEvent.click(screen.getByText("Generate"));
 
     await waitFor(() => {
-      expect(screen.getByText(/API_ERROR: 409/)).toBeInTheDocument();
+      expect(screen.getByText(/couldn't save/i)).toBeInTheDocument();
     });
+    expect(screen.queryByText(/API_ERROR/)).not.toBeInTheDocument();
   });
 });

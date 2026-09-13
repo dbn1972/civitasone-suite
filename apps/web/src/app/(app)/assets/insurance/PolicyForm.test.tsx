@@ -68,7 +68,7 @@ describe("PolicyForm", () => {
     expect(screen.getByText("End date must be after the start date.")).toBeInTheDocument();
   });
 
-  it("surfaces a server error on submit (error path)", async () => {
+  it("surfaces a clerk-safe message on submit, never a raw status code (UX-020)", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(null, { status: 500 }));
 
     render(<PolicyForm assets={assets} />);
@@ -83,7 +83,8 @@ describe("PolicyForm", () => {
     fireEvent.click(screen.getByRole("button", { name: "Create insurance policy" }));
 
     await waitFor(() => {
-      expect(screen.getByText(/API_ERROR: 500/)).toBeInTheDocument();
+      expect(screen.getByText(/couldn't save/i)).toBeInTheDocument();
     });
+    expect(screen.queryByText(/API_ERROR/)).not.toBeInTheDocument();
   });
 });

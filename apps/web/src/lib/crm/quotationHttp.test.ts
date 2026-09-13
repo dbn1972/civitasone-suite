@@ -30,7 +30,9 @@ describe("quotation HTTP client (QP-001..005)", () => {
     fetchMock.mockResolvedValueOnce(res({}, { status: 200 }));
     await expect(qp.deleteProduct("p1")).resolves.toBeUndefined();
     fetchMock.mockResolvedValueOnce(res({ code: "E", message: "m" }, { status: 400 }));
-    await expect(qp.createProduct(product)).rejects.toThrow(/E/);
+    await expect(qp.createProduct(product)).rejects.toThrow(/couldn't save/i);
+    fetchMock.mockResolvedValueOnce(res({ code: "E", message: "m" }, { status: 400 }));
+    await expect(qp.createProduct(product)).rejects.not.toThrow(/E/);
   });
 
   it("price-book loaders, CRUD and resolve", async () => {
@@ -60,7 +62,9 @@ describe("quotation HTTP client (QP-001..005)", () => {
     fetchMock.mockResolvedValueOnce(res({ code: "APPROVAL_REQUIRED", message: "blocked" }, { status: 422 }));
     await expect(qp.sendQuotation("q1")).rejects.toBeInstanceOf(qp.ApprovalRequiredError);
     fetchMock.mockResolvedValueOnce(res({ code: "BAD", message: "x" }, { status: 400 }));
-    await expect(qp.sendQuotation("q1")).rejects.toThrow(/BAD/);
+    await expect(qp.sendQuotation("q1")).rejects.toThrow(/couldn't save/i);
+    fetchMock.mockResolvedValueOnce(res({ code: "BAD", message: "x" }, { status: 400 }));
+    await expect(qp.sendQuotation("q1")).rejects.not.toThrow(/BAD/);
   });
 
   it("accept/reject/new-version/convert + approvals + versions", async () => {

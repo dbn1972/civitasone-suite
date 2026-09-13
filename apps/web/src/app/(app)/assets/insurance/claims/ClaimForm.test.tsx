@@ -61,7 +61,7 @@ describe("ClaimForm", () => {
     expect(body.claimAmountMinor).toBe(800000);
   });
 
-  it("surfaces the real server error code on the confirm dialog (error path)", async () => {
+  it("surfaces a clerk-safe message on the confirm dialog, never the server's raw error code (UX-020)", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(
       new Response(JSON.stringify({ code: "CLAIM_EXCEEDS_COVERAGE", message: "claim amount exceeds the policy's sum insured" }), {
         status: 400,
@@ -78,7 +78,8 @@ describe("ClaimForm", () => {
     fireEvent.click(screen.getByText("File claim"));
 
     await waitFor(() => {
-      expect(screen.getByText(/CLAIM_EXCEEDS_COVERAGE/)).toBeInTheDocument();
+      expect(screen.getByText(/couldn't save/i)).toBeInTheDocument();
     });
+    expect(screen.queryByText(/CLAIM_EXCEEDS_COVERAGE/)).not.toBeInTheDocument();
   });
 });

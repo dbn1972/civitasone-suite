@@ -40,7 +40,8 @@ describe("PaymentStatusLookup", () => {
     fireEvent.click(screen.getByText("Check Status"));
 
     await waitFor(() => {
-      expect(screen.getByText(/API_ERROR: 503/)).toBeInTheDocument();
+      expect(screen.getByText(/couldn't save/i)).toBeInTheDocument();
     });
+    expect(screen.queryByText(/API_ERROR/)).not.toBeInTheDocument();
   });
 });

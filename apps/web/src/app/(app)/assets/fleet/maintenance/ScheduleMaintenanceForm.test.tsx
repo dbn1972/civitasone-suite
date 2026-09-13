@@ -46,7 +46,7 @@ describe("ScheduleMaintenanceForm", () => {
     expect(refreshMock).toHaveBeenCalled();
   });
 
-  it("surfaces a server error on the confirm dialog (error path)", async () => {
+  it("surfaces a clerk-safe message on the confirm dialog, never a raw status code (UX-020)", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(null, { status: 500 }));
 
     render(<ScheduleMaintenanceForm />);
@@ -58,7 +58,8 @@ describe("ScheduleMaintenanceForm", () => {
     fireEvent.click(screen.getByText("Schedule maintenance"));
 
     await waitFor(() => {
-      expect(screen.getByText(/API_ERROR: 500/)).toBeInTheDocument();
+      expect(screen.getByText(/couldn't save/i)).toBeInTheDocument();
     });
+    expect(screen.queryByText(/API_ERROR/)).not.toBeInTheDocument();
   });
 });

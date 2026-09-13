@@ -51,8 +51,9 @@ describe("SponsorBankConfigForm", () => {
     fireEvent.click(screen.getByText("Save configuration"));
 
     await waitFor(() => {
-      expect(screen.getByText(/API_ERROR: 500/)).toBeInTheDocument();
+      expect(screen.getByText(/couldn't save/i)).toBeInTheDocument();
     });
+    expect(screen.queryByText(/API_ERROR/)).not.toBeInTheDocument();
   });
 
   it("does not require a sponsor account when one is already configured (update mode)", () => {

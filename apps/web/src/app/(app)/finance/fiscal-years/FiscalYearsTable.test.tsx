@@ -62,7 +62,8 @@ describe("FiscalYearsTable", () => {
     fireEvent.click(screen.getByText("Activate fiscal year"));
 
     await waitFor(() => {
-      expect(screen.getByText(/API_ERROR: 500/)).toBeInTheDocument();
+      expect(screen.getByText(/couldn't save/i)).toBeInTheDocument();
     });
+    expect(screen.queryByText(/API_ERROR/)).not.toBeInTheDocument();
   });
 });

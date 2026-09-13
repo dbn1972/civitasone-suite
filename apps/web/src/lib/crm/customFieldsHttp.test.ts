@@ -120,11 +120,15 @@ describe("customFields HTTP client", () => {
     });
   });
 
-  it("createCustomField throws the server error message", async () => {
+  it("createCustomField throws a clerk-safe message on failure, never the server's raw code/message (UX-020)", async () => {
     fetchMock.mockResolvedValueOnce(res({ code: "CUSTOM_FIELD_LIMIT_REACHED", message: "too many" }, { status: 422 }));
     await expect(
       cf.createCustomField({ ...cf.blankDraft("leads"), fieldName: "n" }),
-    ).rejects.toThrow(/CUSTOM_FIELD_LIMIT_REACHED/);
+    ).rejects.toThrow(/couldn't save/i);
+    fetchMock.mockResolvedValueOnce(res({ code: "CUSTOM_FIELD_LIMIT_REACHED", message: "too many" }, { status: 422 }));
+    await expect(
+      cf.createCustomField({ ...cf.blankDraft("leads"), fieldName: "n" }),
+    ).rejects.not.toThrow(/CUSTOM_FIELD_LIMIT_REACHED/);
   });
 
   it("updateCustomField PATCHes and deleteCustomField DELETEs by id", async () => {

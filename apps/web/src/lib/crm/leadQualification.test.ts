@@ -146,14 +146,17 @@ describe("leadQualification client calls", () => {
     expect(out).toEqual({ outcome: "qualified", score: 88 });
   });
 
-  it("transitionLead surfaces the server error code+message on failure", async () => {
+  it("transitionLead throws a clerk-safe message on failure, never the server's raw code+message (UX-020)", async () => {
     fetchMock.mockResolvedValue({
       ok: false,
       status: 409,
       clone: () => ({ json: async () => ({ code: "INVALID_TRANSITION", message: "not allowed" }) }),
     });
     await expect(transitionLead("l1", { targetStatus: "qualified", reasonCode: "X" })).rejects.toThrow(
-      /INVALID_TRANSITION: not allowed/,
+      /couldn't save/i,
+    );
+    await expect(transitionLead("l1", { targetStatus: "qualified", reasonCode: "X" })).rejects.not.toThrow(
+      /INVALID_TRANSITION|not allowed/,
     );
   });
 
@@ -192,12 +195,18 @@ describe("leadQualification framework + rule + reason CRUD calls", () => {
     expect((await getFrameworks()).source).toBe("error");
   });
 
-  it("createFramework POSTs and throws the server error on failure", async () => {
+  it("createFramework POSTs and throws a clerk-safe message on failure, never the server's raw code/message (UX-020)", async () => {
     fetchMock.mockResolvedValueOnce(ok);
     await createFramework({ name: "F", businessLine: "gov", active: true, questions: [] });
     expect(fetchMock.mock.calls[0][1].method).toBe("POST");
     fetchMock.mockResolvedValueOnce(fail);
-    await expect(createFramework({ name: "F", businessLine: "gov", active: true, questions: [] })).rejects.toThrow(/BAD: no/);
+    await expect(createFramework({ name: "F", businessLine: "gov", active: true, questions: [] })).rejects.toThrow(
+      /couldn't save/i,
+    );
+    fetchMock.mockResolvedValueOnce(fail);
+    await expect(
+      createFramework({ name: "F", businessLine: "gov", active: true, questions: [] }),
+    ).rejects.not.toThrow(/BAD/);
   });
 
   it("updateFramework PUTs to the id path", async () => {
@@ -234,16 +243,19 @@ describe("leadQualification framework + rule + reason CRUD calls", () => {
     expect((await getReasonCodes()).source).toBe("error");
   });
 
-  it("saveReasonCodes PUTs a { codes } envelope and throws on failure", async () => {
+  it("saveReasonCodes PUTs a { codes } envelope and throws a clerk-safe message on failure, never the server's raw code/message (UX-020)", async () => {
     fetchMock.mockResolvedValueOnce(ok);
     await saveReasonCodes([{ code: "X", label: "X", appliesToStatus: "", active: true }]);
     expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toHaveProperty("codes");
     fetchMock.mockResolvedValueOnce(fail);
-    await expect(saveReasonCodes([])).rejects.toThrow(/BAD: no/);
+    await expect(saveReasonCodes([])).rejects.toThrow(/couldn't save/i);
+    fetchMock.mockResolvedValueOnce(fail);
+    await expect(saveReasonCodes([])).rejects.not.toThrow(/BAD/);
   });
 
-  it("saveClassification throws the server error on failure", async () => {
+  it("saveClassification throws a clerk-safe message on failure, never the server's raw code/message (UX-020)", async () => {
     fetchMock.mockResolvedValue(fail);
-    await expect(saveClassification("c1", { temperature: "hot" })).rejects.toThrow(/BAD: no/);
+    await expect(saveClassification("c1", { temperature: "hot" })).rejects.toThrow(/couldn't save/i);
+    await expect(saveClassification("c1", { temperature: "hot" })).rejects.not.toThrow(/BAD/);
   });
 });

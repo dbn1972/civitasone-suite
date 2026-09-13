@@ -63,7 +63,7 @@ describe("AssetFinancialActions — impairment", () => {
     expect(body.reason).toBe("Site inspection confirmed damage");
   });
 
-  it("surfaces the server's error code/message on failure", async () => {
+  it("surfaces a clerk-safe message on failure, never the server's raw code/message (UX-020)", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(
       new Response(JSON.stringify({ code: "INVALID", message: "impairment exceeds book value" }), { status: 400 }),
     );
@@ -76,8 +76,9 @@ describe("AssetFinancialActions — impairment", () => {
     fireEvent.click(screen.getByText("Post impairment"));
 
     await waitFor(() => {
-      expect(screen.getByText(/INVALID: impairment exceeds book value/)).toBeInTheDocument();
+      expect(screen.getByText(/couldn't save/i)).toBeInTheDocument();
     });
+    expect(screen.queryByText(/INVALID: impairment exceeds book value/)).not.toBeInTheDocument();
     expect(refreshMock).not.toHaveBeenCalled();
   });
 });

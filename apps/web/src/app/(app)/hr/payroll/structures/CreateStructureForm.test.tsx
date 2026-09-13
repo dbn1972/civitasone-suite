@@ -38,7 +38,7 @@ describe("CreateStructureForm", () => {
     expect(refreshMock).toHaveBeenCalled();
   });
 
-  it("surfaces a server error on the confirm dialog (error path)", async () => {
+  it("surfaces a clerk-safe error on the confirm dialog, never the server's raw code/status (error path) (UX-020)", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(null, { status: 500 }));
 
     render(<CreateStructureForm />);
@@ -49,7 +49,8 @@ describe("CreateStructureForm", () => {
     fireEvent.click(screen.getByText("Create structure"));
 
     await waitFor(() => {
-      expect(screen.getByText(/API_ERROR: 500/)).toBeInTheDocument();
+      expect(screen.getByText(/couldn't save/i)).toBeInTheDocument();
     });
+    expect(screen.queryByText(/API_ERROR: 500/)).not.toBeInTheDocument();
   });
 });
