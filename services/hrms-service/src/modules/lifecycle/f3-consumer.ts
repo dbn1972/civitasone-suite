@@ -5,7 +5,7 @@ import { db } from "../../shared/db.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS } from "../../topics.js";
 import { HttpError } from "../../shared/context.js";
-import { hrmsOnboardingTasks, hrmsBuddyAssignments } from "./schema.js";
+import { hrmsOnboardingTasks, hrmsBuddyAssignments, hrmsOnboardingDocuments } from "./schema.js";
 import { hrmsBgvChecks, hrmsPropertyReturns, hrmsMandatoryDocConfigs, hrmsPolicyAcknowledgements } from "./schema.js";
 import { hrmsEmployeeHolds } from "./schema.js";
 import { hrmsEmployees } from "../employee/schema.js";
@@ -63,6 +63,8 @@ export function registerF3_lifecycle_Consumers(queue: Queue): void {
       "lifecycle_onboarding_routes__0",
       "lifecycle_onboarding_routes__1",
       "lifecycle_onboarding_routes__2",
+      "lifecycle_onboarding_routes__3",
+      "lifecycle_onboarding_routes__4",
     ]);
     if (!ops.has(op)) return;
     const body = p.body ?? {};
@@ -239,6 +241,62 @@ export function registerF3_lifecycle_Consumers(queue: Queue): void {
             await tx.insert(hrmsBuddyAssignments).values({
                   id: bid, tenantId: p.tenantId, employeeId, role: "buddy", ...body, createdBy: msg.actorId,
                 });
+            break;
+          }
+          case "lifecycle_onboarding_routes__3": {
+            // PATCH /v1/hrms/employees/:id/onboarding-documents/:docType/mark-received
+            // Upsert keyed by (tenant, employee, docType) — see
+            // hrms_onbdoc_emp_doctype_uq (0140 migration). Manual
+            // select-then-insert-or-update, matching this file's existing
+            // hold-routes pattern, rather than an ORM .onConflictDoUpdate()
+            // this codebase doesn't otherwise use.
+            const employeeId = String(params.id ?? "");
+            const docType = String(params.docType ?? "");
+            const existing = await tx.select().from(hrmsOnboardingDocuments)
+                  .where(and(
+                    eq(hrmsOnboardingDocuments.tenantId, p.tenantId),
+                    eq(hrmsOnboardingDocuments.employeeId, employeeId),
+                    eq(hrmsOnboardingDocuments.docType, docType),
+                  ))
+                  .limit(1);
+            const current = existing[0];
+            if (current) {
+              await tx.update(hrmsOnboardingDocuments)
+                    .set({ status: "uploaded", receivedAt: new Date(), updatedAt: new Date(), version: sql`${hrmsOnboardingDocuments.version} + 1` })
+                    .where(and(eq(hrmsOnboardingDocuments.tenantId, p.tenantId), eq(hrmsOnboardingDocuments.id, current.id)));
+            } else {
+              await tx.insert(hrmsOnboardingDocuments).values({
+                    id, tenantId: p.tenantId, employeeId, docType,
+                    status: "uploaded", receivedAt: new Date(), createdBy: msg.actorId,
+                  });
+            }
+            break;
+          }
+          case "lifecycle_onboarding_routes__4": {
+            // PATCH /v1/hrms/employees/:id/onboarding-documents/:docType/verify
+            // Same upsert shape as __3 — HR can verify (or reject) a document
+            // that was never explicitly "received" first.
+            const employeeId = String(params.id ?? "");
+            const docType = String(params.docType ?? "");
+            const verifyStatus = body.status === "rejected" ? "rejected" : "verified";
+            const existing = await tx.select().from(hrmsOnboardingDocuments)
+                  .where(and(
+                    eq(hrmsOnboardingDocuments.tenantId, p.tenantId),
+                    eq(hrmsOnboardingDocuments.employeeId, employeeId),
+                    eq(hrmsOnboardingDocuments.docType, docType),
+                  ))
+                  .limit(1);
+            const current = existing[0];
+            if (current) {
+              await tx.update(hrmsOnboardingDocuments)
+                    .set({ status: verifyStatus, verifiedBy: msg.actorId, verifiedAt: new Date(), updatedAt: new Date(), version: sql`${hrmsOnboardingDocuments.version} + 1` })
+                    .where(and(eq(hrmsOnboardingDocuments.tenantId, p.tenantId), eq(hrmsOnboardingDocuments.id, current.id)));
+            } else {
+              await tx.insert(hrmsOnboardingDocuments).values({
+                    id, tenantId: p.tenantId, employeeId, docType,
+                    status: verifyStatus, verifiedBy: msg.actorId, verifiedAt: new Date(), createdBy: msg.actorId,
+                  });
+            }
             break;
           }
         }

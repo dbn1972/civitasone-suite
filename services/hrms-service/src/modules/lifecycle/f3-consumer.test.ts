@@ -119,9 +119,11 @@ const HOLD = "40000000-dddd-4000-8000-000000000001";
 const CHECK = "40000000-dddd-4000-8000-000000000002";
 const PROP = "40000000-dddd-4000-8000-000000000003";
 const TASK = "40000000-dddd-4000-8000-000000000004";
+const DOC = "40000000-dddd-4000-8000-000000000005";
 
 const pendingHold = [{ id: HOLD, status: "pending", requestedBy: OTHER, version: 1 }];
 const activeHold = [{ id: HOLD, status: "active", requestedBy: OTHER, version: 1 }];
+const existingDocRow = [{ id: DOC, status: "pending", version: 1 }];
 
 const OPS: Array<{ op: string; params: Record<string, unknown>; body: Record<string, unknown>; rows?: any[] }> = [
   { op: "lifecycle_bgv_property_policy_routes__0", params: { id: EMP }, body: { checkType: "police", provider: "acme" } },
@@ -137,6 +139,8 @@ const OPS: Array<{ op: string; params: Record<string, unknown>; body: Record<str
   { op: "lifecycle_onboarding_routes__0", params: { id: EMP }, body: { title: "collect ID card", dueByDay: 3 } },
   { op: "lifecycle_onboarding_routes__1", params: { taskId: TASK }, body: {} },
   { op: "lifecycle_onboarding_routes__2", params: { id: EMP }, body: { buddyId: OTHER, role: "mentor" } },
+  { op: "lifecycle_onboarding_routes__3", params: { id: EMP, docType: "pan_card" }, body: {} },
+  { op: "lifecycle_onboarding_routes__4", params: { id: EMP, docType: "pan_card" }, body: { status: "verified" } },
 ];
 
 describe("F3 lifecycle consumer — every op runs (previously: ReferenceError on all 13)", () => {
@@ -235,6 +239,74 @@ describe("lifecycle_onboarding_routes__1 (complete onboarding task)", () => {
     expect((updateSetMock.mock.calls[0]![0] as Record<string, unknown>).status).toBe("completed");
     expect(eqOperands).toContain(TASK);
     expect(eqOperands).not.toContain(msgId);
+    await q.stop();
+  });
+});
+
+describe("lifecycle_onboarding_routes__3 (mark-received)", () => {
+  it("creates the employee's first row for a document type it has no row for yet", async () => {
+    selectResult.current = [];
+    const msgId = randomUUID();
+    const q = await run({ op: "lifecycle_onboarding_routes__3", id: msgId, params: { id: EMP, docType: "pan_card" }, body: {} });
+    expect(insertValuesMock).toHaveBeenCalledOnce();
+    expect(updateSetMock).not.toHaveBeenCalled();
+    const v = insertValuesMock.mock.calls[0]![0] as Record<string, unknown>;
+    expect(v.id).toBe(msgId);
+    expect(v.tenantId).toBe(TENANT);
+    expect(v.employeeId).toBe(EMP);
+    expect(v.docType).toBe("pan_card");
+    expect(v.status).toBe("uploaded");
+    expect(v.receivedAt).toBeInstanceOf(Date);
+    expect(v.createdBy).toBe(ACTOR);
+    await q.stop();
+  });
+
+  it("updates the employee's existing row for that document type instead of inserting a duplicate", async () => {
+    selectResult.current = existingDocRow;
+    const msgId = randomUUID();
+    const q = await run({ op: "lifecycle_onboarding_routes__3", id: msgId, params: { id: EMP, docType: "pan_card" }, body: {} });
+    expect(insertValuesMock).not.toHaveBeenCalled();
+    expect(updateSetMock).toHaveBeenCalledOnce();
+    const patch = updateSetMock.mock.calls[0]![0] as Record<string, unknown>;
+    expect(patch.status).toBe("uploaded");
+    // Regression guard for the same id-confusion bug class this whole file
+    // documents: the update must target the EXISTING row's id, not the
+    // throwaway message id the route published.
+    expect(eqOperands).toContain(DOC);
+    expect(eqOperands).not.toContain(msgId);
+    await q.stop();
+  });
+});
+
+describe("lifecycle_onboarding_routes__4 (verify)", () => {
+  it("creates a verified row for a document HR never explicitly marked received", async () => {
+    selectResult.current = [];
+    const q = await run({ op: "lifecycle_onboarding_routes__4", id: randomUUID(), params: { id: EMP, docType: "pan_card" }, body: { status: "verified" } });
+    const v = insertValuesMock.mock.calls[0]![0] as Record<string, unknown>;
+    expect(v.status).toBe("verified");
+    expect(v.verifiedBy).toBe(ACTOR);
+    expect(v.verifiedAt).toBeInstanceOf(Date);
+    await q.stop();
+  });
+
+  it("rejects an existing document row when the caller sends status:rejected", async () => {
+    selectResult.current = existingDocRow;
+    const msgId = randomUUID();
+    const q = await run({ op: "lifecycle_onboarding_routes__4", id: msgId, params: { id: EMP, docType: "pan_card" }, body: { status: "rejected" } });
+    expect(updateSetMock).toHaveBeenCalledOnce();
+    const patch = updateSetMock.mock.calls[0]![0] as Record<string, unknown>;
+    expect(patch.status).toBe("rejected");
+    expect(patch.verifiedBy).toBe(ACTOR);
+    expect(eqOperands).toContain(DOC);
+    expect(eqOperands).not.toContain(msgId);
+    await q.stop();
+  });
+
+  it("defaults to verified when the caller omits status (route's own Zod default)", async () => {
+    selectResult.current = [];
+    const q = await run({ op: "lifecycle_onboarding_routes__4", id: randomUUID(), params: { id: EMP, docType: "pan_card" }, body: {} });
+    const v = insertValuesMock.mock.calls[0]![0] as Record<string, unknown>;
+    expect(v.status).toBe("verified");
     await q.stop();
   });
 });
