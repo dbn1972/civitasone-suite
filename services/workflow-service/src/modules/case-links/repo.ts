@@ -1,10 +1,10 @@
 import { randomUUID } from "node:crypto";
-import { and, asc, eq, inArray, or } from "drizzle-orm";
+import { and, asc, eq, inArray, or, sql } from "drizzle-orm";
 import { db, scopedRead } from "../../shared/db.js";
 import { enqueue } from "../../shared/outbox.js";
 import { caseLinks, type CaseLinkRow } from "./schema.js";
 import { cases } from "../case-registry/schema.js";
-import { validateLink, type CaseLink, type LinkType } from "./domain.js";
+import { assembleLinkGuardResult, containmentEdge, type CaseLink, type LinkType } from "./domain.js";
 import { HttpError } from "../../shared/context.js";
 
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
@@ -90,6 +90,17 @@ export type CreateLinkResult =
   | { ok: true; row: CaseLinkRow }
   | { ok: false; errors: string[] };
 
+/** Row shape for the combined DUPLICATE_LINK / DUPLICATE_OF_A_DUPLICATE existence check. */
+interface DuplicateCheckRow {
+  is_duplicate: boolean;
+  target_is_duplicate: boolean;
+}
+
+/** Row shape for the recursive-CTE cycle-reachability check. */
+interface CycleCheckRow {
+  would_cycle: boolean;
+}
+
 /**
  * PR #169 (HIGH) -- atomic, race-free link creation.
  *
@@ -101,11 +112,35 @@ export type CreateLinkResult =
  *  1. Lock BOTH case rows FOR UPDATE, ordered by id ascending, so concurrent
  *     creations on the same pair acquire locks in the same order (no deadlock)
  *     and serialize -- the second txn blocks until the first commits.
- *  2. Re-read the tenant's links INSIDE the tx (post-lock) so the cycle check
- *     sees the link the first txn just committed.
- *  3. validateLink() -> on any failure return the guard errors (caller maps to
- *     4xx; CYCLE_DETECTED/DUPLICATE_LINK -> 409) and the tx rolls back.
+ *  2. Re-check INSIDE the tx (post-lock) so the guard sees the link the first
+ *     txn just committed.
+ *  3. assembleLinkGuardResult() -> on any failure return the guard errors
+ *     (caller maps to 4xx; CYCLE_DETECTED/DUPLICATE_LINK -> 409) and the tx
+ *     rolls back.
  *  4. Otherwise INSERT + audit.
+ *
+ * PERF-021 (Site B) -- step 2 used to be `SELECT * FROM case_links WHERE
+ * tenant_id = $1`, i.e. EVERY link row for the tenant, fetched on every single
+ * link-creation write solely so validateLink() could walk it in JS. Of
+ * validateLink's 3 data-dependent checks, only CYCLE_DETECTED is genuinely
+ * transitive/multi-hop (wouldCreateCycle() is a DFS over the containment
+ * subgraph); DUPLICATE_LINK and DUPLICATE_OF_A_DUPLICATE are simple indexed
+ * existence checks. So step 2 is now:
+ *  - one combined query with two indexed EXISTS() subqueries for
+ *    DUPLICATE_LINK / DUPLICATE_OF_A_DUPLICATE, and
+ *  - (only when this link type participates in containment, and it isn't a
+ *    trivial from===to self-loop already known to cycle without a query) one
+ *    recursive CTE that rebuilds the containment subgraph restricted to
+ *    parent_child/split_from/merged_from edges -- normalized to
+ *    ancestor->descendant per containmentEdge()'s type-dependent direction,
+ *    including the REVERSED direction for split_from -- and tests whether the
+ *    new link's ancestor is reachable from its descendant.
+ * Both scale with the size of the *reachability frontier actually touched*,
+ * not with the tenant's total link count, and neither ships tenant-wide link
+ * rows out of Postgres into Node. assembleLinkGuardResult() (domain.ts)
+ * assembles the same error set from these booleans that validateLink() would
+ * have produced from the full `existing` array, with the same
+ * collect-everything (never short-circuit) contract.
  */
 export async function createLinkChecked(input: CreateLinkInput & { id?: string }, outer?: Tx): Promise<CreateLinkResult> {
   const id = input.id ?? randomUUID();
@@ -115,9 +150,61 @@ export async function createLinkChecked(input: CreateLinkInput & { id?: string }
       .where(and(eq(cases.tenantId, input.tenantId), inArray(cases.id, lockIds)))
       .orderBy(asc(cases.id))
       .for("update");
-    const rows = await tx.select().from(caseLinks).where(eq(caseLinks.tenantId, input.tenantId));
-    const existing: CaseLink[] = rows.map((r) => ({ fromCaseId: r.fromCaseId, toCaseId: r.toCaseId, type: r.linkType as LinkType }));
-    const guard = validateLink({ fromCaseId: input.fromCaseId, toCaseId: input.toCaseId, type: input.linkType, existing });
+
+    const edge = containmentEdge({ fromCaseId: input.fromCaseId, toCaseId: input.toCaseId, type: input.linkType });
+    // containmentEdge() only ever produces ancestor === descendant when
+    // fromCaseId === toCaseId (a self-link) -- matches wouldCreateCycle's own
+    // immediate `ancestor === descendant` short-circuit, and needs no query.
+    const selfLoop = edge !== null && edge.ancestor === edge.descendant;
+
+    const dupRows = (await tx.execute(sql`
+      SELECT
+        EXISTS (
+          SELECT 1 FROM workflow.case_links
+          WHERE tenant_id = ${input.tenantId}
+            AND from_case_id = ${input.fromCaseId}
+            AND to_case_id = ${input.toCaseId}
+            AND link_type = ${input.linkType}
+        ) AS is_duplicate,
+        EXISTS (
+          SELECT 1 FROM workflow.case_links
+          WHERE tenant_id = ${input.tenantId}
+            AND link_type = 'duplicate_of'
+            AND from_case_id = ${input.toCaseId}
+        ) AS target_is_duplicate
+    `)) as unknown as DuplicateCheckRow[];
+    const isDuplicate = Boolean(dupRows[0]?.is_duplicate);
+    const targetIsAlreadyADuplicate = Boolean(dupRows[0]?.target_is_duplicate);
+
+    let wouldCreateCycle = selfLoop;
+    if (edge !== null && !selfLoop) {
+      const cycleRows = (await tx.execute(sql`
+        WITH RECURSIVE containment_edges AS (
+          SELECT
+            CASE link_type WHEN 'split_from' THEN to_case_id ELSE from_case_id END AS src,
+            CASE link_type WHEN 'split_from' THEN from_case_id ELSE to_case_id END AS dst
+          FROM workflow.case_links
+          WHERE tenant_id = ${input.tenantId}
+            AND link_type IN ('parent_child', 'split_from', 'merged_from')
+        ),
+        reachable AS (
+          SELECT dst AS node FROM containment_edges WHERE src = ${edge.descendant}
+          UNION
+          SELECT ce.dst FROM containment_edges ce JOIN reachable r ON ce.src = r.node
+        )
+        SELECT EXISTS (SELECT 1 FROM reachable WHERE node = ${edge.ancestor}) AS would_cycle
+      `)) as unknown as CycleCheckRow[];
+      wouldCreateCycle = Boolean(cycleRows[0]?.would_cycle);
+    }
+
+    const guard = assembleLinkGuardResult({
+      fromCaseId: input.fromCaseId,
+      toCaseId: input.toCaseId,
+      type: input.linkType,
+      isDuplicate,
+      targetIsAlreadyADuplicate,
+      wouldCreateCycle,
+    });
     if (!guard.allowed) return { ok: false, errors: guard.errors };
     const ins = await tx.insert(caseLinks).values({
       id,
