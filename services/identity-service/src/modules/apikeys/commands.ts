@@ -1,6 +1,8 @@
 import { randomUUID } from "node:crypto";
 import type { RequestContext } from "@civitasone/types";
+import { runWithTenant } from "@civitasone/db";
 import { db } from "../../shared/db.js";
+import { scannerDb } from "../../shared/scanner-db.js";
 import { HttpError } from "../../shared/context.js";
 import { queue } from "../../shared/infra.js";
 import { COMMANDS } from "../../topics.js";
@@ -99,16 +101,37 @@ export type VerifyResult = {
   tenantId?: string;
   scopes?: string[];
   reason?: string;
+  /**
+   * Key creator (apiKeys.createdBy), populated only on a valid result.
+   * SEC-024: the gateway's internal verify caller (gateway-service's
+   * api-key-auth.ts) injects this as x-actor-id downstream so proxied
+   * requests attribute to the key's owner instead of an empty/undefined actor.
+   */
+  ownerId?: string;
 };
 
-/** Verify remains synchronous (introspection). lastUsed touch is best-effort. */
+/**
+ * Verify remains synchronous (introspection). lastUsed touch is best-effort.
+ *
+ * SEC-024: apikeys.api_keys carries FORCE ROW LEVEL SECURITY (migrations
+ * 0012/0013) keyed on tenant_id = current_tenant_id() -- but this lookup's
+ * whole purpose is to discover the tenant from the raw key with none known
+ * yet, so no GUC can legitimately be pre-set. Under the primary (NOBYPASSRLS)
+ * identity_svc connection this matched zero rows for every key, always
+ * (verified empirically; see migration 0023's header comment). Mirrors
+ * sessions/repo.ts#reapExpiredSessions and breakglass/repo.ts#sweepExpiredGrants:
+ * discover the row via the identity_scanner BYPASSRLS role (read-only,
+ * migration 0020/0023), then perform any write on the primary connection
+ * under runWithTenant(row.tenantId, ...) below, now that the tenant is
+ * known -- RLS still governs the mutation.
+ */
 export async function verifyApiKey(presented: string, requiredScope?: string): Promise<VerifyResult> {
   const hash = sha256Hex(presented);
 
-  return db.transaction(async (tx) => {
-    const row = await repo.findBySecretHash(tx, hash);
-    if (!row) return { valid: false, reason: "unknown key" };
+  const row = await repo.findBySecretHash(scannerDb, hash);
+  if (!row) return { valid: false, reason: "unknown key" };
 
+  return runWithTenant(row.tenantId, () => db.transaction(async (tx) => {
     if (!isUsable(row.status as ApiKeyStatus, row.expiresAt ?? null)) {
       await repo.audit(tx, row.tenantId, row.id, "denied", row.id, `status=${row.status} unusable`);
       return { valid: false, apiKeyId: row.id, tenantId: row.tenantId, reason: "key not usable" };
@@ -125,6 +148,6 @@ export async function verifyApiKey(presented: string, requiredScope?: string): P
       }
     }
     await repo.touchLastUsed(tx, row.id, new Date());
-    return { valid: true, apiKeyId: row.id, tenantId: row.tenantId, scopes: row.scopes ?? [] };
-  });
+    return { valid: true, apiKeyId: row.id, tenantId: row.tenantId, scopes: row.scopes ?? [], ownerId: row.createdBy };
+  }));
 }

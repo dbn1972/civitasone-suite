@@ -50,13 +50,17 @@ function stubIdentityAndUpstream() {
   vi.stubGlobal("fetch", async (url: string) => {
     if (url.includes("/internal/apikeys/verify")) {
       return new Response(
+        // SEC-024: identity-service's real /internal/apikeys/verify response is
+        // VerifyResult (valid/apiKeyId/tenantId/ownerId/scopes/reason), not the
+        // id/status/expiresAt shape this stub predates and used to send -- that
+        // shape never matched anything identity-service actually returns. Kept
+        // standing in for a genuinely valid, active key under the real contract.
         JSON.stringify({
-          id: "key-1",
+          valid: true,
+          apiKeyId: "key-1",
           tenantId: TENANT_A,
           ownerId: "owner-1",
           scopes: ["*:*"],
-          status: "active",
-          expiresAt: null,
         }),
         { status: 200, headers: { "content-type": "application/json" } },
       );
