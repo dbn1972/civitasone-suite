@@ -36,6 +36,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { signToken } from "@civitasone/auth";
 import { buildApp } from "../src/app.js";
+import { applyConfig } from "../src/runtime-config.js";
 
 const SECRET = "test_secret_for_civitasone_32chr";
 const TENANT_A = "aaaaaaaa-0000-4000-8000-000000000001";
@@ -255,5 +256,106 @@ describe("SEC-008: per-tenant rate limit is keyed on the verified JWT tid, not t
     const codes: number[] = [];
     for (let i = 0; i < MAX + 1; i++) codes.push(await hitWithApiKey(`spoofed-${i}`));
     expect(codes).toEqual([200, 200, 200, 429]);
+  });
+
+  it("the rate limiter engages correctly for the api-key path on a REAL non-public business route too — SEC-023's separate Bearer-only gate only changes the final response code (401 instead of 200), it does not stop this preHandler from running or from keying on the verified tenant", async () => {
+    // Companion to the test above. That one deliberately targets a PUBLIC
+    // route to isolate the keyGenerator from SEC-023 (proxyHandler's own
+    // auth check, which 401s an api-key-only request on any non-public
+    // route since it only ever looks for a literal Authorization: Bearer
+    // header). This test instead hits /api/v1/finance/bills directly to
+    // confirm SEC-023 doesn't also mask or bypass the rate limiter itself:
+    // the tier is wired as a route-level preHandler (config.rateLimit),
+    // which runs BEFORE proxyHandler (the actual route handler, where
+    // SEC-023's check lives) — so it still executes, still increments the
+    // real tenant's bucket, and still 429s once exhausted, even though every
+    // individual under-budget request goes on to get a 401 from SEC-023's
+    // unrelated bug rather than a 200.
+    vi.stubGlobal("fetch", async (url: string) => {
+      if (url.includes("/internal/apikeys/verify")) {
+        return new Response(
+          JSON.stringify({
+            id: "key-1",
+            tenantId: TENANT_A,
+            ownerId: "owner-1",
+            scopes: ["*:*"],
+            status: "active",
+            expiresAt: null,
+          }),
+          { status: 200, headers: { "content-type": "application/json" } },
+        );
+      }
+      return new Response(JSON.stringify({ ok: true }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    });
+    const app = await buildApp();
+
+    async function hitWithApiKeyOnly(spoofTenantId: string) {
+      const res = await app.inject({
+        method: "GET",
+        url: "/api/v1/finance/bills",
+        // No Authorization header at all — api-key-only auth, same as the
+        // test above, just against a non-public route this time.
+        headers: {
+          "x-api-key": "ak_live_test.secret",
+          "x-tenant-id": spoofTenantId,
+        },
+      });
+      return res.statusCode;
+    }
+
+    const codes: number[] = [];
+    for (let i = 0; i < MAX + 1; i++) codes.push(await hitWithApiKeyOnly(`spoofed-${i}`));
+
+    // First MAX requests pass the rate limiter (keyed correctly on the
+    // verified tenant A regardless of the different spoofed header each
+    // time) and reach proxyHandler, which 401s them for lacking a Bearer
+    // header (SEC-023, untouched by this fix). The next request exceeds the
+    // budget and the rate limiter itself returns 429 before proxyHandler —
+    // and therefore SEC-023's check — ever runs.
+    expect(codes).toEqual([401, 401, 401, 429]);
+  });
+
+  it("GATEWAY_JWT_EDGE_VERIFY=off: with no verified identity available for ANY request, a spoofed x-tenant-id header still has no effect — traffic correctly collapses to one shared IP bucket instead of splitting into attacker-chosen buckets", async () => {
+    // In "off" mode jwtEdgeVerify returns immediately (app.ts / jwt-edge.ts's
+    // own top-of-function check) and never runs at all, so req.jwtPayload is
+    // never set for ANY request — even one carrying a perfectly valid,
+    // correctly-signed JWT. This is the one mode where the keyGenerator fix
+    // matters for ALL authenticated traffic, not just the pre-auth/public
+    // case the earlier test covers: with no verified identity available from
+    // either auth path, every request must fall all the way through to the
+    // req.ip fallback, and a spoofed header must still be powerless to
+    // create fresh per-request buckets.
+    //
+    // jwtEdgeVerify mode is a runtime-config value read once into a
+    // module-level singleton at import time (services/gateway-service/src/
+    // runtime-config.ts), not re-read from process.env per buildApp() call
+    // (unlike GATEWAY_RATE_LIMIT_TENANT_MAX above) — so it must be flipped
+    // via applyConfig(), the same mechanism the gateway's own
+    // /internal/config endpoint uses to change it live. Restored in
+    // `finally` so this mutation of shared module state can't leak into any
+    // other test in this file or process.
+    applyConfig({ jwtEdgeVerify: "off" });
+    try {
+      const app = await buildApp();
+
+      // A real, validly-signed JWT for tenant A is presented on every
+      // request, but jwtEdgeVerify never runs, so it is never verified and
+      // req.jwtPayload is never populated — there is no verified identity
+      // at all here, for any request.
+      const codes = await hitMany(app, MAX + 1, (i) => ({
+        token: tokenFor(TENANT_A),
+        spoofTenantId: `spoofed-${i}`,
+      }));
+
+      // All four requests draw from the SAME ip-keyed bucket (app.inject()
+      // always uses 127.0.0.1), proving the different spoofed header on
+      // every request had zero effect on the key.
+      expect(codes).toEqual([200, 200, 200, 429]);
+    } finally {
+      applyConfig({ jwtEdgeVerify: "true" });
+    }
   });
 });
