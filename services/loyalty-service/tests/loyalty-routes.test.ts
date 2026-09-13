@@ -3,7 +3,7 @@
  * Mock-based approach — no real database connection needed.
  * Covers programs (CRUD + lifecycle), enrolments, accruals, redemptions, tiers.
  */
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { signToken } from "@civitasone/auth";
 
 const SECRET = "test_secret_for_civitasone_32chr";
@@ -125,6 +125,18 @@ function userToken() {
 }
 function noRoleToken() {
   return signToken({ sub: ACTOR, tid: TENANT, roles: ["employee"], sid: "s3" }, SECRET);
+}
+// SEC-016: a human super_admin who does NOT also hold loyalty_admin —
+// distinct from adminToken() above, which intentionally carries both.
+function bareSuperAdminToken() {
+  return signToken({ sub: ACTOR, tid: TENANT, roles: ["super_admin"], sid: "s4" }, SECRET);
+}
+
+// SEC-016: genuine internal service-to-service headers (x-internal +
+// matching service secret), same contract as packages/auth/src/plugin.ts.
+const INTERNAL_SECRET = "test_internal_secret_for_sec016_32ch";
+function internalHeaders() {
+  return { "x-internal": "1", "x-service-secret": INTERNAL_SECRET, "x-tenant-id": TENANT };
 }
 
 // ─── Factory helpers ──────────────────────────────────────────────────────────
@@ -681,6 +693,57 @@ describe("Accruals", () => {
     expect(res.json().status).toBe("accepted");
     expect(H.publishMock).toHaveBeenCalledOnce();
     expect(H.accrualInsertMock).not.toHaveBeenCalled();
+  });
+
+  // SEC-016: /v1/loyalty/accrue used to gate on requireRole(ctx,
+  // ["loyalty_admin", "super_admin", "service_account"]). "service_account"
+  // never actually matches ctx.roles, so a bare super_admin (without
+  // loyalty_admin) was silently sufficient — this route is meant to be
+  // reachable by loyalty_admin humans and genuine internal callers only.
+  describe("SEC-016 internal-only gate", () => {
+    beforeEach(() => { vi.stubEnv("INTERNAL_SERVICE_SECRET", INTERNAL_SECRET); });
+    afterEach(() => { vi.unstubAllEnvs(); });
+
+    it("returns 403 for a human super_admin who does not hold loyalty_admin", async () => {
+      H.enrolmentFindByIdMock.mockResolvedValue(makeEnrolment({ status: "active" }));
+      const app = await buildApp();
+      const res = await app.inject({
+        method: "POST",
+        url: "/v1/loyalty/accrue",
+        headers: { authorization: `Bearer ${bareSuperAdminToken()}` },
+        payload: { enrolmentId: ENROLMENT_ID, points: 100, source: "purchase", txType: "purchase" },
+      });
+      await app.close();
+      expect(res.statusCode).toBe(403);
+      expect(H.publishMock).not.toHaveBeenCalled();
+    });
+
+    it("still returns 202 for a genuine internal service-to-service caller", async () => {
+      H.enrolmentFindByIdMock.mockResolvedValue(makeEnrolment({ status: "active" }));
+      const app = await buildApp();
+      const res = await app.inject({
+        method: "POST",
+        url: "/v1/loyalty/accrue",
+        headers: internalHeaders(),
+        payload: { enrolmentId: ENROLMENT_ID, points: 100, source: "purchase", txType: "purchase" },
+      });
+      await app.close();
+      expect(res.statusCode).toBe(202);
+      expect(H.publishMock).toHaveBeenCalledOnce();
+    });
+
+    it("still returns 202 for loyalty_admin (distinct legitimate human role, unaffected)", async () => {
+      H.enrolmentFindByIdMock.mockResolvedValue(makeEnrolment({ status: "active" }));
+      const app = await buildApp();
+      const res = await app.inject({
+        method: "POST",
+        url: "/v1/loyalty/accrue",
+        headers: { authorization: `Bearer ${adminToken()}` },
+        payload: { enrolmentId: ENROLMENT_ID, points: 100, source: "purchase", txType: "purchase" },
+      });
+      await app.close();
+      expect(res.statusCode).toBe(202);
+    });
   });
 
   it("POST /v1/loyalty/accrue — 404 when enrolment not found", async () => {
