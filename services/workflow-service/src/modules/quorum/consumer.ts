@@ -1,10 +1,13 @@
 import type { Queue } from "@civitasone/queue";
 import { pino } from "pino";
+import { captureError } from "@civitasone/observability";
 import { db } from "../../shared/db.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS } from "../../topics.js";
 import * as repo from "./repo.js";
 import type { QuorumRule, VoteChoice } from "./domain.js";
+
+const SERVICE = "workflow-service";
 
 const AUDIT_TOPIC = "audit.event.record";
 
@@ -39,8 +42,35 @@ export function registerQuorumConsumers(queue: Queue): void {
     try {
       await db.transaction(async (tx) => {
         if (!(await markProcessed(tx, msg.messageId))) return;
-        await repo.castVoteTx(tx, p.tenantId, p.id, msg.actorId, p.vote, p.reason, msg.actorId, msg.correlationId);
-        await enqueue(tx, { topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { service: "workflow-service", action: "cast_vote", resourceType: "committee_vote", resourceId: p.id, outcome: "success" } });
+        const result = await repo.castVoteTx(tx, p.tenantId, p.id, msg.actorId, p.vote, p.reason, msg.actorId, msg.correlationId);
+        // REL-031: a vote from a voter who had NOT already voted, arriving
+        // after the decision was already `decided` by someone else, used to
+        // vanish right here -- castVoteTx's return value was never even
+        // inspected. `lateVote` (see repo.ts's VoteResult doc) makes that
+        // case explicit; surface it via captureError() -- this codebase's
+        // established "make an invisible failure visible without deciding
+        // its deeper handling" primitive (same one the depreciation
+        // consumer's REL-026 fix uses for the analogous silent-miss shape)
+        // -- plus a non-"success" audit outcome, instead of the queue
+        // driver's NonRetryableError/DLQ path (see castVoteTx's comment for
+        // why: no local precedent for throwing on an expected outcome here,
+        // and throwing would roll back markProcessed(), which is itself a
+        // real behavioral choice the deeper "should a late vote ever count"
+        // product question has not settled). This does NOT decide whether a
+        // late vote should count -- only that it can never again be silent.
+        if (!("notFound" in result) && result.lateVote) {
+          captureError(
+            new Error("cast_committee_vote: vote arrived after the decision had already settled"),
+            {
+              service: SERVICE, topic: COMMANDS.castCommitteeVote, messageId: msg.messageId,
+              decisionId: p.id, tenantId: p.tenantId, voterId: msg.actorId,
+              decisionStatus: result.decision.status,
+            },
+          );
+          await enqueue(tx, { topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { service: SERVICE, action: "cast_vote", resourceType: "committee_vote", resourceId: p.id, outcome: "rejected_already_decided" } });
+          return;
+        }
+        await enqueue(tx, { topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { service: SERVICE, action: "cast_vote", resourceType: "committee_vote", resourceId: p.id, outcome: "success" } });
       });
     } catch (err) { log.error({ err, messageId: msg.messageId }, "castCommitteeVote failed"); throw err; }
   });

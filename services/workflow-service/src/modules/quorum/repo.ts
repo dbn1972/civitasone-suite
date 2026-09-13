@@ -117,6 +117,16 @@ export interface VoteResult {
   tally: QuorumTally;
   decision: CommitteeDecisionRow;
   duplicate: boolean;
+  /**
+   * REL-031: true when this vote came from a voter who had NOT already voted
+   * (so `duplicate` is false) but the decision had already left "open" --
+   * i.e. some other vote settled it first. The vote is NOT inserted (same
+   * as before this fix); this flag exists purely so the caller can make
+   * that fact visible instead of silently discarding it. See castVoteTx's
+   * doc comment below for why this stays a returned flag rather than a
+   * thrown error.
+   */
+  lateVote: boolean;
 }
 
 /**
@@ -166,23 +176,45 @@ export async function castVoteTx(
       eq(committeeVotes.voterId, voterId),
     )).limit(1);
   let duplicate = false;
+  let lateVote = false;
   if (existing[0]) {
     duplicate = true;
   } else if (decision.status === "open") {
     // REL-025 investigation note: this `status === "open"` guard means a vote
     // from a member who had not yet voted, arriving AFTER the decision row's
     // own lock is acquired but after some OTHER concurrent vote already
-    // tipped the tally and flipped status to "decided", is silently dropped
-    // here -- never inserted, not flagged `duplicate`, no error surfaced.
-    // Verified live (5 concurrent distinct-voter votes on one majority-5
-    // decision, 10/10 trials): the decided transition itself is reliable,
-    // but only the votes that land before the flip are ever persisted; the
-    // late ones vanish with no record of who cast them or what they chose.
-    // Whether that is the intended contract (a decision is final, stop
-    // recording) or a gap (record every cast vote for audit even after the
-    // decision settles) is a product call this investigation did not make
-    // unilaterally -- see docs/ENTERPRISE-GAP-REPORT-2026-09-07.md REL-025.
+    // tipped the tally and flipped status to "decided", used to be silently
+    // dropped here -- never inserted, not flagged `duplicate`, no error
+    // surfaced. Verified live (5 concurrent distinct-voter votes on one
+    // majority-5 decision, 10/10 trials): the decided transition itself is
+    // reliable, but only the votes that land before the flip are ever
+    // persisted. See docs/ENTERPRISE-GAP-REPORT-2026-09-07.md REL-025.
     await tx.insert(committeeVotes).values({ tenantId, decisionId, voterId, vote, reason });
+  } else {
+    // REL-031 fix: close the silent-drop gap the REL-025 note above
+    // documented. This branch is reached only for a genuinely NEW voter
+    // (not `duplicate`) whose vote arrives after `decision.status` already
+    // left "open". The vote is still deliberately NOT inserted into
+    // committee_votes here -- unchanged from before this fix -- because
+    // whether a late vote should ever COUNT toward the tally (if the
+    // decision were somehow reopened) is a committee-governance/product
+    // call this fix does not make. `lateVote: true` on the return value is
+    // ONLY the visibility half: it lets the caller (consumer.ts) surface
+    // the drop via captureError() + a non-"success" audit outcome instead
+    // of discarding it, mirroring the depreciation consumer's REL-026 fix
+    // for the same shape of bug (a silent miss in an async CQRS consumer,
+    // with the deeper handling-of-a-genuine-miss question deliberately left
+    // open). A thrown/DLQ-routed error (the procurement tender/consumer.ts
+    // NonRetryableError precedent for a bid arriving after a tender's
+    // closing date) was deliberately NOT used here: unlike a late bid --
+    // where "reject it outright" IS the settled product answer -- castVoteTx
+    // itself already has an established local convention of signaling an
+    // expected non-write outcome via a returned flag rather than a thrown
+    // error (see `notFound` above and `duplicate` below), and throwing would
+    // roll back this transaction's markProcessed() (forcing redelivery/DLQ),
+    // which is itself a real behavioral choice the deeper product question
+    // has not settled.
+    lateVote = true;
   }
 
   // REL-032: this recompute-tally query used to filter by decisionId only,
@@ -229,5 +261,5 @@ export async function castVoteTx(
       },
     });
   }
-  return { tally, decision: current, duplicate };
+  return { tally, decision: current, duplicate, lateVote };
 }
