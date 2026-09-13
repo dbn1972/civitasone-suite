@@ -42,6 +42,7 @@ export default async function Page({ searchParams }: { searchParams?: Search }) 
             rows={rows}
             rowLinkKey="id"
             rowLinkPrefix="/learning/courses/"
+            identifyingColumnKey="title"
             sortable
             filterable
             filterPlaceholder="Search courses…"

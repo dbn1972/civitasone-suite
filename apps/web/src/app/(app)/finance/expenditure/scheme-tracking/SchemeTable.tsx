@@ -21,6 +21,7 @@ export function SchemeTable({ schemes, source = "api" }: { schemes: Row[]; sourc
         rows={rows}
         rowLinkKey="id"
         rowLinkPrefix="/finance/expenditure/scheme-tracking/"
+        identifyingColumnKey="name"
         sortable
         filterable
         filterPlaceholder="Search schemes…"

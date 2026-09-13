@@ -62,6 +62,7 @@ export default async function Page() {
             rows={rows}
             rowLinkKey="id"
             rowLinkPrefix="/learning/courses/"
+            identifyingColumnKey="title"
             sortable
             filterable
             filterPlaceholder="Search the catalogue…"

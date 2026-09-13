@@ -57,6 +57,7 @@ export default async function AssetDashboardPage() {
                 rows={recent}
                 rowLinkKey="id"
                 rowLinkPrefix="/assets/"
+                identifyingColumnKey="name"
               />
             )}
           </div>

@@ -55,6 +55,7 @@ export default async function AssetMaintenancePage() {
             rows={rows}
             rowLinkKey="assetId"
             rowLinkPrefix="/assets/"
+            identifyingColumnKey="assetName"
             sortable
             filterable
             filterPlaceholder="Filter jobs…"

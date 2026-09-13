@@ -47,6 +47,7 @@ export function DashboardProjectsTable({ rows }: { rows: DashboardProjectRow[] }
       rows={rows}
       rowLinkPrefix="/projects/"
       rowLinkKey="id"
+      identifyingColumnKey="name"
       sortable
       filterable
       filterPlaceholder="Filter projects…"

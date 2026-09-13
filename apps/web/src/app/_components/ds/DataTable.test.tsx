@@ -170,4 +170,42 @@ describe("DataTable", () => {
     render(<DataTable columns={columns} rows={rows} exportable />);
     expect(screen.getByText("⬇ CSV")).toBeInTheDocument();
   });
+
+  // UX-015: the row-link's accessible name must name the row after the field
+  // a person would use to tell rows apart, not blindly after column 0 --
+  // e.g. a vendor's own name, not its internal vendorCode. identifyingColumnKey
+  // lets a consumer opt a different column into that role.
+  describe("row-link accessible name (UX-015)", () => {
+    it("defaults to column 0's value when identifyingColumnKey is not passed (regression safety)", () => {
+      render(<DataTable columns={columns} rows={rows} rowLinkKey="id" rowLinkPrefix="/orders/" />);
+      expect(screen.getByRole("link", { name: "Open PO-001" })).toBeInTheDocument();
+      expect(screen.queryByRole("link", { name: "Open Office Supplies" })).not.toBeInTheDocument();
+    });
+
+    it("uses identifyingColumnKey's value instead of column 0 when provided", () => {
+      render(
+        <DataTable
+          columns={columns}
+          rows={rows}
+          rowLinkKey="id"
+          rowLinkPrefix="/orders/"
+          identifyingColumnKey="name"
+        />,
+      );
+      expect(screen.getByRole("link", { name: "Open Office Supplies" })).toBeInTheDocument();
+      expect(screen.queryByRole("link", { name: "Open PO-001" })).not.toBeInTheDocument();
+    });
+
+    it("also honors identifyingColumnKey with rowHref (client-only link builder)", () => {
+      render(
+        <DataTable
+          columns={columns}
+          rows={rows}
+          rowHref={(row) => `/orders/${row.id}`}
+          identifyingColumnKey="name"
+        />,
+      );
+      expect(screen.getByRole("link", { name: "Open Office Supplies" })).toBeInTheDocument();
+    });
+  });
 });

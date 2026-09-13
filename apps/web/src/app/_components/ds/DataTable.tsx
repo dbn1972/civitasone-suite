@@ -25,6 +25,15 @@ interface DataTableProps<T extends Record<string, unknown>> {
   /** Server-safe: link first column to `${rowLinkPrefix}${row[rowLinkKey]}` */
   rowLinkKey?: keyof T & string;
   rowLinkPrefix?: string;
+  /**
+   * Opt-in: the row field whose value names the row-link's accessible name
+   * (`aria-label="Open <value>"`), independent of column display order.
+   * Defaults to `columns[0].key`, so every existing consumer keeps today's
+   * exact behavior unless it opts in. Set this when column 0 is an internal
+   * code/id rather than the field a person would use to tell rows apart
+   * (e.g. a vendor's code vs. the vendor's actual name) — see UX-015.
+   */
+  identifyingColumnKey?: keyof T & string;
   /** Opt-in: enable client-side column sorting (clickable headers, aria-sort). */
   sortable?: boolean;
   /** Opt-in: enable a client-side text filter box over all columns. */
@@ -99,6 +108,7 @@ export function DataTable<T extends Record<string, unknown>>({
   rowHref,
   rowLinkKey,
   rowLinkPrefix,
+  identifyingColumnKey,
   sortable = false,
   filterable = false,
   filterPlaceholder = "Filter…",
@@ -280,7 +290,7 @@ export function DataTable<T extends Record<string, unknown>>({
                           <a
                             href={href}
                             tabIndex={-1}
-                            aria-label={`Open ${String(row[columns[0].key] ?? "row")}`}
+                            aria-label={`Open ${String(row[identifyingColumnKey ?? columns[0].key] ?? "row")}`}
                             onClick={(e) => {
                               e.preventDefault();
                               e.stopPropagation();

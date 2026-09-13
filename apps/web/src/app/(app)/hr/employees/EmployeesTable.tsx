@@ -38,6 +38,7 @@ export function EmployeesTable({ employees, source = "api" }: { employees: EmpRo
         rows={rows}
         rowLinkKey="id"
         rowLinkPrefix="/hr/employees/"
+        identifyingColumnKey="name"
         sortable
         filterable
         filterPlaceholder="Search by name, code or department…"

@@ -38,7 +38,7 @@ export function ProjectsTable({ rows, source = "api" }: { rows: ProjectRow[]; so
           {cacheNote}
         </p>
       ) : null}
-      <DataTable<ProjectRow> columns={COLUMNS} rows={data} rowLinkPrefix="/projects/" rowLinkKey="id" />
+      <DataTable<ProjectRow> columns={COLUMNS} rows={data} rowLinkPrefix="/projects/" rowLinkKey="id" identifyingColumnKey="name" />
     </>
   );
 }

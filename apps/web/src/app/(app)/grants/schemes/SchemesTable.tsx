@@ -78,6 +78,7 @@ export function SchemesTable({
         rows={rows}
         rowLinkPrefix="/grants/schemes/"
         rowLinkKey="id"
+        identifyingColumnKey="name"
         sortable
         filterable
         filterPlaceholder="Filter schemes…"

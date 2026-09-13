@@ -63,6 +63,9 @@ export function SchemesTable({ rows }: { rows: SchemeRow[] }) {
       // so linking to it was pointless. Now that it renders the real scheme,
       // wire the real per-tenant id straight through.
       rowHref={(r) => `/projects/schemes/${r.id}`}
+      // UX-015: column 0 is schemeCode (an internal reference), not the
+      // scheme's own name -- name the row link after the scheme, not its code.
+      identifyingColumnKey="name"
     />
   );
 }
