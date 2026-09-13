@@ -263,6 +263,57 @@ async function hasRestrictedArea(
   };
 }
 
+/**
+ * TX-018 — tenant-scoped sibling of hasRestrictedArea(). Reads through a
+ * caller-supplied transaction handle so an already-open db.transaction()
+ * (visitRequestApprove's handler below) does not open a second, bare
+ * db.transaction() from inside itself: under pool.max concurrent in-flight
+ * consumer transactions, the nested call has no free connection to open on
+ * and deadlocks the pool silently. Route every check that happens inside an
+ * already-open consumer transaction through this, not hasRestrictedArea().
+ */
+async function hasRestrictedAreaTx(
+  tx: Pick<typeof db, "select">,
+  tenantId: string,
+  locationId: string,
+  permittedAreaIds: string[],
+): Promise<{ restricted: boolean; securityLevel: number; approvers: string[] }> {
+  if (permittedAreaIds.length === 0) {
+    return { restricted: false, securityLevel: 0, approvers: [] };
+  }
+
+  const rows = await tx
+    .select({
+      id: areas.id,
+      securityLevel: areas.securityLevel,
+      authorizedApprovers: areas.authorizedApprovers,
+    })
+    .from(areas)
+    .where(
+      and(
+        eq(areas.tenantId, tenantId),
+        eq(areas.locationId, locationId),
+        inArray(areas.id, permittedAreaIds),
+      ),
+    );
+
+  // Find the maximum security level among requested areas
+  let maxLevel = 0;
+  let approvers: string[] = [];
+  for (const row of rows) {
+    if (row.securityLevel > maxLevel) {
+      maxLevel = row.securityLevel;
+      approvers = row.authorizedApprovers ?? [];
+    }
+  }
+
+  return {
+    restricted: maxLevel > RESTRICTED_SECURITY_LEVEL,
+    securityLevel: maxLevel,
+    approvers,
+  };
+}
+
 // ── Consumer Registration ────────────────────────────────────────────────
 
 export function registerVisitRequestConsumers(rawQueue: Queue): void {
@@ -444,8 +495,13 @@ export function registerVisitRequestConsumers(rawQueue: Queue): void {
       assertTransitionAllowed(request.status, "approved");
 
       // Check if any permitted areas are restricted (security_level > 1)
+      // TX-018: routed through the *Tx sibling, threading this handler's own
+      // already-open `tx` through instead of hasRestrictedArea() opening its
+      // own nested db.transaction() from inside this already-open one — see
+      // hasRestrictedAreaTx()'s doc comment above.
       const permittedAreaIds = (request.permittedAreas ?? []) as string[];
-      const { restricted, securityLevel, approvers } = await hasRestrictedArea(
+      const { restricted, securityLevel, approvers } = await hasRestrictedAreaTx(
+        tx,
         msg.tenantId,
         request.locationId,
         permittedAreaIds,

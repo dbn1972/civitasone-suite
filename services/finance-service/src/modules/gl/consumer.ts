@@ -13,7 +13,7 @@ import { getPeriodStatusTx } from "../period-close/repo.js";
 import { nextVoucherNo, fyFromDate } from "../hoa/voucher.js";
 import { deterministicId } from "./spine.js";
 import type { JournalLine } from "./schema.js";
-import { validateOrgAssignment } from "../org-structure/domain.js";
+import { validateOrgAssignmentTx } from "../org-structure/domain.js";
 
 const AUDIT_TOPIC = "audit.event.record";
 
@@ -63,7 +63,12 @@ async function postJournal(
 ): Promise<void> {
   assertJournalBalances(journal.lines);
   // ERP org-structure validation: if a legal entity is assigned, verify all org refs belong to it.
-  await validateOrgAssignment(journal.tenantId, {
+  // TX-018: routed through the *Tx sibling, threading this function's own
+  // already-open `tx` through instead of validateOrgAssignment() opening its
+  // own nested db.transaction() (and, transitively, each of the 4 asserts it
+  // calls doing the same) from inside this already-open one — see
+  // validateOrgAssignmentTx()'s doc comment (org-structure/domain.ts).
+  await validateOrgAssignmentTx(tx as unknown as Parameters<typeof validateOrgAssignmentTx>[0], journal.tenantId, {
     legalEntityId: journal.legalEntityId ?? null,
     costCenterId: journal.costCenterId ?? null,
     profitCenterId: journal.profitCenterId ?? null,

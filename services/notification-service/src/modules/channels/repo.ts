@@ -21,6 +21,25 @@ export async function findDefaultChannel(tenantId: string, type?: string): Promi
   return match ? toView(match) : null;
 }
 
+/**
+ * TX-018 — tenant-scoped sibling of findDefaultChannel(). Reads through a
+ * caller-supplied transaction handle so an already-open db.transaction()
+ * (notification-service deliveries/consumer.ts's send handler, via
+ * resolveChannelWithDefaultTx() -> getDefaultChannelTx() -> this) does not
+ * open a second, bare scopedRead()/db.transaction() from inside itself:
+ * under pool.max concurrent in-flight consumer transactions, the nested call
+ * has no free connection to open on and deadlocks the pool silently. Route
+ * every read that happens inside an already-open consumer transaction
+ * through this, not findDefaultChannel().
+ */
+export async function findDefaultChannelTx(tx: Writer, tenantId: string, type?: string): Promise<ChannelView | null> {
+  const rows = await tx.select().from(notificationChannels).where(
+    and(eq(notificationChannels.tenantId, tenantId), eq(notificationChannels.isDefault, true), eq(notificationChannels.enabled, true))
+  );
+  const match = type ? rows.find((r) => r.type === type) : rows[0];
+  return match ? toView(match) : null;
+}
+
 export async function insertChannel(tx: Writer, row: ChannelInsert): Promise<void> {
   await tx.insert(notificationChannels).values(row);
 }
