@@ -27,6 +27,7 @@ import type {
   CRMAccountSummary,
   CRMDealSummary,
 } from "@civitasone/types";
+import { formatMoney } from "@/lib/formatters";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
@@ -43,13 +44,31 @@ export function getArrayPayload(payload: unknown): unknown[] | null {
   return null;
 }
 
-export function parseMinor(value: unknown): number {
-  if (typeof value === "number" && Number.isFinite(value)) return value;
+/**
+ * UX-019: null/undefined/empty/unparseable is MISSING data, not a real zero --
+ * returns `null` so callers can distinguish it from a genuine 0, matching the
+ * `??`/`Number.isFinite`-based null-vs-zero convention UX-006 established in
+ * lib/formatters.ts. Never coerce a missing value to 0 here -- a caller that
+ * needs a definite number for arithmetic/fallback-chaining should do so
+ * explicitly at the call site via `parseMinor(x) ?? 0`.
+ *
+ *   parseMinor(12500)          -> 12500
+ *   parseMinor("5000")         -> 5000
+ *   parseMinor(0)              -> 0
+ *   parseMinor(null)           -> null
+ *   parseMinor(undefined)      -> null
+ *   parseMinor("")             -> null
+ *   parseMinor("not-a-number") -> null
+ */
+export function parseMinor(value: unknown): number | null {
+  if (typeof value === "number") return Number.isFinite(value) ? value : null;
   if (typeof value === "string") {
-    const n = Number(value);
-    return Number.isFinite(n) ? n : 0;
+    const trimmed = value.trim();
+    if (trimmed === "") return null;
+    const n = Number(trimmed);
+    return Number.isFinite(n) ? n : null;
   }
-  return 0;
+  return null;
 }
 
 export function parsePaiseFromDisplay(display: string | null): number {
@@ -76,7 +95,7 @@ export function mapProcurementPOListItems(payload: unknown): PurchaseOrderListIt
     const amount =
       typeof row.amount === "number"
         ? row.amount
-        : parseMinor(row.totalMinor) || parsePaiseFromDisplay(toText(row.amountDisplay));
+        : (parseMinor(row.totalMinor) ?? 0) || parsePaiseFromDisplay(toText(row.amountDisplay));
     const orderDate = toText(row.orderDate) ?? toText(row.createdAt)?.slice(0, 10) ?? "—";
     const raw = (toText(row.status) ?? "draft").toLowerCase();
     const status: PurchaseOrderListItem["status"] =
@@ -162,7 +181,7 @@ export function mapProcurementIndentSummaries(payload: unknown): IndentSummary[]
       requestedBy: toText(row.requestedBy) ?? toText(row.createdBy)?.slice(0, 8) ?? "—",
       department: toText(row.department) ?? "—",
       itemCount: typeof row.itemCount === "number" ? row.itemCount : 1,
-      estimatedAmount: parseMinor(row.totalMinor) || parseMinor(row.estimatedAmount),
+      estimatedAmount: (parseMinor(row.totalMinor) ?? 0) || (parseMinor(row.estimatedAmount) ?? 0),
       requestDate: toText(row.indentDate) ?? toText(row.requestDate) ?? toText(row.createdAt)?.slice(0, 10) ?? "—",
       requiredByDate: toText(row.requiredBy) ?? toText(row.requiredByDate) ?? undefined,
       status,
@@ -182,14 +201,14 @@ export function mapProcurementIndentDetail(payload: unknown): IndentDetail | nul
   for (const item of rawItems) {
     if (!isRecord(item)) continue;
     const qty = typeof item.quantity === "number" ? item.quantity : 1;
-    const unitPrice = parseMinor(item.estimatedUnitPrice) || parseMinor(item.unitPriceMinor);
+    const unitPrice = (parseMinor(item.estimatedUnitPrice) ?? 0) || (parseMinor(item.unitPriceMinor) ?? 0);
     lineItems.push({
       itemCode: toText(item.itemCode) ?? "—",
       itemName: toText(item.itemName) ?? toText(item.description) ?? "—",
       quantity: qty,
       unit: toText(item.unit) ?? "nos",
       estimatedUnitPrice: unitPrice,
-      totalPrice: parseMinor(item.totalPrice) || unitPrice * qty,
+      totalPrice: (parseMinor(item.totalPrice) ?? 0) || unitPrice * qty,
     });
   }
 
@@ -249,14 +268,14 @@ export function mapProcurementPODetail(payload: unknown): PODetail | null {
   for (const item of rawItems) {
     if (!isRecord(item)) continue;
     const qty = typeof item.quantity === "number" ? item.quantity : 1;
-    const unitPrice = parseMinor(item.unitPrice) || parseMinor(item.unitPriceMinor);
+    const unitPrice = (parseMinor(item.unitPrice) ?? 0) || (parseMinor(item.unitPriceMinor) ?? 0);
     lineItems.push({
       itemCode: toText(item.itemCode) ?? "—",
       itemName: toText(item.itemName) ?? toText(item.description) ?? "—",
       quantity: qty,
       unit: toText(item.unit) ?? "nos",
       unitPrice,
-      totalPrice: parseMinor(item.totalPrice) || unitPrice * qty,
+      totalPrice: (parseMinor(item.totalPrice) ?? 0) || unitPrice * qty,
       grnQty: typeof item.grnQty === "number" ? item.grnQty : 0,
     });
   }
@@ -268,7 +287,7 @@ export function mapProcurementPODetail(payload: unknown): PODetail | null {
     vendorId: toText(payload.vendorId) ?? undefined,
     orderDate: toText(payload.orderDate) ?? toText(payload.createdAt)?.slice(0, 10) ?? "—",
     deliveryDate: toText(payload.deliveryDate) ?? undefined,
-    totalAmount: parseMinor(payload.totalAmount) || parseMinor(payload.totalMinor),
+    totalAmount: (parseMinor(payload.totalAmount) ?? 0) || (parseMinor(payload.totalMinor) ?? 0),
     status: normalizePoStatus(toText(payload.status)),
     lineItems,
   };
@@ -298,7 +317,7 @@ export function mapProcurementGRNSummaries(payload: unknown): GRNSummary[] | nul
       receivedDate: toText(row.receivedDate) ?? "—",
       receivedBy: toText(row.receivedBy) ?? "—",
       itemCount: typeof row.itemCount === "number" ? row.itemCount : 0,
-      totalValue: typeof row.totalValue === "number" ? row.totalValue : parseMinor(row.totalValue),
+      totalValue: typeof row.totalValue === "number" ? row.totalValue : (parseMinor(row.totalValue) ?? 0),
       status: normalizeGrnStatus(toText(row.status)),
       threeWayMatch: typeof row.threeWayMatch === "boolean" ? row.threeWayMatch : undefined,
     });
@@ -467,7 +486,7 @@ export function mapDealSummaries(payload: unknown): DealSummary[] | null {
       contactId: toText(row.contactId) ?? undefined,
       contactName: toText(row.contactName) ?? toText(row.company) ?? undefined,
       stage,
-      amount: parseMinor(row.valueMinor) || parseMinor(row.amount),
+      amount: (parseMinor(row.valueMinor) ?? 0) || (parseMinor(row.amount) ?? 0),
       owner: toText(row.owner) ?? "—",
       closeDate: toText(row.closeDate) ?? undefined,
       probability: typeof row.probability === "number" ? row.probability : 0,
@@ -515,7 +534,7 @@ export function mapCrmAccounts(payload: unknown): CRMAccountSummary[] | null {
       industry: toText(row.industry),
       website: toText(row.website),
       parentId: toText(row.parentId),
-      contactCount: parseMinor(row.contactCount),
+      contactCount: parseMinor(row.contactCount) ?? 0,
     });
   }
   return mapped;
@@ -768,8 +787,8 @@ export function mapAssetSummaries(payload: unknown): AssetSummary[] | null {
     const name = toText(row.name);
     const assetCode = toText(row.assetCode) ?? toText(row.code) ?? id;
     if (!id || !name || !assetCode) continue;
-    const purchaseCost = parseMinor(row.acquisitionCost) || parseMinor(row.purchaseCost);
-    const currentValue = parseMinor(row.bookValue) || purchaseCost;
+    const purchaseCost = (parseMinor(row.acquisitionCost) ?? 0) || (parseMinor(row.purchaseCost) ?? 0);
+    const currentValue = (parseMinor(row.bookValue) ?? 0) || purchaseCost;
     const rawType = (toText(row.assetType) ?? toText(row.type) ?? "other").toLowerCase();
     const type: AssetSummary["type"] =
       rawType === "fixed" || rawType === "infra" || rawType === "movable" || rawType === "it" || rawType === "vehicle"
@@ -822,8 +841,8 @@ export function mapDepreciationEntries(payload: unknown): AssetDetail["depreciat
     if (!isRecord(row)) continue;
     const period = toText(row.period) ?? "";
     const year = Number(period.slice(0, 4)) || new Date().getFullYear();
-    const depAmt = parseMinor(row.amountMinor);
-    const closing = parseMinor(row.bookValueAfterMinor);
+    const depAmt = parseMinor(row.amountMinor) ?? 0;
+    const closing = parseMinor(row.bookValueAfterMinor) ?? 0;
     schedule.push({
       year,
       openingValue: opening || closing + depAmt,
@@ -848,7 +867,7 @@ export function mapAssetMaintenanceHistory(payload: unknown): AssetDetail["maint
       date: toText(row.completedDate)?.slice(0, 10) ?? toText(row.scheduledDate)?.slice(0, 10) ?? "—",
       type: toText(row.maintenanceType) ?? toText(row.type) ?? "maintenance",
       description: toText(row.description) ?? toText(row.notes) ?? "Work order",
-      cost: parseMinor(row.costMinor),
+      cost: parseMinor(row.costMinor) ?? 0,
     }];
   });
 }
@@ -877,8 +896,8 @@ export function mapMaintenanceSummaries(payload: unknown): MaintenanceSummary[] 
       maintenanceType: "corrective",
       scheduledDate: toText(row.scheduledDate)?.slice(0, 10) ?? "—",
       completedDate: toText(row.completedDate)?.slice(0, 10) ?? undefined,
-      estimatedCost: parseMinor(row.costMinor),
-      actualCost: parseMinor(row.costMinor),
+      estimatedCost: parseMinor(row.costMinor) ?? 0,
+      actualCost: parseMinor(row.costMinor) ?? 0,
       status,
       remarks: toText(row.notes) ?? undefined,
     });
@@ -916,7 +935,7 @@ export function mapStockLedgerEntries(payload: unknown): StockLedgerEntry[] | nu
         : typeRaw === "transfer" ? "transfer"
           : typeRaw === "adjustment" ? "adjustment"
             : "receipt";
-    const unitCost = parseMinor(row.rateMinor);
+    const unitCost = parseMinor(row.rateMinor) ?? 0;
     mapped.push({
       id,
       itemCode: itemId?.slice(0, 8).toUpperCase() ?? id.slice(0, 8),
@@ -944,7 +963,7 @@ export function mapStockItemSummaries(payload: unknown): StockItemSummary[] | nu
     const itemCode = toText(row.itemCode) ?? toText(row.code) ?? id;
     if (!id || !name || !itemCode) continue;
     const currentStock = typeof row.currentStock === "number" ? row.currentStock : 0;
-    const minStockLevel = typeof row.minStockLevel === "number" ? row.minStockLevel : parseMinor(row.reorderLevel);
+    const minStockLevel = typeof row.minStockLevel === "number" ? row.minStockLevel : (parseMinor(row.reorderLevel) ?? 0);
     mapped.push({
       id,
       itemCode,
@@ -953,8 +972,8 @@ export function mapStockItemSummaries(payload: unknown): StockItemSummary[] | nu
       unit: toText(row.unit) ?? toText(row.uomId)?.slice(0, 4) ?? "EA",
       currentStock,
       minStockLevel,
-      unitCost: parseMinor(row.unitCost),
-      totalValue: parseMinor(row.totalValue),
+      unitCost: parseMinor(row.unitCost) ?? 0,
+      totalValue: parseMinor(row.totalValue) ?? 0,
       isLowStock: currentStock <= minStockLevel,
     });
   }
@@ -1009,9 +1028,13 @@ export function mapPurchaseOrderSummaries(payload: unknown): PurchaseOrderSummar
     if (!isRecord(row)) continue;
     const id = toText(row.id) ?? toText(row.poNo);
     const vendor = toText(row.vendor) ?? toText(row.vendorName);
-    const amountDisplay = toText(row.amountDisplay) ?? (parseMinor(row.totalMinor) ? `₹${(parseMinor(row.totalMinor) / 100).toLocaleString("en-IN")}` : null);
+    // UX-019: parseMinor(row.totalMinor) is `null` for missing/unparseable input
+    // and a real (possibly 0) number otherwise -- formatMoney() already renders
+    // that distinction as "—" vs "₹0.00" (UX-006), so a genuine zero amount no
+    // longer gets treated as falsy and silently drops the row below.
+    const amountDisplay = toText(row.amountDisplay) ?? formatMoney(parseMinor(row.totalMinor));
     const status = toText(row.status);
-    if (!id || !vendor || !amountDisplay || !status) continue;
+    if (!id || !vendor || !status) continue;
     if (status !== "Pending" && status !== "Approved" && status !== "Review" && status !== "Rejected") continue;
     mapped.push({ id, vendor, amountDisplay, status: status as PurchaseOrderSummary["status"] });
   }

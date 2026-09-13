@@ -17,9 +17,26 @@
  * redelivery short-circuits before any notification is enqueued a second
  * time, and enqueue-then-relay keeps "rule matched" and "notification will
  * be sent" atomic with the message being marked processed.
+ *
+ * SEC-009 follow-up: every subscriber below reads `tenantId` off the
+ * message but never called `runWithTenant(tenantId, ...)`, so both
+ * `getRulesForTenant`'s `scopedRead` and the `markProcessed`/enqueue
+ * `db.transaction` ran with no tenant context — `wrapWithTenantGuc` only
+ * sets `app.tenant_id` when `getCurrentTenantId()` (AsyncLocalStorage) has a
+ * value, and nothing here ever put one there. Harmless before migration
+ * 0041 (workflow.nurture_rules only had ENABLE, so workflow_svc, the table
+ * owner, bypassed the tenant_isolation policy and unscoped reads still
+ * "worked"); once FORCE was added this surfaced immediately as every
+ * subscriber's `getRulesForTenant` throwing `invalid input syntax for type
+ * uuid: ""` (bare `current_setting('app.tenant_id')` with nothing ever set).
+ * Fixed by wrapping each subscriber body in `runWithTenant(tenantId, ...)`
+ * so both the rule lookup and the outbox write are correctly tenant-scoped
+ * end to end, per this codebase's standard pattern (see e.g.
+ * sla/consumer.ts).
  */
 import type { Queue } from "@civitasone/queue";
 import { sql } from "drizzle-orm";
+import { runWithTenant } from "@civitasone/db";
 import { db, scopedRead } from "../../shared/db.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 
@@ -85,14 +102,16 @@ export function registerNurtureConsumers(q: Queue): void {
       correlationId: string;
       payload: { contactId: string; score: number };
     };
-    const rules = await getRulesForTenant(tenantId, "score_below");
-    await db.transaction(async (tx) => {
-      if (!(await markProcessed(tx, messageId))) return;
-      for (const rule of rules) {
-        if (payload.score < rule.threshold) {
-          await enqueueNurtureNotification(tx, tenantId, payload.contactId, rule, correlationId);
+    await runWithTenant(tenantId, async () => {
+      const rules = await getRulesForTenant(tenantId, "score_below");
+      await db.transaction(async (tx) => {
+        if (!(await markProcessed(tx, messageId))) return;
+        for (const rule of rules) {
+          if (payload.score < rule.threshold) {
+            await enqueueNurtureNotification(tx, tenantId, payload.contactId, rule, correlationId);
+          }
         }
-      }
+      });
     });
   });
 
@@ -104,12 +123,14 @@ export function registerNurtureConsumers(q: Queue): void {
       correlationId: string;
       payload: { contactId: string; fromStatus: string; toStatus: string };
     };
-    const rules = await getRulesForTenant(tenantId, "stage_change");
-    await db.transaction(async (tx) => {
-      if (!(await markProcessed(tx, messageId))) return;
-      for (const rule of rules) {
-        await enqueueNurtureNotification(tx, tenantId, payload.contactId, rule, correlationId);
-      }
+    await runWithTenant(tenantId, async () => {
+      const rules = await getRulesForTenant(tenantId, "stage_change");
+      await db.transaction(async (tx) => {
+        if (!(await markProcessed(tx, messageId))) return;
+        for (const rule of rules) {
+          await enqueueNurtureNotification(tx, tenantId, payload.contactId, rule, correlationId);
+        }
+      });
     });
   });
 
@@ -125,14 +146,16 @@ export function registerNurtureConsumers(q: Queue): void {
     // For inactive_days, the actual inactivity check would typically run on a
     // scheduled basis. This consumer handles the signal that an activity was
     // created, allowing immediate trigger evaluation.
-    const rules = await getRulesForTenant(tenantId, "inactive_days");
-    await db.transaction(async (tx) => {
-      if (!(await markProcessed(tx, messageId))) return;
-      for (const rule of rules) {
-        // In production, check the last activity date against threshold
-        // For now, just evaluate and fire the notification
-        await enqueueNurtureNotification(tx, tenantId, payload.contactId as string, rule, correlationId);
-      }
+    await runWithTenant(tenantId, async () => {
+      const rules = await getRulesForTenant(tenantId, "inactive_days");
+      await db.transaction(async (tx) => {
+        if (!(await markProcessed(tx, messageId))) return;
+        for (const rule of rules) {
+          // In production, check the last activity date against threshold
+          // For now, just evaluate and fire the notification
+          await enqueueNurtureNotification(tx, tenantId, payload.contactId as string, rule, correlationId);
+        }
+      });
     });
   });
 }
