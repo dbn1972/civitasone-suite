@@ -29,6 +29,7 @@ import { schema as sandboxModule } from "../modules/sandbox/schema.js";
 import { mobileSchema as mobileTelemetryModule } from "../modules/health/mobile-schema.js";
 import { schema as deptTemplateModule } from "../modules/dept-templates/schema.js";
 import { docSchema as documentGovernanceModule } from "../modules/uploads/doc-schema.js";
+import { schema as orgHierarchyLevelsModule } from "../modules/org-hierarchy-levels/schema.js";
 import { outboxSchema } from "./outbox.js";
 
 // NOTE (Phase 4 coverage-gap closure): custom-domains, webhooks, data-export,
@@ -60,6 +61,7 @@ const SCHEMA = {
   ...mobileTelemetryModule,
   ...deptTemplateModule,
   ...documentGovernanceModule,
+  ...orgHierarchyLevelsModule,
   ...outboxSchema,
 };
 

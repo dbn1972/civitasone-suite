@@ -4885,6 +4885,39 @@ export async function getAdminOrgUnits(): Promise<LoaderResult<AdminOrgUnit[]>> 
   });
 }
 
+export type OrgHierarchyLevel = {
+  id: string;
+  order: number;
+  label: string;
+  description: string;
+  examples: string;
+  color: string;
+};
+
+// COMP-014: platform-admin/org-config's hierarchy-LEVEL taxonomy (how many
+// reporting tiers exist, each tier's label/description/examples/color) --
+// backed by admin-service's new org-hierarchy-levels module, tenant override
+// with platform-default fallback (migration 0033). Deliberately a distinct
+// loader/path from getAdminOrgUnits above (org-UNIT instances, a different
+// concept entirely -- see that function's own comment).
+export async function getOrgHierarchyLevels(): Promise<LoaderResult<OrgHierarchyLevel[]>> {
+  return fetchJson<unknown, OrgHierarchyLevel[]>("/api/v1/admin/org-hierarchy-levels", [], {
+    telemetryKey: "admin.org-hierarchy-levels",
+    mapResponse: (p) => {
+      const rows = getArrayPayload(p);
+      if (!rows) return null;
+      return rows.filter(isRecord).map((l) => ({
+        id: String(l.id ?? ""),
+        order: typeof l.order === "number" ? l.order : 0,
+        label: String(l.label ?? ""),
+        description: String(l.description ?? ""),
+        examples: String(l.examples ?? ""),
+        color: String(l.color ?? "#334155"),
+      }));
+    },
+  });
+}
+
 export type AdminRoleDetail = AdminRoleSummary & { permissionKeys: string[] };
 
 export async function getAdminRoleDetail(id: string): Promise<LoaderResult<AdminRoleDetail | null>> {

@@ -33,6 +33,10 @@ import { sandboxRoutes } from "./modules/sandbox/routes.js";
 import { mobileTelemetryRoutes } from "./modules/health/mobile-routes.js";
 import { departmentTemplateRoutes } from "./modules/dept-templates/routes.js";
 import { documentGovernanceRoutes } from "./modules/uploads/doc-routes.js";
+// COMP-014: hierarchy-LEVEL taxonomy for platform-admin/org-config -- a
+// distinct concept and route path from gap/routes.ts's /v1/admin/org-hierarchy
+// (real org-unit INSTANCES, forwarded to tenant-service).
+import { orgHierarchyLevelRoutes } from "./modules/org-hierarchy-levels/routes.js";
 
 export async function buildApp(): Promise<FastifyInstance> {
   const app = Fastify({
@@ -87,6 +91,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(mobileTelemetryRoutes);
   await app.register(departmentTemplateRoutes);
   await app.register(documentGovernanceRoutes);
+  await app.register(orgHierarchyLevelRoutes);
   const { adminGapRoutes } = await import("./modules/gap/routes.js");
   await app.register(adminGapRoutes);
 
