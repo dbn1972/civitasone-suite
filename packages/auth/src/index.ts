@@ -230,6 +230,25 @@ export function toRequestContext(
   };
 }
 
+/**
+ * SEC-015: decode a JWT's claims WITHOUT verifying its signature. This is NOT
+ * an authorization check -- never use it to make an access-control decision.
+ * It's only safe when the token's provenance is already trusted through a
+ * channel OTHER than this decode: e.g. apps/web's OAuth callback route calls
+ * this on a token it just obtained directly from Keycloak's own token
+ * endpoint (a server-to-server HTTPS call it made itself), purely to read
+ * sub/tid/sid so it can populate the body of a subsequent call. That
+ * subsequent call is what actually establishes trust: identity-service
+ * re-verifies the same bearer token independently (verifyJwt, via
+ * authPlugin) before any of these claims are relied on. Returns null if the
+ * token is structurally not a JWT.
+ */
+export function decodeUnverifiedClaims(token: string): CivitasJwtPayload | null {
+  const decoded = jwt.decode(token);
+  if (!decoded || typeof decoded === "string") return null;
+  return decoded as CivitasJwtPayload;
+}
+
 // ── RBAC helpers ─────────────────────────────────────────────────────────────
 
 /**
