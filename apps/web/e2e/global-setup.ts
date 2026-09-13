@@ -291,6 +291,35 @@ const FIXTURES: Record<string, unknown> = {
     },
   ],
 
+  // COMP-015: hr/onboarding/[id]'s document checklist now fetches its own
+  // employee-scoped endpoint (GET /v1/hrms/employees/:id/onboarding-documents)
+  // instead of reading a `documents` field off the summary row above -- that
+  // field (still present on the ob-001/ob-002 rows above) is now dead data,
+  // kept only because page.tsx no longer reads it. Reusing the same doc-*
+  // ids/statuses those dead fields already used, since onboarding-s12.spec.ts's
+  // doc-card-doc-appt / doc-card-doc-address locators were written against
+  // exactly that data and predate this endpoint split.
+  '/api/v1/hrms/employees/ob-001/onboarding-documents': {
+    data: [
+      { docType: 'doc-appt', required: true, status: 'verified', receivedAt: '2026-08-12T00:00:00Z', verifiedBy: 'hr-e2e-fixture', verifiedAt: '2026-08-13T00:00:00Z' },
+      { docType: 'doc-id', required: true, status: 'uploaded', receivedAt: '2026-08-12T00:00:00Z', verifiedBy: null, verifiedAt: null },
+      { docType: 'doc-address', required: true, status: 'pending', receivedAt: null, verifiedBy: null, verifiedAt: null },
+      { docType: 'doc-education', required: true, status: 'pending', receivedAt: null, verifiedBy: null, verifiedAt: null },
+      { docType: 'doc-pan', required: true, status: 'uploaded', receivedAt: '2026-08-12T00:00:00Z', verifiedBy: null, verifiedAt: null },
+      { docType: 'doc-bank', required: true, status: 'pending', receivedAt: null, verifiedBy: null, verifiedAt: null },
+    ],
+  },
+  '/api/v1/hrms/employees/ob-002/onboarding-documents': {
+    data: [
+      { docType: 'doc-appt', required: true, status: 'verified', receivedAt: '2026-08-02T00:00:00Z', verifiedBy: 'hr-e2e-fixture', verifiedAt: '2026-08-03T00:00:00Z' },
+      { docType: 'doc-id', required: true, status: 'pending', receivedAt: null, verifiedBy: null, verifiedAt: null },
+      { docType: 'doc-address', required: true, status: 'pending', receivedAt: null, verifiedBy: null, verifiedAt: null },
+      { docType: 'doc-education', required: true, status: 'pending', receivedAt: null, verifiedBy: null, verifiedAt: null },
+      { docType: 'doc-pan', required: true, status: 'pending', receivedAt: null, verifiedBy: null, verifiedAt: null },
+      { docType: 'doc-bank', required: true, status: 'pending', receivedAt: null, verifiedBy: null, verifiedAt: null },
+    ],
+  },
+
   '/api/v1/payroll/runs': { data: [] },
   '/api/v1/payroll/salary-slips': [],
 
