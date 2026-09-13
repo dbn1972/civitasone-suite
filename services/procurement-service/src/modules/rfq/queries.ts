@@ -1,5 +1,6 @@
 import { cache } from "../../shared/infra.js";
 import * as repo from "./repo.js";
+import * as vendorRepo from "../vendor/repo.js";
 import type { RfqRow } from "./schema.js";
 
 function mapRfqStatus(status: string): "draft" | "issued" | "closed" | "cancelled" | "awarded" {
@@ -39,6 +40,21 @@ export async function getRfqDetail(id: string, tenantId: string) {
   );
   if (!row || row.tenantId !== tenantId) return null;
   const items = await repo.findRfqItemsByRfq(id);
+  // DOM-011: previously hardcoded `[]` -- vendor responses were queued
+  // (COMMANDS.rfqRespond) but nothing ever consumed or persisted them, so
+  // there was nothing real to return here. See rfq/consumer.ts's rfqRespond
+  // handler for where they are now actually stored.
+  const responseRows = await repo.findResponsesByRfq(id, tenantId);
+  const responses = await Promise.all(responseRows.map(async (r) => {
+    const vendor = await vendorRepo.findVendorById(r.vendorId, tenantId);
+    return {
+      vendorId: r.vendorId,
+      vendorName: vendor?.name ?? r.vendorId,
+      totalAmount: Number(r.totalAmountMinor) / 100,
+      submittedAt: r.submittedAt instanceof Date ? r.submittedAt.toISOString() : String(r.submittedAt),
+      status: r.status,
+    };
+  }));
   return {
     id: row.id,
     rfqNo: row.rfqNo,
@@ -50,6 +66,6 @@ export async function getRfqDetail(id: string, tenantId: string) {
     closingDate: String(row.closingDate),
     status: mapRfqStatus(row.status),
     lineItems: items.map((i) => ({ itemName: i.itemName, quantity: i.quantity, unit: i.unit })),
-    responses: [],
+    responses,
   };
 }

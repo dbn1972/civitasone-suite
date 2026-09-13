@@ -7,6 +7,9 @@ export const COMMANDS = {
   vendorBlacklist: "procurement.vendor.blacklist",
   rfqCreate:       "procurement.rfq.create",
   rfqRespond:      "procurement.rfq.respond",
+  // DOM-011: RFQ close/award lifecycle (mirrors poClose/tenderAward naming).
+  rfqClose:        "procurement.rfq.close",
+  rfqAward:        "procurement.rfq.award",
   poCreate:        "procurement.po.create",
   poApprove:       "procurement.po.approve",
   poDispatch:      "procurement.po.dispatch",
@@ -84,6 +87,9 @@ export const EVENTS = {
   grnAmended:          "procurement.grn.amended",
   vendorBlacklisted:   "procurement.vendor.blacklisted",
   auctionClosed:       "procurement.auction.closed",
+  // DOM-011: RFQ lifecycle events
+  rfqClosed:           "procurement.rfq.closed",
+  rfqAwarded:          "procurement.rfq.awarded",
   // Tender lifecycle events
   tenderPublished:     "procurement.tender.published",
   tenderTechEvaluated: "procurement.tender.tech_evaluated",
