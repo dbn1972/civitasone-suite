@@ -17,7 +17,18 @@ const createBody = z.object({
   grnId: z.string().uuid(),
   invoiceId: z.string().uuid().optional(),
   invoiceAmountMinor: z.number().int().nonnegative().optional(),
-});
+  // DOM-027: required whenever invoice info is asserted (see the .refine()
+  // below) -- closes the audit-trail asymmetry with POST
+  // /v1/procurement/matches/invoice, which has always required a structured
+  // invoiceRef. Same bound as that endpoint's own field.
+  invoiceRef: z.string().min(1).max(128).optional(),
+}).refine(
+  (b) => (b.invoiceId === undefined && b.invoiceAmountMinor === undefined) || b.invoiceRef !== undefined,
+  {
+    message: "invoiceRef is required whenever invoice information (invoiceId/invoiceAmountMinor) is supplied",
+    path: ["invoiceRef"],
+  },
+);
 
 const invoiceAttachBody = z.object({
   matchId:       z.string().uuid(),
@@ -38,6 +49,11 @@ function toApi(r: ThreeWayMatchRow): Record<string, unknown> {
     poAmountMinor: String(r.poAmountMinor),
     grnAmountMinor: String(r.grnAmountMinor),
     invoiceAmountMinor: r.invoiceAmountMinor != null ? String(r.invoiceAmountMinor) : null,
+    // DOM-027: audited invoice reference. Mandatory at the HTTP boundary
+    // (both write endpoints, below) whenever invoice info is supplied, and
+    // surfaced here so it is genuinely visible in the read path -- not just
+    // validated and discarded.
+    invoiceRef: r.invoiceRef ?? null,
     matchStatus: r.matchStatus,
     variancePct: r.variancePct,
     autoMatched: r.autoMatched,
@@ -82,7 +98,18 @@ export async function threeWayMatchRoutes(app: FastifyInstance): Promise<void> {
     if (!existingMatch) throw new HttpError(404, "NOT_FOUND", "three-way match record not found");
     const invoiceId = randomUUID();
     const invoiceAmountMinor = Math.round((body.invoiceAmount + body.invoiceTax) * 100);
-    return sendAccepted(reply, acceptedResponseSchema, await commands.runThreeWayMatch(ctx, { poId: existingMatch.poId, grnId: existingMatch.grnId, invoiceId, invoiceAmountMinor }));
+    return sendAccepted(reply, acceptedResponseSchema, await commands.runThreeWayMatch(ctx, {
+      poId: existingMatch.poId,
+      grnId: existingMatch.grnId,
+      invoiceId,
+      invoiceAmountMinor,
+      // DOM-027: invoiceRef has always been REQUIRED by invoiceAttachBody
+      // above, but was previously never forwarded past validation --
+      // accepted, then silently discarded. Threaded through the same pipe
+      // the direct endpoint now uses, so it is genuinely persisted
+      // (procurement.three_way_match.invoice_ref) instead of just checked.
+      invoiceRef: body.invoiceRef,
+    }));
   });
 
   app.setErrorHandler((err, req, reply) => {

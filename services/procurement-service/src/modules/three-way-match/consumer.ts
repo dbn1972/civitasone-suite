@@ -57,13 +57,16 @@ export function registerThreeWayMatchConsumers(queue: Queue): void {
       poId: string;
       grnId: string;
       invoiceId?: string;
-      // DOM-011 follow-up (filed separately in the gap report): this number is
-      // entirely client-asserted -- there is no independent invoice-ingestion
-      // or vendor e-invoicing source in this system to verify it against. Out
-      // of scope for DOM-011 itself (which is about the TOLERANCE check being
-      // blended/hardcoded, not about invoice provenance), but worth flagging
-      // at the exact point it is trusted rather than silently passing it on.
+      // DOM-011 follow-up, closed by DOM-027: this number is still entirely
+      // client-asserted -- there is no independent invoice-ingestion or
+      // vendor e-invoicing source in this system to verify it against
+      // (DOM-027's own gap text calls a real integration out of reach for
+      // now). What DOM-027 DID close is the audit-trail asymmetry: both
+      // HTTP endpoints (routes.ts) now REQUIRE invoiceRef below whenever
+      // this is present, and it is persisted alongside the match instead of
+      // being accepted and silently discarded.
       invoiceAmountMinor?: number;
+      invoiceRef?: string;
     };
 
     await db.transaction(async (tx) => {
@@ -124,6 +127,10 @@ export function registerThreeWayMatchConsumers(queue: Queue): void {
         matchStatus: result.matchStatus,
         invoiceId: p.invoiceId ?? null,
         invoiceAmountMinor,
+        // DOM-027: threaded through from the queued command payload so the
+        // audited reference actually reaches storage (see repo.ts) instead
+        // of stopping at HTTP-layer validation.
+        invoiceRef: p.invoiceRef ?? null,
         variancePct: result.totalVariancePct,
         autoMatched: true,
         qtyVariancePct: result.qtyVariancePct,
