@@ -163,4 +163,46 @@ describe.skipIf(!rabbitUrl)("RabbitMqQueue ↔ real RabbitMQ (PERF-017)", () => 
 
     expect(getDlqMessageCount(topic)).toBe(0); // never dead-lettered — it succeeded
   }, 30_000);
+
+  it("does not re-fan a retry to other services subscribed to the same topic", async () => {
+    // Design claim being checked here: the retry queue's dead-letter-exchange
+    // is the *default* exchange with routing key = the failing service's own
+    // main queue name, not the topic's fanout exchange — so when service A's
+    // copy of a message backs off and comes back, service B's independent
+    // queue for the same topic must NOT receive a second/duplicate delivery.
+    const topic = `qtest.fanout-isolation.${randomUUID().slice(0, 8)}`;
+    const origService = process.env.SERVICE_NAME;
+
+    process.env.SERVICE_NAME = "svc-a-perf017";
+    const queueA = new RabbitMqQueue();
+    let svcAAttempts = 0;
+    queueA.subscribe(topic, async () => {
+      svcAAttempts += 1;
+      if (svcAAttempts < 2) throw new Error("svc-a transient failure");
+    });
+    await queueA.start();
+
+    process.env.SERVICE_NAME = "svc-b-perf017";
+    const queueB = new RabbitMqQueue();
+    let svcBCalls = 0;
+    queueB.subscribe(topic, async () => { svcBCalls += 1; });
+    await queueB.start();
+
+    process.env.SERVICE_NAME = origService;
+    const publisher = new RabbitMqQueue();
+    await publisher.publish(topic, publishInput(topic));
+
+    // svc-a fails once (~1s backoff) then succeeds on redelivery; svc-b's own
+    // copy succeeds immediately. Wait well past svc-a's backoff window so a
+    // leaked re-fan into svc-b's queue would have had time to arrive.
+    const deadline = Date.now() + 15_000;
+    while (svcAAttempts < 2 && Date.now() < deadline) await sleep(50);
+    await sleep(2000);
+
+    await queueA.stop();
+    await queueB.stop();
+
+    expect(svcAAttempts).toBe(2); // failed once, succeeded on the backoff retry
+    expect(svcBCalls).toBe(1); // exactly the original delivery — no leaked re-fan
+  }, 30_000);
 });
