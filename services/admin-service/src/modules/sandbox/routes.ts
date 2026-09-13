@@ -94,6 +94,7 @@ function serializeSandbox(row: SandboxEnvironmentRow): Record<string, unknown> {
     sourceEnvironment: row.sourceEnvironment,
     status: row.status,
     lastRefreshAt: iso(row.lastRefreshAt),
+    lastRefreshDataMovement: row.lastRefreshDataMovement,
     notes: row.notes,
     createdAt: iso(row.createdAt),
     version: row.version,
