@@ -5251,8 +5251,8 @@
       "upstream": null,
       "routeHandler": null,
       "tablesPresent": null,
-      "status": "FABRICATED_DATA",
-      "detail": "no loader, but DEFAULT_DOCUMENTS in apps/web/src/app/(app)/hr/onboarding/[id]/page.tsx:59 looks like 6 hardcoded records"
+      "status": "NO_LOADER",
+      "detail": "navigation hub — no data loader"
     },
     {
       "module": "hr",
@@ -6252,6 +6252,17 @@
     {
       "module": "hr",
       "screen": "/hr/workforce/staffing-plan",
+      "loaders": [],
+      "apiPaths": [],
+      "upstream": null,
+      "routeHandler": null,
+      "tablesPresent": null,
+      "status": "NO_LOADER",
+      "detail": "navigation hub — no data loader"
+    },
+    {
+      "module": "hr",
+      "screen": "/hr/workforce/wfh/new",
       "loaders": [],
       "apiPaths": [],
       "upstream": null,
@@ -10304,11 +10315,11 @@
     "wired": 273,
     "missing": 0,
     "mismatch": 0,
-    "noLoader": 561,
-    "fabricatedData": 3
+    "noLoader": 563,
+    "fabricatedData": 2
   },
   "linkAudit": {
-    "total": 1337,
+    "total": 1335,
     "dead": []
   }
 }

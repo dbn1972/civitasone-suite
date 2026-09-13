@@ -34,6 +34,7 @@ const ENTITY_SEGMENTS: Record<string, string> = {
   holidays: "holiday",
   onboarding: "onboarding",
   "onboarding-tasks": "onboarding_task",
+  "onboarding-documents": "onboarding_document",
   training: "training",
   appraisals: "appraisal",
   transfers: "transfer",

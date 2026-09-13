@@ -4,7 +4,7 @@ import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
 import { fetchJson } from "@/app/_data/apiClient";
 import { JoineeWelcomeHeader } from "../_components/JoineeWelcomeHeader";
 import { OnboardingChecklist, type ChecklistStep } from "../_components/OnboardingChecklist";
-import { DocumentUploadCard, type OnboardingDocument } from "../_components/DocumentUploadCard";
+import { DocumentUploadCard, type OnboardingDocument, type DocStatus } from "../_components/DocumentUploadCard";
 import { TaskCalendar, type CalendarTask } from "../_components/TaskCalendar";
 
 // ---------------------------------------------------------------------------
@@ -52,18 +52,42 @@ function deriveStatus(task: OnboardingTaskRow, joiningDate: string): ChecklistSt
   return due.toISOString().slice(0, 10) < new Date().toISOString().slice(0, 10) ? "overdue" : "pending";
 }
 
-// Standard KYC checklist we ask HR to collect. There is no backend record of
-// per-document collection status yet (no onboarding-document routes exist),
-// so every item starts "pending" rather than inventing which ones are
-// already "verified"/"uploaded" for a given joinee.
-const DEFAULT_DOCUMENTS: OnboardingDocument[] = [
-  { id: "doc-appt", name: "Appointment Letter", description: "Signed copy of the appointment / offer letter.", required: true, status: "pending", category: "document" },
-  { id: "doc-id", name: "Government ID Proof", description: "Aadhaar card, Voter ID, or Passport (self-attested).", required: true, status: "pending", category: "document" },
-  { id: "doc-address", name: "Address Proof", description: "Aadhaar, utility bill, or bank statement (not older than 3 months).", required: true, status: "pending", category: "document" },
-  { id: "doc-education", name: "Education Certificate", description: "Highest qualification marksheet and degree certificate.", required: true, status: "pending", category: "document" },
-  { id: "doc-pan", name: "PAN Card", description: "Permanent Account Number card copy for payroll.", required: true, status: "pending", category: "document" },
-  { id: "doc-bank", name: "Bank Account Details", description: "Cancelled cheque or passbook copy (Name + IFSC + Account No).", required: true, status: "pending", category: "document" },
-];
+// Matches GET /v1/hrms/employees/:id/onboarding-documents (hrms-service
+// modules/lifecycle/onboarding-routes.ts's mergeOnboardingDocuments()): this
+// employee's own real document checklist -- required doc types for their
+// tenant/employeeType, merged with what THEY have actually submitted/had
+// verified. Previously this page ignored the backend entirely and rendered
+// DEFAULT_DOCUMENTS, a fixed 6-item array with every status hardcoded
+// "pending", for every employee (COMP-015) -- there was no fetch, no
+// per-employee state, and no way for a document to ever show as
+// received/verified for anyone.
+type DocumentApiRow = {
+  docType: string;
+  required: boolean;
+  status: DocStatus;
+  receivedAt: string | null;
+  verifiedBy: string | null;
+  verifiedAt: string | null;
+};
+
+// Presentation-only copy for known document-type codes the backend returns.
+// This is display metadata, not employee state: the actual required-ness and
+// status for THIS employee always come from the API response, never from
+// here. An unrecognised code (e.g. a tenant-defined type this map doesn't
+// know about) still renders with a humanized label instead of being dropped.
+const docTypeDisplay: Record<string, { name: string; description: string }> = {
+  appointment_letter: { name: "Appointment Letter", description: "Signed copy of the appointment / offer letter." },
+  government_id: { name: "Government ID Proof", description: "Aadhaar card, Voter ID, or Passport (self-attested)." },
+  address_proof: { name: "Address Proof", description: "Aadhaar, utility bill, or bank statement (not older than 3 months)." },
+  education_certificate: { name: "Education Certificate", description: "Highest qualification marksheet and degree certificate." },
+  pan_card: { name: "PAN Card", description: "Permanent Account Number card copy for payroll." },
+  bank_details: { name: "Bank Account Details", description: "Cancelled cheque or passbook copy (Name + IFSC + Account No)." },
+};
+
+function humanizeDocType(docType: string): string {
+  if (typeof docType !== "string" || docType.length === 0) return "Document";
+  return docType.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+}
 
 // ---------------------------------------------------------------------------
 // Page
@@ -105,7 +129,25 @@ export default async function OnboardingDetailPage({ params }: Props) {
       },
     },
   );
-  const source = summarySource === "error" || tasksSource === "error" ? "error" : "api";
+  // Real per-employee document checklist -- same rationale as the tasks
+  // fetch above (`id` is the employee id). Replaces the DEFAULT_DOCUMENTS
+  // placeholder that used to show the same 6 documents, always "pending",
+  // for every employee regardless of what HR had actually collected or
+  // verified (COMP-015).
+  const { data: documentRows, source: documentsSource } = await fetchJson<unknown, DocumentApiRow[]>(
+    `/api/v1/hrms/employees/${id}/onboarding-documents`,
+    [],
+    {
+      telemetryKey: "hr.onboarding.detail.documents",
+      mapResponse: (p) => {
+        const arr = Array.isArray(p) ? p : (p as { data?: DocumentApiRow[] })?.data;
+        return Array.isArray(arr) ? arr : null;
+      },
+    },
+  );
+
+  const source =
+    summarySource === "error" || tasksSource === "error" || documentsSource === "error" ? "error" : "api";
 
   const pct = Math.min(100, Math.max(0, Number(String(row.progress).replace("%", ""))));
 
@@ -123,7 +165,16 @@ export default async function OnboardingDetailPage({ params }: Props) {
     status: deriveStatus(t, row.joiningDate),
   }));
 
-  const documents: OnboardingDocument[] = DEFAULT_DOCUMENTS;
+  const documents: OnboardingDocument[] = documentRows
+    .filter((d) => typeof d.docType === "string" && d.docType.length > 0)
+    .map((d) => ({
+      id: d.docType,
+      name: docTypeDisplay[d.docType]?.name ?? humanizeDocType(d.docType),
+      description: docTypeDisplay[d.docType]?.description,
+      required: d.required,
+      status: d.status,
+      category: "document",
+    }));
 
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
