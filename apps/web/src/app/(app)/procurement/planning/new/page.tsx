@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useFormError } from "@/lib/useFormError";
+import { estimatedValueRupees } from "./estimatedValueRupees";
 
 const PROCUREMENT_METHODS = ["direct_purchase", "gem", "limited_tender", "advertised_tender", "single_tender"] as const;
 const QUARTERS = ["Q1", "Q2", "Q3", "Q4"] as const;
@@ -134,7 +135,7 @@ export default function NewAnnualPlanPage() {
                     <td><input type="number" className="inp" aria-label={`Quantity, line ${i + 1}`} value={l.quantity} onChange={(e) => updateLine(i, { quantity: Math.max(1, parseInt(e.target.value) || 1) })} style={{ width: 70, textAlign: "right" }} /></td>
                     <td><input className="inp" aria-label={`Unit of measure, line ${i + 1}`} value={l.uom} onChange={(e) => updateLine(i, { uom: e.target.value })} style={{ width: 60 }} /></td>
                     <td>
-                      <input type="number" className="inp" aria-label={`Estimated value INR, line ${i + 1}`} value={l.estimatedValueMinor / 100} onChange={(e) => updateLine(i, { estimatedValueMinor: Math.round((parseFloat(e.target.value) || 0) * 100) })} style={{ width: 120, textAlign: "right" }} step="0.01" />
+                      <input type="number" className="inp" aria-label={`Estimated value INR, line ${i + 1}`} value={estimatedValueRupees(l.estimatedValueMinor)} onChange={(e) => updateLine(i, { estimatedValueMinor: Math.round((parseFloat(e.target.value) || 0) * 100) })} style={{ width: 120, textAlign: "right" }} step="0.01" />
                     </td>
                     <td>
                       <select className="inp" aria-label={`Procurement method, line ${i + 1}`} value={l.procurementMethod} onChange={(e) => updateLine(i, { procurementMethod: e.target.value })}>

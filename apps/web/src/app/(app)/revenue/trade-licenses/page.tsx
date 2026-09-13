@@ -8,6 +8,7 @@ import { useId, useState } from "react";
 import { useRouter } from "next/navigation";
 import { PageHeader, StatGrid, StatCard, Card } from "@/app/_components/ds";
 import { browserJson } from "@/lib/api/browserClient";
+import { feeRupees } from "./feeRupees";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -62,8 +63,8 @@ function TradeLicensesTable({ licenses }: { licenses: TradeLicenseRow[] }) {
                 </span>
               </td>
               <td style={{ padding: "8px 10px", whiteSpace: "nowrap" }}>{l.expiryDate ?? "—"}</td>
-              <td style={{ padding: "8px 10px", textAlign: "right" }}>{(BigInt(l.feeMinor) / 100n).toString()}</td>
-              <td style={{ padding: "8px 10px", textAlign: "right" }}>{(BigInt(l.feePaidMinor) / 100n).toString()}</td>
+              <td style={{ padding: "8px 10px", textAlign: "right" }}>{feeRupees(l.feeMinor)}</td>
+              <td style={{ padding: "8px 10px", textAlign: "right" }}>{feeRupees(l.feePaidMinor)}</td>
             </tr>
           ))}
         </tbody>

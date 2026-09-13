@@ -78,4 +78,19 @@ describe("artifact formatters", () => {
       journalPreview: { debit: "4201", credit: "CASH", amountMinor: 50000 },
     })).toEqual({ debit: "4201", credit: "CASH", amountMinor: 50000 });
   });
+
+  // ---------------------------------------------------------------------------
+  // UX-018: formatPaise is exported and could be called directly with an
+  // unchecked value — a missing amountMinor must render "—", never "₹NaN" or a
+  // fabricated "₹0.00" indistinguishable from a genuine zero.
+  // ---------------------------------------------------------------------------
+  it("renders an em-dash for a missing amountMinor instead of crashing or showing NaN (UX-018)", () => {
+    expect(formatPaise(null)).toBe("—");
+    expect(formatPaise(undefined)).toBe("—");
+  });
+
+  it("keeps a genuine zero amount distinct from missing data", () => {
+    expect(formatPaise(0)).toBe("₹0.00");
+    expect(formatPaise(0)).not.toBe(formatPaise(null));
+  });
 });

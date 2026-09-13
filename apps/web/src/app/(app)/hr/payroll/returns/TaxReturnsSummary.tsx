@@ -1,4 +1,5 @@
 import { StatusPill } from "@/app/_components/ds";
+import { minorToRupeesOrNull } from "@/lib/formatters";
 
 type Quarter = "Q1" | "Q2" | "Q3" | "Q4";
 
@@ -50,6 +51,11 @@ export function TaxReturnsSummary({ fy, quarters }: { fy: string; quarters: Quar
       <div style={{ display: "grid", gap: 10 }}>
         {QUARTERS.map((q) => {
           const data = qMap.get(q);
+          // UX-018: deducteeCount > 0 gates whether this quarter has data at all, but
+          // doesn't guarantee totalTdsDepositedMinor itself is present — a partial API
+          // response could have one without the other. Don't divide a possibly-missing
+          // value; let minorToRupeesOrNull distinguish "missing" from a genuine zero.
+          const tdsRupees = minorToRupeesOrNull(data?.totalTdsDepositedMinor);
           return (
             <div
               key={q}
@@ -81,7 +87,7 @@ export function TaxReturnsSummary({ fy, quarters }: { fy: string; quarters: Quar
                 {data && data.deducteeCount > 0 ? (
                   <div style={{ textAlign: "right" }}>
                     <div style={{ fontSize: 11, color: "var(--ink2)" }}>TDS Deposited</div>
-                    <div style={{ fontWeight: 700 }}>{inrFmt.format(data.totalTdsDepositedMinor / 100)}</div>
+                    <div style={{ fontWeight: 700 }}>{tdsRupees === null ? "—" : inrFmt.format(tdsRupees)}</div>
                   </div>
                 ) : null}
                 {data && data.deducteeCount > 0 ? (
