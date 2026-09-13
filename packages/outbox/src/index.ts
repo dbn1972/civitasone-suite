@@ -269,7 +269,14 @@ export function startOutboxPurge(db: DrizzleTx, opts: OutboxPurgeOptions = {}): 
           const countResult = await db.execute(
             sql`SELECT count(*)::int AS cnt FROM _outbox.messages`
           );
-          const count = (countResult as unknown as { rows?: Array<{ cnt: number }> }).rows?.[0]?.cnt ?? 0;
+          // drizzle's postgres-js driver returns a bare array of rows for a raw
+          // db.execute() SELECT, not a `{rows: [...]}` wrapper (confirmed against
+          // this codebase's own driver — see e.g. the identical bare-array read in
+          // services/animal-service/src/modules/registration/repo.ts's
+          // nextRegistrationNumber). Reading `.rows` here always fell through to
+          // `?? 0` regardless of the real count, so the >10K WARN below could never
+          // fire (REL-029).
+          const count = (countResult as unknown as Array<{ cnt: number }>)[0]?.cnt ?? 0;
           if (count > 10_000) {
             logger.warn(
               { outboxCount: count, deleted: 0, retentionDays },

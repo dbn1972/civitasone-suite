@@ -11,11 +11,21 @@
  * in their `worker.ts`). No live Postgres is required — the Drizzle `db` is a
  * minimal fake exposing only `execute()`, called in the exact sequence
  * `purgeOutbox`/`startOutboxPurge` invoke it.
+ *
+ * REL-029: the count-check branch's fixtures below (`[{ cnt: N }]`) must be a
+ * bare array, matching the real shape drizzle's postgres-js driver returns
+ * for a raw `db.execute()` SELECT. An earlier version of this file mocked
+ * that call as `{ rows: [{ cnt: N }] }` — a shape the real driver never
+ * returns — which is exactly why these unit tests kept passing while the
+ * production code's `.rows?.[0]?.cnt` read silently always fell through to
+ * `?? 0` against the real driver. See `purge-live-pg.test.ts` for the
+ * live-Postgres regression coverage that catches that class of bug (a
+ * mocked-but-wrong return shape) directly.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { purgeOutbox, startOutboxPurge, type DrizzleTx } from "../src/index.js";
 
-type ExecResult = { rowCount?: number } | { rows: Array<{ cnt: number }> };
+type ExecResult = { rowCount?: number } | Array<{ cnt: number }>;
 
 /** Fake Drizzle handle: `execute()` returns queued results in call order. */
 function fakeDb(results: ExecResult[]): DrizzleTx {
@@ -72,7 +82,7 @@ describe("startOutboxPurge — scheduled cycle + WARN threshold", () => {
     const db = fakeDb([
       { rowCount: 0 },
       { rowCount: 0 },
-      { rows: [{ cnt: 15_000 }] },
+      [{ cnt: 15_000 }],
     ]);
 
     const timer = startOutboxPurge(db, { intervalMs: 1000, batchSize: 1000, logger });
@@ -97,7 +107,7 @@ describe("startOutboxPurge — scheduled cycle + WARN threshold", () => {
     const db = fakeDb([
       { rowCount: 0 },
       { rowCount: 0 },
-      { rows: [{ cnt: 10_000 }] },
+      [{ cnt: 10_000 }],
     ]);
 
     const timer = startOutboxPurge(db, { intervalMs: 1000, batchSize: 1000, logger });
@@ -166,7 +176,7 @@ describe("startOutboxPurge — scheduled cycle + WARN threshold", () => {
 
   it("stops running once the returned timer is cleared", async () => {
     const logger = { warn: vi.fn() };
-    const db = fakeDb([{ rowCount: 0 }, { rowCount: 0 }, { rows: [{ cnt: 20_000 }] }]);
+    const db = fakeDb([{ rowCount: 0 }, { rowCount: 0 }, [{ cnt: 20_000 }]]);
     const timer = startOutboxPurge(db, { intervalMs: 1000, batchSize: 1000, logger });
     clearInterval(timer);
     await vi.advanceTimersByTimeAsync(5000);

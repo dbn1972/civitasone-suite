@@ -36,6 +36,16 @@ import {
 
 // x-internal is intentionally absent: external clients must never inject it.
 // The gateway sets it itself only when it originates an internal service call.
+//
+// SEC-021: x-actor-id was missing from this list entirely, so it was silently
+// dropped here regardless of which auth path set it — api-key-auth.ts has set
+// it (from the key's ownerId) on req.headers since that path was built, and
+// jwt-edge.ts now does the same (from the verified token's sub claim), but
+// neither survived this copy loop: only header names in FORWARD_HEADERS are
+// ever read out of req.headers onto the outgoing request. That made the
+// actor-header injection dead code on BOTH auth paths as far as any upstream
+// service (e.g. hrms-service's createAuditHook) was concerned — not only the
+// JWT path this gap was originally filed against.
 const FORWARD_HEADERS = [
   "authorization",
   "content-type",
@@ -45,6 +55,7 @@ const FORWARD_HEADERS = [
   "x-device-trust-token",
   "x-step-up-token",
   "x-tenant-id",
+  "x-actor-id",
   "x-idempotency-key",
 ] as const;
 
