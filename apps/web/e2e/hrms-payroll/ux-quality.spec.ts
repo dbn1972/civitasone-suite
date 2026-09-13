@@ -261,9 +261,11 @@ test.describe('UX Quality — Navigation & Cognitive Load', () => {
 
   test('filter actually narrows results (responsive filtering)', async ({ page }) => {
     await page.goto('/hr/employees');
-    // Use the non-readonly DataTable search (not the global Ctrl+K bar)
-    const filterInput = page.getByRole('textbox', { name: /search by/i }).or(
-      page.locator('input[type="text"]:not([readonly])').first(),
+    // Use the non-readonly DataTable search (not the global Ctrl+K bar).
+    // UX-014: the DataTable filter is now a real `type="search"` searchbox,
+    // not a plain text input — both alternatives below updated to match.
+    const filterInput = page.getByRole('searchbox', { name: /search by/i }).or(
+      page.locator('input[type="search"]:not([readonly])').first(),
     ).first();
     const rowCountBefore = await page.locator('tbody tr').count();
     await filterInput.fill('zzzzzz_no_match_xyz');
