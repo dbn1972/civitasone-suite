@@ -85,6 +85,77 @@ const NOTIFICATION_URL = process.env.TRADE_TEST_NOTIFICATION_DATABASE_URL
 
 let q: MemoryQueue;
 
+/**
+ * TX-017 guard. relayOnce() (packages/outbox/src/index.ts) is the SAME
+ * function the real production relay loop runs — it has no test-only mode,
+ * no tenant/topic scoping, and it reads an unfiltered, oldest-first slice
+ * of _outbox.messages and MARKS whatever it reads as published. Pointed at
+ * a long-lived, shared Postgres instance instead of a disposable one, that
+ * isn't just flaky test data — it permanently marks OTHER services' real
+ * unpublished messages as published without ever actually delivering them.
+ *
+ * That is exactly what investigating TX-017 found: on this project's
+ * shared dev host, port 5435 is not a disposable per-run instance — it's
+ * `civitasone-postgres`, a long-lived container with real finance/hrms/
+ * payroll workers running against it continuously (infra/docker-compose.yml,
+ * container_name: civitasone-postgres). This file's own FINANCE_URL /
+ * NOTIFICATION_URL fallbacks above, and trade-service's vitest.config.ts
+ * DATABASE_URL fallback, all default to that same well-known port, so a
+ * test run that forgets to override them silently lands on ~529K rows of
+ * real accumulated activity instead of an empty table — a migration
+ * bootstrap is idempotent, so it "succeeds" either way and gives no signal
+ * that the data itself isn't fresh.
+ *
+ * The confusing `PostgresError: invalid input syntax for type uuid: ""`
+ * originally attributed to this scenario (see TX-017 in
+ * docs/ENTERPRISE-GAP-REPORT-2026-09-07.md) did not reproduce against
+ * verified-clean data: a byte-level dump of the shared instance's entire
+ * backlog (all ~529K rows, not just the ~1,100 unpublished ones) found
+ * zero malformed values in id/tenant_id/actor_id — the only uuid-typed
+ * columns _outbox.messages has, confirmed via information_schema against
+ * the live table (all its partitions included), not just the Drizzle
+ * model. The realistic explanation is resource contention decoding a
+ * 100-row, jsonb-heavy result set from a table under heavy concurrent
+ * load, not a data or app bug — but regardless of that exact mechanism,
+ * this test must never run against that shared instance in the first
+ * place. Fail fast and loud instead of either a cryptic downstream driver
+ * error or, worse, silent corruption of another service's real backlog.
+ *
+ * Checks TOTAL rows, not just unpublished ones: this file never relays
+ * notification-service's outbox at all (no relayOnce(notificationDb, ...)
+ * call exists — findByRecipient reads a deliveries table written directly
+ * by the consumer, so notification's outbox rows stay unpublished by
+ * design), and only relays finance-service's on the first hop of the very
+ * first test case, so repeated LOCAL runs against the same
+ * never-recreated disposable container legitimately leave a growing,
+ * nonzero, partially-unpublished residue behind in both — checking
+ * "unpublished == 0" was tried first and false-failed after a handful of
+ * such reruns (observed: 96 unpublished notification rows after 5 reruns
+ * of just this file against one reused container). Total row count is a
+ * far more robust discriminator: empirically it stays in the low hundreds
+ * even after several reused-container reruns (trade 333 / finance 87 /
+ * notification 96 rows observed after 5 runs here), while the real shared
+ * instance sits at 529,438 total rows — over 1,000x higher. The threshold
+ * below sits comfortably above realistic repeated-local-iteration residue
+ * (tens of reruns' worth) and comfortably below the shared-instance
+ * signal.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function assertOutboxIsFresh(sql: any, label: string): Promise<void> {
+  const [row] = await sql`select count(*)::int as count from _outbox.messages`;
+  const count = row?.count ?? 0;
+  if (count > 5000) {
+    throw new Error(
+      `${label}'s _outbox.messages already has ${count} rows before this test ran a single ` +
+      "command — this does not look like a freshly-bootstrapped test database (see TX-017 in " +
+      "docs/ENTERPRISE-GAP-REPORT-2026-09-07.md). Refusing to run: relayOnce() would read and mark-published " +
+      "real pre-existing rows it did not produce. Point DATABASE_URL / TRADE_TEST_FINANCE_DATABASE_URL / " +
+      "TRADE_TEST_NOTIFICATION_DATABASE_URL (see this file's header) at a disposable Postgres instance " +
+      "bootstrapped via scripts/ci/bootstrap-postgres.sh, not a shared/long-lived one.",
+    );
+  }
+}
+
 beforeAll(async () => {
   // Captured BEFORE any swapping — this is the real value to restore to,
   // not a hardcoded literal that may not match how this file's own test run
@@ -128,6 +199,13 @@ beforeAll(async () => {
   // in the same worker.
   process.env.DATABASE_URL = originalUrl;
 
+  // TX-017 guard — see assertOutboxIsFresh above. Must run before ANY
+  // write this beforeAll or the tests below make, including the BANK_CODE
+  // fixture insert immediately following.
+  await assertOutboxIsFresh(tradeSqlClient, "trade-service");
+  await assertOutboxIsFresh(financeSqlClient, "finance-service");
+  await assertOutboxIsFresh(notificationSqlClient, "notification-service");
+
   // Fixture: the BANK_CODE control head isn't seeded by any migration for
   // this tenant (same gap the finance reference test documents) — the
   // consumer resolves it by code exactly like it resolves the municipal fee
@@ -158,7 +236,11 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
-  await q.stop();
+  // q is only assigned after the TX-017 freshness guard in beforeAll; if the
+  // guard throws (as designed, on a non-fresh database), q stays undefined --
+  // guard here so that expected failure surfaces cleanly instead of being
+  // masked by a second, unrelated "Cannot read properties of undefined" here.
+  if (q) await q.stop();
   await financeSqlClient.end({ timeout: 5 });
   await notificationSqlClient.end({ timeout: 5 });
   await tradeSqlClient.end({ timeout: 5 });

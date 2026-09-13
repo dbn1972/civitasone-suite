@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { DataTable } from "./DataTable";
 
@@ -85,10 +85,36 @@ describe("DataTable", () => {
 
   it("supports filtering when filterable=true", () => {
     render(<DataTable columns={columns} rows={rows} filterable />);
-    const input = screen.getByRole("textbox");
+    const input = screen.getByRole("searchbox");
     fireEvent.change(input, { target: { value: "IT" } });
     expect(screen.getByText("IT Equipment")).toBeInTheDocument();
     expect(screen.queryByText("Office Supplies")).not.toBeInTheDocument();
+  });
+
+  // UX-014: the filter input must be a real searchbox (type="search"), with
+  // an accessible name derived from the page's own filterPlaceholder rather
+  // than a generic/inconsistent one, without requiring every one of the
+  // ~80+ DataTable consumers to pass a new prop.
+  it("derives a descriptive searchbox name from an explicit filterPlaceholder", () => {
+    render(
+      <DataTable columns={columns} rows={rows} filterable filterPlaceholder="Filter by GRN no, vendor…" />,
+    );
+    expect(screen.getByRole("searchbox", { name: "Search GRN no, vendor" })).toBeInTheDocument();
+  });
+
+  it("derives a descriptive searchbox name from a filterPlaceholder with no 'by'", () => {
+    render(<DataTable columns={columns} rows={rows} filterable filterPlaceholder="Filter DPRs…" />);
+    expect(screen.getByRole("searchbox", { name: "Search DPRs" })).toBeInTheDocument();
+  });
+
+  it("leaves an already-'Search'-worded filterPlaceholder unchanged", () => {
+    render(<DataTable columns={columns} rows={rows} filterable filterPlaceholder="Search vendors…" />);
+    expect(screen.getByRole("searchbox", { name: "Search vendors" })).toBeInTheDocument();
+  });
+
+  it("falls back to a generic name when no filterPlaceholder is given", () => {
+    render(<DataTable columns={columns} rows={rows} filterable />);
+    expect(screen.getByRole("searchbox", { name: "Search records" })).toBeInTheDocument();
   });
 
   it("supports sorting when sortable=true", () => {

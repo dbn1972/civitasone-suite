@@ -23,6 +23,8 @@ export const sandboxEnvironments = sandboxPgSchema.table("sandbox_environments",
   /** registered | refreshing | ready | disabled */
   status: varchar("status", { length: 24 }).notNull().default("registered"),
   lastRefreshAt: timestamp("last_refresh_at", { withTimezone: true }),
+  /** stubbed | executed -- mirrors refresh_jobs.dataMovement; null until a refresh completes. DOM-029. */
+  lastRefreshDataMovement: varchar("last_refresh_data_movement", { length: 16 }),
   notes: text("notes").notNull().default(""),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),

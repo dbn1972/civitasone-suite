@@ -157,3 +157,41 @@ describe("W2.1 — Full record validation (fields + rules)", () => {
     expect(errors.length).toBeGreaterThanOrEqual(3); // short name + negative amount + bad picklist
   });
 });
+
+describe("DOM-016 — resolveField prototype-chain guard", () => {
+  it("prototype-chain keys resolve as absent, not leaked, when no own field shadows them", () => {
+    expect(evaluateExpression("ISBLANK(constructor)", {})).toBe(true);
+    expect(evaluateExpression("ISBLANK(__proto__)", {})).toBe(true);
+    expect(evaluateExpression("ISBLANK(toString)", {})).toBe(true);
+    expect(evaluateExpression("ISBLANK(hasOwnProperty)", {})).toBe(true);
+    expect(evaluateExpression("ISBLANK(valueOf)", {})).toBe(true);
+  });
+
+  it("bare truthy reference to a prototype-chain key is falsy (field not found), even alongside real data", () => {
+    expect(evaluateExpression("constructor", { amount: 100, status: "active" })).toBe(false);
+    expect(evaluateExpression("__proto__", { amount: 100, status: "active" })).toBe(false);
+  });
+
+  it("an own field that happens to share a name with a prototype-chain key still resolves normally", () => {
+    // A record can legitimately have an own field literally named "constructor" (e.g. a tenant's
+    // custom field, or a JSON.parse'd payload with that key) — the own-property guard must allow this.
+    expect(evaluateExpression('constructor == "acme-corp"', { constructor: "acme-corp" })).toBe(true);
+    expect(evaluateExpression("ISBLANK(constructor)", { constructor: "acme-corp" })).toBe(false);
+
+    // JSON.parse assigns "__proto__" as a genuine *own* data property (it does not touch the real
+    // prototype, unlike `obj[key] = value` with a user-controlled key) — must still resolve.
+    const jsonData = JSON.parse('{"__proto__": "not-a-real-prototype", "amount": 5}') as Record<string, unknown>;
+    expect(Object.getPrototypeOf(jsonData)).toBe(Object.prototype); // sanity: JSON.parse didn't pollute
+    expect(evaluateExpression('__proto__ == "not-a-real-prototype"', jsonData)).toBe(true);
+  });
+
+  it("validateRecord does not let a prototype-referencing rule fire on a record missing that field", () => {
+    const fields: FieldDef[] = [{ apiName: "amount", fieldType: "number", isRequired: true }];
+    const rules: ValidationRule[] = [
+      { name: "no_such_field", expression: "ISBLANK(constructor)", errorMessage: "should not matter", isActive: true },
+    ];
+    // ISBLANK(constructor) must be true (field genuinely absent) so the rule PASSES (no error).
+    const errors = validateRecord({ amount: 10 }, fields, rules);
+    expect(errors).not.toContain("should not matter");
+  });
+});

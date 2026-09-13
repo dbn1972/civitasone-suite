@@ -79,8 +79,13 @@ describe("observability — error capture + failure metrics (09-T1)", () => {
     await q.publish("test.topic", {
       type: "test.topic", tenantId: "t", actorId: "a", correlationId: "c", schemaVersion: "1.0", payload: {},
     });
-    // allow the in-process retry/backoff loop to exhaust attempts
-    await new Promise((r) => setTimeout(r, 200));
+    // deterministic: await drain() (which tracks retry backoffs via inflight)
+    // instead of racing a fixed sleep against the real exponential backoff --
+    // REL-028: the fixed 200ms sleep flaked under host contention because a
+    // setTimeout(...,0)/backoff delay can be pushed past 200ms of real elapsed
+    // time under event-loop pressure, even though the nominal backoff total
+    // (20ms + 40ms for 3 attempts) is far below it.
+    await q.drain();
 
     expect(calls).toBe(3);
     expect(q.dlq.length).toBe(1);

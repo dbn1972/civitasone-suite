@@ -97,6 +97,11 @@ function tokenize(expr: string): Token[] {
 type Value = string | number | boolean | null;
 
 function resolveField(fieldName: string, data: Record<string, unknown>): Value {
+  // Own-property guard: a bare field reference must only ever resolve data the
+  // record actually carries. Without this, names like "constructor", "__proto__"
+  // or "toString" resolve off Object.prototype instead of correctly reporting
+  // "field not found" (DOM-016).
+  if (!Object.hasOwn(data, fieldName)) return null;
   const v = data[fieldName];
   if (v === undefined || v === null) return null;
   if (typeof v === "string" || typeof v === "number" || typeof v === "boolean") return v;

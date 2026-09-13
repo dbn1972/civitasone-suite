@@ -84,7 +84,7 @@ export async function updateSandboxStatus(
   tenantId: string,
   id: string,
   expectedVersion: number,
-  patch: { status: string; updatedBy: string; lastRefreshAt?: Date },
+  patch: { status: string; updatedBy: string; lastRefreshAt?: Date; lastRefreshDataMovement?: string },
 ): Promise<boolean> {
   const rows = await (tx.update(sandboxEnvironments)
     .set({ ...patch, updatedAt: new Date(), version: expectedVersion + 1 })

@@ -71,6 +71,24 @@ function cellValue<T extends Record<string, unknown>>(col: Column<T>, row: T): R
   return String(row[col.key] ?? "");
 }
 
+/**
+ * UX-014: derive a `searchbox`-appropriate accessible name from the existing,
+ * already page-specific `filterPlaceholder` text, instead of requiring a new
+ * prop across every DataTable consumer (~80+ call sites). Most call sites
+ * already write "Filter <entity>…" or "Search <entity>…"; both are
+ * normalized to a consistent "Search <entity>" name. Text that matches
+ * neither shape (a non-English translation, or other free-form copy) is
+ * passed through unchanged — it's already descriptive and page-specific,
+ * just not re-worded to start with "Search".
+ */
+function accessibleFilterLabel(placeholder: string): string {
+  const trimmed = placeholder.trim().replace(/(?:…|\.{3,})$/u, "").trim();
+  if (!trimmed || /^filter$/i.test(trimmed)) return "Search records";
+  if (/^search\b/i.test(trimmed)) return trimmed;
+  const m = /^filter\s+(?:by\s+)?(.+)$/i.exec(trimmed);
+  return m ? `Search ${m[1].trim()}` : trimmed;
+}
+
 /** Stable, type-aware comparison used by the sort feature. */
 function compareValues(a: unknown, b: unknown): number {
   if (a == null && b == null) return 0;
@@ -193,10 +211,10 @@ export function DataTable<T extends Record<string, unknown>>({
             <div className="dt-filter" style={{ flex: 1 }}>
               <span aria-hidden="true" style={{ fontSize: 13 }}>🔍</span>
               <input
-                type="text"
+                type="search"
                 value={filter}
                 placeholder={filterPlaceholder}
-                aria-label={filterPlaceholder}
+                aria-label={accessibleFilterLabel(filterPlaceholder)}
                 onChange={(e) => {
                   setFilter(e.target.value);
                   setPage(0);
