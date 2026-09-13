@@ -137,6 +137,7 @@ vi.mock("../src/modules/hoa/voucher.js", () => ({
 
 vi.mock("../src/modules/org-structure/domain.js", () => ({
   validateOrgAssignment: vi.fn(async () => undefined),
+  validateOrgAssignmentTx: vi.fn(async () => undefined),
 }));
 
 vi.mock("../src/modules/gl/spine.js", () => ({
