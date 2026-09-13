@@ -21,4 +21,4 @@ CREATE TABLE IF NOT EXISTS hrms.face_verification_log (
   verified_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX idx_face_verif_employee ON hrms.face_verification_log (tenant_id, employee_id, verified_at DESC);
+CREATE INDEX IF NOT EXISTS idx_face_verif_employee ON hrms.face_verification_log (tenant_id, employee_id, verified_at DESC);

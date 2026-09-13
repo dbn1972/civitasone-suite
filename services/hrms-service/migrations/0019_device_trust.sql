@@ -33,8 +33,8 @@ CREATE TABLE IF NOT EXISTS hrms.trusted_devices (
   UNIQUE (tenant_id, user_id, device_id)
 );
 
-CREATE INDEX idx_trusted_devices_tenant ON hrms.trusted_devices (tenant_id, trust_status);
-CREATE INDEX idx_trusted_devices_user ON hrms.trusted_devices (tenant_id, user_id);
+CREATE INDEX IF NOT EXISTS idx_trusted_devices_tenant ON hrms.trusted_devices (tenant_id, trust_status);
+CREATE INDEX IF NOT EXISTS idx_trusted_devices_user ON hrms.trusted_devices (tenant_id, user_id);
 
 -- Device activity log — tracks key security events per device
 CREATE TABLE IF NOT EXISTS hrms.device_activity_log (
@@ -48,8 +48,8 @@ CREATE TABLE IF NOT EXISTS hrms.device_activity_log (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX idx_device_activity_tenant ON hrms.device_activity_log (tenant_id, created_at DESC);
-CREATE INDEX idx_device_activity_device ON hrms.device_activity_log (device_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_device_activity_tenant ON hrms.device_activity_log (tenant_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_device_activity_device ON hrms.device_activity_log (device_id, created_at DESC);
 
 -- Compliance policies (configurable per tenant)
 CREATE TABLE IF NOT EXISTS hrms.device_policies (
