@@ -65,14 +65,43 @@ jobs:
     name: Create GitHub Release
     runs-on: ubuntu-latest
     needs: release-gate
+    # REL-017: this job used to read a hand-maintained, never-bumped
+    # `package.json` version (frozen at the "0.1.0" placeholder) and call
+    # `gh release create "v${VERSION}"` directly. That's a one-shot script,
+    # not a release pipeline: nothing ever computed a new version, so every
+    # run after the first would have tried to recreate the same tag and
+    # failed. `.releaserc.json` (semantic-release: commit-analyzer,
+    # release-notes-generator, npm plugin with npmPublish:false, github
+    # plugin) already described the intended process but no workflow ever
+    # invoked it — dormant config. This now runs semantic-release for real:
+    # it derives the next version from Conventional Commits since the last
+    # tag, generates release notes, creates the git tag, and creates the
+    # GitHub Release in one step. See the PR for this change for the
+    # dry-run evidence and the version-baseline decision that needs a
+    # maintainer call before the first real run.
+    permissions:
+      # contents:write — semantic-release creates the git tag and the
+      # GitHub Release. issues/pull-requests:write — @semantic-release/github
+      # defaults to labelling the PRs/issues included in a release; without
+      # this it would only fail that one optional step, but grant it so the
+      # plugin's default behavior works rather than partially degrading.
+      # (Could not confirm this repo's default Actions token permission via
+      # the API — GET /actions/permissions/workflow returned 403 for the
+      # token available at investigation time — so this is declared
+      # explicitly rather than assumed.)
+      contents: write
+      issues: write
+      pull-requests: write
     steps:
       - uses: actions/checkout@v4
         with:
           ref: ${{ github.event.workflow_run.head_sha }}
           fetch-depth: 0
-      - name: Create GitHub Release
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '22', cache: 'pnpm' }
+      - run: pnpm install --frozen-lockfile
+      - name: Run semantic-release
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          VERSION=$(node -p "require('./package.json').version")
-          gh release create "v${VERSION}" --target "${{ github.event.workflow_run.head_sha }}" --generate-notes --title "CivitasOne v${VERSION}"
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: pnpm exec semantic-release
