@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { PageHeader, StatGrid, StatCard, Card, EmptyState, ConfirmDialog, useConfirmAction } from "../../../../_components/ds";
 import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
+import { useTranslations } from "next-intl";
 
 type EmployeeOption = { id: string; name: string; employeeNo: string };
 type LeaveApp = {
@@ -19,11 +20,11 @@ type LeaveApp = {
   reason?: string;
 };
 
-const STATUS_CHIP: Record<string, { bg: string; color: string; label: string }> = {
-  pending:   { bg: "var(--warnbg)", color: "var(--warn)", label: "Pending" },
-  approved:  { bg: "var(--goodbg)", color: "var(--good)", label: "Approved" },
-  rejected:  { bg: "var(--badbg)", color: "var(--bad)", label: "Rejected" },
-  cancelled: { bg: "#f8fafc", color: "#64748b", label: "Cancelled" },
+const STATUS_STYLE: Record<string, { bg: string; color: string }> = {
+  pending:   { bg: "var(--warnbg)", color: "var(--warn)" },
+  approved:  { bg: "var(--goodbg)", color: "var(--good)" },
+  rejected:  { bg: "var(--badbg)", color: "var(--bad)" },
+  cancelled: { bg: "#f8fafc", color: "#64748b" },
 };
 
 function fmt(d: string) {
@@ -33,6 +34,7 @@ function fmt(d: string) {
 }
 
 export default function LeaveHistoryPage() {
+  const t = useTranslations("leaveHistory");
   const [employees, setEmployees]   = useState<EmployeeOption[]>([]);
   const [empId, setEmpId]           = useState("");
   const [apps, setApps]             = useState<LeaveApp[]>([]);
@@ -43,6 +45,13 @@ export default function LeaveHistoryPage() {
   const [source, setSource]         = useState<"api" | "error">("api");
   const [pendingCancel, setPendingCancel] = useState<LeaveApp | null>(null);
 
+  const statusLabel: Record<string, string> = {
+    pending: t("chipPending"),
+    approved: t("chipApproved"),
+    rejected: t("chipRejected"),
+    cancelled: t("chipCancelled"),
+  };
+
   useEffect(() => {
     const controller = new AbortController()
     fetch("/api/proxy/v1/hrms/employees?limit=500", { signal: controller.signal })
@@ -52,9 +61,9 @@ export default function LeaveHistoryPage() {
         setEmployees(rows);
         if (rows[0]) setEmpId(rows[0].id);
       })
-      .catch((e) => { if (e.name !== 'AbortError') { setError("Failed to load employees."); setSource("error"); } });
+      .catch((e) => { if (e.name !== 'AbortError') { setError(t("loadEmployeesError")); setSource("error"); } });
     return () => controller.abort()
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     if (!empId) return;
@@ -67,10 +76,10 @@ export default function LeaveHistoryPage() {
         const rows: LeaveApp[] = Array.isArray(body) ? body : (body.data ?? []);
         setApps(rows);
       })
-      .catch((e) => { if (e.name !== 'AbortError') { setError("Failed to load leave history."); setSource("error"); } })
+      .catch((e) => { if (e.name !== 'AbortError') { setError(t("loadHistoryError")); setSource("error"); } })
       .finally(() => setLoading(false));
     return () => controller.abort()
-  }, [empId]);
+  }, [empId, t]);
 
   async function handleCancel(appId: string) {
     setCancelling(appId);
@@ -83,11 +92,11 @@ export default function LeaveHistoryPage() {
       });
       const text = await res.text();
       if (!res.ok) {
-        throw new Error(text || `Cancel failed (${res.status})`);
+        throw new Error(text || t("cancelFailedFallback", { status: res.status }));
       }
       setApps((prev) => prev.map((a) => (a.id === appId ? { ...a, status: "cancelled" } : a)));
     } catch (err) {
-      const msg = err instanceof Error ? err.message : "Network error while cancelling.";
+      const msg = err instanceof Error ? err.message : t("cancelNetworkError");
       setCancelError(msg);
       throw err instanceof Error ? err : new Error(msg);
     } finally {
@@ -121,27 +130,27 @@ export default function LeaveHistoryPage() {
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
-        title="Leave History"
-        subtitle="View and manage leave applications by employee."
+        title={t("title")}
+        subtitle={t("subtitle")}
         back="/hr/leave"
-        actions={<Link href="/hr/leave/apply" className="btn primary">+ Apply Leave</Link>}
+        actions={<Link href="/hr/leave/apply" className="btn primary">{t("applyLeaveAction")}</Link>}
       />
       <DataSourceBadge source={source} />
 
       <StatGrid>
-        <StatCard icon="📋" iconBg="var(--infobg)" label="Total Applications" value={apps.length} />
-        <StatCard icon="\u2705"       iconBg="var(--goodbg)" label="Approved"           value={approved} />
-        <StatCard icon="\u23f3"       iconBg="var(--warnbg)" label="Pending"            value={pending} />
-        <StatCard icon="\u274c"       iconBg="var(--badbg)" label="Rejected"           value={rejected} />
+        <StatCard icon="📋" iconBg="var(--infobg)" label={t("statTotalApplications")} value={apps.length} />
+        <StatCard icon="✅"       iconBg="var(--goodbg)" label={t("statApproved")}           value={approved} />
+        <StatCard icon="⏳"       iconBg="var(--warnbg)" label={t("statPending")}            value={pending} />
+        <StatCard icon="❌"       iconBg="var(--badbg)" label={t("statRejected")}           value={rejected} />
       </StatGrid>
 
-      <Card title="Select Employee">
+      <Card title={t("selectEmployeeCard")}>
         <div style={{ padding: "16px 20px" }}>
           <label
             htmlFor="emp-select"
             style={{ display: "block", fontSize: 13, fontWeight: 500, color: "var(--ink2)", marginBottom: 6 }}
           >
-            Employee
+            {t("employeeLabel")}
           </label>
           <select
             id="emp-select"
@@ -170,7 +179,7 @@ export default function LeaveHistoryPage() {
       )}
       {loading && (
         <p style={{ textAlign: "center", color: "var(--mut)", padding: "24px 0", fontSize: 14 }}>
-          Loading leave history…
+          {t("loadingHistory")}
         </p>
       )}
       {error && (
@@ -179,20 +188,20 @@ export default function LeaveHistoryPage() {
 
       {!loading && !error && (
         apps.length === 0 ? (
-          <Card title="Applications">
+          <Card title={t("applicationsCard")}>
             <EmptyState
               icon="🌴"
-              title="No leave applications"
-              message="This employee has not applied for any leave yet."
+              title={t("noApplicationsTitle")}
+              message={t("noApplicationsMessage")}
             />
           </Card>
         ) : (
-          <Card title="Leave Applications">
+          <Card title={t("leaveApplicationsCard")}>
             <div style={{ overflowX: "auto" }}>
               <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
                 <thead>
                   <tr style={{ background: "var(--bg2)", borderBottom: "1px solid var(--line)" }}>
-                    {["Leave Type", "From", "To", "Days", "Reason", "Status", ""].map((h) => (
+                    {[t("colLeaveType"), t("colFrom"), t("colTo"), t("colDays"), t("colReason"), t("colStatus"), ""].map((h) => (
                       <th scope="col"
                         key={h}
                         style={{
@@ -213,7 +222,8 @@ export default function LeaveHistoryPage() {
                 </thead>
                 <tbody>
                   {apps.map((app) => {
-                    const chip = STATUS_CHIP[app.status] ?? { bg: "var(--bg2)", color: "var(--ink2)", label: app.status };
+                    const style = STATUS_STYLE[app.status] ?? { bg: "var(--bg2)", color: "var(--ink2)" };
+                    const label = statusLabel[app.status] ?? app.status;
                     const days = app.days ?? app.daysApplied ?? "—";
                     const leaveName = app.leaveTypeName ?? app.leaveType ?? "—";
                     return (
@@ -226,8 +236,8 @@ export default function LeaveHistoryPage() {
                           {app.reason ?? "—"}
                         </td>
                         <td style={{ padding: "10px 14px" }}>
-                          <span style={{ padding: "3px 10px", borderRadius: 20, fontSize: 11, fontWeight: 600, background: chip.bg, color: chip.color }}>
-                            {chip.label}
+                          <span style={{ padding: "3px 10px", borderRadius: 20, fontSize: 11, fontWeight: 600, background: style.bg, color: style.color }}>
+                            {label}
                           </span>
                         </td>
                         <td style={{ padding: "10px 14px" }}>
@@ -248,7 +258,7 @@ export default function LeaveHistoryPage() {
                                 minHeight: 32,
                               }}
                             >
-                              {cancelling === app.id ? "Cancelling…" : "Cancel"}
+                              {cancelling === app.id ? t("cancellingBtn") : t("cancelBtn")}
                             </button>
                           )}
                         </td>
@@ -264,20 +274,21 @@ export default function LeaveHistoryPage() {
 
       <ConfirmDialog
         open={cancelOpen}
-        title="Cancel this leave application?"
+        title={t("confirmCancelTitle")}
         description={
           pendingCancel ? (
-            <>
-              This withdraws the <strong>{pendingCancel.leaveTypeName ?? pendingCancel.leaveType ?? "leave"}</strong>{" "}
-              request for {fmt(pendingCancel.fromDate)} – {fmt(pendingCancel.toDate)}
-              {pendingCancel.status === "approved" ? " and reverses the approval" : ""}. This cannot be undone —
-              a new request would need to be submitted from scratch.
-            </>
+            t.rich("confirmCancelDescription", {
+              b: (chunks) => <strong>{chunks}</strong>,
+              leaveType: pendingCancel.leaveTypeName ?? pendingCancel.leaveType ?? "leave",
+              fromDate: fmt(pendingCancel.fromDate),
+              toDate: fmt(pendingCancel.toDate),
+              approvedSuffix: pendingCancel.status === "approved" ? t("reversesApprovalSuffix") : "",
+            })
           ) : null
         }
         danger
-        confirmLabel="Cancel leave"
-        cancelLabel="Keep it"
+        confirmLabel={t("confirmCancelLabel")}
+        cancelLabel={t("keepItLabel")}
         busy={cancelBusy}
         errorMessage={cancelDialogError}
         onConfirm={() => void confirmCancel()}

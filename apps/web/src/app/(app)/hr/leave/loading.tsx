@@ -1,5 +1,6 @@
 import { SkeletonTable } from "../../../_components/ds";
 import { PageHeader } from "../../../_components/ds";
+import { getTranslations } from "next-intl/server";
 
 const shimmer = {
   background: "var(--line2)",
@@ -13,12 +14,13 @@ const shimmer = {
 
 /** Skeleton for LeaveManagementPage (server component). Shown by Next.js Suspense while
  *  the page awaits getLeaveRequestDetails(). Prevents the empty-state flash (W5). */
-export default function LeaveLoading() {
+export default async function LeaveLoading() {
+  const t = await getTranslations("leave");
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
-        title="Leave Management"
-        subtitle="Review and process employee leave requests."
+        title={t("title")}
+        subtitle={t("subtitle")}
         back="/hr"
         backLabel="HR"
         actions={
