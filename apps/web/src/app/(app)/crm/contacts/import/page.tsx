@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
-import { DataTable } from "../../../../_components/ds";
+import { DataTable, PageHeader } from "../../../../_components/ds";
 import { browserFetch, errorMessageFromResponse } from "@/lib/api/browserClient";
 
 type ParsedContact = { name: string; email?: string; phone?: string; company?: string; leadStatus: string };
@@ -66,12 +66,13 @@ export default function ImportContactsPage() {
   }
 
   return (
-    <>
-      <a className="back" href="/crm/contacts">← Contacts</a>
-      <div className="ph" style={{ marginTop: 6 }}>
-        <h1>Import Contacts</h1>
-        <div className="sub">Bulk load — CSV columns: name, email, phone, company, leadStatus</div>
-      </div>
+    <main className="page-main wrap" aria-labelledby="page-heading">
+      <PageHeader
+        title="Import Contacts"
+        subtitle="Bulk load — CSV columns: name, email, phone, company, leadStatus"
+        back="/crm/contacts"
+        backLabel="Contacts"
+      />
       {message ? (
         <div role="status" aria-live="polite" className="banner" style={{ background: "#ecfdf3", padding: 12, borderRadius: 12, marginBottom: 16, fontSize: 13 }}>{message}</div>
       ) : null}
@@ -114,6 +115,6 @@ export default function ImportContactsPage() {
           />
         </div>
       ) : null}
-    </>
+    </main>
   );
 }

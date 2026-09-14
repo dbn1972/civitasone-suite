@@ -3,8 +3,15 @@ import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 
 interface PageHeaderProps {
-  title: string;
-  subtitle?: string;
+  /**
+   * Plain string in most cases. Accepts ReactNode so a title/subtitle that
+   * leads with a specialist acronym can compose the shared `Term` component
+   * (e.g. `title={<>Utilisation Certificates <Term name="UC" /></>}`) and get
+   * a real, visible glossary "?" tooltip right where the acronym appears,
+   * instead of leaving it bare. Plain strings render exactly as before.
+   */
+  title: ReactNode;
+  subtitle?: ReactNode;
   actions?: ReactNode;
   back?: string;
   backLabel?: string;

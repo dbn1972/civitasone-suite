@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { PageHeader, Term } from "@/app/_components/ds";
 
 const CLASS_MAP: Record<string, string> = {
   unclassified: "public",
@@ -64,14 +65,17 @@ export default function NewFilePage() {
   };
 
   return (
-    <>
-      <a className="back" href="/estab/list">← Back</a>
-      <div className="ph" style={{ marginTop: 6 }}>
-        <div>
-          <h1>Create File</h1>
-          <div className="sub">Opens a new eOffice digital file with an initial yellow note.</div>
-        </div>
-      </div>
+    <main className="page-main wrap" aria-labelledby="page-heading">
+      <PageHeader
+        title="Create File"
+        subtitle={
+          <>
+            Opens a new <Term name="eOffice" /> digital file with an initial yellow note.
+          </>
+        }
+        back="/estab/list"
+        help="estab"
+      />
 
       {toast && (
         <div
@@ -99,7 +103,9 @@ export default function NewFilePage() {
               <input id="subject" type="text" value={subject} onChange={(e) => setSubject(e.target.value)} required style={{ width: "100%", padding: "8px 12px", border: "1px solid var(--line)", borderRadius: 8, fontSize: 13 }} />
             </div>
             <div className="fld" style={{ flexDirection: "column", alignItems: "flex-start", gap: 4 }}>
-              <label htmlFor="dakNo" className="l">Linked DAK No (optional)</label>
+              <label htmlFor="dakNo" className="l">
+                Linked <Term name="DAK" /> No (optional)
+              </label>
               <input id="dakNo" type="text" value={dakNo} onChange={(e) => setDakNo(e.target.value)} placeholder="DAK/2026/001" style={{ width: "100%", padding: "8px 12px", border: "1px solid var(--line)", borderRadius: 8, fontSize: 13 }} />
             </div>
             <div className="fld" style={{ flexDirection: "column", alignItems: "flex-start", gap: 4 }}>
@@ -131,6 +137,6 @@ export default function NewFilePage() {
           </div>
         </form>
       </div>
-    </>
+    </main>
   );
 }

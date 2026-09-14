@@ -2,8 +2,9 @@ import type { ReactNode } from "react";
 import Link from "next/link";
 
 interface PageShellProps {
-  title: string;
-  description: string;
+  /** Accepts ReactNode so a bare acronym can carry an inline `Term` glossary tooltip. */
+  title: ReactNode;
+  description: ReactNode;
   breadcrumb?: ReactNode;
   children: ReactNode;
   /** Optional Help Centre slug for a "How this works" link. */

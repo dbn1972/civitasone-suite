@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { PageHeader } from "@/app/_components/ds";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const inputStyle = { width: "100%", padding: "8px 12px", border: "1px solid var(--line)", borderRadius: 8, fontSize: 13 } as const;
@@ -59,14 +60,13 @@ export default function NewGuesthouseBookingPage() {
   };
 
   return (
-    <>
-      <a className="back" href="/estab/guesthouse">← Back</a>
-      <div className="ph" style={{ marginTop: 6 }}>
-        <div>
-          <h1>New Guest House Booking</h1>
-          <div className="sub">Reserve a room for a guest. The booking enters the register pending approval.</div>
-        </div>
-      </div>
+    <main className="page-main wrap" aria-labelledby="page-heading">
+      <PageHeader
+        title="New Guest House Booking"
+        subtitle="Reserve a room for a guest. The booking enters the register pending approval."
+        back="/estab/guesthouse"
+        help="estab"
+      />
 
       {toast && (
         <div
@@ -126,6 +126,6 @@ export default function NewGuesthouseBookingPage() {
           </div>
         </form>
       </div>
-    </>
+    </main>
   );
 }

@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { PageHeader } from "@/app/_components/ds";
 
 const FUEL_TYPES = [
   { value: "petrol", label: "Petrol" },
@@ -61,14 +62,13 @@ export default function NewVehiclePage() {
   };
 
   return (
-    <>
-      <a className="back" href="/estab/vehicles">← Back</a>
-      <div className="ph" style={{ marginTop: 6 }}>
-        <div>
-          <h1>Add Vehicle</h1>
-          <div className="sub">Register a vehicle for fleet operations (allocation, logbook, fuel).</div>
-        </div>
-      </div>
+    <main className="page-main wrap" aria-labelledby="page-heading">
+      <PageHeader
+        title="Add Vehicle"
+        subtitle="Register a vehicle for fleet operations (allocation, logbook, fuel)."
+        back="/estab/vehicles"
+        help="estab"
+      />
 
       {toast && (
         <div
@@ -121,6 +121,6 @@ export default function NewVehiclePage() {
           </div>
         </form>
       </div>
-    </>
+    </main>
   );
 }
