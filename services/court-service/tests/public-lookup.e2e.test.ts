@@ -68,6 +68,7 @@ async function seedCase(tenant: string, cnr: string, title: string) {
   });
 }
 
+// FLAKY-SKIP: Requires COURT_E2E=1 plus a live court-service stack (real Postgres + HTTP); unset in standard CI so this e2e suite never executes there. (expires: 2026-12-13)
 describe.skipIf(!RUN)("public case-status lookup (e2e — configurable OTP/captcha/open)", () => {
   beforeAll(async () => {
     subscribeConsumers();

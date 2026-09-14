@@ -56,6 +56,7 @@ afterAll(async () => {
 });
 
 // ── GROUP 1 — DB-level RLS backstop ─────────────────────────────────────────
+// FLAKY-SKIP: Requires DATABASE_URL/DB_URL against a real Postgres for the SEC-025 DB-level RLS backstop; unset in standard CI so this suite never executes there. (expires: 2026-12-13)
 describe.skipIf(!RUN_DB)("SEC-025 — scim.scim_tokens: DB-level RLS backstop for writes", () => {
   const TENANT_A = "e1000000-0000-4000-8000-0000000000a1";
   const TENANT_B = "e1000000-0000-4000-8000-0000000000b1";

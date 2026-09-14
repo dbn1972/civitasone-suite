@@ -75,6 +75,7 @@ async function registerCase(courtId: string, title: string): Promise<string> {
   return caseId;
 }
 
+// FLAKY-SKIP: Requires COURT_E2E=1 plus a live court-service stack (real Postgres + HTTP); unset in standard CI so this e2e suite never executes there. (expires: 2026-12-13)
 describe.skipIf(!RUN)("synchronous pre-checks for illegal state transitions", () => {
   let courtId: string;
 

@@ -37,6 +37,7 @@ function isPdf(res: { rawPayload: Buffer }): boolean {
 
 let app: FastifyInstance;
 
+// FLAKY-SKIP: Requires COURT_E2E=1 plus a live court-service stack (real Postgres + HTTP); unset in standard CI so this e2e suite never executes there. (expires: 2026-12-13)
 describe.skipIf(!RUN)("court-documents PDF rendering (e2e, RLS)", () => {
   beforeAll(async () => {
     app = await buildApp();

@@ -74,6 +74,7 @@ describe("resolveRabbitBackoff{Base,Max}Seconds (PERF-017)", () => {
 
 // ── Real RabbitMQ integration — poison message, backoff, DLQ, exactly-once ──
 
+// FLAKY-SKIP: Requires a real RabbitMQ (RABBITMQ_URL) for the PERF-017 backoff behavior; unset in standard CI so this suite never executes there. (expires: 2026-12-13)
 describe.skipIf(!rabbitUrl)("RabbitMqQueue ↔ real RabbitMQ (PERF-017)", () => {
   let queue: RabbitMqQueue;
 

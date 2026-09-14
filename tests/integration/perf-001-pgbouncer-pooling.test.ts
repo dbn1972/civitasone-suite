@@ -73,6 +73,7 @@ function uuidFor(i: number): string {
   return `00000000-0000-0000-0000-${String(i).padStart(12, "0")}`;
 }
 
+// FLAKY-SKIP: Requires a real PgBouncer in transaction-pooling mode (PGBOUNCER_TEST_URL) for the PERF-001 tenant-isolation + connection-budget check; unset in standard CI. (expires: 2026-12-13)
 describe.skipIf(!PGBOUNCER_TEST_URL)("PERF-001 — PgBouncer transaction-pooling tenant isolation + connection budget", () => {
   let admin: import("postgres").Sql;
   let sql: import("postgres").Sql;

@@ -132,6 +132,7 @@ async function waitUntilReady(url: string, timeoutMs = 30_000): Promise<void> {
   throw new Error(`hrms-service did not become ready at ${url} within ${timeoutMs}ms: ${String(lastErr)}`);
 }
 
+// FLAKY-SKIP: Requires DATABASE_URL/DB_URL against a real Postgres for the SEC-021 real-HTTP audit-log assertion; unset in standard CI so this suite never executes there. (expires: 2026-12-13)
 describe.skipIf(!RUN_DB)("SEC-021 — jwt-edge x-actor-id -> real hrms audit-log row, real HTTP", () => {
   let hrmsProc: ChildProcess;
   let hrmsPort: number;

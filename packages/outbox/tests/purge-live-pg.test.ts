@@ -67,6 +67,7 @@ async function waitFor(predicate: () => boolean, timeoutMs = 15_000, stepMs = 50
   }
 }
 
+// FLAKY-SKIP: Requires DATABASE_URL against a real Postgres for the REL-029 live-purge path; unset in standard CI so this suite never executes there. (expires: 2026-12-13)
 describe.skipIf(!DATABASE_URL)("startOutboxPurge — live Postgres (REL-029)", () => {
   beforeEach(async () => {
     await client!`TRUNCATE _outbox.messages`;

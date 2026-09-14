@@ -37,6 +37,8 @@
     "guard:schema-drift": "node scripts/ci/schema-drift-guard.mjs --allow-stale",
     "guard:ci-config": "node scripts/ci/ci-config-guard.mjs",
     "guard:ledger-poison": "node scripts/ci/test-ledger-poison-guard.mjs",
+    "guard:flaky-skip": "node scripts/ci/flaky-skip-guard.mjs",
+    "guard:flaky-skip:write-baseline": "node scripts/ci/flaky-skip-guard.mjs --write-baseline",
     "test:e2e-live": "playwright test --config tests/e2e-live/playwright.config.ts",
     "ci:check": "pnpm turbo typecheck lint test && pnpm exec vitest run tests/contract/gateway.contract.test.ts"
   },

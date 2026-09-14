@@ -38,6 +38,7 @@ const VENDOR_ID = "30000000-cccc-4000-8000-000000000001";
 const PO_ID = `po-${randomUUID().slice(0, 8)}`;
 const GRN_ID = `grn-${randomUUID().slice(0, 8)}`;
 
+// FLAKY-SKIP: Requires a running LocalStack (AWS_ENDPOINT_URL) for the three-way-match live SQS integration; unset in standard CI so this suite never executes there. (expires: 2026-12-13)
 describe.skipIf(!localstackUp)("Three-Way Match Live SQS Integration", () => {
   let producer: SqsQueue;
   let subscriber: SqsQueue;
