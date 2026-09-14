@@ -166,6 +166,15 @@ export const payrollTdsNonSalary = statutorySchema.table("payroll_tds_nonsalary"
  * migration 0045) rather than a nullable column — see migration 0038 for the
  * RLS rationale. Resolved effective-dated (latest `effectiveFrom` on/before
  * the payroll period) by `resolveStatutoryConfig()` in payroll/domain.ts.
+ *
+ * DOM-034 (migration 0041): added sec80ccd1bCapMinor, the third Chapter VI-A
+ * cap in this table. Like sec80cCapMinor/sec80dCapMinor, Sec 80CCD(1B) is a
+ * flat nationwide Income Tax Act ceiling with no legitimate employer-level
+ * override in real law — but so are 80C and 80D, and DOM-008's own migration
+ * comment gives "changing any of these required a code deploy" as the reason
+ * they live here, not employer discretion. Same reasoning applies identically
+ * to 80CCD(1B): a future Finance Act amendment to the ₹50,000 figure should
+ * be a new effective-dated row, not a code change. See migration 0041.
  */
 export const statutoryConfig = statutorySchema.table("statutory_config", {
   id:                 uuid("id").primaryKey().defaultRandom(),
@@ -180,6 +189,7 @@ export const statutoryConfig = statutorySchema.table("statutory_config", {
   esiEmployerRateBps: integer("esi_employer_rate_bps").notNull().default(325),
   sec80cCapMinor:     bigint("sec80c_cap_minor", { mode: "bigint" }).notNull().default(15_000_000n),
   sec80dCapMinor:     bigint("sec80d_cap_minor", { mode: "bigint" }).notNull().default(7_500_000n),
+  sec80ccd1bCapMinor: bigint("sec80ccd1b_cap_minor", { mode: "bigint" }).notNull().default(5_000_000n),
   createdAt:          timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   createdBy:          uuid("created_by").notNull(),
 });
