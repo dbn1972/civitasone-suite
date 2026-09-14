@@ -70,6 +70,20 @@ export default defineConfig({
     coverage: {
       provider: "v8",
       exclude: ["dist/**", "src/index.ts", "src/worker.ts"],
+      // REL-013: thresholds set at/just below real measured coverage
+      // (lines 94.55 / branches 87.41 / functions 92.13 / statements
+      // 94.55, via `pnpm --filter @civitasone/event-service run coverage`
+      // against a fully migrated, isolated Postgres, 42/42 tests passing --
+      // PGPORT must point at that instance for this service's
+      // finance/notification cross-service integration tests), matching
+      // the convention used by every other service's vitest.config.ts
+      // (e.g. hrms-service).
+      thresholds: {
+        lines: 94,
+        functions: 92,
+        branches: 87,
+        statements: 94,
+      },
     },
   },
 });

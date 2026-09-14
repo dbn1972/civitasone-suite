@@ -39,5 +39,24 @@ export default defineConfig({
       QUEUE_DRIVER: "memory",
       CACHE_DRIVER: "memory",
     },
+    // REL-013: this service had no coverage block at all. Thresholds set
+    // at/just below real measured coverage (lines 50.54 / branches 60.97 /
+    // functions 47.76 / statements 50.54, via `pnpm --filter
+    // @civitasone/market-service run coverage` against a fully migrated,
+    // isolated Postgres, 24/24 tests passing), matching the convention
+    // used by every other service's vitest.config.ts (e.g. hrms-service).
+    // Genuinely low relative to the fleet -- this reflects this service's
+    // real current coverage, not an aspirational target; it still closes
+    // the actual gap (coverage silently regressing toward 0% with nothing
+    // flagging it).
+    coverage: {
+      provider: "v8",
+      thresholds: {
+        lines: 50,
+        functions: 47,
+        branches: 60,
+        statements: 50,
+      },
+    },
   },
 });
