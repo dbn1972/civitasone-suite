@@ -5,6 +5,7 @@
  * Server component — no client state needed.
  */
 import { formatIndianDate } from "@/lib/formatters";
+import type { getTranslations } from "next-intl/server";
 
 export type Readiness = "ready_now" | "one_two_years" | "three_five_years";
 
@@ -26,19 +27,26 @@ export interface CriticalPost {
   successors: Successor[];
 }
 
-const READINESS_CFG: Record<Readiness, { label: string; color: string; bg: string; order: number }> = {
-  ready_now:        { label: "Ready Now",  color: "#16a34a", bg: "#f0fdf4", order: 0 },
-  one_two_years:    { label: "1–2 Years",  color: "#d97706", bg: "#fffbeb", order: 1 },
-  three_five_years: { label: "3–5 Years",  color: "#6b7280", bg: "#f3f4f6", order: 2 },
-};
+type Translator = Awaited<ReturnType<typeof getTranslations>>;
 
-const RISK_CFG: Record<string, { label: string; color: string; bg: string }> = {
-  high:   { label: "High Risk",   color: "#dc2626", bg: "#fef2f2" },
-  medium: { label: "Medium Risk", color: "#b45309", bg: "#fffbeb" },
-  low:    { label: "Low Risk",    color: "#16a34a", bg: "#f0fdf4" },
-};
+function readinessConfig(t: Translator): Record<Readiness, { label: string; color: string; bg: string; order: number }> {
+  return {
+    ready_now:        { label: t("readyNow"),       color: "#16a34a", bg: "#f0fdf4", order: 0 },
+    one_two_years:    { label: t("oneTwoYears"),     color: "#d97706", bg: "#fffbeb", order: 1 },
+    three_five_years: { label: t("threeFiveYears"),  color: "#6b7280", bg: "#f3f4f6", order: 2 },
+  };
+}
 
-function ReadinessBar({ successors }: { successors: Successor[] }) {
+function riskConfig(t: Translator): Record<string, { label: string; color: string; bg: string }> {
+  return {
+    high:   { label: t("highRisk"),   color: "#dc2626", bg: "#fef2f2" },
+    medium: { label: t("mediumRisk"), color: "#b45309", bg: "#fffbeb" },
+    low:    { label: t("lowRisk"),    color: "#16a34a", bg: "#f0fdf4" },
+  };
+}
+
+function ReadinessBar({ successors, t }: { successors: Successor[]; t: Translator }) {
+  const readinessCfg = readinessConfig(t);
   const counts: Record<Readiness, number> = {
     ready_now: 0, one_two_years: 0, three_five_years: 0,
   };
@@ -48,7 +56,7 @@ function ReadinessBar({ successors }: { successors: Successor[] }) {
   return (
     <div
       style={{ display: "flex", height: 6, borderRadius: 99, overflow: "hidden", gap: 2 }}
-      aria-label="Readiness distribution"
+      aria-label={t("readinessDistributionAriaLabel")}
     >
       {bands.map((r) => {
         const pct = (counts[r] / total) * 100;
@@ -56,8 +64,8 @@ function ReadinessBar({ successors }: { successors: Successor[] }) {
         return (
           <div
             key={r}
-            style={{ width: `${pct}%`, background: READINESS_CFG[r].color, borderRadius: 99 }}
-            title={`${READINESS_CFG[r].label}: ${counts[r]}`}
+            style={{ width: `${pct}%`, background: readinessCfg[r].color, borderRadius: 99 }}
+            title={`${readinessCfg[r].label}: ${counts[r]}`}
           />
         );
       })}
@@ -65,14 +73,16 @@ function ReadinessBar({ successors }: { successors: Successor[] }) {
   );
 }
 
-interface CardProps { post: CriticalPost }
+interface CardProps { post: CriticalPost; t: Translator }
 
-export function SuccessionPlanCard({ post }: CardProps) {
-  const risk      = RISK_CFG[post.riskLevel ?? "medium"] ?? RISK_CFG.medium;
+export function SuccessionPlanCard({ post, t }: CardProps) {
+  const riskCfg   = riskConfig(t);
+  const readinessCfg = readinessConfig(t);
+  const risk      = riskCfg[post.riskLevel ?? "medium"] ?? riskCfg.medium;
   const readyNow  = post.successors.filter((s) => s.readiness === "ready_now").length;
   const sorted    = [...post.successors].sort(
     (a, b) =>
-      READINESS_CFG[a.readiness].order - READINESS_CFG[b.readiness].order,
+      readinessCfg[a.readiness].order - readinessCfg[b.readiness].order,
   );
 
   return (
@@ -106,12 +116,12 @@ export function SuccessionPlanCard({ post }: CardProps) {
         <div style={{ padding: "6px 16px 0", fontSize: "0.8125rem", color: "var(--ink2)" }}>
           {post.currentHolder && (
             <span>
-              Current holder: <strong>{post.currentHolder}</strong>
+              {t("currentHolderLabel")} <strong>{post.currentHolder}</strong>
             </span>
           )}
           {post.retirementDate && (
             <span style={{ marginLeft: 14, color: "var(--ink3)" }}>
-              Vacates: {formatIndianDate(post.retirementDate)}
+              {t("vacatesLabel")} {formatIndianDate(post.retirementDate)}
             </span>
           )}
         </div>
@@ -126,13 +136,13 @@ export function SuccessionPlanCard({ post }: CardProps) {
           }}
         >
           <span>
-            {post.successors.length} successor{post.successors.length !== 1 ? "s" : ""}
+            {t("successorCount", { count: post.successors.length })}
           </span>
           <span style={{ color: readyNow > 0 ? "#16a34a" : "#dc2626", fontWeight: 600 }}>
-            {readyNow > 0 ? `${readyNow} ready now` : "None ready now ⚠️"}
+            {readyNow > 0 ? t("readyNowCount", { count: readyNow }) : t("noneReadyNow")}
           </span>
         </div>
-        {post.successors.length > 0 && <ReadinessBar successors={post.successors} />}
+        {post.successors.length > 0 && <ReadinessBar successors={post.successors} t={t} />}
       </div>
 
       {/* Successor list */}
@@ -145,12 +155,12 @@ export function SuccessionPlanCard({ post }: CardProps) {
               margin: "8px 16px", borderRadius: 8,
             }}
           >
-            ⚠️ No successors identified — key-person risk. Initiate succession planning.
+            {t("noSuccessorsWarning")}
           </div>
         ) : (
           <ul style={{ listStyle: "none", margin: 0, padding: 0 }}>
             {sorted.map((s) => {
-              const rc       = READINESS_CFG[s.readiness];
+              const rc       = readinessCfg[s.readiness];
               const initials = (s.name ?? s.employeeId).charAt(0).toUpperCase();
               return (
                 <li
@@ -205,7 +215,7 @@ export function SuccessionPlanCard({ post }: CardProps) {
                         }}
                       >
                         <span style={{ fontSize: "0.6875rem", color: "var(--ink3)" }}>
-                          Gaps:
+                          {t("gapsLabel")}
                         </span>
                         {s.skillGaps.map((g) => (
                           <span
@@ -233,15 +243,15 @@ export function SuccessionPlanCard({ post }: CardProps) {
                         padding: "3px 9px", borderRadius: 5,
                         background: "#eff6ff", whiteSpace: "nowrap",
                       }}
-                      aria-label={`Development plan for ${s.name ?? s.employeeId}`}
+                      aria-label={t("devPlanAriaLabel", { name: s.name ?? s.employeeId })}
                     >
-                      📋 Dev Plan
+                      {t("devPlanLinkText")}
                     </a>
                   ) : (
                     <span
                       style={{ fontSize: "0.75rem", color: "var(--ink3)", flexShrink: 0 }}
                     >
-                      No plan
+                      {t("noPlan")}
                     </span>
                   )}
                 </li>
@@ -254,19 +264,18 @@ export function SuccessionPlanCard({ post }: CardProps) {
   );
 }
 
-interface ListProps { posts: CriticalPost[] }
+interface ListProps { posts: CriticalPost[]; t: Translator }
 
-export function SuccessionPlanList({ posts }: ListProps) {
+export function SuccessionPlanList({ posts, t }: ListProps) {
   if (posts.length === 0) {
     return (
       <div style={{ padding: "40px 0", textAlign: "center", color: "var(--ink3)" }}>
         <div style={{ fontSize: 40, marginBottom: 12 }}>🏆</div>
         <p style={{ margin: 0, fontSize: "0.9375rem", fontWeight: 500 }}>
-          No succession plans created
+          {t("noPlansTitle")}
         </p>
         <p style={{ margin: "4px 0 0", fontSize: "0.8125rem" }}>
-          Succession plans for critical roles appear here. Each plan tracks nominees and
-          readiness for role assumption.
+          {t("noPlansMessage")}
         </p>
       </div>
     );
@@ -279,7 +288,7 @@ export function SuccessionPlanList({ posts }: ListProps) {
       }}
     >
       {posts.map((p) => (
-        <SuccessionPlanCard key={p.id} post={p} />
+        <SuccessionPlanCard key={p.id} post={p} t={t} />
       ))}
     </div>
   );

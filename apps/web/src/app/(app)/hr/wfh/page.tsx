@@ -2,6 +2,7 @@ import Link from "next/link";
 import { PageHeader, StatGrid, StatCard, Card, DataTable } from "../../../_components/ds";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
+import { getTranslations } from "next-intl/server";
 
 type Row = {
   id: string;
@@ -26,6 +27,7 @@ async function getData(): Promise<LoaderResult<Row[]>> {
 }
 
 export default async function WfhPage() {
+  const t = await getTranslations("wfhRequests");
   const { data: items, source } = await getData();
 
   const approved = items.filter((i) => i.status === "approved").length;
@@ -33,42 +35,42 @@ export default async function WfhPage() {
   const rejected = items.filter((i) => ["rejected", "declined"].includes(i.status)).length;
 
   const columns: { key: keyof Row & string; label: string; cellType?: "status" }[] = [
-    { key: "employee", label: "Employee" },
-    { key: "department", label: "Department" },
-    { key: "fromDate", label: "From" },
-    { key: "toDate", label: "To" },
-    { key: "days", label: "Days" },
-    { key: "reason", label: "Reason" },
-    { key: "status", label: "Status", cellType: "status" },
+    { key: "employee", label: t("colEmployee") },
+    { key: "department", label: t("colDepartment") },
+    { key: "fromDate", label: t("colFrom") },
+    { key: "toDate", label: t("colTo") },
+    { key: "days", label: t("colDays") },
+    { key: "reason", label: t("colReason") },
+    { key: "status", label: t("colStatus"), cellType: "status" },
   ];
 
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
-        title="Work From Home Requests"
-        subtitle="Track remote work days — approved by reporting officers."
+        title={t("title")}
+        subtitle={t("subtitle")}
         back="/hr"
-        actions={<Link href="/hr/workforce/wfh" className="btn primary">+ New Request</Link>}
+        actions={<Link href="/hr/workforce/wfh" className="btn primary">{t("newRequestBtn")}</Link>}
       />
       <DataSourceBadge source={source} />
       <StatGrid>
-        <StatCard icon="🏠" iconBg="#e6f0ff" label="Total Requests" value={items.length} />
-        <StatCard icon="✅" iconBg="#e6f7f0" label="Approved" value={approved} />
-        <StatCard icon="⏳" iconBg="#fffbe6" label="Pending Approval" value={pending} />
-        <StatCard icon="❌" iconBg="#fff0f0" label="Rejected" value={rejected} />
+        <StatCard icon="🏠" iconBg="#e6f0ff" label={t("statTotalLabel")} value={items.length} />
+        <StatCard icon="✅" iconBg="#e6f7f0" label={t("statApprovedLabel")} value={approved} />
+        <StatCard icon="⏳" iconBg="#fffbe6" label={t("statPendingLabel")} value={pending} />
+        <StatCard icon="❌" iconBg="#fff0f0" label={t("statRejectedLabel")} value={rejected} />
       </StatGrid>
-      <Card title="WFH Requests">
+      <Card title={t("cardTitle")}>
         <DataTable<Row>
           columns={columns}
           rows={items}
           sortable
           filterable
-          filterPlaceholder="Filter by employee, department or status…"
+          filterPlaceholder={t("filterPlaceholder")}
           pageSize={15}
           emptyIcon="🏠"
-          emptyTitle="No WFH requests"
-          emptyMessage="Work-from-home requests appear here once employees raise them. Requests are approved by the reporting officer."
-          emptyAction={<Link href="/hr/workforce/wfh" className="btn primary">+ New Request</Link>}
+          emptyTitle={t("emptyTitle")}
+          emptyMessage={t("emptyMessage")}
+          emptyAction={<Link href="/hr/workforce/wfh" className="btn primary">{t("newRequestBtn")}</Link>}
         />
       </Card>
     </main>

@@ -6,6 +6,7 @@
 import { PageHeader, StatGrid, StatCard, Card, DataTable } from "../../../_components/ds";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { fetchJson } from "@/app/_data/apiClient";
+import { getTranslations } from "next-intl/server";
 import {
   SuccessionPlanList,
   type CriticalPost,
@@ -56,12 +57,12 @@ async function getRisk() {
  * Otherwise we synthesise placeholder rows from the aggregate counts
  * so the card always renders meaningfully.
  */
-function buildPosts(rows: PipelineRow[]): CriticalPost[] {
+function buildPosts(rows: PipelineRow[], t: Awaited<ReturnType<typeof getTranslations>>): CriticalPost[] {
   return rows.map((row, idx) => {
     const successors: Successor[] =
       Array.isArray(row.successors) && row.successors.length > 0
         ? row.successors
-        : synthesise(row);
+        : synthesise(row, t);
 
     return {
       id:            String(row.role_ref ?? idx),
@@ -75,14 +76,14 @@ function buildPosts(rows: PipelineRow[]): CriticalPost[] {
   });
 }
 
-function synthesise(row: PipelineRow): Successor[] {
+function synthesise(row: PipelineRow, t: Awaited<ReturnType<typeof getTranslations>>): Successor[] {
   const total     = Number(row.nominee_count ?? 0);
   const readyNow  = Number(row.ready_now ?? 0);
   const results: Successor[] = [];
   for (let i = 0; i < readyNow; i++) {
     results.push({
       employeeId: `${row.role_ref}-rn-${i + 1}`,
-      name:       `Nominee ${i + 1}`,
+      name:       t("nomineeName", { n: i + 1 }),
       readiness:  "ready_now",
     });
   }
@@ -90,19 +91,16 @@ function synthesise(row: PipelineRow): Successor[] {
   for (let i = 0; i < remaining; i++) {
     results.push({
       employeeId: `${row.role_ref}-ot-${i + 1}`,
-      name:       `Nominee ${readyNow + i + 1}`,
+      name:       t("nomineeName", { n: readyNow + i + 1 }),
       readiness:  i < remaining / 2 ? "one_two_years" : "three_five_years",
     });
   }
   return results;
 }
 
-const RISK_COLS: { key: keyof RiskRow & string; label: string }[] = [
-  { key: "role_ref",     label: "Role at Risk" },
-  { key: "department_id",label: "Department" },
-];
-
 export default async function SuccessionPage() {
+  const t = await getTranslations("succession");
+  const tCard = await getTranslations("successionPlanCard");
   const [pipeResult, riskResult] = await Promise.all([getPipeline(), getRisk()]);
   const pipeline = pipeResult.data;
   const atRisk   = riskResult.data;
@@ -111,45 +109,50 @@ export default async function SuccessionPage() {
       ? "error"
       : pipeResult.source;
 
-  const posts        = buildPosts(pipeline);
+  const posts        = buildPosts(pipeline, tCard);
   const readyNow     = pipeline.reduce((s, r) => s + Number(r.ready_now ?? 0), 0);
   const totalNominees= pipeline.reduce((s, r) => s + Number(r.nominee_count ?? 0), 0);
+
+  const RISK_COLS: { key: keyof RiskRow & string; label: string }[] = [
+    { key: "role_ref",     label: t("colRoleAtRisk") },
+    { key: "department_id",label: t("colDepartment") },
+  ];
 
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
-        title="Succession Planning"
-        subtitle="Critical role coverage — nominee pipeline, readiness levels, skill gaps, and key-person risk."
+        title={t("title")}
+        subtitle={t("subtitle")}
         back="/hr"
         actions={<span />}
       />
       <DataSourceBadge source={source} />
 
       <StatGrid>
-        <StatCard icon="🏆" iconBg="#e6f0ff" label="Critical Roles"  value={pipeline.length} />
-        <StatCard icon="👥" iconBg="#f5f5f5" label="Total Nominees"  value={totalNominees} />
-        <StatCard icon="✅" iconBg="#e6f7f0" label="Ready Now"        value={readyNow} />
-        <StatCard icon="⚠️" iconBg="#fff1f0" label="Roles at Risk"   value={atRisk.length} />
+        <StatCard icon="🏆" iconBg="#e6f0ff" label={t("statCriticalRolesLabel")}  value={pipeline.length} />
+        <StatCard icon="👥" iconBg="#f5f5f5" label={t("statTotalNomineesLabel")}  value={totalNominees} />
+        <StatCard icon="✅" iconBg="#e6f7f0" label={t("statReadyNowLabel")}        value={readyNow} />
+        <StatCard icon="⚠️" iconBg="#fff1f0" label={t("statRolesAtRiskLabel")}   value={atRisk.length} />
       </StatGrid>
 
       {/* Rich succession plan cards */}
-      <Card title="Succession Pipeline — Critical Roles">
+      <Card title={t("cardTitlePipeline")}>
         <div style={{ padding: 16 }}>
-          <SuccessionPlanList posts={posts} />
+          <SuccessionPlanList posts={posts} t={tCard} />
         </div>
       </Card>
 
       {/* At-risk table */}
       {atRisk.length > 0 && (
         <div style={{ marginTop: 16 }}>
-          <Card title="Key-Person Risk — No Ready Successors">
+          <Card title={t("cardTitleAtRisk")}>
             <DataTable<RiskRow>
               columns={RISK_COLS}
               rows={atRisk}
               sortable
               pageSize={10}
               emptyIcon="⚠️"
-              emptyTitle="All critical roles have ready successors"
+              emptyTitle={t("emptyTitleAllReady")}
               emptyMessage=""
             />
           </Card>

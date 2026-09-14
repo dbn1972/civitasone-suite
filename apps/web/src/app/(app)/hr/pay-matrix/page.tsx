@@ -1,6 +1,7 @@
 import { PageHeader, StatGrid, StatCard, Card, DataTable } from "../../../_components/ds";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { getPayMatrix } from "../../../_data/loaders";
+import { getTranslations } from "next-intl/server";
 
 type Row = {
   id: string;
@@ -11,6 +12,7 @@ type Row = {
 } & Record<string, unknown>;
 
 export default async function PayMatrixPage() {
+  const t = await getTranslations("payMatrix");
   const { data: levels, source } = await getPayMatrix();
 
   const rows: Row[] = levels.flatMap((l) =>
@@ -29,38 +31,38 @@ export default async function PayMatrixPage() {
   const maxPay = rows.at(-1)?.basic ?? "—";
 
   const columns: { key: keyof Row & string; label: string; align?: "left" | "right" }[] = [
-    { key: "level", label: "Level", align: "right" },
-    { key: "payGrade", label: "Pay Grade" },
-    { key: "cell", label: "Cell", align: "right" },
-    { key: "basic", label: "Basic Pay", align: "right" },
+    { key: "level", label: t("colLevel"), align: "right" },
+    { key: "payGrade", label: t("colPayGrade") },
+    { key: "cell", label: t("colCell"), align: "right" },
+    { key: "basic", label: t("colBasicPay"), align: "right" },
   ];
 
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
-        title="7th CPC Pay Matrix"
-        subtitle="Government pay levels, cells and basic pay amounts per the 7th Central Pay Commission (eHRMS reference)."
+        title={t("title")}
+        subtitle={t("subtitle")}
         back="/hr"
         actions={<span />}
       />
-      <DataSourceBadge source={source} message="Couldn't load — showing nothing" />
+      <DataSourceBadge source={source} message={t("dataSourceErrorMessage")} />
       <StatGrid>
-        <StatCard icon="📊" iconBg="#e6f0ff" label="Pay Levels" value={levelCount} />
-        <StatCard icon="🗂️" iconBg="#f5f5f5" label="Total Cells" value={cellCount} />
-        <StatCard icon="💰" iconBg="#fffbe6" label="Min Basic Pay" value={minPay} />
-        <StatCard icon="💎" iconBg="#e6f7f0" label="Max Basic Pay" value={maxPay} />
+        <StatCard icon="📊" iconBg="#e6f0ff" label={t("statPayLevelsLabel")} value={levelCount} />
+        <StatCard icon="🗂️" iconBg="#f5f5f5" label={t("statTotalCellsLabel")} value={cellCount} />
+        <StatCard icon="💰" iconBg="#fffbe6" label={t("statMinBasicPayLabel")} value={minPay} />
+        <StatCard icon="💎" iconBg="#e6f7f0" label={t("statMaxBasicPayLabel")} value={maxPay} />
       </StatGrid>
-      <Card title="Pay Matrix — All Levels">
+      <Card title={t("cardTitle")}>
         <DataTable<Row>
           columns={columns}
           rows={rows}
           sortable
           filterable
-          filterPlaceholder="Filter by level, pay grade or basic pay…"
+          filterPlaceholder={t("filterPlaceholder")}
           pageSize={20}
           emptyIcon="📊"
-          emptyTitle="Pay matrix not loaded"
-          emptyMessage="The 7th CPC pay matrix data appears here. Use the filter to look up basic pay by level or grade."
+          emptyTitle={t("emptyTitle")}
+          emptyMessage={t("emptyMessage")}
         />
       </Card>
     </main>
