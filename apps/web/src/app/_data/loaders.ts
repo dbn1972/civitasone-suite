@@ -4305,7 +4305,7 @@ export async function getNotificationDeliveries(): Promise<LoaderResult<Notifica
   });
 }
 
-export type StatutoryRow = { id: string; employeeId: string; period: string; empContribMinor?: number; erContribMinor?: number; basicMinor?: number };
+export type StatutoryRow = { id: string; employeeId: string; employeeName?: string | null; period: string; empContribMinor?: number; erContribMinor?: number; basicMinor?: number };
 
 export async function getGpfStatements(): Promise<LoaderResult<StatutoryRow[]>> {
   return fetchJson<unknown, StatutoryRow[]>("/api/v1/payroll/statutory/gpf", [], {

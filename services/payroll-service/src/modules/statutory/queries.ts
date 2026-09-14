@@ -1,4 +1,5 @@
 import * as repo from "./repo.js";
+import { fetchEmployeeSummaries } from "../../shared/hrms-client.js";
 
 export async function listPfReport(tenantId: string, limit: number) {
   const rows = await repo.listPfByTenant(tenantId, limit);
@@ -47,10 +48,19 @@ export async function listGratuityReport(tenantId: string, limit: number) {
 }
 
 export async function listGpfReport(tenantId: string, limit: number) {
-  const rows = await repo.listGpfByTenant(tenantId, limit);
+  // UX-021: enrich with employeeName the same best-effort way payroll/
+  // queries.ts#getSlip already does -- fetchEmployeeSummaries fails open to
+  // an empty Map on an unreachable HRMS, so this never gates the report.
+  // null here just means the frontend falls back to the employeeId it
+  // already shows (see hr/payroll/gpf/page.tsx).
+  const [rows, empMap] = await Promise.all([
+    repo.listGpfByTenant(tenantId, limit),
+    fetchEmployeeSummaries(tenantId),
+  ]);
   return rows.map((r) => ({
     id: r.id,
     employeeId: r.employeeId,
+    employeeName: empMap.get(r.employeeId)?.fullName ?? null,
     period: r.period,
     basicMinor: Number(r.basicMinor),
     contribPct: r.contribPct,
@@ -59,10 +69,15 @@ export async function listGpfReport(tenantId: string, limit: number) {
 }
 
 export async function listNpsReport(tenantId: string, limit: number) {
-  const rows = await repo.listNpsByTenant(tenantId, limit);
+  // UX-021: see listGpfReport above -- same best-effort employeeName enrichment.
+  const [rows, empMap] = await Promise.all([
+    repo.listNpsByTenant(tenantId, limit),
+    fetchEmployeeSummaries(tenantId),
+  ]);
   return rows.map((r) => ({
     id: r.id,
     employeeId: r.employeeId,
+    employeeName: empMap.get(r.employeeId)?.fullName ?? null,
     period: r.period,
     basicMinor: Number(r.basicMinor),
     empContribPct: r.empContribPct,

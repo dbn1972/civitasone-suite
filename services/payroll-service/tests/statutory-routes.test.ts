@@ -25,6 +25,7 @@ const H = vi.hoisted(() => ({
   listGratuityMock: vi.fn(),
   listGpfMock: vi.fn(),
   listNpsMock: vi.fn(),
+  fetchEmployeeSummariesMock: vi.fn(),
 }));
 
 vi.mock("../src/modules/statutory/repo.js", () => ({
@@ -34,6 +35,14 @@ vi.mock("../src/modules/statutory/repo.js", () => ({
   listGratuityByTenant: (...a: unknown[]) => H.listGratuityMock(...a),
   listGpfByTenant: (...a: unknown[]) => H.listGpfMock(...a),
   listNpsByTenant: (...a: unknown[]) => H.listNpsMock(...a),
+}));
+
+// UX-021: listGpfReport/listNpsReport now enrich with employeeName via
+// fetchEmployeeSummaries (same hrms-client payroll/queries.ts#getSlip
+// already uses). Mocked to an empty Map by default in beforeEach so these
+// route tests stay hermetic; fails open in production the same way.
+vi.mock("../src/shared/hrms-client.js", () => ({
+  fetchEmployeeSummaries: (...a: unknown[]) => H.fetchEmployeeSummariesMock(...a),
 }));
 
 vi.mock("../src/shared/infra.js", async (io) => {
@@ -83,6 +92,7 @@ beforeEach(() => {
   H.listGratuityMock.mockResolvedValue([gratuityRow]);
   H.listGpfMock.mockResolvedValue([gpfRow]);
   H.listNpsMock.mockResolvedValue([npsRow]);
+  H.fetchEmployeeSummariesMock.mockResolvedValue(new Map());
 });
 
 // ═══════════════════════════════════════════════════════════════════
