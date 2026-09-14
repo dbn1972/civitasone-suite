@@ -23,11 +23,11 @@
  * mocked-but-wrong return shape) directly.
  *
  * REL-034: the same class of bug existed on the DELETE side. These fixtures
- * used to mock `{ count: N }` (the node-postgres convention) while the
- * production code also (incorrectly) read `.count` -- so, exactly as
+ * used to mock `{ rowCount: N }` (the node-postgres convention) while the
+ * production code also (incorrectly) read `.rowCount` -- so, exactly as
  * with REL-029, the tests kept passing while validating the wrong shape.
  * postgres-js's real DELETE result exposes the affected-row count as
- * `.count`, never `.count`; fixtures below now use `{ count: N }` to
+ * `.count`, never `.rowCount`; fixtures below now use `{ count: N }` to
  * match.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
