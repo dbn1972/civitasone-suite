@@ -47,7 +47,15 @@ spec:
           type: RuntimeDefault
       containers:
         - name: pgbouncer
-          image: "edoburu/pgbouncer:1.21.0"
+          # PERF-012: "1.21.0" (bare, no suffix) does not exist on Docker Hub
+          # -- edoburu/pgbouncer only ever published "1.21.0-p0"/"-p1"/"-p2"
+          # under the old scheme, or "vX.Y.Z-pN" under the current one (e.g.
+          # "v1.23.1-p2") -- so `helm install` could never pull this image at
+          # all (ImagePullBackOff), independent of the env var bug this same
+          # gap fixes above. Pinned to the same tag infra/docker-compose.yml's
+          # already-fixed, currently-running pgbouncer uses (PERF-001), so
+          # both deployment paths run identical, known-good proxy behavior.
+          image: "edoburu/pgbouncer:v1.23.1-p2"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           securityContext:
             allowPrivilegeEscalation: false
@@ -58,16 +66,29 @@ spec:
             - name: pgbouncer
               containerPort: 6432
           env:
-            - name: DATABASE_HOST
+            # PERF-012: the edoburu/pgbouncer entrypoint only recognizes
+            # DB_HOST/DB_PORT/DB_USER/DB_PASSWORD (or DATABASE_URL) -- NOT
+            # DATABASE_HOST/DATABASE_PORT/DATABASE_USER/DATABASE_PASSWORD
+            # (the app-facing names used elsewhere in this chart, e.g. the
+            # shared ConfigMap read by every other service via envFrom). Do
+            # not "fix" this back to DATABASE_* -- that was the bug. DB_NAME
+            # is deliberately left unset so the entrypoint defaults it to the
+            # wildcard `*` database entry, since this single shared
+            # `civitasone` role must reach every per-service database name
+            # (civitas_identity, civitas_hrms, ...) -- an explicit DB_NAME
+            # (or a DATABASE_URL, which implies one) would only route the one
+            # database it names, same failure mode as PERF-001's docker-compose
+            # bug 3a (see docs/architecture/CONNECTION-BUDGET.md §3a).
+            - name: DB_HOST
               value: {{ $upstreamHost | quote }}
-            - name: DATABASE_PORT
+            - name: DB_PORT
               value: {{ $upstreamPort | quote }}
-            - name: DATABASE_USER
+            - name: DB_USER
               valueFrom:
                 configMapKeyRef:
                   name: {{ .Release.Name }}-civitasone-config
                   key: DATABASE_USER
-            - name: DATABASE_PASSWORD
+            - name: DB_PASSWORD
               valueFrom:
                 secretKeyRef:
                   name: {{ .Values.existingSecret }}
@@ -78,8 +99,37 @@ spec:
               value: {{ .Values.pgbouncer.maxClientConn | quote }}
             - name: DEFAULT_POOL_SIZE
               value: {{ .Values.pgbouncer.defaultPoolSize | quote }}
+            # PERF-012: "md5" cannot authenticate to a Postgres whose
+            # pg_hba.conf requires scram-sha-256 (Postgres 14+'s own modern
+            # default, including the bundled `postgresql` sub-chart below,
+            # and confirmed live against the campaign's shared dev Postgres,
+            # which is scram-sha-256-only) -- the server-side login fails
+            # with "wrong password type" regardless of the env var names
+            # being correct, same class of bug as PERF-001's docker-compose
+            # bug 3b (CONNECTION-BUDGET.md §3b), just discovered here via
+            # this gap's own boot verification rather than static reading.
+            # Unlike §3b's fix, no AUTH_USER/AUTH_QUERY is needed here: this
+            # chart's single shared `civitasone` role needs no per-connecting
+            # -role lookup, so the entrypoint's own static userlist.txt entry
+            # (from DB_USER/DB_PASSWORD above) is sufficient once auth_type
+            # matches what the server actually speaks -- verified end-to-end
+            # against a real scram-sha-256 Postgres (see PR description).
             - name: AUTH_TYPE
-              value: "md5"
+              value: "scram-sha-256"
+            # PERF-012 (found during independent review): edoburu/pgbouncer's
+            # entrypoint defaults its actual listening socket to port 5432
+            # (LISTEN_PORT is never set otherwise), while this Deployment's
+            # own containerPort/Service targetPort/both probes above all
+            # target 6432 -- PERF-001's docker-compose sibling papers over
+            # this identical mismatch via a "6432:5432" port mapping, which
+            # Kubernetes has no equivalent of. Without this, the pod's
+            # liveness probe fails forever (perpetual restarts) and the
+            # Service can never reach it, regardless of the other 3 fixes
+            # above being correct -- confirmed live: a container booted with
+            # this exact env block only accepted connections on 5432 until
+            # LISTEN_PORT was added.
+            - name: LISTEN_PORT
+              value: "6432"
           readinessProbe:
             tcpSocket:
               port: pgbouncer
