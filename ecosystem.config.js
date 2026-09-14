@@ -490,7 +490,7 @@ module.exports = {
     // ── Finance & procurement ──────────────────────────────────────────────────
     svc("finance",      3007, "finance_svc",       "civitas_finance", { PII_ENC_KEY: FINANCE_PII_KEY }, { graceful: true }), // REL-012: validated subset
     svc("procurement",  3008, "procurement_svc",   "civitas_procurement", { PII_ENC_KEY: PROCUREMENT_PII_KEY }, { graceful: true }), // PERF-003
-    svc("contract",     3009, "contract_svc",      "civitas_contract"),
+    svc("contract",     3009, "contract_svc",      "civitas_contract", {}, { graceful: true }), // PERF-015
 
     // ── Establishment & physical assets ───────────────────────────────────────
     svc("estab",        3010, "estab_svc",         "civitas_estab"),
