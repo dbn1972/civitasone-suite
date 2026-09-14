@@ -1,6 +1,7 @@
 import { Suspense } from "react";
-import { PageHeader, Card, StatCard, StatGrid, StatusPill, EmptyState } from "../../../../_components/ds";
+import { PageHeader, Card, StatCard, StatGrid, StatusPill, EmptyState, RefreshErrorState } from "../../../../_components/ds";
 import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
+import { toHumanError } from "@/lib/messages";
 import { Breadcrumbs } from "../../_components/Breadcrumbs";
 import { HistoryTimeline } from "../../_components/HistoryTimeline";
 import { TasksTable } from "../../_components/TasksTable";
@@ -13,7 +14,11 @@ import {
 export const dynamic = "force-dynamic";
 
 export default async function InstanceDetailPage({ params }: { params: { id: string } }) {
-  const [{ data: instance, source }, { data: history }, { data: tasks }] = await Promise.all([
+  const [
+    { data: instance, source },
+    { data: history, source: historySource },
+    { data: tasks, source: tasksSource },
+  ] = await Promise.all([
     getInstanceById(params.id),
     getInstanceHistory(params.id),
     getTasksForInstance(params.id),
@@ -92,7 +97,11 @@ export default async function InstanceDetailPage({ params }: { params: { id: str
 
       <div className="grid g-2" style={{ marginTop: 18 }}>
         <Card title="Open tasks">
-          {openTasks.length === 0 ? (
+          {tasksSource === "error" ? (
+            <div className="pad">
+              <RefreshErrorState error={toHumanError("load", { area: "open tasks" })} />
+            </div>
+          ) : openTasks.length === 0 ? (
             <div className="pad">
               <EmptyState icon="✅" title="No open tasks" message="There are no pending tasks on this instance." />
             </div>
@@ -106,7 +115,9 @@ export default async function InstanceDetailPage({ params }: { params: { id: str
         </Card>
 
         <Card title="Transition history" padding>
-          {history.length === 0 ? (
+          {historySource === "error" ? (
+            <RefreshErrorState error={toHumanError("load", { area: "transition history" })} />
+          ) : history.length === 0 ? (
             <EmptyState
               icon="🕘"
               title="No history"
