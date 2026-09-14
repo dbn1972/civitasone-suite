@@ -92,9 +92,16 @@ export function computeForm16Deductions(
   // bigint-precision behavior (orthogonal to the 80D cap source) are
   // unaffected; buildForm16 below passes the resolved tenant value.
   sec80dCapMinor: bigint = CAP_80D_MINOR,
+  // DOM-030: same treatment for the sibling Sec 80C cap (domain.ts's
+  // config-driven sec80cCapMinor, DOM-008), mirroring DOM-025's fix for
+  // 80D in this exact function. Defaults to this file's own historical
+  // CAP_80C_MINOR so dom-014-tax-precision.test.ts's existing calls
+  // (which pass only `inputs`) are unaffected; buildForm16 below passes
+  // the resolved tenant value.
+  sec80cCapMinor: bigint = CAP_80C_MINOR,
 ) {
   const isOld = inputs.regime === "old";
-  const section80cMinor = isOld ? minBig(inputs.section80cMinor, CAP_80C_MINOR) : 0n;
+  const section80cMinor = isOld ? minBig(inputs.section80cMinor, sec80cCapMinor) : 0n;
   const section80dMinor = isOld ? minBig(inputs.section80dMinor, sec80dCapMinor) : 0n;
   const hraExemptMinor = isOld ? inputs.hraClaimedMinor : 0n;
   const otherDeductionsMinor = isOld ? inputs.otherDeductionsMinor : 0n;
@@ -187,15 +194,19 @@ export async function buildForm16(tenantId: string, employeeId: string, fy: stri
   const otherSourcesIncomeMinor = dec ? BigInt(dec.otherSourcesIncomeMinor) : 0n;
   const prevEmployerTdsMinor    = dec ? BigInt(dec.prevEmployerTdsMinor) : 0n;
 
-  // DOM-025: this function used to apply computeForm16Deductions' own
-  // internal CAP_80D_MINOR (Rs 50,000) unconditionally, disagreeing with
-  // domain.ts's config-driven sec80dCapMinor (DOM-008's platform default
-  // Rs 75,000) and silently ignoring a tenant's override -- same bug
-  // class DOM-020 fixed in tax/routes.ts. Resolve the same
+  // DOM-025/DOM-030: this function used to apply computeForm16Deductions'
+  // own internal CAP_80D_MINOR/CAP_80C_MINOR (Rs 50,000 / Rs 1,50,000)
+  // unconditionally, disagreeing with domain.ts's config-driven
+  // sec80dCapMinor/sec80cCapMinor (DOM-008's platform defaults Rs 75,000 /
+  // Rs 1,50,000) and silently ignoring a tenant's override -- same bug
+  // class DOM-020 fixed in tax/routes.ts. DOM-025 fixed the 80D cap first;
+  // DOM-030 destructures the sibling sec80cCapMinor field from this SAME
+  // already-fetched config object -- zero extra DB round-trips, exactly
+  // mirroring DOM-026's fix in gap-routes.ts. Resolve the same
   // effective-dated config through scopedRead(), FY-scoped as of the
   // FY's last month (endYear-03), matching this function's own
   // fetchPayrollInput call below and DOM-020's tax/routes.ts convention.
-  const { sec80dCapMinor } = await scopedRead((tx) => resolveRunStatutoryConfig(tx, tenantId, `${endYear}-03`));
+  const { sec80cCapMinor, sec80dCapMinor } = await scopedRead((tx) => resolveRunStatutoryConfig(tx, tenantId, `${endYear}-03`));
 
   const {
     section80cMinor, section80dMinor, hraExemptMinor, otherDeductionsMinor, totalChapterViAMinor,
@@ -207,7 +218,7 @@ export async function buildForm16(tenantId: string, employeeId: string, fy: stri
     section80dMinor: dec ? BigInt(dec.section80d) : 0n,
     otherDeductionsMinor: dec ? BigInt(dec.otherDeductions) : 0n,
     perquisitesMinor, prevEmployerSalaryMinor, otherSourcesIncomeMinor,
-  }, sec80dCapMinor);
+  }, sec80dCapMinor, sec80cCapMinor);
   // DOM-008 (completing #1117): resolved for this employee's own tenant.
   const tax = computeTax(taxableIncome, regime, startYear, tenantId);
   const totalTaxLiability = tax.totalTax;
