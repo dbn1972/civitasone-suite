@@ -109,8 +109,16 @@ export default defineConfig({
   globalSetup: '../global-setup',
   globalTeardown: '../global-teardown',
   webServer: {
+    // REL-036: was `url`-based, which can never succeed in this app -- every
+    // route 307-redirects an unauthenticated request (middleware.ts), so a
+    // url-readiness check never sees a non-redirect response and always times
+    // out even though the server is genuinely up in milliseconds. Mirrors the
+    // root apps/web/playwright.config.ts's own fix for the identical problem
+    // (see its webServer comment, dated 2026-08-27): `port` only checks that
+    // the TCP port accepts connections, which is what "is the server up"
+    // actually means here.
     command: `CIVITASONE_API_BASE_URL=${MOCK_GATEWAY_URL} pnpm --filter @civitasone/web dev --port ${E2E_PORT}`,
-    url: `http://localhost:${E2E_PORT}`,
+    port: E2E_PORT,
     reuseExistingServer: true,
     timeout: 300_000,
     ignoreHTTPSErrors: true,

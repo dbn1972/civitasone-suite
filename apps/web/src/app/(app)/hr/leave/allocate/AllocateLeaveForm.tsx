@@ -3,6 +3,7 @@
 import { useEffect, useId, useState } from "react";
 import type { CSSProperties } from "react";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { useFormError } from "@/lib/useFormError";
 
 type EmployeeOption = { id: string; name: string; employeeNo: string };
@@ -25,6 +26,7 @@ function getCurrentFY(): string {
 }
 
 export function AllocateLeaveForm() {
+  const t = useTranslations("leaveAllocate");
   const router = useRouter();
   const [employees, setEmployees] = useState<EmployeeOption[]>([]);
   const [leaveTypes, setLeaveTypes] = useState<LeaveTypeOption[]>([]);
@@ -57,9 +59,9 @@ export function AllocateLeaveForm() {
       })
       .catch(() => {
         setStatus("error");
-        setMessage("Failed to load employees or leave types.");
+        setMessage(t("loadOptionsError"));
       });
-  }, []);
+  }, [t]);
 
   function clearErr(field: string) {
     setInvalid((s) => { const n = new Set(s); n.delete(field); return n; });
@@ -97,7 +99,7 @@ export function AllocateLeaveForm() {
       // POST /v1/hrms/leave-allocations returns 202 (queued command), not a
       // completed allocation — say so honestly rather than claiming it's done.
       setStatus("success");
-      setMessage("Leave allocation submitted. The employee's balance will update shortly.");
+      setMessage(t("allocationSuccess"));
       setTotalDays("");
     } catch {
       setStatus("error");
@@ -116,7 +118,7 @@ export function AllocateLeaveForm() {
 
       <div>
         <label htmlFor={empId} style={{ fontSize: 13, fontWeight: 500 }}>
-          Employee <span aria-hidden="true" style={{ color: "#ef4444" }}>*</span>
+          {t("employeeLabel")} <span aria-hidden="true" style={{ color: "#ef4444" }}>*</span>
         </label>
         <select
           id={empId}
@@ -127,19 +129,19 @@ export function AllocateLeaveForm() {
           aria-describedby={invalid.has("employee") ? `${empId}-err` : undefined}
         >
           {employees.length === 0
-            ? <option value="">{status === "error" ? "Unable to load employees" : "Loading…"}</option>
+            ? <option value="">{status === "error" ? t("unableToLoadEmployees") : t("loadingOption")}</option>
             : employees.map((emp) => (
                 <option key={emp.id} value={emp.id}>{emp.name} ({emp.employeeNo})</option>
               ))}
         </select>
         {invalid.has("employee") && (
-          <p id={`${empId}-err`} role="alert" style={fieldErrStyle}>Please select an employee.</p>
+          <p id={`${empId}-err`} role="alert" style={fieldErrStyle}>{t("employeeRequired")}</p>
         )}
       </div>
 
       <div>
         <label htmlFor={ltId} style={{ fontSize: 13, fontWeight: 500 }}>
-          Leave Type <span aria-hidden="true" style={{ color: "#ef4444" }}>*</span>
+          {t("leaveTypeLabel")} <span aria-hidden="true" style={{ color: "#ef4444" }}>*</span>
         </label>
         <select
           id={ltId}
@@ -150,20 +152,20 @@ export function AllocateLeaveForm() {
           aria-describedby={invalid.has("leaveType") ? `${ltId}-err` : undefined}
         >
           {leaveTypes.length === 0
-            ? <option value="">{status === "error" ? "Unable to load leave types" : "Loading…"}</option>
+            ? <option value="">{status === "error" ? t("unableToLoadLeaveTypes") : t("loadingOption")}</option>
             : leaveTypes.map((lt) => (
                 <option key={lt.id} value={lt.id}>{lt.name} ({lt.code})</option>
               ))}
         </select>
         {invalid.has("leaveType") && (
-          <p id={`${ltId}-err`} role="alert" style={fieldErrStyle}>Please select a leave type.</p>
+          <p id={`${ltId}-err`} role="alert" style={fieldErrStyle}>{t("leaveTypeRequired")}</p>
         )}
       </div>
 
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
         <div>
           <label htmlFor={fyId} style={{ fontSize: 13, fontWeight: 500 }}>
-            Financial Year <span aria-hidden="true" style={{ color: "#ef4444" }}>*</span>
+            {t("financialYearLabel")} <span aria-hidden="true" style={{ color: "#ef4444" }}>*</span>
           </label>
           <input
             id={fyId}
@@ -177,14 +179,14 @@ export function AllocateLeaveForm() {
             aria-describedby={invalid.has("fy") ? `${fyId}-err` : `${fyId}-hint`}
           />
           {invalid.has("fy") ? (
-            <p id={`${fyId}-err`} role="alert" style={fieldErrStyle}>Must be YYYY-YY format (e.g. {getCurrentFY()}).</p>
+            <p id={`${fyId}-err`} role="alert" style={fieldErrStyle}>{t("fyFormatError", { fy: getCurrentFY() })}</p>
           ) : (
-            <p id={`${fyId}-hint`} style={{ fontSize: 11, color: "var(--mut)", margin: "3px 0 0" }}>Format: YYYY-YY</p>
+            <p id={`${fyId}-hint`} style={{ fontSize: 11, color: "var(--mut)", margin: "3px 0 0" }}>{t("fyFormatHint")}</p>
           )}
         </div>
         <div>
           <label htmlFor={daysId} style={{ fontSize: 13, fontWeight: 500 }}>
-            Total Days <span aria-hidden="true" style={{ color: "#ef4444" }}>*</span>
+            {t("totalDaysLabel")} <span aria-hidden="true" style={{ color: "#ef4444" }}>*</span>
           </label>
           <input
             id={daysId}
@@ -193,23 +195,23 @@ export function AllocateLeaveForm() {
             max={365}
             value={totalDays}
             onChange={(e) => { setTotalDays(e.target.value); clearErr("days"); }}
-            placeholder="e.g. 15"
+            placeholder={t("daysPlaceholder")}
             style={invalid.has("days") ? inputErrStyle : inputStyle}
             aria-invalid={invalid.has("days")}
             aria-describedby={invalid.has("days") ? `${daysId}-err` : undefined}
           />
           {invalid.has("days") && (
-            <p id={`${daysId}-err`} role="alert" style={fieldErrStyle}>Enter a number between 1 and 365.</p>
+            <p id={`${daysId}-err`} role="alert" style={fieldErrStyle}>{t("daysRangeError")}</p>
           )}
         </div>
       </div>
 
       <div style={{ display: "flex", gap: 10, marginTop: 4 }}>
         <button type="submit" className="btn primary" disabled={status === "submitting" || employees.length === 0} style={{ minHeight: 44, minWidth: 140 }}>
-          {status === "submitting" ? "Allocating…" : "Allocate Leave"}
+          {status === "submitting" ? t("submitAllocating") : t("submitLabel")}
         </button>
         <button type="button" className="btn ghost" style={{ minHeight: 44 }} onClick={() => router.push("/hr/leave")}>
-          Cancel
+          {t("cancel")}
         </button>
       </div>
     </form>

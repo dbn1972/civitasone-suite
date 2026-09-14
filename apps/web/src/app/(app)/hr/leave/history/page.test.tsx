@@ -1,9 +1,22 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { NextIntlClientProvider } from "next-intl";
+import enMessages from "@/messages/en.json";
 
 import LeaveHistoryPage from "./page";
 
 const EMPLOYEES = [{ id: "emp-1", name: "Asha Verma", employeeNo: "E001" }];
+
+// UX-017 (tranche 2): LeaveHistoryPage now reads its copy through next-intl
+// (useTranslations("leaveHistory")), so it needs a real provider in the tree
+// — same pattern as citizen/grievances/GrievancesTable.test.tsx.
+function renderPage() {
+  return render(
+    <NextIntlClientProvider locale="en" messages={enMessages}>
+      <LeaveHistoryPage />
+    </NextIntlClientProvider>,
+  );
+}
 
 function mockFetch(apps: unknown[], opts: { employeesOk?: boolean; appsOk?: boolean } = {}) {
   const { employeesOk = true, appsOk = true } = opts;
@@ -37,7 +50,7 @@ describe("LeaveHistoryPage", () => {
       "fetch",
       mockFetch([{ id: "app-1", leaveType: "Casual Leave", fromDate: "2026-09-01", toDate: "2026-09-02", status: "pending" }]),
     );
-    render(<LeaveHistoryPage />);
+    renderPage();
     fireEvent.click(await screen.findByRole("button", { name: "Cancel" }));
 
     expect(await screen.findByRole("alertdialog")).toBeInTheDocument();
@@ -52,7 +65,7 @@ describe("LeaveHistoryPage", () => {
       "fetch",
       mockFetch([{ id: "app-2", leaveType: "Earned Leave", fromDate: "2026-09-01", toDate: "2026-09-05", status: "approved" }]),
     );
-    render(<LeaveHistoryPage />);
+    renderPage();
     expect(await screen.findByRole("button", { name: "Cancel" })).toBeInTheDocument();
   });
 
@@ -61,14 +74,14 @@ describe("LeaveHistoryPage", () => {
       "fetch",
       mockFetch([{ id: "app-3", leaveType: "Casual Leave", fromDate: "2026-09-01", toDate: "2026-09-02", status: "rejected" }]),
     );
-    render(<LeaveHistoryPage />);
+    renderPage();
     await screen.findByText("Casual Leave");
     expect(screen.queryByRole("button", { name: "Cancel" })).not.toBeInTheDocument();
   });
 
   it("shows an error state instead of a false empty state when the history fetch fails", async () => {
     vi.stubGlobal("fetch", mockFetch([], { appsOk: false }));
-    render(<LeaveHistoryPage />);
+    renderPage();
     await waitFor(() => {
       expect(screen.getByRole("alert")).toHaveTextContent(/failed to load leave history/i);
     });
@@ -105,7 +118,11 @@ describe("LeaveHistoryPage — UX-016 clerk-safe errors", () => {
       }),
     );
 
-    render(<LeaveHistoryPage />);
+    // renderPage(), not a bare render(): LeaveHistoryPage calls
+    // useTranslations() (UX-017) and needs a NextIntlClientProvider ancestor
+    // — this test predates that requirement (added by UX-016 tranche 2
+    // against a pre-i18n version of the page).
+    renderPage();
     fireEvent.click(await screen.findByRole("button", { name: /^cancel$/i }));
     const dialog = await screen.findByRole("alertdialog");
     fireEvent.click(screen.getByRole("button", { name: /cancel leave/i }));

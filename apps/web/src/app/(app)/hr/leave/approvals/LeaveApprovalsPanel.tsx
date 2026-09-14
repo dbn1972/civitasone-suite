@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { PageHeader, Card, DataTable, ConfirmDialog, EmptyState } from "../../../../_components/ds";
 import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
 import { formatIndianDate } from "@/lib/formatters";
+import { useTranslations } from "next-intl";
 import { useFormError } from "@/lib/useFormError";
 
 type WorkflowTask = {
@@ -39,6 +40,7 @@ type EnrichedTask = WorkflowTask & {
 type Decision = "approve" | "reject";
 
 export function LeaveApprovalsPanel() {
+  const t = useTranslations("leaveApprovals");
   const router = useRouter();
   const [tasks, setTasks] = useState<WorkflowTask[]>([]);
   const [leaveById, setLeaveById] = useState<Record<string, LeaveDetail>>({});
@@ -69,7 +71,7 @@ export function LeaveApprovalsPanel() {
       }
       const taskBody = (await taskRes.json()) as { data?: WorkflowTask[] } | WorkflowTask[];
       const taskRows = Array.isArray(taskBody) ? taskBody : taskBody.data ?? [];
-      setTasks(taskRows.filter((t) => t.refType === "leave_app" && t.status === "pending"));
+      setTasks(taskRows.filter((wt) => wt.refType === "leave_app" && wt.status === "pending"));
 
       // Leave context is best-effort: a failure here still shows tasks (with IDs).
       if (leaveRes && leaveRes.ok) {
@@ -97,12 +99,12 @@ export function LeaveApprovalsPanel() {
 
   const enriched: EnrichedTask[] = useMemo(
     () =>
-      tasks.map((t) => {
-        const l = t.refId ? leaveById[t.refId] : undefined;
+      tasks.map((wt) => {
+        const l = wt.refId ? leaveById[wt.refId] : undefined;
         return {
-          ...t,
+          ...wt,
           employeeName: l?.employeeName ?? "Unknown employee",
-          leaveType: l?.leaveType ?? t.name ?? "—",
+          leaveType: l?.leaveType ?? wt.name ?? "—",
           dates: l ? `${formatIndianDate(l.fromDate)} – ${formatIndianDate(l.toDate)}` : "—",
           days: l?.days ?? "—",
           reason: l?.reason ?? "—",
@@ -154,10 +156,12 @@ export function LeaveApprovalsPanel() {
       setPending(null);
       setToast(
         reasonSaved
-          ? { tone: "good", text: decision === "approve" ? "Leave approved via workflow." : "Leave rejected." }
+          ? { tone: "good", text: decision === "approve" ? t("toastApproved") : t("toastRejected") }
           : {
               tone: "bad",
-              text: `Leave ${decision === "approve" ? "approved" : "rejected"}, but the reason could not be saved. Add it as a comment on the request.`,
+              text: t("toastReasonNotSaved", {
+                decision: decision === "approve" ? t("approvedWord") : t("rejectedWord"),
+              }),
             },
       );
       await loadTasks();
@@ -176,14 +180,14 @@ export function LeaveApprovalsPanel() {
     sortable?: boolean;
     render?: (row: EnrichedTask) => React.ReactNode;
   }[] = [
-    { key: "employeeName", label: "Employee" },
-    { key: "leaveType", label: "Leave Type" },
-    { key: "dates", label: "Dates" },
-    { key: "days", label: "Days", align: "right" },
-    { key: "reason", label: "Reason" },
+    { key: "employeeName", label: t("colEmployee") },
+    { key: "leaveType", label: t("colLeaveType") },
+    { key: "dates", label: t("colDates") },
+    { key: "days", label: t("colDays"), align: "right" },
+    { key: "reason", label: t("colReason") },
     {
       key: "id",
-      label: "Decision",
+      label: t("colDecision"),
       sortable: false,
       render: (row) => (
         <div style={{ display: "flex", gap: 8 }}>
@@ -196,7 +200,7 @@ export function LeaveApprovalsPanel() {
               setPending({ task: row, decision: "approve" });
             }}
           >
-            Approve
+            {t("approve")}
           </button>
           <button
             type="button"
@@ -207,7 +211,7 @@ export function LeaveApprovalsPanel() {
               setPending({ task: row, decision: "reject" });
             }}
           >
-            Reject
+            {t("reject")}
           </button>
         </div>
       ),
@@ -223,27 +227,27 @@ export function LeaveApprovalsPanel() {
       )}
 
       <DataSourceBadge source={source} />
-      <Card title="Pending Leave Approvals">
+      <Card title={t("panelTitle")}>
         {loading ? (
           <div style={{ padding: "40px 0", textAlign: "center", color: "var(--mut)" }} aria-live="polite">
-            Loading workflow tasks…
+            {t("loadingTasks")}
           </div>
         ) : error ? (
           <EmptyState
             icon="⚠️"
-            title="Could not load approvals"
+            title={t("loadErrorTitle")}
             message={error}
             action={
               <button type="button" className="btn ghost" onClick={() => void loadTasks()}>
-                Retry
+                {t("retry")}
               </button>
             }
           />
         ) : enriched.length === 0 ? (
           <EmptyState
             icon="✅"
-            title="No pending approvals"
-            message="There are no leave applications awaiting your decision."
+            title={t("emptyTitle")}
+            message={t("emptyMessage")}
           />
         ) : (
           <DataTable<EnrichedTask>
@@ -251,7 +255,7 @@ export function LeaveApprovalsPanel() {
             rows={enriched}
             sortable
             filterable
-            filterPlaceholder="Filter by employee, type or reason…"
+            filterPlaceholder={t("filterPlaceholder")}
             pageSize={15}
           />
         )}
@@ -259,25 +263,31 @@ export function LeaveApprovalsPanel() {
 
       <ConfirmDialog
         open={pending !== null}
-        title={pending?.decision === "approve" ? "Approve this leave application?" : "Reject this leave application?"}
+        title={pending?.decision === "approve" ? t("approveDialogTitle") : t("rejectDialogTitle")}
         danger={pending?.decision === "reject"}
         requireReason
-        reasonLabel={pending?.decision === "approve" ? "Approval remarks (maker-checker)" : "Reason for rejection"}
-        confirmLabel={pending?.decision === "approve" ? "Approve leave" : "Reject leave"}
+        reasonLabel={pending?.decision === "approve" ? t("approveRemarksLabel") : t("rejectReasonLabel")}
+        confirmLabel={pending?.decision === "approve" ? t("approveConfirmLabel") : t("rejectConfirmLabel")}
         busy={busy}
         errorMessage={dialogError}
         description={
           pending ? (
             <>
-              {pending.decision === "approve" ? "Approve" : "Reject"} the{" "}
-              <strong>{pending.task.leaveType}</strong> request from{" "}
-              <strong>{pending.task.employeeName}</strong> for{" "}
-              <strong>{pending.task.dates}</strong>
-              {typeof pending.task.days === "number" ? ` (${pending.task.days} day(s))` : ""}.
+              {t.rich("description", {
+                b: (chunks) => <strong>{chunks}</strong>,
+                decision: pending.decision === "approve" ? t("approve") : t("reject"),
+                leaveType: pending.task.leaveType,
+                employeeName: pending.task.employeeName,
+                dates: pending.task.dates,
+                dayCount:
+                  typeof pending.task.days === "number"
+                    ? t("dayCountSuffix", { count: pending.task.days })
+                    : "",
+              })}
               {pending.task.reason !== "—" && (
                 <>
                   <br />
-                  <span style={{ color: "var(--ink2)" }}>Reason given: {pending.task.reason}</span>
+                  <span style={{ color: "var(--ink2)" }}>{t("reasonGiven", { reason: pending.task.reason })}</span>
                 </>
               )}
             </>

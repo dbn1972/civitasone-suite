@@ -1,16 +1,18 @@
 import { PageHeader, Card } from "../../../../_components/ds";
 import { AllocateLeaveForm } from "./AllocateLeaveForm";
+import { getTranslations } from "next-intl/server";
 
-export default function AllocateLeavePage() {
+export default async function AllocateLeavePage() {
+  const t = await getTranslations("leaveAllocate");
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
-        title="Allocate Leave"
-        subtitle="Grant leave entitlement to an employee for the financial year."
+        title={t("title")}
+        subtitle={t("subtitle")}
         back="/hr/leave"
-        backLabel="Leave"
+        backLabel={t("backLabel")}
       />
-      <Card title="New Allocation">
+      <Card title={t("newAllocationCard")}>
         <div style={{ padding: "4px 0 8px" }}>
           <AllocateLeaveForm />
         </div>

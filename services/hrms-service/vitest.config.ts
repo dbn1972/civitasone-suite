@@ -4,10 +4,15 @@ import { join } from "node:path";
 
 function readPiiKey(): string {
   try {
-    const p = join(process.env.HOME || "/home/ec2-user", ".civitasone-hrms-pii-key");
+    const p = join(
+      process.env.HOME || "/home/ec2-user",
+      ".civitasone-hrms-pii-key",
+    );
     const v = readFileSync(p, "utf8").trim();
     if (v.length >= 16) return v;
-  } catch { /* fall through */ }
+  } catch {
+    /* fall through */
+  }
   return "civitasone-hrms-pii-dev-key-not-for-prod";
 }
 
@@ -45,7 +50,13 @@ export default defineConfig({
       PII_ENC_KEY: process.env.PII_ENC_KEY ?? readPiiKey(),
       DATABASE_URL:
         process.env.DATABASE_URL ??
-        "postgres://hrms_svc:hrms_dev_pw@localhost:5435/civitas_hrms",
+        (process.env.CI === "true" || process.env.GITHUB_ACTIONS === "true"
+          ? "postgres://hrms_svc:hrms_dev_pw@localhost:5435/civitas_hrms"
+          : (() => {
+              throw new Error(
+                "REL-035: DATABASE_URL is not set. This test suite no longer silently falls back to the shared, long-lived civitasone-postgres:5435 dev instance outside CI — export DATABASE_URL explicitly (point it at your own disposable Postgres) before running tests.",
+              );
+            })()),
       QUEUE_DRIVER: "memory",
       CACHE_DRIVER: "memory",
     },

@@ -5,6 +5,7 @@ import type { EmployeeSummary } from "@civitasone/types";
 import { fetchOrQueue } from "@/lib/sync/requestQueue";
 import { trackActivation } from "@/lib/activation";
 import { useToast } from "@/app/_components/ds/Toast";
+import { useTranslations } from "next-intl";
 import {
   useFieldValidation,
   required,
@@ -41,6 +42,7 @@ const fieldCls =
 const errorCls = "mt-1 text-xs text-red-600";
 
 export function ApplyLeaveForm({ employees, initialEmployeeId }: Props) {
+  const t = useTranslations("leaveApply");
   const preselected = initialEmployeeId && employees.some((e) => e.id === initialEmployeeId)
     ? initialEmployeeId
     : employees[0]?.id ?? "";
@@ -62,10 +64,10 @@ export function ApplyLeaveForm({ employees, initialEmployeeId }: Props) {
     (v) => {
       if (!v || !fromDateRef.current) return undefined;
       return new Date(v) < new Date(fromDateRef.current)
-        ? "To date must be on or after from date."
+        ? t("toDateAfterFromError")
         : undefined;
     },
-    [],
+    [t],
   );
 
   const { fields, validate, values, reset: resetFields } = useFieldValidation({
@@ -133,27 +135,25 @@ export function ApplyLeaveForm({ employees, initialEmployeeId }: Props) {
     // Run all validators; if any fail, abort.
     if (!validate()) {
       setStatus("error");
-      setMessage("Please fix the errors above before submitting.");
+      setMessage(t("fixErrorsError"));
       return;
     }
 
     if (!selectedAlloc) {
       setStatus("error");
-      setMessage("Please select a valid leave type.");
+      setMessage(t("selectValidLeaveTypeError"));
       return;
     }
 
     const daysApplied = calcDays();
     if (daysApplied <= 0) {
       setStatus("error");
-      setMessage("To date must be on or after from date.");
+      setMessage(t("toDateAfterFromError"));
       return;
     }
     if (daysApplied > selectedAlloc.balanceDays) {
       setStatus("error");
-      setMessage(
-        `Insufficient balance (${selectedAlloc.balanceDays} days available).`,
-      );
+      setMessage(t("insufficientBalanceError", { balance: selectedAlloc.balanceDays }));
       return;
     }
 
@@ -178,12 +178,8 @@ export function ApplyLeaveForm({ employees, initialEmployeeId }: Props) {
 
       if (queued) {
         setStatus("accepted");
-        setMessage(
-          "You're offline — leave request saved and will submit automatically when you reconnect.",
-        );
-        toast.info(
-          "Leave request queued — will submit when you're back online.",
-        );
+        setMessage(t("queuedMessage"));
+        toast.info(t("queuedToast"));
         resetFields();
         return;
       }
@@ -199,8 +195,8 @@ export function ApplyLeaveForm({ employees, initialEmployeeId }: Props) {
       }
       setStatus("accepted");
       trackActivation("first_transaction");
-      setMessage("Leave request submitted for approval.");
-      toast.success("Leave request submitted for approval.");
+      setMessage(t("acceptedMessage"));
+      toast.success(t("acceptedMessage"));
       resetFields();
       void loadContext(employeeId);
     } catch {
@@ -231,7 +227,7 @@ export function ApplyLeaveForm({ employees, initialEmployeeId }: Props) {
             htmlFor="leave-employee"
             className="block text-sm font-medium text-slate-700 mb-1"
           >
-            Employee
+            {t("employeeLabel")}
           </label>
           <select
             id="leave-employee"
@@ -240,7 +236,7 @@ export function ApplyLeaveForm({ employees, initialEmployeeId }: Props) {
             className={fieldCls}
           >
             {employees.length === 0 ? (
-              <option value="">No employees loaded</option>
+              <option value="">{t("noEmployeesLoaded")}</option>
             ) : (
               employees.map((emp) => (
                 <option key={emp.id} value={emp.id}>
@@ -257,7 +253,7 @@ export function ApplyLeaveForm({ employees, initialEmployeeId }: Props) {
             htmlFor="leave-type"
             className="block text-sm font-medium text-slate-700 mb-1"
           >
-            Leave Type{" "}
+            {t("leaveTypeLabel")}{" "}
             <span aria-hidden="true" className="text-red-500">
               *
             </span>
@@ -275,13 +271,13 @@ export function ApplyLeaveForm({ employees, initialEmployeeId }: Props) {
             className={`${fieldCls} disabled:opacity-60`}
           >
             {!leaveContext?.allocations.length ? (
-              <option value="">No leave allocations</option>
+              <option value="">{t("noLeaveAllocations")}</option>
             ) : (
               <>
-                <option value="">Select a leave type…</option>
+                <option value="">{t("selectLeaveTypePlaceholder")}</option>
                 {leaveContext.allocations.map((a) => (
                   <option key={a.id} value={a.id}>
-                    {a.leaveTypeName} ({a.balanceDays} days balance)
+                    {t("allocationOption", { name: a.leaveTypeName, balance: a.balanceDays })}
                   </option>
                 ))}
               </>
@@ -301,7 +297,7 @@ export function ApplyLeaveForm({ employees, initialEmployeeId }: Props) {
               htmlFor="leave-from"
               className="block text-sm font-medium text-slate-700 mb-1"
             >
-              From Date{" "}
+              {t("fromDateLabel")}{" "}
               <span aria-hidden="true" className="text-red-500">
                 *
               </span>
@@ -330,7 +326,7 @@ export function ApplyLeaveForm({ employees, initialEmployeeId }: Props) {
               htmlFor="leave-to"
               className="block text-sm font-medium text-slate-700 mb-1"
             >
-              To Date{" "}
+              {t("toDateLabel")}{" "}
               <span aria-hidden="true" className="text-red-500">
                 *
               </span>
@@ -357,9 +353,9 @@ export function ApplyLeaveForm({ employees, initialEmployeeId }: Props) {
 
         {days > 0 ? (
           <p className="text-sm text-slate-600">
-            Duration:{" "}
+            {t("durationLabel")}{" "}
             <span className="font-semibold text-slate-900">
-              {days} day{days !== 1 ? "s" : ""}
+              {t("daysCount", { count: days })}
             </span>
           </p>
         ) : null}
@@ -370,12 +366,12 @@ export function ApplyLeaveForm({ employees, initialEmployeeId }: Props) {
             htmlFor="leave-reason"
             className="block text-sm font-medium text-slate-700 mb-1"
           >
-            Reason{" "}
+            {t("reasonLabel")}{" "}
             <span aria-hidden="true" className="text-red-500">
               *
             </span>
             <span className="ml-1 font-normal text-slate-500">
-              (min. 20 characters)
+              {t("reasonHint")}
             </span>
           </label>
           <textarea
@@ -384,7 +380,7 @@ export function ApplyLeaveForm({ employees, initialEmployeeId }: Props) {
             onChange={fields.reason.onChange}
             onBlur={fields.reason.onBlur}
             rows={3}
-            placeholder="Briefly describe the reason for leave"
+            placeholder={t("reasonPlaceholder")}
             aria-invalid={!!fields.reason.error}
             aria-describedby={
               fields.reason.error ? "leave-reason-error" : undefined
@@ -398,7 +394,7 @@ export function ApplyLeaveForm({ employees, initialEmployeeId }: Props) {
           )}
           {!fields.reason.error && fields.reason.value.length > 0 && (
             <p className="mt-1 text-xs text-slate-400">
-              {fields.reason.value.trim().length} / 20+ chars
+              {t("charsCount", { count: fields.reason.value.trim().length })}
             </p>
           )}
         </div>
@@ -412,7 +408,7 @@ export function ApplyLeaveForm({ employees, initialEmployeeId }: Props) {
           }
           className="rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-500 disabled:opacity-60"
         >
-          {status === "submitting" ? "Submitting…" : "Submit Leave Request"}
+          {status === "submitting" ? t("submitSubmitting") : t("submitLabel")}
         </button>
 
         {message ? (
@@ -422,7 +418,7 @@ export function ApplyLeaveForm({ employees, initialEmployeeId }: Props) {
             className={`text-sm ${status === "error" ? "text-red-600" : "text-emerald-700"}`}
           >
             <span className="font-semibold">
-              {status === "error" ? "Error: " : ""}
+              {status === "error" ? t("errorPrefix") : ""}
             </span>
             {message}
           </p>

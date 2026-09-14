@@ -1,5 +1,7 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { render, screen, fireEvent, waitFor, within } from "@testing-library/react";
+import { NextIntlClientProvider } from "next-intl";
+import enMessages from "@/messages/en.json";
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ refresh: vi.fn() }),
@@ -9,6 +11,17 @@ import { LeaveApprovalsPanel } from "./LeaveApprovalsPanel";
 
 const TASK = { id: "task-1", instanceId: "inst-1", name: "Leave approval", status: "pending", refType: "leave_app", refId: "leave-1" };
 const LEAVE = { id: "leave-1", employeeName: "Asha Verma", leaveType: "Casual Leave", fromDate: "2026-09-01", toDate: "2026-09-02", days: 2, reason: "Family function" };
+
+// UX-017 (tranche 2): LeaveApprovalsPanel now reads its copy through
+// next-intl (useTranslations("leaveApprovals")), so it needs a real provider
+// in the tree — same pattern as citizen/grievances/GrievancesTable.test.tsx.
+function renderPanel() {
+  return render(
+    <NextIntlClientProvider locale="en" messages={enMessages}>
+      <LeaveApprovalsPanel />
+    </NextIntlClientProvider>,
+  );
+}
 
 function mockFetch() {
   const calls: { url: string; body: unknown }[] = [];
@@ -31,7 +44,7 @@ describe("LeaveApprovalsPanel — reason persistence", () => {
   it("records the rejection reason as a comment, since workflow-service's complete endpoint silently drops it", async () => {
     const fetchMock = mockFetch();
     vi.stubGlobal("fetch", fetchMock);
-    render(<LeaveApprovalsPanel />);
+    renderPanel();
 
     fireEvent.click(await screen.findByRole("button", { name: "Reject" }));
     await screen.findByRole("alertdialog");
@@ -66,7 +79,7 @@ describe("LeaveApprovalsPanel — reason persistence", () => {
       return { ok: false, status: 404, text: async () => "{}" } as Response;
     });
     vi.stubGlobal("fetch", fn);
-    render(<LeaveApprovalsPanel />);
+    renderPanel();
 
     fireEvent.click(await screen.findByRole("button", { name: "Approve" }));
     fireEvent.change(screen.getByLabelText(/approval remarks/i), { target: { value: "Looks fine" } });
@@ -97,7 +110,9 @@ describe("LeaveApprovalsPanel — UX-016 clerk-safe errors", () => {
       return Promise.resolve(new Response(JSON.stringify({ data: [] }), { status: 200 }));
     });
     vi.stubGlobal("fetch", fetchMock);
-    render(<LeaveApprovalsPanel />);
+    // renderPanel(), not a bare render(): LeaveApprovalsPanel calls
+    // useTranslations() (UX-017) and needs a NextIntlClientProvider ancestor.
+    renderPanel();
 
     // Scoped to the toHumanError "area" text (not just /couldn't load/i)
     // since this panel's own DataSourceBadge also shows a generic
@@ -126,7 +141,7 @@ describe("LeaveApprovalsPanel — UX-016 clerk-safe errors", () => {
       return Promise.resolve(new Response("workflow-service: complete route panicked", { status: 500 }));
     });
     vi.stubGlobal("fetch", fetchMock);
-    render(<LeaveApprovalsPanel />);
+    renderPanel();
 
     fireEvent.click(await screen.findByRole("button", { name: /approve/i }));
     const dialog = await screen.findByRole("alertdialog");
