@@ -1,4 +1,4 @@
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, inArray } from "drizzle-orm";
 import { db } from "../../shared/db.js";
 import { procurementVendors, procurementEmpanelment, type VendorRow, type VendorInsert } from "./schema.js";
 import { procurementVendorScorecards } from "./scorecard-schema.js";
@@ -17,6 +17,21 @@ export async function findVendorByIdTx(tx: Writer, id: string, tenantId: string)
   const rows = await (tx as typeof db).select().from(procurementVendors)
     .where(and(eq(procurementVendors.id, id), eq(procurementVendors.tenantId, tenantId))).limit(1);
   return rows[0] ?? null;
+}
+
+/**
+ * PERF-005: batch loader for rfq/queries.ts::getRfqDetail, which previously
+ * called findVendorById once per response row (N+1). Tenant-scoped like
+ * findVendorById; returns a Map keyed by vendor id so callers doing a
+ * per-response lookup after this single query become an O(1) Map.get().
+ */
+export async function findVendorsByIds(ids: string[], tenantId: string): Promise<Map<string, VendorRow>> {
+  const byId = new Map<string, VendorRow>();
+  if (ids.length === 0) return byId;
+  const rows = await db.transaction((tx) => tx.select().from(procurementVendors)
+    .where(and(inArray(procurementVendors.id, ids), eq(procurementVendors.tenantId, tenantId))));
+  for (const row of rows) byId.set(row.id, row);
+  return byId;
 }
 
 export async function listVendorsByTenant(tenantId: string, limit = 100, offset = 0): Promise<VendorRow[]> {
