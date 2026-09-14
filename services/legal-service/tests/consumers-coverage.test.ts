@@ -201,6 +201,7 @@ describe("Settlements domain — DomainError (pure)", () => {
 // routes-coverage-full.test.ts. Skipping integration consumer test until RLS visibility
 // issue is resolved.
 describe("Settlement consumer — create with Lok Adalat (integration)", () => {
+  // FLAKY-SKIP: See NOTE above — consumer runs correctly (DLQ empty) but RLS row visibility in the test read path returns empty; covered by route-level tests in routes-coverage-full.test.ts. (expires: 2026-12-13)
   it.skip("settlementCreate: covered via route test POST /v1/legal/settlements → 202", () => {});
 });
 
@@ -209,6 +210,7 @@ describe("Settlement consumer — create with Lok Adalat (integration)", () => {
 // schema column names (remind_at vs reminder_date). Consumer tests skip until migration
 // 0019 aligns the columns.
 describe("Reminder consumer — create (integration)", () => {
+  // FLAKY-SKIP: See NOTE above — reminders table's real DB columns (migration 0003) don't match the Drizzle schema column names (remind_at vs reminder_date); pending migration 0019. (expires: 2026-12-13)
   it.skip("reminderCreate: inserts reminder with sent=false and emits audit", async () => {
     const q = wireTenantAwareQueue(new MemoryQueue());
     registerReminderConsumers(q);
@@ -236,6 +238,7 @@ describe("Reminder consumer — create (integration)", () => {
     expect(events.map((e) => e.eventType)).toContain("legal.reminder.created");
   });
 
+  // FLAKY-SKIP: Same migration-0019 column mismatch as reminderCreate above. (expires: 2026-12-13)
   it.skip("idempotency: redelivered reminderCreate does not duplicate", async () => {
     // Skipped — same migration mismatch as above.
   });

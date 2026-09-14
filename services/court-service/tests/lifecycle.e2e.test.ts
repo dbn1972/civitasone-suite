@@ -51,6 +51,7 @@ async function waitFor(pred: () => Promise<boolean>, tries = 60, gap = 25): Prom
   return false;
 }
 
+// FLAKY-SKIP: Requires COURT_E2E=1 plus a live court-service stack (real Postgres + HTTP); unset in standard CI so this e2e suite never executes there. (expires: 2026-12-13)
 describe.skipIf(!RUN)("court-service FULL-LIFECYCLE walkthrough (e2e, real stack, RLS)", () => {
   let courtId = "";
   let caseId = "";

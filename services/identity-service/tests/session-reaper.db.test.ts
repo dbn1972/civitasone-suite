@@ -20,6 +20,7 @@ const RUN_DB = process.env.DATABASE_URL ?? process.env.DB_URL;
 const TENANT_A = "00000000-0000-0000-0000-000000000001";
 const TENANT_B = "00000000-0000-0000-0000-0000000000b2";
 
+// FLAKY-SKIP: Requires DATABASE_URL/DB_URL against a real Postgres for the expired-session reaper regression guard; unset in standard CI so this suite never executes there. (expires: 2026-12-13)
 describe.skipIf(!RUN_DB)("sessions — expired-session reaper (RLS scanner-role regression guard)", () => {
   let repo: typeof import("../src/modules/sessions/repo.js");
   let db: any;

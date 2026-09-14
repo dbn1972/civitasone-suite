@@ -735,6 +735,7 @@ describe("POST /v1/hrms/consultants/:id/invoices — optional fields & edge case
   // and was never updated for the new architecture. Left here, skipped, for
   // visibility — either delete it as inapplicable, or rewrite it to assert
   // against the DLQ/outbox instead of a synchronous HTTP 500.
+  // FLAKY-SKIP: See the block comment above — asserts a synchronous-500 contract the async F3/CQRS conversion deliberately broke; tracked as debt, not re-enabled tonight. (expires: 2026-12-13)
   it.skip("500 — unhandled error from insert propagates through error handler", async () => {
     H.insertInvoiceMock.mockRejectedValue(new Error("connection reset"));
     const app = await buildApp();

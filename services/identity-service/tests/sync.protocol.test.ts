@@ -18,6 +18,7 @@ function wireTenantAwareQueue(q: Queue): Queue {
   return q;
 }
 
+// FLAKY-SKIP: Requires DB_URL against a real Postgres for sync protocol idempotency/conflict-detection; unset in standard CI so this suite never executes there. (expires: 2026-12-13)
 describe.skipIf(!dbUrl)("sync protocol — idempotency + conflict detection", () => {
   const tenantId = "00000000-0000-0000-0000-000000000001";
   const deviceId = randomUUID();

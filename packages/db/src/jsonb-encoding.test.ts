@@ -134,6 +134,7 @@ const probe = pgTable("jsonb_probe", {
   data: jsonb("data"),
 });
 
+// FLAKY-SKIP: Requires a real, reachable Postgres (probed via probeReachable() at startup); not provisioned in standard CI so this suite never executes there. (expires: 2026-12-13)
 describe.skipIf(!reachable)("jsonb encoding — live Postgres round-trip", () => {
   let client: postgres.Sql<{}>;
   let db: PostgresJsDatabase<Record<string, never>>;

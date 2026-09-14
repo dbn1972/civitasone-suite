@@ -1,0 +1,275 @@
+{
+  "$comment": "TRACKED DEBT, not an approved state. Each entry is a test that is hard-skipped (.skip/.todo/xdescribe/xit/xtest), env-gated (.skipIf on an unset var/unreachable dependency), or a Playwright runtime-conditional test.skip(condition, message). REL-014: this file is the inventory scripts/ci/flaky-skip-guard.mjs ratchets against — it fails on a NEW skip not listed here, and on a STALE entry (no longer a skip in source). Every hard/env-gated entry must ALSO carry its own inline // FLAKY-SKIP: <reason> (expires: YYYY-MM-DD) comment at the call site — this file tracks identity and count so the total cannot silently grow, it does not replace the inline requirement. Regenerate with --write-baseline after adding/removing/un-skipping a test. See docs/ENTERPRISE-GAP-REPORT-2026-09-07.md REL-014.",
+  "generatedAt": "2026-09-14",
+  "hardSkipCount": 12,
+  "envGatedCount": 36,
+  "runtimeConditionalCount": 5,
+  "count": 53,
+  "entries": [
+    {
+      "key": "apps/web/e2e-uat-live/hr-payroll-uat.spec.ts::Pay structure creation is processed asynchronously and had not landed yet — rerun to pick it up.",
+      "file": "apps/web/e2e-uat-live/hr-payroll-uat.spec.ts",
+      "kind": "runtime-conditional"
+    },
+    {
+      "key": "packages/db/src/jsonb-encoding.test.ts::jsonb encoding — live Postgres round-trip",
+      "file": "packages/db/src/jsonb-encoding.test.ts",
+      "kind": "env-gated"
+    },
+    {
+      "key": "packages/outbox/tests/purge-live-pg.test.ts::startOutboxPurge — live Postgres (REL-029)",
+      "file": "packages/outbox/tests/purge-live-pg.test.ts",
+      "kind": "env-gated"
+    },
+    {
+      "key": "services/catalogue-service/tests/integration/catalogue-locking.int.test.ts::catalogue repo — real Postgres (optimistic locking, outbox atomicity)",
+      "file": "services/catalogue-service/tests/integration/catalogue-locking.int.test.ts",
+      "kind": "env-gated"
+    },
+    {
+      "key": "services/cdp-service/tests/integration/cdp-identity.int.test.ts::cdp repo — real Postgres (identity resolution, merge, RLS)",
+      "file": "services/cdp-service/tests/integration/cdp-identity.int.test.ts",
+      "kind": "env-gated"
+    },
+    {
+      "key": "services/cdp-service/tests/integration/cdp-sprint2.int.test.ts::cdp sprint-2 repos — real Postgres",
+      "file": "services/cdp-service/tests/integration/cdp-sprint2.int.test.ts",
+      "kind": "env-gated"
+    },
+    {
+      "key": "services/citizen-service/tests/helpdesk.perf.test.ts::citizen helpdesk query perf (p95)",
+      "file": "services/citizen-service/tests/helpdesk.perf.test.ts",
+      "kind": "env-gated"
+    },
+    {
+      "key": "services/court-service/tests/analytics.e2e.test.ts::court-service analytics summary (e2e, RLS)",
+      "file": "services/court-service/tests/analytics.e2e.test.ts",
+      "kind": "env-gated"
+    },
+    {
+      "key": "services/court-service/tests/case-order-hearing-precheck.e2e.test.ts::synchronous pre-checks for illegal state transitions",
+      "file": "services/court-service/tests/case-order-hearing-precheck.e2e.test.ts",
+      "kind": "env-gated"
+    },
+    {
+      "key": "services/court-service/tests/court-documents.e2e.test.ts::court-documents PDF rendering (e2e, RLS)",
+      "file": "services/court-service/tests/court-documents.e2e.test.ts",
+      "kind": "env-gated"
+    },
+    {
+      "key": "services/court-service/tests/lifecycle.e2e.test.ts::court-service FULL-LIFECYCLE walkthrough (e2e, real stack, RLS)",
+      "file": "services/court-service/tests/lifecycle.e2e.test.ts",
+      "kind": "env-gated"
+    },
+    {
+      "key": "services/court-service/tests/overdue.e2e.test.ts::court-service overdue / pendency MIS reads (e2e, RLS)",
+      "file": "services/court-service/tests/overdue.e2e.test.ts",
+      "kind": "env-gated"
+    },
+    {
+      "key": "services/court-service/tests/public-lookup.e2e.test.ts::public case-status lookup (e2e — configurable OTP/captcha/open)",
+      "file": "services/court-service/tests/public-lookup.e2e.test.ts",
+      "kind": "env-gated"
+    },
+    {
+      "key": "services/court-service/tests/smoke.e2e.test.ts::court-service e2e smoke (real DB, RLS through HTTP)",
+      "file": "services/court-service/tests/smoke.e2e.test.ts",
+      "kind": "env-gated"
+    },
+    {
+      "key": "services/court-service/tests/write-path.e2e.test.ts::court-service write-path + §47 full loop (e2e, real DB, RLS)",
+      "file": "services/court-service/tests/write-path.e2e.test.ts",
+      "kind": "env-gated"
+    },
+    {
+      "key": "services/finance-service/tests/payments.perf.test.ts::finance payments query perf (p95)",
+      "file": "services/finance-service/tests/payments.perf.test.ts",
+      "kind": "env-gated"
+    },
+    {
+      "key": "services/gateway-service/tests/sec-021-actor-id-audit-log.integration.test.ts::SEC-021 — jwt-edge x-actor-id -> real hrms audit-log row, real HTTP",
+      "file": "services/gateway-service/tests/sec-021-actor-id-audit-log.integration.test.ts",
+      "kind": "env-gated"
+    },
+    {
+      "key": "services/gateway-service/tests/sec-024-verify-real-http.test.ts::SEC-024 — apiKeyPreHandler → identity-service, real HTTP",
+      "file": "services/gateway-service/tests/sec-024-verify-real-http.test.ts",
+      "kind": "env-gated"
+    },
+    {
+      "key": "services/hrms-service/tests/consultant-invoice-routes.test.ts::500 — unhandled error from insert propagates through error handler",
+      "file": "services/hrms-service/tests/consultant-invoice-routes.test.ts",
+      "kind": "hard"
+    },
+    {
+      "key": "services/hrms-service/tests/hr-ecosystem-e2e.test.ts::5.1 List salary structures",
+      "file": "services/hrms-service/tests/hr-ecosystem-e2e.test.ts",
+      "kind": "hard"
+    },
+    {
+      "key": "services/hrms-service/tests/hr-ecosystem-e2e.test.ts::5.2 List payroll runs",
+      "file": "services/hrms-service/tests/hr-ecosystem-e2e.test.ts",
+      "kind": "hard"
+    },
+    {
+      "key": "services/hrms-service/tests/hr-ecosystem-e2e.test.ts::5.3 View salary slips",
+      "file": "services/hrms-service/tests/hr-ecosystem-e2e.test.ts",
+      "kind": "hard"
+    },
+    {
+      "key": "services/hrms-service/tests/hr-ecosystem-e2e.test.ts::5.4 PF statutory records available",
+      "file": "services/hrms-service/tests/hr-ecosystem-e2e.test.ts",
+      "kind": "hard"
+    },
+    {
+      "key": "services/hrms-service/tests/hr-ecosystem-e2e.test.ts::5.5 ESI records available",
+      "file": "services/hrms-service/tests/hr-ecosystem-e2e.test.ts",
+      "kind": "hard"
+    },
+    {
+      "key": "services/hrms-service/tests/hr-ecosystem-e2e.test.ts::5.6 TDS records available",
+      "file": "services/hrms-service/tests/hr-ecosystem-e2e.test.ts",
+      "kind": "hard"
+    },
+    {
+      "key": "services/hrms-service/tests/hr-ecosystem-e2e.test.ts::5.7 Gratuity calculation available",
+      "file": "services/hrms-service/tests/hr-ecosystem-e2e.test.ts",
+      "kind": "hard"
+    },
+    {
+      "key": "services/hrms-service/tests/hr-ecosystem-e2e.test.ts::5.8 Loan management available",
+      "file": "services/hrms-service/tests/hr-ecosystem-e2e.test.ts",
+      "kind": "hard"
+    },
+    {
+      "key": "services/identity-service/tests/apikeys-breakglass.db.test.ts::api-keys + break-glass — DB integration",
+      "file": "services/identity-service/tests/apikeys-breakglass.db.test.ts",
+      "kind": "env-gated"
+    },
+    {
+      "key": "services/identity-service/tests/sec-006-session-revoke-denylist.db.test.ts::sessions consumer — SEC-006 denylist wiring (real consumer, real Postgres)",
+      "file": "services/identity-service/tests/sec-006-session-revoke-denylist.db.test.ts",
+      "kind": "env-gated"
+    },
+    {
+      "key": "services/identity-service/tests/sec-024-internal-verify-route.test.ts::SEC-024 — POST /internal/apikeys/verify",
+      "file": "services/identity-service/tests/sec-024-internal-verify-route.test.ts",
+      "kind": "env-gated"
+    },
+    {
+      "key": "services/identity-service/tests/sec-025-scim-tokens-rls.test.ts::SEC-025 — scim.scim_tokens: DB-level RLS backstop for writes",
+      "file": "services/identity-service/tests/sec-025-scim-tokens-rls.test.ts",
+      "kind": "env-gated"
+    },
+    {
+      "key": "services/identity-service/tests/session-reaper.db.test.ts::sessions — expired-session reaper (RLS scanner-role regression guard)",
+      "file": "services/identity-service/tests/session-reaper.db.test.ts",
+      "kind": "env-gated"
+    },
+    {
+      "key": "services/identity-service/tests/sync.perf.test.ts::identity sync query perf (p95)",
+      "file": "services/identity-service/tests/sync.perf.test.ts",
+      "kind": "env-gated"
+    },
+    {
+      "key": "services/identity-service/tests/sync.protocol.test.ts::sync protocol — idempotency + conflict detection",
+      "file": "services/identity-service/tests/sync.protocol.test.ts",
+      "kind": "env-gated"
+    },
+    {
+      "key": "services/identity-service/tests/webauthn-credentials.route.test.ts::WebAuthn credential delete — ownership + real deletion (DOM-005)",
+      "file": "services/identity-service/tests/webauthn-credentials.route.test.ts",
+      "kind": "env-gated"
+    },
+    {
+      "key": "services/legal-service/tests/consumers-coverage.test.ts::idempotency: redelivered reminderCreate does not duplicate",
+      "file": "services/legal-service/tests/consumers-coverage.test.ts",
+      "kind": "hard"
+    },
+    {
+      "key": "services/legal-service/tests/consumers-coverage.test.ts::reminderCreate: inserts reminder with sent=false and emits audit",
+      "file": "services/legal-service/tests/consumers-coverage.test.ts",
+      "kind": "hard"
+    },
+    {
+      "key": "services/legal-service/tests/consumers-coverage.test.ts::settlementCreate: covered via route test POST /v1/legal/settlements → 202",
+      "file": "services/legal-service/tests/consumers-coverage.test.ts",
+      "kind": "hard"
+    },
+    {
+      "key": "services/loyalty-service/tests/integration/loyalty-money.int.test.ts::loyalty repo — real Postgres (money correctness)",
+      "file": "services/loyalty-service/tests/integration/loyalty-money.int.test.ts",
+      "kind": "env-gated"
+    },
+    {
+      "key": "services/notification-service/tests/ch19-attachments-storage.localstack.test.ts::DOM-006: attachments genuinely round-trip through real S3/LocalStack",
+      "file": "services/notification-service/tests/ch19-attachments-storage.localstack.test.ts",
+      "kind": "env-gated"
+    },
+    {
+      "key": "services/queue-service/tests/perf-017-rabbitmq-backoff.test.ts::RabbitMqQueue ↔ real RabbitMQ (PERF-017)",
+      "file": "services/queue-service/tests/perf-017-rabbitmq-backoff.test.ts",
+      "kind": "env-gated"
+    },
+    {
+      "key": "services/queue-service/tests/sqs.localstack.test.ts::SqsQueue ↔ LocalStack (05-T5)",
+      "file": "services/queue-service/tests/sqs.localstack.test.ts",
+      "kind": "env-gated"
+    },
+    {
+      "key": "services/workflow-service/tests/rel-032-cast-vote-tenant-filter.test.ts::REL-032 -- castVoteTx",
+      "file": "services/workflow-service/tests/rel-032-cast-vote-tenant-filter.test.ts",
+      "kind": "env-gated"
+    },
+    {
+      "key": "services/workflow-service/tests/rel-032-tenant-filter-rls.test.ts::REL-032 -- RLS is an independently-verified backstop for the unscoped query shape (real workflow_svc connection, no mocks)",
+      "file": "services/workflow-service/tests/rel-032-tenant-filter-rls.test.ts",
+      "kind": "env-gated"
+    },
+    {
+      "key": "services/workflow-service/tests/rel-033-committee-vote-unique-tenant-scoped.test.ts::REL-033 -- committee_vote_unique is tenant-scoped: UNIQUE (tenant_id, decision_id, voter_id)",
+      "file": "services/workflow-service/tests/rel-033-committee-vote-unique-tenant-scoped.test.ts",
+      "kind": "env-gated"
+    },
+    {
+      "key": "tests/e2e-live/specs/chart-alt-tables.spec.ts::First vendor has no scorecard data yet — chart/table pair not rendered.",
+      "file": "tests/e2e-live/specs/chart-alt-tables.spec.ts",
+      "kind": "runtime-conditional"
+    },
+    {
+      "key": "tests/e2e-live/specs/chart-alt-tables.spec.ts::No low-stock item on the live stack to forecast against — chart/table pair not rendered.",
+      "file": "tests/e2e-live/specs/chart-alt-tables.spec.ts",
+      "kind": "runtime-conditional"
+    },
+    {
+      "key": "tests/e2e-live/specs/chart-alt-tables.spec.ts::No vendors on the live stack.",
+      "file": "tests/e2e-live/specs/chart-alt-tables.spec.ts",
+      "kind": "runtime-conditional"
+    },
+    {
+      "key": "tests/e2e-live/specs/staging-smoke-scaled.spec.ts::No vendors seeded on staging to attach a smoke-test PO to.",
+      "file": "tests/e2e-live/specs/staging-smoke-scaled.spec.ts",
+      "kind": "runtime-conditional"
+    },
+    {
+      "key": "tests/integration/cross-process.localstack.test.ts::Cross-process SQS delivery (LocalStack)",
+      "file": "tests/integration/cross-process.localstack.test.ts",
+      "kind": "env-gated"
+    },
+    {
+      "key": "tests/integration/payroll-gl-live.test.ts::Payroll→GL Live SQS Integration",
+      "file": "tests/integration/payroll-gl-live.test.ts",
+      "kind": "env-gated"
+    },
+    {
+      "key": "tests/integration/perf-001-pgbouncer-pooling.test.ts::PERF-001 — PgBouncer transaction-pooling tenant isolation + connection budget",
+      "file": "tests/integration/perf-001-pgbouncer-pooling.test.ts",
+      "kind": "env-gated"
+    },
+    {
+      "key": "tests/integration/three-way-match-live.test.ts::Three-Way Match Live SQS Integration",
+      "file": "tests/integration/three-way-match-live.test.ts",
+      "kind": "env-gated"
+    }
+  ]
+}

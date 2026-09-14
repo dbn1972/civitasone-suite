@@ -104,6 +104,7 @@ async function probe(): Promise<boolean> {
 
 const reachable = await probe();
 
+// FLAKY-SKIP: Requires a real, reachable Postgres (probed at startup) for the REL-032 castVoteTx tenant-filter check; not provisioned in standard CI. (expires: 2026-12-13)
 describe.skipIf(!reachable)(
   "REL-032 -- castVoteTx's own queries filter on tenantId, independent of RLS (superuser connection, RLS provably inert)",
   () => {

@@ -29,6 +29,7 @@ function publishInput(type: string) {
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
+// FLAKY-SKIP: Requires a running LocalStack (AWS_ENDPOINT_URL) for real SQS; unset in standard CI so this suite never executes there. (expires: 2026-12-13)
 describe.skipIf(!endpoint)("SqsQueue ↔ LocalStack (05-T5)", () => {
   let queue: SqsQueue;
 

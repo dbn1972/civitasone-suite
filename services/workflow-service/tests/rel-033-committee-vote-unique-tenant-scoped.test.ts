@@ -80,6 +80,7 @@ async function probe(): Promise<boolean> {
 
 const reachable = await probe();
 
+// FLAKY-SKIP: Requires a real, reachable Postgres (probed at startup) for the REL-033 tenant-scoped UNIQUE constraint check; not provisioned in standard CI. (expires: 2026-12-13)
 describe.skipIf(!reachable)(
   "REL-033 -- committee_vote_unique is tenant-scoped: UNIQUE (tenant_id, decision_id, voter_id)",
   () => {

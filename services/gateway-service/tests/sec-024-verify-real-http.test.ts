@@ -107,6 +107,7 @@ async function waitUntilReady(url: string, timeoutMs = 30_000): Promise<void> {
   throw new Error(`identity-service did not become ready at ${url} within ${timeoutMs}ms: ${String(lastErr)}`);
 }
 
+// FLAKY-SKIP: Requires DATABASE_URL/DB_URL against a real Postgres for the SEC-024 real-HTTP path; unset in standard CI so this suite never executes there. (expires: 2026-12-13)
 describe.skipIf(!RUN_DB)("SEC-024 — apiKeyPreHandler → identity-service, real HTTP", () => {
   let identityProc: ChildProcess;
   let identityPort: number;

@@ -19,6 +19,7 @@ import type { CommandEnvelope } from "../../packages/queue/dist/index.js";
 const localstackUp = Boolean(process.env.AWS_ENDPOINT_URL);
 const TOPIC = "test.crossprocess.ping";
 
+// FLAKY-SKIP: Requires a running LocalStack (AWS_ENDPOINT_URL) for cross-process SQS delivery; unset in standard CI so this suite never executes there. (expires: 2026-12-13)
 describe.skipIf(!localstackUp)("Cross-process SQS delivery (LocalStack)", () => {
   it("a message published by one SqsQueue is received by a separate SqsQueue instance", async () => {
     // Two independent bus instances == two separate "processes" sharing a broker.

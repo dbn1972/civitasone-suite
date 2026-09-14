@@ -26,6 +26,7 @@ function token(sub: string, roles: string[] = ["employee"]): string {
 }
 const headers = (sub: string) => ({ authorization: `Bearer ${token(sub)}` });
 
+// FLAKY-SKIP: Requires DATABASE_URL/DB_URL against a real Postgres for the DOM-005 real-deletion ownership check; unset in standard CI so this suite never executes there. (expires: 2026-12-13)
 describe.skipIf(!RUN_DB)("WebAuthn credential delete — ownership + real deletion (DOM-005)", () => {
   let app: FastifyInstance;
   let repo: typeof import("../src/modules/webauthn/repo.js");

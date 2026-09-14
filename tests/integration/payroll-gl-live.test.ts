@@ -36,6 +36,7 @@ const TENANT_ID = "10000000-aaaa-4000-8000-000000000001";
 const ACTOR_ID = "20000000-bbbb-4000-8000-000000000001";
 const RUN_ID = `payrun-${randomUUID().slice(0, 8)}`;
 
+// FLAKY-SKIP: Requires a running LocalStack (AWS_ENDPOINT_URL) for the Payroll→GL live SQS integration; unset in standard CI so this suite never executes there. (expires: 2026-12-13)
 describe.skipIf(!localstackUp)("Payroll→GL Live SQS Integration", () => {
   let producer: SqsQueue;
   let subscriber: SqsQueue;

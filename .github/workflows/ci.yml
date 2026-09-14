@@ -470,6 +470,46 @@ jobs:
       - name: Evidence-suite DBs guard (EVIDENCE_SUITE_DBS must not shrink, PERF-022)
         run: node scripts/ci/evidence-suite-dbs-guard.mjs
 
+      # REL-014: the flaky-test policy had no enforcement — 12 hard-skipped
+      # tests (.skip/.todo/xdescribe/xit/xtest) and 36 conditionally-skipped
+      # tests (.skipIf on an unreachable dependency, plus Playwright's
+      # test.skip(condition, msg) runtime form) passed CI silently, with no
+      # required reason, no ticket, no expiry and no report anyone would
+      # actually see — a skip added to turn a red build green could sit
+      # forever with nobody the wiser. Pure text analysis (no live DB
+      # needed), so it runs here like the guards above. Unit tests first
+      # (fixture coverage for the classifier/comment-parser), then the guard
+      # against the real tree (ratchet: fails on a NEW skip not yet added to
+      # scripts/ci/flaky-skip-baseline.json via --write-baseline, on a STALE
+      # baseline entry, and on any skip whose `// FLAKY-SKIP:` comment is
+      # missing, empty, or past its `expires` date — same expiring-allowlist
+      # mechanic as scripts/ci/cve-audit-gate.mjs). The inventory is written
+      # to $GITHUB_STEP_SUMMARY too, so it shows up on the run page itself
+      # instead of only in scrollback.
+      #
+      # `if: always()` on both steps below: REL-039 (filed same-day as this
+      # fix) found that this job fails at a different unrelated earlier step
+      # nearly every real run, and GitHub Actions' default fail-fast then
+      # SKIPS every step after it — so empty-vs-error-guard and others were
+      # silently never executing in live CI despite being correct in
+      # isolation. REL-039's full fix (split the job / continue-on-error
+      # every guard) is its own tracked P1, out of scope here — but shipping
+      # a brand-new enforcement gate for REL-014 that could suffer the exact
+      # same silent-never-runs fate this gap describes would defeat its own
+      # purpose, so these two steps opt out of that fail-fast starvation on
+      # their own — same always() mechanism this file already uses elsewhere
+      # to keep a step's own signal from being hidden by an earlier,
+      # unrelated step's result (see e.g. "Check web server health", REL-010).
+      # This does NOT fix REL-039 itself: an earlier guard in this job can
+      # still fail and hide ITS OWN result the same way; only these two
+      # steps are covered.
+      - name: Flaky-skip guard unit tests (REL-014)
+        if: always()
+        run: pnpm exec vitest run tests/architecture/flaky-skip-guard.test.ts
+      - name: Flaky-skip guard (every skip/skipIf must be inventoried + carry a reason or expiry, REL-014)
+        if: always()
+        run: node scripts/ci/flaky-skip-guard.mjs
+
   # ─────────────────────────────────────────────
   # Job 4: Web build check
   # ─────────────────────────────────────────────

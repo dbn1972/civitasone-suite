@@ -19,6 +19,7 @@ function ctx(tenantId: string, roles: string[]): RequestContext {
   };
 }
 
+// FLAKY-SKIP: Requires DATABASE_URL/DB_URL against a real Postgres for break-glass DB integration; unset in standard CI so this suite never executes there. (expires: 2026-12-13)
 describe.skipIf(!RUN_DB)("api-keys + break-glass — DB integration", () => {
   let apiCmd: typeof import("../src/modules/apikeys/commands.js");
   let bgCmd: typeof import("../src/modules/breakglass/commands.js");
