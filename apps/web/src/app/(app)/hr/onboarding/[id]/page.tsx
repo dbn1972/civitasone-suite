@@ -1,7 +1,8 @@
 import { notFound } from "next/navigation";
-import { PageHeader, EmptyState } from "../../../../_components/ds";
+import { PageHeader, EmptyState, RefreshErrorState } from "../../../../_components/ds";
 import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
 import { fetchJson } from "@/app/_data/apiClient";
+import { toHumanError } from "@/lib/messages";
 import { JoineeWelcomeHeader } from "../_components/JoineeWelcomeHeader";
 import { OnboardingChecklist, type ChecklistStep } from "../_components/OnboardingChecklist";
 import { DocumentUploadCard, type OnboardingDocument, type DocStatus } from "../_components/DocumentUploadCard";
@@ -85,7 +86,7 @@ const docTypeDisplay: Record<string, { name: string; description: string }> = {
 };
 
 function humanizeDocType(docType: string): string {
-  if (typeof docType !== "string" || docType.length === 0) return "Document";
+  if (typeof docType !== "string" || docType.length === 0) return "Document"; // ux-001-ok: type/format guard for display text, not a loader empty-check
   return docType.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
@@ -197,7 +198,19 @@ export default async function OnboardingDetailPage({ params }: Props) {
       />
 
       {/* Two-column: checklist | task calendar */}
-      {checklist.length === 0 ? (
+      {source === "error" ? (
+        <div
+          style={{
+            border: "1px solid var(--border, #e2e8f0)",
+            borderRadius: 12,
+            padding: 20,
+            background: "var(--card-bg, #fff)",
+            marginBottom: 24,
+          }}
+        >
+          <RefreshErrorState error={toHumanError("load", { area: "onboarding checklist" })} />
+        </div>
+      ) : checklist.length === 0 ? (
         <div
           style={{
             border: "1px solid var(--border, #e2e8f0)",

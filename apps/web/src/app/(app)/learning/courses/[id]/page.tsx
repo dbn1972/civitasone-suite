@@ -12,7 +12,7 @@ export default async function Page({ params, searchParams }: {
   const { data: course, source } = await getCourseDetail(params.id);
   const employeeId = typeof searchParams?.employeeId === "string" ? searchParams.employeeId : "";
 
-  if (!course) {
+  if (!course || source === "error") {
     return (
       <>
         <PageHeader title="Course" back="/learning" />
@@ -54,7 +54,6 @@ export default async function Page({ params, searchParams }: {
           ) : null
         }
       />
-      {source === "error" && <DataSourceBadge source={source} />}
       <StatGrid>
         <StatCard icon="🏷️" iconBg="var(--panel)" label="Code" value={course.code} />
         <StatCard icon="📂" iconBg="var(--panel)" label="Category" value={course.category} />
