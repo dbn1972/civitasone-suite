@@ -91,7 +91,28 @@ describe("NewJobOpeningForm", () => {
     fireEvent.click(screen.getByRole("button", { name: /create job opening/i }));
 
     await waitFor(() => {
-      expect(screen.getByRole("alert")).toHaveTextContent(/duplicate refNo/i);
+      expect(screen.getByRole("alert")).toHaveTextContent(/couldn't save/i);
     });
+  });
+
+  // UX-016: this used to show the raw server response text ("duplicate
+  // refNo", falling back to `Request failed (${res.status})`) verbatim —
+  // the same class of leak useFormError closes fleet-wide (UX-003). The
+  // test above already covers the happy assertion (clerk-safe message
+  // shown); this one is the two-sided check that the raw text is gone.
+  it("never surfaces the raw server response text on a failed submission", async () => {
+    (fetch as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
+      ok: false,
+      status: 409,
+      text: async () => "duplicate refNo",
+    });
+    render(<NewJobOpeningForm />);
+    fillRequiredFields();
+    fireEvent.click(screen.getByRole("button", { name: /create job opening/i }));
+
+    const alert = await screen.findByRole("alert");
+    await waitFor(() => expect(alert).toHaveTextContent(/couldn't save/i));
+    expect(alert.textContent).not.toMatch(/duplicate refNo/);
+    expect(alert.textContent).not.toMatch(/\b409\b/);
   });
 });

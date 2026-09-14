@@ -4,6 +4,7 @@ import { useEffect, useId, useState } from "react";
 import type { CSSProperties } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
+import { useFormError } from "@/lib/useFormError";
 
 type EmployeeOption = { id: string; name: string; employeeNo: string };
 type LeaveTypeOption = { id: string; code: string; name: string };
@@ -36,6 +37,7 @@ export function AllocateLeaveForm() {
   const [invalid, setInvalid] = useState<Set<string>>(new Set());
   const [status, setStatus] = useState<"idle" | "submitting" | "success" | "error">("idle");
   const [message, setMessage] = useState("");
+  const formError = useFormError("leave allocation");
 
   const empId = useId();
   const ltId = useId();
@@ -88,10 +90,10 @@ export function AllocateLeaveForm() {
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ employeeId, leaveTypeId, fy, totalDays: days }),
       });
-      const text = await res.text();
       if (!res.ok) {
+        const resolved = await formError.fromResponse(res, "save");
         setStatus("error");
-        setMessage(text || `Request failed (${res.status})`);
+        setMessage(resolved.message);
         return;
       }
       // POST /v1/hrms/leave-allocations returns 202 (queued command), not a
@@ -101,7 +103,7 @@ export function AllocateLeaveForm() {
       setTotalDays("");
     } catch {
       setStatus("error");
-      setMessage(t("networkError"));
+      setMessage(formError.fromException("save").message);
     }
   }
 

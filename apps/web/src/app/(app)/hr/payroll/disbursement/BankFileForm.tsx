@@ -3,6 +3,7 @@
 import { useId, useRef, useState } from "react";
 import { ConfirmDialog } from "../../../../_components/ds";
 import { browserFetch } from "@/lib/api/browserClient";
+import { useFormError } from "@/lib/useFormError";
 
 type RunOption = { id: string; payPeriod: string; netAmount: number };
 
@@ -16,6 +17,7 @@ export function BankFileForm({ runs }: { runs: RunOption[] }) {
   const [error, setError] = useState<string | undefined>();
   const [message, setMessage] = useState<string | null>(null);
   const [runInvalid, setRunInvalid] = useState(false);
+  const formError = useFormError("bank file");
 
   const runSelectId = useId();
   const formatSelectId = useId();
@@ -46,9 +48,8 @@ export function BankFileForm({ runs }: { runs: RunOption[] }) {
         method: "GET",
       });
       if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        const code = (body as { error?: { code?: string; message?: string } })?.error;
-        setError(code?.message ?? code?.code ?? `Bank file generation failed (${res.status}).`);
+        const resolved = await formError.fromResponse(res, "save");
+        setError(resolved.message);
         return;
       }
       const disposition = res.headers.get("content-disposition") ?? "";
@@ -63,8 +64,8 @@ export function BankFileForm({ runs }: { runs: RunOption[] }) {
       URL.revokeObjectURL(url);
       setConfirmOpen(false);
       setMessage(`Bank file "${filename}" generated and downloaded.`);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Network error. Please try again.");
+    } catch {
+      setError(formError.fromException("save").message);
     } finally {
       setBusy(false);
     }

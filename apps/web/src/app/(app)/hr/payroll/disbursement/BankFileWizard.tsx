@@ -2,6 +2,7 @@
 
 import { useId, useState } from "react";
 import { browserFetch } from "@/lib/api/browserClient";
+import { useFormError } from "@/lib/useFormError";
 
 type RunOption = { id: string; payPeriod: string; netAmount: number };
 type Format = "csv" | "nach" | "apbs";
@@ -64,6 +65,7 @@ export function BankFileWizard({ runs, dscConfig }: { runs: RunOption[]; dscConf
   const [filename, setFilename] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | undefined>();
+  const formError = useFormError("bank file");
 
   const runSelectId = useId();
   const selectedRun = runs.find((r) => r.id === runId);
@@ -75,8 +77,8 @@ export function BankFileWizard({ runs, dscConfig }: { runs: RunOption[]; dscConf
     try {
       const res = await browserFetch(`v1/payroll/runs/${runId}/bank-file?format=${format}`, { method: "GET" });
       if (!res.ok) {
-        const body = await res.json().catch(() => ({})) as { error?: { message?: string; code?: string } };
-        setError(body?.error?.message ?? body?.error?.code ?? `Bank file generation failed (${res.status}).`);
+        const resolved = await formError.fromResponse(res, "save");
+        setError(resolved.message);
         return;
       }
       const disposition = res.headers.get("content-disposition") ?? "";
@@ -91,8 +93,8 @@ export function BankFileWizard({ runs, dscConfig }: { runs: RunOption[]; dscConf
       a.click();
       URL.revokeObjectURL(url);
       setStep(3);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Network error. Please try again.");
+    } catch {
+      setError(formError.fromException("save").message);
     } finally {
       setBusy(false);
     }

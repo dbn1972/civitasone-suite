@@ -89,3 +89,46 @@ describe("LeaveHistoryPage", () => {
     expect(screen.queryByText(/no leave applications/i)).not.toBeInTheDocument();
   });
 });
+
+/**
+ * UX-016: cancelling an application used to throw the raw backend response
+ * text (falling back to `Cancel failed (${res.status})`) verbatim — the
+ * same class of leak useFormError closes fleet-wide (UX-003).
+ */
+describe("LeaveHistoryPage — UX-016 clerk-safe errors", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("shows a clerk-safe message, never the raw server text or status, when cancelling fails", async () => {
+    const APP = {
+      id: "app1",
+      employeeName: "Test Employee",
+      leaveTypeName: "Earned Leave",
+      fromDate: "2026-09-10",
+      toDate: "2026-09-11",
+      daysApplied: 2,
+      status: "pending",
+    };
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string, init?: RequestInit) => {
+        if (url.includes("/hrms/employees")) return { ok: true, status: 200, json: async () => [EMPLOYEES[0]] } as Response;
+        if (url.includes("/hrms/leave/applications")) return { ok: true, status: 200, json: async () => ({ data: [APP] }) } as Response;
+        if (init?.method === "PATCH") return new Response("leave-service: cancel-route trace at line 55", { status: 500 });
+        return { ok: false, status: 404, json: async () => ({}) } as Response;
+      }),
+    );
+
+    // renderPage(), not a bare render(): LeaveHistoryPage calls
+    // useTranslations() (UX-017) and needs a NextIntlClientProvider ancestor
+    // — this test predates that requirement (added by UX-016 tranche 2
+    // against a pre-i18n version of the page).
+    renderPage();
+    fireEvent.click(await screen.findByRole("button", { name: /^cancel$/i }));
+    const dialog = await screen.findByRole("alertdialog");
+    fireEvent.click(screen.getByRole("button", { name: /cancel leave/i }));
+
+    await waitFor(() => expect(dialog).toHaveTextContent(/couldn't save/i));
+    expect(dialog.textContent).not.toMatch(/leave-service/);
+    expect(dialog.textContent).not.toMatch(/\b500\b/);
+  });
+});

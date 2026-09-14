@@ -3,6 +3,7 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Card, ConfirmDialog } from "../../../_components/ds";
+import { useFormError } from "@/lib/useFormError";
 
 type LeaveType = { id: string; code: string; name: string };
 
@@ -49,6 +50,7 @@ export function CreateLeavePolicyForm({ onCreated }: { onCreated?: () => void } 
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | undefined>();
   const [fieldError, setFieldError] = useState<string | null>(null);
+  const formError = useFormError("leave policy");
 
   const ltField = useId();
   const empField = useId();
@@ -119,8 +121,8 @@ export function CreateLeavePolicyForm({ onCreated }: { onCreated?: () => void } 
         }),
       });
       if (!res.ok) {
-        const txt = await res.text();
-        setError(txt || `Failed to create policy (${res.status})`);
+        const resolved = await formError.fromResponse(res, "save");
+        setError(resolved.message);
         return;
       }
       setConfirmOpen(false);
@@ -133,7 +135,7 @@ export function CreateLeavePolicyForm({ onCreated }: { onCreated?: () => void } 
       onCreated?.();
       router.refresh();
     } catch {
-      setError("Network error. Please try again.");
+      setError(formError.fromException("save").message);
     } finally {
       setBusy(false);
     }

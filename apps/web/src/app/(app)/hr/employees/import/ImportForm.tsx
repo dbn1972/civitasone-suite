@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
+import { useFormError } from "@/lib/useFormError";
 
 type Row = Record<string, string> & { lineNo: number };
 
@@ -26,6 +27,7 @@ export function ImportForm() {
   const [status, setStatus] = useState<"idle" | "parsing" | "uploading" | "done" | "error">("idle");
   const [progress, setProgress] = useState({ total: 0, success: 0, failed: 0 });
   const [errors, setErrors] = useState<string[]>([]);
+  const formError = useFormError("employee row");
 
   async function loadCodeMap(path: string): Promise<Map<string, string>> {
     const res = await fetch(path);
@@ -106,8 +108,8 @@ export function ImportForm() {
           });
           if (res.ok || res.status === 202) { success++; }
           else {
-            const text2 = await res.text();
-            errs.push(`Row ${row.lineNo} (${row.fullName}): ${text2 || `request failed (${res.status})`}`);
+            const resolved = await formError.fromResponse(res, "save");
+            errs.push(`Row ${row.lineNo} (${row.fullName}): ${resolved.message}`);
           }
         } catch {
           errs.push(`Row ${row.lineNo} (${row.fullName}): network error`);

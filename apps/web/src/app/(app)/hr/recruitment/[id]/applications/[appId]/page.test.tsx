@@ -78,4 +78,49 @@ describe("ApplicationDetailPage", () => {
     });
     expect(screen.queryByRole("button", { name: "Hire" })).not.toBeInTheDocument();
   });
+
+  /**
+   * UX-016: the pipeline load used to show `Failed to load (${res.status})`
+   * and the hire submit used to show the raw response text (falling back to
+   * `Request failed (${res.status})`) verbatim — the same class of leak
+   * useFormError closes fleet-wide (UX-003).
+   */
+  describe("UX-016 clerk-safe errors", () => {
+    it("shows a clerk-safe message, never the raw HTTP status, when the pipeline fails to load", async () => {
+      vi.stubGlobal("fetch", vi.fn(async () => new Response("", { status: 500 })));
+      render(<ApplicationDetailPage />);
+
+      // Scoped to the toHumanError "area" text (not just /couldn't load/i)
+      // since this page's own DataSourceBadge also shows a generic
+      // "Couldn't load — showing nothing" pill on this same error state.
+      await waitFor(() => expect(screen.getByText(/couldn't load this application/i)).toBeInTheDocument());
+      expect(screen.queryByText(/\b500\b/)).not.toBeInTheDocument();
+    });
+
+    it("shows a clerk-safe message, never the raw server text, when hiring fails", async () => {
+      const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
+        if (url === "/api/proxy/v1/hrms/job-openings/job-1/applications") {
+          return new Response(JSON.stringify(LIST_RESPONSE), { status: 200 });
+        }
+        if (url === "/api/proxy/v1/hrms/applications/app-2/hire" && init?.method === "POST") {
+          return new Response("hrms-service: hire command rejected", { status: 500 });
+        }
+        throw new Error(`unexpected fetch to ${url}`);
+      });
+      vi.stubGlobal("fetch", fetchMock);
+
+      render(<ApplicationDetailPage />);
+      fireEvent.click(await screen.findByRole("button", { name: "Hire" }));
+      fireEvent.change(screen.getByLabelText(/employee no/i), { target: { value: "EMP-2026-001" } });
+      fireEvent.change(screen.getByLabelText(/date of joining/i), { target: { value: "2026-09-01" } });
+      fireEvent.change(screen.getByLabelText(/department id/i), { target: { value: "dept-1" } });
+      fireEvent.change(screen.getByLabelText(/designation id/i), { target: { value: "desig-1" } });
+      fireEvent.click(screen.getByRole("button", { name: /confirm hire/i }));
+
+      const alert = await screen.findByRole("alert");
+      await waitFor(() => expect(alert).toHaveTextContent(/couldn't save/i));
+      expect(alert.textContent).not.toMatch(/hrms-service/);
+      expect(alert.textContent).not.toMatch(/\b500\b/);
+    });
+  });
 });

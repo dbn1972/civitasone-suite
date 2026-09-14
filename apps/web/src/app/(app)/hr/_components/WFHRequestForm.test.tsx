@@ -1,5 +1,5 @@
-import { describe, it, expect, vi } from "vitest";
-import { render, screen, fireEvent, act } from "@testing-library/react";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { render, screen, fireEvent, act, waitFor } from "@testing-library/react";
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }),
@@ -93,5 +93,62 @@ describe("WFHRequestForm", () => {
     render(<WFHRequestForm weeklyWfhCount={0} />);
     expect(screen.getByTestId("paylevel-warning")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /submit request/i })).not.toBeDisabled();
+  });
+});
+
+/**
+ * UX-016: this used to show the raw server `message` (falling back to
+ * `Server error ${res.status}`) verbatim — the same class of leak
+ * useFormError closes fleet-wide (UX-003).
+ */
+describe("WFHRequestForm — UX-016 clerk-safe errors", () => {
+  const fetchMock = vi.fn();
+  beforeEach(() => {
+    fetchMock.mockReset();
+    vi.stubGlobal("fetch", fetchMock);
+  });
+  afterEach(() => vi.unstubAllGlobals());
+
+  async function submitValidForm() {
+    render(<WFHRequestForm payLevel={5} weeklyWfhCount={0} />);
+    await act(async () => {
+      fireEvent.change(screen.getByLabelText(/employee id/i), {
+        target: { value: "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee" },
+      });
+    });
+    await act(async () => {
+      fireEvent.change(screen.getByLabelText(/from date/i), { target: { value: "2026-09-20" } });
+    });
+    await act(async () => {
+      fireEvent.change(screen.getByLabelText(/to date/i), { target: { value: "2026-09-21" } });
+    });
+    await act(async () => {
+      fireEvent.submit(screen.getByRole("form", { name: /work from home request form/i }));
+    });
+  }
+
+  it("shows a clerk-safe message, never the raw HTTP status, when submission fails", async () => {
+    fetchMock.mockResolvedValue(new Response("", { status: 500 }));
+    await submitValidForm();
+
+    const alert = await screen.findByRole("alert");
+    await waitFor(() => expect(alert).toHaveTextContent(/couldn't save/i));
+    expect(alert.textContent).not.toMatch(/\b500\b/);
+  });
+
+  it("renders an inline field-level message from a fieldErrors response next to the offending field", async () => {
+    fetchMock.mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          code: "VALIDATION_FAILED",
+          message: "validation_failed",
+          fieldErrors: [{ field: "fromDate", message: "From date cannot be in the past." }],
+        }),
+        { status: 400, headers: { "content-type": "application/json" } },
+      ),
+    );
+    await submitValidForm();
+
+    expect(await screen.findByText("From date cannot be in the past.")).toBeInTheDocument();
   });
 });

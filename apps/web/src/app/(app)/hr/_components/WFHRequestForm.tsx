@@ -7,6 +7,7 @@
 
 import { useState, useId } from "react";
 import { useRouter } from "next/navigation";
+import { useFormError } from "@/lib/useFormError";
 
 interface WFHRequestFormProps {
   /** Pre-fill employee UUID (optional — admin filing on behalf) */
@@ -34,6 +35,7 @@ export function WFHRequestForm({
   const router = useRouter();
   const [state, setState] = useState<SubmitState>("idle");
   const [errorMsg, setErrorMsg] = useState("");
+  const formError = useFormError("WFH request");
 
   const [employeeId, setEmployeeId] = useState(prefillId);
   const [fromDate, setFromDate] = useState("");
@@ -68,22 +70,23 @@ export function WFHRequestForm({
     }
     setState("submitting");
     setErrorMsg("");
+    formError.clear();
     try {
       const res = await fetch("/api/proxy/v1/hrms/wfh-requests", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ employeeId, fromDate, toDate, reason: reason || undefined }),
       });
-      const data = (await res.json()) as { id?: string; message?: string };
       if (!res.ok) {
-        setErrorMsg(data.message ?? `Server error ${res.status}`);
+        const resolved = await formError.fromResponse(res, "save");
+        setErrorMsg(resolved.message);
         setState("error");
         return;
       }
       setState("done");
       setTimeout(() => router.push("/hr/workforce/wfh"), 900);
     } catch {
-      setErrorMsg("Network error — please retry.");
+      setErrorMsg(formError.fromException("save").message);
       setState("error");
     }
   }
@@ -173,6 +176,11 @@ export function WFHRequestForm({
             aria-required="true"
             min={new Date().toISOString().split("T")[0]}
           />
+          {formError.fieldError("fromDate") && (
+            <span style={{ display: "block", fontSize: 12, color: "var(--red, #dc2626)", marginTop: 4 }}>
+              {formError.fieldError("fromDate")}
+            </span>
+          )}
         </div>
         <div>
           <label htmlFor={idTo} style={labelStyle}>To Date <span aria-hidden>*</span></label>
@@ -186,6 +194,11 @@ export function WFHRequestForm({
             aria-required="true"
             min={fromDate || new Date().toISOString().split("T")[0]}
           />
+          {formError.fieldError("toDate") && (
+            <span style={{ display: "block", fontSize: 12, color: "var(--red, #dc2626)", marginTop: 4 }}>
+              {formError.fieldError("toDate")}
+            </span>
+          )}
         </div>
       </div>
 

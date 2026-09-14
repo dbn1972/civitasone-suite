@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
+import { useFormError } from "@/lib/useFormError";
 
 import { StepIndicator } from "./StepIndicator";
 import { Step1 } from "./steps/Step1";
@@ -116,6 +117,7 @@ export function AddEmployeeWizard({ departments, designations, managers }: Props
   const [submitting, setSubmitting] = useState(false);
   const [success, setSuccess] = useState<{ id: string } | null>(null);
   const [draftRestored, setDraftRestored] = useState(false);
+  const formError = useFormError("employee");
 
   // Restore draft once on mount
   useEffect(() => {
@@ -212,17 +214,9 @@ export function AddEmployeeWizard({ departments, designations, managers }: Props
       });
 
       if (!res.ok) {
-        let msg = `Request failed (${res.status})`;
-        try {
-          // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-          const j = await res.json();
-          if (typeof j === "object" && j !== null && "message" in j) {
-            msg = String((j as Record<string, unknown>).message);
-          }
-        } catch {
-          // ignore parse errors
-        }
-        throw new Error(msg);
+        const resolved = await formError.fromResponse(res, "save");
+        setGlobalError(resolved.message);
+        return;
       }
 
       // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
@@ -237,10 +231,8 @@ export function AddEmployeeWizard({ departments, designations, managers }: Props
 
       clearDraft();
       setSuccess({ id });
-    } catch (err) {
-      setGlobalError(
-        err instanceof Error ? err.message : "Network error. Please try again.",
-      );
+    } catch {
+      setGlobalError(formError.fromException("save").message);
     } finally {
       setSubmitting(false);
     }

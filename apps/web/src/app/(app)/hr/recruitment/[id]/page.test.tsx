@@ -39,26 +39,26 @@ const SELECTED_APP = {
 function mockFetchSequence(applications = [APPLIED_APP]) {
   const fn = vi.fn(async (url: string, init?: RequestInit) => {
     if (url.includes("job-openings?limit=")) {
-      return { ok: true, status: 200, json: async () => ({ data: [OPENING] }) } as Response;
+      return new Response(JSON.stringify({ data: [OPENING] }), { status: 200 });
     }
     if (url.match(/job-openings\/[^/]+\/applications$/)) {
-      return { ok: true, status: 200, json: async () => ({ data: applications }) } as Response;
+      return new Response(JSON.stringify({ data: applications }), { status: 200 });
     }
     if (url.includes("/screening-decision")) {
       const body = JSON.parse(String(init?.body ?? "{}"));
       (fn as FetchMock).lastScreeningBody = body;
-      return { ok: true, status: 200, json: async () => ({}) } as Response;
+      return new Response(JSON.stringify({}), { status: 200 });
     }
     if (url.endsWith("/withdraw")) {
       const body = JSON.parse(String(init?.body ?? "{}"));
       (fn as FetchMock).lastWithdrawBody = body;
-      return { ok: true, status: 200, json: async () => ({}) } as Response;
+      return new Response(JSON.stringify({}), { status: 200 });
     }
     if (url.endsWith("/stage")) {
       // The dead route the page used to call — must never be hit again.
-      return { ok: false, status: 404, json: async () => ({ message: "Route not found" }) } as Response;
+      return new Response(JSON.stringify({ message: "Route not found" }), { status: 404 });
     }
-    return { ok: false, status: 404, json: async () => ({}) } as Response;
+    return new Response(JSON.stringify({}), { status: 404 });
   });
   vi.stubGlobal("fetch", fn);
   return fn;
@@ -132,10 +132,10 @@ describe("JobOpeningDetailPage — applications pipeline", () => {
 
   it("shows a truthful failure hint when an action's request fails, instead of silently marking it done", async () => {
     const fn = vi.fn(async (url: string) => {
-      if (url.includes("job-openings?limit=")) return { ok: true, status: 200, json: async () => ({ data: [OPENING] }) } as Response;
-      if (url.match(/applications$/)) return { ok: true, status: 200, json: async () => ({ data: [APPLIED_APP] }) } as Response;
-      if (url.includes("/screening-decision")) return { ok: false, status: 500, json: async () => ({}) } as Response;
-      return { ok: false, status: 404, json: async () => ({}) } as Response;
+      if (url.includes("job-openings?limit=")) return new Response(JSON.stringify({ data: [OPENING] }), { status: 200 });
+      if (url.match(/applications$/)) return new Response(JSON.stringify({ data: [APPLIED_APP] }), { status: 200 });
+      if (url.includes("/screening-decision")) return new Response(JSON.stringify({}), { status: 500 });
+      return new Response(JSON.stringify({}), { status: 404 });
     });
     vi.stubGlobal("fetch", fn);
 
@@ -146,6 +146,52 @@ describe("JobOpeningDetailPage — applications pipeline", () => {
 
     await waitFor(() => {
       expect(within(row).getByText(/action failed/i)).toBeInTheDocument();
+    });
+  });
+
+  /**
+   * UX-016: loading the vacancy used to show `Failed to load vacancy
+   * (${res.status})`, and a confirm-gated action (reject/withdraw) used to
+   * show `Action failed (HTTP ${res.status})` verbatim inside the confirm
+   * dialog — the same class of leak useFormError closes fleet-wide
+   * (UX-003).
+   */
+  describe("UX-016 clerk-safe errors", () => {
+    it("shows a clerk-safe message, never the raw HTTP status, when the vacancy fails to load", async () => {
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(async (url: string) => {
+          if (url.includes("job-openings?limit=")) return new Response("", { status: 500 });
+          return new Response(JSON.stringify({ data: [] }), { status: 200 });
+        }),
+      );
+      render(<JobOpeningDetailPage />);
+
+      await waitFor(() => expect(screen.getByText(/couldn't load/i)).toBeInTheDocument());
+      expect(screen.queryByText(/\b500\b/)).not.toBeInTheDocument();
+    });
+
+    it("shows a clerk-safe message, never the raw HTTP status, in the confirm dialog when reject fails", async () => {
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(async (url: string) => {
+          if (url.includes("job-openings?limit=")) return new Response(JSON.stringify({ data: [OPENING] }), { status: 200 });
+          if (url.match(/applications$/)) return new Response(JSON.stringify({ data: [APPLIED_APP] }), { status: 200 });
+          if (url.includes("/screening-decision")) return new Response("hrms-service: screening-decision trace", { status: 500 });
+          return new Response(JSON.stringify({}), { status: 404 });
+        }),
+      );
+
+      render(<JobOpeningDetailPage />);
+      await screen.findByText("Asha Verma");
+      const row = await openActionsMenu(/Asha Verma/);
+      fireEvent.click(within(row).getByRole("menuitem", { name: "Reject" }));
+      const dialog = await screen.findByRole("alertdialog");
+      fireEvent.click(within(dialog).getByRole("button", { name: /reject application/i }));
+
+      await waitFor(() => expect(dialog).toHaveTextContent(/couldn't save/i));
+      expect(dialog.textContent).not.toMatch(/hrms-service/);
+      expect(dialog.textContent).not.toMatch(/\b500\b/);
     });
   });
 });

@@ -35,14 +35,29 @@ describe("ProbationConfirmationCard", () => {
     await waitFor(() => expect(screen.getByText("✅ Confirmed")).toBeInTheDocument());
   });
 
-  it("surfaces a real failure instead of showing Confirmed anyway", async () => {
+  // UX-016: this used to show the raw backend response text ("not
+  // authorised") verbatim — the same class of leak useFormError closes
+  // fleet-wide (UX-003). It must now show the catalogued clerk-safe message
+  // instead, never the raw server text.
+  it("surfaces a clerk-safe failure message instead of showing Confirmed anyway", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => ({ ok: false, status: 403, text: async () => "not authorised" }) as Response));
     render(<ProbationConfirmationList rows={[ROW]} />);
     fireEvent.click(screen.getByRole("button", { name: "Confirm Priya Nair" }));
     fireEvent.click(await screen.findByRole("button", { name: "Confirm service" }));
 
-    await waitFor(() => expect(screen.getByText(/not authorised/i)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(/couldn't save/i)).toBeInTheDocument());
+    expect(screen.queryByText(/not authorised/i)).not.toBeInTheDocument();
     expect(screen.queryByText("✅ Confirmed")).not.toBeInTheDocument();
+  });
+
+  it("never surfaces a raw HTTP status code on a plain-text failure with no body", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => ({ ok: false, status: 500, text: async () => "" }) as Response));
+    render(<ProbationConfirmationList rows={[ROW]} />);
+    fireEvent.click(screen.getByRole("button", { name: "Confirm Priya Nair" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Confirm service" }));
+
+    await waitFor(() => expect(screen.getByText(/couldn't save/i)).toBeInTheDocument());
+    expect(screen.queryByText(/\b500\b/)).not.toBeInTheDocument();
   });
 
   it("Extend is disabled rather than faking a local-only state change (no backend endpoint exists for it)", () => {

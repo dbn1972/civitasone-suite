@@ -6,6 +6,7 @@ import { PageHeader, Card, DataTable, ConfirmDialog, EmptyState } from "../../..
 import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
 import { formatIndianDate } from "@/lib/formatters";
 import { useTranslations } from "next-intl";
+import { useFormError } from "@/lib/useFormError";
 
 type WorkflowTask = {
   id: string;
@@ -52,6 +53,7 @@ export function LeaveApprovalsPanel() {
   const [pending, setPending] = useState<{ task: EnrichedTask; decision: Decision } | null>(null);
   const [busy, setBusy] = useState(false);
   const [dialogError, setDialogError] = useState<string | undefined>();
+  const formError = useFormError("leave application");
 
   const loadTasks = useCallback(async () => {
     setLoading(true);
@@ -63,12 +65,9 @@ export function LeaveApprovalsPanel() {
       ]);
 
       if (!taskRes.ok) {
-        const rawText = await taskRes.text();
-        let msg: string;
-        try { const parsed = JSON.parse(rawText); msg = parsed.message || parsed.error || rawText; }
-        catch { msg = rawText; }
+        const resolved = await formError.fromResponse(taskRes, "load");
         setSource("error");
-        throw new Error(msg || `Failed to load tasks (${taskRes.status})`);
+        throw new Error(resolved.message);
       }
       const taskBody = (await taskRes.json()) as { data?: WorkflowTask[] } | WorkflowTask[];
       const taskRows = Array.isArray(taskBody) ? taskBody : taskBody.data ?? [];
@@ -84,10 +83,14 @@ export function LeaveApprovalsPanel() {
       }
     } catch (err) {
       setSource("error");
-      setError(err instanceof Error ? err.message : t("loadTasksError"));
+      setError(err instanceof Error ? err.message : formError.fromException("load").message);
     } finally {
       setLoading(false);
     }
+    // formError.fromResponse/fromException/clear are stable (useCallback'd on
+    // a fixed `area` string inside useFormError) even though the wrapping
+    // `formError` object literal isn't, so omitting it here is safe and
+    // avoids re-creating loadTasks (and re-running its effect) every render.
   }, []);
 
   useEffect(() => {
@@ -113,7 +116,6 @@ export function LeaveApprovalsPanel() {
   async function complete(task: EnrichedTask, decision: Decision, reason?: string) {
     setBusy(true);
     setDialogError(undefined);
-    const decisionWord = decision === "approve" ? t("approve") : t("reject");
     try {
       const res = await fetch(`/api/proxy/v1/workflow/tasks/${task.id}/complete`, {
         method: "POST",
@@ -126,12 +128,9 @@ export function LeaveApprovalsPanel() {
         // below, via the task/comments module that already exists for this.
         body: JSON.stringify({ decision }),
       });
-      const text = await res.text();
       if (!res.ok) {
-        let errMsg: string;
-        try { const p = JSON.parse(text); errMsg = p.message || p.error || text; }
-        catch { errMsg = text; }
-        setDialogError(errMsg || t("actionFailedFallback", { decision: decisionWord, status: res.status }));
+        const resolved = await formError.fromResponse(res, "save");
+        setDialogError(resolved.message);
         return;
       }
 
@@ -167,8 +166,8 @@ export function LeaveApprovalsPanel() {
       );
       await loadTasks();
       router.refresh();
-    } catch (err) {
-      setDialogError(err instanceof Error ? err.message : t("networkErrorRetry"));
+    } catch {
+      setDialogError(formError.fromException("save").message);
     } finally {
       setBusy(false);
     }

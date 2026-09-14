@@ -3,6 +3,7 @@
 import { useId, useState } from "react";
 import type { CSSProperties } from "react";
 import { useRouter } from "next/navigation";
+import { useFormError } from "@/lib/useFormError";
 
 const inputStyle: CSSProperties = {
   width: "100%", padding: "8px 12px", border: "1px solid var(--line)",
@@ -36,6 +37,7 @@ export function TravelRequestForm() {
   const [message, setMessage] = useState<{ tone: "good" | "bad"; text: string } | null>(null);
   const [busy, setBusy] = useState(false);
   const router = useRouter();
+  const formError = useFormError("travel request");
 
   function set(key: keyof Fields, value: string) {
     setFields((f) => ({ ...f, [key]: value }));
@@ -76,16 +78,16 @@ export function TravelRequestForm() {
         body: JSON.stringify(body),
       });
       if (!res.ok) {
-        const err = await res.json().catch(() => ({})) as { message?: string };
-        setMessage({ tone: "bad", text: err.message ?? `Failed (${res.status})` });
+        const resolved = await formError.fromResponse(res, "save");
+        setMessage({ tone: "bad", text: resolved.message });
         return;
       }
       setMessage({ tone: "good", text: "Travel request submitted." });
       setFields(INITIAL);
       setOpen(false);
       router.refresh();
-    } catch (err) {
-      setMessage({ tone: "bad", text: err instanceof Error ? err.message : "Network error." });
+    } catch {
+      setMessage({ tone: "bad", text: formError.fromException("save").message });
     } finally {
       setBusy(false);
     }

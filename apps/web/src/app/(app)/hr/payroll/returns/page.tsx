@@ -6,6 +6,19 @@ import { statusAwareGet } from "../_lib/statusAwareFetch";
 import { QuarterLookupForm } from "./QuarterLookupForm";
 import { ForceFileButton } from "./ForceFileButton";
 import { TaxReturnsSummary, type QuarterSummaryRow } from "./TaxReturnsSummary";
+import { toHumanError } from "@/lib/messages";
+
+/**
+ * Plain-language failure message for a quarterly-return load, for this
+ * server component's own JSX (it's an `async function` page, not a client
+ * component, so it can't use the useFormError hook — toHumanError is the
+ * same catalogued-message building block that hook is built on). Never a
+ * raw status/body — see docs/ENTERPRISE-GAP-REPORT-2026-09-07.md UX-016.
+ */
+function loadFailureMessage(area: string): string {
+  const human = toHumanError("load", { area });
+  return `${human.what} ${human.next}`;
+}
 
 type Quarter = "Q1" | "Q2" | "Q3" | "Q4";
 const QUARTERS: Quarter[] = ["Q1", "Q2", "Q3", "Q4"];
@@ -221,7 +234,7 @@ export default async function ReturnsPage({
               <EmptyState
                 icon="⚠️"
                 title={"Could not load Form-24Q for FY " + fy + " " + quarter}
-                message="The request failed. Please reload the page, or contact an administrator if this persists."
+                message={loadFailureMessage("Form-24Q return")}
               />
             </>
           ) : (
@@ -277,7 +290,7 @@ export default async function ReturnsPage({
               <EmptyState
                 icon="⚠️"
                 title={"Could not load Form-26Q for FY " + fy + " " + quarter}
-                message="The request failed. Please reload the page, or contact an administrator if this persists."
+                message={loadFailureMessage("Form-26Q return")}
               />
             </>
           ) : !f26.populated ? (

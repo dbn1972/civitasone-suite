@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor, within } from "@testing-library/react";
 import { NextIntlClientProvider } from "next-intl";
 import enMessages from "@/messages/en.json";
 
@@ -88,5 +88,68 @@ describe("LeaveApprovalsPanel — reason persistence", () => {
     await waitFor(() => {
       expect(screen.getByText(/reason could not be saved/i)).toBeInTheDocument();
     });
+  });
+});
+
+/**
+ * UX-016: both the task-list load and a decision (approve/reject) used to
+ * JSON-parse the response and fall back to the raw response text verbatim
+ * (or `${decision} failed (${res.status})`) — the same class of leak
+ * useFormError closes fleet-wide (UX-003).
+ */
+describe("LeaveApprovalsPanel — UX-016 clerk-safe errors", () => {
+  const fetchMock = vi.fn();
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("shows a clerk-safe message, never the raw server text, when the task list fails to load", async () => {
+    fetchMock.mockReset();
+    fetchMock.mockImplementation((url: string) => {
+      if (typeof url === "string" && url.includes("/workflow/tasks")) {
+        return Promise.resolve(new Response("workflow-service: db pool exhausted", { status: 500 }));
+      }
+      return Promise.resolve(new Response(JSON.stringify({ data: [] }), { status: 200 }));
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    // renderPanel(), not a bare render(): LeaveApprovalsPanel calls
+    // useTranslations() (UX-017) and needs a NextIntlClientProvider ancestor.
+    renderPanel();
+
+    // Scoped to the toHumanError "area" text (not just /couldn't load/i)
+    // since this panel's own DataSourceBadge also shows a generic
+    // "Couldn't load — showing nothing" pill on this same error state.
+    await waitFor(() => expect(screen.getByText(/couldn't load this leave application/i)).toBeInTheDocument());
+    expect(screen.queryByText(/workflow-service/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/\b500\b/)).not.toBeInTheDocument();
+  });
+
+  it("shows a clerk-safe message, never the raw server text, when a decision fails", async () => {
+    fetchMock.mockReset();
+    fetchMock.mockImplementation((url: string) => {
+      // Check the more specific "/complete" suffix before the broader
+      // "/workflow/tasks" substring check below — the complete URL
+      // (".../workflow/tasks/task-1/complete") itself contains
+      // "/workflow/tasks", so the order here matters.
+      if (typeof url === "string" && url.endsWith("/complete")) {
+        return Promise.resolve(new Response("workflow-service: complete route panicked", { status: 500 }));
+      }
+      if (typeof url === "string" && url.includes("/workflow/tasks")) {
+        return Promise.resolve(new Response(JSON.stringify({ data: [TASK] }), { status: 200 }));
+      }
+      if (typeof url === "string" && url.includes("/hrms/leave-requests")) {
+        return Promise.resolve(new Response(JSON.stringify({ data: [LEAVE] }), { status: 200 }));
+      }
+      return Promise.resolve(new Response("workflow-service: complete route panicked", { status: 500 }));
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    renderPanel();
+
+    fireEvent.click(await screen.findByRole("button", { name: /approve/i }));
+    const dialog = await screen.findByRole("alertdialog");
+    fireEvent.change(within(dialog).getByLabelText(/approval remarks/i), { target: { value: "Looks fine" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: /approve leave/i }));
+
+    await waitFor(() => expect(dialog).toHaveTextContent(/couldn't save/i));
+    expect(dialog.textContent).not.toMatch(/workflow-service/);
+    expect(dialog.textContent).not.toMatch(/\b500\b/);
   });
 });

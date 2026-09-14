@@ -89,4 +89,32 @@ describe("TransferOrderCard", () => {
     render(<TransferOrderCard transfer={row({ employee: undefined, employeeId: "emp-999" })} />);
     expect(screen.getByText("emp-999")).toBeInTheDocument();
   });
+
+  // UX-016: this used to show the raw response text (falling back to
+  // `HTTP ${res.status}`) verbatim — the same class of leak useFormError
+  // closes fleet-wide (UX-003).
+  it("shows a clerk-safe message, never the raw HTTP status, when the action fails", async () => {
+    fetchMock.mockResolvedValue(new Response("", { status: 500 }));
+    render(<TransferOrderCard transfer={row()} />);
+
+    fireEvent.click(screen.getByText("Issue Order"));
+    const dialog = screen.getByRole("alertdialog");
+    fireEvent.click(within(dialog).getByText("Issue Order"));
+
+    await waitFor(() => expect(dialog).toHaveTextContent(/couldn't save/i));
+    expect(dialog.textContent).not.toMatch(/\b500\b/);
+    expect(dialog.textContent).not.toMatch(/^HTTP /);
+  });
+
+  it("never surfaces raw server response text on a plain-text failure", async () => {
+    fetchMock.mockResolvedValue(new Response("hrms-service: lifecycle transition rejected", { status: 500 }));
+    render(<TransferOrderCard transfer={row()} />);
+
+    fireEvent.click(screen.getByText("Issue Order"));
+    const dialog = screen.getByRole("alertdialog");
+    fireEvent.click(within(dialog).getByText("Issue Order"));
+
+    await waitFor(() => expect(dialog).toHaveTextContent(/couldn't save/i));
+    expect(dialog.textContent).not.toMatch(/hrms-service/);
+  });
 });

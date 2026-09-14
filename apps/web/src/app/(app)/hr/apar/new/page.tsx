@@ -2,11 +2,13 @@
 import { useState, useId } from "react";
 import { useRouter } from "next/navigation";
 import { PageHeader, Card } from "../../../../_components/ds";
+import { useFormError } from "@/lib/useFormError";
 
 export default function AparNewPage() {
   const router = useRouter();
   const [status, setStatus] = useState<"idle" | "submitting" | "done" | "error">("idle");
   const [msg, setMsg] = useState("");
+  const formError = useFormError("APAR");
 
   const empId    = useId();
   const periodId = useId();
@@ -23,22 +25,24 @@ export default function AparNewPage() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setStatus("submitting");
+    formError.clear();
     try {
       const res = await fetch("/api/proxy/v1/hrms/apar", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ employeeId, appraisalPeriod, reportingOfficerId, reviewingOfficerId, acceptingAuthorityId }),
       });
-      const data = await res.json() as { id?: string; message?: string };
       if (!res.ok) {
-        setMsg(data.message ?? `Error ${res.status}`);
+        const resolved = await formError.fromResponse(res, "save");
+        setMsg(resolved.message);
         setStatus("error");
         return;
       }
+      const data = await res.json() as { id?: string };
       setStatus("done");
       router.push(`/hr/apar/${data.id}`);
     } catch {
-      setMsg("Network error — please retry.");
+      setMsg(formError.fromException("save").message);
       setStatus("error");
     }
   }
@@ -54,6 +58,9 @@ export default function AparNewPage() {
             <label htmlFor={empId} style={{ fontSize: 13, color: "var(--mut)", display: "block", marginBottom: 4 }}>Employee ID (UUID)</label>
             <input id={empId} value={employeeId} onChange={(e) => setEmployeeId(e.target.value)}
               placeholder="e.g. 550e8400-e29b-41d4-a716-446655440000" required pattern="[0-9a-f-]{36}" />
+            {formError.fieldError("employeeId") && (
+              <p style={{ color: "var(--red, #c00)", fontSize: 12, margin: "4px 0 0" }}>{formError.fieldError("employeeId")}</p>
+            )}
           </div>
           <div>
             <label htmlFor={periodId} style={{ fontSize: 13, color: "var(--mut)", display: "block", marginBottom: 4 }}>Appraisal Period</label>

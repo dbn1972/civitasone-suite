@@ -7,6 +7,7 @@
 
 import { useState, useId } from "react";
 import { useRouter } from "next/navigation";
+import { useFormError } from "@/lib/useFormError";
 
 type SubmitState = "idle" | "submitting" | "done" | "error";
 type CompMode = "cash" | "comp_off";
@@ -15,6 +16,7 @@ export function OvertimeClaimForm() {
   const router = useRouter();
   const [state, setState] = useState<SubmitState>("idle");
   const [errorMsg, setErrorMsg] = useState("");
+  const formError = useFormError("overtime claim");
 
   const [employeeId, setEmployeeId] = useState("");
   const [requestDate, setRequestDate] = useState("");
@@ -40,6 +42,7 @@ export function OvertimeClaimForm() {
     }
     setState("submitting");
     setErrorMsg("");
+    formError.clear();
     try {
       const res = await fetch("/api/proxy/v1/hrms/overtime-requests", {
         method: "POST",
@@ -53,16 +56,16 @@ export function OvertimeClaimForm() {
           compensationMode: compMode,
         }),
       });
-      const data = (await res.json()) as { id?: string; message?: string };
       if (!res.ok) {
-        setErrorMsg(data.message ?? `Server error ${res.status}`);
+        const resolved = await formError.fromResponse(res, "save");
+        setErrorMsg(resolved.message);
         setState("error");
         return;
       }
       setState("done");
       setTimeout(() => router.push("/hr/workforce/overtime"), 900);
     } catch {
-      setErrorMsg("Network error — please retry.");
+      setErrorMsg(formError.fromException("save").message);
       setState("error");
     }
   }
@@ -101,6 +104,9 @@ export function OvertimeClaimForm() {
           required
           aria-required="true"
         />
+        {formError.fieldError("employeeId") && (
+          <span style={fieldErrorStyle}>{formError.fieldError("employeeId")}</span>
+        )}
       </div>
 
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
@@ -115,6 +121,9 @@ export function OvertimeClaimForm() {
             required
             aria-required="true"
           />
+          {formError.fieldError("requestDate") && (
+            <span style={fieldErrorStyle}>{formError.fieldError("requestDate")}</span>
+          )}
         </div>
         <div>
           <label htmlFor={idHrs} style={labelStyle}>Hours Worked OT <span aria-hidden>*</span></label>
@@ -131,6 +140,9 @@ export function OvertimeClaimForm() {
             required
             aria-required="true"
           />
+          {formError.fieldError("hoursRequested") && (
+            <span style={fieldErrorStyle}>{formError.fieldError("hoursRequested")}</span>
+          )}
         </div>
       </div>
 
@@ -144,6 +156,9 @@ export function OvertimeClaimForm() {
           placeholder="Approving officer's UUID"
           pattern="([0-9a-fA-F-]{36})?"
         />
+        {formError.fieldError("dutyOfficerId") && (
+          <span style={fieldErrorStyle}>{formError.fieldError("dutyOfficerId")}</span>
+        )}
       </div>
 
       <fieldset style={{ border: "1px solid var(--border, #e5e7eb)", borderRadius: 6, padding: "10px 14px" }}>
@@ -232,4 +247,11 @@ const inputStyle: React.CSSProperties = {
   width: "100%",
   boxSizing: "border-box",
   minHeight: 44,
+};
+
+const fieldErrorStyle: React.CSSProperties = {
+  display: "block",
+  fontSize: 12,
+  color: "var(--red, #dc2626)",
+  marginTop: 4,
 };

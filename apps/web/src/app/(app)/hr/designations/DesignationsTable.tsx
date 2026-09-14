@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { ConfirmDialog } from "../../../_components/ds";
+import { useFormError } from "@/lib/useFormError";
 
 type Designation = {
   id: string;
@@ -98,6 +99,7 @@ export function DesignationsTable({ items }: { items: Designation[] }) {
   const [rowError, setRowError] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | undefined>();
+  const formError = useFormError("designation");
 
   function startEdit(item: Designation) {
     setEditingId(item.id);
@@ -123,13 +125,18 @@ export function DesignationsTable({ items }: { items: Designation[] }) {
       return;
     }
     setSaving(true);
+    formError.clear();
     try {
       const res = await fetch(`/api/proxy/v1/hrms/designations/${id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ code: editCode, name: editName, level: editLevel, payGrade: editPayGrade }),
       });
-      if (!res.ok) throw new Error("Save failed");
+      if (!res.ok) {
+        const resolved = await formError.fromResponse(res, "save");
+        setRowError(resolved.message);
+        return;
+      }
       setRowError(null);
       setEditingId(null);
       setLocalItems((prev) =>
@@ -140,7 +147,7 @@ export function DesignationsTable({ items }: { items: Designation[] }) {
         ),
       );
     } catch {
-      setRowError("Save failed. Please try again.");
+      setRowError(formError.fromException("save").message);
     } finally {
       setSaving(false);
       try { router.refresh(); } catch { /* ignore */ }
@@ -150,13 +157,18 @@ export function DesignationsTable({ items }: { items: Designation[] }) {
   async function doDelete(id: string) {
     setDeletingId(id);
     setDeleteError(undefined);
+    formError.clear();
     try {
       const res = await fetch(`/api/proxy/v1/hrms/designations/${id}`, { method: "DELETE" });
-      if (!res.ok) throw new Error("Delete failed");
+      if (!res.ok) {
+        const resolved = await formError.fromResponse(res, "save");
+        setDeleteError(resolved.message);
+        return;
+      }
       setDeleteTarget(null);
       setLocalItems((prev) => prev.filter((d) => d.id !== id));
     } catch {
-      setDeleteError("Delete failed. Please try again.");
+      setDeleteError(formError.fromException("save").message);
     } finally {
       setDeletingId(null);
       try { router.refresh(); } catch { /* ignore */ }
