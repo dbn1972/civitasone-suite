@@ -268,7 +268,7 @@ export async function uploadToStorage(uploadUrl: string, file: File | Blob, mime
     headers: { "content-type": mimeType },
   });
   if (!res.ok) {
-    throw new Error(`STORAGE_UPLOAD_FAILED: the file could not be stored (HTTP ${res.status}).`);
+    throw new Error(await errorMessageFromResponse(res));
   }
 }
 
