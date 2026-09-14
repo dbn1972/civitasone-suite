@@ -47,9 +47,12 @@ export async function quotaRoutes(app: FastifyInstance): Promise<void> {
 
   // CHECK quota — synchronous read (no queue)
   app.post("/v1/quotas/check", async (req, reply) => {
-    resolveContext(req); // auth required
+    // SEC-012: tenant identity comes from the authenticated session
+    // (ctx.tenantId), never from the request body -- see
+    // commands.quotaCheck. A client-supplied body.tenantId is ignored.
+    const ctx = resolveContext(req);
     const body = quotaCheckBody.parse(req.body);
-    const result = await commands.quotaCheck(body);
+    const result = await commands.quotaCheck(ctx, body);
     return reply.send(result);
   });
 
