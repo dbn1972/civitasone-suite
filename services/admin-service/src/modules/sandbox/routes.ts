@@ -152,7 +152,18 @@ function serializeJob(row: RefreshJobRow, plan?: MaskingPlan): Record<string, un
  */
 async function jobPlan(tenantId: string, job: RefreshJobRow): Promise<MaskingPlan> {
   const { rows } = await repo.listMaskingRules(tenantId, job.sandboxId, 500, 0);
-  return buildMaskingPlan(job.requestedFields, toDomainRules(rows));
+  return jobPlanFromRules(job, rows);
+}
+
+/**
+ * PERF-005: the pure half of jobPlan(), split out so the list route below can
+ * batch-fetch every job's masking rules in one query up front and then reuse
+ * this synchronous computation per row, instead of jobPlan()'s own per-job
+ * DB call. jobPlan() itself is unchanged and still used as-is by the
+ * single-job GET route further down.
+ */
+export function jobPlanFromRules(job: RefreshJobRow, rules: readonly MaskingRuleRow[]): MaskingPlan {
+  return buildMaskingPlan(job.requestedFields, toDomainRules(rules));
 }
 
 function serializeMaskedField(row: RefreshMaskedFieldRow): Record<string, unknown> {
@@ -293,7 +304,12 @@ export async function sandboxRoutes(app: FastifyInstance): Promise<void> {
     const { rows, total } = await repo.listRefreshJobs(
       ctx.tenantId, q.limit, (q.page - 1) * q.limit, q.status, q.sandboxId,
     );
-    const jobs = await Promise.all(rows.map(async (row) => serializeJob(row, await jobPlan(ctx.tenantId, row))));
+    // PERF-005: was jobPlan() -> listMaskingRules() once per job row (2N+1).
+    // Batch-fetch every distinct sandbox's masking rules in one query.
+    const rulesBySandbox = await repo.listMaskingRulesBySandboxIds(
+      ctx.tenantId, [...new Set(rows.map((row) => row.sandboxId))],
+    );
+    const jobs = rows.map((row) => serializeJob(row, jobPlanFromRules(row, rulesBySandbox.get(row.sandboxId) ?? [])));
     return reply.send(listEnvelope(jobs, { page: q.page, pageSize: q.limit, total }));
   });
 

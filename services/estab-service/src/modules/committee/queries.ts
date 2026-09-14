@@ -42,14 +42,6 @@ function mapMeetingRow(
   };
 }
 
-async function countsForMeeting(meetingId: string, tenantId: string): Promise<{ attendeesCount: number; agendaItemsCount: number }> {
-  const [attendees, resolutions] = await Promise.all([
-    repo.findAttendeesByMeeting(meetingId, tenantId),
-    repo.findResolutionsByMeeting(meetingId, tenantId),
-  ]);
-  return { attendeesCount: attendees.length, agendaItemsCount: resolutions.length };
-}
-
 export async function getMeetingsByCommittee(tenantId: string, committeeId: string): Promise<MeetingRow[]> {
   const result = await cache.getOrLoad<MeetingRow[]>(
     cache.makeKey(tenantId, "committee_meetings", committeeId),
@@ -63,9 +55,18 @@ export async function listMeetingSummaries(tenantId: string, limit: number) {
     cache.makeKey(tenantId, "meetings", `list:${limit}`),
     () => repo.listMeetingsByTenant(tenantId, limit),
   );
-  return Promise.all(
-    (rows ?? []).map(async (row) => mapMeetingRow(row, await countsForMeeting(row.id, tenantId))),
-  );
+  const meetingIds = (rows ?? []).map((row) => row.id);
+  // PERF-005: was countsForMeeting() -- full-row fetches of attendees AND
+  // resolutions, kept only for their .length -- issued once PER meeting row
+  // (2N+1). Two grouped-count queries, independent of row count, instead.
+  const [attendeeCounts, resolutionCounts] = await Promise.all([
+    repo.countAttendeesByMeetingIds(meetingIds, tenantId),
+    repo.countResolutionsByMeetingIds(meetingIds, tenantId),
+  ]);
+  return (rows ?? []).map((row) => mapMeetingRow(row, {
+    attendeesCount: attendeeCounts.get(row.id) ?? 0,
+    agendaItemsCount: resolutionCounts.get(row.id) ?? 0,
+  }));
 }
 
 export async function getMeetingDetail(id: string, tenantId: string) {

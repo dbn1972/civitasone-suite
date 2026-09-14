@@ -220,7 +220,7 @@ const H = vi.hoisted(() => ({
   profileInsertMock: vi.fn(),
   profileMarkMergedMock: vi.fn(),
   identityInsertMock: vi.fn(),
-  identityFindByHashMock: vi.fn(),
+  identityFindByHashesMock: vi.fn(),
   identityReassignMock: vi.fn(),
   deviceReassignMock: vi.fn(),
   eventsReassignMock: vi.fn(),
@@ -265,7 +265,7 @@ vi.mock("../src/modules/profiles/repo.js", () => ({
 
 vi.mock("../src/modules/identity/repo.js", () => ({
   insert: (...a: unknown[]) => H.identityInsertMock(...a),
-  findByHash: (...a: unknown[]) => H.identityFindByHashMock(...a),
+  findByHashes: (...a: unknown[]) => H.identityFindByHashesMock(...a),
   reassignProfile: (...a: unknown[]) => H.identityReassignMock(...a),
   findByProfileId: vi.fn(async () => []),
   findById: vi.fn(async () => null),
@@ -333,6 +333,19 @@ function makeVisitor(overrides: Record<string, unknown> = {}) {
   };
 }
 
+// PERF-005: the stitch route now calls identityRepo.findByHashes() once (a
+// Map keyed by hash) instead of identityRepo.findByHash() once per
+// identifier. This helper keeps the old per-test "no matter which hash,
+// return these matches" mocking semantics: every hash in the batch call's
+// argument maps to the same configured matches array. All tests in this
+// file use single-identifier payloads, so in practice this is a one-entry
+// Map each time.
+function mockFindByHashesReturning(matches: Array<{ profileId: string }>) {
+  H.identityFindByHashesMock.mockImplementation(
+    async (hashes: string[]) => new Map(hashes.map((h) => [h, matches])),
+  );
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
   H.dbTransactionMock.mockImplementation(async (cb: (tx: unknown) => Promise<unknown>) => cb({}));
@@ -345,7 +358,7 @@ beforeEach(() => {
   H.profileInsertMock.mockResolvedValue(undefined);
   H.profileMarkMergedMock.mockResolvedValue(undefined);
   H.identityInsertMock.mockResolvedValue(undefined);
-  H.identityFindByHashMock.mockResolvedValue([]);
+  mockFindByHashesReturning([]);
   H.eventsReassignMock.mockResolvedValue(7);
   H.identityReassignMock.mockResolvedValue(2);
   H.deviceReassignMock.mockResolvedValue(1);
@@ -559,7 +572,7 @@ describe("POST /v1/cdp/identity/anonymous-visitors/:id/stitch", () => {
   it("202 — resolves known profile then publishes stitch", async () => {
     H.visitorFindByIdMock.mockResolvedValue(makeVisitor());
     withProfiles();
-    H.identityFindByHashMock.mockResolvedValue([{ profileId: KNOWN_PROFILE }]);
+    mockFindByHashesReturning([{ profileId: KNOWN_PROFILE }]);
     const app = await buildApp();
     const r = await app.inject({
       method: "POST", url, headers: auth(),
@@ -567,8 +580,8 @@ describe("POST /v1/cdp/identity/anonymous-visitors/:id/stitch", () => {
     });
     expect(r.statusCode).toBe(202);
     expect(r.json().data.knownProfileId).toBe(KNOWN_PROFILE);
-    expect(H.identityFindByHashMock).toHaveBeenCalledWith(
-      hashIdentifier("email", "rajesh@example.gov.in"), TENANT,
+    expect(H.identityFindByHashesMock).toHaveBeenCalledWith(
+      [hashIdentifier("email", "rajesh@example.gov.in")], TENANT,
     );
     await app.close();
   });
@@ -589,7 +602,7 @@ describe("POST /v1/cdp/identity/anonymous-visitors/:id/stitch", () => {
   it("422 — identifiers resolve to two different profiles", async () => {
     H.visitorFindByIdMock.mockResolvedValue(makeVisitor());
     withProfiles();
-    H.identityFindByHashMock.mockResolvedValue([{ profileId: KNOWN_PROFILE }, { profileId: "bbbbbbbb-5555-4000-8000-000000000001" }]);
+    mockFindByHashesReturning([{ profileId: KNOWN_PROFILE }, { profileId: "bbbbbbbb-5555-4000-8000-000000000001" }]);
     const app = await buildApp();
     const r = await app.inject({
       method: "POST", url, headers: auth(),
@@ -604,7 +617,7 @@ describe("POST /v1/cdp/identity/anonymous-visitors/:id/stitch", () => {
   it("422 — an edge pointing back at the shell does not count as a known profile", async () => {
     H.visitorFindByIdMock.mockResolvedValue(makeVisitor());
     withProfiles();
-    H.identityFindByHashMock.mockResolvedValue([{ profileId: ANON_PROFILE }]);
+    mockFindByHashesReturning([{ profileId: ANON_PROFILE }]);
     const app = await buildApp();
     const r = await app.inject({
       method: "POST", url, headers: auth(),

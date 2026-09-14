@@ -2,7 +2,7 @@
  * WC-009 — DB access for sandbox environments, masking rules and refresh jobs.
  * Reads via scopedRead() so RLS is enforced; writes take the caller's tx.
  */
-import { and, desc, eq, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { db, scopedRead } from "../../shared/db.js";
 import {
   sandboxEnvironments,
@@ -131,6 +131,36 @@ export async function listMaskingRules(
     const counted = await tx.select({ n: sql<number>`count(*)::int` }).from(maskingRules).where(where);
     return { rows, total: counted[0]?.n ?? 0 };
   });
+}
+
+/**
+ * PERF-005: batch loader for routes.ts's GET /v1/admin/sandbox-refreshes,
+ * which previously called jobPlan() -> listMaskingRules(tenantId, job.sandboxId, 500, 0)
+ * once per job row -- 2 queries per row (a rows query plus a count query
+ * jobPlan never even reads), on top of the page's own listRefreshJobs query.
+ * One sandbox can have multiple refresh jobs, so this batches by the
+ * DISTINCT sandbox ids on the current page rather than by job id.
+ *
+ * No per-sandbox cap (unlike listMaskingRules's limit/offset): that 500 page
+ * size was jobPlan reusing a paginated list-endpoint helper as a "fetch
+ * effectively all the rules for this sandbox" call, not a real business
+ * limit. masking_rules has a UNIQUE(tenant_id, sandbox_id, table_name,
+ * field_name) index, so the true ceiling per sandbox is the schema's own
+ * table/column count -- nowhere near 500 in practice.
+ */
+export async function listMaskingRulesBySandboxIds(
+  tenantId: string, sandboxIds: string[],
+): Promise<Map<string, MaskingRuleRow[]>> {
+  const bySandbox = new Map<string, MaskingRuleRow[]>();
+  if (sandboxIds.length === 0) return bySandbox;
+  const rows = await scopedRead((tx) => tx.select().from(maskingRules)
+    .where(and(eq(maskingRules.tenantId, tenantId), inArray(maskingRules.sandboxId, sandboxIds)))
+    .orderBy(maskingRules.tableName, maskingRules.fieldName));
+  for (const row of rows) {
+    const list = bySandbox.get(row.sandboxId);
+    if (list) list.push(row); else bySandbox.set(row.sandboxId, [row]);
+  }
+  return bySandbox;
 }
 
 // ── refresh jobs ────────────────────────────────────────────────────────────

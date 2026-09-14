@@ -45,8 +45,14 @@ export async function getRfqDetail(id: string, tenantId: string) {
   // there was nothing real to return here. See rfq/consumer.ts's rfqRespond
   // handler for where they are now actually stored.
   const responseRows = await repo.findResponsesByRfq(id, tenantId);
-  const responses = await Promise.all(responseRows.map(async (r) => {
-    const vendor = await vendorRepo.findVendorById(r.vendorId, tenantId);
+  // PERF-005: was one findVendorById() per response row (N+1). Batch-fetch
+  // every distinct vendor for this RFQ's responses in a single query.
+  const vendorsById = await vendorRepo.findVendorsByIds(
+    [...new Set(responseRows.map((r) => r.vendorId))],
+    tenantId,
+  );
+  const responses = responseRows.map((r) => {
+    const vendor = vendorsById.get(r.vendorId);
     return {
       vendorId: r.vendorId,
       vendorName: vendor?.name ?? r.vendorId,
@@ -54,7 +60,7 @@ export async function getRfqDetail(id: string, tenantId: string) {
       submittedAt: r.submittedAt instanceof Date ? r.submittedAt.toISOString() : String(r.submittedAt),
       status: r.status,
     };
-  }));
+  });
   return {
     id: row.id,
     rfqNo: row.rfqNo,

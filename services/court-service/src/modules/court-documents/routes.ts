@@ -17,7 +17,7 @@ import * as causeListRepo from "../cause-list/repo.js";
 import * as orderRepo from "../order/repo.js";
 import * as certifiedCopyRepo from "../certified-copy/repo.js";
 import * as courtRepo from "../court-registry/repo.js";
-import { getCaseById } from "../case-registry/repo.js";
+import { getCaseById, getCasesByIds } from "../case-registry/repo.js";
 import { renderCauseListPdf, renderOrderPdf, renderCertifiedCopyPdf } from "./render.js";
 
 /** Roles permitted to read/render court documents. */
@@ -44,17 +44,17 @@ export async function courtDocumentsRoutes(app: FastifyInstance): Promise<void> 
     const items = await causeListRepo.listItems(ctx.tenantId, id);
 
     // Resolve each item's CNR (falls back to the case id) for the "CNR / Case" column.
-    const rendered = await Promise.all(
-      items.map(async (it) => {
-        const kase = await getCaseById(ctx.tenantId, it.caseId);
-        return {
-          itemNo: it.itemNumber,
-          caseRef: kase?.cnrNumber ?? it.caseId,
-          slot: it.slot,
-          courtroom: it.courtroom,
-        };
-      }),
-    );
+    // PERF-005: was one getCaseById() per item (N+1); batched via getCasesByIds.
+    const casesById = await getCasesByIds(ctx.tenantId, [...new Set(items.map((it) => it.caseId))]);
+    const rendered = items.map((it) => {
+      const kase = casesById.get(it.caseId);
+      return {
+        itemNo: it.itemNumber,
+        caseRef: kase?.cnrNumber ?? it.caseId,
+        slot: it.slot,
+        courtroom: it.courtroom,
+      };
+    });
 
     const bytes = await renderCauseListPdf({
       courtName: court?.name ?? "—",

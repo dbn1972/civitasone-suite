@@ -7,8 +7,9 @@
  *
  * All of it is written transactionally by the route, exactly as the other cdp writes are;
  * the outbox events are the downstream contract. Deterministic identity lookup reuses
- * `hashIdentifier` and `identity/repo.findByHash` — the same helpers POST /v1/cdp/resolve
- * uses — so a visitor cannot be stitched by a weaker rule than a normal resolution.
+ * `hashIdentifier` and `identity/repo.findByHashes` — the same batch loader (PERF-005)
+ * POST /v1/cdp/resolve uses — so a visitor cannot be stitched by a weaker rule than a
+ * normal resolution.
  */
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
@@ -160,9 +161,16 @@ export async function identityVisitorRoutes(app: FastifyInstance): Promise<void>
     if (body.knownProfileId !== undefined) {
       knownProfileId = body.knownProfileId;
     } else {
+      // PERF-005: was one identityRepo.findByHash() call per submitted
+      // identifier (N+1, N<=10 per stitchBody's schema). Batch-fetch every
+      // distinct hash's matches in a single query (same findByHashes()
+      // batch loader POST /v1/cdp/resolve uses), then replay the same
+      // per-identifier loop against the in-memory result.
       const matched: string[] = [];
-      for (const ident of body.identifiers ?? []) {
-        const edges = await identityRepo.findByHash(hashIdentifier(ident.type, ident.value), ctx.tenantId);
+      const hashes = (body.identifiers ?? []).map((ident) => hashIdentifier(ident.type, ident.value));
+      const edgesByHash = await identityRepo.findByHashes(hashes, ctx.tenantId);
+      for (const hash of hashes) {
+        const edges = edgesByHash.get(hash) ?? [];
         for (const edge of edges) {
           if (edge.profileId !== visitor.anonymousProfileId) matched.push(edge.profileId);
         }
