@@ -48,6 +48,23 @@ const PG_HOST_PORT = (process.env.DATABASE_URL ?? process.env.DB_URL ?? "").matc
 // The shared civitasone-postgres instance's docker-mapped port, and
 // vitest.config.ts's own hardcoded fallback -- see the SEC-026 note above.
 const SHARED_INSTANCE_PORT = "5435";
+// IN_CI is deliberately exempted from the port-5435 refusal below (SEC-028
+// regression fix). Per REL-035 (services/gateway-service/vitest.config.ts),
+// ci.yml's `test` and `integration-tests` jobs never export
+// GATEWAY_DATABASE_URL and rely entirely on this exact port matching that
+// job's own freshly-created, disposable Postgres service container -- a
+// DIFFERENT container every run, despite sharing this port number by
+// repo-wide convention ("Postgres on host port 5435 matches vitest defaults
+// per service", ci.yml). From inside this process, a real CI container on
+// :5435 and this dev host's real long-lived shared instance on :5435 are
+// indistinguishable by port alone -- refusing unconditionally, as this
+// guard originally did, refuses CI's own legitimate disposable database too,
+// not just the dev-host risk this gap is actually about. Confirmed live:
+// this exact guard, unconditional, throws under simulated real CI env
+// (CI=true GITHUB_ACTIONS=true, no override) -- meaning the unconditional
+// version of this fix was itself breaking the real CI test job it's
+// supposed to run cleanly in.
+const IN_CI = process.env.CI === "true" || process.env.GITHUB_ACTIONS === "true";
 
 const IDENTITY_DIR = path.resolve(__dirname, "../../identity-service");
 const SHARED_INTERNAL_SECRET = "sec-024-shared-test-secret-32chars";
@@ -116,7 +133,7 @@ describe.skipIf(!RUN_DB)("SEC-024 — apiKeyPreHandler → identity-service, rea
     // that turns out to be identity-service crashing on a relation the
     // shared DB never migrated.
     const resolvedPort = PG_HOST_PORT.split(":").pop();
-    if (resolvedPort === SHARED_INSTANCE_PORT) {
+    if (resolvedPort === SHARED_INSTANCE_PORT && !IN_CI) {
       throw new Error(
         `Refusing to run: DATABASE_URL/DB_URL resolves to port ${SHARED_INSTANCE_PORT} ` +
           "(gateway-service/vitest.config.ts's own fallback for the SHARED civitasone-postgres " +
