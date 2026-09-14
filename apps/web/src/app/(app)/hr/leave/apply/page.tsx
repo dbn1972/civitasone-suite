@@ -2,12 +2,14 @@ import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
 import { PageHeader } from "../../../../_components/ds";
 import { getEmployees, getMyProfile } from "../../../../_data/loaders";
 import { ApplyLeaveForm } from "./ApplyLeaveForm";
+import { getTranslations } from "next-intl/server";
 
 export default async function ApplyLeavePage({
   searchParams,
 }: {
   searchParams?: { empId?: string };
 }) {
+  const t = await getTranslations("leaveApply");
   // Try the admin employees list first (works for hr_admin / hr_officer / manager).
   // If it returns empty (403 for employee role), fall back to the self-service
   // profile endpoint so a regular employee can apply for their own leave.
@@ -35,8 +37,8 @@ export default async function ApplyLeavePage({
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
-        title="Apply for Leave"
-        subtitle="Submit a leave request for approval."
+        title={t("title")}
+        subtitle={t("subtitle")}
         back="/hr/leave"
       />
       <DataSourceBadge source={resolvedSource} />

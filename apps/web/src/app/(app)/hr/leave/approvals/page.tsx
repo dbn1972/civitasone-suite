@@ -1,10 +1,12 @@
 import { PageHeader } from "../../../../_components/ds";
 import { LeaveApprovalsPanel } from "./LeaveApprovalsPanel";
+import { getTranslations } from "next-intl/server";
 
-export default function LeaveApprovalsPage() {
+export default async function LeaveApprovalsPage() {
+  const t = await getTranslations("leaveApprovals");
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
-      <PageHeader title="Leave Approvals" subtitle="Review and approve pending leave requests." back="/hr/leave" />
+      <PageHeader title={t("title")} subtitle={t("subtitle")} back="/hr/leave" />
       <LeaveApprovalsPanel />
     </main>
   );
