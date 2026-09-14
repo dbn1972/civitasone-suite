@@ -1,8 +1,8 @@
 import Link from "next/link";
-import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { getProjectById } from "../../../_data/loaders";
-import { PageHeader, Card, StatusPill, EmptyState } from "@/app/_components/ds";
+import { PageHeader, Card, StatusPill, EmptyState, RefreshErrorState } from "@/app/_components/ds";
 import { formatMoney, formatIndianDate } from "@/lib/formatters";
+import { toHumanError } from "@/lib/messages";
 import { ProjectGantt } from "./ProjectGantt";
 import { ProjectDetailActions } from "./ProjectDetailActions";
 import { MilestonesDetailTable, FundReleasesDetailTable } from "./ProjectDetailTables";
@@ -25,6 +25,15 @@ export default async function ProjectDetailPage({ params }: { params: { id: stri
     );
   }
 
+  if (source === "error") {
+    return (
+      <>
+        <PageHeader back="/projects/list" title="Project Detail" />
+        <RefreshErrorState error={toHumanError("load", { area: "project" })} backHref="/projects/list" />
+      </>
+    );
+  }
+
   const milestoneRows = project.milestones.map((m) => ({ ...m }));
   const fundReleaseRows = project.fundReleases.map((r) => ({ ...r }));
 
@@ -36,7 +45,6 @@ export default async function ProjectDetailPage({ params }: { params: { id: stri
         subtitle={project.projectCode}
         actions={<ProjectDetailActions projectId={project.id} milestones={project.milestones} />}
       />
-      {source === "error" && <DataSourceBadge source="error" />}
       <Card title="Details" padding>
         <div className="fields">
           <div className="fld"><div className="l">Department</div><div className="v">{project.department ?? "—"}</div></div>

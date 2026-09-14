@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
-import { PageHeader, StatCard, EmptyState } from "../../../_components/ds";
+import { PageHeader, StatCard, EmptyState, RefreshErrorState } from "../../../_components/ds";
 import { getAuditCompliance } from "../../../_data/loaders";
+import { toHumanError } from "@/lib/messages";
 import { GenerateReportButton } from "./GenerateReportButton";
 import { ComplianceTable } from "./ComplianceTable";
 
@@ -17,6 +18,7 @@ type ComplianceRow = {
 
 export default async function AuditCompliancePage() {
   const { data: items, source } = await getAuditCompliance();
+  const errored = source === "error";
 
   const total = items.length;
   const complied = items.filter((i) => i.status === "complied").length;
@@ -48,24 +50,28 @@ export default async function AuditCompliancePage() {
         <StatCard icon="⏳" iconBg="var(--warnbg)" label="Open Actions" value={pending + overdue} />
       </div>
       {source === "error" && <DataSourceBadge source={source} />}
-      <div className="grid g-2">
-        <div className="card">
-          <div className="card-h"><h3>Compliance requirements</h3></div>
-          {displayDpdp.length === 0 ? (
-            <EmptyState icon="📜" title="No items" message="Compliance requirements will appear here once configured." />
-          ) : (
-            <ComplianceTable items={displayDpdp} variant="dpdp" />
-          )}
+      {errored ? (
+        <RefreshErrorState error={toHumanError("load", { area: "compliance requirements" })} />
+      ) : (
+        <div className="grid g-2">
+          <div className="card">
+            <div className="card-h"><h3>Compliance requirements</h3></div>
+            {displayDpdp.length === 0 ? (
+              <EmptyState icon="📜" title="No items" message="Compliance requirements will appear here once configured." />
+            ) : (
+              <ComplianceTable items={displayDpdp} variant="dpdp" />
+            )}
+          </div>
+          <div className="card">
+            <div className="card-h"><h3>Regulatory &amp; govt policy</h3></div>
+            {displayCert.length === 0 ? (
+              <EmptyState icon="📋" title="No items" message="Regulatory requirements will appear here once configured." />
+            ) : (
+              <ComplianceTable items={displayCert} variant="cert" />
+            )}
+          </div>
         </div>
-        <div className="card">
-          <div className="card-h"><h3>Regulatory &amp; govt policy</h3></div>
-          {displayCert.length === 0 ? (
-            <EmptyState icon="📋" title="No items" message="Regulatory requirements will appear here once configured." />
-          ) : (
-            <ComplianceTable items={displayCert} variant="cert" />
-          )}
-        </div>
-      </div>
+      )}
     </main>
   );
 }
