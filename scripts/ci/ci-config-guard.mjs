@@ -313,6 +313,16 @@ if (existsSync(BOOTSTRAP_SCRIPT) === false) {
  *
  * This is the cheapest possible protection for the most expensive failure — a gate
  * that still runs, still prints its banner, and can no longer fail.
+ *
+ * One documented exception (REL-039): a step may pass `--write-baseline` purely to
+ * reuse a guard's "refuse to write when unreachable" check as a live connectivity
+ * probe (see ci.yml's "Tenant index guard — civitas_admin reachability" step,
+ * PERF-022), as long as the SAME step immediately discards whatever it wrote with
+ * `git checkout -- <that exact *-baseline.json>` before doing anything else — only
+ * the exit code is ever used, nothing is ever persisted. Recognised structurally
+ * (write followed by a same-step revert of a baseline file), not by step name or
+ * file allowlist, so it stays correct if the step is renamed and stays strict for
+ * any *other* step that writes a baseline without reverting it.
  */
 const RATCHET_ESCAPE_HATCHES = [
   { pattern: "--allow-stale", why: "relaxes stale detection; CI is the only strict run" },
@@ -332,6 +342,24 @@ const RATCHET_ESCAPE_HATCHES = [
   },
 ];
 
+/**
+ * True only if a `--write-baseline` at `lines[hatchLineIdx]` is followed, before the
+ * step ends, by a `git checkout --` of the *-baseline.json it would have written —
+ * i.e. the write can never outlive the step it happened in. The step boundary is
+ * the next `- name:`/`- uses:` list item; scanning stops there so a revert that
+ * belongs to some later, unrelated step can never be credited to this one.
+ */
+function selfRevertedBaselineWrite(lines, hatchLineIdx) {
+  for (let i = hatchLineIdx + 1; i < lines.length; i++) {
+    const line = lines[i];
+    if (/^\s*-\s*(name|uses):/.test(line)) break;
+    if (/git checkout -- \S*[\w-]+-baseline\.json/.test(line)) {
+      return { lineNo: i + 1, text: line.trim() };
+    }
+  }
+  return null;
+}
+
 let workflowLinesScanned = 0;
 for (const wf of workflows) {
   const src = readFileSync(join(WORKFLOW_DIR, wf), "utf8");
@@ -343,6 +371,15 @@ for (const wf of workflows) {
     if (line.trim().startsWith("#")) return;
     for (const hatch of RATCHET_ESCAPE_HATCHES) {
       if (line.includes(hatch.pattern)) {
+        const revert = hatch.pattern === "--write-baseline" ? selfRevertedBaselineWrite(lines, idx) : null;
+        if (revert) {
+          notes.push(
+            `exempt: ${wf}:${idx + 1} uses \`${hatch.pattern}\`, but ${wf}:${revert.lineNo} reverts the exact ` +
+              `file it would write (\`${revert.text}\`) before the step ends — used only for its exit code ` +
+              `(a live reachability probe), never to persist a baseline.`,
+          );
+          continue;
+        }
         failures.push(
           `${wf}:${idx + 1}: CI step uses \`${hatch.pattern}\`.\n` +
             `      ${hatch.why}.\n` +
