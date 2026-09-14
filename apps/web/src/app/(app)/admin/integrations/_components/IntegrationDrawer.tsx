@@ -262,7 +262,7 @@ export function IntegrationDrawer({
                   <span style={{ fontSize: 12.5, color: "var(--ink2)" }}>Secret set: {d.secretMasked}</span>
                 )}
                 {d?.lastTestedAt && (
-                  <span style={{ fontSize: 12, color: "var(--mut)" }}>Tested {new Date(d.lastTestedAt).toLocaleString()}</span>
+                  <span style={{ fontSize: 12, color: "var(--mut)" }}>Tested {new Date(d.lastTestedAt).toLocaleString("en-IN")}</span>
                 )}
               </div>
               {d?.lastError && (
@@ -366,7 +366,7 @@ export function IntegrationDrawer({
                   <ul style={{ listStyle: "none", padding: 0, margin: "10px 0 0", display: "flex", flexDirection: "column", gap: 6 }}>
                     {detail.history.map((h) => (
                       <li key={h.id} style={{ fontSize: 12, color: "var(--ink2)", borderLeft: "2px solid var(--line)", paddingLeft: 10 }}>
-                        <StatusBadge status={h.status} /> {h.createdAt ? new Date(h.createdAt).toLocaleString() : ""}
+                        <StatusBadge status={h.status} /> {h.createdAt ? new Date(h.createdAt).toLocaleString("en-IN") : ""}
                         {h.note ? ` — ${h.note}` : ""}{h.rejectedReason ? ` (${h.rejectedReason})` : ""}
                       </li>
                     ))}

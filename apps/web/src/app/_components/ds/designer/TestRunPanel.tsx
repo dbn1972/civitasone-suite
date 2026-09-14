@@ -226,7 +226,7 @@ export function TestRunPanel({ definitionId, steps, history, onRun, running }: T
       <h3 style={{ margin: "24px 0 8px", fontSize: 15, color: "var(--ink)" }}>Recent runs</h3>
       <DataTable<TestRunHistoryRow>
         columns={[
-          { key: "createdAt", label: "Run at", render: (row) => new Date(row.createdAt).toLocaleString() },
+          { key: "createdAt", label: "Run at", render: (row) => new Date(row.createdAt).toLocaleString("en-IN") },
           { key: "status", label: "Result", cellType: "status" },
           {
             key: "durationMs",

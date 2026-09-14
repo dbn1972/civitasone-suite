@@ -18,7 +18,7 @@ export default async function PlansPage() {
 
       <StatGrid>
         <StatCard icon="📋" iconBg="#eef2ff" label="Current Plan" value={currentPlan?.name ?? "—"} />
-        <StatCard icon="👥" iconBg="#ecfdf3" label="Max Users" value={currentPlan?.maxUsers?.toLocaleString() ?? "—"} />
+        <StatCard icon="👥" iconBg="#ecfdf3" label="Max Users" value={currentPlan?.maxUsers?.toLocaleString("en-IN") ?? "—"} />
         <StatCard icon="💾" iconBg="#dbeafe" label="Storage" value={currentPlan ? `${currentPlan.storageGb} GB` : "—"} />
         <StatCard icon="💰" iconBg="#fef3c7" label="Monthly Cost" value={currentPlan ? formatCurrency(currentPlan.pricePerMonth) : "—"} />
       </StatGrid>
