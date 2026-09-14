@@ -1,4 +1,4 @@
-import { eq, and, desc, asc, lt, isNull, sql } from "drizzle-orm";
+import { eq, and, desc, asc, lt, isNull, sql, inArray } from "drizzle-orm";
 import { db, scopedRead } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
 import { cases, caseParties, caseStateTransitions } from "./schema.js";
@@ -109,6 +109,25 @@ export async function getCaseById(tenantId: string, id: string): Promise<CaseRow
       .where(and(eq(cases.tenantId, tenantId), eq(cases.id, id))).limit(1));
     return rows[0] ?? null;
   });
+}
+
+/**
+ * PERF-005: batch loader for court-documents/routes.ts's cause-list PDF
+ * route, which previously called getCaseById() once per cause-list item
+ * (N+1) -- the per-id read-through cache above protects repeat lookups of
+ * the SAME case across requests, but does nothing for the N-distinct-cases-
+ * in-one-request shape here. Deliberately bypasses that cache and always
+ * hits the DB, same as legal-service's PERF-019 findCasesByIds: caching is
+ * orthogonal to this fix, and one query regardless of N is strictly better
+ * than N cache lookups (hit or miss).
+ */
+export async function getCasesByIds(tenantId: string, ids: string[]): Promise<Map<string, CaseRow>> {
+  const byId = new Map<string, CaseRow>();
+  if (ids.length === 0) return byId;
+  const rows = await scopedRead<CaseRow[]>((tx) => tx.select().from(cases)
+    .where(and(eq(cases.tenantId, tenantId), inArray(cases.id, ids))));
+  for (const row of rows) byId.set(row.id, row);
+  return byId;
 }
 
 /**
