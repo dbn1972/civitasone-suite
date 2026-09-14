@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { getReportsDashboard } from "../../../_data/loaders";
-import { EmptyState, PageHeader, StatCard, StatGrid } from "../../../_components/ds";
+import { EmptyState, PageHeader, RefreshErrorState, StatCard, StatGrid } from "../../../_components/ds";
+import { toHumanError } from "@/lib/messages";
 import { SpendSegmented } from "./SpendSegmented";
 
 const BAR_W = 640;
@@ -12,7 +13,7 @@ const LABEL_H = 18;
 
 function ModuleBarChart({ kpis }: { kpis: { id: string; title: string; module: string; value?: number }[] }) {
   const items = kpis.filter((k) => k.value !== undefined && k.value > 0).slice(0, 8);
-  if (items.length === 0) return null;
+  if (items.length === 0) return null; // ux-001-ok: derived chart-only filter (top positive-value KPIs); the caller already branches on the loader's error state before this component ever renders
 
   const maxVal = Math.max(...items.map((k) => k.value ?? 0), 1);
   const totalBars = items.length;
@@ -65,6 +66,7 @@ function OutcomeDonut({ achievedPct }: { achievedPct: number }) {
 
 export default async function ReportsDashboardPage() {
   const { data, source } = await getReportsDashboard();
+  const errored = source === "error";
 
   const upKpis = data.kpis.filter((k) => k.changeDirection === "up").length;
   const downKpis = data.kpis.filter((k) => k.changeDirection === "down").length;
@@ -99,7 +101,9 @@ export default async function ReportsDashboardPage() {
         <StatCard icon="⚡" iconBg="#ecfdf3" label="Refresh" value="Real-time" />
       </StatGrid>
 
-      {data.kpis.length === 0 ? (
+      {errored ? (
+        <RefreshErrorState error={toHumanError("load", { area: "analytics dashboard" })} />
+      ) : data.kpis.length === 0 ? (
         <EmptyState icon="📊" title="No KPI data available" message="The analytics service is compiling data." />
       ) : (
         <div className="grid g-main" style={{ marginTop: "18px" }}>
