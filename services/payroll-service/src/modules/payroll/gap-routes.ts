@@ -288,17 +288,19 @@ export async function gapRoutes(app: FastifyInstance): Promise<void> {
     `))) as unknown as Array<{ section_80c: string; section_80d: string; other_deductions: string; rent_paid_minor: string; regime: string }>;
     const dec = decRows[0];
 
-    // DOM-025/DOM-026: cap80c and cap80d were independently hardcoded (Rs
-    // 1.5L / Rs 50,000, paise), disagreeing with domain.ts's config-driven
-    // sec80cCapMinor/sec80dCapMinor (DOM-008's platform defaults Rs 1.5L /
-    // Rs 75,000) and silently ignoring a tenant's override -- same bug class
-    // DOM-020 fixed in tax/routes.ts. Resolve the same effective-dated
-    // config through scopedRead(), as of the current month (this route
-    // advises on the in-progress FY's remaining headroom, not a closed FY
-    // snapshot). DOM-025 fixed cap80d first; DOM-026 destructures the
-    // sibling sec80cCapMinor field from this SAME already-fetched config
-    // object -- zero extra DB round-trips.
-    const { sec80cCapMinor, sec80dCapMinor } = await scopedRead((tx) => resolveRunStatutoryConfig(tx, ctx.tenantId, currentMonth));
+    // DOM-025/DOM-026/DOM-034: cap80c, cap80d and the 80CCD(1B) headroom
+    // were independently hardcoded (Rs 1.5L / Rs 50,000 / Rs 50,000, paise),
+    // disagreeing with domain.ts's config-driven sec80cCapMinor/
+    // sec80dCapMinor/sec80ccd1bCapMinor (DOM-008's platform defaults Rs 1.5L
+    // / Rs 75,000 / Rs 50,000) and silently ignoring a tenant's override --
+    // same bug class DOM-020 fixed in tax/routes.ts. Resolve the same
+    // effective-dated config through scopedRead(), as of the current month
+    // (this route advises on the in-progress FY's remaining headroom, not a
+    // closed FY snapshot). DOM-025 fixed cap80d first, DOM-026 added
+    // sec80cCapMinor, DOM-034 (migration 0041) adds the sibling
+    // sec80ccd1bCapMinor field -- all three come from this SAME
+    // already-fetched config object, zero extra DB round-trips.
+    const { sec80cCapMinor, sec80dCapMinor, sec80ccd1bCapMinor } = await scopedRead((tx) => resolveRunStatutoryConfig(tx, ctx.tenantId, currentMonth));
 
     const cap80c = sec80cCapMinor;
     const cap80d = sec80dCapMinor;
@@ -314,7 +316,18 @@ export async function gapRoutes(app: FastifyInstance): Promise<void> {
     if (remaining80d > 0n) {
       suggestions.push({ section: "80D", headroom: Number(remaining80d), suggestion: "Health insurance premium (self/family/parents) can reduce taxable income" });
     }
-    suggestions.push({ section: "80CCD(1B)", headroom: 5000000, suggestion: "Additional NPS contribution of up to ₹50,000 deductible beyond 80C" });
+    // DOM-034: headroom is the resolved cap itself, not cap-minus-used --
+    // payroll_tax_declarations has no section_80ccd_1b (or equivalent)
+    // column to read a "used" amount from, unlike 80C/80D above. This
+    // mirrors the pre-fix route's own original semantics (always the full
+    // cap), just no longer a bare literal. The suggestion text previously
+    // hardcoded "up to ₹50,000" a second time in the same object -- a
+    // second, independent occurrence of the identical bug class DOM-026
+    // fixed for tax/routes.ts's income-tax listing (a hardcoded figure that
+    // could silently disagree with a tenant-overridden headroom) -- removed
+    // rather than interpolated, matching the 80C/80D suggestion strings
+    // above, neither of which embeds a cap figure either.
+    suggestions.push({ section: "80CCD(1B)", headroom: Number(sec80ccd1bCapMinor), suggestion: "Additional NPS (Tier-I) contribution to utilize 80CCD(1B) headroom, deductible beyond 80C" });
 
     return reply.send({
       employeeId: q.employeeId, fy, regime: dec?.regime ?? "new",

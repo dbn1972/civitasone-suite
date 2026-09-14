@@ -160,6 +160,7 @@ export interface StatutoryConfig {
   esiEmployerRateBps: bigint; // e.g. 325n = 3.25%
   sec80cCapMinor: bigint;     // Chapter VI-A Sec 80C cap, paise (₹1,50,000 = 15_000_000n)
   sec80dCapMinor: bigint;     // Chapter VI-A Sec 80D cap, paise (₹75,000 = 7_500_000n)
+  sec80ccd1bCapMinor: bigint; // Chapter VI-A Sec 80CCD(1B) cap (NPS additional), paise (₹50,000 = 5_000_000n) — DOM-034
 }
 
 /** The exact values that were hardcoded pre-DOM-008 — never change silently. */
@@ -173,6 +174,7 @@ export const DEFAULT_STATUTORY_CONFIG: StatutoryConfig = {
   esiEmployerRateBps: 325n,
   sec80cCapMinor: 15_000_000n,
   sec80dCapMinor: 7_500_000n,
+  sec80ccd1bCapMinor: 5_000_000n,
 };
 
 /** A `statutory.statutory_config` row as loaded from the DB; `tenantId: null` means platform default (DB sentinel zero-UUID mapped to null at the repo boundary). */
@@ -202,11 +204,11 @@ export function resolveStatutoryConfig(rows: StatutoryConfigRow[], tenantId: str
   // resolved row or the DEFAULT_STATUTORY_CONFIG fallback above.
   const {
     pfRatePct, pfWageCapMinor, epsRateBps, epsCapMinor, esiWageCapMinor,
-    esiEmployeeRateBps, esiEmployerRateBps, sec80cCapMinor, sec80dCapMinor,
+    esiEmployeeRateBps, esiEmployerRateBps, sec80cCapMinor, sec80dCapMinor, sec80ccd1bCapMinor,
   } = picked;
   return {
     pfRatePct, pfWageCapMinor, epsRateBps, epsCapMinor, esiWageCapMinor,
-    esiEmployeeRateBps, esiEmployerRateBps, sec80cCapMinor, sec80dCapMinor,
+    esiEmployeeRateBps, esiEmployerRateBps, sec80cCapMinor, sec80dCapMinor, sec80ccd1bCapMinor,
   };
 }
 
