@@ -3,6 +3,7 @@ import { PageHeader, Card, StatGrid, StatCard, EmptyState, RefreshErrorState } f
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import { useResource } from "@/app/_data/useResource";
 import { toHumanError } from "@/lib/messages";
+import { getTranslations } from "next-intl/server";
 import { DesignationsTable } from "./DesignationsTable";
 
 type Designation = { id: string; code: string; name: string; level: number; payGrade: string | null } & Record<string, unknown>;
@@ -33,6 +34,7 @@ const newBtnStyle: React.CSSProperties = {
 };
 
 export default async function DesignationsPage() {
+  const t = await getTranslations("designations");
   const result = await getDesignations();
   const { data: items } = result;
   const resource = useResource(result);
@@ -45,25 +47,25 @@ export default async function DesignationsPage() {
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
-        title="Designations"
-        subtitle="Job titles and pay levels used across your office — Clerk, Officer, DDO, etc."
+        title={t("title")}
+        subtitle={t("subtitle")}
         back="/hr"
-        backLabel="HR"
+        backLabel={t("backLabel")}
         help="hr"
         actions={
           <Link href="/hr/designations/new" style={newBtnStyle}>
-            + New Designation
+            {t("newBtn")}
           </Link>
         }
       />
       <StatGrid>
-        <StatCard icon="🏅" iconBg="#e6f0ff" label="Total Designations" value={errored ? "—" : items.length} />
-        <StatCard icon="💰" iconBg="#e6f7f0" label="With Pay Grade"     value={withPayGrade ?? "—"} />
-        <StatCard icon="—" iconBg="#fff7e6" label="Without Pay Grade"  value={withoutPayGrade ?? "—"} />
-        <StatCard icon="🎚️" iconBg="#f5f5f5" label="Unique Levels"      value={uniqueLevels ?? "—"} />
+        <StatCard icon="🏅" iconBg="#e6f0ff" label={t("statTotalLabel")} value={errored ? "—" : items.length} />
+        <StatCard icon="💰" iconBg="#e6f7f0" label={t("statWithPayGradeLabel")}     value={withPayGrade ?? "—"} />
+        <StatCard icon="—" iconBg="#fff7e6" label={t("statWithoutPayGradeLabel")}  value={withoutPayGrade ?? "—"} />
+        <StatCard icon="🎚️" iconBg="#f5f5f5" label={t("statUniqueLevelsLabel")}      value={uniqueLevels ?? "—"} />
       </StatGrid>
 
-      <Card title={errored ? "Designations" : `Designations (${items.length})`}>
+      <Card title={errored ? t("title") : t("cardTitleWithCount", { count: items.length })}>
         {errored ? (
           <div className="pad">
             <RefreshErrorState error={toHumanError("load", { area: "designations" })} backHref="/hr" />
@@ -71,8 +73,8 @@ export default async function DesignationsPage() {
         ) : items.length === 0 ? (
           <EmptyState
             icon="🏷️"
-            title="No designations yet"
-            message="Add your first designation so employees can be given a proper job title."
+            title={t("emptyTitle")}
+            message={t("emptyMessage")}
           />
         ) : (
           <DesignationsTable items={items} />

@@ -1,6 +1,7 @@
 "use client";
 
 import { useId, useState } from "react";
+import { useTranslations } from "next-intl";
 import { useFormError } from "@/lib/useFormError";
 
 interface Props {
@@ -27,6 +28,7 @@ const labelStyle: React.CSSProperties = {
 };
 
 export function AddDepartmentForm({ onCancel, onSuccess }: Props) {
+  const t = useTranslations("addDepartmentForm");
   const formId = useId();
   const [code, setCode] = useState("");
   const [name, setName] = useState("");
@@ -62,7 +64,7 @@ export function AddDepartmentForm({ onCancel, onSuccess }: Props) {
     if (errs.size > 0) {
       setInvalid(errs);
       setTone("error");
-      setMessage("Please fix the highlighted fields.");
+      setMessage(t("statusFixFields"));
       return;
     }
 
@@ -84,7 +86,7 @@ export function AddDepartmentForm({ onCancel, onSuccess }: Props) {
       }
 
       setTone("success");
-      setMessage(`Department "${trimName}" added successfully.`);
+      setMessage(t("successMsg", { name: trimName }));
       setCode("");
       setName("");
       onSuccess?.();
@@ -101,13 +103,13 @@ export function AddDepartmentForm({ onCancel, onSuccess }: Props) {
       onSubmit={(e) => {
         void handleSubmit(e);
       }}
-      aria-label="Add department"
+      aria-label={t("formAriaLabel")}
       noValidate
       className="card"
       style={{ marginTop: 16 }}
     >
       <div className="card-h">
-        <h3>Add Department</h3>
+        <h3>{t("cardHeading")}</h3>
       </div>
       <div className="pad" style={{ display: "grid", gap: 16 }}>
         {/* Status region */}
@@ -142,7 +144,7 @@ export function AddDepartmentForm({ onCancel, onSuccess }: Props) {
           {/* Code */}
           <div style={{ display: "grid", gap: 6 }}>
             <label htmlFor={codeId} style={labelStyle}>
-              Code{" "}
+              {t("codeLabel")}{" "}
               <span aria-hidden="true" style={{ color: "#b91c1c" }}>
                 *
               </span>
@@ -152,7 +154,7 @@ export function AddDepartmentForm({ onCancel, onSuccess }: Props) {
               type="text"
               value={code}
               onChange={(e) => setCode(e.target.value)}
-              placeholder="e.g. FIN"
+              placeholder={t("codePlaceholder")}
               maxLength={20}
               required
               aria-required="true"
@@ -167,7 +169,7 @@ export function AddDepartmentForm({ onCancel, onSuccess }: Props) {
           {/* Name */}
           <div style={{ display: "grid", gap: 6 }}>
             <label htmlFor={nameId} style={labelStyle}>
-              Name{" "}
+              {t("nameLabel")}{" "}
               <span aria-hidden="true" style={{ color: "#b91c1c" }}>
                 *
               </span>
@@ -177,7 +179,7 @@ export function AddDepartmentForm({ onCancel, onSuccess }: Props) {
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="e.g. Finance Department"
+              placeholder={t("namePlaceholder")}
               maxLength={200}
               required
               aria-required="true"
@@ -199,7 +201,7 @@ export function AddDepartmentForm({ onCancel, onSuccess }: Props) {
             aria-busy={busy}
             style={{ minHeight: 44, minWidth: 140 }}
           >
-            {busy ? "Adding…" : "Add Department"}
+            {busy ? t("addingBtn") : t("addBtn")}
           </button>
           <button
             type="button"
@@ -208,7 +210,7 @@ export function AddDepartmentForm({ onCancel, onSuccess }: Props) {
             disabled={busy}
             style={{ minHeight: 44 }}
           >
-            Cancel
+            {t("cancelBtn")}
           </button>
         </div>
       </div>

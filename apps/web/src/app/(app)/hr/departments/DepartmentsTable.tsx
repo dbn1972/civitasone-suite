@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { ConfirmDialog } from "../../../_components/ds";
 import { useFormError } from "@/lib/useFormError";
 
@@ -61,6 +62,7 @@ type NodeProps = {
   editName: string;
   saving: boolean;
   rowError: string | null;
+  t: ReturnType<typeof useTranslations>;
   onStartEdit: (dept: Dept) => void;
   onCancelEdit: () => void;
   onSaveEdit: (id: string) => void;
@@ -77,6 +79,7 @@ function DeptNode({
   editName,
   saving,
   rowError,
+  t,
   onStartEdit,
   onCancelEdit,
   onSaveEdit,
@@ -104,7 +107,7 @@ function DeptNode({
         {/* Expand/collapse toggle */}
         <button
           type="button"
-          aria-label={hasChildren ? (open ? "Collapse" : "Expand") : undefined}
+          aria-label={hasChildren ? (open ? t("collapseLabel") : t("expandLabel")) : undefined}
           onClick={() => hasChildren && setOpen((v) => !v)}
           style={{
             width: 20,
@@ -128,13 +131,13 @@ function DeptNode({
           /* ── Edit mode ── */
           <>
             <input
-              aria-label="Department code"
+              aria-label={t("deptCodeAriaLabel")}
               value={editCode}
               onChange={(e) => onSetEditCode(e.target.value)}
               style={{ ...inputStyle, maxWidth: 90 }}
             />
             <input
-              aria-label="Department name"
+              aria-label={t("deptNameAriaLabel")}
               value={editName}
               onChange={(e) => onSetEditName(e.target.value)}
               style={{ ...inputStyle, flex: 1 }}
@@ -152,9 +155,9 @@ function DeptNode({
                 border: "none",
               }}
             >
-              {saving ? "Saving…" : "Save"}
+              {saving ? t("savingBtn") : t("saveBtn")}
             </button>
-            <button onClick={onCancelEdit} style={btnBase}>Cancel</button>
+            <button onClick={onCancelEdit} style={btnBase}>{t("cancelBtn")}</button>
           </>
         ) : (
           /* ── View mode ── */
@@ -175,7 +178,7 @@ function DeptNode({
             </span>
             {/* Employee count badge */}
             <span
-              aria-label={`${node.employeeCount ?? 0} employees`}
+              aria-label={t("employeeCountAriaLabel", { count: node.employeeCount ?? 0 })}
               style={{
                 display: "inline-flex",
                 alignItems: "center",
@@ -199,20 +202,20 @@ function DeptNode({
                   marginLeft: 4,
                 }}
               >
-                {node.children.length} sub-dept{node.children.length !== 1 ? "s" : ""}
+                {t("subDeptCount", { count: node.children.length })}
               </span>
             )}
             <button
               onClick={() => onStartEdit(node)}
               style={{ ...btnBase, marginLeft: 8 }}
             >
-              Edit
+              {t("editBtn")}
             </button>
             <button
               onClick={() => onDeleteTarget(node)}
               style={{ ...btnBase, color: "#b91c1c" }}
             >
-              Delete
+              {t("deleteBtn")}
             </button>
           </>
         )}
@@ -231,6 +234,7 @@ function DeptNode({
               editName={editName}
               saving={saving}
               rowError={rowError}
+              t={t}
               onStartEdit={onStartEdit}
               onCancelEdit={onCancelEdit}
               onSaveEdit={onSaveEdit}
@@ -248,6 +252,7 @@ function DeptNode({
 // ── Main component ─────────────────────────────────────────────────────────
 
 export function DepartmentsTable({ depts }: { depts: Dept[] }) {
+  const t = useTranslations("departmentsTable");
   const router = useRouter();
   const [localDepts, setLocalDepts] = useState<Dept[]>(depts);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -276,7 +281,7 @@ export function DepartmentsTable({ depts }: { depts: Dept[] }) {
 
   async function saveEdit(id: string) {
     if (editCode.trim() === "" || editName.trim() === "") {
-      setRowError("Code and name are required");
+      setRowError(t("rowErrorRequired"));
       return;
     }
     setSaving(true);
@@ -331,7 +336,7 @@ export function DepartmentsTable({ depts }: { depts: Dept[] }) {
       <div style={{ borderRadius: 8, overflow: "hidden", border: "1px solid var(--line,#e2e8f0)" }}>
         {roots.length === 0 ? (
           <div style={{ padding: "24px 16px", textAlign: "center", color: "var(--mut,#64748b)", fontSize: 13 }}>
-            No departments found.
+            {t("noDepartmentsFound")}
           </div>
         ) : (
           roots.map((root) => (
@@ -344,6 +349,7 @@ export function DepartmentsTable({ depts }: { depts: Dept[] }) {
               editName={editName}
               saving={saving}
               rowError={rowError}
+              t={t}
               onStartEdit={startEdit}
               onCancelEdit={cancelEdit}
               onSaveEdit={saveEdit}
@@ -357,10 +363,10 @@ export function DepartmentsTable({ depts }: { depts: Dept[] }) {
 
       <ConfirmDialog
         open={deleteTarget !== null}
-        title={`Delete "${deleteTarget?.name ?? ""}"?`}
-        description="This department will be permanently removed. This action cannot be undone."
+        title={t("deleteConfirmTitle", { name: deleteTarget?.name ?? "" })}
+        description={t("deleteConfirmDesc")}
         danger
-        confirmLabel="Delete department"
+        confirmLabel={t("deleteConfirmBtn")}
         busy={deletingId !== null}
         errorMessage={deleteError}
         onConfirm={() => deleteTarget && void doDelete(deleteTarget.id)}

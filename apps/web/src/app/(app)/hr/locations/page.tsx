@@ -2,6 +2,7 @@ import Link from "next/link";
 import { PageHeader, Card, DataTable, EmptyState, StatGrid, StatCard } from "../../../_components/ds";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
+import { getTranslations } from "next-intl/server";
 
 type Location = {
   id: string;
@@ -64,6 +65,7 @@ function MapPin({ size = 14, color = "currentColor" }: { size?: number; color?: 
 }
 
 export default async function LocationsPage() {
+  const t = await getTranslations("locations");
   const { data: locations, source } = await getLocations();
 
   const stateCount    = locations.filter((l) => l.type === "state").length;
@@ -73,37 +75,37 @@ export default async function LocationsPage() {
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
-        title="Locations"
-        subtitle="Offices, branches, and facilities registered in the system. Add locations so employees and operations can be correctly assigned."
+        title={t("title")}
+        subtitle={t("subtitle")}
         back="/hr"
-        backLabel="HR"
+        backLabel={t("backLabel")}
         help="hr"
         actions={
           <Link href="/hr/locations/new" style={newBtnStyle}>
-            + New Location
+            {t("newBtn")}
           </Link>
         }
       />
       <DataSourceBadge source={source} />
       <StatGrid>
-        <StatCard icon="🌍" iconBg="#e6f0ff" label="Total Locations" value={locations.length} />
-        <StatCard icon="🏛️" iconBg="#e6f7f0" label="State-level"     value={stateCount} />
-        <StatCard icon="🏙️" iconBg="#fff7e6" label="District-level"  value={districtCount} />
-        <StatCard icon="🏘️" iconBg="#f5f5f5" label="Block / Other"   value={blockCount} />
+        <StatCard icon="🌍" iconBg="#e6f0ff" label={t("statTotalLabel")} value={locations.length} />
+        <StatCard icon="🏛️" iconBg="#e6f7f0" label={t("statStateLabel")}     value={stateCount} />
+        <StatCard icon="🏙️" iconBg="#fff7e6" label={t("statDistrictLabel")}  value={districtCount} />
+        <StatCard icon="🏘️" iconBg="#f5f5f5" label={t("statBlockLabel")}   value={blockCount} />
       </StatGrid>
-      <Card title={`Locations (${locations.length})`}>
+      <Card title={t("cardTitleWithCount", { count: locations.length })}>
         {locations.length === 0 ? (
           <EmptyState
             icon="📍"
-            title="No locations yet"
-            message="Register your first office, branch, or facility."
+            title={t("emptyTitle")}
+            message={t("emptyMessage")}
           />
         ) : (
           <DataTable<Location>
             columns={[
               {
                 key: "name",
-                label: "Name",
+                label: t("colName"),
                 render: (row) => (
                   <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
                     <MapPin size={13} color="var(--primary,#2563eb)" />
@@ -111,10 +113,10 @@ export default async function LocationsPage() {
                   </span>
                 ),
               },
-              { key: "type", label: "Type" },
+              { key: "type", label: t("colType") },
               {
                 key: "state",
-                label: "State",
+                label: t("colState"),
                 render: (row) => (
                   <span>
                     {row.state ? (
@@ -139,7 +141,7 @@ export default async function LocationsPage() {
               },
               {
                 key: "district",
-                label: "District",
+                label: t("colDistrict"),
                 render: (row) => (
                   <span>
                     {row.district ? (
@@ -162,16 +164,16 @@ export default async function LocationsPage() {
                   </span>
                 ),
               },
-              { key: "city",       label: "City" },
-              { key: "postalCode", label: "Postal Code" },
+              { key: "city",       label: t("colCity") },
+              { key: "postalCode", label: t("colPostalCode") },
             ]}
             rows={locations}
             sortable
             filterable
-            filterPlaceholder="Search locations…"
+            filterPlaceholder={t("filterPlaceholder")}
             emptyIcon="📍"
-            emptyTitle="No match"
-            emptyMessage="Try a different search."
+            emptyTitle={t("noMatchTitle")}
+            emptyMessage={t("noMatchMessage")}
           />
         )}
       </Card>
