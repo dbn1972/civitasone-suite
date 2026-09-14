@@ -68,7 +68,13 @@ describe("OrgHierarchyManager (COMP-004: real tenant-service org-hierarchy)", ()
   // Sabotage check for the honest-failure path: a real upstream failure on
   // rename must surface as a visible error and must NOT silently rename the
   // node in local state as if it had persisted.
-  it("shows a real error and leaves the unit name unchanged when the rename PATCH fails", async () => {
+  //
+  // UX-016: this used to assert the raw backend `message` ("cycle
+  // detected") was echoed verbatim in the alert -- the same class of leak
+  // useFormError/toHumanError closes fleet-wide (UX-003). The clerk-safe
+  // replacement never shows backend-authored text, so this now asserts a
+  // catalogued message instead, and explicitly that the raw text is absent.
+  it("shows a clerk-safe error and leaves the unit name unchanged when the rename PATCH fails", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(
       new Response(JSON.stringify({ message: "cycle detected" }), { status: 422 }),
     );
@@ -80,7 +86,9 @@ describe("OrgHierarchyManager (COMP-004: real tenant-service org-hierarchy)", ()
     fireEvent.change(input, { target: { value: "Something Else" } });
     fireEvent.keyDown(input, { key: "Enter" });
 
-    expect(await screen.findByRole("alert")).toHaveTextContent("cycle detected");
+    const alert = await screen.findByRole("alert");
+    await waitFor(() => expect(alert).toHaveTextContent(/couldn't save/i));
+    expect(alert.textContent).not.toMatch(/cycle detected/);
     expect(screen.getByText("Revenue Department")).toBeInTheDocument();
     expect(screen.queryByText("Something Else")).not.toBeInTheDocument();
   });

@@ -4,6 +4,8 @@ import { useState } from "react";
 import { PageHeader, StatGrid, StatCard } from "@/app/_components/ds";
 import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
 import type { AdminScheduledJob } from "@/app/_data/loaders";
+import { useFormError } from "@/lib/useFormError";
+import { toHumanError } from "@/lib/messages";
 
 type ExecutionRecord = {
   id: string;
@@ -45,6 +47,18 @@ function getStatusBadge(status: string) {
   }
 }
 
+/**
+ * Plain-language failure message for a failed scheduled-job action. This is
+ * a plain async API helper, not a component, so it can't use the
+ * useFormError hook; toHumanError is the same catalogued-message building
+ * block that hook is built on — never the backend's own `message` or the
+ * raw HTTP status. See docs/ENTERPRISE-GAP-REPORT-2026-09-07.md UX-003/UX-016.
+ */
+function scheduledJobError(): string {
+  const human = toHumanError("save", { area: "scheduled job" });
+  return `${human.what} ${human.next}`;
+}
+
 async function callApi(path: string, method: string, body?: unknown): Promise<{ ok: boolean; message?: string; json?: unknown }> {
   try {
     const res = await fetch(`/api/proxy/v1/admin/scheduled-jobs${path}`, {
@@ -53,10 +67,10 @@ async function callApi(path: string, method: string, body?: unknown): Promise<{ 
       body: body !== undefined ? JSON.stringify(body) : undefined,
     });
     const json = await res.json().catch(() => undefined);
-    if (!res.ok) return { ok: false, message: (json as { message?: string } | undefined)?.message ?? `HTTP ${res.status}` };
+    if (!res.ok) return { ok: false, message: scheduledJobError() };
     return { ok: true, json };
-  } catch (err) {
-    return { ok: false, message: err instanceof Error ? err.message : "Network error" };
+  } catch {
+    return { ok: false, message: scheduledJobError() };
   }
 }
 
@@ -69,6 +83,7 @@ export function ScheduledJobsManager({ initialJobs, source }: { initialJobs: Adm
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const formError = useFormError("scheduled job");
 
   const enabledCount = jobs.filter((j) => j.enabled).length;
   const runningCount = jobs.filter((j) => j.lastRunStatus === "running").length;
@@ -89,7 +104,7 @@ export function ScheduledJobsManager({ initialJobs, source }: { initialJobs: Adm
     setBusyId(job.id);
     setError(null);
     const result = await callApi(`/${job.id}`, "PUT", { enabled: !job.enabled });
-    if (!result.ok) setError(result.message ?? "Update failed");
+    if (!result.ok) setError(result.message ?? null);
     else await refresh();
     setBusyId(null);
   }
@@ -98,7 +113,7 @@ export function ScheduledJobsManager({ initialJobs, source }: { initialJobs: Adm
     setBusyId(id);
     setError(null);
     const result = await callApi(`/${id}/run-now`, "POST");
-    if (!result.ok) setError(result.message ?? "Run now failed");
+    if (!result.ok) setError(result.message ?? null);
     else await refresh();
     setBusyId(null);
   }
@@ -107,7 +122,7 @@ export function ScheduledJobsManager({ initialJobs, source }: { initialJobs: Adm
     setBusyId(id);
     setError(null);
     const result = await callApi(`/${id}`, "DELETE");
-    if (!result.ok) setError(result.message ?? "Delete failed");
+    if (!result.ok) setError(result.message ?? null);
     else await refresh();
     setBusyId(null);
   }
@@ -129,6 +144,7 @@ export function ScheduledJobsManager({ initialJobs, source }: { initialJobs: Adm
   async function handleCreate(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setError(null);
+    formError.clear();
     setSaving(true);
     const fd = new FormData(e.currentTarget);
     let payload: Record<string, unknown> = {};
@@ -150,14 +166,24 @@ export function ScheduledJobsManager({ initialJobs, source }: { initialJobs: Adm
       payload,
       enabled: true,
     };
-    const result = await callApi("", "POST", body);
-    setSaving(false);
-    if (!result.ok) {
-      setError(result.message ?? "Create failed");
-      return;
+    try {
+      const res = await fetch("/api/proxy/v1/admin/scheduled-jobs", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      setSaving(false);
+      if (!res.ok) {
+        const resolved = await formError.fromResponse(res, "save");
+        setError(resolved.message);
+        return;
+      }
+      setShowModal(false);
+      await refresh();
+    } catch {
+      setSaving(false);
+      setError(formError.fromException("save").message);
     }
-    setShowModal(false);
-    await refresh();
   }
 
   return (
@@ -232,10 +258,16 @@ export function ScheduledJobsManager({ initialJobs, source }: { initialJobs: Adm
               <div style={{ marginBottom: 12 }}>
                 <label htmlFor="job-name">Name</label>
                 <input id="job-name" name="name" type="text" className="input" placeholder="Daily Backup" required />
+                {formError.fieldError("name") && (
+                  <span role="alert" style={{ display: "block", fontSize: 12, color: "#b42318", marginTop: 4 }}>{formError.fieldError("name")}</span>
+                )}
               </div>
               <div style={{ marginBottom: 12 }}>
                 <label htmlFor="job-desc">Description</label>
                 <textarea id="job-desc" name="description" className="input" placeholder="What does this job do?" />
+                {formError.fieldError("description") && (
+                  <span role="alert" style={{ display: "block", fontSize: 12, color: "#b42318", marginTop: 4 }}>{formError.fieldError("description")}</span>
+                )}
               </div>
               <div style={{ marginBottom: 12 }}>
                 <label htmlFor="job-cron">Cron Expression</label>
@@ -243,6 +275,9 @@ export function ScheduledJobsManager({ initialJobs, source }: { initialJobs: Adm
                 <datalist id="cron-presets">
                   {CRON_PRESETS.map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}
                 </datalist>
+                {formError.fieldError("cronExpression") && (
+                  <span role="alert" style={{ display: "block", fontSize: 12, color: "#b42318", marginTop: 4 }}>{formError.fieldError("cronExpression")}</span>
+                )}
               </div>
               <div style={{ marginBottom: 12 }}>
                 <label htmlFor="job-service">Target Service</label>
@@ -255,14 +290,23 @@ export function ScheduledJobsManager({ initialJobs, source }: { initialJobs: Adm
                   <option value="audit-service">audit-service</option>
                   <option value="notification-service">notification-service</option>
                 </select>
+                {formError.fieldError("targetService") && (
+                  <span role="alert" style={{ display: "block", fontSize: 12, color: "#b42318", marginTop: 4 }}>{formError.fieldError("targetService")}</span>
+                )}
               </div>
               <div style={{ marginBottom: 12 }}>
                 <label htmlFor="job-command">Target Command</label>
                 <input id="job-command" name="command" type="text" className="input" placeholder="service.entity.action" required />
+                {formError.fieldError("targetCommand") && (
+                  <span role="alert" style={{ display: "block", fontSize: 12, color: "#b42318", marginTop: 4 }}>{formError.fieldError("targetCommand")}</span>
+                )}
               </div>
               <div style={{ marginBottom: 12 }}>
                 <label htmlFor="job-payload">Payload (JSON)</label>
                 <textarea id="job-payload" name="payload" className="input" defaultValue="{}" rows={3} style={{ fontFamily: "monospace" }} />
+                {formError.fieldError("payload") && (
+                  <span role="alert" style={{ display: "block", fontSize: 12, color: "#b42318", marginTop: 4 }}>{formError.fieldError("payload")}</span>
+                )}
               </div>
               <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
                 <button type="button" className="btn" onClick={() => setShowModal(false)} disabled={saving}>Cancel</button>

@@ -2,9 +2,11 @@
 
 import { useState } from "react";
 import { PageHeader } from "@/app/_components/ds";
+import { useFormError } from "@/lib/useFormError";
 
 const inputStyle = { width: "100%", padding: "8px 12px", borderRadius: 6, border: "1px solid #d1d5db", fontSize: 14 } as const;
 const labelStyle = { display: "block", fontSize: 13, fontWeight: 600, color: "var(--muted)", marginBottom: 4 } as const;
+const fieldErrorStyle = { display: "block", fontSize: 12, color: "#b42318", marginTop: 4 } as const;
 
 export default function AdminConfigPage() {
   const [form, setForm] = useState({
@@ -20,12 +22,14 @@ export default function AdminConfigPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const formError = useFormError("platform configuration");
 
   async function handleSave(e: React.FormEvent) {
     e.preventDefault();
     setSaving(true);
     setError(null);
     setSuccess(null);
+    formError.clear();
     try {
       const res = await fetch("/api/v1/admin/platform-config", {
         method: "PATCH",
@@ -33,13 +37,14 @@ export default function AdminConfigPage() {
         body: JSON.stringify(form),
       });
       if (!res.ok) {
-        const body = await res.json().catch(() => ({})) as { message?: string };
-        throw new Error(body.message ?? `Save failed: ${res.status}`);
+        const resolved = await formError.fromResponse(res, "save");
+        setError(resolved.message);
+        return;
       }
       setSuccess("Platform configuration saved successfully.");
       setTimeout(() => setSuccess(null), 5000);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to save configuration.");
+    } catch {
+      setError(formError.fromException("save").message);
     } finally {
       setSaving(false);
     }
@@ -91,6 +96,9 @@ export default function AdminConfigPage() {
                 required
                 aria-required="true"
               />
+              {formError.fieldError("platformName") && (
+                <span role="alert" style={fieldErrorStyle}>{formError.fieldError("platformName")}</span>
+              )}
             </div>
 
             <div>
@@ -107,6 +115,9 @@ export default function AdminConfigPage() {
                 required
                 aria-required="true"
               />
+              {formError.fieldError("supportEmail") && (
+                <span role="alert" style={fieldErrorStyle}>{formError.fieldError("supportEmail")}</span>
+              )}
             </div>
 
             <div>
@@ -128,6 +139,9 @@ export default function AdminConfigPage() {
                 <option value="mr-IN">Marathi</option>
                 <option value="bn-IN">Bengali</option>
               </select>
+              {formError.fieldError("defaultLocale") && (
+                <span role="alert" style={fieldErrorStyle}>{formError.fieldError("defaultLocale")}</span>
+              )}
             </div>
 
             <div>
@@ -164,6 +178,9 @@ export default function AdminConfigPage() {
                 required
                 aria-required="true"
               />
+              {formError.fieldError("maxLoginAttempts") && (
+                <span role="alert" style={fieldErrorStyle}>{formError.fieldError("maxLoginAttempts")}</span>
+              )}
             </div>
 
             <div>
@@ -181,6 +198,9 @@ export default function AdminConfigPage() {
                 required
                 aria-required="true"
               />
+              {formError.fieldError("sessionTimeoutMin") && (
+                <span role="alert" style={fieldErrorStyle}>{formError.fieldError("sessionTimeoutMin")}</span>
+              )}
             </div>
 
             <div style={{ display: "flex", alignItems: "center", gap: 10, paddingTop: 20 }}>
