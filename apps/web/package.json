@@ -24,6 +24,7 @@
   "dependencies": {
     "@civitasone/auth": "workspace:*",
     "@civitasone/client-core": "workspace:*",
+    "@civitasone/observability": "workspace:*",
     "@civitasone/schemas": "workspace:*",
     "@civitasone/types": "workspace:*",
     "@civitasone/ui-kit": "workspace:*",
