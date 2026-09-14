@@ -3,16 +3,27 @@
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 import { DataTable, PageHeader } from "../../../../_components/ds";
-import { browserFetch, errorMessageFromResponse } from "@/lib/api/browserClient";
+import {
+  browserFetch,
+  errorMessageFromResponse,
+} from "@/lib/api/browserClient";
 
-type ParsedContact = { name: string; email?: string; phone?: string; company?: string; leadStatus: string };
+type ParsedContact = {
+  name: string;
+  email?: string;
+  phone?: string;
+  company?: string;
+  leadStatus: string;
+};
 
 function parseCsv(csv: string): { rows: ParsedContact[]; invalid: number } {
   const lines = csv.trim().split("\n").slice(1).filter(Boolean);
   let invalid = 0;
   const rows: ParsedContact[] = [];
   for (const line of lines) {
-    const [name, email, phone, company, leadStatus] = line.split(",").map((s) => s.trim());
+    const [name, email, phone, company, leadStatus] = line
+      .split(",")
+      .map((s) => s.trim());
     if (!name) {
       invalid += 1;
       continue;
@@ -29,7 +40,9 @@ function parseCsv(csv: string): { rows: ParsedContact[]; invalid: number } {
 }
 
 export default function ImportContactsPage() {
-  const [csv, setCsv] = useState("name,email,phone,company,leadStatus\nSample User,user@example.com,9900000000,Acme Corp,new");
+  const [csv, setCsv] = useState(
+    "name,email,phone,company,leadStatus\nSample User,user@example.com,9900000000,Acme Corp,new",
+  );
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -59,7 +72,9 @@ export default function ImportContactsPage() {
       setMessage(`Import accepted — ${contacts.length} contacts queued.`);
       setTimeout(() => router.push("/crm/contacts"), 800);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not import the contacts.");
+      setError(
+        e instanceof Error ? e.message : "Could not import the contacts.",
+      );
     } finally {
       setBusy(false);
     }
@@ -74,28 +89,94 @@ export default function ImportContactsPage() {
         backLabel="Contacts"
       />
       {message ? (
-        <div role="status" aria-live="polite" className="banner" style={{ background: "#ecfdf3", padding: 12, borderRadius: 12, marginBottom: 16, fontSize: 13 }}>{message}</div>
+        <div
+          role="status"
+          aria-live="polite"
+          className="banner"
+          style={{
+            background: "#ecfdf3",
+            padding: 12,
+            borderRadius: 12,
+            marginBottom: 16,
+            fontSize: 13,
+          }}
+        >
+          {message}
+        </div>
       ) : null}
       {error ? (
-        <div role="alert" aria-live="assertive" className="banner" style={{ background: "#fef2f2", color: "#b42318", padding: 12, borderRadius: 12, marginBottom: 16, fontSize: 13 }}>{error}</div>
+        <div
+          role="alert"
+          aria-live="assertive"
+          className="banner"
+          style={{
+            background: "#fef2f2",
+            color: "#b42318",
+            padding: 12,
+            borderRadius: 12,
+            marginBottom: 16,
+            fontSize: 13,
+          }}
+        >
+          {error}
+        </div>
       ) : null}
       <div className="card">
         <form onSubmit={submit} className="pad">
-          <label htmlFor="import-csv" style={{ display: "block", fontSize: 12, color: "var(--muted)", marginBottom: 4, fontWeight: 600 }}>
+          <label
+            htmlFor="import-csv"
+            style={{
+              display: "block",
+              fontSize: 12,
+              color: "var(--muted)",
+              marginBottom: 4,
+              fontWeight: 600,
+            }}
+          >
             CSV data
           </label>
-          <textarea id="import-csv" value={csv} onChange={(e) => setCsv(e.target.value)} rows={12} style={{ width: "100%", fontFamily: "monospace", fontSize: 12, padding: 12, borderRadius: 8, border: "1px solid var(--line)" }} />
-          <p role="status" aria-live="polite" style={{ fontSize: 13, color: "var(--muted)", margin: "8px 0 0" }}>
-            {preview.length} valid row{preview.length === 1 ? "" : "s"} ready{invalid > 0 ? ` · ${invalid} row${invalid === 1 ? "" : "s"} skipped (missing name)` : ""}.
+          <textarea
+            id="import-csv"
+            value={csv}
+            onChange={(e) => setCsv(e.target.value)}
+            rows={12}
+            style={{
+              width: "100%",
+              fontFamily: "monospace",
+              fontSize: 12,
+              padding: 12,
+              borderRadius: 8,
+              border: "1px solid var(--line)",
+            }}
+          />
+          <p
+            role="status"
+            aria-live="polite"
+            style={{ fontSize: 13, color: "var(--muted)", margin: "8px 0 0" }}
+          >
+            {preview.length} valid row{preview.length === 1 ? "" : "s"} ready
+            {invalid > 0
+              ? ` · ${invalid} row${invalid === 1 ? "" : "s"} skipped (missing name)`
+              : ""}
+            .
           </p>
-          <button type="submit" className="btn primary" disabled={busy || preview.length === 0} style={{ marginTop: 12, minHeight: 44 }}>
-            {busy ? "Importing…" : `Import ${preview.length} contact${preview.length === 1 ? "" : "s"}`}
+          <button
+            type="submit"
+            className="btn primary"
+            disabled={busy || preview.length === 0}
+            style={{ marginTop: 12, minHeight: 44 }}
+          >
+            {busy
+              ? "Importing…"
+              : `Import ${preview.length} contact${preview.length === 1 ? "" : "s"}`}
           </button>
         </form>
       </div>
       {preview.length > 0 ? (
         <div className="card" style={{ marginTop: 18 }}>
-          <div className="card-h"><h3>Preview</h3></div>
+          <div className="card-h">
+            <h3>Preview</h3>
+          </div>
           <DataTable
             columns={[
               { key: "name", label: "Name" },
