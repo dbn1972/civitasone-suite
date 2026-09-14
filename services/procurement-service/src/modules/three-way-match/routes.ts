@@ -82,7 +82,7 @@ export async function threeWayMatchRoutes(app: FastifyInstance): Promise<void> {
     if (!po) throw new HttpError(404, "NOT_FOUND", "PO not found");
     const grn = await grnRepo.findGrnById(body.grnId);
     if (!grn || grn.tenantId !== ctx.tenantId) throw new HttpError(404, "NOT_FOUND", "GRN not found");
-    const grnPoId = grn.poRef.replace(/\^procurement_po:/, "");
+    const grnPoId = grn.poRef.replace(/^procurement_po:/, "");
     if (grnPoId !== body.poId) throw new HttpError(409, "GRN_PO_MISMATCH", "GRN does not belong to the supplied PO");
     return sendAccepted(reply, acceptedResponseSchema, await commands.runThreeWayMatch(ctx, body));
   });

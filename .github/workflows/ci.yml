@@ -276,14 +276,17 @@ jobs:
       # since only the exit code (reachability) matters here, not its
       # content — the real ratchet gate already ran as civitas above.
       #
-      # Scoped to tenant-index-guard.mjs only: schema-drift-guard.mjs has a
+      # Scoped to tenant-index-guard.mjs only: schema-drift-guard.mjs had a
       # separate, pre-existing, PERF-022-unrelated defect (ai-agent-service
-      # resolves to the wrong database name — civitas_ai-agent instead of
-      # civitas_ai_agent — so it always reports one unrelated skip
-      # regardless of role or grants), which would make an equivalent step
-      # for it permanently fail for a reason having nothing to do with
-      # civitas_admin's grants. Flagged separately rather than fixed here
-      # (out of scope for PERF-022) or silently worked around.
+      # resolved to the wrong database name — civitas_ai-agent instead of
+      # civitas_ai_agent — so it always reported one unrelated skip
+      # regardless of role or grants), which would have made an equivalent
+      # step for it permanently fail for a reason having nothing to do with
+      # civitas_admin's grants. Fixed by PERF-023 (schema-drift-guard.mjs now
+      # resolves ai-agent via the same DB_NAME_OVERRIDES mechanism as this
+      # guard), so an equivalent civitas_admin-reachability step for it is no
+      # longer blocked. Not added here — out of scope for this PR — flagged
+      # separately rather than bundled in silently.
       - name: Tenant index guard — civitas_admin reachability (PERF-022)
         env:
           POSTGRES_ADMIN_USER: civitas_admin
