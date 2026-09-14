@@ -7,9 +7,40 @@ import * as repo from "./repo.js";
 
 const AUDIT_TOPIC = "audit.event.record";
 
-/** Option B: a silo tenant's dedicated DB name (matches provision-silo-tenant.mjs). */
-function siloDbName(tenantId: string): string {
-  return `civitas_tenant_${tenantId.replace(/-/g, "").slice(0, 16)}`;
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * Option B: a silo tenant's dedicated DB name (matches provision-silo-tenant.mjs).
+ *
+ * SEC-013: this result is interpolated into a raw, unparameterized
+ * `CREATE DATABASE ${dbName}` DDL statement by a privileged CREATEDB
+ * connection (actuator.ts's provisionSiloDatabase — Postgres cannot
+ * parameterize identifiers). The only defense before this fix was
+ * `.replace(/-/g, "")` + `.slice(0, 16)`, which strips dashes and truncates
+ * but does not reject any other character — `tenantId` itself was never
+ * validated as a real UUID before reaching here (the sole caller casts the
+ * queue payload with `as IsolationChanged`, a compile-time-only assertion,
+ * not a runtime check). Assert a real UUID here, at the single place this
+ * repo's own dbName strings are derived, so a malformed or adversarial
+ * tenantId fails loudly at this choke point instead of silently reaching the
+ * DDL statement.
+ *
+ * Exported (only) for the SEC-013 regression test
+ * (tests/silo-db-name-validation.test.ts) to unit-test this assertion in
+ * isolation, without needing a live queue/DB round trip.
+ */
+export function siloDbName(tenantId: string): string {
+  if (!UUID_RE.test(tenantId)) {
+    throw new Error(`INVALID_TENANT_ID: siloDbName requires a UUID tenantId, got ${JSON.stringify(tenantId)}`);
+  }
+  // .toLowerCase() before stripping/slicing: UUID_RE (like this repo's other
+  // UUID_RE call sites) accepts mixed-case hex, but Postgres case-folds an
+  // unquoted CREATE DATABASE identifier to lowercase regardless -- normalize
+  // here so the dbName this function returns always matches what Postgres
+  // actually names the database (relevant for the `datname = $1` lookup in
+  // actuator.ts) and so it always satisfies actuator.ts's own lowercase-only
+  // SAFE_PG_IDENTIFIER_RE defense-in-depth check.
+  return `civitas_tenant_${tenantId.toLowerCase().replace(/-/g, "").slice(0, 16)}`;
 }
 
 type IsolationChanged = { tenantId: string; tier: "pool" | "silo" };

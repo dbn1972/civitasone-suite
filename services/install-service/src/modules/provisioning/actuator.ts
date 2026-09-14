@@ -30,6 +30,22 @@ import { join } from "node:path";
 import { pendingMigrations } from "./domain.js";
 
 /**
+ * SEC-013: guards the raw `CREATE DATABASE ${dbName}` DDL below (Postgres
+ * cannot parameterize identifiers). `dbName` is a safe, unquoted Postgres
+ * identifier (lowercase letters/digits/underscores, starting with a letter
+ * or underscore) in every real caller — consumer.ts's `siloDbName()` now
+ * asserts its tenantId input is a real UUID before building one (always
+ * `civitas_tenant_<16 lowercase-hex chars>`), but this function is itself
+ * exported and directly callable (scripts/dev/provision-silo-tenant.mjs,
+ * scheduler.ts, and this file's own test suite use other dbName shapes, e.g.
+ * `civitas_e2e_silo_<timestamp>`), so it must not assume every caller went
+ * through that one validated path or matches that one exact naming scheme.
+ * Defense-in-depth: reject anything that is not a safe identifier
+ * immediately before it is used in raw SQL, rather than trusting the caller.
+ */
+const SAFE_PG_IDENTIFIER_RE = /^[a-z_][a-z0-9_]{0,62}$/;
+
+/**
  * Every DB_Backed_Service whose migrations are applied into a silo tenant's
  * dedicated database (Option B: one physical DB hosts every service's pg
  * schema). Kept in sync with `scripts/dev/provision-silo-tenant.mjs` and
@@ -137,6 +153,16 @@ export async function provisionSiloDatabase(
 
   // 1) Create the database if it does not already exist (Req 3.3).
   try {
+    // SEC-013: dbName is interpolated into raw SQL below (Postgres cannot
+    // parameterize identifiers) -- validate it is a safe identifier at this
+    // point of use rather than trusting the caller. consumer.ts's
+    // siloDbName() now validates its tenantId input too, but this function
+    // is directly exported/callable (scripts/dev/provision-silo-tenant.mjs,
+    // scheduler.ts) and must not rely on that alone -- see
+    // SAFE_PG_IDENTIFIER_RE's doc-comment above.
+    if (!SAFE_PG_IDENTIFIER_RE.test(dbName)) {
+      throw new Error(`invalid dbName ${JSON.stringify(dbName)}: not a safe Postgres identifier`);
+    }
     const existing = await runnerConn.unsafe(
       "SELECT 1 FROM pg_database WHERE datname = $1",
       [dbName],
@@ -144,8 +170,6 @@ export async function provisionSiloDatabase(
     if (Array.isArray(existing) && existing.length > 0) {
       steps.push({ step: "create_database", ok: true, detail: `already exists (tenant ${tenantId})` });
     } else {
-      // Database names cannot be parameterized; dbName is derived internally
-      // from the tenantId (see siloDbName in consumer.ts), never user input.
       await runnerConn.unsafe(`CREATE DATABASE ${dbName}`);
       steps.push({ step: "create_database", ok: true, detail: `created for tenant ${tenantId}` });
     }
