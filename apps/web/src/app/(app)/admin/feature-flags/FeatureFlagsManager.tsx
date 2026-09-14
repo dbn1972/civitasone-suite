@@ -4,12 +4,26 @@ import { useState } from "react";
 import { PageHeader, StatGrid, StatCard } from "@/app/_components/ds";
 import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
 import type { AdminFeatureFlagRow } from "@/app/_data/loaders";
+import { useFormError } from "@/lib/useFormError";
+import { toHumanError } from "@/lib/messages";
 
 function getStatusBadge(flag: AdminFeatureFlagRow) {
   if (flag.killSwitch) return <span className="badge badge-red">Killed</span>;
   if (!flag.enabled) return <span className="badge badge-grey">Disabled</span>;
   if (flag.rolloutPercent === 100) return <span className="badge badge-green">Active</span>;
   return <span className="badge badge-amber">Partial ({flag.rolloutPercent}%)</span>;
+}
+
+/**
+ * Plain-language failure message for a failed flag toggle/kill-switch call.
+ * This is a plain async API helper, not a component, so it can't use the
+ * useFormError hook; toHumanError is the same catalogued-message building
+ * block that hook is built on — never the backend's own `message` or the
+ * raw HTTP status. See docs/ENTERPRISE-GAP-REPORT-2026-09-07.md UX-003/UX-016.
+ */
+function featureFlagError(): string {
+  const human = toHumanError("save", { area: "feature flag" });
+  return `${human.what} ${human.next}`;
 }
 
 async function callApi(path: string, method: string, body?: unknown): Promise<{ ok: boolean; message?: string }> {
@@ -19,13 +33,10 @@ async function callApi(path: string, method: string, body?: unknown): Promise<{ 
       headers: { "content-type": "application/json" },
       body: body !== undefined ? JSON.stringify(body) : undefined,
     });
-    if (!res.ok) {
-      const json = await res.json().catch(() => ({}));
-      return { ok: false, message: (json as { message?: string }).message ?? `HTTP ${res.status}` };
-    }
+    if (!res.ok) return { ok: false, message: featureFlagError() };
     return { ok: true };
-  } catch (err) {
-    return { ok: false, message: err instanceof Error ? err.message : "Network error" };
+  } catch {
+    return { ok: false, message: featureFlagError() };
   }
 }
 
@@ -35,6 +46,7 @@ export function FeatureFlagsManager({ initialFlags, source }: { initialFlags: Ad
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
+  const formError = useFormError("feature flag");
 
   const activeCount = flags.filter((f) => f.enabled && f.rolloutPercent === 100 && !f.killSwitch).length;
   const partialCount = flags.filter((f) => f.enabled && f.rolloutPercent > 0 && f.rolloutPercent < 100 && !f.killSwitch).length;
@@ -55,7 +67,7 @@ export function FeatureFlagsManager({ initialFlags, source }: { initialFlags: Ad
     setBusyId(id);
     setError(null);
     const result = await callApi(`/${id}/kill`, "POST");
-    if (!result.ok) setError(result.message ?? "Kill switch failed");
+    if (!result.ok) setError(result.message ?? null);
     else await refresh();
     setBusyId(null);
   }
@@ -64,7 +76,7 @@ export function FeatureFlagsManager({ initialFlags, source }: { initialFlags: Ad
     setBusyId(flag.id);
     setError(null);
     const result = await callApi(`/${flag.id}`, "PUT", { enabled: !flag.enabled });
-    if (!result.ok) setError(result.message ?? "Update failed");
+    if (!result.ok) setError(result.message ?? null);
     else await refresh();
     setBusyId(null);
   }
@@ -72,6 +84,7 @@ export function FeatureFlagsManager({ initialFlags, source }: { initialFlags: Ad
   async function handleCreate(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setError(null);
+    formError.clear();
     setCreating(true);
     const fd = new FormData(e.currentTarget);
     const segmentsRaw = String(fd.get("segments") ?? "");
@@ -83,14 +96,24 @@ export function FeatureFlagsManager({ initialFlags, source }: { initialFlags: Ad
       targetSegments: segmentsRaw.split(",").map((s) => s.trim()).filter(Boolean),
       enabled: false,
     };
-    const result = await callApi("", "POST", body);
-    setCreating(false);
-    if (!result.ok) {
-      setError(result.message ?? "Create failed");
-      return;
+    try {
+      const res = await fetch("/api/proxy/v1/admin/feature-flags/manage", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      setCreating(false);
+      if (!res.ok) {
+        const resolved = await formError.fromResponse(res, "save");
+        setError(resolved.message);
+        return;
+      }
+      setShowModal(false);
+      await refresh();
+    } catch {
+      setCreating(false);
+      setError(formError.fromException("save").message);
     }
-    setShowModal(false);
-    await refresh();
   }
 
   return (
@@ -173,22 +196,37 @@ export function FeatureFlagsManager({ initialFlags, source }: { initialFlags: Ad
               <div style={{ marginBottom: 12 }}>
                 <label htmlFor="flag-name">Name</label>
                 <input id="flag-name" name="name" type="text" className="input" placeholder="My Feature" required />
+                {formError.fieldError("name") && (
+                  <span role="alert" style={{ display: "block", fontSize: 12, color: "#b42318", marginTop: 4 }}>{formError.fieldError("name")}</span>
+                )}
               </div>
               <div style={{ marginBottom: 12 }}>
                 <label htmlFor="flag-key">Key</label>
                 <input id="flag-key" name="key" type="text" className="input" placeholder="my-feature" pattern="[a-z0-9_-]+" required />
+                {formError.fieldError("key") && (
+                  <span role="alert" style={{ display: "block", fontSize: 12, color: "#b42318", marginTop: 4 }}>{formError.fieldError("key")}</span>
+                )}
               </div>
               <div style={{ marginBottom: 12 }}>
                 <label htmlFor="flag-desc">Description</label>
                 <textarea id="flag-desc" name="description" className="input" placeholder="Description..." />
+                {formError.fieldError("description") && (
+                  <span role="alert" style={{ display: "block", fontSize: 12, color: "#b42318", marginTop: 4 }}>{formError.fieldError("description")}</span>
+                )}
               </div>
               <div style={{ marginBottom: 12 }}>
                 <label htmlFor="flag-rollout">Rollout Percent: </label>
                 <input id="flag-rollout" name="rollout" type="range" min={0} max={100} defaultValue={0} style={{ width: "100%" }} />
+                {formError.fieldError("rolloutPercent") && (
+                  <span role="alert" style={{ display: "block", fontSize: 12, color: "#b42318", marginTop: 4 }}>{formError.fieldError("rolloutPercent")}</span>
+                )}
               </div>
               <div style={{ marginBottom: 12 }}>
                 <label htmlFor="flag-segments">Target Segments (comma-separated)</label>
                 <input id="flag-segments" name="segments" type="text" className="input" placeholder="beta, internal" />
+                {formError.fieldError("targetSegments") && (
+                  <span role="alert" style={{ display: "block", fontSize: 12, color: "#b42318", marginTop: 4 }}>{formError.fieldError("targetSegments")}</span>
+                )}
               </div>
               <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
                 <button type="button" className="btn" onClick={() => setShowModal(false)} disabled={creating}>Cancel</button>

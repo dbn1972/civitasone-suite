@@ -90,14 +90,24 @@ describe("RolesPermissionsManager (COMP-004: real per-role permissions editor)",
   // Sabotage check for the honest-failure path: a real upstream 404 (role
   // deleted between list and detail fetch) must render as a visible error,
   // never silently fall back to an empty/fabricated permission set.
-  it("shows a real load error instead of silently rendering an empty permission set", async () => {
+  //
+  // UX-016: this used to assert the raw backend `message` ("role not
+  // found") or the raw HTTP status ("HTTP 404") appeared in the alert --
+  // the same class of leak useFormError/toHumanError closes fleet-wide
+  // (UX-003). The clerk-safe replacement never shows backend-authored text
+  // or the status code, so this now asserts a catalogued message instead,
+  // and explicitly that the raw text/status are absent.
+  it("shows a clerk-safe load error instead of silently rendering an empty permission set", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(
       new Response(JSON.stringify({ code: "NOT_FOUND", message: "role not found" }), { status: 404 }),
     );
 
     render(<RolesPermissionsManager roles={roles} permissions={permissions} source="api" />);
 
-    expect(await screen.findByRole("alert")).toHaveTextContent(/not found|http 404/i);
+    const alert = await screen.findByRole("alert");
+    await waitFor(() => expect(alert).toHaveTextContent(/couldn't load/i));
+    expect(alert.textContent).not.toMatch(/role not found/i);
+    expect(alert.textContent).not.toMatch(/\b404\b/);
     expect(screen.queryByRole("checkbox")).not.toBeInTheDocument();
   });
 });

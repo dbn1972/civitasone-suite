@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { PageHeader, StatGrid, StatCard } from "@/app/_components/ds";
+import { useFormError } from "@/lib/useFormError";
 
 type GatewayConfig = {
   jwtEdgeVerify: "true" | "audit" | "off";
@@ -23,20 +24,29 @@ export default function GatewayConfigPage() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const formError = useFormError("gateway configuration");
 
   const fetchConfig = useCallback(async (signal?: AbortSignal) => {
     try {
       const res = await fetch("/api/v1/admin/platform-config/gateway", { signal });
-      if (!res.ok) throw new Error(`Failed to load: ${res.status}`);
+      if (!res.ok) {
+        const resolved = await formError.fromResponse(res, "load");
+        setError(resolved.message);
+        return;
+      }
       const body = await res.json();
       setConfig(body.data);
     } catch (err) {
       if (err instanceof Error && err.name !== 'AbortError') {
-        setError(err.message || "Failed to load gateway config");
+        setError(formError.fromException("load").message);
       }
     } finally {
       setLoading(false);
     }
+    // formError.fromResponse/fromException are stable (useCallback'd on a
+    // fixed `area` string inside useFormError) even though the wrapping
+    // `formError` object literal isn't, so omitting it here is safe and
+    // avoids re-creating fetchConfig (and re-running its effect) every render.
   }, []);
 
   const fetchBreakers = useCallback(async (signal?: AbortSignal) => {
@@ -63,6 +73,7 @@ export default function GatewayConfigPage() {
     setSaving(true);
     setError(null);
     setSuccess(null);
+    formError.clear();
     try {
       const res = await fetch("/api/v1/admin/platform-config/gateway", {
         method: "PATCH",
@@ -70,13 +81,14 @@ export default function GatewayConfigPage() {
         body: JSON.stringify(config),
       });
       if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        throw new Error(body.message ?? `Save failed: ${res.status}`);
+        const resolved = await formError.fromResponse(res, "save");
+        setError(resolved.message);
+        return;
       }
       setSuccess("Gateway configuration updated successfully");
       setTimeout(() => setSuccess(null), 4000);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Save failed");
+    } catch {
+      setError(formError.fromException("save").message);
     } finally {
       setSaving(false);
     }
@@ -128,7 +140,7 @@ export default function GatewayConfigPage() {
           <div className="card">
             <div className="card-h"><h3>Security</h3></div>
             <div style={{ padding: 16, display: "flex", flexDirection: "column", gap: 16 }}>
-              <FieldGroup label="JWT Edge Verification" hint="Verify token signatures at the gateway before proxying to upstream services.">
+              <FieldGroup label="JWT Edge Verification" hint="Verify token signatures at the gateway before proxying to upstream services." error={formError.fieldError("jwtEdgeVerify")}>
                 <select
                   value={config.jwtEdgeVerify}
                   onChange={(e) => updateField("jwtEdgeVerify", e.target.value as GatewayConfig["jwtEdgeVerify"])}
@@ -140,11 +152,11 @@ export default function GatewayConfigPage() {
                 </select>
               </FieldGroup>
 
-              <FieldGroup label="Auth Rate Limit" hint="Max login attempts per minute per username/IP (brute-force protection).">
+              <FieldGroup label="Auth Rate Limit" hint="Max login attempts per minute per username/IP (brute-force protection)." error={formError.fieldError("authRateLimitMax")}>
                 <NumberInput value={config.authRateLimitMax} min={3} max={1000} onChange={(v) => updateField("authRateLimitMax", v)} suffix="req/min" />
               </FieldGroup>
 
-              <FieldGroup label="Request Body Limit" hint="Maximum request body size accepted by the gateway.">
+              <FieldGroup label="Request Body Limit" hint="Maximum request body size accepted by the gateway." error={formError.fieldError("bodyLimitBytes")}>
                 <NumberInput value={config.bodyLimitBytes} min={1024} max={52428800} step={1024} onChange={(v) => updateField("bodyLimitBytes", v)} suffix="bytes" />
                 <span style={{ fontSize: 12, color: "#6b7280" }}>{formatBytes(config.bodyLimitBytes)}</span>
               </FieldGroup>
@@ -155,11 +167,11 @@ export default function GatewayConfigPage() {
           <div className="card">
             <div className="card-h"><h3>Rate Limiting</h3></div>
             <div style={{ padding: 16, display: "flex", flexDirection: "column", gap: 16 }}>
-              <FieldGroup label="Global Rate Limit" hint="Maximum requests per minute across all tenants combined.">
+              <FieldGroup label="Global Rate Limit" hint="Maximum requests per minute across all tenants combined." error={formError.fieldError("rateLimitMax")}>
                 <NumberInput value={config.rateLimitMax} min={10} max={100000} onChange={(v) => updateField("rateLimitMax", v)} suffix="req/min" />
               </FieldGroup>
 
-              <FieldGroup label="Per-Tenant Rate Limit" hint="Maximum requests per minute for a single tenant.">
+              <FieldGroup label="Per-Tenant Rate Limit" hint="Maximum requests per minute for a single tenant." error={formError.fieldError("rateLimitTenantMax")}>
                 <NumberInput value={config.rateLimitTenantMax} min={10} max={10000} onChange={(v) => updateField("rateLimitTenantMax", v)} suffix="req/min" />
               </FieldGroup>
             </div>
@@ -169,16 +181,16 @@ export default function GatewayConfigPage() {
           <div className="card">
             <div className="card-h"><h3>Circuit Breaker</h3></div>
             <div style={{ padding: 16, display: "flex", flexDirection: "column", gap: 16 }}>
-              <FieldGroup label="Failure Threshold" hint="Number of consecutive 5xx errors before the breaker trips open.">
+              <FieldGroup label="Failure Threshold" hint="Number of consecutive 5xx errors before the breaker trips open." error={formError.fieldError("cbFailureThreshold")}>
                 <NumberInput value={config.cbFailureThreshold} min={1} max={50} onChange={(v) => updateField("cbFailureThreshold", v)} suffix="failures" />
               </FieldGroup>
 
-              <FieldGroup label="Recovery Window" hint="How long the breaker stays open before probing again.">
+              <FieldGroup label="Recovery Window" hint="How long the breaker stays open before probing again." error={formError.fieldError("cbRecoveryMs")}>
                 <NumberInput value={config.cbRecoveryMs} min={1000} max={300000} step={1000} onChange={(v) => updateField("cbRecoveryMs", v)} suffix="ms" />
                 <span style={{ fontSize: 12, color: "#6b7280" }}>{(config.cbRecoveryMs / 1000).toFixed(0)}s</span>
               </FieldGroup>
 
-              <FieldGroup label="Upstream Timeout" hint="Max time to wait for an upstream service response.">
+              <FieldGroup label="Upstream Timeout" hint="Max time to wait for an upstream service response." error={formError.fieldError("upstreamTimeoutMs")}>
                 <NumberInput value={config.upstreamTimeoutMs} min={1000} max={120000} step={1000} onChange={(v) => updateField("upstreamTimeoutMs", v)} suffix="ms" />
                 <span style={{ fontSize: 12, color: "#6b7280" }}>{(config.upstreamTimeoutMs / 1000).toFixed(0)}s</span>
               </FieldGroup>
@@ -239,12 +251,13 @@ export default function GatewayConfigPage() {
   );
 }
 
-function FieldGroup({ label, hint, children }: { label: string; hint: string; children: React.ReactNode }) {
+function FieldGroup({ label, hint, error, children }: { label: string; hint: string; error?: string; children: React.ReactNode }) {
   return (
     <div>
       <label style={{ fontWeight: 600, fontSize: 14, display: "block", marginBottom: 4 }}>{label}</label>
       <p style={{ fontSize: 12, color: "#6b7280", marginBottom: 8 }}>{hint}</p>
       {children}
+      {error && <span role="alert" style={{ display: "block", fontSize: 12, color: "#b42318", marginTop: 4 }}>{error}</span>}
     </div>
   );
 }
