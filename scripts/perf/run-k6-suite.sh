@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # PERF-010: runs the full tier-0/1 k6 sanity suite against a locally running
 # instance of the fleet (see start-stack.sh). This is what a CI job or a
-# developer would invoke; it is NOT wired to any nightly schedule -- see the
-# PERF-010 PR description for exactly what is and isn't automated today.
+# developer would invoke; .github/workflows/perf-k6.yml runs it both nightly
+# (schedule: 0 5 * * * UTC) and on-demand (workflow_dispatch) -- see that
+# workflow's header comment for exactly what is and isn't automated today.
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 RESULTS_DIR="${ROOT}/.perf-k6-results"
