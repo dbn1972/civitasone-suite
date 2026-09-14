@@ -80,7 +80,9 @@ describe("documents HTTP client (DM-001)", () => {
     expect(call[1]).toMatchObject({ method: "PUT" });
 
     fetchMock.mockResolvedValueOnce(new Response("", { status: 403 }));
-    await expect(dm.uploadToStorage("https://s3/put", file, "application/pdf")).rejects.toThrow(/STORAGE_UPLOAD_FAILED/);
+    await expect(dm.uploadToStorage("https://s3/put", file, "application/pdf")).rejects.toThrow(/couldn't save/i);
+    fetchMock.mockResolvedValueOnce(new Response("", { status: 403 }));
+    await expect(dm.uploadToStorage("https://s3/put", file, "application/pdf")).rejects.not.toThrow(/403|STORAGE_UPLOAD_FAILED/);
   });
 
   it("confirmDocument posts and normalises the returned row (and 202 no-body)", async () => {
