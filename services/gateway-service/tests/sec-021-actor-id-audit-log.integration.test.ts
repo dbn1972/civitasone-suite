@@ -53,7 +53,36 @@ const RUN_DB = process.env.DATABASE_URL ?? process.env.DB_URL;
 // scripts/ci/bootstrap-postgres.sh. Never the shared civitasone-postgres
 // (:5435) default other configs fall back to -- this suite refuses to run at
 // all without an explicit override (see RUN_DB above).
+//
+// SEC-028: that refusal can NOT be enforced by checking that DATABASE_URL/
+// DB_URL are merely *set* (RUN_DB above) -- gateway-service's own
+// vitest.config.ts unconditionally shadowed DATABASE_URL from
+// GATEWAY_DATABASE_URL with a hardcoded ":5435" fallback in every
+// environment until REL-035, and even after REL-035, an explicit
+// GATEWAY_DATABASE_URL/DATABASE_URL/DB_URL override can still simply be set
+// BY MISTAKE to the shared instance's own host:port -- presence alone
+// (RUN_DB) proves nothing either way. Same root cause SEC-026 already fixed
+// in sec-024-verify-real-http.test.ts, for the identical vitest.config.ts
+// shadow, against this file's hrms-service target instead of
+// identity-service. The real guard is the actually-resolved port check in
+// beforeAll below.
 const PG_HOST_PORT = (process.env.DATABASE_URL ?? process.env.DB_URL ?? "").match(/@([^/]+)\//)?.[1];
+// The shared civitasone-postgres instance's docker-mapped port, and
+// vitest.config.ts's own hardcoded CI/GATEWAY_DATABASE_URL fallback -- see
+// the SEC-028 note above.
+const SHARED_INSTANCE_PORT = "5435";
+// IN_CI is deliberately exempted from the port-5435 refusal below. Per
+// REL-035 (services/gateway-service/vitest.config.ts), ci.yml's `test` and
+// `integration-tests` jobs never export GATEWAY_DATABASE_URL and rely
+// entirely on this exact port matching that job's own freshly-created,
+// disposable Postgres service container -- a DIFFERENT container every run,
+// despite sharing this port number by repo-wide convention ("Postgres on
+// host port 5435 matches vitest defaults per service", ci.yml). From inside
+// this process, a real CI container on :5435 and this dev host's real
+// long-lived shared instance on :5435 are indistinguishable by port alone --
+// refusing unconditionally would also refuse CI's own legitimate disposable
+// database, not just the dev-host risk this gap is actually about.
+const IN_CI = process.env.CI === "true" || process.env.GITHUB_ACTIONS === "true";
 
 const HRMS_DIR = path.resolve(__dirname, "../../hrms-service");
 const JWT_SECRET = "test_secret_for_civitasone_32chr";
@@ -112,6 +141,30 @@ describe.skipIf(!RUN_DB)("SEC-021 — jwt-edge x-actor-id -> real hrms audit-log
   beforeAll(async () => {
     if (!PG_HOST_PORT) {
       throw new Error("DATABASE_URL/DB_URL must point at the disposable test Postgres for this suite");
+    }
+
+    // SEC-028: presence of DATABASE_URL/DB_URL (above) proves nothing -- see
+    // the note above PG_HOST_PORT/SHARED_INSTANCE_PORT. Check the
+    // actually-resolved port instead of trusting presence, exactly as
+    // SEC-026 already does in sec-024-verify-real-http.test.ts (IN_CI is the
+    // one deliberate addition -- see its own comment for why). Failing here
+    // is immediate and before spawning hrms-service or touching the database
+    // at all. Reproduced directly (safely, via a decoy database name so no
+    // real write occurred): today, with no port check, an unguarded run
+    // against the shared instance does NOT fail closed by design the way
+    // SEC-024's missing-relation crash did -- it reaches a real spawned
+    // hrms-service subprocess and a real seedSql INSERT attempt, stopped
+    // only by an incidental credential mismatch in that reproduction, not by
+    // anything this file itself does.
+    const resolvedPort = PG_HOST_PORT.split(":").pop();
+    if (resolvedPort === SHARED_INSTANCE_PORT && !IN_CI) {
+      throw new Error(
+        `Refusing to run: DATABASE_URL/DB_URL resolves to port ${SHARED_INSTANCE_PORT} ` +
+          "(gateway-service/vitest.config.ts's own fallback for the SHARED civitasone-postgres " +
+          "instance), not a disposable test database. No explicit override is set. Export " +
+          "GATEWAY_DATABASE_URL to point at a disposable Postgres bootstrapped via " +
+          "scripts/ci/bootstrap-postgres.sh before running this suite.",
+      );
     }
 
     hrmsPort = await getFreePort();
