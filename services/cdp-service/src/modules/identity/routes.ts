@@ -29,10 +29,18 @@ export async function identityRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, CDP_ROLES);
     const body = resolveBody.parse(req.body);
 
+    // PERF-005: was one repo.findByHash() call per submitted identifier
+    // (N+1, N<=10). Batch-fetch every distinct hash's matches in a single
+    // query, then replay the same per-identifier counting loop against the
+    // in-memory result instead of re-querying -- this preserves the
+    // original's exact semantics for a duplicate submitted identifier
+    // (each occurrence still counts its hash's matches again), which a
+    // naive de-duplicated batch would not.
+    const hashes = body.identifiers.map((ident) => hashIdentifier(ident.type, ident.value));
+    const matchesByHash = await repo.findByHashes(hashes, ctx.tenantId);
     const candidateProfileIds = new Map<string, number>();
-    for (const ident of body.identifiers) {
-      const hash = hashIdentifier(ident.type, ident.value);
-      const matches = await repo.findByHash(hash, ctx.tenantId);
+    for (const hash of hashes) {
+      const matches = matchesByHash.get(hash) ?? [];
       for (const match of matches) {
         const count = candidateProfileIds.get(match.profileId) ?? 0;
         candidateProfileIds.set(match.profileId, count + 1);

@@ -1,7 +1,7 @@
 /**
  * identity/repo.ts — Database operations for identity graph.
  */
-import { eq, and, sql } from "drizzle-orm";
+import { eq, and, sql, inArray } from "drizzle-orm";
 import { db, scopedRead, type ScopedTx } from "../../shared/db.js";
 import { identityGraph, type IdentityGraphRow, type IdentityGraphInsert } from "./schema.js";
 
@@ -34,6 +34,33 @@ export async function findByHash(hash: string, tenantId: string): Promise<Identi
     tx.select().from(identityGraph)
       .where(and(eq(identityGraph.identifierHash, hash), eq(identityGraph.tenantId, tenantId))),
   );
+}
+
+/**
+ * PERF-005: batch loader for routes.ts's POST /v1/cdp/resolve, which
+ * previously called findByHash() once PER submitted identifier (N+1, N
+ * bounded at 10 by resolveBody's schema -- still up to 9 avoidable
+ * sequential round trips per resolve call on what can be a high-QPS
+ * ingestion-adjacent endpoint). Grouped by identifierHash (not profileId)
+ * so the caller can replay its own per-identifier loop against this Map
+ * instead of re-querying -- deliberately preserves the original's
+ * per-identifier (not per-unique-hash) semantics: if the caller submits
+ * the same hash twice, `matchesByHash.get(hash)` naturally yields the same
+ * matches twice too, one lookup per submitted identifier, same as the old
+ * per-identifier query would have.
+ */
+export async function findByHashes(hashes: string[], tenantId: string): Promise<Map<string, IdentityGraphRow[]>> {
+  const byHash = new Map<string, IdentityGraphRow[]>();
+  if (hashes.length === 0) return byHash;
+  const rows = await scopedRead((tx) =>
+    tx.select().from(identityGraph)
+      .where(and(eq(identityGraph.tenantId, tenantId), inArray(identityGraph.identifierHash, [...new Set(hashes)]))),
+  );
+  for (const row of rows) {
+    const list = byHash.get(row.identifierHash);
+    if (list) list.push(row); else byHash.set(row.identifierHash, [row]);
+  }
+  return byHash;
 }
 
 /**

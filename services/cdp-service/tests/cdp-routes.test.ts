@@ -24,7 +24,7 @@ const H = vi.hoisted(() => ({
   profileUpdateMock: vi.fn(),
   profileMarkMergedMock: vi.fn(),
   profileFindByIdsMock: vi.fn(),
-  identityFindByHashMock: vi.fn(),
+  identityFindByHashesMock: vi.fn(),
   identityFindByProfileMock: vi.fn(),
   identityFindByIdMock: vi.fn(),
   identityInsertMock: vi.fn(),
@@ -82,7 +82,7 @@ vi.mock("../src/modules/profiles/repo.js", () => ({
 }));
 
 vi.mock("../src/modules/identity/repo.js", () => ({
-  findByHash: (...a: unknown[]) => H.identityFindByHashMock(...a),
+  findByHashes: (...a: unknown[]) => H.identityFindByHashesMock(...a),
   findByProfileId: (...a: unknown[]) => H.identityFindByProfileMock(...a),
   findById: (...a: unknown[]) => H.identityFindByIdMock(...a),
   insert: (...a: unknown[]) => H.identityInsertMock(...a),
@@ -497,8 +497,20 @@ describe("POST /v1/cdp/resolve", () => {
     attributes: { name: "Raj" },
   };
 
+  // PERF-005: the route now calls repo.findByHashes() once (a Map keyed by
+  // hash) instead of repo.findByHash() once per identifier. This helper
+  // keeps the old per-test "no matter which hash, return these matches"
+  // mocking semantics: every hash in the batch call's argument maps to the
+  // same configured matches array. All tests below use a single-identifier
+  // resolvePayload, so in practice this is a one-entry Map each time.
+  function mockFindByHashesReturning(matches: Array<{ profileId: string }>) {
+    H.identityFindByHashesMock.mockImplementation(
+      async (hashes: string[]) => new Map(hashes.map((h) => [h, matches])),
+    );
+  }
+
   it("202 — accepts identity create when no match", async () => {
-    H.identityFindByHashMock.mockResolvedValue([]);
+    mockFindByHashesReturning([]);
     const app = await buildApp();
     const r = await app.inject({
       method: "POST", url: "/v1/cdp/resolve",
@@ -513,7 +525,7 @@ describe("POST /v1/cdp/resolve", () => {
   });
 
   it("200 — returns matched profile", async () => {
-    H.identityFindByHashMock.mockResolvedValue([{ profileId: PROFILE_ID }]);
+    mockFindByHashesReturning([{ profileId: PROFILE_ID }]);
     const app = await buildApp();
     const r = await app.inject({
       method: "POST", url: "/v1/cdp/resolve",
@@ -528,7 +540,7 @@ describe("POST /v1/cdp/resolve", () => {
   });
 
   it("202 — ambiguous match publishes steward command", async () => {
-    H.identityFindByHashMock.mockResolvedValue([
+    mockFindByHashesReturning([
       { profileId: PROFILE_ID },
       { profileId: PROFILE_ID_2 },
     ]);
@@ -546,7 +558,7 @@ describe("POST /v1/cdp/resolve", () => {
   });
 
   it("200 — not_found when createIfMissing=false", async () => {
-    H.identityFindByHashMock.mockResolvedValue([]);
+    mockFindByHashesReturning([]);
     const app = await buildApp();
     const r = await app.inject({
       method: "POST", url: "/v1/cdp/resolve",
