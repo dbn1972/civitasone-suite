@@ -501,7 +501,7 @@ module.exports = {
     svc("asset",        3015, "asset_svc",         "civitas_asset", {}, { graceful: true }), // PERF-015
 
     // ── Reporting & plugins ────────────────────────────────────────────────────
-    svc("report",       3016, "report_svc",        "civitas_report"),
+    svc("report",       3016, "report_svc",        "civitas_report", {}, { graceful: true }), // PERF-015
     svc("plugin",       3017, "plugin_svc",        "civitas_plugin"),
     svc("theme",        3018, "theme_svc",         "civitas_theme"),
 
