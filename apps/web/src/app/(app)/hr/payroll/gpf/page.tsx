@@ -8,6 +8,7 @@ type GpfRow = {
   id: string;
   employeeId: string;
   employeeCode: string;
+  employeeName: string;
   period: string;
   contrib: number | string;
 } & Record<string, unknown>;
@@ -25,13 +26,21 @@ export default async function GpfStatementsPage() {
   const resource = useResource(result);
   const errored = resource.status === "error";
 
-  const tableRows: GpfRow[] = rows.map((r) => ({
-    id: r.id,
-    employeeId: r.employeeId,
-    employeeCode: r.employeeId.slice(0, 8).toUpperCase(),
-    period: r.period,
-    contrib: r.empContribMinor ?? 0,
-  }));
+  const tableRows: GpfRow[] = rows.map((r) => {
+    const employeeCode = r.employeeId.slice(0, 8).toUpperCase();
+    return {
+      id: r.id,
+      employeeId: r.employeeId,
+      employeeCode,
+      // UX-021: employeeName is best-effort (payroll-service enriches via
+      // hrms-client, which fails open on an unreachable HRMS); fall back to
+      // the code so the identifying column -- and its row-link accessible
+      // name -- always shows something rather than a raw "null".
+      employeeName: r.employeeName ?? employeeCode,
+      period: r.period,
+      contrib: r.empContribMinor ?? 0,
+    };
+  });
 
   const uniqueEmps = errored ? null : new Set(tableRows.map((r) => r.employeeId)).size;
   const uniquePeriods = errored ? null : new Set(tableRows.map((r) => r.period)).size;
@@ -163,16 +172,18 @@ export default async function GpfStatementsPage() {
         ) : (
           <DataTable<GpfRow>
             columns={[
-              { key: "employeeCode", label: "Employee" },
+              { key: "employeeName", label: "Employee" },
+              { key: "employeeCode", label: "Code" },
               { key: "period", label: "Period" },
               { key: "contrib", label: "Employee GPF (10%)", align: "right", cellType: "amount" },
             ]}
             rows={tableRows}
             rowLinkKey="employeeId"
             rowLinkPrefix="/hr/employees/"
+            identifyingColumnKey="employeeName"
             sortable
             filterable
-            filterPlaceholder="Filter by employee or period…"
+            filterPlaceholder="Filter by employee name, code or period…"
             pageSize={20}
             emptyIcon="🏦"
             emptyTitle="No GPF statements found"

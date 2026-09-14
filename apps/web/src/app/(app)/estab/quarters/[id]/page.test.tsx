@@ -76,4 +76,33 @@ describe("QuarterDetailPage — allotment history source masking", () => {
 
     expect(screen.queryByText("Couldn't load — showing nothing")).not.toBeInTheDocument();
   });
+
+  // UX-021: the Employee column used to show the raw truncated employeeRef;
+  // it now shows the real name estab-service resolves via hrms-client
+  // (best-effort), falling back to the truncated ref when unresolved.
+  it("shows the employee's real name in the Employee column when hrms-client resolved it (UX-021)", async () => {
+    mockFetchJsonByKey({
+      "estab.quarters.detail": { data: QUARTER, source: "api" },
+      "estab.quarters.allotments.byQuarter": { data: [{ ...ALLOTMENT, employeeName: "Kiran Bose" }], source: "api" },
+    });
+
+    const ui = await QuarterDetailPage({ params: { id: QUARTER.id } });
+    render(ui);
+
+    expect(screen.getByText("Kiran Bose")).toBeInTheDocument();
+  });
+
+  it("falls back to the truncated employee ref when employeeName is null (UX-021)", async () => {
+    mockFetchJsonByKey({
+      "estab.quarters.detail": { data: QUARTER, source: "api" },
+      "estab.quarters.allotments.byQuarter": { data: [{ ...ALLOTMENT, employeeName: null }], source: "api" },
+    });
+
+    const ui = await QuarterDetailPage({ params: { id: QUARTER.id } });
+    render(ui);
+
+    // Both the Employee and "Employee ref" columns fall back to the same
+    // truncated ref when there is no resolved name.
+    expect(screen.getAllByText(`${ALLOTMENT.employeeRef.slice(0, 8)}…`).length).toBe(2);
+  });
 });

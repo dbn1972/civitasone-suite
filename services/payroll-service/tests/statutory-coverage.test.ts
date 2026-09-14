@@ -23,6 +23,7 @@ const H = vi.hoisted(() => ({
   listGratuityMock: vi.fn(),
   listGpfMock: vi.fn(),
   listNpsMock: vi.fn(),
+  fetchEmployeeSummariesMock: vi.fn(),
 }));
 
 vi.mock("../src/modules/statutory/repo.js", () => ({
@@ -39,6 +40,14 @@ vi.mock("../src/modules/statutory/repo.js", () => ({
   insertGpf: vi.fn(),
   insertNps: vi.fn(),
   sumEmployerContribByRun: vi.fn(() => 0n),
+}));
+
+// UX-021: listGpfReport/listNpsReport now enrich with employeeName via
+// fetchEmployeeSummaries (same hrms-client payroll/queries.ts#getSlip
+// already uses). Mocked to an empty Map by default in beforeEach; individual
+// tests below override it to exercise the hit/miss enrichment paths.
+vi.mock("../src/shared/hrms-client.js", () => ({
+  fetchEmployeeSummaries: (...a: unknown[]) => H.fetchEmployeeSummariesMock(...a),
 }));
 
 vi.mock("../src/shared/infra.js", async (io) => {
@@ -84,6 +93,7 @@ beforeEach(() => {
   H.listGratuityMock.mockResolvedValue([]);
   H.listGpfMock.mockResolvedValue([]);
   H.listNpsMock.mockResolvedValue([]);
+  H.fetchEmployeeSummariesMock.mockResolvedValue(new Map());
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -205,6 +215,66 @@ describe("Statutory queries — bigint→Number coercion", () => {
     expect(body[0].erContribMinor).toBe(980000);
     expect(body[0].empContribPct).toBe(10);
     expect(body[0].erContribPct).toBe(14);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// UX-021 — employeeName enrichment (fetchEmployeeSummaries, best-effort)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+describe("Statutory queries — employeeName enrichment", () => {
+  it("GPF report includes employeeName when hrms-client resolves the employee", async () => {
+    H.listGpfMock.mockResolvedValue([{
+      id: "gpf-1", employeeId: "emp-1", period: "2025-06",
+      basicMinor: 8000000n, contribPct: 12, empContribMinor: 960000n,
+    }]);
+    H.fetchEmployeeSummariesMock.mockResolvedValue(
+      new Map([["emp-1", { fullName: "Anita Sharma", departmentName: "Finance" }]]),
+    );
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "GET",
+      url: "/v1/payroll/statutory/gpf",
+      headers: { authorization: `Bearer ${token()}` },
+    });
+    await app.close();
+    expect(res.json()[0].employeeName).toBe("Anita Sharma");
+  });
+
+  it("GPF report falls back to null employeeName when hrms-client has no match (fails open, does not fail the report)", async () => {
+    H.listGpfMock.mockResolvedValue([{
+      id: "gpf-2", employeeId: "emp-unknown", period: "2025-06",
+      basicMinor: 8000000n, contribPct: 12, empContribMinor: 960000n,
+    }]);
+    H.fetchEmployeeSummariesMock.mockResolvedValue(new Map());
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "GET",
+      url: "/v1/payroll/statutory/gpf",
+      headers: { authorization: `Bearer ${token()}` },
+    });
+    await app.close();
+    expect(res.statusCode).toBe(200);
+    expect(res.json()[0].employeeName).toBeNull();
+  });
+
+  it("NPS report includes employeeName when hrms-client resolves the employee", async () => {
+    H.listNpsMock.mockResolvedValue([{
+      id: "nps-1", employeeId: "emp-1", period: "2025-06",
+      basicMinor: 7000000n, empContribPct: 10, erContribPct: 14,
+      empContribMinor: 700000n, erContribMinor: 980000n,
+    }]);
+    H.fetchEmployeeSummariesMock.mockResolvedValue(
+      new Map([["emp-1", { fullName: "Ravi Kumar", departmentName: "Estates" }]]),
+    );
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "GET",
+      url: "/v1/payroll/statutory/nps",
+      headers: { authorization: `Bearer ${token()}` },
+    });
+    await app.close();
+    expect(res.json()[0].employeeName).toBe("Ravi Kumar");
   });
 });
 

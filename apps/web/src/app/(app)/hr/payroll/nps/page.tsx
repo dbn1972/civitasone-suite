@@ -8,6 +8,7 @@ type NpsRow = {
   id: string;
   employeeId: string;
   employeeCode: string;
+  employeeName: string;
   period: string;
   emp: number;
   er: number;
@@ -27,14 +28,19 @@ export default async function NpsStatementsPage() {
   const resource = useResource(result);
   const errored = resource.status === "error";
 
-  const tableRows: NpsRow[] = rows.map((r) => ({
-    id: r.id,
-    employeeId: r.employeeId,
-    employeeCode: r.employeeId.slice(0, 8).toUpperCase(),
-    period: r.period,
-    emp: r.empContribMinor ?? 0,
-    er: r.erContribMinor ?? 0,
-  }));
+  const tableRows: NpsRow[] = rows.map((r) => {
+    const employeeCode = r.employeeId.slice(0, 8).toUpperCase();
+    return {
+      id: r.id,
+      employeeId: r.employeeId,
+      employeeCode,
+      // UX-021: see hr/payroll/gpf/page.tsx -- same best-effort fallback.
+      employeeName: r.employeeName ?? employeeCode,
+      period: r.period,
+      emp: r.empContribMinor ?? 0,
+      er: r.erContribMinor ?? 0,
+    };
+  });
 
   const uniqueEmps = errored ? null : new Set(tableRows.map((r) => r.employeeId)).size;
   // Raw (not gated): tableRows is already [] on a real fetch failure, so
@@ -171,7 +177,8 @@ export default async function NpsStatementsPage() {
         ) : (
           <DataTable<NpsRow>
             columns={[
-              { key: "employeeCode", label: "Employee" },
+              { key: "employeeName", label: "Employee" },
+              { key: "employeeCode", label: "Code" },
               { key: "period", label: "Period" },
               { key: "emp", label: "Employee (10%)", align: "right", cellType: "amount" },
               { key: "er", label: "Employer (14%)", align: "right", cellType: "amount" },
@@ -179,9 +186,10 @@ export default async function NpsStatementsPage() {
             rows={tableRows}
             rowLinkKey="employeeId"
             rowLinkPrefix="/hr/employees/"
+            identifyingColumnKey="employeeName"
             sortable
             filterable
-            filterPlaceholder="Filter by employee or period…"
+            filterPlaceholder="Filter by employee name, code or period…"
             pageSize={20}
             emptyIcon="🏦"
             emptyTitle="No NPS statements found"

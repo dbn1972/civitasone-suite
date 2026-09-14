@@ -7,6 +7,7 @@ export type AllotmentRow = {
   id: string;
   quarterId: string;
   employeeRef: string;
+  employeeName: string | null;
   designation: string | null;
   payLevel: string | null;
   eligibilityScore: number;
@@ -16,15 +17,24 @@ export type AllotmentRow = {
 } & Record<string, unknown>;
 
 export function AllotmentsTable({ allotments }: { allotments: AllotmentRow[] }) {
-  const rows = allotments.map((a) => ({
-    ...a,
-    employeeShort: `${a.employeeRef.slice(0, 8)}…`,
-    quarterShort: `${a.quarterId.slice(0, 8)}…`,
-    appliedDisplay: formatIndianDate(a.appliedAt),
-  }));
+  const rows = allotments.map((a) => {
+    const employeeShort = `${a.employeeRef.slice(0, 8)}…`;
+    return {
+      ...a,
+      employeeShort,
+      // UX-021: employeeName is best-effort (estab-service enriches via
+      // hrms-client, which fails open); fall back to the truncated ref so
+      // the identifying column -- and its row-link accessible name --
+      // always shows something rather than a raw "null".
+      employeeDisplay: a.employeeName ?? employeeShort,
+      quarterShort: `${a.quarterId.slice(0, 8)}…`,
+      appliedDisplay: formatIndianDate(a.appliedAt),
+    };
+  });
 
   const columns = [
-    { key: "employeeShort" as const, label: "Employee", render: (r: typeof rows[number]) => <span className="mono">{r.employeeShort}</span> },
+    { key: "employeeDisplay" as const, label: "Employee" },
+    { key: "employeeShort" as const, label: "Employee ref", render: (r: typeof rows[number]) => <span className="mono">{r.employeeShort}</span> },
     { key: "quarterShort" as const, label: "Quarter", render: (r: typeof rows[number]) => <span className="mono">{r.quarterShort}</span> },
     { key: "designation" as const, label: "Designation", render: (r: typeof rows[number]) => r.designation ?? "—" },
     { key: "payLevel" as const, label: "Pay Level", render: (r: typeof rows[number]) => r.payLevel ?? "—" },
@@ -39,6 +49,7 @@ export function AllotmentsTable({ allotments }: { allotments: AllotmentRow[] }) 
       caption="Quarter allotments — current financial year"
       rowLinkKey="id"
       rowLinkPrefix="/estab/quarters/allotments/"
+      identifyingColumnKey="employeeDisplay"
       sortable
       filterable
       filterPlaceholder="Filter by employee, quarter, designation or status…"

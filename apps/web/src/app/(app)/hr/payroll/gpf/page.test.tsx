@@ -55,4 +55,27 @@ describe("GpfStatementsPage", () => {
     expect(screen.queryByText("₹0")).not.toBeInTheDocument();
     expect(screen.getAllByText("—").length).toBeGreaterThan(0);
   });
+
+  // UX-021: the ledger's row-link/Employee column used to show the raw
+  // truncated employeeId under an "Employee" label; it now shows the real
+  // name payroll-service resolves via hrms-client (best-effort).
+  it("shows the employee's real name in the Employee column when hrms-client resolved it (UX-021)", async () => {
+    mockGpf({
+      data: [{ id: "g1", employeeId: "emp-00000001", employeeName: "Priya Verma", period: "2026-08", empContribMinor: 500000 }],
+      source: "api",
+    });
+    render(await GpfStatementsPage());
+    expect(screen.getByText("Priya Verma")).toBeInTheDocument();
+  });
+
+  it("falls back to the employee code when employeeName is null -- hrms-client had no match, fails open rather than breaking the ledger (UX-021)", async () => {
+    mockGpf({
+      data: [{ id: "g1", employeeId: "emp-00000001", employeeName: null, period: "2026-08", empContribMinor: 500000 }],
+      source: "api",
+    });
+    render(await GpfStatementsPage());
+    // Both the Employee and Code columns fall back to the same derived
+    // code when there is no resolved name, so there are two matches.
+    expect(screen.getAllByText("EMP-0000").length).toBe(2);
+  });
 });

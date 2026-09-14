@@ -9,6 +9,7 @@ type AllotmentSummary = {
   id: string;
   quarterId: string;
   employeeRef: string;
+  employeeName: string | null;
   designation: string | null;
   payLevel: string | null;
   status: string;
@@ -55,14 +56,21 @@ export default async function QuarterDetailPage({ params }: { params: { id: stri
   const quarterAllotments = allotments.filter((a) => a.quarterId === quarter.id);
   const allotmentsErrored = allotmentSource === "error";
 
-  const allotmentRows = quarterAllotments.map((a) => ({
-    id: a.id,
-    employeeRef: a.employeeRef,
-    designation: a.designation ?? "—",
-    payLevel: a.payLevel ?? "—",
-    status: a.status,
-    appliedAt: formatIndianDate(a.appliedAt),
-  }));
+  const allotmentRows = quarterAllotments.map((a) => {
+    const employeeShort = `${a.employeeRef.slice(0, 8)}…`;
+    return {
+      id: a.id,
+      employeeRef: a.employeeRef,
+      // UX-021: see estab/quarters/allotments/AllotmentsTable.tsx -- same
+      // best-effort fallback (estab-service's hrms-client enrichment fails
+      // open, so employeeName may legitimately be absent).
+      employeeDisplay: a.employeeName ?? employeeShort,
+      designation: a.designation ?? "—",
+      payLevel: a.payLevel ?? "—",
+      status: a.status,
+      appliedAt: formatIndianDate(a.appliedAt),
+    };
+  });
 
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
@@ -99,7 +107,8 @@ export default async function QuarterDetailPage({ params }: { params: { id: stri
         ) : (
           <DataTable
             columns={[
-              { key: "employeeRef" as const, label: "Employee", render: (r) => <span className="mono">{String(r.employeeRef).slice(0, 8)}…</span> },
+              { key: "employeeDisplay" as const, label: "Employee" },
+              { key: "employeeRef" as const, label: "Employee ref", render: (r) => <span className="mono">{String(r.employeeRef).slice(0, 8)}…</span> },
               { key: "designation" as const, label: "Designation" },
               { key: "payLevel" as const, label: "Pay Level" },
               { key: "status" as const, label: "Status", cellType: "status" as const },
@@ -108,6 +117,7 @@ export default async function QuarterDetailPage({ params }: { params: { id: stri
             rows={allotmentRows}
             rowLinkKey="id"
             rowLinkPrefix="/estab/quarters/allotments/"
+            identifyingColumnKey="employeeDisplay"
             pageSize={10}
             emptyIcon="📋"
             emptyTitle="No allotment applications yet"
