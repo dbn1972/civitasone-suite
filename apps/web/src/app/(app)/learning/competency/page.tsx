@@ -1,5 +1,6 @@
-import { PageHeader, DataTable, EmptyState, StatGrid, StatCard } from "@/app/_components/ds";
+import { PageHeader, DataTable, EmptyState, StatGrid, StatCard, RefreshErrorState } from "@/app/_components/ds";
 import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
+import { toHumanError } from "@/lib/messages";
 import { getCompetencyProfile, getGapAnalysis } from "../_data";
 
 type Search = { [k: string]: string | string[] | undefined };
@@ -51,7 +52,9 @@ export default async function Page({ searchParams }: { searchParams?: Search }) 
       )}
       <div className="card">
         <div className="card-h"><h3>Held competencies</h3></div>
-        {heldRows.length === 0 ? (
+        {s1 === "error" ? (
+          <RefreshErrorState error={toHumanError("load", { area: "held competencies" })} />
+        ) : heldRows.length === 0 ? (
           <EmptyState icon="🎓" title="No competencies recorded" message="Competencies appear here as they are certified or recorded manually." />
         ) : (
           <DataTable<HeldRow>
@@ -69,7 +72,9 @@ export default async function Page({ searchParams }: { searchParams?: Search }) 
       {roleCode && (
         <div className="card">
           <div className="card-h"><h3>Gap analysis — {roleCode}</h3></div>
-          {gapRows.length === 0 ? (
+          {gap.source === "error" ? (
+            <RefreshErrorState error={toHumanError("load", { area: "gap analysis" })} />
+          ) : gapRows.length === 0 ? (
             <EmptyState icon="✅" title="No requirements or all met" message="No gaps found against this role's competency requirements." />
           ) : (
             <DataTable<GapRow>
