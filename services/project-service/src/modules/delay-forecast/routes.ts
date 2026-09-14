@@ -17,6 +17,16 @@
  * onto the simulation's inputs, and the 422 branch below for what happens
  * when a project genuinely has no schedule data to simulate over.
  *
+ * DOM-017: even after DOM-001, the "Calls ml-service" claim above wasn't
+ * true — predictDelay() called the unrelated generic POST /v1/ml/predict
+ * with two scalar counts (no model is ever registered for that "tasks"
+ * domain, and the call carried no internal-service auth), so it always
+ * failed and this route always computed locally, silently, with only a
+ * debug-level log line. adapter.ts now calls ml-service's real Monte Carlo
+ * endpoint with the real task list; the catch block below is a genuine
+ * fallback for when ml-service is actually unreachable/erroring, not the
+ * silent default.
+ *
  * Requirements: 10.1, 10.2, 10.3, 10.4, 10.5, 10.6, 10.7
  */
 
@@ -82,12 +92,14 @@ export async function delayForecastRoutes(app: FastifyInstance): Promise<void> {
     let result: DelayForecastResult;
 
     try {
-      const mlResponse = await predictDelay(ctx.tenantId, projectId, {
-        completedTaskCount: tasks.filter((t) => t.isCompleted).length,
-        totalTaskCount: tasks.length,
-      });
+      // Real Monte Carlo simulation over this project's REAL task graph
+      // (DOM-017) — null means ML is disabled or there's nothing to
+      // simulate; a thrown error means ml-service is unreachable/erroring.
+      // Either way we fall back to the local computation below, but only
+      // for a genuine reason — never as the silent default.
+      const mlResponse = await predictDelay(ctx.tenantId, projectId, tasks);
 
-      if (mlResponse && !mlResponse.fallback) {
+      if (mlResponse) {
         // Convert ms offsets to ISO dates
         const now = new Date();
         result = {
@@ -99,14 +111,18 @@ export async function delayForecastRoutes(app: FastifyInstance): Promise<void> {
           isFallback: false,
         };
       } else {
-        // ML returned fallback — compute locally
+        req.log.info(
+          { projectId },
+          "ML delay-forecast disabled or no tasks to simulate — computing locally",
+        );
         result = computeLocalForecast(tasks);
       }
     } catch (err) {
-      // On any error (circuit breaker open, timeout, etc.) — compute locally
+      // On any error (circuit breaker open, timeout, non-2xx, etc.) —
+      // ml-service is genuinely unreachable/failing — compute locally.
       req.log.warn(
         { err: (err as Error).message, projectId },
-        "ml-service unavailable for delay forecast, computing locally",
+        "ml-service unavailable for delay forecast (DOM-017 real path failed) — computing locally as fallback",
       );
       result = computeLocalForecast(tasks);
     }

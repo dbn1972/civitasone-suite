@@ -16,16 +16,27 @@ import { sqlClient } from "../src/shared/db.js";
  *     forecasts (the direct sabotage check — this fails immediately if the
  *     hardcoded task-1..7 array is restored, since both projects would then
  *     produce byte-identical output)
- *   - the counts sent to ml-service (completedTaskCount/totalTaskCount)
- *     match the REAL seeded counts, not the old fixed 5/7
+ *   - the REAL task graph (ids/durations/variance/dependencies) sent to
+ *     ml-service matches the seeded data, not a summary/stub
  *   - no `task-<n>` synthetic ids ever appear in a response
  *   - a project with zero real tasks gets 422 INSUFFICIENT_DATA, never a
  *     fabricated fallback
+ *
+ * DOM-017: predictDelay() used to call the unrelated generic
+ * POST /v1/ml/predict with two scalar counts and no internal-service auth
+ * headers — a request that could never succeed — so the "ML available"
+ * describe block below previously tested a path that was never exercised in
+ * production. It now asserts calls go to the REAL
+ * POST /v1/ml/internal/delay-forecast/simulate endpoint, carrying the real
+ * task list AND the x-internal/x-service-secret/x-tenant-id auth headers
+ * services/payroll-service/src/shared/hrms-client.ts's sibling adapters
+ * already use for service-to-service calls.
  *
  * Also covers:
  * - GET /v1/projects/:projectId/delay-forecast → 200 (ML available)
  * - GET /v1/projects/:projectId/delay-forecast → 200 (fallback mode, < 5 completed tasks)
  * - GET /v1/projects/:projectId/delay-forecast → 200 (ML error → local computation)
+ * - GET /v1/projects/:projectId/delay-forecast → 200 (ML unreachable/network error → local computation)
  * - GET /v1/projects/:projectId/delay-forecast → 400 (invalid projectId)
  * - GET /v1/projects/:projectId/delay-forecast → 401 (no auth)
  *
@@ -291,32 +302,45 @@ describe("Delay forecast routes — real project data (DOM-001), local computati
 
 describe("Delay forecast routes — ML available (mocked)", () => {
   let app: FastifyInstance;
-  let capturedRequestBody: { entityId?: string; features?: { completedTaskCount?: number; totalTaskCount?: number } } | undefined;
+  let capturedUrl: string | undefined;
+  let capturedHeaders: Record<string, string> | undefined;
+  let capturedRequestBody: { projectId?: string; tasks?: Array<{ taskId: string }> } | undefined;
+
+  const INTERNAL_SECRET = "test-internal-secret-for-dom-017";
 
   beforeAll(async () => {
     vi.stubEnv("JWT_SECRET", SECRET);
     vi.stubEnv("FEATURE_ML_ENABLED", "true");
     vi.stubEnv("ML_SERVICE_URL", "http://localhost:3032");
+    vi.stubEnv("INTERNAL_SERVICE_SECRET", INTERNAL_SECRET);
 
+    capturedUrl = undefined;
+    capturedHeaders = undefined;
     capturedRequestBody = undefined;
-    // Mock fetch to simulate ml-service delay forecast response, and to
-    // capture the request body sent — this is what proves the route feeds
-    // ml-service REAL counts, not the old hardcoded 5-completed/7-total.
+    // Mock fetch to simulate ml-service's REAL delay-forecast simulate
+    // response, and to capture the request URL/headers/body sent — this is
+    // what proves the route now calls the real Monte Carlo endpoint (DOM-017)
+    // with the real task graph and internal-service auth, not the old
+    // generic /v1/ml/predict call with two scalar counts and no auth headers
+    // at all (which could never have succeeded).
     const fetchMock = vi.fn().mockImplementation((url: string, init?: RequestInit) => {
-      if (typeof url === "string" && url.includes("/v1/ml/predict")) {
+      if (typeof url === "string" && url.includes("/v1/ml/internal/delay-forecast/simulate")) {
+        capturedUrl = url;
+        capturedHeaders = init?.headers as Record<string, string>;
         capturedRequestBody = JSON.parse((init?.body as string) ?? "{}");
         return Promise.resolve({
           ok: true,
           json: () => Promise.resolve({
-            p50Ms: 604800000,   // 7 days
-            p80Ms: 864000000,   // 10 days
-            p95Ms: 1296000000,  // 15 days
-            taskRisks: [
-              { taskId: taskId("a", 7), riskScore: 0.85, factors: ["SPI below target", "high resource utilization"] },
-              { taskId: taskId("a", 8), riskScore: 0.45, factors: ["moderate dependency chain"] },
-            ],
-            bottlenecks: [],
-            fallback: false,
+            data: {
+              p50Ms: 604800000,   // 7 days
+              p80Ms: 864000000,   // 10 days
+              p95Ms: 1296000000,  // 15 days
+              taskRisks: [
+                { taskId: taskId("a", 7), riskScore: 0.85, factors: ["SPI below target", "high resource utilization"] },
+                { taskId: taskId("a", 8), riskScore: 0.45, factors: ["moderate dependency chain"] },
+              ],
+              bottlenecks: [],
+            },
           }),
         });
       }
@@ -336,16 +360,28 @@ describe("Delay forecast routes — ML available (mocked)", () => {
     vi.restoreAllMocks();
   });
 
-  it("SABOTAGE CHECK: sends Project A's REAL completed/total task counts to ml-service, not the old hardcoded 5/7", async () => {
+  it("SABOTAGE CHECK: calls the REAL Monte Carlo endpoint with Project A's REAL task graph, not the old two-scalar-count payload", async () => {
     const res = await app.inject({ method: "GET", url: `/v1/projects/${PROJECT_A}/delay-forecast`, headers: authHeaders() });
 
     expect(res.statusCode).toBe(200);
-    expect(capturedRequestBody?.entityId).toBe(PROJECT_A);
-    // Project A: 6 completed of 8 total (PROJECT_A_TASKS above) — the old
-    // hardcoded task-1..7 stub always sent completedTaskCount=5,
-    // totalTaskCount=7 regardless of which project was queried.
-    expect(capturedRequestBody?.features?.completedTaskCount).toBe(6);
-    expect(capturedRequestBody?.features?.totalTaskCount).toBe(8);
+    expect(capturedUrl).toContain("/v1/ml/internal/delay-forecast/simulate");
+    expect(capturedRequestBody?.projectId).toBe(PROJECT_A);
+    // Project A has 8 real tasks (PROJECT_A_TASKS above) — the old adapter
+    // never sent task data at all, only completedTaskCount/totalTaskCount.
+    const sentIds = new Set((capturedRequestBody?.tasks ?? []).map((t) => t.taskId));
+    expect(capturedRequestBody?.tasks).toHaveLength(8);
+    for (const t of PROJECT_A_TASKS) {
+      expect(sentIds.has(t.id)).toBe(true);
+    }
+  });
+
+  it("SABOTAGE CHECK: authenticates the call with the internal-service headers, not an unauthenticated request", async () => {
+    const res = await app.inject({ method: "GET", url: `/v1/projects/${PROJECT_A}/delay-forecast`, headers: authHeaders() });
+
+    expect(res.statusCode).toBe(200);
+    expect(capturedHeaders?.["x-internal"]).toBe("1");
+    expect(capturedHeaders?.["x-service-secret"]).toBe(INTERNAL_SECRET);
+    expect(capturedHeaders?.["x-tenant-id"]).toBe(TENANT);
   });
 
   it("returns ML prediction with task risks referencing Project A's real task ids", async () => {
@@ -377,10 +413,12 @@ describe("Delay forecast routes — ML error (fallback on failure)", () => {
     vi.stubEnv("JWT_SECRET", SECRET);
     vi.stubEnv("FEATURE_ML_ENABLED", "true");
     vi.stubEnv("ML_SERVICE_URL", "http://localhost:3032");
+    vi.stubEnv("INTERNAL_SERVICE_SECRET", "test-internal-secret-for-dom-017");
 
-    // Mock fetch to simulate ml-service failure
+    // Mock fetch to simulate ml-service reachable but erroring (500) on the
+    // REAL Monte Carlo endpoint.
     const fetchMock = vi.fn().mockImplementation((url: string) => {
-      if (typeof url === "string" && url.includes("/v1/ml/predict")) {
+      if (typeof url === "string" && url.includes("/v1/ml/internal/delay-forecast/simulate")) {
         return Promise.resolve({
           ok: false,
           status: 500,
@@ -403,7 +441,7 @@ describe("Delay forecast routes — ML error (fallback on failure)", () => {
     vi.restoreAllMocks();
   });
 
-  it("falls back to local computation over Project A's real tasks when ML returns error", async () => {
+  it("falls back to local computation over Project A's real tasks when ML returns a 500", async () => {
     const res = await app.inject({ method: "GET", url: `/v1/projects/${PROJECT_A}/delay-forecast`, headers: authHeaders() });
 
     expect(res.statusCode).toBe(200);
@@ -413,6 +451,55 @@ describe("Delay forecast routes — ML error (fallback on failure)", () => {
     expect(body.data.p80Date).toBeDefined();
     expect(body.data.p95Date).toBeDefined();
     expect(Array.isArray(body.data.taskRisks)).toBe(true);
+    for (const risk of body.data.taskRisks) {
+      expect(risk.taskId).not.toMatch(/^task-\d$/);
+    }
+  });
+});
+
+describe("Delay forecast routes — ML genuinely unreachable (network error → fallback)", () => {
+  let app: FastifyInstance;
+
+  beforeAll(async () => {
+    vi.stubEnv("JWT_SECRET", SECRET);
+    vi.stubEnv("FEATURE_ML_ENABLED", "true");
+    vi.stubEnv("ML_SERVICE_URL", "http://localhost:3032");
+    vi.stubEnv("INTERNAL_SERVICE_SECRET", "test-internal-secret-for-dom-017");
+
+    // Mock fetch to simulate ml-service being genuinely unreachable — a
+    // rejected fetch() (connection refused / DNS failure / timeout), not
+    // merely a non-2xx HTTP response. This is the "ml-service is actually
+    // unreachable" case the task's own DoD calls out specifically.
+    const fetchMock = vi.fn().mockImplementation((url: string) => {
+      if (typeof url === "string" && url.includes("/v1/ml/internal/delay-forecast/simulate")) {
+        return Promise.reject(new Error("connect ECONNREFUSED 127.0.0.1:3032"));
+      }
+      return Promise.resolve({ ok: false, status: 404, text: () => Promise.resolve("not found") });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    vi.resetModules();
+    const { buildApp } = await import("../src/app.js");
+    app = await buildApp();
+    await app.ready();
+  });
+
+  afterAll(async () => {
+    await app.close();
+    vi.unstubAllEnvs();
+    vi.restoreAllMocks();
+  });
+
+  it("falls back to local computation over Project A's real tasks when ml-service is unreachable", async () => {
+    const res = await app.inject({ method: "GET", url: `/v1/projects/${PROJECT_A}/delay-forecast`, headers: authHeaders() });
+
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body.data.p50Date).toBeDefined();
+    expect(body.data.p80Date).toBeDefined();
+    expect(body.data.p95Date).toBeDefined();
+    expect(Array.isArray(body.data.taskRisks)).toBe(true);
+    expect(body.data.taskRisks.length).toBeGreaterThan(0);
     for (const risk of body.data.taskRisks) {
       expect(risk.taskId).not.toMatch(/^task-\d$/);
     }

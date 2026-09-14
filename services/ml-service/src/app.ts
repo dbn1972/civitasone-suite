@@ -14,6 +14,7 @@ import { evaluationRoutes } from "./modules/evaluations/routes.js";
 import { predictionRoutes } from "./modules/predictions/routes.js";
 import { healthRoutes } from "./modules/health/routes.js";
 import { experimentRoutes } from "./modules/experiments/routes.js";
+import { delayForecastRoutes } from "./modules/delay-forecast/routes.js";
 import { formatMlMetrics } from "./modules/observability/metrics.js";
 
 export async function buildApp(): Promise<FastifyInstance> {
@@ -55,6 +56,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(predictionRoutes);
   await app.register(healthRoutes);
   await app.register(experimentRoutes);
+  await app.register(delayForecastRoutes);
 
   registerSchemaErrorHandler(app, HttpError);
   return app;
