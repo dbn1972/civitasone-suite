@@ -43,6 +43,10 @@
     "ci:check": "pnpm turbo typecheck lint test && pnpm exec vitest run tests/contract/gateway.contract.test.ts"
   },
   "devDependencies": {
+    "@semantic-release/commit-analyzer": "^13.0.1",
+    "@semantic-release/github": "^12.0.9",
+    "@semantic-release/npm": "^13.1.5",
+    "@semantic-release/release-notes-generator": "^14.1.1",
     "@stryker-mutator/core": "8.6.0",
     "@stryker-mutator/typescript-checker": "8.6.0",
     "@stryker-mutator/vitest-runner": "8.6.0",
@@ -50,6 +54,7 @@
     "eslint": "^9.0.0",
     "fast-check": "4.8.0",
     "prettier": "^3.3.0",
+    "semantic-release": "^25.0.9",
     "turbo": "^2.0.0",
     "typescript": "^5.4.0",
     "vitest": "^2.1.9"
