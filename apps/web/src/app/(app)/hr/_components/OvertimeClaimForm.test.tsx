@@ -1,11 +1,19 @@
-import { describe, it, expect, vi } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }),
 }));
 
 import { OvertimeClaimForm } from "./OvertimeClaimForm";
+
+function fillRequiredFields() {
+  fireEvent.change(screen.getByLabelText(/employee id/i), {
+    target: { value: "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee" },
+  });
+  fireEvent.change(screen.getByLabelText(/date of overtime/i), { target: { value: "2026-09-01" } });
+  fireEvent.change(screen.getByLabelText(/hours worked ot/i), { target: { value: "2" } });
+}
 
 describe("OvertimeClaimForm", () => {
   it("renders CCS Rules policy note", () => {
@@ -69,5 +77,48 @@ describe("OvertimeClaimForm", () => {
     expect(btn).toBeInTheDocument();
     // Style is set inline; check style attribute presence
     expect(btn).toHaveStyle({ minHeight: "44px" });
+  });
+});
+
+/**
+ * UX-016: this used to show the raw server `message` (falling back to
+ * `Server error ${res.status}`) verbatim — the same class of leak
+ * useFormError closes fleet-wide (UX-003).
+ */
+describe("OvertimeClaimForm — UX-016 clerk-safe errors", () => {
+  const fetchMock = vi.fn();
+  beforeEach(() => {
+    fetchMock.mockReset();
+    vi.stubGlobal("fetch", fetchMock);
+  });
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("shows a clerk-safe message, never the raw HTTP status, when submission fails", async () => {
+    fetchMock.mockResolvedValue(new Response("", { status: 500 }));
+    render(<OvertimeClaimForm />);
+    fillRequiredFields();
+    fireEvent.submit(screen.getByRole("form", { name: /overtime claim form/i }));
+
+    const alert = await screen.findByRole("alert");
+    await waitFor(() => expect(alert).toHaveTextContent(/couldn't save/i));
+    expect(alert.textContent).not.toMatch(/\b500\b/);
+  });
+
+  it("renders an inline field-level message from a fieldErrors response next to the offending field", async () => {
+    fetchMock.mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          code: "VALIDATION_FAILED",
+          message: "validation_failed",
+          fieldErrors: [{ field: "hoursRequested", message: "Hours must be a valid number." }],
+        }),
+        { status: 400, headers: { "content-type": "application/json" } },
+      ),
+    );
+    render(<OvertimeClaimForm />);
+    fillRequiredFields();
+    fireEvent.submit(screen.getByRole("form", { name: /overtime claim form/i }));
+
+    expect(await screen.findByText("Hours must be a valid number.")).toBeInTheDocument();
   });
 });

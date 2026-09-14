@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { PageHeader, Card, DataTable, EmptyState, ConfirmDialog, StatGrid, StatCard } from "../../../_components/ds";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { CreateLeavePolicyForm } from "./CreateLeavePolicyForm";
+import { useFormError } from "@/lib/useFormError";
 
 type Policy = {
   id: string;
@@ -60,6 +61,7 @@ export default function LeavePoliciesPage() {
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | undefined>();
   const [toast, setToast] = useState<{ tone: "good" | "bad"; text: string } | null>(null);
+  const formError = useFormError("leave policy");
 
   async function fetchPolicies(signal?: AbortSignal) {
     setState("loading");
@@ -70,13 +72,18 @@ export default function LeavePoliciesPage() {
           ? "/api/proxy/v1/hrms/admin/leave-policies"
           : `/api/proxy/v1/hrms/admin/leave-policies?employeeType=${filter}`;
       const res = await fetch(url, { signal });
-      if (!res.ok) throw new Error((await res.text()) || `Failed to load policies (${res.status})`);
+      if (!res.ok) {
+        const resolved = await formError.fromResponse(res, "load");
+        setLoadError(resolved.message);
+        setState("error");
+        return;
+      }
       const data = await res.json();
       setPolicies(data.data ?? []);
       setState("ready");
     } catch (err) {
       if (err instanceof Error && err.name !== 'AbortError') {
-        setLoadError(err.message || "Failed to load leave policies.");
+        setLoadError(formError.fromException("load").message);
         setState("error");
       }
     }
@@ -85,7 +92,6 @@ export default function LeavePoliciesPage() {
   useEffect(() => {
     const controller = new AbortController()
     void fetchPolicies(controller.signal)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     return () => controller.abort()
   }, [filter]);
 
@@ -118,14 +124,18 @@ export default function LeavePoliciesPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(editValues),
       });
-      if (!res.ok) throw new Error((await res.text()) || `Update failed (${res.status})`);
+      if (!res.ok) {
+        const resolved = await formError.fromResponse(res, "save");
+        setSaveError(resolved.message);
+        return;
+      }
       setConfirmOpen(false);
       setEditId(null);
       setToast({ tone: "good", text: "Policy updated successfully." });
       await fetchPolicies();
       setTimeout(() => setToast(null), 4000);
-    } catch (err) {
-      setSaveError(err instanceof Error ? err.message : "Failed to update policy.");
+    } catch {
+      setSaveError(formError.fromException("save").message);
     } finally {
       setSaving(false);
     }

@@ -6,6 +6,7 @@ import { DataTable, ConfirmDialog } from "../../../../_components/ds";
 import type { AttendanceRegularisation } from "@civitasone/types";
 import { useSeededResource } from "@/lib/sync/resource";
 import { formatIndianDate } from "@/lib/formatters";
+import { useFormError } from "@/lib/useFormError";
 
 type Decision = "approve" | "reject";
 type Row = AttendanceRegularisation & Record<string, unknown>;
@@ -23,6 +24,7 @@ export function RegularisationTable({ regs, source = "api" }: { regs: Attendance
   const [busy, setBusy] = useState(false);
   const [dialogError, setDialogError] = useState<string | undefined>();
   const [toast, setToast] = useState<{ tone: "good" | "bad"; text: string } | null>(null);
+  const formError = useFormError("regularisation request");
 
   const cacheNote =
     offline || fromCache
@@ -32,22 +34,23 @@ export function RegularisationTable({ regs, source = "api" }: { regs: Attendance
   async function act(id: string, decision: Decision, reason?: string) {
     setBusy(true);
     setDialogError(undefined);
+    formError.clear();
     try {
       const res = await fetch(`/api/proxy/v1/hrms/attendance/regularisations/${id}/${decision}`, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ reason }),
       });
-      const text = await res.text();
       if (!res.ok) {
-        setDialogError(text || `${decision} failed (${res.status})`);
+        const resolved = await formError.fromResponse(res, "save");
+        setDialogError(resolved.message);
         return;
       }
       setPending(null);
       setToast({ tone: "good", text: decision === "approve" ? "Regularisation approved." : "Regularisation rejected." });
       router.refresh();
-    } catch (err) {
-      setDialogError(err instanceof Error ? err.message : "Network error. Please try again.");
+    } catch {
+      setDialogError(formError.fromException("save").message);
     } finally {
       setBusy(false);
     }

@@ -11,6 +11,7 @@ import {
   minLength,
   type Validator,
 } from "@/lib/form-validation";
+import { useFormError } from "@/lib/useFormError";
 
 type LeaveAllocation = {
   id: string;
@@ -50,6 +51,7 @@ export function ApplyLeaveForm({ employees, initialEmployeeId }: Props) {
   >("idle");
   const [message, setMessage] = useState("");
   const { toast } = useToast();
+  const formError = useFormError("leave request");
 
   // Ref that mirrors fromDate value for the cross-field toDate validator.
   // Updated during render (write-to-ref-during-render pattern — safe in React).
@@ -86,7 +88,10 @@ export function ApplyLeaveForm({ employees, initialEmployeeId }: Props) {
       const res = await fetch(
         `/api/proxy/v1/hrms/leave-context?employeeId=${encodeURIComponent(empId)}`,
       );
-      if (!res.ok) throw new Error(await res.text());
+      if (!res.ok) {
+        const resolved = await formError.fromResponse(res, "load");
+        throw new Error(resolved.message);
+      }
       const ctx = (await res.json()) as LeaveContext;
       setLeaveContext(ctx);
       setStatus("idle");
@@ -94,9 +99,11 @@ export function ApplyLeaveForm({ employees, initialEmployeeId }: Props) {
       setLeaveContext(null);
       setStatus("error");
       setMessage(
-        err instanceof Error ? err.message : "Failed to load leave balances",
+        err instanceof Error ? err.message : formError.fromException("load").message,
       );
     }
+    // formError.fromResponse/fromException are stable across renders (see
+    // useFormError) even though the wrapping object literal isn't.
   }, []);
 
   useEffect(() => {
@@ -181,15 +188,13 @@ export function ApplyLeaveForm({ employees, initialEmployeeId }: Props) {
         return;
       }
 
-      const text = response ? await response.text() : "";
       if (!response || !response.ok) {
+        const resolved = response
+          ? await formError.fromResponse(response, "save")
+          : formError.fromException("save");
         setStatus("error");
-        setMessage(
-          text || `Request failed (${response?.status ?? "network"})`,
-        );
-        toast.error(
-          "Leave request failed. Please check the details and try again.",
-        );
+        setMessage(resolved.message);
+        toast.error(resolved.message);
         return;
       }
       setStatus("accepted");
@@ -198,9 +203,9 @@ export function ApplyLeaveForm({ employees, initialEmployeeId }: Props) {
       toast.success("Leave request submitted for approval.");
       resetFields();
       void loadContext(employeeId);
-    } catch (err) {
+    } catch {
       setStatus("error");
-      setMessage(err instanceof Error ? err.message : "Network error");
+      setMessage(formError.fromException("save").message);
     }
   }
 

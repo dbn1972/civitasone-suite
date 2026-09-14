@@ -3,6 +3,7 @@
 import { useId, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { EmployeeDetail } from "@civitasone/types";
+import { useFormError } from "@/lib/useFormError";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const PHONE_RE = /^\+?[\d\s\-()]{7,20}$/;
@@ -49,6 +50,7 @@ export function EditEmployeeForm({ employee }: Props) {
   const [message, setMessage] = useState<string | null>(null);
   const [tone, setTone] = useState<"success" | "error">("error");
   const [invalidFields, setInvalidFields] = useState<Set<string>>(new Set());
+  const formError = useFormError("employee record");
 
   const ids = {
     mobile: `${formId}-mobile`,
@@ -111,20 +113,10 @@ export function EditEmployeeForm({ employee }: Props) {
       });
 
       if (!res.ok) {
-        let detail = "";
-        try {
-          const json: unknown = await res.json();
-          if (
-            typeof json === "object" &&
-            json !== null &&
-            "message" in json
-          ) {
-            detail = String((json as Record<string, unknown>).message);
-          }
-        } catch {
-          // ignore
-        }
-        throw new Error(detail || `Update failed (${res.status})`);
+        const resolved = await formError.fromResponse(res, "save");
+        setTone("error");
+        setMessage(resolved.message);
+        return;
       }
 
       // PATCH /v1/hrms/employees/:id returns 202 (queued command) -- the
@@ -135,11 +127,9 @@ export function EditEmployeeForm({ employee }: Props) {
         router.push(`/hr/employees/${employee.id}`);
         router.refresh();
       }, 1200);
-    } catch (err) {
+    } catch {
       setTone("error");
-      setMessage(
-        err instanceof Error ? err.message : "Network error. Please try again."
-      );
+      setMessage(formError.fromException("save").message);
     } finally {
       setBusy(false);
     }
@@ -240,6 +230,9 @@ export function EditEmployeeForm({ employee }: Props) {
                   : "var(--line, #cbd5e1)",
               }}
             />
+            {formError.fieldError("mobile") && (
+              <span style={{ fontSize: 12, color: "#b91c1c" }}>{formError.fieldError("mobile")}</span>
+            )}
           </div>
 
           <div style={{ display: "grid", gap: 6 }}>
@@ -261,6 +254,9 @@ export function EditEmployeeForm({ employee }: Props) {
                   : "var(--line, #cbd5e1)",
               }}
             />
+            {formError.fieldError("email") && (
+              <span style={{ fontSize: 12, color: "#b91c1c" }}>{formError.fieldError("email")}</span>
+            )}
           </div>
 
           <div style={{ display: "grid", gap: 6 }}>

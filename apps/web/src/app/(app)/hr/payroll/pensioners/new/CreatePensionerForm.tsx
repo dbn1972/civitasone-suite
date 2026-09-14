@@ -3,6 +3,7 @@
 import { useId, useState } from "react";
 import type { CSSProperties } from "react";
 import { useRouter } from "next/navigation";
+import { useFormError } from "@/lib/useFormError";
 
 const PAN_REGEX = /^[A-Z]{5}[0-9]{4}[A-Z]$/;
 
@@ -34,6 +35,7 @@ export function CreatePensionerForm() {
   const [taxRegime, setTaxRegime] = useState<"old" | "new">("new");
   const [status, setStatus] = useState<"idle" | "submitting" | "success" | "error">("idle");
   const [message, setMessage] = useState("");
+  const formError = useFormError("pensioner");
 
   const ppoFieldId = useId();
   const nameFieldId = useId();
@@ -93,19 +95,19 @@ export function CreatePensionerForm() {
         }),
       });
 
-      const text = await res.text();
       if (!res.ok) {
+        const resolved = await formError.fromResponse(res, "save");
         setStatus("error");
-        setMessage(text || `Request failed (${res.status})`);
+        setMessage(resolved.message);
         return;
       }
 
       setStatus("success");
       setMessage("Pensioner created successfully.");
       router.push("/hr/payroll/pensioners");
-    } catch (err) {
+    } catch {
       setStatus("error");
-      setMessage(err instanceof Error ? err.message : "Network error");
+      setMessage(formError.fromException("save").message);
     }
   }
 

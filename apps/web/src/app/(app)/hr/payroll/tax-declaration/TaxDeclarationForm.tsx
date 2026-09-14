@@ -2,6 +2,7 @@
 
 import { useEffect, useId, useState } from "react";
 import { currentFinancialYear } from "@/lib/fiscalYear";
+import { useFormError } from "@/lib/useFormError";
 
 /** Convert INR (rupees) input to paise. */
 function toPaise(inr: string): number {
@@ -32,6 +33,7 @@ export function TaxDeclarationForm() {
   const [loadFailed, setLoadFailed] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [tone, setTone] = useState<"good" | "bad">("good");
+  const formError = useFormError("tax declaration");
 
   const regimeNewId = useId();
   const regimeOldId = useId();
@@ -95,15 +97,16 @@ export function TaxDeclarationForm() {
       });
 
       if (!res.ok) {
+        const resolved = await formError.fromResponse(res, "save");
         setTone("bad");
-        setMessage(`Submission failed (${res.status}). Please try again or contact support.`);
+        setMessage(resolved.message);
         return;
       }
       setTone("good");
       setMessage("Declaration submitted successfully.");
-    } catch (err) {
+    } catch {
       setTone("bad");
-      setMessage(err instanceof Error ? err.message : "Network error. Please try again.");
+      setMessage(formError.fromException("save").message);
     } finally {
       setBusy(false);
     }

@@ -3,6 +3,7 @@
 import { useId, useRef, useState } from "react";
 import { ConfirmDialog } from "../../../../_components/ds";
 import { browserJson, browserFetch } from "@/lib/api/browserClient";
+import { useFormError } from "@/lib/useFormError";
 
 type MandateResult = { umrn?: string; status?: string; message?: string } & Record<string, unknown>;
 
@@ -29,6 +30,7 @@ export function NachMandateForm() {
   const [statusError, setStatusError] = useState<string | null>(null);
   const [statusResult, setStatusResult] = useState<MandateResult | null>(null);
   const [statusRefInvalid, setStatusRefInvalid] = useState(false);
+  const formError = useFormError("mandate");
 
   const empIdField = useId();
   const amtField = useId();
@@ -120,15 +122,14 @@ export function NachMandateForm() {
         method: "GET",
       });
       if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        const code = (body as { error?: { message?: string; code?: string } })?.error;
-        setStatusError(code?.message ?? code?.code ?? `Status check failed (${res.status}).`);
+        const resolved = await formError.fromResponse(res, "unknownStatus");
+        setStatusError(resolved.message);
         return;
       }
       const body = (await res.json()) as { data: MandateResult };
       setStatusResult(body.data);
-    } catch (err) {
-      setStatusError(err instanceof Error ? err.message : "Network error. Please try again.");
+    } catch {
+      setStatusError(formError.fromException("unknownStatus").message);
     } finally {
       setStatusBusy(false);
     }

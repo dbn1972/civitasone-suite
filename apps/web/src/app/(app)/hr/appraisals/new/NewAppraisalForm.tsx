@@ -3,6 +3,7 @@
 import { useId, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { EmployeeSummary } from "@civitasone/types";
+import { useFormError } from "@/lib/useFormError";
 
 type Props = {
   employees: EmployeeSummary[];
@@ -16,6 +17,7 @@ export function NewAppraisalForm({ employees }: Props) {
   const [reviewerId, setReviewerId] = useState("");
   const [status, setStatus] = useState<"idle" | "submitting" | "success" | "error">("idle");
   const [message, setMessage] = useState("");
+  const formError = useFormError("appraisal");
 
   const employeeFieldId = useId();
   const periodFieldId = useId();
@@ -32,6 +34,7 @@ export function NewAppraisalForm({ employees }: Props) {
 
     setStatus("submitting");
     setMessage("");
+    formError.clear();
 
     try {
       const res = await fetch("/api/proxy/v1/hrms/appraisals", {
@@ -44,19 +47,19 @@ export function NewAppraisalForm({ employees }: Props) {
         }),
       });
 
-      const text = await res.text();
       if (!res.ok) {
+        const resolved = await formError.fromResponse(res, "save");
         setStatus("error");
-        setMessage(text || `Request failed (${res.status})`);
+        setMessage(resolved.message);
         return;
       }
 
       setStatus("success");
       setMessage("Appraisal created successfully.");
       router.push("/hr/appraisals");
-    } catch (err) {
+    } catch {
       setStatus("error");
-      setMessage(err instanceof Error ? err.message : "Network error");
+      setMessage(formError.fromException("save").message);
     }
   }
 
@@ -101,6 +104,9 @@ export function NewAppraisalForm({ employees }: Props) {
           className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
           required
         />
+        {formError.fieldError("appraisalPeriod") && (
+          <p className="mt-1 text-xs text-red-600">{formError.fieldError("appraisalPeriod")}</p>
+        )}
       </div>
 
       <div>

@@ -5,6 +5,7 @@ import type { CSSProperties } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { PageHeader, Card } from "../../../../../../_components/ds";
 import { DataSourceBadge } from "../../../../../../_components/DataSourceBadge";
+import { useFormError } from "@/lib/useFormError";
 
 const inputStyle: CSSProperties = {
   width: "100%", padding: "8px 12px", border: "1px solid var(--line)",
@@ -43,6 +44,7 @@ export default function ApplicationDetailPage() {
   const [employeeType, setEmployeeType] = useState<"permanent" | "temporary" | "contract" | "deputation">("permanent");
   const [hireStatus, setHireStatus] = useState<"idle" | "submitting" | "success" | "error">("idle");
   const [hireMessage, setHireMessage] = useState("");
+  const formError = useFormError("application");
 
   const empNoId = useId();
   const dojId = useId();
@@ -62,7 +64,7 @@ export default function ApplicationDetailPage() {
         const res = await fetch(`/api/proxy/v1/hrms/job-openings/${jobOpeningId}/applications`);
         if (!res.ok) {
           setSource("error");
-          setError(`Failed to load (${res.status})`);
+          setError((await formError.fromResponse(res, "load")).message);
           return;
         }
         const data = await res.json() as { data?: Application[] };
@@ -74,7 +76,7 @@ export default function ApplicationDetailPage() {
         setApplication(found);
       } catch {
         setSource("error");
-        setError("Network error loading application.");
+        setError(formError.fromException("load").message);
       } finally {
         setLoading(false);
       }
@@ -98,18 +100,18 @@ export default function ApplicationDetailPage() {
         body: JSON.stringify({ employeeNo: employeeNo.trim(), dateOfJoining, basicMinor, departmentId: departmentId.trim(), designationId: designationId.trim(), employeeType }),
       });
       if (!res.ok) {
-        const text = await res.text();
+        const resolved = await formError.fromResponse(res, "save");
         setHireStatus("error");
-        setHireMessage(text || `Request failed (${res.status})`);
+        setHireMessage(resolved.message);
         return;
       }
       setHireStatus("success");
       setHireMessage("Hire initiated. Employee record is being created.");
       setShowHireDialog(false);
       router.refresh();
-    } catch (err) {
+    } catch {
       setHireStatus("error");
-      setHireMessage(err instanceof Error ? err.message : "Network error");
+      setHireMessage(formError.fromException("save").message);
     }
   }
 

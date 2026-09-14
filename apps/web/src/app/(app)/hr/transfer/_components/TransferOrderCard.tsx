@@ -9,6 +9,7 @@ import { useState } from "react";
 import { StatusPill, ConfirmDialog } from "@/app/_components/ds";
 import { formatIndianDate } from "@/lib/formatters";
 import { useToast } from "@/app/_components/ds/Toast";
+import { useFormError } from "@/lib/useFormError";
 
 export type TransferRow = {
   id: string;
@@ -81,6 +82,7 @@ export function TransferOrderCard({ transfer, onAction }: Props) {
   const [acting, setActing] = useState(false);
   const [pending, setPending] = useState<PendingStage | null>(null);
   const [dialogError, setDialogError] = useState<string | undefined>();
+  const formError = useFormError("transfer order");
   const statusLabel = STAGE_LABEL[transfer.status] ?? transfer.status;
   const currentIdx = stageIndex(transfer.status);
   const today = new Date().toISOString().split("T")[0] ?? "";
@@ -96,12 +98,15 @@ export function TransferOrderCard({ transfer, onAction }: Props) {
         `/api/proxy/v1/hrms/lifecycle/transfers/${transfer.id}/${path}`,
         { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) },
       );
-      if (!res.ok) throw new Error(await res.text() || `HTTP ${res.status}`);
+      if (!res.ok) {
+        const resolved = await formError.fromResponse(res, "save");
+        throw new Error(resolved.message);
+      }
       toast.success("Transfer updated. Change will reflect shortly.");
       setPending(null);
       onAction?.();
     } catch (err) {
-      setDialogError(err instanceof Error ? err.message : "Action failed");
+      setDialogError(err instanceof Error ? err.message : formError.fromException("save").message);
     } finally {
       setActing(false);
     }

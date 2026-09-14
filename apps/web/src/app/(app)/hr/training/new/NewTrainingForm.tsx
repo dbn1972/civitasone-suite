@@ -2,9 +2,11 @@
 
 import { useId, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useFormError } from "@/lib/useFormError";
 
 export function NewTrainingForm() {
   const router = useRouter();
+  const formError = useFormError("training program");
 
   const [title, setTitle] = useState("");
   const [venue, setVenue] = useState("");
@@ -58,19 +60,19 @@ export function NewTrainingForm() {
         }),
       });
 
-      const text = await res.text();
       if (!res.ok) {
+        const resolved = await formError.fromResponse(res, "save");
         setStatus("error");
-        setMessage(text || `Request failed (${res.status})`);
+        setMessage(resolved.message);
         return;
       }
 
       setStatus("success");
       setMessage("Training program created successfully.");
       router.push("/hr/training");
-    } catch (err) {
+    } catch {
       setStatus("error");
-      setMessage(err instanceof Error ? err.message : "Network error");
+      setMessage(formError.fromException("save").message);
     }
   }
 

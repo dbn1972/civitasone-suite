@@ -93,6 +93,12 @@ describe("ReturnsPage", () => {
     expect(screen.getByText("Could not load Form-24Q for FY 2025-26 Q1")).toBeInTheDocument();
     expect(screen.queryByText("File anyway — bypass reconciliation (force)")).not.toBeInTheDocument();
     expect(screen.queryByText("Form-24Q blocked for FY 2025-26 Q1")).not.toBeInTheDocument();
+    // UX-016: this used to show a hardcoded "The request failed. Please
+    // reload the page…" literal regardless of what actually went wrong —
+    // the same class of leak useFormError closes fleet-wide (UX-003), just
+    // via toHumanError directly since this is a server component.
+    expect(screen.getByText(/couldn't load this form-24q return/i)).toBeInTheDocument();
+    expect(screen.queryByText(/^The request failed\./)).not.toBeInTheDocument();
   });
 
   it("shows the Form-26Q error affordance (not generic empty copy) when the loader fails", async () => {
@@ -108,5 +114,8 @@ describe("ReturnsPage", () => {
 
     expect(screen.getByText("Could not load Form-26Q for FY 2025-26 Q1")).toBeInTheDocument();
     expect(screen.queryByText("Non-salary TDS not yet populated")).not.toBeInTheDocument();
+    // UX-016: same hardcoded-literal leak as the Form-24Q branch above.
+    expect(screen.getByText(/couldn't load this form-26q return/i)).toBeInTheDocument();
+    expect(screen.queryByText(/^The request failed\./)).not.toBeInTheDocument();
   });
 });

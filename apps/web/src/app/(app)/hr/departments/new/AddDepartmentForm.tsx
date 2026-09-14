@@ -1,6 +1,7 @@
 "use client";
 
 import { useId, useState } from "react";
+import { useFormError } from "@/lib/useFormError";
 
 interface Props {
   onCancel: () => void;
@@ -33,6 +34,7 @@ export function AddDepartmentForm({ onCancel, onSuccess }: Props) {
   const [message, setMessage] = useState<string | null>(null);
   const [tone, setTone] = useState<"success" | "error">("success");
   const [invalid, setInvalid] = useState<Set<string>>(new Set());
+  const formError = useFormError("department");
 
   const codeId = `${formId}-code`;
   const nameId = `${formId}-name`;
@@ -66,6 +68,7 @@ export function AddDepartmentForm({ onCancel, onSuccess }: Props) {
 
     setInvalid(new Set());
     setBusy(true);
+    formError.clear();
     try {
       const res = await fetch("/api/proxy/v1/hrms/departments", {
         method: "POST",
@@ -74,20 +77,10 @@ export function AddDepartmentForm({ onCancel, onSuccess }: Props) {
       });
 
       if (!res.ok) {
-        let detail = "";
-        try {
-          const json: unknown = await res.json();
-          if (
-            typeof json === "object" &&
-            json !== null &&
-            "message" in json
-          ) {
-            detail = String((json as Record<string, unknown>).message);
-          }
-        } catch {
-          // ignore
-        }
-        throw new Error(detail || `Failed (${res.status})`);
+        const resolved = await formError.fromResponse(res, "save");
+        setTone("error");
+        setMessage(resolved.message);
+        return;
       }
 
       setTone("success");
@@ -95,11 +88,9 @@ export function AddDepartmentForm({ onCancel, onSuccess }: Props) {
       setCode("");
       setName("");
       onSuccess?.();
-    } catch (err) {
+    } catch {
       setTone("error");
-      setMessage(
-        err instanceof Error ? err.message : "Network error. Please try again."
-      );
+      setMessage(formError.fromException("save").message);
     } finally {
       setBusy(false);
     }
@@ -168,6 +159,9 @@ export function AddDepartmentForm({ onCancel, onSuccess }: Props) {
               aria-invalid={invalid.has("code")}
               style={inputStyle}
             />
+            {formError.fieldError("code") && (
+              <span style={{ fontSize: 12, color: "#b91c1c" }}>{formError.fieldError("code")}</span>
+            )}
           </div>
 
           {/* Name */}
@@ -190,6 +184,9 @@ export function AddDepartmentForm({ onCancel, onSuccess }: Props) {
               aria-invalid={invalid.has("name")}
               style={inputStyle}
             />
+            {formError.fieldError("name") && (
+              <span style={{ fontSize: 12, color: "#b91c1c" }}>{formError.fieldError("name")}</span>
+            )}
           </div>
         </div>
 

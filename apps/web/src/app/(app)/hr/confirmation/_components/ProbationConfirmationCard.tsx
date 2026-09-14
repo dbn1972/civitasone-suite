@@ -15,6 +15,7 @@
 import { useState } from "react";
 import { StatusPill, ConfirmDialog, useConfirmAction } from "@/app/_components/ds";
 import { formatIndianDate } from "@/lib/formatters";
+import { useFormError } from "@/lib/useFormError";
 
 export type ConfirmationRow = {
   id: string;
@@ -53,6 +54,7 @@ function ProbationCard({ row }: { row: ConfirmationRow }) {
   const days = daysDiff(row.dueDate);
   const due  = dueMeta(days);
   const rec  = REC_CONFIG[row.managerRecommendation ?? "pending"] ?? REC_CONFIG.pending;
+  const formError = useFormError("probation confirmation");
 
   const { open, busy, error, trigger, cancel, confirm } = useConfirmAction({
     onConfirm: async () => {
@@ -63,8 +65,8 @@ function ProbationCard({ row }: { row: ConfirmationRow }) {
         body: JSON.stringify({ confirmationDate }),
       });
       if (!res.ok) {
-        const text = await res.text();
-        throw new Error(text || `Confirmation failed (${res.status})`);
+        const resolved = await formError.fromResponse(res, "save");
+        throw new Error(resolved.message);
       }
     },
     onSuccess: () => setAction("confirmed"),

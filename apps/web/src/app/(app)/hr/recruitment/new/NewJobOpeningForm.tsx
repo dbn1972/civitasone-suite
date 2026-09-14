@@ -3,6 +3,7 @@
 import { useId, useState, useEffect } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
+import { useFormError } from "@/lib/useFormError";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -62,6 +63,7 @@ export function NewJobOpeningForm() {
   const [status, setStatus] = useState<"idle" | "submitting" | "success" | "error">("idle");
   const [message, setMessage] = useState("");
   const [invalidField, setInvalidField] = useState<string | null>(null);
+  const formError = useFormError("job opening");
 
   const refNoId = useId();
   const titleId = useId();
@@ -123,10 +125,10 @@ export function NewJobOpeningForm() {
         }),
       });
 
-      const text = await res.text();
       if (!res.ok) {
+        const resolved = await formError.fromResponse(res, "save");
         setStatus("error");
-        setMessage(text || `Request failed (${res.status})`);
+        setMessage(resolved.message);
         return;
       }
 
@@ -136,9 +138,9 @@ export function NewJobOpeningForm() {
       // race it off-screen).
       setStatus("success");
       setMessage("Job opening submitted. It will appear in the vacancy list shortly.");
-    } catch (err) {
+    } catch {
       setStatus("error");
-      setMessage(err instanceof Error ? err.message : "Network error");
+      setMessage(formError.fromException("save").message);
     }
   }
 

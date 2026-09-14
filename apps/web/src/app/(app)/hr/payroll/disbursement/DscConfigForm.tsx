@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { ConfirmDialog } from "../../../../_components/ds";
 import { formatIndianDate } from "@/lib/formatters";
 import { browserJson } from "@/lib/api/browserClient";
+import { useFormError } from "@/lib/useFormError";
 
 type DscConfig = {
   subjectCn: string;
@@ -42,6 +43,7 @@ export function DscConfigForm({ initial }: { initial: DscConfig | null }) {
   const [message, setMessage] = useState<string | null>(null);
   const [fileInvalid, setFileInvalid] = useState(false);
   const [passInvalid, setPassInvalid] = useState(false);
+  const formError = useFormError("DSC certificate");
 
   const fileId = useId();
   const passId = useId();
@@ -84,7 +86,7 @@ export function DscConfigForm({ initial }: { initial: DscConfig | null }) {
       if (fileRef.current) fileRef.current.value = "";
       router.refresh();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Certificate upload failed. Check the P12 file and passphrase.");
+      setError(err instanceof Error ? err.message : formError.fromException("save").message);
     } finally {
       setBusy(false);
     }
@@ -99,7 +101,7 @@ export function DscConfigForm({ initial }: { initial: DscConfig | null }) {
       setMessage("DSC configuration removed. This tenant now runs in unsigned mode.");
       router.refresh();
     } catch (err) {
-      setDeleteError(err instanceof Error ? err.message : "Could not remove the DSC configuration.");
+      setDeleteError(err instanceof Error ? err.message : formError.fromException("save").message);
     } finally {
       setBusy(false);
     }

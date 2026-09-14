@@ -1,6 +1,7 @@
 "use client";
 
 import { useId, useState } from "react";
+import { useFormError } from "@/lib/useFormError";
 
 interface Props {
   onCancel: () => void;
@@ -49,6 +50,7 @@ export function AddLocationForm({ onCancel, onSuccess }: Props) {
   const [message, setMessage] = useState<string | null>(null);
   const [tone, setTone] = useState<"success" | "error">("success");
   const [invalid, setInvalid] = useState<Set<string>>(new Set());
+  const formError = useFormError("location");
 
   const nameId = `${formId}-name`;
   const typeId = `${formId}-type`;
@@ -110,20 +112,10 @@ export function AddLocationForm({ onCancel, onSuccess }: Props) {
       });
 
       if (!res.ok) {
-        let detail = "";
-        try {
-          const json: unknown = await res.json();
-          if (
-            typeof json === "object" &&
-            json !== null &&
-            "message" in json
-          ) {
-            detail = String((json as Record<string, unknown>).message);
-          }
-        } catch {
-          // ignore
-        }
-        throw new Error(detail || `Failed (${res.status})`);
+        const resolved = await formError.fromResponse(res, "save");
+        setTone("error");
+        setMessage(resolved.message);
+        return;
       }
 
       setTone("success");
@@ -135,11 +127,9 @@ export function AddLocationForm({ onCancel, onSuccess }: Props) {
       setPostalCode("");
       setLgdCode("");
       onSuccess?.();
-    } catch (err) {
+    } catch {
       setTone("error");
-      setMessage(
-        err instanceof Error ? err.message : "Network error. Please try again."
-      );
+      setMessage(formError.fromException("save").message);
     } finally {
       setBusy(false);
     }

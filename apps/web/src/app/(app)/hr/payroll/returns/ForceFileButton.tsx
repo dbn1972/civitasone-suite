@@ -4,6 +4,7 @@ import { useState } from "react";
 import { ConfirmDialog } from "../../../../_components/ds";
 import { useToast } from "@/app/_components/ds/Toast";
 import { formatMoney } from "@/lib/formatters";
+import { useFormError } from "@/lib/useFormError";
 
 type ForceFileResult = {
   deducteeCount: number;
@@ -40,6 +41,7 @@ export function ForceFileButton({ fy, quarter }: { fy: string; quarter: string }
   const [error, setError] = useState<string | undefined>();
   const [result, setResult] = useState<ForceFileResult | null>(null);
   const { toast } = useToast();
+  const formError = useFormError("Form-24Q return");
 
   async function confirm(reason?: string) {
     setBusy(true);
@@ -50,11 +52,12 @@ export function ForceFileButton({ fy, quarter }: { fy: string; quarter: string }
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ fy, quarter, confirmForce: true, reason }),
       });
-      const body = await res.json().catch(() => null);
       if (!res.ok) {
-        setError((body && typeof body.message === "string" && body.message) || `Force-file failed (${res.status})`);
+        const resolved = await formError.fromResponse(res, "save");
+        setError(resolved.message);
         return;
       }
+      const body = await res.json().catch(() => null);
       setResult({
         deducteeCount: Number(body?.deducteeCount ?? 0),
         totalTdsDeducted: Number(body?.totalTdsDeducted ?? 0),
@@ -63,8 +66,8 @@ export function ForceFileButton({ fy, quarter }: { fy: string; quarter: string }
       });
       toast.success(`✓ Form-24Q for FY ${fy} ${quarter} filed with reconciliation override`);
       setOpen(false);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Network error. Please try again.");
+    } catch {
+      setError(formError.fromException("save").message);
     } finally {
       setBusy(false);
     }

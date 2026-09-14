@@ -2,6 +2,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import type { LeaveInboxItem } from "@civitasone/types";
+import { useFormError } from "@/lib/useFormError";
 
 const LEAVE_COLORS: Record<string, { bg: string; color: string }> = {
   EL:  { bg: "#eff6ff", color: "#2563eb" },
@@ -24,6 +25,7 @@ export function ActionInbox({ initialItems }: Props) {
   const [items, setItems] = useState<LeaveInboxItem[]>(initialItems);
   const [loading, setLoading] = useState<Record<string, boolean>>({});
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const formError = useFormError("leave application");
 
   async function act(id: string, action: "approve" | "reject") {
     setLoading((p) => ({ ...p, [id]: true }));
@@ -32,8 +34,8 @@ export function ActionInbox({ initialItems }: Props) {
       if (res.ok) {
         setItems((p) => p.filter((i) => i.id !== id));
       } else {
-        const msg = await res.json().then((d) => d?.error ?? d?.message ?? `Error ${res.status}`).catch(() => `Error ${res.status}`);
-        setErrors((p) => ({ ...p, [id]: msg }));
+        const resolved = await formError.fromResponse(res, "save");
+        setErrors((p) => ({ ...p, [id]: resolved.message }));
       }
     } finally {
       setLoading((p) => ({ ...p, [id]: false }));

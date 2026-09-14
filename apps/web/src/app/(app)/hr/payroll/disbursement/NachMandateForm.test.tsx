@@ -78,7 +78,11 @@ describe("NachMandateForm", () => {
     });
   });
 
-  it("surfaces a server error on the status lookup (error path)", async () => {
+  // UX-016: this used to show the backend's raw `error.message` verbatim
+  // ("mandate not found") — the same class of leak useFormError closes
+  // fleet-wide (UX-003). It must now show the catalogued clerk-safe message
+  // instead, never the raw server text.
+  it("surfaces a clerk-safe message on the status lookup, never the raw server text (error path)", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(
       new Response(JSON.stringify({ error: { code: "NOT_FOUND", message: "mandate not found" } }), { status: 404 }),
     );
@@ -88,7 +92,22 @@ describe("NachMandateForm", () => {
     fireEvent.click(screen.getByText("Check Status"));
 
     await waitFor(() => {
-      expect(screen.getByText("mandate not found")).toBeInTheDocument();
+      expect(screen.getByText(/couldn't check the status/i)).toBeInTheDocument();
     });
+    expect(screen.queryByText("mandate not found")).not.toBeInTheDocument();
+    expect(screen.queryByText(/NOT_FOUND/)).not.toBeInTheDocument();
+  });
+
+  it("never surfaces a raw HTTP status code on a plain-text status-lookup failure", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("", { status: 500 }));
+
+    render(<NachMandateForm />);
+    fireEvent.change(screen.getByLabelText(/Check Mandate Status by Reference/), { target: { value: "REF-2" } });
+    fireEvent.click(screen.getByText("Check Status"));
+
+    await waitFor(() => {
+      expect(screen.getByText(/couldn't check the status/i)).toBeInTheDocument();
+    });
+    expect(screen.queryByText(/\b500\b/)).not.toBeInTheDocument();
   });
 });

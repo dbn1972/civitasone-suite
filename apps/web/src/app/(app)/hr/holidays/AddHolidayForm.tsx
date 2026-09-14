@@ -2,6 +2,7 @@
 
 import { useId, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useFormError } from "@/lib/useFormError";
 
 const inputStyle: React.CSSProperties = {
   width: "100%", padding: "8px 12px", border: "1px solid var(--line)",
@@ -22,6 +23,7 @@ export function AddHolidayForm() {
   const [busy, setBusy] = useState(false);
   const router = useRouter();
   const nameRef = useRef<HTMLInputElement>(null);
+  const formError = useFormError("holiday");
 
   function set(key: keyof Fields, value: string) {
     setFields((f) => ({ ...f, [key]: value }));
@@ -41,6 +43,7 @@ export function AddHolidayForm() {
     if (!validate()) return;
     setBusy(true);
     setMessage(null);
+    formError.clear();
     try {
       const res = await fetch("/api/proxy/v1/hrms/holidays", {
         method: "POST",
@@ -53,16 +56,16 @@ export function AddHolidayForm() {
         }),
       });
       if (!res.ok) {
-        const err = await res.json().catch(() => ({})) as { message?: string };
-        setMessage({ tone: "bad", text: err.message ?? `Failed (${res.status})` });
+        const resolved = await formError.fromResponse(res, "save");
+        setMessage({ tone: "bad", text: resolved.message });
         return;
       }
       setMessage({ tone: "good", text: `Holiday "${fields.name.trim()}" added.` });
       setFields(INITIAL);
       setOpen(false);
       router.refresh();
-    } catch (err) {
-      setMessage({ tone: "bad", text: err instanceof Error ? err.message : "Network error." });
+    } catch {
+      setMessage({ tone: "bad", text: formError.fromException("save").message });
     } finally {
       setBusy(false);
     }

@@ -5,6 +5,7 @@ import { useState } from "react";
 import { ConfirmDialog } from "../../../../_components/ds";
 import { useToast } from "@/app/_components/ds/Toast";
 import { formatRupees } from "@/lib/formatters";
+import { useFormError } from "@/lib/useFormError";
 
 type Props = {
   runId: string;
@@ -35,6 +36,7 @@ export function PayrollRunActions({
   const [message, setMessage] = useState<string | null>(null);
   const [messageTone, setMessageTone] = useState<"good" | "bad">("good");
   const { toast } = useToast();
+  const formError = useFormError("payroll run");
 
   async function runAction(action: "approve" | "disburse" | "revert", reason?: string) {
     setBusy(true);
@@ -51,9 +53,9 @@ export function PayrollRunActions({
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ reason }),
       });
-      const text = await res.text();
       if (!res.ok) {
-        setError(text || `${action} failed (${res.status})`);
+        const resolved = await formError.fromResponse(res, "save");
+        setError(resolved.message);
         return;
       }
       setMessageTone("good");
@@ -73,8 +75,8 @@ export function PayrollRunActions({
       );
       setPending(null);
       router.refresh();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Network error. Please try again.");
+    } catch {
+      setError(formError.fromException("save").message);
     } finally {
       setBusy(false);
     }

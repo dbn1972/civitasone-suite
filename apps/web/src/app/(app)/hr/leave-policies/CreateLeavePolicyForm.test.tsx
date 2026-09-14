@@ -1,0 +1,48 @@
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { render, screen, fireEvent, waitFor, within } from "@testing-library/react";
+
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }),
+}));
+
+import { CreateLeavePolicyForm } from "./CreateLeavePolicyForm";
+
+const LEAVE_TYPES = [{ id: "lt1", code: "EL", name: "Earned Leave" }];
+
+/**
+ * UX-016: this used to show the raw backend response text (falling back to
+ * `Failed to create policy (${res.status})`) verbatim — the same class of
+ * leak useFormError closes fleet-wide (UX-003).
+ */
+describe("CreateLeavePolicyForm — UX-016 clerk-safe errors", () => {
+  const fetchMock = vi.fn();
+  beforeEach(() => {
+    fetchMock.mockReset();
+    vi.stubGlobal("fetch", fetchMock);
+  });
+  afterEach(() => vi.unstubAllGlobals());
+
+  async function openConfirmSave() {
+    fetchMock.mockImplementation((url: string) => {
+      if (typeof url === "string" && url.includes("/hrms/leave-types")) {
+        return Promise.resolve(new Response(JSON.stringify({ data: LEAVE_TYPES }), { status: 200 }));
+      }
+      return Promise.resolve(new Response("policy-service create-policy trace: NPE at line 88", { status: 500 }));
+    });
+    render(<CreateLeavePolicyForm />);
+    fireEvent.click(screen.getByRole("button", { name: /new policy/i }));
+    await waitFor(() => expect(screen.getByLabelText(/leave type/i)).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: /create policy/i }));
+    const dialog = await screen.findByRole("alertdialog");
+    fireEvent.click(within(dialog).getByRole("button", { name: /create policy/i }));
+  }
+
+  it("shows a clerk-safe message, never the raw server text or status, when creation fails", async () => {
+    await openConfirmSave();
+
+    await waitFor(() => expect(screen.getByRole("alertdialog")).toHaveTextContent(/couldn't save/i));
+    const dialogText = screen.getByRole("alertdialog").textContent ?? "";
+    expect(dialogText).not.toMatch(/policy-service/);
+    expect(dialogText).not.toMatch(/\b500\b/);
+  });
+});

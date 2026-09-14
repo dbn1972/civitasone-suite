@@ -16,7 +16,8 @@ function csvFile() {
   return file;
 }
 
-function mockBackend() {
+function mockBackend(opts: { employeePostOk?: boolean; employeePostBody?: string; employeePostStatus?: number } = {}) {
+  const { employeePostOk = true, employeePostBody = "{}", employeePostStatus = 202 } = opts;
   const postedBodies: Record<string, unknown>[] = [];
   const fn = vi.fn(async (url: string, init?: RequestInit) => {
     if (url === "/api/proxy/v1/hrms/departments") {
@@ -28,6 +29,9 @@ function mockBackend() {
     if (url === "/api/proxy/v1/hrms/employees" && init?.method === "POST") {
       const body = JSON.parse(String(init.body));
       postedBodies.push(body);
+      if (!employeePostOk) {
+        return { ok: false, status: employeePostStatus, text: async () => employeePostBody } as Response;
+      }
       return { ok: true, status: 202, text: async () => "{}" } as Response;
     }
     return { ok: false, status: 404, text: async () => "not found" } as Response;
@@ -66,5 +70,32 @@ describe("ImportForm — department/designation code resolution", () => {
     await waitFor(() => {
       expect(screen.getByText(/unknown department code "NOPE"/i)).toBeInTheDocument();
     });
+  });
+});
+
+/**
+ * UX-016: a failed per-row employee create used to append the raw response
+ * text (falling back to `request failed (${res.status})`) straight into the
+ * visible error list — the same class of leak useFormError closes
+ * fleet-wide (UX-003).
+ */
+describe("ImportForm — UX-016 clerk-safe errors", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("shows a clerk-safe per-row message, never the raw server text or status, when a row's create fails", async () => {
+    vi.stubGlobal(
+      "fetch",
+      mockBackend({ employeePostOk: false, employeePostStatus: 500, employeePostBody: "hrms-service employee-create panicked" }),
+    );
+    render(<ImportForm />);
+
+    const input = document.getElementById("import-csv-file") as HTMLInputElement;
+    fireEvent.change(input, { target: { files: [csvFile()] } });
+    fireEvent.click(screen.getByRole("button", { name: /upload & import/i }));
+
+    await waitFor(() => expect(screen.getByText(/couldn't save/i)).toBeInTheDocument());
+    const errorList = screen.getByText(/couldn't save/i).closest("div");
+    expect(errorList?.textContent).not.toMatch(/hrms-service employee-create panicked/);
+    expect(errorList?.textContent).not.toMatch(/\b500\b/);
   });
 });

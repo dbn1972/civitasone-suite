@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { PageHeader, StatGrid, StatCard, Card, EmptyState, ConfirmDialog, useConfirmAction } from "../../../../_components/ds";
 import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
+import { useFormError } from "@/lib/useFormError";
 
 type EmployeeOption = { id: string; name: string; employeeNo: string };
 type LeaveApp = {
@@ -42,6 +43,7 @@ export default function LeaveHistoryPage() {
   const [cancelError, setCancelError] = useState<string | null>(null);
   const [source, setSource]         = useState<"api" | "error">("api");
   const [pendingCancel, setPendingCancel] = useState<LeaveApp | null>(null);
+  const formError = useFormError("leave application");
 
   useEffect(() => {
     const controller = new AbortController()
@@ -81,13 +83,13 @@ export default function LeaveHistoryPage() {
         headers: { "content-type": "application/json" },
         body: JSON.stringify({}),
       });
-      const text = await res.text();
       if (!res.ok) {
-        throw new Error(text || `Cancel failed (${res.status})`);
+        const resolved = await formError.fromResponse(res, "save");
+        throw new Error(resolved.message);
       }
       setApps((prev) => prev.map((a) => (a.id === appId ? { ...a, status: "cancelled" } : a)));
     } catch (err) {
-      const msg = err instanceof Error ? err.message : "Network error while cancelling.";
+      const msg = err instanceof Error ? err.message : formError.fromException("save").message;
       setCancelError(msg);
       throw err instanceof Error ? err : new Error(msg);
     } finally {

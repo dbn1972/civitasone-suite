@@ -6,6 +6,7 @@ import { useParams, useRouter } from "next/navigation";
 import { ApplicationPipeline } from "../_components/ApplicationPipeline";
 import { GOIReservationCard } from "../_components/GOIReservationCard";
 import { ConfirmDialog, useConfirmAction } from "../../../../_components/ds";
+import { useFormError } from "@/lib/useFormError";
 
 type JobOpening = {
   id: string;
@@ -267,20 +268,23 @@ export default function JobOpeningDetailPage() {
   const [stageFilter, setStageFilter] = useState("all");
 
   const searchId = useId();
+  const formError = useFormError("vacancy");
 
   const loadOpening = useCallback(async (signal?: AbortSignal) => {
     try {
       const res = await fetch(`/api/proxy/v1/hrms/job-openings?limit=200`, { signal });
-      if (!res.ok) { setError(`Failed to load vacancy (${res.status})`); return; }
+      if (!res.ok) { setError((await formError.fromResponse(res, "load")).message); return; }
       const data = await res.json() as unknown;
       const arr: JobOpening[] = Array.isArray(data) ? data : ((data as Record<string, unknown>)?.data as JobOpening[] ?? []);
       const found = arr.find((o) => o.id === id) ?? null;
       setOpening(found);
     } catch (e) {
-      if (!(e instanceof Error && e.name === "AbortError")) setError("Network error loading vacancy.");
+      if (!(e instanceof Error && e.name === "AbortError")) setError(formError.fromException("load").message);
     } finally {
       setLoadingOpening(false);
     }
+    // formError.fromResponse/fromException are stable across renders (see
+    // useFormError) even though the wrapping object literal isn't.
   }, [id]);
 
   const loadApplications = useCallback(async (signal?: AbortSignal) => {
@@ -346,13 +350,16 @@ export default function JobOpeningDetailPage() {
       }
       if (!res.ok) {
         setDecisionStates((s) => ({ ...s, [appId]: "error" }));
-        throw new Error(`Action failed (HTTP ${res.status})`);
+        const resolved = await formError.fromResponse(res, "save");
+        throw new Error(resolved.message);
       }
       setDecisionStates((s) => ({ ...s, [appId]: "done" }));
     } catch (e) {
       setDecisionStates((s) => ({ ...s, [appId]: "error" }));
-      throw e instanceof Error ? e : new Error("Action failed. Please try again.");
+      throw e instanceof Error ? e : new Error(formError.fromException("save").message);
     }
+    // formError.fromResponse/fromException are stable across renders (see
+    // useFormError) even though the wrapping object literal isn't.
   }, []);
 
   const filtered = applications.filter((a) => {

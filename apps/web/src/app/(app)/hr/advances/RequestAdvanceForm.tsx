@@ -3,6 +3,7 @@
 import { useEffect, useId, useState } from "react";
 import type { CSSProperties } from "react";
 import { useRouter } from "next/navigation";
+import { useFormError } from "@/lib/useFormError";
 
 const inputStyle: CSSProperties = {
   width: "100%", padding: "8px 12px", border: "1px solid var(--line)",
@@ -30,6 +31,7 @@ export function RequestAdvanceForm() {
   const [message, setMessage] = useState<{ tone: "good" | "bad"; text: string } | null>(null);
   const [busy, setBusy] = useState(false);
   const router = useRouter();
+  const formError = useFormError("advance request");
 
   useEffect(() => {
     fetch("/api/proxy/v1/hrms/employees?limit=500")
@@ -62,6 +64,7 @@ export function RequestAdvanceForm() {
     if (!validate()) return;
     setBusy(true);
     setMessage(null);
+    formError.clear();
     try {
       const body: Record<string, unknown> = {
         employeeId,
@@ -76,16 +79,16 @@ export function RequestAdvanceForm() {
         body: JSON.stringify(body),
       });
       if (!res.ok) {
-        const err = await res.json().catch(() => ({})) as { message?: string };
-        setMessage({ tone: "bad", text: err.message ?? `Failed (${res.status})` });
+        const resolved = await formError.fromResponse(res, "save");
+        setMessage({ tone: "bad", text: resolved.message });
         return;
       }
       setMessage({ tone: "good", text: "Advance request submitted." });
       setAmount(""); setPurpose(""); setMonths("3"); setRequestDate("");
       setOpen(false);
       router.refresh();
-    } catch (err) {
-      setMessage({ tone: "bad", text: err instanceof Error ? err.message : "Network error." });
+    } catch {
+      setMessage({ tone: "bad", text: formError.fromException("save").message });
     } finally {
       setBusy(false);
     }
@@ -142,6 +145,9 @@ export function RequestAdvanceForm() {
                 style={invalid.has("amount") ? inputErrStyle : inputStyle}
                 aria-invalid={invalid.has("amount")} />
               {invalid.has("amount") && <p role="alert" style={fieldErrStyle}>Enter a valid amount.</p>}
+              {!invalid.has("amount") && formError.fieldError("amountMinor") && (
+                <p role="alert" style={fieldErrStyle}>{formError.fieldError("amountMinor")}</p>
+              )}
             </div>
             <div>
               <label htmlFor={ids.months} style={{ fontSize: 13, fontWeight: 500 }}>
@@ -176,6 +182,9 @@ export function RequestAdvanceForm() {
               aria-invalid={invalid.has("purpose")}
               aria-describedby={invalid.has("purpose") ? `${ids.purpose}-err` : undefined} />
             {invalid.has("purpose") && <p id={`${ids.purpose}-err`} role="alert" style={fieldErrStyle}>Purpose must be at least 2 characters.</p>}
+            {!invalid.has("purpose") && formError.fieldError("purpose") && (
+              <p role="alert" style={fieldErrStyle}>{formError.fieldError("purpose")}</p>
+            )}
           </div>
 
           <div style={{ display: "flex", justifyContent: "flex-end" }}>

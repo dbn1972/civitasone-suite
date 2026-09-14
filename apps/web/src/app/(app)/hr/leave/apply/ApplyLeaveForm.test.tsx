@@ -1,11 +1,15 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 
 vi.mock("@/lib/sync/requestQueue", () => ({ fetchOrQueue: vi.fn() }));
 vi.mock("@/lib/activation", () => ({ trackActivation: vi.fn() }));
-vi.mock("@/app/_components/ds/Toast", () => ({ useToast: () => ({ toast: { success: vi.fn(), error: vi.fn(), info: vi.fn() } }) }));
+const toastError = vi.fn();
+vi.mock("@/app/_components/ds/Toast", () => ({
+  useToast: () => ({ toast: { success: vi.fn(), error: toastError, info: vi.fn() } }),
+}));
 
 import { ApplyLeaveForm } from "./ApplyLeaveForm";
+import { fetchOrQueue } from "@/lib/sync/requestQueue";
 
 const EMPLOYEES = [
   { id: "emp-1", name: "Asha Verma", department: "Finance" },
@@ -39,5 +43,72 @@ describe("ApplyLeaveForm — deep-link preselection", () => {
     stubLeaveContextFetch();
     render(<ApplyLeaveForm employees={EMPLOYEES} initialEmployeeId="does-not-exist" />);
     expect(screen.getByRole("combobox", { name: /employee/i })).toHaveValue("emp-1");
+  });
+});
+
+/**
+ * UX-016: a failed submit used to show the raw response text (falling back
+ * to `Request failed (${response?.status ?? "network"})`) verbatim, both
+ * inline and in the toast — the same class of leak useFormError closes
+ * fleet-wide (UX-003).
+ */
+describe("ApplyLeaveForm — UX-016 clerk-safe errors", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.mocked(fetchOrQueue).mockReset();
+    toastError.mockReset();
+  });
+
+  function stubLeaveContextFetchWithAllocation() {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        ({
+          ok: true,
+          json: async () => ({
+            employee: { id: "emp-1", employeeNo: "E1", name: "Asha Verma" },
+            leaveTypes: [{ id: "lt1", code: "EL", name: "Earned Leave", maxDays: 30 }],
+            allocations: [{ id: "a1", leaveTypeId: "lt1", leaveTypeCode: "EL", leaveTypeName: "Earned Leave", balanceDays: 10 }],
+          }),
+        }) as Response,
+      ),
+    );
+  }
+
+  async function fillAndSubmit() {
+    stubLeaveContextFetchWithAllocation();
+    render(<ApplyLeaveForm employees={EMPLOYEES} />);
+    await waitFor(() => expect(screen.getByRole("option", { name: /earned leave/i })).toBeInTheDocument());
+    fireEvent.change(screen.getByLabelText(/leave type/i), { target: { value: "a1" } });
+    fireEvent.change(screen.getByLabelText(/from date/i), { target: { value: "2026-09-20" } });
+    fireEvent.change(screen.getByLabelText(/to date/i), { target: { value: "2026-09-21" } });
+    fireEvent.change(screen.getByLabelText(/reason/i), {
+      target: { value: "Attending a family function out of town." },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /submit leave request/i }));
+  }
+
+  it("shows a clerk-safe message, never the raw response text or status, when the request is rejected (not queued)", async () => {
+    vi.mocked(fetchOrQueue).mockResolvedValue({
+      response: new Response("leave-service: overlapping request rejected", { status: 409 }),
+      queued: false,
+      idempotencyKey: "k1",
+    });
+    await fillAndSubmit();
+
+    const alert = await screen.findByRole("alert");
+    await waitFor(() => expect(alert).toHaveTextContent(/couldn't save/i));
+    expect(alert.textContent).not.toMatch(/leave-service/);
+    expect(alert.textContent).not.toMatch(/\b409\b/);
+    expect(toastError).toHaveBeenCalledWith(expect.stringMatching(/couldn't save/i));
+  });
+
+  it("shows a clerk-safe message when there is no response at all (network failure, not queued)", async () => {
+    vi.mocked(fetchOrQueue).mockResolvedValue({ response: null, queued: false, idempotencyKey: "k2" });
+    await fillAndSubmit();
+
+    const alert = await screen.findByRole("alert");
+    await waitFor(() => expect(alert).toHaveTextContent(/couldn't save/i));
+    expect(alert.textContent).not.toMatch(/\bnetwork\b/);
   });
 });
