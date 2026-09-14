@@ -512,7 +512,7 @@ module.exports = {
 
     // ── Admin & billing ────────────────────────────────────────────────────────
     svc("admin",        3022, "admin_svc",         "civitas_admin", {}, { graceful: true }), // PERF-015
-    svc("billing",      3023, "billing_svc",       "civitas_billing"),
+    svc("billing",      3023, "billing_svc",       "civitas_billing", {}, { graceful: true }), // PERF-015
 
     // ── CRM & operations ───────────────────────────────────────────────────────
     svc("crm",          3024, "crm_svc",           "civitas_crm", { CRM_PII_KEY }),
