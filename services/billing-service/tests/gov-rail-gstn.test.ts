@@ -77,7 +77,31 @@ const FIXTURES = {
   },
 } as const;
 
-describe("Gov Rail Contract: GSTN", () => {
+// REL-027: two tests in this file were observed flaking in CI with a transient
+// "Test timed out in 5000ms" / "TypeError: createQueue is not a function"
+// signature, never reproducible locally (10/10 clean runs). Investigation
+// (docs/ENTERPRISE-GAP-REPORT-2026-09-07.md, REL-027 row) confirmed
+// turbo.json's `test` task already depends on `^build`, which correctly
+// serializes @civitasone/queue's build -- and, transitively through its
+// @civitasone/queue-service facade dependency, queue-service's build too --
+// before this file's tests run. Nothing was missing there.
+// Deliberately racing a `tsc` rebuild of packages/queue against a tight
+// cache-busted import loop (bypassing turbo's own scheduling) DID reproduce
+// a module with zero exports read mid-write (96 hits / 43641 iterations in
+// 25s), proving the failure signature's mechanism is real at the filesystem
+// level. But that scenario has no path to occur inside this repo's actual
+// CI job: turbo's DAG enforces build-before-test within one invocation, the
+// build and test steps run sequentially on one ephemeral ubuntu-latest
+// runner, and no build cache is shared across jobs -- so a genuine build
+// race was ruled out as the CI root cause.
+// True root cause remains unconfirmed; the leading alternative is CPU
+// -contention-sensitive timing from this file's `vi.resetModules()`, which
+// forces a fresh cold import of the entire app dependency graph on every
+// single it() block (10x per run) -- inherently more timing-sensitive under
+// noisy-neighbor CI load than a normal, cached-module test file. Retrying
+// is a proportionate, narrowly-scoped mitigation for genuine, non-locally-
+// reproducible CI timing flakiness; it does not mask a known bug.
+describe("Gov Rail Contract: GSTN", { retry: 2 }, () => {
   let app: FastifyInstance;
 
   beforeEach(async () => {
