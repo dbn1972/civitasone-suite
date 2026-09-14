@@ -11,6 +11,7 @@ import { randomUUID } from "node:crypto";
 const processedIds = new Set<string>();
 
 vi.mock("../src/shared/db.js", () => ({
+  scopedRead: async (fn: (tx: unknown) => Promise<unknown>) => fn({ __tx: true }),
   db: { transaction: async (fn: (tx: unknown) => Promise<unknown>) => fn({ __tx: true }) },
 }));
 

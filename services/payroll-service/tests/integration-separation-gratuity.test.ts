@@ -58,6 +58,7 @@ const {
 
 // 1. DB mock.
 vi.mock("../src/shared/db.js", () => ({
+  scopedRead: dbTransactionFn,
   db: { transaction: dbTransactionFn },
 }));
 

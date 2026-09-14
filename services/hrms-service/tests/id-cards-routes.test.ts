@@ -57,6 +57,7 @@ vi.mock("../src/shared/db.js", () => {
   sqlClientFn.unsafe = (...a: unknown[]) => (isAuditInsert(a[0]) ? Promise.resolve([]) : H.poolQuery(...a));
   sqlClientFn.begin = async (fn: (tx: typeof sqlClientFn) => Promise<unknown>) => fn(sqlClientFn);
   return {
+  scopedRead: async (cb: (tx: unknown) => Promise<unknown>) => cb({}),
     // buildApp() wires a blanket onRequest hook (createTenantTxHook(db), for
     // RLS tenant scoping) that runs for every request regardless of which
     // module's routes handle it, so `db.transaction` must exist and work.

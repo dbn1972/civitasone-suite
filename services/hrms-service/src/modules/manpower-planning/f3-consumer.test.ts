@@ -42,7 +42,8 @@ const { mockTx, dbTransactionFn, enqueueMock, R } = vi.hoisted(() => {
   return { mockTx: _mockTx, dbTransactionFn: _dbTransactionFn, enqueueMock: _enqueueMock, R: _R };
 });
 
-vi.mock("../../shared/db.js", () => ({ db: { transaction: dbTransactionFn } }));
+vi.mock("../../shared/db.js", () => ({
+  scopedRead: dbTransactionFn, db: { transaction: dbTransactionFn } }));
 vi.mock("../../shared/outbox.js", () => ({
   enqueue: (...a: unknown[]) => enqueueMock(...(a as [])),
   markProcessed: vi.fn(async (..._a: any[]) => true),

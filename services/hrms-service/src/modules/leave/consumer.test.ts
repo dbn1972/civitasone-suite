@@ -94,6 +94,7 @@ const {
 
 // 1. Shared DB — intercept transactions.
 vi.mock("../../shared/db.js", () => ({
+  scopedRead: dbTransactionFn,
   db: { transaction: dbTransactionFn },
 }));
 

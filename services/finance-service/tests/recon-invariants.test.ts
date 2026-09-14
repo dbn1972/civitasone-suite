@@ -379,7 +379,8 @@ const {
   };
 });
 
-vi.mock("../src/shared/db.js", () => ({ db: { transaction: dbTransFn } }));
+vi.mock("../src/shared/db.js", () => ({
+  scopedRead: dbTransFn, db: { transaction: dbTransFn } }));
 
 vi.mock("../src/shared/outbox.js", () => ({
   enqueue:       (...a: any[]) => mockEnqueue(...a),

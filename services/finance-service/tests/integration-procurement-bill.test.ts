@@ -82,6 +82,7 @@ const {
 
 // 1. DB mock — intercept transactions.
 vi.mock("../src/shared/db.js", () => ({
+  scopedRead: dbTransactionFn,
   db: { transaction: dbTransactionFn },
 }));
 
@@ -97,14 +98,6 @@ vi.mock("../src/shared/infra.js", () => ({
     invalidate: vi.fn(async () => undefined),
     makeKey: vi.fn((...parts: string[]) => parts.join(":")),
   },
-}));
-
-// 4. PFMS repo — getTenantConfig + insertPfmsBatch stubs.
-vi.mock("../src/modules/pfms/repo.js", () => ({
-  getTenantConfig: vi.fn(async () => ({ agencyCode: "AG001", defaultDdo: "DDO001" })),
-  insertPfmsBatch: vi.fn(async () => undefined),
-  listRealBeneficiaries: vi.fn(async () => []),
-  updatePfmsBatch: vi.fn(async () => undefined),
 }));
 
 // 5. Audit repo — no-op.

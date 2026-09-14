@@ -10,6 +10,7 @@ const processedIds = new Set<string>();
 let currentDirection: { status: string; version: number } | undefined;
 
 vi.mock("../src/shared/db.js", () => ({
+  scopedRead: async (fn: (tx: unknown) => Promise<unknown>) => fn({ __tx: true }),
   db: { transaction: async (fn: (tx: unknown) => Promise<unknown>) => fn({ __tx: true }) },
 }));
 

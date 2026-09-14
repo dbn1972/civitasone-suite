@@ -44,7 +44,8 @@ const {
   };
 });
 
-vi.mock("../src/shared/db.js", () => ({ db: { transaction: dbTransactionFn } }));
+vi.mock("../src/shared/db.js", () => ({
+  scopedRead: dbTransactionFn, db: { transaction: dbTransactionFn } }));
 vi.mock("@civitasone/db", () => ({
   tenantTransaction: async (_db: unknown, _tenantId: string, fn: (tx: unknown) => Promise<void>) => { await dbTransactionFn(fn); },
   runWithTenant: async <T>(_tenantId: string, fn: () => T | Promise<T>) => fn(),
