@@ -208,6 +208,20 @@ function schemaFilesFor(svc) {
   return files;
 }
 
+// Database name is `civitas_<svc>` with one exception: ai-agent-service's
+// role/DB predate this convention and use an underscore (civitas_ai_agent,
+// see scripts/ci/bootstrap-postgres.sh's SERVICE_DBS map) rather than the
+// hyphen every other multi-word service name would produce. Mirrors
+// tenant-index-guard.mjs's own DB_NAME_OVERRIDES (kept in sync manually —
+// there is no shared module between the two guards) rather than parsing
+// bootstrap-postgres.sh's bash map at runtime. Without this, ai-agent
+// resolved to civitas_ai-agent, which never exists, so ai-agent-service's
+// 8 schema.ts files were silently skipped rather than checked (PERF-023).
+const DB_NAME_OVERRIDES = { "ai-agent": "civitas_ai_agent" };
+function dbNameFor(svc) {
+  return DB_NAME_OVERRIDES[svc] ?? `civitas_${svc}`;
+}
+
 const services = readdirSync(SERVICES_DIR)
   .filter((d) => d.endsWith("-service"))
   .map((d) => d.replace("-service", ""))
@@ -223,7 +237,7 @@ for (const svc of services) {
   const files = schemaFilesFor(svc);
   if (files.length === 0) continue;
 
-  const db = `civitas_${svc}`;
+  const db = dbNameFor(svc);
   const live = psql(
     db,
     `SELECT table_schema, table_name, column_name FROM information_schema.columns
