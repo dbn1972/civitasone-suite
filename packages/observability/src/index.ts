@@ -522,6 +522,29 @@ function requestTenant(request: unknown): string {
   return r.ctx?.tenantId ?? "";
 }
 
+// ── SEC-029: metrics text shared with non-Fastify processes ─────────────────
+// registerOpsRoutes() below is Fastify-only (it needs an AppLike to hang
+// /health /ready /metrics /openapi.json off of), but the metric FAMILIES
+// themselves -- captured_errors_total (SEC-027), outbox/dlq, consumer
+// errors/heartbeat, http latency, per-tenant requests -- are just process-
+// local Maps with no Fastify dependency. apps/web (Next.js, no Fastify app)
+// calls this directly from its own GET /api/metrics route so a web-app-
+// originated captureError() is exposed in the same Prometheus text every
+// backend service already emits, instead of duplicating this formatting.
+// Deliberately excludes service_up/http_requests_total: those need a live
+// request-count closure (requestCount/startedAt below) that only
+// registerOpsRoutes()'s onRequest/onResponse hooks actually drive.
+export function formatSharedMetrics(): string[] {
+  return [
+    ...formatNotificationDeliveryMetrics(),
+    ...formatConsumerErrorMetrics(),
+    ...formatConsumerHeartbeatMetrics(),
+    ...formatFailureMetrics(),
+    ...formatHttpLatencyMetrics(),
+    ...formatTenantRequestMetrics(),
+  ];
+}
+
 /** Standard /health /ready /metrics /openapi.json for every service. */
 export function registerOpsRoutes(app: AppLike, opts: OpsOptions): void {
   const version = opts.version ?? process.env.npm_package_version ?? "0.1.0";
@@ -616,12 +639,7 @@ export function registerOpsRoutes(app: AppLike, opts: OpsOptions): void {
       "# HELP process_uptime_seconds Process uptime",
       "# TYPE process_uptime_seconds gauge",
       `process_uptime_seconds{service="${opts.service}"} ${Math.floor((Date.now() - startedAt) / 1000)}`,
-      ...formatNotificationDeliveryMetrics(),
-      ...formatConsumerErrorMetrics(),
-      ...formatConsumerHeartbeatMetrics(),
-      ...formatFailureMetrics(),
-      ...formatHttpLatencyMetrics(),
-      ...formatTenantRequestMetrics(),
+      ...formatSharedMetrics(),
     ];
     return reply.type("text/plain; version=0.0.4").send(lines.join("\n") + "\n");
   });
