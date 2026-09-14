@@ -522,7 +522,7 @@ module.exports = {
 
     // ── Intelligence & automation ──────────────────────────────────────────────
     svc("knowledge",    3028, "knowledge_svc",     "civitas_knowledge"),
-    svc("workflow",     3029, "workflow_svc",      "civitas_workflow"),
+    svc("workflow",     3029, "workflow_svc",      "civitas_workflow", {}, { graceful: true }), // PERF-015
 
     // ── CQRS workers (async writes + outbox relay) ─────────────────────────────
     worker("finance",      "finance_svc",      "civitas_finance", {
