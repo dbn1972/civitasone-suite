@@ -88,7 +88,15 @@ type Preset = {
 
 // ── Color Picker Component ───────────────────────────────────────────────────
 
-function ColorPicker({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {
+function ColorPicker({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+}) {
   return (
     <div className="flex items-center gap-3 py-2">
       <input
@@ -108,22 +116,43 @@ function ColorPicker({ label, value, onChange }: { label: string; value: string;
 
 // ── Preset Card ──────────────────────────────────────────────────────────────
 
-function PresetCard({ preset, isActive, onSelect }: { preset: Preset; isActive: boolean; onSelect: () => void }) {
+function PresetCard({
+  preset,
+  isActive,
+  onSelect,
+}: {
+  preset: Preset;
+  isActive: boolean;
+  onSelect: () => void;
+}) {
   return (
     <button
       onClick={onSelect}
       className={`flex items-center gap-3 p-3 rounded-xl border-2 transition-all w-full text-start ${
-        isActive ? "border-blue-500 bg-blue-50" : "border-gray-200 hover:border-gray-300 bg-white"
+        isActive
+          ? "border-blue-500 bg-blue-50"
+          : "border-gray-200 hover:border-gray-300 bg-white"
       }`}
     >
       <div className="flex gap-1">
-        <div className="w-6 h-6 rounded-full" style={{ backgroundColor: preset.colorPrimary }} />
-        <div className="w-6 h-6 rounded-full" style={{ backgroundColor: preset.colorSecondary }} />
-        <div className="w-6 h-6 rounded-full" style={{ backgroundColor: preset.colorAccent }} />
+        <div
+          className="w-6 h-6 rounded-full"
+          style={{ backgroundColor: preset.colorPrimary }}
+        />
+        <div
+          className="w-6 h-6 rounded-full"
+          style={{ backgroundColor: preset.colorSecondary }}
+        />
+        <div
+          className="w-6 h-6 rounded-full"
+          style={{ backgroundColor: preset.colorAccent }}
+        />
       </div>
       <div className="flex-1 min-w-0">
         <p className="text-sm font-medium truncate">{preset.name}</p>
-        {preset.description && <p className="text-xs text-gray-500 truncate">{preset.description}</p>}
+        {preset.description && (
+          <p className="text-xs text-gray-500 truncate">{preset.description}</p>
+        )}
       </div>
       {isActive && <span className="text-blue-500 text-sm">✓</span>}
     </button>
@@ -145,22 +174,40 @@ function LivePreview({ config }: { config: BrandConfig }) {
       {/* Header */}
       <div
         className="flex items-center gap-3 px-4 py-3 border-b"
-        style={{ backgroundColor: config.colorPrimary, borderColor: config.colorBorder }}
+        style={{
+          backgroundColor: config.colorPrimary,
+          borderColor: config.colorBorder,
+        }}
       >
         {config.logoUrl ? (
           <img src={config.logoUrl} alt="Logo" className="h-8 w-auto" />
         ) : (
           <div className="h-8 w-8 rounded bg-white/20" />
         )}
-        <span className="text-sm font-semibold" style={{ color: config.colorPrimaryFg }}>
+        <span
+          className="text-sm font-semibold"
+          style={{ color: config.colorPrimaryFg }}
+        >
           {config.appName}
         </span>
       </div>
 
       <div className="flex h-[400px]">
         {/* Sidebar */}
-        <div className="w-48 border-e p-3 space-y-2" style={{ backgroundColor: config.colorSurface, borderColor: config.colorBorder }}>
-          {["Dashboard", "Finance", "HR & Payroll", "Procurement", "Reports"].map((item, i) => (
+        <div
+          className="w-48 border-e p-3 space-y-2"
+          style={{
+            backgroundColor: config.colorSurface,
+            borderColor: config.colorBorder,
+          }}
+        >
+          {[
+            "Dashboard",
+            "Finance",
+            "HR & Payroll",
+            "Procurement",
+            "Reports",
+          ].map((item, i) => (
             <div
               key={item}
               className="px-3 py-2 rounded-lg text-xs font-medium"
@@ -176,7 +223,12 @@ function LivePreview({ config }: { config: BrandConfig }) {
 
         {/* Main content area */}
         <div className="flex-1 p-4 space-y-4">
-          <h2 className="text-lg font-semibold" style={{ color: config.colorText }}>Dashboard</h2>
+          <h2
+            className="text-lg font-semibold"
+            style={{ color: config.colorText }}
+          >
+            Dashboard
+          </h2>
 
           {/* Card grid */}
           <div className="grid grid-cols-2 gap-3">
@@ -189,10 +241,21 @@ function LivePreview({ config }: { config: BrandConfig }) {
               <div
                 key={card.label}
                 className="p-3 rounded-xl border"
-                style={{ backgroundColor: config.colorSurface, borderColor: config.colorBorder, borderRadius: config.borderRadius }}
+                style={{
+                  backgroundColor: config.colorSurface,
+                  borderColor: config.colorBorder,
+                  borderRadius: config.borderRadius,
+                }}
               >
-                <p className="text-xs" style={{ color: config.colorMuted }}>{card.label}</p>
-                <p className="text-xl font-bold mt-1" style={{ color: card.color }}>{card.value}</p>
+                <p className="text-xs" style={{ color: config.colorMuted }}>
+                  {card.label}
+                </p>
+                <p
+                  className="text-xl font-bold mt-1"
+                  style={{ color: card.color }}
+                >
+                  {card.value}
+                </p>
               </div>
             ))}
           </div>
@@ -201,13 +264,21 @@ function LivePreview({ config }: { config: BrandConfig }) {
           <div className="flex gap-2 mt-4">
             <button
               className="px-4 py-2 text-sm font-medium rounded-lg"
-              style={{ backgroundColor: config.colorPrimary, color: config.colorPrimaryFg, borderRadius: config.borderRadius }}
+              style={{
+                backgroundColor: config.colorPrimary,
+                color: config.colorPrimaryFg,
+                borderRadius: config.borderRadius,
+              }}
             >
               Primary Action
             </button>
             <button
               className="px-4 py-2 text-sm font-medium rounded-lg border"
-              style={{ color: config.colorPrimary, borderColor: config.colorBorder, borderRadius: config.borderRadius }}
+              style={{
+                color: config.colorPrimary,
+                borderColor: config.colorBorder,
+                borderRadius: config.borderRadius,
+              }}
             >
               Secondary
             </button>
@@ -231,7 +302,10 @@ function LivePreview({ config }: { config: BrandConfig }) {
       </div>
 
       {/* Footer */}
-      <div className="px-4 py-2 text-center border-t" style={{ borderColor: config.colorBorder }}>
+      <div
+        className="px-4 py-2 text-center border-t"
+        style={{ borderColor: config.colorBorder }}
+      >
         <p className="text-xs" style={{ color: config.colorMuted }}>
           {config.poweredBy ?? "Powered by CivitasOne"}
         </p>
@@ -313,7 +387,9 @@ export default function BrandingPage() {
       .then(setConfig)
       .catch((e) => {
         if (e.name === "AbortError") return;
-        setLoadError("Couldn't load your current branding. Showing defaults — saving will still work.");
+        setLoadError(
+          "Couldn't load your current branding. Showing defaults — saving will still work.",
+        );
       });
     fetch("/api/proxy/v1/themes/brand/presets", { signal: controller.signal })
       .then((r) => {
@@ -323,7 +399,11 @@ export default function BrandingPage() {
       .then(setPresets)
       .catch((e) => {
         if (e.name === "AbortError") return;
-        setLoadError((prev) => prev ?? "Couldn't load color presets. You can still set colors manually.");
+        setLoadError(
+          (prev) =>
+            prev ??
+            "Couldn't load color presets. You can still set colors manually.",
+        );
       });
     return () => controller.abort();
   }, []);
@@ -373,23 +453,39 @@ export default function BrandingPage() {
   }, [config]);
 
   return (
-    <div className="flex h-screen">
+    // A bespoke split-screen editor (live preview on the right), not a list/detail
+    // page, so it deliberately doesn't use the shared PageHeader chrome (back link
+    // + "How this works") which is built for the page-main/wrap layout and would
+    // eat into the fixed-height editor panel. It still gets the same real,
+    // properly-landmarked heading every other page has: a <main> with
+    // aria-labelledby pointing at an id'd <h1> (UX-007).
+    <main className="flex h-screen" aria-labelledby="page-heading">
       {/* Left: Editor Panel */}
       <div className="w-[420px] border-e overflow-y-auto p-6 space-y-6 bg-white">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Brand & Theme</h1>
-          <p className="text-sm text-gray-500 mt-1">Customize how your portal looks. Changes preview instantly on the right.</p>
+          <h1 id="page-heading" className="text-2xl font-bold text-gray-900">
+            Brand & Theme
+          </h1>
+          <p className="text-sm text-gray-500 mt-1">
+            Customize how your portal looks. Changes preview instantly on the
+            right.
+          </p>
         </div>
 
         {loadError && (
-          <div role="alert" className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+          <div
+            role="alert"
+            className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800"
+          >
             {loadError}
           </div>
         )}
 
         {/* App Name */}
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">App Name</label>
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            App Name
+          </label>
           <input
             type="text"
             value={config.appName}
@@ -401,14 +497,18 @@ export default function BrandingPage() {
 
         {/* Logo Upload */}
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Logo</label>
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            Logo
+          </label>
           <div className="border-2 border-dashed rounded-xl p-4 text-center cursor-pointer hover:border-blue-400 transition-colors">
             {config.logoUrl ? (
               <img src={config.logoUrl} alt="Logo" className="h-12 mx-auto" />
             ) : (
               <div>
                 <p className="text-sm text-gray-500">Drag & drop logo here</p>
-                <p className="text-xs text-gray-500 mt-1">SVG or PNG, max 200KB</p>
+                <p className="text-xs text-gray-500 mt-1">
+                  SVG or PNG, max 200KB
+                </p>
               </div>
             )}
             <input
@@ -423,7 +523,9 @@ export default function BrandingPage() {
 
         {/* Presets */}
         <div>
-          <h3 className="text-sm font-semibold text-gray-700 mb-2">Quick Presets</h3>
+          <h3 className="text-sm font-semibold text-gray-700 mb-2">
+            Quick Presets
+          </h3>
           <div className="space-y-2">
             {presets.map((p) => (
               <PresetCard
@@ -440,15 +542,51 @@ export default function BrandingPage() {
         <div>
           <h3 className="text-sm font-semibold text-gray-700 mb-2">Colors</h3>
           <div className="space-y-1">
-            <ColorPicker label="Primary" value={config.colorPrimary} onChange={(v) => updateColor("colorPrimary", v)} />
-            <ColorPicker label="Secondary" value={config.colorSecondary} onChange={(v) => updateColor("colorSecondary", v)} />
-            <ColorPicker label="Accent" value={config.colorAccent} onChange={(v) => updateColor("colorAccent", v)} />
-            <ColorPicker label="Background" value={config.colorBackground} onChange={(v) => updateColor("colorBackground", v)} />
-            <ColorPicker label="Surface" value={config.colorSurface} onChange={(v) => updateColor("colorSurface", v)} />
-            <ColorPicker label="Text" value={config.colorText} onChange={(v) => updateColor("colorText", v)} />
-            <ColorPicker label="Success" value={config.colorSuccess} onChange={(v) => updateColor("colorSuccess", v)} />
-            <ColorPicker label="Warning" value={config.colorWarning} onChange={(v) => updateColor("colorWarning", v)} />
-            <ColorPicker label="Error" value={config.colorError} onChange={(v) => updateColor("colorError", v)} />
+            <ColorPicker
+              label="Primary"
+              value={config.colorPrimary}
+              onChange={(v) => updateColor("colorPrimary", v)}
+            />
+            <ColorPicker
+              label="Secondary"
+              value={config.colorSecondary}
+              onChange={(v) => updateColor("colorSecondary", v)}
+            />
+            <ColorPicker
+              label="Accent"
+              value={config.colorAccent}
+              onChange={(v) => updateColor("colorAccent", v)}
+            />
+            <ColorPicker
+              label="Background"
+              value={config.colorBackground}
+              onChange={(v) => updateColor("colorBackground", v)}
+            />
+            <ColorPicker
+              label="Surface"
+              value={config.colorSurface}
+              onChange={(v) => updateColor("colorSurface", v)}
+            />
+            <ColorPicker
+              label="Text"
+              value={config.colorText}
+              onChange={(v) => updateColor("colorText", v)}
+            />
+            <ColorPicker
+              label="Success"
+              value={config.colorSuccess}
+              onChange={(v) => updateColor("colorSuccess", v)}
+            />
+            <ColorPicker
+              label="Warning"
+              value={config.colorWarning}
+              onChange={(v) => updateColor("colorWarning", v)}
+            />
+            <ColorPicker
+              label="Error"
+              value={config.colorError}
+              onChange={(v) => updateColor("colorError", v)}
+            />
           </div>
         </div>
 
@@ -469,11 +607,16 @@ export default function BrandingPage() {
             min="0"
             max="20"
             value={parseFloat(config.borderRadius) * 16}
-            onChange={(e) => updateColor("borderRadius", `${Number(e.target.value) / 16}rem`)}
+            onChange={(e) =>
+              updateColor("borderRadius", `${Number(e.target.value) / 16}rem`)
+            }
             className="w-full"
             aria-describedby="branding-border-radius-value"
           />
-          <p id="branding-border-radius-value" className="text-xs text-gray-500 mt-1">
+          <p
+            id="branding-border-radius-value"
+            className="text-xs text-gray-500 mt-1"
+          >
             {config.borderRadius}
           </p>
         </div>
@@ -481,7 +624,10 @@ export default function BrandingPage() {
         {/* Save Button */}
         <div className="sticky bottom-0 bg-white pt-4 border-t space-y-2">
           {saveError && (
-            <div role="alert" className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+            <div
+              role="alert"
+              className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700"
+            >
               {saveError}
             </div>
           )}
@@ -496,7 +642,13 @@ export default function BrandingPage() {
                   : "bg-gray-100 text-gray-500 cursor-not-allowed"
             }`}
           >
-            {saving ? "Saving..." : saved ? "✓ Saved!" : dirty ? "Save Changes" : "No Changes"}
+            {saving
+              ? "Saving..."
+              : saved
+                ? "✓ Saved!"
+                : dirty
+                  ? "Save Changes"
+                  : "No Changes"}
           </button>
         </div>
       </div>
@@ -513,6 +665,6 @@ export default function BrandingPage() {
           <LivePreview config={config} />
         </div>
       </div>
-    </div>
+    </main>
   );
 }

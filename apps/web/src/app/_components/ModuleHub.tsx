@@ -4,8 +4,9 @@ import { LinkTiles } from "./LinkTiles";
 import { PageHeader } from "./ds";
 
 interface ModuleHubProps {
-  title: string;
-  description: string;
+  /** Accepts ReactNode so a bare acronym can carry an inline `Term` glossary tooltip. */
+  title: ReactNode;
+  description: ReactNode;
   links: { href: string; label: string; note?: string }[];
   children?: ReactNode;
   /** Optional Help Centre slug for a "How this works" link. */
