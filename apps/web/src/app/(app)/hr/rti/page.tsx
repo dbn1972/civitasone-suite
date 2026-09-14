@@ -1,6 +1,7 @@
 import { PageHeader, StatGrid, StatCard, Card, DataTable } from "../../../_components/ds";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
+import { getTranslations } from "next-intl/server";
 
 type Row = {
   id: string;
@@ -25,6 +26,7 @@ async function getData(): Promise<LoaderResult<Row[]>> {
 }
 
 export default async function RtiPage() {
+  const t = await getTranslations("rtiRequests");
   const { data: items, source } = await getData();
 
   const filed = items.filter((i) => i.status === "filed").length;
@@ -32,40 +34,40 @@ export default async function RtiPage() {
   const disposed = items.filter((i) => i.status === "responded" || i.status === "closed").length;
 
   const columns: { key: keyof Row & string; label: string; cellType?: "status" }[] = [
-    { key: "referenceNo", label: "Reference No." },
-    { key: "applicantName", label: "Applicant" },
-    { key: "subject", label: "Subject" },
-    { key: "receivedDate", label: "Received" },
-    { key: "dueDate", label: "Due Date" },
-    { key: "status", label: "Status", cellType: "status" },
+    { key: "referenceNo", label: t("colReferenceNo") },
+    { key: "applicantName", label: t("colApplicant") },
+    { key: "subject", label: t("colSubject") },
+    { key: "receivedDate", label: t("colReceived") },
+    { key: "dueDate", label: t("colDueDate") },
+    { key: "status", label: t("colStatus"), cellType: "status" },
   ];
 
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
-        title="RTI Requests"
-        subtitle="Right to Information applications — 30-day SLA tracking and CPIO response workflow."
+        title={t("title")}
+        subtitle={t("subtitle")}
         back="/hr"
         actions={<span />}
       />
-      <DataSourceBadge source={source} message="Couldn't load — showing nothing" />
+      <DataSourceBadge source={source} message={t("dataSourceErrorMessage")} />
       <StatGrid>
-        <StatCard icon="📂" iconBg="#e6f0ff" label="Total Requests" value={items.length} />
-        <StatCard icon="🔔" iconBg="#fffbe6" label="Pending (Filed)" value={filed} />
-        <StatCard icon="🔴" iconBg="#fff1f0" label="Overdue" value={overdue} />
-        <StatCard icon="✅" iconBg="#e6f7f0" label="Disposed" value={disposed} />
+        <StatCard icon="📂" iconBg="#e6f0ff" label={t("statTotalLabel")} value={items.length} />
+        <StatCard icon="🔔" iconBg="#fffbe6" label={t("statPendingLabel")} value={filed} />
+        <StatCard icon="🔴" iconBg="#fff1f0" label={t("statOverdueLabel")} value={overdue} />
+        <StatCard icon="✅" iconBg="#e6f7f0" label={t("statDisposedLabel")} value={disposed} />
       </StatGrid>
-      <Card title="RTI Applications Register">
+      <Card title={t("cardTitle")}>
         <DataTable<Row>
           columns={columns}
           rows={items}
           sortable
           filterable
-          filterPlaceholder="Filter by reference, applicant or subject…"
+          filterPlaceholder={t("filterPlaceholder")}
           pageSize={15}
           emptyIcon="📂"
-          emptyTitle="No RTI requests received"
-          emptyMessage="RTI applications filed by citizens appear here. CPIO assigns them and responds within 30 days under the Right to Information Act, 2005."
+          emptyTitle={t("emptyTitle")}
+          emptyMessage={t("emptyMessage")}
         />
       </Card>
     </main>

@@ -2,29 +2,21 @@
 
 import { useEffect, useId, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { Card, ConfirmDialog } from "../../../_components/ds";
 import { useFormError } from "@/lib/useFormError";
 
 type LeaveType = { id: string; code: string; name: string };
 
-const EMPLOYEE_TYPES = [
-  { value: "permanent", label: "Permanent" },
-  { value: "contractual", label: "Contractual" },
-  { value: "vendor_deputed", label: "Vendor Deputed" },
-  { value: "deputation", label: "Deputation" },
-  { value: "consultant", label: "Consultant" },
-  { value: "temporary", label: "Temporary" },
-  { value: "intern", label: "Intern" },
-  { value: "apprentice", label: "Apprentice" },
-  { value: "volunteer", label: "Volunteer" },
+const EMPLOYEE_TYPE_VALUES = [
+  "permanent", "contractual", "vendor_deputed", "deputation", "consultant",
+  "temporary", "intern", "apprentice", "volunteer",
 ];
 
-const COUNT_METHODS = [
-  { value: "calendar", label: "Calendar days" },
-  { value: "working_days", label: "Working days only" },
-];
+const COUNT_METHOD_VALUES = ["calendar", "working_days"];
 
 export function CreateLeavePolicyForm({ onCreated }: { onCreated?: () => void } = {}) {
+  const t = useTranslations("leavePolicyForm");
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [leaveTypes, setLeaveTypes] = useState<LeaveType[]>([]);
@@ -52,6 +44,9 @@ export function CreateLeavePolicyForm({ onCreated }: { onCreated?: () => void } 
   const [fieldError, setFieldError] = useState<string | null>(null);
   const formError = useFormError("leave policy");
 
+  const employeeTypeOptions = EMPLOYEE_TYPE_VALUES.map((value) => ({ value, label: t(`employeeTypes.${value}`) }));
+  const countMethodOptions = COUNT_METHOD_VALUES.map((value) => ({ value, label: t(`countMethods.${value}`) }));
+
   const ltField = useId();
   const empField = useId();
   const daysField = useId();
@@ -74,15 +69,15 @@ export function CreateLeavePolicyForm({ onCreated }: { onCreated?: () => void } 
         setLeaveTypes(arr as LeaveType[]);
         if ((arr as LeaveType[])[0]) setLeaveTypeId((arr as LeaveType[])[0].id);
       })
-      .catch(() => setFieldError("Could not load leave types."))
+      .catch(() => setFieldError(t("couldNotLoadLeaveTypes")))
       .finally(() => setLtLoading(false));
   }, [open, leaveTypes.length]);
 
   function validate() {
-    if (!leaveTypeId) return "Please select a leave type.";
-    if (!employeeType) return "Please select an employee type.";
+    if (!leaveTypeId) return t("selectLeaveTypeRequired");
+    if (!employeeType) return t("selectEmployeeTypeRequired");
     const days = Number(maxDaysPerYear);
-    if (!Number.isInteger(days) || days < 0 || days > 730) return "Days per year must be 0–730.";
+    if (!Number.isInteger(days) || days < 0 || days > 730) return t("daysRangeError");
     return null;
   }
 
@@ -147,11 +142,11 @@ export function CreateLeavePolicyForm({ onCreated }: { onCreated?: () => void } 
     <div style={{ marginBottom: 16 }}>
       {!open ? (
         <button type="button" className="btn primary" onClick={() => setOpen(true)}>
-          + New Policy
+          {t("newPolicyBtn")}
         </button>
       ) : (
         <form onSubmit={openConfirm} noValidate>
-          <Card title="New Leave Policy" padding>
+          <Card title={t("formTitle")} padding>
             {fieldError && (
               <p id={errId} role="alert" style={{ color: "var(--bad, #c0392b)", fontSize: 13, marginBottom: 12 }}>
                 {fieldError}
@@ -161,10 +156,10 @@ export function CreateLeavePolicyForm({ onCreated }: { onCreated?: () => void } 
             <div style={{ display: "grid", gap: 14, gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))" }}>
               <div style={{ display: "grid", gap: 6 }}>
                 <label htmlFor={ltField} style={{ fontSize: 13, fontWeight: 600 }}>
-                  Leave Type <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
+                  {t("leaveTypeLabel")} <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
                 </label>
                 {ltLoading ? (
-                  <p style={{ fontSize: 13, color: "var(--mut)" }}>Loading leave types…</p>
+                  <p style={{ fontSize: 13, color: "var(--mut)" }}>{t("loadingLeaveTypes")}</p>
                 ) : (
                   <select
                     id={ltField}
@@ -173,7 +168,7 @@ export function CreateLeavePolicyForm({ onCreated }: { onCreated?: () => void } 
                     onChange={(e) => setLeaveTypeId(e.target.value)}
                     style={{ padding: "8px 10px", borderRadius: 8, border: "1px solid var(--line)", fontSize: 13 }}
                   >
-                    {leaveTypes.length === 0 && <option value="">No leave types available</option>}
+                    {leaveTypes.length === 0 && <option value="">{t("noLeaveTypesAvailable")}</option>}
                     {leaveTypes.map((lt) => (
                       <option key={lt.id} value={lt.id}>{lt.code} — {lt.name}</option>
                     ))}
@@ -183,7 +178,7 @@ export function CreateLeavePolicyForm({ onCreated }: { onCreated?: () => void } 
 
               <div style={{ display: "grid", gap: 6 }}>
                 <label htmlFor={empField} style={{ fontSize: 13, fontWeight: 600 }}>
-                  Employee Type <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
+                  {t("employeeTypeLabel")} <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
                 </label>
                 <select
                   id={empField}
@@ -191,7 +186,7 @@ export function CreateLeavePolicyForm({ onCreated }: { onCreated?: () => void } 
                   onChange={(e) => setEmployeeType(e.target.value)}
                   style={{ padding: "8px 10px", borderRadius: 8, border: "1px solid var(--line)", fontSize: 13 }}
                 >
-                  {EMPLOYEE_TYPES.map((et) => (
+                  {employeeTypeOptions.map((et) => (
                     <option key={et.value} value={et.value}>{et.label}</option>
                   ))}
                 </select>
@@ -199,7 +194,7 @@ export function CreateLeavePolicyForm({ onCreated }: { onCreated?: () => void } 
 
               <div style={{ display: "grid", gap: 6 }}>
                 <label htmlFor={daysField} style={{ fontSize: 13, fontWeight: 600 }}>
-                  Days per year <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
+                  {t("daysPerYearLabel")} <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
                 </label>
                 <input
                   id={daysField}
@@ -213,14 +208,14 @@ export function CreateLeavePolicyForm({ onCreated }: { onCreated?: () => void } 
               </div>
 
               <div style={{ display: "grid", gap: 6 }}>
-                <label htmlFor={countMethodField} style={{ fontSize: 13, fontWeight: 600 }}>Count Method</label>
+                <label htmlFor={countMethodField} style={{ fontSize: 13, fontWeight: 600 }}>{t("countMethodLabel")}</label>
                 <select
                   id={countMethodField}
                   value={countMethod}
                   onChange={(e) => setCountMethod(e.target.value)}
                   style={{ padding: "8px 10px", borderRadius: 8, border: "1px solid var(--line)", fontSize: 13 }}
                 >
-                  {COUNT_METHODS.map((m) => (
+                  {countMethodOptions.map((m) => (
                     <option key={m.value} value={m.value}>{m.label}</option>
                   ))}
                 </select>
@@ -229,11 +224,11 @@ export function CreateLeavePolicyForm({ onCreated }: { onCreated?: () => void } 
 
             <details style={{ marginTop: 16 }}>
               <summary style={{ fontSize: 13, fontWeight: 600, cursor: "pointer", color: "var(--primary-d)", userSelect: "none" }}>
-                Advanced settings
+                {t("advancedSettings")}
               </summary>
               <div style={{ marginTop: 12, display: "grid", gap: 14, gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))" }}>
                 <div style={{ display: "grid", gap: 6 }}>
-                  <label htmlFor={maxAccumField} style={{ fontSize: 13, fontWeight: 600 }}>Max accumulation (days)</label>
+                  <label htmlFor={maxAccumField} style={{ fontSize: 13, fontWeight: 600 }}>{t("maxAccumulationLabel")}</label>
                   <input
                     id={maxAccumField}
                     type="number" min={0}
@@ -243,7 +238,7 @@ export function CreateLeavePolicyForm({ onCreated }: { onCreated?: () => void } 
                   />
                 </div>
                 <div style={{ display: "grid", gap: 6 }}>
-                  <label htmlFor={maxContField} style={{ fontSize: 13, fontWeight: 600 }}>Max continuous (days)</label>
+                  <label htmlFor={maxContField} style={{ fontSize: 13, fontWeight: 600 }}>{t("maxContinuousLabel")}</label>
                   <input
                     id={maxContField}
                     type="number" min={1} max={730}
@@ -253,7 +248,7 @@ export function CreateLeavePolicyForm({ onCreated }: { onCreated?: () => void } 
                   />
                 </div>
                 <div style={{ display: "grid", gap: 6 }}>
-                  <label htmlFor={minServiceField} style={{ fontSize: 13, fontWeight: 600 }}>Min service (months)</label>
+                  <label htmlFor={minServiceField} style={{ fontSize: 13, fontWeight: 600 }}>{t("minServiceLabel")}</label>
                   <input
                     id={minServiceField}
                     type="number" min={0}
@@ -263,20 +258,20 @@ export function CreateLeavePolicyForm({ onCreated }: { onCreated?: () => void } 
                   />
                 </div>
                 <div style={{ display: "grid", gap: 6 }}>
-                  <label htmlFor={genderField} style={{ fontSize: 13, fontWeight: 600 }}>Gender restriction</label>
+                  <label htmlFor={genderField} style={{ fontSize: 13, fontWeight: 600 }}>{t("genderRestrictionLabel")}</label>
                   <select
                     id={genderField}
                     value={genderRestriction}
                     onChange={(e) => setGenderRestriction(e.target.value as "" | "male" | "female")}
                     style={{ padding: "8px 10px", borderRadius: 8, border: "1px solid var(--line)", fontSize: 13 }}
                   >
-                    <option value="">None</option>
-                    <option value="female">Female only (e.g. Maternity)</option>
-                    <option value="male">Male only (e.g. Paternity)</option>
+                    <option value="">{t("genderNone")}</option>
+                    <option value="female">{t("genderFemaleOnly")}</option>
+                    <option value="male">{t("genderMaleOnly")}</option>
                   </select>
                 </div>
                 <div style={{ display: "grid", gap: 6 }}>
-                  <label htmlFor={medCertDaysField} style={{ fontSize: 13, fontWeight: 600 }}>Med cert required after (days)</label>
+                  <label htmlFor={medCertDaysField} style={{ fontSize: 13, fontWeight: 600 }}>{t("medCertDaysLabel")}</label>
                   <input
                     id={medCertDaysField}
                     type="number" min={1}
@@ -289,14 +284,14 @@ export function CreateLeavePolicyForm({ onCreated }: { onCreated?: () => void } 
 
               <div style={{ marginTop: 12, display: "flex", flexWrap: "wrap", gap: 20 }}>
                 {[
-                  { label: "Carry forward", value: carryForward, set: setCarryForward },
-                  { label: "Encashable", value: encashable, set: setEncashable },
-                  { label: "Requires medical certificate", value: requiresMedicalCert, set: setRequiresMedicalCert },
-                  { label: "Prefix/suffix rule", value: prefixSuffixRule, set: setPrefixSuffixRule },
-                  { label: "Sandwich rule", value: sandwichRule, set: setSandwichRule },
-                  { label: "Pro-rata on joining", value: proRataOnJoining, set: setProRataOnJoining },
-                ].map(({ label, value, set }) => (
-                  <label key={label} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, cursor: "pointer" }}>
+                  { id: "carryForward", label: t("checkCarryForward"), value: carryForward, set: setCarryForward },
+                  { id: "encashable", label: t("checkEncashable"), value: encashable, set: setEncashable },
+                  { id: "requiresMedicalCert", label: t("checkRequiresMedCert"), value: requiresMedicalCert, set: setRequiresMedicalCert },
+                  { id: "prefixSuffixRule", label: t("checkPrefixSuffix"), value: prefixSuffixRule, set: setPrefixSuffixRule },
+                  { id: "sandwichRule", label: t("checkSandwich"), value: sandwichRule, set: setSandwichRule },
+                  { id: "proRataOnJoining", label: t("checkProRata"), value: proRataOnJoining, set: setProRataOnJoining },
+                ].map(({ id, label, value, set }) => (
+                  <label key={id} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, cursor: "pointer" }}>
                     <input
                       type="checkbox"
                       checked={value}
@@ -311,10 +306,10 @@ export function CreateLeavePolicyForm({ onCreated }: { onCreated?: () => void } 
 
             <div style={{ display: "flex", gap: 8, marginTop: 16 }}>
               <button type="submit" className="btn primary">
-                Create Policy
+                {t("createPolicyBtn")}
               </button>
               <button type="button" className="btn ghost" onClick={() => { setOpen(false); setFieldError(null); }}>
-                Cancel
+                {t("cancelBtn")}
               </button>
             </div>
           </Card>
@@ -323,19 +318,22 @@ export function CreateLeavePolicyForm({ onCreated }: { onCreated?: () => void } 
 
       <ConfirmDialog
         open={confirmOpen}
-        title="Create leave policy?"
-        confirmLabel="Create policy"
+        title={t("confirmCreateTitle")}
+        confirmLabel={t("confirmCreateLabel")}
         busy={busy}
         errorMessage={error}
         description={
           selectedLt ? (
-            <>
-              Create a new <strong>{selectedLt.name}</strong> policy for{" "}
-              <strong style={{ textTransform: "capitalize" }}>{employeeType.replace(/_/g, " ")}</strong>{" "}
-              employees granting <strong>{maxDaysPerYear} days/year</strong>.
-            </>
+            t.rich("confirmCreateDescRich", {
+              leaveType: selectedLt.name,
+              employeeType: employeeType.replace(/_/g, " "),
+              days: maxDaysPerYear,
+              strongType: (chunks) => <strong>{chunks}</strong>,
+              strongEmp: (chunks) => <strong style={{ textTransform: "capitalize" }}>{chunks}</strong>,
+              strongDays: (chunks) => <strong>{chunks}</strong>,
+            })
           ) : (
-            "Create this leave policy."
+            t("confirmCreateDescDefault")
           )
         }
         onConfirm={() => void save()}

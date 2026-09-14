@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { DataTable, ConfirmDialog } from "../../../../_components/ds";
 import type { AttendanceRegularisation } from "@civitasone/types";
 import { useSeededResource } from "@/lib/sync/resource";
@@ -12,6 +13,7 @@ type Decision = "approve" | "reject";
 type Row = AttendanceRegularisation & Record<string, unknown>;
 
 export function RegularisationTable({ regs, source = "api" }: { regs: AttendanceRegularisation[]; source?: "api" | "error" }) {
+  const t = useTranslations("attendanceRegularisation");
   const router = useRouter();
   const { data: rows, fromCache, offline, cachedAt } = useSeededResource<AttendanceRegularisation[]>(
     "hr.attendanceRegularisation",
@@ -28,7 +30,7 @@ export function RegularisationTable({ regs, source = "api" }: { regs: Attendance
 
   const cacheNote =
     offline || fromCache
-      ? `Showing saved data${cachedAt ? ` from ${new Date(cachedAt).toLocaleString("en-IN")}` : ""}${offline ? " — you're offline" : ""}.`
+      ? `${t("cacheNoteShowingSaved")}${cachedAt ? t("cacheNoteFrom", { date: new Date(cachedAt).toLocaleString("en-IN") }) : ""}${offline ? t("cacheNoteOffline") : ""}.`
       : null;
 
   async function act(id: string, decision: Decision, reason?: string) {
@@ -47,7 +49,7 @@ export function RegularisationTable({ regs, source = "api" }: { regs: Attendance
         return;
       }
       setPending(null);
-      setToast({ tone: "good", text: decision === "approve" ? "Regularisation approved." : "Regularisation rejected." });
+      setToast({ tone: "good", text: decision === "approve" ? t("toastApproved") : t("toastRejected") });
       router.refresh();
     } catch {
       setDialogError(formError.fromException("save").message);
@@ -58,24 +60,24 @@ export function RegularisationTable({ regs, source = "api" }: { regs: Attendance
 
   const columns = useMemo(
     () => [
-      { key: "employeeName" as const, label: "Employee" },
-      { key: "date" as const, label: "Date", render: (r: Row) => formatIndianDate(r.date) },
-      { key: "reason" as const, label: "Reason" },
-      { key: "requestedStatus" as const, label: "Requested Status" },
-      { key: "requestedAt" as const, label: "Applied At", render: (r: Row) => formatIndianDate(r.requestedAt) },
-      { key: "status" as const, label: "Status", cellType: "status" as const },
+      { key: "employeeName" as const, label: t("colEmployee") },
+      { key: "date" as const, label: t("colDate"), render: (r: Row) => formatIndianDate(r.date) },
+      { key: "reason" as const, label: t("colReason") },
+      { key: "requestedStatus" as const, label: t("colRequestedStatus") },
+      { key: "requestedAt" as const, label: t("colAppliedAt"), render: (r: Row) => formatIndianDate(r.requestedAt) },
+      { key: "status" as const, label: t("colStatus"), cellType: "status" as const },
       {
         key: "id" as const,
-        label: "Decision",
+        label: t("colDecision"),
         sortable: false,
         render: (r: Row) =>
           r.status === "pending" ? (
             <div style={{ display: "flex", gap: 8 }}>
               <button type="button" className="btn primary sm" style={{ minHeight: 44 }} onClick={() => { setDialogError(undefined); setPending({ row: r, decision: "approve" }); }}>
-                Approve
+                {t("approveBtn")}
               </button>
               <button type="button" className="btn ghost sm" style={{ minHeight: 44 }} onClick={() => { setDialogError(undefined); setPending({ row: r, decision: "reject" }); }}>
-                Reject
+                {t("rejectBtn")}
               </button>
             </div>
           ) : (
@@ -83,7 +85,7 @@ export function RegularisationTable({ regs, source = "api" }: { regs: Attendance
           ),
       },
     ],
-    [],
+    [t],
   );
 
   return (
@@ -103,31 +105,36 @@ export function RegularisationTable({ regs, source = "api" }: { regs: Attendance
         rows={rows as Row[]}
         sortable
         filterable
-        filterPlaceholder="Filter by employee, reason or status…"
+        filterPlaceholder={t("filterPlaceholder")}
         pageSize={20}
         emptyIcon="✅"
-        emptyTitle="No regularisation requests"
-        emptyMessage="Employees can request corrections to their attendance records. Pending approvals will appear here."
+        emptyTitle={t("emptyTitle")}
+        emptyMessage={t("emptyMessage")}
       />
 
       <ConfirmDialog
         open={pending !== null}
-        title={pending?.decision === "approve" ? "Approve regularisation?" : "Reject regularisation?"}
+        title={pending?.decision === "approve" ? t("confirmApproveTitle") : t("confirmRejectTitle")}
         danger={pending?.decision === "reject"}
         requireReason
-        reasonLabel={pending?.decision === "approve" ? "Approval remarks" : "Reason for rejection"}
-        confirmLabel={pending?.decision === "approve" ? "Approve" : "Reject"}
+        reasonLabel={pending?.decision === "approve" ? t("approvalRemarksLabel") : t("rejectionReasonLabel")}
+        confirmLabel={pending?.decision === "approve" ? t("approveBtn") : t("rejectBtn")}
         busy={busy}
         errorMessage={dialogError}
         description={
           pending ? (
             <>
-              {pending.decision === "approve" ? "Approve" : "Reject"} the request from{" "}
-              <strong>{pending.row.employeeName}</strong> to mark{" "}
-              <strong>{formatIndianDate(pending.row.date)}</strong> as{" "}
-              <strong>{pending.row.requestedStatus}</strong>.
+              {t.rich("confirmDescRich", {
+                verb: pending.decision === "approve" ? t("approveBtn") : t("rejectBtn"),
+                employeeName: pending.row.employeeName,
+                date: formatIndianDate(pending.row.date),
+                requestedStatus: pending.row.requestedStatus,
+                strongName: (chunks) => <strong>{chunks}</strong>,
+                strongDate: (chunks) => <strong>{chunks}</strong>,
+                strongStatus: (chunks) => <strong>{chunks}</strong>,
+              })}
               <br />
-              <span style={{ color: "var(--ink2)" }}>Reason: {pending.row.reason}</span>
+              <span style={{ color: "var(--ink2)" }}>{t("reasonLine", { reason: pending.row.reason })}</span>
             </>
           ) : null
         }

@@ -1,5 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, fireEvent, waitFor, within } from "@testing-library/react";
+import { NextIntlClientProvider } from "next-intl";
+import enMessages from "@/messages/en.json";
 import { RegularisationTable } from "./RegularisationTable";
 import type { AttendanceRegularisation } from "@civitasone/types";
 
@@ -29,7 +31,11 @@ describe("RegularisationTable — UX-016 clerk-safe errors", () => {
   afterEach(() => vi.unstubAllGlobals());
 
   function openApproveDialog() {
-    render(<RegularisationTable regs={[REG]} source="api" />);
+    render(
+      <NextIntlClientProvider locale="en" messages={enMessages}>
+        <RegularisationTable regs={[REG]} source="api" />
+      </NextIntlClientProvider>,
+    );
     fireEvent.click(screen.getByRole("button", { name: /approve/i }));
   }
 

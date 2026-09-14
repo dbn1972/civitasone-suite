@@ -1,6 +1,7 @@
 import { PageHeader, StatGrid, StatCard, Card, DataTable } from "../../../_components/ds";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
+import { getTranslations } from "next-intl/server";
 
 type ApiLoan = {
   id: string;
@@ -57,6 +58,7 @@ async function getLoans(): Promise<LoaderResult<Row[]>> {
 }
 
 export default async function LoansPage() {
+  const t = await getTranslations("loans");
   const { data: items, source } = await getLoans();
 
   const active = items.filter((i) => i.status === "active").length;
@@ -64,32 +66,32 @@ export default async function LoansPage() {
   const completed = items.filter((i) => i.status === "completed" || i.status === "closed").length;
 
   const columns: { key: keyof Row & string; label: string; cellType?: "status" }[] = [
-    { key: "employee", label: "Employee" },
-    { key: "department", label: "Department" },
-    { key: "loanType", label: "Loan Type" },
-    { key: "sanctionedAmount", label: "Sanctioned" },
-    { key: "emi", label: "EMI" },
-    { key: "balance", label: "Balance" },
-    { key: "status", label: "Status", cellType: "status" },
+    { key: "employee", label: t("colEmployee") },
+    { key: "department", label: t("colDepartment") },
+    { key: "loanType", label: t("colLoanType") },
+    { key: "sanctionedAmount", label: t("colSanctioned") },
+    { key: "emi", label: t("colEmi") },
+    { key: "balance", label: t("colBalance") },
+    { key: "status", label: t("colStatus"), cellType: "status" },
   ];
 
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
-      <PageHeader title="Employee Loans" subtitle="Loans sanctioned, EMI recovery, and outstanding balances." back="/hr" />
-      <DataSourceBadge source={source} message="Couldn't load — showing nothing" />
+      <PageHeader title={t("title")} subtitle={t("subtitle")} back="/hr" />
+      <DataSourceBadge source={source} message={t("dataSourceErrorMessage")} />
       <StatGrid>
-        <StatCard icon="💰" iconBg="#e6f0ff" label="Total Loans" value={items.length} />
-        <StatCard icon="▶️" iconBg="#e6f7f0" label="Active" value={active} />
-        <StatCard icon="⏳" iconBg="#fffbe6" label="Pending" value={pending} />
-        <StatCard icon="✅" iconBg="#f5f5f5" label="Closed" value={completed} />
+        <StatCard icon="💰" iconBg="#e6f0ff" label={t("statTotalLoansLabel")} value={items.length} />
+        <StatCard icon="▶️" iconBg="#e6f7f0" label={t("statActiveLabel")} value={active} />
+        <StatCard icon="⏳" iconBg="#fffbe6" label={t("statPendingLabel")} value={pending} />
+        <StatCard icon="✅" iconBg="#f5f5f5" label={t("statClosedLabel")} value={completed} />
       </StatGrid>
-      <Card title="Loans Register">
+      <Card title={t("cardTitle")}>
         <DataTable<Row> columns={columns} rows={items} sortable filterable exportable
-        filterPlaceholder="Filter by employee, loan type or status…"
+        filterPlaceholder={t("filterPlaceholder")}
           pageSize={15}
           emptyIcon="💳"
-          emptyTitle="No employee loans"
-          emptyMessage="Employee salary advances and loans appear here. Loans are created via the Payroll › Loans module."
+          emptyTitle={t("emptyTitle")}
+          emptyMessage={t("emptyMessage")}
         />
       </Card>
     </main>

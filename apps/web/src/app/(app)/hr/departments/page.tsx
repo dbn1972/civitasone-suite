@@ -3,6 +3,7 @@ import { PageHeader, Card, EmptyState, StatGrid, StatCard, RefreshErrorState } f
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import { useResource } from "@/app/_data/useResource";
 import { toHumanError } from "@/lib/messages";
+import { getTranslations } from "next-intl/server";
 import { DepartmentsTable } from "./DepartmentsTable";
 
 type Dept = {
@@ -39,6 +40,7 @@ const newBtnStyle: React.CSSProperties = {
 };
 
 export default async function DepartmentsPage() {
+  const t = await getTranslations("departments");
   const result = await getDepartments();
   const { data: depts } = result;
   const resource = useResource(result);
@@ -51,20 +53,20 @@ export default async function DepartmentsPage() {
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
-        title="Departments"
-        subtitle="The teams in your office — Finance, HR, Establishment and others. Add departments so people and work can be sorted correctly."
+        title={t("title")}
+        subtitle={t("subtitle")}
         back="/hr"
-        backLabel="HR"
+        backLabel={t("backLabel")}
         help="hr"
         actions={
           <Link href="/hr/departments/new" style={newBtnStyle}>
-            + New Department
+            {t("newBtn")}
           </Link>
         }
       />
 
       {/* Breadcrumb */}
-      <nav aria-label="Breadcrumb" style={{ marginBottom: 12 }}>
+      <nav aria-label={t("breadcrumbNavLabel")} style={{ marginBottom: 12 }}>
         <ol
           style={{
             display: "flex",
@@ -79,30 +81,30 @@ export default async function DepartmentsPage() {
         >
           <li>
             <Link href="/" style={{ color: "var(--mut,#64748b)", textDecoration: "none" }}>
-              Home
+              {t("breadcrumbHome")}
             </Link>
           </li>
           <li aria-hidden="true" style={{ fontSize: 10 }}>›</li>
           <li>
             <Link href="/hr" style={{ color: "var(--mut,#64748b)", textDecoration: "none" }}>
-              HR
+              {t("backLabel")}
             </Link>
           </li>
           <li aria-hidden="true" style={{ fontSize: 10 }}>›</li>
           <li aria-current="page" style={{ fontWeight: 600, color: "var(--fg,#0f172a)" }}>
-            Departments
+            {t("title")}
           </li>
         </ol>
       </nav>
 
       <StatGrid>
-        <StatCard icon="🗂️" iconBg="#e6f0ff" label="Total Departments" value={errored ? "—" : depts.length} />
-        <StatCard icon="🌳" iconBg="#e6f7f0" label="Root Departments"  value={rootDepts ?? "—"} />
-        <StatCard icon="🌿" iconBg="#fff7e6" label="Sub-Departments"   value={subDepts ?? "—"} />
-        <StatCard icon="🏷️" iconBg="#f5f5f5" label="With Code"         value={withCode ?? "—"} />
+        <StatCard icon="🗂️" iconBg="#e6f0ff" label={t("statTotalLabel")} value={errored ? "—" : depts.length} />
+        <StatCard icon="🌳" iconBg="#e6f7f0" label={t("statRootLabel")}  value={rootDepts ?? "—"} />
+        <StatCard icon="🌿" iconBg="#fff7e6" label={t("statSubLabel")}   value={subDepts ?? "—"} />
+        <StatCard icon="🏷️" iconBg="#f5f5f5" label={t("statWithCodeLabel")} value={withCode ?? "—"} />
       </StatGrid>
 
-      <Card title={errored ? "Departments" : `Departments (${depts.length})`}>
+      <Card title={errored ? t("title") : t("cardTitleWithCount", { count: depts.length })}>
         {errored ? (
           <div className="pad">
             <RefreshErrorState error={toHumanError("load", { area: "departments" })} backHref="/hr" />
@@ -110,8 +112,8 @@ export default async function DepartmentsPage() {
         ) : depts.length === 0 ? (
           <EmptyState
             icon="🗂️"
-            title="No departments yet"
-            message="Create your first department so employees can be assigned to teams."
+            title={t("emptyTitle")}
+            message={t("emptyMessage")}
           />
         ) : (
           <DepartmentsTable depts={depts} />

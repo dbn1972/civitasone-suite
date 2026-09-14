@@ -1,5 +1,6 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import type { WizardData } from "../wizardTypes";
 import { ACCENT } from "../wizardTypes";
 
@@ -52,114 +53,115 @@ const SECTION_HDR: React.CSSProperties = {
   marginBottom: 12,
 };
 
-function EditLink({ step, onGoToStep }: { step: number; onGoToStep: (s: number) => void }) {
-  return (
-    <button
-      type="button"
-      onClick={() => onGoToStep(step)}
-      style={{
-        background: "none",
-        border: "none",
-        color: ACCENT,
-        fontSize: 12,
-        fontWeight: 600,
-        cursor: "pointer",
-        textDecoration: "underline",
-        padding: 0,
-      }}
-    >
-      Edit
-    </button>
-  );
-}
-
-function Row({ label, value, masked }: { label: string; value?: string | boolean; masked?: boolean }) {
-  const displayValue =
-    typeof value === "boolean"
-      ? value ? "Yes" : "No"
-      : masked && value
-        ? "••••••••"
-        : value || "—";
-
-  return (
-    <div style={ROW}>
-      <span style={LABEL}>{label}</span>
-      <span style={VALUE}>{displayValue}</span>
-    </div>
-  );
-}
-
-function SectionHeader({ title, step, onGoToStep }: { title: string; step: number; onGoToStep: (s: number) => void }) {
-  return (
-    <div style={SECTION_HDR}>
-      <h3 style={{ margin: 0, fontSize: 13, fontWeight: 700, color: "#374151" }}>{title}</h3>
-      <EditLink step={step} onGoToStep={onGoToStep} />
-    </div>
-  );
-}
-
 export function Step5({ data, departments, designations, submitting, onGoToStep }: Props) {
+  const t = useTranslations("employeeWizardStep5");
   const deptName = departments.find((d) => d.id === data.departmentId)?.name ?? data.departmentId;
   const desigName = designations.find((d) => d.id === data.designationId)?.name ?? data.designationId;
 
   const SHIFT_LABELS: Record<string, string> = {
-    general: "General (9 AM – 6 PM)",
-    morning: "Morning (6 AM – 2 PM)",
-    evening: "Evening (2 PM – 10 PM)",
-    night: "Night (10 PM – 6 AM)",
+    general: t("shiftGeneral"),
+    morning: t("shiftMorning"),
+    evening: t("shiftEvening"),
+    night: t("shiftNight"),
   };
+
+  function EditLink({ step }: { step: number }) {
+    return (
+      <button
+        type="button"
+        onClick={() => onGoToStep(step)}
+        style={{
+          background: "none",
+          border: "none",
+          color: ACCENT,
+          fontSize: 12,
+          fontWeight: 600,
+          cursor: "pointer",
+          textDecoration: "underline",
+          padding: 0,
+        }}
+      >
+        {t("editLink")}
+      </button>
+    );
+  }
+
+  function Row({ label, value, masked }: { label: string; value?: string | boolean; masked?: boolean }) {
+    const displayValue =
+      typeof value === "boolean"
+        ? value ? t("yes") : t("no")
+        : masked && value
+          ? "••••••••"
+          : value || "—";
+
+    return (
+      <div style={ROW}>
+        <span style={LABEL}>{label}</span>
+        <span style={VALUE}>{displayValue}</span>
+      </div>
+    );
+  }
+
+  function SectionHeader({ title, step }: { title: string; step: number }) {
+    return (
+      <div style={SECTION_HDR}>
+        <h3 style={{ margin: 0, fontSize: 13, fontWeight: 700, color: "#374151" }}>{title}</h3>
+        <EditLink step={step} />
+      </div>
+    );
+  }
 
   return (
     <>
       <h2 style={{ fontSize: 16, fontWeight: 700, color: "#0f172a", marginTop: 0, marginBottom: 8 }}>
-        Step 5 — Review &amp; Submit
+        {t("heading")}
       </h2>
       <p style={{ fontSize: 13, color: "#64748b", marginBottom: 20, marginTop: 0 }}>
-        Review all details below. Click <strong>Edit</strong> on any section to go back and make changes.
+        {t.rich("introRich", { b: (chunks) => <strong>{chunks}</strong> })}
       </p>
 
       {/* Step 1 — Personal */}
-      <section style={SECTION} aria-label="Personal Info">
-        <SectionHeader title="Personal Info" step={1} onGoToStep={onGoToStep} />
-        <Row label="Full Name" value={data.fullName} />
-        <Row label="Date of Birth" value={data.dateOfBirth} />
-        <Row label="Gender" value={data.gender} />
-        <Row label="Marital Status" value={data.maritalStatus} />
-        <Row label="Blood Group" value={data.bloodGroup} />
-        <Row label="Official Email" value={data.email} />
-        <Row label="Mobile" value={data.mobile} />
+      <section style={SECTION} aria-label={t("sectionPersonalInfo")}>
+        <SectionHeader title={t("sectionPersonalInfo")} step={1} />
+        <Row label={t("fullName")} value={data.fullName} />
+        <Row label={t("dateOfBirth")} value={data.dateOfBirth} />
+        <Row label={t("gender")} value={data.gender} />
+        <Row label={t("maritalStatus")} value={data.maritalStatus} />
+        <Row label={t("bloodGroup")} value={data.bloodGroup} />
+        <Row label={t("officialEmail")} value={data.email} />
+        <Row label={t("mobile")} value={data.mobile} />
       </section>
 
       {/* Step 2 — Employment */}
-      <section style={SECTION} aria-label="Employment">
-        <SectionHeader title="Employment" step={2} onGoToStep={onGoToStep} />
-        <Row label="Employee ID" value={data.employeeNo} />
-        <Row label="Department" value={deptName} />
-        <Row label="Designation" value={desigName} />
-        <Row label="Pay Grade" value={data.grade} />
-        <Row label="Date of Joining" value={data.dateOfJoining} />
-        <Row label="Employment Type" value={data.employeeType} />
+      <section style={SECTION} aria-label={t("sectionEmployment")}>
+        <SectionHeader title={t("sectionEmployment")} step={2} />
+        <Row label={t("employeeId")} value={data.employeeNo} />
+        <Row label={t("department")} value={deptName} />
+        <Row label={t("designation")} value={desigName} />
+        <Row label={t("payGrade")} value={data.grade} />
+        <Row label={t("dateOfJoining")} value={data.dateOfJoining} />
+        <Row label={t("employmentType")} value={data.employeeType} />
       </section>
 
       {/* Step 3 — Assignment */}
-      <section style={SECTION} aria-label="Assignment">
-        <SectionHeader title="Assignment" step={3} onGoToStep={onGoToStep} />
-        <Row label="Reporting Manager ID" value={data.managerId} />
-        <Row label="Work Location" value={data.workLocation} />
-        <Row label="Shift" value={data.shift ? SHIFT_LABELS[data.shift] : ""} />
-        <Row label="Cost Center" value={data.costCenter} />
+      <section style={SECTION} aria-label={t("sectionAssignment")}>
+        <SectionHeader title={t("sectionAssignment")} step={3} />
+        <Row label={t("reportingManagerId")} value={data.managerId} />
+        <Row label={t("workLocation")} value={data.workLocation} />
+        <Row label={t("shift")} value={data.shift ? SHIFT_LABELS[data.shift] : ""} />
+        <Row label={t("costCenter")} value={data.costCenter} />
       </section>
 
       {/* Step 4 — Statutory */}
-      <section style={SECTION} aria-label="Statutory & Finance">
-        <SectionHeader title="Statutory & Finance" step={4} onGoToStep={onGoToStep} />
-        <Row label="PAN" value={data.pan} masked />
-        <Row label="Aadhaar Reference" value={data.aadhaarRef} masked />
-        <Row label="Bank Account No" value={data.bankAccountNo} masked />
-        <Row label="IFSC Code" value={data.bankIfsc} />
-        <Row label="PF Enrolled" value={data.pfEnrolled} />
-        <Row label="ESI Opt-in" value={data.esiEnrolled} />
-        <Row label="PT Applicable" value={data.ptApplicable} />
+      <section style={SECTION} aria-label={t("sectionStatutoryFinance")}>
+        <SectionHeader title={t("sectionStatutoryFinance")} step={4} />
+        <Row label={t("pan")} value={data.pan} masked />
+        <Row label={t("aadhaarRef")} value={data.aadhaarRef} masked />
+        <Row label={t("bankAccountNo")} value={data.bankAccountNo} masked />
+        <Row label={t("ifscCode")} value={data.bankIfsc} />
+        <Row label={t("pfEnrolled")} value={data.pfEnrolled} />
+        <Row label={t("esiOptIn")} value={data.esiEnrolled} />
+        <Row label={t("ptApplicable")} value={data.ptApplicable} />
       </section>
 
       {/* Compliance note */}
@@ -174,13 +176,12 @@ export function Step5({ data, departments, designations, submitting, onGoToStep 
           marginBottom: 8,
         }}
       >
-        <strong>Important:</strong> Sensitive fields (PAN, Aadhaar, Bank Account) are transmitted over TLS
-        and stored AES-256 encrypted at rest in compliance with IT Act 2000 and DPDP Act 2023.
+        <strong>{t("complianceImportant")}</strong> {t("complianceNote")}
       </div>
 
       {submitting && (
         <p style={{ fontSize: 13, color: "#047857", fontWeight: 500, margin: "12px 0 0" }}>
-          Creating employee record…
+          {t("creatingRecord")}
         </p>
       )}
     </>

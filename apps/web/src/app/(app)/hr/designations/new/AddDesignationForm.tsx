@@ -1,6 +1,7 @@
 "use client";
 
 import { useId, useState } from "react";
+import { useTranslations } from "next-intl";
 import { useFormError } from "@/lib/useFormError";
 
 interface Props {
@@ -27,6 +28,7 @@ const labelStyle: React.CSSProperties = {
 };
 
 export function AddDesignationForm({ onCancel, onSuccess }: Props) {
+  const t = useTranslations("addDesignationForm");
   const formId = useId();
   const [code, setCode] = useState("");
   const [name, setName] = useState("");
@@ -75,7 +77,7 @@ export function AddDesignationForm({ onCancel, onSuccess }: Props) {
     if (errs.size > 0) {
       setInvalid(errs);
       setTone("error");
-      setMessage("Please fix the highlighted fields.");
+      setMessage(t("statusFixFields"));
       return;
     }
 
@@ -103,7 +105,7 @@ export function AddDesignationForm({ onCancel, onSuccess }: Props) {
       }
 
       setTone("success");
-      setMessage(`Designation "${trimName}" added successfully.`);
+      setMessage(t("successMsg", { name: trimName }));
       setCode("");
       setName("");
       setLevel("");
@@ -122,13 +124,13 @@ export function AddDesignationForm({ onCancel, onSuccess }: Props) {
       onSubmit={(e) => {
         void handleSubmit(e);
       }}
-      aria-label="Add designation"
+      aria-label={t("formAriaLabel")}
       noValidate
       className="card"
       style={{ marginTop: 16 }}
     >
       <div className="card-h">
-        <h3>Add Designation</h3>
+        <h3>{t("cardHeading")}</h3>
       </div>
       <div className="pad" style={{ display: "grid", gap: 16 }}>
         {/* Status region */}
@@ -163,7 +165,7 @@ export function AddDesignationForm({ onCancel, onSuccess }: Props) {
           {/* Code */}
           <div style={{ display: "grid", gap: 6 }}>
             <label htmlFor={codeId} style={labelStyle}>
-              Code{" "}
+              {t("codeLabel")}{" "}
               <span aria-hidden="true" style={{ color: "#b91c1c" }}>
                 *
               </span>
@@ -173,7 +175,7 @@ export function AddDesignationForm({ onCancel, onSuccess }: Props) {
               type="text"
               value={code}
               onChange={(e) => setCode(e.target.value)}
-              placeholder="e.g. CLERK"
+              placeholder={t("codePlaceholder")}
               maxLength={20}
               required
               aria-required="true"
@@ -188,7 +190,7 @@ export function AddDesignationForm({ onCancel, onSuccess }: Props) {
           {/* Name */}
           <div style={{ display: "grid", gap: 6 }}>
             <label htmlFor={nameId} style={labelStyle}>
-              Name{" "}
+              {t("nameLabel")}{" "}
               <span aria-hidden="true" style={{ color: "#b91c1c" }}>
                 *
               </span>
@@ -198,7 +200,7 @@ export function AddDesignationForm({ onCancel, onSuccess }: Props) {
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="e.g. Upper Division Clerk"
+              placeholder={t("namePlaceholder")}
               maxLength={200}
               required
               aria-required="true"
@@ -210,7 +212,7 @@ export function AddDesignationForm({ onCancel, onSuccess }: Props) {
           {/* Level */}
           <div style={{ display: "grid", gap: 6 }}>
             <label htmlFor={levelId} style={labelStyle}>
-              Pay Level
+              {t("levelLabel")}
             </label>
             <input
               id={levelId}
@@ -219,7 +221,7 @@ export function AddDesignationForm({ onCancel, onSuccess }: Props) {
               step={1}
               value={level}
               onChange={(e) => setLevel(e.target.value)}
-              placeholder="e.g. 4"
+              placeholder={t("levelPlaceholder")}
               aria-invalid={invalid.has("level")}
               style={inputStyle}
             />
@@ -228,14 +230,14 @@ export function AddDesignationForm({ onCancel, onSuccess }: Props) {
           {/* Pay Grade */}
           <div style={{ display: "grid", gap: 6 }}>
             <label htmlFor={payGradeId} style={labelStyle}>
-              Pay Grade
+              {t("payGradeLabel")}
             </label>
             <input
               id={payGradeId}
               type="text"
               value={payGrade}
               onChange={(e) => setPayGrade(e.target.value)}
-              placeholder="e.g. GP-2400"
+              placeholder={t("payGradePlaceholder")}
               maxLength={30}
               aria-invalid={invalid.has("payGrade")}
               style={inputStyle}
@@ -252,7 +254,7 @@ export function AddDesignationForm({ onCancel, onSuccess }: Props) {
             aria-busy={busy}
             style={{ minHeight: 44, minWidth: 140 }}
           >
-            {busy ? "Adding…" : "Add Designation"}
+            {busy ? t("addingBtn") : t("addBtn")}
           </button>
           <button
             type="button"
@@ -261,7 +263,7 @@ export function AddDesignationForm({ onCancel, onSuccess }: Props) {
             disabled={busy}
             style={{ minHeight: 44 }}
           >
-            Cancel
+            {t("cancelBtn")}
           </button>
         </div>
       </div>

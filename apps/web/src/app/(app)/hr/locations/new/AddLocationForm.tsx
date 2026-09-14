@@ -1,6 +1,7 @@
 "use client";
 
 import { useId, useState } from "react";
+import { useTranslations } from "next-intl";
 import { useFormError } from "@/lib/useFormError";
 
 interface Props {
@@ -39,6 +40,7 @@ const labelStyle: React.CSSProperties = {
 };
 
 export function AddLocationForm({ onCancel, onSuccess }: Props) {
+  const t = useTranslations("addLocationForm");
   const formId = useId();
   const [name, setName] = useState("");
   const [type, setType] = useState<LocationType>("office");
@@ -59,6 +61,16 @@ export function AddLocationForm({ onCancel, onSuccess }: Props) {
   const postalCodeId = `${formId}-postalCode`;
   const lgdCodeId = `${formId}-lgdCode`;
   const statusId = `${formId}-status`;
+
+  const typeLabels: Record<LocationType, string> = {
+    state: t("typeState"),
+    district: t("typeDistrict"),
+    block: t("typeBlock"),
+    ward: t("typeWard"),
+    office: t("typeOffice"),
+    facility: t("typeFacility"),
+    branch: t("typeBranch"),
+  };
 
   function handleCancel() {
     setName("");
@@ -92,7 +104,7 @@ export function AddLocationForm({ onCancel, onSuccess }: Props) {
     if (errs.size > 0) {
       setInvalid(errs);
       setTone("error");
-      setMessage("Please fix the highlighted fields.");
+      setMessage(t("statusFixFields"));
       return;
     }
 
@@ -119,7 +131,7 @@ export function AddLocationForm({ onCancel, onSuccess }: Props) {
       }
 
       setTone("success");
-      setMessage(`Location "${trimName}" added successfully.`);
+      setMessage(t("successMsg", { name: trimName }));
       setName("");
       setType("office");
       setAddressLine("");
@@ -140,13 +152,13 @@ export function AddLocationForm({ onCancel, onSuccess }: Props) {
       onSubmit={(e) => {
         void handleSubmit(e);
       }}
-      aria-label="Add location"
+      aria-label={t("formAriaLabel")}
       noValidate
       className="card"
       style={{ marginTop: 16 }}
     >
       <div className="card-h">
-        <h3>Add Location</h3>
+        <h3>{t("cardHeading")}</h3>
       </div>
       <div className="pad" style={{ display: "grid", gap: 16 }}>
         {/* Status region */}
@@ -181,7 +193,7 @@ export function AddLocationForm({ onCancel, onSuccess }: Props) {
           {/* Name */}
           <div style={{ display: "grid", gap: 6 }}>
             <label htmlFor={nameId} style={labelStyle}>
-              Name{" "}
+              {t("nameLabel")}{" "}
               <span aria-hidden="true" style={{ color: "#b91c1c" }}>
                 *
               </span>
@@ -191,7 +203,7 @@ export function AddLocationForm({ onCancel, onSuccess }: Props) {
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="e.g. Block Development Office, Ranchi"
+              placeholder={t("namePlaceholder")}
               maxLength={200}
               required
               aria-required="true"
@@ -203,7 +215,7 @@ export function AddLocationForm({ onCancel, onSuccess }: Props) {
           {/* Type */}
           <div style={{ display: "grid", gap: 6 }}>
             <label htmlFor={typeId} style={labelStyle}>
-              Type{" "}
+              {t("typeLabel")}{" "}
               <span aria-hidden="true" style={{ color: "#b91c1c" }}>
                 *
               </span>
@@ -216,9 +228,9 @@ export function AddLocationForm({ onCancel, onSuccess }: Props) {
               aria-required="true"
               style={inputStyle}
             >
-              {LOCATION_TYPES.map((t) => (
-                <option key={t} value={t}>
-                  {t.charAt(0).toUpperCase() + t.slice(1)}
+              {LOCATION_TYPES.map((lt) => (
+                <option key={lt} value={lt}>
+                  {typeLabels[lt]}
                 </option>
               ))}
             </select>
@@ -228,14 +240,14 @@ export function AddLocationForm({ onCancel, onSuccess }: Props) {
         {/* Address Line */}
         <div style={{ display: "grid", gap: 6 }}>
           <label htmlFor={addressLineId} style={labelStyle}>
-            Address Line
+            {t("addressLineLabel")}
           </label>
           <input
             id={addressLineId}
             type="text"
             value={addressLine}
             onChange={(e) => setAddressLine(e.target.value)}
-            placeholder="e.g. 12 Main Street, Near Post Office"
+            placeholder={t("addressLinePlaceholder")}
             maxLength={500}
             aria-invalid={invalid.has("addressLine")}
             style={inputStyle}
@@ -252,14 +264,14 @@ export function AddLocationForm({ onCancel, onSuccess }: Props) {
           {/* City */}
           <div style={{ display: "grid", gap: 6 }}>
             <label htmlFor={cityId} style={labelStyle}>
-              City
+              {t("cityLabel")}
             </label>
             <input
               id={cityId}
               type="text"
               value={city}
               onChange={(e) => setCity(e.target.value)}
-              placeholder="e.g. Ranchi"
+              placeholder={t("cityPlaceholder")}
               maxLength={120}
               aria-invalid={invalid.has("city")}
               style={inputStyle}
@@ -269,7 +281,7 @@ export function AddLocationForm({ onCancel, onSuccess }: Props) {
           {/* Postal Code */}
           <div style={{ display: "grid", gap: 6 }}>
             <label htmlFor={postalCodeId} style={labelStyle}>
-              Postal Code
+              {t("postalCodeLabel")}
             </label>
             <input
               id={postalCodeId}
@@ -277,7 +289,7 @@ export function AddLocationForm({ onCancel, onSuccess }: Props) {
               inputMode="numeric"
               value={postalCode}
               onChange={(e) => setPostalCode(e.target.value)}
-              placeholder="e.g. 834001"
+              placeholder={t("postalCodePlaceholder")}
               maxLength={6}
               aria-invalid={invalid.has("postalCode")}
               style={inputStyle}
@@ -287,7 +299,7 @@ export function AddLocationForm({ onCancel, onSuccess }: Props) {
           {/* LGD Code */}
           <div style={{ display: "grid", gap: 6 }}>
             <label htmlFor={lgdCodeId} style={labelStyle}>
-              LGD Code
+              {t("lgdCodeLabel")}
             </label>
             <input
               id={lgdCodeId}
@@ -295,7 +307,7 @@ export function AddLocationForm({ onCancel, onSuccess }: Props) {
               inputMode="numeric"
               value={lgdCode}
               onChange={(e) => setLgdCode(e.target.value)}
-              placeholder="Local Government Directory code"
+              placeholder={t("lgdCodePlaceholder")}
               maxLength={32}
               aria-invalid={invalid.has("lgdCode")}
               style={inputStyle}
@@ -312,7 +324,7 @@ export function AddLocationForm({ onCancel, onSuccess }: Props) {
             aria-busy={busy}
             style={{ minHeight: 44, minWidth: 140 }}
           >
-            {busy ? "Adding…" : "Add Location"}
+            {busy ? t("addingBtn") : t("addBtn")}
           </button>
           <button
             type="button"
@@ -321,7 +333,7 @@ export function AddLocationForm({ onCancel, onSuccess }: Props) {
             disabled={busy}
             style={{ minHeight: 44 }}
           >
-            Cancel
+            {t("cancelBtn")}
           </button>
         </div>
       </div>

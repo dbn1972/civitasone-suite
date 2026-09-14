@@ -1,6 +1,7 @@
 "use client";
 
 import { Fragment } from "react";
+import { useTranslations } from "next-intl";
 import { ACCENT } from "./wizardTypes";
 
 interface Props {
@@ -10,8 +11,9 @@ interface Props {
 }
 
 export function StepIndicator({ steps, current }: Props) {
+  const t = useTranslations("employeeWizard");
   return (
-    <nav aria-label="Wizard progress" style={{ marginBottom: 28 }}>
+    <nav aria-label={t("wizardProgressAriaLabel")} style={{ marginBottom: 28 }}>
       <ol
         style={{
           display: "flex",

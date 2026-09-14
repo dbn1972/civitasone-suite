@@ -1,66 +1,68 @@
 import { PageHeader, Card } from "../../../../_components/ds";
+import { getTranslations } from "next-intl/server";
 
 /**
  * Attendance Rules Configuration — defines how the system marks attendance:
  * late, half-day, overtime, weekly-off, flexi-time.
  */
-export default function AttendanceConfigPage() {
+export default async function AttendanceConfigPage() {
+  const t = await getTranslations("attendanceConfig");
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
-      <PageHeader title="Attendance Rules" subtitle="How late marks, half-days, overtime, and weekly-offs are computed (read-only reference)." back="/hr/attendance" backLabel="Attendance" />
+      <PageHeader title={t("title")} subtitle={t("subtitle")} back="/hr/attendance" backLabel={t("backLabel")} />
 
       <div className="grid g-2">
-        <Card title="Working Hours" padding>
+        <Card title={t("cardWorkingHours")} padding>
           <table className="tbl" style={{ fontSize: 13 }}>
             <tbody>
-              <tr><td>Office start time</td><td><strong>09:30 AM</strong></td></tr>
-              <tr><td>Office end time</td><td><strong>06:00 PM</strong></td></tr>
-              <tr><td>Grace period (late mark)</td><td><strong>15 minutes</strong></td></tr>
-              <tr><td>Half-day cutoff</td><td><strong>After 12:30 PM arrival</strong></td></tr>
-              <tr><td>Minimum hours for full day</td><td><strong>7.5 hours</strong></td></tr>
-              <tr><td>Weekly off</td><td><strong>Saturday & Sunday</strong></td></tr>
+              <tr><td>{t("whOfficeStart")}</td><td><strong>{t("whOfficeStartVal")}</strong></td></tr>
+              <tr><td>{t("whOfficeEnd")}</td><td><strong>{t("whOfficeEndVal")}</strong></td></tr>
+              <tr><td>{t("whGracePeriod")}</td><td><strong>{t("whGracePeriodVal")}</strong></td></tr>
+              <tr><td>{t("whHalfDayCutoff")}</td><td><strong>{t("whHalfDayCutoffVal")}</strong></td></tr>
+              <tr><td>{t("whMinHours")}</td><td><strong>{t("whMinHoursVal")}</strong></td></tr>
+              <tr><td>{t("whWeeklyOff")}</td><td><strong>{t("whWeeklyOffVal")}</strong></td></tr>
             </tbody>
           </table>
         </Card>
 
-        <Card title="Late Mark Rules" padding>
+        <Card title={t("cardLateMarkRules")} padding>
           <table className="tbl" style={{ fontSize: 13 }}>
             <tbody>
-              <tr><td>Grace period</td><td>15 min after start time</td></tr>
-              <tr><td>Late mark trigger</td><td>Check-in after 09:45 AM</td></tr>
-              <tr><td>Half-day if</td><td>Check-in after 12:30 PM</td></tr>
-              <tr><td>Absent if</td><td>No check-in by 02:00 PM</td></tr>
-              <tr><td>Late marks → CL deduction</td><td>3 late marks = 1 CL deducted</td></tr>
+              <tr><td>{t("lmGracePeriod")}</td><td>{t("lmGracePeriodVal")}</td></tr>
+              <tr><td>{t("lmTrigger")}</td><td>{t("lmTriggerVal")}</td></tr>
+              <tr><td>{t("lmHalfDayIf")}</td><td>{t("lmHalfDayIfVal")}</td></tr>
+              <tr><td>{t("lmAbsentIf")}</td><td>{t("lmAbsentIfVal")}</td></tr>
+              <tr><td>{t("lmDeduction")}</td><td>{t("lmDeductionVal")}</td></tr>
             </tbody>
           </table>
         </Card>
 
-        <Card title="Overtime Rules" padding>
+        <Card title={t("cardOvertimeRules")} padding>
           <table className="tbl" style={{ fontSize: 13 }}>
             <tbody>
-              <tr><td>OT eligible after</td><td>8.5 hours worked</td></tr>
-              <tr><td>OT rate (weekday)</td><td>1.5× hourly rate</td></tr>
-              <tr><td>OT rate (weekly off / holiday)</td><td>2× hourly rate</td></tr>
-              <tr><td>Max OT per day</td><td>4 hours</td></tr>
-              <tr><td>Requires approval</td><td>Yes (supervisor)</td></tr>
+              <tr><td>{t("otEligible")}</td><td>{t("otEligibleVal")}</td></tr>
+              <tr><td>{t("otRateWeekday")}</td><td>{t("otRateWeekdayVal")}</td></tr>
+              <tr><td>{t("otRateWeeklyOff")}</td><td>{t("otRateWeeklyOffVal")}</td></tr>
+              <tr><td>{t("otMaxPerDay")}</td><td>{t("otMaxPerDayVal")}</td></tr>
+              <tr><td>{t("otRequiresApproval")}</td><td>{t("otRequiresApprovalVal")}</td></tr>
             </tbody>
           </table>
         </Card>
 
-        <Card title="Compensatory Off (CO)" padding>
+        <Card title={t("cardCompOff")} padding>
           <table className="tbl" style={{ fontSize: 13 }}>
             <tbody>
-              <tr><td>Earned when</td><td>Worked on a holiday / weekly off</td></tr>
-              <tr><td>Must be availed within</td><td>30 days of earning</td></tr>
-              <tr><td>Max accumulation</td><td>3 COs at a time</td></tr>
-              <tr><td>Approval required</td><td>Yes (supervisor)</td></tr>
+              <tr><td>{t("coEarnedWhen")}</td><td>{t("coEarnedWhenVal")}</td></tr>
+              <tr><td>{t("coMustAvail")}</td><td>{t("coMustAvailVal")}</td></tr>
+              <tr><td>{t("coMaxAccumulation")}</td><td>{t("coMaxAccumulationVal")}</td></tr>
+              <tr><td>{t("coApprovalRequired")}</td><td>{t("coApprovalRequiredVal")}</td></tr>
             </tbody>
           </table>
         </Card>
       </div>
 
       <p style={{ marginTop: 16, color: "var(--mut)", fontSize: 13 }}>
-        These rules are applied automatically by the attendance engine when processing daily check-ins. To change them, update via the platform config API.
+        {t("footerNote")}
       </p>
     </main>
   );

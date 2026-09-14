@@ -1,5 +1,6 @@
 import { PageHeader, Card } from "../../../../_components/ds";
 import { ImportForm } from "./ImportForm";
+import { getTranslations } from "next-intl/server";
 
 // No backend template-generation route exists (GET .../import/template 404s
 // — confirmed live and matches the "no /import route anywhere" finding in
@@ -10,36 +11,37 @@ const TEMPLATE_CSV =
   "EMP-001,Ravi Kumar,ravi@office.gov.in,9876543210,FIN,JC,permanent,2024-01-15,44900,male\n";
 const TEMPLATE_HREF = `data:text/csv;charset=utf-8,${encodeURIComponent(TEMPLATE_CSV)}`;
 
-export default function BulkImportPage() {
+export default async function BulkImportPage() {
+  const t = await getTranslations("employeeImport");
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
-        title="Bulk Employee Import"
-        subtitle="Upload a CSV file to add multiple employees at once. Download the template first to see the required format."
+        title={t("title")}
+        subtitle={t("subtitle")}
         back="/hr/employees"
-        backLabel="Employees"
+        backLabel={t("backLabel")}
       />
 
       <Card padding>
-        <h3 style={{ margin: "0 0 12px", fontSize: 15 }}>CSV Template</h3>
+        <h3 style={{ margin: "0 0 12px", fontSize: 15 }}>{t("csvTemplateHeading")}</h3>
         <p style={{ color: "var(--mut)", fontSize: 13.5, marginBottom: 12 }}>
-          Your CSV must have these columns (in this order). Download the template and fill it in.
+          {t("csvInstructions")}
         </p>
         <table className="tbl" style={{ fontSize: 13, marginBottom: 16 }}>
           <thead>
-            <tr><th>Column</th><th>Required</th><th>Example</th></tr>
+            <tr><th>{t("thColumn")}</th><th>{t("thRequired")}</th><th>{t("thExample")}</th></tr>
           </thead>
           <tbody>
-            <tr><td>employeeNo</td><td>Yes</td><td>EMP-001</td></tr>
-            <tr><td>fullName</td><td>Yes</td><td>Ravi Kumar</td></tr>
-            <tr><td>email</td><td>No</td><td>ravi@office.gov.in</td></tr>
-            <tr><td>mobile</td><td>No</td><td>9876543210</td></tr>
-            <tr><td>departmentCode</td><td>Yes</td><td>FIN</td></tr>
-            <tr><td>designationCode</td><td>Yes</td><td>JC</td></tr>
-            <tr><td>employeeType</td><td>Yes</td><td>permanent / contract / intern</td></tr>
-            <tr><td>dateOfJoining</td><td>Yes</td><td>2024-01-15</td></tr>
-            <tr><td>basicPay</td><td>Yes</td><td>44900 (in rupees)</td></tr>
-            <tr><td>gender</td><td>No</td><td>male / female / other</td></tr>
+            <tr><td>{t("colEmployeeNo")}</td><td>{t("yes")}</td><td>{t("exEmployeeNo")}</td></tr>
+            <tr><td>{t("colFullName")}</td><td>{t("yes")}</td><td>{t("exFullName")}</td></tr>
+            <tr><td>{t("colEmail")}</td><td>{t("no")}</td><td>{t("exEmail")}</td></tr>
+            <tr><td>{t("colMobile")}</td><td>{t("no")}</td><td>{t("exMobile")}</td></tr>
+            <tr><td>{t("colDepartmentCode")}</td><td>{t("yes")}</td><td>{t("exDepartmentCode")}</td></tr>
+            <tr><td>{t("colDesignationCode")}</td><td>{t("yes")}</td><td>{t("exDesignationCode")}</td></tr>
+            <tr><td>{t("colEmployeeType")}</td><td>{t("yes")}</td><td>{t("exEmployeeType")}</td></tr>
+            <tr><td>{t("colDateOfJoining")}</td><td>{t("yes")}</td><td>{t("exDateOfJoining")}</td></tr>
+            <tr><td>{t("colBasicPay")}</td><td>{t("yes")}</td><td>{t("exBasicPay")}</td></tr>
+            <tr><td>{t("colGender")}</td><td>{t("no")}</td><td>{t("exGender")}</td></tr>
           </tbody>
         </table>
         <a
@@ -48,17 +50,18 @@ export default function BulkImportPage() {
           className="btn ghost"
           style={{ marginBottom: 16, display: "inline-block" }}
         >
-          ⬇️ Download CSV template
+          {t("downloadTemplate")}
         </a>
         <p style={{ color: "var(--mut)", fontSize: 12.5, marginTop: -8, marginBottom: 16 }}>
-          Department and designation codes must match exactly what&apos;s configured on the{" "}
-          <a href="/hr/departments" style={{ color: "inherit", textDecoration: "underline" }}>Departments</a> and{" "}
-          <a href="/hr/designations" style={{ color: "inherit", textDecoration: "underline" }}>Designations</a> pages.
+          {t.rich("codesNoteRich", {
+            deptLink: (chunks) => <a href="/hr/departments" style={{ color: "inherit", textDecoration: "underline" }}>{chunks}</a>,
+            desigLink: (chunks) => <a href="/hr/designations" style={{ color: "inherit", textDecoration: "underline" }}>{chunks}</a>,
+          })}
         </p>
       </Card>
 
       <Card padding>
-        <h3 style={{ margin: "0 0 12px", fontSize: 15 }}>Upload your file</h3>
+        <h3 style={{ margin: "0 0 12px", fontSize: 15 }}>{t("uploadHeading")}</h3>
         <ImportForm />
       </Card>
     </main>

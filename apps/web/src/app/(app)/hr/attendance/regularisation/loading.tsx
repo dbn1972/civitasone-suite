@@ -1,12 +1,14 @@
 import { SkeletonTable } from "../../../../_components/ds";
 import { PageHeader } from "../../../../_components/ds";
+import { getTranslations } from "next-intl/server";
 
-export default function RegularisationLoading() {
+export default async function RegularisationLoading() {
+  const t = await getTranslations("attendanceRegularisation");
   return (
     <>
       <PageHeader
-        title="Attendance Regularisation"
-        subtitle="Employee requests to correct attendance records."
+        title={t("title")}
+        subtitle={t("subtitleLoading")}
         back="/hr/attendance"
       />
       <main className="page-main wrap">

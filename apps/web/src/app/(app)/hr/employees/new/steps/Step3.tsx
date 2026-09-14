@@ -1,5 +1,6 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import type { WizardData, FieldErrors } from "../wizardTypes";
 import {
   inputStyle,
@@ -18,30 +19,32 @@ interface Props {
   onBlur: (field: keyof WizardData) => void;
 }
 
-const SHIFTS: { value: WizardData["shift"]; label: string }[] = [
-  { value: "general", label: "General (9 AM – 6 PM)" },
-  { value: "morning", label: "Morning (6 AM – 2 PM)" },
-  { value: "evening", label: "Evening (2 PM – 10 PM)" },
-  { value: "night", label: "Night (10 PM – 6 AM)" },
-];
-
 export function Step3({ data, errors: _errors, managers, onChange, onBlur: _onBlur }: Props) {
+  const t = useTranslations("employeeWizard");
+
+  const SHIFTS: { value: WizardData["shift"]; label: string }[] = [
+    { value: "general", label: t("shiftGeneral") },
+    { value: "morning", label: t("shiftMorning") },
+    { value: "evening", label: t("shiftEvening") },
+    { value: "night", label: t("shiftNight") },
+  ];
+
   return (
     <>
       <h2 style={{ fontSize: 16, fontWeight: 700, color: "#0f172a", marginTop: 0, marginBottom: 20 }}>
-        Step 3 — Assignment
+        {t("step3Heading")}
       </h2>
       <div style={grid2}>
         {/* Reporting Manager */}
         <div style={fieldWrap}>
-          <label htmlFor="w-manager" style={labelStyle}>Reporting Manager</label>
+          <label htmlFor="w-manager" style={labelStyle}>{t("reportingManagerLabel")}</label>
           <select
             id="w-manager"
             value={data.managerId}
             onChange={(e) => onChange("managerId", e.target.value)}
             style={inputStyle}
           >
-            <option value="">Select manager</option>
+            <option value="">{t("selectManager")}</option>
             {(managers ?? []).map((m) => (
               <option key={m.id} value={m.id}>
                 {m.name}{m.designationName ? ` — ${m.designationName}` : ""}
@@ -52,27 +55,27 @@ export function Step3({ data, errors: _errors, managers, onChange, onBlur: _onBl
 
         {/* Work Location */}
         <div style={fieldWrap}>
-          <label htmlFor="w-location" style={labelStyle}>Work Location</label>
+          <label htmlFor="w-location" style={labelStyle}>{t("workLocationLabel")}</label>
           <input
             id="w-location"
             type="text"
             value={data.workLocation}
             onChange={(e) => onChange("workLocation", e.target.value)}
-            placeholder="e.g. CGO Complex, New Delhi"
+            placeholder={t("workLocationPlaceholder")}
             style={inputStyle}
           />
         </div>
 
         {/* Shift */}
         <div style={fieldWrap}>
-          <label htmlFor="w-shift" style={labelStyle}>Shift</label>
+          <label htmlFor="w-shift" style={labelStyle}>{t("shiftLabel")}</label>
           <select
             id="w-shift"
             value={data.shift}
             onChange={(e) => onChange("shift", e.target.value as WizardData["shift"])}
             style={inputStyle}
           >
-            <option value="">Select shift</option>
+            <option value="">{t("selectShift")}</option>
             {SHIFTS.map(({ value, label }) => (
               <option key={value} value={value}>{label}</option>
             ))}
@@ -81,20 +84,20 @@ export function Step3({ data, errors: _errors, managers, onChange, onBlur: _onBl
 
         {/* Cost Center */}
         <div style={fieldWrap}>
-          <label htmlFor="w-costCenter" style={labelStyle}>Cost Center</label>
+          <label htmlFor="w-costCenter" style={labelStyle}>{t("costCenterLabel")}</label>
           <input
             id="w-costCenter"
             type="text"
             value={data.costCenter}
             onChange={(e) => onChange("costCenter", e.target.value)}
-            placeholder="e.g. CC-IT-INFRA-001"
+            placeholder={t("costCenterPlaceholder")}
             style={inputStyle}
           />
         </div>
       </div>
 
       <p style={{ marginTop: 20, marginBottom: 0, fontSize: 12, color: "#64748b" }}>
-        All Assignment fields are optional and can be updated later from the employee profile.
+        {t("assignmentOptionalNote")}
       </p>
     </>
   );

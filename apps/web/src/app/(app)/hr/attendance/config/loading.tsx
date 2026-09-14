@@ -1,10 +1,13 @@
-export default function Loading() {
+import { getTranslations } from "next-intl/server";
+
+export default async function Loading() {
+  const t = await getTranslations("attendanceConfig");
   return (
     <main className="page-main" aria-labelledby="page-heading">
       <div className="ph">
         <div>
-          <h1 id="page-heading">Attendance Config</h1>
-          <div className="sub">Configure attendance rules and period locks.</div>
+          <h1 id="page-heading">{t("loadingTitle")}</h1>
+          <div className="sub">{t("loadingSubtitle")}</div>
         </div>
       </div>
       <div className="animate-pulse" style={{ display: "grid", gap: 16 }}>

@@ -1,18 +1,20 @@
 "use client";
 
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { PageHeader } from "../../../../_components/ds";
 import { AddLocationForm } from "./AddLocationForm";
 
 export default function NewLocationPage() {
+  const t = useTranslations("addLocationForm");
   const router = useRouter();
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
-        title="Add Location"
-        subtitle="Register an office, branch, or facility location."
+        title={t("pageTitle")}
+        subtitle={t("pageSubtitle")}
         back="/hr/locations"
-        backLabel="Locations"
+        backLabel={t("pageBackLabel")}
       />
       <AddLocationForm
         onCancel={() => { router.push("/hr/locations"); }}

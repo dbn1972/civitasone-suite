@@ -1,6 +1,7 @@
 import { PageHeader, StatGrid, StatCard, Card, DataTable } from "../../../_components/ds";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
+import { getTranslations } from "next-intl/server";
 
 /**
  * ShiftRequestsPage — employee requests to swap/change shift.
@@ -43,47 +44,48 @@ async function getData(): Promise<LoaderResult<Row[]>> {
   });
 }
 
-const COLUMNS: { key: keyof Row & string; label: string; cellType?: "status" }[] = [
-  { key: "employeeName", label: "Employee" },
-  { key: "currentShift", label: "Current Shift" },
-  { key: "requestedShift", label: "Requested Shift" },
-  { key: "effectiveDate", label: "Effective Date" },
-  { key: "reason", label: "Reason" },
-  { key: "status", label: "Status", cellType: "status" },
-];
-
 export default async function ShiftRequestsPage() {
+  const t = await getTranslations("shiftRequests");
   const { data: items, source } = await getData();
 
   const pending = items.filter((i) => i.status === "pending").length;
   const approved = items.filter((i) => i.status === "approved").length;
   const rejected = items.filter((i) => ["rejected", "declined"].includes(i.status)).length;
 
+  const COLUMNS: { key: keyof Row & string; label: string; cellType?: "status" }[] = [
+    { key: "employeeName", label: t("colEmployee") },
+    { key: "currentShift", label: t("colCurrentShift") },
+    { key: "requestedShift", label: t("colRequestedShift") },
+    { key: "effectiveDate", label: t("colEffectiveDate") },
+    { key: "reason", label: t("colReason") },
+    { key: "status", label: t("colStatus"), cellType: "status" },
+  ];
+
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
-        title="Shift Change Requests"
-        subtitle="Employees requesting a swap or change of assigned shift. Supervisor approval required."
+        title={t("title")}
+        subtitle={t("subtitle")}
         back="/hr"
       />
       <DataSourceBadge source={source} />
       <StatGrid>
-        <StatCard icon="🔄" iconBg="#e6f0ff" label="Total Requests" value={items.length} />
-        <StatCard icon="⏳" iconBg="#fffbe6" label="Pending Approval" value={pending} />
-        <StatCard icon="✅" iconBg="#e6f7f0" label="Approved" value={approved} />
-        <StatCard icon="❌" iconBg="#fff0f0" label="Rejected" value={rejected} />
+        <StatCard icon="🔄" iconBg="#e6f0ff" label={t("statTotalLabel")} value={items.length} />
+        <StatCard icon="⏳" iconBg="#fffbe6" label={t("statPendingLabel")} value={pending} />
+        <StatCard icon="✅" iconBg="#e6f7f0" label={t("statApprovedLabel")} value={approved} />
+        <StatCard icon="❌" iconBg="#fff0f0" label={t("statRejectedLabel")} value={rejected} />
       </StatGrid>
-      <Card title="Shift Change Requests">
+      <Card title={t("cardTitle")}>
         <DataTable<Row>
           columns={COLUMNS}
           rows={items}
           sortable
           filterable
-          filterPlaceholder="Filter by employee, shift or status…"
+          filterPlaceholder={t("filterPlaceholder")}
           pageSize={20}
           emptyIcon="🔄"
-          emptyTitle="No shift change requests"
-          emptyMessage="Requests appear here once employees apply to change their assigned shift. Approved by the reporting officer per DoPT staffing policy."
+          emptyTitle={t("emptyTitle")}
+          emptyMessage={t("emptyMessage")}
         />
       </Card>
     </main>

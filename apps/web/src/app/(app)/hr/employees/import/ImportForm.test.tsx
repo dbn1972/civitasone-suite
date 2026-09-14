@@ -1,6 +1,16 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { NextIntlClientProvider } from "next-intl";
+import enMessages from "@/messages/en.json";
 import { ImportForm } from "./ImportForm";
+
+function renderForm() {
+  return render(
+    <NextIntlClientProvider locale="en" messages={enMessages}>
+      <ImportForm />
+    </NextIntlClientProvider>,
+  );
+}
 
 const CSV =
   "employeeNo,fullName,email,mobile,departmentCode,designationCode,employeeType,dateOfJoining,basicPay,gender\n" +
@@ -46,7 +56,7 @@ describe("ImportForm — department/designation code resolution", () => {
   it("resolves departmentCode/designationCode to real UUIDs before posting, instead of sending the code as the id", async () => {
     const fetchMock = mockBackend();
     vi.stubGlobal("fetch", fetchMock);
-    render(<ImportForm />);
+    renderForm();
 
     const input = document.getElementById("import-csv-file") as HTMLInputElement;
     fireEvent.change(input, { target: { files: [csvFile()] } });
@@ -61,7 +71,7 @@ describe("ImportForm — department/designation code resolution", () => {
 
   it("reports an unknown department code by name instead of sending it as a UUID and getting a bare 400", async () => {
     vi.stubGlobal("fetch", mockBackend());
-    render(<ImportForm />);
+    renderForm();
 
     const input = document.getElementById("import-csv-file") as HTMLInputElement;
     fireEvent.change(input, { target: { files: [csvFile()] } });
@@ -87,7 +97,7 @@ describe("ImportForm — UX-016 clerk-safe errors", () => {
       "fetch",
       mockBackend({ employeePostOk: false, employeePostStatus: 500, employeePostBody: "hrms-service employee-create panicked" }),
     );
-    render(<ImportForm />);
+    renderForm();
 
     const input = document.getElementById("import-csv-file") as HTMLInputElement;
     fireEvent.change(input, { target: { files: [csvFile()] } });

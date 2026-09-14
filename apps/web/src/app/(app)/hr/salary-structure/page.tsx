@@ -1,6 +1,7 @@
 import { PageHeader, StatGrid, StatCard, Card, DataTable } from "../../../_components/ds";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
+import { getTranslations } from "next-intl/server";
 
 type ApiStructure = {
   id: string;
@@ -48,6 +49,7 @@ async function getStructures(): Promise<LoaderResult<Row[]>> {
 }
 
 export default async function SalaryStructurePage() {
+  const t = await getTranslations("salaryStructure");
   const { data: items, source } = await getStructures();
 
   const active = items.filter((i) => i.status === "active").length;
@@ -63,41 +65,41 @@ export default async function SalaryStructurePage() {
     .at(-1) ?? "—";
 
   const columns: { key: keyof Row & string; label: string; cellType?: "status" }[] = [
-    { key: "name", label: "Structure Name" },
-    { key: "grade", label: "Grade/Level" },
-    { key: "components", label: "Components" },
-    { key: "basicPay", label: "Basic Pay Range" },
-    { key: "effectiveDate", label: "Effective Date" },
-    { key: "employees", label: "Employees" },
-    { key: "status", label: "Status", cellType: "status" },
+    { key: "name", label: t("colStructureName") },
+    { key: "grade", label: t("colGradeLevel") },
+    { key: "components", label: t("colComponents") },
+    { key: "basicPay", label: t("colBasicPayRange") },
+    { key: "effectiveDate", label: t("colEffectiveDate") },
+    { key: "employees", label: t("colEmployees") },
+    { key: "status", label: t("colStatus"), cellType: "status" },
   ];
 
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
-        title="Salary Structures"
-        subtitle="Pay structure definitions by grade and level — component breakdown, allowances, and revision history."
+        title={t("title")}
+        subtitle={t("subtitle")}
         back="/hr"
         actions={<span />}
       />
-      <DataSourceBadge source={source} message="Couldn't load — showing nothing" />
+      <DataSourceBadge source={source} message={t("dataSourceErrorMessage")} />
       <StatGrid>
-        <StatCard icon="📊" iconBg="#e6f0ff" label="Structures" value={items.length} />
-        <StatCard icon="✅" iconBg="#e6f7f0" label="Active" value={active} />
-        <StatCard icon="👥" iconBg="#fffbe6" label="Employees Covered" value={totalEmployees.toLocaleString("en-IN")} />
-        <StatCard icon="📅" iconBg="#f5f5f5" label="Last Revision" value={lastRevision} />
+        <StatCard icon="📊" iconBg="#e6f0ff" label={t("statStructuresLabel")} value={items.length} />
+        <StatCard icon="✅" iconBg="#e6f7f0" label={t("statActiveLabel")} value={active} />
+        <StatCard icon="👥" iconBg="#fffbe6" label={t("statEmployeesCoveredLabel")} value={totalEmployees.toLocaleString("en-IN")} />
+        <StatCard icon="📅" iconBg="#f5f5f5" label={t("statLastRevisionLabel")} value={lastRevision} />
       </StatGrid>
-      <Card title="Salary Structures">
+      <Card title={t("cardTitle")}>
         <DataTable<Row>
           columns={columns}
           rows={items}
           sortable
           filterable
-          filterPlaceholder="Filter by name, grade or status…"
+          filterPlaceholder={t("filterPlaceholder")}
           pageSize={15}
           emptyIcon="💼"
-          emptyTitle="No salary structures defined"
-          emptyMessage="Pay structure definitions by grade and level appear here. Structures define the component breakdown — basic pay, DA, HRA, transport, and special allowances — for each employee category."
+          emptyTitle={t("emptyTitle")}
+          emptyMessage={t("emptyMessage")}
         />
       </Card>
     </main>

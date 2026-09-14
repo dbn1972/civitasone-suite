@@ -1,6 +1,7 @@
 import { PageHeader, StatGrid, StatCard, Card } from "../../../_components/ds";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
+import { getTranslations } from "next-intl/server";
 
 type FeedItem = {
   type: string;
@@ -37,6 +38,7 @@ async function getData(): Promise<LoaderResult<FeedItem[]>> {
 }
 
 export default async function SocialFeedPage() {
+  const t = await getTranslations("socialFeed");
   const { data: feed, source } = await getData();
 
   const kudosCount        = feed.filter((f) => f.type === "kudos").length;
@@ -47,28 +49,28 @@ export default async function SocialFeedPage() {
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
-        title="Social Feed"
-        subtitle="Kudos, birthdays, new joinees, and office announcements."
+        title={t("title")}
+        subtitle={t("subtitle")}
         back="/hr"
       />
       <DataSourceBadge source={source} />
       <StatGrid>
-        <StatCard icon="🌟" iconBg="#fffbe6" label="Kudos"         value={kudosCount} />
-        <StatCard icon="🎂" iconBg="#fff0f6" label="Birthdays"    value={birthdayCount} />
-        <StatCard icon="👋" iconBg="#e6f7f0" label="New Joinees"   value={newJoineeCount} />
-        <StatCard icon="📢" iconBg="#e6f0ff" label="Announcements" value={announcementCount} />
+        <StatCard icon="🌟" iconBg="#fffbe6" label={t("statKudosLabel")}         value={kudosCount} />
+        <StatCard icon="🎂" iconBg="#fff0f6" label={t("statBirthdaysLabel")}    value={birthdayCount} />
+        <StatCard icon="👋" iconBg="#e6f7f0" label={t("statNewJoineesLabel")}   value={newJoineeCount} />
+        <StatCard icon="📢" iconBg="#e6f0ff" label={t("statAnnouncementsLabel")} value={announcementCount} />
       </StatGrid>
 
       {feed.length === 0 ? (
-        <Card title="Feed">
+        <Card title={t("cardTitleEmpty")}>
           <div style={{ padding: "48px 24px", textAlign: "center", color: "var(--mut)" }}>
             <div style={{ fontSize: 40, marginBottom: 12 }}>🎉</div>
-            <p style={{ fontWeight: 600, marginBottom: 4 }}>No updates yet</p>
-            <p style={{ fontSize: 14 }}>Give kudos to a colleague to start the feed!</p>
+            <p style={{ fontWeight: 600, marginBottom: 4 }}>{t("emptyTitle")}</p>
+            <p style={{ fontSize: 14 }}>{t("emptyMessage")}</p>
           </div>
         </Card>
       ) : (
-        <Card title="Latest Updates">
+        <Card title={t("cardTitleLatest")}>
           <div style={{ display: "flex", flexDirection: "column", gap: 12, padding: "12px 0" }}>
             {feed.map((item) => {
               if (item.type === "kudos") {
@@ -77,7 +79,12 @@ export default async function SocialFeedPage() {
                     <span style={{ fontSize: 28, flexShrink: 0 }}>{BADGE_EMOJI[item.badge ?? "star"]}</span>
                     <div>
                       <p style={{ fontSize: 14, lineHeight: 1.5 }}>
-                        <strong>{item.giver_name}</strong>{" appreciated "}<strong>{item.receiver_name}</strong>
+                        {t.rich("kudosLine", {
+                          giver: item.giver_name ?? "",
+                          receiver: item.receiver_name ?? "",
+                          strongGiver: (chunks) => <strong>{chunks}</strong>,
+                          strongReceiver: (chunks) => <strong>{chunks}</strong>,
+                        })}
                       </p>
                       {item.message && (
                         <p style={{ marginTop: 6, fontSize: 13, color: "var(--ink2)", background: "var(--bg2)", borderRadius: 8, padding: "8px 12px", fontStyle: "italic" }}>
@@ -93,7 +100,7 @@ export default async function SocialFeedPage() {
                   <div key={item.id} style={{ display: "flex", alignItems: "center", gap: 14, padding: "14px 20px", background: "#fff9f0", borderBottom: "1px solid var(--line)" }}>
                     <span style={{ fontSize: 32 }}>🎂</span>
                     <div>
-                      <p style={{ fontWeight: 600, color: "var(--ink)", fontSize: 14 }}>Happy Birthday, {item.name}!</p>
+                      <p style={{ fontWeight: 600, color: "var(--ink)", fontSize: 14 }}>{t("birthdayGreeting", { name: item.name ?? "" })}</p>
                       <p style={{ fontSize: 12, color: "var(--mut)" }}>{item.designation} · {item.department}</p>
                     </div>
                   </div>
@@ -104,8 +111,8 @@ export default async function SocialFeedPage() {
                   <div key={item.id} style={{ display: "flex", alignItems: "center", gap: 14, padding: "14px 20px", background: "#f0fff8", borderBottom: "1px solid var(--line)" }}>
                     <span style={{ fontSize: 32 }}>👋</span>
                     <div>
-                      <p style={{ fontWeight: 600, color: "var(--ink)", fontSize: 14 }}>Welcome {item.name}!</p>
-                      <p style={{ fontSize: 12, color: "var(--mut)" }}>Joined as {item.designation} in {item.department}</p>
+                      <p style={{ fontWeight: 600, color: "var(--ink)", fontSize: 14 }}>{t("newJoineeGreeting", { name: item.name ?? "" })}</p>
+                      <p style={{ fontSize: 12, color: "var(--mut)" }}>{t("joinedAsLine", { designation: item.designation ?? "", department: item.department ?? "" })}</p>
                     </div>
                   </div>
                 );
@@ -124,7 +131,7 @@ export default async function SocialFeedPage() {
                           </span>
                         )}
                         {item.author && (
-                          <span style={{ fontSize: 11, color: "var(--mut)" }}>by {item.author}</span>
+                          <span style={{ fontSize: 11, color: "var(--mut)" }}>{t("byAuthorLine", { author: item.author })}</span>
                         )}
                       </div>
                     </div>

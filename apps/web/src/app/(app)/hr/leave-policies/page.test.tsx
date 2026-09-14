@@ -1,11 +1,21 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, fireEvent, waitFor, within } from "@testing-library/react";
+import { NextIntlClientProvider } from "next-intl";
+import enMessages from "@/messages/en.json";
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }),
 }));
 
 import LeavePoliciesPage from "./page";
+
+function renderPage() {
+  return render(
+    <NextIntlClientProvider locale="en" messages={enMessages}>
+      <LeavePoliciesPage />
+    </NextIntlClientProvider>,
+  );
+}
 
 const POLICY = {
   id: "p1",
@@ -44,7 +54,7 @@ describe("LeavePoliciesPage — UX-016 clerk-safe errors", () => {
 
   it("shows a clerk-safe message, never the raw HTTP status, when the initial list load fails", async () => {
     fetchMock.mockResolvedValue(new Response("", { status: 500 }));
-    render(<LeavePoliciesPage />);
+    renderPage();
 
     // Scoped to the toHumanError "area" text (not just /couldn't load/i) since
     // the page's own DataSourceBadge also shows a generic "Couldn't load —
@@ -60,7 +70,7 @@ describe("LeavePoliciesPage — UX-016 clerk-safe errors", () => {
       }
       return Promise.resolve(new Response("policy-service: PATCH trace at line 40", { status: 500 }));
     });
-    render(<LeavePoliciesPage />);
+    renderPage();
 
     fireEvent.click(await screen.findByRole("button", { name: /^edit$/i }));
     fireEvent.click(screen.getByRole("button", { name: /^save$/i }));

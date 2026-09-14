@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { ConfirmDialog } from "../../../_components/ds";
 import { useFormError } from "@/lib/useFormError";
 
@@ -87,6 +88,7 @@ const thStyle: React.CSSProperties = {
 // ── Main component ─────────────────────────────────────────────────────────
 
 export function DesignationsTable({ items }: { items: Designation[] }) {
+  const t = useTranslations("designationsTable");
   const router = useRouter();
   const [localItems, setLocalItems] = useState<Designation[]>(items);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -117,11 +119,11 @@ export function DesignationsTable({ items }: { items: Designation[] }) {
 
   async function saveEdit(id: string) {
     if (editCode.trim() === "" || editName.trim() === "") {
-      setRowError("Code and name are required");
+      setRowError(t("rowErrorRequired"));
       return;
     }
     if (editLevel !== 0 && (isNaN(editLevel) || editLevel < 1 || !Number.isInteger(editLevel))) {
-      setRowError("Level must be a positive integer if provided");
+      setRowError(t("rowErrorLevelInteger"));
       return;
     }
     setSaving(true);
@@ -180,12 +182,12 @@ export function DesignationsTable({ items }: { items: Designation[] }) {
       <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
         <thead>
           <tr>
-            <th style={thStyle}>Code</th>
-            <th style={thStyle}>Designation</th>
-            <th style={{ ...thStyle, textAlign: "right" }}>Pay Level (7th CPC)</th>
-            <th style={thStyle}>Grade Pay (₹)</th>
-            <th style={thStyle}>Service Group</th>
-            <th style={thStyle}>Pay Grade</th>
+            <th style={thStyle}>{t("colCode")}</th>
+            <th style={thStyle}>{t("colDesignation")}</th>
+            <th style={{ ...thStyle, textAlign: "right" }}>{t("colPayLevel")}</th>
+            <th style={thStyle}>{t("colGradePay")}</th>
+            <th style={thStyle}>{t("colServiceGroup")}</th>
+            <th style={thStyle}>{t("colPayGrade")}</th>
             <th style={{ ...thStyle, width: 1 }}></th>
           </tr>
         </thead>
@@ -200,7 +202,7 @@ export function DesignationsTable({ items }: { items: Designation[] }) {
                   <>
                     <td style={{ padding: "10px 12px" }}>
                       <input
-                        aria-label="Designation code"
+                        aria-label={t("designationCodeAriaLabel")}
                         value={editCode}
                         onChange={(e) => setEditCode(e.target.value)}
                         style={{ ...inputStyle, maxWidth: 80 }}
@@ -208,7 +210,7 @@ export function DesignationsTable({ items }: { items: Designation[] }) {
                     </td>
                     <td style={{ padding: "10px 12px" }}>
                       <input
-                        aria-label="Designation name"
+                        aria-label={t("designationNameAriaLabel")}
                         value={editName}
                         onChange={(e) => setEditName(e.target.value)}
                         style={inputStyle}
@@ -221,7 +223,7 @@ export function DesignationsTable({ items }: { items: Designation[] }) {
                     </td>
                     <td style={{ padding: "10px 12px", textAlign: "right" }}>
                       <input
-                        aria-label="Pay level (1–18)"
+                        aria-label={t("payLevelAriaLabel")}
                         type="number"
                         min={0}
                         max={18}
@@ -231,11 +233,11 @@ export function DesignationsTable({ items }: { items: Designation[] }) {
                       />
                     </td>
                     <td colSpan={2} style={{ padding: "10px 12px", color: "var(--mut,#94a3b8)", fontSize: 12 }}>
-                      computed on save
+                      {t("computedOnSave")}
                     </td>
                     <td style={{ padding: "10px 12px" }}>
                       <input
-                        aria-label="Pay grade"
+                        aria-label={t("payGradeAriaLabel")}
                         value={editPayGrade}
                         onChange={(e) => setEditPayGrade(e.target.value)}
                         style={{ ...inputStyle, maxWidth: 100 }}
@@ -247,9 +249,9 @@ export function DesignationsTable({ items }: { items: Designation[] }) {
                         disabled={saving}
                         style={{ ...btnBase, marginRight: 6, background: "var(--primary,#2563eb)", color: "#fff", border: "none" }}
                       >
-                        {saving ? "Saving…" : "Save"}
+                        {saving ? t("savingBtn") : t("saveBtn")}
                       </button>
-                      <button onClick={cancelEdit} style={btnBase}>Cancel</button>
+                      <button onClick={cancelEdit} style={btnBase}>{t("cancelBtn")}</button>
                     </td>
                   </>
                 ) : (
@@ -263,7 +265,7 @@ export function DesignationsTable({ items }: { items: Designation[] }) {
                     <td style={{ padding: "10px 12px", textAlign: "right", fontVariantNumeric: "tabular-nums" }}>
                       {item.level > 0 ? (
                         <span style={{ fontWeight: 700, color: "var(--fg,#0f172a)" }}>
-                          Level {item.level}
+                          {t("levelPrefix", { level: item.level })}
                         </span>
                       ) : "—"}
                     </td>
@@ -284,13 +286,13 @@ export function DesignationsTable({ items }: { items: Designation[] }) {
                     </td>
                     <td style={{ padding: "10px 12px", whiteSpace: "nowrap" }}>
                       <button onClick={() => startEdit(item)} style={{ ...btnBase, marginRight: 6 }}>
-                        Edit
+                        {t("editBtn")}
                       </button>
                       <button
                         onClick={() => { setDeleteError(undefined); setDeleteTarget(item); }}
                         style={{ ...btnBase, color: "#b91c1c" }}
                       >
-                        Delete
+                        {t("deleteBtn")}
                       </button>
                     </td>
                   </>
@@ -303,10 +305,10 @@ export function DesignationsTable({ items }: { items: Designation[] }) {
 
       <ConfirmDialog
         open={deleteTarget !== null}
-        title={`Delete "${deleteTarget?.name ?? ""}"?`}
-        description="This designation will be permanently removed. This action cannot be undone."
+        title={t("deleteConfirmTitle", { name: deleteTarget?.name ?? "" })}
+        description={t("deleteConfirmDesc")}
         danger
-        confirmLabel="Delete designation"
+        confirmLabel={t("deleteConfirmBtn")}
         busy={deletingId !== null}
         errorMessage={deleteError}
         onConfirm={() => deleteTarget && void doDelete(deleteTarget.id)}

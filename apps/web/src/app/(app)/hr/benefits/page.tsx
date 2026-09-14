@@ -1,6 +1,7 @@
 import { PageHeader, StatGrid, StatCard, Card, DataTable } from "../../../_components/ds";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
+import { getTranslations } from "next-intl/server";
 
 type ApiElection = {
   id: string;
@@ -50,6 +51,7 @@ async function getData(): Promise<LoaderResult<Row[]>> {
 }
 
 export default async function BenefitsPage() {
+  const t = await getTranslations("benefits");
   const { data: items, source } = await getData();
 
   const active = items.filter((i) => i.status === "active").length;
@@ -57,38 +59,38 @@ export default async function BenefitsPage() {
   const closed = items.filter((i) => ["closed", "lapsed", "expired"].includes(i.status)).length;
 
   const columns: { key: keyof Row & string; label: string; cellType?: "status" }[] = [
-    { key: "plan_name", label: "Plan" },
-    { key: "fy", label: "Financial Year" },
-    { key: "components", label: "Components" },
-    { key: "total_elected", label: "Total Elected" },
-    { key: "status", label: "Status", cellType: "status" },
+    { key: "plan_name", label: t("colPlan") },
+    { key: "fy", label: t("colFinancialYear") },
+    { key: "components", label: t("colComponents") },
+    { key: "total_elected", label: t("colTotalElected") },
+    { key: "status", label: t("colStatus"), cellType: "status" },
   ];
 
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
-        title="Benefits Enrollment"
-        subtitle="HRA, LTC, medical, and flex-benefit elections for the financial year."
+        title={t("title")}
+        subtitle={t("subtitle")}
         back="/hr"
       />
-      <DataSourceBadge source={source} message="Couldn't load — showing nothing" />
+      <DataSourceBadge source={source} message={t("dataSourceErrorMessage")} />
       <StatGrid>
-        <StatCard icon="🏥" iconBg="#e6f0ff" label="Total Enrollments" value={items.length} />
-        <StatCard icon="✅" iconBg="#e6f7f0" label="Active" value={active} />
-        <StatCard icon="⏳" iconBg="#fffbe6" label="Processing" value={processing} />
-        <StatCard icon="📁" iconBg="#f5f5f5" label="Closed / Expired" value={closed} />
+        <StatCard icon="🏥" iconBg="#e6f0ff" label={t("statTotalEnrollmentsLabel")} value={items.length} />
+        <StatCard icon="✅" iconBg="#e6f7f0" label={t("statActiveLabel")} value={active} />
+        <StatCard icon="⏳" iconBg="#fffbe6" label={t("statProcessingLabel")} value={processing} />
+        <StatCard icon="📁" iconBg="#f5f5f5" label={t("statClosedLabel")} value={closed} />
       </StatGrid>
-      <Card title="Benefit Elections">
+      <Card title={t("cardTitle")}>
         <DataTable<Row>
           columns={columns}
           rows={items}
           sortable
           filterable
-          filterPlaceholder="Filter by plan, FY or status…"
+          filterPlaceholder={t("filterPlaceholder")}
           pageSize={15}
           emptyIcon="🏥"
-          emptyTitle="No benefits enrolled"
-          emptyMessage="Employee benefits enrollments (HRA, LTC, medical) appear here once elections are submitted during the benefit window."
+          emptyTitle={t("emptyTitle")}
+          emptyMessage={t("emptyMessage")}
         />
       </Card>
     </main>

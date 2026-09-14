@@ -1,18 +1,20 @@
 "use client";
 
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { PageHeader } from "../../../../_components/ds";
 import { AddDesignationForm } from "./AddDesignationForm";
 
 export default function NewDesignationPage() {
+  const t = useTranslations("addDesignationForm");
   const router = useRouter();
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
-        title="Add Designation"
-        subtitle="Add a new job title or pay level to use across your office."
+        title={t("pageTitle")}
+        subtitle={t("pageSubtitle")}
         back="/hr/designations"
-        backLabel="Designations"
+        backLabel={t("pageBackLabel")}
       />
       <AddDesignationForm
         onCancel={() => { router.push("/hr/designations"); }}

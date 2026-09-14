@@ -1,5 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { NextIntlClientProvider } from "next-intl";
+import enMessages from "@/messages/en.json";
 import { AddEmployeeWizard } from "./AddEmployeeWizard";
 
 const DEPARTMENTS = [{ id: "dep1", name: "Finance" }];
@@ -19,7 +21,11 @@ describe("AddEmployeeWizard — UX-016 clerk-safe errors", () => {
   afterEach(() => vi.unstubAllGlobals());
 
   async function driveToFinalStepAndSubmit() {
-    render(<AddEmployeeWizard departments={DEPARTMENTS} designations={DESIGNATIONS} />);
+    render(
+      <NextIntlClientProvider locale="en" messages={enMessages}>
+        <AddEmployeeWizard departments={DEPARTMENTS} designations={DESIGNATIONS} />
+      </NextIntlClientProvider>,
+    );
 
     // Step 1 — Personal Info
     fireEvent.change(screen.getByLabelText(/full name/i), { target: { value: "Priya Sharma" } });

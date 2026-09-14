@@ -1,6 +1,7 @@
 import { PageHeader, StatGrid, StatCard, Card, DataTable } from "../../../_components/ds";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
+import { getTranslations } from "next-intl/server";
 
 type Row = {
   id: string;
@@ -25,16 +26,17 @@ async function getData(): Promise<LoaderResult<Row[]>> {
 }
 
 export default async function OutsourcedPage() {
+  const t = await getTranslations("outsourced");
   const { data: items, source } = await getData();
 
   const columns: { key: keyof Row & string; label: string; cellType?: "status"; align?: "left" | "right" }[] = [
-    { key: "vendor", label: "Vendor" },
-    { key: "department", label: "Department" },
-    { key: "headcount", label: "Headcount", align: "right" },
-    { key: "service", label: "Service" },
-    { key: "contractValue", label: "Contract Value" },
-    { key: "contractEnd", label: "Contract End" },
-    { key: "status", label: "Status", cellType: "status" },
+    { key: "vendor", label: t("colVendor") },
+    { key: "department", label: t("colDepartment") },
+    { key: "headcount", label: t("colHeadcount"), align: "right" },
+    { key: "service", label: t("colService") },
+    { key: "contractValue", label: t("colContractValue") },
+    { key: "contractEnd", label: t("colContractEnd") },
+    { key: "status", label: t("colStatus"), cellType: "status" },
   ];
 
   const uniqueVendors = new Set(items.map((i) => i.vendor).filter(Boolean)).size;
@@ -43,19 +45,19 @@ export default async function OutsourcedPage() {
 
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
-      <PageHeader title="Outsourced Workforce" subtitle="Vendor-wise outsourced staff, headcount, and contract details." back="/hr" />
+      <PageHeader title={t("title")} subtitle={t("subtitle")} back="/hr" />
       <StatGrid>
-        <StatCard icon="📋" iconBg="#e6f0ff" label="Total Records" value={items.length} />
-        <StatCard icon="🏭" iconBg="#f0fff4" label="Unique Vendors" value={uniqueVendors} />
-        <StatCard icon="✅" iconBg="#e6f7f0" label="Active Contracts" value={activeContracts} />
-        <StatCard icon="👷" iconBg="#fff7e6" label="Total Headcount" value={totalHeadcount} />
+        <StatCard icon="📋" iconBg="#e6f0ff" label={t("statTotalRecordsLabel")} value={items.length} />
+        <StatCard icon="🏭" iconBg="#f0fff4" label={t("statUniqueVendorsLabel")} value={uniqueVendors} />
+        <StatCard icon="✅" iconBg="#e6f7f0" label={t("statActiveContractsLabel")} value={activeContracts} />
+        <StatCard icon="👷" iconBg="#fff7e6" label={t("statTotalHeadcountLabel")} value={totalHeadcount} />
       </StatGrid>
-      <Card title="Outsourced Workforce">
-        <DataTable<Row> columns={columns} rows={items} sortable filterable filterPlaceholder="Filter…"
+      <Card title={t("cardTitle")}>
+        <DataTable<Row> columns={columns} rows={items} sortable filterable filterPlaceholder={t("filterPlaceholder")}
           pageSize={15}
           emptyIcon="🏢"
-          emptyTitle="No outsourced staff"
-          emptyMessage="Outsourced workforce records appear here, tracking vendor-supplied staff and their contract details."
+          emptyTitle={t("emptyTitle")}
+          emptyMessage={t("emptyMessage")}
         />
       </Card>
     </main>

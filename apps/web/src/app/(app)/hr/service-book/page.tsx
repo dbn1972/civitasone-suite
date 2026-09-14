@@ -6,6 +6,7 @@ import Link from "next/link";
 import { PageHeader, StatGrid, StatCard, Card } from "../../../_components/ds";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
+import { getTranslations } from "next-intl/server";
 import { ServiceBookView, type ServiceEntry } from "./_components/ServiceBookView";
 
 async function getData(employeeId?: string): Promise<LoaderResult<ServiceEntry[]>> {
@@ -26,6 +27,7 @@ export default async function ServiceBookPage({
 }: {
   searchParams?: { empId?: string };
 }) {
+  const t = await getTranslations("serviceBook");
   // The employee profile's "Service Book" quick action links here with
   // ?empId= — previously ignored entirely, so it always showed every
   // employee's entries mixed together instead of the one the officer opened.
@@ -43,25 +45,21 @@ export default async function ServiceBookPage({
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
-        title={empId ? `Service Book — ${items[0]?.employee ?? "Employee"}` : "Service Book"}
-        subtitle={
-          empId
-            ? "This employee's postings, transfers, promotions, and administrative orders in chronological order."
-            : "Official service history register — all postings, transfers, promotions, and administrative orders in chronological order."
-        }
+        title={empId ? t("titleForEmployee", { employee: items[0]?.employee ?? t("defaultEmployeeName") }) : t("title")}
+        subtitle={empId ? t("subtitleForEmployee") : t("subtitleAll")}
         back="/hr"
-        actions={empId ? <Link href="/hr/service-book" className="btn ghost">View all employees</Link> : <span />}
+        actions={empId ? <Link href="/hr/service-book" className="btn ghost">{t("viewAllEmployeesLink")}</Link> : <span />}
       />
       <DataSourceBadge source={source} />
 
       <StatGrid>
-        <StatCard icon="📒" iconBg="#e6f0ff" label="Total Entries"         value={items.length} />
-        <StatCard icon="👥" iconBg="#f5f5f5" label="Employees"             value={employees} />
-        <StatCard icon="🔄" iconBg="#fffbe6" label="Transfers / Postings"  value={transfers} />
-        <StatCard icon="📈" iconBg="#e6f7f0" label="Promotions / Increments" value={promotions} />
+        <StatCard icon="📒" iconBg="#e6f0ff" label={t("statTotalEntriesLabel")} value={items.length} />
+        <StatCard icon="👥" iconBg="#f5f5f5" label={t("statEmployeesLabel")} value={employees} />
+        <StatCard icon="🔄" iconBg="#fffbe6" label={t("statTransfersLabel")} value={transfers} />
+        <StatCard icon="📈" iconBg="#e6f7f0" label={t("statPromotionsLabel")} value={promotions} />
       </StatGrid>
 
-      <Card title="Service Book Entries">
+      <Card title={t("cardTitle")}>
         <div style={{ padding: 16 }}>
           <ServiceBookView entries={items} />
         </div>

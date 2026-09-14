@@ -54,3 +54,33 @@ vi.mock("next/headers", () => ({
   }),
   headers: () => new Map(),
 }));
+
+// Mock next-intl/server (UX-017): Vitest/jsdom never sets the "react-server"
+// resolve condition next-intl gates its real server implementation behind,
+// so an unmocked getTranslations() throws "`getTranslations` is not
+// supported in Client Components" the instant any async Server Component
+// page.tsx calls it -- surfaced by the first UX-017 tranche to translate a
+// server-component page that also has a direct `render(await Page())` unit
+// test (earlier tranches only touched "use client" pages, which sidestep
+// this by wrapping renders in NextIntlClientProvider instead). Rebuilt here
+// on next-intl's own createTranslator (not gated behind react-server) so
+// ICU interpolation/plurals/t.rich() behave exactly like production --
+// always in English, matching the locale="en" NextIntlClientProvider
+// wrapping already used for client-component tests.
+vi.mock("next-intl/server", async () => {
+  const { createTranslator } = await import("next-intl");
+  const enMessages = (await import("./src/messages/en.json")).default;
+  return {
+    getTranslations: async (arg?: string | { namespace?: string }) => {
+      const namespace = typeof arg === "string" ? arg : arg?.namespace;
+      // next-intl infers a large namespace-key union from the real messages
+      // shape for production type safety; a test mock's dynamically-typed
+      // `namespace` string can't satisfy that literal union, so it's cast
+      // to the createTranslator parameter type here rather than widening
+      // (and so losing) that type safety for real call sites.
+      return createTranslator({ locale: "en", messages: enMessages, namespace } as Parameters<typeof createTranslator>[0]);
+    },
+    getLocale: async () => "en",
+    getMessages: async () => enMessages,
+  };
+});
