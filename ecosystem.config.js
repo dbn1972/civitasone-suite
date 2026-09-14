@@ -518,7 +518,7 @@ module.exports = {
     svc("crm",          3024, "crm_svc",           "civitas_crm", { CRM_PII_KEY }, { graceful: true }), // PERF-015
     svc("inventory",    3025, "inventory_svc",     "civitas_inventory", { PROCUREMENT_SERVICE_URL: "http://127.0.0.1:3008" }),
     svc("telephony",    3026, "telephony_svc",     "civitas_telephony"),
-    svc("helpdesk",     3027, "helpdesk_svc",      "civitas_helpdesk"),
+    svc("helpdesk",     3027, "helpdesk_svc",      "civitas_helpdesk", {}, { graceful: true }), // PERF-015
 
     // ── Intelligence & automation ──────────────────────────────────────────────
     svc("knowledge",    3028, "knowledge_svc",     "civitas_knowledge"),
