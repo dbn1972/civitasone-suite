@@ -507,7 +507,7 @@ module.exports = {
 
     // ── Government-specific ────────────────────────────────────────────────────
     svc("grant",        3019, "grant_svc",         "civitas_grant"),
-    svc("citizen",      3020, "citizen_svc",       "civitas_citizen", { CITIZEN_PII_KEY }),
+    svc("citizen",      3020, "citizen_svc",       "civitas_citizen", { CITIZEN_PII_KEY }, { graceful: true }), // PERF-015
     svc("legal",        3021, "legal_svc",         "civitas_legal"),
 
     // ── Admin & billing ────────────────────────────────────────────────────────

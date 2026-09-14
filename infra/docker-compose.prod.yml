@@ -845,7 +845,7 @@ services:
       DATABASE_URL: ${DATABASE_URL_CITIZEN:?per-service least-privilege DSN required (set DATABASE_URL for civitas_citizen; do NOT use the cluster superuser)}
       CITIZEN_PII_KEY: ${CITIZEN_PII_KEY:?}
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3020/health >/dev/null 2>&1 || exit 1"]
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3020/ready >/dev/null 2>&1 || exit 1"]  # PERF-015
       interval: 20s
       timeout: 5s
       retries: 5
