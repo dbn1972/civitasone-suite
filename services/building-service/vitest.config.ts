@@ -90,5 +90,20 @@ export default defineConfig({
     // TRUNCATE race (PR #1022, services/trade-service/vitest.config.ts) and
     // used this exact setting.
     fileParallelism: false,
+    // REL-013: this service had no coverage block at all. Thresholds set
+    // at/just below real measured coverage (lines 88.99 / branches 74.9 /
+    // functions 86.41 / statements 88.99, via `pnpm --filter
+    // @civitasone/building-service run coverage` against a fully migrated,
+    // isolated Postgres, 37/37 tests passing), matching the convention used
+    // by every other service's vitest.config.ts (e.g. hrms-service).
+    coverage: {
+      provider: "v8",
+      thresholds: {
+        lines: 88,
+        functions: 86,
+        branches: 74,
+        statements: 88,
+      },
+    },
   },
 });
