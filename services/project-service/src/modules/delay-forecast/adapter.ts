@@ -1,31 +1,51 @@
 /**
  * ML Service adapter for project delay prediction.
  *
- * Calls ml-service POST /v1/ml/predict with domain "tasks".
+ * Calls ml-service POST /v1/ml/internal/delay-forecast/simulate — the REAL
+ * Monte Carlo simulation (ml-service's src/modules/algorithms/monte-carlo.ts),
+ * over this project's actual task graph. Authenticated via the internal
+ * service-to-service mechanism (x-internal + x-service-secret + x-tenant-id;
+ * see packages/auth/src/plugin.ts), the same one
+ * services/payroll-service/src/shared/hrms-client.ts already uses to call
+ * hrms-service.
  * Wrapped with @civitasone/circuit-breaker (5 failures in 60s → open for 30s).
  *
+ * DOM-017: this adapter used to call the unrelated generic
+ * POST /v1/ml/predict (logistic regression over the "tasks" domain) with just
+ * two scalar counts, and without ANY of the headers above — a request that
+ * could never succeed (no "tasks" model is ever registered there, and it was
+ * missing internal-service auth entirely) — so every call fell through to
+ * routes.ts's/consumer.ts's local fallback computation, silently, on every
+ * single request. This now calls the real endpoint with the real task list.
+ *
  * Env vars:
- *   ML_SERVICE_URL       — Base URL for ml-service (default: http://localhost:3032)
- *   FEATURE_ML_ENABLED   — "true" to activate; anything else → fallback mode
+ *   ML_SERVICE_URL          — Base URL for ml-service (default: http://localhost:3032)
+ *   FEATURE_ML_ENABLED      — "true" to activate; anything else → fallback mode
+ *   INTERNAL_SERVICE_SECRET — shared secret for the x-internal service auth path
  *
  * No PII is logged — only correlation IDs, status codes, and timing.
  */
 
 import { CircuitBreaker, CircuitBreakerOpenError } from "@civitasone/circuit-breaker";
+import type { TaskData } from "./domain.js";
 
 // ── Types ─────────────────────────────────────────────────────────
 
-export interface MlDelayPredictionRequest {
-  tenantId: string;
-  domain: "tasks";
-  entityId: string;
-  features: Record<string, number | string> | undefined;
+/** The subset of TaskData that ml-service's Monte Carlo module actually needs. */
+export interface MlSimTaskInput {
+  taskId: string;
+  baselineDurationMs: number;
+  varianceMs: number;
+  dependencies: string[];
+  assignedTo?: string;
+  isCriticalPath: boolean;
 }
 
-export interface ExplainabilityFactor {
-  feature: string;
-  contribution: number;
-  direction: "positive" | "negative";
+export interface MlDelaySimulateRequest {
+  projectId: string;
+  tasks: MlSimTaskInput[];
+  iterations?: number;
+  seed?: number;
 }
 
 export interface TaskRiskResult {
@@ -45,8 +65,6 @@ export interface MlDelayForecastResponse {
   p95Ms: number;
   taskRisks: TaskRiskResult[];
   bottlenecks: ResourceBottleneckResult[];
-  fallback: boolean;
-  reason?: string;
 }
 
 // ── Errors ────────────────────────────────────────────────────────
@@ -88,43 +106,67 @@ async function fetchWithTimeout(url: string, init: RequestInit): Promise<Respons
   }
 }
 
+/** exactOptionalPropertyTypes: only set assignedTo when the source task has one. */
+function toSimTask(t: TaskData): MlSimTaskInput {
+  return {
+    taskId: t.taskId,
+    baselineDurationMs: t.baselineDurationMs,
+    varianceMs: t.varianceMs,
+    dependencies: t.dependencies,
+    ...(t.assignedTo !== undefined ? { assignedTo: t.assignedTo } : {}),
+    isCriticalPath: t.isCriticalPath,
+  };
+}
+
 // ── Public API ────────────────────────────────────────────────────
 
 /**
- * Call ml-service to run Monte Carlo simulation for a project.
+ * Call ml-service to run the REAL Monte Carlo simulation for a project's
+ * actual task graph.
  *
- * Returns null when ML is disabled (callers should use fallback logic).
- * Throws MlAdapterError on non-2xx responses.
+ * Returns null when ML is disabled or there are no tasks to simulate
+ * (callers should use fallback logic in both cases).
+ * Throws MlAdapterError on non-2xx responses (network failures throw the
+ * underlying fetch error — both are caught by breaker.call() and count
+ * toward the circuit breaker's failure threshold).
  * Throws CircuitBreakerOpenError when the breaker is open.
  */
 export async function predictDelay(
   tenantId: string,
   projectId: string,
-  features?: Record<string, number | string>,
+  tasks: TaskData[],
+  options?: { iterations?: number; seed?: number },
 ): Promise<MlDelayForecastResponse | null> {
   if (!ENABLED) return null;
+  if (tasks.length === 0) return null;
 
   return breaker.call(async () => {
-    const res = await fetchWithTimeout(`${ML_URL}/v1/ml/predict`, {
+    const res = await fetchWithTimeout(`${ML_URL}/v1/ml/internal/delay-forecast/simulate`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        "x-internal": "1",
+        "x-service-secret": process.env.INTERNAL_SERVICE_SECRET ?? "",
+        "x-tenant-id": tenantId,
+      },
       body: JSON.stringify({
-        tenantId,
-        domain: "tasks",
-        entityId: projectId,
-        features,
-      } satisfies MlDelayPredictionRequest),
+        projectId,
+        tasks: tasks.map(toSimTask),
+        ...(options?.iterations !== undefined ? { iterations: options.iterations } : {}),
+        ...(options?.seed !== undefined ? { seed: options.seed } : {}),
+      } satisfies MlDelaySimulateRequest),
     });
 
     if (!res.ok) {
       throw new MlAdapterError(
-        `ml-service returned ${res.status}`,
+        `ml-service delay-forecast simulate returned ${res.status}`,
         "ML_API_ERROR",
         res.status,
       );
     }
 
-    return (await res.json()) as MlDelayForecastResponse;
+    const body = (await res.json()) as { data: MlDelayForecastResponse };
+    return body.data;
   });
 }
 
