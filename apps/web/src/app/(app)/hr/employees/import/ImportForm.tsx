@@ -1,9 +1,14 @@
 "use client";
 
 import { useRef, useState } from "react";
+import { useTranslations } from "next-intl";
 import { useFormError } from "@/lib/useFormError";
 
 type Row = Record<string, string> & { lineNo: number };
+
+// Hoisted so the handleSubmit validation and the JSX hint text below share
+// one list instead of two independently-maintained copies drifting apart.
+const REQUIRED_COLUMNS = ["employeeNo", "fullName", "departmentCode", "designationCode", "employeeType", "dateOfJoining", "basicPay"];
 
 /**
  * Bulk CSV import form — parses the file client-side, validates rows, then
@@ -23,6 +28,7 @@ type Row = Record<string, string> & { lineNo: number };
  * found (rather than a bare status code).
  */
 export function ImportForm() {
+  const t = useTranslations("employeeImportForm");
   const fileRef = useRef<HTMLInputElement>(null);
   const [status, setStatus] = useState<"idle" | "parsing" | "uploading" | "done" | "error">("idle");
   const [progress, setProgress] = useState({ total: 0, success: 0, failed: 0 });
@@ -40,18 +46,17 @@ export function ImportForm() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     const file = fileRef.current?.files?.[0];
-    if (!file) { setStatus("error"); setErrors(["Please select a CSV file."]); return; }
+    if (!file) { setStatus("error"); setErrors([t("errSelectFile")]); return; }
 
     setStatus("parsing");
     setErrors([]);
     const text = await file.text();
     const lines = text.split("\n").map((l) => l.trim()).filter(Boolean);
-    if (lines.length < 2) { setStatus("error"); setErrors(["CSV must have a header row + at least one data row."]); return; }
+    if (lines.length < 2) { setStatus("error"); setErrors([t("errMinRows")]); return; }
 
     const headers = lines[0].split(",").map((h) => h.trim().replace(/^"/, "").replace(/"$/, ""));
-    const requiredCols = ["employeeNo", "fullName", "departmentCode", "designationCode", "employeeType", "dateOfJoining", "basicPay"];
-    const missing = requiredCols.filter((c) => !headers.includes(c));
-    if (missing.length) { setStatus("error"); setErrors([`Missing columns: ${missing.join(", ")}`]); return; }
+    const missing = REQUIRED_COLUMNS.filter((c) => !headers.includes(c));
+    if (missing.length) { setStatus("error"); setErrors([t("errMissingColumns", { columns: missing.join(", ") })]); return; }
 
     // Parse rows. `lineNo` (number) deliberately sits alongside the
     // Record<string, string> CSV-column fields, which the index signature
@@ -82,9 +87,11 @@ export function ImportForm() {
         const departmentId = deptByCode.get(row.departmentCode);
         const designationId = desigByCode.get(row.designationCode);
         if (!departmentId || !designationId) {
-          const bad = [!departmentId && `department code "${row.departmentCode}"`, !designationId && `designation code "${row.designationCode}"`]
-            .filter(Boolean).join(" and ");
-          errs.push(`Row ${row.lineNo} (${row.fullName}): unknown ${bad} — check spelling against the Departments/Designations pages.`);
+          const bad = [
+            !departmentId && t("errUnknownDept", { code: row.departmentCode }),
+            !designationId && t("errUnknownDesig", { code: row.designationCode }),
+          ].filter(Boolean).join(t("andJoiner"));
+          errs.push(t("errUnknownRow", { lineNo: row.lineNo, fullName: row.fullName, bad }));
           return;
         }
         try {
@@ -109,10 +116,10 @@ export function ImportForm() {
           if (res.ok || res.status === 202) { success++; }
           else {
             const resolved = await formError.fromResponse(res, "save");
-            errs.push(`Row ${row.lineNo} (${row.fullName}): ${resolved.message}`);
+            errs.push(t("errRowSave", { lineNo: row.lineNo, fullName: row.fullName, message: resolved.message }));
           }
         } catch {
-          errs.push(`Row ${row.lineNo} (${row.fullName}): network error`);
+          errs.push(t("errRowNetwork", { lineNo: row.lineNo, fullName: row.fullName }));
         }
       }));
       setProgress({ total: rows.length, success, failed: errs.length });
@@ -126,7 +133,7 @@ export function ImportForm() {
     <form onSubmit={handleSubmit}>
       <div style={{ display: "grid", gap: 6, marginBottom: 12 }}>
         <label htmlFor="import-csv-file" style={{ fontSize: 13, fontWeight: 500, color: "var(--fg, #0f172a)" }}>
-          CSV File <span style={{ color: "#ef4444" }}>*</span>
+          {t("fileLabel")} <span style={{ color: "#ef4444" }}>*</span>
         </label>
         <input
           ref={fileRef}
@@ -136,16 +143,17 @@ export function ImportForm() {
           aria-describedby="import-csv-hint"
         />
         <p id="import-csv-hint" style={{ fontSize: 12, color: "var(--mut, #64748b)", margin: 0 }}>
-          Required columns: employeeNo, fullName, departmentCode, designationCode, employeeType, dateOfJoining, basicPay
+          {t("requiredColumnsHint", { columns: REQUIRED_COLUMNS.join(", ") })}
         </p>
       </div>
       <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
         <button type="submit" className="btn primary" disabled={status === "uploading"} style={{ minHeight: 44 }}>
-          {status === "uploading" ? `Importing… (${progress.success}/${progress.total})` : "Upload & Import"}
+          {status === "uploading" ? t("importingProgress", { success: progress.success, total: progress.total }) : t("uploadBtn")}
         </button>
         {status === "done" && (
           <span style={{ fontSize: 13, color: progress.failed === 0 ? "#166534" : "#b91c1c" }}>
-            ✅ {progress.success} imported{progress.failed > 0 ? `, ❌ ${progress.failed} failed` : ""}
+            {t("resultImported", { success: progress.success })}
+            {progress.failed > 0 ? t("resultFailedSuffix", { failed: progress.failed }) : ""}
           </span>
         )}
       </div>

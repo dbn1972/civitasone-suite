@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useTranslations } from "next-intl";
 import { PageHeader, Card, DataTable, EmptyState, ConfirmDialog, StatGrid, StatCard } from "../../../_components/ds";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { CreateLeavePolicyForm } from "./CreateLeavePolicyForm";
@@ -50,6 +51,7 @@ const TYPE_VARIANT: Record<string, string> = {
 type LoadState = "loading" | "ready" | "error";
 
 export default function LeavePoliciesPage() {
+  const t = useTranslations("leavePolicies");
   const [policies, setPolicies] = useState<Policy[]>([]);
   const [filter, setFilter] = useState<string>("all");
   const [state, setState] = useState<LoadState>("loading");
@@ -131,7 +133,7 @@ export default function LeavePoliciesPage() {
       }
       setConfirmOpen(false);
       setEditId(null);
-      setToast({ tone: "good", text: "Policy updated successfully." });
+      setToast({ tone: "good", text: t("toastUpdated") });
       await fetchPolicies();
       setTimeout(() => setToast(null), 4000);
     } catch {
@@ -142,7 +144,7 @@ export default function LeavePoliciesPage() {
   }
 
   async function handlePolicyCreated() {
-    setToast({ tone: "good", text: "Policy created successfully." });
+    setToast({ tone: "good", text: t("toastCreated") });
     await fetchPolicies();
     setTimeout(() => setToast(null), 4000);
   }
@@ -153,21 +155,21 @@ export default function LeavePoliciesPage() {
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
-        title="Leave Policy Configuration"
-        subtitle="Configure leave entitlements for each employee type. Changes take effect immediately."
+        title={t("title")}
+        subtitle={t("subtitle")}
       />
       <DataSourceBadge source={state === "error" ? "error" : "api"} />
       {state === "ready" && policies.length > 0 && (
         <StatGrid>
-          <StatCard icon="\ud83d\udccb" iconBg="#e6f0ff" label="Total Policies"   value={policies.length} />
-          <StatCard icon="\u2705"       iconBg="#e6f7f0" label="Active"           value={policies.filter((p) => p.isActive).length} />
-          <StatCard icon="\ud83d\udd01" iconBg="#fff7e6" label="Carry Forward"    value={policies.filter((p) => p.carryForward).length} />
-          <StatCard icon="\ud83d\udcb0" iconBg="#f5f5f5" label="Encashable"       value={policies.filter((p) => p.encashable).length} />
+          <StatCard icon="📋" iconBg="#e6f0ff" label={t("statTotal")} value={policies.length} />
+          <StatCard icon="✅"       iconBg="#e6f7f0" label={t("statActive")} value={policies.filter((p) => p.isActive).length} />
+          <StatCard icon="🔁" iconBg="#fff7e6" label={t("statCarryForward")} value={policies.filter((p) => p.carryForward).length} />
+          <StatCard icon="💰" iconBg="#f5f5f5" label={t("statEncashable")} value={policies.filter((p) => p.encashable).length} />
         </StatGrid>
       )}
 
-      <div role="group" aria-label="Filter by employee type" style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 16 }}>
-        {[{ value: "all", label: "All Types" }, ...EMPLOYEE_TYPES.map((t) => ({ value: t, label: t.replace("_", " ") }))].map((o) => (
+      <div role="group" aria-label={t("filterGroupLabel")} style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 16 }}>
+        {[{ value: "all", label: t("allTypes") }, ...EMPLOYEE_TYPES.map((type) => ({ value: type, label: type.replace("_", " ") }))].map((o) => (
           <button
             key={o.value}
             type="button"
@@ -189,34 +191,34 @@ export default function LeavePoliciesPage() {
 
       <CreateLeavePolicyForm onCreated={() => void handlePolicyCreated()} />
 
-      <Card title="Leave Policies">
+      <Card title={t("cardTitle")}>
         {state === "loading" ? (
           <div style={{ padding: "40px 0", textAlign: "center", color: "var(--mut)" }} aria-live="polite">
-            Loading policies…
+            {t("loadingPolicies")}
           </div>
         ) : state === "error" ? (
           <EmptyState
             icon="⚠️"
-            title="Could not load policies"
-            message={loadError ?? "Something went wrong."}
+            title={t("errorTitle")}
+            message={loadError ?? t("errorFallback")}
             action={
               <button type="button" className="btn ghost" onClick={() => void fetchPolicies()}>
-                Retry
+                {t("retry")}
               </button>
             }
           />
         ) : policies.length === 0 ? (
           <EmptyState
             icon="📋"
-            title="No policies configured"
-            message="No leave policies match the selected employee type."
+            title={t("emptyTitle")}
+            message={t("emptyMessage")}
           />
         ) : (
           <DataTable<PolicyRow>
             columns={[
               {
                 key: "employeeType",
-                label: "Employee Type",
+                label: t("colEmployeeType"),
                 render: (p) => (
                   <span className={`pill ${TYPE_VARIANT[p.employeeType as string] ?? "mut"}`} style={{ textTransform: "capitalize" }}>
                     {(p.employeeType as string).replace("_", " ")}
@@ -225,7 +227,7 @@ export default function LeavePoliciesPage() {
               },
               {
                 key: "leaveTypeName",
-                label: "Leave Type",
+                label: t("colLeaveType"),
                 render: (p) => (
                   <>
                     <span style={{ fontSize: 11, color: "var(--mut)", marginRight: 4 }}>{p.leaveTypeCode as string}</span>
@@ -235,13 +237,13 @@ export default function LeavePoliciesPage() {
               },
               {
                 key: "maxDaysPerYear",
-                label: "Days/Year",
+                label: t("colDaysPerYear"),
                 align: "center",
                 render: (p) => {
                   if (editId === (p.id as string)) {
                     return (
                       <>
-                        <label className="sr-only" htmlFor={`days-${p.id as string}`}>Days per year</label>
+                        <label className="sr-only" htmlFor={`days-${p.id as string}`}>{t("srDaysPerYear")}</label>
                         <input
                           id={`days-${p.id as string}`}
                           type="number"
@@ -257,13 +259,13 @@ export default function LeavePoliciesPage() {
               },
               {
                 key: "maxContinuousDays",
-                label: "Max Continuous",
+                label: t("colMaxContinuous"),
                 align: "center",
                 render: (p) => {
                   if (editId === (p.id as string)) {
                     return (
                       <>
-                        <label className="sr-only" htmlFor={`cont-${p.id as string}`}>Max continuous days</label>
+                        <label className="sr-only" htmlFor={`cont-${p.id as string}`}>{t("srMaxContinuousDays")}</label>
                         <input
                           id={`cont-${p.id as string}`}
                           type="number"
@@ -279,74 +281,74 @@ export default function LeavePoliciesPage() {
               },
               {
                 key: "carryForward",
-                label: "Carry Fwd",
+                label: t("colCarryFwd"),
                 align: "center",
                 render: (p) => {
                   if (editId === (p.id as string)) {
                     return (
                       <input
                         type="checkbox"
-                        aria-label="Carry forward"
+                        aria-label={t("ariaCarryForward")}
                         checked={editValues.carryForward ?? false}
                         onChange={(e) => setEditValues({ ...editValues, carryForward: e.target.checked })}
                       />
                     );
                   }
-                  return p.carryForward ? <span aria-label="Yes">✓</span> : <span aria-label="No">—</span>;
+                  return p.carryForward ? <span aria-label={t("ariaYes")}>✓</span> : <span aria-label={t("ariaNo")}>—</span>;
                 },
               },
               {
                 key: "encashable",
-                label: "Encashable",
+                label: t("colEncashable"),
                 align: "center",
                 render: (p) => {
                   if (editId === (p.id as string)) {
                     return (
                       <input
                         type="checkbox"
-                        aria-label="Encashable"
+                        aria-label={t("ariaEncashable")}
                         checked={editValues.encashable ?? false}
                         onChange={(e) => setEditValues({ ...editValues, encashable: e.target.checked })}
                       />
                     );
                   }
-                  return p.encashable ? <span aria-label="Encashable">💰</span> : <span aria-label="No">—</span>;
+                  return p.encashable ? <span aria-label={t("ariaEncashable")}>💰</span> : <span aria-label={t("ariaNo")}>—</span>;
                 },
               },
               {
                 key: "countMethod",
-                label: "Count Method",
+                label: t("colCountMethod"),
                 align: "center",
                 render: (p) => {
                   if (editId === (p.id as string)) {
                     return (
                       <>
-                        <label className="sr-only" htmlFor={`cm-${p.id as string}`}>Count method</label>
+                        <label className="sr-only" htmlFor={`cm-${p.id as string}`}>{t("srCountMethod")}</label>
                         <select
                           id={`cm-${p.id as string}`}
                           style={{ padding: 6, border: "1px solid var(--line)", borderRadius: 8 }}
                           value={editValues.countMethod ?? "calendar"}
                           onChange={(e) => setEditValues({ ...editValues, countMethod: e.target.value })}
                         >
-                          <option value="calendar">Calendar</option>
-                          <option value="working_days">Working Days</option>
+                          <option value="calendar">{t("optionCalendar")}</option>
+                          <option value="working_days">{t("optionWorkingDays")}</option>
                         </select>
                       </>
                     );
                   }
-                  return <span style={{ fontSize: 12 }}>{(p.countMethod as string) === "working_days" ? "Working" : "Calendar"}</span>;
+                  return <span style={{ fontSize: 12 }}>{(p.countMethod as string) === "working_days" ? t("countWorkingShort") : t("optionCalendar")}</span>;
                 },
               },
               {
                 key: "requiresMedicalCert",
-                label: "Med Cert",
+                label: t("colMedCert"),
                 align: "center",
                 render: (p) => {
                   if (editId === (p.id as string)) {
                     return (
                       <input
                         type="checkbox"
-                        aria-label="Requires medical certificate"
+                        aria-label={t("ariaRequiresMedCert")}
                         checked={editValues.requiresMedicalCert ?? false}
                         onChange={(e) => setEditValues({ ...editValues, requiresMedicalCert: e.target.checked })}
                       />
@@ -354,36 +356,36 @@ export default function LeavePoliciesPage() {
                   }
                   return (p.requiresMedicalCert as boolean)
                     ? <span><span aria-hidden="true">⚕️</span> &gt;{p.requiresMedicalCertAfterDays as number}d</span>
-                    : <span aria-label="Not required">—</span>;
+                    : <span aria-label={t("notRequired")}>—</span>;
                 },
               },
               {
                 key: "sandwichRule",
-                label: "Sandwich",
+                label: t("colSandwich"),
                 align: "center",
                 render: (p) => {
                   if (editId === (p.id as string)) {
                     return (
                       <input
                         type="checkbox"
-                        aria-label="Sandwich rule"
+                        aria-label={t("ariaSandwichRule")}
                         checked={editValues.sandwichRule ?? false}
                         onChange={(e) => setEditValues({ ...editValues, sandwichRule: e.target.checked })}
                       />
                     );
                   }
-                  return p.sandwichRule ? <span aria-label="Yes">✓</span> : <span aria-label="No">—</span>;
+                  return p.sandwichRule ? <span aria-label={t("ariaYes")}>✓</span> : <span aria-label={t("ariaNo")}>—</span>;
                 },
               },
               {
                 key: "minServiceMonths",
-                label: "Min Service",
+                label: t("colMinService"),
                 align: "center",
                 render: (p) => {
                   if (editId === (p.id as string)) {
                     return (
                       <>
-                        <label className="sr-only" htmlFor={`svc-${p.id as string}`}>Minimum service months</label>
+                        <label className="sr-only" htmlFor={`svc-${p.id as string}`}>{t("srMinServiceMonths")}</label>
                         <input
                           id={`svc-${p.id as string}`}
                           type="number"
@@ -391,20 +393,20 @@ export default function LeavePoliciesPage() {
                           value={editValues.minServiceMonths ?? 0}
                           onChange={(e) => setEditValues({ ...editValues, minServiceMonths: Number(e.target.value) })}
                         />
-                        {" "}<span style={{ fontSize: 11, color: "var(--mut)" }}>mo</span>
+                        {" "}<span style={{ fontSize: 11, color: "var(--mut)" }}>{t("monthsShort")}</span>
                       </>
                     );
                   }
                   return (
                     <span style={{ fontSize: 12, color: "var(--ink2)" }}>
-                      {(p.minServiceMonths as number) > 0 ? `${p.minServiceMonths as number}mo` : "—"}
+                      {(p.minServiceMonths as number) > 0 ? `${p.minServiceMonths as number}${t("monthsShort")}` : "—"}
                     </span>
                   );
                 },
               },
               {
                 key: "id",
-                label: "Actions",
+                label: t("colActions"),
                 align: "center",
                 sortable: false,
                 render: (p) => {
@@ -417,17 +419,17 @@ export default function LeavePoliciesPage() {
                           disabled={saving}
                           onClick={() => { setSaveError(undefined); setConfirmOpen(true); }}
                         >
-                          Save
+                          {t("saveBtn")}
                         </button>
                         <button type="button" className="btn ghost sm" onClick={() => setEditId(null)}>
-                          Cancel
+                          {t("cancelBtn")}
                         </button>
                       </div>
                     );
                   }
                   return (
                     <button type="button" className="btn ghost sm" onClick={() => startEdit(p as Policy)}>
-                      Edit
+                      {t("editBtn")}
                     </button>
                   );
                 },
@@ -442,26 +444,27 @@ export default function LeavePoliciesPage() {
       </Card>
 
       <div style={{ marginTop: 16, padding: 14, background: "var(--bg)", border: "1px solid var(--line)", borderRadius: 12, fontSize: 12, color: "var(--ink2)" }}>
-        <strong style={{ color: "var(--ink)" }}>Legend:</strong> ✓ = Yes · — = No ·{" "}
-        <span aria-hidden="true">💰</span> Encashable · <span aria-hidden="true">⚕️</span> Medical certificate required ·
-        Working = excludes weekends + holidays · Calendar = all days counted.
+        <strong style={{ color: "var(--ink)" }}>{t("legendTitle")}</strong> {t("legendYesNo")}{" "}
+        <span aria-hidden="true">💰</span> {t("legendEncashableLabel")} <span aria-hidden="true">⚕️</span> {t("legendMedCertLabel")}
+        {" "}{t("legendFooter")}
       </div>
 
       <ConfirmDialog
         open={confirmOpen}
-        title="Save policy changes?"
-        confirmLabel="Save changes"
+        title={t("confirmSaveTitle")}
+        confirmLabel={t("confirmSaveLabel")}
         busy={saving}
         errorMessage={saveError}
         description={
           editingPolicy ? (
-            <>
-              Update the <strong>{editingPolicy.leaveTypeName}</strong> policy for{" "}
-              <strong style={{ textTransform: "capitalize" }}>{editingPolicy.employeeType.replace("_", " ")}</strong>{" "}
-              employees. Changes take effect immediately for new applications.
-            </>
+            t.rich("confirmDescRich", {
+              leaveType: editingPolicy.leaveTypeName,
+              employeeType: editingPolicy.employeeType.replace("_", " "),
+              strongType: (chunks) => <strong>{chunks}</strong>,
+              strongEmp: (chunks) => <strong style={{ textTransform: "capitalize" }}>{chunks}</strong>,
+            })
           ) : (
-            "Apply the edited values to this leave policy."
+            t("confirmDescDefault")
           )
         }
         onConfirm={() => void saveEdit()}

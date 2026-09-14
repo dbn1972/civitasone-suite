@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useTranslations } from "next-intl";
 import type { WizardData, FieldErrors } from "../wizardTypes";
 import {
   inputStyle,
@@ -27,6 +28,10 @@ function MaskedInput({
   maxLength,
   hasError,
   errorId,
+  hideValueLabel,
+  showValueLabel,
+  hideBtn,
+  showBtn,
 }: {
   id: string;
   value: string;
@@ -36,6 +41,10 @@ function MaskedInput({
   maxLength?: number;
   hasError?: boolean;
   errorId?: string;
+  hideValueLabel: string;
+  showValueLabel: string;
+  hideBtn: string;
+  showBtn: string;
 }) {
   const [reveal, setReveal] = useState(false);
 
@@ -60,7 +69,7 @@ function MaskedInput({
       <button
         type="button"
         tabIndex={-1}
-        aria-label={reveal ? "Hide value" : "Show value"}
+        aria-label={reveal ? hideValueLabel : showValueLabel}
         onClick={() => setReveal((r) => !r)}
         style={{
           position: "absolute",
@@ -76,7 +85,7 @@ function MaskedInput({
           lineHeight: 1,
         }}
       >
-        {reveal ? "Hide" : "Show"}
+        {reveal ? hideBtn : showBtn}
       </button>
     </div>
   );
@@ -128,19 +137,20 @@ function Toggle({
 }
 
 export function Step4({ data, errors, onChange, onBlur }: Props) {
+  const t = useTranslations("employeeWizard");
   return (
     <>
       <h2 style={{ fontSize: 16, fontWeight: 700, color: "#0f172a", marginTop: 0, marginBottom: 20 }}>
-        Step 4 — Statutory &amp; Finance
+        {t("step4Heading")}
       </h2>
 
       <div style={grid2}>
         {/* PAN */}
         <div style={fieldWrap}>
           <label htmlFor="w-pan" style={labelStyle}>
-            PAN
+            {t("panLabel")}
             <span style={{ fontWeight: 400, color: "#64748b", marginLeft: 6, fontSize: 11 }}>
-              (stored encrypted)
+              {t("storedEncrypted")}
             </span>
           </label>
           <MaskedInput
@@ -148,10 +158,14 @@ export function Step4({ data, errors, onChange, onBlur }: Props) {
             value={data.pan}
             onChange={(v) => onChange("pan", v.toUpperCase())}
             onBlur={() => onBlur("pan")}
-            placeholder="ABCDE1234F"
+            placeholder={t("panPlaceholder")}
             maxLength={10}
             hasError={!!errors.pan}
             errorId={errors.pan ? "w-pan-err" : undefined}
+            hideValueLabel={t("hideValue")}
+            showValueLabel={t("showValue")}
+            hideBtn={t("hideBtn")}
+            showBtn={t("showBtn")}
           />
           {errors.pan && (
             <span id="w-pan-err" role="alert" style={{ fontSize: 12, color: "#b91c1c" }}>
@@ -163,47 +177,55 @@ export function Step4({ data, errors, onChange, onBlur }: Props) {
         {/* Aadhaar */}
         <div style={fieldWrap}>
           <label htmlFor="w-aadhaar" style={labelStyle}>
-            Aadhaar Reference
+            {t("aadhaarRefLabel")}
             <span style={{ fontWeight: 400, color: "#64748b", marginLeft: 6, fontSize: 11 }}>
-              (last 4 digits or masked ref)
+              {t("aadhaarHint")}
             </span>
           </label>
           <MaskedInput
             id="w-aadhaar"
             value={data.aadhaarRef}
             onChange={(v) => onChange("aadhaarRef", v)}
-            placeholder="XXXX XXXX 1234"
+            placeholder={t("aadhaarPlaceholder")}
             hasError={false}
+            hideValueLabel={t("hideValue")}
+            showValueLabel={t("showValue")}
+            hideBtn={t("hideBtn")}
+            showBtn={t("showBtn")}
           />
         </div>
 
         {/* Bank Account */}
         <div style={fieldWrap}>
           <label htmlFor="w-bank" style={labelStyle}>
-            Bank Account No
+            {t("bankAccountNoLabel")}
             <span style={{ fontWeight: 400, color: "#64748b", marginLeft: 6, fontSize: 11 }}>
-              (stored encrypted)
+              {t("storedEncrypted")}
             </span>
           </label>
           <MaskedInput
             id="w-bank"
             value={data.bankAccountNo}
             onChange={(v) => onChange("bankAccountNo", v)}
-            placeholder="Account number"
+            placeholder={t("bankAccountPlaceholder")}
             hasError={false}
+            hideValueLabel={t("hideValue")}
+            showValueLabel={t("showValue")}
+            hideBtn={t("hideBtn")}
+            showBtn={t("showBtn")}
           />
         </div>
 
         {/* IFSC */}
         <div style={fieldWrap}>
-          <label htmlFor="w-ifsc" style={labelStyle}>IFSC Code</label>
+          <label htmlFor="w-ifsc" style={labelStyle}>{t("ifscCodeLabel")}</label>
           <input
             id="w-ifsc"
             type="text"
             value={data.bankIfsc}
             onChange={(e) => onChange("bankIfsc", e.target.value.toUpperCase())}
             onBlur={() => onBlur("bankIfsc")}
-            placeholder="e.g. SBIN0001234"
+            placeholder={t("ifscPlaceholder")}
             maxLength={11}
             aria-invalid={!!errors.bankIfsc}
             aria-describedby={errors.bankIfsc ? "w-ifsc-err" : undefined}
@@ -234,22 +256,22 @@ export function Step4({ data, errors, onChange, onBlur }: Props) {
             id="w-pf"
             checked={data.pfEnrolled}
             onChange={(v) => onChange("pfEnrolled", v)}
-            label="PF Enrolled"
-            hint="Provident Fund contribution"
+            label={t("pfEnrolledLabel")}
+            hint={t("pfEnrolledHint")}
           />
           <Toggle
             id="w-esi"
             checked={data.esiEnrolled}
             onChange={(v) => onChange("esiEnrolled", v)}
-            label="ESI Opt-in"
-            hint="Applicable if gross ≤ ₹21,000/m"
+            label={t("esiOptInLabel")}
+            hint={t("esiHint")}
           />
           <Toggle
             id="w-pt"
             checked={data.ptApplicable}
             onChange={(v) => onChange("ptApplicable", v)}
-            label="PT Applicable"
-            hint="Professional Tax (state-specific)"
+            label={t("ptApplicableLabel")}
+            hint={t("ptHint")}
           />
         </div>
       </div>

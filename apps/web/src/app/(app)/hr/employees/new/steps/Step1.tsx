@@ -1,5 +1,6 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import type { WizardData, FieldErrors } from "../wizardTypes";
 import {
   inputStyle,
@@ -17,16 +18,17 @@ interface Props {
 }
 
 export function Step1({ data, errors, onChange, onBlur }: Props) {
+  const t = useTranslations("employeeWizard");
   return (
     <>
       <h2 style={{ fontSize: 16, fontWeight: 700, color: "#0f172a", marginTop: 0, marginBottom: 20 }}>
-        Step 1 — Personal Info
+        {t("step1Heading")}
       </h2>
       <div style={grid2}>
         {/* Full Name */}
         <div style={{ ...fieldWrap, gridColumn: "span 2" }}>
           <label htmlFor="w-fullName" style={labelStyle}>
-            Full Name <span style={{ color: "#ef4444" }} aria-hidden="true">*</span>
+            {t("fullNameLabel")} <span style={{ color: "#ef4444" }} aria-hidden="true">*</span>
           </label>
           <input
             id="w-fullName"
@@ -35,7 +37,7 @@ export function Step1({ data, errors, onChange, onBlur }: Props) {
             value={data.fullName}
             onChange={(e) => onChange("fullName", e.target.value)}
             onBlur={() => onBlur("fullName")}
-            placeholder="e.g. Priya Sharma"
+            placeholder={t("fullNamePlaceholder")}
             aria-required="true"
             aria-invalid={!!errors.fullName}
             aria-describedby={errors.fullName ? "w-fullName-err" : undefined}
@@ -50,7 +52,7 @@ export function Step1({ data, errors, onChange, onBlur }: Props) {
 
         {/* Date of Birth */}
         <div style={fieldWrap}>
-          <label htmlFor="w-dob" style={labelStyle}>Date of Birth</label>
+          <label htmlFor="w-dob" style={labelStyle}>{t("dobLabel")}</label>
           <input
             id="w-dob"
             type="date"
@@ -63,47 +65,47 @@ export function Step1({ data, errors, onChange, onBlur }: Props) {
 
         {/* Gender */}
         <div style={fieldWrap}>
-          <label htmlFor="w-gender" style={labelStyle}>Gender</label>
+          <label htmlFor="w-gender" style={labelStyle}>{t("genderLabel")}</label>
           <select
             id="w-gender"
             value={data.gender}
             onChange={(e) => onChange("gender", e.target.value as WizardData["gender"])}
             style={inputStyle}
           >
-            <option value="">Select gender</option>
-            <option value="male">Male</option>
-            <option value="female">Female</option>
-            <option value="other">Other / Prefer not to say</option>
+            <option value="">{t("selectGender")}</option>
+            <option value="male">{t("male")}</option>
+            <option value="female">{t("female")}</option>
+            <option value="other">{t("otherPreferNot")}</option>
           </select>
         </div>
 
         {/* Marital Status */}
         <div style={fieldWrap}>
-          <label htmlFor="w-marital" style={labelStyle}>Marital Status</label>
+          <label htmlFor="w-marital" style={labelStyle}>{t("maritalStatusLabel")}</label>
           <select
             id="w-marital"
             value={data.maritalStatus}
             onChange={(e) => onChange("maritalStatus", e.target.value as WizardData["maritalStatus"])}
             style={inputStyle}
           >
-            <option value="">Select status</option>
-            <option value="single">Single</option>
-            <option value="married">Married</option>
-            <option value="divorced">Divorced</option>
-            <option value="widowed">Widowed</option>
+            <option value="">{t("selectStatus")}</option>
+            <option value="single">{t("single")}</option>
+            <option value="married">{t("married")}</option>
+            <option value="divorced">{t("divorced")}</option>
+            <option value="widowed">{t("widowed")}</option>
           </select>
         </div>
 
         {/* Blood Group */}
         <div style={fieldWrap}>
-          <label htmlFor="w-blood" style={labelStyle}>Blood Group</label>
+          <label htmlFor="w-blood" style={labelStyle}>{t("bloodGroupLabel")}</label>
           <select
             id="w-blood"
             value={data.bloodGroup}
             onChange={(e) => onChange("bloodGroup", e.target.value as WizardData["bloodGroup"])}
             style={inputStyle}
           >
-            <option value="">Select blood group</option>
+            <option value="">{t("selectBloodGroup")}</option>
             {(["A+", "A-", "B+", "B-", "O+", "O-", "AB+", "AB-"] as const).map((bg) => (
               <option key={bg} value={bg}>{bg}</option>
             ))}
@@ -112,7 +114,7 @@ export function Step1({ data, errors, onChange, onBlur }: Props) {
 
         {/* Official Email */}
         <div style={fieldWrap}>
-          <label htmlFor="w-email" style={labelStyle}>Official Email</label>
+          <label htmlFor="w-email" style={labelStyle}>{t("officialEmailLabel")}</label>
           <input
             id="w-email"
             type="email"
@@ -120,7 +122,7 @@ export function Step1({ data, errors, onChange, onBlur }: Props) {
             value={data.email}
             onChange={(e) => onChange("email", e.target.value)}
             onBlur={() => onBlur("email")}
-            placeholder="employee@gov.in"
+            placeholder={t("emailPlaceholder")}
             aria-invalid={!!errors.email}
             aria-describedby={errors.email ? "w-email-err" : undefined}
             style={errors.email ? inputErrorStyle : inputStyle}
@@ -134,7 +136,7 @@ export function Step1({ data, errors, onChange, onBlur }: Props) {
 
         {/* Mobile */}
         <div style={fieldWrap}>
-          <label htmlFor="w-mobile" style={labelStyle}>Mobile</label>
+          <label htmlFor="w-mobile" style={labelStyle}>{t("mobileLabel")}</label>
           <input
             id="w-mobile"
             type="tel"

@@ -2,6 +2,7 @@ import { PageHeader } from "../../../../_components/ds";
 import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import { AddEmployeeWizard } from "./AddEmployeeWizard";
+import { getTranslations } from "next-intl/server";
 
 type Dept = { id: string; name: string };
 type Desig = { id: string; name: string };
@@ -29,6 +30,7 @@ async function getManagers(): Promise<LoaderResult<EmpSummary[]>> {
 }
 
 export default async function NewEmployeePage() {
+  const t = await getTranslations("employeeWizard");
   const [deptResult, desigResult, managerResult] = await Promise.all([
     getDepartments(),
     getDesignations(),
@@ -46,10 +48,10 @@ export default async function NewEmployeePage() {
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
-        title="Add Employee"
-        subtitle="Complete all five steps to create a new employee record."
+        title={t("pageTitle")}
+        subtitle={t("pageSubtitle")}
         back="/hr/employees"
-        backLabel="Employees"
+        backLabel={t("backLabel")}
       />
       <DataSourceBadge source={hasError ? "error" : "api"} />
       <AddEmployeeWizard

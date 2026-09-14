@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
+import { useTranslations } from "next-intl";
 import { useFormError } from "@/lib/useFormError";
 
 import { StepIndicator } from "./StepIndicator";
@@ -33,14 +34,6 @@ interface Props {
   designations: Desig[];
   managers?: EmpSummary[];
 }
-
-const STEP_LABELS = [
-  "Personal Info",
-  "Employment",
-  "Assignment",
-  "Statutory",
-  "Review & Submit",
-];
 
 const TOTAL_STEPS = 5;
 
@@ -110,6 +103,7 @@ function buildPayload(data: WizardData): Record<string, unknown> {
 
 // ── Wizard component ─────────────────────────────────────────────────────────
 export function AddEmployeeWizard({ departments, designations, managers }: Props) {
+  const t = useTranslations("employeeWizard");
   const [step, setStep] = useState(1);
   const [data, setData] = useState<WizardData>(WIZARD_INIT);
   const [errors, setErrors] = useState<FieldErrors>({});
@@ -118,6 +112,14 @@ export function AddEmployeeWizard({ departments, designations, managers }: Props
   const [success, setSuccess] = useState<{ id: string } | null>(null);
   const [draftRestored, setDraftRestored] = useState(false);
   const formError = useFormError("employee");
+
+  const STEP_LABELS = [
+    t("stepPersonalInfo"),
+    t("stepEmployment"),
+    t("stepAssignment"),
+    t("stepStatutory"),
+    t("stepReviewSubmit"),
+  ];
 
   // Restore draft once on mount
   useEffect(() => {
@@ -176,7 +178,7 @@ export function AddEmployeeWizard({ departments, designations, managers }: Props
     const stepErrors = validateStep(step, data);
     if (Object.keys(stepErrors).length > 0) {
       setErrors(stepErrors);
-      setGlobalError("Please fix the highlighted fields before continuing.");
+      setGlobalError(t("fixHighlightedFields"));
       return;
     }
     setErrors({});
@@ -199,7 +201,7 @@ export function AddEmployeeWizard({ departments, designations, managers }: Props
     };
     if (Object.keys(allErrors).length > 0) {
       setErrors(allErrors);
-      setGlobalError("Some required fields are missing. Please use the Edit links above to correct them.");
+      setGlobalError(t("missingRequiredFields"));
       return;
     }
 
@@ -252,16 +254,16 @@ export function AddEmployeeWizard({ departments, designations, managers }: Props
         }}
       >
         <p style={{ margin: 0, fontWeight: 700, fontSize: 16 }}>
-          Employee record created successfully!
+          {t("successMessage")}
         </p>
         <p style={{ margin: "8px 0 16px", fontSize: 14 }}>
-          Employee ID: <strong>{success.id}</strong>
+          {t("employeeIdColonLabel")} <strong>{success.id}</strong>
         </p>
         <Link
           href="/hr/employees"
           style={{ color: ACCENT, fontWeight: 600, fontSize: 14, textDecoration: "none" }}
         >
-          ← View Employee Directory
+          {t("viewDirectoryLink")}
         </Link>
       </div>
     );
@@ -289,7 +291,7 @@ export function AddEmployeeWizard({ departments, designations, managers }: Props
             alignItems: "center",
           }}
         >
-          <span>Your in-progress draft has been restored.</span>
+          <span>{t("draftRestoredNotice")}</span>
           <button
             type="button"
             onClick={() => {
@@ -307,7 +309,7 @@ export function AddEmployeeWizard({ departments, designations, managers }: Props
               padding: 0,
             }}
           >
-            Clear &amp; start fresh
+            {t("clearStartFresh")}
           </button>
         </div>
       )}
@@ -383,7 +385,7 @@ export function AddEmployeeWizard({ departments, designations, managers }: Props
       >
         {step > 1 && (
           <button type="button" onClick={handleBack} style={ghostBtn} disabled={submitting}>
-            ← Back
+            {t("backBtn")}
           </button>
         )}
 
@@ -396,12 +398,12 @@ export function AddEmployeeWizard({ departments, designations, managers }: Props
             textAlign: "center",
           }}
         >
-          Step {step} of {TOTAL_STEPS}
+          {t("stepCounter", { step, total: TOTAL_STEPS })}
         </span>
 
         {!isLastStep ? (
           <button type="button" onClick={handleNext} style={primaryBtn}>
-            Next →
+            {t("nextBtn")}
           </button>
         ) : (
           <button
@@ -416,7 +418,7 @@ export function AddEmployeeWizard({ departments, designations, managers }: Props
               minWidth: 200,
             }}
           >
-            {submitting ? "Creating…" : "Create Employee Record"}
+            {submitting ? t("creatingBtn") : t("createRecordBtn")}
           </button>
         )}
       </div>

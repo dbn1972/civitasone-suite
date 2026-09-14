@@ -17,16 +17,16 @@ export default async function AttendancePage() {
     <main className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
         title={t("title")}
-        subtitle="Daily presence and punctuality records."
+        subtitle={t("subtitle")}
       />
       <DataSourceBadge source={source} />
       <StatGrid>
-        <StatCard icon="📋" iconBg="var(--panel)" label="Total Records" value={total} />
-        <StatCard icon="✅" iconBg="var(--goodbg)" label="Present" value={present} />
-        <StatCard icon="❌" iconBg="var(--badbg)" label="Absent" value={absent} />
-        <StatCard icon="🌴" iconBg="var(--warnbg)" label="On Leave" value={onLeave} />
+        <StatCard icon="📋" iconBg="var(--panel)" label={t("total")} value={total} />
+        <StatCard icon="✅" iconBg="var(--goodbg)" label={t("present")} value={present} />
+        <StatCard icon="❌" iconBg="var(--badbg)" label={t("absent")} value={absent} />
+        <StatCard icon="🌴" iconBg="var(--warnbg)" label={t("onLeave")} value={onLeave} />
       </StatGrid>
-      <Card title="Attendance Records">
+      <Card title={t("recordsCardTitle")}>
         <AttendanceTable attendance={attendance} source={source} />
       </Card>
     </main>
