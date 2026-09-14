@@ -1,7 +1,8 @@
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { getFixedAssets } from "../../../_data/loaders";
-import { PageHeader, StatCard, StatGrid, EmptyState, DataTable } from "../../../_components/ds";
+import { PageHeader, StatCard, StatGrid, EmptyState, DataTable, RefreshErrorState } from "../../../_components/ds";
 import { formatMoney } from "@/lib/formatters";
+import { toHumanError } from "@/lib/messages";
 
 export default async function FixedAssetsPage() {
   const { data: allAssets, source } = await getFixedAssets();
@@ -57,7 +58,9 @@ export default async function FixedAssetsPage() {
         <div className="card-h">
           <h3>Fixed asset register</h3>
         </div>
-        {rows.length === 0 ? (
+        {source === "error" ? (
+          <RefreshErrorState error={toHumanError("load", { area: "fixed asset register" })} />
+        ) : rows.length === 0 ? (
           <EmptyState icon="🖥️" title="No fixed assets found" message="Fixed assets will appear here once registered." />
         ) : (
           <DataTable
