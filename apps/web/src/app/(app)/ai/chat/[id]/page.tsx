@@ -1,6 +1,7 @@
 import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
-import { Card, EmptyState, PageHeader, StatCard, StatGrid, StatusPill } from "../../../../_components/ds";
+import { Card, EmptyState, PageHeader, StatCard, StatGrid, StatusPill, RefreshErrorState } from "../../../../_components/ds";
 import { getChatConversation, getChatTranscript } from "../../../../_data/loaders";
+import { toHumanError } from "@/lib/messages";
 import {
   conversationDurationMinutes,
   handoffReasonLabel,
@@ -102,7 +103,9 @@ export default async function ChatConversationPage({ params }: PageProps) {
       ) : null}
 
       <Card title="Transcript">
-        {ordered.length === 0 ? (
+        {source === "error" ? (
+          <RefreshErrorState error={toHumanError("load", { area: "conversation transcript" })} />
+        ) : ordered.length === 0 ? (
           <EmptyState
             icon="💬"
             title="No messages yet"

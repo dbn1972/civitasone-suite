@@ -1,7 +1,8 @@
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { getAssetById } from "../../../_data/loaders";
-import { PageHeader, StatusPill, EmptyState, DataTable } from "../../../_components/ds";
+import { PageHeader, StatusPill, EmptyState, DataTable, RefreshErrorState } from "../../../_components/ds";
 import { formatMoney, formatIndianDate } from "@/lib/formatters";
+import { toHumanError } from "@/lib/messages";
 import { AssetDetailActions } from "./AssetDetailActions";
 import { AssetFinancialActions } from "./AssetFinancialActions";
 import { RaiseEOfficeNote } from "../../../_components/RaiseEOfficeNote";
@@ -71,7 +72,9 @@ export default async function AssetDetailPage({ params }: { params: { id: string
           </div>
           <div className="card">
             <div className="card-h"><h3>Depreciation schedule (SLM)</h3></div>
-            {schedule.length === 0 ? (
+            {source === "error" ? (
+              <RefreshErrorState error={toHumanError("load", { area: "depreciation schedule" })} />
+            ) : schedule.length === 0 ? (
               <EmptyState icon="📉" title="No depreciation schedule" message="Depreciation will appear once the asset is capitalized." />
             ) : (
               <>
