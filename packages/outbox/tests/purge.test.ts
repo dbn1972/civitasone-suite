@@ -21,17 +21,25 @@
  * `?? 0` against the real driver. See `purge-live-pg.test.ts` for the
  * live-Postgres regression coverage that catches that class of bug (a
  * mocked-but-wrong return shape) directly.
+ *
+ * REL-034: the same class of bug existed on the DELETE side. These fixtures
+ * used to mock `{ rowCount: N }` (the node-postgres convention) while the
+ * production code also (incorrectly) read `.rowCount` -- so, exactly as
+ * with REL-029, the tests kept passing while validating the wrong shape.
+ * postgres-js's real DELETE result exposes the affected-row count as
+ * `.count`, never `.rowCount`; fixtures below now use `{ count: N }` to
+ * match.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { purgeOutbox, startOutboxPurge, type DrizzleTx } from "../src/index.js";
 
-type ExecResult = { rowCount?: number } | Array<{ cnt: number }>;
+type ExecResult = { count?: number } | Array<{ cnt: number }>;
 
 /** Fake Drizzle handle: `execute()` returns queued results in call order. */
 function fakeDb(results: ExecResult[]): DrizzleTx {
   let i = 0;
   const execute = vi.fn(async () => {
-    const r = results[i] ?? { rowCount: 0 };
+    const r = results[i] ?? { count: 0 };
     i++;
     return r;
   });
@@ -43,25 +51,25 @@ describe("purgeOutbox — batched deletion", () => {
     // Outbox loop: 1000, 1000, 300 (3 calls, stops at 300 < 1000).
     // Inbox loop: 500 (1 call, stops at 500 < 1000).
     const db = fakeDb([
-      { rowCount: 1000 },
-      { rowCount: 1000 },
-      { rowCount: 300 },
-      { rowCount: 500 },
+      { count: 1000 },
+      { count: 1000 },
+      { count: 300 },
+      { count: 500 },
     ]);
     const total = await purgeOutbox(db, 7, 1000);
-    expect(total).toBe(2300); // inbox deletions are not counted in the return value
+    expect(total).toBe(2800); // REL-034: inbox deletions are now included in the return value
     expect((db.execute as ReturnType<typeof vi.fn>)).toHaveBeenCalledTimes(4);
   });
 
   it("performs exactly one batch per table when the first batch is already under batchSize", async () => {
-    const db = fakeDb([{ rowCount: 42 }, { rowCount: 0 }]);
+    const db = fakeDb([{ count: 42 }, { count: 0 }]);
     const total = await purgeOutbox(db, 7, 1000);
     expect(total).toBe(42);
     expect((db.execute as ReturnType<typeof vi.fn>)).toHaveBeenCalledTimes(2);
   });
 
   it("returns 0 and issues no unnecessary work when nothing is eligible for deletion", async () => {
-    const db = fakeDb([{ rowCount: 0 }, { rowCount: 0 }]);
+    const db = fakeDb([{ count: 0 }, { count: 0 }]);
     const total = await purgeOutbox(db, 7, 1000);
     expect(total).toBe(0);
   });
@@ -80,8 +88,8 @@ describe("startOutboxPurge — scheduled cycle + WARN threshold", () => {
     // purgeOutbox: outbox loop (1 call, 0 deleted), inbox loop (1 call, 0 deleted).
     // Then the zero-deleted count check queries _outbox.messages.
     const db = fakeDb([
-      { rowCount: 0 },
-      { rowCount: 0 },
+      { count: 0 },
+      { count: 0 },
       [{ cnt: 15_000 }],
     ]);
 
@@ -105,8 +113,8 @@ describe("startOutboxPurge — scheduled cycle + WARN threshold", () => {
   it("does not log a WARN when a cycle deletes zero rows but the outbox is at or under 10,000 entries", async () => {
     const logger = { warn: vi.fn() };
     const db = fakeDb([
-      { rowCount: 0 },
-      { rowCount: 0 },
+      { count: 0 },
+      { count: 0 },
       [{ cnt: 10_000 }],
     ]);
 
@@ -121,7 +129,7 @@ describe("startOutboxPurge — scheduled cycle + WARN threshold", () => {
     const logger = { warn: vi.fn() };
     // Outbox loop deletes 500 (1 call, stop), inbox loop deletes 0 (1 call, stop).
     // No third call — the count check only runs when deleted === 0.
-    const db = fakeDb([{ rowCount: 500 }, { rowCount: 0 }]);
+    const db = fakeDb([{ count: 500 }, { count: 0 }]);
 
     const timer = startOutboxPurge(db, { intervalMs: 1000, batchSize: 1000, logger });
     await vi.advanceTimersByTimeAsync(1001);
@@ -135,7 +143,7 @@ describe("startOutboxPurge — scheduled cycle + WARN threshold", () => {
   });
 
   it("is a no-op (never throws, never warns) when no logger is supplied", async () => {
-    const db = fakeDb([{ rowCount: 0 }, { rowCount: 0 }]);
+    const db = fakeDb([{ count: 0 }, { count: 0 }]);
     const timer = startOutboxPurge(db, { intervalMs: 1000, batchSize: 1000 });
     await expect(vi.advanceTimersByTimeAsync(1000)).resolves.not.toThrow();
     clearInterval(timer);
@@ -151,7 +159,7 @@ describe("startOutboxPurge — scheduled cycle + WARN threshold", () => {
   });
 
   it("defaults to a 60-minute interval and 1000-row batches when options are omitted", async () => {
-    const db = fakeDb([{ rowCount: 0 }, { rowCount: 0 }]);
+    const db = fakeDb([{ count: 0 }, { count: 0 }]);
     const executeSpy = db.execute as ReturnType<typeof vi.fn>;
     const timer = startOutboxPurge(db);
 
@@ -167,7 +175,7 @@ describe("startOutboxPurge — scheduled cycle + WARN threshold", () => {
   });
 
   it("returns a timer that does not keep the event loop alive (unref'd)", () => {
-    const db = fakeDb([{ rowCount: 0 }, { rowCount: 0 }]);
+    const db = fakeDb([{ count: 0 }, { count: 0 }]);
     const timer = startOutboxPurge(db, { intervalMs: 60_000 });
     expect(typeof (timer as unknown as { hasRef?: () => boolean }).hasRef).toBe("function");
     expect((timer as unknown as { hasRef: () => boolean }).hasRef()).toBe(false);
@@ -176,7 +184,7 @@ describe("startOutboxPurge — scheduled cycle + WARN threshold", () => {
 
   it("stops running once the returned timer is cleared", async () => {
     const logger = { warn: vi.fn() };
-    const db = fakeDb([{ rowCount: 0 }, { rowCount: 0 }, [{ cnt: 20_000 }]]);
+    const db = fakeDb([{ count: 0 }, { count: 0 }, [{ cnt: 20_000 }]]);
     const timer = startOutboxPurge(db, { intervalMs: 1000, batchSize: 1000, logger });
     clearInterval(timer);
     await vi.advanceTimersByTimeAsync(5000);

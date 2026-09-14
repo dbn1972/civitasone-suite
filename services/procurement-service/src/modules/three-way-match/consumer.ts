@@ -67,6 +67,8 @@ export function registerThreeWayMatchConsumers(queue: Queue): void {
       // being accepted and silently discarded.
       invoiceAmountMinor?: number;
       invoiceRef?: string;
+      /** DOM-032: invoice date as supplied by the client. Same discard-then-fixed shape as invoiceRef above, just for a field that stays optional on its one caller (matches/invoice) -- see routes.ts. */
+      invoiceDate?: string;
     };
 
     await db.transaction(async (tx) => {
@@ -131,6 +133,8 @@ export function registerThreeWayMatchConsumers(queue: Queue): void {
         // audited reference actually reaches storage (see repo.ts) instead
         // of stopping at HTTP-layer validation.
         invoiceRef: p.invoiceRef ?? null,
+        // DOM-032: same threading, for the (still-optional) invoice date.
+        invoiceDate: p.invoiceDate ?? null,
         variancePct: result.totalVariancePct,
         autoMatched: true,
         qtyVariancePct: result.qtyVariancePct,

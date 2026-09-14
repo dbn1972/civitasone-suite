@@ -5,13 +5,30 @@ export default defineConfig({
     env: {
       JWT_ALGORITHM: "HS256",
       JWT_SECRET: "test_secret_for_civitasone_32chr",
-      DATABASE_URL: process.env.DATABASE_URL ?? "postgres://legal_svc:legal_dev_pw@localhost:5435/civitas_legal",
+      DATABASE_URL:
+        process.env.DATABASE_URL ??
+        (process.env.CI === "true" || process.env.GITHUB_ACTIONS === "true"
+          ? "postgres://legal_svc:legal_dev_pw@localhost:5435/civitas_legal"
+          : (() => {
+              throw new Error(
+                "REL-035: DATABASE_URL is not set. This test suite no longer silently falls back to the shared, long-lived civitasone-postgres:5435 dev instance outside CI — export DATABASE_URL explicitly (point it at your own disposable Postgres) before running tests.",
+              );
+            })()),
       QUEUE_DRIVER: "memory",
       CACHE_DRIVER: "memory",
     },
     coverage: {
       provider: "v8",
-      exclude: ["dist/**", "src/index.ts", "src/worker.ts", "src/cron/**", "src/modules/ecourts/sync-consumer.ts", "src/modules/opinions/eoffice-consumer.ts", "src/modules/documents/consumer.ts", "src/modules/limitations/consumer.ts"],
+      exclude: [
+        "dist/**",
+        "src/index.ts",
+        "src/worker.ts",
+        "src/cron/**",
+        "src/modules/ecourts/sync-consumer.ts",
+        "src/modules/opinions/eoffice-consumer.ts",
+        "src/modules/documents/consumer.ts",
+        "src/modules/limitations/consumer.ts",
+      ],
       thresholds: {
         lines: 80,
         functions: 75,
