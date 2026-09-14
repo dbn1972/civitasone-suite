@@ -142,6 +142,26 @@ describe("Quarter allotment workflow", () => {
     });
     expect(res.statusCode).toBe(200);
   });
+
+  // UX-021: listAllotments now enriches each row with employeeName (best-
+  // effort, via hrms-client's getEmployeeDisplayMap -- same pattern as
+  // modules/files/queries.ts#officerLabel). No INTERNAL_SERVICE_SECRET is
+  // configured in this test env, so hrms-client short-circuits to an empty
+  // map and employeeName legitimately comes back null -- this asserts the
+  // field exists and the endpoint degrades gracefully rather than omitting
+  // it or breaking.
+  it("GET /v1/estab/quarter-allotments → row includes an employeeName field (UX-021, best-effort)", async () => {
+    const res = await app.inject({
+      method: "GET", url: "/v1/estab/quarter-allotments",
+      headers: authHeader(),
+    });
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(Array.isArray(body.data)).toBe(true);
+    if (body.data.length > 0) {
+      expect(body.data[0]).toHaveProperty("employeeName");
+    }
+  });
 });
 
 describe("Licence-fee rates", () => {

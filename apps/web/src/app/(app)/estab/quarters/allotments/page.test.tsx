@@ -36,6 +36,16 @@ describe("QuarterAllotmentsPage", () => {
     expect(screen.getByText("Section Officer")).toBeInTheDocument();
   });
 
+  // UX-021: the Employee column used to show the raw truncated employeeRef;
+  // it now shows the real name when hrms-client resolves it (best-effort).
+  it("shows the employee's real name in the Employee column when hrms-client resolved it (UX-021)", async () => {
+    fetchJsonMock.mockResolvedValue({ data: [{ ...ALLOTMENT, employeeName: "Meera Iyer" }], source: "api" });
+    const ui = await QuarterAllotmentsPage();
+    render(ui);
+
+    expect(screen.getByText("Meera Iyer")).toBeInTheDocument();
+  });
+
   it("renders an empty state when there are no allotments", async () => {
     fetchJsonMock.mockResolvedValue({ data: [], source: "api" });
     const ui = await QuarterAllotmentsPage();
