@@ -6,7 +6,7 @@ import { getSubscription } from "../../../_data/loaders";
 
 function formatCurrency(amount: number, currency: string): string {
   if (currency === "INR") return `₹${amount.toLocaleString("en-IN")}`;
-  return `${currency} ${amount.toLocaleString()}`;
+  return `${currency} ${amount.toLocaleString("en-IN")}`;
 }
 
 export default async function SubscriptionPage() {

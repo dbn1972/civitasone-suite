@@ -95,7 +95,7 @@ export default async function ScheduledReportsPage() {
                       </span>
                     </td>
                     <td style={{ ...tdStyle, color: "var(--ink2)", fontSize: "0.8125rem" }}>
-                      {s.nextRunAt ? new Date(s.nextRunAt).toLocaleString() : "—"}
+                      {s.nextRunAt ? new Date(s.nextRunAt).toLocaleString("en-IN") : "—"}
                     </td>
                   </tr>
                 ))}

@@ -61,7 +61,7 @@ export function AgentKillSwitch({ agents }: { agents: AgentStatus[] }) {
                 >
                   <span>
                     {agent.name}
-                    <span className={`pill ${pausing ? "ok" : "info"}`} style={{ marginLeft: 8 }}>{agent.status}</span>
+                    <span className={`pill ${pausing ? "good" : "info"}`} style={{ marginLeft: 8 }}>{agent.status}</span>
                   </span>
                   <button
                     type="button"

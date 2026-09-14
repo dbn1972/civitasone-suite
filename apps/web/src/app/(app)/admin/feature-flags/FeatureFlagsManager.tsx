@@ -8,10 +8,10 @@ import { useFormError } from "@/lib/useFormError";
 import { toHumanError } from "@/lib/messages";
 
 function getStatusBadge(flag: AdminFeatureFlagRow) {
-  if (flag.killSwitch) return <span className="badge badge-red">Killed</span>;
-  if (!flag.enabled) return <span className="badge badge-grey">Disabled</span>;
-  if (flag.rolloutPercent === 100) return <span className="badge badge-green">Active</span>;
-  return <span className="badge badge-amber">Partial ({flag.rolloutPercent}%)</span>;
+  if (flag.killSwitch) return <span className="pill bad">Killed</span>;
+  if (!flag.enabled) return <span className="pill mut">Disabled</span>;
+  if (flag.rolloutPercent === 100) return <span className="pill good">Active</span>;
+  return <span className="pill warn">Partial ({flag.rolloutPercent}%)</span>;
 }
 
 /**

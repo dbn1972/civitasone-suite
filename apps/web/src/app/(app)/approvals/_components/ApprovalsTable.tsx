@@ -65,7 +65,7 @@ export function ApprovalsTable({ initialData, source }: ApprovalsTableProps) {
     <>
       {fromCache && (
         <p role="status" aria-live="polite" style={{ fontSize: 12, color: "#64748b", marginBottom: 8 }}>
-          {offline ? "You're offline." : ""} Showing cached data{cachedAt ? ` from ${new Date(cachedAt).toLocaleString()}` : ""}.
+          {offline ? "You're offline." : ""} Showing cached data{cachedAt ? ` from ${new Date(cachedAt).toLocaleString("en-IN")}` : ""}.
         </p>
       )}
       <DataTable<ApprovalRow>

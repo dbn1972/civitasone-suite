@@ -83,7 +83,7 @@ export function TenantConfigCard({ config = DEFAULT_CONFIG, isPlatformAdmin = fa
   }
 
   const daysUntilExpiry = Math.ceil((new Date(config.licensedUntil).getTime() - Date.now()) / 86400000);
-  const licenseStatus = daysUntilExpiry < 30 ? "warn" : daysUntilExpiry < 0 ? "bad" : "good";
+  const licenseStatus = daysUntilExpiry < 0 ? "bad" : daysUntilExpiry < 30 ? "warn" : "good";
 
   return (
     <div style={{ display: "grid", gap: 16 }}>

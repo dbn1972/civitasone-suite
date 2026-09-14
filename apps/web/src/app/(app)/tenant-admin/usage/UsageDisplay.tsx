@@ -68,7 +68,7 @@ export function UsageDisplay({
                   {r.icon} {r.label}
                 </span>
                 <span style={{ fontSize: 13, color: "#6b7280" }}>
-                  {r.used.toLocaleString()} / {r.limit.toLocaleString()} {r.unit}
+                  {r.used.toLocaleString("en-IN")} / {r.limit.toLocaleString("en-IN")} {r.unit}
                   {r.percent >= 80 && (
                     <a href="/tenant-admin/plans" className="btn btn-sm" style={{ marginLeft: 8, fontSize: 11, padding: "2px 8px" }}>
                       Upgrade

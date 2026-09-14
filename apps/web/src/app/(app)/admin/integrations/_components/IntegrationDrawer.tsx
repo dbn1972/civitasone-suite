@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { StatusPill } from "@/app/_components/ds";
 import {
   ENV_SCOPES,
   type EnvScope,
@@ -261,7 +262,7 @@ export function IntegrationDrawer({
                   <span style={{ fontSize: 12.5, color: "var(--ink2)" }}>Secret set: {d.secretMasked}</span>
                 )}
                 {d?.lastTestedAt && (
-                  <span style={{ fontSize: 12, color: "var(--mut)" }}>Tested {new Date(d.lastTestedAt).toLocaleString()}</span>
+                  <span style={{ fontSize: 12, color: "var(--mut)" }}>Tested {new Date(d.lastTestedAt).toLocaleString("en-IN")}</span>
                 )}
               </div>
               {d?.lastError && (
@@ -365,7 +366,7 @@ export function IntegrationDrawer({
                   <ul style={{ listStyle: "none", padding: 0, margin: "10px 0 0", display: "flex", flexDirection: "column", gap: 6 }}>
                     {detail.history.map((h) => (
                       <li key={h.id} style={{ fontSize: 12, color: "var(--ink2)", borderLeft: "2px solid var(--line)", paddingLeft: 10 }}>
-                        <StatusBadge status={h.status} /> {h.createdAt ? new Date(h.createdAt).toLocaleString() : ""}
+                        <StatusBadge status={h.status} /> {h.createdAt ? new Date(h.createdAt).toLocaleString("en-IN") : ""}
                         {h.note ? ` — ${h.note}` : ""}{h.rejectedReason ? ` (${h.rejectedReason})` : ""}
                       </li>
                     ))}
@@ -389,7 +390,6 @@ export function IntegrationDrawer({
 }
 
 export function StatusBadge({ status }: { status: string }) {
-  const map: Record<string, string> = { connected: "good", unconfigured: "mut", failed: "bad", approved: "good", pending: "warn", rejected: "bad" };
   const label: Record<string, string> = { connected: "Connected", unconfigured: "Not configured", failed: "Failed" };
-  return <span className={`pill ${map[status] ?? "info"}`}>{label[status] ?? status}</span>;
+  return <StatusPill status={status} label={label[status]} />;
 }

@@ -47,7 +47,7 @@ export default async function StockItemDetailPage({
           <>
             {item.itemCode} · {item.name}{" "}
             <StatusPill
-              status={item.isLowStock ? "bad" : "active"}
+              status={item.isLowStock ? "low stock" : "active"}
               label={item.isLowStock ? "Low Stock" : "OK"}
             />
           </>

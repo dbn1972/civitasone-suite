@@ -24,6 +24,7 @@ export default async function KnowledgeRepositoryPage() {
     if (s === "approved") return "approved";
     if (s === "under_review") return "pending";
     if (s === "draft") return "draft";
+    if (s === "archived") return "archived";
     return "mut";
   }
 

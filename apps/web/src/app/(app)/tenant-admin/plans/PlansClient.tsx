@@ -55,10 +55,10 @@ export function PlansClient({ plansData, source }: { plansData: PlansData; sourc
 
   function getInvoiceStatusBadge(status: string) {
     switch (status) {
-      case "paid": return <span className="badge badge-green">Paid</span>;
-      case "pending": return <span className="badge badge-amber">Pending</span>;
-      case "failed": return <span className="badge badge-red">Failed</span>;
-      default: return <span className="badge badge-grey">{status}</span>;
+      case "paid": return <span className="pill good">Paid</span>;
+      case "pending": return <span className="pill warn">Pending</span>;
+      case "failed": return <span className="pill bad">Failed</span>;
+      default: return <span className="pill mut">{status}</span>;
     }
   }
 
@@ -83,9 +83,9 @@ export function PlansClient({ plansData, source }: { plansData: PlansData; sourc
               <h3 style={{ marginTop: isCurrent ? 8 : 0 }}>{plan.name}</h3>
               <p style={{ fontSize: 28, fontWeight: 700, margin: "8px 0" }}>{formatCurrency(plan.pricePerMonth)}<small style={{ fontSize: 14, fontWeight: 400, color: "#666" }}>/month</small></p>
               <ul style={{ listStyle: "none", padding: 0, margin: "12px 0" }}>
-                <li style={{ padding: "4px 0" }}>👥 Up to <strong>{plan.maxUsers.toLocaleString()}</strong> users</li>
+                <li style={{ padding: "4px 0" }}>👥 Up to <strong>{plan.maxUsers.toLocaleString("en-IN")}</strong> users</li>
                 <li style={{ padding: "4px 0" }}>💾 <strong>{plan.storageGb} GB</strong> storage</li>
-                <li style={{ padding: "4px 0" }}>🔗 <strong>{plan.maxApiCalls.toLocaleString()}</strong> API calls/month</li>
+                <li style={{ padding: "4px 0" }}>🔗 <strong>{plan.maxApiCalls.toLocaleString("en-IN")}</strong> API calls/month</li>
               </ul>
               <h4 style={{ marginTop: 12, marginBottom: 8 }}>Modules</h4>
               <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>

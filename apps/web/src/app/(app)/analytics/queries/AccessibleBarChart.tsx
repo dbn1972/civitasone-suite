@@ -35,7 +35,7 @@ export function AccessibleBarChart({
   }
 
   const summary = `${title}: ${data
-    .map((d) => `${d.label} ${d.value.toLocaleString()}${unit}`)
+    .map((d) => `${d.label} ${d.value.toLocaleString("en-IN")}${unit}`)
     .join(", ")}.`;
 
   return (
@@ -64,7 +64,7 @@ export function AccessibleBarChart({
               />
             </span>
             <span style={{ flex: "0 0 90px", fontSize: 13, color: "#0f172a" }}>
-              {d.value.toLocaleString()}
+              {d.value.toLocaleString("en-IN")}
               {unit}
             </span>
           </div>
@@ -78,7 +78,7 @@ export function AccessibleBarChart({
           <div key={d.label}>
             <dt>{d.label}</dt>
             <dd>
-              {d.value.toLocaleString()}
+              {d.value.toLocaleString("en-IN")}
               {unit ? ` ${unit}` : ""}
             </dd>
           </div>

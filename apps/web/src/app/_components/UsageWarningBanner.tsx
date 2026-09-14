@@ -46,7 +46,7 @@ export function UsageWarningBanner({ alerts }: UsageWarningBannerProps) {
         {alerts.map((alert) => (
           <p key={alert.resource} style={{ margin: "4px 0 0", fontSize: 13, color: "#dc2626" }}>
             You&apos;ve used {alert.percent}% of your monthly {alert.label.toLowerCase()}
-            ({alert.used.toLocaleString()}/{alert.limit.toLocaleString()}).
+            ({alert.used.toLocaleString("en-IN")}/{alert.limit.toLocaleString("en-IN")}).
             {" "}
             <a href="/tenant-admin/usage" style={{ color: "#991b1b", textDecoration: "underline" }}>
               Upgrade or contact admin.

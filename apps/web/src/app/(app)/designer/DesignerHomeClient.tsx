@@ -29,7 +29,7 @@ export function DesignerHomeClient({ services, domainPacks }: Props) {
     office: s.ownerDepartment || "—",
     version: `v${s.version}`,
     status: s.status,
-    updated: s.updatedAt ? new Date(s.updatedAt).toLocaleDateString() : "—",
+    updated: s.updatedAt ? new Date(s.updatedAt).toLocaleDateString("en-IN") : "—",
   }));
 
   const packRows = domainPacks.map((p) => ({

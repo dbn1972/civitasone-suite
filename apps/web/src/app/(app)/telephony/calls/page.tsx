@@ -72,7 +72,7 @@ const columns = [
     key: "slaAnswered" as const,
     label: "SLA",
     render: (r: CallRow) =>
-      r.slaAnswered == null ? "—" : <StatusPill status={r.slaAnswered ? "good" : "bad"} label={r.slaAnswered ? "met" : "breached"} />,
+      r.slaAnswered == null ? "—" : <StatusPill status={r.slaAnswered ? "cleared" : "breached"} label={r.slaAnswered ? "met" : "breached"} />,
   },
   {
     key: "linkedRefType" as const,

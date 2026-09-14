@@ -39,11 +39,11 @@ function cronToHuman(cron: string): string {
 
 function getStatusBadge(status: string) {
   switch (status) {
-    case "running": return <span className="badge badge-blue" style={{ animation: "pulse 2s infinite" }}>Running</span>;
-    case "success": return <span className="badge badge-green">Success</span>;
-    case "failed": return <span className="badge badge-red">Failed</span>;
-    case "never_run": return <span className="badge badge-grey">Never Run</span>;
-    default: return <span className="badge badge-grey">{status}</span>;
+    case "running": return <span className="pill info" style={{ animation: "pulse 2s infinite" }}>Running</span>;
+    case "success": return <span className="pill good">Success</span>;
+    case "failed": return <span className="pill bad">Failed</span>;
+    case "never_run": return <span className="pill mut">Never Run</span>;
+    default: return <span className="pill mut">{status}</span>;
   }
 }
 
