@@ -5,7 +5,7 @@ import path from "node:path";
 import { MemoryQueue, type Queue, type Handler } from "@civitasone/queue";
 import { eq } from "drizzle-orm";
 import { sql } from "drizzle-orm";
-import { runWithTenant, withTenantConsumer } from "@civitasone/db";
+import { runWithTenant, withTenantConsumer, createSqlClient } from "@civitasone/db";
 
 /**
  * Test-harness fix: `new MemoryQueue()` used directly (not the `createQueue()`
@@ -288,6 +288,26 @@ describe("DB-backed audit ledger", () => {
   let auditExports: typeof import("../src/modules/exports/schema.js")["auditExports"];
   let processed: typeof import("../src/shared/outbox.js")["processed"];
 
+  // SEC-019: `db` above authenticates as audit_svc, which — per
+  // migrations/0006_audit_immutability.sql and 0029's own extensive history
+  // on this exact table — has had UPDATE/DELETE on events.events revoked at
+  // some points (the original pre-partition table) and left un-revoked at
+  // others (the current partitioned table, post-0014/0029), and 0029
+  // explicitly declined to reinstate the REVOKE specifically because doing
+  // so would make this test's UPDATE/DELETE fail on the ACL check before
+  // Postgres ever reaches trg_events_immutable. Whichever way that ACL
+  // state happens to be set in a given environment, asserting the rejection
+  // through `db` cannot tell "the trigger blocked it" apart from "the grant
+  // blocked it" — it is not a clean, isolated test of the trigger, only of
+  // "the write was rejected for SOME reason". A second connection as the
+  // actual Postgres superuser sidesteps this ambiguity entirely: a
+  // superuser has unconditional DML privilege and bypasses RLS, so nothing
+  // but the trigger can reject a mutation attempted on it. Same pattern as
+  // gateway-service/tests/sec-021-actor-id-audit-log.integration.test.ts's
+  // seedSql (`postgres://civitas:civitas_test@...`).
+  const PG_HOST_PORT = (process.env.DATABASE_URL ?? "").match(/@([^/]+)\//)?.[1];
+  let adminSql: ReturnType<typeof createSqlClient>;
+
   beforeAll(async () => {
     ({ db, sqlClient } = await import("../src/shared/db.js"));
     ({ auditEvents } = await import("../src/modules/events/schema.js"));
@@ -295,6 +315,10 @@ describe("DB-backed audit ledger", () => {
     ({ registerExportConsumers } = await import("../src/modules/exports/consumer.js"));
     ({ auditExports } = await import("../src/modules/exports/schema.js"));
     ({ processed } = await import("../src/shared/outbox.js"));
+    if (!PG_HOST_PORT) {
+      throw new Error("SEC-019: could not parse host:port from DATABASE_URL for the superuser connection");
+    }
+    adminSql = createSqlClient(`postgres://civitas:civitas_test@${PG_HOST_PORT}/civitas_audit`, { max: 1, prepare: false });
   });
 
   afterAll(async () => {
@@ -302,10 +326,11 @@ describe("DB-backed audit ledger", () => {
     // events rows are append-only and intentionally left in place.
     try { await runWithTenant(TENANT_A, () => db.transaction((tx) => tx.delete(auditExports).where(eq(auditExports.tenantId, TENANT_A)))); } catch { /* noop */ }
     await rm(path.join(EXPORT_DIR, TENANT_A), { recursive: true, force: true }).catch(() => {});
+    await adminSql.end().catch(() => {});
     await sqlClient.end();
   });
 
-  it("APPEND-ONLY: a direct UPDATE on events.events is rejected by the trigger", async () => {
+  it("APPEND-ONLY: a direct UPDATE on events.events is rejected by the trigger, not merely by ACL/RLS", async () => {
     // Seed one row through the (allowed) INSERT path.
     const q = wireTenantAwareQueue(new MemoryQueue());
     registerAuditConsumers(q);
@@ -322,17 +347,24 @@ describe("DB-backed audit ledger", () => {
     const rows = await runWithTenant(TENANT_A, () => db.transaction((tx) => tx.select().from(auditEvents).where(eq(auditEvents.tenantId, TENANT_A))));
     expect(rows.length).toBeGreaterThanOrEqual(1);
 
-    await runWithTenant(TENANT_A, async () => {
-      // UPDATE must be rejected by the BEFORE UPDATE trigger.
-      await expect(
-        db.transaction((tx) => tx.execute(sql`update events.events set severity = 'tampered' where tenant_id = ${TENANT_A}`)),
-      ).rejects.toThrow(/append-only|not permitted|immutable/i);
+    // Attempted as the Postgres superuser (adminSql, see above) rather than
+    // through `db` (audit_svc). The superuser is guaranteed to hold
+    // UPDATE/DELETE and to bypass RLS unconditionally, regardless of
+    // audit_svc's own ACL state in this environment — so if these are still
+    // rejected, trg_events_immutable is the only thing that could have
+    // rejected them. No tenant GUC needs to be set for this connection
+    // (RLS does not apply to it at all); the WHERE clause targets the row
+    // by tenant_id directly, same as the app's own writes would.
 
-      // DELETE must be rejected by the BEFORE DELETE trigger.
-      await expect(
-        db.transaction((tx) => tx.execute(sql`delete from events.events where tenant_id = ${TENANT_A}`)),
-      ).rejects.toThrow(/append-only|not permitted|immutable/i);
-    });
+    // UPDATE must be rejected by the BEFORE UPDATE trigger.
+    await expect(
+      adminSql`update events.events set severity = 'tampered' where tenant_id = ${TENANT_A}`,
+    ).rejects.toThrow(/append-only|not permitted|immutable/i);
+
+    // DELETE must be rejected by the BEFORE DELETE trigger.
+    await expect(
+      adminSql`delete from events.events where tenant_id = ${TENANT_A}`,
+    ).rejects.toThrow(/append-only|not permitted|immutable/i);
 
     // Row is untouched.
     const after = await runWithTenant(TENANT_A, () => db.transaction((tx) => tx.select().from(auditEvents).where(eq(auditEvents.tenantId, TENANT_A))));
