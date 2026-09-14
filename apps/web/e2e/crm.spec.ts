@@ -9,8 +9,13 @@ test.describe('CRM', () => {
   // ── Dashboard ────────────────────────────────────────────────────────────
 
   test('crm dashboard shows KPI cards', async ({ page }) => {
+    // Module was relabeled from a commercial sales-pipeline framing to a
+    // government vendor/stakeholder-engagement framing (see the "not a
+    // commercial sales pipeline" notice on the page); "Leads / Contacts" no
+    // longer exists as a KPI card -- the equivalent stat is now labeled
+    // "Contacts / Stakeholders".
     await page.goto('/crm/dashboard');
-    await expect(page.getByText('Leads / Contacts')).toBeVisible();
+    await expect(page.getByText('Contacts / Stakeholders')).toBeVisible();
   });
 
   // ── Contacts list ─────────────────────────────────────────────────────────
@@ -53,14 +58,19 @@ test.describe('CRM', () => {
   // ── Deals list ────────────────────────────────────────────────────────────
 
   test('deals list page loads without error', async ({ page }) => {
+    // Page heading renamed from "Deal Pipeline" to "Vendor / Stakeholder
+    // Engagements" as part of the same CRM relabeling (see dashboard test
+    // above). level: 1 targets the page's own <h1>.
     await page.goto('/crm/deals');
-    await expect(page.getByRole('heading', { name: /deal pipeline/i })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 1, name: /engagements/i })).toBeVisible();
   });
 
   // ── Activities ────────────────────────────────────────────────────────────
 
   test('activities page loads without error', async ({ page }) => {
+    // Page heading renamed from something matching "Activities" to
+    // "Stakeholder Interactions" as part of the same CRM relabeling.
     await page.goto('/crm/activities');
-    await expect(page.getByRole('heading', { level: 1, name: /activit/i })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 1, name: /interactions/i })).toBeVisible();
   });
 });
