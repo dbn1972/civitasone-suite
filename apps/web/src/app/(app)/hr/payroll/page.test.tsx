@@ -16,6 +16,7 @@ vi.mock("@/app/_components/ds/Toast", () => ({
 }));
 
 import PayrollPage from "./page";
+import { expectRupeeGroundTruthDisplayed } from "@/lib/testUtils/money";
 
 const MOCK_RUNS = [
   { id: "r1", payPeriod: "2026-08", employeeCount: 40, grossAmount: 400000, netAmount: 360000, status: "paid" },
@@ -62,5 +63,24 @@ describe("PayrollPage", () => {
     mockFetchJson({ data: [], source: "error" });
     render(await PayrollPage());
     expect(screen.queryByText(/No pay structures configured/)).not.toBeInTheDocument();
+  });
+
+  // payroll-runs' grossAmount is already whole RUPEES (see PayrollRunsTable's
+  // own COMP-019 regression test and #312, the historical fix this mirrors:
+  // a real net pay of Rs 90,000 once rendered as Rs 900). This page sums
+  // only "paid"/"completed" runs' grossAmount into the "Total Gross" stat
+  // card via formatRupees() (page.tsx's own filter) -- had no coverage
+  // asserting that stat actually renders the right magnitude, only that the
+  // page renders at all. Two distinct "paid" amounts, summing to a number
+  // that coincides with neither individually, so the stat card can't be
+  // confused with either row's own Gross Pay cell in the table below it --
+  // same collision-avoidance technique as SchemesPage's COMP-017 regression
+  // test (page.test.tsx, projects/schemes).
+  it("renders the Total Gross stat as rupees, not 100x smaller (COMP-019, historically #312)", async () => {
+    const PAID_RUN_A = { id: "pr1", payPeriod: "2026-07", employeeCount: 10, grossAmount: 500000, netAmount: 450000, status: "paid" };
+    const PAID_RUN_B = { id: "pr2", payPeriod: "2026-08", employeeCount: 12, grossAmount: 300000, netAmount: 270000, status: "paid" };
+    mockFetchJson({ data: [PAID_RUN_A, PAID_RUN_B], source: "api" });
+    render(await PayrollPage());
+    expectRupeeGroundTruthDisplayed(screen, 80000000n); // Rs 8,00,000 = 500000 + 300000 rupees
   });
 });
