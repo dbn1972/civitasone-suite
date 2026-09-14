@@ -1,6 +1,7 @@
 import { PageHeader, StatGrid, StatCard, Card, DataTable } from "../../../_components/ds";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
+import { getTranslations } from "next-intl/server";
 
 type ApiRow = {
   id: string;
@@ -35,7 +36,7 @@ function formatINR(minor?: string): string {
   return "₹" + (n / 100).toLocaleString("en-IN", { minimumFractionDigits: 0 });
 }
 
-async function getData(): Promise<LoaderResult<Row[]>> {
+async function getData(t: Awaited<ReturnType<typeof getTranslations>>): Promise<LoaderResult<Row[]>> {
   return fetchJson<unknown, Row[]>("/api/v1/hrms/medical/claims", [], {
     telemetryKey: "hr.medical",
     mapResponse: (p) => {
@@ -48,7 +49,7 @@ async function getData(): Promise<LoaderResult<Row[]>> {
         hospital: r.hospital_name ?? "—",
         amount: formatINR(r.amount_minor),
         approvedAmount: r.approved_amount_minor ? formatINR(r.approved_amount_minor) : "—",
-        claimantType: r.dependant_name ? `Dependant (${r.dependant_relation ?? ""})` : "Self",
+        claimantType: r.dependant_name ? t("claimantDependant", { relation: r.dependant_relation ?? "" }) : t("claimantSelf"),
         filedDate: r.created_at ? r.created_at.slice(0, 10) : "—",
         status: r.status,
       }));
@@ -57,49 +58,50 @@ async function getData(): Promise<LoaderResult<Row[]>> {
 }
 
 export default async function MedicalPage() {
-  const { data: items, source } = await getData();
+  const t = await getTranslations("medicalClaims");
+  const { data: items, source } = await getData(t);
 
   const pending = items.filter((i) => i.status === "pending").length;
   const approved = items.filter((i) => i.status === "approved" || i.status === "paid").length;
   const rejected = items.filter((i) => i.status === "rejected").length;
 
   const columns: { key: keyof Row & string; label: string; cellType?: "status" }[] = [
-    { key: "caseRef", label: "Claim Ref" },
-    { key: "claimType", label: "Claim Type" },
-    { key: "hospital", label: "Hospital" },
-    { key: "amount", label: "Claimed Amount" },
-    { key: "approvedAmount", label: "Approved" },
-    { key: "claimantType", label: "Claimant" },
-    { key: "filedDate", label: "Filed Date" },
-    { key: "status", label: "Status", cellType: "status" },
+    { key: "caseRef", label: t("colClaimRef") },
+    { key: "claimType", label: t("colClaimType") },
+    { key: "hospital", label: t("colHospital") },
+    { key: "amount", label: t("colClaimedAmount") },
+    { key: "approvedAmount", label: t("colApproved") },
+    { key: "claimantType", label: t("colClaimant") },
+    { key: "filedDate", label: t("colFiledDate") },
+    { key: "status", label: t("colStatus"), cellType: "status" },
   ];
 
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
-        title="Medical Claims"
-        subtitle="CGHS / CS(MA) medical reimbursement claims — tracking and approval status."
+        title={t("title")}
+        subtitle={t("subtitle")}
         back="/hr"
         actions={<span />}
       />
       <DataSourceBadge source={source} />
       <StatGrid>
-        <StatCard icon="🏥" iconBg="#e6f0ff" label="Total Claims" value={items.length} />
-        <StatCard icon="⏳" iconBg="#fffbe6" label="Pending" value={pending} />
-        <StatCard icon="✅" iconBg="#e6f7f0" label="Approved / Paid" value={approved} />
-        <StatCard icon="🔴" iconBg="#fff1f0" label="Rejected" value={rejected} />
+        <StatCard icon="🏥" iconBg="#e6f0ff" label={t("statTotalLabel")} value={items.length} />
+        <StatCard icon="⏳" iconBg="#fffbe6" label={t("statPendingLabel")} value={pending} />
+        <StatCard icon="✅" iconBg="#e6f7f0" label={t("statApprovedLabel")} value={approved} />
+        <StatCard icon="🔴" iconBg="#fff1f0" label={t("statRejectedLabel")} value={rejected} />
       </StatGrid>
-      <Card title="Medical Reimbursement Claims">
+      <Card title={t("cardTitle")}>
         <DataTable<Row>
           columns={columns}
           rows={items}
           sortable
           filterable
-          filterPlaceholder="Filter by claim type, hospital or status…"
+          filterPlaceholder={t("filterPlaceholder")}
           pageSize={15}
           emptyIcon="🏥"
-          emptyTitle="No medical claims filed"
-          emptyMessage="Medical reimbursement claims filed by employees under CGHS or CS(MA) Rules appear here. Both self and dependent claims are tracked."
+          emptyTitle={t("emptyTitle")}
+          emptyMessage={t("emptyMessage")}
         />
       </Card>
     </main>
