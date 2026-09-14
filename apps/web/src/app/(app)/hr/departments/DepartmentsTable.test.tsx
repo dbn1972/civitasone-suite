@@ -1,8 +1,18 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { NextIntlClientProvider } from "next-intl";
+import enMessages from "@/messages/en.json";
 import { DepartmentsTable } from "./DepartmentsTable";
 
 const DEPTS = [{ id: "d1", code: "IT", name: "Information Technology", parentId: null, employeeCount: 5 }];
+
+function renderTable() {
+  return render(
+    <NextIntlClientProvider locale="en" messages={enMessages}>
+      <DepartmentsTable depts={DEPTS} />
+    </NextIntlClientProvider>,
+  );
+}
 
 /**
  * UX-016: both save and delete used to throw a hardcoded "Save failed" /
@@ -21,7 +31,7 @@ describe("DepartmentsTable — UX-016 clerk-safe errors", () => {
 
   it("shows a clerk-safe message, never the generic 'Save failed' literal, when saving fails", async () => {
     fetchMock.mockResolvedValue(new Response("", { status: 500 }));
-    render(<DepartmentsTable depts={DEPTS} />);
+    renderTable();
 
     fireEvent.click(screen.getByRole("button", { name: "Edit" }));
     fireEvent.click(screen.getByRole("button", { name: /save/i }));
@@ -32,7 +42,7 @@ describe("DepartmentsTable — UX-016 clerk-safe errors", () => {
 
   it("shows a clerk-safe message, never the generic 'Delete failed' literal, when deleting fails", async () => {
     fetchMock.mockResolvedValue(new Response("", { status: 500 }));
-    render(<DepartmentsTable depts={DEPTS} />);
+    renderTable();
 
     fireEvent.click(screen.getByRole("button", { name: "Delete" }));
     fireEvent.click(await screen.findByRole("button", { name: /delete department/i }));

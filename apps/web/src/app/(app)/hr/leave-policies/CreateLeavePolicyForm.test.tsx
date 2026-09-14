@@ -1,5 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, fireEvent, waitFor, within } from "@testing-library/react";
+import { NextIntlClientProvider } from "next-intl";
+import enMessages from "@/messages/en.json";
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }),
@@ -29,7 +31,11 @@ describe("CreateLeavePolicyForm — UX-016 clerk-safe errors", () => {
       }
       return Promise.resolve(new Response("policy-service create-policy trace: NPE at line 88", { status: 500 }));
     });
-    render(<CreateLeavePolicyForm />);
+    render(
+      <NextIntlClientProvider locale="en" messages={enMessages}>
+        <CreateLeavePolicyForm />
+      </NextIntlClientProvider>,
+    );
     fireEvent.click(screen.getByRole("button", { name: /new policy/i }));
     await waitFor(() => expect(screen.getByLabelText(/leave type/i)).toBeInTheDocument());
     fireEvent.click(screen.getByRole("button", { name: /create policy/i }));

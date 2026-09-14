@@ -1,5 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { NextIntlClientProvider } from "next-intl";
+import enMessages from "@/messages/en.json";
 import { AddDepartmentForm } from "./AddDepartmentForm";
 
 /**
@@ -16,7 +18,11 @@ describe("AddDepartmentForm — UX-016 clerk-safe errors", () => {
   afterEach(() => vi.unstubAllGlobals());
 
   function fillAndSubmit() {
-    render(<AddDepartmentForm onCancel={vi.fn()} />);
+    render(
+      <NextIntlClientProvider locale="en" messages={enMessages}>
+        <AddDepartmentForm onCancel={vi.fn()} />
+      </NextIntlClientProvider>,
+    );
     fireEvent.change(screen.getByLabelText(/code/i), { target: { value: "FIN" } });
     fireEvent.change(screen.getByLabelText(/name/i), { target: { value: "Finance Department" } });
     fireEvent.click(screen.getByRole("button", { name: /add department/i }));
