@@ -56,7 +56,7 @@ import { COMMANDS } from "../src/topics.js";
 import { calculateFeeMinor } from "../src/modules/applications/domain.js";
 
 const TENANT = "00000000-0000-0000-0000-000000000001"; // platform-default tenant — 0075 head already seeded (migration 0070)
-const ACTOR = "cc000002-ec00-4000-8000-0000000000ff";
+const ACTOR = randomUUID(); // fresh per run (REL-037): a fixed constant let delivery rows for this recipient accumulate past the findByRecipient page cap across repeated local runs, breaking the length+1 assertions below
 const BANK_CODE = "1100";
 
 function makeMsg(type: string, payload: Record<string, unknown>) {
