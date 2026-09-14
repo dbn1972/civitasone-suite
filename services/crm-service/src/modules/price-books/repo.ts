@@ -79,3 +79,26 @@ export async function listItems(tenantId: string, priceBookId: string): Promise<
     ORDER BY created_at ASC
   `)) as unknown as PriceBookItemView[];
 }
+
+/**
+ * PERF-005: batch loader for routes.ts's GET /v1/crm/price-books, which
+ * previously called listItems() once per book row in the page (N+1). Same
+ * columns/order as listItems, grouped in JS by price_book_id so the route
+ * can attach `items` to each row with an O(1) Map.get() instead of a query.
+ */
+export async function listItemsByBookIds(tenantId: string, priceBookIds: string[]): Promise<Map<string, PriceBookItemView[]>> {
+  const byBook = new Map<string, PriceBookItemView[]>();
+  if (priceBookIds.length === 0) return byBook;
+  const rows = await scopedRead(async (tx) => tx.execute(sql`
+    SELECT id, price_book_id AS "priceBookId", product_id AS "productId", price_minor::text AS "priceMinor"
+    FROM crm.price_book_items
+    WHERE tenant_id = ${tenantId}
+      AND price_book_id = ANY(${sql`ARRAY[${sql.join(priceBookIds.map((id) => sql`${id}::uuid`), sql`, `)}]`})
+    ORDER BY price_book_id, created_at ASC
+  `)) as unknown as PriceBookItemView[];
+  for (const row of rows) {
+    const list = byBook.get(row.priceBookId);
+    if (list) list.push(row); else byBook.set(row.priceBookId, [row]);
+  }
+  return byBook;
+}

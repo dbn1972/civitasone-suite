@@ -100,8 +100,10 @@ export async function priceBookRoutes(app: FastifyInstance): Promise<void> {
     // reuses this same row as its draft — without items attached here, every book looked
     // like it had zero saved prices until you separately GET'd it by id, which nothing in
     // the UI actually does. Same attach-items-per-book the single GET /:id already does
-    // below; at admin-configured price-book cardinalities this stays cheap.
-    const data = await Promise.all(rows.map(async (book) => ({ ...book, items: await repo.listItems(ctx.tenantId, book.id) })));
+    // below. PERF-005: this used to be one repo.listItems() call per book row (N+1) --
+    // batched into a single query via listItemsByBookIds.
+    const itemsByBook = await repo.listItemsByBookIds(ctx.tenantId, rows.map((book) => book.id));
+    const data = rows.map((book) => ({ ...book, items: itemsByBook.get(book.id) ?? [] }));
     return reply.send({ data, meta: { limit: q.limit, offset: q.offset, total } });
   });
 
