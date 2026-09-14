@@ -1,6 +1,7 @@
 import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
-import { PageHeader, StatGrid, StatCard, Card, EmptyState } from "@/app/_components/ds";
+import { PageHeader, StatGrid, StatCard, Card, EmptyState, RefreshErrorState } from "@/app/_components/ds";
 import { getAdminTenantDetail, getAdminTenantModules } from "@/app/_data/loaders";
+import { toHumanError } from "@/lib/messages";
 import { TenantModulesTable } from "./TenantModulesTable";
 
 export default async function TenantDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -47,10 +48,12 @@ export default async function TenantDetailPage({ params }: { params: Promise<{ i
         <StatCard icon="🔒" iconBg="#fce7ee" label="Status" value={tenant.status} />
       </StatGrid>
       <Card title="Module Usage">
-        {modules.length === 0 ? (
+        {source === "error" ? (
+          <RefreshErrorState error={toHumanError("load", { area: "tenant modules" })} />
+        ) : modules.length === 0 ? (
           <EmptyState icon="📦" title="No modules" message="No modules configured for this tenant." />
         ) : (
-          <TenantModulesTable modules={modules} source={source === "error" ? "error" : "api"} />
+          <TenantModulesTable modules={modules} source="api" />
         )}
       </Card>
     </main>

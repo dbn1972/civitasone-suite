@@ -2,8 +2,10 @@ export const dynamic = "force-dynamic";
 import { getTranslations } from "next-intl/server";
 import Link from "next/link";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
+import { RefreshErrorState } from "../../../_components/ds";
 import { getHRDashboard, getEmployees, getDashboardLeaveInbox, getMyProfile } from "../../../_data/loaders";
 import { getSessionName } from "../../../../lib/auth/roleGuard";
+import { toHumanError } from "@/lib/messages";
 import { GreetingHeader } from "./_components/GreetingHeader";
 import { HRKPIStrip } from "./_components/HRKPIStrip";
 import { ActionInbox } from "./_components/ActionInbox";
@@ -56,7 +58,13 @@ export default async function HRDashboardPage() {
   const leaveInbox = inboxResult.data;
   const profile = profileResult.data;
 
-  const anyError = source === "error" || empResult.source === "error";
+  // Note: getDashboardLeaveInbox() doesn't surface a `source` (it discards the
+  // loader's error token internally -- a separate, loader-level gap outside
+  // UX-013's page.tsx scope), so it can't be included here.
+  const anyError =
+    source === "error" ||
+    empResult.source === "error" ||
+    profileResult.source === "error";
   const onLeaveCount = data.onLeave;
   const deptCount = data.departmentBreakdown.length > 0
     ? data.departmentBreakdown.filter((d) => !d.name.startsWith("Others")).length +
@@ -136,7 +144,13 @@ export default async function HRDashboardPage() {
                 </tr>
               </thead>
               <tbody>
-                {recentEmployees.length === 0 ? (
+                {anyError ? (
+                  <tr>
+                    <td colSpan={6} style={{ padding: "24px" }}>
+                      <RefreshErrorState error={toHumanError("load", { area: "employees" })} />
+                    </td>
+                  </tr>
+                ) : recentEmployees.length === 0 ? (
                   <tr><td colSpan={6} style={{ textAlign: "center", padding: "24px", color: "var(--muted,#64748b)" }}>No employee records found</td></tr>
                 ) : (
                   recentEmployees.map((emp, idx) => {

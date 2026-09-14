@@ -1,7 +1,8 @@
 import Link from "next/link";
-import { PageHeader, Card, StatGrid, StatCard, DataTable, EmptyState } from "../../../_components/ds";
+import { PageHeader, Card, StatGrid, StatCard, DataTable, EmptyState, RefreshErrorState } from "../../../_components/ds";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
+import { toHumanError } from "@/lib/messages";
 
 type FY = { id: string; code: string; label: string; startDate: string; endDate: string; status: string } & Record<string, unknown>;
 type Bank = { id: string; bankName: string; branchName: string | null; accountNo: string; ifsc: string; accountType: string; purpose: string | null; status: string } & Record<string, unknown>;
@@ -16,6 +17,7 @@ async function getBanks(): Promise<LoaderResult<Bank[]>> {
 export default async function FinanceConfigPage() {
   const [{ data: fys, source: fySource }, { data: banks, source: bankSource }] = await Promise.all([getFYs(), getBanks()]);
   const source = fySource === "error" || bankSource === "error" ? "error" : "api";
+  const errored = source === "error";
   const activeFY = fys.find((f) => f.status === "active");
 
   return (
@@ -34,44 +36,50 @@ export default async function FinanceConfigPage() {
         <StatCard icon="🏦" iconBg="#ecfdf3" label="Bank Accounts" value={banks.length} />
       </StatGrid>
 
-      {/* Financial Years */}
-      <Card title="Financial Years">
-        {fys.length === 0 ? (
-          <EmptyState icon="📅" title="No financial year set" message="Create your first financial year to start recording transactions." />
-        ) : (
-          <DataTable<FY>
-            columns={[
-              { key: "code", label: "Code" },
-              { key: "label", label: "Label" },
-              { key: "startDate", label: "Start" },
-              { key: "endDate", label: "End" },
-              { key: "status", label: "Status", cellType: "status" },
-            ]}
-            rows={fys}
-            sortable
-          />
-        )}
-      </Card>
+      {errored ? (
+        <RefreshErrorState error={toHumanError("load", { area: "finance configuration" })} />
+      ) : (
+        <>
+          {/* Financial Years */}
+          <Card title="Financial Years">
+            {fys.length === 0 ? (
+              <EmptyState icon="📅" title="No financial year set" message="Create your first financial year to start recording transactions." />
+            ) : (
+              <DataTable<FY>
+                columns={[
+                  { key: "code", label: "Code" },
+                  { key: "label", label: "Label" },
+                  { key: "startDate", label: "Start" },
+                  { key: "endDate", label: "End" },
+                  { key: "status", label: "Status", cellType: "status" },
+                ]}
+                rows={fys}
+                sortable
+              />
+            )}
+          </Card>
 
-      {/* Bank Accounts */}
-      <Card title="Bank Accounts">
-        {banks.length === 0 ? (
-          <EmptyState icon="🏦" title="No bank accounts" message="Add your office's bank accounts so payments can be issued." />
-        ) : (
-          <DataTable<Bank>
-            columns={[
-              { key: "bankName", label: "Bank" },
-              { key: "branchName", label: "Branch" },
-              { key: "accountNo", label: "Account No" },
-              { key: "ifsc", label: "IFSC" },
-              { key: "accountType", label: "Type" },
-              { key: "status", label: "Status", cellType: "status" },
-            ]}
-            rows={banks}
-            sortable
-          />
-        )}
-      </Card>
+          {/* Bank Accounts */}
+          <Card title="Bank Accounts">
+            {banks.length === 0 ? (
+              <EmptyState icon="🏦" title="No bank accounts" message="Add your office's bank accounts so payments can be issued." />
+            ) : (
+              <DataTable<Bank>
+                columns={[
+                  { key: "bankName", label: "Bank" },
+                  { key: "branchName", label: "Branch" },
+                  { key: "accountNo", label: "Account No" },
+                  { key: "ifsc", label: "IFSC" },
+                  { key: "accountType", label: "Type" },
+                  { key: "status", label: "Status", cellType: "status" },
+                ]}
+                rows={banks}
+                sortable
+              />
+            )}
+          </Card>
+        </>
+      )}
 
       {activeFY && (
         <Card title={`Opening Balances — ${activeFY.code}`}>

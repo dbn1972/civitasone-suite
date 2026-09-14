@@ -22,7 +22,7 @@ function formatDateTime(iso: string): string {
 export default async function CopilotTurnPage({ params }: PageProps) {
   const { data: turn, source } = await getCopilotTurn(params.id);
 
-  if (!turn) {
+  if (!turn || source === "error") {
     return (
       <>
         <PageHeader title="Copilot Turn" back="/ai/copilot" />

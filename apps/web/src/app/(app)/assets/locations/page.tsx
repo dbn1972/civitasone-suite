@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { PageHeader, EmptyState } from "../../../_components/ds";
+import { PageHeader, EmptyState, ErrorState } from "../../../_components/ds";
+import { toHumanError } from "@/lib/messages";
 
 type Location = { id: string; code: string; name: string; orgUnit?: string | null };
 
@@ -12,16 +13,24 @@ export default function LocationsPage() {
   const [isError, setIsError] = useState(false);
   const [busy, setBusy] = useState(false);
   const [loaded, setLoaded] = useState(false);
+  const [loadError, setLoadError] = useState(false);
 
   async function load(signal?: AbortSignal) {
+    setLoadError(false);
     try {
       const res = await fetch("/api/proxy/v1/asset/locations", { signal });
       setLoaded(true);
-      if (!res.ok) return;
+      if (!res.ok) {
+        setLoadError(true);
+        return;
+      }
       const body = await res.json() as { data: Location[] };
       setRows(body.data ?? []);
     } catch (e) {
-      if (e instanceof Error && e.name !== 'AbortError') setLoaded(true);
+      if (e instanceof Error && e.name !== 'AbortError') {
+        setLoaded(true);
+        setLoadError(true);
+      }
     }
   }
 
@@ -93,7 +102,11 @@ export default function LocationsPage() {
       </div>
       <div className="card">
         <div className="card-h"><h3>Location tree</h3></div>
-        {rows.length === 0 ? (
+        {loadError ? (
+          <div className="pad">
+            <ErrorState error={toHumanError("load", { area: "functional locations" })} onRetry={() => load()} />
+          </div>
+        ) : rows.length === 0 ? (
           <EmptyState icon="📍" title={loaded ? "No locations yet" : "Loading locations…"} message={loaded ? "Add functional locations to build the plant-maintenance hierarchy." : undefined} />
         ) : (
           <div className="pad">

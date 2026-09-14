@@ -5,8 +5,9 @@ import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { ApplicationPipeline } from "../_components/ApplicationPipeline";
 import { GOIReservationCard } from "../_components/GOIReservationCard";
-import { ConfirmDialog, useConfirmAction } from "../../../../_components/ds";
+import { ConfirmDialog, ErrorState, useConfirmAction } from "../../../../_components/ds";
 import { useFormError } from "@/lib/useFormError";
+import { toHumanError } from "@/lib/messages";
 
 type JobOpening = {
   id: string;
@@ -156,7 +157,7 @@ function ContextMenu({
     return () => document.removeEventListener("mousedown", handler);
   }, [open]);
 
-  if (actions.length === 0) {
+  if (actions.length === 0) { // ux-001-ok: static STAGE_ACTIONS lookup keyed by app.stage (see the COMP-004 note above) -- not a loader result
     return (
       <span className="text-xs text-slate-400 italic">No actions</span>
     );
@@ -263,6 +264,7 @@ export default function JobOpeningDetailPage() {
   const [loadingOpening, setLoadingOpening] = useState(true);
   const [loadingApps, setLoadingApps] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [appsLoadError, setAppsLoadError] = useState(false);
   const [decisionStates, setDecisionStates] = useState<DecisionState>({});
   const [search, setSearch] = useState("");
   const [stageFilter, setStageFilter] = useState("all");
@@ -288,13 +290,14 @@ export default function JobOpeningDetailPage() {
   }, [id]);
 
   const loadApplications = useCallback(async (signal?: AbortSignal) => {
+    setAppsLoadError(false);
     try {
       const res = await fetch(`/api/proxy/v1/hrms/job-openings/${id}/applications`, { signal });
-      if (!res.ok) { return; }
+      if (!res.ok) { setAppsLoadError(true); return; }
       const data = await res.json() as { data?: Application[] };
       setApplications(data.data ?? []);
-    } catch {
-      // Non-fatal
+    } catch (e) {
+      if (!(e instanceof Error && e.name === "AbortError")) setAppsLoadError(true);
     } finally {
       setLoadingApps(false);
     }
@@ -481,6 +484,10 @@ export default function JobOpeningDetailPage() {
 
         {loadingApps ? (
           <div className="px-5 py-10 text-center text-slate-500 text-sm">Loading applications…</div>
+        ) : appsLoadError ? (
+          <div className="px-5 py-8">
+            <ErrorState error={toHumanError("load", { area: "applications" })} onRetry={() => loadApplications()} />
+          </div>
         ) : filtered.length === 0 ? (
           <div className="px-5 py-12 text-center">
             <p className="text-3xl mb-2">📭</p>
@@ -567,7 +574,7 @@ export default function JobOpeningDetailPage() {
             type="button"
             onClick={() => {
               const pending = applications.filter((a) => a.screeningDecision === "pending" && a.stage === "applied");
-              if (pending.length === 0) return;
+              if (pending.length === 0) return; // ux-001-ok: local no-op guard on already-loaded, already error-gated data -- renders nothing, so there's no empty-vs-error UI to confuse
               // Per-row failures are already reflected in decisionStates (and the
               // per-row "Action failed" hint); this just avoids an unhandled
               // rejection when some (but not all) calls in the batch fail.

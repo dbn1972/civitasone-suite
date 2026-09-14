@@ -1,6 +1,7 @@
-import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
-import { PageHeader, EmptyState, DataTable } from "../../../../_components/ds";
+import { PageHeader, EmptyState, DataTable, RefreshErrorState } from "../../../../_components/ds";
 import { getCrmAccountAncestors, getCrmAccountChildren, getCrmAccounts } from "../../../../_data/loaders";
+import { combineResourceState } from "../../../../_data/useResource";
+import { toHumanError } from "@/lib/messages";
 import { AccountParentForm } from "./AccountParentForm";
 import { Customer360Panel } from "../../../../_components/crm/Customer360Panel";
 import { AccountRelationshipsEditor } from "../../../../_components/crm/AccountRelationshipsEditor";
@@ -11,11 +12,24 @@ import { DocumentsPanel } from "../../../../_components/crm/DocumentsPanel";
 import { DocumentAlertsView } from "../../../../_components/crm/DocumentAlertsView";
 
 export default async function Page({ params }: { params: { id: string } }) {
-  const [{ data: accounts, source }, { data: ancestors }, { data: children }] = await Promise.all([
+  const [accountsResult, ancestorsResult, childrenResult] = await Promise.all([
     getCrmAccounts(),
     getCrmAccountAncestors(params.id),
     getCrmAccountChildren(params.id),
   ]);
+  const { data: accounts } = accountsResult;
+  const { data: ancestors } = ancestorsResult;
+  const { data: children } = childrenResult;
+
+  const resource = combineResourceState([accountsResult, ancestorsResult, childrenResult], accounts);
+  if (resource.status === "error") {
+    return (
+      <>
+        <PageHeader title="Account Detail" back="/crm/accounts" backLabel="Accounts" />
+        <RefreshErrorState error={toHumanError("load", { area: "account" })} backHref="/crm/accounts" />
+      </>
+    );
+  }
 
   const account = accounts.find((a) => a.id === params.id);
 
@@ -23,7 +37,6 @@ export default async function Page({ params }: { params: { id: string } }) {
     return (
       <>
         <PageHeader title="Account Detail" back="/crm/accounts" backLabel="Accounts" />
-        {source === "error" && <DataSourceBadge source={source} />}
         <EmptyState icon="🏢" title="Account not found" message="This account does not exist or is no longer active." />
       </>
     );
@@ -49,7 +62,6 @@ export default async function Page({ params }: { params: { id: string } }) {
           />
         }
       />
-      {source === "error" && <DataSourceBadge source={source} />}
       <div className="grid g-main" style={{ alignItems: "start" }}>
         <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
           <div className="card">

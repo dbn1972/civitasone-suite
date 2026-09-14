@@ -1,8 +1,9 @@
 import Link from "next/link";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { getAssetDashboard } from "../../../_data/loaders";
-import { PageHeader, StatCard, StatGrid, EmptyState, DataTable } from "../../../_components/ds";
+import { PageHeader, StatCard, StatGrid, EmptyState, DataTable, RefreshErrorState } from "../../../_components/ds";
 import { formatMoney, formatIndianDate } from "@/lib/formatters";
+import { toHumanError } from "@/lib/messages";
 
 export default async function AssetDashboardPage() {
   const { data, source } = await getAssetDashboard();
@@ -44,7 +45,9 @@ export default async function AssetDashboardPage() {
               <h3>Recent additions (from GRN)</h3>
               <Link className="lnk" href="/assets/list">Register →</Link>
             </div>
-            {recent.length === 0 ? (
+            {source === "error" ? (
+              <RefreshErrorState error={toHumanError("load", { area: "recent asset additions" })} />
+            ) : recent.length === 0 ? (
               <EmptyState icon="🖥️" title="No GRN-capitalized assets" message="Accept a GRN with fixed_asset PO lines to auto-register." />
             ) : (
               <DataTable

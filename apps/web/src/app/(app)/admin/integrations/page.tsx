@@ -100,7 +100,7 @@ export default function IntegrationsPage() {
       ) : (
         CATEGORIES.map((cat) => {
           const provs = PROVIDER_META.filter((p) => p.category === cat.id);
-          if (provs.length === 0) return null;
+          if (provs.length === 0) return null; // ux-001-ok: grouping a static PROVIDER_META catalog by category, not a loader result
           return (
             <section key={cat.id} aria-labelledby={`cat-${cat.id}`} style={{ marginTop: 22 }}>
               <h2 id={`cat-${cat.id}`} style={{ fontSize: 14, fontWeight: 700, color: "var(--ink2)", marginBottom: 12, textTransform: "uppercase", letterSpacing: ".4px" }}>

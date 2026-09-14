@@ -33,7 +33,7 @@ export type TradeLicenseRow = {
 // ── Table ────────────────────────────────────────────────────────────────────
 
 function TradeLicensesTable({ licenses }: { licenses: TradeLicenseRow[] }) {
-  if (licenses.length === 0) {
+  if (licenses.length === 0) { // ux-001-ok: only rendered by the parent's `!loading && !fetchError` branch below -- a fetch failure never reaches this component
     return <p style={{ color: "var(--ink2)", fontSize: 14, margin: 0 }}>No trade licenses found.</p>;
   }
   return (
@@ -114,7 +114,7 @@ function TradeLicenseCreateForm({ onCreated }: { onCreated: () => void }) {
     if (!address.trim()) next.address = "Address is required.";
     if (!businessType) next.businessType = "Select a business type.";
     setErrors(next);
-    return Object.keys(next).length === 0;
+    return Object.keys(next).length === 0; // ux-001-ok: client-side form-field validation result, not a loader empty-check
   }
 
   async function handleSubmit(e: React.FormEvent) {

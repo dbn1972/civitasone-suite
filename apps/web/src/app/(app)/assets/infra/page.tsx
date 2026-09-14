@@ -1,7 +1,8 @@
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { getInfraAssets } from "../../../_data/loaders";
-import { PageHeader, StatCard, StatGrid, EmptyState, DataTable } from "../../../_components/ds";
+import { PageHeader, StatCard, StatGrid, EmptyState, DataTable, RefreshErrorState } from "../../../_components/ds";
 import { formatMoney } from "@/lib/formatters";
+import { toHumanError } from "@/lib/messages";
 
 export default async function InfraAssetsPage() {
   const { data: allAssets, source } = await getInfraAssets();
@@ -42,7 +43,9 @@ export default async function InfraAssetsPage() {
         <div className="card-h">
           <h3>Infrastructure asset register</h3>
         </div>
-        {rows.length === 0 ? (
+        {source === "error" ? (
+          <RefreshErrorState error={toHumanError("load", { area: "infrastructure asset register" })} />
+        ) : rows.length === 0 ? (
           <EmptyState icon="🏗️" title="No infrastructure assets" message="Infrastructure assets will appear here once added." />
         ) : (
           <DataTable

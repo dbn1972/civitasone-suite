@@ -1,6 +1,7 @@
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
-import { EmptyState, PageHeader, StatCard, StatGrid } from "../../../_components/ds";
+import { EmptyState, PageHeader, StatCard, StatGrid, RefreshErrorState } from "../../../_components/ds";
 import { getAiAgentStatuses, getAiGovernanceAudit, getAiGovernanceCounters } from "../_data";
+import { toHumanError } from "@/lib/messages";
 import { AgentKillSwitch } from "./AgentKillSwitch";
 import { AuditTrailTable } from "./AuditTrailTable";
 import { blockRateBand, topBlockReasons } from "./governance";
@@ -71,7 +72,9 @@ export default async function Page({ searchParams }: { searchParams?: { blocked?
         <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
           <div className="card">
             <div className="card-h"><h3>Top Block Reasons</h3></div>
-            {reasons.length === 0 ? (
+            {source === "error" ? (
+              <RefreshErrorState error={toHumanError("load", { area: "block reasons" })} />
+            ) : reasons.length === 0 ? (
               <EmptyState icon="✅" title="Nothing blocked" message="No AI action in this window was refused by a guardrail." />
             ) : (
               <div className="pad">

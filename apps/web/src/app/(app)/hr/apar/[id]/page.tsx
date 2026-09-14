@@ -83,8 +83,18 @@ export default async function AparDetailPage({
 }) {
   const result = await getApar(params.id);
   const detail = result.data;
+  // getApar's `empty` sentinel is `null` and mapResponse returns null on any
+  // non-object payload, so per fetchJson's contract (apiClient.ts) detail
+  // is null if-and-only-if result.source === "error" -- but that's an
+  // internal implementation detail of the loader, not something a reader of
+  // this page should have to know. Naming it explicitly here means a real
+  // fetch error is guaranteed to hit this same early return (and everything
+  // below -- including the Scores/History empty-checks -- can assume a
+  // genuinely successful load) even if a future change to getApar's default
+  // ever breaks the current !detail/error coincidence.
+  const errored = result.source === "error";
 
-  if (!detail) {
+  if (!detail || errored) {
     return (
       <main className="page-main wrap" aria-labelledby="page-heading">
         <PageHeader title="APAR Detail" subtitle="Not found" back="/hr/apar" />

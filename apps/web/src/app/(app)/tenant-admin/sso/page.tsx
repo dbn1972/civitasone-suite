@@ -1,12 +1,16 @@
-import { PageHeader, StatCard, StatGrid, Card, DataTable, StatusPill, EmptyState } from "@/app/_components/ds";
-import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
+import { PageHeader, StatCard, StatGrid, Card, DataTable, StatusPill, EmptyState, RefreshErrorState } from "@/app/_components/ds";
 import { Breadcrumb } from "../Breadcrumb";
 import { getSsoProviders, type SsoProvider } from "@/app/_data/loaders";
 import { SsoTable } from "./SsoTable";
+import { useResource } from "@/app/_data/useResource";
+import { toHumanError } from "@/lib/messages";
 
 export default async function SSOPage() {
-  const { data: providers, source } = await getSsoProviders();
-  const activeProviders = providers.filter((p) => p.status === "active").length;
+  const result = await getSsoProviders();
+  const { data: providers, source } = result;
+  const resource = useResource(result);
+  const errored = resource.status === "error";
+  const activeProviders = errored ? null : providers.filter((p) => p.status === "active").length;
   const totalUsers = providers.reduce((sum, p) => sum + (p.status === "active" ? 1 : 0), 0);
 
   return (
@@ -22,16 +26,18 @@ export default async function SSOPage() {
           </a>
         }
       />
-      <DataSourceBadge source={source} />
-
       <StatGrid>
-        <StatCard icon="🔗" iconBg="#eff6ff" label="Active Providers" value={activeProviders} />
-        <StatCard icon="👥" iconBg="#ecfdf3" label="Total Providers" value={providers.length} />
+        <StatCard icon="🔗" iconBg="#eff6ff" label="Active Providers" value={activeProviders ?? "—"} />
+        <StatCard icon="👥" iconBg="#ecfdf3" label="Total Providers" value={errored ? "—" : providers.length} />
         <StatCard icon="🛡️" iconBg="#f1f5f9" label="Protocols" value="SAML / OIDC" />
-        <StatCard icon="✅" iconBg="#ecfdf3" label="Last Sync" value={providers.length > 0 ? "Recent" : "—"} />
+        <StatCard icon="✅" iconBg="#ecfdf3" label="Last Sync" value={!errored && providers.length > 0 ? "Recent" : "—"} />
       </StatGrid>
 
-      {providers.length === 0 ? (
+      {errored ? (
+        <Card title="Configured Identity Providers">
+          <RefreshErrorState error={toHumanError("load", { area: "identity providers" })} backHref="/tenant-admin" />
+        </Card>
+      ) : providers.length === 0 ? (
         <Card title="Configured Identity Providers">
           <EmptyState
             icon="🔗"

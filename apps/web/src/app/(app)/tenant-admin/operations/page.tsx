@@ -1,8 +1,9 @@
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
-import { PageHeader, StatCard, EmptyState } from "../../../_components/ds";
+import { PageHeader, StatCard, EmptyState, RefreshErrorState } from "../../../_components/ds";
 import { getAdminOperationsDashboard } from "../../../_data/loaders";
 import { Breadcrumb } from "../Breadcrumb";
 import { requireAnyRole } from "@/lib/auth/roleGuard";
+import { toHumanError } from "@/lib/messages";
 import { ProcessesTable, SchedulersTable, RecentErrorsTable } from "./OperationsTables";
 
 function formatDate(value?: string): string {
@@ -19,7 +20,7 @@ function operationsScore(ops: Awaited<ReturnType<typeof getAdminOperationsDashbo
     ops.queue.healthy,
     ops.summary.outboxPending === 0,
     ops.summary.failedJobs === 0,
-    ops.recentErrors.length === 0,
+    ops.recentErrors.length === 0, // ux-001-ok: only called on a successfully-loaded dashboard -- AdminOperationsPage returns a RefreshErrorState before this function is ever invoked when source === "error"
     ops.schedulers.length > 0 && ops.schedulers.every((job) => job.status === "online"),
   ];
   return Math.round((checks.filter(Boolean).length / checks.length) * 10);
@@ -33,7 +34,7 @@ function incidentSummary(ops: Awaited<ReturnType<typeof getAdminOperationsDashbo
   if (ops.summary.failedJobs > 0) blockers.push(`${ops.summary.failedJobs} PM2 process(es) are not online`);
   if (ops.summary.outboxPending > 0) blockers.push(`${ops.summary.outboxPending} admin outbox message(s) are pending`);
   if (ops.recentErrors.length > 0) blockers.push(`${ops.recentErrors.length} recent redacted log error(s) were found`);
-  if (blockers.length === 0) return null;
+  if (blockers.length === 0) return null; // ux-001-ok: only called on a successfully-loaded dashboard -- see operationsScore above
   const level = !ops.pm2Available || !ops.queue.healthy || ops.summary.failedJobs > 0 ? "bad" : "warn";
   return {
     level,
@@ -45,6 +46,21 @@ function incidentSummary(ops: Awaited<ReturnType<typeof getAdminOperationsDashbo
 export default async function AdminOperationsPage() {
   requireAnyRole(["platform_admin", "super_admin"], "/tenant-admin");
   const { data: ops, source } = await getAdminOperationsDashboard();
+
+  if (source === "error") {
+    return (
+      <main className="page-main wrap" aria-labelledby="page-heading">
+        <Breadcrumb items={[{ label: "Tenant Admin", href: "/tenant-admin" }, { label: "Operations" }]} />
+        <PageHeader
+          back="/tenant-admin"
+          title="Admin Operations Dashboard"
+          subtitle="Monitor PM2 services, workers, queues, schedulers, cron activity, outbox backlog, and recent operational errors."
+        />
+        <RefreshErrorState error={toHumanError("load", { area: "operations dashboard" })} backHref="/tenant-admin" />
+      </main>
+    );
+  }
+
   const workers = ops.processes.filter((p) => p.kind === "worker");
   const services = ops.processes.filter((p) => p.kind === "service" || p.kind === "infrastructure");
   const score = operationsScore(ops);
@@ -71,7 +87,6 @@ export default async function AdminOperationsPage() {
         <StatCard icon="⚙️" iconBg="#eff6ff" label="Workers Online" value={`${ops.summary.workersOnline}/${ops.summary.workersTotal}`} />
         <StatCard icon="🚨" iconBg="#fef3f2" label="Processes Not Online" value={ops.summary.failedJobs} />
       </div>
-      {source === "error" && <DataSourceBadge source={source} />}
 
       <div className="grid g-2" style={{ marginTop: 18 }}>
         <div className="card">

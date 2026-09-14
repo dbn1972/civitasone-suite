@@ -1,6 +1,7 @@
-import { PageHeader, StatGrid, StatCard, Card } from "../../../_components/ds";
+import { PageHeader, StatGrid, StatCard, Card, RefreshErrorState } from "../../../_components/ds";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
+import { toHumanError } from "@/lib/messages";
 import { GoalsProgressRing, type CategoryScore } from "./_components/GoalsProgressRing";
 import { GoalTrackerCard } from "./_components/GoalTrackerCard";
 import { DevelopmentPlanTimeline, type DevActivity } from "./_components/DevelopmentPlanTimeline";
@@ -86,13 +87,14 @@ export default async function GoalsPage() {
     getGoals(),
     getDevPlans(),
   ]);
+  const errored = source === "error";
 
   const onTrack   = items.filter((i) => ["on_track","on track","active"].includes((i.status ?? "").toLowerCase())).length;
   const atRisk    = items.filter((i) => ["at_risk","behind","at risk"].includes((i.status ?? "").toLowerCase())).length;
   const completed = items.filter((i) => ["completed","achieved","closed"].includes((i.status ?? "").toLowerCase())).length;
 
   const categoryScores = buildCategoryScores(items);
-  const overallScore   = items.length === 0 ? 0 : Math.round((completed / items.length) * 100);
+  const overallScore   = items.length === 0 ? 0 : Math.round((completed / items.length) * 100); // ux-001-ok: divide-by-zero guard for a ratio, not a rendered empty-state
 
   const activities: DevActivity[] = devPlans.map((d) => ({
     id:           d.id,
@@ -135,7 +137,9 @@ export default async function GoalsPage() {
 
       {/* Individual goal tracker cards */}
       <Card title="My Goals">
-        {items.length === 0 ? (
+        {errored ? (
+          <RefreshErrorState error={toHumanError("load", { area: "goals" })} />
+        ) : items.length === 0 ? (
           <div style={{ padding: 32, textAlign: "center", color: "#94a3b8" }}>
             <p style={{ fontSize: 32, margin: "0 0 8px" }}>🎯</p>
             <p style={{ fontWeight: 600, color: "#475569", margin: 0 }}>No goals set</p>
