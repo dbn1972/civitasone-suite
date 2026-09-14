@@ -54,6 +54,11 @@ function toApi(r: ThreeWayMatchRow): Record<string, unknown> {
     // surfaced here so it is genuinely visible in the read path -- not just
     // validated and discarded.
     invoiceRef: r.invoiceRef ?? null,
+    // DOM-032: invoice date as supplied by the client. Optional (unlike
+    // invoiceRef above, this endpoint's sibling matches/invoice field has no
+    // required-whenever-invoice-info-present rule) -- surfaced here so it is
+    // genuinely visible on the read path instead of validated and dropped.
+    invoiceDate: r.invoiceDate ?? null,
     matchStatus: r.matchStatus,
     variancePct: r.variancePct,
     autoMatched: r.autoMatched,
@@ -109,6 +114,13 @@ export async function threeWayMatchRoutes(app: FastifyInstance): Promise<void> {
       // the direct endpoint now uses, so it is genuinely persisted
       // (procurement.three_way_match.invoice_ref) instead of just checked.
       invoiceRef: body.invoiceRef,
+      // DOM-032: invoiceDate has always been ACCEPTED (optionally) by
+      // invoiceAttachBody above, but was never forwarded past validation
+      // either -- the exact same discard shape invoiceRef had before
+      // DOM-027. Threaded through the same pipe, so it is genuinely
+      // persisted (procurement.three_way_match.invoice_date) instead of
+      // just validated and dropped.
+      invoiceDate: body.invoiceDate,
     }));
   });
 

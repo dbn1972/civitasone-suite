@@ -19,6 +19,8 @@ export interface DerivedMatch {
   invoiceAmountMinor?: bigint;
   /** DOM-027: audited invoice reference. Only meaningful (and only ever supplied) alongside a non-null invoiceId -- see the upsert's ON CONFLICT clause below for how a re-run without one preserves the existing value instead of clobbering it. */
   invoiceRef?: string | null;
+  /** DOM-032: invoice date as supplied by the client, stored unparsed (see schema.ts). Same conditional-preserve semantics as invoiceRef below. */
+  invoiceDate?: string | null;
   /** Computed variance percentage for this match (persisted alongside match_status). */
   variancePct?: number | null;
   /** True for every row this system-derived upsert writes (no manual-entry path exists yet). */
@@ -39,12 +41,12 @@ export interface DerivedMatch {
 export async function upsertDerivedMatch(tx: Writer, m: DerivedMatch): Promise<void> {
   await (tx as typeof db).execute(sql`
     INSERT INTO procurement.three_way_match
-      (id, tenant_id, po_id, grn_id, invoice_id, po_amount_minor, grn_amount_minor, invoice_amount_minor, invoice_ref, match_status, variance_pct, auto_matched,
+      (id, tenant_id, po_id, grn_id, invoice_id, po_amount_minor, grn_amount_minor, invoice_amount_minor, invoice_ref, invoice_date, match_status, variance_pct, auto_matched,
        qty_variance_pct, price_variance_pct, qty_tolerance_pct, price_tolerance_pct, tolerance_pct)
     VALUES (
       ${m.id}::uuid, ${m.tenantId}::uuid, ${m.poId}::uuid, ${m.grnId}::uuid,
       ${m.invoiceId ?? null}, ${m.poAmountMinor.toString()}::bigint, ${m.grnAmountMinor.toString()}::bigint,
-      ${(m.invoiceAmountMinor ?? 0n).toString()}::bigint, ${m.invoiceRef ?? null}, ${m.matchStatus}, ${m.variancePct ?? null}, ${m.autoMatched ?? true},
+      ${(m.invoiceAmountMinor ?? 0n).toString()}::bigint, ${m.invoiceRef ?? null}, ${m.invoiceDate ?? null}, ${m.matchStatus}, ${m.variancePct ?? null}, ${m.autoMatched ?? true},
       ${m.qtyVariancePct ?? null}, ${m.priceVariancePct ?? null},
       ${m.qtyTolerancePct ?? null}, ${m.priceTolerancePct ?? null},
       ${m.totalTolerancePct ?? "5.00"}
@@ -59,6 +61,9 @@ export async function upsertDerivedMatch(tx: Writer, m: DerivedMatch): Promise<v
       invoice_ref          = CASE WHEN EXCLUDED.invoice_id IS NOT NULL
                                   THEN EXCLUDED.invoice_ref
                                   ELSE procurement.three_way_match.invoice_ref END,
+      invoice_date         = CASE WHEN EXCLUDED.invoice_id IS NOT NULL
+                                  THEN EXCLUDED.invoice_date
+                                  ELSE procurement.three_way_match.invoice_date END,
       match_status         = EXCLUDED.match_status,
       variance_pct         = EXCLUDED.variance_pct,
       auto_matched         = EXCLUDED.auto_matched,
