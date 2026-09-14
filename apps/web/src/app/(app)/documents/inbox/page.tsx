@@ -7,12 +7,12 @@ import type { DakSummary } from "../_data/types";
 function priorityPill(p: string) {
   if (p === "urgent") return "bad";
   if (p === "high") return "warn";
-  return "approved";
+  return "good";
 }
 
 function statusPill(s: string) {
-  if (s === "acknowledged") return "approved";
-  if (s === "forwarded") return "pending";
+  if (s === "acknowledged") return "good";
+  if (s === "forwarded") return "warn";
   if (s === "pending") return "warn";
   return "mut";
 }

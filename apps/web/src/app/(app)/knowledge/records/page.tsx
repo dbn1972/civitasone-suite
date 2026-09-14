@@ -23,6 +23,7 @@ export default async function KnowledgeRecordsPage() {
     if (s === "active") return "active";
     if (s === "disposed") return "rejected";
     if (s === "transferred") return "pending";
+    if (s === "archived") return "archived";
     return "mut";
   }
 

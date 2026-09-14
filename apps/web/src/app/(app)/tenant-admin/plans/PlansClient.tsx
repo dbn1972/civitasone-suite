@@ -55,10 +55,10 @@ export function PlansClient({ plansData, source }: { plansData: PlansData; sourc
 
   function getInvoiceStatusBadge(status: string) {
     switch (status) {
-      case "paid": return <span className="badge badge-green">Paid</span>;
-      case "pending": return <span className="badge badge-amber">Pending</span>;
-      case "failed": return <span className="badge badge-red">Failed</span>;
-      default: return <span className="badge badge-grey">{status}</span>;
+      case "paid": return <span className="pill good">Paid</span>;
+      case "pending": return <span className="pill warn">Pending</span>;
+      case "failed": return <span className="pill bad">Failed</span>;
+      default: return <span className="pill mut">{status}</span>;
     }
   }
 

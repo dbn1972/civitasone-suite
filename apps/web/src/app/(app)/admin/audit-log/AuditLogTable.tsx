@@ -1,6 +1,6 @@
 "use client";
 import { useMemo, useState } from "react";
-import { DataTable } from "@/app/_components/ds";
+import { DataTable, StatusPill } from "@/app/_components/ds";
 import type { AdminAuditLogEntry } from "@/app/_data/loaders";
 
 type Row = AdminAuditLogEntry & Record<string, unknown>;
@@ -52,9 +52,7 @@ export function AuditLogTable({ entries }: { entries: AdminAuditLogEntry[] }) {
           {
             key: "outcome",
             label: "Outcome",
-            render: (e) => (
-              <span className={`pill ${e.outcome === "success" ? "good" : "bad"}`}>{String(e.outcome)}</span>
-            ),
+            render: (e) => <StatusPill status={String(e.outcome)} />,
           },
         ]}
         rows={filtered}

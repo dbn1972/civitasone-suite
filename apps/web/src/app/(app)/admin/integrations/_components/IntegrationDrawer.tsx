@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { StatusPill } from "@/app/_components/ds";
 import {
   ENV_SCOPES,
   type EnvScope,
@@ -389,7 +390,6 @@ export function IntegrationDrawer({
 }
 
 export function StatusBadge({ status }: { status: string }) {
-  const map: Record<string, string> = { connected: "good", unconfigured: "mut", failed: "bad", approved: "good", pending: "warn", rejected: "bad" };
   const label: Record<string, string> = { connected: "Connected", unconfigured: "Not configured", failed: "Failed" };
-  return <span className={`pill ${map[status] ?? "info"}`}>{label[status] ?? status}</span>;
+  return <StatusPill status={status} label={label[status]} />;
 }

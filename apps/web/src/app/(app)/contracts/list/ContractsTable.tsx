@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { DataTable } from "../../../_components/ds";
+import { DataTable, StatusPill } from "../../../_components/ds";
 
 type ContractRow = {
   id: string;
@@ -34,11 +34,7 @@ export function ContractsTable({ rows }: { rows: ContractRow[] }) {
         {
           key: "status",
           label: "Status",
-          render: (r) => {
-            const s = r.status.toLowerCase();
-            const cls = s === "active" ? "good" : s === "expired" ? "bad" : "mut";
-            return <span className={`pill ${cls}`}>{r.status}</span>;
-          },
+          render: (r) => <StatusPill status={r.status} />,
         },
       ]}
       rows={rows}

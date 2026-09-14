@@ -24,6 +24,7 @@ export default async function KnowledgeListPage() {
   function statusPillStatus(s: string) {
     if (s === "approved") return "approved";
     if (s === "under_review") return "pending";
+    if (s === "archived") return "archived";
     return "mut";
   }
 

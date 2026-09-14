@@ -22,7 +22,7 @@ function mimeIcon(mime: string | null): string {
 }
 
 function priorityPill(status: string) {
-  if (status === "active") return "approved";
+  if (status === "active") return "good";
   if (status === "deleted") return "bad";
   return "mut";
 }

@@ -7,21 +7,21 @@ import type { CustomDomain } from "@/app/_data/loaders";
 
 function getDomainStatusBadge(status: string) {
   switch (status) {
-    case "pending_verification": return <span className="badge badge-amber">Pending Verification</span>;
-    case "verified": return <span className="badge badge-green">Verified</span>;
-    case "active": return <span className="badge badge-green">✓ Active</span>;
-    case "failed": return <span className="badge badge-red">Failed</span>;
-    case "revoked": return <span className="badge badge-grey">Revoked</span>;
-    default: return <span className="badge badge-grey">{status}</span>;
+    case "pending_verification": return <span className="pill warn">Pending Verification</span>;
+    case "verified": return <span className="pill good">Verified</span>;
+    case "active": return <span className="pill good">✓ Active</span>;
+    case "failed": return <span className="pill bad">Failed</span>;
+    case "revoked": return <span className="pill mut">Revoked</span>;
+    default: return <span className="pill mut">{status}</span>;
   }
 }
 
 function getSslBadge(status: string) {
   switch (status) {
-    case "issued": return <span className="badge badge-green">SSL Active</span>;
-    case "pending": return <span className="badge badge-blue">SSL Pending</span>;
-    case "expired": return <span className="badge badge-red">SSL Expired</span>;
-    default: return <span className="badge badge-grey">{status}</span>;
+    case "issued": return <span className="pill good">SSL Active</span>;
+    case "pending": return <span className="pill info">SSL Pending</span>;
+    case "expired": return <span className="pill bad">SSL Expired</span>;
+    default: return <span className="pill mut">{status}</span>;
   }
 }
 
