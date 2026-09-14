@@ -87,24 +87,19 @@ export async function writeAuditLog(entry: AuditEntry): Promise<void> {
     // packages/db/src/raw-tenant-guc.ts (also hit by helpdesk-service,
     // crm-service, estab-service and payroll-service).
     //
-    // `sqlClient.begin` feature-check: dozens of pre-existing route test
-    // files stub `../shared/db.js`'s `sqlClient` as a bare callable (tagged
-    // template only, for their own route code) with no `.begin()` — they
-    // never touch a real, RLS-enforcing database, so app.ts's onResponse
-    // hook firing this for every mutating response in every one of those
-    // files would otherwise throw "sqlClient.begin is not a function" on
-    // every request, purely from a test double gap unrelated to what those
-    // tests exercise. Rather than retrofit .begin() onto every such mock,
-    // fall back to the original (pre-TX-013) direct `.unsafe()` call shape
-    // when `.begin` isn't present — those tests keep working unmodified. The
-    // real postgres.js client (production, and any real-DB integration test)
-    // always implements `.begin`, so this fallback is never taken outside a
-    // deliberately partial test double.
-    if (typeof sqlClient.begin === "function") {
-      await withRawTenantGuc(sqlClient, entry.tenantId, (tx) => tx.unsafe(insertSql, params));
-    } else {
-      await sqlClient.unsafe(insertSql, params);
-    }
+    // TX-015: this used to feature-check `typeof sqlClient.begin ===
+    // "function"` and fall back to a direct (non-tenant-scoped) `.unsafe()`
+    // call when it was missing, purely to accommodate ~28 test doubles for
+    // `../shared/db.js` that stubbed `sqlClient` as `{ end: ... }` with no
+    // `.begin`. That silently exercised the pre-TX-013 fallback path instead
+    // of withRawTenantGuc in every one of those files' tests -- no coverage
+    // of the tenant-scoping behavior it's supposed to guarantee. The real
+    // postgres.js client (production, and any real-DB integration test)
+    // always implements `.begin` (see packages/db/src/pool.ts), so the
+    // fallback served no production purpose. Fixed by giving those doubles a
+    // real `.begin` (tests/fixtures/mock-sql-client.ts) instead of routing
+    // around the gap here; the fallback is gone now that nothing needs it.
+    await withRawTenantGuc(sqlClient, entry.tenantId, (tx) => tx.unsafe(insertSql, params));
   } catch (err) {
     log.error({ err }, "[audit] write failed");
   }

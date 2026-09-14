@@ -11,6 +11,7 @@
  *   - Tenant scoping via runWithTenant
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { createMockSqlClient } from "./fixtures/mock-sql-client.js";
 import { randomUUID } from "node:crypto";
 import { MemoryQueue } from "@civitasone/queue";
 
@@ -26,7 +27,7 @@ const H = vi.hoisted(() => ({
 
 vi.mock("../src/shared/db.js", () => ({
   db: { transaction: (...a: unknown[]) => H.dbTransaction(...a) },
-  sqlClient: { end: async () => {} },
+  sqlClient: createMockSqlClient(),
 }));
 vi.mock("@civitasone/db", () => ({
   runWithTenant: (...a: unknown[]) => H.runWithTenant(...a),
