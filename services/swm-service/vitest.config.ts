@@ -21,6 +21,18 @@ export default defineConfig({
     coverage: {
       provider: "v8",
       exclude: ["dist/**", "src/index.ts", "src/worker.ts", "**/*.config.ts"],
+      // REL-013: thresholds set at/just below real measured coverage
+      // (lines 89.52 / branches 77.81 / functions 84.52 / statements
+      // 89.52, via `pnpm --filter @civitasone/swm-service run coverage`
+      // against a fully migrated, isolated Postgres, 21/21 tests passing),
+      // matching the convention used by every other service's
+      // vitest.config.ts (e.g. hrms-service).
+      thresholds: {
+        lines: 89,
+        functions: 84,
+        branches: 77,
+        statements: 89,
+      },
     },
   },
 });
