@@ -10,14 +10,17 @@ test.describe('Audit', () => {
 
   test('audit log shows the Event Log section', async ({ page }) => {
     await page.goto('/audit');
-    await expect(page.getByText('Event Log')).toBeVisible();
+    // Exact match: "Event Log" (breadcrumb) is also a substring of the
+    // "Audit event log" card heading, which would otherwise resolve to 2 elements.
+    await expect(page.getByText('Event Log', { exact: true })).toBeVisible();
   });
 
   test('audit log shows actor and action column headers', async ({ page }) => {
     await page.goto('/audit');
     await expect(page.getByRole('columnheader', { name: 'Actor' })).toBeVisible();
     await expect(page.getByRole('columnheader', { name: 'Action' })).toBeVisible();
-    await expect(page.getByRole('columnheader', { name: 'Outcome' })).toBeVisible();
+    // Column was relabeled from "Outcome" to "Result".
+    await expect(page.getByRole('columnheader', { name: 'Result' })).toBeVisible();
   });
 
   test('audit log shows row from mock API', async ({ page }) => {
@@ -28,22 +31,28 @@ test.describe('Audit', () => {
 
   test('audit row renders outcome badge', async ({ page }) => {
     await page.goto('/audit');
-    await expect(page.getByText('success')).toBeVisible();
+    // Exact match: the "Success" KPI stat-card label is also a case-insensitive
+    // substring match for "success", which would otherwise resolve to 2 elements.
+    await expect(page.getByText('success', { exact: true })).toBeVisible();
   });
 
   // ── Dashboard ────────────────────────────────────────────────────────────
 
   test('audit dashboard shows KPI cards', async ({ page }) => {
     await page.goto('/audit/dashboard');
-    await expect(page.getByText(/observation/i)).toBeVisible();
+    // Several elements legitimately match /observation/i (subtitle, KPI label,
+    // quick-link) — any one of them proves the dashboard rendered.
+    await expect(page.getByText(/observation/i).first()).toBeVisible();
   });
 
   // ── Observations list ─────────────────────────────────────────────────────
 
   test('audit observations list shows heading and column headers', async ({ page }) => {
     await page.goto('/audit/observations');
-    await expect(page.getByRole('heading', { name: /observation/i })).toBeVisible();
-    await expect(page.getByRole('columnheader', { name: /Obs No/i }).or(page.getByRole('columnheader', { name: /No/i })).first()).toBeVisible();
+    // level: 1 targets the page's <h1> specifically — the "Audit observations"
+    // card also has an <h3> that matches the same case-insensitive regex.
+    await expect(page.getByRole('heading', { name: /observation/i, level: 1 })).toBeVisible();
+    await expect(page.getByRole('columnheader', { name: 'Obs' })).toBeVisible();
   });
 
   test('audit observations list shows seeded observation', async ({ page }) => {
@@ -55,7 +64,9 @@ test.describe('Audit', () => {
 
   test('audit observation detail shows heading', async ({ page }) => {
     await page.goto('/audit/observations/a0000000-0000-0000-0000-000000000001');
-    await expect(page.getByRole('heading', { name: /observation/i })).toBeVisible();
+    // Detail heading is "<Obs No> · <Department>" (e.g. "OBS-001 · —"), not the
+    // word "observation" — match the observation-number pattern instead.
+    await expect(page.getByRole('heading', { name: /OBS-/i, level: 1 })).toBeVisible();
   });
 
   test('audit observation detail shows breadcrumb', async ({ page }) => {
@@ -67,16 +78,19 @@ test.describe('Audit', () => {
 
   test('risk register page shows heading', async ({ page }) => {
     await page.goto('/audit/risk-register');
-    await expect(page.getByRole('heading', { name: /risk/i })).toBeVisible();
+    // level: 1 — the "Risk register" table card also has an <h3> matching /risk/i.
+    await expect(page.getByRole('heading', { name: /risk/i, level: 1 })).toBeVisible();
   });
 
   test('audit plan page shows heading', async ({ page }) => {
     await page.goto('/audit/plan');
-    await expect(page.getByRole('heading', { name: /plan/i })).toBeVisible();
+    // level: 1 — the "Audit plan" table card also has an <h3> matching /plan/i.
+    await expect(page.getByRole('heading', { name: /plan/i, level: 1 })).toBeVisible();
   });
 
   test('compliance page shows heading', async ({ page }) => {
     await page.goto('/audit/compliance');
-    await expect(page.getByRole('heading', { name: /compliance/i })).toBeVisible();
+    // level: 1 — the "Compliance requirements" card also has an <h3> matching /compliance/i.
+    await expect(page.getByRole('heading', { name: /compliance/i, level: 1 })).toBeVisible();
   });
 });

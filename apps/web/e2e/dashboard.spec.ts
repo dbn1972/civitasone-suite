@@ -4,6 +4,19 @@ import { authenticate } from './helpers/auth';
 test.describe('Dashboard', () => {
   test.beforeEach(async ({ page }) => {
     await authenticate(page);
+    // The dashboard renders a first-run onboarding tour (FirstRunTour.tsx) as a
+    // centred modal dialog whenever civitasone.tour.dashboard.v1 isn't set in
+    // localStorage -- true for every fresh E2E context. The dialog covers the
+    // whole viewport (position: fixed, inset: 0) and intercepts pointer events,
+    // so it blocks clicks on the module tiles beneath it. Seed the "already
+    // seen" flag before any page script runs so the tour never mounts.
+    await page.addInitScript(() => {
+      try {
+        window.localStorage.setItem('civitasone.tour.dashboard.v1', new Date().toISOString());
+      } catch {
+        /* localStorage unavailable -- tour would no-op anyway */
+      }
+    });
     await page.goto('/dashboard');
   });
 
@@ -18,13 +31,14 @@ test.describe('Dashboard', () => {
 
   test('clicking Finance tile navigates to /finance', async ({ page }) => {
     // The dashboard nav renders links with aria-label matching the module label.
-    // Use the one inside the modules <nav aria-label="Modules"> to avoid sidebar.
-    await page.locator('[aria-label="Modules"]').getByRole('link', { name: 'Finance' }).click();
+    // Use the one inside the modules nav (aria-label from i18n key
+    // home.yourModules -> "Your modules") to avoid the sidebar's own Finance link.
+    await page.locator('[aria-label="Your modules"]').getByRole('link', { name: 'Finance' }).click();
     await expect(page).toHaveURL(/\/finance/);
   });
 
   test('clicking Tenant Admin tile navigates to /tenant-admin', async ({ page }) => {
-    await page.locator('[aria-label="Modules"]').getByRole('link', { name: 'Tenant Admin' }).click();
+    await page.locator('[aria-label="Your modules"]').getByRole('link', { name: 'Tenant Admin' }).click();
     await expect(page).toHaveURL(/\/tenant-admin/);
   });
 });
