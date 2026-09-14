@@ -2,6 +2,7 @@ import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { exchangeAuthorizationCode } from "@civitasone/client-core";
 import { decodeUnverifiedClaims } from "@civitasone/auth";
+import { captureError } from "@civitasone/observability";
 import { getOidcConfig, COOKIE } from "@/lib/auth/config";
 
 const SECURE = process.env.NODE_ENV === "production";
@@ -48,11 +49,16 @@ export async function GET(req: Request) {
     // the gateway) must not lock a user out of an otherwise-successful login
     // -- the same fail-open-for-availability reasoning SEC-006's own denylist
     // check uses on the READ side (plugin.ts / denylist.ts), applied
-    // symmetrically here on the WRITE side. A failure here is not silent:
-    // it's logged loudly, same as the token-exchange failure path below.
-    await createBackendSession(tokens.access_token, req).catch((err) => {
-      // eslint-disable-next-line no-console -- same rationale as the token-exchange catch below
-      console.error("[auth/callback] SEC-015: failed to create backend session record", err);
+    // symmetrically here on the WRITE side. SEC-027: a failure here is not
+    // silent -- createBackendSession() reports it via captureError() (a
+    // metric plus a structured log line, this codebase's fleet-wide
+    // convention for exactly this "silent but important" failure class; see
+    // e.g. services/identity-service/src/shared/keycloak.ts), so it stays
+    // queryable/alertable instead of only a line in raw server logs.
+    await createBackendSession(tokens.access_token, req).catch(() => {
+      // Already reported inside createBackendSession() via captureError().
+      // This catch only stops the failure from surfacing as an unhandled
+      // rejection -- the fail-open contract above still applies.
     });
 
     return NextResponse.redirect(new URL("/dashboard", APP_URL));
@@ -75,21 +81,51 @@ export async function GET(req: Request) {
 // request body -- the decode below is only used to fill tenantId/userId in
 // the JSON body the endpoint requires; it is not the security boundary.
 async function createBackendSession(accessToken: string, req: Request): Promise<void> {
-  const claims = decodeUnverifiedClaims(accessToken);
-  const userId = claims?.sub;
-  const tenantId = claims?.tid ?? claims?.tenantId;
-  if (!userId || !tenantId) {
-    throw new Error("access token missing sub/tid claims");
-  }
-  const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
-  const device = req.headers.get("user-agent") ?? undefined;
+  // SEC-027 review note: decodeUnverifiedClaims() used to run outside this
+  // try block, so a claims-parse throw would bypass captureError() entirely.
+  // In practice decodeUnverifiedClaims() (jwt.decode() under the hood)
+  // returns null rather than throwing on malformed input, so this was
+  // low-risk -- but it's now inside the guarded region so EVERY failure path
+  // here is captured, not just the network/validation ones.
+  let userId: string | undefined;
+  let tenantId: string | undefined;
+  try {
+    const claims = decodeUnverifiedClaims(accessToken);
+    userId = claims?.sub;
+    tenantId = claims?.tid ?? claims?.tenantId;
+    if (!userId || !tenantId) {
+      throw new Error("access token missing sub/tid claims");
+    }
+    const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
+    const device = req.headers.get("user-agent") ?? undefined;
 
-  const res = await fetch(`${GATEWAY}/api/identity/sessions`, {
-    method: "POST",
-    headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ tenantId, userId, ip, device }),
-  });
-  if (!res.ok) {
-    throw new Error(`identity-service POST /identity/sessions responded ${res.status}: ${await res.text().catch(() => "")}`);
+    const res = await fetch(`${GATEWAY}/api/identity/sessions`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ tenantId, userId, ip, device }),
+    });
+    if (!res.ok) {
+      throw new Error(`identity-service POST /identity/sessions responded ${res.status}: ${await res.text().catch(() => "")}`);
+    }
+  } catch (err) {
+    // SEC-027: this best-effort write had zero operational signal beyond a
+    // raw console.error -- captureError() gives it an in-memory counter
+    // (queryable via getCapturedErrorCountByService("web")) and a
+    // structured JSON log line an operator can grep/alert on today. It is
+    // NOT YET Prometheus-scraped (apps/web has no /metrics route and
+    // infra/observability/prometheus.yml has no scrape job for it, unlike
+    // every Fastify backend service via registerOpsRoutes()) -- see the PR
+    // description for why that's a deliberately separate follow-up, not
+    // bundled into this fix. Context is userId/tenantId only -- never
+    // accessToken/tokens -- matching what this codebase's other
+    // captureError() call sites already treat as safe (see
+    // services/identity-service/src/shared/keycloak.ts).
+    captureError(err, {
+      service: "web",
+      event: "auth_callback_session_create_failed",
+      userId,
+      tenantId,
+    });
+    throw err;
   }
 }

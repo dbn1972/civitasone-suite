@@ -55,6 +55,9 @@ importers:
       '@civitasone/client-core':
         specifier: workspace:*
         version: link:../../packages/client-core
+      '@civitasone/observability':
+        specifier: workspace:*
+        version: link:../../packages/observability
       '@civitasone/schemas':
         specifier: workspace:*
         version: link:../../packages/schemas
