@@ -1,6 +1,7 @@
 import { PageHeader, StatGrid, StatCard, Card, DataTable } from "../../../_components/ds";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
+import { getTranslations } from "next-intl/server";
 
 type Row = {
   id: string;
@@ -28,56 +29,56 @@ async function getData(): Promise<LoaderResult<Row[]>> {
   return r;
 }
 
-const COLUMNS: { key: keyof Row & string; label: string; cellType?: "status" }[] = [
-  { key: "card_number",        label: "Card #" },
-  { key: "holder_name",        label: "Holder" },
-  { key: "designation",        label: "Designation" },
-  { key: "department",         label: "Department" },
-  { key: "card_type",          label: "Type" },
-  { key: "valid_until",        label: "Valid Until" },
-  { key: "verification_count", label: "Verifications" },
-  { key: "status",             label: "Status", cellType: "status" },
-];
-
 export default async function IdCardsPage() {
+  const t = await getTranslations("idCards");
   const { data: items, source } = await getData();
 
   const active      = items.filter((i) => i.status === "active").length;
   const suspended   = items.filter((i) => i.status === "suspended").length;
-  const employee    = items.filter((i) => i.card_type === "employee").length;
   const vendor      = items.filter((i) => i.card_type === "vendor_staff" || i.card_type === "project_team").length;
+
+  const COLUMNS: { key: keyof Row & string; label: string; cellType?: "status" }[] = [
+    { key: "card_number",        label: t("colCardNumber") },
+    { key: "holder_name",        label: t("colHolder") },
+    { key: "designation",        label: t("colDesignation") },
+    { key: "department",         label: t("colDepartment") },
+    { key: "card_type",          label: t("colType") },
+    { key: "valid_until",        label: t("colValidUntil") },
+    { key: "verification_count", label: t("colVerifications") },
+    { key: "status",             label: t("colStatus"), cellType: "status" },
+  ];
 
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
-        title="ID Card Management"
-        subtitle="Issue, manage, and verify digital identity cards for employees and vendor staff."
+        title={t("title")}
+        subtitle={t("subtitle")}
         back="/hr"
       />
-      <DataSourceBadge source={source} message="Couldn't load — showing nothing" />
+      <DataSourceBadge source={source} message={t("dataSourceErrorMessage")} />
       <StatGrid>
-        <StatCard icon="🆔" iconBg="#e6f0ff" label="Total Cards"    value={items.length} />
-        <StatCard icon="✅"          iconBg="#e6f7f0" label="Active"         value={active} />
-        <StatCard icon="⏸️"          iconBg="#fffbe6" label="Suspended"      value={suspended} />
-        <StatCard icon="👥"          iconBg="#f5f5f5" label="Vendor / Project" value={vendor} />
+        <StatCard icon="🆔" iconBg="#e6f0ff" label={t("statTotalCardsLabel")}    value={items.length} />
+        <StatCard icon="✅"          iconBg="#e6f7f0" label={t("statActiveLabel")}         value={active} />
+        <StatCard icon="⏸️"          iconBg="#fffbe6" label={t("statSuspendedLabel")}      value={suspended} />
+        <StatCard icon="👥"          iconBg="#f5f5f5" label={t("statVendorProjectLabel")} value={vendor} />
       </StatGrid>
-      <Card title="ID Cards">
+      <Card title={t("cardTitle")}>
         <DataTable<Row>
           columns={COLUMNS}
           rows={items}
           sortable
           filterable
-          filterPlaceholder="Filter by holder, card number, type or department…"
+          filterPlaceholder={t("filterPlaceholder")}
           pageSize={20}
           emptyIcon="🆔"
-          emptyTitle="No ID cards issued"
-          // HR-A deep-verify finding: this pointed users at a "card management
-          // portal" that does not exist anywhere in the app (repo-wide grep
+          emptyTitle={t("emptyTitle")}
+          // HR-A deep-verify finding: this pointed users at a card management
+          // portal that does not exist anywhere in the app (repo-wide grep
           // confirms zero matches beyond this string) -- this page is a
           // read-only list (no issue/suspend/revoke UI at all, though the
           // backend fully supports all of it). Removed the dead reference
           // rather than invent a destination.
-          emptyMessage="ID cards for employees and vendor staff appear here once issued by HR administration."
+          emptyMessage={t("emptyMessage")}
         />
       </Card>
     </main>

@@ -6,6 +6,7 @@
  * Client-side filter by employee name and event type; 15 rows per page.
  */
 import { useState, useMemo } from "react";
+import { useTranslations } from "next-intl";
 import { formatIndianDate } from "@/lib/formatters";
 
 export type ServiceEntry = {
@@ -21,22 +22,26 @@ export type ServiceEntry = {
   status?: string;
 } & Record<string, unknown>;
 
-const EVENT_CFG: Record<string, { icon: string; color: string; bg: string; label: string }> = {
-  join:        { icon: "🎉", color: "#16a34a", bg: "#f0fdf4", label: "Joining" },
-  transfer:    { icon: "🔄", color: "#2563eb", bg: "#eff6ff", label: "Transfer" },
-  posting:     { icon: "📍", color: "#2563eb", bg: "#eff6ff", label: "Posting" },
-  promotion:   { icon: "⬆️", color: "#7c3aed", bg: "#f5f3ff", label: "Promotion" },
-  increment:   { icon: "💹", color: "#0891b2", bg: "#ecfeff", label: "Increment" },
-  leave:       { icon: "🌴", color: "#d97706", bg: "#fffbeb", label: "Leave" },
-  deputation:  { icon: "🏛️", color: "#0891b2", bg: "#ecfeff", label: "Deputation" },
-  confirmation:{ icon: "✅", color: "#16a34a", bg: "#f0fdf4", label: "Confirmation" },
-  suspension:  { icon: "⛔", color: "#dc2626", bg: "#fef2f2", label: "Suspension" },
-  retirement:  { icon: "📤", color: "#64748b", bg: "#f8fafc", label: "Retirement" },
-  other:       { icon: "📌", color: "#64748b", bg: "#f8fafc", label: "Other" },
-};
+type Translator = ReturnType<typeof useTranslations>;
 
-function EventBadge({ type }: { type: string }) {
-  const cfg = EVENT_CFG[type] ?? EVENT_CFG.other;
+function eventConfig(t: Translator): Record<string, { icon: string; color: string; bg: string; label: string }> {
+  return {
+    join:        { icon: "🎉", color: "#16a34a", bg: "#f0fdf4", label: t("eventJoining") },
+    transfer:    { icon: "🔄", color: "#2563eb", bg: "#eff6ff", label: t("eventTransfer") },
+    posting:     { icon: "📍", color: "#2563eb", bg: "#eff6ff", label: t("eventPosting") },
+    promotion:   { icon: "⬆️", color: "#7c3aed", bg: "#f5f3ff", label: t("eventPromotion") },
+    increment:   { icon: "💹", color: "#0891b2", bg: "#ecfeff", label: t("eventIncrement") },
+    leave:       { icon: "🌴", color: "#d97706", bg: "#fffbeb", label: t("eventLeave") },
+    deputation:  { icon: "🏛️", color: "#0891b2", bg: "#ecfeff", label: t("eventDeputation") },
+    confirmation:{ icon: "✅", color: "#16a34a", bg: "#f0fdf4", label: t("eventConfirmation") },
+    suspension:  { icon: "⛔", color: "#dc2626", bg: "#fef2f2", label: t("eventSuspension") },
+    retirement:  { icon: "📤", color: "#64748b", bg: "#f8fafc", label: t("eventRetirement") },
+    other:       { icon: "📌", color: "#64748b", bg: "#f8fafc", label: t("eventOther") },
+  };
+}
+
+function EventBadge({ type, eventCfg }: { type: string; eventCfg: Record<string, { icon: string; color: string; bg: string; label: string }> }) {
+  const cfg = eventCfg[type] ?? eventCfg.other;
   return (
     <span
       style={{
@@ -60,6 +65,8 @@ interface Props {
 }
 
 export function ServiceBookView({ entries, employeeId }: Props) {
+  const t = useTranslations("serviceBookView");
+  const eventCfg = eventConfig(t);
   const [page, setPage]           = useState(0);
   const [empFilter, setEmpFilter] = useState(employeeId ?? "");
   const [typeFilter, setTypeFilter] = useState("all");
@@ -100,6 +107,8 @@ export function ServiceBookView({ entries, employeeId }: Props) {
   const start = Math.max(0, Math.min(safePage - 2, totalPages - 5));
   for (let i = start; i < Math.min(start + 5, totalPages); i++) pageNumbers.push(i);
 
+  const COLUMNS = [t("colNum"), t("colDate"), t("colEvent"), t("colEmployee"), t("colFrom"), t("colToDetail"), t("colOrderRef")];
+
   return (
     <div>
       {/* Filter bar */}
@@ -111,7 +120,7 @@ export function ServiceBookView({ entries, employeeId }: Props) {
       >
         <input
           type="search"
-          placeholder="Search employee…"
+          placeholder={t("searchEmployeePlaceholder")}
           value={empFilter}
           onChange={(e) => { setEmpFilter(e.target.value); setPage(0); }}
           style={{
@@ -120,7 +129,7 @@ export function ServiceBookView({ entries, employeeId }: Props) {
             fontSize: "0.875rem", background: "var(--bg, #fff)",
             color: "var(--ink)", flex: "1 1 180px", minWidth: 160,
           }}
-          aria-label="Filter by employee name"
+          aria-label={t("filterByEmployeeAriaLabel")}
         />
         <select
           value={typeFilter}
@@ -131,16 +140,16 @@ export function ServiceBookView({ entries, employeeId }: Props) {
             fontSize: "0.875rem", background: "var(--bg, #fff)",
             color: "var(--ink)",
           }}
-          aria-label="Filter by event type"
+          aria-label={t("filterByEventTypeAriaLabel")}
         >
-          {eventTypes.map((t) => (
-            <option key={t} value={t}>
-              {t === "all" ? "All Event Types" : (EVENT_CFG[t]?.label ?? t)}
+          {eventTypes.map((ty) => (
+            <option key={ty} value={ty}>
+              {ty === "all" ? t("allEventTypes") : (eventCfg[ty]?.label ?? ty)}
             </option>
           ))}
         </select>
         <span style={{ fontSize: "0.8125rem", color: "var(--ink3)", marginLeft: "auto" }}>
-          {filtered.length} {filtered.length === 1 ? "entry" : "entries"}
+          {t("entryCount", { count: filtered.length })}
         </span>
       </div>
 
@@ -148,11 +157,11 @@ export function ServiceBookView({ entries, employeeId }: Props) {
       <div style={{ overflowX: "auto" }}>
         <table
           style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.875rem" }}
-          aria-label="Service book entries"
+          aria-label={t("tableAriaLabel")}
         >
           <thead>
             <tr style={{ background: "var(--bg2, #f8fafc)" }}>
-              {["#", "Date", "Event", "Employee", "From", "To / Detail", "Order Ref"].map(
+              {COLUMNS.map(
                 (h) => (
                   <th
                     key={h}
@@ -179,7 +188,7 @@ export function ServiceBookView({ entries, employeeId }: Props) {
                     color: "var(--ink3)", fontSize: "0.875rem",
                   }}
                 >
-                  No service entries match the current filter.
+                  {t("noEntriesMatch")}
                 </td>
               </tr>
             ) : (
@@ -208,7 +217,7 @@ export function ServiceBookView({ entries, employeeId }: Props) {
                       {formatIndianDate(entry.effectiveDate)}
                     </td>
                     <td style={{ padding: "10px 12px" }}>
-                      <EventBadge type={entry.eventType} />
+                      <EventBadge type={entry.eventType} eventCfg={eventCfg} />
                     </td>
                     <td style={{ padding: "10px 12px", fontWeight: 500 }}>
                       {entry.employee ?? entry.employeeId ?? "—"}
@@ -258,14 +267,17 @@ export function ServiceBookView({ entries, employeeId }: Props) {
           }}
         >
           <span style={{ color: "var(--ink3)" }}>
-            {safePage * PAGE_SIZE + 1}–
-            {Math.min(safePage * PAGE_SIZE + PAGE_SIZE, filtered.length)} of{" "}
-            {filtered.length}
+            {t("paginationRange", {
+              from: safePage * PAGE_SIZE + 1,
+              to: Math.min(safePage * PAGE_SIZE + PAGE_SIZE, filtered.length),
+              total: filtered.length,
+            })}
           </span>
           <div style={{ display: "flex", gap: 4 }}>
             <button
               onClick={() => gotoPage(safePage - 1)}
               disabled={safePage === 0}
+              aria-label={t("prevPageAriaLabel")}
               style={{
                 padding: "5px 12px", borderRadius: 5,
                 border: "1px solid var(--line)",
@@ -294,6 +306,7 @@ export function ServiceBookView({ entries, employeeId }: Props) {
             <button
               onClick={() => gotoPage(safePage + 1)}
               disabled={safePage >= totalPages - 1}
+              aria-label={t("nextPageAriaLabel")}
               style={{
                 padding: "5px 12px", borderRadius: 5,
                 border: "1px solid var(--line)",
