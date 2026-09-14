@@ -481,7 +481,7 @@ module.exports = {
   apps: [
     // ── Core platform ──────────────────────────────────────────────────────────
     svc("identity",     3001, "identity_svc",     "civitas_identity", { MFA_ENC_KEY }, { graceful: true }), // PERF-003
-    svc("tenant",       3002, "tenant_svc",        "civitas_tenant"),
+    svc("tenant",       3002, "tenant_svc",        "civitas_tenant", {}, { graceful: true }), // PERF-015
     svc("policy",       3003, "policy_svc",        "civitas_policy", {}, { graceful: true }), // PERF-015
     svc("audit",        3004, "audit_svc",         "civitas_audit", {}, { graceful: true }), // PERF-015
     svc("install",      3005, "install_svc",       "civitas_install"),
