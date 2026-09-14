@@ -1,4 +1,4 @@
-import { eq, and } from "drizzle-orm";
+import { eq, and, inArray, sql } from "drizzle-orm";
 import { db } from "../../shared/db.js";
 import { estabCommittees, estabMeetings, estabResolutions, estabAttendees, estabCompliance } from "./schema.js";
 import type { CommitteeInsert, MeetingInsert, MeetingRow, ResolutionInsert, ResolutionRow, AttendeeRow, ComplianceRow } from "./schema.js";
@@ -47,6 +47,36 @@ export async function findResolutionsByMeeting(meetingId: string, tenantId: stri
 export async function findAttendeesByMeeting(meetingId: string, tenantId: string): Promise<AttendeeRow[]> {
   return db.transaction((tx) => tx.select().from(estabAttendees)
     .where(and(eq(estabAttendees.meetingId, meetingId), eq(estabAttendees.tenantId, tenantId))));
+}
+
+/**
+ * PERF-005: batch loaders for queries.ts's listMeetingSummaries, which
+ * previously called findAttendeesByMeeting()/findResolutionsByMeeting() --
+ * full-row fetches used only for their `.length` -- once PER meeting row on
+ * the list page (2N+1). One grouped SQL COUNT per table instead.
+ */
+export async function countAttendeesByMeetingIds(meetingIds: string[], tenantId: string): Promise<Map<string, number>> {
+  const byMeeting = new Map<string, number>();
+  if (meetingIds.length === 0) return byMeeting;
+  const rows = await db.transaction((tx) => tx
+    .select({ meetingId: estabAttendees.meetingId, count: sql<number>`count(*)::int` })
+    .from(estabAttendees)
+    .where(and(eq(estabAttendees.tenantId, tenantId), inArray(estabAttendees.meetingId, meetingIds)))
+    .groupBy(estabAttendees.meetingId));
+  for (const row of rows) byMeeting.set(row.meetingId, row.count);
+  return byMeeting;
+}
+
+export async function countResolutionsByMeetingIds(meetingIds: string[], tenantId: string): Promise<Map<string, number>> {
+  const byMeeting = new Map<string, number>();
+  if (meetingIds.length === 0) return byMeeting;
+  const rows = await db.transaction((tx) => tx
+    .select({ meetingId: estabResolutions.meetingId, count: sql<number>`count(*)::int` })
+    .from(estabResolutions)
+    .where(and(eq(estabResolutions.tenantId, tenantId), inArray(estabResolutions.meetingId, meetingIds)))
+    .groupBy(estabResolutions.meetingId));
+  for (const row of rows) byMeeting.set(row.meetingId, row.count);
+  return byMeeting;
 }
 
 export async function insertCommittee(tx: Writer, row: CommitteeInsert): Promise<void> {
