@@ -53,6 +53,8 @@ vi.mock("../src/shared/infra.js", () => ({
 }));
 
 vi.mock("../src/modules/tasks/repo.js", () => ({
+  listAgents: vi.fn(async () => []),
+  getKpis: vi.fn(async () => []),
   findById: (...a: unknown[]) => H.taskFindByIdMock(...a),
   listByTenant: (...a: unknown[]) => H.taskListMock(...a),
   insert: vi.fn(),
@@ -61,6 +63,7 @@ vi.mock("../src/modules/tasks/repo.js", () => ({
 }));
 
 vi.mock("../src/modules/visits/repo.js", () => ({
+  listRecent: vi.fn(async () => ({ rows: [], total: 0 })),
   findById: (...a: unknown[]) => H.visitFindByIdMock(...a),
   findByTaskId: (...a: unknown[]) => H.visitFindByTaskMock(...a),
   findByAgent: (...a: unknown[]) => H.visitFindByAgentMock(...a),

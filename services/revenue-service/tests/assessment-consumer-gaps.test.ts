@@ -72,6 +72,14 @@ vi.mock("../src/modules/rate-engine/schema.js", () => ({
 }));
 
 vi.mock("../src/modules/rate-engine/domain.js", () => ({
+  DomainError: class DomainError extends Error {
+    code: string;
+    constructor(code: string, message: string) {
+      super(message);
+      this.code = code;
+      this.name = "DomainError";
+    }
+  },
   compute: vi.fn().mockReturnValue({
     principal: 120000n, rebate: 0n, penalty: 5000n, interest: 2000n, net: 127000n,
     snapshot: { net: "127000" },

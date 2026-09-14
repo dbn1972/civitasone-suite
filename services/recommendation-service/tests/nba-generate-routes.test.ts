@@ -51,6 +51,7 @@ vi.mock("../src/shared/infra.js", () => ({
 vi.mock("../src/modules/nba/repo.js", async () => {
   const actual = await import("../src/modules/nba/repo.js");
   return {
+  listAll: vi.fn(async () => ({ rows: [], total: 0 })),
     toView: actual.toView,
     findById: vi.fn(async () => null),
     listForProfile: (...a: unknown[]) => H.listForProfileMock(...a),
@@ -62,6 +63,7 @@ vi.mock("../src/modules/nba/repo.js", async () => {
 vi.mock("../src/modules/matrix/repo.js", async () => {
   const actual = await import("../src/modules/matrix/repo.js");
   return {
+  listEffectiveForTriggers: vi.fn(async () => []),
     toView: actual.toView,
     findById: vi.fn(async () => null),
     listByTenant: (...a: unknown[]) => H.matrixListMock(...a),

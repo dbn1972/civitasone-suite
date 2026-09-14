@@ -96,6 +96,8 @@ vi.mock("../src/modules/gl/repo.js", () => ({
   getTrialBalanceByPeriod: vi.fn(async () => []),
 }));
 vi.mock("../src/modules/budget/repo.js", () => ({
+  incrementBudgetUtilisedGuarded: vi.fn(async () => true),
+  incrementBudgetUtilisedForced: vi.fn(async () => undefined),
   findHeadByCodeTx: (...args: any[]) => findHeadByCodeTxMock(...args),
   findHeadByIdTx: vi.fn(async () => ({ id: "head-uuid", code: "0000", name: "Head" })),
   // DOM-007: postJournal() calls the tx-scoped findBudgetTx (not findBudget —

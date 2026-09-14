@@ -13,7 +13,8 @@
 import { describe, it, expect, vi } from "vitest";
 
 vi.mock("../src/shared/infra.js", () => ({ cache: { makeKey: (...p: string[]) => p.join(":"), getOrLoad: vi.fn(async (_k: string, fn: () => Promise<unknown>) => fn()) } }));
-vi.mock("../src/modules/dlt/repo.js", () => ({ findActiveByChannel: vi.fn(async () => []) }));
+vi.mock("../src/modules/dlt/repo.js", () => ({
+  findActiveByChannelInTx: vi.fn(async () => []), findActiveByChannel: vi.fn(async () => []) }));
 
 import { validateDltTemplate } from "../src/modules/dlt/validate.js";
 import { requiresDlt } from "../src/modules/dlt/guard.js";

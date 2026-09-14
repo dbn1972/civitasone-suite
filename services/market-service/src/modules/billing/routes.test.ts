@@ -55,6 +55,7 @@ vi.mock("./domain.js", async () => {
 });
 
 vi.mock("../allotments/repo.js", () => ({
+  list: vi.fn(async () => ({ rows: [], total: 0 })),
   findById: (...a: unknown[]) => H.allotmentsFindByIdMock(...a),
 }));
 

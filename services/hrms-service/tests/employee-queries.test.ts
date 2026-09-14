@@ -34,6 +34,7 @@ const { findByIdMock, rowsMock } = vi.hoisted(() => ({
 // set, the manager's row) through repo.findById -- mock that module boundary
 // directly rather than the underlying db primitives.
 vi.mock("../src/modules/employee/repo.js", () => ({
+  listByTenant: vi.fn(async () => []),
   findById: (...a: unknown[]) => findByIdMock(...a),
 }));
 

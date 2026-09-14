@@ -66,6 +66,7 @@ vi.mock("../src/shared/infra.js", () => ({
 vi.mock("../src/modules/nba/repo.js", async () => {
   const actual = await import("../src/modules/nba/repo.js");
   return {
+  listAll: vi.fn(async () => ({ rows: [], total: 0 })),
     toView: actual.toView,
     findById: (...a: unknown[]) => H.nbaFindByIdMock(...a),
     listForProfile: vi.fn(async () => ({ rows: [], total: 0 })),

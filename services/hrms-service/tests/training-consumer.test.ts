@@ -24,6 +24,7 @@ vi.mock("../src/shared/outbox.js", () => ({
   markProcessed: vi.fn(async () => true),
 }));
 vi.mock("../src/modules/training/repo.js", () => ({
+  completeNomination: vi.fn(async () => null),
   insertTraining: (...a: any[]) => insertTrainingMock(...a),
   insertNomination: (...a: any[]) => insertNominationMock(...a),
 }));

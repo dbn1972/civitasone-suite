@@ -37,6 +37,7 @@ vi.mock("../src/shared/infra.js", () => ({
   cache: { invalidate: vi.fn(async () => undefined), makeKey: (...parts: string[]) => parts.join(":") },
 }));
 vi.mock("../src/modules/attendance/repo.js", () => ({
+  upsertLock: vi.fn(async () => undefined),
   upsertAttendance: (...a: any[]) => upsertAttendanceMock(...a),
   insertRegularisation: (...a: any[]) => insertRegularisationMock(...a),
 }));
