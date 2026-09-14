@@ -3,6 +3,7 @@ import { useMemo, useState } from "react";
 import { PageHeader } from "@/app/_components/ds";
 import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
 import type { AdminOrgUnit } from "@/app/_data/loaders";
+import { toHumanError } from "@/lib/messages";
 
 // Matches tenant-service's real, flat org-unit taxonomy (org-hierarchy
 // module) — there is no "Ministry" level in the backing store, so this page
@@ -33,6 +34,18 @@ function buildTree(units: AdminOrgUnit[]): TreeNode[] {
   return roots;
 }
 
+/**
+ * Plain-language failure message for a failed org-unit call. This is a
+ * plain async API helper, not a component, so it can't use the
+ * useFormError hook; toHumanError is the same catalogued-message building
+ * block that hook is built on — never the backend's own `message` or the
+ * raw HTTP status. See docs/ENTERPRISE-GAP-REPORT-2026-09-07.md UX-003/UX-016.
+ */
+function orgUnitError(): string {
+  const human = toHumanError("save", { area: "organisational unit" });
+  return `${human.what} ${human.next}`;
+}
+
 async function callApi(path: string, method: string, body?: unknown): Promise<{ ok: boolean; message?: string }> {
   try {
     const res = await fetch(`/api/proxy/v1/admin/org-hierarchy${path}`, {
@@ -40,13 +53,10 @@ async function callApi(path: string, method: string, body?: unknown): Promise<{ 
       headers: { "content-type": "application/json" },
       body: body !== undefined ? JSON.stringify(body) : undefined,
     });
-    if (!res.ok) {
-      const json = await res.json().catch(() => ({}));
-      return { ok: false, message: (json as { message?: string }).message ?? `HTTP ${res.status}` };
-    }
+    if (!res.ok) return { ok: false, message: orgUnitError() };
     return { ok: true };
-  } catch (err) {
-    return { ok: false, message: err instanceof Error ? err.message : "Network error" };
+  } catch {
+    return { ok: false, message: orgUnitError() };
   }
 }
 
@@ -76,7 +86,7 @@ function CreateUnitForm({
       ...(code.trim() ? { code: code.trim() } : {}),
     });
     setBusy(false);
-    if (!result.ok) { setError(result.message ?? "Create failed"); return; }
+    if (!result.ok) { setError(result.message ?? null); return; }
     onDone();
   }
 

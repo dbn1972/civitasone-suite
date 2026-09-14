@@ -134,6 +134,7 @@ async function balanceOf(enrolmentId: string): Promise<bigint> {
   return row.pointsBalance;
 }
 
+// FLAKY-SKIP: Requires a real, reachable Postgres (probed at startup) for money-correctness assertions; not provisioned in standard CI. (expires: 2026-12-13)
 describe.skipIf(!reachable)("loyalty repo — real Postgres (money correctness)", () => {
   beforeAll(async () => {
     await asTenant(TENANT, () =>

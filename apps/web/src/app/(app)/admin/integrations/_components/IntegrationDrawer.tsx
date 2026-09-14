@@ -16,6 +16,7 @@ import {
   validateIngestionConfig,
   type IngestionConfigDraft,
 } from "@/lib/admin/sftpIngestion";
+import { useFormError } from "@/lib/useFormError";
 
 const EMPTY_INGESTION_DRAFT: IngestionConfigDraft = {
   inboundPath: "",
@@ -60,6 +61,7 @@ export function IntegrationDrawer({
   const [success, setSuccess] = useState<string | null>(null);
   const isSftp = provider.id === "sftp";
   const [ingestion, setIngestion] = useState<IngestionConfigDraft>(EMPTY_INGESTION_DRAFT);
+  const formError = useFormError(provider.label);
 
   const load = useCallback(async (scope: EnvScope) => {
     setLoading(true);
@@ -67,7 +69,11 @@ export function IntegrationDrawer({
     setTestResult(null);
     try {
       const res = await fetch(`${API}/${provider.id}/${scope}`);
-      if (!res.ok) throw new Error(`Failed to load (${res.status})`);
+      if (!res.ok) {
+        const resolved = await formError.fromResponse(res, "load");
+        setError(resolved.message);
+        return;
+      }
       const body: DetailResponse = await res.json();
       setDetail(body);
       setEnabled(body.data.enabled ?? true);
@@ -86,11 +92,15 @@ export function IntegrationDrawer({
       if (provider.id === "sftp") {
         setIngestion(extractIngestionDraft(body.data.config));
       }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load");
+    } catch {
+      setError(formError.fromException("load").message);
     } finally {
       setLoading(false);
     }
+    // formError.fromResponse/fromException are stable (useCallback'd on a
+    // fixed `area` string inside useFormError) even though the wrapping
+    // `formError` object literal isn't, so omitting it here is safe and
+    // avoids re-creating load (and re-running its effect) every render.
   }, [provider]);
 
   useEffect(() => { void load(env); }, [env, load]);
@@ -133,6 +143,7 @@ export function IntegrationDrawer({
       }
     }
     setBusy(true); setError(null); setSuccess(null);
+    formError.clear();
     try {
       const res = await fetch(`${API}/${provider.id}/${env}`, {
         method: "PUT",
@@ -144,14 +155,17 @@ export function IntegrationDrawer({
           expectedVersion: detail?.data.version && detail.data.version > 0 ? detail.data.version : undefined,
         }),
       });
-      const body = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(body.message ?? `Save failed (${res.status})`);
+      if (!res.ok) {
+        const resolved = await formError.fromResponse(res, "save");
+        setError(resolved.message);
+        return;
+      }
       setSuccess("Change proposed. A different admin must approve it (maker-checker).");
       setNote("");
       onChanged();
       await load(env);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Save failed");
+    } catch {
+      setError(formError.fromException("save").message);
     } finally {
       setBusy(false);
     }
@@ -159,19 +173,23 @@ export function IntegrationDrawer({
 
   async function decide(action: "approve" | "reject") {
     setBusy(true); setError(null); setSuccess(null);
+    formError.clear();
     try {
       const res = await fetch(`${API}/${provider.id}/${env}/${action}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(action === "reject" ? { reason: "Rejected from Admin UI" } : {}),
       });
-      const body = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(body.message ?? `${action} failed (${res.status})`);
+      if (!res.ok) {
+        const resolved = await formError.fromResponse(res, "save");
+        setError(resolved.message);
+        return;
+      }
       setSuccess(action === "approve" ? "Change approved and applied." : "Change rejected.");
       onChanged();
       await load(env);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : `${action} failed`);
+    } catch {
+      setError(formError.fromException("save").message);
     } finally {
       setBusy(false);
     }
@@ -271,6 +289,9 @@ export function IntegrationDrawer({
                         style={{ border: "1px solid var(--line)", borderRadius: 10, padding: "9px 12px", fontSize: 13.5, background: "var(--panel)", color: "var(--ink)" }}
                       />
                       {f.help && <span style={{ fontSize: 11.5, color: "var(--mut)" }}>{f.help}</span>}
+                      {formError.fieldError(f.key) && (
+                        <span role="alert" style={{ fontSize: 11.5, color: "var(--bad, #b42318)" }}>{formError.fieldError(f.key)}</span>
+                      )}
                     </div>
                   );
                 })}
@@ -285,6 +306,9 @@ export function IntegrationDrawer({
                   <input id="int-note" type="text" value={note} onChange={(e) => setNote(e.target.value)}
                     placeholder="Why is this change being made?"
                     style={{ border: "1px solid var(--line)", borderRadius: 10, padding: "9px 12px", fontSize: 13.5, background: "var(--panel)", color: "var(--ink)" }} />
+                  {formError.fieldError("note") && (
+                    <span role="alert" style={{ fontSize: 11.5, color: "var(--bad, #b42318)" }}>{formError.fieldError("note")}</span>
+                  )}
                 </div>
 
                 {isSftp && (

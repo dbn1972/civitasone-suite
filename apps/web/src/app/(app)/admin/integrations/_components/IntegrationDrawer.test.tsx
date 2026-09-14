@@ -92,4 +92,36 @@ describe("IntegrationDrawer", () => {
     fireEvent.click(screen.getByText("Close"));
     expect(onClose).toHaveBeenCalled();
   });
+
+  /**
+   * UX-016: `save`/`decide`/`load` used to throw `Error(body.message ??
+   * \`Save failed (${res.status})\`)` (and the equivalent for approve/
+   * reject) and re-display `err.message` verbatim — echoing either the raw
+   * HTTP status or the backend's own error text. The same class of leak
+   * useFormError closes fleet-wide (UX-003).
+   */
+  describe("IntegrationDrawer — UX-016 clerk-safe errors", () => {
+    it("shows a clerk-safe message, never the raw HTTP status or backend text, when Propose change fails", async () => {
+      const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
+        if (init?.method === "PUT") {
+          return {
+            ok: false,
+            status: 409,
+            json: async () => ({ message: "version conflict: config changed since load" }),
+          } as Response;
+        }
+        return mockDetail() as unknown as Response;
+      });
+      vi.stubGlobal("fetch", fetchMock);
+
+      render(<IntegrationDrawer provider={anthropic} initialEnv="prod" onClose={() => {}} onChanged={() => {}} />);
+      await waitFor(() => expect(screen.getByLabelText(/Model/)).toBeInTheDocument());
+      fireEvent.click(screen.getByText(/Propose change/));
+
+      const alert = await screen.findByRole("alert");
+      await waitFor(() => expect(alert).toHaveTextContent(/couldn't save/i));
+      expect(alert.textContent).not.toMatch(/version conflict/i);
+      expect(alert.textContent).not.toMatch(/\b409\b/);
+    });
+  });
 });

@@ -3,6 +3,7 @@ import { useMemo, useState } from "react";
 import { PageHeader, StatGrid, StatCard } from "@/app/_components/ds";
 import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
 import type { AdminRoleSummary, RoleFeatureGrant } from "@/app/_data/loaders";
+import { toHumanError } from "@/lib/messages";
 
 // Curated catalogue of selectable feature keys — there is no backend
 // registry of "every feature key that could ever exist" to load (the
@@ -21,6 +22,19 @@ const FEATURE_KEYS = [
   "admin.settings", "admin.users",
 ];
 
+/**
+ * Plain-language failure message for a failed role-feature grant/revoke
+ * call. This is a plain async API helper, not a component, so it can't use
+ * the useFormError hook; toHumanError is the same catalogued-message
+ * building block that hook is built on — never the backend's own `message`
+ * or the raw HTTP status. See docs/ENTERPRISE-GAP-REPORT-2026-09-07.md
+ * UX-003/UX-016.
+ */
+function roleFeatureError(): string {
+  const human = toHumanError("save", { area: "role feature grant" });
+  return `${human.what} ${human.next}`;
+}
+
 async function callApi(path: string, method: string, body?: unknown): Promise<{ ok: boolean; message?: string; json?: unknown }> {
   try {
     const res = await fetch(`/api/proxy/v1/policy/role-features${path}`, {
@@ -29,10 +43,10 @@ async function callApi(path: string, method: string, body?: unknown): Promise<{ 
       body: body !== undefined ? JSON.stringify(body) : undefined,
     });
     const json = await res.json().catch(() => undefined);
-    if (!res.ok) return { ok: false, message: (json as { message?: string } | undefined)?.message ?? `HTTP ${res.status}` };
+    if (!res.ok) return { ok: false, message: roleFeatureError() };
     return { ok: true, json };
-  } catch (err) {
-    return { ok: false, message: err instanceof Error ? err.message : "Network error" };
+  } catch {
+    return { ok: false, message: roleFeatureError() };
   }
 }
 

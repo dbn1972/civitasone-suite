@@ -3,16 +3,29 @@ import { useEffect, useMemo, useState } from "react";
 import { PageHeader, StatCard } from "@/app/_components/ds";
 import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
 import type { AdminRoleSummary, AdminPermissionSummary } from "@/app/_data/loaders";
+import { toHumanError, type MessageKind } from "@/lib/messages";
+
+/**
+ * Plain-language failure message for a failed role-permissions read/write.
+ * These are plain async API helpers, not components, so they can't use the
+ * useFormError hook; toHumanError is the same catalogued-message building
+ * block that hook is built on — never the backend's own `message` or the
+ * raw HTTP status. See docs/ENTERPRISE-GAP-REPORT-2026-09-07.md UX-003/UX-016.
+ */
+function rolePermissionsError(kind: MessageKind): string {
+  const human = toHumanError(kind, { area: "role permissions" });
+  return `${human.what} ${human.next}`;
+}
 
 async function fetchRolePermissions(roleId: string): Promise<{ ok: boolean; keys?: string[]; message?: string }> {
   try {
     const res = await fetch(`/api/proxy/v1/admin/roles/${roleId}`);
+    if (!res.ok) return { ok: false, message: rolePermissionsError("load") };
     const body = await res.json().catch(() => undefined);
-    if (!res.ok) return { ok: false, message: (body as { message?: string } | undefined)?.message ?? `HTTP ${res.status}` };
     const permissions = (body as { permissions?: unknown })?.permissions;
     return { ok: true, keys: Array.isArray(permissions) ? permissions.map(String) : [] };
-  } catch (err) {
-    return { ok: false, message: err instanceof Error ? err.message : "Network error" };
+  } catch {
+    return { ok: false, message: rolePermissionsError("load") };
   }
 }
 
@@ -23,13 +36,10 @@ async function saveRolePermissions(roleId: string, permissionKeys: string[]): Pr
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ permissionKeys }),
     });
-    if (!res.ok) {
-      const body = await res.json().catch(() => ({}));
-      return { ok: false, message: (body as { message?: string }).message ?? `HTTP ${res.status}` };
-    }
+    if (!res.ok) return { ok: false, message: rolePermissionsError("save") };
     return { ok: true };
-  } catch (err) {
-    return { ok: false, message: err instanceof Error ? err.message : "Network error" };
+  } catch {
+    return { ok: false, message: rolePermissionsError("save") };
   }
 }
 
@@ -97,7 +107,7 @@ export function RolesPermissionsManager({
     const result = await saveRolePermissions(selectedRoleId, [...selected]);
     if (!result.ok) {
       setSaveState("error");
-      setSaveError(result.message ?? "Save failed");
+      setSaveError(result.message ?? null);
       return;
     }
     setBaseline(new Set(selected));
@@ -142,7 +152,7 @@ export function RolesPermissionsManager({
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
             {saveState === "saved" && <span role="status" style={{ fontSize: 12, color: "#027a48" }}>Saved.</span>}
-            {saveState === "error" && <span role="alert" style={{ fontSize: 12, color: "#b42318" }}>{saveError ?? "Save failed."}</span>}
+            {saveState === "error" && <span role="alert" style={{ fontSize: 12, color: "#b42318" }}>{saveError}</span>}
             <button
               type="button"
               className="btn primary sm"

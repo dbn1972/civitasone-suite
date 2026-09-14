@@ -53,6 +53,7 @@ function wireTenantAwareQueue(q: Queue): Queue {
   return q;
 }
 
+// FLAKY-SKIP: Requires DATABASE_URL/DB_URL against a real Postgres for the SEC-006 denylist consumer wiring; unset in standard CI so this suite never executes there. (expires: 2026-12-13)
 describe.skipIf(!RUN_DB)("sessions consumer — SEC-006 denylist wiring (real consumer, real Postgres)", () => {
   let repo: typeof import("../src/modules/sessions/repo.js");
   let db: any;

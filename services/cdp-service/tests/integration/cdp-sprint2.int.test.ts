@@ -95,6 +95,7 @@ async function createSegment(tenantId: string, criteria: Record<string, unknown>
   return id;
 }
 
+// FLAKY-SKIP: Requires a real, reachable Postgres (probed at startup); not provisioned in standard CI so this suite never executes there. (expires: 2026-12-13)
 describe.skipIf(!reachable)("cdp sprint-2 repos — real Postgres", () => {
   afterAll(async () => {
     for (const tenantId of [TENANT_A, TENANT_B]) {

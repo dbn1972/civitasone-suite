@@ -554,6 +554,39 @@ jobs:
         continue-on-error: true
         run: node scripts/ci/evidence-suite-dbs-guard.mjs
 
+      # REL-014: the flaky-test policy had no enforcement — 12 hard-skipped
+      # tests (.skip/.todo/xdescribe/xit/xtest) and 36 conditionally-skipped
+      # tests (.skipIf on an unreachable dependency, plus Playwright's
+      # test.skip(condition, msg) runtime form) passed CI silently, with no
+      # required reason, no ticket, no expiry and no report anyone would
+      # actually see — a skip added to turn a red build green could sit
+      # forever with nobody the wiser. Pure text analysis (no live DB
+      # needed), so it runs here like the guards above. Unit tests first
+      # (fixture coverage for the classifier/comment-parser), then the guard
+      # against the real tree (ratchet: fails on a NEW skip not yet added to
+      # scripts/ci/flaky-skip-baseline.json via --write-baseline, on a STALE
+      # baseline entry, and on any skip whose `// FLAKY-SKIP:` comment is
+      # missing, empty, or past its `expires` date — same expiring-allowlist
+      # mechanic as scripts/ci/cve-audit-gate.mjs). The inventory is written
+      # to $GITHUB_STEP_SUMMARY too, so it shows up on the run page itself
+      # instead of only in scrollback.
+      #
+      # Originally shipped with `if: always()` on both steps below as a
+      # standalone opt-out of exactly the REL-039 fail-fast starvation this
+      # commit fixes for the whole job (see the blame on this comment for
+      # the original reasoning) — now redundant and replaced with the same
+      # id + continue-on-error + aggregate pattern as every other guard in
+      # this job, so these two are covered by the general fix instead of
+      # carrying their own one-off workaround.
+      - name: Flaky-skip guard unit tests (REL-014)
+        id: flaky-skip-guard-tests
+        continue-on-error: true
+        run: pnpm exec vitest run tests/architecture/flaky-skip-guard.test.ts
+      - name: Flaky-skip guard (every skip/skipIf must be inventoried + carry a reason or expiry, REL-014)
+        id: flaky-skip-guard
+        continue-on-error: true
+        run: node scripts/ci/flaky-skip-guard.mjs
+
       # REL-039: this job's actual gate. Every guard above always reports
       # its own real outcome now instead of being skipped, but continue-on-
       # error also forces every one of those steps' `conclusion` to
@@ -591,6 +624,8 @@ jobs:
           R_NESTED_TX: ${{ steps.nested-tx-guard.outcome }}
           R_EVIDENCE_SUITE_DBS_TESTS: ${{ steps.evidence-suite-dbs-guard-tests.outcome }}
           R_EVIDENCE_SUITE_DBS: ${{ steps.evidence-suite-dbs-guard.outcome }}
+          R_FLAKY_SKIP_GUARD_TESTS: ${{ steps.flaky-skip-guard-tests.outcome }}
+          R_FLAKY_SKIP_GUARD: ${{ steps.flaky-skip-guard.outcome }}
         run: |
           fail=0
           check() {
@@ -628,6 +663,8 @@ jobs:
           check "Nested-transaction guard" "$R_NESTED_TX"
           check "Evidence-suite DBs guard unit tests" "$R_EVIDENCE_SUITE_DBS_TESTS"
           check "Evidence-suite DBs guard" "$R_EVIDENCE_SUITE_DBS"
+          check "Flaky-skip guard unit tests" "$R_FLAKY_SKIP_GUARD_TESTS"
+          check "Flaky-skip guard" "$R_FLAKY_SKIP_GUARD"
           if [ "$fail" = "1" ]; then
             echo "One or more architecture guard steps failed -- see the individual step logs above (each now reports its own real result, never 'skipped')."
             exit 1

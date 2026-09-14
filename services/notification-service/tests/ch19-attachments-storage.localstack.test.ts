@@ -53,6 +53,7 @@ function randomToken(): string {
 const originalFetch = globalThis.fetch;
 const uploadedKeys: string[] = [];
 
+// FLAKY-SKIP: Requires a running LocalStack (AWS_ENDPOINT_URL) for the DOM-006 real S3 round-trip; unset in standard CI so this suite never executes there. (expires: 2026-12-13)
 describe.skipIf(!endpoint)("DOM-006: attachments genuinely round-trip through real S3/LocalStack", () => {
   beforeAll(async () => {
     process.env.AWS_ACCESS_KEY_ID ??= "test";

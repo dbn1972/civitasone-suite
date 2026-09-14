@@ -110,6 +110,7 @@ async function linkIdentifier(
   return id;
 }
 
+// FLAKY-SKIP: Requires a real, reachable Postgres (probed at startup) for identity resolution/merge/RLS; not provisioned in standard CI. (expires: 2026-12-13)
 describe.skipIf(!reachable)("cdp repo — real Postgres (identity resolution, merge, RLS)", () => {
   afterAll(async () => {
     for (const tenantId of [TENANT_A, TENANT_B]) {

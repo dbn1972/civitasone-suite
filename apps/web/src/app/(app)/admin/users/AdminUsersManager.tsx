@@ -2,6 +2,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { DataTable } from "@/app/_components/ds";
 import type { AdminUserSummary, AdminRoleSummary } from "@/app/_data/loaders";
+import { useFormError } from "@/lib/useFormError";
+import { toHumanError } from "@/lib/messages";
 
 type Row = AdminUserSummary & Record<string, unknown>;
 
@@ -15,6 +17,18 @@ function StatusChip({ status }: { status: AdminUserSummary["status"] }) {
   return <span className="pill mut">Deactivated</span>;
 }
 
+/**
+ * Plain-language failure message for a failed user-status call. This is a
+ * plain async API helper, not a component, so it can't use the
+ * useFormError hook; toHumanError is the same catalogued-message building
+ * block that hook is built on — never the backend's own `message` or the
+ * raw HTTP status. See docs/ENTERPRISE-GAP-REPORT-2026-09-07.md UX-003/UX-016.
+ */
+function adminUserError(): string {
+  const human = toHumanError("save", { area: "user" });
+  return `${human.what} ${human.next}`;
+}
+
 async function callApi(path: string, method: string, body?: unknown): Promise<{ ok: boolean; message?: string; json?: unknown }> {
   try {
     const res = await fetch(`/api/proxy/v1/admin/users${path}`, {
@@ -23,10 +37,10 @@ async function callApi(path: string, method: string, body?: unknown): Promise<{ 
       body: body !== undefined ? JSON.stringify(body) : undefined,
     });
     const json = await res.json().catch(() => undefined);
-    if (!res.ok) return { ok: false, message: (json as { message?: string } | undefined)?.message ?? `HTTP ${res.status}` };
+    if (!res.ok) return { ok: false, message: adminUserError() };
     return { ok: true, json };
-  } catch (err) {
-    return { ok: false, message: err instanceof Error ? err.message : "Network error" };
+  } catch {
+    return { ok: false, message: adminUserError() };
   }
 }
 
@@ -44,6 +58,7 @@ function EditRolesSheet({
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const formError = useFormError("user roles");
 
   const userId = user?.id;
 
@@ -87,17 +102,24 @@ function EditRolesSheet({
   async function save() {
     setBusy(true);
     setError(null);
-    const res = await fetch(`/api/proxy/v1/admin/user-roles/${safeUser.id}`, {
-      method: "PATCH",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ roleKeys: [...selected] }),
-    });
-    const result = res.ok
-      ? { ok: true as const }
-      : { ok: false as const, message: (await res.json().catch(() => ({}))).message ?? `HTTP ${res.status}` };
-    setBusy(false);
-    if (!result.ok) { setError(result.message ?? "Save failed"); return; }
-    onClose();
+    formError.clear();
+    try {
+      const res = await fetch(`/api/proxy/v1/admin/user-roles/${safeUser.id}`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ roleKeys: [...selected] }),
+      });
+      setBusy(false);
+      if (!res.ok) {
+        const resolved = await formError.fromResponse(res, "save");
+        setError(resolved.message);
+        return;
+      }
+      onClose();
+    } catch {
+      setBusy(false);
+      setError(formError.fromException("save").message);
+    }
   }
 
   const changed = current.size !== selected.size || [...current].some((k) => !selected.has(k));
@@ -171,7 +193,7 @@ export function AdminUsersManager({
     setError(null);
     const result = await callApi(`/${user.id}/status`, "PATCH", { status: newStatus });
     if (!result.ok) {
-      setError(result.message ?? "Status update failed");
+      setError(result.message ?? null);
     } else {
       // Reflect the confirmed state from the server response rather than
       // assuming the request succeeded exactly as sent.

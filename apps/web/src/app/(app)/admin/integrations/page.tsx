@@ -11,6 +11,7 @@ import {
   type ProviderMeta,
 } from "./_components/providers";
 import { IntegrationDrawer, StatusBadge } from "./_components/IntegrationDrawer";
+import { useFormError } from "@/lib/useFormError";
 
 const API = "/api/proxy/v1/admin/integrations";
 
@@ -20,22 +21,31 @@ export default function IntegrationsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [open, setOpen] = useState<ProviderMeta | null>(null);
+  const formError = useFormError("integrations");
 
   const load = useCallback(async (signal?: AbortSignal) => {
     setLoading(true);
     setError(null);
     try {
       const res = await fetch(API, { signal });
-      if (!res.ok) throw new Error(`Failed to load integrations (${res.status})`);
+      if (!res.ok) {
+        const resolved = await formError.fromResponse(res, "load");
+        setError(resolved.message);
+        return;
+      }
       const body = await res.json();
       setRows((body.data ?? []) as IntegrationRow[]);
     } catch (err) {
       if (err instanceof Error && err.name !== 'AbortError') {
-        setError(err.message || "Failed to load integrations");
+        setError(formError.fromException("load").message);
       }
     } finally {
       setLoading(false);
     }
+    // formError.fromResponse/fromException are stable (useCallback'd on a
+    // fixed `area` string inside useFormError) even though the wrapping
+    // `formError` object literal isn't, so omitting it here is safe and
+    // avoids re-creating load (and re-running its effect) every render.
   }, []);
 
   useEffect(() => {

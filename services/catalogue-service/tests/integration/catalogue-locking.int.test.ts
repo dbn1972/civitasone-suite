@@ -99,6 +99,7 @@ async function outboxRowsFor(correlationId: string): Promise<Array<{ eventType: 
   );
 }
 
+// FLAKY-SKIP: Requires a real, reachable Postgres (probed at startup) to exercise optimistic locking + outbox atomicity; not provisioned in standard CI. (expires: 2026-12-13)
 describe.skipIf(!reachable)("catalogue repo — real Postgres (optimistic locking, outbox atomicity)", () => {
   afterAll(async () => {
     await asTenant(TENANT, () =>

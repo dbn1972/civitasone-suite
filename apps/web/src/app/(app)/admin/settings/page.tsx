@@ -1,6 +1,7 @@
 "use client";
 import { useState, useId } from "react";
 import { PageHeader, Card } from "@/app/_components/ds";
+import { useFormError } from "@/lib/useFormError";
 
 // ── UX decisions (ux-auditor criteria applied) ───────────────────────────────
 // 1. Tabbed layout: one mental model per tab, zero side-scroll cognitive load
@@ -20,10 +21,11 @@ type Tab = typeof TABS[number];
 
 type SaveState = "idle" | "saving" | "saved" | "error";
 
-function useSectionState<T>(initial: T) {
+function useSectionState<T>(initial: T, area: string) {
   const [values, setValues] = useState<T>(initial);
   const [dirty, setDirty] = useState(false);
   const [saveState, setSaveState] = useState<SaveState>("idle");
+  const formError = useFormError(area);
 
   function update(patch: Partial<T>) {
     setValues((prev) => ({ ...prev, ...patch }));
@@ -33,24 +35,40 @@ function useSectionState<T>(initial: T) {
 
   async function save(endpoint: string) {
     setSaveState("saving");
+    formError.clear();
     try {
       const res = await fetch(endpoint, {
         method: "PATCH",
         headers: { "content-type": "application/json" },
         body: JSON.stringify(values),
       });
-      if (!res.ok) throw new Error(`${res.status}`);
+      if (!res.ok) {
+        await formError.fromResponse(res, "save");
+        setSaveState("error");
+        return;
+      }
       setSaveState("saved");
       setDirty(false);
     } catch {
+      formError.fromException("save");
       setSaveState("error");
     }
   }
 
-  return { values, update, dirty, saveState, save };
+  return { values, update, dirty, saveState, save, formError };
 }
 
-function SaveButton({ dirty, saveState, onSave }: { dirty: boolean; saveState: SaveState; onSave: () => void }) {
+function SaveButton({
+  dirty,
+  saveState,
+  onSave,
+  errorMessage,
+}: {
+  dirty: boolean;
+  saveState: SaveState;
+  onSave: () => void;
+  errorMessage?: string;
+}) {
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
       {dirty && <span title="Unsaved changes" aria-label="Unsaved changes" style={{ display: "inline-block", width: 8, height: 8, borderRadius: "50%", background: "#f59e0b" }} />}
@@ -64,7 +82,7 @@ function SaveButton({ dirty, saveState, onSave }: { dirty: boolean; saveState: S
         {saveState === "saving" ? "Saving…" : saveState === "saved" ? "Saved" : "Save changes"}
       </button>
       {saveState === "error" && (
-        <span role="alert" style={{ fontSize: 12, color: "#b42318" }}>Save failed — please retry.</span>
+        <span role="alert" style={{ fontSize: 12, color: "#b42318" }}>{errorMessage}</span>
       )}
       {saveState === "saved" && (
         <span role="status" style={{ fontSize: 12, color: "#027a48" }}>Changes saved.</span>
@@ -73,13 +91,26 @@ function SaveButton({ dirty, saveState, onSave }: { dirty: boolean; saveState: S
   );
 }
 
-function FieldRow({ label, htmlFor, required, children }: { label: string; htmlFor: string; required?: boolean; children: React.ReactNode }) {
+function FieldRow({
+  label,
+  htmlFor,
+  required,
+  error,
+  children,
+}: {
+  label: string;
+  htmlFor: string;
+  required?: boolean;
+  error?: string;
+  children: React.ReactNode;
+}) {
   return (
     <div style={{ display: "grid", gap: 6 }}>
       <label htmlFor={htmlFor} style={{ fontSize: 12.5, fontWeight: 650, color: "var(--ink2)" }}>
         {label}{required && <span aria-hidden="true" style={{ color: "#b42318", marginLeft: 2 }}>*</span>}
       </label>
       {children}
+      {error && <span role="alert" style={{ fontSize: 12, color: "#b42318" }}>{error}</span>}
     </div>
   );
 }
@@ -89,26 +120,29 @@ const inp: React.CSSProperties = { width: "100%", padding: "9px 12px", borderRad
 // ── GENERAL TAB ──────────────────────────────────────────────────────────────
 function GeneralSection() {
   const id = useId();
-  const { values, update, dirty, saveState, save } = useSectionState({
-    orgName: "Ministry of Finance, Government of India",
-    logoUrl: "",
-    timezone: "Asia/Kolkata",
-    currency: "INR",
-    dateFormat: "dd/MM/yyyy",
-    fiscalYearStart: "04",
-  });
+  const { values, update, dirty, saveState, save, formError } = useSectionState(
+    {
+      orgName: "Ministry of Finance, Government of India",
+      logoUrl: "",
+      timezone: "Asia/Kolkata",
+      currency: "INR",
+      dateFormat: "dd/MM/yyyy",
+      fiscalYearStart: "04",
+    },
+    "general settings",
+  );
 
   return (
     <Card>
       <div className="pad" style={{ display: "grid", gap: 20 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <h3 style={{ margin: 0 }}>General Settings</h3>
-          <SaveButton dirty={dirty} saveState={saveState} onSave={() => void save("/api/proxy/v1/admin/settings/general")} />
+          <SaveButton dirty={dirty} saveState={saveState} onSave={() => void save("/api/proxy/v1/admin/settings/general")} errorMessage={formError.message} />
         </div>
-        <FieldRow label="Organisation name" htmlFor={`${id}-orgName`} required>
+        <FieldRow label="Organisation name" htmlFor={`${id}-orgName`} required error={formError.fieldError("orgName")}>
           <input id={`${id}-orgName`} value={values.orgName} onChange={(e) => update({ orgName: e.target.value })} style={inp} />
         </FieldRow>
-        <FieldRow label="Logo" htmlFor={`${id}-logo`}>
+        <FieldRow label="Logo" htmlFor={`${id}-logo`} error={formError.fieldError("logoUrl")}>
           <div style={{ border: "2px dashed var(--line)", borderRadius: 10, padding: "24px 16px", textAlign: "center", cursor: "pointer", background: "var(--surface2)" }}>
             <span style={{ fontSize: 28 }}>🖼️</span>
             <p style={{ margin: "8px 0 0", fontSize: 13, color: "var(--ink2)" }}>Drop PNG/SVG here or <span style={{ color: "var(--primary)", textDecoration: "underline", cursor: "pointer" }}>browse</span></p>
@@ -117,25 +151,25 @@ function GeneralSection() {
           </div>
         </FieldRow>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
-          <FieldRow label="Timezone" htmlFor={`${id}-tz`}>
+          <FieldRow label="Timezone" htmlFor={`${id}-tz`} error={formError.fieldError("timezone")}>
             <select id={`${id}-tz`} value={values.timezone} onChange={(e) => update({ timezone: e.target.value })} style={inp}>
               <option value="Asia/Kolkata">IST (Asia/Kolkata) +05:30</option>
               <option value="UTC">UTC +00:00</option>
             </select>
           </FieldRow>
-          <FieldRow label="Currency" htmlFor={`${id}-curr`}>
+          <FieldRow label="Currency" htmlFor={`${id}-curr`} error={formError.fieldError("currency")}>
             <select id={`${id}-curr`} value={values.currency} onChange={(e) => update({ currency: e.target.value })} style={inp}>
               <option value="INR">INR — Indian Rupee (₹)</option>
               <option value="USD">USD — US Dollar ($)</option>
             </select>
           </FieldRow>
-          <FieldRow label="Date format" htmlFor={`${id}-df`}>
+          <FieldRow label="Date format" htmlFor={`${id}-df`} error={formError.fieldError("dateFormat")}>
             <select id={`${id}-df`} value={values.dateFormat} onChange={(e) => update({ dateFormat: e.target.value })} style={inp}>
               <option value="dd/MM/yyyy">dd/MM/yyyy (GFR 2017)</option>
               <option value="yyyy-MM-dd">yyyy-MM-dd (ISO 8601)</option>
             </select>
           </FieldRow>
-          <FieldRow label="Fiscal year starts" htmlFor={`${id}-fy`}>
+          <FieldRow label="Fiscal year starts" htmlFor={`${id}-fy`} error={formError.fieldError("fiscalYearStart")}>
             <select id={`${id}-fy`} value={values.fiscalYearStart} onChange={(e) => update({ fiscalYearStart: e.target.value })} style={inp}>
               <option value="04">April (Government of India)</option>
               <option value="01">January</option>
@@ -151,15 +185,18 @@ function GeneralSection() {
 function EmailSection() {
   const id = useId();
   const [testStatus, setTestStatus] = useState<"idle" | "sending" | "ok" | "fail">("idle");
-  const { values, update, dirty, saveState, save } = useSectionState({
-    smtpHost: "smtp.nic.in",
-    smtpPort: "587",
-    smtpUser: "noreply@gov.in",
-    smtpPass: "",
-    fromName: "CivitasOne HRMS",
-    fromEmail: "noreply@gov.in",
-    useTls: true,
-  });
+  const { values, update, dirty, saveState, save, formError } = useSectionState(
+    {
+      smtpHost: "smtp.nic.in",
+      smtpPort: "587",
+      smtpUser: "noreply@gov.in",
+      smtpPass: "",
+      fromName: "CivitasOne HRMS",
+      fromEmail: "noreply@gov.in",
+      useTls: true,
+    },
+    "email settings",
+  );
 
   async function sendTest() {
     setTestStatus("sending");
@@ -177,27 +214,27 @@ function EmailSection() {
       <div className="pad" style={{ display: "grid", gap: 20 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <h3 style={{ margin: 0 }}>Email (SMTP)</h3>
-          <SaveButton dirty={dirty} saveState={saveState} onSave={() => void save("/api/proxy/v1/admin/settings/email")} />
+          <SaveButton dirty={dirty} saveState={saveState} onSave={() => void save("/api/proxy/v1/admin/settings/email")} errorMessage={formError.message} />
         </div>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 180px", gap: 16 }}>
-          <FieldRow label="SMTP host" htmlFor={`${id}-host`} required>
+          <FieldRow label="SMTP host" htmlFor={`${id}-host`} required error={formError.fieldError("smtpHost")}>
             <input id={`${id}-host`} value={values.smtpHost} onChange={(e) => update({ smtpHost: e.target.value })} placeholder="smtp.nic.in" style={inp} />
           </FieldRow>
-          <FieldRow label="Port" htmlFor={`${id}-port`} required>
+          <FieldRow label="Port" htmlFor={`${id}-port`} required error={formError.fieldError("smtpPort")}>
             <input id={`${id}-port`} value={values.smtpPort} onChange={(e) => update({ smtpPort: e.target.value })} placeholder="587" type="number" min={1} max={65535} style={inp} />
           </FieldRow>
         </div>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
-          <FieldRow label="Username" htmlFor={`${id}-user`}>
+          <FieldRow label="Username" htmlFor={`${id}-user`} error={formError.fieldError("smtpUser")}>
             <input id={`${id}-user`} value={values.smtpUser} onChange={(e) => update({ smtpUser: e.target.value })} style={inp} />
           </FieldRow>
-          <FieldRow label="Password" htmlFor={`${id}-pass`}>
+          <FieldRow label="Password" htmlFor={`${id}-pass`} error={formError.fieldError("smtpPass")}>
             <input id={`${id}-pass`} type="password" value={values.smtpPass} onChange={(e) => update({ smtpPass: e.target.value })} placeholder="••••••••" style={inp} autoComplete="new-password" />
           </FieldRow>
-          <FieldRow label="From name" htmlFor={`${id}-fname`}>
+          <FieldRow label="From name" htmlFor={`${id}-fname`} error={formError.fieldError("fromName")}>
             <input id={`${id}-fname`} value={values.fromName} onChange={(e) => update({ fromName: e.target.value })} style={inp} />
           </FieldRow>
-          <FieldRow label="From email" htmlFor={`${id}-femail`}>
+          <FieldRow label="From email" htmlFor={`${id}-femail`} error={formError.fieldError("fromEmail")}>
             <input id={`${id}-femail`} type="email" value={values.fromEmail} onChange={(e) => update({ fromEmail: e.target.value })} style={inp} />
           </FieldRow>
         </div>
@@ -221,13 +258,16 @@ function EmailSection() {
 function SecuritySection() {
   const id = useId();
   const [mfaConfirm, setMfaConfirm] = useState(false);
-  const { values, update, dirty, saveState, save } = useSectionState({
-    sessionTimeoutMin: 30,
-    mfaRequired: true,
-    ipWhitelist: "",
-    maxLoginAttempts: 5,
-    passwordMinLen: 12,
-  });
+  const { values, update, dirty, saveState, save, formError } = useSectionState(
+    {
+      sessionTimeoutMin: 30,
+      mfaRequired: true,
+      ipWhitelist: "",
+      maxLoginAttempts: 5,
+      passwordMinLen: 12,
+    },
+    "security settings",
+  );
 
   function handleMfaToggle(checked: boolean) {
     if (!checked) { setMfaConfirm(true); return; }
@@ -239,16 +279,16 @@ function SecuritySection() {
       <div className="pad" style={{ display: "grid", gap: 20 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <h3 style={{ margin: 0 }}>Security</h3>
-          <SaveButton dirty={dirty} saveState={saveState} onSave={() => void save("/api/proxy/v1/admin/settings/security")} />
+          <SaveButton dirty={dirty} saveState={saveState} onSave={() => void save("/api/proxy/v1/admin/settings/security")} errorMessage={formError.message} />
         </div>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
-          <FieldRow label="Session timeout (minutes)" htmlFor={`${id}-sto`}>
+          <FieldRow label="Session timeout (minutes)" htmlFor={`${id}-sto`} error={formError.fieldError("sessionTimeoutMin")}>
             <input id={`${id}-sto`} type="number" min={5} max={480} value={values.sessionTimeoutMin} onChange={(e) => update({ sessionTimeoutMin: Number(e.target.value) })} style={inp} />
           </FieldRow>
-          <FieldRow label="Max login attempts" htmlFor={`${id}-mla`}>
+          <FieldRow label="Max login attempts" htmlFor={`${id}-mla`} error={formError.fieldError("maxLoginAttempts")}>
             <input id={`${id}-mla`} type="number" min={1} max={20} value={values.maxLoginAttempts} onChange={(e) => update({ maxLoginAttempts: Number(e.target.value) })} style={inp} />
           </FieldRow>
-          <FieldRow label="Minimum password length" htmlFor={`${id}-pwlen`}>
+          <FieldRow label="Minimum password length" htmlFor={`${id}-pwlen`} error={formError.fieldError("passwordMinLen")}>
             <input id={`${id}-pwlen`} type="number" min={8} max={64} value={values.passwordMinLen} onChange={(e) => update({ passwordMinLen: Number(e.target.value) })} style={inp} />
           </FieldRow>
         </div>
@@ -269,7 +309,7 @@ function SecuritySection() {
             </div>
           </div>
         )}
-        <FieldRow label="IP whitelist (one CIDR per line)" htmlFor={`${id}-ip`}>
+        <FieldRow label="IP whitelist (one CIDR per line)" htmlFor={`${id}-ip`} error={formError.fieldError("ipWhitelist")}>
           <textarea id={`${id}-ip`} rows={4} value={values.ipWhitelist} onChange={(e) => update({ ipWhitelist: e.target.value })} placeholder={"10.0.0.0/8\n192.168.1.0/24"} style={{ ...inp, resize: "vertical", fontFamily: "monospace", fontSize: 13 }} aria-describedby={`${id}-ip-hint`} />
           <p id={`${id}-ip-hint`} style={{ margin: "4px 0 0", fontSize: 11.5, color: "var(--ink3)" }}>Leave blank to allow all IPs. Enter one CIDR range per line.</p>
         </FieldRow>
@@ -281,24 +321,27 @@ function SecuritySection() {
 // ── INTEGRATIONS TAB ─────────────────────────────────────────────────────────
 function IntegrationsSection() {
   const id = useId();
-  const { values, update, dirty, saveState, save } = useSectionState({
-    pfmsUrl: "https://pfms.nic.in",
-    nicGatewayUrl: "https://api.nic.in/gateway",
-    digiLockerEnabled: false,
-    umangEnabled: false,
-  });
+  const { values, update, dirty, saveState, save, formError } = useSectionState(
+    {
+      pfmsUrl: "https://pfms.nic.in",
+      nicGatewayUrl: "https://api.nic.in/gateway",
+      digiLockerEnabled: false,
+      umangEnabled: false,
+    },
+    "integrations settings",
+  );
 
   return (
     <Card>
       <div className="pad" style={{ display: "grid", gap: 20 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <h3 style={{ margin: 0 }}>Integrations</h3>
-          <SaveButton dirty={dirty} saveState={saveState} onSave={() => void save("/api/proxy/v1/admin/settings/integrations")} />
+          <SaveButton dirty={dirty} saveState={saveState} onSave={() => void save("/api/proxy/v1/admin/settings/integrations")} errorMessage={formError.message} />
         </div>
-        <FieldRow label="PFMS base URL" htmlFor={`${id}-pfms`}>
+        <FieldRow label="PFMS base URL" htmlFor={`${id}-pfms`} error={formError.fieldError("pfmsUrl")}>
           <input id={`${id}-pfms`} type="url" value={values.pfmsUrl} onChange={(e) => update({ pfmsUrl: e.target.value })} style={inp} />
         </FieldRow>
-        <FieldRow label="NIC Gateway URL" htmlFor={`${id}-nic`}>
+        <FieldRow label="NIC Gateway URL" htmlFor={`${id}-nic`} error={formError.fieldError("nicGatewayUrl")}>
           <input id={`${id}-nic`} type="url" value={values.nicGatewayUrl} onChange={(e) => update({ nicGatewayUrl: e.target.value })} style={inp} />
         </FieldRow>
         <fieldset style={{ border: "none", margin: 0, padding: 0, display: "grid", gap: 14 }}>

@@ -57,6 +57,7 @@ async function probe(): Promise<boolean> {
 
 const reachable = await probe();
 
+// FLAKY-SKIP: Requires a real, reachable Postgres (probed at startup) — REL-032's RLS backstop against a real workflow_svc connection; not provisioned in standard CI. (expires: 2026-12-13)
 describe.skipIf(!reachable)(
   "REL-032 -- RLS is an independently-verified backstop for the unscoped query shape (real workflow_svc connection, no mocks)",
   () => {
