@@ -485,7 +485,7 @@ module.exports = {
     svc("policy",       3003, "policy_svc",        "civitas_policy"),
     svc("audit",        3004, "audit_svc",         "civitas_audit", {}, { graceful: true }), // PERF-015
     svc("install",      3005, "install_svc",       "civitas_install"),
-    svc("notification", 3006, "notification_svc",  "civitas_notification"),
+    svc("notification", 3006, "notification_svc",  "civitas_notification", {}, { graceful: true }), // PERF-015
 
     // ── Finance & procurement ──────────────────────────────────────────────────
     svc("finance",      3007, "finance_svc",       "civitas_finance", { PII_ENC_KEY: FINANCE_PII_KEY }, { graceful: true }), // REL-012: validated subset
