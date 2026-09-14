@@ -493,7 +493,7 @@ module.exports = {
     svc("contract",     3009, "contract_svc",      "civitas_contract", {}, { graceful: true }), // PERF-015
 
     // ── Establishment & physical assets ───────────────────────────────────────
-    svc("estab",        3010, "estab_svc",         "civitas_estab"),
+    svc("estab",        3010, "estab_svc",         "civitas_estab", {}, { graceful: true }), // PERF-015
     svc("stock",        3011, "stock_svc",         "civitas_stock"),
     svc("hrms",         3012, "hrms_svc",          "civitas_hrms", { PII_ENC_KEY, ID_CARD_QR_SECRET, CANDIDATE_JWT_SECRET }, { graceful: true }), // PERF-003
     svc("payroll",      3013, "payroll_svc",       "civitas_payroll", {}, { graceful: true }), // PERF-003
