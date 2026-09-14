@@ -24,7 +24,22 @@ export type QuarterSummaryRow = {
 const inrFmt = new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 2 });
 
 export function TaxReturnsSummary({ fy, quarters }: { fy: string; quarters: QuarterSummaryRow[] }) {
-  const totalTds = quarters.reduce((s, q) => s + q.totalTdsDepositedMinor, 0);
+  // UX-022: the per-quarter figure below already guards against a missing
+  // totalTdsDepositedMinor (UX-018) by rendering "—" instead of dividing a
+  // possibly-missing value. The annual tile has the same exposure one level
+  // up: a bare `+` reduce turns a single `undefined` quarter total into
+  // "₹NaN" for the whole year, and a single `null` quarter total into a
+  // silent undercount (`s + null` coerces to `s + 0`) with no visible sign
+  // anything is wrong. Convention, chosen to match UX-018's per-quarter
+  // answer to the same question (show "—" rather than a fabricated number):
+  // if ANY quarter's total is unknown, the annual tile shows "—" too, rather
+  // than quietly summing only the known quarters — silently excluding a
+  // missing quarter from the sum is itself indistinguishable from treating
+  // it as a real zero, the exact masking this campaign closes.
+  const quarterTdsRupees = quarters.map((q) => minorToRupeesOrNull(q.totalTdsDepositedMinor));
+  const totalTdsRupees = quarterTdsRupees.some((r) => r === null)
+    ? null
+    : quarterTdsRupees.reduce<number>((s, r) => s + (r as number), 0);
   const filedCount = quarters.filter((q) => q.status === "filed" || q.status === "late_filed").length;
   const qMap = new Map<Quarter, QuarterSummaryRow>(quarters.map((q) => [q.quarter, q]));
   const filedLabel = String(filedCount) + " / 4";
@@ -43,7 +58,7 @@ export function TaxReturnsSummary({ fy, quarters }: { fy: string; quarters: Quar
         </div>
         <div style={{ background: "var(--panel)", borderRadius: 10, padding: "12px 16px" }}>
           <div style={{ fontSize: 11, color: "var(--ink2)", fontWeight: 600, textTransform: "uppercase", letterSpacing: ".5px" }}>Total TDS Deposited</div>
-          <div style={{ fontSize: 17, fontWeight: 700, marginTop: 4 }}>{inrFmt.format(totalTds / 100)}</div>
+          <div style={{ fontSize: 17, fontWeight: 700, marginTop: 4 }}>{totalTdsRupees === null ? "—" : inrFmt.format(totalTdsRupees)}</div>
         </div>
       </div>
 
