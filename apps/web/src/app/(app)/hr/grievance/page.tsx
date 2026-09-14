@@ -1,6 +1,7 @@
 import { PageHeader, StatGrid, StatCard, Card, DataTable } from "../../../_components/ds";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
+import { getTranslations } from "next-intl/server";
 
 type RawRow = {
   id: string;
@@ -30,6 +31,7 @@ function shortId(id: string): string {
 }
 
 export default async function GrievancePage() {
+  const t = await getTranslations("grievance");
   const { data: rawItems, source } = await getData();
   const items: Row[] = rawItems.map((r) => ({ ...r, caseRef: shortId(r.id) }));
 
@@ -38,41 +40,41 @@ export default async function GrievancePage() {
   const closed = items.filter((i) => i.status === "closed" || i.status === "disposed").length;
 
   const columns: { key: keyof Row & string; label: string; cellType?: "status" }[] = [
-    { key: "caseRef", label: "Ref No." },
-    { key: "employee", label: "Employee" },
-    { key: "department", label: "Department" },
-    { key: "category", label: "Grievance" },
-    { key: "filedDate", label: "Filed Date" },
-    { key: "assignedTo", label: "HR Officer" },
-    { key: "status", label: "Status", cellType: "status" },
+    { key: "caseRef", label: t("colRefNo") },
+    { key: "employee", label: t("colEmployee") },
+    { key: "department", label: t("colDepartment") },
+    { key: "category", label: t("colGrievance") },
+    { key: "filedDate", label: t("colFiledDate") },
+    { key: "assignedTo", label: t("colHrOfficer") },
+    { key: "status", label: t("colStatus"), cellType: "status" },
   ];
 
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
-        title="Grievance Redressal"
-        subtitle="Employee grievances, category tracking, and resolution pipeline."
+        title={t("title")}
+        subtitle={t("subtitle")}
         back="/hr"
         actions={<span />}
       />
-      <DataSourceBadge source={source} message="Couldn't load — showing nothing" />
+      <DataSourceBadge source={source} message={t("dataSourceErrorMessage")} />
       <StatGrid>
-        <StatCard icon="📋" iconBg="#e6f0ff" label="Total Cases" value={items.length} />
-        <StatCard icon="🔴" iconBg="#fff1f0" label="Open" value={opened} />
-        <StatCard icon="🔍" iconBg="#fffbe6" label="Under Inquiry" value={inquiry} />
-        <StatCard icon="✅" iconBg="#e6f7f0" label="Disposed" value={closed} />
+        <StatCard icon="📋" iconBg="#e6f0ff" label={t("statTotalCasesLabel")} value={items.length} />
+        <StatCard icon="🔴" iconBg="#fff1f0" label={t("statOpenLabel")} value={opened} />
+        <StatCard icon="🔍" iconBg="#fffbe6" label={t("statUnderInquiryLabel")} value={inquiry} />
+        <StatCard icon="✅" iconBg="#e6f7f0" label={t("statDisposedLabel")} value={closed} />
       </StatGrid>
-      <Card title="Grievance Cases">
+      <Card title={t("cardTitle")}>
         <DataTable<Row>
           columns={columns}
           rows={items}
           sortable
           filterable
-          filterPlaceholder="Filter by employee, category or assigned officer…"
+          filterPlaceholder={t("filterPlaceholder")}
           pageSize={15}
           emptyIcon="📋"
-          emptyTitle="No grievances on record"
-          emptyMessage="Grievance cases appear here when employees file formal complaints under CCS (Conduct) Rules. Cases are assigned to an HR officer and tracked through inquiry to disposal."
+          emptyTitle={t("emptyTitle")}
+          emptyMessage={t("emptyMessage")}
         />
       </Card>
     </main>

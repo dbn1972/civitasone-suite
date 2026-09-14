@@ -1,6 +1,7 @@
 import { PageHeader, StatGrid, StatCard, Card, DataTable } from "../../../_components/ds";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
+import { getTranslations } from "next-intl/server";
 
 type RawRow = {
   id: string;
@@ -30,6 +31,7 @@ function shortId(id: string): string {
 }
 
 export default async function VigilancePage() {
+  const t = await getTranslations("vigilance");
   const { data: rawItems, source } = await getData();
   const items: Row[] = rawItems.map((r) => ({ ...r, caseRef: shortId(r.id) }));
 
@@ -38,46 +40,46 @@ export default async function VigilancePage() {
   const closed = items.filter((i) => ["closed", "disposed", "finalised"].includes(i.status)).length;
 
   const columns: { key: keyof Row & string; label: string; cellType?: "status" }[] = [
-    { key: "caseRef", label: "Case Ref" },
-    { key: "employee", label: "Employee" },
-    { key: "department", label: "Department" },
-    { key: "charges", label: "Charge Summary" },
-    { key: "inquiryOfficer", label: "Inquiry Officer" },
+    { key: "caseRef", label: t("colCaseRef") },
+    { key: "employee", label: t("colEmployee") },
+    { key: "department", label: t("colDepartment") },
+    { key: "charges", label: t("colChargeSummary") },
+    { key: "inquiryOfficer", label: t("colInquiryOfficer") },
     // Backend aliases inquiry_appointed_date (a one-time event) as
     // "nextHearing" -- it is not a recurring hearing schedule, so a case
     // shows the same date forever after its inquiry officer is appointed,
     // regardless of how many hearings actually happen afterward. Labelled
     // honestly until the backend tracks real hearing dates.
-    { key: "nextHearing", label: "Inquiry Officer Appointed" },
-    { key: "status", label: "Status", cellType: "status" },
+    { key: "nextHearing", label: t("colInquiryOfficerAppointed") },
+    { key: "status", label: t("colStatus"), cellType: "status" },
   ];
 
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
-        title="Vigilance & Disciplinary"
-        subtitle="Major proceedings under CCS (CCA) Rules — charge memos, inquiry, penalty and appeal."
+        title={t("title")}
+        subtitle={t("subtitle")}
         back="/hr"
         actions={<span />}
       />
-      <DataSourceBadge source={source} message="Couldn't load — showing nothing" />
+      <DataSourceBadge source={source} message={t("dataSourceErrorMessage")} />
       <StatGrid>
-        <StatCard icon="⚖️" iconBg="#e6f0ff" label="Total Cases" value={items.length} />
-        <StatCard icon="🔴" iconBg="#fff1f0" label="Charge Memo Stage" value={opened} />
-        <StatCard icon="🔍" iconBg="#fffbe6" label="Under Inquiry" value={inquiry} />
-        <StatCard icon="✅" iconBg="#e6f7f0" label="Disposed / Closed" value={closed} />
+        <StatCard icon="⚖️" iconBg="#e6f0ff" label={t("statTotalCasesLabel")} value={items.length} />
+        <StatCard icon="🔴" iconBg="#fff1f0" label={t("statChargeMemoStageLabel")} value={opened} />
+        <StatCard icon="🔍" iconBg="#fffbe6" label={t("statUnderInquiryLabel")} value={inquiry} />
+        <StatCard icon="✅" iconBg="#e6f7f0" label={t("statDisposedClosedLabel")} value={closed} />
       </StatGrid>
-      <Card title="Vigilance Cases Register">
+      <Card title={t("cardTitle")}>
         <DataTable<Row>
           columns={columns}
           rows={items}
           sortable
           filterable
-          filterPlaceholder="Filter by employee, department or inquiry officer…"
+          filterPlaceholder={t("filterPlaceholder")}
           pageSize={15}
           emptyIcon="⚖️"
-          emptyTitle="No vigilance cases on record"
-          emptyMessage="Major departmental proceedings appear here — registered by the Vigilance Unit with charge memos, inquiry officer appointment, and penalty tracking under CCS (CCA) Rules."
+          emptyTitle={t("emptyTitle")}
+          emptyMessage={t("emptyMessage")}
         />
       </Card>
     </main>

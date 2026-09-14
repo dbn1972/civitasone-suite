@@ -1,6 +1,7 @@
 import { PageHeader, StatGrid, StatCard, Card, DataTable } from "../../../_components/ds";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
+import { getTranslations } from "next-intl/server";
 
 type RawRow = {
   id: string;
@@ -25,6 +26,7 @@ async function getData(): Promise<LoaderResult<RawRow[]>> {
 }
 
 export default async function IccPage() {
+  const t = await getTranslations("icc");
   const { data: rawItems, source } = await getData();
   const items: Row[] = rawItems.map((r) => ({ ...r, caseRef: "ICC/" + r.id.slice(0, 8).toUpperCase() }));
 
@@ -33,38 +35,38 @@ export default async function IccPage() {
   const closed = items.filter((i) => ["closed", "disposed", "withdrawn"].includes(i.status)).length;
 
   const columns: { key: keyof Row & string; label: string; cellType?: "status" }[] = [
-    { key: "caseRef", label: "Case Ref" },
-    { key: "summary", label: "Summary" },
-    { key: "filedAt", label: "Filed Date" },
-    { key: "status", label: "Status", cellType: "status" },
+    { key: "caseRef", label: t("colCaseRef") },
+    { key: "summary", label: t("colSummary") },
+    { key: "filedAt", label: t("colFiledDate") },
+    { key: "status", label: t("colStatus"), cellType: "status" },
   ];
 
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
-        title="ICC Complaints"
-        subtitle="Internal Complaints Committee — sexual harassment complaints under the POSH Act, 2013."
+        title={t("title")}
+        subtitle={t("subtitle")}
         back="/hr"
         actions={<span />}
       />
-      <DataSourceBadge source={source} message="Couldn't load — showing nothing" />
+      <DataSourceBadge source={source} message={t("dataSourceErrorMessage")} />
       <StatGrid>
-        <StatCard icon="⚖️" iconBg="#e6f0ff" label="Total Complaints" value={items.length} />
-        <StatCard icon="🔔" iconBg="#fffbe6" label="Filed" value={filed} />
-        <StatCard icon="🔍" iconBg="#fff1f0" label="Under Inquiry" value={inquiry} />
-        <StatCard icon="✅" iconBg="#e6f7f0" label="Disposed" value={closed} />
+        <StatCard icon="⚖️" iconBg="#e6f0ff" label={t("statTotalComplaintsLabel")} value={items.length} />
+        <StatCard icon="🔔" iconBg="#fffbe6" label={t("statFiledLabel")} value={filed} />
+        <StatCard icon="🔍" iconBg="#fff1f0" label={t("statUnderInquiryLabel")} value={inquiry} />
+        <StatCard icon="✅" iconBg="#e6f7f0" label={t("statDisposedLabel")} value={closed} />
       </StatGrid>
-      <Card title="ICC Complaint Register">
+      <Card title={t("cardTitle")}>
         <DataTable<Row>
           columns={columns}
           rows={items}
           sortable
           filterable
-          filterPlaceholder="Filter by reference or status…"
+          filterPlaceholder={t("filterPlaceholder")}
           pageSize={15}
           emptyIcon="⚖️"
-          emptyTitle="No ICC complaints on record"
-          emptyMessage="Complaints under the Prevention of Sexual Harassment (POSH) Act are handled by the Internal Complaints Committee (ICC) with full confidentiality."
+          emptyTitle={t("emptyTitle")}
+          emptyMessage={t("emptyMessage")}
         />
       </Card>
     </main>

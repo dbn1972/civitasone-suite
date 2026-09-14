@@ -1,6 +1,7 @@
 import { PageHeader, StatGrid, StatCard, Card, DataTable } from "../../../_components/ds";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
+import { getTranslations } from "next-intl/server";
 
 type ApiEmployee = {
   id: string;
@@ -69,6 +70,7 @@ async function getContractual(): Promise<LoaderResult<Row[]>> {
 }
 
 export default async function ContractualPage() {
+  const t = await getTranslations("contractual");
   const { data: items, source } = await getContractual();
 
   const active = items.filter((i) => i.status === "active").length;
@@ -76,30 +78,30 @@ export default async function ContractualPage() {
   const agencies = new Set(items.map((i) => i.agency).filter((a) => a !== "—")).size;
 
   const columns: { key: keyof Row & string; label: string; cellType?: "status" }[] = [
-    { key: "name", label: "Name" },
-    { key: "department", label: "Department" },
-    { key: "agency", label: "Agency" },
-    { key: "designation", label: "Designation" },
-    { key: "contractFrom", label: "From" },
-    { key: "contractTo", label: "To" },
-    { key: "status", label: "Status", cellType: "status" },
+    { key: "name", label: t("colName") },
+    { key: "department", label: t("colDepartment") },
+    { key: "agency", label: t("colAgency") },
+    { key: "designation", label: t("colDesignation") },
+    { key: "contractFrom", label: t("colFrom") },
+    { key: "contractTo", label: t("colTo") },
+    { key: "status", label: t("colStatus"), cellType: "status" },
   ];
 
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
-      <PageHeader title="Contractual Employees" subtitle="Contractual staff engagement details and contract periods." back="/hr" />
+      <PageHeader title={t("title")} subtitle={t("subtitle")} back="/hr" />
       <StatGrid>
-        <StatCard icon="📋" iconBg="#e6f0ff" label="Total Contractual" value={items.length} />
-        <StatCard icon="✅" iconBg="#e6f7f0" label="Active" value={active} />
-        <StatCard icon="📁" iconBg="#fffbe6" label="Expired" value={completed} />
-        <StatCard icon="🏢" iconBg="#f5f5f5" label="Agencies" value={agencies} />
+        <StatCard icon="📋" iconBg="#e6f0ff" label={t("statTotalLabel")} value={items.length} />
+        <StatCard icon="✅" iconBg="#e6f7f0" label={t("statActiveLabel")} value={active} />
+        <StatCard icon="📁" iconBg="#fffbe6" label={t("statExpiredLabel")} value={completed} />
+        <StatCard icon="🏢" iconBg="#f5f5f5" label={t("statAgenciesLabel")} value={agencies} />
       </StatGrid>
-      <Card title="Contractual Staff">
-        <DataTable<Row> columns={columns} rows={items} sortable filterable filterPlaceholder="Filter by name, agency or department…"
+      <Card title={t("cardTitle")}>
+        <DataTable<Row> columns={columns} rows={items} sortable filterable filterPlaceholder={t("filterPlaceholder")}
           pageSize={15}
           emptyIcon="📑"
-          emptyTitle="No contractual staff"
-          emptyMessage="Contractual employees appear here, showing their engagement terms and contract expiry dates."
+          emptyTitle={t("emptyTitle")}
+          emptyMessage={t("emptyMessage")}
         />
       </Card>
     </main>
