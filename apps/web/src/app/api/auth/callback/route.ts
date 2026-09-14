@@ -81,10 +81,18 @@ export async function GET(req: Request) {
 // request body -- the decode below is only used to fill tenantId/userId in
 // the JSON body the endpoint requires; it is not the security boundary.
 async function createBackendSession(accessToken: string, req: Request): Promise<void> {
-  const claims = decodeUnverifiedClaims(accessToken);
-  const userId = claims?.sub;
-  const tenantId = claims?.tid ?? claims?.tenantId;
+  // SEC-027 review note: decodeUnverifiedClaims() used to run outside this
+  // try block, so a claims-parse throw would bypass captureError() entirely.
+  // In practice decodeUnverifiedClaims() (jwt.decode() under the hood)
+  // returns null rather than throwing on malformed input, so this was
+  // low-risk -- but it's now inside the guarded region so EVERY failure path
+  // here is captured, not just the network/validation ones.
+  let userId: string | undefined;
+  let tenantId: string | undefined;
   try {
+    const claims = decodeUnverifiedClaims(accessToken);
+    userId = claims?.sub;
+    tenantId = claims?.tid ?? claims?.tenantId;
     if (!userId || !tenantId) {
       throw new Error("access token missing sub/tid claims");
     }
@@ -101,9 +109,14 @@ async function createBackendSession(accessToken: string, req: Request): Promise<
     }
   } catch (err) {
     // SEC-027: this best-effort write had zero operational signal beyond a
-    // raw console.error -- captureError() gives it a Prometheus counter
-    // (captured_errors_total{service="web"}) and a structured log line an
-    // operator can alert on. Context is userId/tenantId only -- never
+    // raw console.error -- captureError() gives it an in-memory counter
+    // (queryable via getCapturedErrorCountByService("web")) and a
+    // structured JSON log line an operator can grep/alert on today. It is
+    // NOT YET Prometheus-scraped (apps/web has no /metrics route and
+    // infra/observability/prometheus.yml has no scrape job for it, unlike
+    // every Fastify backend service via registerOpsRoutes()) -- see the PR
+    // description for why that's a deliberately separate follow-up, not
+    // bundled into this fix. Context is userId/tenantId only -- never
     // accessToken/tokens -- matching what this codebase's other
     // captureError() call sites already treat as safe (see
     // services/identity-service/src/shared/keycloak.ts).

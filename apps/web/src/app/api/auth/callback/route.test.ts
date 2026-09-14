@@ -100,4 +100,30 @@ describe("GET /api/auth/callback -- SEC-027 session-creation failure signal", ()
     expect(captureError).not.toHaveBeenCalled();
     expect(res.headers.get("location")).toContain("/dashboard");
   });
+
+  it("reports a claims-decode failure via captureError too (decode now runs inside the guarded region)", async () => {
+    vi.mocked(decodeUnverifiedClaims).mockImplementation(() => {
+      throw new Error("malformed token");
+    });
+
+    const { GET } = await import("./route");
+    const res = await GET(callbackRequest());
+
+    // Review note: decodeUnverifiedClaims() used to run outside the try
+    // block, so a throw here would bypass captureError() entirely. It's now
+    // inside the guarded region -- confirm the failure never reaches fetch
+    // and is still captured.
+    expect(global.fetch).not.toHaveBeenCalled();
+    expect(captureError).toHaveBeenCalledTimes(1);
+    const [err, ctx] = vi.mocked(captureError).mock.calls[0];
+    expect(String((err as Error).message)).toContain("malformed token");
+    expect(ctx).toMatchObject({ service: "web", event: "auth_callback_session_create_failed" });
+    // userId/tenantId were never assigned in this failure mode -- must stay
+    // absent, not get silently coerced into a misleading placeholder.
+    expect((ctx as Record<string, unknown>).userId).toBeUndefined();
+    expect((ctx as Record<string, unknown>).tenantId).toBeUndefined();
+
+    // Fail-open contract still holds even for this earlier failure point.
+    expect(res.headers.get("location")).toContain("/dashboard");
+  });
 });
