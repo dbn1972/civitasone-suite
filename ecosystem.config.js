@@ -498,7 +498,7 @@ module.exports = {
     svc("hrms",         3012, "hrms_svc",          "civitas_hrms", { PII_ENC_KEY, ID_CARD_QR_SECRET, CANDIDATE_JWT_SECRET }, { graceful: true }), // PERF-003
     svc("payroll",      3013, "payroll_svc",       "civitas_payroll", {}, { graceful: true }), // PERF-003
     svc("project",      3014, "project_svc",       "civitas_project"),
-    svc("asset",        3015, "asset_svc",         "civitas_asset"),
+    svc("asset",        3015, "asset_svc",         "civitas_asset", {}, { graceful: true }), // PERF-015
 
     // ── Reporting & plugins ────────────────────────────────────────────────────
     svc("report",       3016, "report_svc",        "civitas_report"),
