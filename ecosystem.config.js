@@ -511,7 +511,7 @@ module.exports = {
     svc("legal",        3021, "legal_svc",         "civitas_legal"),
 
     // ── Admin & billing ────────────────────────────────────────────────────────
-    svc("admin",        3022, "admin_svc",         "civitas_admin"),
+    svc("admin",        3022, "admin_svc",         "civitas_admin", {}, { graceful: true }), // PERF-015
     svc("billing",      3023, "billing_svc",       "civitas_billing"),
 
     // ── CRM & operations ───────────────────────────────────────────────────────

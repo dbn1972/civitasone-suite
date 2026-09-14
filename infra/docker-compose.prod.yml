@@ -916,7 +916,7 @@ services:
       PORT: "3022"
       DATABASE_URL: ${DATABASE_URL_ADMIN:?per-service least-privilege DSN required (set DATABASE_URL for civitas_admin; do NOT use the cluster superuser)}
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3022/health >/dev/null 2>&1 || exit 1"]
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3022/ready >/dev/null 2>&1 || exit 1"]  # PERF-015
       interval: 20s
       timeout: 5s
       retries: 5
