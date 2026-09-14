@@ -481,48 +481,48 @@ module.exports = {
   apps: [
     // ── Core platform ──────────────────────────────────────────────────────────
     svc("identity",     3001, "identity_svc",     "civitas_identity", { MFA_ENC_KEY }, { graceful: true }), // PERF-003
-    svc("tenant",       3002, "tenant_svc",        "civitas_tenant"),
-    svc("policy",       3003, "policy_svc",        "civitas_policy"),
-    svc("audit",        3004, "audit_svc",         "civitas_audit"),
+    svc("tenant",       3002, "tenant_svc",        "civitas_tenant", {}, { graceful: true }), // PERF-015
+    svc("policy",       3003, "policy_svc",        "civitas_policy", {}, { graceful: true }), // PERF-015
+    svc("audit",        3004, "audit_svc",         "civitas_audit", {}, { graceful: true }), // PERF-015
     svc("install",      3005, "install_svc",       "civitas_install"),
-    svc("notification", 3006, "notification_svc",  "civitas_notification"),
+    svc("notification", 3006, "notification_svc",  "civitas_notification", {}, { graceful: true }), // PERF-015
 
     // ── Finance & procurement ──────────────────────────────────────────────────
     svc("finance",      3007, "finance_svc",       "civitas_finance", { PII_ENC_KEY: FINANCE_PII_KEY }, { graceful: true }), // REL-012: validated subset
     svc("procurement",  3008, "procurement_svc",   "civitas_procurement", { PII_ENC_KEY: PROCUREMENT_PII_KEY }, { graceful: true }), // PERF-003
-    svc("contract",     3009, "contract_svc",      "civitas_contract"),
+    svc("contract",     3009, "contract_svc",      "civitas_contract", {}, { graceful: true }), // PERF-015
 
     // ── Establishment & physical assets ───────────────────────────────────────
-    svc("estab",        3010, "estab_svc",         "civitas_estab"),
-    svc("stock",        3011, "stock_svc",         "civitas_stock"),
+    svc("estab",        3010, "estab_svc",         "civitas_estab", {}, { graceful: true }), // PERF-015
+    svc("stock",        3011, "stock_svc",         "civitas_stock", {}, { graceful: true }), // PERF-015
     svc("hrms",         3012, "hrms_svc",          "civitas_hrms", { PII_ENC_KEY, ID_CARD_QR_SECRET, CANDIDATE_JWT_SECRET }, { graceful: true }), // PERF-003
     svc("payroll",      3013, "payroll_svc",       "civitas_payroll", {}, { graceful: true }), // PERF-003
-    svc("project",      3014, "project_svc",       "civitas_project"),
-    svc("asset",        3015, "asset_svc",         "civitas_asset"),
+    svc("project",      3014, "project_svc",       "civitas_project", {}, { graceful: true }), // PERF-015
+    svc("asset",        3015, "asset_svc",         "civitas_asset", {}, { graceful: true }), // PERF-015
 
     // ── Reporting & plugins ────────────────────────────────────────────────────
-    svc("report",       3016, "report_svc",        "civitas_report"),
+    svc("report",       3016, "report_svc",        "civitas_report", {}, { graceful: true }), // PERF-015
     svc("plugin",       3017, "plugin_svc",        "civitas_plugin"),
     svc("theme",        3018, "theme_svc",         "civitas_theme"),
 
     // ── Government-specific ────────────────────────────────────────────────────
-    svc("grant",        3019, "grant_svc",         "civitas_grant"),
-    svc("citizen",      3020, "citizen_svc",       "civitas_citizen", { CITIZEN_PII_KEY }),
-    svc("legal",        3021, "legal_svc",         "civitas_legal"),
+    svc("grant",        3019, "grant_svc",         "civitas_grant", {}, { graceful: true }), // PERF-015
+    svc("citizen",      3020, "citizen_svc",       "civitas_citizen", { CITIZEN_PII_KEY }, { graceful: true }), // PERF-015
+    svc("legal",        3021, "legal_svc",         "civitas_legal", {}, { graceful: true }), // PERF-015
 
     // ── Admin & billing ────────────────────────────────────────────────────────
-    svc("admin",        3022, "admin_svc",         "civitas_admin"),
-    svc("billing",      3023, "billing_svc",       "civitas_billing"),
+    svc("admin",        3022, "admin_svc",         "civitas_admin", {}, { graceful: true }), // PERF-015
+    svc("billing",      3023, "billing_svc",       "civitas_billing", {}, { graceful: true }), // PERF-015
 
     // ── CRM & operations ───────────────────────────────────────────────────────
-    svc("crm",          3024, "crm_svc",           "civitas_crm", { CRM_PII_KEY }),
-    svc("inventory",    3025, "inventory_svc",     "civitas_inventory", { PROCUREMENT_SERVICE_URL: "http://127.0.0.1:3008" }),
-    svc("telephony",    3026, "telephony_svc",     "civitas_telephony"),
-    svc("helpdesk",     3027, "helpdesk_svc",      "civitas_helpdesk"),
+    svc("crm",          3024, "crm_svc",           "civitas_crm", { CRM_PII_KEY }, { graceful: true }), // PERF-015
+    svc("inventory",    3025, "inventory_svc",     "civitas_inventory", { PROCUREMENT_SERVICE_URL: "http://127.0.0.1:3008" }, { graceful: true }), // PERF-015
+    svc("telephony",    3026, "telephony_svc",     "civitas_telephony", {}, { graceful: true }), // PERF-015
+    svc("helpdesk",     3027, "helpdesk_svc",      "civitas_helpdesk", {}, { graceful: true }), // PERF-015
 
     // ── Intelligence & automation ──────────────────────────────────────────────
     svc("knowledge",    3028, "knowledge_svc",     "civitas_knowledge"),
-    svc("workflow",     3029, "workflow_svc",      "civitas_workflow"),
+    svc("workflow",     3029, "workflow_svc",      "civitas_workflow", {}, { graceful: true }), // PERF-015
 
     // ── CQRS workers (async writes + outbox relay) ─────────────────────────────
     worker("finance",      "finance_svc",      "civitas_finance", {
@@ -674,7 +674,7 @@ module.exports = {
     svc("catalogue",    3044, "catalogue_svc",    "civitas_catalogue"),
     svc("journey",      3045, "journey_svc",      "civitas_journey"),
     svc("loyalty",      3048, "loyalty_svc",      "civitas_loyalty"),
-    svc("document",     3049, "document_svc",     "civitas_document"),
+    svc("document",     3049, "document_svc",     "civitas_document", {}, { graceful: true }), // PERF-015
     svc("recommendation", 3040, "recommendation_svc", "civitas_recommendation"),
     svc("cdp",         3047, "cdp_svc",         "civitas_cdp"),
     svc("revenue",      3038, "revenue_svc",      "civitas_revenue", {}, { graceful: true }), // PERF-003

@@ -203,7 +203,7 @@ services:
       PORT: "3002"
       DATABASE_URL: ${DATABASE_URL_TENANT:?per-service least-privilege DSN required (set DATABASE_URL for civitas_tenant; do NOT use the cluster superuser)}
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3002/health >/dev/null 2>&1 || exit 1"]
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3002/ready >/dev/null 2>&1 || exit 1"]  # PERF-015
       interval: 20s
       timeout: 5s
       retries: 5
@@ -238,7 +238,7 @@ services:
       PORT: "3003"
       DATABASE_URL: ${DATABASE_URL_POLICY:?per-service least-privilege DSN required (set DATABASE_URL for civitas_policy; do NOT use the cluster superuser)}
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3003/health >/dev/null 2>&1 || exit 1"]
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3003/ready >/dev/null 2>&1 || exit 1"]  # PERF-015
       interval: 20s
       timeout: 5s
       retries: 5
@@ -273,7 +273,7 @@ services:
       PORT: "3004"
       DATABASE_URL: ${DATABASE_URL_AUDIT:?per-service least-privilege DSN required (set DATABASE_URL for civitas_audit; do NOT use the cluster superuser)}
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3004/health >/dev/null 2>&1 || exit 1"]
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3004/ready >/dev/null 2>&1 || exit 1"]  # PERF-015
       interval: 20s
       timeout: 5s
       retries: 5
@@ -343,7 +343,7 @@ services:
       PORT: "3006"
       DATABASE_URL: ${DATABASE_URL_NOTIFICATION:?per-service least-privilege DSN required (set DATABASE_URL for civitas_notification; do NOT use the cluster superuser)}
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3006/health >/dev/null 2>&1 || exit 1"]
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3006/ready >/dev/null 2>&1 || exit 1"]  # PERF-015
       interval: 20s
       timeout: 5s
       retries: 5
@@ -448,7 +448,7 @@ services:
       PORT: "3009"
       DATABASE_URL: ${DATABASE_URL_CONTRACT:?per-service least-privilege DSN required (set DATABASE_URL for civitas_contract; do NOT use the cluster superuser)}
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3009/health >/dev/null 2>&1 || exit 1"]
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3009/ready >/dev/null 2>&1 || exit 1"]  # PERF-015
       interval: 20s
       timeout: 5s
       retries: 5
@@ -483,7 +483,7 @@ services:
       PORT: "3010"
       DATABASE_URL: ${DATABASE_URL_ESTAB:?per-service least-privilege DSN required (set DATABASE_URL for civitas_estab; do NOT use the cluster superuser)}
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3010/health >/dev/null 2>&1 || exit 1"]
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3010/ready >/dev/null 2>&1 || exit 1"]  # PERF-015
       interval: 20s
       timeout: 5s
       retries: 5
@@ -518,7 +518,7 @@ services:
       PORT: "3011"
       DATABASE_URL: ${DATABASE_URL_STOCK:?per-service least-privilege DSN required (set DATABASE_URL for civitas_stock; do NOT use the cluster superuser)}
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3011/health >/dev/null 2>&1 || exit 1"]
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3011/ready >/dev/null 2>&1 || exit 1"]  # PERF-015
       interval: 20s
       timeout: 5s
       retries: 5
@@ -634,7 +634,7 @@ services:
       PORT: "3014"
       DATABASE_URL: ${DATABASE_URL_PROJECT:?per-service least-privilege DSN required (set DATABASE_URL for civitas_project; do NOT use the cluster superuser)}
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3014/health >/dev/null 2>&1 || exit 1"]
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3014/ready >/dev/null 2>&1 || exit 1"]  # PERF-015
       interval: 20s
       timeout: 5s
       retries: 5
@@ -669,7 +669,7 @@ services:
       PORT: "3015"
       DATABASE_URL: ${DATABASE_URL_ASSET:?per-service least-privilege DSN required (set DATABASE_URL for civitas_asset; do NOT use the cluster superuser)}
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3015/health >/dev/null 2>&1 || exit 1"]
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3015/ready >/dev/null 2>&1 || exit 1"]  # PERF-015
       interval: 20s
       timeout: 5s
       retries: 5
@@ -704,7 +704,7 @@ services:
       PORT: "3016"
       DATABASE_URL: ${DATABASE_URL_REPORT:?per-service least-privilege DSN required (set DATABASE_URL for civitas_report; do NOT use the cluster superuser)}
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3016/health >/dev/null 2>&1 || exit 1"]
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3016/ready >/dev/null 2>&1 || exit 1"]  # PERF-015
       interval: 20s
       timeout: 5s
       retries: 5
@@ -809,7 +809,7 @@ services:
       PORT: "3019"
       DATABASE_URL: ${DATABASE_URL_GRANT:?per-service least-privilege DSN required (set DATABASE_URL for civitas_grant; do NOT use the cluster superuser)}
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3019/health >/dev/null 2>&1 || exit 1"]
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3019/ready >/dev/null 2>&1 || exit 1"]  # PERF-015
       interval: 20s
       timeout: 5s
       retries: 5
@@ -845,7 +845,7 @@ services:
       DATABASE_URL: ${DATABASE_URL_CITIZEN:?per-service least-privilege DSN required (set DATABASE_URL for civitas_citizen; do NOT use the cluster superuser)}
       CITIZEN_PII_KEY: ${CITIZEN_PII_KEY:?}
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3020/health >/dev/null 2>&1 || exit 1"]
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3020/ready >/dev/null 2>&1 || exit 1"]  # PERF-015
       interval: 20s
       timeout: 5s
       retries: 5
@@ -881,7 +881,7 @@ services:
       PORT: "3021"
       DATABASE_URL: ${DATABASE_URL_LEGAL:?per-service least-privilege DSN required (set DATABASE_URL for civitas_legal; do NOT use the cluster superuser)}
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3021/health >/dev/null 2>&1 || exit 1"]
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3021/ready >/dev/null 2>&1 || exit 1"]  # PERF-015
       interval: 20s
       timeout: 5s
       retries: 5
@@ -916,7 +916,7 @@ services:
       PORT: "3022"
       DATABASE_URL: ${DATABASE_URL_ADMIN:?per-service least-privilege DSN required (set DATABASE_URL for civitas_admin; do NOT use the cluster superuser)}
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3022/health >/dev/null 2>&1 || exit 1"]
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3022/ready >/dev/null 2>&1 || exit 1"]  # PERF-015
       interval: 20s
       timeout: 5s
       retries: 5
@@ -951,7 +951,7 @@ services:
       PORT: "3023"
       DATABASE_URL: ${DATABASE_URL_BILLING:?per-service least-privilege DSN required (set DATABASE_URL for civitas_billing; do NOT use the cluster superuser)}
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3023/health >/dev/null 2>&1 || exit 1"]
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3023/ready >/dev/null 2>&1 || exit 1"]  # PERF-015
       interval: 20s
       timeout: 5s
       retries: 5
@@ -987,7 +987,7 @@ services:
       DATABASE_URL: ${DATABASE_URL_CRM:?per-service least-privilege DSN required (set DATABASE_URL for civitas_crm; do NOT use the cluster superuser)}
       CRM_PII_KEY: ${CRM_PII_KEY:?}
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3024/health >/dev/null 2>&1 || exit 1"]
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3024/ready >/dev/null 2>&1 || exit 1"]  # PERF-015
       interval: 20s
       timeout: 5s
       retries: 5
@@ -1023,7 +1023,7 @@ services:
       PORT: "3025"
       DATABASE_URL: ${DATABASE_URL_INVENTORY:?per-service least-privilege DSN required (set DATABASE_URL for civitas_inventory; do NOT use the cluster superuser)}
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3025/health >/dev/null 2>&1 || exit 1"]
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3025/ready >/dev/null 2>&1 || exit 1"]  # PERF-015
       interval: 20s
       timeout: 5s
       retries: 5
@@ -1058,7 +1058,7 @@ services:
       PORT: "3026"
       DATABASE_URL: ${DATABASE_URL_TELEPHONY:?per-service least-privilege DSN required (set DATABASE_URL for civitas_telephony; do NOT use the cluster superuser)}
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3026/health >/dev/null 2>&1 || exit 1"]
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3026/ready >/dev/null 2>&1 || exit 1"]  # PERF-015
       interval: 20s
       timeout: 5s
       retries: 5
@@ -1093,7 +1093,7 @@ services:
       PORT: "3027"
       DATABASE_URL: ${DATABASE_URL_HELPDESK:?per-service least-privilege DSN required (set DATABASE_URL for civitas_helpdesk; do NOT use the cluster superuser)}
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3027/health >/dev/null 2>&1 || exit 1"]
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3027/ready >/dev/null 2>&1 || exit 1"]  # PERF-015
       interval: 20s
       timeout: 5s
       retries: 5
@@ -1163,7 +1163,7 @@ services:
       PORT: "3029"
       DATABASE_URL: ${DATABASE_URL_WORKFLOW:?per-service least-privilege DSN required (set DATABASE_URL for civitas_workflow; do NOT use the cluster superuser)}
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3029/health >/dev/null 2>&1 || exit 1"]
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3029/ready >/dev/null 2>&1 || exit 1"]  # PERF-015
       interval: 20s
       timeout: 5s
       retries: 5
