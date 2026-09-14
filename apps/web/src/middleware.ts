@@ -3,7 +3,12 @@ import { NextResponse } from "next/server";
 import { COOKIE } from "@/lib/auth/config";
 import { defaultLoginPath, isDevLoginEnabled } from "@/lib/auth/env";
 
-const PUBLIC = ["/auth", "/api/auth", "/api/careers", "/careers", "/_next", "/favicon.ico", "/sw.js"];
+// SEC-029: /api/metrics is public HERE (no session cookie) because a
+// Prometheus scrape carries no browser session to check -- access is instead
+// gated inside the route itself via METRICS_TOKEN (fail-closed; see
+// src/app/api/metrics/route.ts), the same "gate at the handler, not the
+// session layer" shape the backend services use for their own /metrics.
+const PUBLIC = ["/auth", "/api/auth", "/api/careers", "/careers", "/_next", "/favicon.ico", "/sw.js", "/api/metrics"];
 
 // M2: decode JWT payload and check exp claim — does not verify signature
 // (signature is checked by the gateway on every proxied request).
