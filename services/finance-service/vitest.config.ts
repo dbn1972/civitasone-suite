@@ -18,10 +18,27 @@ export default defineConfig({
       JWT_ALGORITHM: "HS256",
       JWT_SECRET: "test_secret_for_civitasone_32chr",
       PII_ENC_KEY: "test_pii_enc_key_for_finance_32c",
-      DATABASE_URL:  process.env.DATABASE_URL ?? "postgres://finance_svc:finance_dev_pw@localhost:5435/civitas_finance",
-      DB_URL: process.env.DB_URL ?? process.env.DATABASE_URL ?? "postgres://finance_svc:finance_dev_pw@localhost:5435/civitas_finance",
-      QUEUE_DRIVER:  "memory",
-      CACHE_DRIVER:  "memory",
+      DATABASE_URL:
+        process.env.DATABASE_URL ??
+        (process.env.CI === "true" || process.env.GITHUB_ACTIONS === "true"
+          ? "postgres://finance_svc:finance_dev_pw@localhost:5435/civitas_finance"
+          : (() => {
+              throw new Error(
+                "REL-035: DATABASE_URL is not set. This test suite no longer silently falls back to the shared, long-lived civitasone-postgres:5435 dev instance outside CI — export DATABASE_URL explicitly (point it at your own disposable Postgres) before running tests.",
+              );
+            })()),
+      DB_URL:
+        process.env.DB_URL ??
+        process.env.DATABASE_URL ??
+        (process.env.CI === "true" || process.env.GITHUB_ACTIONS === "true"
+          ? "postgres://finance_svc:finance_dev_pw@localhost:5435/civitas_finance"
+          : (() => {
+              throw new Error(
+                "REL-035: DB_URL (or DATABASE_URL) is not set. This test suite no longer silently falls back to the shared, long-lived civitasone-postgres:5435 dev instance outside CI — export DB_URL (or DATABASE_URL) explicitly (point it at your own disposable Postgres) before running tests.",
+              );
+            })()),
+      QUEUE_DRIVER: "memory",
+      CACHE_DRIVER: "memory",
     },
     coverage: {
       provider: "v8",

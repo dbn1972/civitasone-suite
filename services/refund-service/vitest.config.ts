@@ -20,7 +20,13 @@ export default defineConfig({
       CACHE_DRIVER: "memory",
       DATABASE_URL:
         process.env.DATABASE_URL ??
-        "postgres://refund_svc:refund_dev_pw@localhost:5435/civitas_refund",
+        (process.env.CI === "true" || process.env.GITHUB_ACTIONS === "true"
+          ? "postgres://refund_svc:refund_dev_pw@localhost:5435/civitas_refund"
+          : (() => {
+              throw new Error(
+                "REL-035: DATABASE_URL is not set. This test suite no longer silently falls back to the shared, long-lived civitasone-postgres:5435 dev instance outside CI — export DATABASE_URL explicitly (point it at your own disposable Postgres) before running tests.",
+              );
+            })()),
     },
     // Wave 3 cross-events wiring added
     // tests/cross-events-integration.test.ts, which dynamically imports a

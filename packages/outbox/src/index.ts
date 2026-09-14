@@ -219,7 +219,7 @@ export async function purgeOutbox(db: DrizzleTx, retentionDays = 7, batchSize = 
         LIMIT ${sql.raw(String(batchSize))}
       )
     `);
-    batchDeleted = (result as unknown as { rowCount?: number }).rowCount ?? 0;
+    batchDeleted = (result as unknown as { count?: number }).count ?? 0;
     totalDeleted += batchDeleted;
   } while (batchDeleted >= batchSize);
 
@@ -234,7 +234,8 @@ export async function purgeOutbox(db: DrizzleTx, retentionDays = 7, batchSize = 
         LIMIT ${sql.raw(String(batchSize))}
       )
     `);
-    inboxBatchDeleted = (result as unknown as { rowCount?: number }).rowCount ?? 0;
+    inboxBatchDeleted = (result as unknown as { count?: number }).count ?? 0;
+    totalDeleted += inboxBatchDeleted;
   } while (inboxBatchDeleted >= batchSize);
 
   return totalDeleted;

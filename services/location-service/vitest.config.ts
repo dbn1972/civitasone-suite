@@ -8,7 +8,13 @@ export default defineConfig({
       JWT_SECRET: "test_secret_for_civitasone_32chr",
       DATABASE_URL:
         process.env.DATABASE_URL ??
-        "postgres://location_svc:location_dev_pw@localhost:5435/civitas_location",
+        (process.env.CI === "true" || process.env.GITHUB_ACTIONS === "true"
+          ? "postgres://location_svc:location_dev_pw@localhost:5435/civitas_location"
+          : (() => {
+              throw new Error(
+                "REL-035: DATABASE_URL is not set. This test suite no longer silently falls back to the shared, long-lived civitasone-postgres:5435 dev instance outside CI — export DATABASE_URL explicitly (point it at your own disposable Postgres) before running tests.",
+              );
+            })()),
       QUEUE_DRIVER: "memory",
       CACHE_DRIVER: "memory",
     },

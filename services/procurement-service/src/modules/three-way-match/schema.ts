@@ -18,6 +18,16 @@ export const threeWayMatch = procurementSchema.table("three_way_match", {
   // PO+GRN-only match (no invoice attached yet) never carries one. Added by
   // migration 0035; length matches both endpoints' z.string().max(128).
   invoiceRef:         varchar("invoice_ref", { length: 128 }),
+  // DOM-032: invoice date as supplied by the client (POST body field of the
+  // same name on /v1/procurement/matches/invoice -- see routes.ts). Stored
+  // as an unparsed VARCHAR, not a DATE column: invoiceAttachBody's own Zod
+  // schema for this field is z.string().optional() with no format
+  // constraint, so persisting to a DATE column would trade a clean 400 at
+  // the HTTP boundary for a runtime SQL cast failure on a malformed value --
+  // tightening that validation is a separate, un-asked-for change, not this
+  // gap's DoD. Nullable: historical rows predate this column, and it is
+  // optional on its one caller today. Added by migration 0036.
+  invoiceDate:        varchar("invoice_date", { length: 32 }),
   matchStatus:        varchar("match_status", { length: 16 }).notNull().default("pending"),
   variancePct:        numeric("variance_pct", { precision: 5, scale: 2 }),
   autoMatched:        boolean("auto_matched").notNull().default(false),
