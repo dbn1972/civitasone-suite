@@ -5,6 +5,7 @@
  * 0230 — cycle detection, 0233 — span-of-control, 0314 — hold/release
  */
 import { describe, it, expect, beforeEach, afterEach, afterAll, vi } from "vitest";
+import { createMockSqlClient } from "./fixtures/mock-sql-client.js";
 import { signToken } from "@civitasone/auth";
 
 const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
@@ -77,7 +78,7 @@ vi.mock("../src/shared/db.js", () => {
       },
     },
     scopedRead: async (fn: (tx: typeof mockTx) => Promise<unknown>) => fn(mockTx),
-    sqlClient: { end: async () => {} },
+    sqlClient: createMockSqlClient(),
     sqlPool: { query: async () => ({ rows: [], rowCount: 0 }) },
   };
 });

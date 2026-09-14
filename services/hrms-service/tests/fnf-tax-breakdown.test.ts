@@ -8,6 +8,7 @@
  * 4. Private employee: partial exemptions
  */
 import { describe, it, expect, vi, beforeAll, afterAll } from "vitest";
+import { createMockSqlClient } from "./fixtures/mock-sql-client.js";
 import { createHmac } from "node:crypto";
 import type { FastifyInstance } from "fastify";
 
@@ -40,7 +41,7 @@ vi.mock("../src/shared/db.js", () => {
   };
   return {
     db: mockDb,
-    sqlClient: { end: vi.fn() },
+    sqlClient: createMockSqlClient(),
     // scopedRead runs reads under db.transaction() in production so RLS's
     // app.tenant_id GUC is set. In this mocked-db test, there's no real
     // transaction/connection, so just invoke the callback directly with the

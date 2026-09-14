@@ -4,6 +4,7 @@
  * bulk renewal, auto-separation, idempotency, and error paths.
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { createMockSqlClient } from "./fixtures/mock-sql-client.js";
 import { randomUUID } from "node:crypto";
 import { MemoryQueue } from "@civitasone/queue";
 
@@ -43,7 +44,7 @@ const H = vi.hoisted(() => {
 vi.mock("../src/shared/db.js", () => ({
   db: { transaction: H.dbTransaction },
   scopedRead: vi.fn(async (cb: any) => cb(H.mockTx)),
-  sqlClient: { end: async () => {} },
+  sqlClient: createMockSqlClient(),
 }));
 
 vi.mock("../src/shared/outbox.js", () => ({

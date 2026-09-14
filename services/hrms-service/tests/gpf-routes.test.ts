@@ -22,6 +22,7 @@
  * synchronously. See routes.ts and f3-consumer.ts for the fix.)
  */
 import { describe, it, expect, beforeEach, afterAll, vi } from "vitest";
+import { createMockSqlClient } from "./fixtures/mock-sql-client.js";
 import { signToken } from "@civitasone/auth";
 
 const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
@@ -69,7 +70,7 @@ vi.mock("../src/shared/db.js", () => {
   return {
     db: { transaction: async (cb: (tx: typeof mockTx) => Promise<unknown>) => cb(mockTx) },
     scopedRead: async (fn: (tx: typeof mockTx) => Promise<unknown>) => fn(mockTx),
-    sqlClient: { end: async () => {} },
+    sqlClient: createMockSqlClient(),
     sqlPool: { query: async () => ({ rows: [], rowCount: 0 }) },
   };
 });

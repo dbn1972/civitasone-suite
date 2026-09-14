@@ -5,6 +5,7 @@
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
+import { createMockSqlClient } from "./fixtures/mock-sql-client.js";
 const TENANT = "aaaaaaaa-0001-4000-8000-000000000001";
 const USER = "aaaaaaaa-1111-4000-8000-000000000001";
 const RTI_ID = "cccccccc-0001-4000-8000-000000000001";
@@ -36,7 +37,7 @@ vi.mock("../src/shared/db.js", () => {
   return {
     db: { transaction: async (cb: (tx: typeof mockTx) => Promise<unknown>) => cb(mockTx) },
     scopedRead: async (fn: (tx: typeof mockTx) => Promise<unknown>) => fn(mockTx),
-    sqlClient: { end: async () => {} },
+    sqlClient: createMockSqlClient(),
   };
 });
 

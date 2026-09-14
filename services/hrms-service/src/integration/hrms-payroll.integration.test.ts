@@ -75,6 +75,19 @@ vi.mock("../shared/db.js", () => {
     insert: (_t: unknown) => ({ values: (v: unknown) => insertValues(v), $returningId: () => ({ values: (v: unknown) => insertValues(v) }) }),
     execute: (q: unknown) => H.execute(q),
   };
+  // TX-015: inlined, not imported from tests/fixtures/mock-sql-client.js --
+  // this file lives under src/, whose tsconfig.json scopes rootDir to
+  // ./src, and tsc --noEmit rejects any src/ file that reaches outside it.
+  // Identical shape to createMockSqlClient(); see that file's doc comment.
+  // The base must be a plain arrow function (not vi.fn(...)) for TS's
+  // "properties on const functions" inference to allow the assignments
+  // below -- see tests/fixtures/mock-sql-client.ts and
+  // tests/id-cards-routes.test.ts for the same pattern.
+  const sqlClientFn = (..._args: unknown[]) => Promise.resolve([]);
+  sqlClientFn.end = vi.fn(async () => {});
+  sqlClientFn.unsafe = vi.fn((..._args: unknown[]) => Promise.resolve([]));
+  sqlClientFn.begin = vi.fn(async (fn: (tx: typeof sqlClientFn) => Promise<unknown>) => fn(sqlClientFn));
+
   return {
     db: {
       transaction: async (cb: (tx: typeof mockTx) => Promise<unknown>) => cb(mockTx),
@@ -82,7 +95,7 @@ vi.mock("../shared/db.js", () => {
       execute: (q: unknown) => H.execute(q),
     },
     scopedRead: async (fn: (tx: typeof mockTx) => Promise<unknown>) => fn(mockTx),
-    sqlClient: { end: async () => {} },
+    sqlClient: sqlClientFn,
     sqlPool: { query: async (...a: unknown[]) => H.poolQuery(...a) },
   };
 });

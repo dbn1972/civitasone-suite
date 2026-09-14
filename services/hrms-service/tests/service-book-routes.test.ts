@@ -8,6 +8,7 @@
  * Happy paths, 400 validation, 401 auth, 403 role, 404 not found, 409 conflict.
  */
 import { describe, it, expect, beforeEach, afterAll, vi } from "vitest";
+import { createMockSqlClient } from "./fixtures/mock-sql-client.js";
 import { signToken } from "@civitasone/auth";
 
 const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
@@ -35,7 +36,7 @@ vi.mock("../src/shared/db.js", () => ({
     execute: async () => [],
   },
   scopedRead: async (fn: (tx: unknown) => Promise<unknown>) => fn({}),
-  sqlClient: { end: async () => {} },
+  sqlClient: createMockSqlClient(),
   sqlPool: { query: async () => ({ rows: [], rowCount: 0 }) },
 }));
 
