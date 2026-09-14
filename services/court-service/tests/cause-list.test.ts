@@ -12,6 +12,7 @@ let currentList: { id: string; listDate: string; courtId: string } | undefined;
 let insertItemImpl: () => Promise<void> = async () => {};
 
 vi.mock("../src/shared/db.js", () => ({
+  scopedRead: async (fn: (tx: unknown) => Promise<unknown>) => fn({ __tx: true }),
   db: { transaction: async (fn: (tx: unknown) => Promise<unknown>) => fn({ __tx: true }) },
 }));
 

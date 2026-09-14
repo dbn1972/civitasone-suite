@@ -54,7 +54,8 @@ const {
   };
 });
 
-vi.mock("../src/shared/db.js", () => ({ db: { transaction: dbTransactionFn } }));
+vi.mock("../src/shared/db.js", () => ({
+  scopedRead: dbTransactionFn, db: { transaction: dbTransactionFn } }));
 vi.mock("../src/shared/outbox.js", () => ({
   enqueue: (...args: unknown[]) => enqueueMock(...args),
   markProcessed: (...args: unknown[]) => markProcessedMock(...args),

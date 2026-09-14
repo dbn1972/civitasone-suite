@@ -41,6 +41,8 @@ vi.mock("../src/shared/infra.js", () => ({
   cache: { invalidate: vi.fn(async () => undefined), makeKey: (...parts: string[]) => parts.join(":") },
 }));
 vi.mock("../src/modules/board-intake/repo.js", () => ({
+  findByIdTx: vi.fn(async () => null),
+  review: vi.fn(async () => undefined),
   insertIntakeIdempotent: (...a: any[]) => insertMock(...a),
 }));
 

@@ -16,6 +16,7 @@ let currentHearing: { status: string; version: number; caseId: string } | undefi
 let currentCase: { status: string } | undefined = { status: "pending" };
 
 vi.mock("../src/shared/db.js", () => ({
+  scopedRead: async (fn: (tx: unknown) => Promise<unknown>) => fn({ __tx: true }),
   db: { transaction: async (fn: (tx: unknown) => Promise<unknown>) => fn({ __tx: true }) },
 }));
 

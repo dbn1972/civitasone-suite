@@ -97,6 +97,7 @@ const {
 });
 
 vi.mock("../src/shared/db.js", () => ({
+  scopedRead: dbTransactionFn,
   db: { transaction: dbTransactionFn },
 }));
 
@@ -125,6 +126,8 @@ vi.mock("../src/modules/gl/repo.js", () => ({
 }));
 
 vi.mock("../src/modules/budget/repo.js", () => ({
+  incrementBudgetUtilisedGuarded: vi.fn(async () => true),
+  incrementBudgetUtilisedForced: vi.fn(async () => undefined),
   findHeadByCodeTx: (...args: any[]) => findHeadByCodeTxMock(...args),
   findHeadByIdTx: (...args: any[]) => findHeadByIdTxMock(...args),
   findBudget: vi.fn(async () => null),

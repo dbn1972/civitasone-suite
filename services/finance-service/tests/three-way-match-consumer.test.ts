@@ -109,6 +109,7 @@ const {
 });
 
 vi.mock("../src/shared/db.js", () => ({
+  scopedRead: dbTransactionFn,
   db: { transaction: dbTransactionFn },
 }));
 
@@ -119,11 +120,6 @@ vi.mock("../src/shared/outbox.js", () => ({
 
 vi.mock("../src/modules/payments/repo.js", () => ({
   upsertGrnMatch: vi.fn(async () => undefined),
-}));
-
-vi.mock("../src/modules/pfms/repo.js", () => ({
-  getTenantConfig: vi.fn(async () => ({ agencyCode: "AG001", defaultDdo: "DDO001" })),
-  insertPfmsBatch: vi.fn(async () => undefined),
 }));
 
 // ---------------------------------------------------------------------------

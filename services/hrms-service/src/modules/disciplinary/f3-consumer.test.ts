@@ -56,6 +56,7 @@ const { mockTx, insertValuesMock, updateSetMock, eqOperands, selectResult, R } =
 });
 
 vi.mock("../../shared/db.js", () => ({
+  scopedRead: async (cb: (tx: unknown) => Promise<void>) => cb(mockTx),
   db: { transaction: async (cb: (tx: unknown) => Promise<void>) => cb(mockTx) },
 }));
 vi.mock("../../shared/outbox.js", () => ({

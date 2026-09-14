@@ -25,6 +25,7 @@ const H = vi.hoisted(() => ({
 }));
 
 vi.mock("../src/modules/apar/repo.js", () => ({
+  listAppraisals: vi.fn(async () => []),
   findAppraisal: (...a: unknown[]) => H.findAppraisal(...a),
   updateAppraisal: (...a: unknown[]) => H.updateAppraisal(...a),
   appendHistory: (...a: unknown[]) => H.appendHistory(...a),

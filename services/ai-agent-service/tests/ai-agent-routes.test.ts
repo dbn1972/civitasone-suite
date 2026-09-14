@@ -101,6 +101,7 @@ vi.mock("../src/modules/agents/repo.js", () => ({
 }));
 
 vi.mock("../src/modules/governance/repo.js", () => ({
+  blockedCountsByAgent: vi.fn(async () => ({})),
   findById: (...a: unknown[]) => H.auditFindByIdMock(...a),
   listByTenant: (...a: unknown[]) => H.auditListMock(...a),
   countTotals: (...a: unknown[]) => H.auditCountTotalsMock(...a),

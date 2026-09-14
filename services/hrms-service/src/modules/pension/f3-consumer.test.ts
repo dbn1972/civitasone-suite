@@ -47,6 +47,7 @@ const { mockTx, dbTransactionFn, scopedReadResult, insertPensionRecordMock, serv
 });
 
 vi.mock("../../shared/db.js", () => ({
+  scopedRead: dbTransactionFn,
   db: { transaction: dbTransactionFn },
 }));
 vi.mock("../../shared/outbox.js", () => ({

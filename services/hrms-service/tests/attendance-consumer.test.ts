@@ -25,7 +25,8 @@ const {
   };
 });
 
-vi.mock("../src/shared/db.js", () => ({ db: { transaction: dbTransactionFn } }));
+vi.mock("../src/shared/db.js", () => ({
+  scopedRead: dbTransactionFn, db: { transaction: dbTransactionFn } }));
 vi.mock("../src/shared/outbox.js", () => ({
   enqueue: vi.fn(async (_tx: unknown, msg: { topic: string; payload: unknown }) => {
     enqueuedMessages.push({ topic: msg.topic, payload: msg.payload });
@@ -36,6 +37,7 @@ vi.mock("../src/shared/infra.js", () => ({
   cache: { invalidate: vi.fn(async () => undefined), makeKey: (...parts: string[]) => parts.join(":") },
 }));
 vi.mock("../src/modules/attendance/repo.js", () => ({
+  upsertLock: vi.fn(async () => undefined),
   upsertAttendance: (...a: any[]) => upsertAttendanceMock(...a),
   insertRegularisation: (...a: any[]) => insertRegularisationMock(...a),
 }));

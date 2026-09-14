@@ -69,6 +69,7 @@ vi.mock("../src/shared/infra.js", () => ({
 }));
 
 vi.mock("../src/modules/disciplinary/repo.js", () => ({
+  activePaySuspendedEmployeeIds: vi.fn(async () => new Map()),
   findCase: (...a: unknown[]) => H.findCase(...a),
   listCasesByEmployee: (...a: unknown[]) => H.listCasesByEmployee(...a),
   insertCase: (...a: unknown[]) => H.insertCase(...a),

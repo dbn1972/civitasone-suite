@@ -18,7 +18,8 @@ const { mockTx, dbTransactionFn, enqueuedMessages, insertLoanMock, updateLoanMoc
   };
 });
 
-vi.mock("../src/shared/db.js", () => ({ db: { transaction: dbTransactionFn, execute: vi.fn(async () => []) } }));
+vi.mock("../src/shared/db.js", () => ({
+  scopedRead: dbTransactionFn, db: { transaction: dbTransactionFn, execute: vi.fn(async () => []) } }));
 vi.mock("../src/shared/outbox.js", () => ({
   enqueue: vi.fn(async (_tx: unknown, msg: { topic: string; payload: unknown }) => { enqueuedMessages.push({ topic: msg.topic, payload: msg.payload }); }),
   markProcessed: vi.fn(async () => true),

@@ -59,6 +59,7 @@ vi.mock("../src/shared/infra.js", () => ({
 vi.mock("../src/modules/collateral/repo.js", async () => {
   const actual = await import("../src/modules/collateral/repo.js");
   return {
+  findByIdTx: vi.fn(async () => null),
     toView: actual.toView,
     listByRecommendation: (...a: unknown[]) => H.listByRecommendationMock(...a),
     listAllForRecommendation: (...a: unknown[]) => H.listAllForRecommendationMock(...a),
@@ -72,6 +73,7 @@ vi.mock("../src/modules/collateral/repo.js", async () => {
 vi.mock("../src/modules/nba/repo.js", async () => {
   const actual = await import("../src/modules/nba/repo.js");
   return {
+  listAll: vi.fn(async () => ({ rows: [], total: 0 })),
     toView: actual.toView,
     findById: (...a: unknown[]) => H.nbaFindByIdMock(...a),
     listForProfile: vi.fn(async () => ({ rows: [], total: 0 })),

@@ -39,6 +39,7 @@ vi.mock("../../shared/db.js", () => ({
 }));
 
 vi.mock("../properties/repo.js", () => ({
+  list: vi.fn(async () => ({ rows: [], total: 0 })),
   findById: (...a: unknown[]) => H.propertiesFindByIdMock(...a),
 }));
 

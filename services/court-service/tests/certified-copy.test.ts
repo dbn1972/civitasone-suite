@@ -15,6 +15,7 @@ let currentCopy: { status: string; version: number; feeMinor: bigint } | undefin
 let configValues: Record<string, unknown> = {};
 
 vi.mock("../src/shared/db.js", () => ({
+  scopedRead: async (fn: (tx: unknown) => Promise<unknown>) => fn({ __tx: true }),
   db: { transaction: async (fn: (tx: unknown) => Promise<unknown>) => fn({ __tx: true }) },
 }));
 

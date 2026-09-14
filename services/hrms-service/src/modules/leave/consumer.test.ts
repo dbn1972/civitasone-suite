@@ -94,6 +94,7 @@ const {
 
 // 1. Shared DB — intercept transactions.
 vi.mock("../../shared/db.js", () => ({
+  scopedRead: dbTransactionFn,
   db: { transaction: dbTransactionFn },
 }));
 
@@ -107,6 +108,7 @@ vi.mock("../../shared/outbox.js", () => ({
 
 // 3. Leave repo — controlled responses.
 vi.mock("./repo.js", () => ({
+  findTenantLeavePolicy: vi.fn(async () => null),
   findAllocById:    (...args: any[]) => findAllocByIdMock(...args),
   findLeaveAppById: (...args: any[]) => findLeaveAppByIdMock(...args),
   // Tx-scoped variants (fix/hrms-batch2-nested-tx-deadlock): the consumer now

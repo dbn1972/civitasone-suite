@@ -26,6 +26,7 @@ const H = vi.hoisted(() => ({
 }));
 
 vi.mock("../src/shared/db.js", () => ({
+  scopedRead: (...a: unknown[]) => H.dbTransaction(...a),
   db: { transaction: (...a: unknown[]) => H.dbTransaction(...a) },
   sqlClient: createMockSqlClient(),
 }));

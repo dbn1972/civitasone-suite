@@ -30,7 +30,8 @@ const {
 
 let markProcessedResult = true;
 
-vi.mock("../src/shared/db.js", () => ({ db: { transaction: dbTransactionFn, insert: vi.fn().mockReturnValue({ values: vi.fn().mockResolvedValue(undefined) }) } }));
+vi.mock("../src/shared/db.js", () => ({
+  scopedRead: dbTransactionFn, db: { transaction: dbTransactionFn, insert: vi.fn().mockReturnValue({ values: vi.fn().mockResolvedValue(undefined) }) } }));
 vi.mock("../src/shared/outbox.js", () => ({
   enqueue: vi.fn(async (_tx: unknown, msg: { topic: string; eventType: string; payload: unknown }) => {
     enqueuedMessages.push({ topic: msg.topic, eventType: msg.eventType, payload: msg.payload });

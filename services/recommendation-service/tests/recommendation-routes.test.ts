@@ -65,6 +65,7 @@ vi.mock("../src/shared/infra.js", () => ({
 }));
 
 vi.mock("../src/modules/nba/repo.js", () => ({
+  listAll: vi.fn(async () => ({ rows: [], total: 0 })),
   findById: (...a: unknown[]) => H.nbaFindByIdMock(...a),
   listForProfile: (...a: unknown[]) => H.nbaListForProfileMock(...a),
   insert: (...a: unknown[]) => H.nbaInsertMock(...a),
@@ -73,6 +74,7 @@ vi.mock("../src/modules/nba/repo.js", () => ({
 }));
 
 vi.mock("../src/modules/matrix/repo.js", () => ({
+  listEffectiveForTriggers: vi.fn(async () => []),
   findById: (...a: unknown[]) => H.matrixFindByIdMock(...a),
   listByTenant: (...a: unknown[]) => H.matrixListMock(...a),
   findByProductPair: (...a: unknown[]) => H.matrixFindByProductPairMock(...a),

@@ -379,7 +379,8 @@ const {
   };
 });
 
-vi.mock("../src/shared/db.js", () => ({ db: { transaction: dbTransFn } }));
+vi.mock("../src/shared/db.js", () => ({
+  scopedRead: dbTransFn, db: { transaction: dbTransFn } }));
 
 vi.mock("../src/shared/outbox.js", () => ({
   enqueue:       (...a: any[]) => mockEnqueue(...a),
@@ -409,6 +410,8 @@ vi.mock("../src/modules/gl/repo.js", () => ({
 }));
 
 vi.mock("../src/modules/budget/repo.js", () => ({
+  incrementBudgetUtilisedGuarded: vi.fn(async () => true),
+  incrementBudgetUtilisedForced: vi.fn(async () => undefined),
   findHeadByCodeTx: (...a: any[]) => mockFindHeadByCodeTx(...a),
   findHeadByIdTx:   (...a: any[]) => mockFindHeadByIdTx(...a),
   findBudget:       vi.fn(async () => null),

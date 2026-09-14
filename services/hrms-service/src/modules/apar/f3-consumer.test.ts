@@ -79,6 +79,8 @@ vi.mock("../../shared/outbox.js", () => ({
   markProcessed: vi.fn(async () => true),
 }));
 vi.mock("./repo.js", () => ({
+  listAppraisals: vi.fn(async () => []),
+  listHistory: vi.fn(async () => []),
   findAppraisal: (...a: unknown[]) => R.findAppraisal(...a),
   findAppraisalTx: (...a: unknown[]) => R.findAppraisalTx(...a),
   updateAppraisal: (...a: unknown[]) => R.updateAppraisal(...a),
