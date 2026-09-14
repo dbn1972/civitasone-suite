@@ -12,18 +12,21 @@ export default defineConfig({
       // Route tests assert on status codes, not on logs; per-request Pino output made
       // a failing run unreadable.
       LOG_LEVEL: "silent",
-      DATABASE_URL: process.env.DATABASE_URL ?? "postgres://cdp_svc:cdp_dev_pw@localhost:5435/civitas_cdp",
+      DATABASE_URL:
+        process.env.DATABASE_URL ??
+        (process.env.CI === "true" || process.env.GITHUB_ACTIONS === "true"
+          ? "postgres://cdp_svc:cdp_dev_pw@localhost:5435/civitas_cdp"
+          : (() => {
+              throw new Error(
+                "REL-035: DATABASE_URL is not set. This test suite no longer silently falls back to the shared, long-lived civitasone-postgres:5435 dev instance outside CI — export DATABASE_URL explicitly (point it at your own disposable Postgres) before running tests.",
+              );
+            })()),
       QUEUE_DRIVER: "memory",
       CACHE_DRIVER: "memory",
     },
     coverage: {
       provider: "v8",
-      exclude: [
-        "dist/**",
-        "src/index.ts",
-        "src/worker.ts",
-        "vitest.config.ts",
-      ],
+      exclude: ["dist/**", "src/index.ts", "src/worker.ts", "vitest.config.ts"],
       thresholds: {
         lines: 80,
         functions: 75,
