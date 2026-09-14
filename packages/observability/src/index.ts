@@ -340,7 +340,20 @@ export async function initErrorReporting(service: string): Promise<"sentry" | "l
   if (!dsn) return "log-only";
   try {
     // Dynamic, optional import — absent dependency degrades to log-only.
-    const Sentry = (await import("@sentry/node" as string)) as {
+    // SEC-029: the specifier is deliberately routed through a variable
+    // (rather than a literal passed directly to import()) so bundler-based
+    // tooling (Vite/Rollup -- and therefore vitest) cannot statically
+    // resolve an intentionally-optional dependency at build/transform time.
+    // A literal here (even with /* @vite-ignore */, which only silences
+    // Vite's "can't analyze this" warning for specifiers it truly can't see
+    // -- it does not stop Vite from still trying to resolve one it CAN see)
+    // fails the whole module transform for any test importing this module
+    // unmocked when @sentry/node isn't installed, even though this branch
+    // only runs when SENTRY_DSN is set (guard above) and is already
+    // try/caught for exactly this "may not be installed" case. Node's own
+    // runtime import() resolution is unaffected either way.
+    const sentryModuleName = "@sentry/node";
+    const Sentry = (await import(/* @vite-ignore */ sentryModuleName)) as {
       init: (o: Record<string, unknown>) => void;
       captureException: (e: unknown, hint?: unknown) => void;
     };
