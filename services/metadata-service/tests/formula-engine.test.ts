@@ -106,3 +106,32 @@ describe("validateFormula", () => {
     expect(r.error).toBeTruthy();
   });
 });
+
+describe("evaluateFormula — DOM-031: resolveField prototype-chain guard", () => {
+  it("prototype-chain keys resolve as absent (null via ISBLANK), not leaked off Object.prototype, when no own field shadows them", () => {
+    expect(evaluateFormula("ISBLANK(constructor)")).toBe(true);
+    expect(evaluateFormula("ISBLANK(__proto__)")).toBe(true);
+    expect(evaluateFormula("ISBLANK(toString)")).toBe(true);
+    expect(evaluateFormula("ISBLANK(hasOwnProperty)")).toBe(true);
+    expect(evaluateFormula("ISBLANK(valueOf)")).toBe(true);
+  });
+
+  it("a bare reference to a prototype-chain key evaluates to null (field not found), even alongside real context data", () => {
+    expect(evaluateFormula("constructor", { amount: 100, status: "active" })).toBe(null);
+    expect(evaluateFormula("__proto__", { amount: 100, status: "active" })).toBe(null);
+  });
+
+  it("an own field that happens to share a name with a prototype-chain key still resolves normally", () => {
+    // A record can legitimately have an own field literally named "constructor" (e.g. a tenant's
+    // custom field) — the own-property guard must allow this rather than treat the name as absent.
+    expect(evaluateFormula('constructor == "acme-corp"', { constructor: "acme-corp" })).toBe(true);
+    expect(evaluateFormula("ISBLANK(constructor)", { constructor: "acme-corp" })).toBe(false);
+
+    // JSON.parse assigns "__proto__" as a genuine *own* data property (it does not touch the real
+    // prototype, unlike `obj[key] = value` with a user-controlled key, and unlike an object literal
+    // where `{ __proto__: "..." }` is special-cased and creates no own property at all) — must still resolve.
+    const jsonData = JSON.parse('{"__proto__": "not-a-real-prototype", "amount": 5}') as Record<string, unknown>;
+    expect(Object.getPrototypeOf(jsonData)).toBe(Object.prototype); // sanity: JSON.parse didn't pollute
+    expect(evaluateFormula('__proto__ == "not-a-real-prototype"', jsonData)).toBe(true);
+  });
+});
