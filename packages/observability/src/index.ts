@@ -340,7 +340,20 @@ export async function initErrorReporting(service: string): Promise<"sentry" | "l
   if (!dsn) return "log-only";
   try {
     // Dynamic, optional import — absent dependency degrades to log-only.
-    const Sentry = (await import("@sentry/node" as string)) as {
+    // SEC-029: the specifier is deliberately routed through a variable
+    // (rather than a literal passed directly to import()) so bundler-based
+    // tooling (Vite/Rollup -- and therefore vitest) cannot statically
+    // resolve an intentionally-optional dependency at build/transform time.
+    // A literal here (even with /* @vite-ignore */, which only silences
+    // Vite's "can't analyze this" warning for specifiers it truly can't see
+    // -- it does not stop Vite from still trying to resolve one it CAN see)
+    // fails the whole module transform for any test importing this module
+    // unmocked when @sentry/node isn't installed, even though this branch
+    // only runs when SENTRY_DSN is set (guard above) and is already
+    // try/caught for exactly this "may not be installed" case. Node's own
+    // runtime import() resolution is unaffected either way.
+    const sentryModuleName = "@sentry/node";
+    const Sentry = (await import(/* @vite-ignore */ sentryModuleName)) as {
       init: (o: Record<string, unknown>) => void;
       captureException: (e: unknown, hint?: unknown) => void;
     };
@@ -522,6 +535,29 @@ function requestTenant(request: unknown): string {
   return r.ctx?.tenantId ?? "";
 }
 
+// ── SEC-029: metrics text shared with non-Fastify processes ─────────────────
+// registerOpsRoutes() below is Fastify-only (it needs an AppLike to hang
+// /health /ready /metrics /openapi.json off of), but the metric FAMILIES
+// themselves -- captured_errors_total (SEC-027), outbox/dlq, consumer
+// errors/heartbeat, http latency, per-tenant requests -- are just process-
+// local Maps with no Fastify dependency. apps/web (Next.js, no Fastify app)
+// calls this directly from its own GET /api/metrics route so a web-app-
+// originated captureError() is exposed in the same Prometheus text every
+// backend service already emits, instead of duplicating this formatting.
+// Deliberately excludes service_up/http_requests_total: those need a live
+// request-count closure (requestCount/startedAt below) that only
+// registerOpsRoutes()'s onRequest/onResponse hooks actually drive.
+export function formatSharedMetrics(): string[] {
+  return [
+    ...formatNotificationDeliveryMetrics(),
+    ...formatConsumerErrorMetrics(),
+    ...formatConsumerHeartbeatMetrics(),
+    ...formatFailureMetrics(),
+    ...formatHttpLatencyMetrics(),
+    ...formatTenantRequestMetrics(),
+  ];
+}
+
 /** Standard /health /ready /metrics /openapi.json for every service. */
 export function registerOpsRoutes(app: AppLike, opts: OpsOptions): void {
   const version = opts.version ?? process.env.npm_package_version ?? "0.1.0";
@@ -616,12 +652,7 @@ export function registerOpsRoutes(app: AppLike, opts: OpsOptions): void {
       "# HELP process_uptime_seconds Process uptime",
       "# TYPE process_uptime_seconds gauge",
       `process_uptime_seconds{service="${opts.service}"} ${Math.floor((Date.now() - startedAt) / 1000)}`,
-      ...formatNotificationDeliveryMetrics(),
-      ...formatConsumerErrorMetrics(),
-      ...formatConsumerHeartbeatMetrics(),
-      ...formatFailureMetrics(),
-      ...formatHttpLatencyMetrics(),
-      ...formatTenantRequestMetrics(),
+      ...formatSharedMetrics(),
     ];
     return reply.type("text/plain; version=0.0.4").send(lines.join("\n") + "\n");
   });

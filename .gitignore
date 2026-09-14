@@ -8,6 +8,9 @@ coverage/
 .env.local
 .env*.local
 infra/.env
+# SEC-029: local METRICS_TOKEN file mounted into the prometheus container
+# (infra/observability/docker-compose.observability.yml) -- never committed.
+infra/observability/secrets/
 .DS_Store
 ._*
 *.tsbuildinfo

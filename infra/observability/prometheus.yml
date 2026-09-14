@@ -123,3 +123,25 @@ scrape_configs:
           - 'host.docker.internal:3031'   # analytics
           - 'host.docker.internal:4012'   # location
         labels: { tier: infra }
+
+  # -- Web app (apps/web, self-hosted via `next start`) ------------------------
+  # SEC-029: unlike every target above, this one has no internal-IP fallback --
+  # apps/web's own /api/metrics route (Next.js has no trustProxy-equivalent
+  # config, so an XFF-based allowlist there would be spoofable) requires
+  # METRICS_TOKEN unconditionally, sent as `Authorization: Bearer <token>`.
+  #
+  # NOTE: this file is bind-mounted into the prometheus container as-is (see
+  # docker-compose.observability.yml) -- Prometheus does not shell-interpolate
+  # ${VAR} the way docker-compose itself does, so the token can't be inlined
+  # here as plain text either way. credentials_file points at a file the
+  # deployer provisions (same "provision in your secrets manager" contract
+  # DEPLOYMENT.md/SELF-HOSTING.md already document for METRICS_TOKEN itself)
+  # containing the raw token value, mounted read-only alongside this file.
+  - job_name: civitasone-web
+    metrics_path: /api/metrics
+    authorization:
+      type: Bearer
+      credentials_file: /etc/prometheus/secrets/metrics_token
+    static_configs:
+      - targets: ['host.docker.internal:3000']
+        labels: { service: web, tier: web }

@@ -8,6 +8,18 @@
 #   ALERTMANAGER_SMTP_USERNAME -- SMTP auth username
 #   ALERTMANAGER_SMTP_PASSWORD -- SMTP auth password (from secret manager)
 #   ALERTMANAGER_EMAIL_TO      -- Recipient address for alert emails
+#
+# SEC-029: prometheus.yml's civitasone-web scrape job reads its bearer token
+# from /etc/prometheus/secrets/metrics_token (credentials_file) instead of an
+# inline value -- Prometheus's own config file can't do shell-style ${VAR}
+# substitution the way this compose file's `environment:` blocks can. This
+# repo deploys via both docker-compose and Kubernetes/Helm (see
+# docs/DEPLOYMENT.md), so wiring one specific bind-mount here would presume
+# docker-compose is the target; add the matching volume mount for your own
+# deployment (e.g. `./secrets/metrics_token:/etc/prometheus/secrets/metrics_token:ro`
+# for this compose file, or a Secret+volumeMount under Helm) when you
+# provision METRICS_TOKEN, the same deploy-time step already required for
+# PII_ENC_KEY/INTERNAL_SERVICE_SECRET (see SELF-HOSTING.md).
 
 services:
   prometheus:
