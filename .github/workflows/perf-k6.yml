@@ -1,25 +1,33 @@
-name: Perf k6 Suite (manual)
+name: Perf k6 Suite
 
 # PERF-010: a REAL, RUNNABLE CI entry point for the tier-0/1 k6 sanity suite
-# (scripts/perf/) added by that gap's fix. Deliberately workflow_dispatch
-# ONLY -- there is no `schedule:` trigger here. docs/operations/SLO-SLI-RUNBOOKS.md
-# describes a "nightly suite against staging"; this workflow is neither of
-# those things yet:
-#   - it runs against a fresh, ephemeral docker-compose'd LOCAL stack on the
-#     runner (infra/docker-compose.yml), not staging -- there is no staging
-#     environment reachable from this repo/session to validate against;
-#   - it is dispatched by a human, not a cron schedule -- turning this into
-#     a real nightly-against-staging job is real infra/ops work (a staging
-#     environment to point at, secrets, on-call ownership for a new alert
-#     surface) that is out of scope for this PR. See the PERF-010 gap-report
-#     entry and its filed follow-up for what's still needed there.
+# (scripts/perf/) added by that gap's fix. Runs nightly on a `schedule:` AND
+# on-demand via `workflow_dispatch`. The nightly time (0 5 * * * UTC) is
+# offset 2h from this repo's other nightly job (see
+# .github/workflows/nightly.yml, 0 3 * * * UTC) so the two don't overlap.
 #
-# What this DOES prove, every time someone runs it: the k6 scripts are real,
-# they build the 4 target services from source, boot them against a REAL
-# docker-compose'd Postgres with pg_stat_statements actually enabled (this
-# uses infra/docker-compose.yml directly -- the same file this PR fixed --
-# rather than a GitHub Actions `services:` container, specifically because
-# `services:` has no `command:` field and cannot pass
+# docs/operations/SLO-SLI-RUNBOOKS.md describes a "nightly suite against
+# staging"; this workflow is now only half of that -- read carefully:
+#   - it DOES now run automatically every night, unattended, and persists
+#     its results as a durable GitHub Actions artifact (`perf-k6-results`,
+#     30-day retention -- see the "Upload k6 results" step below). That
+#     step is unconditional on trigger type, so a schedule-triggered run
+#     produces exactly the same report a manual workflow_dispatch run does;
+#   - it still runs against a fresh, ephemeral docker-compose'd LOCAL stack
+#     on the runner (infra/docker-compose.yml), NOT staging -- there is no
+#     staging environment reachable from this repo/session to validate
+#     against. Turning this into a real nightly-against-staging job is
+#     still separate infra/ops work (a staging environment to point at,
+#     secrets, on-call ownership for a new alert surface) that remains out
+#     of scope here. See the PERF-010 gap-report entry for what's still
+#     needed there.
+#
+# What this DOES prove, every time it runs (manual or scheduled): the k6
+# scripts are real, they build the 4 target services from source, boot them
+# against a REAL docker-compose'd Postgres with pg_stat_statements actually
+# enabled (this uses infra/docker-compose.yml directly -- the same file
+# PERF-010 fixed -- rather than a GitHub Actions `services:` container,
+# specifically because `services:` has no `command:` field and cannot pass
 # shared_preload_libraries at server start; see scripts/ci/bootstrap-postgres.sh's
 # comment on why that step is best-effort everywhere else in CI), run real
 # HTTP traffic through each, and fail the job if the dev-scale thresholds in
@@ -30,10 +38,12 @@ name: Perf k6 Suite (manual)
 # this self-contained CI run depends on or re-validates.
 
 on:
+  schedule:
+    - cron: '0 5 * * *'  # nightly, 05:00 UTC -- 2h after nightly.yml's 0 3 * * *
   workflow_dispatch:
     inputs:
       k6_duration:
-        description: 'Override each k6 scenario''s duration (e.g. "20s"). Leave blank to use each script''s own default.'
+        description: 'Override each k6 scenario''s duration (e.g. "20s"). Leave blank to use each script''s own default. (Manual dispatch only -- scheduled runs always use each script''s own default.)'
         type: string
         default: ''
 
