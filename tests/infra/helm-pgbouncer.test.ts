@@ -201,4 +201,18 @@ describe("Helm chart: pgbouncer (Connection_Proxy) deployment renders correctly 
     expect(envBlock).toMatch(/name:\s*AUTH_TYPE\s*\n\s*value:\s*"scram-sha-256"/);
     expect(envBlock).not.toMatch(/name:\s*AUTH_TYPE\s*\n\s*value:\s*"md5"/);
   });
+
+  it("LISTEN_PORT is set to 6432, matching containerPort/Service/probes (PERF-012)", () => {
+    // edoburu/pgbouncer's entrypoint defaults its actual listening socket to
+    // 5432 unless LISTEN_PORT overrides it -- confirmed live, a container
+    // booted with this chart's exact rendered env (pre-fix) only accepted
+    // connections on 5432, while containerPort/Service targetPort/both
+    // probes above all declare 6432, so the pod's liveness probe would fail
+    // forever and the Service would never route to it in a real cluster.
+    const doc = bySource.find(([src, body]) => src.includes("pgbouncer.yaml") && /kind:\s*Deployment/.test(body));
+    const [, body] = doc!;
+    const envBlockMatch = body.match(/env:\n([\s\S]*?)\n\s*readinessProbe:/);
+    const envBlock = envBlockMatch![1]!;
+    expect(envBlock).toMatch(/name:\s*LISTEN_PORT\s*\n\s*value:\s*"6432"/);
+  });
 });

@@ -116,6 +116,20 @@ spec:
             # against a real scram-sha-256 Postgres (see PR description).
             - name: AUTH_TYPE
               value: "scram-sha-256"
+            # PERF-012 (found during independent review): edoburu/pgbouncer's
+            # entrypoint defaults its actual listening socket to port 5432
+            # (LISTEN_PORT is never set otherwise), while this Deployment's
+            # own containerPort/Service targetPort/both probes above all
+            # target 6432 -- PERF-001's docker-compose sibling papers over
+            # this identical mismatch via a "6432:5432" port mapping, which
+            # Kubernetes has no equivalent of. Without this, the pod's
+            # liveness probe fails forever (perpetual restarts) and the
+            # Service can never reach it, regardless of the other 3 fixes
+            # above being correct -- confirmed live: a container booted with
+            # this exact env block only accepted connections on 5432 until
+            # LISTEN_PORT was added.
+            - name: LISTEN_PORT
+              value: "6432"
           readinessProbe:
             tcpSocket:
               port: pgbouncer
