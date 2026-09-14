@@ -35,35 +35,44 @@
  * or migration elsewhere that lets a mis-tenanted row exist), not a
  * contrived test-only state.
  *
- * The two vulnerable queries each get their OWN decision + poisoned row,
- * chosen so `committee_vote_unique` -- UNIQUE (decision_id, voter_id),
- * notably NOT including tenant_id (a separate, out-of-scope finding; see
- * this gap's PR description) -- never conflates the two scenarios:
+ * The two vulnerable queries each get their OWN decision + poisoned row, so
+ * the two scenarios never conflate:
  *
  *  - recompute-tally scenario: the poisoned row uses a DIFFERENT voter_id
  *    than the genuine vote, so castVoteTx's own INSERT never collides with
  *    it -- isolating a clean approvals-count comparison.
  *  - duplicate-check scenario: the poisoned row deliberately uses the SAME
  *    voter_id, reproducing the exact collision the missing filter used to
- *    mask. Because (decision_id, voter_id) is globally unique regardless of
- *    tenant, the FIXED query correctly refusing to treat that poisoned row
- *    as TENANT_A's own prior vote means castVoteTx proceeds to an INSERT
- *    that the constraint then rejects -- so the fixed code's observable
- *    behavior here is a thrown unique-violation, versus the unfixed code's
- *    clean-but-wrong `duplicate: true` return with no error at all. Both
- *    are unambiguous, sabotage-differentiating signals; a thrown constraint
- *    error in this specific scenario (constructible only via a direct DB
- *    write that bypasses castVoteTx entirely, as this test's own seeding
- *    does -- never through normal application operation) is not itself a
- *    production concern.
+ *    mask. The FIXED query correctly refuses to treat that poisoned row as
+ *    TENANT_A's own prior vote, so castVoteTx proceeds to the real INSERT
+ *    for a genuine first-time voter. REL-033
+ *    (migrations/0043_committee_vote_unique_tenant_scoped.sql) widened
+ *    committee_vote_unique to UNIQUE (tenant_id, decision_id, voter_id) --
+ *    before that fix it was UNIQUE (decision_id, voter_id) with no
+ *    tenant_id, so this INSERT collided with the poisoned row regardless of
+ *    tenant and threw; now it succeeds cleanly, matching what should always
+ *    have happened for a voter who has genuinely never voted on this
+ *    decision. See rel-033-committee-vote-unique-tenant-scoped.test.ts for
+ *    dedicated constraint-level coverage (including proof that a GENUINE
+ *    same-tenant duplicate still correctly collides).
  *
- * Sabotage-checked (see PR description): reverting repo.ts's two tenantId
- * predicates and re-running this file, unmodified, flips the recompute-tally
- * scenario's `approvals` to 2 and makes the duplicate-check scenario resolve
- * cleanly with `duplicate: true` instead of throwing; restoring the fix
- * reproduces both results below again. The final test (castVoteTx's FIRST
- * query, the decision lock) is untouched by REL-032 and expected to pass
- * either way -- it already filtered on tenantId before this fix.
+ * Sabotage-checked at the time (see PR #1268 description): reverting
+ * repo.ts's two tenantId predicates and re-running this file, unmodified,
+ * flipped the recompute-tally scenario's `approvals` to 2 and made the
+ * duplicate-check scenario resolve cleanly with `duplicate: true` (never
+ * reaching the INSERT) instead of proceeding to it; restoring the fix
+ * reproduced both results again. The final test (castVoteTx's FIRST query,
+ * the decision lock) is untouched by REL-032 and passes either way -- it
+ * already filtered on tenantId before this fix.
+ *
+ * REL-033 update: at the time REL-032 was fixed, the duplicate-check
+ * scenario's fixed-forward behavior (REL-032's predicates in place, not
+ * reverted) was a THROWN unique-violation -- see this file's git history --
+ * because committee_vote_unique still collided across tenants. REL-033
+ * closed that adjacent gap; the duplicate-check test below now asserts the
+ * fully-fixed, non-throwing outcome, and was itself sabotage-checked by
+ * reverting migrations/0043_committee_vote_unique_tenant_scoped.sql (see
+ * this gap's PR description) -- confirmed the raw PostgresError returns.
  */
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { randomUUID } from "node:crypto";
@@ -173,7 +182,7 @@ describe.skipIf(!reachable)(
       expect(rows.length).toBe(2);
     });
 
-    it("duplicate-check query does not mistake a poisoned cross-tenant row for TENANT_A's own prior vote", async () => {
+    it("duplicate-check query does not mistake a poisoned cross-tenant row for TENANT_A's own prior vote, and (post-REL-033) the genuine vote is recorded cleanly instead of throwing", async () => {
       const decisionId = randomUUID();
       const voterX = randomUUID();
       await seedDecision(decisionId, TENANT_A);
@@ -181,21 +190,35 @@ describe.skipIf(!reachable)(
       // exact collision the missing tenantId filter used to mask.
       await seedPoisonedVote(decisionId, TENANT_B, voterX);
 
-      // See this file's header: committee_vote_unique has no tenant_id, so
-      // this (decisionId, voterX) pair can only ever be occupied once --
-      // here, already taken by the poisoned TENANT_B row above. The FIXED
-      // duplicate-check query correctly does NOT recognize that row as
-      // TENANT_A's own (right decisionId, right voter_id, WRONG tenant_id),
-      // so it does not short-circuit with `duplicate: true` -- it proceeds
-      // to the real INSERT, which the constraint then rejects. That thrown
-      // violation is the proof the fix works: the unfixed query would have
-      // matched the poisoned row and returned CLEANLY with the wrong
-      // `duplicate: true`, never reaching the INSERT (and never throwing)
-      // at all.
-      await expect(
-        superuserDb.transaction((tx) =>
-          castVoteTx(tx as unknown as Writer, TENANT_A, decisionId, voterX, "approve", null, ACTOR, randomUUID())),
-      ).rejects.toThrow(/committee_vote_unique/);
+      // The FIXED duplicate-check query correctly does NOT recognize the
+      // poisoned row as TENANT_A's own (right decisionId, right voter_id,
+      // WRONG tenant_id), so it does not short-circuit with
+      // `duplicate: true` -- it proceeds to the real INSERT for a genuine
+      // first-time voter. Before REL-033, committee_vote_unique was UNIQUE
+      // (decision_id, voter_id) with no tenant_id, so that INSERT still
+      // collided with the poisoned row and threw -- a real first-time voter
+      // getting a raw, unhandled PostgresError instead of a recorded vote.
+      // REL-033 (migrations/0043_committee_vote_unique_tenant_scoped.sql)
+      // widened the constraint to include tenant_id, so the poisoned
+      // TENANT_B row no longer collides with this genuine TENANT_A INSERT
+      // at all -- the vote now succeeds cleanly, exactly as it should for a
+      // voter who has never voted on this decision before.
+      const result = await superuserDb.transaction((tx) =>
+        castVoteTx(tx as unknown as Writer, TENANT_A, decisionId, voterX, "approve", null, ACTOR, randomUUID()));
+      if ("notFound" in result) throw new Error("decision unexpectedly not found");
+      expect(result.duplicate).toBe(false);
+      expect(result.tally.approvals).toBe(1);
+      expect(result.tally.cast).toBe(1);
+
+      // Both rows really do physically exist, and remain independently
+      // tenant-scoped -- proves the assertion above is castVoteTx's own
+      // filter (REL-032) plus the widened constraint (REL-033) at work, not
+      // the poisoning insert having silently failed or the two rows having
+      // merged.
+      const rows = await superuserSql`SELECT tenant_id, voter_id FROM workflow.committee_votes WHERE decision_id = ${decisionId}`;
+      expect(rows.length).toBe(2);
+      expect(rows.filter((r) => r["tenant_id"] === TENANT_A).length).toBe(1);
+      expect(rows.filter((r) => r["tenant_id"] === TENANT_B).length).toBe(1);
     });
 
     it("castVoteTx's FIRST query (the decision lock) remains correctly tenant-scoped -- TENANT_B cannot vote against TENANT_A's decisionId (unchanged by this fix, already correct)", async () => {
