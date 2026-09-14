@@ -154,6 +154,11 @@ export function evaluateFormula(expression: string, context: Record<string, unkn
   };
 
   function resolveField(name: string): FormulaValue {
+    // Own-property guard: a bare field reference must only ever resolve data the
+    // context actually carries. Without this, names like "constructor", "__proto__"
+    // or "toString" resolve off Object.prototype instead of correctly reporting
+    // "field not found" (DOM-031, same pattern as the rule evaluator's DOM-016).
+    if (!Object.hasOwn(context, name)) return null;
     const v = context[name];
     if (v === undefined || v === null) return null;
     if (typeof v === "string" || typeof v === "number" || typeof v === "boolean") return v;

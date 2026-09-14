@@ -35,7 +35,19 @@ const RUN_DB = process.env.DATABASE_URL ?? process.env.DB_URL;
 // migration, including 0023's identity_scanner grant on apikeys.api_keys).
 // Never the shared civitasone-postgres (:5435) default other configs fall
 // back to -- this suite refuses to run at all without an explicit override.
+//
+// SEC-026: that refusal can NOT be enforced by checking that DATABASE_URL/
+// DB_URL are merely *set* (RUN_DB/PG_HOST_PORT above) -- gateway-service's
+// own vitest.config.ts unconditionally sets DATABASE_URL from
+// GATEWAY_DATABASE_URL with a hardcoded ":5435" fallback, so DATABASE_URL is
+// ALWAYS defined by the time this file runs, override or not, and it always
+// wins the `??` ahead of DB_URL too. The only env var that actually changes
+// what DATABASE_URL resolves to is GATEWAY_DATABASE_URL. The real guard is
+// the actually-resolved port check in beforeAll below.
 const PG_HOST_PORT = (process.env.DATABASE_URL ?? process.env.DB_URL ?? "").match(/@([^/]+)\//)?.[1];
+// The shared civitasone-postgres instance's docker-mapped port, and
+// vitest.config.ts's own hardcoded fallback -- see the SEC-026 note above.
+const SHARED_INSTANCE_PORT = "5435";
 
 const IDENTITY_DIR = path.resolve(__dirname, "../../identity-service");
 const SHARED_INTERNAL_SECRET = "sec-024-shared-test-secret-32chars";
@@ -91,6 +103,27 @@ describe.skipIf(!RUN_DB)("SEC-024 — apiKeyPreHandler → identity-service, rea
   beforeAll(async () => {
     if (!PG_HOST_PORT) {
       throw new Error("DATABASE_URL/DB_URL must point at the disposable test Postgres for this suite");
+    }
+
+    // SEC-026: presence of DATABASE_URL/DB_URL (above) proves nothing --
+    // vitest.config.ts's own GATEWAY_DATABASE_URL fallback means DATABASE_URL
+    // is set even when no developer ever exported an override, and it
+    // resolves to the SHARED civitasone-postgres instance on port 5435. Check
+    // the actually-resolved port instead of trusting that presence. Failing
+    // here is immediate (before spawning identity-service or touching the
+    // database at all) and says exactly what's wrong, instead of leaving a
+    // developer to debug a "did not become ready" timeout 30+ seconds later
+    // that turns out to be identity-service crashing on a relation the
+    // shared DB never migrated.
+    const resolvedPort = PG_HOST_PORT.split(":").pop();
+    if (resolvedPort === SHARED_INSTANCE_PORT) {
+      throw new Error(
+        `Refusing to run: DATABASE_URL/DB_URL resolves to port ${SHARED_INSTANCE_PORT} ` +
+          "(gateway-service/vitest.config.ts's own fallback for the SHARED civitasone-postgres " +
+          "instance), not a disposable test database. No explicit override is set. Export " +
+          "GATEWAY_DATABASE_URL to point at a disposable Postgres bootstrapped via " +
+          "scripts/ci/bootstrap-postgres.sh before running this suite.",
+      );
     }
 
     identityPort = await getFreePort();
