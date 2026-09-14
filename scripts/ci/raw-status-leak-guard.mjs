@@ -42,22 +42,52 @@
 // BASELINE / RATCHET (raw-status-leak-baseline.json):
 // UX-003 fixed 4 sampled forms plus the shared hook in one PR; the other
 // ~137 files (169 violations at the time this guard was written) are
-// tracked as follow-up gap UX-016, not silenced. This guard therefore reads
-// a checked-in `maxViolations` from raw-status-leak-baseline.json (sitting
-// alongside this script) and only FAILS if the live count exceeds it — i.e.
-// it blocks any NEW leak from landing, without pretending the backlog is
-// clear. Every UX-016 fix must lower that number in the same PR (see
-// tests/architecture/raw-status-leak-guard.test.ts for the sabotage-check
-// that keeps this file itself honest). This is a ratchet that can only move
-// down through a reviewed diff — not the "delete/skip the gate" pattern
-// section 5 of the gap report warns against (REL-001/REL-003).
+// tracked as follow-up gap UX-016, not silenced.
 //
-// UX-020 exception to "only moves down": strengthening detection itself (as
-// opposed to fixing files) makes previously-invisible TRUE violations
-// visible, which necessarily moves the live count UP even though nothing
-// regressed. raw-status-leak-baseline.json's own _comment records exactly
-// which detection change caused which jump, so a reviewer can tell that
-// apart from a real new leak landing at a glance.
+// UX-024 FOLLOW-UP (2026-09-14) — keyed entries, not an aggregate count.
+// This guard used to check ONLY `allViolations.length <= maxViolations`, an
+// aggregate with no entry identity. That let a PR introduce a genuinely NEW
+// leak while bumping `maxViolations` by the same amount in the same diff —
+// the count still fit "under budget," so the guard passed clean with no
+// warning. That is precisely the failure class that let a real leak
+// (apps/web/src/lib/crm/documents.ts:271, dating to PR #463) sit undetected
+// for over a month before UX-024 found it by manual review rather than by
+// this gate — see docs/ENTERPRISE-GAP-REPORT-2026-09-07.md UX-024 for the
+// CI-timing investigation.
+//
+// Fixed by porting the keyed-entry ratchet scripts/ci/schema-drift-guard.mjs
+// and scripts/ci/tenant-index-guard.mjs use — and, for a same-category
+// pure-source-text scanner (no live DB involved),
+// scripts/ci/nested-tx-guard.mjs, whose own "RATCHET" doc comment named this
+// exact maxViolations-count gap before it was closed here. Every violation
+// now gets a stable identity key, `<file relative to repo root>:<line>`, and
+// raw-status-leak-baseline.json checks in the full `entries` list rather
+// than a count. The gate fails on:
+//   - a NEW entry — a live violation whose key is not in the checked-in
+//     baseline, regardless of whether the total count would still fit under
+//     the old maxViolations number (that field, and the whole notion of a
+//     "budget," are gone — there is nothing left to silently bump). This
+//     also catches a baselined entry that is still genuinely live in the
+//     code but was quietly deleted from the baseline file: from this
+//     guard's point of view that is indistinguishable from a brand-new
+//     leak, so it fails the same way, by design.
+//   - a STALE entry — a key still listed in the baseline that no longer
+//     matches any live violation. Either it was really fixed (regenerate
+//     the baseline with --write-baseline in the same PR, so the fix can't
+//     be silently reverted for free), or it was never a real violation (a
+//     fabricated/padded entry) — either way it cannot sit in the file
+//     unexamined.
+// `count` in the baseline is informational only (kept equal to
+// entries.length for a human skimming the diff) and is never itself
+// compared, so it cannot be "bumped" to paper over a new entry.
+//
+// UX-020 exception to "only ever moves down" still applies, to entries now
+// instead of to a count: strengthening detection itself (as opposed to
+// fixing files) makes previously-invisible TRUE violations visible, which
+// adds baseline entries even though nothing regressed.
+// raw-status-leak-baseline.json's own _comment records exactly which
+// detection change caused which jump, so a reviewer can tell that apart
+// from a real new leak landing at a glance.
 //
 // EXCLUDES:
 //   - Lines with `// status-leak-ok`
@@ -67,13 +97,22 @@
 //   - This file's own doc comment above (not scanned — see SELF_PATH below)
 //
 // Exit behavior:
-//   - Exit 1 if the live violation count exceeds raw-status-leak-baseline.json's maxViolations
-//   - Exit 0 otherwise (prints a note if the live count improved on the baseline)
+//   - Exit 1 if any live violation's key is not in the checked-in baseline
+//     (a NEW leak), or if any baselined key no longer matches a live
+//     violation (a STALE entry — fixed, or never real).
+//   - Exit 0 otherwise.
 //
-// Usage: node scripts/ci/raw-status-leak-guard.mjs
+// Usage:
+//   node scripts/ci/raw-status-leak-guard.mjs                  # guard: exit 1 on
+//                                                                # new/stale baseline entries
+//   node scripts/ci/raw-status-leak-guard.mjs --write-baseline  # regenerate the baseline
+//                                                                # from the current tree
+//                                                                # (keeps the existing
+//                                                                # _comment; only recomputes
+//                                                                # entries/count/generatedAt)
 // ─────────────────────────────────────────────────────────────────────────────
 
-import { readdirSync, statSync, readFileSync, existsSync } from "node:fs";
+import { readdirSync, statSync, readFileSync, existsSync, writeFileSync } from "node:fs";
 import { join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import { dirname } from "node:path";
@@ -84,9 +123,15 @@ const WEB_SRC_DIR = join(REPO_ROOT, "apps", "web", "src");
 const SELF_PATH = fileURLToPath(import.meta.url);
 const BASELINE_PATH = join(__dirname, "raw-status-leak-baseline.json");
 
+// UX-024: keyed-entry ratchet (mirrors schema-drift-guard.mjs /
+// tenant-index-guard.mjs / nested-tx-guard.mjs), not the old
+// maxViolations-count style. See this file's own top doc comment.
+const WRITE_BASELINE = process.argv.includes("--write-baseline");
+
 // ANSI colors
 const RED = "\x1b[31m";
 const GREEN = "\x1b[32m";
+const YELLOW = "\x1b[33m";
 const CYAN = "\x1b[36m";
 const RESET = "\x1b[0m";
 const BOLD = "\x1b[1m";
@@ -237,15 +282,45 @@ export function checkRawStatusLeakViolations(source) {
   return violations;
 }
 
+// Read the checked-in baseline. Returns { entries: Set<string>, raw: object|null }.
+//
+// A MISSING file means zero known debt (empty Set) — every live violation
+// will show as NEW. That is correct fail-closed behavior, not a silent pass.
+//
+// A file that EXISTS but is not valid JSON, or whose `entries` is not an
+// array, is a HARD error (never silently treated as "no known debt") — the
+// same defensive posture schema-drift-guard.mjs takes, because reading a
+// malformed baseline as empty is the exact unreachable-failure-condition bug
+// class this programme exists to prevent, and it would otherwise dump a
+// confusing wall of ~210 false "NEW" violations instead of one clear
+// "fix your baseline file" message.
 function readBaseline() {
+  if (!existsSync(BASELINE_PATH)) return { entries: new Set(), raw: null };
+  let raw;
   try {
-    const raw = readFileSync(BASELINE_PATH, "utf8");
-    const parsed = JSON.parse(raw);
-    if (typeof parsed.maxViolations === "number") return parsed.maxViolations;
-  } catch {
-    // Fall through — no baseline file means zero-tolerance.
+    raw = JSON.parse(readFileSync(BASELINE_PATH, "utf8"));
+  } catch (e) {
+    console.error(`${RED}FAILED: ${relative(REPO_ROOT, BASELINE_PATH)} is not valid JSON — ${e.message}${RESET}`);
+    process.exit(1);
   }
-  return 0;
+  if (!Array.isArray(raw.entries)) {
+    console.error(
+      `${RED}FAILED: ${relative(REPO_ROOT, BASELINE_PATH)} is malformed — \`entries\` must be an array.${RESET}\n` +
+        `  Regenerate it with: node scripts/ci/raw-status-leak-guard.mjs --write-baseline`,
+    );
+    process.exit(1);
+  }
+  // Obsolete since UX-024 — never read for pass/fail, but a stray leftover is
+  // worth calling out loudly rather than letting it sit unexplained.
+  if (typeof raw.maxViolations === "number") {
+    console.log(
+      `  ${YELLOW}WARNING: ${relative(REPO_ROOT, BASELINE_PATH)} still has a "maxViolations" field ` +
+        `(${raw.maxViolations}).${RESET}\n` +
+        `  ${YELLOW}It is obsolete and IGNORED — this guard compares entry identity, not a count.${RESET}\n` +
+        `  ${YELLOW}Regenerate with --write-baseline to drop it.${RESET}`,
+    );
+  }
+  return { entries: new Set(raw.entries), raw };
 }
 
 // ── 3. Run ────────────────────────────────────────────────────────────────────
@@ -254,47 +329,104 @@ function main() {
   const allViolations = [];
 
   for (const file of files) {
+    const rel = relative(REPO_ROOT, file);
     const source = readFileSync(file, "utf8");
     const violations = checkRawStatusLeakViolations(source);
     for (const v of violations) {
-      allViolations.push({ file, ...v });
+      allViolations.push({ file, rel, key: `${rel}:${v.line}`, ...v });
     }
   }
 
-  const baseline = readBaseline();
-
   console.log("──────────────────────────────────────────────────────────────");
   console.log(`${BOLD}${CYAN}Raw status-leak guard (UX-003)${RESET} — ${files.length} files scanned`);
-  console.log(`  Live violations: ${allViolations.length}  |  Baseline (scripts/ci/raw-status-leak-baseline.json): ${baseline}`);
+
+  // ── --write-baseline: regenerate from the current tree ──────────────────
+  // Keeps the existing baseline's `_comment` verbatim (it is hand-written
+  // institutional memory of the whole ratchet's history, not something to
+  // regenerate away) and only recomputes the mechanically-derived fields.
+  if (WRITE_BASELINE) {
+    const entries = allViolations.map((v) => v.key).sort();
+    let prevComment;
+    try {
+      prevComment = JSON.parse(readFileSync(BASELINE_PATH, "utf8"))._comment;
+    } catch {
+      prevComment = undefined;
+    }
+    const baseline = {
+      _comment:
+        prevComment ??
+        "TRACKED DEBT, not an approved state. Each entry is a <file>:<line> that leaks " +
+          "a raw HTTP status code or raw failure copy to the user (UX-003). The gate " +
+          "fails on NEW entries and on stale entries (fixed, or never real, but still " +
+          "listed). Burn these down; regenerate with --write-baseline after a real fix. " +
+          "See UX-016/UX-020/UX-024 in docs/ENTERPRISE-GAP-REPORT-2026-09-07.md.",
+      generatedAt: new Date().toISOString().slice(0, 10),
+      count: entries.length,
+      entries,
+    };
+    writeFileSync(BASELINE_PATH, JSON.stringify(baseline, null, 2) + "\n");
+    console.log(`  ${GREEN}Wrote ${entries.length} entries to ${relative(REPO_ROOT, BASELINE_PATH)}${RESET}`);
+    console.log("──────────────────────────────────────────────────────────────");
+    process.exit(0);
+  }
+
+  // ── Ratchet comparison against the checked-in baseline ───────────────────
+  const { entries: baselineKeys } = readBaseline();
+  const currentKeys = new Set(allViolations.map((v) => v.key));
+  const novel = allViolations.filter((v) => !baselineKeys.has(v.key));
+  const stale = [...baselineKeys].filter((k) => !currentKeys.has(k)).sort();
+  const knownDebt = allViolations.filter((v) => baselineKeys.has(v.key));
+
+  console.log(
+    `  Live violations: ${allViolations.length}  |  baselined: ${knownDebt.length}  |  ` +
+      `NEW: ${novel.length}  |  stale: ${stale.length}`,
+  );
   console.log("");
 
   if (allViolations.length > 0) {
     for (const v of allViolations) {
-      const rel = relative(REPO_ROOT, v.file);
-      console.log(`  ${RED}[STATUS-LEAK]${RESET} ${rel}:${v.line} — ${v.reason}`);
+      const isNew = !baselineKeys.has(v.key);
+      const tag = isNew ? `  ${RED}<-- NEW, not in baseline${RESET}` : "";
+      console.log(`  ${isNew ? RED : YELLOW}[STATUS-LEAK]${RESET} ${v.key}${tag} — ${v.reason}`);
       console.log(`      ${DIM}${v.snippet}${RESET}`);
     }
     console.log("");
   }
 
-  if (allViolations.length > baseline) {
-    console.log(`  ${RED}${BOLD}❌ ${allViolations.length} violation(s) — exceeds the baseline of ${baseline} (a NEW leak landed).${RESET}`);
+  let failed = false;
+
+  if (novel.length > 0) {
+    console.log(`  ${RED}${BOLD}FAIL${RESET} — ${novel.length} NEW violation(s) not in the checked-in baseline (marked above).`);
     console.log(`  ${RED}Fix: route the failed response through useFormError${RESET}`);
     console.log(`  ${RED}(apps/web/src/lib/useFormError.ts) instead of building the${RESET}`);
     console.log(`  ${RED}message by hand. Suppress a rare false positive with // ${SUPPRESS_COMMENT}.${RESET}`);
+    console.log(`  ${RED}A key also shows as NEW if a still-live baselined entry was quietly${RESET}`);
+    console.log(`  ${RED}deleted from raw-status-leak-baseline.json without being fixed — that is${RESET}`);
+    console.log(`  ${RED}deliberate: this guard cannot tell the two apart, by design.${RESET}`);
     console.log(`  ${RED}See follow-up gap UX-016 in docs/ENTERPRISE-GAP-REPORT-2026-09-07.md.${RESET}`);
-    console.log("──────────────────────────────────────────────────────────────");
-    process.exit(1);
+    failed = true;
   }
 
-  if (allViolations.length < baseline) {
-    console.log(`  ${GREEN}✅ PASS — ${allViolations.length} < baseline ${baseline}.${RESET}`);
-    console.log(`  ${CYAN}Progress! Lower "maxViolations" in raw-status-leak-baseline.json to ${allViolations.length} to lock it in.${RESET}`);
-  } else {
-    console.log(`  ${GREEN}✅ PASS — ${allViolations.length} violation(s), at the tracked baseline (see UX-016).${RESET}`);
+  if (stale.length > 0) {
+    console.log(
+      `  ${RED}${BOLD}FAIL${RESET} — ${stale.length} baselined entr${stale.length === 1 ? "y" : "ies"} ` +
+        `no longer match a live violation:`,
+    );
+    for (const k of stale) console.log(`      ${GREEN}${k}${RESET}  (fixed, or never real — remove from baseline)`);
+    console.log(`  ${RED}Regenerate so a real fix can't be silently reverted for free, and so a${RESET}`);
+    console.log(`  ${RED}fabricated entry can't sit in the file unexamined:${RESET}`);
+    console.log(`      node scripts/ci/raw-status-leak-guard.mjs --write-baseline`);
+    failed = true;
+  }
+
+  if (!failed) {
+    console.log(
+      `  ${GREEN}${BOLD}PASS${RESET} — no new violations, baseline is accurate ` +
+        `(${knownDebt.length} tracked debt entries remain — see UX-016).`,
+    );
   }
   console.log("──────────────────────────────────────────────────────────────");
-  process.exit(0);
+  process.exit(failed ? 1 : 0);
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {
