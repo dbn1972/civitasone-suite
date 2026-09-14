@@ -27,13 +27,17 @@ const PLATFORM_TENANT_ID = "00000000-0000-0000-0000-000000000000";
  * the sentinel rows visible alongside the tenant's own. Resolution itself is
  * the pure resolveStatutoryConfig() in domain.ts. Queried once per run (not
  * per employee) since tenantId/month are constant across a run's employees.
+ *
+ * DOM-034 (migration 0041): sec80ccd1b_cap_minor added alongside its
+ * sec80c_cap_minor/sec80d_cap_minor siblings — same Chapter VI-A cap class,
+ * same effective-dated resolution, zero new query.
  */
 export async function resolveRunStatutoryConfig(tx: typeof db, tenantId: string, month: string): Promise<StatutoryConfig> {
   const rows = (await tx.execute(sql`
     SELECT tenant_id, effective_from::text AS effective_from,
            pf_rate_pct, pf_wage_cap_minor, eps_rate_bps, eps_cap_minor,
            esi_wage_cap_minor, esi_employee_rate_bps, esi_employer_rate_bps,
-           sec80c_cap_minor, sec80d_cap_minor
+           sec80c_cap_minor, sec80d_cap_minor, sec80ccd1b_cap_minor
     FROM statutory.statutory_config
     WHERE tenant_id IN (${tenantId}::uuid, ${PLATFORM_TENANT_ID}::uuid)
       AND effective_from <= ${month + "-01"}::date
@@ -42,7 +46,7 @@ export async function resolveRunStatutoryConfig(tx: typeof db, tenantId: string,
     pf_rate_pct: number | string; pf_wage_cap_minor: number | string;
     eps_rate_bps: number | string; eps_cap_minor: number | string;
     esi_wage_cap_minor: number | string; esi_employee_rate_bps: number | string; esi_employer_rate_bps: number | string;
-    sec80c_cap_minor: number | string; sec80d_cap_minor: number | string;
+    sec80c_cap_minor: number | string; sec80d_cap_minor: number | string; sec80ccd1b_cap_minor: number | string;
   }>;
   const mapped: StatutoryConfigRow[] = rows.map((r) => ({
     tenantId: r.tenant_id === PLATFORM_TENANT_ID ? null : r.tenant_id,
@@ -52,6 +56,7 @@ export async function resolveRunStatutoryConfig(tx: typeof db, tenantId: string,
     esiWageCapMinor: BigInt(r.esi_wage_cap_minor),
     esiEmployeeRateBps: BigInt(r.esi_employee_rate_bps), esiEmployerRateBps: BigInt(r.esi_employer_rate_bps),
     sec80cCapMinor: BigInt(r.sec80c_cap_minor), sec80dCapMinor: BigInt(r.sec80d_cap_minor),
+    sec80ccd1bCapMinor: BigInt(r.sec80ccd1b_cap_minor),
   }));
   return resolveStatutoryConfig(mapped, tenantId, month);
 }
