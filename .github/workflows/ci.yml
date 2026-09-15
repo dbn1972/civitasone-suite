@@ -453,10 +453,10 @@ jobs:
         id: reinstall-deps
         continue-on-error: true
         run: pnpm install --frozen-lockfile
-      - name: Ops regression locks (ecosystem workers + migrate-all inventory + runbook lint)
+      - name: Ops regression locks (ecosystem workers + migrate-all inventory + migration rollback down-files + runbook lint)
         id: ops-regression-locks
         continue-on-error: true
-        run: pnpm exec vitest run tests/ops/ecosystem-workers.test.ts tests/ops/migrate-all-inventory.test.ts tests/architecture/runbook-lint.test.ts
+        run: pnpm exec vitest run tests/ops/ecosystem-workers.test.ts tests/ops/migrate-all-inventory.test.ts tests/ops/migrate-rollback-down-files.test.ts tests/architecture/runbook-lint.test.ts
 
       - name: Tenant router adoption guard (Req 1.7)
         id: tenant-router-guard
