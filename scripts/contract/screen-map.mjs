@@ -264,6 +264,79 @@ function findMatchingRoute(upstreamPath, routeName, method = 'GET') {
 
 // ── loaders.ts parser ─────────────────────────────────────────────────────────
 
+// COMP-006: the previous body/call extraction here was two cooperating
+// regexes, each of which only tolerated ONE level of brace/angle-bracket
+// nesting. Real loaders in this file routinely nest deeper than that in two
+// independent ways -- both silently produced a loader with zero detected
+// fetchJson paths, which made every screen calling it indistinguishable
+// from a genuine NO_LOADER hub page (COMP-006's "69% exempt" figure was
+// inflated by this, not only by genuinely static screens):
+//
+//   1. A function whose *return type* itself contains an inline object type
+//      (`Promise<LoaderResult<{ id: string; ... }>>`) broke "skip to the
+//      first `{`": that first `{` is the inline type's own brace, not the
+//      function's, so the "body" captured was the type's field list, never
+//      the real body with the fetchJson(...) call in it.
+//   2. A `fetchJson<A, B<C>>(...)` call whose own generic argument nests
+//      (e.g. `fetchJson<unknown, Record<string, unknown>[]>(...)`, this
+//      file's own dominant style) couldn't be skipped by `<[^>]*>`, which
+//      stops at the first `>` -- the inner generic's close, one token short
+//      of the real `(` -- so the call, and its path, were invisible.
+//
+// Both are now real brace/bracket-depth matches (like findMatchingBracket,
+// used below for the fabricated-data scanner) instead of a single-level
+// regex guess, so they work for any nesting depth.
+
+function findFunctionBodyOpenBrace(src, fromIdx) {
+  // Scans a return-type annotation (from just after a function's own `)` up
+  // to its opening `{`), tracking <>/()/[] nesting so an inline object
+  // type's `{...}` in the return type is never mistaken for the function's
+  // own opening brace. Only a `{` seen at depth 0 is the real one.
+  let depth = 0;
+  for (let i = fromIdx; i < src.length; i++) {
+    const c = src[i];
+    if (c === '<' || c === '(' || c === '[') depth++;
+    else if (c === '>' || c === ')' || c === ']') depth--;
+    else if (c === '{') {
+      if (depth === 0) return i;
+      depth++;
+    } else if (c === '}') {
+      depth--;
+    }
+  }
+  return -1;
+}
+
+function findFetchJsonCalls(body) {
+  // Finds every fetchJson(...) call in `body` and returns its first (path)
+  // argument, skipping a nested-generic type-argument clause via
+  // findMatchingBracket instead of a single-level regex.
+  const paths = [];
+  const nameRe = /\bfetchJson\b/g;
+  let nm;
+  while ((nm = nameRe.exec(body)) !== null) {
+    let i = nameRe.lastIndex;
+    while (i < body.length && /\s/.test(body[i])) i++;
+    if (body[i] === '<') {
+      const closeAngle = findMatchingBracket(body, i, '<', '>');
+      if (closeAngle === -1) continue;
+      i = closeAngle + 1;
+      while (i < body.length && /\s/.test(body[i])) i++;
+    }
+    if (body[i] !== '(') continue;
+    i++;
+    while (i < body.length && /\s/.test(body[i])) i++;
+    const quote = body[i];
+    if (quote !== '"' && quote !== "'" && quote !== '`') continue;
+    const end = body.indexOf(quote, i + 1);
+    if (end === -1) continue;
+    const apiPath = body.slice(i + 1, end);
+    paths.push({ apiPath: normalizePath(apiPath), isTemplate: apiPath.includes('${') });
+    nameRe.lastIndex = end;
+  }
+  return paths;
+}
+
 function parseLoaders() {
   const loadersPath = join(ROOT, 'apps/web/src/app/_data/loaders.ts');
   if (!existsSync(loadersPath)) return new Map();
@@ -275,14 +348,14 @@ function parseLoaders() {
   const loaderMap = new Map(); // name → [{ apiPath, isTemplate }]
 
   // Match exported functions and moduleLoader consts
-  // Pattern 1: export async function FnName<...>(...)
-  const funcRe = /export\s+async\s+function\s+(\w+)\s*(?:<[^>]*>)?\s*\([^)]*\)[^{]*\{([^}]*(?:\{[^}]*\}[^}]*)*)\}/gs;
+  // Pattern 1: export async function FnName<...>(...) -- header only; the
+  // real body is then located with findFunctionBodyOpenBrace/
+  // findMatchingBracket below, which is correct for any nesting depth
+  // (see comment above), instead of the previous single-level regex.
+  const funcHeaderRe = /export\s+async\s+function\s+(\w+)\s*(?:<[^>]*>)?\s*\([^)]*\)/g;
 
   // Pattern 2: export const FnName = moduleLoader("/path", ...)
   const moduleLoaderRe = /export\s+const\s+(\w+)\s*=\s*moduleLoader\(\s*["'`]([^"'`]+)["'`]/g;
-
-  // Collect fetchJson calls within a function body
-  const fetchJsonRe = /fetchJson(?:<[^>]*>)?\(\s*(?:["'`])([^"'`]+)(?:["'`])/g;
 
   // Process moduleLoader consts (simple case)
   let m;
@@ -293,15 +366,16 @@ function parseLoaders() {
   }
 
   // Process async functions
-  while ((m = funcRe.exec(src)) !== null) {
+  while ((m = funcHeaderRe.exec(src)) !== null) {
     const name = m[1];
-    const body = m[2];
-    const paths = [];
-    let fm;
-    fetchJsonRe.lastIndex = 0;
-    while ((fm = fetchJsonRe.exec(body)) !== null) {
-      paths.push({ apiPath: normalizePath(fm[1]), isTemplate: fm[1].includes('${') });
-    }
+    const afterParams = m.index + m[0].length;
+    const openIdx = findFunctionBodyOpenBrace(src, afterParams);
+    if (openIdx === -1) continue;
+    const closeIdx = findMatchingBracket(src, openIdx, '{', '}');
+    if (closeIdx === -1) continue;
+    const body = src.slice(openIdx + 1, closeIdx);
+
+    const paths = findFetchJsonCalls(body);
     if (paths.length > 0) {
       loaderMap.set(name, paths);
     }
