@@ -1,5 +1,4 @@
 import { getTranslations } from "next-intl/server";
-import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { PageHeader, StatGrid, StatCard } from "../../../_components/ds";
 import { getCitizenSurveys } from "../../../_data/loaders";
 import { SurveysTable } from "./SurveysTable";
@@ -14,10 +13,13 @@ export default async function SurveysPage() {
 
   return (
     <>
+      {/* UX-012: the data-source badge now lives inside SurveysTable, driven
+          by the same useSeededResource call that produces its rows — not a
+          second, independent read of `source` here that could disagree with
+          the table's own cache state (UX-002's pattern). */}
       <PageHeader
         title={t("pageTitle")}
         subtitle={t("pageSubtitle")}
-        actions={source === "error" ? <DataSourceBadge source={source} /> : null}
       />
 
       <StatGrid>
