@@ -1,4 +1,3 @@
-import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { PageHeader, StatGrid, StatCard, Card } from "@/app/_components/ds";
 import { formatMoney } from "@/lib/formatters";
 import { getGrants } from "../../../_data/loaders";
@@ -16,7 +15,10 @@ export default async function GrantsListPage() {
         ← <a href="/grants">Grants</a>
       </nav>
       <PageHeader title="Grants" subtitle="All grants with lifecycle status." />
-      {source === "error" && <DataSourceBadge source="error" />}
+      {/* UX-012: the data-source badge now lives inside GrantsTable, driven
+          by the same useSeededResource call that produces its rows — not a
+          second, independent read of `source` here that could disagree with
+          the table's own cache state (UX-002's pattern). */}
       <main aria-label="Grants list">
         <StatGrid>
           <StatCard icon="🎁" iconBg="#dcfce7" label="Total" value={grants.length} />

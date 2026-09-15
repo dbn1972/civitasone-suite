@@ -3,6 +3,7 @@
 import type { ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { DataTable, StatusPill, ActionButton } from "@/app/_components/ds";
+import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
 import { formatMoney, formatIndianDate } from "@/lib/formatters";
 import type { GrantUtilization } from "@civitasone/types";
 import { useSeededResource } from "@/lib/sync/resource";
@@ -28,7 +29,7 @@ async function postAction(url: string, body: unknown): Promise<void> {
 
 export function UtilizationTable({ ucs, source = "api" }: { ucs: GrantUtilization[]; source?: "api" | "error" }) {
   const router = useRouter();
-  const { data: rows, fromCache, offline, cachedAt } = useSeededResource<GrantUtilization[]>(
+  const { data: rows, provenance, offline, cachedAt } = useSeededResource<GrantUtilization[]>(
     "grants.utilization",
     ucs,
     source,
@@ -105,18 +106,14 @@ export function UtilizationTable({ ucs, source = "api" }: { ucs: GrantUtilizatio
     },
   ];
 
-  const cacheNote =
-    offline || fromCache
-      ? `Showing saved data${cachedAt ? ` from ${formatIndianDate(new Date(cachedAt).toISOString())}` : ""}${offline ? " — you're offline" : ""}.`
-      : null;
-
   return (
     <>
-      {cacheNote ? (
-        <p role="status" aria-live="polite" style={{ fontSize: 12, color: "#92400e", margin: "0 0 8px" }}>
-          {cacheNote}
-        </p>
-      ) : null}
+      {/* UX-012: this badge is the ONLY place that reports data provenance for
+          the rows shown below — it reads the same useSeededResource call as
+          `rows`, so it can never disagree with what the table shows
+          (UX-002's pattern; the page used to render a second, independent
+          badge from the raw `source` prop — removed). */}
+      <DataSourceBadge provenance={provenance ?? "live"} cachedAt={cachedAt} offline={offline} />
       <DataTable<GrantUtilization> columns={columns} rows={rows} sortable filterable filterPlaceholder="Filter UCs…" pageSize={15} />
     </>
   );

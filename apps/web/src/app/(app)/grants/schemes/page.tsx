@@ -1,6 +1,5 @@
 import Link from "next/link";
 import { PageHeader, Card, StatGrid, StatCard } from "@/app/_components/ds";
-import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { formatMoney } from "@/lib/formatters";
 import { getGrantSchemes } from "../_data";
 import { SchemesTable } from "./SchemesTable";
@@ -29,7 +28,10 @@ export default async function GrantSchemesPage() {
           </Link>
         }
       />
-      {source === "error" && <DataSourceBadge source="error" />}
+      {/* UX-012: the data-source badge now lives inside SchemesTable, driven
+          by the same useSeededResource call that produces its rows — not a
+          second, independent read of `source` here that could disagree with
+          the table's own cache state (UX-002's pattern). */}
       <main aria-label="Grant schemes">
         <StatGrid>
           <StatCard icon="📋" iconBg="#f1f5f9" label="Total Schemes" value={schemes.length} />

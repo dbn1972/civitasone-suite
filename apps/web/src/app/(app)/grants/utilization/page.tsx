@@ -1,4 +1,3 @@
-import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { PageHeader, StatGrid, StatCard, Card } from "@/app/_components/ds";
 import { getGrantUtilization } from "../../../_data/loaders";
 import { UtilizationTable } from "./UtilizationTable";
@@ -19,7 +18,10 @@ export default async function GrantUtilizationPage() {
         title="Utilization Certificates"
         subtitle="UC submission and verification tracking."
       />
-      {source === "error" && <DataSourceBadge source="error" />}
+      {/* UX-012: the data-source badge now lives inside UtilizationTable,
+          driven by the same useSeededResource call that produces its rows —
+          not a second, independent read of `source` here that could
+          disagree with the table's own cache state (UX-002's pattern). */}
       <main aria-label="Utilization certificates">
         <StatGrid>
           <StatCard icon="📋" iconBg="#f1f5f9" label="Total" value={ucs.length} />
