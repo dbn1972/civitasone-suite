@@ -1,5 +1,4 @@
 import Link from "next/link";
-import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
 import { PageHeader, StatGrid, StatCard, Card } from "@/app/_components/ds";
 import { formatMoney } from "@/lib/formatters";
 import { getBoqItems } from "../_data/loaders";
@@ -24,13 +23,16 @@ export default async function BoqPage() {
 
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
+      {/* UX-012: the data-source badge now lives inside BoqTable, driven by
+          the same useSeededResource call that produces its rows — not a
+          second, independent read of `source` here that could disagree with
+          the table's own cache state (UX-002's pattern). */}
       <PageHeader
         title="Bill of Quantities"
         subtitle="SR items, measurements, and recapitulation for works."
         back="/works"
         actions={
           <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-            {source === "error" && <DataSourceBadge source={source} />}
             <Link
               href="/works/boq/new"
               className="btn primary"

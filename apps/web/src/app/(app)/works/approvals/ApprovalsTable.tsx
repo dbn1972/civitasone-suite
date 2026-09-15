@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { DataTable } from "@/app/_components/ds";
+import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
 import { useSeededResource } from "@/lib/sync/resource";
 
 const columns = [
@@ -26,9 +27,27 @@ export function ApprovalsTable({
   source: "api" | "error";
 }) {
   const [tab, setTab] = useState<Tab>("aa");
-  const { data: aaData } = useSeededResource("works-approvals-aa", aaApprovals, source, (rows) => rows.length === 0);
-  const { data: tsData } = useSeededResource("works-approvals-ts", tsApprovals, source, (rows) => rows.length === 0);
+  const {
+    data: aaData,
+    provenance: aaProvenance,
+    offline: aaOffline,
+    cachedAt: aaCachedAt,
+  } = useSeededResource("works-approvals-aa", aaApprovals, source, (rows) => rows.length === 0);
+  const {
+    data: tsData,
+    provenance: tsProvenance,
+    offline: tsOffline,
+    cachedAt: tsCachedAt,
+  } = useSeededResource("works-approvals-ts", tsApprovals, source, (rows) => rows.length === 0);
   const rows = tab === "aa" ? aaData : tsData;
+  // UX-012: each register has its own independent cache entry, so the two
+  // useSeededResource calls can genuinely disagree with each other (e.g. AA
+  // has a usable cache while TS does not) even though the page fed both the
+  // same upstream `source`. The badge must therefore reflect whichever
+  // register's rows are actually on screen right now, not an aggregate.
+  const provenance = tab === "aa" ? aaProvenance : tsProvenance;
+  const offline = tab === "aa" ? aaOffline : tsOffline;
+  const cachedAt = tab === "aa" ? aaCachedAt : tsCachedAt;
   const rowHref =
     tab === "aa"
       ? (row: Record<string, unknown>) => "/works/approvals/aa/" + String(row.id ?? "")
@@ -54,6 +73,13 @@ export function ApprovalsTable({
           TS Register
         </button>
       </div>
+      {/* UX-012: this badge is the ONLY place that reports data provenance for
+          the rows shown below — it reads from the same useSeededResource
+          call (for the active tab) that produces `rows`, so it can never
+          disagree with what the table shows (UX-002's pattern; the page
+          used to render a second, independent badge from the raw `source`
+          prop — removed). */}
+      <DataSourceBadge provenance={provenance ?? "live"} cachedAt={cachedAt} offline={offline} />
       <DataTable
         columns={columns}
         rows={rows}

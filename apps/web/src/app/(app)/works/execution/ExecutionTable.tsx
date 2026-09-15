@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { DataTable } from "@/app/_components/ds";
+import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
 import { useSeededResource } from "@/lib/sync/resource";
 
 const progressColumns = [
@@ -31,8 +32,25 @@ export function ExecutionTable({
   source: "api" | "error";
 }) {
   const [tab, setTab] = useState<Tab>("progress");
-  const { data: progressData } = useSeededResource("works-execution-progress", progress, source, (rows) => rows.length === 0);
-  const { data: issuesData } = useSeededResource("works-execution-issues", issues, source, (rows) => rows.length === 0);
+  const {
+    data: progressData,
+    provenance: progressProvenance,
+    offline: progressOffline,
+    cachedAt: progressCachedAt,
+  } = useSeededResource("works-execution-progress", progress, source, (rows) => rows.length === 0);
+  const {
+    data: issuesData,
+    provenance: issuesProvenance,
+    offline: issuesOffline,
+    cachedAt: issuesCachedAt,
+  } = useSeededResource("works-execution-issues", issues, source, (rows) => rows.length === 0);
+
+  // UX-012: each tab has its own independent cache entry, so the two
+  // useSeededResource calls can genuinely disagree with each other. The
+  // badge must reflect whichever tab's rows are actually on screen.
+  const provenance = tab === "progress" ? progressProvenance : issuesProvenance;
+  const offline = tab === "progress" ? progressOffline : issuesOffline;
+  const cachedAt = tab === "progress" ? progressCachedAt : issuesCachedAt;
 
   return (
     <div>
@@ -54,6 +72,13 @@ export function ExecutionTable({
           Issues
         </button>
       </div>
+      {/* UX-012: this badge is the ONLY place that reports data provenance for
+          the rows shown below — it reads from the same useSeededResource
+          call (for the active tab) that produces the rows, so it can never
+          disagree with what the table shows (UX-002's pattern; the page
+          used to render a second, independent badge from the raw `source`
+          prop — removed). */}
+      <DataSourceBadge provenance={provenance ?? "live"} cachedAt={cachedAt} offline={offline} />
       {tab === "progress" ? (
         <DataTable
           columns={progressColumns}

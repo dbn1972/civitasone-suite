@@ -1,5 +1,4 @@
 import Link from "next/link";
-import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
 import { PageHeader, StatGrid, StatCard, Card } from "@/app/_components/ds";
 import { getTenders } from "../_data/loaders";
 import { TendersTable } from "./TendersTable";
@@ -13,13 +12,16 @@ export default async function TendersPage() {
 
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
+      {/* UX-012: the data-source badge now lives inside TendersTable, driven
+          by the same useSeededResource call that produces its rows — not a
+          second, independent read of `source` here that could disagree with
+          the table's own cache state (UX-002's pattern). */}
       <PageHeader
         title="Tender Pipeline"
         subtitle="Pre-tender, quotation, and award management."
         back="/works"
         actions={
           <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-            {source === "error" && <DataSourceBadge source={source} />}
             <Link href="/works/tenders/new" className="btn primary" style={{ minHeight: 36, fontSize: 13, padding: "6px 14px" }}>+ New pre-tender</Link>
           </div>
         }
