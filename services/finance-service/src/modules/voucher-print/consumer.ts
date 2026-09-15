@@ -18,7 +18,7 @@ export function registerVoucherPrintConsumers(queue: Queue): void {
         payload: { service: "finance", action: "voucher_print_generate", resourceType: "voucher", resourceId: p.journalId, outcome: "success" },
       });
     });
-    await cache.invalidate(`finance:${p.tenantId}:voucher_print:*`);
+    await cache.invalidateResource(p.tenantId, "voucher_print");
     log.info({ id: msg.messageId, journalId: p.journalId }, "Processed voucher_print.generate");
   });
 }

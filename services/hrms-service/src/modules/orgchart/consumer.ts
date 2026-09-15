@@ -26,7 +26,7 @@ export function registerOrgchartConsumers(queue: Queue): void {
         payload: { service: "hrms", action: "orgchart_refresh", resourceType: "orgchart", resourceId: msg.messageId, outcome: "success" },
       });
     });
-    await cache.invalidate(`hrms:${msg.tenantId}:orgchart:*`);
+    await cache.invalidateResource(msg.tenantId, "orgchart");
     log.info({ id: msg.messageId }, "Processed orgchart.refresh");
   });
 }

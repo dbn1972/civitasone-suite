@@ -57,7 +57,7 @@ export function registerProposalConsumers(rawQueue: Queue): void {
       });
       await enqueue(tx, { topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { service: "works-service", action: "create", resourceType: "proposal", resourceId: p.id, outcome: "success" } });
     });
-    await cache.invalidate(`works:${msg.tenantId}:master:work_proposals:*`);
+    await cache.invalidateResource(msg.tenantId, "master:work_proposals");
   });
 
   queue.subscribe(COMMANDS.proposalDaoFinalize, async (msg) => {
