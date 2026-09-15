@@ -68,7 +68,6 @@ export default defineConfig({
         "dist/**",
         // AI/ML modules not under test
         "src/modules/ai-fraud/**",
-        "src/modules/ai-ml/**",
         "src/modules/ai-predictions/**",
         "src/modules/face-verification/**",
         "src/modules/device-trust/**",
