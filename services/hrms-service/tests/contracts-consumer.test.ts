@@ -7,6 +7,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { createMockSqlClient } from "./fixtures/mock-sql-client.js";
 import { randomUUID } from "node:crypto";
 import { MemoryQueue } from "@civitasone/queue";
+import { uuidV5 } from "../src/shared/ids.js";
 
 const H = vi.hoisted(() => {
   const mockTx = {
@@ -216,6 +217,34 @@ describe("idempotency (markProcessed returns false)", () => {
     await settle();
     // No outbox events should be enqueued inside the transaction
     expect(H.enqueue).not.toHaveBeenCalled();
+  });
+
+  it("contractRenewalBulk: per-contract dedup skips an already-processed contract, but the bulk summary audit still fires (review-fix)", async () => {
+    // Updated for the review-fix: a single message-level gate that blocked
+    // the ENTIRE handler (including the bulk_renewal_complete summary audit)
+    // is exactly the silent-incomplete-bulk-operation bug this fix removes
+    // (see the long comment above contractRenewalBulk in consumer.ts). The
+    // per-contract idempotency key still skips re-validating/re-inserting an
+    // already-processed contract with no writes -- that property still
+    // holds -- but there is no longer a single blanket gate that also
+    // suppresses the summary audit, so it fires and correctly reports this
+    // contract as `alreadyProcessed`.
+    H.markProcessed.mockResolvedValue(false);
+    const c1 = randomUUID();
+    await q.publish(COMMANDS.contractRenewalBulk, makeMsg(COMMANDS.contractRenewalBulk, {
+      tenantId: TENANT, contractIds: [c1], newEndDate: "2026-06-30", newTerms: {}, initiatedBy: ACTOR,
+    }));
+    await settle();
+    // Per-contract gate short-circuits BEFORE any contract lookup or write.
+    expect(H.getContractById).not.toHaveBeenCalled();
+    expect(H.mockTx.insert).not.toHaveBeenCalled();
+    const auditCall = H.enqueue.mock.calls.find((c: any) => c[1]?.payload?.action === "bulk_renewal_complete");
+    expect(auditCall).toBeDefined();
+    expect((auditCall![1] as any).payload.results[0]).toMatchObject({
+      contractId: c1,
+      success: true,
+      alreadyProcessed: true,
+    });
   });
 
   it("contractAutoSeparate: skips if already processed", async () => {
@@ -664,6 +693,147 @@ describe("contractRenewalBulk command", () => {
 
     // Bulk audit still fires
     expect(H.enqueue).toHaveBeenCalled();
+  });
+
+  it("TX-009 regression: redelivering the SAME bulk-renewal message (same messageId) does not duplicate the renewal", async () => {
+    // Reproduces a real at-least-once redelivery. Before ANY fix, this
+    // handler had no dedup at all: the per-contract "pending renewal already
+    // exists" check only protects a contract while its FIRST renewal from
+    // this message is still undecided -- it does nothing once that renewal
+    // has already resolved one way or the other, which is exactly the case
+    // here (H.getPendingRenewalForContract stays null throughout, simulating
+    // a redelivery arriving after the first renewal was already decided and
+    // is no longer "pending"). Without per-contract dedup this test would
+    // show a SECOND insert for c1.
+    //
+    // review-fix: this is no longer gated by a single message-level
+    // markProcessed (see the contractRenewalBulk comment in consumer.ts) --
+    // it's gated per-contract, so a full-message redelivery still correctly
+    // results in zero new writes for c1, but (unlike the removed early gate)
+    // the bulk summary audit fires again, now correctly reporting c1 as
+    // `alreadyProcessed` rather than staying silent.
+    const c1 = randomUUID();
+    const contract1 = makeContract({ id: c1, status: "active", renewalCount: 0 });
+    H.getContractById.mockResolvedValue(contract1);
+    H.getPendingRenewalForContract.mockResolvedValue(null);
+    H.getContractConfig.mockResolvedValue({ approvalChain: [], maxContractMonths: null });
+    H.getContractHistory.mockResolvedValue([]);
+
+    const msg = makeMsg(COMMANDS.contractRenewalBulk, {
+      tenantId: TENANT, contractIds: [c1], newEndDate: "2026-06-30", newTerms: { role: "Renewed" }, initiatedBy: ACTOR,
+    });
+
+    // First delivery: processes normally.
+    await q.publish(COMMANDS.contractRenewalBulk, msg);
+    await settle();
+    const insertsAfterFirst = H.mockTx.insert.mock.calls.length;
+    expect(insertsAfterFirst).toBeGreaterThan(0);
+
+    // Redelivery: a REAL at-least-once redelivery is a FRESH consumer
+    // process picking the message back up from the broker (e.g. after the
+    // original process crashed) -- it shares only the DATABASE's state
+    // (here: H.markProcessed's mocked "already seen" state), never the
+    // crashed process's in-memory state. Modeled with a fresh MemoryQueue +
+    // a fresh registration of the same handler, rather than re-publishing on
+    // the SAME queue instance: MemoryQueue has its OWN internal BUS-DEDUP
+    // guard (keyed by topic:messageId:subscriberId -- see
+    // services/queue-service/src/bus.ts) that silently refuses to redeliver
+    // an identical messageId to the same subscriber, which would make this
+    // test pass even if the CONSUMER's own per-contract dedup were
+    // completely broken -- it would never even reach the handler.
+    H.markProcessed.mockResolvedValue(false);
+    const q2 = new MemoryQueue();
+    registerContractConsumers(q2);
+    await q2.start();
+    await q2.publish(COMMANDS.contractRenewalBulk, msg);
+    await settle();
+
+    // No new renewal insert for c1 -- not duplicated.
+    expect(H.mockTx.insert.mock.calls.length).toBe(insertsAfterFirst);
+    // The redelivery still gets its own bulk summary audit, correctly
+    // reporting c1 as already processed rather than a fresh success.
+    const auditCalls = H.enqueue.mock.calls.filter((c: any) => c[1]?.payload?.action === "bulk_renewal_complete");
+    expect(auditCalls.length).toBe(2);
+    expect((auditCalls[1]![1] as any).payload.results[0]).toMatchObject({
+      contractId: c1,
+      alreadyProcessed: true,
+    });
+  });
+
+  it("review-fix regression: a crash after N of M contracts, followed by redelivery of the identical message, resumes the REMAINING contracts instead of silently skipping them", async () => {
+    // This is the exact bug the independent review found: the earlier draft
+    // of this fix gated the WHOLE handler with one markProcessed(tx,
+    // msg.messageId) transaction committed BEFORE the per-contract loop. A
+    // crash partway through that loop -- after the early gate had already
+    // committed -- meant a redelivery of the identical message saw
+    // `isNew = false` and returned immediately, permanently and silently
+    // skipping every contract not yet reached. Reproduced here with THREE
+    // contracts: c1 and c2 finish (their per-contract keys are already
+    // committed, simulating a crash right after c2 and before c3 is ever
+    // reached), then the identical message is redelivered.
+    const c1 = randomUUID();
+    const c2 = randomUUID();
+    const c3 = randomUUID();
+
+    H.getContractById.mockResolvedValue(makeContract({ id: c3, status: "active", renewalCount: 0 }));
+    H.getPendingRenewalForContract.mockResolvedValue(null);
+    H.getContractConfig.mockResolvedValue({ approvalChain: [], maxContractMonths: null });
+    H.getContractHistory.mockResolvedValue([]);
+
+    const msg = makeMsg(COMMANDS.contractRenewalBulk, {
+      tenantId: TENANT, contractIds: [c1, c2, c3], newEndDate: "2026-06-30", newTerms: { role: "Renewed" }, initiatedBy: ACTOR,
+    });
+
+    // Stateful fake standing in for the REAL markProcessed (Postgres
+    // `INSERT ... ON CONFLICT DO NOTHING RETURNING`): each unique key can
+    // only newly claim once; the SAME key on a later call returns false.
+    // Unlike the blanket mockResolvedValue(true/false) used elsewhere in
+    // this file, a bulk message's per-contract keys must be tracked
+    // individually to simulate a PARTIAL crash correctly.
+    const seen = new Set<string>();
+    H.markProcessed.mockImplementation(async (..._args: unknown[]) => {
+      const key = _args[1] as string;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+
+    // Pre-seed c1 and c2's per-contract keys as already committed -- the
+    // direct consequence of "the process crashed right after c2's own
+    // transaction committed, before c3 was ever reached" (markProcessed is
+    // the FIRST statement in each per-contract transaction, so "committed"
+    // and "key present in `seen`" are the same fact). Computed the same way
+    // the consumer derives it, so this precisely reproduces a mid-loop crash
+    // without needing to literally interrupt the loop.
+    seen.add(uuidV5(`${msg.messageId}:${c1}`));
+    seen.add(uuidV5(`${msg.messageId}:${c2}`));
+
+    // Redelivery of the identical message (this IS the "first" call the
+    // consumer under test ever sees in this test -- c1/c2's earlier
+    // "delivery" is represented entirely by the pre-seeded `seen` set above).
+    await q.publish(COMMANDS.contractRenewalBulk, msg);
+    await settle();
+
+    // c3 -- never reached before the simulated crash -- was validated and
+    // inserted on this redelivery. c1/c2 were not re-validated.
+    expect(H.getContractById).toHaveBeenCalledTimes(1);
+    expect(H.getContractById).toHaveBeenCalledWith(expect.anything(), TENANT, c3);
+    expect(H.mockTx.insert).toHaveBeenCalledTimes(1);
+
+    const auditCall = H.enqueue.mock.calls.find((c: any) => c[1]?.payload?.action === "bulk_renewal_complete");
+    expect(auditCall).toBeDefined();
+    const summary = (auditCall![1] as any).payload;
+    expect(summary.total).toBe(3);
+    expect(summary.succeeded).toBe(3);
+    const byContract = Object.fromEntries(summary.results.map((r: any) => [r.contractId, r]));
+    // c1/c2: resumed as already-done, NOT reprocessed or duplicated.
+    expect(byContract[c1]).toMatchObject({ success: true, alreadyProcessed: true });
+    expect(byContract[c2]).toMatchObject({ success: true, alreadyProcessed: true });
+    // c3: the remaining contract actually got processed -- not silently
+    // skipped, and not flagged as already-done.
+    expect(byContract[c3].success).toBe(true);
+    expect(byContract[c3].alreadyProcessed).toBeFalsy();
+    expect(byContract[c3].renewalId).toBeDefined();
   });
 });
 

@@ -1,4 +1,6 @@
 import type { Queue } from "@civitasone/queue";
+import { db } from "../../shared/db.js";
+import { markProcessed } from "../../shared/outbox.js";
 import * as repo from "../devices/repo.js";
 
 type FeedRule = {
@@ -84,13 +86,32 @@ export function registerSyncFeederConsumers(queue: Queue): void {
       const payload = msg.payload as Record<string, unknown>;
       const entityId = rule.entityId(payload);
       if (!entityId) return;
-      await repo.appendChangelog({
-        tenantId: msg.tenantId,
-        mailbox: rule.mailbox,
-        entityId,
-        operation: rule.operation ?? "upsert",
-        payload,
-        ownerUserId: rule.ownerId ? rule.ownerId(payload) : null,
+      // TX-009: this consumer used to call repo.appendChangelog() directly,
+      // with no markProcessed/dedup of any kind — every redelivery of any of
+      // these ~30 upstream domain events appended a brand-new, permanent
+      // changelog row. Mobile/web sync clients pull this mailbox by cursor
+      // (pullSince) and apply every row they haven't seen, so a redelivery
+      // made them observe and re-apply the SAME entity mutation twice (for
+      // the "delete" tombstone rules, a harmless no-op re-delete; for the far
+      // more common "upsert" rules, a redundant re-fetch/re-render and, for
+      // the notification.* rules, effectively a duplicate delivery record),
+      // and the changelog table grew unboundedly with dead duplicate rows
+      // that are never deduped or reconciled. markProcessed (keyed on the
+      // message's own messageId) now gates the write, and appendChangelogOne
+      // runs in the SAME transaction so "processed" and "the changelog row
+      // exists" are atomic — matching this codebase's standard consumer
+      // shape (rbac/consumer.ts, users/consumer.ts, etc. in this same
+      // service).
+      await db.transaction(async (tx) => {
+        if (!(await markProcessed(tx, msg.messageId))) return;
+        await repo.appendChangelogOne(tx, {
+          tenantId: msg.tenantId,
+          mailbox: rule.mailbox,
+          entityId,
+          operation: rule.operation ?? "upsert",
+          payload,
+          ownerUserId: rule.ownerId ? rule.ownerId(payload) : null,
+        });
       });
     });
   }

@@ -34,26 +34,39 @@ export function registerJobConsumers(queue: Queue): void {
         version: 1,
       });
       await emit(tx, msg, EVENTS.jobCreated, { jobId: p.id, name: p.name }, "create", p.id);
+
+      // TX-009: trigger the render pipeline through the transactional outbox
+      // instead of a direct post-commit queue.publish. The old code called
+      // queue.publish(COMMANDS.renderJob, ...) AFTER this transaction had
+      // already committed (markProcessed included), so any crash or publish
+      // failure in that gap permanently stranded the job: a genuine
+      // redelivery of this same createJob message sees markProcessed return
+      // false and skips the whole handler body, so the render command is
+      // never (re)issued and the job never completes. Enqueuing it here
+      // makes "processed" and "render will be triggered" atomic — either
+      // both commit together, or neither does and a real redelivery safely
+      // retries the whole thing from scratch. The outbox assigns its own
+      // row id as the relayed messageId (see relayOnce in
+      // packages/outbox/src/index.ts), so the old hand-rolled
+      // `render-${p.id}` messageId is dropped -- it was never load-bearing
+      // anyway, since a createJob redelivery already short-circuited on
+      // markProcessed before reaching this line.
+      await enqueue(tx, {
+        topic: COMMANDS.renderJob,
+        eventType: COMMANDS.renderJob,
+        tenantId: msg.tenantId,
+        actorId: msg.actorId,
+        correlationId: msg.correlationId,
+        payload: {
+          jobId: p.id,
+          tenantId: msg.tenantId,
+          templateHtml: `<html><body><h1>${p.name}</h1><p>Report type: ${p.reportType ?? "general"}</p><p>Generated at: ${new Date().toISOString()}</p></body></html>`,
+          format: (p.format ?? "pdf") as "pdf" | "xlsx" | "csv" | "html",
+        },
+      });
     });
     await cache.put(keyFor(msg.tenantId, msg.payload.id), msg.payload);
     await cache.invalidateResource(msg.tenantId, RESOURCE);
-
-    // Trigger the render pipeline — the render consumer will produce the actual file
-    const p = msg.payload;
-    await queue.publish(COMMANDS.renderJob, {
-      messageId: `render-${p.id}`,
-      type: COMMANDS.renderJob,
-      tenantId: msg.tenantId,
-      actorId: msg.actorId,
-      correlationId: msg.correlationId,
-      schemaVersion: "1.0",
-      payload: {
-        jobId: p.id,
-        tenantId: msg.tenantId,
-        templateHtml: `<html><body><h1>${p.name}</h1><p>Report type: ${p.reportType ?? "general"}</p><p>Generated at: ${new Date().toISOString()}</p></body></html>`,
-        format: (p.format ?? "pdf") as "pdf" | "xlsx" | "csv" | "html",
-      },
-    });
   });
 }
 

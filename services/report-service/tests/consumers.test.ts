@@ -209,17 +209,69 @@ describe("registerJobConsumers", () => {
 
     // Should have inserted the job
     expect(mockState.inserted.length).toBeGreaterThan(0);
-    // Should have enqueued outbox events (job.created + audit)
-    expect(mockState.enqueueCalls.length).toBe(2);
+    // TX-009: job.created + audit + the renderJob trigger now all go through
+    // the transactional outbox (enqueue), not a direct post-commit publish.
+    expect(mockState.enqueueCalls.length).toBe(3);
     expect(mockState.enqueueCalls[0]!.topic).toBe("reports.job.created");
     expect(mockState.enqueueCalls[1]!.topic).toBe("audit.event.record");
+    expect(mockState.enqueueCalls[2]!.topic).toBe("reports.job.render");
     // Should have cached the projected value
     expect(mockState.cachePuts.length).toBe(1);
     // Should have invalidated the resource list
     expect(mockState.resourceInvalidations.length).toBe(1);
-    // Should have published render command
-    expect(mockState.publishCalls.length).toBe(1);
-    expect((mockState.publishCalls[0] as any).topic).toBe("reports.job.render");
+    // No more direct queue.publish for the render trigger.
+    expect(mockState.publishCalls.length).toBe(0);
+  });
+
+  it("TX-009 regression: redelivering the SAME createJob message does not re-trigger the render pipeline", async () => {
+    // Reproduces an at-least-once redelivery: the exact same messageId is
+    // delivered twice. Before the fix, this couldn't even double-fire the
+    // render command on a same-messageId redelivery (markProcessed already
+    // blocked the whole handler) -- the REAL bug was the other direction: a
+    // crash between markProcessed's commit and the direct queue.publish call
+    // permanently lost the render trigger, because a genuine redelivery is
+    // exactly what this test simulates and it must be a clean no-op, not an
+    // error and not a re-publish outside the outbox.
+    const { registerJobConsumers } = await import("../src/modules/jobs/consumer.js");
+    const handlers = new Map<string, (msg: unknown) => Promise<void>>();
+    const mockQueue = {
+      subscribe: (topic: string, handler: (msg: unknown) => Promise<void>) => { handlers.set(topic, handler); },
+      publish: async (topic: string, msg: unknown) => { mockState.publishCalls.push({ topic, msg }); },
+    };
+    registerJobConsumers(mockQueue as any);
+
+    const msg = {
+      messageId: "redelivered-msg",
+      type: "reports.job.create",
+      tenantId: TENANT_ID,
+      actorId: ACTOR_ID,
+      correlationId: "corr-redelivery",
+      schemaVersion: "1.0",
+      payload: {
+        id: JOB_ID,
+        tenantId: TENANT_ID,
+        name: "Test Report",
+        reportType: "finance",
+        status: "queued",
+        format: "pdf",
+      },
+    };
+
+    // First delivery: processes normally, enqueues all three outbox rows.
+    await handlers.get("reports.job.create")!(msg);
+    expect(mockState.enqueueCalls.length).toBe(3);
+    expect(mockState.enqueueCalls.map((c) => c.topic)).toEqual([
+      "reports.job.created", "audit.event.record", "reports.job.render",
+    ]);
+
+    // Redelivery: same messageId. The real markProcessed (Postgres
+    // ON CONFLICT DO NOTHING ... RETURNING) would now report "already seen";
+    // this mock flips to simulate exactly that.
+    mockState.markProcessedResult = false;
+    await handlers.get("reports.job.create")!(msg);
+
+    // No new writes and — critically — no second render-trigger enqueue.
+    expect(mockState.enqueueCalls.length).toBe(3);
   });
 
   it("skips processing when markProcessed returns false", async () => {

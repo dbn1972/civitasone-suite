@@ -136,10 +136,16 @@ export async function pullSince(
 
 // ── SYN-1 (03): idempotency, conflict detection, per-mutation apply ──────────
 
-/** Append a single changelog row (used by the per-mutation push path). */
+/**
+ * Append a single changelog row (used by the per-mutation push path, and by
+ * TX-009's markProcessed-gated sync feeder — see modules/sync/feeder.ts).
+ * `ownerUserId` is optional and defaults to null (unset), same as before this
+ * field existed — every pre-existing caller that doesn't pass it keeps its
+ * exact current behavior.
+ */
 export async function appendChangelogOne(
   tx: Writer,
-  entry: { tenantId: string; mailbox: string; entityId: string; operation: string; payload?: Record<string, unknown> },
+  entry: { tenantId: string; mailbox: string; entityId: string; operation: string; payload?: Record<string, unknown>; ownerUserId?: string | null },
 ): Promise<{ seq: string; etag: string }> {
   const etag = randomBytes(8).toString("hex");
   const rows = await tx.insert(entityChangelog).values({
@@ -148,6 +154,7 @@ export async function appendChangelogOne(
     entityId: entry.entityId,
     operation: entry.operation,
     payload: entry.payload ?? null,
+    ownerUserId: entry.ownerUserId ?? null,
     etag,
   }).returning({ seq: entityChangelog.seq, etag: entityChangelog.etag });
   return { seq: String(rows[0]?.seq ?? "0"), etag: rows[0]?.etag ?? etag };
