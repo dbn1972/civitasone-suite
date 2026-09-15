@@ -61,6 +61,25 @@ services:
     # host-side drift.
     mem_limit: 3g
     mem_reservation: 768m
+    # REL-021: the limits above (PERF-018) were correct but had never been
+    # applied to the live shared container -- it kept running under the old
+    # ad-hoc 1GiB/2-CPU cap until this gap recreated it. Re-validated the
+    # sizing against the fleet's real usage shape rather than trusting the
+    # PERF-018 estimate as-is: 1,483 bare `create-queue` calls (the fleet's
+    # full queue count) and, separately, 400 topics created the way
+    # services/queue-service/src/bus.ts actually does it (DLQ +
+    # RedrivePolicy + VisibilityTimeout + MessageRetentionPeriod each, 800
+    # queues) both settled around 420MiB total on a disposable 6g-capped
+    # container -- next to nothing above LocalStack's own ~400MiB idle
+    # footprint, and far below PERF-018's 300-queue/1.05GiB extrapolation.
+    # 3g keeps wide, evidence-based headroom either way. Recreating also
+    # dropped the undocumented ad-hoc 2-CPU cap entirely (nothing in this
+    # file replaced it); added an explicit `cpus` limit below so the live
+    # container isn't left less-bounded than before, and so CPU is
+    # version-controlled the same way memory now is. See the REL-021 PR
+    # description for full before/after verification (real concurrent
+    # LocalStack-backed test suites against the recreated container).
+    cpus: "2.0"
     networks: [civitasone]
 
   postgres:
