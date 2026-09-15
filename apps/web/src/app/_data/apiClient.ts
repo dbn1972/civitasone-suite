@@ -4,7 +4,16 @@ import { COOKIE } from "@/lib/auth/config";
 import { recordLoaderFallback, type LoaderFallbackReason } from "./loaderTelemetry";
 
 export type LoaderSource = "api" | "error";
-export type LoaderResult<T> = { data: T; source: LoaderSource };
+/**
+ * `status` is the raw HTTP status code when one was actually received
+ * (undefined for network errors / missing config, where there was no
+ * response to read one from). It is optional and additive on purpose: every
+ * existing caller keys off `source` alone and is unaffected. It exists so a
+ * detail-by-id page CAN tell a real 404 ("this record doesn't exist") apart
+ * from every other failure ("we couldn't load it") when that distinction
+ * matters — `source: "error"` alone conflates them (see UX-009 follow-up).
+ */
+export type LoaderResult<T> = { data: T; source: LoaderSource; status?: number };
 
 export interface FetchJsonOptions<TApi, TOutput> {
   revalidateSeconds?: number;
@@ -65,7 +74,7 @@ export async function fetchJson<TApi, TOutput>(
   const auth = serverAuthHeaders();
   if (!auth.authorization) {
     emitError(options.telemetryKey, "http_error", path, 401);
-    return { data: empty, source: "error" };
+    return { data: empty, source: "error", status: 401 };
   }
 
   const normalized = path.startsWith("/") ? path : `/${path}`;
@@ -83,7 +92,7 @@ export async function fetchJson<TApi, TOutput>(
 
     if (!response.ok) {
       emitError(options.telemetryKey, "http_error", path, response.status);
-      return { data: empty, source: "error" };
+      return { data: empty, source: "error", status: response.status };
     }
 
     const raw = await response.json();
@@ -91,12 +100,12 @@ export async function fetchJson<TApi, TOutput>(
       const parsed = options.responseSchema.safeParse(raw);
       if (!parsed.success) {
         emitError(options.telemetryKey, "invalid_payload", path, response.status);
-        return { data: empty, source: "error" };
+        return { data: empty, source: "error", status: response.status };
       }
       const mapped = options.mapResponse(parsed.data);
       if (mapped === null) {
         emitError(options.telemetryKey, "invalid_payload", path, response.status);
-        return { data: empty, source: "error" };
+        return { data: empty, source: "error", status: response.status };
       }
       return { data: mapped, source: "api" };
     }
@@ -105,7 +114,7 @@ export async function fetchJson<TApi, TOutput>(
     const mapped = options.mapResponse(payload);
     if (mapped === null) {
       emitError(options.telemetryKey, "invalid_payload", path, response.status);
-      return { data: empty, source: "error" };
+      return { data: empty, source: "error", status: response.status };
     }
 
     return { data: mapped, source: "api" };
