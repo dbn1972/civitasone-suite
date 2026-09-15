@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useId, useRef, useState } from "react";
 
 /** Real metadata of the file that was just uploaded (from the browser File object). */
 export type UploadedFileMeta = {
@@ -33,6 +33,7 @@ export function FileUpload({
   onUploaded?: (key: string, meta: UploadedFileMeta) => void;
 }) {
   const fileRef = useRef<HTMLInputElement>(null);
+  const fileInputId = useId();
   const [status, setStatus] = useState<"idle" | "uploading" | "done" | "error">("idle");
   const [message, setMessage] = useState("");
 
@@ -90,12 +91,13 @@ export function FileUpload({
 
   return (
     <div>
-      <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "#334155", marginBottom: 5 }}>
+      <label htmlFor={fileInputId} style={{ display: "block", fontSize: 13, fontWeight: 600, color: "#334155", marginBottom: 5 }}>
         {label}
       </label>
       <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
         <input
           ref={fileRef}
+          id={fileInputId}
           type="file"
           accept={accept}
           onChange={handleChange}

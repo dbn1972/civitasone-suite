@@ -104,6 +104,7 @@ function ColorPicker({
         value={value}
         onChange={(e) => onChange(e.target.value)}
         className="w-10 h-10 rounded-lg border border-gray-200 cursor-pointer"
+        aria-label={label}
         title={label}
       />
       <div className="flex-1">
@@ -483,10 +484,11 @@ export default function BrandingPage() {
 
         {/* App Name */}
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
+          <label htmlFor="branding-app-name" className="block text-sm font-medium text-gray-700 mb-1">
             App Name
           </label>
           <input
+            id="branding-app-name"
             type="text"
             value={config.appName}
             onChange={(e) => updateColor("appName", e.target.value)}
@@ -497,9 +499,13 @@ export default function BrandingPage() {
 
         {/* Logo Upload */}
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
+          {/* Not a <label>: this heads a drag-and-drop zone plus a fallback
+              text input, not one single control it could be htmlFor-linked
+              to — the fallback input already carries its own
+              aria-label="Logo image URL" below. */}
+          <p className="block text-sm font-medium text-gray-700 mb-1">
             Logo
-          </label>
+          </p>
           <div className="border-2 border-dashed rounded-xl p-4 text-center cursor-pointer hover:border-blue-400 transition-colors">
             {config.logoUrl ? (
               <img src={config.logoUrl} alt="Logo" className="h-12 mx-auto" />
@@ -513,6 +519,7 @@ export default function BrandingPage() {
             )}
             <input
               type="text"
+              aria-label="Logo image URL"
               value={config.logoUrl ?? ""}
               onChange={(e) => updateColor("logoUrl", e.target.value)}
               className="w-full px-2 py-1 border rounded text-xs mt-2"

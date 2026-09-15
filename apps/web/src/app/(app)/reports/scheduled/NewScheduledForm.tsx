@@ -64,8 +64,9 @@ export function NewScheduledForm() {
       style={{ padding: "16px", display: "flex", flexDirection: "column", gap: "14px", maxWidth: "480px" }}
     >
       <div>
-        <label style={labelStyle}>Template ID</label>
+        <label htmlFor="scheduled-report-template-id" style={labelStyle}>Template ID</label>
         <input
+          id="scheduled-report-template-id"
           required
           style={inputStyle}
           placeholder="UUID of report template"
@@ -75,8 +76,8 @@ export function NewScheduledForm() {
         />
       </div>
       <div>
-        <label style={labelStyle}>Cadence</label>
-        <select style={inputStyle} value={cadence} onChange={(e) => setCadence(e.target.value)}>
+        <label htmlFor="scheduled-report-cadence" style={labelStyle}>Cadence</label>
+        <select id="scheduled-report-cadence" style={inputStyle} value={cadence} onChange={(e) => setCadence(e.target.value)}>
           <option value="hourly">Hourly</option>
           <option value="daily">Daily</option>
           <option value="weekly">Weekly</option>
@@ -84,10 +85,11 @@ export function NewScheduledForm() {
         </select>
       </div>
       <div>
-        <label style={labelStyle}>
+        <label htmlFor="scheduled-report-recipients" style={labelStyle}>
           Recipients <span style={{ fontWeight: 400 }}>(comma-separated emails)</span>
         </label>
         <input
+          id="scheduled-report-recipients"
           required
           type="text"
           style={inputStyle}
@@ -97,8 +99,8 @@ export function NewScheduledForm() {
         />
       </div>
       <div>
-        <label style={labelStyle}>Format</label>
-        <select style={inputStyle} value={format} onChange={(e) => setFormat(e.target.value)}>
+        <label htmlFor="scheduled-report-format" style={labelStyle}>Format</label>
+        <select id="scheduled-report-format" style={inputStyle} value={format} onChange={(e) => setFormat(e.target.value)}>
           <option value="pdf">PDF</option>
           <option value="xlsx">XLSX</option>
           <option value="csv">CSV</option>

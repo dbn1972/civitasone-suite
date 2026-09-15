@@ -81,10 +81,11 @@ export function LoginForm() {
       {phase === "email" ? (
         <form onSubmit={requestOtp} style={{ display: "grid", gap: 14 }}>
           <div>
-            <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "#334155", marginBottom: 5 }}>
+            <label htmlFor="careers-login-email" style={{ display: "block", fontSize: 13, fontWeight: 600, color: "#334155", marginBottom: 5 }}>
               Email address you applied with
             </label>
             <input
+              id="careers-login-email"
               type="email" required value={email} onChange={(e) => setEmail(e.target.value)}
               placeholder="e.g. priya@example.com"
               style={{ width: "100%", padding: "11px 14px", fontSize: 14, border: "1px solid #cbd5e1", borderRadius: 9, boxSizing: "border-box" }}
@@ -108,10 +109,11 @@ export function LoginForm() {
             </p>
           </div>
           <div>
-            <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "#334155", marginBottom: 5 }}>
+            <label htmlFor="careers-login-otp" style={{ display: "block", fontSize: 13, fontWeight: 600, color: "#334155", marginBottom: 5 }}>
               Enter the 6-digit code
             </label>
             <input
+              id="careers-login-otp"
               type="text" inputMode="numeric" pattern="\d{6}" maxLength={6} required
               value={otp} onChange={(e) => setOtp(e.target.value.replace(/\D/g, "").slice(0, 6))}
               placeholder="e.g. 472839"

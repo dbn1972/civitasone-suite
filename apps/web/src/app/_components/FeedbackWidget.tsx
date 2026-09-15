@@ -162,10 +162,11 @@ export function FeedbackWidget() {
         </div>
       ) : (
         <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-          <label style={{ fontSize: 13, color: "#6b7280" }}>
+          <label htmlFor="feedback-widget-comment" style={{ fontSize: 13, color: "#6b7280" }}>
             Any details? (optional)
           </label>
           <input
+            id="feedback-widget-comment"
             type="text"
             value={comment}
             onChange={(e) => setComment(e.target.value)}
