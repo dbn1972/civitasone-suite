@@ -193,6 +193,167 @@ function formatConsumerHeartbeatMetrics(): string[] {
   return lines;
 }
 
+// ── PERF-011: scheduled-job / cron run observability ─────────────────────────
+// Every periodic in-process job (report-service ScheduledReportCron,
+// analytics-service ScheduledExportCron, hrms-service scheduler tick, and any
+// future setInterval-driven sweeper) calls recordScheduledJobRun() — directly,
+// or via the withScheduledJobMetrics() wrapper below — once per tick. Mirrors
+// the consumer-heartbeat section above: process-local Maps, a gauge for "last
+// run" so a stuck loop goes stale and is visible, plus outcome counters and a
+// duration histogram so a job that starts silently failing (or starts taking
+// far longer than usual) is visible on /metrics instead of only in scrollback.
+
+const scheduledJobLastRun = new Map<string, number>();     // job -> epoch ms (any outcome)
+const scheduledJobLastSuccess = new Map<string, number>(); // job -> epoch ms (success only)
+const scheduledJobRunsTotal = new Map<string, number>();   // "job:status" -> count
+
+// Bucket bounds in ms, sized for job ticks (a few ms up to several minutes)
+// rather than HTTP requests — last bucket is +Inf, tracked separately.
+const JOB_DURATION_BUCKETS_MS = [10, 50, 100, 250, 500, 1_000, 2_500, 5_000, 10_000, 30_000, 60_000, 300_000];
+type JobDurationHist = { buckets: number[]; sum: number; count: number };
+const scheduledJobDuration = new Map<string, JobDurationHist>(); // job -> hist
+
+/**
+ * Record the outcome of one scheduled-job tick. Call this once per tick,
+ * whether or not the tick found any work to do — a healthy no-op tick still
+ * proves the loop is alive, which is exactly what "is this scheduler stuck"
+ * needs to be able to tell apart from silence.
+ */
+export function recordScheduledJobRun(job: string, status: "success" | "failure", durationMs: number): void {
+  const now = Date.now();
+  scheduledJobLastRun.set(job, now);
+  if (status === "success") scheduledJobLastSuccess.set(job, now);
+
+  const key = `${job}:${status}`;
+  scheduledJobRunsTotal.set(key, (scheduledJobRunsTotal.get(key) ?? 0) + 1);
+
+  let h = scheduledJobDuration.get(job);
+  if (!h) {
+    h = { buckets: new Array(JOB_DURATION_BUCKETS_MS.length + 1).fill(0), sum: 0, count: 0 };
+    scheduledJobDuration.set(job, h);
+  }
+  h.sum += durationMs;
+  h.count += 1;
+  let placed = false;
+  for (let i = 0; i < JOB_DURATION_BUCKETS_MS.length; i++) {
+    if (durationMs <= JOB_DURATION_BUCKETS_MS[i]!) { h.buckets[i]! += 1; placed = true; break; }
+  }
+  if (!placed) h.buckets[JOB_DURATION_BUCKETS_MS.length]! += 1; // +Inf bucket
+}
+
+type JobLogger = {
+  info: (obj: Record<string, unknown>, msg: string) => void;
+  error: (obj: Record<string, unknown>, msg: string) => void;
+};
+
+/**
+ * Time `fn`, record its outcome via recordScheduledJobRun(), and (when a
+ * logger is passed) emit one structured log line per tick regardless of
+ * outcome — the "plus enough logging that a stuck or silently-failing job
+ * would actually be visible" half of PERF-011. Rethrows on failure so the
+ * caller's own error handling (e.g. an existing `.catch()` on the interval)
+ * still runs unchanged.
+ */
+export async function withScheduledJobMetrics<T>(
+  job: string,
+  fn: () => Promise<T>,
+  opts?: { logger?: JobLogger },
+): Promise<T> {
+  const start = performance.now();
+  try {
+    const result = await fn();
+    const durationMs = performance.now() - start;
+    recordScheduledJobRun(job, "success", durationMs);
+    opts?.logger?.info({ job, status: "success", durationMs: Math.round(durationMs) }, "scheduled job tick completed");
+    return result;
+  } catch (err) {
+    const durationMs = performance.now() - start;
+    recordScheduledJobRun(job, "failure", durationMs);
+    opts?.logger?.error({ job, status: "failure", durationMs: Math.round(durationMs), err }, "scheduled job tick failed");
+    throw err;
+  }
+}
+
+/** Epoch ms of the last run (any outcome) for `job`, or null if it has never run. */
+export function getScheduledJobLastRun(job: string): number | null {
+  return scheduledJobLastRun.get(job) ?? null;
+}
+/** Epoch ms of the last SUCCESSFUL run for `job`, or null if it has never succeeded. */
+export function getScheduledJobLastSuccess(job: string): number | null {
+  return scheduledJobLastSuccess.get(job) ?? null;
+}
+/** scheduled_job_runs_total{job,status} — test/dashboard helper. */
+export function getScheduledJobRunCount(job: string, status: "success" | "failure"): number {
+  return scheduledJobRunsTotal.get(`${job}:${status}`) ?? 0;
+}
+/** Reset scheduled-job metrics — test helper. */
+export function resetScheduledJobMetrics(): void {
+  scheduledJobLastRun.clear();
+  scheduledJobLastSuccess.clear();
+  scheduledJobRunsTotal.clear();
+  scheduledJobDuration.clear();
+}
+
+/**
+ * Build a readiness ping that fails once `job` hasn't had a SUCCESSFUL run
+ * within `maxStalenessMs` — same shape as consumerHeartbeatCheck, for wiring a
+ * stuck/silently-failing scheduler into /ready:
+ *
+ *   registerOpsRoutes(app, { service: "report-service", checks: { custom: [
+ *     { name: "scheduled-report-cron", ping: scheduledJobHeartbeatCheck({ job: JOB_NAME, maxStalenessMs: 15 * 60_000 }) },
+ *   ] } });
+ */
+export function scheduledJobHeartbeatCheck(opts: { job: string; maxStalenessMs: number }): () => boolean {
+  return () => {
+    const last = getScheduledJobLastSuccess(opts.job);
+    if (last === null) return false;
+    return Date.now() - last <= opts.maxStalenessMs;
+  };
+}
+
+function formatScheduledJobMetrics(): string[] {
+  const lines = [
+    "# HELP scheduled_job_last_run_timestamp Unix time (seconds) of the last attempted run, by job",
+    "# TYPE scheduled_job_last_run_timestamp gauge",
+  ];
+  for (const [job, ts] of scheduledJobLastRun) {
+    lines.push(`scheduled_job_last_run_timestamp{job="${job}"} ${Math.floor(ts / 1000)}`);
+  }
+  lines.push(
+    "# HELP scheduled_job_last_success_timestamp Unix time (seconds) of the last SUCCESSFUL run, by job",
+    "# TYPE scheduled_job_last_success_timestamp gauge",
+  );
+  for (const [job, ts] of scheduledJobLastSuccess) {
+    lines.push(`scheduled_job_last_success_timestamp{job="${job}"} ${Math.floor(ts / 1000)}`);
+  }
+  lines.push(
+    "# HELP scheduled_job_runs_total Scheduled-job tick outcomes, by job and status",
+    "# TYPE scheduled_job_runs_total counter",
+  );
+  for (const [key, count] of scheduledJobRunsTotal) {
+    const sep = key.lastIndexOf(":");
+    const job = key.slice(0, sep);
+    const status = key.slice(sep + 1);
+    lines.push(`scheduled_job_runs_total{job="${job}",status="${status}"} ${count}`);
+  }
+  lines.push(
+    "# HELP scheduled_job_duration_ms Scheduled-job tick duration in milliseconds, by job",
+    "# TYPE scheduled_job_duration_ms histogram",
+  );
+  for (const [job, h] of scheduledJobDuration) {
+    let cumulative = 0;
+    for (let i = 0; i < JOB_DURATION_BUCKETS_MS.length; i++) {
+      cumulative += h.buckets[i]!;
+      lines.push(`scheduled_job_duration_ms_bucket{job="${job}",le="${JOB_DURATION_BUCKETS_MS[i]}"} ${cumulative}`);
+    }
+    cumulative += h.buckets[JOB_DURATION_BUCKETS_MS.length]!;
+    lines.push(`scheduled_job_duration_ms_bucket{job="${job}",le="+Inf"} ${cumulative}`);
+    lines.push(`scheduled_job_duration_ms_sum{job="${job}"} ${h.sum}`);
+    lines.push(`scheduled_job_duration_ms_count{job="${job}"} ${h.count}`);
+  }
+  return lines;
+}
+
 // ── OPS-1 (09-T1): outbox relay + DLQ failure metrics ────────────────────────
 
 const outboxRelayFailuresTotal = new Map<string, number>(); // service -> count
@@ -555,6 +716,7 @@ export function formatSharedMetrics(): string[] {
     ...formatFailureMetrics(),
     ...formatHttpLatencyMetrics(),
     ...formatTenantRequestMetrics(),
+    ...formatScheduledJobMetrics(),
   ];
 }
 
