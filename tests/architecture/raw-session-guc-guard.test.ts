@@ -91,6 +91,220 @@ await tx.unsafe(\`select set_config('app.tenant_id', '\${T}', true)\`);
     const source = `SET lock_timeout = '5s';`;
     expect(checkTenantGucViolations(source, true)).toEqual([]);
   });
+
+  // ── PERF-013: confirmed false negatives (docs/ENTERPRISE-GAP-REPORT-2026-09-07.md) ──
+  // Each of these four reproduces one of the adversarial inputs the gap row
+  // hand-crafted: the guard's pre-fix regex/line-by-line logic misses all
+  // four despite each being the exact same underlying bug (a session-scoped
+  // GUC set outside SET LOCAL / a transaction-scoped set_config) PR #1098
+  // already fixed two real instances of.
+
+  it("reports raw `SET app.tenant_id TO '...'` — the alternate Postgres SET syntax — as a violation", () => {
+    const source = `SET app.tenant_id TO '00000000-0000-0000-0000-000000000001';`;
+    const violations = checkTenantGucViolations(source, true);
+    expect(violations).toHaveLength(1);
+    expect(violations[0].snippet).toContain("SET app.tenant_id");
+  });
+
+  it("reports a raw SET whose keyword and identifier/operator are split across lines", () => {
+    const source = `
+SET
+  app.tenant_id = '00000000-0000-0000-0000-000000000001';
+`;
+    const violations = checkTenantGucViolations(source, true);
+    expect(violations).toHaveLength(1);
+    expect(violations[0].line).toBe(2);
+  });
+
+  it("reports a raw SET statement built via string concatenation as a violation", () => {
+    const source = `
+const stmt = "SET app.tenant_id" + " = '" + tenantId + "'";
+await sql.unsafe(stmt);
+`;
+    const violations = checkTenantGucViolations(source, false);
+    expect(violations).toHaveLength(1);
+    expect(violations[0].line).toBe(2);
+  });
+
+  it("reports set_config(..., <non-literal>) — a variable third arg that can't be statically proven `true` — as a violation", () => {
+    const source = `PERFORM set_config('app.tenant_id', tenant_uuid, is_local_flag);`;
+    const violations = checkTenantGucViolations(source, true);
+    expect(violations).toHaveLength(1);
+    expect(violations[0].snippet).toContain("set_config");
+  });
+
+  // ── Regression guards: the broadened matching above must not start
+  // flagging the established safe patterns. ──
+  it("does NOT flag `SET LOCAL app.tenant_id = ...` split across lines", () => {
+    const source = `
+DO $body$
+BEGIN
+  SET
+    LOCAL app.tenant_id = '00000000-0000-0000-0000-000000000001';
+END
+$body$;
+`;
+    expect(checkTenantGucViolations(source, true)).toEqual([]);
+  });
+
+  it("does NOT flag set_config(..., true) regardless of case/whitespace around the literal", () => {
+    const source = `select set_config('app.tenant_id', '00000000-0000-0000-0000-000000000001',  TRUE  );`;
+    expect(checkTenantGucViolations(source, true)).toEqual([]);
+  });
+
+  // ── PERF-013 review follow-up (Issue A): the bare `\bTO\b` added above to
+  // catch Postgres's `SET x TO y` syntax also matches the ordinary English
+  // word "to" — a false positive in application code that is not SQL at
+  // all. Reproduces the reviewer's own live repro against the shipped
+  // guard; both must resolve to zero violations now that bare `TO` is
+  // gated to isSql===true (SQL contexts only). ──
+  it("does NOT flag a plain-English string containing SET .. app.foo .. to — not SQL (PERF-013 review false positive)", () => {
+    const source = `throw new Error("SET app.tenant_id to a valid UUID before calling this");`;
+    expect(checkTenantGucViolations(source, false)).toEqual([]);
+  });
+
+  it("does NOT flag a multi-line logger.warn(...) string containing SET .. app.foo .. to — not SQL (PERF-013 review false positive)", () => {
+    const source = `
+logger.warn(
+  "SET app.tenant_id " +
+    "to a valid UUID before calling this function"
+);
+`;
+    expect(checkTenantGucViolations(source, false)).toEqual([]);
+  });
+
+  // ── PERF-013 review follow-up (Issue B): the multi-line lookahead window
+  // must attribute a violation to the line the match actually starts on,
+  // not the window's start (trigger) line — a harmless `SET
+  // statement_timeout` line immediately preceding the real violation was
+  // being reported at its own line with its own (non-matching) snippet
+  // text, even though the violation message correctly named `app.tenant_id`
+  // (on the next line). The old line-by-line guard (pre-PERF-013) did not
+  // have this problem on the same input; this is a regression introduced
+  // by the new window mechanism specifically. ──
+  it("attributes line/snippet to the actual violating line, not a harmless SET line earlier in the lookahead window", () => {
+    const source = `SET statement_timeout = '30s';
+SET app.tenant_id = 'xyz';`;
+    const violations = checkTenantGucViolations(source, true);
+    expect(violations).toHaveLength(1);
+    expect(violations[0].line).toBe(2);
+    expect(violations[0].snippet).toContain("app.tenant_id");
+    expect(violations[0].snippet).not.toContain("statement_timeout");
+  });
+
+  // ── PERF-013 review follow-up (round 2): the isSql-gated TO pattern
+  // above closed issue A's false positive but introduced a regression of
+  // its own — gating bare TO on file extension also stops it from matching
+  // TO-syntax raw SQL that's embedded in a .ts/.mjs file via a template
+  // literal (e.g. handed to sql.unsafe(...)), the same embedding shape the
+  // set_config(...) test above already covers. Fixed by requiring a
+  // value-like token (a quote, `$`, or `:`) immediately after TO instead of
+  // gating on isSql/file extension at all — this must now catch the
+  // embedded case even though isSql is false here. ──
+  it("reports raw `SET app.tenant_id TO '...'` embedded in a .ts template literal as a violation, even though isSql is false", () => {
+    const source = `
+await sql.unsafe(\`SET app.tenant_id TO '\${T}'\`);
+`;
+    const violations = checkTenantGucViolations(source, false);
+    expect(violations).toHaveLength(1);
+    expect(violations[0].snippet).toContain("SET app.tenant_id");
+  });
+
+  // ── PERF-013 review rounds 4 → 5: the FULL bareword-TO gap, now unified
+  // and permanently accepted (not fixed). Round 4 found that round 3's
+  // quote/$/colon lookahead above has a residual gap — a BARE, unquoted
+  // value after TO (`TO DEFAULT` / `TO 5` / `TO my_tenant_var`) starts with
+  // none of those three characters, so it was silently missed (confirmed a
+  // genuine regression against bb64f216's parent, not a pre-existing gap).
+  // Round 4 tried to fix it by adding a second lookahead alternative: a
+  // bareword immediately followed by a statement terminator (`;`, newline,
+  // or EOF).
+  //
+  // A round-5 review found round 4's fix itself unsound: a terminator right
+  // after a bareword is not reliably SQL-only — it is also exactly what
+  // ends the enclosing JS statement/string in ordinary prose that happens
+  // to name `app.tenant_id`/`tenant.*` and use the word "to" before a short
+  // word, reopening the SAME false-positive shape round 2/round 3 already
+  // fixed once (see the two regression tests immediately below). Round 4's
+  // addition was reverted; RAW_SET_RE is back to round 3's quote/$/colon-
+  // only lookahead — see its comment above for the full history and the
+  // final decision.
+  //
+  // The tests below assert CURRENT (accepted-gap) behavior for every
+  // bareword-TO shape — with and without a trailing terminator, single- and
+  // multi-line — not desired behavior. If any of these ever starts failing
+  // because someone tightens the regex further, that's a deliberate scope
+  // decision to revisit, not a regression to silently paper over. ──
+  it("does NOT flag an English sentence naming app.tenant_id and ending '...to <bareword>;' (PERF-013 round 4's false-positive regression)", () => {
+    const source = `throw new Error("Remember to set app.tenant_id to null; retry after fixing config");`;
+    expect(checkTenantGucViolations(source, false)).toEqual([]);
+  });
+
+  it("does NOT flag a multi-line/concatenated variant of the same English-sentence shape", () => {
+    const source = `
+throw new Error(
+  "Remember to set app.tenant_id " +
+    "to null; retry after fixing config"
+);
+`;
+    expect(checkTenantGucViolations(source, false)).toEqual([]);
+  });
+
+  it("[KNOWN GAP, accepted] does NOT catch `SET app.tenant_id TO DEFAULT;` — a bare keyword value", () => {
+    const source = `SET app.tenant_id TO DEFAULT;`;
+    expect(checkTenantGucViolations(source, true)).toEqual([]);
+  });
+
+  it("[KNOWN GAP, accepted] does NOT catch `SET app.tenant_id TO 5;` — a bare numeric value", () => {
+    const source = `SET app.tenant_id TO 5;`;
+    expect(checkTenantGucViolations(source, true)).toEqual([]);
+  });
+
+  it("[KNOWN GAP, accepted] does NOT catch `SET app.tenant_id TO my_tenant_var;` — a bare identifier/variable reference, ordinary realistic PL/pgSQL", () => {
+    const source = `
+DO $body$
+BEGIN
+  SET app.tenant_id TO my_tenant_var;
+END
+$body$;
+`;
+    expect(checkTenantGucViolations(source, true)).toEqual([]);
+  });
+
+  it("[KNOWN GAP, accepted] does NOT catch a bare TO value split onto its own line inside a multi-line .ts template literal (a trailing newline does not help — the terminator branch is gone)", () => {
+    const source = `
+await sql.unsafe(\`
+  SET app.tenant_id TO DEFAULT
+\`);
+`;
+    expect(checkTenantGucViolations(source, false)).toEqual([]);
+  });
+
+  it("[KNOWN GAP, accepted] does NOT catch a bare TO value with no terminator at all after it on the same line (e.g. a single-line template literal with the trailing `;` omitted)", () => {
+    const source = `await sql.unsafe(\`SET app.tenant_id TO DEFAULT\`);`;
+    const violations = checkTenantGucViolations(source, false);
+    expect(violations).toEqual([]); // documented gap — see RAW_SET_RE's comment above
+  });
+
+  // ── Reviewer-flagged secondary issue (lower severity, non-blocking): a
+  // multi-line string concatenation of ordinary, non-violating text that
+  // itself contains the bare word SET (triggering the lookahead-window
+  // check), immediately followed within that same window by a real
+  // violation, used to report the real violation TWICE — a phantom,
+  // mislocated extra one, plus the correct one — because
+  // collapseConcatJoins() deleted the real physical newline inside the
+  // join span, desyncing the line-offset count from the original `lines`
+  // array. Fixed by preserving the join span's newline count instead of
+  // always collapsing to "". ──
+  it("does not double-report a real violation when a preceding multi-line concatenated non-violating string also contains the word SET", () => {
+    const source = `logger.warn("a message about SET " +
+  "configuration, nothing to see here");
+SET app.tenant_id = 'real-value';`;
+    const violations = checkTenantGucViolations(source, false);
+    expect(violations).toHaveLength(1);
+    expect(violations[0].line).toBe(3);
+    expect(violations[0].snippet).toContain("app.tenant_id");
+  });
 });
 
 describe("raw-session-guc-guard: checkAdvisoryLockViolations()", () => {
