@@ -86,7 +86,7 @@ vi.mock("../src/shared/outbox.js", () => ({
 }));
 
 vi.mock("../src/shared/db.js", () => ({
-  db: { transaction: async (fn: (tx: unknown) => Promise<unknown>) => fn({}) },
+  db: { transaction: vi.fn(async (fn: (tx: unknown) => Promise<unknown>) => fn({})) },
 }));
 
 interface StubQueueHandle {
@@ -249,5 +249,62 @@ describe("Delay forecast consumer — project.task.updated", () => {
     expect(riskEvents).toHaveLength(1); // not 2
     expect(H.enqueueCalls.filter((e) => e.topic === "audit.event.record")).toHaveLength(1); // not 2
     expect(published).toHaveLength(0);
+  });
+
+  it("review-fix regression: a genuine transaction/DB error propagates instead of being swallowed by the ML-failure catch", async () => {
+    // This is the exact bug the independent review found: a PRE-EXISTING
+    // outer try/catch (predating TX-009, written to degrade gracefully on an
+    // ML-scoring failure specifically) ended up ALSO wrapping the TX-009
+    // transaction once that was moved in. A DB/commit error inside it was
+    // caught by that same catch, logged as if it were an ML failure, and
+    // swallowed: the handler returned normally, the queue treated the
+    // message as fully consumed, and the high-risk events + audit row were
+    // lost silently and permanently, with no redelivery ever triggered.
+    // Mocking db.transaction itself to reject (rather than making the ML
+    // call fail) isolates exactly that: a failure that has NOTHING to do
+    // with ml-service.
+    global.fetch = vi.fn().mockImplementation(() => Promise.resolve({
+      ok: true,
+      json: () => Promise.resolve({
+        data: {
+          p50Ms: 1, p80Ms: 2, p95Ms: 3,
+          taskRisks: [{ taskId: "task-real-x1", riskScore: 0.9, factors: ["x"] }],
+          bottlenecks: [],
+        },
+      }),
+    })) as unknown as typeof fetch;
+
+    const dbModule = await import("../src/shared/db.js");
+    const dbError = new Error("connection terminated unexpectedly");
+    vi.mocked(dbModule.db.transaction).mockRejectedValueOnce(dbError);
+
+    const { registerDelayForecastConsumers } = await import("../src/modules/delay-forecast/consumer.js");
+    const { queue, getHandler } = makeStubQueue();
+    registerDelayForecastConsumers(queue);
+
+    // The narrowed try/catch (scoped to ONLY the predictDelay call) must NOT
+    // catch this -- it has to propagate out of the handler so the queue
+    // knows to redeliver, instead of silently marking the message consumed.
+    await expect(getHandler()(taskUpdatedMessage())).rejects.toThrow("connection terminated unexpectedly");
+  });
+
+  it("review-fix regression: an ML-call failure alone still degrades gracefully and does not propagate (contrast with the DB-error case above)", async () => {
+    // Companion to the test above, proving the two failure modes are still
+    // told apart correctly after narrowing the catch: an ML failure must
+    // still complete the message normally (matching billing's churn
+    // consumer pattern), while a DB/transaction failure (above) must not.
+    global.fetch = vi.fn().mockRejectedValue(new Error("connect ECONNREFUSED 127.0.0.1:3032")) as unknown as typeof fetch;
+
+    const { registerDelayForecastConsumers } = await import("../src/modules/delay-forecast/consumer.js");
+    const { queue, getHandler } = makeStubQueue();
+    registerDelayForecastConsumers(queue);
+
+    await expect(getHandler()(taskUpdatedMessage())).resolves.toBeUndefined();
+
+    // Still falls back to local scoring and emits normally -- an ML failure
+    // is not a reason to lose the risk event or the audit row.
+    const riskEvents = H.enqueueCalls.filter((e) => e.topic === "ml.prediction.task_high_risk");
+    expect(riskEvents).toHaveLength(1);
+    expect(H.enqueueCalls.filter((e) => e.topic === "audit.event.record")).toHaveLength(1);
   });
 });

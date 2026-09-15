@@ -24,6 +24,7 @@ import {
 import * as employeeRepo from "../employee/repo.js";
 import { eq, and } from "drizzle-orm";
 import type { ContractStatus } from "./types.js";
+import { uuidV5 } from "../../shared/ids.js";
 
 const log = pino({ name: "contract-consumer" });
 const AUDIT = "audit.event.record";
@@ -548,14 +549,45 @@ export function registerContractConsumers(queue: Queue): void {
     // message is still undecided; once that renewal has been approved or
     // rejected, a late redelivery of the original message sails past that
     // check and creates a brand-new, genuinely duplicate renewal record for
-    // a real employee contract. It also unconditionally emitted a fresh (and
-    // content-inconsistent -- success the first time, "already exists"
-    // failures the second) bulk_renewal_complete audit event on every
-    // redelivery. A dedicated markProcessed-gated transaction up front closes
-    // both holes without disturbing the intentional per-contract isolation.
-    const isNew = await db.transaction(async (tx) => markProcessed(tx, msg.messageId));
-    if (!isNew) return;
-
+    // a real employee contract.
+    //
+    // review-fix (post-merge-review of this same PR): an EARLIER version of
+    // this fix closed the hole above with a single, dedicated
+    // `markProcessed(tx, msg.messageId)` gate committed in its OWN
+    // transaction BEFORE this loop even started. That over-corrected: if the
+    // process crashed/threw partway through the loop -- AFTER that early
+    // gate had already committed -- a redelivery of the identical message
+    // would see `isNew = false` and return immediately, permanently and
+    // silently skipping every contract not yet reached, with no error and no
+    // further retry (trading the original duplicate-record bug for a
+    // silent-incomplete-bulk-operation bug).
+    //
+    // Fixed by dropping the single message-level gate entirely and giving
+    // EACH contract its own permanent idempotency key instead, derived (not
+    // random) via `uuidV5` from `${msg.messageId}:${contractId}` --
+    // services/asset-service/src/shared/ids.ts's `uuidV5` is the established
+    // pattern in this codebase for exactly this: `_inbox.processed.message_id`
+    // is a uuid column, so a composite string key can't be inserted as-is and
+    // must be derived through a stable hash first. `markProcessed` on that
+    // per-contract key is the FIRST statement inside each contract's own
+    // transaction below -- the same placement convention every single-item
+    // handler in this file already uses for `msg.messageId` -- so:
+    //   - a contract whose transaction already committed (in an earlier
+    //     delivery of this same message) is skipped here with no
+    //     re-validation and no duplicate insert, REGARDLESS of whether its
+    //     renewal has since been decided (strictly stronger than the old
+    //     "pending renewal already exists" check, which only protects an
+    //     undecided renewal);
+    //   - a contract never reached, or whose attempt threw and rolled back
+    //     (rollback takes the per-contract markProcessed insert with it,
+    //     same as any other handler here), runs fresh on redelivery instead
+    //     of being silently skipped.
+    // The bulk_renewal_complete summary audit below stays unconditional (as
+    // before this review-fix): a redelivery that resumes a partially-done
+    // bulk operation records its own summary, with per-contract results that
+    // now distinguish `alreadyProcessed` from a fresh success/failure --
+    // unlike the pre-fix bug, this is an accurate account of THIS delivery,
+    // not a contradictory duplicate.
     const p = msg.payload as {
       tenantId: string;
       contractIds: string[];
@@ -564,13 +596,24 @@ export function registerContractConsumers(queue: Queue): void {
       initiatedBy: string;
     };
 
-    const results: Array<{ contractId: string; success: boolean; renewalId?: string; error?: string }> = [];
+    const results: Array<{
+      contractId: string;
+      success: boolean;
+      renewalId?: string;
+      error?: string;
+      alreadyProcessed?: boolean;
+    }> = [];
 
     for (const contractId of p.contractIds) {
       try {
         const renewalId = crypto.randomUUID();
+        // Per-contract idempotency key: deterministic, so a redelivery of
+        // this SAME bulk message maps contractId to the SAME key every time.
+        const contractKey = uuidV5(`${msg.messageId}:${contractId}`);
 
-        await db.transaction(async (tx) => {
+        const isNewContract = await db.transaction(async (tx) => {
+          if (!(await markProcessed(tx, contractKey))) return false;
+
           // Validate contract independently
           const contract = await getContractByIdTx(tx, p.tenantId, contractId);
           if (!contract) {
@@ -625,7 +668,15 @@ export function registerContractConsumers(queue: Queue): void {
           });
 
           await audit(tx, msg, "bulk_renewal_initiate", "contract_renewal", renewalId);
+          return true;
         });
+
+        if (!isNewContract) {
+          // Already committed in an earlier delivery of this same message --
+          // do not reprocess or duplicate.
+          results.push({ contractId, success: true, alreadyProcessed: true });
+          continue;
+        }
 
         results.push({ contractId, success: true, renewalId });
       } catch (err: unknown) {
