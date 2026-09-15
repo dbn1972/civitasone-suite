@@ -67,6 +67,36 @@ vi.mock("../src/shared/outbox.js", async (io) => {
   };
 });
 
+// REL-018 follow-up: every other dependency here is mocked (repo, hrms-client,
+// infra, outbox) but shared/db.js itself never was, so buildApp()'s
+// createTenantTxHook(db) onRequest hook and the unconditional loadTaxConfig()
+// boot call below both reached the REAL db module -- which opens a real
+// Postgres connection pool at import time (src/shared/db.ts's top-level
+// createTenantDb() call). With no reachable Postgres in a unit-test context,
+// that hung/failed every test in this file. scopedRead delegates to the same
+// db.transaction mock, matching the real shared/db.ts shape
+// (scopedRead(fn) { return db.transaction(fn); }) this campaign's other 69
+// fixed files already established (PR #1364).
+const mockDbTransaction = vi.fn();
+
+vi.mock("../src/shared/db.js", () => {
+  const db = { transaction: (...args: unknown[]) => mockDbTransaction(...args) };
+  return {
+    db,
+    scopedRead: (...args: unknown[]) => db.transaction(...args),
+    sqlClient: { end: vi.fn() },
+  };
+});
+
+// loadTaxConfig() (called unconditionally by buildApp()) uses
+// scopedPlatformRead, a separate export the mock above doesn't provide --
+// neutralize it directly instead, the same way this suite's other
+// buildApp()-based unit tests do (e.g. fnf-routes.test.ts,
+// dsc-config-routes.test.ts), so this boot step never touches the DB.
+vi.mock("../src/modules/tax/config.js", () => ({
+  loadTaxConfig: vi.fn(),
+}));
+
 import { buildApp } from "../src/app.js";
 import { sqlClient } from "../src/shared/db.js";
 

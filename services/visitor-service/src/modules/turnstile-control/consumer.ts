@@ -64,6 +64,29 @@ function emergencyFlagKey(tenantId: string, locationId: string): string {
   return `visitor:${tenantId}:location:${locationId}:emergency`;
 }
 
+/**
+ * PERF-007: bounded TTL for the anti-passback direction key.
+ *
+ * setAntiPassbackState() used to `redis.set(key, direction)` with no TTL at
+ * all — every pass that ever traversed a turnstile leaves a Redis key that
+ * lives forever, growing without bound across the fleet's whole install
+ * base (every visitor pass issued, ever), unlike every read-through entry
+ * `packages/cache` manages, which is hard-capped at MAX_TTL_SECONDS for
+ * exactly this reason. There IS an explicit admin reset endpoint
+ * (POST /v1/visitor/turnstiles/anti-passback/reset -> clearAntiPassbackState),
+ * so this is not a correctness bug the way the cache-invalidation finding
+ * was — direction state is overwritten on every passage — but an unbounded
+ * key with no self-healing backstop is exactly the "cached data that never
+ * expires" pattern this audit was asked to look for. 24h is long enough
+ * that no legitimate same-day anti-passback check is affected (the state is
+ * re-set on every passage anyway), while bounding growth for passes that
+ * are never explicitly reset. Deliberately NOT applied to the emergency
+ * flag below: that one is a manual override meant to persist exactly until
+ * an operator clears it, and auto-expiring it while an emergency unlock is
+ * still active would be a safety regression, not a hygiene fix.
+ */
+const ANTI_PASSBACK_TTL_SECONDS = 24 * 60 * 60; // 24h
+
 // ── In-memory fallback stores for dev/test ────────────────────────────────
 
 const _memoryAntiPassback = new Map<string, string>();
@@ -73,7 +96,7 @@ async function setAntiPassbackState(tenantId: string, passId: string, direction:
   const key = antiPassbackKey(tenantId, passId);
   const redis = getRedis();
   if (redis) {
-    await redis.set(key, direction);
+    await redis.set(key, direction, "EX", ANTI_PASSBACK_TTL_SECONDS);
   } else {
     _memoryAntiPassback.set(key, direction);
   }

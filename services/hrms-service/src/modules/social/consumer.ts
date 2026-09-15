@@ -30,7 +30,7 @@ export function registerSocialConsumers(queue: Queue): void {
         payload: { service: "hrms", action: "kudos_create", resourceType: "kudos", resourceId: p.id, outcome: "success" },
       });
     });
-    await cache.invalidate(`hrms:${msg.tenantId}:social:*`);
+    await cache.invalidateResource(msg.tenantId, "social");
     log.info({ id: msg.messageId, kudosId: p.id }, "Processed social.kudos_create");
   });
 
@@ -55,7 +55,7 @@ export function registerSocialConsumers(queue: Queue): void {
         payload: { service: "hrms", action: "announcement_create", resourceType: "announcement", resourceId: p.id, outcome: "success" },
       });
     });
-    await cache.invalidate(`hrms:${msg.tenantId}:social:*`);
+    await cache.invalidateResource(msg.tenantId, "social");
     log.info({ id: msg.messageId, announcementId: p.id }, "Processed social.announcement_create");
   });
 
@@ -80,7 +80,7 @@ export function registerSocialConsumers(queue: Queue): void {
         payload: { service: "hrms", action: "travel_request_create", resourceType: "travel_request", resourceId: p.id, outcome: "success" },
       });
     });
-    await cache.invalidate(`hrms:${msg.tenantId}:social:*`);
+    await cache.invalidateResource(msg.tenantId, "social");
     log.info({ id: msg.messageId, travelId: p.id }, "Processed social.travel_request_create");
   });
 
@@ -102,7 +102,7 @@ export function registerSocialConsumers(queue: Queue): void {
         payload: { service: "hrms", action: "travel_request_approve", resourceType: "travel_request", resourceId: p.id, outcome: "success" },
       });
     });
-    await cache.invalidate(`hrms:${msg.tenantId}:social:*`);
+    await cache.invalidateResource(msg.tenantId, "social");
     log.info({ id: msg.messageId, travelId: p.id }, "Processed social.travel_request_approve");
   });
 
@@ -127,7 +127,7 @@ export function registerSocialConsumers(queue: Queue): void {
         payload: { service: "hrms", action: "expense_create", resourceType: "expense_claim", resourceId: p.id, outcome: "success" },
       });
     });
-    await cache.invalidate(`hrms:${msg.tenantId}:social:*`);
+    await cache.invalidateResource(msg.tenantId, "social");
     log.info({ id: msg.messageId, expenseId: p.id }, "Processed social.expense_create");
   });
 
@@ -149,7 +149,7 @@ export function registerSocialConsumers(queue: Queue): void {
         payload: { service: "hrms", action: "expense_approve", resourceType: "expense_claim", resourceId: p.id, outcome: "success" },
       });
     });
-    await cache.invalidate(`hrms:${msg.tenantId}:social:*`);
+    await cache.invalidateResource(msg.tenantId, "social");
     log.info({ id: msg.messageId, expenseId: p.id }, "Processed social.expense_approve");
   });
 }

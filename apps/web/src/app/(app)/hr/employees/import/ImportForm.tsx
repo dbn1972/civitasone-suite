@@ -3,6 +3,7 @@
 import { useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import { useFormError } from "@/lib/useFormError";
+import { Button } from "../../../../_components/ds";
 
 type Row = Record<string, string> & { lineNo: number };
 
@@ -147,9 +148,9 @@ export function ImportForm() {
         </p>
       </div>
       <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-        <button type="submit" className="btn primary" disabled={status === "uploading"} style={{ minHeight: 44 }}>
+        <Button type="submit" variant="primary" disabled={status === "uploading"} style={{ minHeight: 44 }}>
           {status === "uploading" ? t("importingProgress", { success: progress.success, total: progress.total }) : t("uploadBtn")}
-        </button>
+        </Button>
         {status === "done" && (
           <span style={{ fontSize: 13, color: progress.failed === 0 ? "#166534" : "#b91c1c" }}>
             {t("resultImported", { success: progress.success })}

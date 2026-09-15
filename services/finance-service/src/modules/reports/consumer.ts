@@ -18,7 +18,7 @@ export function registerReportsConsumers(queue: Queue): void {
         payload: { service: "finance", action: "reports_refresh", resourceType: "report", resourceId: p.reportType ?? msg.tenantId, outcome: "success" },
       });
     });
-    await cache.invalidate(`finance:${p.tenantId}:reports:*`);
+    await cache.invalidateResource(p.tenantId, "reports");
     log.info({ id: msg.messageId, reportType: p.reportType }, "Processed reports.refresh");
   });
 }

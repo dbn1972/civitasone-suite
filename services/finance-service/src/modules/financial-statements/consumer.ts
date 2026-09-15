@@ -18,7 +18,7 @@ export function registerFinancialStatementsConsumers(queue: Queue): void {
         payload: { service: "finance", action: "financial_statements_refresh", resourceType: "financial_statement", resourceId: p.fy ?? msg.tenantId, outcome: "success" },
       });
     });
-    await cache.invalidate(`finance:${p.tenantId}:financial_statements:*`);
+    await cache.invalidateResource(p.tenantId, "financial_statements");
     log.info({ id: msg.messageId }, "Processed financial_statements.refresh");
   });
 }

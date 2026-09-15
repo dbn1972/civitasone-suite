@@ -26,7 +26,7 @@ export function registerVisitingCardConsumers(queue: Queue): void {
         payload: { service: "hrms", action: "visiting_card_update", resourceType: "visiting_card", resourceId: p.employeeId, outcome: "success" },
       });
     });
-    await cache.invalidate(`hrms:${msg.tenantId}:visiting_cards:*`);
+    await cache.invalidateResource(msg.tenantId, "visiting_cards");
     log.info({ id: msg.messageId, employeeId: p.employeeId }, "Processed visiting_card.update");
   });
 
@@ -48,7 +48,7 @@ export function registerVisitingCardConsumers(queue: Queue): void {
         payload: { service: "hrms", action: "visiting_card_share", resourceType: "visiting_card", resourceId: p.employeeId, outcome: "success" },
       });
     });
-    await cache.invalidate(`hrms:${msg.tenantId}:visiting_cards:*`);
+    await cache.invalidateResource(msg.tenantId, "visiting_cards");
     log.info({ id: msg.messageId, employeeId: p.employeeId }, "Processed visiting_card.share");
   });
 }

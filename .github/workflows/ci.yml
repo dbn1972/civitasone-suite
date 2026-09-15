@@ -453,10 +453,10 @@ jobs:
         id: reinstall-deps
         continue-on-error: true
         run: pnpm install --frozen-lockfile
-      - name: Ops regression locks (ecosystem workers + migrate-all inventory + runbook lint)
+      - name: Ops regression locks (ecosystem workers + migrate-all inventory + migration rollback down-files + runbook lint)
         id: ops-regression-locks
         continue-on-error: true
-        run: pnpm exec vitest run tests/ops/ecosystem-workers.test.ts tests/ops/migrate-all-inventory.test.ts tests/architecture/runbook-lint.test.ts
+        run: pnpm exec vitest run tests/ops/ecosystem-workers.test.ts tests/ops/migrate-all-inventory.test.ts tests/ops/migrate-rollback-down-files.test.ts tests/architecture/runbook-lint.test.ts
 
       - name: Tenant router adoption guard (Req 1.7)
         id: tenant-router-guard
@@ -587,6 +587,28 @@ jobs:
         continue-on-error: true
         run: node scripts/ci/flaky-skip-guard.mjs
 
+      # SEC-014: the authz-within-tenant scanner, made a durable tool. The
+      # fleet's only prior version of this check was a one-time, not-checked-
+      # in "Manual 2,110-handler scan" (docs/ENTERPRISE-GAP-REPORT-2026-09-07.md
+      # SEC-014) verifying every mutating route handler calls a real
+      # role/permission helper before touching the database -- a different
+      # axis from tenant ISOLATION (tenant-table-rls-guard/tenant-router-guard
+      # above): can any authenticated user of tenant A do anything any other
+      # user of tenant A can do (.claude/skills/19-security-beyond-tenancy.md
+      # S1). Pure source-text analysis (no live DB needed), so it runs here
+      # like the guards above. Unit tests first (fixture coverage for
+      # findAuthzViolations() itself), then the guard against the real tree
+      # (ratchet: fails on NEW violations and on stale baseline entries, see
+      # scripts/ci/authz-tenant-scanner-baseline.json).
+      - name: Authz-tenant scanner unit tests (SEC-014)
+        id: authz-tenant-scanner-tests
+        continue-on-error: true
+        run: pnpm exec vitest run tests/architecture/authz-tenant-scanner.test.ts
+      - name: Authz-tenant scanner (mutating handlers must call a recognized authz helper, SEC-014)
+        id: authz-tenant-scanner
+        continue-on-error: true
+        run: node scripts/ci/authz-tenant-scanner.mjs
+
       # REL-039: this job's actual gate. Every guard above always reports
       # its own real outcome now instead of being skipped, but continue-on-
       # error also forces every one of those steps' `conclusion` to
@@ -626,6 +648,8 @@ jobs:
           R_EVIDENCE_SUITE_DBS: ${{ steps.evidence-suite-dbs-guard.outcome }}
           R_FLAKY_SKIP_GUARD_TESTS: ${{ steps.flaky-skip-guard-tests.outcome }}
           R_FLAKY_SKIP_GUARD: ${{ steps.flaky-skip-guard.outcome }}
+          R_AUTHZ_TENANT_SCANNER_TESTS: ${{ steps.authz-tenant-scanner-tests.outcome }}
+          R_AUTHZ_TENANT_SCANNER: ${{ steps.authz-tenant-scanner.outcome }}
         run: |
           fail=0
           check() {
@@ -665,6 +689,8 @@ jobs:
           check "Evidence-suite DBs guard" "$R_EVIDENCE_SUITE_DBS"
           check "Flaky-skip guard unit tests" "$R_FLAKY_SKIP_GUARD_TESTS"
           check "Flaky-skip guard" "$R_FLAKY_SKIP_GUARD"
+          check "Authz-tenant scanner unit tests" "$R_AUTHZ_TENANT_SCANNER_TESTS"
+          check "Authz-tenant scanner" "$R_AUTHZ_TENANT_SCANNER"
           if [ "$fail" = "1" ]; then
             echo "One or more architecture guard steps failed -- see the individual step logs above (each now reports its own real result, never 'skipped')."
             exit 1
@@ -768,13 +794,24 @@ jobs:
           node -e "
             const fs = require('fs');
             const map = JSON.parse(fs.readFileSync('scripts/contract/screen-map.json', 'utf8'));
-            const broken = map.rows.filter(r => r.status === 'MISSING' || r.status === 'MISMATCH' || r.status === 'FABRICATED_DATA');
+            // COMP-006 fix-up: tracked, ID-tagged exceptions (see
+            // scripts/contract/known-broken-chains.json) for screens whose
+            // loader chain is real but the backend endpoint genuinely
+            // doesn't exist yet (follow-up gap COMP-020) -- not a blanket
+            // carve-out, and kept in the same file tests/contract/screens.
+            // contract.test.ts reads, so both gates agree.
+            const known = JSON.parse(fs.readFileSync('scripts/contract/known-broken-chains.json', 'utf8')).entries;
+            const knownKeys = new Set(known.map(e => \`\${e.module}::\${e.screen}\`));
+            const broken = map.rows.filter(r =>
+              (r.status === 'MISSING' || r.status === 'MISMATCH' || r.status === 'FABRICATED_DATA') &&
+              !knownKeys.has(\`\${r.module}::\${r.screen}\`)
+            );
             if (broken.length > 0) {
               console.error('BROKEN SCREEN CHAINS:');
               broken.forEach(r => console.error(\`  [\${r.status}] \${r.module}\${r.screen}: \${r.detail}\`));
               process.exit(1);
             }
-            console.log('All ' + map.counts.wired + ' screens are WIRED.');
+            console.log('All ' + map.counts.wired + ' screens are WIRED (' + knownKeys.size + ' tracked exceptions, see known-broken-chains.json).');
           "
       - name: Start mock gateway on port 8080
         run: node scripts/ci/start-mock-gateway.mjs &

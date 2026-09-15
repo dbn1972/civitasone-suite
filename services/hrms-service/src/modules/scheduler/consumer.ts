@@ -26,7 +26,7 @@ export function registerSchedulerConsumers(queue: Queue): void {
         payload: { service: "hrms", action: "scheduler_run", resourceType: "scheduler", resourceId: msg.messageId, outcome: "success" },
       });
     });
-    await cache.invalidate(`hrms:${msg.tenantId}:scheduler:*`);
+    await cache.invalidateResource(msg.tenantId, "scheduler");
     log.info({ id: msg.messageId }, "Processed scheduler.run");
   });
 }

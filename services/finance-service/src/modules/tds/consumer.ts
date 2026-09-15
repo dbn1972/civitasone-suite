@@ -70,7 +70,7 @@ export function registerTdsConsumers(queue: Queue): void {
       });
       await audit(tx, msg, "record_deduction", "vendor_tds", id);
     });
-    await cache.invalidate(`finance:${msg.tenantId}:tds:*`);
+    await cache.invalidateResource(msg.tenantId, "tds");
     log.info({ id: msg.messageId }, "Processed tds.deduction_record");
   });
 
@@ -95,7 +95,7 @@ export function registerTdsConsumers(queue: Queue): void {
       });
       await audit(tx, msg, "mark_deposited", "vendor_tds", p.id);
     });
-    await cache.invalidate(`finance:${msg.tenantId}:tds:*`);
+    await cache.invalidateResource(msg.tenantId, "tds");
     log.info({ id: msg.messageId }, "Processed tds.deposit_mark");
   });
 }

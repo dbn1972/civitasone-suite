@@ -86,6 +86,20 @@ vi.mock("@civitasone/render", () => {
     })),
     DscValidationError: MockDscValidationError,
     validateDscCertificate: vi.fn(),
+    // REL-018 follow-up: this mock replaces the whole @civitasone/render
+    // module, but buildApp() also registers form16-verify routes, whose
+    // module imports verifyPdfSignature from this same package at load time
+    // -- left undefined here. Not exercised by this file's own PDF-render
+    // scenarios, so a static default matching the real "unsigned" shape
+    // (packages/render/src/pdf-verify.ts's VerifyResult) is enough.
+    verifyPdfSignature: vi.fn(() => ({
+      valid: false,
+      signerCN: undefined,
+      signedAt: undefined,
+      serialNumber: undefined,
+      certificateExpiry: undefined,
+      issues: ["no_signature"],
+    })),
   };
 });
 

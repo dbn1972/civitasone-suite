@@ -18,7 +18,7 @@ export function registerFixedAssetConsumers(queue: Queue): void {
         payload: { service: "finance", action: "fixed_asset_register_refresh", resourceType: "fixed_asset", resourceId: msg.tenantId, outcome: "success" },
       });
     });
-    await cache.invalidate(`finance:${p.tenantId}:fixed_asset:*`);
+    await cache.invalidateResource(p.tenantId, "fixed_asset");
     log.info({ id: msg.messageId }, "Processed fixed_asset.register_refresh");
   });
 }

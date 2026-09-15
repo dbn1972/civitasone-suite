@@ -17,8 +17,13 @@ import { queue } from "../../shared/infra.js";
 import { scheduledExports, type ScheduledExportCadence } from "./scheduled-schema.js";
 import { computeNextRunAt } from "./scheduled-domain.js";
 import { COMMANDS } from "../../topics.js";
+import { withScheduledJobMetrics } from "@civitasone/observability";
 
-const log = pino({ name: "analytics.scheduled-export-cron" });
+// PERF-011: shared identifier for both the pino logger and the
+// scheduled_job_* Prometheus series (packages/observability).
+export const SCHEDULED_EXPORT_CRON_JOB = "analytics.scheduled-export-cron";
+
+const log = pino({ name: SCHEDULED_EXPORT_CRON_JOB });
 
 const SYSTEM_ACTOR = "00000000-0000-4000-8000-000000000000";
 
@@ -35,7 +40,9 @@ export function startScheduledExportCron(intervalMs = 60_000): ReturnType<typeof
     return null;
   }
 
-  const timer = setInterval(() => void tick().catch((e) => {
+  // PERF-011: wrap every tick with withScheduledJobMetrics — see
+  // report-service's scheduled/cron.ts for the rationale; identical pattern.
+  const timer = setInterval(() => void withScheduledJobMetrics(SCHEDULED_EXPORT_CRON_JOB, tick, { logger: log }).catch((e) => {
     log.error({ err: e }, "ScheduledExportCron: sweep error");
   }), intervalMs);
   timer.unref();

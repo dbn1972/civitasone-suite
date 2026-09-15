@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { ConfirmDialog } from "../../../_components/ds";
+import { ConfirmDialog, Button } from "../../../_components/ds";
 import { useFormError } from "@/lib/useFormError";
 
 type Designation = {
@@ -63,15 +63,6 @@ const inputStyle: React.CSSProperties = {
   width: "100%",
   boxSizing: "border-box",
   minHeight: 36,
-};
-
-const btnBase: React.CSSProperties = {
-  padding: "4px 10px",
-  fontSize: 12,
-  borderRadius: 6,
-  border: "1px solid var(--line,#e2e8f0)",
-  cursor: "pointer",
-  background: "var(--surface,#fff)",
 };
 
 const thStyle: React.CSSProperties = {
@@ -244,14 +235,16 @@ export function DesignationsTable({ items }: { items: Designation[] }) {
                       />
                     </td>
                     <td style={{ padding: "10px 12px", whiteSpace: "nowrap" }}>
-                      <button
+                      <Button
+                        variant="primary"
+                        size="sm"
+                        style={{ marginRight: 6 }}
                         onClick={() => saveEdit(item.id)}
                         disabled={saving}
-                        style={{ ...btnBase, marginRight: 6, background: "var(--primary,#2563eb)", color: "#fff", border: "none" }}
                       >
                         {saving ? t("savingBtn") : t("saveBtn")}
-                      </button>
-                      <button onClick={cancelEdit} style={btnBase}>{t("cancelBtn")}</button>
+                      </Button>
+                      <Button variant="ghost" size="sm" onClick={cancelEdit}>{t("cancelBtn")}</Button>
                     </td>
                   </>
                 ) : (
@@ -285,15 +278,16 @@ export function DesignationsTable({ items }: { items: Designation[] }) {
                       {item.payGrade ?? "—"}
                     </td>
                     <td style={{ padding: "10px 12px", whiteSpace: "nowrap" }}>
-                      <button onClick={() => startEdit(item)} style={{ ...btnBase, marginRight: 6 }}>
+                      <Button variant="ghost" size="sm" style={{ marginRight: 6 }} onClick={() => startEdit(item)}>
                         {t("editBtn")}
-                      </button>
-                      <button
+                      </Button>
+                      <Button
+                        variant="danger"
+                        size="sm"
                         onClick={() => { setDeleteError(undefined); setDeleteTarget(item); }}
-                        style={{ ...btnBase, color: "#b91c1c" }}
                       >
                         {t("deleteBtn")}
-                      </button>
+                      </Button>
                     </td>
                   </>
                 )}

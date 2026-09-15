@@ -48,7 +48,7 @@ export function registerGstConsumers(queue: Queue): void {
       });
       await audit(tx, msg, "record_entry", "gst_ledger", p.id);
     });
-    await cache.invalidate(`finance:${msg.tenantId}:gst:*`);
+    await cache.invalidateResource(msg.tenantId, "gst");
     log.info({ id: msg.messageId }, "Processed gst.entry_record");
   });
 }

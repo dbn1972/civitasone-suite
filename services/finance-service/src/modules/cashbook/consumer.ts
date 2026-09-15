@@ -36,7 +36,7 @@ export function registerCashbookConsumers(queue: Queue): void {
       });
       await audit(tx, msg, "create_entry", "cashbook", p.id);
     });
-    await cache.invalidate(`finance:${msg.tenantId}:cashbook:*`);
+    await cache.invalidateResource(msg.tenantId, "cashbook");
     log.info({ id: msg.messageId }, "Processed cashbook.entry_create");
   });
 }
