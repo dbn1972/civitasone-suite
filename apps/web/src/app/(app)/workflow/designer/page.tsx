@@ -1,7 +1,7 @@
 import { PageHeader } from "../../../_components/ds";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { getDesignerDefinitions } from "./_data/designerData";
-import { DesignerCanvas } from "./_components/DesignerCanvas";
+import { DesignerCanvas } from "./_components/DesignerCanvasClient";
 
 export default async function WorkflowDesignerPage() {
   const { data: definitions, source } = await getDesignerDefinitions();
