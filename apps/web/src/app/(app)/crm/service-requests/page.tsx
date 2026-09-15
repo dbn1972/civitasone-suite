@@ -1,5 +1,4 @@
 import Link from "next/link";
-import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { PageHeader, StatCard, StatGrid } from "../../../_components/ds";
 import { getCrmServiceRequests } from "../../../_data/loaders";
 import { ServiceRequestsTable } from "./ServiceRequestsTable";
@@ -36,7 +35,11 @@ export default async function ServiceRequestsPage({ searchParams }: { searchPara
           </Link>
         }
       />
-      {source === "error" && <DataSourceBadge source={source} />}
+      {/* UX-012: the data-source badge now lives inside ServiceRequestsTable,
+          driven by the same useSeededResource call that produces its rows —
+          not a second, independent read of `source` here that could
+          disagree with the table's own cache state (UX-002's pattern). The
+          `stat()` "—" fallback below is unrelated and unchanged. */}
 
       <StatGrid>
         <StatCard icon="📥" iconBg="color-mix(in srgb, var(--ink2) 10%, transparent)" label="Open / In Progress (this page)" value={stat(open)} />

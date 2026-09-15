@@ -1,4 +1,3 @@
-import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { PageHeader, StatCard, StatGrid } from "../../../_components/ds";
 import { MergeButton } from "../../../_components/crm/MergeButton";
 import type { MergeOption } from "../../../_components/crm/MergeDialog";
@@ -37,7 +36,11 @@ export default async function Page() {
         backLabel="CRM"
         actions={<NewAccountForm accounts={accounts} />}
       />
-      {source === "error" && <DataSourceBadge source={source} />}
+      {/* UX-012: the data-source badge now lives inside AccountsTable, driven
+          by the same useSeededResource call that produces its rows — not a
+          second, independent read of `source` here that could disagree with
+          the table's own cache state (UX-002's pattern). The `stat()`
+          "—" fallback above is unrelated and unchanged. */}
       {mergeOptions.length >= 2 ? <MergeButton entity="accounts" options={mergeOptions} label="Merge duplicate accounts" /> : null}
       <StatGrid>
         <StatCard icon="▣" iconBg="#eef2ff" label="Total Accounts" value={stat(accounts.length)} />
