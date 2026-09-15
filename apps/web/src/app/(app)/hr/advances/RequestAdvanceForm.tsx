@@ -4,6 +4,7 @@ import { useEffect, useId, useState } from "react";
 import type { CSSProperties } from "react";
 import { useRouter } from "next/navigation";
 import { useFormError } from "@/lib/useFormError";
+import { Button } from "../../../_components/ds";
 
 const inputStyle: CSSProperties = {
   width: "100%", padding: "8px 12px", border: "1px solid var(--line)",
@@ -98,15 +99,15 @@ export function RequestAdvanceForm() {
     <div className="card" style={{ marginBottom: 0 }}>
       <div className="card-h" style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <h3>Request Advance</h3>
-        <button
-          type="button"
-          className="btn primary sm"
+        <Button
+          variant="primary"
+          size="sm"
           style={{ minHeight: 36 }}
           onClick={() => { setOpen((o) => !o); setMessage(null); }}
           aria-expanded={open}
         >
           {open ? "✕ Cancel" : "+ New Request"}
-        </button>
+        </Button>
       </div>
 
       {message && (
@@ -188,9 +189,9 @@ export function RequestAdvanceForm() {
           </div>
 
           <div style={{ display: "flex", justifyContent: "flex-end" }}>
-            <button type="submit" className="btn primary" disabled={busy || employeeFetchError} style={{ minHeight: 44, minWidth: 160 }}>
+            <Button type="submit" variant="primary" disabled={busy || employeeFetchError} style={{ minHeight: 44, minWidth: 160 }}>
               {busy ? "Submitting…" : "Submit Request"}
-            </button>
+            </Button>
           </div>
         </form>
       )}
