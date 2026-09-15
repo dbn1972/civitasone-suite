@@ -73,3 +73,37 @@
   0%   { background-position: 200% center; }
   100% { background-position: -200% center; }
 }
+
+/* ═══════════════════════════════════════════════════════════════════════
+   UX-005: prefers-reduced-motion
+   ═══════════════════════════════════════════════════════════════════════
+   Every animation/transition above (and every one added to this file or
+   anywhere else in the app since -- Tailwind's default `animate-pulse` /
+   `animate-spin` utilities included) is non-essential decoration: hover
+   lift, press feedback, toast slide, the success checkmark, the voice-nav
+   pulse, skeleton shimmer. None of them convey information that is lost by
+   making them instant, so this is the standard blanket technique rather
+   than a per-animation opt-out list that a new animation could silently
+   fall outside of: it collapses every animation/transition duration to
+   effectively zero and every iteration count to 1 (so a `voice-pulse
+   ... infinite` becomes one quick blip instead of an endless pulse,
+   rather than freezing mid-animation) whenever the user has asked their
+   OS/browser for reduced motion. `!important` is required here because it
+   is overriding utility classes and inline `style` animation/transition
+   properties (VoiceNav.tsx, Skeleton.tsx), not just other rules in this
+   file. `scroll-behavior: auto` covers CSS/anchor-driven smooth scrolling;
+   an explicit JS `scrollIntoView({ behavior: "smooth" })` call is a
+   separate opt-in that no stylesheet can intercept -- see
+   src/lib/motion.ts's `scrollBehavior()`, used at the two call sites that
+   had one (SetupWizard.tsx, AskCivitasOnePanel.tsx).
+*/
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

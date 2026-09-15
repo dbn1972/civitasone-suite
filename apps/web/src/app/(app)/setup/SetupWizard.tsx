@@ -6,6 +6,7 @@ import { Card, StatusPill, ProgressBar } from "../../_components/ds";
 import { SampleDataControls } from "./SampleDataControls";
 import { trackActivation, type FunnelStep } from "@/lib/activation";
 import type { WizardStep, StepStatus } from "@/lib/setupSteps";
+import { scrollBehavior } from "@/lib/motion";
 
 type StepView = WizardStep & { status: StepStatus };
 
@@ -41,8 +42,10 @@ export function SetupWizard({
   const resumeRef = useRef<HTMLDivElement | null>(null);
 
   // Resume: bring the first incomplete step into view on load. (R9.2)
+  // UX-005: honors prefers-reduced-motion -- instant jump instead of an
+  // animated scroll when the user has asked for reduced motion.
   useEffect(() => {
-    resumeRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+    resumeRef.current?.scrollIntoView({ behavior: scrollBehavior(), block: "center" });
   }, []);
 
   // Activation funnel: record that the wizard was opened, plus any golden-path
