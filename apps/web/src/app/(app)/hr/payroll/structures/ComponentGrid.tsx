@@ -196,6 +196,7 @@ export function ComponentGrid({ components }: ComponentGridProps) {
       <div style={{ marginBottom: 14, display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
         <input
           type="search"
+          aria-label="Filter salary components by code, name or type"
           placeholder="Filter by code, name or type…"
           value={filter}
           onChange={(e) => setFilter(e.target.value)}

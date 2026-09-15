@@ -158,8 +158,9 @@ export function Form16Wizard({ defaultFy }: { defaultFy: string }) {
             <div style={{ display: "grid", gap: 8, maxWidth: 540 }}>
               {DEDUCTIONS.map((d) => (
                 <div key={d.section} style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: 12, alignItems: "center" }}>
-                  <label style={{ fontSize: 13, color: "var(--ink2)" }}>{d.label}</label>
+                  <label htmlFor={`f16-deduction-${d.section}`} style={{ fontSize: 13, color: "var(--ink2)" }}>{d.label}</label>
                   <input
+                    id={`f16-deduction-${d.section}`}
                     type="number"
                     className="input"
                     style={{ width: 160, textAlign: "right" }}

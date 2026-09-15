@@ -73,6 +73,7 @@ export function SkillMatrix({ records, onExportPdf }: SkillMatrixProps) {
       <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
         <input
           type="text"
+          aria-label="Filter by employee"
           placeholder="Filter by employee…"
           value={filterEmp}
           onChange={(e) => setFilterEmp(e.target.value)}
