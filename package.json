@@ -47,9 +47,9 @@
     "@semantic-release/github": "^12.0.9",
     "@semantic-release/npm": "^13.1.5",
     "@semantic-release/release-notes-generator": "^14.1.1",
-    "@stryker-mutator/core": "8.6.0",
-    "@stryker-mutator/typescript-checker": "8.6.0",
-    "@stryker-mutator/vitest-runner": "8.6.0",
+    "@stryker-mutator/core": "9.6.1",
+    "@stryker-mutator/typescript-checker": "9.6.1",
+    "@stryker-mutator/vitest-runner": "9.6.1",
     "@types/node": "^20.0.0",
     "eslint": "^9.0.0",
     "fast-check": "4.8.0",
@@ -57,7 +57,7 @@
     "semantic-release": "^25.0.9",
     "turbo": "^2.0.0",
     "typescript": "^5.4.0",
-    "vitest": "^2.1.9"
+    "vitest": "^3.2.6"
   },
   "pnpm": {
     "overrides": {
@@ -66,7 +66,20 @@
       "nanoid": "^3.3.18",
       "nodemailer": "^9.1.0",
       "svgo": "^4.1.0",
-      "htmlnano>svgo": "^4.1.0"
+      "htmlnano>svgo": "^4.1.0",
+      "brace-expansion@1": "^1.1.18",
+      "brace-expansion@2": "^2.1.4",
+      "brace-expansion@5": "^5.0.9",
+      "browserslist": "^4.28.7",
+      "fast-uri@2": "^2.4.5",
+      "fast-uri@3": "^3.1.6",
+      "js-yaml@3": "^3.15.2",
+      "js-yaml@4": "^4.3.2",
+      "glob@>=10.2.0 <10.5.0": "^10.5.0",
+      "tmp": "^0.2.6",
+      "vitest": "^3.2.6",
+      "@vitest/coverage-v8": "^3.2.6",
+      "vite": "^6.4.3"
     }
   }
 }
