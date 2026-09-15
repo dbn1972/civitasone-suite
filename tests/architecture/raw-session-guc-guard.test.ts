@@ -151,6 +151,46 @@ $body$;
     const source = `select set_config('app.tenant_id', '00000000-0000-0000-0000-000000000001',  TRUE  );`;
     expect(checkTenantGucViolations(source, true)).toEqual([]);
   });
+
+  // ── PERF-013 review follow-up (Issue A): the bare `\bTO\b` added above to
+  // catch Postgres's `SET x TO y` syntax also matches the ordinary English
+  // word "to" — a false positive in application code that is not SQL at
+  // all. Reproduces the reviewer's own live repro against the shipped
+  // guard; both must resolve to zero violations now that bare `TO` is
+  // gated to isSql===true (SQL contexts only). ──
+  it("does NOT flag a plain-English string containing SET .. app.foo .. to — not SQL (PERF-013 review false positive)", () => {
+    const source = `throw new Error("SET app.tenant_id to a valid UUID before calling this");`;
+    expect(checkTenantGucViolations(source, false)).toEqual([]);
+  });
+
+  it("does NOT flag a multi-line logger.warn(...) string containing SET .. app.foo .. to — not SQL (PERF-013 review false positive)", () => {
+    const source = `
+logger.warn(
+  "SET app.tenant_id " +
+    "to a valid UUID before calling this function"
+);
+`;
+    expect(checkTenantGucViolations(source, false)).toEqual([]);
+  });
+
+  // ── PERF-013 review follow-up (Issue B): the multi-line lookahead window
+  // must attribute a violation to the line the match actually starts on,
+  // not the window's start (trigger) line — a harmless `SET
+  // statement_timeout` line immediately preceding the real violation was
+  // being reported at its own line with its own (non-matching) snippet
+  // text, even though the violation message correctly named `app.tenant_id`
+  // (on the next line). The old line-by-line guard (pre-PERF-013) did not
+  // have this problem on the same input; this is a regression introduced
+  // by the new window mechanism specifically. ──
+  it("attributes line/snippet to the actual violating line, not a harmless SET line earlier in the lookahead window", () => {
+    const source = `SET statement_timeout = '30s';
+SET app.tenant_id = 'xyz';`;
+    const violations = checkTenantGucViolations(source, true);
+    expect(violations).toHaveLength(1);
+    expect(violations[0].line).toBe(2);
+    expect(violations[0].snippet).toContain("app.tenant_id");
+    expect(violations[0].snippet).not.toContain("statement_timeout");
+  });
 });
 
 describe("raw-session-guc-guard: checkAdvisoryLockViolations()", () => {

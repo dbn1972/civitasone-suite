@@ -27,9 +27,13 @@
 //            packages/db/src/raw-tenant-guc.ts's `withRawTenantGuc` and
 //            services/audit-service/migrations/0025_*.sql are the
 //            established patterns).
-// VIOLATION: `SET app.foo = ...` / `SET app.foo TO ...` / `SET SESSION
-//            app.foo = ...` (session-scoped, `TO` is Postgres's synonym for
-//            `=` in a SET statement) / `set_config('app.foo', v, false)` /
+// VIOLATION: `SET app.foo = ...` / `SET SESSION app.foo = ...` (session-
+//            scoped) / `SET app.foo TO ...` in `.sql` files only (`TO` is
+//            Postgres's synonym for `=` in a SET statement, but it is ALSO
+//            the ordinary English word "to" — matching it outside real SQL
+//            false-positives on application log/error strings, so it is
+//            gated on isSql; see RAW_SET_RE_SQL below) /
+//            `set_config('app.foo', v, false)` /
 //            `set_config('app.foo', v, <anything other than a literal
 //            true>)` — a non-literal third argument (a variable, a function
 //            call, ...) can't be proven transaction-scoped by static
@@ -182,12 +186,27 @@ function stripComments(source, sqlStyle) {
 }
 
 // ── 3. Check 1: raw session-scoped tenant/app GUC ───────────────────────────
-// Matches `SET app.foo = ...` / `SET app.foo TO ...` / `SET SESSION app.foo
-// = ...` but NOT `SET LOCAL app.foo = ...`. `(?!LOCAL\b)` after `SET\s+`
-// rejects LOCAL right after SET; `SESSION` is accepted (still a violation —
-// session-scoped). `TO` is Postgres's own accepted synonym for `=` in a SET
-// statement (PERF-013 — the pre-fix version only recognized `=`).
-const RAW_SET_RE = /\bSET\s+(?!LOCAL\b)(?:SESSION\s+)?((?:app|tenant)\.[A-Za-z_][A-Za-z0-9_]*)\s*(?:=|\bTO\b)/gi;
+// Matches `SET app.foo = ...` / `SET SESSION app.foo = ...` but NOT `SET
+// LOCAL app.foo = ...`. `(?!LOCAL\b)` after `SET\s+` rejects LOCAL right
+// after SET; `SESSION` is accepted (still a violation — session-scoped).
+// Safe in ANY context (`.sql` or application code) because `=` cannot occur
+// as ordinary English prose the way the bare word "to" below can.
+const RAW_SET_RE = /\bSET\s+(?!LOCAL\b)(?:SESSION\s+)?((?:app|tenant)\.[A-Za-z_][A-Za-z0-9_]*)\s*=/gi;
+
+// SQL-only variant additionally matching bare `TO` — Postgres's own accepted
+// synonym for `=` in a SET statement (PERF-013 — the pre-fix version only
+// recognized `=`). Deliberately a SEPARATE pattern from RAW_SET_RE, applied
+// only when isSql is true (see the dispatch in checkTenantGucViolations
+// below): bare `TO` is ALSO just the ordinary English word "to", so applying
+// it unconditionally to application code is a false-positive generator —
+// live-reproduced against this exact guard on a line that is not SQL at
+// all: `throw new Error("SET app.tenant_id to a valid UUID before calling
+// this")` (PERF-013 review follow-up). A `.sql` migration file is never
+// anything other than SQL, so gating on isSql — computed once per file from
+// its extension, in main() — cannot be tricked by a string literal the way
+// per-line/per-match detection could be; this reuses that existing
+// distinction rather than inventing a new one.
+const RAW_SET_RE_SQL = /\bSET\s+(?!LOCAL\b)(?:SESSION\s+)?((?:app|tenant)\.[A-Za-z_][A-Za-z0-9_]*)\s*(?:=|\bTO\b)/gi;
 
 // A candidate line is any line containing the bare `SET` keyword; the actual
 // identifier/operator is then searched for across a short forward window —
@@ -253,23 +272,39 @@ export function checkTenantGucViolations(source, isSql) {
     const windowEnd = Math.min(i + SET_LOOKAHEAD_LINES, lines.length);
     const rawWindow = lines.slice(i, windowEnd).join("\n");
     const windowText = isSql ? rawWindow : collapseConcatJoins(rawWindow);
-    RAW_SET_RE.lastIndex = 0;
-    const m = RAW_SET_RE.exec(windowText);
+    // isSql picks which pattern applies (see RAW_SET_RE_SQL above) — bare
+    // `TO` is only ever a candidate inside real SQL.
+    const activeRe = isSql ? RAW_SET_RE_SQL : RAW_SET_RE;
+    activeRe.lastIndex = 0;
+    const m = activeRe.exec(windowText);
     if (!m) {
       i += 1;
       continue;
     }
+    // The trigger line (i) is just wherever the bare `SET` keyword was
+    // found — the actual pattern match can start on a LATER line within the
+    // window (e.g. a harmless `SET statement_timeout = ...;` trigger line
+    // immediately followed by the real `SET app.tenant_id = ...;`
+    // violation). Count newlines in windowText BEFORE the match start to
+    // find which line within the window it actually starts on, rather than
+    // hardcoding the window's start line — a line/snippet misattribution
+    // bug independently found in review (the count/pass-fail outcome was
+    // never wrong, only the reported location).
+    const matchLineOffset = windowText.slice(0, m.index).split("\n").length - 1;
+    const matchLine = i + matchLineOffset;
     const consumedLines = (m[0].match(/\n/g) || []).length;
     violations.push({
-      line: i + 1,
-      snippet: consumedLines > 0 ? m[0].replace(/\s+/g, " ").trim() : lines[i].trim(),
+      line: matchLine + 1,
+      snippet: consumedLines > 0 ? m[0].replace(/\s+/g, " ").trim() : lines[matchLine].trim(),
       reason: `raw session-scoped SET (${m[1]}) — use SET LOCAL, or set_config('${m[1]}', ..., true) inside a transaction`,
     });
-    // Advance past whatever lines the match itself spanned so the tail of
-    // this same statement can't be re-triggered as a new candidate. The
-    // common case — a single-line match — spans 0 newlines and just falls
-    // through to i += 1, unchanged from the pre-PERF-013 behavior.
-    i += consumedLines > 0 ? consumedLines + 1 : 1;
+    // Advance past whatever lines the match itself spanned (from wherever it
+    // actually started, not from the trigger line) so the tail of this same
+    // statement can't be re-triggered as a new candidate. The common case —
+    // a single-line match starting right on the trigger line — has
+    // matchLineOffset 0 and consumedLines 0, and just falls through to
+    // i += 1, unchanged from the pre-PERF-013 behavior.
+    i = matchLine + consumedLines + 1;
   }
 
   // set_config(...) can legitimately span multiple lines, so check against
