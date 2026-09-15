@@ -54,6 +54,32 @@ describe("flaky-skip-guard: classifySkipOccurrence()", () => {
     });
   });
 
+  it("REL-040 regression: classifies a multi-line it.skip(\"name\", fn) as hard when the name is on the " +
+    "next line rather than the match line, given the lookahead window", () => {
+    const window = ["  it.skip(", '    "some flaky test",', "    () => {", "      /* body */", "    },", "  );"];
+    expect(classifySkipOccurrence(window[0], window)).toEqual({
+      kind: "hard",
+      label: "it.skip",
+    });
+  });
+
+  it("REL-040 regression: a genuine multi-line test.skip(condition, msg) with the condition on the next " +
+    "line still classifies as runtime-conditional, not hard, given the lookahead window", () => {
+    const window = ["  test.skip(", "    stillMissing,", '    "reason text here"', "  );"];
+    expect(classifySkipOccurrence(window[0], window)).toEqual({
+      kind: "runtime-conditional",
+      label: "test.skip",
+    });
+  });
+
+  it("without a window argument (single-line callers), a multi-line-formatted skip still falls back to the " +
+    "old same-line-only behavior — the default keeps existing single-argument call sites unaffected", () => {
+    expect(classifySkipOccurrence("  it.skip(")).toEqual({
+      kind: "runtime-conditional",
+      label: "it.skip",
+    });
+  });
+
   it("classifies .todo( as hard regardless of prefix", () => {
     expect(classifySkipOccurrence('it.todo("not written yet")')).toEqual({ kind: "hard", label: ".todo" });
     expect(classifySkipOccurrence('describe.todo("later")')).toEqual({ kind: "hard", label: ".todo" });
@@ -156,5 +182,71 @@ describe("flaky-skip-guard: parseGovernanceTag() + evaluateGovernance()", () => 
     );
     expect(tag.reason).toBe("legacy, superseded");
     expect(evaluateGovernance(tag, TODAY)).toEqual({ status: "ok" });
+  });
+});
+
+describe("flaky-skip-guard: REL-040 end-to-end governance composition (regression)", () => {
+  // scanRepo() itself isn't exported (it walks the real filesystem — see the
+  // file header comment), so this mirrors its per-line decision composition
+  // exactly against in-memory fixtures, the same way scanRepo() combines
+  // these exported pure functions, to prove the fix holds at the level that
+  // actually matters: the final governance verdict, not just classification
+  // in isolation.
+  const TODAY = "2026-09-14";
+
+  function classifyAndGovern(lines, todayISO = TODAY) {
+    const results = [];
+    for (let i = 0; i < lines.length; i++) {
+      const window = lines.slice(i, Math.min(i + 4, lines.length));
+      const match = classifySkipOccurrence(lines[i], window);
+      if (!match) continue;
+      let governance;
+      if (match.kind === "runtime-conditional" && hasSecondArgument(window)) {
+        governance = { status: "self-documented" };
+      } else {
+        const sameLineTag = parseGovernanceTag(lines[i]);
+        const prevLineTag = sameLineTag ? null : parseGovernanceTag(lines[i - 1]);
+        governance = evaluateGovernance(sameLineTag ?? prevLineTag, todayISO);
+      }
+      results.push({ line: i + 1, kind: match.kind, governance });
+    }
+    return results;
+  }
+
+  it("flags a multi-line-formatted it.skip(\"name\", fn) with NO FLAKY-SKIP comment as missing governance " +
+    "(previously silently accepted as self-documented via the runtime-conditional misclassification)", () => {
+    const source = [
+      'describe("some suite", () => {',
+      "  it.skip(",
+      '    "some flaky test",',
+      "    () => {",
+      "      expect(true).toBe(true);",
+      "    },",
+      "  );",
+      "});",
+    ];
+    const results = classifyAndGovern(source);
+    expect(results).toHaveLength(1);
+    expect(results[0]).toEqual({ line: 2, kind: "hard", governance: { status: "missing" } });
+  });
+
+  it("a multi-line-formatted it.skip(\"name\", fn) WITH a FLAKY-SKIP comment on the line above is governed (ok)", () => {
+    const source = [
+      "  // FLAKY-SKIP: flaky against seeded data (expires: 2026-12-31)",
+      "  it.skip(",
+      '    "some flaky test",',
+      "    () => {},",
+      "  );",
+    ];
+    const results = classifyAndGovern(source);
+    expect(results).toHaveLength(1);
+    expect(results[0]).toEqual({ line: 2, kind: "hard", governance: { status: "ok" } });
+  });
+
+  it("a genuine multi-line Playwright test.skip(condition, msg) is still self-documented with no comment needed", () => {
+    const source = ["  test.skip(", "    stillMissing,", '    "reason text here"', "  );"];
+    const results = classifyAndGovern(source);
+    expect(results).toHaveLength(1);
+    expect(results[0]).toEqual({ line: 1, kind: "runtime-conditional", governance: { status: "self-documented" } });
   });
 });

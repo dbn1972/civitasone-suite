@@ -87,15 +87,39 @@ const SKIP_RE = /\b(describe|it|test)\.skip\(/;
 
 /**
  * Classifies (at most) one skip-shaped occurrence on a single source line.
+ * `windowLines` is the same short lookahead window callers already build for
+ * extractTitle() below (the match line plus a few following lines) — needed
+ * here too because a hard `it.skip("name", fn)` is sometimes formatted with
+ * the name on a following line rather than trailing `.skip(` on the match
+ * line itself:
+ *   it.skip(
+ *     "some flaky test",
+ *     () => {...},
+ *   );
+ * Without looking past the match line, `after` (below) is empty and the call
+ * falls through to "runtime-conditional" — which then rides the Playwright
+ * self-documented exemption for free via hasSecondArgument()'s loose comma
+ * check, silently requiring zero FLAKY-SKIP justification for a genuine hard
+ * skip (REL-040). Defaults to a single-line window so existing single-
+ * argument call sites/tests (which only care about the match line) are
+ * unaffected.
  * Returns null when the line has none.
  */
-export function classifySkipOccurrence(line) {
+export function classifySkipOccurrence(line, windowLines = [line]) {
   if (SKIPIF_RE.test(line)) return { kind: "env-gated", label: "skipIf" };
   if (X_PREFIXED_RE.test(line)) return { kind: "hard", label: "x-prefixed" };
   if (TODO_RE.test(line)) return { kind: "hard", label: ".todo" };
   const sm = SKIP_RE.exec(line);
   if (sm) {
-    const after = line.slice(sm.index + sm[0].length).trimStart();
+    // Same lookahead trick as extractTitle(): join whatever trails the
+    // `.skip(` token on the match line with any following window lines, then
+    // trim — so a name/condition starting on the next line is seen as
+    // immediately following the call, same as on the same line. When the
+    // match line itself has real (non-whitespace) content after `.skip(`,
+    // trimStart() never reaches past it, so this is a no-op for the common
+    // single-line case.
+    const tail = [line.slice(sm.index + sm[0].length), ...windowLines.slice(1)].join("\n");
+    const after = tail.trimStart();
     const isNamedTest = /^["'`]/.test(after);
     return { kind: isNamedTest ? "hard" : "runtime-conditional", label: `${sm[1]}.skip` };
   }
@@ -191,10 +215,10 @@ function scanRepo() {
     const rel = relative(REPO_ROOT, abs).split("\\").join("/");
     const lines = readFileSync(abs, "utf8").split("\n");
     for (let i = 0; i < lines.length; i++) {
-      const match = classifySkipOccurrence(lines[i]);
+      const window = lines.slice(i, Math.min(i + 4, lines.length));
+      const match = classifySkipOccurrence(lines[i], window);
       if (!match) continue;
 
-      const window = lines.slice(i, Math.min(i + 4, lines.length));
       const title = extractTitle(window);
       const key = `${rel}::${title ?? `L${i + 1}`}`;
 
