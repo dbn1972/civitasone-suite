@@ -15,6 +15,10 @@ export interface ListPage<T> {
 // hrms-service employee/queries.ts): `cursor` is an opaque offset-encoded
 // token, not a real keyset cursor, but that's what every other paginated
 // route here does, and routes.ts's listQuery already validates limit/offset.
+// Review follow-up: orderBy(id) on every limit/offset query below keeps the
+// row partition stable across page fetches (offset pagination with no
+// deterministic order has no guaranteed stable split across calls) --
+// matches this same PR's hrms-service fixes (ai-fraud/routes.ts).
 function paginate<T>(rows: T[], limit: number, offset: number): ListPage<T> {
   return {
     data: rows,
@@ -35,9 +39,11 @@ export async function listFacilities(
   const rows = q.status
     ? await db.select().from(estabFacilitiesCatalog)
         .where(and(eq(estabFacilitiesCatalog.tenantId, tenantId), eq(estabFacilitiesCatalog.status, q.status)))
+        .orderBy(estabFacilitiesCatalog.id)
         .limit(limit).offset(offset)
     : await db.select().from(estabFacilitiesCatalog)
         .where(eq(estabFacilitiesCatalog.tenantId, tenantId))
+        .orderBy(estabFacilitiesCatalog.id)
         .limit(limit).offset(offset);
   return paginate(rows, limit, offset);
 }
@@ -70,9 +76,11 @@ export async function listBookings(
   const rows = q.status
     ? await db.select().from(estabBookings)
         .where(and(eq(estabBookings.tenantId, tenantId), eq(estabBookings.status, q.status)))
+        .orderBy(estabBookings.id)
         .limit(limit).offset(offset)
     : await db.select().from(estabBookings)
         .where(eq(estabBookings.tenantId, tenantId))
+        .orderBy(estabBookings.id)
         .limit(limit).offset(offset);
   return paginate(rows, limit, offset);
 }

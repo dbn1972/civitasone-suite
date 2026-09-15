@@ -48,6 +48,13 @@ export default defineConfig({
       JWT_ALGORITHM: "HS256",
       JWT_SECRET: "test_secret_for_civitasone_32chr",
       PII_ENC_KEY: process.env.PII_ENC_KEY ?? readPiiKey(),
+      // PERF-006 review follow-up: countQueriesDuring() (packages/db/src/pool.ts)
+      // only counts queries when DB_QUERY_DEBUG=true was set before the sql
+      // client was created -- without it queryCount is always 0 and
+      // tests/perf-006-unbounded-lists.test.ts's `expect(queryCount).toBe(8)`
+      // fails. Set here (test bootstrap), never in service env files -- see
+      // the `debug` comment in createSqlClient().
+      DB_QUERY_DEBUG: "true",
       DATABASE_URL:
         process.env.DATABASE_URL ??
         (process.env.CI === "true" || process.env.GITHUB_ACTIONS === "true"

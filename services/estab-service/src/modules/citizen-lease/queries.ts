@@ -12,6 +12,10 @@ export interface ListPage<T> {
 // limit/offset (for a pagination UI that was apparently never wired up) but
 // never passed them through here. See booking/queries.ts's paginate() for
 // the same convention.
+// Review follow-up: orderBy(id) on every limit/offset query below keeps the
+// row partition stable across page fetches (offset pagination with no
+// deterministic order has no guaranteed stable split across calls) --
+// matches this same PR's hrms-service fixes (ai-fraud/routes.ts).
 function paginate<T>(rows: T[], limit: number, offset: number): ListPage<T> {
   return {
     data: rows,
@@ -32,9 +36,11 @@ export async function listProperties(
   const rows = q.status
     ? await db.select().from(estabLeaseProperties)
         .where(and(eq(estabLeaseProperties.tenantId, tenantId), eq(estabLeaseProperties.status, q.status)))
+        .orderBy(estabLeaseProperties.id)
         .limit(limit).offset(offset)
     : await db.select().from(estabLeaseProperties)
         .where(eq(estabLeaseProperties.tenantId, tenantId))
+        .orderBy(estabLeaseProperties.id)
         .limit(limit).offset(offset);
   return paginate(rows, limit, offset);
 }
@@ -55,9 +61,11 @@ export async function listLeases(
   const rows = q.status
     ? await db.select().from(estabLeases)
         .where(and(eq(estabLeases.tenantId, tenantId), eq(estabLeases.status, q.status)))
+        .orderBy(estabLeases.id)
         .limit(limit).offset(offset)
     : await db.select().from(estabLeases)
         .where(eq(estabLeases.tenantId, tenantId))
+        .orderBy(estabLeases.id)
         .limit(limit).offset(offset);
   return paginate(rows, limit, offset);
 }
@@ -85,9 +93,11 @@ export async function listRequests(
   const rows = q.status
     ? await db.select().from(estabLeaseRequests)
         .where(and(eq(estabLeaseRequests.tenantId, tenantId), eq(estabLeaseRequests.status, q.status)))
+        .orderBy(estabLeaseRequests.id)
         .limit(limit).offset(offset)
     : await db.select().from(estabLeaseRequests)
         .where(eq(estabLeaseRequests.tenantId, tenantId))
+        .orderBy(estabLeaseRequests.id)
         .limit(limit).offset(offset);
   return paginate(rows, limit, offset);
 }
