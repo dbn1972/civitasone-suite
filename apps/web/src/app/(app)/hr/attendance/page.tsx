@@ -1,4 +1,3 @@
-import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { PageHeader, StatGrid, StatCard, Card } from "../../../_components/ds";
 import { getAttendanceList } from "../../../_data/loaders";
 import { AttendanceTable } from "./AttendanceTable";
@@ -19,7 +18,10 @@ export default async function AttendancePage() {
         title={t("title")}
         subtitle={t("subtitle")}
       />
-      <DataSourceBadge source={source} />
+      {/* UX-012: the data-source badge now lives inside AttendanceTable,
+          driven by the same useSeededResource call that produces its rows —
+          not a second, independent read of `source` here that could
+          disagree with the table's own cache state (UX-002's pattern). */}
       <StatGrid>
         <StatCard icon="📋" iconBg="var(--panel)" label={t("total")} value={total} />
         <StatCard icon="✅" iconBg="var(--goodbg)" label={t("present")} value={present} />

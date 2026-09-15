@@ -1,5 +1,4 @@
 import Link from "next/link";
-import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
 import { PageHeader, StatGrid, StatCard, Card } from "@/app/_components/ds";
 import { getExecutionIssues, getExecutionProgress } from "../_data/loaders";
 import { ExecutionTable } from "./ExecutionTable";
@@ -19,13 +18,16 @@ export default async function ExecutionPage() {
 
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
+      {/* UX-012: the data-source badge now lives inside ExecutionTable,
+          driven by the same useSeededResource calls that produce its rows —
+          not a second, independent read of `source` here that could
+          disagree with the table's own cache state (UX-002's pattern). */}
       <PageHeader
         title="Execution & Progress"
         subtitle="Scope progress monitoring, photos, and issue tracking."
         back="/works"
         actions={
           <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-            {source === "error" && <DataSourceBadge source={source} />}
             <Link
               href="/works/execution/record-progress"
               className="btn primary"

@@ -2,6 +2,7 @@
 
 import type { CRMAccountSummary } from "@civitasone/types";
 import { DataTable, EmptyState } from "../../../_components/ds";
+import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { useSeededResource } from "@/lib/sync/resource";
 
 type AccountRow = {
@@ -20,17 +21,12 @@ export function AccountsTable({
   accounts: CRMAccountSummary[];
   source?: "api" | "error";
 }) {
-  const { data: rows, fromCache, offline, cachedAt } = useSeededResource<CRMAccountSummary[]>(
+  const { data: rows, provenance, offline, cachedAt } = useSeededResource<CRMAccountSummary[]>(
     "crm.accounts",
     accounts,
     source,
     (d) => d.length === 0,
   );
-
-  const cacheNote =
-    offline || fromCache
-      ? `Showing saved data${cachedAt ? ` from ${new Date(cachedAt).toLocaleString("en-IN")}` : ""}${offline ? " — you're offline" : ""}.`
-      : null;
 
   const nameById = new Map(rows.map((a) => [a.id, a.name]));
 
@@ -46,11 +42,12 @@ export function AccountsTable({
   return (
     <div className="card">
       <div className="card-h"><h3>Accounts</h3></div>
-      {cacheNote ? (
-        <p role="status" aria-live="polite" style={{ fontSize: 12, color: "#92400e", margin: "0 0 8px", paddingLeft: 12 }}>
-          {cacheNote}
-        </p>
-      ) : null}
+      {/* UX-012: this badge is the ONLY place that reports data provenance for
+          the rows shown below — it reads the same useSeededResource call as
+          `rows`, so it can never disagree with what the table shows
+          (UX-002's pattern; the page used to render a second, independent
+          badge from the raw `source` prop — removed). */}
+      <DataSourceBadge provenance={provenance ?? "live"} cachedAt={cachedAt} offline={offline} />
       {tableRows.length === 0 ? (
         <EmptyState
           icon="▣"

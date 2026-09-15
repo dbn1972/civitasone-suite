@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useMemo, useState, type ReactNode } from "react";
 import { ConfirmDialog, DataTable, Segmented } from "../../../_components/ds";
+import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { formatIndianDate } from "@/lib/formatters";
 import { useSeededResource } from "@/lib/sync/resource";
 
@@ -89,7 +90,7 @@ type HearingRow = {
 
 export function HearingsTable({ items, source = "api" }: { items: Hearing[]; source?: "api" | "error" }) {
   const router = useRouter();
-  const { data: rows, fromCache, offline, cachedAt } = useSeededResource<Hearing[]>(
+  const { data: rows, provenance, offline, cachedAt } = useSeededResource<Hearing[]>(
     "legal.hearings",
     items,
     source,
@@ -135,11 +136,6 @@ export function HearingsTable({ items, source = "api" }: { items: Hearing[]; sou
       }),
     [visible, today],
   );
-
-  const cacheNote =
-    offline || fromCache
-      ? `Showing saved data${cachedAt ? ` from ${new Date(cachedAt).toLocaleString("en-IN")}` : ""}${offline ? " — you're offline" : ""}.`
-      : null;
 
   async function handleSetReminder(): Promise<void> {
     if (!reminderRow) return;
@@ -233,11 +229,12 @@ export function HearingsTable({ items, source = "api" }: { items: Hearing[]; sou
         <h3>Hearing schedule</h3>
         <Segmented options={[...FILTERS]} value={filter} onChange={setFilter} />
       </div>
-      {cacheNote ? (
-        <p role="status" aria-live="polite" style={{ fontSize: 12, color: "#92400e", margin: "0", padding: "8px 16px 0" }}>
-          {cacheNote}
-        </p>
-      ) : null}
+      {/* UX-012: this badge is the ONLY place that reports data provenance for
+          the rows shown below — it reads the same useSeededResource call as
+          `rows`, so it can never disagree with what the table shows
+          (UX-002's pattern; the page used to render a second, independent
+          badge from the raw `source` prop — removed). */}
+      <DataSourceBadge provenance={provenance ?? "live"} cachedAt={cachedAt} offline={offline} />
       <DataTable<HearingRow>
         columns={columns}
         rows={tableRows}

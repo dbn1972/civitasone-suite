@@ -30,15 +30,15 @@ describe("ModuleListPage", () => {
     expect(screen.getByTestId("list-table")).toHaveTextContent("2 rows");
   });
 
-  it("shows DataSourceBadge when source is error", () => {
-    render(<ModuleListPage title="Bills" description="desc" rows={[]} source="error" />);
-    expect(screen.getByText("Couldn't load — showing nothing")).toBeInTheDocument();
-  });
-
-  it("does not show DataSourceBadge when source is api", () => {
-    render(<ModuleListPage title="Bills" description="desc" rows={rows} source="api" />);
-    expect(screen.queryByText("Couldn't load — showing nothing")).not.toBeInTheDocument();
-  });
+  // UX-012: ModuleListPage used to render its own <DataSourceBadge
+  // source={source} /> straight off the raw `source` prop, independently of
+  // ModuleListTable's own useSeededResource-derived cache state — the exact
+  // UX-002 contradictory-badge shape (a failed fetch with a usable cache
+  // could show "showing nothing" here AND "Showing saved data" in the
+  // table at once). The badge now lives inside ModuleListTable, reading the
+  // same hook call that produces its rows, so it can't disagree with them.
+  // No coverage lost: ModuleListTable.test.tsx covers all three provenance
+  // states (live / cached / error-no-data) directly.
 
   it("renders children", () => {
     render(

@@ -1,5 +1,4 @@
 import Link from "next/link";
-import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { PageHeader, StatCard, StatGrid } from "../../../_components/ds";
 import { getCrmRti } from "../../../_data/loaders";
 import { RtiTable } from "./RtiTable";
@@ -54,7 +53,11 @@ export default async function RtiPage({
         }
       />
 
-      {source === "error" && <DataSourceBadge source={source} />}
+      {/* UX-012: the data-source badge now lives inside RtiTable, driven by
+          the same useSeededResource call that produces its rows — not a
+          second, independent read of `source` here that could disagree with
+          the table's own cache state (UX-002's pattern). The `stat()` "—"
+          fallback below is unrelated and unchanged. */}
 
       <StatGrid>
         <StatCard

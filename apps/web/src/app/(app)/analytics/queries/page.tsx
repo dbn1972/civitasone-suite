@@ -1,4 +1,3 @@
-import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { PageHeader, StatGrid, StatCard, Card } from "@/app/_components/ds";
 import { getAnalyticsQueryRuns } from "../_data";
 import { QueryResultsView } from "./QueryResultsView";
@@ -19,7 +18,10 @@ export default async function AnalyticsQueriesPage() {
         title="Query Results"
         subtitle="Recent query runs. Every query is built from the whitelisted metric registry — no raw SQL, tenant-scoped."
       />
-      {source === "error" && <DataSourceBadge source="error" />}
+      {/* UX-012: the data-source badge now lives inside QueryResultsView,
+          driven by the same useSeededResource call that produces its rows —
+          not a second, independent read of `source` here that could
+          disagree with the table's own cache state (UX-002's pattern). */}
 
       <main aria-label="Analytics query results">
         {/* ── Section 1: Run a new query ──────────────────────────────────── */}

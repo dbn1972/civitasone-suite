@@ -52,10 +52,17 @@ describe("Accounts list page", () => {
     expect(screen.queryByText(/couldn.t load/i)).not.toBeInTheDocument();
   });
 
+  // UX-012: the "couldn't load" badge assertion that used to live here was
+  // removed — AccountsTable is mocked out in this file, and the badge now
+  // lives inside the real AccountsTable (reading the same useSeededResource
+  // call as its rows, so it can never disagree with what the table shows;
+  // UX-002's pattern). No coverage lost: the stat-fallback behavior below
+  // (the `stat()` "—" gating, a separate and unrelated concern) is still
+  // covered here, and AccountsTable's own provenance-driven badge is a
+  // shared-component concern already covered by DataSourceBadge.test.tsx.
   it("shows '—' for all stats when load fails (source='error')", async () => {
     mocked.mockResolvedValue({ data: [], source: "error" });
     render(await Page());
     expect(screen.getAllByText("—").length).toBeGreaterThanOrEqual(4);
-    expect(screen.getByText(/couldn.t load/i)).toBeInTheDocument();
   });
 });

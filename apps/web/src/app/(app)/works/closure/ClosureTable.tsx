@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { DataTable } from "@/app/_components/ds";
+import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
 import { useSeededResource } from "@/lib/sync/resource";
 
 // Bug fix (works-deep-verify, MEDIUM/L3): dropped the "Agreement" column.
@@ -26,7 +27,7 @@ type Tab = "closed" | "dropped" | "completion";
 
 export function ClosureTable({ closures, source }: { closures: Record<string, unknown>[]; source: "api" | "error" }) {
   const [tab, setTab] = useState<Tab>("closed");
-  const { data } = useSeededResource("works-closure", closures, source, (rows) => rows.length === 0);
+  const { data, provenance, offline, cachedAt } = useSeededResource("works-closure", closures, source, (rows) => rows.length === 0);
   const rows = data.filter((c) => String(c.status ?? "").toLowerCase() === tab);
 
   return (
@@ -57,6 +58,12 @@ export function ClosureTable({ closures, source }: { closures: Record<string, un
           Completion List
         </button>
       </div>
+      {/* UX-012: this badge is the ONLY place that reports data provenance for
+          the rows shown below — it reads the same useSeededResource call
+          `rows` is filtered from, so it can never disagree with what the
+          table shows (UX-002's pattern; the page used to render a second,
+          independent badge from the raw `source` prop — removed). */}
+      <DataSourceBadge provenance={provenance ?? "live"} cachedAt={cachedAt} offline={offline} />
       <DataTable
         columns={columns}
         rows={rows}

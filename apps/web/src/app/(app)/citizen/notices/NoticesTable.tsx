@@ -3,6 +3,7 @@
 import { useMemo } from "react";
 import { useTranslations } from "next-intl";
 import { Card, DataTable, EmptyState } from "../../../_components/ds";
+import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { useSeededResource } from "@/lib/sync/resource";
 import type { CitizenNotice } from "../../../_data/loaders";
 
@@ -18,7 +19,7 @@ type NoticeRow = {
 
 export function NoticesTable({ notices, source = "api" }: { notices: CitizenNotice[]; source?: "api" | "error" }) {
   const t = useTranslations("citizenNotices");
-  const { data: rows, fromCache, offline, cachedAt } = useSeededResource<CitizenNotice[]>(
+  const { data: rows, provenance, offline, cachedAt } = useSeededResource<CitizenNotice[]>(
     "citizen.notices",
     notices,
     source,
@@ -39,18 +40,14 @@ export function NoticesTable({ notices, source = "api" }: { notices: CitizenNoti
     [rows],
   );
 
-  const cacheNote =
-    offline || fromCache
-      ? `Showing saved data${cachedAt ? ` from ${new Date(cachedAt).toLocaleString("en-IN")}` : ""}${offline ? " — you're offline" : ""}.`
-      : null;
-
   return (
     <Card title={t("tableTitle")}>
-      {cacheNote ? (
-        <p role="status" aria-live="polite" style={{ fontSize: 12, color: "#92400e", margin: "0", padding: "8px 16px 0" }}>
-          {cacheNote}
-        </p>
-      ) : null}
+      {/* UX-012: this badge is the ONLY place that reports data provenance for
+          the rows shown below — it reads the same useSeededResource call as
+          `rows`, so it can never disagree with what the table shows
+          (UX-002's pattern; the page used to render a second, independent
+          badge from the raw `source` prop — removed). */}
+      <DataSourceBadge provenance={provenance ?? "live"} cachedAt={cachedAt} offline={offline} />
       {tableRows.length === 0 ? (
         <EmptyState icon="📰" title={t("emptyTitle")} message={t("emptyMessage")} />
       ) : (

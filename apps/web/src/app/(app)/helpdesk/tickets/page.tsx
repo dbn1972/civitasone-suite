@@ -1,5 +1,4 @@
 import Link from "next/link";
-import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { PrintExportButton } from "../../../_components/PrintExportButton";
 import { PageHeader, StatCard, StatGrid } from "../../../_components/ds";
 import { getHelpdeskTicketList } from "../../../_data/loaders";
@@ -35,7 +34,10 @@ export default async function Page() {
           </>
         }
       />
-      {source === "error" && <DataSourceBadge source={source} />}
+      {/* UX-012: the data-source badge now lives inside TicketsTable, driven
+          by the same useSeededResource call that produces its rows — not a
+          second, independent read of `source` here that could disagree with
+          the table's own cache state (UX-002's pattern). */}
       <StatGrid>
         <StatCard icon="🎫" label="Open Tickets" value={open.toLocaleString("en-IN")} />
         <StatCard icon="⏱" label="First Response" value={firstResponseDisplay} />

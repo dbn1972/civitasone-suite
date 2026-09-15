@@ -1,0 +1,380 @@
+{
+  "generatedAt": "2026-09-15T18:10:39.794Z",
+  "totalPairs": 46,
+  "moduleCounts": {
+    "admin": 11,
+    "finance": 25,
+    "tenant-admin": 10
+  },
+  "pairs": [
+    {
+      "dir": "(app)/admin/api-monitoring",
+      "page": "(app)/admin/api-monitoring/page.tsx",
+      "tables": [
+        "(app)/admin/api-monitoring/ApiMonitoringTable.tsx"
+      ],
+      "module": "admin"
+    },
+    {
+      "dir": "(app)/admin/editions",
+      "page": "(app)/admin/editions/page.tsx",
+      "tables": [
+        "(app)/admin/editions/EditionsTable.tsx"
+      ],
+      "module": "admin"
+    },
+    {
+      "dir": "(app)/admin/entitlements",
+      "page": "(app)/admin/entitlements/page.tsx",
+      "tables": [
+        "(app)/admin/entitlements/EntitlementsTable.tsx"
+      ],
+      "module": "admin"
+    },
+    {
+      "dir": "(app)/admin/gateways",
+      "page": "(app)/admin/gateways/page.tsx",
+      "tables": [
+        "(app)/admin/gateways/GatewaysTable.tsx"
+      ],
+      "module": "admin"
+    },
+    {
+      "dir": "(app)/admin/invoices",
+      "page": "(app)/admin/invoices/page.tsx",
+      "tables": [
+        "(app)/admin/invoices/InvoicesTable.tsx"
+      ],
+      "module": "admin"
+    },
+    {
+      "dir": "(app)/admin/metering",
+      "page": "(app)/admin/metering/page.tsx",
+      "tables": [
+        "(app)/admin/metering/MeteringTable.tsx"
+      ],
+      "module": "admin"
+    },
+    {
+      "dir": "(app)/admin/onboarding",
+      "page": "(app)/admin/onboarding/page.tsx",
+      "tables": [
+        "(app)/admin/onboarding/OnboardingTable.tsx"
+      ],
+      "module": "admin"
+    },
+    {
+      "dir": "(app)/admin/operators",
+      "page": "(app)/admin/operators/page.tsx",
+      "tables": [
+        "(app)/admin/operators/OperatorsTable.tsx"
+      ],
+      "module": "admin"
+    },
+    {
+      "dir": "(app)/admin/tech-admin",
+      "page": "(app)/admin/tech-admin/page.tsx",
+      "tables": [
+        "(app)/admin/tech-admin/TechAdminTable.tsx"
+      ],
+      "module": "admin"
+    },
+    {
+      "dir": "(app)/admin/tenants",
+      "page": "(app)/admin/tenants/page.tsx",
+      "tables": [
+        "(app)/admin/tenants/TenantsTable.tsx"
+      ],
+      "module": "admin"
+    },
+    {
+      "dir": "(app)/admin/tenants/[id]",
+      "page": "(app)/admin/tenants/[id]/page.tsx",
+      "tables": [
+        "(app)/admin/tenants/[id]/TenantModulesTable.tsx"
+      ],
+      "module": "admin"
+    },
+    {
+      "dir": "(app)/finance/accounting/financial-statements",
+      "page": "(app)/finance/accounting/financial-statements/page.tsx",
+      "tables": [
+        "(app)/finance/accounting/financial-statements/StatementsTable.tsx"
+      ],
+      "module": "finance"
+    },
+    {
+      "dir": "(app)/finance/accounting/general-ledger",
+      "page": "(app)/finance/accounting/general-ledger/page.tsx",
+      "tables": [
+        "(app)/finance/accounting/general-ledger/GLTable.tsx"
+      ],
+      "module": "finance"
+    },
+    {
+      "dir": "(app)/finance/audit-paras",
+      "page": "(app)/finance/audit-paras/page.tsx",
+      "tables": [
+        "(app)/finance/audit-paras/AuditParasTable.tsx"
+      ],
+      "module": "finance"
+    },
+    {
+      "dir": "(app)/finance/budget/allocation",
+      "page": "(app)/finance/budget/allocation/page.tsx",
+      "tables": [
+        "(app)/finance/budget/allocation/AllocationTable.tsx"
+      ],
+      "module": "finance"
+    },
+    {
+      "dir": "(app)/finance/budget/demand-grants",
+      "page": "(app)/finance/budget/demand-grants/page.tsx",
+      "tables": [
+        "(app)/finance/budget/demand-grants/DemandGrantsTable.tsx"
+      ],
+      "module": "finance"
+    },
+    {
+      "dir": "(app)/finance/budget/formulation",
+      "page": "(app)/finance/budget/formulation/page.tsx",
+      "tables": [
+        "(app)/finance/budget/formulation/FormulationTable.tsx"
+      ],
+      "module": "finance"
+    },
+    {
+      "dir": "(app)/finance/budget/fund-releases",
+      "page": "(app)/finance/budget/fund-releases/page.tsx",
+      "tables": [
+        "(app)/finance/budget/fund-releases/FundReleasesTable.tsx"
+      ],
+      "module": "finance"
+    },
+    {
+      "dir": "(app)/finance/budget/monitoring",
+      "page": "(app)/finance/budget/monitoring/page.tsx",
+      "tables": [
+        "(app)/finance/budget/monitoring/MonitoringTable.tsx"
+      ],
+      "module": "finance"
+    },
+    {
+      "dir": "(app)/finance/budget/outcome-budget",
+      "page": "(app)/finance/budget/outcome-budget/page.tsx",
+      "tables": [
+        "(app)/finance/budget/outcome-budget/OutcomeBudgetTable.tsx"
+      ],
+      "module": "finance"
+    },
+    {
+      "dir": "(app)/finance/budget/sanctions",
+      "page": "(app)/finance/budget/sanctions/page.tsx",
+      "tables": [
+        "(app)/finance/budget/sanctions/SanctionsTable.tsx"
+      ],
+      "module": "finance"
+    },
+    {
+      "dir": "(app)/finance/chart-of-accounts",
+      "page": "(app)/finance/chart-of-accounts/page.tsx",
+      "tables": [
+        "(app)/finance/chart-of-accounts/AccountsTable.tsx"
+      ],
+      "module": "finance"
+    },
+    {
+      "dir": "(app)/finance/debt",
+      "page": "(app)/finance/debt/page.tsx",
+      "tables": [
+        "(app)/finance/debt/DebtTable.tsx"
+      ],
+      "module": "finance"
+    },
+    {
+      "dir": "(app)/finance/expenditure/advances",
+      "page": "(app)/finance/expenditure/advances/page.tsx",
+      "tables": [
+        "(app)/finance/expenditure/advances/AdvancesTable.tsx"
+      ],
+      "module": "finance"
+    },
+    {
+      "dir": "(app)/finance/expenditure/bills",
+      "page": "(app)/finance/expenditure/bills/page.tsx",
+      "tables": [
+        "(app)/finance/expenditure/bills/BillsTable.tsx"
+      ],
+      "module": "finance"
+    },
+    {
+      "dir": "(app)/finance/expenditure/guarantees",
+      "page": "(app)/finance/expenditure/guarantees/page.tsx",
+      "tables": [
+        "(app)/finance/expenditure/guarantees/GuaranteesTable.tsx"
+      ],
+      "module": "finance"
+    },
+    {
+      "dir": "(app)/finance/expenditure/scheme-tracking",
+      "page": "(app)/finance/expenditure/scheme-tracking/page.tsx",
+      "tables": [
+        "(app)/finance/expenditure/scheme-tracking/SchemeTable.tsx"
+      ],
+      "module": "finance"
+    },
+    {
+      "dir": "(app)/finance/expenditure/utilization-certificates",
+      "page": "(app)/finance/expenditure/utilization-certificates/page.tsx",
+      "tables": [
+        "(app)/finance/expenditure/utilization-certificates/UCsTable.tsx"
+      ],
+      "module": "finance"
+    },
+    {
+      "dir": "(app)/finance/payments",
+      "page": "(app)/finance/payments/page.tsx",
+      "tables": [
+        "(app)/finance/payments/PaymentsTable.tsx"
+      ],
+      "module": "finance"
+    },
+    {
+      "dir": "(app)/finance/revenue/challans",
+      "page": "(app)/finance/revenue/challans/page.tsx",
+      "tables": [
+        "(app)/finance/revenue/challans/ChallansTable.tsx"
+      ],
+      "module": "finance"
+    },
+    {
+      "dir": "(app)/finance/statutory/tds-returns",
+      "page": "(app)/finance/statutory/tds-returns/page.tsx",
+      "tables": [
+        "(app)/finance/statutory/tds-returns/TDSReturnsTable.tsx"
+      ],
+      "module": "finance"
+    },
+    {
+      "dir": "(app)/finance/treasury/cash-bank",
+      "page": "(app)/finance/treasury/cash-bank/page.tsx",
+      "tables": [
+        "(app)/finance/treasury/cash-bank/CashBankTable.tsx"
+      ],
+      "module": "finance"
+    },
+    {
+      "dir": "(app)/finance/treasury/cheques",
+      "page": "(app)/finance/treasury/cheques/page.tsx",
+      "tables": [
+        "(app)/finance/treasury/cheques/ChequesTable.tsx"
+      ],
+      "module": "finance"
+    },
+    {
+      "dir": "(app)/finance/treasury/deposits",
+      "page": "(app)/finance/treasury/deposits/page.tsx",
+      "tables": [
+        "(app)/finance/treasury/deposits/DepositsTable.tsx"
+      ],
+      "module": "finance"
+    },
+    {
+      "dir": "(app)/finance/treasury/e-payments",
+      "page": "(app)/finance/treasury/e-payments/page.tsx",
+      "tables": [
+        "(app)/finance/treasury/e-payments/EPaymentsTable.tsx"
+      ],
+      "module": "finance"
+    },
+    {
+      "dir": "(app)/finance/treasury/pfms",
+      "page": "(app)/finance/treasury/pfms/page.tsx",
+      "tables": [
+        "(app)/finance/treasury/pfms/PFMSTable.tsx"
+      ],
+      "module": "finance"
+    },
+    {
+      "dir": "(app)/tenant-admin/data-export",
+      "page": "(app)/tenant-admin/data-export/page.tsx",
+      "tables": [
+        "(app)/tenant-admin/data-export/DataExportClient.tsx"
+      ],
+      "module": "tenant-admin"
+    },
+    {
+      "dir": "(app)/tenant-admin/domain",
+      "page": "(app)/tenant-admin/domain/page.tsx",
+      "tables": [
+        "(app)/tenant-admin/domain/DomainClient.tsx"
+      ],
+      "module": "tenant-admin"
+    },
+    {
+      "dir": "(app)/tenant-admin/idp",
+      "page": "(app)/tenant-admin/idp/page.tsx",
+      "tables": [
+        "(app)/tenant-admin/idp/IdpTable.tsx"
+      ],
+      "module": "tenant-admin"
+    },
+    {
+      "dir": "(app)/tenant-admin/mfa",
+      "page": "(app)/tenant-admin/mfa/page.tsx",
+      "tables": [
+        "(app)/tenant-admin/mfa/MfaTable.tsx"
+      ],
+      "module": "tenant-admin"
+    },
+    {
+      "dir": "(app)/tenant-admin/plans",
+      "page": "(app)/tenant-admin/plans/page.tsx",
+      "tables": [
+        "(app)/tenant-admin/plans/PlansClient.tsx"
+      ],
+      "module": "tenant-admin"
+    },
+    {
+      "dir": "(app)/tenant-admin/security",
+      "page": "(app)/tenant-admin/security/page.tsx",
+      "tables": [
+        "(app)/tenant-admin/security/SecurityTable.tsx"
+      ],
+      "module": "tenant-admin"
+    },
+    {
+      "dir": "(app)/tenant-admin/siem",
+      "page": "(app)/tenant-admin/siem/page.tsx",
+      "tables": [
+        "(app)/tenant-admin/siem/SiemTable.tsx"
+      ],
+      "module": "tenant-admin"
+    },
+    {
+      "dir": "(app)/tenant-admin/usage",
+      "page": "(app)/tenant-admin/usage/page.tsx",
+      "tables": [
+        "(app)/tenant-admin/usage/UsageDisplay.tsx"
+      ],
+      "module": "tenant-admin"
+    },
+    {
+      "dir": "(app)/tenant-admin/users",
+      "page": "(app)/tenant-admin/users/page.tsx",
+      "tables": [
+        "(app)/tenant-admin/users/UsersTable.tsx"
+      ],
+      "module": "tenant-admin"
+    },
+    {
+      "dir": "(app)/tenant-admin/webhooks",
+      "page": "(app)/tenant-admin/webhooks/page.tsx",
+      "tables": [
+        "(app)/tenant-admin/webhooks/WebhooksClient.tsx"
+      ],
+      "module": "tenant-admin"
+    }
+  ],
+  "sharedModuleListPageTablePair": null
+}

@@ -1,4 +1,3 @@
-import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { PageHeader, StatGrid, StatCard, Card } from "@/app/_components/ds";
 import { getAnalyticsDashboards } from "../_data";
 import { DashboardsTable } from "./DashboardsTable";
@@ -15,7 +14,10 @@ export default async function AnalyticsDashboardsPage() {
         ← <a href="/analytics">Analytics</a>
       </nav>
       <PageHeader title="Dashboards" subtitle="Saved analytics dashboards with widgets, layout and owner/shared access control." />
-      {source === "error" && <DataSourceBadge source="error" />}
+      {/* UX-012: the data-source badge now lives inside DashboardsTable,
+          driven by the same useSeededResource call that produces its rows —
+          not a second, independent read of `source` here that could
+          disagree with the table's own cache state (UX-002's pattern). */}
       <main aria-label="Analytics dashboards">
         <StatGrid>
           <StatCard icon="📊" iconBg="#f1f5f9" label="Total" value={dashboards.length} />

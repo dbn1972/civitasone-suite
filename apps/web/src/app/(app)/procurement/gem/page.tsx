@@ -1,4 +1,3 @@
-import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { PageHeader, StatGrid, StatCard, Card } from "../../../_components/ds";
 import { getProcurementGem } from "../../../_data/loaders";
 import { GemTable } from "./GemTable";
@@ -13,10 +12,13 @@ export default async function GemPage() {
 
   return (
     <>
+      {/* UX-012: the data-source badge now lives inside GemTable, driven by
+          the same useSeededResource call that produces its rows — not a
+          second, independent read of `source` here that could disagree with
+          the table's own cache state (UX-002's pattern). */}
       <PageHeader
         title="GeM Integration"
         subtitle="Government e-Marketplace orders and delivery tracking."
-        actions={source === "error" ? <DataSourceBadge source={source} message="Couldn't load — showing nothing" /> : null}
       />
 
       <StatGrid>

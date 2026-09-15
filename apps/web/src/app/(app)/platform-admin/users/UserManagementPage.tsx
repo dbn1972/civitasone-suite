@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ConfirmDialog } from "@/app/_components/ds";
+import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
 import { useSeededResource } from "@/lib/sync/resource";
 import { errorMessageFromResponse } from "@/lib/api/browserClient";
 
@@ -74,7 +75,7 @@ const PAGE_SIZE = 15;
 /* ─── Component ─────────────────────────────────────────────────────── */
 export function UserManagementPage({ users: seed, source = "api" }: { users: PlatformUser[]; source?: "api" | "error" }) {
   const router = useRouter();
-  const { data: users } = useSeededResource<PlatformUser[]>("platformAdmin.users", seed, source, (d) => d.length === 0);
+  const { data: users, provenance, offline, cachedAt } = useSeededResource<PlatformUser[]>("platformAdmin.users", seed, source, (d) => d.length === 0);
 
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("All");
@@ -181,6 +182,16 @@ export function UserManagementPage({ users: seed, source = "api" }: { users: Pla
             Export all ({filtered.length})
           </button>
         </div>
+      </div>
+
+      {/* UX-012: this badge is the ONLY place that reports data provenance for
+          the rows shown below — it reads the same useSeededResource call as
+          `users`, so it can never disagree with what the table shows
+          (UX-002's pattern; the page used to render a second, independent
+          badge from the raw `source` prop — removed). Previously this table
+          never surfaced cache state at all. */}
+      <div style={{ padding: "8px 16px 0" }}>
+        <DataSourceBadge provenance={provenance ?? "live"} cachedAt={cachedAt} offline={offline} />
       </div>
 
       {/* Filters */}

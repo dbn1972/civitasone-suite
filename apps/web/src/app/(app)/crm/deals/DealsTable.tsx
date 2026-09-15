@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { DataTable, Segmented, EmptyState } from "../../../_components/ds";
+import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { useSeededResource } from "@/lib/sync/resource";
 
 type Deal = {
@@ -26,7 +27,7 @@ type DealRow = {
 const SEGMENTS = ["All", "Open", "Concluded"] as const;
 
 export function DealsTable({ deals, source = "api" }: { deals: Deal[]; source?: "api" | "error" }) {
-  const { data: rows, fromCache, offline, cachedAt } = useSeededResource<Deal[]>(
+  const { data: rows, provenance, offline, cachedAt } = useSeededResource<Deal[]>(
     "crm.deals",
     deals,
     source,
@@ -34,11 +35,6 @@ export function DealsTable({ deals, source = "api" }: { deals: Deal[]; source?: 
   );
 
   const [segment, setSegment] = useState<string>("All");
-
-  const cacheNote =
-    offline || fromCache
-      ? `Showing saved data${cachedAt ? ` from ${new Date(cachedAt).toLocaleString("en-IN")}` : ""}${offline ? " — you're offline" : ""}.`
-      : null;
 
   const tableRows: DealRow[] = rows
     .filter((d) => {
@@ -78,11 +74,12 @@ export function DealsTable({ deals, source = "api" }: { deals: Deal[]; source?: 
         <h3 style={{ marginRight: "auto" }}>Engagements</h3>
         <Segmented options={[...SEGMENTS]} value={segment} onChange={setSegment} />
       </div>
-      {cacheNote ? (
-        <p role="status" aria-live="polite" style={{ fontSize: 12, color: "#92400e", margin: "0", padding: "8px 16px 0" }}>
-          {cacheNote}
-        </p>
-      ) : null}
+      {/* UX-012: this badge is the ONLY place that reports data provenance for
+          the rows shown below — it reads the same useSeededResource call as
+          `rows`, so it can never disagree with what the table shows
+          (UX-002's pattern; the page used to render a second, independent
+          badge from the raw `source` prop — removed). */}
+      <DataSourceBadge provenance={provenance ?? "live"} cachedAt={cachedAt} offline={offline} />
       {rows.length === 0 ? (
         <EmptyState icon="◈" title="No engagements found" message="Start adding engagements to track your procurement pipeline." />
       ) : (

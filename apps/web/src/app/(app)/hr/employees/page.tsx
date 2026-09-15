@@ -1,5 +1,4 @@
 import Link from "next/link";
-import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { PageHeader, StatGrid, StatCard, Card } from "../../../_components/ds";
 import { getEmployees, getHRDashboard } from "../../../_data/loaders";
 import { EmployeesTable, type EmpRow } from "./EmployeesTable";
@@ -64,7 +63,10 @@ export default async function EmployeeDirectoryPage({ searchParams }: { searchPa
           <Link href="/hr/employees/new" className="btn primary">{t("employees.add")}</Link>
         }
       />
-      <DataSourceBadge source={source} />
+      {/* UX-012: the data-source badge now lives inside EmployeesTable, driven
+          by the same useSeededResource call that produces its rows — not a
+          second, independent read of `source` here that could disagree with
+          the table's own cache state (UX-002's pattern). */}
       <StatGrid>
         <StatCard icon="👥" iconBg="#e6f7f0" label="Total" value={total} />
         <StatCard icon="✅" iconBg="#e6f0ff" label="Active (Serving)" value={active} />

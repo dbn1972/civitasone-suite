@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { DataTable, Segmented, EmptyState } from "../../../_components/ds";
+import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { PredictionBadge } from "../../../_components/ds/PredictionBadge";
 import { useSeededResource } from "@/lib/sync/resource";
 
@@ -35,7 +36,7 @@ type Row = {
 const TABS = ["All", "Open", "Pending", "Resolved"] as const;
 
 export function TicketsTable({ tickets, source = "api" }: { tickets: Ticket[]; source?: "api" | "error" }) {
-  const { data: rows, fromCache, offline, cachedAt } = useSeededResource<Ticket[]>(
+  const { data: rows, provenance, offline, cachedAt } = useSeededResource<Ticket[]>(
     "helpdesk.tickets",
     tickets,
     source,
@@ -43,11 +44,6 @@ export function TicketsTable({ tickets, source = "api" }: { tickets: Ticket[]; s
   );
 
   const [tab, setTab] = useState<string>("All");
-
-  const cacheNote =
-    offline || fromCache
-      ? `Showing saved data${cachedAt ? ` from ${new Date(cachedAt).toLocaleString("en-IN")}` : ""}${offline ? " — you're offline" : ""}.`
-      : null;
 
   const tableRows: Row[] = rows.map((t) => ({
     id: t.id,
@@ -77,11 +73,12 @@ export function TicketsTable({ tickets, source = "api" }: { tickets: Ticket[]; s
           <Segmented options={[...TABS]} value={tab} onChange={setTab} />
         </div>
       </div>
-      {cacheNote ? (
-        <p role="status" aria-live="polite" style={{ fontSize: 12, color: "#92400e", margin: "0", padding: "8px 16px 0" }}>
-          {cacheNote}
-        </p>
-      ) : null}
+      {/* UX-012: this badge is the ONLY place that reports data provenance for
+          the rows shown below — it reads the same useSeededResource call as
+          `rows`, so it can never disagree with what the table shows
+          (UX-002's pattern; the page used to render a second, independent
+          badge from the raw `source` prop — removed). */}
+      <DataSourceBadge provenance={provenance ?? "live"} cachedAt={cachedAt} offline={offline} />
       {tableRows.length === 0 ? (
         <EmptyState icon="🎫" title="No tickets" message="Citizen tickets will appear here once submitted." />
       ) : (

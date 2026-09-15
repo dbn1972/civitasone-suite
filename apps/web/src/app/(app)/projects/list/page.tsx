@@ -1,5 +1,4 @@
 import Link from "next/link";
-import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { getProjects } from "../../../_data/loaders";
 import { PageHeader, StatGrid, StatCard, Card } from "@/app/_components/ds";
 import { ProjectsTable, type ProjectRow } from "./ProjectsTable";
@@ -33,7 +32,10 @@ export default async function ProjectsListPage() {
           </Link>
         }
       />
-      {source === "error" && <DataSourceBadge source="error" />}
+      {/* UX-012: the data-source badge now lives inside ProjectsTable, driven
+          by the same useSeededResource call that produces its rows — not a
+          second, independent read of `source` here that could disagree with
+          the table's own cache state (UX-002's pattern). */}
       <StatGrid>
         <StatCard icon="📁" iconBg="#eef0fe" label="Active" value={active} />
         <StatCard icon="✅" iconBg="#ecfdf3" label="On Track" value={onTrack} />

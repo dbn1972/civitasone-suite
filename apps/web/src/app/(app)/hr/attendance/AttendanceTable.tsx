@@ -5,13 +5,14 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 import { useTranslations } from "next-intl";
 import { DataTable, StatusPill } from "../../../_components/ds";
+import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import type { AttendanceSummaryItem } from "@civitasone/types";
 import { useSeededResource } from "@/lib/sync/resource";
 import { formatIndianDate } from "@/lib/formatters";
 
 export function AttendanceTable({ attendance, source = "api" }: { attendance: AttendanceSummaryItem[]; source?: "api" | "error" }) {
   const t = useTranslations("attendance");
-  const { data: rows, fromCache, offline, cachedAt } = useSeededResource<AttendanceSummaryItem[]>(
+  const { data: rows, provenance, offline, cachedAt } = useSeededResource<AttendanceSummaryItem[]>(
     "hr.attendance",
     attendance,
     source,
@@ -28,18 +29,26 @@ export function AttendanceTable({ attendance, source = "api" }: { attendance: At
     { key: "hoursWorked", label: t("colHours"), align: "right", render: (r) => (r.hoursWorked != null ? r.hoursWorked.toFixed(1) : "—") },
   ];
 
-  const cacheNote =
-    offline || fromCache
+  // UX-012: preserve UX-017's existing translation of the cached-state note
+  // (this table already had a translated i18n string here) by feeding it to
+  // DataSourceBadge's `message` override rather than falling back to the
+  // badge's own hardcoded English default. The error-no-data path had no
+  // translated copy before this fix either (the old page-level badge had no
+  // `message` prop, so it always rendered the default English text) -- that
+  // is unchanged, not a new regression.
+  const cachedMessage =
+    provenance === "cached"
       ? `${t("cacheNoteShowingSaved")}${cachedAt ? t("cacheNoteFrom", { date: new Date(cachedAt).toLocaleString("en-IN") }) : ""}${offline ? t("cacheNoteOffline") : ""}.`
-      : null;
+      : undefined;
 
   return (
     <>
-      {cacheNote ? (
-        <p role="status" aria-live="polite" style={{ fontSize: 12, color: "var(--warn)", margin: "0 0 8px" }}>
-          {cacheNote}
-        </p>
-      ) : null}
+      {/* UX-012: this badge is the ONLY place that reports data provenance for
+          the rows shown below — it reads the same useSeededResource call as
+          `rows`, so it can never disagree with what the table shows
+          (UX-002's pattern; the page used to render a second, independent
+          badge from the raw `source` prop — removed). */}
+      <DataSourceBadge provenance={provenance ?? "live"} cachedAt={cachedAt} offline={offline} message={cachedMessage} />
       <DataTable<AttendanceSummaryItem>
         columns={columns}
         rows={rows}

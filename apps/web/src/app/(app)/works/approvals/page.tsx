@@ -1,5 +1,4 @@
 import Link from "next/link";
-import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
 import { PageHeader, StatGrid, StatCard, Card } from "@/app/_components/ds";
 import { getApprovalsAa, getApprovalsTs } from "../_data/loaders";
 import { ApprovalsTable } from "./ApprovalsTable";
@@ -18,13 +17,16 @@ export default async function ApprovalsPage() {
 
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
+      {/* UX-012: the data-source badge now lives inside ApprovalsTable,
+          driven by the same useSeededResource calls that produce its rows —
+          not a second, independent read of `source` here that could
+          disagree with the table's own cache state (UX-002's pattern). */}
       <PageHeader
         title="AA / TS Register"
         subtitle="Administrative Approval and Technical Sanction registers."
         back="/works"
         actions={
           <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-            {source === "error" && <DataSourceBadge source={source} />}
             <Link href="/works/approvals/new" className="btn" style={{ minHeight: 36, fontSize: 13, padding: "6px 14px", border: "1px solid var(--line)" }}>+ New AA</Link>
             <Link href="/works/approvals/ts-new" className="btn primary" style={{ minHeight: 36, fontSize: 13, padding: "6px 14px" }}>+ New TS</Link>
           </div>

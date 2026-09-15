@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { DataTable, ConfirmDialog, Button } from "../../../../_components/ds";
+import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
 import type { AttendanceRegularisation } from "@civitasone/types";
 import { useSeededResource } from "@/lib/sync/resource";
 import { formatIndianDate } from "@/lib/formatters";
@@ -15,7 +16,7 @@ type Row = AttendanceRegularisation & Record<string, unknown>;
 export function RegularisationTable({ regs, source = "api" }: { regs: AttendanceRegularisation[]; source?: "api" | "error" }) {
   const t = useTranslations("attendanceRegularisation");
   const router = useRouter();
-  const { data: rows, fromCache, offline, cachedAt } = useSeededResource<AttendanceRegularisation[]>(
+  const { data: rows, provenance, offline, cachedAt } = useSeededResource<AttendanceRegularisation[]>(
     "hr.attendanceRegularisation",
     regs,
     source,
@@ -28,10 +29,16 @@ export function RegularisationTable({ regs, source = "api" }: { regs: Attendance
   const [toast, setToast] = useState<{ tone: "good" | "bad"; text: string } | null>(null);
   const formError = useFormError("regularisation request");
 
-  const cacheNote =
-    offline || fromCache
+  // UX-012: preserve UX-017's existing translation of the cached-state note
+  // by feeding it to DataSourceBadge's `message` override rather than
+  // falling back to the badge's own hardcoded English default. The
+  // error-no-data path had no translated copy before this fix either (the
+  // old page-level badge had no `message` prop, so it always rendered the
+  // default English text) -- that is unchanged, not a new regression.
+  const cachedMessage =
+    provenance === "cached"
       ? `${t("cacheNoteShowingSaved")}${cachedAt ? t("cacheNoteFrom", { date: new Date(cachedAt).toLocaleString("en-IN") }) : ""}${offline ? t("cacheNoteOffline") : ""}.`
-      : null;
+      : undefined;
 
   async function act(id: string, decision: Decision, reason?: string) {
     setBusy(true);
@@ -90,11 +97,12 @@ export function RegularisationTable({ regs, source = "api" }: { regs: Attendance
 
   return (
     <>
-      {cacheNote ? (
-        <p role="status" aria-live="polite" style={{ fontSize: 12, color: "var(--warn)", margin: "0 0 8px" }}>
-          {cacheNote}
-        </p>
-      ) : null}
+      {/* UX-012: this badge is the ONLY place that reports data provenance for
+          the rows shown below — it reads the same useSeededResource call as
+          `rows`, so it can never disagree with what the table shows
+          (UX-002's pattern; the page used to render a second, independent
+          badge from the raw `source` prop — removed). */}
+      <DataSourceBadge provenance={provenance ?? "live"} cachedAt={cachedAt} offline={offline} message={cachedMessage} />
       {toast && (
         <p role="status" aria-live="polite" className={`pill ${toast.tone}`} style={{ margin: "0 0 12px" }}>
           {toast.text}

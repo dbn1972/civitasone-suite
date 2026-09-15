@@ -1,6 +1,7 @@
 "use client";
 
 import { Card, EmptyState } from "../../../_components/ds";
+import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { PredictionBadge } from "../../../_components/ds/PredictionBadge";
 import { useSeededResource } from "@/lib/sync/resource";
 import type { ModuleRowSummary } from "@civitasone/types";
@@ -23,25 +24,21 @@ export function SubscriptionsTable({
   rows: SubscriptionRow[];
   source: "api" | "error";
 }) {
-  const { data, fromCache, offline, cachedAt } = useSeededResource<SubscriptionRow[]>(
+  const { data, provenance, offline, cachedAt } = useSeededResource<SubscriptionRow[]>(
     cacheKey,
     rows,
     source,
     (d) => d.length === 0,
   );
 
-  const cacheNote =
-    offline || fromCache
-      ? `Showing saved data${cachedAt ? ` from ${new Date(cachedAt).toLocaleString("en-IN")}` : ""}${offline ? " — you're offline" : ""}.`
-      : null;
-
   return (
     <Card title="Subscriptions">
-      {cacheNote ? (
-        <p role="status" aria-live="polite" style={{ fontSize: 12, color: "var(--warn)", margin: "0", padding: "8px 16px 0" }}>
-          {cacheNote}
-        </p>
-      ) : null}
+      {/* UX-012: this badge is the ONLY place that reports data provenance for
+          the rows shown below — it reads the same useSeededResource call as
+          `data`, so it can never disagree with what the table shows
+          (UX-002's pattern; the page used to render a second, independent
+          badge from the raw `source` prop — removed). */}
+      <DataSourceBadge provenance={provenance ?? "live"} cachedAt={cachedAt} offline={offline} />
       {data.length === 0 ? (
         <EmptyState icon="📋" title="No subscriptions" message="No subscriptions have been created yet." />
       ) : (

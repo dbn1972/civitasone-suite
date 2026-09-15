@@ -1,4 +1,3 @@
-import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
 import { PageHeader, StatGrid, StatCard, Card } from "@/app/_components/ds";
 import { getClosures } from "../_data/loaders";
 import { ClosureTable } from "./ClosureTable";
@@ -13,11 +12,14 @@ export default async function ClosurePage() {
 
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
+      {/* UX-012: the data-source badge now lives inside ClosureTable, driven
+          by the same useSeededResource call that produces its rows — not a
+          second, independent read of `source` here that could disagree with
+          the table's own cache state (UX-002's pattern). */}
       <PageHeader
         title="Closure"
         subtitle="Closed, dropped, and completion list works."
         back="/works"
-        actions={source === "error" ? <DataSourceBadge source={source} /> : null}
       />
       <StatGrid>
         <StatCard icon="🔒" iconBg="#eff6ff" label="Total" value={total} />

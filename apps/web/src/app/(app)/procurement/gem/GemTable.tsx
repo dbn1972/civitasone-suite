@@ -2,6 +2,7 @@
 
 import { useMemo } from "react";
 import { Card, DataTable, EmptyState } from "../../../_components/ds";
+import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { useSeededResource } from "@/lib/sync/resource";
 import type { GemItem } from "../../../_data/loaders";
 
@@ -16,7 +17,7 @@ type GemRow = {
 } & Record<string, unknown>;
 
 export function GemTable({ items, source = "api" }: { items: GemItem[]; source?: "api" | "error" }) {
-  const { data: rows, fromCache, offline, cachedAt } = useSeededResource<GemItem[]>(
+  const { data: rows, provenance, offline, cachedAt } = useSeededResource<GemItem[]>(
     "procurement.gem",
     items,
     source,
@@ -37,18 +38,19 @@ export function GemTable({ items, source = "api" }: { items: GemItem[]; source?:
     [rows],
   );
 
-  const cacheNote =
-    offline || fromCache
-      ? `Showing saved data${cachedAt ? ` from ${new Date(cachedAt).toLocaleString("en-IN")}` : ""}${offline ? " — you're offline" : ""}.`
-      : null;
-
   return (
     <Card title="GeM Orders">
-      {cacheNote ? (
-        <p role="status" aria-live="polite" style={{ fontSize: 12, color: "#92400e", margin: "0", padding: "8px 16px 0" }}>
-          {cacheNote}
-        </p>
-      ) : null}
+      {/* UX-012: this badge is the ONLY place that reports data provenance for
+          the rows shown below — it reads the same useSeededResource call as
+          `rows`, so it can never disagree with what the table shows
+          (UX-002's pattern; the page used to render a second, independent
+          badge from the raw `source` prop — removed). */}
+      <DataSourceBadge
+        provenance={provenance ?? "live"}
+        cachedAt={cachedAt}
+        offline={offline}
+        message={provenance === "error-no-data" ? "Couldn't load — showing nothing" : undefined}
+      />
       {tableRows.length === 0 ? (
         <EmptyState icon="🛒" title="No GeM orders found" message="Orders placed on GeM will appear here." />
       ) : (
