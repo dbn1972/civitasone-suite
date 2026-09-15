@@ -1,42 +1,42 @@
 # Screen Contract Map
 
-Generated: 2026-09-13T10:29:19.367Z
+Generated: 2026-09-15T17:43:21.251Z
 
-**Summary:** 275 WIRED | 0 MISSING | 0 MISMATCH | 563 NO_LOADER | 0 FABRICATED_DATA
+**Summary:** 291 WIRED | 8 MISSING | 1 MISMATCH | 544 NO_LOADER | 0 FABRICATED_DATA
 
 | module | screen | loader | apiPath | upstream | route? | table? | status |
 |--------|--------|--------|---------|----------|--------|--------|--------|
-| admin | /admin/api-monitoring | — | — | — | — | — | — NO_LOADER |
+| admin | /admin/api-monitoring | getSAApiMonitoring | /api/v1/admin/api-monitoring | admin → /v1/admin/api-monitoring | ✗ | ✓ | ❌ MISSING |
 | admin | /admin/audit-log | getAdminAuditLogEntries | /api/v1/admin/audit-logs | admin → /v1/admin/audit-logs | ✓ `/v1/admin/audit-logs` | ✓ | ✅ WIRED |
 | admin | /admin/bulk-scan | — | — | — | — | — | — NO_LOADER |
 | admin | /admin/config | — | — | — | — | — | — NO_LOADER |
 | admin | /admin/devices | — | — | — | — | — | — NO_LOADER |
 | admin | /admin/discovery | — | — | — | — | — | — NO_LOADER |
-| admin | /admin/editions | — | — | — | — | — | — NO_LOADER |
-| admin | /admin/entitlements | — | — | — | — | — | — NO_LOADER |
+| admin | /admin/editions | getSAEditions | /api/v1/admin/editions | admin → /v1/admin/editions | ✗ | ✓ | ❌ MISSING |
+| admin | /admin/entitlements | getSAEntitlements | /api/v1/admin/entitlements | admin → /v1/admin/entitlements | ✗ | ✓ | ❌ MISSING |
 | admin | /admin/feature-flags | getAdminFeatureFlagsManage | /api/v1/admin/feature-flags/manage | admin → /v1/admin/feature-flags/manage | ✓ `/v1/admin/feature-flags/manage` | ✓ | ✅ WIRED |
 | admin | /admin/gateway-config | — | — | — | — | — | — NO_LOADER |
 | admin | /admin/gateway-routes | — | — | — | — | — | — NO_LOADER |
-| admin | /admin/gateways | — | — | — | — | — | — NO_LOADER |
+| admin | /admin/gateways | getSAGateways | /api/v1/admin/gateways | admin → /v1/admin/gateways | ✗ | ✓ | ❌ MISSING |
 | admin | /admin/integrations | — | — | — | — | — | — NO_LOADER |
-| admin | /admin/invoices | — | — | — | — | — | — NO_LOADER |
-| admin | /admin/metering | — | — | — | — | — | — NO_LOADER |
-| admin | /admin/onboarding | — | — | — | — | — | — NO_LOADER |
-| admin | /admin/operators | — | — | — | — | — | — NO_LOADER |
+| admin | /admin/invoices | getSAInvoices | /api/v1/billing/invoices | billing → /v1/billing/invoices | ✓ `/v1/billing/invoices` | ✓ | ✅ WIRED |
+| admin | /admin/metering | getSAMetering | /api/v1/billing/metering | billing → /v1/billing/metering | ✗ | ✓ | ❌ MISSING |
+| admin | /admin/onboarding | getSAOnboarding | /api/v1/admin/onboarding | admin → /v1/admin/onboarding | ✗ | ✓ | ❌ MISSING |
+| admin | /admin/operators | getSAOperators | /api/v1/admin/operators | admin → /v1/admin/operators | ✗ | ✓ | ❌ MISSING |
 | admin | /admin/org | getAdminOrgUnits | /api/v1/admin/org-hierarchy | admin → /v1/admin/org-hierarchy | ✓ `/v1/admin/org-hierarchy` | ✓ | ✅ WIRED |
 | admin | /admin | — | — | — | — | — | — NO_LOADER |
 | admin | /admin/role-features | getAdminRolesList | /api/v1/admin/roles | admin → /v1/admin/roles | ✓ `/v1/admin/roles` | ✓ | ✅ WIRED |
 | admin | /admin/role-features | getRoleFeatureGrants | /api/v1/policy/role-features | policy-v1 → /v1/policy/role-features | ✓ `/v1/policy/role-features` | ✓ | ✅ WIRED |
 | admin | /admin/roles | getAdminRolesList | /api/v1/admin/roles | admin → /v1/admin/roles | ✓ `/v1/admin/roles` | ✓ | ✅ WIRED |
 | admin | /admin/roles | getAdminPermissionsList | /api/v1/admin/permissions | admin → /v1/admin/permissions | ✓ `/v1/admin/permissions` | ✓ | ✅ WIRED |
-| admin | /admin/sa-dashboard | — | — | — | — | — | — NO_LOADER |
+| admin | /admin/sa-dashboard | getSADashboard | /api/v1/admin/sa-dashboard | admin → /v1/admin/sa-dashboard | ✗ | ✓ | ❌ MISSING |
 | admin | /admin/scheduled-jobs | getAdminScheduledJobs | /api/v1/admin/scheduled-jobs | admin → /v1/admin/scheduled-jobs | ✓ `/v1/admin/scheduled-jobs` | ✓ | ✅ WIRED |
 | admin | /admin/settings | — | — | — | — | — | — NO_LOADER |
-| admin | /admin/tech-admin | — | — | — | — | — | — NO_LOADER |
+| admin | /admin/tech-admin | getSATechAdmin | /api/v1/admin/health/services | admin → /v1/admin/health/services | ✓ `/v1/admin/health/:service` | ✓ | ✅ WIRED |
 | admin | /admin/tenant-provision | — | — | — | — | — | — NO_LOADER |
 | admin | /admin/tenants/[id] | getAdminTenantDetail | /api/v1/admin/tenants/:param | admin → /v1/admin/tenants/:param | ✓ `/v1/admin/tenants/:id` | ✓ | ✅ WIRED |
 | admin | /admin/tenants/[id] | getAdminTenantModules | /api/v1/admin/tenants/:param/config | admin → /v1/admin/tenants/:param/config | ✓ `/v1/admin/tenants/:id/config` | ✓ | ✅ WIRED |
-| admin | /admin/tenants | — | — | — | — | — | — NO_LOADER |
+| admin | /admin/tenants | getSATenants | /api/v1/tenants | tenant → /v1/tenants/ | ✓ `/v1/tenants` | ✓ | ⚠️ MISMATCH |
 | admin | /admin/users | getAdminUsersList | /api/v1/admin/users | admin-users → /identity/users/ | ✓ `/identity/users` | ✓ | ✅ WIRED |
 | admin | /admin/users | getAdminRolesList | /api/v1/admin/roles | admin → /v1/admin/roles | ✓ `/v1/admin/roles` | ✓ | ✅ WIRED |
 | ai | /ai/agents | — | — | — | — | — | — NO_LOADER |
@@ -62,7 +62,7 @@ Generated: 2026-09-13T10:29:19.367Z
 | analytics | /analytics/ml-insights/tickets | — | — | — | — | — | — NO_LOADER |
 | analytics | /analytics | — | — | — | — | — | — NO_LOADER |
 | analytics | /analytics/queries | — | — | — | — | — | — NO_LOADER |
-| approvals | /approvals | — | — | — | — | — | — NO_LOADER |
+| approvals | /approvals | getMyApprovals | /api/v1/workflow/tasks | workflow → /v1/workflow/tasks | ✓ `/v1/workflow/tasks` | ✓ | ✅ WIRED |
 | assets | /assets/[id] | getAssetById | /api/v1/asset/assets/:param | asset → /v1/assets/assets/:param | ✓ `/v1/assets/assets/:id` | ✓ | ✅ WIRED |
 | assets | /assets/bulk-import | — | — | — | — | — | — NO_LOADER |
 | assets | /assets/condemnation | — | — | — | — | — | — NO_LOADER |
@@ -104,7 +104,7 @@ Generated: 2026-09-13T10:29:19.367Z
 | billing | /billing/list | getBillingPlans | /api/v1/billing/plans | billing → /v1/billing/plans | ✓ `/v1/billing/plans` | ✓ | ✅ WIRED |
 | billing | /billing | — | — | — | — | — | — NO_LOADER |
 | billing | /billing/payments | getBillingPayments | /api/v1/billing/payments | billing → /v1/billing/payments | ✓ `/v1/billing/payments` | ✓ | ✅ WIRED |
-| billing | /billing/plans/[id] | — | — | — | — | — | — NO_LOADER |
+| billing | /billing/plans/[id] | getBillingPlanById | /api/v1/billing/plans/:param | billing → /v1/billing/plans/:param | ✓ `/v1/billing/plans/:id` | ✓ | ✅ WIRED |
 | billing | /billing/plans/new | — | — | — | — | — | — NO_LOADER |
 | billing | /billing/plans | getBillingPlans | /api/v1/billing/plans | billing → /v1/billing/plans | ✓ `/v1/billing/plans` | ✓ | ✅ WIRED |
 | billing | /billing/subscriptions | getBillingSubscriptions | /api/v1/billing/subscriptions | billing → /v1/billing/subscriptions | ✓ `/v1/billing/subscriptions` | ✓ | ✅ WIRED |
@@ -147,7 +147,10 @@ Generated: 2026-09-13T10:29:19.367Z
 | citizen | /citizen/services/[serviceKey] | — | — | — | — | — | — NO_LOADER |
 | citizen | /citizen/services/[serviceKey]/track/[trackingNo] | — | — | — | — | — | — NO_LOADER |
 | citizen | /citizen/surveys | getCitizenSurveys | /api/v1/citizen/surveys | citizen → /v1/citizen/surveys | ✓ `/v1/citizen/surveys` | ✓ | ✅ WIRED |
-| contracts | /contracts/[id] | — | — | — | — | — | — NO_LOADER |
+| contracts | /contracts/[id] | getContractById | /api/v1/contract/contracts/:param | contract → /v1/contract/contracts/:param | ✓ `/v1/contract/contracts/:id` | ✓ | ✅ WIRED |
+| contracts | /contracts/[id] | getContractMilestones | /api/v1/contract/contracts/:param/milestones | contract → /v1/contract/contracts/:param/milestones | ✓ `/v1/contract/contracts/:id/milestones` | ✓ | ✅ WIRED |
+| contracts | /contracts/[id] | getContractBonds | /api/v1/contract/contracts/:param/bonds | contract → /v1/contract/contracts/:param/bonds | ✓ `/v1/contract/contracts/:id/bonds` | ✓ | ✅ WIRED |
+| contracts | /contracts/[id] | getContractObligations | /api/v1/contract/obligations | contract → /v1/contract/obligations | ✓ `/v1/contract/obligations` | ✓ | ✅ WIRED |
 | contracts | /contracts/list | getContracts | /api/v1/contract/contracts | contract → /v1/contract/contracts | ✓ `/v1/contract/contracts` | ✓ | ✅ WIRED |
 | contracts | /contracts/new | — | — | — | — | — | — NO_LOADER |
 | contracts | /contracts | — | — | — | — | — | — NO_LOADER |
@@ -189,7 +192,7 @@ Generated: 2026-09-13T10:29:19.367Z
 | crm | /crm/forecast | getPipelines | /api/v1/crm/pipelines | crm → /v1/crm/pipelines | ✓ `/v1/crm/pipelines` | ✓ | ✅ WIRED |
 | crm | /crm/grievances/[id] | — | — | — | — | — | — NO_LOADER |
 | crm | /crm/grievances/new | — | — | — | — | — | — NO_LOADER |
-| crm | /crm/grievances | — | — | — | — | — | — NO_LOADER |
+| crm | /crm/grievances | getCrmGrievances | /api/v1/crm/grievances | crm → /v1/crm/grievances | ✓ `/v1/crm/grievances` | ✓ | ✅ WIRED |
 | crm | /crm/health/[accountId] | getAccountHealthBreakdown | /api/v1/recommendations/health/:param/breakdown | recommendations → /v1/recommendations/health/:param/breakdown | ✓ `/v1/recommendations/health/:accountId/breakdown` | ✓ | ✅ WIRED |
 | crm | /crm/health | getAccountHealthWatchlist | /api/v1/recommendations/health/at-risk | recommendations → /v1/recommendations/health/at-risk | ✓ `/v1/recommendations/health/:accountId` | ✓ | ✅ WIRED |
 | crm | /crm/health | getCrmAccounts | /api/v1/crm/accounts | crm → /v1/crm/accounts | ✓ `/v1/crm/accounts` | ✓ | ✅ WIRED |
@@ -212,10 +215,10 @@ Generated: 2026-09-13T10:29:19.367Z
 | crm | /crm/quotations | — | — | — | — | — | — NO_LOADER |
 | crm | /crm/rti/[id] | — | — | — | — | — | — NO_LOADER |
 | crm | /crm/rti/new | — | — | — | — | — | — NO_LOADER |
-| crm | /crm/rti | — | — | — | — | — | — NO_LOADER |
+| crm | /crm/rti | getCrmRti | /api/v1/crm/rti | crm → /v1/crm/rti | ✓ `/v1/crm/rti` | ✓ | ✅ WIRED |
 | crm | /crm/service-requests/[id] | — | — | — | — | — | — NO_LOADER |
 | crm | /crm/service-requests/new | — | — | — | — | — | — NO_LOADER |
-| crm | /crm/service-requests | — | — | — | — | — | — NO_LOADER |
+| crm | /crm/service-requests | getCrmServiceRequests | /api/v1/crm/service-requests | crm → /v1/crm/service-requests | ✓ `/v1/crm/service-requests` | ✓ | ✅ WIRED |
 | crm | /crm/task-escalation | — | — | — | — | — | — NO_LOADER |
 | crm | /crm/voice-of-customer/feedback | — | — | — | — | — | — NO_LOADER |
 | crm | /crm/voice-of-customer | — | — | — | — | — | — NO_LOADER |
@@ -360,7 +363,7 @@ Generated: 2026-09-13T10:29:19.367Z
 | help | /help/[module] | — | — | — | — | — | — NO_LOADER |
 | help | /help | — | — | — | — | — | — NO_LOADER |
 | helpdesk | /helpdesk/catalogue/[id] | getCatalogueOffering | /api/v1/helpdesk/catalogue/offerings/:param | helpdesk → /v1/helpdesk/catalogue/offerings/:param | ✓ `/v1/helpdesk/catalogue/offerings/:id` | ✓ | ✅ WIRED |
-| helpdesk | /helpdesk/catalogue/breaches | — | — | — | — | — | — NO_LOADER |
+| helpdesk | /helpdesk/catalogue/breaches | getRequestBreachReport | /api/v1/helpdesk/catalogue/requests/breaches | helpdesk → /v1/helpdesk/catalogue/requests/breaches | ✓ `/v1/helpdesk/catalogue/requests/breaches` | ✓ | ✅ WIRED |
 | helpdesk | /helpdesk/catalogue/my-requests | getMyServiceRequests | /api/v1/helpdesk/catalogue/requests | helpdesk → /v1/helpdesk/catalogue/requests | ✓ `/v1/helpdesk/catalogue/requests` | ✓ | ✅ WIRED |
 | helpdesk | /helpdesk/catalogue | getCatalogueOfferings | /api/v1/helpdesk/catalogue/offerings | helpdesk → /v1/helpdesk/catalogue/offerings | ✓ `/v1/helpdesk/catalogue/offerings` | ✓ | ✅ WIRED |
 | helpdesk | /helpdesk/internal/[id] | — | — | — | — | — | — NO_LOADER |
@@ -391,6 +394,8 @@ Generated: 2026-09-13T10:29:19.367Z
 | hr | /hr/contractual | — | — | — | — | — | — NO_LOADER |
 | hr | /hr/dashboard | getHRDashboard | /api/v1/hrms/dashboard | hrms → /v1/hrms/dashboard | ✓ `/v1/hrms/dashboard` | ✓ | ✅ WIRED |
 | hr | /hr/dashboard | getEmployees | /api/v1/hrms/employees | hrms → /v1/hrms/employees | ✓ `/v1/hrms/employees` | ✓ | ✅ WIRED |
+| hr | /hr/dashboard | getDashboardLeaveInbox | /api/v1/hrms/dashboard/pending-leaves | hrms → /v1/hrms/dashboard/pending-leaves | ✓ `/v1/hrms/dashboard/pending-leaves` | ✓ | ✅ WIRED |
+| hr | /hr/dashboard | getMyProfile | /api/v1/hrms/me/profile | hrms → /v1/hrms/me/profile | ✓ `/v1/hrms/me/profile` | ✓ | ✅ WIRED |
 | hr | /hr/departments/new | — | — | — | — | — | — NO_LOADER |
 | hr | /hr/departments | — | — | — | — | — | — NO_LOADER |
 | hr | /hr/deputation | — | — | — | — | — | — NO_LOADER |
@@ -418,6 +423,7 @@ Generated: 2026-09-13T10:29:19.367Z
 | hr | /hr/jd-templates | — | — | — | — | — | — NO_LOADER |
 | hr | /hr/leave/allocate | — | — | — | — | — | — NO_LOADER |
 | hr | /hr/leave/apply | getEmployees | /api/v1/hrms/employees | hrms → /v1/hrms/employees | ✓ `/v1/hrms/employees` | ✓ | ✅ WIRED |
+| hr | /hr/leave/apply | getMyProfile | /api/v1/hrms/me/profile | hrms → /v1/hrms/me/profile | ✓ `/v1/hrms/me/profile` | ✓ | ✅ WIRED |
 | hr | /hr/leave/approvals | — | — | — | — | — | — NO_LOADER |
 | hr | /hr/leave/balance | — | — | — | — | — | — NO_LOADER |
 | hr | /hr/leave/history | — | — | — | — | — | — NO_LOADER |
@@ -579,7 +585,7 @@ Generated: 2026-09-13T10:29:19.367Z
 | legal | /legal/dashboard | getLegalDashboard | /api/v1/legal/dashboard | legal → /v1/legal/dashboard | ✓ `/v1/legal/dashboard` | ✓ | ✅ WIRED |
 | legal | /legal/hearings | getLegalHearings | /api/v1/legal/hearings | legal → /v1/legal/hearings | ✓ `/v1/legal/hearings` | ✓ | ✅ WIRED |
 | legal | /legal/list | getLegalCases | /api/v1/legal/cases | legal → /v1/legal/cases | ✓ `/v1/legal/cases` | ✓ | ✅ WIRED |
-| legal | /legal/opinions/[id] | — | — | — | — | — | — NO_LOADER |
+| legal | /legal/opinions/[id] | getLegalOpinionById | /api/v1/legal/opinions/:param | legal → /v1/legal/opinions/:param | ✓ `/v1/legal/opinions/:id` | ✓ | ✅ WIRED |
 | legal | /legal/opinions/new | — | — | — | — | — | — NO_LOADER |
 | legal | /legal/opinions | getLegalOpinions | /api/v1/legal/opinions | legal → /v1/legal/opinions | ✓ `/v1/legal/opinions` | ✓ | ✅ WIRED |
 | legal | /legal | — | — | — | — | — | — NO_LOADER |

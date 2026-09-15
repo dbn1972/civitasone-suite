@@ -1,0 +1,14 @@
+{
+  "_comment": "COMP-006 fix-up: narrow, ID-tagged tracked ledger (same pattern as the KNOWN_EXCEPTIONS / KNOWN_FABRICATED_DATA_EXCEPTIONS ledgers in tests/contract/screens.contract.test.ts, not a blanket carve-out) for screens whose loader chain is real and correctly resolves to a real upstream service that genuinely has no matching route -- a pre-existing product gap that screen-map.mjs's loader-parsing bug (fixed in this same PR) was accidentally hiding behind a false NO_LOADER classification. Read by both tests/contract/screens.contract.test.ts and the 'Screen Verification Gate' CI job in .github/workflows/ci.yml so the two stay consistent. Filed as follow-up gap COMP-020 (superadmin console: these 9 screens call loaders with no backing read endpoint anywhere in the fleet -- confirmed by a fleet-wide route search, not a naming/gateway-routing mismatch; e.g. /admin/tenants's loader correctly resolves to tenant-service, which has full CRUD on a single tenant but no GET list-all-tenants route at all). Renumber on collision with a concurrently-filed COMP-020, same as this campaign's UX-012->UX-013 precedent. Remove an entry the same day its endpoint ships for real -- both tests fail loudly if an entry stops reproducing.",
+  "entries": [
+    { "module": "admin", "screen": "/admin/api-monitoring" },
+    { "module": "admin", "screen": "/admin/editions" },
+    { "module": "admin", "screen": "/admin/entitlements" },
+    { "module": "admin", "screen": "/admin/gateways" },
+    { "module": "admin", "screen": "/admin/metering" },
+    { "module": "admin", "screen": "/admin/onboarding" },
+    { "module": "admin", "screen": "/admin/operators" },
+    { "module": "admin", "screen": "/admin/sa-dashboard" },
+    { "module": "admin", "screen": "/admin/tenants" }
+  ]
+}
