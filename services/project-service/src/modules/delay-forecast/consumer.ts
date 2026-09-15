@@ -19,13 +19,23 @@
  * Carlo endpoint, falling back to computeTaskRiskScores over the real tasks
  * only when ml-service is genuinely unavailable.
  *
+ * TX-009: the high-risk events used to be published directly via
+ * queue.publish, and markProcessed ran in its own early transaction BEFORE
+ * the ml-service call. That left a dual-write hole: a crash (or even just a
+ * failed queue.publish call) anywhere after markProcessed's early commit
+ * permanently dropped the risk event(s), because a genuine redelivery of the
+ * same message would see markProcessed return false and skip re-evaluation
+ * entirely. Fixed by moving markProcessed to gate a single transaction,
+ * executed AFTER the ml-service call, that also performs the resulting
+ * outbox enqueues (per-task high-risk events + the audit row) -- see the
+ * comment at that transaction below.
+ *
  * Requirements: 10.5, 10.6
  */
 
 import type { Queue } from "@civitasone/queue";
 import { db } from "../../shared/db.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
-import { randomUUID } from "node:crypto";
 import { pino } from "pino";
 import { EVENTS } from "../../topics.js";
 import { predictDelay } from "./adapter.js";
@@ -42,6 +52,15 @@ const AUDIT_TOPIC = "audit.event.record";
 const log = pino({ name: "project-delay-forecast-consumer" });
 const TASK_HIGH_RISK_EVENT = "ml.prediction.task_high_risk";
 
+// System-initiated actor for outbox rows with no human actor (this
+// consumer's own event, not a re-emission of the inbound message). Mirrors
+// the SYSTEM_ACTOR convention used elsewhere in this codebase (e.g.
+// workflow-service's nurture-triggers.ts, report-service's scheduled/cron.ts).
+// outbox.messages.actor_id is a typed uuid NOT NULL column, so the old
+// literal string "system" (which only ever had to satisfy queue.publish's
+// untyped envelope) cannot be reused for enqueue().
+const SYSTEM_ACTOR = "00000000-0000-0000-0000-000000000000";
+
 interface TaskUpdatedPayload {
   taskId: string;
   projectId: string;
@@ -57,9 +76,6 @@ export function registerDelayForecastConsumers(queue: Queue): void {
   queue.subscribe<TaskUpdatedPayload>(
     EVENTS.taskUpdated,
     async (msg) => {
-      const isNew = await db.transaction(async (tx) => markProcessed(tx, msg.messageId));
-      if (!isNew) return;
-
       const { taskId, projectId, tenantId } = msg.payload;
       const startMs = Date.now();
 
@@ -78,7 +94,10 @@ export function registerDelayForecastConsumers(queue: Queue): void {
         // Real Monte Carlo simulation over the real task graph. A genuine
         // ml-service failure (network/timeout/non-2xx/circuit-breaker-open)
         // falls back to the same local risk computation the delay-forecast
-        // route uses — never a silent no-op.
+        // route uses — never a silent no-op. Neither predictDelay nor
+        // computeTaskRiskScores has any side effects of its own, so it's
+        // safe to redo this call on every redelivery until the transaction
+        // below finally commits.
         let taskRisks: TaskRiskOutput[];
         try {
           const mlResponse = await predictDelay(tenantId, projectId, tasks);
@@ -93,26 +112,41 @@ export function registerDelayForecastConsumers(queue: Queue): void {
 
         const highRiskTasks = getHighRiskTasks(taskRisks);
 
-        // Emit high-risk events
-        for (const task of highRiskTasks) {
-          await queue.publish(TASK_HIGH_RISK_EVENT, {
-            messageId: randomUUID(),
-            type: TASK_HIGH_RISK_EVENT,
-            tenantId,
-            actorId: "system",
-            correlationId: msg.correlationId,
-            schemaVersion: "1.0",
-            payload: {
+        // TX-009: markProcessed + the resulting outbox enqueues (per-task
+        // high-risk events + the audit row) now commit ATOMICALLY in ONE
+        // transaction, executed AFTER the ml-service call/local fallback
+        // above -- never held open across that external I/O (same principle
+        // as TX-007: don't hold a DB transaction across slow network calls).
+        // "processed" and "the risk events will be delivered" are therefore
+        // atomic: either both commit together, or neither does and a real
+        // redelivery safely retries the whole thing from scratch.
+        const isNew = await db.transaction(async (tx) => {
+          if (!(await markProcessed(tx, msg.messageId))) return false;
+          for (const task of highRiskTasks) {
+            await enqueue(tx, {
+              topic: TASK_HIGH_RISK_EVENT,
+              eventType: TASK_HIGH_RISK_EVENT,
               tenantId,
-              domain: "tasks",
-              entityId: task.taskId,
-              prediction: task.riskScore,
-              confidence: task.riskScore,
-              factors: task.factors.map((f) => ({ feature: f, contribution: 0.33, direction: "negative" as const })),
-              timestamp: new Date().toISOString(),
+              actorId: SYSTEM_ACTOR,
               correlationId: msg.correlationId,
-            },
-          });
+              payload: {
+                tenantId,
+                domain: "tasks",
+                entityId: task.taskId,
+                prediction: task.riskScore,
+                confidence: task.riskScore,
+                factors: task.factors.map((f) => ({ feature: f, contribution: 0.33, direction: "negative" as const })),
+                timestamp: new Date().toISOString(),
+                correlationId: msg.correlationId,
+              },
+            });
+          }
+          await enqueue(tx, { topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { service: "project-service", action: "forecast", resourceType: "delay_forecast", resourceId: taskId, outcome: "success" } });
+          return true;
+        });
+        if (!isNew) return;
+
+        for (const task of highRiskTasks) {
           log.info(
             { tenantId, projectId, taskId: task.taskId, riskScore: task.riskScore, processingTimeMs: Date.now() - startMs },
             "task high risk event emitted",
@@ -125,10 +159,6 @@ export function registerDelayForecastConsumers(queue: Queue): void {
             "delay risk assessed — no high-risk tasks",
           );
         }
-
-        await db.transaction(async (tx) => {
-          await enqueue(tx, { topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { service: "project-service", action: "forecast", resourceType: "delay_forecast", resourceId: taskId, outcome: "success" } });
-        });
       } catch (err) {
         log.warn(
           { err: (err as Error).message, tenantId, projectId, taskId, processingTimeMs: Date.now() - startMs },
