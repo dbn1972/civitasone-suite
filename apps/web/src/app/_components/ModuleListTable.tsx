@@ -1,6 +1,7 @@
 "use client";
 
 import { Card, EmptyState } from "./ds";
+import { DataSourceBadge } from "./DataSourceBadge";
 import type { ModuleRowSummary } from "@civitasone/types";
 import { useSeededResource } from "@/lib/sync/resource";
 
@@ -15,25 +16,21 @@ export function ModuleListTable({
   rows: ModuleRowSummary[];
   source: "api" | "error";
 }) {
-  const { data, fromCache, offline, cachedAt } = useSeededResource<ModuleRowSummary[]>(
+  const { data, provenance, offline, cachedAt } = useSeededResource<ModuleRowSummary[]>(
     cacheKey,
     rows,
     source,
     (d) => d.length === 0,
   );
 
-  const cacheNote =
-    offline || fromCache
-      ? `Showing saved data${cachedAt ? ` from ${new Date(cachedAt).toLocaleString("en-IN")}` : ""}${offline ? " — you're offline" : ""}.`
-      : null;
-
   return (
     <Card title="Records">
-      {cacheNote ? (
-        <p role="status" aria-live="polite" style={{ fontSize: 12, color: "var(--warn)", margin: "0", padding: "8px 16px 0" }}>
-          {cacheNote}
-        </p>
-      ) : null}
+      {/* UX-012: this badge is the ONLY place that reports data provenance for
+          the rows shown below — it reads the same useSeededResource call as
+          `data`, so it can never disagree with what the table shows
+          (UX-002's pattern; ModuleListPage used to render a second,
+          independent badge from the raw `source` prop — removed). */}
+      <DataSourceBadge provenance={provenance ?? "live"} cachedAt={cachedAt} offline={offline} />
       {data.length === 0 ? (
         <EmptyState icon="📋" title="No records" message="Nothing to show yet for this module." />
       ) : (

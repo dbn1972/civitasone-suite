@@ -1,5 +1,4 @@
 import type { ReactNode } from "react";
-import { DataSourceBadge } from "./DataSourceBadge";
 import { PageHeader } from "./ds";
 import type { ModuleRowSummary } from "@civitasone/types";
 import type { LoaderSource } from "../_data/apiClient";
@@ -21,7 +20,10 @@ export function ModuleListPage({ title, description, rows, source, children }: M
   return (
     <>
       <PageHeader title={title} subtitle={description} />
-      {source === "error" ? <DataSourceBadge source={source} /> : null}
+      {/* UX-012: the data-source badge now lives inside ModuleListTable,
+          driven by the same useSeededResource call that produces its rows —
+          not a second, independent read of `source` here that could
+          disagree with the table's own cache state (UX-002's pattern). */}
       {children}
       <ModuleListTable cacheKey={slugify(title)} rows={rows} source={source === "error" ? "error" : "api"} />
     </>

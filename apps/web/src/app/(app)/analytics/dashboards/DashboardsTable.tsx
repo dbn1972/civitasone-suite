@@ -2,7 +2,7 @@
 
 import type { ReactNode } from "react";
 import { DataTable, StatusPill } from "@/app/_components/ds";
-import { formatIndianDate } from "@/lib/formatters";
+import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
 import { useSeededResource } from "@/lib/sync/resource";
 import type { AnalyticsDashboardRow } from "../_data";
 
@@ -28,24 +28,21 @@ export function DashboardsTable({
   dashboards: AnalyticsDashboardRow[];
   source?: "api" | "error";
 }) {
-  const { data: rows, fromCache, offline, cachedAt } = useSeededResource<AnalyticsDashboardRow[]>(
+  const { data: rows, provenance, offline, cachedAt } = useSeededResource<AnalyticsDashboardRow[]>(
     "analytics.dashboards",
     dashboards,
     source,
     (d) => d.length === 0,
   );
 
-  const cacheNote =
-    offline || fromCache
-      ? `Showing saved data${cachedAt ? ` from ${formatIndianDate(new Date(cachedAt).toISOString())}` : ""}${offline ? " — you're offline" : ""}.`
-      : null;
-
   return (
     <>
-      {/* aria-live so assistive tech announces the offline/cached state change */}
-      <p role="status" aria-live="polite" style={{ fontSize: 12, color: "#92400e", margin: "0 0 8px", minHeight: 16 }}>
-        {cacheNote ?? ""}
-      </p>
+      {/* UX-012: this badge is the ONLY place that reports data provenance
+          for the rows shown below — it reads the same useSeededResource
+          call as `rows`, so it can never disagree with what the table shows
+          (UX-002's pattern; the page used to render a second, independent
+          badge from the raw `source` prop — removed). */}
+      <DataSourceBadge provenance={provenance ?? "live"} cachedAt={cachedAt} offline={offline} />
       <DataTable<AnalyticsDashboardRow>
         columns={columns}
         rows={rows}
