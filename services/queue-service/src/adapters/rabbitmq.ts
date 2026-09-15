@@ -36,6 +36,7 @@ import {
   computeBackoffSeconds,
   DEFAULT_SQS_BACKOFF_BASE_SECONDS,
   DEFAULT_SQS_BACKOFF_MAX_SECONDS,
+  deriveTraceparent,
 } from "../bus.js";
 import { randomUUID } from "node:crypto";
 
@@ -112,7 +113,7 @@ export class RabbitMqQueue implements Queue {
       persistent: true,
       messageId: msg.messageId,
       correlationId: msg.correlationId,
-      headers: { type: msg.type, tenantId: msg.tenantId },
+      headers: { type: msg.type, tenantId: msg.tenantId, traceparent: msg.traceparent },
     });
 
     return msg.messageId;
@@ -184,7 +185,7 @@ export class RabbitMqQueue implements Queue {
         if (!parsed.ok) {
           incrementConsumerError(this.service, topic);
           captureError(new Error(`invalid_envelope: ${parsed.error}`), {
-            service: this.service, topic, messageId: msg.messageId,
+            service: this.service, topic, messageId: msg.messageId, traceparent: msg.traceparent,
           });
           ch.nack(sqsMsg, false, false); // → DLX
           incrementDlqMessage(topic, "invalid_envelope");
@@ -200,14 +201,14 @@ export class RabbitMqQueue implements Queue {
           } catch (err) {
             if (err instanceof NonRetryableError) {
               incrementConsumerError(this.service, topic);
-              captureError(err, { service: this.service, topic, messageId: msg.messageId });
+              captureError(err, { service: this.service, topic, messageId: msg.messageId, traceparent: msg.traceparent });
               ch.nack(sqsMsg, false, false); // → DLX immediately
               incrementDlqMessage(topic, "non_retryable_error");
               return;
             }
             allHandled = false;
             incrementConsumerError(this.service, topic);
-            captureError(err, { service: this.service, topic, messageId: msg.messageId, deliveryCount });
+            captureError(err, { service: this.service, topic, messageId: msg.messageId, traceparent: msg.traceparent, deliveryCount });
             this.logError(topic, msg, deliveryCount, err);
           }
         }
@@ -388,6 +389,9 @@ export class RabbitMqQueue implements Queue {
       ...(input.causationId ? { causationId: input.causationId } : {}),
       timestamp: input.timestamp ?? new Date().toISOString(),
       schemaVersion: input.schemaVersion,
+      // PERF-008: same derivation as the SQS/memory bus (bus.ts) — shared via
+      // deriveTraceparent() rather than a second, divergent copy of the logic.
+      traceparent: deriveTraceparent(input.correlationId, input.traceparent),
       payload: input.payload,
     };
   }
@@ -401,6 +405,7 @@ export class RabbitMqQueue implements Queue {
       topic,
       messageId: msg?.messageId,
       correlationId: msg?.correlationId,
+      traceparent: msg?.traceparent,
       deliveryCount,
       err: err instanceof Error ? err.stack : String(err),
     }));

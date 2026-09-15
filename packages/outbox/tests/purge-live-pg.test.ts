@@ -23,7 +23,10 @@
  *   CREATE TABLE _outbox.messages (id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
  *     topic varchar(128) NOT NULL, event_type varchar(128) NOT NULL,
  *     tenant_id uuid NOT NULL, actor_id uuid NOT NULL,
- *     correlation_id varchar(64) NOT NULL, payload jsonb NOT NULL,
+ *     correlation_id varchar(64) NOT NULL,
+ *     -- PERF-008: schema_version has a DEFAULT, so it's optional at INSERT time too.
+ *     schema_version varchar(16) NOT NULL DEFAULT '1.0',
+ *     payload jsonb NOT NULL,
  *     created_at timestamptz NOT NULL DEFAULT now(), published_at timestamptz);
  *   CREATE TABLE _inbox.processed (message_id uuid PRIMARY KEY,
  *     processed_at timestamptz NOT NULL DEFAULT now());

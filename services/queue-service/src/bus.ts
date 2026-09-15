@@ -5,7 +5,7 @@
  * QUEUE_DRIVER=memory  — in-process (tests / local)
  * QUEUE_DRIVER=sqs     — AWS SQS / LocalStack
  */
-import { randomUUID } from "node:crypto";
+import { randomUUID, randomBytes, createHash } from "node:crypto";
 import {
   SQSClient,
   SendMessageCommand,
@@ -34,12 +34,22 @@ export type CommandEnvelope<T = unknown> = {
   causationId?: string;
   timestamp: string;
   schemaVersion: string;
+  /**
+   * PERF-008: W3C Trace Context header (https://www.w3.org/TR/trace-context/),
+   * `version-traceid-parentid-flags`, e.g.
+   * "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01". Always populated
+   * by envelope() below — never blank, so every consumer can rely on it being
+   * present. See deriveTraceparent()'s own doc comment for exactly what this
+   * does and does not give you in this codebase today.
+   */
+  traceparent: string;
   payload: T;
 };
 
-export type PublishInput<T> = Omit<CommandEnvelope<T>, "messageId" | "timestamp"> & {
+export type PublishInput<T> = Omit<CommandEnvelope<T>, "messageId" | "timestamp" | "traceparent"> & {
   messageId?: string;
   timestamp?: string;
+  traceparent?: string;
 };
 
 export type Handler<T = unknown> = (msg: CommandEnvelope<T>) => Promise<void>;
@@ -106,6 +116,52 @@ export function isFifoTopic(topic: string): boolean {
   return topic.endsWith(".fifo");
 }
 
+const TRACEPARENT_VERSION = "00";
+const TRACEPARENT_FLAGS_SAMPLED = "01";
+const TRACEPARENT_RE = /^[0-9a-f]{2}-[0-9a-f]{32}-[0-9a-f]{16}-[0-9a-f]{2}$/;
+
+/**
+ * PERF-008: resolve the traceparent to stamp on an outgoing envelope.
+ *
+ * Honest scope (checked against this repo, 2026-09-16): `@opentelemetry/api`
+ * is not a dependency of any package or service here — it appears in
+ * pnpm-lock.yaml only as Next.js's/drizzle-orm's own transitive peer
+ * resolution, is not installed under node_modules, and nothing imports it.
+ * packages/observability/src/tracing.ts's OTel bootstrap is real but
+ * fail-open — every service runs with it fully disabled today (no
+ * OTEL_EXPORTER_OTLP_ENDPOINT configured anywhere, and the peer packages it
+ * dynamically imports aren't installed). So there is no live span context
+ * anywhere in this fleet right now to extract a REAL traceparent from — that
+ * would require adding @opentelemetry/api as a genuine dependency and wiring
+ * up a real collector, a materially larger, separate infra decision than
+ * this gap. Building a fake integration against an SDK that isn't installed
+ * would be untestable dead code, not a real fix.
+ *
+ * What this does instead: derives a deterministic, W3C-Trace-Context-FORMAT-
+ * VALID traceparent from the envelope's own `correlationId` (required on
+ * every envelope already) — same correlationId always yields the same
+ * trace-id root, so every event in one business flow shares a trace, join-
+ * able across services purely from data already on the envelope, with a
+ * fresh span-id per publish call (each publish is its own hop). This is
+ * genuinely useful for cross-service log/error correlation TODAY (see the
+ * captureError call sites below and in packages/outbox), and the header
+ * format is real, so a later OTel collector can consume it unchanged if this
+ * fleet ever turns on live export — without requiring one now.
+ *
+ * An explicitly-supplied, already-valid traceparent (e.g. one a consumer is
+ * forwarding onward while handling an upstream message, to keep the SAME
+ * trace across a causal chain) is passed through unchanged rather than
+ * re-derived. Threading an incoming traceparent through outbox's enqueue()
+ * automatically (the way causationId could) is a natural follow-up, not done
+ * here — see the outbox `enqueue()` doc comment.
+ */
+export function deriveTraceparent(correlationId: string, explicit?: string): string {
+  if (explicit && TRACEPARENT_RE.test(explicit)) return explicit;
+  const traceId = createHash("sha256").update(correlationId).digest("hex").slice(0, 32);
+  const spanId = randomBytes(8).toString("hex");
+  return `${TRACEPARENT_VERSION}-${traceId}-${spanId}-${TRACEPARENT_FLAGS_SAMPLED}`;
+}
+
 function envelope<T>(input: PublishInput<T>): CommandEnvelope<T> {
   return {
     messageId: input.messageId ?? randomUUID(),
@@ -116,6 +172,7 @@ function envelope<T>(input: PublishInput<T>): CommandEnvelope<T> {
     ...(input.causationId ? { causationId: input.causationId } : {}),
     timestamp: input.timestamp ?? new Date().toISOString(),
     schemaVersion: input.schemaVersion,
+    traceparent: deriveTraceparent(input.correlationId, input.traceparent),
     payload: input.payload,
   };
 }
@@ -632,6 +689,10 @@ export class SqsQueue implements Queue {
       messageId:     { DataType: "String" as const, StringValue: msg.messageId },
       correlationId: { DataType: "String" as const, StringValue: msg.correlationId },
       type:          { DataType: "String" as const, StringValue: msg.type },
+      // PERF-008: also as its own MessageAttribute (not just in the JSON
+      // body) — the conventional place an SQS-aware trace collector looks,
+      // and lets a subscriber filter/inspect it without deserializing body.
+      traceparent:   { DataType: "String" as const, StringValue: msg.traceparent },
     };
     // 05-T4: FIFO ordering/dedup preserved per send.
     const fifoFields = isFifoTopic(topic)
@@ -771,6 +832,7 @@ export class SqsQueue implements Queue {
               topic,
               messageId: msg.messageId,
               correlationId: msg.correlationId,
+              traceparent: msg.traceparent,
             });
             await this.routeToDlq(topic, sqsMsg.Body ?? "", "invalid_envelope");
             await this.deleteSqsMessage(url, sqsMsg.ReceiptHandle!);
@@ -791,7 +853,7 @@ export class SqsQueue implements Queue {
               if (err instanceof NonRetryableError) {
                 // Permanent domain error — dead-letter immediately without retry.
                 incrementConsumerError(this.service, topic);
-                captureError(err, { service: this.service, topic, messageId: msg.messageId, correlationId: msg.correlationId, receiveCount });
+                captureError(err, { service: this.service, topic, messageId: msg.messageId, correlationId: msg.correlationId, traceparent: msg.traceparent, receiveCount });
                 this.logHandlerError(topic, msg, receiveCount, err);
                 await this.routeToDlq(topic, sqsMsg.Body ?? "", "non_retryable_error");
                 await this.deleteSqsMessage(url, sqsMsg.ReceiptHandle!);
@@ -800,7 +862,7 @@ export class SqsQueue implements Queue {
               }
               allHandled = false;
               incrementConsumerError(this.service, topic);
-              captureError(err, { service: this.service, topic, messageId: msg.messageId, correlationId: msg.correlationId, receiveCount });
+              captureError(err, { service: this.service, topic, messageId: msg.messageId, correlationId: msg.correlationId, traceparent: msg.traceparent, receiveCount });
               this.logHandlerError(topic, msg, receiveCount, err);
             }
           }
@@ -864,6 +926,7 @@ export class SqsQueue implements Queue {
         topic,
         messageId: msg?.messageId,
         correlationId: msg?.correlationId,
+        traceparent: msg?.traceparent,
         receiveCount,
         err: stack,
       }),

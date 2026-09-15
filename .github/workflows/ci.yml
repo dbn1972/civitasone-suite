@@ -619,6 +619,21 @@ jobs:
         continue-on-error: true
         run: node scripts/ci/authz-tenant-scanner.mjs
 
+      # PERF-008: queue.publish() call sites must pass an explicit messageId
+      # (a retry with no explicit id gets a fresh random one from the bus's
+      # own auto-generation, defeating consumer-side idempotent dedup).
+      # Fixture tests first, then the guard against the real tree (ratchet:
+      # fails on NEW violations and on stale baseline entries, see
+      # scripts/ci/queue-publish-messageid-baseline.json).
+      - name: Queue publish messageId guard unit tests (PERF-008)
+        id: queue-publish-messageid-guard-tests
+        continue-on-error: true
+        run: pnpm exec vitest run tests/architecture/queue-publish-messageid-guard.test.ts
+      - name: Queue publish messageId guard (explicit messageId required, PERF-008)
+        id: queue-publish-messageid-guard
+        continue-on-error: true
+        run: node scripts/ci/queue-publish-messageid-guard.mjs
+
       # REL-039: this job's actual gate. Every guard above always reports
       # its own real outcome now instead of being skipped, but continue-on-
       # error also forces every one of those steps' `conclusion` to
@@ -660,6 +675,8 @@ jobs:
           R_FLAKY_SKIP_GUARD: ${{ steps.flaky-skip-guard.outcome }}
           R_AUTHZ_TENANT_SCANNER_TESTS: ${{ steps.authz-tenant-scanner-tests.outcome }}
           R_AUTHZ_TENANT_SCANNER: ${{ steps.authz-tenant-scanner.outcome }}
+          R_QUEUE_PUBLISH_MESSAGEID_TESTS: ${{ steps.queue-publish-messageid-guard-tests.outcome }}
+          R_QUEUE_PUBLISH_MESSAGEID: ${{ steps.queue-publish-messageid-guard.outcome }}
         run: |
           fail=0
           check() {
@@ -701,6 +718,8 @@ jobs:
           check "Flaky-skip guard" "$R_FLAKY_SKIP_GUARD"
           check "Authz-tenant scanner unit tests" "$R_AUTHZ_TENANT_SCANNER_TESTS"
           check "Authz-tenant scanner" "$R_AUTHZ_TENANT_SCANNER"
+          check "Queue publish messageId guard unit tests" "$R_QUEUE_PUBLISH_MESSAGEID_TESTS"
+          check "Queue publish messageId guard" "$R_QUEUE_PUBLISH_MESSAGEID"
           if [ "$fail" = "1" ]; then
             echo "One or more architecture guard steps failed -- see the individual step logs above (each now reports its own real result, never 'skipped')."
             exit 1
