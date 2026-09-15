@@ -20,6 +20,7 @@ import { and, asc, eq, isNull, inArray, sql } from "drizzle-orm";
 import type { PostgresJsQueryResultHKT } from "drizzle-orm/postgres-js";
 import type { Queue } from "@civitasone/queue";
 import { incrementOutboxRelayFailure, captureError } from "@civitasone/observability";
+import { getTopicSchemaVersion } from "./schema-versions.js";
 
 /**
  * Minimal Drizzle surface accepted by both the full database instance and any
@@ -40,6 +41,13 @@ export const outboxMessages = outbox.table("messages", {
   tenantId:      uuid("tenant_id").notNull(),
   actorId:       uuid("actor_id").notNull(),
   correlationId: varchar("correlation_id", { length: 64 }).notNull(),
+  // PERF-008: captured at enqueue() time from the per-topic registry
+  // (schema-versions.ts), NOT re-derived at relay/publish time — the relay can
+  // run long after enqueue, and a topic's current version may have moved on in
+  // between. An event must carry the version that was actually true when the
+  // business transaction that produced it committed, not whatever the topic
+  // happens to be on when the relay gets around to it.
+  schemaVersion: varchar("schema_version", { length: 16 }).notNull().default("1.0"),
   payload:       jsonb("payload").$type<Record<string, unknown>>().notNull(),
   createdAt:     timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   publishedAt:   timestamp("published_at", { withTimezone: true }),
@@ -52,12 +60,34 @@ export const processed = inbox.table("processed", {
 
 export const outboxSchema = { outboxMessages, processed };
 
-/** Enqueue an event into the outbox — MUST be called inside the same tx as the business write. */
+/**
+ * Enqueue an event into the outbox — MUST be called inside the same tx as the
+ * business write.
+ *
+ * PERF-008: `schemaVersion` is optional. Callers that already know their
+ * topic's exact version may pass it explicitly; everyone else gets the
+ * topic's current version from the registry (schema-versions.ts) resolved
+ * HERE, at enqueue time, and persisted on the row — not a single hardcoded
+ * literal shared by every topic. Backward compatible: every one of this
+ * repo's existing call sites omits schemaVersion and keeps working unchanged.
+ */
 export async function enqueue(
   tx: DrizzleTx,
-  e: { topic: string; eventType: string; tenantId: string; actorId: string; correlationId: string; payload: Record<string, unknown> }
+  e: {
+    topic: string;
+    eventType: string;
+    tenantId: string;
+    actorId: string;
+    correlationId: string;
+    payload: Record<string, unknown>;
+    schemaVersion?: string;
+  }
 ): Promise<void> {
-  await tx.insert(outboxMessages).values(e);
+  const { schemaVersion, ...rest } = e;
+  await tx.insert(outboxMessages).values({
+    ...rest,
+    schemaVersion: schemaVersion ?? getTopicSchemaVersion(e.topic),
+  });
 }
 
 /**
@@ -138,7 +168,13 @@ export async function relayOnce(
             // idempotency).
             messageId: row.id,
             type: row.eventType, tenantId: row.tenantId, actorId: row.actorId,
-            correlationId: row.correlationId, schemaVersion: "1.0", payload: row.payload,
+            // PERF-008: the version stamped on the row at enqueue() time (per
+            // the topic's registry entry in schema-versions.ts), not a single
+            // hardcoded "1.0" shared by every topic regardless of what it
+            // actually is. Deliberately NOT re-resolved from the registry
+            // here — see enqueue()'s doc comment on why enqueue-time is the
+            // correct point to fix the version, not relay time.
+            correlationId: row.correlationId, schemaVersion: row.schemaVersion, payload: row.payload,
           });
           return row.id;
         } catch (err) {

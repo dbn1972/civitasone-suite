@@ -55,9 +55,10 @@ interface Row {
   actorId: string;
   correlationId: string;
   payload: Record<string, unknown>;
+  schemaVersion: string;
 }
 
-function makeRows(n: number): Row[] {
+function makeRows(n: number, schemaVersion = "1.0"): Row[] {
   return Array.from({ length: n }, (_, i) => ({
     id: `id-${i}`,
     topic: `topic.${i % 3}`,
@@ -66,6 +67,7 @@ function makeRows(n: number): Row[] {
     actorId: `actor-${i}`,
     correlationId: `corr-${i}`,
     payload: { i },
+    schemaVersion,
   }));
 }
 
@@ -221,10 +223,37 @@ describe("relayOnce bounded-concurrency publishing", () => {
         tenantId: row.tenantId,
         actorId: row.actorId,
         correlationId: row.correlationId,
-        schemaVersion: "1.0",
+        // PERF-008: the version stamped on the ROW at enqueue time, not a
+        // shared literal — see the next test for proof this is genuinely
+        // per-row/per-topic and not just "still happens to read 1.0".
+        schemaVersion: row.schemaVersion,
         payload: row.payload,
       });
     }
+  });
+
+  it("PERF-008: publishes each row's OWN schemaVersion, not a fleet-wide shared literal", async () => {
+    // Two rows on two different topics, deliberately given DIFFERENT
+    // schemaVersion values (as if enqueue() resolved them from two different
+    // registry entries, or one topic's version had since moved on). Proves
+    // relayOnce reads row.schemaVersion rather than a hardcoded constant —
+    // the exact regression the old `schemaVersion: "1.0"` literal at the
+    // relay's publish() call site could never catch, because every row
+    // happened to already be "1.0".
+    const rows: Row[] = [
+      { id: "id-a", topic: "topic.a", eventType: "a.happened", tenantId: "t-a", actorId: "actor-a", correlationId: "corr-a", payload: { v: "a" }, schemaVersion: "1.0" },
+      { id: "id-b", topic: "topic.b", eventType: "b.happened", tenantId: "t-b", actorId: "actor-b", correlationId: "corr-b", payload: { v: "b" }, schemaVersion: "2.1" },
+    ];
+    const { db } = makeDb(rows);
+    const { queue, publish } = makeQueue(1);
+
+    await relayOnce(db, queue, 100, "test");
+
+    expect(publish).toHaveBeenCalledTimes(2);
+    const callA = publish.mock.calls.find((c) => c[1].messageId === "id-a")!;
+    const callB = publish.mock.calls.find((c) => c[1].messageId === "id-b")!;
+    expect(callA[1].schemaVersion).toBe("1.0");
+    expect(callB[1].schemaVersion).toBe("2.1");
   });
 
   it("does not touch the DB update when there are no unsent rows", async () => {
