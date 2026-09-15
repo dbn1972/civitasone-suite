@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { DataTable, ConfirmDialog } from "../../../../_components/ds";
+import { DataTable, ConfirmDialog, Button } from "../../../../_components/ds";
 import type { AttendanceRegularisation } from "@civitasone/types";
 import { useSeededResource } from "@/lib/sync/resource";
 import { formatIndianDate } from "@/lib/formatters";
@@ -73,12 +73,12 @@ export function RegularisationTable({ regs, source = "api" }: { regs: Attendance
         render: (r: Row) =>
           r.status === "pending" ? (
             <div style={{ display: "flex", gap: 8 }}>
-              <button type="button" className="btn primary sm" style={{ minHeight: 44 }} onClick={() => { setDialogError(undefined); setPending({ row: r, decision: "approve" }); }}>
+              <Button variant="primary" size="sm" style={{ minHeight: 44 }} onClick={() => { setDialogError(undefined); setPending({ row: r, decision: "approve" }); }}>
                 {t("approveBtn")}
-              </button>
-              <button type="button" className="btn ghost sm" style={{ minHeight: 44 }} onClick={() => { setDialogError(undefined); setPending({ row: r, decision: "reject" }); }}>
+              </Button>
+              <Button variant="ghost" size="sm" style={{ minHeight: 44 }} onClick={() => { setDialogError(undefined); setPending({ row: r, decision: "reject" }); }}>
                 {t("rejectBtn")}
-              </button>
+              </Button>
             </div>
           ) : (
             <span style={{ color: "var(--mut)", fontSize: 12 }}>—</span>
