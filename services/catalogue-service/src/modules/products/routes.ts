@@ -71,7 +71,11 @@ export async function productRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, CATALOGUE_ROLES);
     const all = await repo.listByTenant(ctx.tenantId);
-    return reply.send({ data: buildHierarchyTree(all) });
+    // PERF-006: repo.listByTenant now caps at repo.TREE_ROW_CAP instead of
+    // returning an unbounded result set -- surface whether that cap was hit
+    // so a tenant whose catalogue actually exceeds it gets a visible signal
+    // instead of a silently-incomplete tree.
+    return reply.send({ data: buildHierarchyTree(all), meta: { truncated: all.length >= repo.TREE_ROW_CAP } });
   });
 
   app.get("/v1/catalogue/products/:id", async (req, reply) => {
