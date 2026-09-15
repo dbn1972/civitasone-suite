@@ -9,6 +9,14 @@
  * the same elevated tier period-close's hard-close "reopen" already uses for
  * an admin-only bypass-with-reason of another GL-core control).
  *
+ * DOM-024 UPDATE: POST /v1/finance/journals now only drafts a
+ * pending_approval journal — it no longer posts in one step. Every scenario
+ * below that needs an actual posted outcome (or a posting-time rejection)
+ * now also calls PATCH .../:id/approve as a genuinely distinct checker
+ * (maker-checker regression coverage for the base gate itself lives in
+ * tests/dom-024-gl-journal-maker-checker.test.ts; this file stays focused on
+ * DOM-007's budget-override role gate, just carried through the extra step).
+ *
  * Real Postgres integration test (no mocks), same shape as
  * tests/distribution-routes.test.ts.
  */
@@ -36,6 +44,11 @@ const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
 const TENANT = randomUUID();
 const ACTOR  = randomUUID();
 const ADMIN  = randomUUID();
+// DOM-024: a genuinely distinct checker for the approve step — ADMIN is the
+// MAKER in the override test below (only an elevated role may set
+// budgetOverride on create), so approving that same journal needs a
+// different finance_admin/super_admin identity, not ADMIN again.
+const CHECKER_ADMIN = randomUUID();
 const EXPENSE_HEAD = randomUUID();
 const BANK_HEAD    = randomUUID();
 const FY = "2027-28";
@@ -43,8 +56,9 @@ const FY = "2027-28";
 function token(roles: string[], sub: string) {
   return signToken({ sub, tid: TENANT, roles, sid: "sess-dom007" }, SECRET);
 }
-const officer = () => ({ authorization: `Bearer ${token(["finance_officer"], ACTOR)}` });
-const admin   = () => ({ authorization: `Bearer ${token(["finance_admin"], ADMIN)}` });
+const officer      = () => ({ authorization: `Bearer ${token(["finance_officer"], ACTOR)}` });
+const admin        = () => ({ authorization: `Bearer ${token(["finance_admin"], ADMIN)}` });
+const checkerAdmin = () => ({ authorization: `Bearer ${token(["finance_admin"], CHECKER_ADMIN)}` });
 
 async function drain() {
   await (queue as MemoryQueue).drain();
@@ -120,7 +134,7 @@ describe("DOM-007 — budget-override role gate", () => {
     } finally { await app.close(); }
   });
 
-  it("a finance_officer's plain over-budget post (no override) is accepted at 202 but rejected by the async consumer — nothing lands", async () => {
+  it("a finance_officer's plain over-budget post (no override): drafts fine, but a distinct checker's approval is rejected by the budget check — nothing posts", async () => {
     const app = await buildApp();
     try {
       const res = await app.inject({
@@ -128,9 +142,27 @@ describe("DOM-007 — budget-override role gate", () => {
         payload: journalPayload(),
       });
       expect(res.statusCode).toBe(202);
+      const journalId = res.json().id as string;
       await drain();
-      const journals = await scoped(TENANT, (tx) => tx.select().from(financeJournals).where(eq(financeJournals.tenantId, TENANT)));
-      expect(journals.length).toBe(0);
+
+      // DOM-024: creating a draft never runs the budget check — it only runs
+      // at actual-posting time, i.e. on approval. The draft lands fine.
+      let journal = (await scoped(TENANT, (tx) => tx.select().from(financeJournals).where(eq(financeJournals.id, journalId))))[0];
+      expect(journal?.status).toBe("pending_approval");
+
+      // A genuinely distinct checker (ADMIN — a different, elevated actor)
+      // approves it; the approval itself is accepted (identity + role checks
+      // pass), but the async posting step it triggers hits the SAME
+      // BUDGET_EXCEEDED rejection tests/gl-budget-check.test.ts covers —
+      // nothing ever reaches "posted" and the budget is untouched.
+      const approveRes = await app.inject({
+        method: "PATCH", url: `/v1/finance/journals/${journalId}/approve`, headers: admin(),
+      });
+      expect(approveRes.statusCode).toBe(202);
+      await drain();
+
+      journal = (await scoped(TENANT, (tx) => tx.select().from(financeJournals).where(eq(financeJournals.id, journalId))))[0];
+      expect(journal?.status).toBe("pending_approval"); // unchanged — never posted
       const budget = await scoped(TENANT, (tx) => tx.select().from(financeBudgets)
         .where(and(eq(financeBudgets.tenantId, TENANT), eq(financeBudgets.headId, EXPENSE_HEAD))));
       expect(budget[0]?.utilisedMinor).toBe(0n);
@@ -145,16 +177,33 @@ describe("DOM-007 — budget-override role gate", () => {
         payload: journalPayload({ budgetOverride: true, overrideReason: "emergency flood-relief sanction" }),
       });
       expect(res.statusCode).toBe(202);
-      // commands.postJournal returns {id, status, correlationId} — the
+      // commands.createJournal returns {id, status, correlationId} — the
       // optional nested `data` envelope (acceptedResponseSchema) is only
       // populated by routes migrated under fix/admin-f3-response-envelope;
       // gl/routes.ts predates that, so the id is top-level.
       const journalId = res.json().id as string;
       await drain();
 
+      // DOM-024: ADMIN (the maker) drafted this with budgetOverride — that
+      // request is now persisted on the pending row and only takes effect
+      // once approved. ADMIN cannot approve their own draft (maker-checker);
+      // CHECKER_ADMIN is a genuinely distinct elevated actor.
+      let journal = (await scoped(TENANT, (tx) => tx.select().from(financeJournals).where(eq(financeJournals.id, journalId))))[0];
+      expect(journal?.status).toBe("pending_approval");
+      expect(journal?.budgetOverride).toBe(true);
+
+      const approveRes = await app.inject({
+        method: "PATCH", url: `/v1/finance/journals/${journalId}/approve`, headers: checkerAdmin(),
+      });
+      expect(approveRes.statusCode).toBe(202);
+      await drain();
+
       const journals = await scoped(TENANT, (tx) => tx.select().from(financeJournals).where(eq(financeJournals.id, journalId)));
       expect(journals.length).toBe(1);
       expect(journals[0].status).toBe("posted");
+      // created_by stays the original maker (ADMIN) — the immutability
+      // trigger enforces this; only the checker's approval flips the status.
+      expect(journals[0].createdBy).toBe(ADMIN);
 
       const budget = await scoped(TENANT, (tx) => tx.select().from(financeBudgets)
         .where(and(eq(financeBudgets.tenantId, TENANT), eq(financeBudgets.headId, EXPENSE_HEAD))));

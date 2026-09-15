@@ -1,5 +1,5 @@
 import {
-  pgSchema, uuid, text, integer, bigint, char, varchar, timestamp, date, jsonb,
+  pgSchema, uuid, text, integer, bigint, char, varchar, timestamp, date, jsonb, boolean,
 } from "drizzle-orm/pg-core";
 
 export const glSchema = pgSchema("gl");
@@ -25,7 +25,19 @@ export const financeJournals = glSchema.table("finance_journals", {
   type:        varchar("type", { length: 32 }).notNull(),
   postingDate: date("posting_date").notNull(),
   lines:       jsonb("lines").$type<JournalLine[]>().notNull().default([]),
+  // DOM-024: "pending_approval" added — a manual journal entry sits here
+  // (created_by = the maker) until a distinct checker approves it via
+  // PATCH /v1/finance/journals/:id/approve. Automated/system-generated
+  // journals (GL-spine, depreciation, asset_disposal, payroll settlement)
+  // still go straight from insert to "posted" in one step.
   status:      varchar("status", { length: 24 }).notNull().default("draft"),
+  // DOM-024: carries a manual journal's budget-override request (DOM-007)
+  // from draft through to posting — previously a transient, message-
+  // payload-only flag, now persisted so the checker's approval finalizes
+  // exactly what the maker requested. Always false/null for automated
+  // journals (they never set budgetOverride).
+  budgetOverride: boolean("budget_override").notNull().default(false),
+  overrideReason: text("override_reason"),
   // ERP org structure references (0028)
   legalEntityId:  uuid("legal_entity_id"),
   costCenterId:   uuid("cost_center_id"),
