@@ -14,9 +14,44 @@ import { eq, and, desc, inArray, count } from "drizzle-orm";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { db, scopedRead} from "../../shared/db.js";
 import { hrmsFraudAlerts, hrmsEmployeeRiskScores, hrmsRecommendations } from "./schema.js";
+import type { EmployeeRow } from "../employee/schema.js";
 import * as engine from "./detection-engine.js";
 
 const ADMIN_ROLES = ["hr_admin", "super_admin", "audit_admin"];
+
+// PERF-006: /v1/hrms/ai/scan used to fetch the WHOLE tenant's employees in
+// one unbounded `db.select()...where(tenantId)` before running
+// duplicate-bank-account / ghost-employee detection over them (gap report:
+// ai-fraud/routes.ts:45). Both checks are genuinely tenant-wide by design --
+// a partial view would silently miss real duplicates/ghosts -- so this can't
+// become a client-facing paginated list like this fix's other sites.
+// Instead it fetches the same full result in SCAN_BATCH_SIZE-row pages, so
+// no single query is unbounded, while still covering every employee.
+// orderBy(id) keeps the paging stable across calls (the original single-shot
+// select never needed one).
+const SCAN_BATCH_SIZE = 500;
+
+export async function fetchAllEmployeesForScan(tenantId: string): Promise<EmployeeRow[]> {
+  const { hrmsEmployees } = await import("../employee/schema.js");
+  const all: EmployeeRow[] = [];
+  let offset = 0;
+  for (;;) {
+    const page = await scopedRead((tx) => tx.select().from(hrmsEmployees)
+      .where(eq(hrmsEmployees.tenantId, tenantId))
+      .orderBy(hrmsEmployees.id)
+      .limit(SCAN_BATCH_SIZE)
+      .offset(offset)) as EmployeeRow[];
+    all.push(...page);
+    if (page.length < SCAN_BATCH_SIZE) break;
+    offset += SCAN_BATCH_SIZE;
+  }
+  return all;
+}
+
+const riskScoresQuery = z.object({
+  limit: z.coerce.number().int().positive().max(200).default(50),
+  offset: z.coerce.number().int().nonnegative().default(0),
+});
 
 export async function aiFraudRoutes(app: FastifyInstance): Promise<void> {
   // ── List fraud alerts ──
@@ -41,8 +76,7 @@ export async function aiFraudRoutes(app: FastifyInstance): Promise<void> {
     const alerts: engine.FraudAlert[] = [];
 
     // Run ghost employee detection
-    const { hrmsEmployees } = await import("../employee/schema.js");
-    const employees = await scopedRead((tx) => tx.select().from(hrmsEmployees).where(eq(hrmsEmployees.tenantId, ctx.tenantId)));
+    const employees = await fetchAllEmployeesForScan(ctx.tenantId);
 
     // Check duplicate bank accounts
     const bankData = employees.filter(e => e.bankAccountNo).map(e => ({
@@ -89,8 +123,23 @@ export async function aiFraudRoutes(app: FastifyInstance): Promise<void> {
   app.get("/v1/hrms/ai/risk-scores", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ADMIN_ROLES);
-    const rows = await scopedRead((tx) => tx.select().from(hrmsEmployeeRiskScores).where(eq(hrmsEmployeeRiskScores.tenantId, ctx.tenantId)));
-    return reply.send({ data: rows });
+    // PERF-006: this was `db.select()...where(tenantId)` with no limit/offset
+    // at all -- one row per employee, so unbounded tenant-wide growth. Added
+    // pagination (no existing query schema here to extend, unlike the alerts
+    // route above which already had one).
+    const q = riskScoresQuery.parse(req.query);
+    const rows = await scopedRead((tx) => tx.select().from(hrmsEmployeeRiskScores)
+      .where(eq(hrmsEmployeeRiskScores.tenantId, ctx.tenantId))
+      .orderBy(hrmsEmployeeRiskScores.employeeId)
+      .limit(q.limit).offset(q.offset));
+    return reply.send({
+      data: rows,
+      pagination: {
+        hasMore: rows.length === q.limit,
+        pageSize: q.limit,
+        ...(rows.length > 0 ? { cursor: String(q.offset + rows.length) } : {}),
+      },
+    });
   });
 
   // ── Smart recommendations ──

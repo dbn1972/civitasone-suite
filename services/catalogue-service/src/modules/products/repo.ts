@@ -42,9 +42,23 @@ export async function listProducts(filters: ListFilters): Promise<{ rows: Produc
   return { rows, total: countResult[0]?.count ?? 0 };
 }
 
-export async function listByTenant(tenantId: string): Promise<ProductRow[]> {
+// PERF-006: feeds GET /v1/catalogue/products/tree, which builds a 4-level
+// parent/child hierarchy (routes.ts's buildHierarchyTree) from the flat
+// result -- unlike this file's other list function above, a tenant's
+// products can't be split across pages here without either orphaning
+// children whose parent landed on a different page, or breaking a
+// multi-page client into re-stitching the tree itself. So instead of real
+// pagination, this bounds the query with a generous hard cap: high enough
+// that no real catalogue should ever hit it, but no longer a truly unbounded
+// `db.select()...where(tenantId)` (gap report: repo.ts:47) that could return
+// every row for a tenant regardless of size. routes.ts surfaces
+// `meta.truncated` so a tenant that *does* hit the cap is visible rather
+// than silently rendering an incomplete tree.
+export const TREE_ROW_CAP = 5000;
+
+export async function listByTenant(tenantId: string, limit: number = TREE_ROW_CAP): Promise<ProductRow[]> {
   return scopedRead((tx) =>
-    tx.select().from(products).where(eq(products.tenantId, tenantId)).orderBy(products.name),
+    tx.select().from(products).where(eq(products.tenantId, tenantId)).orderBy(products.name).limit(limit),
   );
 }
 
