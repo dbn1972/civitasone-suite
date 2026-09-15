@@ -10,6 +10,7 @@ vi.mock("../../../../../_components/ds", () => ({
   FileUpload: ({ onUploaded }: { onUploaded: (key: string) => void }) => (
     <button type="button" onClick={() => onUploaded(FAKE_KEY)}>Simulate completed upload</button>
   ),
+  PageHeader: ({ title }: { title: string }) => <h1>{title}</h1>,
 }));
 
 import TenderDocumentsPage from "./page";
