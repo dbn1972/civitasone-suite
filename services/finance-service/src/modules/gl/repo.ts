@@ -1,4 +1,4 @@
-import { eq, and, gte, lte, sql, asc } from "drizzle-orm";
+import { eq, and, ne, gte, lte, sql, asc } from "drizzle-orm";
 import { db, scopedRead } from "../../shared/db.js";
 import { financeJournals, financeLedger, financeJournalLines, type JournalRow, type JournalInsert, type LedgerInsert, type JournalLineInsert } from "./schema.js";
 import { financeHeads } from "../budget/schema.js";
@@ -35,6 +35,22 @@ export async function markJournalReversed(tx: Writer, id: string, reversedByUpda
     .where(eq(financeJournals.id, id));
 }
 
+/**
+ * DOM-024 — finalize a manual maker-checker draft: pending_approval -> posted,
+ * in place (UPDATE, not a second insert — the row already exists from the
+ * finance.gl.create step). created_by (the maker) is left untouched here and
+ * is additionally enforced immutable by the gl.block_journal_mutation trigger
+ * (migration 0014 + 0073); only status/voucher_no/updated_by/updated_at
+ * change. voucher_no moves from its AUTO placeholder to the real
+ * gapless-allocated number — the trigger permits voucher_no to change ONLY
+ * on this exact status edge.
+ */
+export async function markPendingJournalPosted(tx: Writer, id: string, fields: { voucherNo: string; updatedBy: string }): Promise<void> {
+  await tx.update(financeJournals)
+    .set({ status: "posted", voucherNo: fields.voucherNo, updatedBy: fields.updatedBy, updatedAt: new Date() })
+    .where(eq(financeJournals.id, id));
+}
+
 /** Resolve a headId that may be a UUID or a 4-digit account code. Returns the UUID or null. */
 export async function resolveHeadId(tenantId: string, headIdOrCode: string): Promise<string | null> {
   const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(headIdOrCode);
@@ -66,9 +82,17 @@ export async function getTrialBalance(tenantId: string) {
     .groupBy(financeLedger.headId));
 }
 
+/**
+ * DOM-024: excludes pending_approval drafts — a manual journal awaiting a
+ * checker's approval has not really happened yet (no ledger lines, no
+ * budget/period effect) and must not appear in the GL entries list
+ * alongside real postings. Reversed journals stay visible (they WERE
+ * posted); a future non-"posted"/"reversed" status is excluded by default
+ * rather than requiring this allow-list to be extended for it.
+ */
 export async function listJournalsByTenant(tenantId: string, limit: number, offset = 0): Promise<JournalRow[]> {
   return scopedRead((tx) => tx.select().from(financeJournals)
-    .where(eq(financeJournals.tenantId, tenantId))
+    .where(and(eq(financeJournals.tenantId, tenantId), ne(financeJournals.status, "pending_approval")))
     .orderBy(financeJournals.postingDate)
     .limit(limit)
     .offset(offset));

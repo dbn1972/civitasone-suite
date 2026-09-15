@@ -13,6 +13,12 @@ const READER_ROLES  = [...FINANCE_ROLES, "audit_officer"];
 // tier as period-close's hard-close "reopen" — the other GL-core control
 // this codebase already lets an admin bypass, audited, with a reason.
 const BUDGET_OVERRIDE_ROLES = ["finance_admin", "super_admin"];
+// DOM-024 (maker-checker) — same elevated tier sanctions' R11 approve uses
+// (budget/routes.ts). A plain finance_officer cannot approve/post a journal
+// at all, even their own; the identity check (approver ≠ creator) is
+// enforced separately, in the consumer transaction, for the case where the
+// same elevated officer tries to approve their own draft.
+const JOURNAL_APPROVE_ROLES = ["finance_admin", "super_admin"];
 
 export async function glRoutes(app: FastifyInstance): Promise<void> {
   // NOTE (flagged for explicit review): this was FINANCE_ROLES (includes
@@ -38,7 +44,22 @@ export async function glRoutes(app: FastifyInstance): Promise<void> {
     if (body.budgetOverride) {
       requireRole(ctx, BUDGET_OVERRIDE_ROLES);
     }
-    return sendAccepted(reply, acceptedResponseSchema, await commands.postJournal(ctx, body));
+    // DOM-024: this now creates a pending_approval draft, not a posted
+    // journal — see gl/commands.ts createJournal() / gl/consumer.ts
+    // finance.gl.create.
+    return sendAccepted(reply, acceptedResponseSchema, await commands.createJournal(ctx, body));
+  });
+
+  // DOM-024 R11 (maker-checker) — a checker approves/posts a pending manual
+  // journal entry. Restricted to finance_admin/super_admin; the SoD guard
+  // (approver ≠ creator) is enforced in the consumer transaction
+  // (gl/consumer.ts finance.gl.approve, assertDistinctMakerChecker). Reuses
+  // reverseParam — both routes take only a UUID :id.
+  app.patch("/v1/finance/journals/:id/approve", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, JOURNAL_APPROVE_ROLES);
+    const { id } = reverseParam.parse(req.params);
+    return sendAccepted(reply, acceptedResponseSchema, await commands.approveJournal(ctx, id));
   });
 
   app.post("/v1/finance/journals/:id/reverse", async (req, reply) => {

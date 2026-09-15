@@ -12,6 +12,15 @@ export const COMMANDS = {
   // gl
   journalPost:          "finance.gl.post",
   journalReverse:       "finance.gl.reverse",
+  // DOM-024: maker-checker for MANUAL journal entries only. A manual entry
+  // (POST /v1/finance/journals) now publishes journalCreate (lands as
+  // pending_approval, not posted); a distinct checker's
+  // PATCH /v1/finance/journals/:id/approve publishes journalApprove, which
+  // performs the actual posting. Automated/system-generated journals
+  // (gl/spine.ts, depreciation, asset_disposal, payroll settlement) are
+  // unaffected and still publish/consume journalPost directly.
+  journalCreate:        "finance.gl.create",
+  journalApprove:       "finance.gl.approve",
   // treasury
   challanCreate:        "finance.challan.create",
   depositCreate:        "finance.deposit.create",

@@ -7,14 +7,41 @@ import type { PostJournalBody } from "./validators.js";
 
 export type Accepted = { id: string; status: string; correlationId: string };
 
-export async function postJournal(ctx: RequestContext, body: PostJournalBody): Promise<Accepted> {
+/**
+ * DOM-024 R11 — maker-checker gate for MANUAL journal entries. This no
+ * longer posts: it records the request as `pending_approval` (created_by =
+ * this maker) via finance.gl.create — see gl/consumer.ts. A distinct
+ * checker must call approveJournal() (PATCH .../:id/approve) to actually
+ * post it. Automated/system-generated journals (gl/spine.ts) are unaffected
+ * — they still publish finance.gl.post directly and post in one step.
+ */
+export async function createJournal(ctx: RequestContext, body: PostJournalBody): Promise<Accepted> {
   assertJournalBalances(body.lines);
   // EVT-4: stable id from the client idempotency key → double-submit dedupes.
   const id = idempotentId(ctx);
-  await queue.publish(COMMANDS.journalPost, {
-    messageId: id, type: COMMANDS.journalPost,
+  await queue.publish(COMMANDS.journalCreate, {
+    messageId: id, type: COMMANDS.journalCreate,
     tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
     payload: { id, tenantId: ctx.tenantId, ...body },
+  });
+  return { id, status: "accepted", correlationId: ctx.correlationId };
+}
+
+/**
+ * DOM-024 R11 — maker-checker approval of a manual journal entry by a
+ * checker (an officer other than the drafter). The SoD check (approver ≠
+ * maker) is enforced in the consumer inside the write transaction — see
+ * gl/consumer.ts's finance.gl.approve handler (assertDistinctMakerChecker,
+ * the same payments/domain.js function journalReverse already uses). On
+ * approval the journal becomes `posted`: double-entry ledger lines, the
+ * budget check, and period-close gating all run at THIS point, not at
+ * draft-creation time.
+ */
+export async function approveJournal(ctx: RequestContext, id: string): Promise<Accepted> {
+  await queue.publish(COMMANDS.journalApprove, {
+    type: COMMANDS.journalApprove,
+    tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
+    payload: { id, tenantId: ctx.tenantId },
   });
   return { id, status: "accepted", correlationId: ctx.correlationId };
 }

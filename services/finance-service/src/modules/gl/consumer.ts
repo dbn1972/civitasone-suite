@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { Queue, CommandEnvelope } from "@civitasone/queue";
+import { NonRetryableError } from "@civitasone/queue";
 import { db } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
@@ -114,8 +115,16 @@ async function postJournal(
     throw new Error(`PERIOD_SOFT_CLOSED: only adjustment/closing journals allowed in soft-closed period ${period}`);
   }
   // Idempotency: a journal id is deterministic for GL-spine postings (keyed off
-  // the source doc). If it already exists, this is a redelivery — skip silently
-  // so bills/payments/receipts never double-post.
+  // the source doc). If it already exists and is already posted/reversed, this
+  // is a redelivery — skip silently so bills/payments/receipts never double-post.
+  //
+  // DOM-024: a manual maker-checker draft (finance.gl.create, see
+  // registerGlConsumers below) pre-inserts this exact journal.id as
+  // `pending_approval`. That is NOT a redelivery — it is the one legitimate
+  // case where an existing row must still fall through everything below and
+  // get posted (see the `existing` branch at the persistence step near the
+  // end of this function). Only a row that is already `posted`/`reversed`
+  // short-circuits here.
   //
   // DOM-007 fixup: the budget-check block below MUST run after this
   // short-circuit, not before it. A redelivered command (same journal.id,
@@ -139,11 +148,16 @@ async function postJournal(
   // leaving a hole in what is supposed to be a gapless sequence. Voucher
   // allocation now happens AFTER this idempotency check, so a message this
   // short-circuit ends never touches the counter at all.
-  if (await repo.findJournalByIdTx(tx, journal.id)) return;
+  const existing = await repo.findJournalByIdTx(tx, journal.id);
+  if (existing && existing.status !== "pending_approval") return;
   // Gapless voucher numbering: if the caller did not supply a voucher number
-  // (or asked for AUTO), allocate a strictly-sequential one under a row lock.
+  // (or asked for AUTO — including DOM-024's `DRAFT-<id>` placeholder, which
+  // finance.gl.create writes in place of a literal "AUTO" specifically so two
+  // concurrently-pending manual drafts for the same tenant don't collide on
+  // finance_journals' UNIQUE(tenant_id, voucher_no) before either is
+  // approved), allocate a strictly-sequential one under a row lock.
   let voucherNo = journal.voucherNo;
-  if (!voucherNo || voucherNo.trim() === "" || voucherNo.toUpperCase() === "AUTO") {
+  if (!voucherNo || voucherNo.trim() === "" || voucherNo.toUpperCase() === "AUTO" || voucherNo.startsWith("DRAFT-")) {
     const fy = fyFromDate(journal.postingDate);
     const series = (journal.type || "JV").slice(0, 8).toUpperCase();
     const allocated = await nextVoucherNo(
@@ -231,16 +245,28 @@ async function postJournal(
       }
     }
   }
-  await repo.insertJournal(tx, {
-    id: journal.id, tenantId: journal.tenantId, voucherNo,
-    type: journal.type, postingDate: journal.postingDate, lines: journal.lines,
-    status: "posted", createdBy: msg.actorId, updatedBy: msg.actorId,
-    ...(journal.reversesId ? { reversesId: journal.reversesId } : {}),
+  if (existing) {
+    // DOM-024: finalizing a manual maker-checker draft — UPDATE the existing
+    // pending_approval row in place instead of a second INSERT (its id
+    // already exists). created_by (the maker) is left untouched, which the
+    // gl.block_journal_mutation trigger additionally enforces as immutable;
+    // only status/voucher_no/updated_by/updated_at change. msg.actorId here
+    // is the CHECKER (registerGlConsumers's finance.gl.approve handler
+    // already asserted checker !== creator before calling this function).
+    await repo.markPendingJournalPosted(tx, journal.id, { voucherNo, updatedBy: msg.actorId });
+  } else {
+    await repo.insertJournal(tx, {
+      id: journal.id, tenantId: journal.tenantId, voucherNo,
+      type: journal.type, postingDate: journal.postingDate, lines: journal.lines,
+      status: "posted", createdBy: msg.actorId, updatedBy: msg.actorId,
+      budgetOverride: journal.budgetOverride ?? false, overrideReason: journal.overrideReason ?? null,
+      ...(journal.reversesId ? { reversesId: journal.reversesId } : {}),
       ...(journal.legalEntityId ? { legalEntityId: journal.legalEntityId } : {}),
       ...(journal.costCenterId ? { costCenterId: journal.costCenterId } : {}),
       ...(journal.profitCenterId ? { profitCenterId: journal.profitCenterId } : {}),
       ...(journal.operatingUnitId ? { operatingUnitId: journal.operatingUnitId } : {}),
-  });
+    });
+  }
   for (const line of journal.lines) {
     // P5: resolve raw account codes -> head UUIDs so the depreciation / disposal
     // / manual-journal paths post instead of dead-lettering on the uuid column.
@@ -361,6 +387,94 @@ export function registerGlConsumers(queue: Queue): void {
       await postJournal(tx, msg, p);
     });
     await cache.invalidate(cache.makeKey(msg.tenantId, "gl_trial_balance", msg.tenantId));
+  });
+
+  // DOM-024 R11 (maker-checker) — a MANUAL journal entry (POST
+  // /v1/finance/journals, gl/commands.ts createJournal()) lands here as
+  // `pending_approval`, NOT posted: no ledger lines, no budget/period
+  // effect, no voucher number allocated yet (all of that only happens at
+  // actual posting time — see finance.gl.approve below, and postJournal()'s
+  // `existing` branch). created_by = this maker. Automated/system-generated
+  // journals never publish this topic — they still call enqueueSpineJournal
+  // (gl/spine.ts) straight to finance.gl.post above, unaffected.
+  queue.subscribe(COMMANDS.journalCreate, async (msg) => {
+    const p = msg.payload as StandardJournal;
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+      // Structural check repeated here (also re-checked by postJournal() at
+      // actual posting time): cheap, pure, and guards against a stored draft
+      // being tampered with between create and approve.
+      assertJournalBalances(p.lines);
+      // finance_journals has UNIQUE(tenant_id, voucher_no). The real gapless
+      // number is only allocated at actual-posting time (approval) — see
+      // postJournal()'s voucher-numbering block — so a still-pending draft
+      // cannot store the literal "AUTO" sentinel verbatim: a SECOND pending
+      // draft for the same tenant (the common case — most manual entries
+      // don't set a custom voucher number) would collide on this exact
+      // constraint before either was ever approved. `DRAFT-<id>` is unique
+      // per row (journal.id is the primary key) and is itself recognised as
+      // "needs allocation" by postJournal(), same as "AUTO".
+      const rawVoucherNo = p.voucherNo;
+      const needsAllocation = !rawVoucherNo || rawVoucherNo.trim() === "" || rawVoucherNo.toUpperCase() === "AUTO";
+      const draftVoucherNo = needsAllocation ? `DRAFT-${p.id}` : rawVoucherNo;
+      await repo.insertJournal(tx, {
+        id: p.id, tenantId: p.tenantId, voucherNo: draftVoucherNo,
+        type: p.type, postingDate: p.postingDate, lines: p.lines,
+        status: "pending_approval", createdBy: msg.actorId, updatedBy: msg.actorId,
+        budgetOverride: p.budgetOverride ?? false, overrideReason: p.overrideReason ?? null,
+        ...(p.legalEntityId ? { legalEntityId: p.legalEntityId } : {}),
+        ...(p.costCenterId ? { costCenterId: p.costCenterId } : {}),
+        ...(p.profitCenterId ? { profitCenterId: p.profitCenterId } : {}),
+        ...(p.operatingUnitId ? { operatingUnitId: p.operatingUnitId } : {}),
+      });
+      await enqueue(tx, {
+        topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC,
+        tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+        payload: { service: "finance", action: "create_journal_draft", resourceType: "journal", resourceId: p.id, outcome: "success" },
+      });
+    });
+    await cache.invalidateResource(msg.tenantId, "journals");
+  });
+
+  // DOM-024 R11 (maker-checker) — a checker (an officer other than the
+  // maker; role-gated to finance_admin/super_admin in gl/routes.ts) approves
+  // a pending manual journal entry, which actually posts it: this is the
+  // ONLY place assertDistinctMakerChecker guards the base manual-posting
+  // action (journalReverse already guards reversal the same way, lower in
+  // this file). postJournal() detects the pre-existing pending_approval row
+  // and UPDATEs it to posted in place instead of inserting again.
+  queue.subscribe(COMMANDS.journalApprove, async (msg) => {
+    const p = msg.payload as { id: string; tenantId: string };
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+      const existing = await repo.findJournalByIdTx(tx, p.id);
+      // H2-style: IDOR / not-found — throw to roll back markProcessed and
+      // trigger retry/DLQ (mirrors budget/consumer.ts sanctionApprove).
+      if (!existing || existing.tenantId !== p.tenantId) {
+        throw new NonRetryableError(`[finance/gl] IDOR or not-found: id=${p.id} tenant=${p.tenantId}`);
+      }
+      if (existing.status === "posted") return; // true idempotent redelivery
+      if (existing.status !== "pending_approval") {
+        throw new NonRetryableError(`[finance/gl] INVALID_JOURNAL_STATE: id=${p.id} status=${existing.status}`);
+      }
+      // R11 SoD: the approving officer (checker) must differ from the
+      // officer who drafted it (maker). Same-officer approval is exactly
+      // the unattended-posting gap DOM-024 closes.
+      assertDistinctMakerChecker(existing.createdBy, msg.actorId);
+      const lines = (existing.lines ?? []) as JournalLine[];
+      await postJournal(tx, msg, {
+        id: existing.id, tenantId: existing.tenantId, voucherNo: existing.voucherNo,
+        type: existing.type, postingDate: existing.postingDate, lines,
+        budgetOverride: existing.budgetOverride,
+        ...(existing.overrideReason ? { overrideReason: existing.overrideReason } : {}),
+        ...(existing.legalEntityId ? { legalEntityId: existing.legalEntityId } : {}),
+        ...(existing.costCenterId ? { costCenterId: existing.costCenterId } : {}),
+        ...(existing.profitCenterId ? { profitCenterId: existing.profitCenterId } : {}),
+        ...(existing.operatingUnitId ? { operatingUnitId: existing.operatingUnitId } : {}),
+      });
+    });
+    await cache.invalidate(cache.makeKey(msg.tenantId, "gl_trial_balance", msg.tenantId));
+    await cache.invalidateResource(msg.tenantId, "journals");
   });
 
   /**
