@@ -1,4 +1,3 @@
-import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { PageHeader, StatCard } from "../../../_components/ds";
 import { getLegalHearings } from "../../../_data/loaders";
 import { HearingsTable } from "./HearingsTable";
@@ -29,7 +28,10 @@ export default async function LegalHearingsPage() {
         <StatCard icon="✍️" iconBg="#fef3f2" label="Prep Pending" value={prepPending} />
         <StatCard icon="👨‍⚖️" iconBg="#eff6ff" label="Courts" value={counsels} />
       </div>
-      {source === "error" && <DataSourceBadge source={source} />}
+      {/* UX-012: the data-source badge now lives inside HearingsTable, driven
+          by the same useSeededResource call that produces its rows — not a
+          second, independent read of `source` here that could disagree with
+          the table's own cache state (UX-002's pattern). */}
       <HearingsTable items={items} source={source} />
     </div>
   );

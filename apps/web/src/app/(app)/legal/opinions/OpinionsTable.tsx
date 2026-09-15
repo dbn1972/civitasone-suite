@@ -2,6 +2,7 @@
 
 import { useMemo, useState, type ReactNode } from "react";
 import { DataTable, Segmented, StatusPill } from "../../../_components/ds";
+import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { useSeededResource } from "@/lib/sync/resource";
 
 type Opinion = {
@@ -29,7 +30,7 @@ function opinionStatusPill(status: string): ReactNode {
 }
 
 export function OpinionsTable({ items, source = "api" }: { items: Opinion[]; source?: "api" | "error" }) {
-  const { data: rows, fromCache, offline, cachedAt } = useSeededResource<Opinion[]>(
+  const { data: rows, provenance, offline, cachedAt } = useSeededResource<Opinion[]>(
     "legal.opinions",
     items,
     source,
@@ -43,22 +44,18 @@ export function OpinionsTable({ items, source = "api" }: { items: Opinion[]; sou
     return rows;
   }, [rows, filter]);
 
-  const cacheNote =
-    offline || fromCache
-      ? `Showing saved data${cachedAt ? ` from ${new Date(cachedAt).toLocaleString("en-IN")}` : ""}${offline ? " — you're offline" : ""}.`
-      : null;
-
   return (
     <div className="card">
       <div className="card-h">
         <h3>Opinion repository</h3>
         <Segmented options={[...FILTERS]} value={filter} onChange={setFilter} />
       </div>
-      {cacheNote ? (
-        <p role="status" aria-live="polite" style={{ fontSize: 12, color: "#92400e", margin: "0", padding: "8px 16px 0" }}>
-          {cacheNote}
-        </p>
-      ) : null}
+      {/* UX-012: this badge is the ONLY place that reports data provenance for
+          the rows shown below — it reads the same useSeededResource call as
+          `rows`, so it can never disagree with what the table shows
+          (UX-002's pattern; the page used to render a second, independent
+          badge from the raw `source` prop — removed). */}
+      <DataSourceBadge provenance={provenance ?? "live"} cachedAt={cachedAt} offline={offline} />
       <DataTable<Opinion>
         columns={[
           { key: "opinionNo", label: "Opinion", render: (r) => <span className="mono">{r.opinionNo}</span> },

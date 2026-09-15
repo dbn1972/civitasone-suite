@@ -1,5 +1,4 @@
 import Link from "next/link";
-import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { PageHeader, StatCard } from "../../../_components/ds";
 import { getLegalCases } from "../../../_data/loaders";
 import { LegalCasesTable } from "./LegalCasesTable";
@@ -30,7 +29,10 @@ export default async function LegalCasesListPage() {
         <StatCard icon="✅" iconBg="#ecfdf3" label="Disposed (FY)" value={disposed} />
         <StatCard icon="⚠️" iconBg="#fef3f2" label="Adverse Risk" value={adverseRisk} />
       </div>
-      {source === "error" && <DataSourceBadge source={source} />}
+      {/* UX-012: the data-source badge now lives inside LegalCasesTable,
+          driven by the same useSeededResource call that produces its rows —
+          not a second, independent read of `source` here that could
+          disagree with the table's own cache state (UX-002's pattern). */}
       <LegalCasesTable items={items} source={source} />
     </div>
   );

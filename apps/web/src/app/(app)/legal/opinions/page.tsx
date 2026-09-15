@@ -1,5 +1,4 @@
 import Link from "next/link";
-import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { PlaceholderButton } from "../../../_components/PlaceholderButton";
 import { PageHeader, StatCard } from "../../../_components/ds";
 import { getLegalOpinions } from "../../../_data/loaders";
@@ -32,7 +31,10 @@ export default async function LegalOpinionsPage() {
         <StatCard icon="⏱" iconBg="#eff6ff" label="Avg TAT" value="6.2 d" delta="-1d" up />
         <StatCard icon="🔖" iconBg="#ecfdf3" label="Precedents Tagged" value={issued} />
       </div>
-      {source === "error" && <DataSourceBadge source={source} />}
+      {/* UX-012: the data-source badge now lives inside OpinionsTable, driven
+          by the same useSeededResource call that produces its rows — not a
+          second, independent read of `source` here that could disagree with
+          the table's own cache state (UX-002's pattern). */}
       <OpinionsTable items={items} source={source} />
     </div>
   );
