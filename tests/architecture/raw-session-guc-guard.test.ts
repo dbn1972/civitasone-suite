@@ -210,31 +210,57 @@ await sql.unsafe(\`SET app.tenant_id TO '\${T}'\`);
     expect(violations[0].snippet).toContain("SET app.tenant_id");
   });
 
-  // ── PERF-013 review follow-up (round 4): round 3's fix above (the
-  // quote/$/colon lookahead) closed issue A's false positive but has its
-  // own residual gap — a BARE, unquoted value after TO starts with none of
-  // those three characters, so it was silently missed. All three of the
-  // following correctly triggered a violation before round 3's fix (i.e.
-  // against bb64f216's parent), confirming a genuine regression rather than
-  // a pre-existing gap. Fixed by ADDING a second value-start signal (a
-  // bareword immediately closed by a statement terminator — see
-  // RAW_SET_RE's comment above for the full rationale) alongside the
-  // quote/$/colon lookahead, not replacing it — the false-positive
-  // regression tests above/below must (and do) still pass unchanged. ──
-  it("reports raw `SET app.tenant_id TO DEFAULT;` — a bare keyword value — as a violation", () => {
+  // ── PERF-013 review rounds 4 → 5: the FULL bareword-TO gap, now unified
+  // and permanently accepted (not fixed). Round 4 found that round 3's
+  // quote/$/colon lookahead above has a residual gap — a BARE, unquoted
+  // value after TO (`TO DEFAULT` / `TO 5` / `TO my_tenant_var`) starts with
+  // none of those three characters, so it was silently missed (confirmed a
+  // genuine regression against bb64f216's parent, not a pre-existing gap).
+  // Round 4 tried to fix it by adding a second lookahead alternative: a
+  // bareword immediately followed by a statement terminator (`;`, newline,
+  // or EOF).
+  //
+  // A round-5 review found round 4's fix itself unsound: a terminator right
+  // after a bareword is not reliably SQL-only — it is also exactly what
+  // ends the enclosing JS statement/string in ordinary prose that happens
+  // to name `app.tenant_id`/`tenant.*` and use the word "to" before a short
+  // word, reopening the SAME false-positive shape round 2/round 3 already
+  // fixed once (see the two regression tests immediately below). Round 4's
+  // addition was reverted; RAW_SET_RE is back to round 3's quote/$/colon-
+  // only lookahead — see its comment above for the full history and the
+  // final decision.
+  //
+  // The tests below assert CURRENT (accepted-gap) behavior for every
+  // bareword-TO shape — with and without a trailing terminator, single- and
+  // multi-line — not desired behavior. If any of these ever starts failing
+  // because someone tightens the regex further, that's a deliberate scope
+  // decision to revisit, not a regression to silently paper over. ──
+  it("does NOT flag an English sentence naming app.tenant_id and ending '...to <bareword>;' (PERF-013 round 4's false-positive regression)", () => {
+    const source = `throw new Error("Remember to set app.tenant_id to null; retry after fixing config");`;
+    expect(checkTenantGucViolations(source, false)).toEqual([]);
+  });
+
+  it("does NOT flag a multi-line/concatenated variant of the same English-sentence shape", () => {
+    const source = `
+throw new Error(
+  "Remember to set app.tenant_id " +
+    "to null; retry after fixing config"
+);
+`;
+    expect(checkTenantGucViolations(source, false)).toEqual([]);
+  });
+
+  it("[KNOWN GAP, accepted] does NOT catch `SET app.tenant_id TO DEFAULT;` — a bare keyword value", () => {
     const source = `SET app.tenant_id TO DEFAULT;`;
-    const violations = checkTenantGucViolations(source, true);
-    expect(violations).toHaveLength(1);
-    expect(violations[0].snippet).toContain("SET app.tenant_id");
+    expect(checkTenantGucViolations(source, true)).toEqual([]);
   });
 
-  it("reports raw `SET app.tenant_id TO 5;` — a bare numeric value — as a violation", () => {
+  it("[KNOWN GAP, accepted] does NOT catch `SET app.tenant_id TO 5;` — a bare numeric value", () => {
     const source = `SET app.tenant_id TO 5;`;
-    const violations = checkTenantGucViolations(source, true);
-    expect(violations).toHaveLength(1);
+    expect(checkTenantGucViolations(source, true)).toEqual([]);
   });
 
-  it("reports raw `SET app.tenant_id TO my_tenant_var;` — a bare identifier/variable reference, ordinary realistic PL/pgSQL — as a violation", () => {
+  it("[KNOWN GAP, accepted] does NOT catch `SET app.tenant_id TO my_tenant_var;` — a bare identifier/variable reference, ordinary realistic PL/pgSQL", () => {
     const source = `
 DO $body$
 BEGIN
@@ -242,35 +268,18 @@ BEGIN
 END
 $body$;
 `;
-    const violations = checkTenantGucViolations(source, true);
-    expect(violations).toHaveLength(1);
-    expect(violations[0].snippet).toContain("SET app.tenant_id");
+    expect(checkTenantGucViolations(source, true)).toEqual([]);
   });
 
-  it("reports a bare TO value split onto its own line inside a multi-line .ts template literal (a real newline satisfies the terminator check)", () => {
+  it("[KNOWN GAP, accepted] does NOT catch a bare TO value split onto its own line inside a multi-line .ts template literal (a trailing newline does not help — the terminator branch is gone)", () => {
     const source = `
 await sql.unsafe(\`
   SET app.tenant_id TO DEFAULT
 \`);
 `;
-    const violations = checkTenantGucViolations(source, false);
-    expect(violations).toHaveLength(1);
+    expect(checkTenantGucViolations(source, false)).toEqual([]);
   });
 
-  // ── Round 4: DELIBERATELY ACCEPTED gap, documented rather than silently
-  // left as a surprise (same convention discoverFiles() above uses for its
-  // own out-of-scope set_config sites). A bareword value with NO terminator
-  // at all immediately after it on the SAME line — here, a single-line
-  // template literal with the trailing `;` omitted, so a bare backtick (not
-  // `;`/newline) sits right after DEFAULT — is still missed. This is
-  // intentional, not an oversight: including a bare backtick or `)` in the
-  // terminator set would also match plausible English phrasing inside a
-  // template-literal error message ending in "...to DEFAULT`)" with no
-  // further words, reintroducing the exact false positive round 3 fixed.
-  // This test asserts CURRENT (accepted-gap) behavior, not desired
-  // behavior — if it ever starts failing because someone tightens the
-  // regex further, that's a deliberate scope decision to revisit, not a
-  // regression to silently paper over. ──
   it("[KNOWN GAP, accepted] does NOT catch a bare TO value with no terminator at all after it on the same line (e.g. a single-line template literal with the trailing `;` omitted)", () => {
     const source = `await sql.unsafe(\`SET app.tenant_id TO DEFAULT\`);`;
     const violations = checkTenantGucViolations(source, false);

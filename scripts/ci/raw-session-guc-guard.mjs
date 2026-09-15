@@ -36,12 +36,15 @@
 //            which fixed that false positive but introduced a regression:
 //            it silently stopped catching `TO`-syntax raw SQL embedded in
 //            a `.ts`/`.mjs` file via a template literal (e.g. handed to
-//            `sql.unsafe(...)`). Fixed by requiring a value-like token
-//            immediately after `TO` instead of gating on file extension —
-//            a quoted/interpolated value, OR a bare identifier/keyword/
-//            number immediately closed by a statement terminator (round 4;
-//            a residual gap remains for a bareword with NO terminator at
-//            all right after it) — see RAW_SET_RE below /
+//            `sql.unsafe(...)`). Fixed by requiring a quoted/interpolated
+//            value-like token immediately after `TO` instead of gating on
+//            file extension. A BARE, unquoted value after `TO` (`TO
+//            DEFAULT` / `TO 5` / `TO my_var`, with or without a trailing
+//            terminator) is NOT caught, in any form — a permanently
+//            accepted gap; 4 review rounds found no regex heuristic that
+//            catches it without also flagging ordinary English sentences
+//            naming these same tenant-scoped identifiers — see RAW_SET_RE
+//            below for the full history /
 //            `set_config('app.foo', v, false)` /
 //            `set_config('app.foo', v, <anything other than a literal
 //            true>)` — a non-literal third argument (a variable, a function
@@ -235,61 +238,62 @@ function stripComments(source, sqlStyle) {
 // raw session-scoped SET this guard exists to catch) — starts with none of
 // `'"$:`, so round 3's lookahead silently missed all three. Confirmed as a
 // genuine regression, not a pre-existing gap: all three correctly triggered
-// a violation against bb64f216's parent (before round 3's fix landed).
+// a violation against bb64f216's parent (before round 3's fix landed). 0
+// live occurrences in the fleet either way (latent gap, not an active leak).
 //
-// Round 4 looked for a cleaner fix by asking whether some OTHER mechanism in
-// this file already knows "this specific span is inside a real SQL-
-// execution call" (as opposed to "looks like it could be English") — e.g.
-// however the set_config(...)-in-a-template-literal test below manages to
-// pass with isSql===false. There is no such mechanism: isSql (see main()) is
-// the only SQL-context signal anywhere in this file, it is computed once
-// per FILE from its extension, and — per round 2 above — is already known
-// to be the wrong tool for exactly this file (the .ts-embedded-template-
-// literal case must match despite isSql===false there). The set_config
-// test below passes for the same reason round 3's quoted-TO case does: the
-// regex matches the raw text unconditionally, regardless of surrounding JS
-// syntax — not because anything here has verified the match sits inside a
-// call to sql.unsafe(...)/similar. There is no per-literal "is this really
-// SQL" signal to reuse; adding real parsing (an AST/tagged-template walk)
-// to get one is out of proportion for closing one P2 gap.
+// Round 4 tried to close this by ADDING a second, independent value-start
+// signal alongside round 3's quote/$/colon lookahead (not replacing it): a
+// bareword (identifier/keyword/integer) would count as a value start when
+// immediately followed, after only inline whitespace, by a statement
+// terminator (`;`, a newline, or end of the scanned text) — the reasoning
+// being that a real `SET x TO <bareword>` is always closed by exactly one
+// of those in valid SQL, while ordinary English "to <word>" continues with
+// more prose instead.
 //
-// Fixed (round 4) instead by ADDING a second, independent value-start
-// signal alongside round 3's quote/$/colon lookahead — NOT replacing it, so
-// round 3's fix stays intact and is re-verified by the same tests below: a
-// bareword (identifier, keyword, or integer — `[A-Za-z0-9_]+`, optionally
-// one `.`-delimited segment for a decimal) counts as a value start ONLY
-// when it is immediately followed — after nothing but inline whitespace —
-// by a statement terminator: `;`, a newline, or true end of the scanned
-// text. A real `SET x TO <bareword>` is a complete SQL/PL-pgSQL statement,
-// and Postgres syntax always closes one with exactly that; ordinary English
-// prose containing "to <word>" is essentially never followed immediately by
-// one of those three — it continues with more words ("to a valid UUID
-// BEFORE CALLING THIS", "to a valid value first", ...). Concretely: in both
-// false-positive regression tests below, the token right after "to" is the
-// single-letter word "a", and what follows "a" is a space then more letters
-// ("valid...") — not a terminator — so the new alternative's lookahead
-// fails there for the same structural reason it succeeds on real code.
-// Verified directly (all of the above, plus the two false-positive tests)
-// before this landed; a fresh fleet scan afterward stayed at 0 violations.
+// A further, independent review (round 5 — THIS round) found round 4's
+// premise unsound: a terminator immediately after a bareword is NOT
+// reliably SQL-only. It is also exactly what ends the enclosing JS
+// statement/string in ordinary application prose that happens to name
+// `app.tenant_id`/`tenant.*` and use the word "to" before a short word —
+// i.e. the SAME false-positive SHAPE round 2/round 3 already fixed once,
+// reopened through a different trigger. Adversarially confirmed, e.g.:
+// `throw new Error("Remember to set app.tenant_id to null; retry after
+// fixing config");` — "to null" is a bareword ("null") immediately followed
+// by ";", but that ";" terminates the JS `throw` statement's own string
+// argument, not a SQL statement — round 4's lookahead couldn't tell the
+// difference and wrongly flagged it (and multi-line/concatenated variants
+// of the same shape — see the regression tests in
+// raw-session-guc-guard.test.ts). Not a contrived case: log/error messages
+// naming this guard's own subject-matter identifiers are exactly the
+// vocabulary this codebase's developers use when writing about the guard
+// itself — the same observation that motivated round 2's original fix.
 //
-// Residual, DELIBERATELY ACCEPTED gap — same "document it, don't leave a
-// silent surprise" convention discoverFiles() above uses for its own out-
-// of-scope set_config sites: a bareword value with NO terminator at all
-// immediately after it on the SAME line — e.g. a single-line template
-// literal with the trailing `;` omitted, `` sql.unsafe(`SET app.tenant_id
-// TO DEFAULT`); `` (a backtick, not `;`/newline, sits right after DEFAULT)
-// — is still missed, because a bare backtick or `)` was deliberately left
-// OUT of the terminator set: either would also match plausible English
-// phrasing inside a template-literal error message ending in "...to
-// DEFAULT`)" with no further words, reintroducing exactly the false
-// positive round 3 fixed. (The same statement reformatted onto multiple
-// lines — value on its own line, closing backtick on the next — IS caught,
-// since a real newline right after the bareword satisfies the terminator
-// check.) Not reproduced anywhere in this fleet today (fresh scan: 0
-// violations); tracked as a fast-follow, not fixed here, the same way the
-// 33 test/seed set_config sites above are.
+// DECISION (round 5): round 4's addition is REVERTED. RAW_SET_RE below is
+// back to round 3's `\bTO\s*(?=['"$:])` — quoted/interpolated values only —
+// with no known false-positive class of its own. This trades away round
+// 4's partial bareword-detection improvement in exchange for closing a
+// confirmed, adversarially-demonstrated false-positive regression.
+//
+// The FULL bareword-TO gap is therefore ONE unified, DELIBERATELY ACCEPTED
+// limitation — not fixed here, and not expected to be fixable by a better
+// regex: this guard does not catch `SET x TO <value>` in ANY bareword form
+// (a keyword like DEFAULT, a number, or a bare identifier — with or
+// without a trailing terminator, on one line or split across lines) unless
+// the value is quoted, `${...}`-interpolated, or `:`-bind-prefixed. Four
+// review rounds (2 through 5) tried progressively narrower regex
+// heuristics to close this without reopening the English-prose false
+// positive, and none succeeded: every heuristic tried either missed real
+// bareword `SET ... TO` statements or flagged real English sentences
+// naming the same `app.*`/`tenant.*` identifiers. Actually closing it would
+// need real SQL/tagged-template parsing (an AST walk, not a regex), out of
+// proportion for a P2 gap with 0 live occurrences in the fleet today.
+// Documented here rather than silently left as a surprise — same
+// convention discoverFiles() above uses for its own out-of-scope
+// set_config sites — and exercised by the "[KNOWN GAP, accepted]" tests in
+// raw-session-guc-guard.test.ts (representative bareword shapes, with and
+// without a terminator, single- and multi-line).
 const RAW_SET_RE =
-  /\bSET\s+(?!LOCAL\b)(?:SESSION\s+)?((?:app|tenant)\.[A-Za-z_][A-Za-z0-9_]*)\s*(?:=|\bTO\s*(?=['"$:]|[A-Za-z0-9_]+(?:\.[A-Za-z0-9_]+)?\s*(?:;|\n|$)))/gi;
+  /\bSET\s+(?!LOCAL\b)(?:SESSION\s+)?((?:app|tenant)\.[A-Za-z_][A-Za-z0-9_]*)\s*(?:=|\bTO\s*(?=['"$:]))/gi;
 
 // A candidate line is any line containing the bare `SET` keyword; the actual
 // identifier/operator is then searched for across a short forward window —
