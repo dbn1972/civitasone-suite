@@ -1,5 +1,4 @@
 import { PageHeader, StatCard } from "@/app/_components/ds";
-import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { getAdminUsers } from "@/app/_data/loaders";
 import { Breadcrumb } from "../Breadcrumb";
 import { UserManagementPage } from "./UserManagementPage";
@@ -38,7 +37,14 @@ export default async function PlatformUsersPage() {
         <StatCard icon="⛔" iconBg="#fef3f2" label="Suspended" value={suspended} />
         <StatCard icon="🔐" iconBg="#eff6ff" label="MFA enabled" value={mfaOn} />
       </div>
-      {source === "error" && <DataSourceBadge source={source} />}
+      {/* UX-012: the data-source badge now lives inside UserManagementPage,
+          driven by the same useSeededResource call that produces its rows —
+          not a second, independent read of `source` here that could
+          disagree with the table's own cache state (UX-002's pattern). This
+          site previously had it worse than most: the table never surfaced
+          cache state at all, so a failed fetch with a usable cache showed
+          "Couldn't load — showing nothing" while real (cached) rows were
+          visible directly underneath it. */}
       <UserManagementPage users={users} source={source} />
     </main>
   );
