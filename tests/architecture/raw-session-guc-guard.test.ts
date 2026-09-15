@@ -91,6 +91,66 @@ await tx.unsafe(\`select set_config('app.tenant_id', '\${T}', true)\`);
     const source = `SET lock_timeout = '5s';`;
     expect(checkTenantGucViolations(source, true)).toEqual([]);
   });
+
+  // ── PERF-013: confirmed false negatives (docs/ENTERPRISE-GAP-REPORT-2026-09-07.md) ──
+  // Each of these four reproduces one of the adversarial inputs the gap row
+  // hand-crafted: the guard's pre-fix regex/line-by-line logic misses all
+  // four despite each being the exact same underlying bug (a session-scoped
+  // GUC set outside SET LOCAL / a transaction-scoped set_config) PR #1098
+  // already fixed two real instances of.
+
+  it("reports raw `SET app.tenant_id TO '...'` — the alternate Postgres SET syntax — as a violation", () => {
+    const source = `SET app.tenant_id TO '00000000-0000-0000-0000-000000000001';`;
+    const violations = checkTenantGucViolations(source, true);
+    expect(violations).toHaveLength(1);
+    expect(violations[0].snippet).toContain("SET app.tenant_id");
+  });
+
+  it("reports a raw SET whose keyword and identifier/operator are split across lines", () => {
+    const source = `
+SET
+  app.tenant_id = '00000000-0000-0000-0000-000000000001';
+`;
+    const violations = checkTenantGucViolations(source, true);
+    expect(violations).toHaveLength(1);
+    expect(violations[0].line).toBe(2);
+  });
+
+  it("reports a raw SET statement built via string concatenation as a violation", () => {
+    const source = `
+const stmt = "SET app.tenant_id" + " = '" + tenantId + "'";
+await sql.unsafe(stmt);
+`;
+    const violations = checkTenantGucViolations(source, false);
+    expect(violations).toHaveLength(1);
+    expect(violations[0].line).toBe(2);
+  });
+
+  it("reports set_config(..., <non-literal>) — a variable third arg that can't be statically proven `true` — as a violation", () => {
+    const source = `PERFORM set_config('app.tenant_id', tenant_uuid, is_local_flag);`;
+    const violations = checkTenantGucViolations(source, true);
+    expect(violations).toHaveLength(1);
+    expect(violations[0].snippet).toContain("set_config");
+  });
+
+  // ── Regression guards: the broadened matching above must not start
+  // flagging the established safe patterns. ──
+  it("does NOT flag `SET LOCAL app.tenant_id = ...` split across lines", () => {
+    const source = `
+DO $body$
+BEGIN
+  SET
+    LOCAL app.tenant_id = '00000000-0000-0000-0000-000000000001';
+END
+$body$;
+`;
+    expect(checkTenantGucViolations(source, true)).toEqual([]);
+  });
+
+  it("does NOT flag set_config(..., true) regardless of case/whitespace around the literal", () => {
+    const source = `select set_config('app.tenant_id', '00000000-0000-0000-0000-000000000001',  TRUE  );`;
+    expect(checkTenantGucViolations(source, true)).toEqual([]);
+  });
 });
 
 describe("raw-session-guc-guard: checkAdvisoryLockViolations()", () => {

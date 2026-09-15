@@ -27,8 +27,19 @@
 //            packages/db/src/raw-tenant-guc.ts's `withRawTenantGuc` and
 //            services/audit-service/migrations/0025_*.sql are the
 //            established patterns).
-// VIOLATION: `SET app.foo = ...` / `SET SESSION app.foo = ...` (session-
-//            scoped) / `set_config('app.foo', v, false)`.
+// VIOLATION: `SET app.foo = ...` / `SET app.foo TO ...` / `SET SESSION
+//            app.foo = ...` (session-scoped, `TO` is Postgres's synonym for
+//            `=` in a SET statement) / `set_config('app.foo', v, false)` /
+//            `set_config('app.foo', v, <anything other than a literal
+//            true>)` — a non-literal third argument (a variable, a function
+//            call, ...) can't be proven transaction-scoped by static
+//            inspection, so it is treated the same as an explicit `false`
+//            (PERF-013). Detection also tolerates the statement's keyword,
+//            GUC name and operator being split across lines, or assembled
+//            via `+` string concatenation — see SET_TRIGGER_RE and
+//            collapseConcatJoins() below (also PERF-013; both were
+//            independently confirmed false negatives of the original,
+//            strictly-single-line, contiguous-text-only match).
 //
 // A RELATED BUT SEPARATE check flags non-transaction-scoped advisory locks
 // (`pg_advisory_lock`/`pg_try_advisory_lock`/`..._shared`, as opposed to the
@@ -171,53 +182,114 @@ function stripComments(source, sqlStyle) {
 }
 
 // ── 3. Check 1: raw session-scoped tenant/app GUC ───────────────────────────
-// Matches `SET app.foo = ...` / `SET SESSION app.foo = ...` but NOT
-// `SET LOCAL app.foo = ...`. `(?!LOCAL\b)` after `SET\s+` rejects LOCAL right
-// after SET; `SESSION` is accepted (still a violation — session-scoped).
-const RAW_SET_RE = /\bSET\s+(?!LOCAL\b)(?:SESSION\s+)?((?:app|tenant)\.[A-Za-z_][A-Za-z0-9_]*)\s*=/gi;
-// Matches `set_config('app.foo', <value>, true|false)` and captures the
-// is_local boolean so only an explicit `false` is flagged. The middle
-// (value) argument is matched as "anything but a paren" so the match can't
-// stretch past this call's own closing `)` into a LATER, unrelated
-// set_config(...) call further down the file — every real value argument in
-// this codebase (a UUID string literal, a `${...}` template interpolation, a
-// `:'bind_param'`, a bound `$1`) satisfies that; a value that itself calls a
-// function would not match, which is fine — this guard is best-effort and
-// erring toward under- rather than over-reporting.
-const SET_CONFIG_RE = /\bset_config\s*\(\s*['"]((?:app|tenant)\.[A-Za-z_][A-Za-z0-9_]*)['"]\s*,\s*[^()]*?,\s*(true|false)\s*\)/gi;
+// Matches `SET app.foo = ...` / `SET app.foo TO ...` / `SET SESSION app.foo
+// = ...` but NOT `SET LOCAL app.foo = ...`. `(?!LOCAL\b)` after `SET\s+`
+// rejects LOCAL right after SET; `SESSION` is accepted (still a violation —
+// session-scoped). `TO` is Postgres's own accepted synonym for `=` in a SET
+// statement (PERF-013 — the pre-fix version only recognized `=`).
+const RAW_SET_RE = /\bSET\s+(?!LOCAL\b)(?:SESSION\s+)?((?:app|tenant)\.[A-Za-z_][A-Za-z0-9_]*)\s*(?:=|\bTO\b)/gi;
+
+// A candidate line is any line containing the bare `SET` keyword; the actual
+// identifier/operator is then searched for across a short forward window —
+// this line plus a few more — rather than only this one line. PERF-013 found
+// two real gaps this closes: a formatter (or a query assembled a piece at a
+// time) can put `SET` on its own line with the GUC name and `=`/`TO` a line
+// or two later, and — separately — LOCAL, wherever it falls in that gap,
+// still blocks a match (the identifier group can only ever align with
+// "app."/"tenant.", never with "LOCAL", so the exclusion holds across the
+// window exactly as it did on one line). Same short-lookahead-window
+// technique scripts/ci/flaky-skip-guard.mjs already uses to find a skip
+// call's title/second argument a line or two after its trigger token.
+const SET_TRIGGER_RE = /\bSET\b/i;
+const SET_LOOKAHEAD_LINES = 4;
+
+// PERF-013's other confirmed false negative for the raw SET check: a
+// statement assembled via string concatenation, e.g.
+// `"SET app.tenant_id" + " = '" + tenantId + "'"`. In the raw source text
+// this reads as two strings glued by `+` — the characters actually sitting
+// between "app.tenant_id" and "=" are a closing quote, `+`, and an opening
+// quote, none of which is whitespace, so RAW_SET_RE never lines up. This
+// collapses a `<quote> + <quote>`-shaped join (either quote style, any of
+// `'`/`"`/`` ` ``, whitespace or newlines around the `+`) between two
+// adjacent literal fragments so a statement built that way reads as one
+// contiguous run before RAW_SET_RE is applied — the same "normalize the
+// text before matching" idea stripComments() above already uses, aimed at a
+// different kind of noise between the tokens that matter here. SQL uses
+// `||`, never `+`, for string building, so this is only meaningful (and
+// only applied) for JS/TS source.
+const CONCAT_JOIN_RE = /(['"`])\s*\+\s*(['"`])/g;
+function collapseConcatJoins(text) {
+  return text.replace(CONCAT_JOIN_RE, "");
+}
+
+// Matches `set_config('app.foo', <value>, <is_local>)` and captures the
+// is_local argument as-is, not just literal `true`/`false`. PERF-013 found
+// that a call whose third argument is a variable or other expression (e.g.
+// `set_config('app.tenant_id', v, isLocalFlag)`) didn't match the old
+// `(true|false)`-only pattern AT ALL, so it was silently ignored regardless
+// of what that argument actually holds at runtime. Only a literal `true` is
+// treated as proven-safe below; an explicit `false` or any non-literal third
+// argument this guard has no way to evaluate statically is now flagged. The
+// middle (value) argument is still matched as "anything but a paren" so the
+// match can't stretch past this call's own closing `)` into a LATER,
+// unrelated set_config(...) call further down the file — every real value
+// argument in this codebase (a UUID string literal, a `${...}` template
+// interpolation, a `:'bind_param'`, a bound `$1`) satisfies that; a value
+// that itself calls a function would not match, which is fine — this guard
+// is best-effort and errs toward under- rather than over-reporting for that
+// argument specifically.
+const SET_CONFIG_RE = /\bset_config\s*\(\s*['"]((?:app|tenant)\.[A-Za-z_][A-Za-z0-9_]*)['"]\s*,\s*[^()]*?,\s*([^()]*?)\s*\)/gi;
 
 export function checkTenantGucViolations(source, isSql) {
   const lines = stripComments(source, isSql);
   const violations = [];
 
-  lines.forEach((line, idx) => {
-    RAW_SET_RE.lastIndex = 0;
-    let m;
-    while ((m = RAW_SET_RE.exec(line)) !== null) {
-      violations.push({
-        line: idx + 1,
-        snippet: line.trim(),
-        reason: `raw session-scoped SET (${m[1]}) — use SET LOCAL, or set_config('${m[1]}', ..., true) inside a transaction`,
-      });
+  let i = 0;
+  while (i < lines.length) {
+    if (!SET_TRIGGER_RE.test(lines[i])) {
+      i += 1;
+      continue;
     }
-  });
+    const windowEnd = Math.min(i + SET_LOOKAHEAD_LINES, lines.length);
+    const rawWindow = lines.slice(i, windowEnd).join("\n");
+    const windowText = isSql ? rawWindow : collapseConcatJoins(rawWindow);
+    RAW_SET_RE.lastIndex = 0;
+    const m = RAW_SET_RE.exec(windowText);
+    if (!m) {
+      i += 1;
+      continue;
+    }
+    const consumedLines = (m[0].match(/\n/g) || []).length;
+    violations.push({
+      line: i + 1,
+      snippet: consumedLines > 0 ? m[0].replace(/\s+/g, " ").trim() : lines[i].trim(),
+      reason: `raw session-scoped SET (${m[1]}) — use SET LOCAL, or set_config('${m[1]}', ..., true) inside a transaction`,
+    });
+    // Advance past whatever lines the match itself spanned so the tail of
+    // this same statement can't be re-triggered as a new candidate. The
+    // common case — a single-line match — spans 0 newlines and just falls
+    // through to i += 1, unchanged from the pre-PERF-013 behavior.
+    i += consumedLines > 0 ? consumedLines + 1 : 1;
+  }
 
   // set_config(...) can legitimately span multiple lines, so check against
   // the whole stripped source (not line-by-line) and locate the reported
-  // line by the match's start offset. Only an explicit `false` is flagged;
-  // `true` (or an unrecognized third arg, which this regex won't match at
-  // all) is left alone.
+  // line by the match's start offset.
   const stripped = lines.join("\n");
   SET_CONFIG_RE.lastIndex = 0;
   let sm;
   while ((sm = SET_CONFIG_RE.exec(stripped)) !== null) {
-    if (sm[2].toLowerCase() !== "false") continue;
+    const thirdArg = sm[2].trim();
+    if (/^true$/i.test(thirdArg)) continue; // literal true — proven transaction-scoped, the safe pattern
     const upToMatch = stripped.slice(0, sm.index);
     const lineNo = upToMatch.split("\n").length;
+    const isLiteralFalse = /^false$/i.test(thirdArg);
     violations.push({
       line: lineNo,
       snippet: lines[lineNo - 1]?.trim() ?? sm[0].trim(),
-      reason: `set_config('${sm[1]}', ..., false) is session-scoped — pass true (SET LOCAL semantics) instead`,
+      reason: isLiteralFalse
+        ? `set_config('${sm[1]}', ..., false) is session-scoped — pass true (SET LOCAL semantics) instead`
+        : `set_config('${sm[1]}', ..., ${thirdArg || "<empty>"}) — is_local isn't a literal \`true\`, so this can't be statically proven transaction-scoped; pass a literal true, or restructure to SET LOCAL, inside a transaction`,
     });
   }
 
