@@ -535,6 +535,27 @@ export function registerContractConsumers(queue: Queue): void {
   // ─── 6.4 Bulk Renewal ──────────────────────────────────────────────────────
 
   queue.subscribe(COMMANDS.contractRenewalBulk, async (msg) => {
+    // TX-009: this handler processes each contract in its OWN transaction
+    // (by design -- one bad contract must not roll back its siblings), so it
+    // can't be gated by a single wrapping db.transaction the way every other
+    // handler in this file is (contractCreate, contractActivate, etc. all
+    // start with `if (!(await markProcessed(tx, msg.messageId))) return;`
+    // inside their one transaction). This handler had NO message-level dedup
+    // at all: a redelivered bulk-renewal message -- a real at-least-once
+    // retry after a crash, or a delayed dead-letter replay -- re-ran the
+    // entire loop. The per-contract "pending renewal already exists" check
+    // below only blocks a second renewal while the FIRST one from this same
+    // message is still undecided; once that renewal has been approved or
+    // rejected, a late redelivery of the original message sails past that
+    // check and creates a brand-new, genuinely duplicate renewal record for
+    // a real employee contract. It also unconditionally emitted a fresh (and
+    // content-inconsistent -- success the first time, "already exists"
+    // failures the second) bulk_renewal_complete audit event on every
+    // redelivery. A dedicated markProcessed-gated transaction up front closes
+    // both holes without disturbing the intentional per-contract isolation.
+    const isNew = await db.transaction(async (tx) => markProcessed(tx, msg.messageId));
+    if (!isNew) return;
+
     const p = msg.payload as {
       tenantId: string;
       contractIds: string[];

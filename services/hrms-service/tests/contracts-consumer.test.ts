@@ -218,6 +218,17 @@ describe("idempotency (markProcessed returns false)", () => {
     expect(H.enqueue).not.toHaveBeenCalled();
   });
 
+  it("contractRenewalBulk: skips entirely if already processed (TX-009 -- no per-contract writes, no bulk audit)", async () => {
+    H.markProcessed.mockResolvedValue(false);
+    const c1 = randomUUID();
+    await q.publish(COMMANDS.contractRenewalBulk, makeMsg(COMMANDS.contractRenewalBulk, {
+      tenantId: TENANT, contractIds: [c1], newEndDate: "2026-06-30", newTerms: {}, initiatedBy: ACTOR,
+    }));
+    await settle();
+    expect(H.getContractById).not.toHaveBeenCalled();
+    expect(H.enqueue).not.toHaveBeenCalled();
+  });
+
   it("contractAutoSeparate: skips if already processed", async () => {
     H.markProcessed.mockResolvedValue(false);
     await q.publish(COMMANDS.contractAutoSeparate, makeMsg(COMMANDS.contractAutoSeparate, {
@@ -664,6 +675,50 @@ describe("contractRenewalBulk command", () => {
 
     // Bulk audit still fires
     expect(H.enqueue).toHaveBeenCalled();
+  });
+
+  it("TX-009 regression: redelivering the SAME bulk-renewal message (same messageId) does not re-process it", async () => {
+    // Reproduces a real at-least-once redelivery. Before the fix, this
+    // handler had no message-level dedup at all: the per-contract "pending
+    // renewal already exists" check only protects a contract while its FIRST
+    // renewal from this message is still undecided -- it does nothing once
+    // that renewal has already resolved one way or the other, which is
+    // exactly the case here (H.getPendingRenewalForContract stays null
+    // throughout, simulating a redelivery arriving after the first renewal
+    // was already decided and is no longer "pending"). Without the
+    // markProcessed guard this test would show a SECOND insert + a second,
+    // contradictory bulk_renewal_complete audit event.
+    const c1 = randomUUID();
+    const contract1 = makeContract({ id: c1, status: "active", renewalCount: 0 });
+    H.getContractById.mockResolvedValue(contract1);
+    H.getPendingRenewalForContract.mockResolvedValue(null);
+    H.getContractConfig.mockResolvedValue({ approvalChain: [], maxContractMonths: null });
+    H.getContractHistory.mockResolvedValue([]);
+
+    const msg = makeMsg(COMMANDS.contractRenewalBulk, {
+      tenantId: TENANT, contractIds: [c1], newEndDate: "2026-06-30", newTerms: { role: "Renewed" }, initiatedBy: ACTOR,
+    });
+
+    // First delivery: processes normally.
+    await q.publish(COMMANDS.contractRenewalBulk, msg);
+    await settle();
+    const insertsAfterFirst = H.mockTx.insert.mock.calls.length;
+    const enqueuesAfterFirst = H.enqueue.mock.calls.length;
+    expect(insertsAfterFirst).toBeGreaterThan(0);
+    expect(enqueuesAfterFirst).toBeGreaterThan(0);
+
+    // Redelivery: same messageId -- exactly what a real queue redelivery
+    // looks like. The real markProcessed (Postgres ON CONFLICT DO NOTHING
+    // ... RETURNING) would now report "already seen"; this mock flips to
+    // simulate exactly that.
+    H.markProcessed.mockResolvedValue(false);
+    await q.publish(COMMANDS.contractRenewalBulk, msg);
+    await settle();
+
+    // No new writes and no second (contradictory) bulk audit -- the whole
+    // handler short-circuited before touching a single contract.
+    expect(H.mockTx.insert.mock.calls.length).toBe(insertsAfterFirst);
+    expect(H.enqueue.mock.calls.length).toBe(enqueuesAfterFirst);
   });
 });
 
