@@ -1,12 +1,12 @@
 "use client";
 
 import Link from "next/link";
+import dynamic from "next/dynamic";
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { HelpTip } from "@/app/_components/ds";
 import { WizardShell, type DesignerBlock } from "@/app/_components/ds/designer";
 import type { FormFieldDefinition } from "@/app/_components/ds/designer/formTypes";
-import { FeeBuilder } from "../../_components/FeeBuilder";
 import { OfficeOverridesBuilder } from "../../_components/OfficeOverridesBuilder";
 import { fetchServiceDefinition, updateServiceDefinition } from "../../_data/designerApi";
 import { usePhase3Config } from "../../_data/usePhase3Config";
@@ -16,6 +16,15 @@ import { adjacentBlocks } from "../../_data/designerNavigation";
 import { emptyFeeDesign, loadFeeDesign } from "../../_data/feeBuilderApi";
 import { hoaBlockMessage, isHoaBlocking } from "../../_data/feeBuilderModel";
 import type { FeeDesignState } from "@/app/_components/ds/designer/feeTypes";
+
+// PERF-009: FeeBuilder is 706 LOC. This page only ever renders it after its
+// own client-side fetch finishes (the `loading` branch above returns early),
+// so it is never part of the server-rendered first paint -- ssr:false is
+// zero-risk here and keeps it out of this route's bundle entirely until needed.
+const FeeBuilder = dynamic(
+  () => import("../../_components/FeeBuilder").then((m) => m.FeeBuilder),
+  { ssr: false, loading: () => <p style={{ color: "var(--mut)" }}>Loading fee builder…</p> },
+);
 
 export default function DesignerB5Page() {
   const params = useParams<{ id: string }>();
