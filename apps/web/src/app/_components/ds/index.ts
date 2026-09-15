@@ -6,6 +6,8 @@ export { PageHeader } from "./PageHeader";
 export { StatCard } from "./StatCard";
 export { StatGrid } from "./StatGrid";
 export { Card } from "./Card";
+export { Button } from "./Button";
+export type { ButtonProps, ButtonVariant, ButtonSize } from "./Button";
 export { DataTable } from "./DataTable";
 export { StatusPill } from "./StatusPill";
 export { Segmented } from "./Segmented";

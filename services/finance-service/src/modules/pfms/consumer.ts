@@ -38,7 +38,7 @@ export function registerPfmsConsumers(queue: Queue): void {
       });
       await audit(tx, msg, "sign", "pfms_batch", p.id);
     });
-    await cache.invalidate(`finance:${msg.tenantId}:pfms:*`);
+    await cache.invalidateResource(msg.tenantId, "pfms");
     log.info({ id: msg.messageId }, "Processed pfms.batch_sign");
   });
 
@@ -63,7 +63,7 @@ export function registerPfmsConsumers(queue: Queue): void {
       });
       await audit(tx, msg, "submit", "pfms_batch", p.id);
     });
-    await cache.invalidate(`finance:${msg.tenantId}:pfms:*`);
+    await cache.invalidateResource(msg.tenantId, "pfms");
     log.info({ id: msg.messageId }, "Processed pfms.batch_submit");
   });
 }

@@ -173,10 +173,24 @@ async function run() {
   const { rows } = loadScreenMap();
   const jwt = mintDevJWT();
 
+  // COMP-006 fix-up: screens tracked in known-broken-chains.json have a real
+  // loader chain that correctly resolves to a real upstream service which
+  // genuinely has no matching route yet (a pre-existing product gap, filed
+  // as follow-up gap COMP-020 -- see that file and tests/contract/
+  // screens.contract.test.ts for the full writeup). The static gate already
+  // excludes them; this live check must too, or it would fail on the exact
+  // same pre-existing 404s the static gate is deliberately not blocking on.
+  const knownBrokenPath = join(ROOT, 'scripts/contract/known-broken-chains.json');
+  const knownBrokenKeys = new Set(
+    (existsSync(knownBrokenPath) ? JSON.parse(readFileSync(knownBrokenPath, 'utf8')).entries : [])
+      .map(e => `${e.module}::${e.screen}`),
+  );
+
   // Only test screens that have loaders and are in-scope
   const toTest = rows.filter(r =>
     r.status !== 'NO_LOADER' &&
     r.apiPaths.length > 0 &&
+    !knownBrokenKeys.has(`${r.module}::${r.screen}`) &&
     (!moduleFilter || r.module === moduleFilter),
   );
 

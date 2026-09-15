@@ -1,7 +1,8 @@
 import Link from "next/link";
-import { PageHeader, Card, DataTable, EmptyState, StatGrid, StatCard } from "../../../../_components/ds";
+import { PageHeader, Card, DataTable, EmptyState, RefreshErrorState, StatGrid, StatCard } from "../../../../_components/ds";
 import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
+import { toHumanError } from "@/lib/messages";
 
 type Score = {
   id: string;
@@ -93,8 +94,29 @@ export default async function AparDetailPage({
   // genuinely successful load) even if a future change to getApar's default
   // ever breaks the current !detail/error coincidence.
   const errored = result.source === "error";
+  // A missing record (the hrms-service GET route throws a real HTTP 404 --
+  // see services/hrms-service/src/modules/apar/routes.ts `mustFind`) and
+  // every other failure (network error, 5xx, bad payload, missing
+  // auth/config) both collapse to the same `source: "error"` above --
+  // `fetchJson`'s optional `status` is what still lets this page tell them
+  // apart (UX-009 follow-up), so a clerk only ever sees "this record doesn't
+  // exist" when that's actually true, and a retryable "couldn't load" for a
+  // genuine transient failure instead of a dead-end "not found".
+  const isNotFound = errored && result.status === 404;
 
-  if (!detail || errored) {
+  if (errored && !isNotFound) {
+    return (
+      <main className="page-main wrap" aria-labelledby="page-heading">
+        <PageHeader title="APAR Detail" subtitle="Couldn't load" back="/hr/apar" />
+        <DataSourceBadge source={result.source} />
+        <Card title="">
+          <RefreshErrorState error={toHumanError("load", { area: "APAR record" })} backHref="/hr/apar" />
+        </Card>
+      </main>
+    );
+  }
+
+  if (!detail) {
     return (
       <main className="page-main wrap" aria-labelledby="page-heading">
         <PageHeader title="APAR Detail" subtitle="Not found" back="/hr/apar" />

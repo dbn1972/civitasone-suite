@@ -26,7 +26,7 @@ export function registerReportsConsumers(queue: Queue): void {
         payload: { service: "hrms", action: "report_generate", resourceType: "report", resourceId: msg.messageId, outcome: "success" },
       });
     });
-    await cache.invalidate(`hrms:${msg.tenantId}:reports:*`);
+    await cache.invalidateResource(msg.tenantId, "reports");
     log.info({ id: msg.messageId, reportType: p.reportType }, "Processed report.generate");
   });
 }

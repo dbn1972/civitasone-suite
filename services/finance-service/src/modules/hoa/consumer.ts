@@ -20,7 +20,7 @@ export function registerHoaConsumers(queue: Queue): void {
       });
       await audit(tx, msg, "sync_major_heads", "hoa", msg.messageId);
     });
-    await cache.invalidate(`finance:${msg.tenantId}:hoa:*`);
+    await cache.invalidateResource(msg.tenantId, "hoa");
     log.info({ id: msg.messageId }, "Processed hoa.major_head_sync");
   });
 }

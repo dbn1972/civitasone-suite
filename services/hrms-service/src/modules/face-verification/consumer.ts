@@ -29,7 +29,7 @@ export function registerFaceVerificationConsumers(queue: Queue): void {
         payload: { service: "hrms", action: "face_photo_upload", resourceType: "profile_photo", resourceId: p.employeeId, outcome: "success" },
       });
     });
-    await cache.invalidate(`hrms:${msg.tenantId}:face_verification:*`);
+    await cache.invalidateResource(msg.tenantId, "face_verification");
     log.info({ id: msg.messageId, employeeId: p.employeeId }, "Processed face_verification.upload_photo");
   });
 
@@ -54,7 +54,7 @@ export function registerFaceVerificationConsumers(queue: Queue): void {
         payload: { service: "hrms", action: "face_verify", resourceType: "face_verification", resourceId: p.employeeId, outcome: "success" },
       });
     });
-    await cache.invalidate(`hrms:${msg.tenantId}:face_verification:*`);
+    await cache.invalidateResource(msg.tenantId, "face_verification");
     log.info({ id: msg.messageId, employeeId: p.employeeId }, "Processed face_verification.verify");
   });
 
@@ -76,7 +76,7 @@ export function registerFaceVerificationConsumers(queue: Queue): void {
         payload: { service: "hrms", action: "face_config_update", resourceType: "face_config", resourceId: msg.messageId, outcome: "success" },
       });
     });
-    await cache.invalidate(`hrms:${msg.tenantId}:face_verification:*`);
+    await cache.invalidateResource(msg.tenantId, "face_verification");
     log.info({ id: msg.messageId }, "Processed face_verification.config_update");
   });
 }

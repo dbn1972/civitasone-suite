@@ -35,7 +35,7 @@ export function registerPeriodCloseConsumers(queue: Queue): void {
       });
       await audit(tx, msg, p.closeType, "period", p.period);
     });
-    await cache.invalidate(`finance:${msg.tenantId}:periods:*`);
+    await cache.invalidateResource(msg.tenantId, "periods");
     log.info({ id: msg.messageId, period: p.period }, "Processed period.close");
   });
 
@@ -72,7 +72,7 @@ export function registerPeriodCloseConsumers(queue: Queue): void {
       });
       await audit(tx, msg, "reopen", "period", p.period);
     });
-    await cache.invalidate(`finance:${msg.tenantId}:periods:*`);
+    await cache.invalidateResource(msg.tenantId, "periods");
     log.info({ id: msg.messageId, period: p.period }, "Processed period.reopen");
   });
 }

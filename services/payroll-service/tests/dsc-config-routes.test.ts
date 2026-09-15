@@ -82,6 +82,21 @@ const H = vi.hoisted(() => {
 vi.mock("@civitasone/render", () => ({
   validateDscCertificate: (...args: unknown[]) => H.mockValidateDsc(...args),
   DscValidationError: H.MockDscValidationError,
+  // REL-018 follow-up: buildApp() registers form16-verify routes too, whose
+  // module imports verifyPdfSignature from this same package at load time --
+  // this mock replacing the whole module without it left that binding
+  // undefined for this file's module graph. Not exercised by this file's own
+  // tests (no DSC-config scenario calls it), so a static default matching the
+  // real "unsigned" shape (packages/render/src/pdf-verify.ts's VerifyResult)
+  // is enough.
+  verifyPdfSignature: vi.fn(() => ({
+    valid: false,
+    signerCN: undefined,
+    signedAt: undefined,
+    serialNumber: undefined,
+    certificateExpiry: undefined,
+    issues: ["no_signature"],
+  })),
 }));
 
 // Mock the repo module to control DB interactions

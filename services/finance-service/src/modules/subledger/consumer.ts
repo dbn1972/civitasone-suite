@@ -18,7 +18,7 @@ export function registerSubledgerConsumers(queue: Queue): void {
         payload: { service: "finance", action: "subledger_refresh", resourceType: "subledger", resourceId: p.side ?? msg.tenantId, outcome: "success" },
       });
     });
-    await cache.invalidate(`finance:${p.tenantId}:subledger:*`);
+    await cache.invalidateResource(p.tenantId, "subledger");
     log.info({ id: msg.messageId, side: p.side }, "Processed subledger.refresh");
   });
 }

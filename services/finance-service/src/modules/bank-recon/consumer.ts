@@ -51,7 +51,7 @@ export function registerBankReconConsumers(queue: Queue): void {
       });
       await audit(tx, msg, "import", "bank_statement", p.id);
     });
-    await cache.invalidate(`finance:${msg.tenantId}:bank_statements:*`);
+    await cache.invalidateResource(msg.tenantId, "bank_statements");
     log.info({ id: msg.messageId }, "Processed bank_statement.import");
   });
 
@@ -103,7 +103,7 @@ export function registerBankReconConsumers(queue: Queue): void {
       });
       await audit(tx, msg, "reconcile", "bank_statement", p.id);
     });
-    await cache.invalidate(`finance:${msg.tenantId}:bank_recon:*`);
+    await cache.invalidateResource(msg.tenantId, "bank_recon");
     log.info({ id: msg.messageId }, "Processed bank_statement.reconcile");
   });
 }

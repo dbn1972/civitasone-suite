@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { ConfirmDialog } from "../../../_components/ds";
+import { ConfirmDialog, Button } from "../../../_components/ds";
 import { useFormError } from "@/lib/useFormError";
 
 type Dept = {
@@ -31,7 +31,7 @@ function buildTree(flat: Dept[]): TreeNode[] {
   return roots;
 }
 
-// ── Input / button styles ──────────────────────────────────────────────────
+// ── Input styles ────────────────────────────────────────────────────────
 
 const inputStyle: React.CSSProperties = {
   padding: "6px 10px",
@@ -41,15 +41,6 @@ const inputStyle: React.CSSProperties = {
   width: "100%",
   boxSizing: "border-box",
   minHeight: 36,
-};
-
-const btnBase: React.CSSProperties = {
-  padding: "4px 10px",
-  fontSize: 12,
-  borderRadius: 6,
-  border: "1px solid var(--line,#e2e8f0)",
-  cursor: "pointer",
-  background: "var(--surface,#fff)",
 };
 
 // ── Single tree node ───────────────────────────────────────────────────────
@@ -145,19 +136,10 @@ function DeptNode({
             {rowError && (
               <span style={{ color: "#b91c1c", fontSize: 11 }}>{rowError}</span>
             )}
-            <button
-              onClick={() => onSaveEdit(node.id)}
-              disabled={saving}
-              style={{
-                ...btnBase,
-                background: "var(--primary,#2563eb)",
-                color: "#fff",
-                border: "none",
-              }}
-            >
+            <Button variant="primary" size="sm" onClick={() => onSaveEdit(node.id)} disabled={saving}>
               {saving ? t("savingBtn") : t("saveBtn")}
-            </button>
-            <button onClick={onCancelEdit} style={btnBase}>{t("cancelBtn")}</button>
+            </Button>
+            <Button variant="ghost" size="sm" onClick={onCancelEdit}>{t("cancelBtn")}</Button>
           </>
         ) : (
           /* ── View mode ── */
@@ -205,18 +187,12 @@ function DeptNode({
                 {t("subDeptCount", { count: node.children.length })}
               </span>
             )}
-            <button
-              onClick={() => onStartEdit(node)}
-              style={{ ...btnBase, marginLeft: 8 }}
-            >
+            <Button variant="ghost" size="sm" onClick={() => onStartEdit(node)} style={{ marginLeft: 8 }}>
               {t("editBtn")}
-            </button>
-            <button
-              onClick={() => onDeleteTarget(node)}
-              style={{ ...btnBase, color: "#b91c1c" }}
-            >
+            </Button>
+            <Button variant="danger" size="sm" onClick={() => onDeleteTarget(node)}>
               {t("deleteBtn")}
-            </button>
+            </Button>
           </>
         )}
       </div>

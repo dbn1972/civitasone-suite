@@ -26,7 +26,7 @@ export function registerAiPredictionsConsumers(queue: Queue): void {
         payload: { service: "hrms", action: "ai_predictions_refresh", resourceType: "ai_prediction", resourceId: msg.messageId, outcome: "success" },
       });
     });
-    await cache.invalidate(`hrms:${msg.tenantId}:ai_predictions:*`);
+    await cache.invalidateResource(msg.tenantId, "ai_predictions");
     log.info({ id: msg.messageId }, "Processed ai_predictions.refresh");
   });
 }

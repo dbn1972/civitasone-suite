@@ -47,7 +47,7 @@ export function registerOrgStructureConsumers(queue: Queue): void {
       });
       await audit(tx, msg, "create", "legal_entity", id);
     });
-    await cache.invalidate(`finance:${msg.tenantId}:org_structure:*`);
+    await cache.invalidateResource(msg.tenantId, "org_structure");
     log.info({ id: msg.messageId }, "Processed org_structure.legal_entity_create");
   });
 
@@ -72,7 +72,7 @@ export function registerOrgStructureConsumers(queue: Queue): void {
       });
       await audit(tx, msg, "create", "operating_unit", id);
     });
-    await cache.invalidate(`finance:${msg.tenantId}:org_structure:*`);
+    await cache.invalidateResource(msg.tenantId, "org_structure");
     log.info({ id: msg.messageId }, "Processed org_structure.operating_unit_create");
   });
 
@@ -99,7 +99,7 @@ export function registerOrgStructureConsumers(queue: Queue): void {
       });
       await audit(tx, msg, "create", "cost_center", id);
     });
-    await cache.invalidate(`finance:${msg.tenantId}:org_structure:*`);
+    await cache.invalidateResource(msg.tenantId, "org_structure");
     log.info({ id: msg.messageId }, "Processed org_structure.cost_center_create");
   });
 
@@ -126,7 +126,7 @@ export function registerOrgStructureConsumers(queue: Queue): void {
       });
       await audit(tx, msg, "create", "profit_center", id);
     });
-    await cache.invalidate(`finance:${msg.tenantId}:org_structure:*`);
+    await cache.invalidateResource(msg.tenantId, "org_structure");
     log.info({ id: msg.messageId }, "Processed org_structure.profit_center_create");
   });
 }

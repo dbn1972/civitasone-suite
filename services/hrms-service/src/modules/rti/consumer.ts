@@ -30,7 +30,7 @@ export function registerRtiConsumers(queue: Queue): void {
         payload: { service: "hrms", action: "rti_file", resourceType: "rti_request", resourceId: p.id, outcome: "success" },
       });
     });
-    await cache.invalidate(`hrms:${msg.tenantId}:rti:*`);
+    await cache.invalidateResource(msg.tenantId, "rti");
     log.info({ id: msg.messageId, rtiId: p.id }, "Processed rti.file");
   });
 
@@ -52,7 +52,7 @@ export function registerRtiConsumers(queue: Queue): void {
         payload: { service: "hrms", action: "rti_assign", resourceType: "rti_request", resourceId: p.id, outcome: "success" },
       });
     });
-    await cache.invalidate(`hrms:${msg.tenantId}:rti:*`);
+    await cache.invalidateResource(msg.tenantId, "rti");
     log.info({ id: msg.messageId, rtiId: p.id }, "Processed rti.assign");
   });
 
@@ -74,7 +74,7 @@ export function registerRtiConsumers(queue: Queue): void {
         payload: { service: "hrms", action: "rti_respond", resourceType: "rti_request", resourceId: p.id, outcome: "success" },
       });
     });
-    await cache.invalidate(`hrms:${msg.tenantId}:rti:*`);
+    await cache.invalidateResource(msg.tenantId, "rti");
     log.info({ id: msg.messageId, rtiId: p.id }, "Processed rti.respond");
   });
 
@@ -96,7 +96,7 @@ export function registerRtiConsumers(queue: Queue): void {
         payload: { service: "hrms", action: "rti_appeal", resourceType: "rti_request", resourceId: p.id, outcome: "success" },
       });
     });
-    await cache.invalidate(`hrms:${msg.tenantId}:rti:*`);
+    await cache.invalidateResource(msg.tenantId, "rti");
     log.info({ id: msg.messageId, rtiId: p.id }, "Processed rti.appeal");
   });
 
@@ -118,7 +118,7 @@ export function registerRtiConsumers(queue: Queue): void {
         payload: { service: "hrms", action: "rti_close", resourceType: "rti_request", resourceId: p.id, outcome: "success" },
       });
     });
-    await cache.invalidate(`hrms:${msg.tenantId}:rti:*`);
+    await cache.invalidateResource(msg.tenantId, "rti");
     log.info({ id: msg.messageId, rtiId: p.id }, "Processed rti.close");
   });
 }

@@ -41,7 +41,7 @@ export function registerInstrumentsConsumers(queue: Queue): void {
       });
       await audit(tx, msg, "issue", "instrument", p.instrumentNo);
     });
-    await cache.invalidate(`finance:${msg.tenantId}:instruments:*`);
+    await cache.invalidateResource(msg.tenantId, "instruments");
     log.info({ id: msg.messageId }, "Processed instrument.issue");
   });
 
@@ -87,7 +87,7 @@ export function registerInstrumentsConsumers(queue: Queue): void {
       });
       await audit(tx, msg, p.action, "instrument", p.id);
     });
-    await cache.invalidate(`finance:${msg.tenantId}:instruments:*`);
+    await cache.invalidateResource(msg.tenantId, "instruments");
     log.info({ id: msg.messageId, action: p.action }, "Processed instrument.transition");
   });
 }

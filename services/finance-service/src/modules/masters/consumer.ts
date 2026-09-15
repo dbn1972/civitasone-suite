@@ -68,7 +68,7 @@ export function registerMastersConsumers(queue: Queue): void {
       });
       await audit(tx, msg, "sync_ddo", "masters", msg.messageId);
     });
-    await cache.invalidate(`finance:${msg.tenantId}:masters:*`);
+    await cache.invalidateResource(msg.tenantId, "masters");
     log.info({ id: msg.messageId }, "Processed masters.ddo_sync");
   });
 
@@ -83,7 +83,7 @@ export function registerMastersConsumers(queue: Queue): void {
       });
       await audit(tx, msg, "sync_pao", "masters", msg.messageId);
     });
-    await cache.invalidate(`finance:${msg.tenantId}:masters:*`);
+    await cache.invalidateResource(msg.tenantId, "masters");
     log.info({ id: msg.messageId }, "Processed masters.pao_sync");
   });
 
@@ -101,7 +101,7 @@ export function registerMastersConsumers(queue: Queue): void {
       });
       await audit(tx, msg, "create_bank_account", "bank_account", p.id);
     });
-    await cache.invalidate(`finance:${msg.tenantId}:masters:*`);
+    await cache.invalidateResource(msg.tenantId, "masters");
   });
 
   queue.subscribe(COMMANDS.fiscalYearCreate, async (msg) => {
@@ -122,7 +122,7 @@ export function registerMastersConsumers(queue: Queue): void {
         .where(and(eq(fiscalYears.tenantId, p.tenantId), eq(fiscalYears.status, "active"), ne(fiscalYears.id, p.id)));
       await audit(tx, msg, "create_fiscal_year", "fiscal_year", p.id);
     });
-    await cache.invalidate(`finance:${msg.tenantId}:masters:*`);
+    await cache.invalidateResource(msg.tenantId, "masters");
   });
 
   queue.subscribe(COMMANDS.fiscalYearActivate, async (msg) => {
@@ -137,7 +137,7 @@ export function registerMastersConsumers(queue: Queue): void {
         .where(and(eq(fiscalYears.tenantId, p.tenantId), eq(fiscalYears.code, p.code)));
       await audit(tx, msg, "activate_fiscal_year", "fiscal_year", p.code);
     });
-    await cache.invalidate(`finance:${msg.tenantId}:masters:*`);
+    await cache.invalidateResource(msg.tenantId, "masters");
   });
 
   queue.subscribe(COMMANDS.openingBalancesEnter, async (msg) => {
@@ -167,7 +167,7 @@ export function registerMastersConsumers(queue: Queue): void {
       }
       await audit(tx, msg, "enter_opening_balances", "opening_balance", p.id);
     });
-    await cache.invalidate(`finance:${msg.tenantId}:masters:*`);
+    await cache.invalidateResource(msg.tenantId, "masters");
   });
 }
 

@@ -26,7 +26,7 @@ export function registerDashboardConsumers(queue: Queue): void {
         payload: { service: "hrms", action: "dashboard_refresh", resourceType: "dashboard", resourceId: msg.messageId, outcome: "success" },
       });
     });
-    await cache.invalidate(`hrms:${msg.tenantId}:dashboard:*`);
+    await cache.invalidateResource(msg.tenantId, "dashboard");
     log.info({ id: msg.messageId }, "Processed dashboard.refresh");
   });
 }

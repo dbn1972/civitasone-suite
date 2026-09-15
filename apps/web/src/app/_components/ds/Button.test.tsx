@@ -1,0 +1,72 @@
+import { describe, it, expect, vi } from "vitest";
+import { render, screen, fireEvent } from "@testing-library/react";
+import { Button } from "./Button";
+
+describe("Button", () => {
+  it("defaults to a primary, default-size button", () => {
+    render(<Button>Save</Button>);
+    const btn = screen.getByRole("button", { name: "Save" });
+    expect(btn.className).toBe("btn primary");
+    expect(btn).toHaveAttribute("type", "button");
+  });
+
+  it("renders the ghost variant", () => {
+    render(<Button variant="ghost">Cancel</Button>);
+    expect(screen.getByRole("button", { name: "Cancel" }).className).toBe("btn ghost");
+  });
+
+  it("renders the danger variant", () => {
+    render(<Button variant="danger">Delete</Button>);
+    expect(screen.getByRole("button", { name: "Delete" }).className).toBe("btn danger");
+  });
+
+  it("renders the secondary variant", () => {
+    render(<Button variant="secondary">More</Button>);
+    expect(screen.getByRole("button", { name: "More" }).className).toBe("btn secondary");
+  });
+
+  it("appends the sm size class", () => {
+    render(<Button variant="primary" size="sm">Approve</Button>);
+    expect(screen.getByRole("button", { name: "Approve" }).className).toBe("btn primary sm");
+  });
+
+  it("merges a caller-supplied className", () => {
+    render(<Button className="extra">Go</Button>);
+    expect(screen.getByRole("button", { name: "Go" }).className).toBe("btn primary extra");
+  });
+
+  it("is disabled and not clickable when disabled is set", () => {
+    const onClick = vi.fn();
+    render(<Button disabled onClick={onClick}>Save</Button>);
+    const btn = screen.getByRole("button", { name: "Save" });
+    expect(btn).toBeDisabled();
+    fireEvent.click(btn);
+    expect(onClick).not.toHaveBeenCalled();
+  });
+
+  it("disables and marks aria-busy when loading", () => {
+    render(<Button loading>Saving…</Button>);
+    const btn = screen.getByRole("button", { name: "Saving…" });
+    expect(btn).toBeDisabled();
+    expect(btn).toHaveAttribute("aria-busy", "true");
+  });
+
+  it("does not set aria-busy when not loading", () => {
+    render(<Button>Save</Button>);
+    expect(screen.getByRole("button", { name: "Save" })).not.toHaveAttribute("aria-busy");
+  });
+
+  it("allows overriding type to submit", () => {
+    render(<Button type="submit">Submit</Button>);
+    expect(screen.getByRole("button", { name: "Submit" })).toHaveAttribute("type", "submit");
+  });
+
+  it("forwards native button props such as onClick and aria-expanded", () => {
+    const onClick = vi.fn();
+    render(<Button onClick={onClick} aria-expanded={true}>Toggle</Button>);
+    const btn = screen.getByRole("button", { name: "Toggle" });
+    fireEvent.click(btn);
+    expect(onClick).toHaveBeenCalledTimes(1);
+    expect(btn).toHaveAttribute("aria-expanded", "true");
+  });
+});
