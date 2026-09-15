@@ -104,6 +104,7 @@ export function ExecutionActions({ workId }: ExecutionActionsProps) {
           >
             <div>
               <label
+                htmlFor="execution-completion-date"
                 style={{
                   display: "block",
                   fontSize: 12,
@@ -115,6 +116,7 @@ export function ExecutionActions({ workId }: ExecutionActionsProps) {
                 Completion Date (optional)
               </label>
               <input
+                id="execution-completion-date"
                 type="date"
                 className="input"
                 value={completionDate}
@@ -157,6 +159,7 @@ export function ExecutionActions({ workId }: ExecutionActionsProps) {
           >
             <div>
               <label
+                htmlFor="execution-closure-type"
                 style={{
                   display: "block",
                   fontSize: 12,
@@ -168,6 +171,7 @@ export function ExecutionActions({ workId }: ExecutionActionsProps) {
                 Closure Type
               </label>
               <select
+                id="execution-closure-type"
                 className="input"
                 value={closureType}
                 onChange={(e) => setClosureType(e.target.value as ClosureType)}

@@ -196,7 +196,8 @@ function SplitProposalForm({
     <div style={formPad}>
       <form onSubmit={handleSubmit}>
         <div style={fieldGroup}>
-          <label style={labelStyle}>Parent Work</label>
+          {/* Not a <label>: read-only display text, not a form control. */}
+          <p style={labelStyle}>Parent Work</p>
           <div
             style={{
               fontSize: 13,
@@ -210,10 +211,11 @@ function SplitProposalForm({
           </div>
         </div>
         <div style={fieldGroup}>
-          <label style={labelStyle}>
+          <label htmlFor="proposal-split-description" style={labelStyle}>
             Description <span style={{ color: "#b42318" }}>*</span>
           </label>
           <textarea
+            id="proposal-split-description"
             required
             maxLength={2048}
             placeholder="Describe the sub-work scope"
@@ -300,8 +302,9 @@ function MapCOAForm({
     placeholder: string,
   ) => (
     <div>
-      <label style={labelStyle}>{label}</label>
+      <label htmlFor={`coa-${field}`} style={labelStyle}>{label}</label>
       <input
+        id={`coa-${field}`}
         type="text"
         maxLength={16}
         placeholder={placeholder}
@@ -319,10 +322,11 @@ function MapCOAForm({
     <div style={formPad}>
       <form onSubmit={handleSubmit}>
         <div style={fieldGroup}>
-          <label style={labelStyle}>
+          <label htmlFor="coa-majorHead" style={labelStyle}>
             Major Head <span style={{ color: "#b42318" }}>*</span>
           </label>
           <input
+            id="coa-majorHead"
             type="text"
             required
             maxLength={16}
@@ -407,10 +411,11 @@ function MapOfficeForm({
     <div style={formPad}>
       <form onSubmit={handleSubmit}>
         <div style={fieldGroup}>
-          <label style={labelStyle}>
+          <label htmlFor="office-map-division-id" style={labelStyle}>
             Division ID <span style={{ color: "#b42318" }}>*</span>
           </label>
           <input
+            id="office-map-division-id"
             type="text"
             required
             placeholder="Division UUID"
@@ -423,8 +428,9 @@ function MapOfficeForm({
           )}
         </div>
         <div style={fieldGroup}>
-          <label style={labelStyle}>Sub-Division ID</label>
+          <label htmlFor="office-map-sub-division-id" style={labelStyle}>Sub-Division ID</label>
           <input
+            id="office-map-sub-division-id"
             type="text"
             placeholder="Sub-division UUID (optional)"
             value={subDivisionId}
@@ -436,8 +442,9 @@ function MapOfficeForm({
           )}
         </div>
         <div style={fieldGroup}>
-          <label style={labelStyle}>Section ID</label>
+          <label htmlFor="office-map-section-id" style={labelStyle}>Section ID</label>
           <input
+            id="office-map-section-id"
             type="text"
             placeholder="Section UUID (optional)"
             value={sectionId}

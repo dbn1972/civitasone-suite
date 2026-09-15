@@ -93,8 +93,9 @@ function NewMbForm() {
             }}
           >
             <div>
-              <label style={labelStyle}>Work ID (UUID) *</label>
+              <label htmlFor="new-mb-work-id" style={labelStyle}>Work ID (UUID) *</label>
               <input
+                id="new-mb-work-id"
                 type="text"
                 required
                 value={form.workId}
@@ -105,8 +106,9 @@ function NewMbForm() {
             </div>
 
             <div>
-              <label style={labelStyle}>Award ID (UUID) *</label>
+              <label htmlFor="new-mb-award-id" style={labelStyle}>Award ID (UUID) *</label>
               <input
+                id="new-mb-award-id"
                 type="text"
                 required
                 value={form.awardId}
@@ -120,8 +122,9 @@ function NewMbForm() {
             </div>
 
             <div>
-              <label style={labelStyle}>MB Number *</label>
+              <label htmlFor="new-mb-number" style={labelStyle}>MB Number *</label>
               <input
+                id="new-mb-number"
                 type="text"
                 required
                 maxLength={64}
