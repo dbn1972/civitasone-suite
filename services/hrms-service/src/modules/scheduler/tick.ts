@@ -14,6 +14,8 @@
  * deterministically for verification.
  */
 import { sql } from "drizzle-orm";
+import { pino } from "pino";
+import { recordScheduledJobRun } from "@civitasone/observability";
 import type { Db } from "../../shared/db.js";
 import {
   computeSuperannuationDue, computeProbationDue,
@@ -107,7 +109,17 @@ async function upsertDueRows(
 
 export const SCHEDULER_JOB_NAME = "hr_due_lists";
 
+// PERF-011: this tick previously emitted no logs at all — a hung DB call or a
+// tenant scan that silently produced zero rows was invisible outside the
+// scheduler.hrms_scheduler_runs row (queried on demand, never watched). The
+// logger + recordScheduledJobRun() below give it the same "is this stuck"
+// signal every other scheduled job in the fleet now has, and reuse
+// SCHEDULER_JOB_NAME so the log lines, the Prometheus series, and the
+// job_name column in scheduler.hrms_scheduler_runs all correlate.
+const log = pino({ name: SCHEDULER_JOB_NAME });
+
 export async function runSchedulerOnce(db: Db, opts: TickOptions = {}): Promise<TickResult> {
+  const start = performance.now();
   const runDate = opts.asOf ?? todayISO();
   const supWindow = opts.superannuationWithinDays ?? 180;
   const probWindow = opts.probationWithinDays ?? 60;
@@ -175,12 +187,33 @@ export async function runSchedulerOnce(db: Db, opts: TickOptions = {}): Promise<
           tenants_seen = ${tenantsSeen}, rows_produced = ${supRows + probRows},
           detail = ${`superannuation=${supRows}, probation=${probRows}, tenantsFailed=${failed}`}
       WHERE job_name = ${SCHEDULER_JOB_NAME} AND run_date = ${runDate}`);
+
+    // PERF-011: record the tick as a success even when some individual
+    // tenants failed (matches the run-marker's own 'ok' semantics above) —
+    // per-tenant failures are already visible via `failed`/`outcomes`.
+    const durationMs = performance.now() - start;
+    recordScheduledJobRun(SCHEDULER_JOB_NAME, "success", durationMs);
+    log.info(
+      {
+        event: "scheduler.tick", runDate, tenantsSeen,
+        superannuationRows: supRows, probationRows: probRows,
+        tenantsFailed: failed, durationMs: Math.round(durationMs),
+      },
+      "hrms scheduler tick completed",
+    );
   } catch (err) {
     // Only reached for tick-wide failures (tenant discovery / run-marker update).
     await db.execute(sql`
       UPDATE scheduler.hrms_scheduler_runs
       SET finished_at = now(), status = 'error', detail = ${String(err)}
       WHERE job_name = ${SCHEDULER_JOB_NAME} AND run_date = ${runDate}`);
+
+    const durationMs = performance.now() - start;
+    recordScheduledJobRun(SCHEDULER_JOB_NAME, "failure", durationMs);
+    log.error(
+      { event: "scheduler.tick", runDate, durationMs: Math.round(durationMs), err },
+      "hrms scheduler tick failed",
+    );
     throw err;
   }
 

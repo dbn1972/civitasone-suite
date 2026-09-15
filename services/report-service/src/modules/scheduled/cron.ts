@@ -23,8 +23,14 @@ import { computeNextRunAt, GENERATION_TIMEOUT_MS, MAX_DELIVERY_RETRIES } from ".
 import type { ScheduledReportCadence } from "./schema.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import { NOTIFICATION_SEND, buildNotificationPayload } from "@civitasone/events";
+import { withScheduledJobMetrics } from "@civitasone/observability";
 
-const log = pino({ name: "reports.scheduled-cron" });
+// PERF-011: shared identifier for both the pino logger and the
+// scheduled_job_* Prometheus series (packages/observability) so a tick's log
+// lines and its metrics always correlate under the same name.
+export const SCHEDULED_REPORT_CRON_JOB = "reports.scheduled-cron";
+
+const log = pino({ name: SCHEDULED_REPORT_CRON_JOB });
 
 const SYSTEM_ACTOR = "00000000-0000-4000-8000-000000000000";
 
@@ -41,7 +47,11 @@ export function startScheduledReportCron(intervalMs = 60_000): ReturnType<typeof
     return null;
   }
 
-  const timer = setInterval(() => void tick().catch((e) => {
+  // PERF-011: wrap every tick with withScheduledJobMetrics so a stuck or
+  // silently-failing sweep shows up as a stale
+  // scheduled_job_last_success_timestamp / a
+  // scheduled_job_runs_total{status="failure"} increment, not just silence.
+  const timer = setInterval(() => void withScheduledJobMetrics(SCHEDULED_REPORT_CRON_JOB, tick, { logger: log }).catch((e) => {
     log.error({ err: e }, "ScheduledReportCron: sweep error");
   }), intervalMs);
   timer.unref();
