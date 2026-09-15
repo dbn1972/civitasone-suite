@@ -14,7 +14,14 @@ const CITIZEN_ROLES = [...ADMIN_ROLES, "citizen", "employee"];
 
 const idParam = z.object({ id: z.string().uuid() });
 const dateQuery = z.object({ date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/) });
-const listQuery = z.object({ status: z.string().optional() });
+// PERF-006: limit/offset added so listFacilities/listBookings (both
+// tenant-wide) return a bounded page -- mirrors citizen-lease/routes.ts's
+// listQuery in this same service.
+const listQuery = z.object({
+  status: z.string().optional(),
+  limit:  z.coerce.number().int().positive().max(200).default(50),
+  offset: z.coerce.number().int().nonnegative().default(0),
+});
 
 const createFacilityBody = z.object({
   facilityName: z.string().min(1),
@@ -76,7 +83,7 @@ export async function bookingRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, CITIZEN_ROLES);
     const q = listQuery.parse(req.query);
-    return reply.send({ data: await queries.listFacilities(ctx.tenantId, q) });
+    return reply.send(await queries.listFacilities(ctx.tenantId, { status: q.status }, q.limit, q.offset));
   });
 
   app.get("/v1/estab/booking/facilities/:id", async (req, reply) => {
@@ -108,7 +115,7 @@ export async function bookingRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, CITIZEN_ROLES);
     const q = listQuery.parse(req.query);
-    return reply.send({ data: await queries.listBookings(ctx.tenantId, q) });
+    return reply.send(await queries.listBookings(ctx.tenantId, { status: q.status }, q.limit, q.offset));
   });
 
   app.get("/v1/estab/booking/bookings/:id", async (req, reply) => {

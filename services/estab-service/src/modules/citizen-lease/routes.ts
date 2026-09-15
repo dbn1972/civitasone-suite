@@ -69,7 +69,7 @@ export async function citizenLeaseRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, READER_ROLES);
     const q = listQuery.parse(req.query);
-    return reply.send({ data: await queries.listProperties(ctx.tenantId, { status: q.status ?? undefined }) });
+    return reply.send(await queries.listProperties(ctx.tenantId, { status: q.status ?? undefined }, q.limit, q.offset));
   });
 
   app.get("/v1/estab/citizen-lease/properties/:id", async (req, reply) => {
@@ -93,7 +93,7 @@ export async function citizenLeaseRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, READER_ROLES);
     const q = listQuery.parse(req.query);
-    return reply.send({ data: await queries.listLeases(ctx.tenantId, { status: q.status ?? undefined }) });
+    return reply.send(await queries.listLeases(ctx.tenantId, { status: q.status ?? undefined }, q.limit, q.offset));
   });
 
   app.get("/v1/estab/citizen-lease/leases/:id", async (req, reply) => {
@@ -133,7 +133,7 @@ export async function citizenLeaseRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, READER_ROLES);
     const q = listQuery.parse(req.query);
-    return reply.send({ data: await queries.listRequests(ctx.tenantId, { status: q.status ?? undefined }) });
+    return reply.send(await queries.listRequests(ctx.tenantId, { status: q.status ?? undefined }, q.limit, q.offset));
   });
 
   app.get("/v1/estab/citizen-lease/requests/:id", async (req, reply) => {
