@@ -191,6 +191,44 @@ SET app.tenant_id = 'xyz';`;
     expect(violations[0].snippet).toContain("app.tenant_id");
     expect(violations[0].snippet).not.toContain("statement_timeout");
   });
+
+  // ── PERF-013 review follow-up (round 2): the isSql-gated TO pattern
+  // above closed issue A's false positive but introduced a regression of
+  // its own — gating bare TO on file extension also stops it from matching
+  // TO-syntax raw SQL that's embedded in a .ts/.mjs file via a template
+  // literal (e.g. handed to sql.unsafe(...)), the same embedding shape the
+  // set_config(...) test above already covers. Fixed by requiring a
+  // value-like token (a quote, `$`, or `:`) immediately after TO instead of
+  // gating on isSql/file extension at all — this must now catch the
+  // embedded case even though isSql is false here. ──
+  it("reports raw `SET app.tenant_id TO '...'` embedded in a .ts template literal as a violation, even though isSql is false", () => {
+    const source = `
+await sql.unsafe(\`SET app.tenant_id TO '\${T}'\`);
+`;
+    const violations = checkTenantGucViolations(source, false);
+    expect(violations).toHaveLength(1);
+    expect(violations[0].snippet).toContain("SET app.tenant_id");
+  });
+
+  // ── Reviewer-flagged secondary issue (lower severity, non-blocking): a
+  // multi-line string concatenation of ordinary, non-violating text that
+  // itself contains the bare word SET (triggering the lookahead-window
+  // check), immediately followed within that same window by a real
+  // violation, used to report the real violation TWICE — a phantom,
+  // mislocated extra one, plus the correct one — because
+  // collapseConcatJoins() deleted the real physical newline inside the
+  // join span, desyncing the line-offset count from the original `lines`
+  // array. Fixed by preserving the join span's newline count instead of
+  // always collapsing to "". ──
+  it("does not double-report a real violation when a preceding multi-line concatenated non-violating string also contains the word SET", () => {
+    const source = `logger.warn("a message about SET " +
+  "configuration, nothing to see here");
+SET app.tenant_id = 'real-value';`;
+    const violations = checkTenantGucViolations(source, false);
+    expect(violations).toHaveLength(1);
+    expect(violations[0].line).toBe(3);
+    expect(violations[0].snippet).toContain("app.tenant_id");
+  });
 });
 
 describe("raw-session-guc-guard: checkAdvisoryLockViolations()", () => {

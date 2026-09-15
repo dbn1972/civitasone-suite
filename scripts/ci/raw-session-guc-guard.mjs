@@ -27,12 +27,18 @@
 //            packages/db/src/raw-tenant-guc.ts's `withRawTenantGuc` and
 //            services/audit-service/migrations/0025_*.sql are the
 //            established patterns).
-// VIOLATION: `SET app.foo = ...` / `SET SESSION app.foo = ...` (session-
-//            scoped) / `SET app.foo TO ...` in `.sql` files only (`TO` is
-//            Postgres's synonym for `=` in a SET statement, but it is ALSO
-//            the ordinary English word "to" — matching it outside real SQL
-//            false-positives on application log/error strings, so it is
-//            gated on isSql; see RAW_SET_RE_SQL below) /
+// VIOLATION: `SET app.foo = ...` / `SET app.foo TO ...` / `SET SESSION
+//            app.foo = ...` (session-scoped). `TO` is Postgres's own
+//            accepted synonym for `=` in a SET statement, but it is ALSO
+//            the ordinary English word "to" — matching it unconditionally
+//            false-positives on application log/error strings. An earlier
+//            fix-up gated `TO` on the guard's isSql (file-extension) flag,
+//            which fixed that false positive but introduced a regression:
+//            it silently stopped catching `TO`-syntax raw SQL embedded in
+//            a `.ts`/`.mjs` file via a template literal (e.g. handed to
+//            `sql.unsafe(...)`). Fixed by requiring a value-like token
+//            immediately after `TO` instead of gating on file extension —
+//            see RAW_SET_RE below /
 //            `set_config('app.foo', v, false)` /
 //            `set_config('app.foo', v, <anything other than a literal
 //            true>)` — a non-literal third argument (a variable, a function
@@ -186,27 +192,41 @@ function stripComments(source, sqlStyle) {
 }
 
 // ── 3. Check 1: raw session-scoped tenant/app GUC ───────────────────────────
-// Matches `SET app.foo = ...` / `SET SESSION app.foo = ...` but NOT `SET
-// LOCAL app.foo = ...`. `(?!LOCAL\b)` after `SET\s+` rejects LOCAL right
-// after SET; `SESSION` is accepted (still a violation — session-scoped).
-// Safe in ANY context (`.sql` or application code) because `=` cannot occur
-// as ordinary English prose the way the bare word "to" below can.
-const RAW_SET_RE = /\bSET\s+(?!LOCAL\b)(?:SESSION\s+)?((?:app|tenant)\.[A-Za-z_][A-Za-z0-9_]*)\s*=/gi;
-
-// SQL-only variant additionally matching bare `TO` — Postgres's own accepted
-// synonym for `=` in a SET statement (PERF-013 — the pre-fix version only
-// recognized `=`). Deliberately a SEPARATE pattern from RAW_SET_RE, applied
-// only when isSql is true (see the dispatch in checkTenantGucViolations
-// below): bare `TO` is ALSO just the ordinary English word "to", so applying
-// it unconditionally to application code is a false-positive generator —
-// live-reproduced against this exact guard on a line that is not SQL at
-// all: `throw new Error("SET app.tenant_id to a valid UUID before calling
-// this")` (PERF-013 review follow-up). A `.sql` migration file is never
-// anything other than SQL, so gating on isSql — computed once per file from
-// its extension, in main() — cannot be tricked by a string literal the way
-// per-line/per-match detection could be; this reuses that existing
-// distinction rather than inventing a new one.
-const RAW_SET_RE_SQL = /\bSET\s+(?!LOCAL\b)(?:SESSION\s+)?((?:app|tenant)\.[A-Za-z_][A-Za-z0-9_]*)\s*(?:=|\bTO\b)/gi;
+// Matches `SET app.foo = ...` / `SET app.foo TO ...` / `SET SESSION app.foo
+// = ...` but NOT `SET LOCAL app.foo = ...`. `(?!LOCAL\b)` after `SET\s+`
+// rejects LOCAL right after SET; `SESSION` is accepted (still a violation —
+// session-scoped). `TO` is Postgres's own accepted synonym for `=` in a SET
+// statement (PERF-013 — the pre-fix version only recognized `=`).
+//
+// Bare `TO` is ALSO just the ordinary English word "to", so matching it
+// unconditionally is a false-positive generator — live-reproduced on a line
+// that is not SQL at all: `throw new Error("SET app.tenant_id to a valid
+// UUID before calling this")` (PERF-013 review follow-up, issue A). The
+// first attempt at closing that false positive gated the `TO` alternative
+// on the guard's isSql flag (computed once per file from its extension, in
+// main()), via a separate RAW_SET_RE_SQL pattern applied only to `.sql`
+// files. That fixed the false positive but is too broad a hammer: it also
+// silently stopped matching real raw SQL using `TO` syntax that's embedded
+// in a `.ts`/`.mjs` file via a template literal handed to something like
+// `sql.unsafe(...)` — e.g. `await sql.unsafe(\`SET app.tenant_id TO
+// '${T}'\`)` — a genuine regression, independently found in a second
+// review pass (0 violations against the isSql-gated version; 1 against the
+// version before that gate was added, proving it a real regression and not
+// a pre-existing gap).
+//
+// Fixed by tightening what `TO` may be followed by instead of gating on
+// file extension: `\bTO\s*(?=['"$:])` only matches when the next non-space
+// character looks like the start of a value — a quote (a SQL string
+// literal), `$` (a `${...}` template interpolation or a `$1` bound
+// parameter), or `:` (a `:'name'`/`:name` bind/psql-variable form). Plain
+// English "to" in a sentence is essentially never immediately followed by
+// one of those three characters, so this resolves the false positive
+// without depending on isSql/file extension at all — which means this one
+// pattern now correctly covers both real `.sql` files AND the embedded-in-
+// `.ts`-via-template-literal case above, with no separate SQL-only pattern
+// or isSql dispatch needed.
+const RAW_SET_RE =
+  /\bSET\s+(?!LOCAL\b)(?:SESSION\s+)?((?:app|tenant)\.[A-Za-z_][A-Za-z0-9_]*)\s*(?:=|\bTO\s*(?=['"$:]))/gi;
 
 // A candidate line is any line containing the bare `SET` keyword; the actual
 // identifier/operator is then searched for across a short forward window —
@@ -236,9 +256,27 @@ const SET_LOOKAHEAD_LINES = 4;
 // different kind of noise between the tokens that matter here. SQL uses
 // `||`, never `+`, for string building, so this is only meaningful (and
 // only applied) for JS/TS source.
+//
+// The replacement preserves however many newlines the matched join span
+// itself contained (zero, for the common same-line case) instead of always
+// collapsing to the empty string. checkTenantGucViolations() below locates
+// a match's line by counting newlines in this collapsed text, so silently
+// deleting a *real* physical newline here (a join whose `+` sits on its
+// own line, or between two lines) desyncs that count from the original
+// `lines` array — independently found in review to produce a phantom extra
+// violation: a multi-line concatenation of ordinary, non-violating text
+// that happens to also contain the bare word "SET" (triggering the window
+// check) immediately followed, within the same lookahead window, by a real
+// violation, could report that real violation TWICE — once misattributed
+// to the wrong (earlier) line under the desynced count, and once more,
+// correctly, when the outer loop separately reaches the real violation's
+// own line. Keeping the newline count intact avoids the desync; `\s*`/
+// `\s+` in the matching regexes are indifferent to a run of newlines vs.
+// nothing at this position, so this changes nothing about whether or what
+// matches — only where a match is reported.
 const CONCAT_JOIN_RE = /(['"`])\s*\+\s*(['"`])/g;
 function collapseConcatJoins(text) {
-  return text.replace(CONCAT_JOIN_RE, "");
+  return text.replace(CONCAT_JOIN_RE, (m) => "\n".repeat((m.match(/\n/g) || []).length));
 }
 
 // Matches `set_config('app.foo', <value>, <is_local>)` and captures the
@@ -272,11 +310,10 @@ export function checkTenantGucViolations(source, isSql) {
     const windowEnd = Math.min(i + SET_LOOKAHEAD_LINES, lines.length);
     const rawWindow = lines.slice(i, windowEnd).join("\n");
     const windowText = isSql ? rawWindow : collapseConcatJoins(rawWindow);
-    // isSql picks which pattern applies (see RAW_SET_RE_SQL above) — bare
-    // `TO` is only ever a candidate inside real SQL.
-    const activeRe = isSql ? RAW_SET_RE_SQL : RAW_SET_RE;
-    activeRe.lastIndex = 0;
-    const m = activeRe.exec(windowText);
+    // One pattern covers both contexts now — TO is gated on what follows
+    // it (see RAW_SET_RE above), not on isSql/file extension.
+    RAW_SET_RE.lastIndex = 0;
+    const m = RAW_SET_RE.exec(windowText);
     if (!m) {
       i += 1;
       continue;
