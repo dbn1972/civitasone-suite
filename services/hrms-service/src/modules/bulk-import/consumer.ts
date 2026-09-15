@@ -29,7 +29,7 @@ export function registerBulkImportConsumers(queue: Queue): void {
         payload: { service: "hrms", action: "bulk_import_start", resourceType: "bulk_import", resourceId: p.batchId, outcome: "success" },
       });
     });
-    await cache.invalidate(`hrms:${msg.tenantId}:bulk_import:*`);
+    await cache.invalidateResource(msg.tenantId, "bulk_import");
     log.info({ id: msg.messageId, batchId: p.batchId }, "Processed bulk_import.start");
   });
 
@@ -54,7 +54,7 @@ export function registerBulkImportConsumers(queue: Queue): void {
         payload: { service: "hrms", action: "bulk_import_complete", resourceType: "bulk_import", resourceId: p.batchId, outcome: "success" },
       });
     });
-    await cache.invalidate(`hrms:${msg.tenantId}:bulk_import:*`);
+    await cache.invalidateResource(msg.tenantId, "bulk_import");
     log.info({ id: msg.messageId, batchId: p.batchId }, "Processed bulk_import.complete");
   });
 }

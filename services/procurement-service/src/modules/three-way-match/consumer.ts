@@ -176,7 +176,7 @@ export function registerThreeWayMatchConsumers(queue: Queue): void {
       });
     });
 
-    await cache.invalidate(`procurement:${msg.tenantId}:three_way_match:*`);
+    await cache.invalidateResource(msg.tenantId, "three_way_match");
     log.info({ id: msg.messageId }, "Processed three_way_match.run");
   });
 }

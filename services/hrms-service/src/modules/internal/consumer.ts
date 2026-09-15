@@ -26,7 +26,7 @@ export function registerInternalConsumers(queue: Queue): void {
         payload: { service: "hrms", action: "payroll_snapshot", resourceType: "payroll_input", resourceId: msg.messageId, outcome: "success" },
       });
     });
-    await cache.invalidate(`hrms:${msg.tenantId}:internal:*`);
+    await cache.invalidateResource(msg.tenantId, "internal");
     log.info({ id: msg.messageId, month: p.month }, "Processed internal.payroll_snapshot");
   });
 }

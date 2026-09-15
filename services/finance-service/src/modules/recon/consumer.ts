@@ -34,7 +34,7 @@ export function registerReconConsumers(queue: Queue): void {
       log.debug({ id: msg.messageId }, "finance.recon.run already processed");
       return;
     }
-    await cache.invalidate(`finance:${msg.tenantId}:recon:*`);
+    await cache.invalidateResource(msg.tenantId, "recon");
     log.info({ id: msg.messageId, runId: result.run.id }, "Processed finance.recon.run");
   }, { visibilityTimeout: 300 });
 
@@ -86,7 +86,7 @@ export function registerReconConsumers(queue: Queue): void {
         },
       });
     });
-    await cache.invalidate(`finance:${msg.tenantId}:recon:*`);
+    await cache.invalidateResource(msg.tenantId, "recon");
     log.info({ id: msg.messageId, breakId: p.id }, "Processed finance.recon.exception_action");
   });
 }

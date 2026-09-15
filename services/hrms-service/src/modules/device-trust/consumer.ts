@@ -26,7 +26,7 @@ export function registerDeviceTrustConsumers(queue: Queue): void {
         payload: { service: "hrms", action: "device_block", resourceType: "device", resourceId: p.deviceId, outcome: "success" },
       });
     });
-    await cache.invalidate(`hrms:${msg.tenantId}:device_trust:*`);
+    await cache.invalidateResource(msg.tenantId, "device_trust");
     log.info({ id: msg.messageId, deviceId: p.deviceId }, "Processed device_trust.block");
   });
 
@@ -48,7 +48,7 @@ export function registerDeviceTrustConsumers(queue: Queue): void {
         payload: { service: "hrms", action: "device_unblock", resourceType: "device", resourceId: p.deviceId, outcome: "success" },
       });
     });
-    await cache.invalidate(`hrms:${msg.tenantId}:device_trust:*`);
+    await cache.invalidateResource(msg.tenantId, "device_trust");
     log.info({ id: msg.messageId, deviceId: p.deviceId }, "Processed device_trust.unblock");
   });
 
@@ -70,7 +70,7 @@ export function registerDeviceTrustConsumers(queue: Queue): void {
         payload: { service: "hrms", action: "device_policy_update", resourceType: "device_policy", resourceId: msg.messageId, outcome: "success" },
       });
     });
-    await cache.invalidate(`hrms:${msg.tenantId}:device_trust:*`);
+    await cache.invalidateResource(msg.tenantId, "device_trust");
     log.info({ id: msg.messageId }, "Processed device_trust.policy_update");
   });
 }

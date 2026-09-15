@@ -26,7 +26,7 @@ export function registerSelfServiceConsumers(queue: Queue): void {
         payload: { service: "hrms", action: "self_service_profile_update", resourceType: "employee", resourceId: p.employeeId, outcome: "success" },
       });
     });
-    await cache.invalidate(`hrms:${msg.tenantId}:self_service:*`);
+    await cache.invalidateResource(msg.tenantId, "self_service");
     log.info({ id: msg.messageId, employeeId: p.employeeId }, "Processed self_service.profile_update");
   });
 }

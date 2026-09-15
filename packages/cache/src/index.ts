@@ -38,6 +38,35 @@ export function clampTtl(ttlSeconds: number): number {
 }
 
 /**
+ * PERF-007: bounded value size for anything this package writes to the store.
+ *
+ * Every write path here (`put`, `getOrLoad`, `listOrLoad`,
+ * `getOrLoadWithNegative`) JSON.stringify()s whatever the caller/loader hands
+ * it with no size check at all — a caller that accidentally caches a large
+ * report, an unpaginated list, or a wide join result stores that entire blob
+ * in Redis, on the SAME hot-path connection/instance every other service's
+ * request-scoped reads and writes share. One oversized value inflates Redis
+ * memory and the latency of anything sharing that instance; this is the
+ * value-size analogue of the unbounded-TTL problem MAX_TTL_SECONDS already
+ * guards against above.
+ *
+ * Fix, at this single choke point so every caller gets it automatically:
+ * before a value is written, its serialised byte length is checked against
+ * this cap. An oversized value is NOT written to the store — the safety
+ * behaviour is "don't cache it", not "throw" or "cache it anyway" — so a
+ * caller loading a large result still gets that value back correctly; it
+ * just isn't persisted into shared Redis memory. A warning is logged so the
+ * oversized read-through call site can be found and fixed (paginate it,
+ * cache a summary instead of the full payload, etc.) rather than the cap
+ * silently and repeatedly eating the cache benefit for that key.
+ *
+ * 256 KiB is generous for a cached read-through entity/list page (typically
+ * single-digit KB) while still catching the "cached an entire table" class
+ * of mistake long before it is large enough to matter to Redis itself.
+ */
+export const MAX_CACHE_VALUE_BYTES = 262_144; // 256 KiB
+
+/**
  * A transaction-like object that can run a callback when the surrounding DB
  * transaction commits. The drizzle/postgres-js layer used by CivitasOne does
  * NOT expose this today (see invalidateAfterCommit / README.md), but the helper
@@ -181,6 +210,28 @@ export class Cache {
     return ttlSeconds === undefined ? this.ttl : clampTtl(ttlSeconds);
   }
 
+  /**
+   * Single choke point for every write this class performs (see
+   * MAX_CACHE_VALUE_BYTES above). Serialises `value`, and writes it to the
+   * store UNLESS the serialised form exceeds the size cap, in which case the
+   * write is skipped and a warning is logged — the caller already has the
+   * fresh value from its loader regardless, so correctness is unaffected;
+   * only the caching of that one oversized entry is (deliberately) skipped.
+   */
+  private async writeToStore(key: string, value: unknown, ttlSeconds: number): Promise<void> {
+    const serialized = serialize(value);
+    const sizeBytes = Buffer.byteLength(serialized, "utf8");
+    if (sizeBytes > MAX_CACHE_VALUE_BYTES) {
+      console.warn(
+        `[@civitasone/cache] skipping cache write for "${key}": ` +
+        `${sizeBytes} bytes exceeds the ${MAX_CACHE_VALUE_BYTES}-byte cap ` +
+        `(MAX_CACHE_VALUE_BYTES) — value is still returned to the caller, just not cached`,
+      );
+      return;
+    }
+    await this.store.set(key, serialized, ttlSeconds);
+  }
+
   /** Build a namespaced key. Throws if you try to address another service's keyspace. */
   makeKey(tenantId: string, resource: string, id: string): string {
     return `${this.opts.service}:${tenantId}:${resource}:${id}`;
@@ -201,7 +252,7 @@ export class Cache {
     const cached = await this.store.get(key);
     if (cached !== null) return deserialize<T>(cached);
     const fresh = await loader();
-    await this.store.set(key, serialize(fresh), this.resolveTtl(ttlSeconds));
+    await this.writeToStore(key, fresh, this.resolveTtl(ttlSeconds));
     return fresh;
   }
 
@@ -223,7 +274,7 @@ export class Cache {
     const shared: Promise<T | null> = (async () => {
       const fresh = await loader();
       if (fresh !== null && fresh !== undefined) {
-        await this.store.set(key, serialize(fresh), this.resolveTtl(ttlSeconds));
+        await this.writeToStore(key, fresh, this.resolveTtl(ttlSeconds));
       }
       return fresh;
     })();
@@ -243,7 +294,7 @@ export class Cache {
 
   /** Prime the cache (used by the command handler for read-your-writes). */
   async put<T>(key: string, value: T, ttlSeconds?: number): Promise<void> {
-    await this.store.set(key, serialize(value), this.resolveTtl(ttlSeconds));
+    await this.writeToStore(key, value, this.resolveTtl(ttlSeconds));
   }
 
   /**
@@ -285,10 +336,10 @@ export class Cache {
     const shared: Promise<T | null> = (async () => {
       const fresh = await loader();
       if (fresh !== null && fresh !== undefined) {
-        await this.store.set(key, serialize(fresh), this.resolveTtl(opts?.ttlSeconds));
+        await this.writeToStore(key, fresh, this.resolveTtl(opts?.ttlSeconds));
       } else {
         // Negative cache: store a sentinel for a short TTL
-        await this.store.set(key, serialize("__NULL__"), opts?.negativeTtlSeconds ?? 30);
+        await this.writeToStore(key, "__NULL__", opts?.negativeTtlSeconds ?? 30);
       }
       return fresh;
     })();

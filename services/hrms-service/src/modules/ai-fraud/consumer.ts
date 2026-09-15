@@ -26,7 +26,7 @@ export function registerAiFraudConsumers(queue: Queue): void {
         payload: { service: "hrms", action: "ai_fraud_scan", resourceType: "fraud_scan", resourceId: msg.messageId, outcome: "success" },
       });
     });
-    await cache.invalidate(`hrms:${msg.tenantId}:ai_fraud:*`);
+    await cache.invalidateResource(msg.tenantId, "ai_fraud");
     log.info({ id: msg.messageId }, "Processed ai_fraud.scan");
   });
 
@@ -48,7 +48,7 @@ export function registerAiFraudConsumers(queue: Queue): void {
         payload: { service: "hrms", action: "ai_fraud_alert_update", resourceType: "fraud_alert", resourceId: p.id, outcome: "success" },
       });
     });
-    await cache.invalidate(`hrms:${msg.tenantId}:ai_fraud:*`);
+    await cache.invalidateResource(msg.tenantId, "ai_fraud");
     log.info({ id: msg.messageId, alertId: p.id }, "Processed ai_fraud.alert_update");
   });
 }

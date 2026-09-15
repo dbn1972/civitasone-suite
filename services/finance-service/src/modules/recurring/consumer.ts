@@ -39,7 +39,7 @@ export function registerRecurringConsumers(queue: Queue): void {
       });
       await audit(tx, msg, "create", "recurring_entry", id);
     });
-    await cache.invalidate(`finance:${msg.tenantId}:recurring:*`);
+    await cache.invalidateResource(msg.tenantId, "recurring");
     log.info({ id: msg.messageId }, "Processed recurring.entry_create");
   });
 
@@ -71,7 +71,7 @@ export function registerRecurringConsumers(queue: Queue): void {
       });
       await audit(tx, msg, "update", "recurring_entry", p.id);
     });
-    await cache.invalidate(`finance:${msg.tenantId}:recurring:*`);
+    await cache.invalidateResource(msg.tenantId, "recurring");
     log.info({ id: msg.messageId }, "Processed recurring.entry_update");
   });
 }
