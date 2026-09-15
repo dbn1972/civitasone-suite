@@ -1,5 +1,4 @@
 import Link from "next/link";
-import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { PageHeader, StatGrid, StatCard } from "../../../_components/ds";
 import { getProcurementVendors } from "../../../_data/loaders";
 import { VendorsTable } from "./VendorsTable";
@@ -13,14 +12,15 @@ export default async function VendorsPage() {
 
   return (
     <>
+      {/* UX-012: the data-source badge now lives inside VendorsTable, driven
+          by the same useSeededResource call that produces its rows — not a
+          second, independent read of `source` here that could disagree with
+          the table's own cache state (UX-002's pattern). */}
       <PageHeader
         title="Vendor Directory"
         subtitle="Approved vendor directory with empanelment status and performance ratings."
         actions={
-          <>
-            <Link href="/procurement/vendors/new" className="btn primary">+ Register Vendor</Link>
-            {source === "error" ? <DataSourceBadge source={source} message="Couldn't load — showing nothing" /> : null}
-          </>
+          <Link href="/procurement/vendors/new" className="btn primary">+ Register Vendor</Link>
         }
       />
 

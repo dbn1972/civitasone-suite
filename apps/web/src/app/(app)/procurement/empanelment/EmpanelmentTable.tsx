@@ -2,6 +2,7 @@
 
 import { useMemo } from "react";
 import { Card, DataTable, EmptyState } from "../../../_components/ds";
+import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { useSeededResource } from "@/lib/sync/resource";
 import type { EmpanelmentEntry } from "../../../_data/loaders";
 
@@ -15,7 +16,7 @@ type EmpanelmentRow = {
 } & Record<string, unknown>;
 
 export function EmpanelmentTable({ vendors, source = "api" }: { vendors: EmpanelmentEntry[]; source?: "api" | "error" }) {
-  const { data: rows, fromCache, offline, cachedAt } = useSeededResource<EmpanelmentEntry[]>(
+  const { data: rows, provenance, offline, cachedAt } = useSeededResource<EmpanelmentEntry[]>(
     "procurement.empanelment",
     vendors,
     source,
@@ -35,18 +36,19 @@ export function EmpanelmentTable({ vendors, source = "api" }: { vendors: Empanel
     [rows],
   );
 
-  const cacheNote =
-    offline || fromCache
-      ? `Showing saved data${cachedAt ? ` from ${new Date(cachedAt).toLocaleString("en-IN")}` : ""}${offline ? " — you're offline" : ""}.`
-      : null;
-
   return (
     <Card title="Empanelled Vendors">
-      {cacheNote ? (
-        <p role="status" aria-live="polite" style={{ fontSize: 12, color: "#92400e", margin: "0", padding: "8px 16px 0" }}>
-          {cacheNote}
-        </p>
-      ) : null}
+      {/* UX-012: this badge is the ONLY place that reports data provenance for
+          the rows shown below — it reads the same useSeededResource call as
+          `rows`, so it can never disagree with what the table shows
+          (UX-002's pattern; the page used to render a second, independent
+          badge from the raw `source` prop — removed). */}
+      <DataSourceBadge
+        provenance={provenance ?? "live"}
+        cachedAt={cachedAt}
+        offline={offline}
+        message={provenance === "error-no-data" ? "Couldn't load — showing nothing" : undefined}
+      />
       {tableRows.length === 0 ? (
         <EmptyState icon="🏢" title="No empanelled vendors" message="Vendors will appear here once empanelled." />
       ) : (

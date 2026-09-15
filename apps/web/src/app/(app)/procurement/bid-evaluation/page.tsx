@@ -1,4 +1,3 @@
-import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { PageHeader, StatGrid, StatCard, Card } from "../../../_components/ds";
 import { getProcurementBidEvaluations } from "../../../_data/loaders";
 import { BidEvaluationTable } from "./BidEvaluationTable";
@@ -12,10 +11,13 @@ export default async function BidEvaluationPage() {
 
   return (
     <>
+      {/* UX-012: the data-source badge now lives inside BidEvaluationTable,
+          driven by the same useSeededResource call that produces its rows —
+          not a second, independent read of `source` here that could
+          disagree with the table's own cache state (UX-002's pattern). */}
       <PageHeader
         title="Bid Evaluation"
         subtitle="Technical and financial scoring matrix for open tenders."
-        actions={source === "error" ? <DataSourceBadge source={source} message="Couldn't load — showing nothing" /> : null}
       />
 
       <StatGrid>
