@@ -101,6 +101,12 @@ services:
     # explicit bound proactively so prod never inherits the same ad-hoc drift.
     mem_limit: 3g
     mem_reservation: 768m
+    # REL-021: re-validated this sizing against the dev fleet's real queue
+    # count/shape (see docker-compose.yml's localstack service for the
+    # measurement) and added an explicit CPU bound proactively, matching this
+    # file's existing PERF-018 memory precedent -- see the REL-021 PR
+    # description for detail.
+    cpus: "2.0"
 
   pgbouncer:
     image: edoburu/pgbouncer:1.21.0
