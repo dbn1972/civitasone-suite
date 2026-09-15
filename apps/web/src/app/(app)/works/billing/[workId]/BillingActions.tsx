@@ -190,6 +190,7 @@ export function BillingActions({ bills }: BillingActionsProps) {
           >
             <div>
               <label
+                htmlFor="billing-mb-id"
                 style={{
                   display: "block",
                   fontSize: 12,
@@ -201,6 +202,7 @@ export function BillingActions({ bills }: BillingActionsProps) {
                 MB ID <span aria-hidden>*</span>
               </label>
               <input
+                id="billing-mb-id"
                 type="text"
                 className="input"
                 placeholder="Paste full MB UUID"
@@ -211,6 +213,7 @@ export function BillingActions({ bills }: BillingActionsProps) {
             </div>
             <div>
               <label
+                htmlFor="billing-mb-next-status"
                 style={{
                   display: "block",
                   fontSize: 12,
@@ -222,6 +225,7 @@ export function BillingActions({ bills }: BillingActionsProps) {
                 Next Status
               </label>
               <select
+                id="billing-mb-next-status"
                 className="input"
                 value={mbNextStatus}
                 onChange={(e) => setMbNextStatus(e.target.value)}

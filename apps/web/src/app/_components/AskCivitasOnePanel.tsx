@@ -8,6 +8,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
 import { useTranslations } from "next-intl";
+import { scrollBehavior } from "@/lib/motion";
 
 const SESSION_KEY = "civitasone.assistant.messages";
 
@@ -84,8 +85,10 @@ export function AskCivitasOnePanel({ onClose }: AskCivitasOnePanelProps) {
   }, []);
 
   // Scroll to bottom on new messages
+  // UX-005: honors prefers-reduced-motion -- instant jump instead of an
+  // animated scroll when the user has asked for reduced motion.
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    messagesEndRef.current?.scrollIntoView({ behavior: scrollBehavior() });
   }, [messages, isThinking]);
 
   // Handle Escape to close

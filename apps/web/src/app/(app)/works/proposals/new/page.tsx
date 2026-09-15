@@ -106,8 +106,9 @@ export default function NewProposalPage() {
           <p style={{ fontSize: 12, color: "var(--muted)" }}>Fields marked * are required.</p>
 
           <div>
-            <label style={labelStyle}>Description *</label>
+            <label htmlFor="proposal-new-description" style={labelStyle}>Description *</label>
             <textarea
+              id="proposal-new-description"
               required
               maxLength={2048}
               value={form.description}
@@ -125,8 +126,9 @@ export default function NewProposalPage() {
             }}
           >
             <div>
-              <label style={labelStyle}>Category *</label>
+              <label htmlFor="proposal-new-category" style={labelStyle}>Category *</label>
               <select
+                id="proposal-new-category"
                 required
                 value={form.category}
                 onChange={(e) =>
@@ -141,8 +143,9 @@ export default function NewProposalPage() {
             </div>
 
             <div>
-              <label style={labelStyle}>Estimated cost (₹) *</label>
+              <label htmlFor="proposal-new-estimated-cost" style={labelStyle}>Estimated cost (₹) *</label>
               <input
+                id="proposal-new-estimated-cost"
                 type="number"
                 required
                 min={0}
@@ -155,8 +158,9 @@ export default function NewProposalPage() {
             </div>
 
             <div>
-              <label style={labelStyle}>Work type ID (UUID)</label>
+              <label htmlFor="proposal-new-work-type-id" style={labelStyle}>Work type ID (UUID)</label>
               <input
+                id="proposal-new-work-type-id"
                 type="text"
                 value={form.workTypeId}
                 onChange={set("workTypeId")}
@@ -166,8 +170,9 @@ export default function NewProposalPage() {
             </div>
 
             <div>
-              <label style={labelStyle}>District</label>
+              <label htmlFor="proposal-new-district" style={labelStyle}>District</label>
               <input
+                id="proposal-new-district"
                 type="text"
                 maxLength={128}
                 value={form.district}
@@ -177,8 +182,9 @@ export default function NewProposalPage() {
             </div>
 
             <div>
-              <label style={labelStyle}>Taluka</label>
+              <label htmlFor="proposal-new-taluka" style={labelStyle}>Taluka</label>
               <input
+                id="proposal-new-taluka"
                 type="text"
                 maxLength={128}
                 value={form.taluka}
@@ -188,8 +194,9 @@ export default function NewProposalPage() {
             </div>
 
             <div>
-              <label style={labelStyle}>Village / locality</label>
+              <label htmlFor="proposal-new-village" style={labelStyle}>Village / locality</label>
               <input
+                id="proposal-new-village"
                 type="text"
                 maxLength={128}
                 value={form.village}
@@ -200,8 +207,9 @@ export default function NewProposalPage() {
           </div>
 
           <div>
-            <label style={labelStyle}>Remarks</label>
+            <label htmlFor="proposal-new-remarks" style={labelStyle}>Remarks</label>
             <textarea
+              id="proposal-new-remarks"
               maxLength={2048}
               value={form.remarks}
               onChange={set("remarks")}

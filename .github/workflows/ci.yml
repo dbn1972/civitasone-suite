@@ -25,6 +25,16 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm turbo typecheck
       - run: pnpm turbo lint
+      # UX-005 tranche 1: eslint-plugin-jsx-a11y is registered in
+      # apps/web/eslint.config.js at "warn" (so the `turbo lint` step above
+      # does not fail on this repo's pre-existing violations) -- this is the
+      # actual gate. It fails on any NEW (file:line|rule) pair not already in
+      # scripts/ci/jsx-a11y-baseline.json, and on any STALE entry (fixed but
+      # left listed), the same ratchet convention as empty-vs-error-guard.mjs
+      # and raw-status-leak-guard.mjs. See that script for --report/
+      # --write-baseline.
+      - name: jsx-a11y ratchet guard (UX-005)
+        run: node scripts/ci/jsx-a11y-ratchet-guard.mjs
 
   # ─────────────────────────────────────────────
   # Security: scan for known dev/test secrets in source

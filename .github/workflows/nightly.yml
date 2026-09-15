@@ -177,3 +177,121 @@ jobs:
             web-server.log
             mock-gateway.log
           retention-days: 14
+
+  # ─────────────────────────────────────────────
+  # UX-005 tranche 1: full-sweep accessibility discovery.
+  #
+  # The per-PR "Accessibility (WCAG 2.2 AA, axe-core)" job in ci.yml
+  # (apps/web/tests/a11y/a11y.spec.ts) only ever audits CURATED_ROUTES --
+  # apps/web/tests/a11y/routes.ts's deliberately small, hand-picked set (one
+  # per module hub + one per shared page ARCHETYPE), chosen because a real
+  # rendered-DOM axe audit of every route is too slow to gate every push.
+  # That set was 55 of 827 routes as of the 2026-09-07 audit (6.6% --
+  # measured again on 2026-09-15: 52 curated vs. 691 discovered, ~7.5%; the
+  # gap is the same shape, the repo has just moved under it). The mechanism
+  # to close that gap already existed --
+  # apps/web/tests/a11y/discover.ts + the `test:a11y:full` package.json
+  # script (A11Y_FULL=1) walk every page.tsx under src/app/(app) instead of
+  # the curated set -- it was simply never invoked by any workflow. This job
+  # is that invocation: same build+serve steps as ci.yml's `accessibility`
+  # job, but running the full sweep on a schedule instead of the curated set
+  # on every push.
+  #
+  # NOT wired as blocking: this is deliberately a nightly/on-demand job, not
+  # a `needs:` dependency of any PR gate. A full sweep is far slower than the
+  # curated set (~13x the routes) and, on its first ever run, will surface
+  # real pre-existing violations across the ~640 routes the curated gate has
+  # never rendered -- apps/web/tests/a11y/a11y-baseline.json only has
+  # entries for the curated set today (`"mode": "curated"`). That first run
+  # is expected to fail loudly with a real list, which is the point (an
+  # honest "before" picture), not a bug in this job. Burning that list down
+  # and re-baselining in FULL mode (A11Y_BASELINE_WRITE=1 A11Y_FULL=1 --
+  # this script refuses to allow that combination in CI, by design, so it
+  # must be done locally and committed) is follow-up work -- tranche 1 wires
+  # the mechanism up and gets it running for real; it does not fabricate a
+  # full-mode baseline that was never actually measured.
+  #
+  # timeout-minutes is set explicitly (none of this workflow's other jobs
+  # need it, being much shorter) because this is genuinely expected to run
+  # far longer than a typical CI job and has not yet had a real timed run to
+  # calibrate against.
+  # ─────────────────────────────────────────────
+  accessibility-full-sweep:
+    name: Accessibility Full Sweep (WCAG 2.2 AA, axe-core, A11Y_FULL)
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '22', cache: 'pnpm' }
+      - run: pnpm install --frozen-lockfile
+      - name: Build shared packages
+        run: pnpm turbo build --filter='./packages/*'
+      - name: Build web (production build — dev mode renders differently)
+        run: pnpm --filter @civitasone/web run build
+        env:
+          NEXT_TELEMETRY_DISABLED: '1'
+      - name: Install Playwright chromium
+        run: pnpm --filter @civitasone/web exec playwright install --with-deps chromium
+      # Same mock gateway + watchdog as ci.yml's `accessibility` job -- see
+      # that job's comments (REL-010) for why a bare `command &` isn't
+      # enough for a run this long: one crash mid-sweep must not read as a
+      # wall of unrelated connection-refused failures.
+      - name: Start mock gateway
+        run: |
+          chmod +x scripts/ci/run-with-watchdog.sh
+          scripts/ci/run-with-watchdog.sh mock-gateway 8080 \
+            /tmp/mock-gateway.pid /tmp/mock-gateway.watchdog-status mock-gateway.log \
+            -- node scripts/ci/start-mock-gateway.mjs
+      - name: Start web
+        run: |
+          scripts/ci/run-with-watchdog.sh web 3000 \
+            /tmp/web-server.pid /tmp/web-server.watchdog-status web-server.log \
+            -- pnpm --filter @civitasone/web run start
+        env:
+          CIVITASONE_API_BASE_URL: http://localhost:8080
+          NEXT_PUBLIC_API_BASE_URL: http://localhost:8080
+          ENABLE_DEV_LOGIN: 'true'
+          JWT_SECRET: civitasone-dev-secret
+      - name: Run axe-core WCAG 2.2 AA full sweep (A11Y_FULL=1)
+        run: pnpm --filter @civitasone/web run test:a11y:full
+        env:
+          CI: true
+          JWT_SECRET: civitasone-dev-secret
+      - name: Check web server health
+        if: always()
+        run: |
+          web_status=$(cat /tmp/web-server.watchdog-status 2>/dev/null || echo "unknown")
+          gw_status=$(cat /tmp/mock-gateway.watchdog-status 2>/dev/null || echo "unknown")
+          echo "web server watchdog status: $web_status"
+          echo "mock gateway watchdog status: $gw_status"
+          fail=0
+          for label_status in "web:$web_status" "mock-gateway:$gw_status"; do
+            label="${label_status%%:*}"; status="${label_status#*:}"
+            case "$status" in
+              ok) ;;
+              restarted)
+                echo "::warning::$label crashed once during this run and was restarted by the watchdog — see ${label}.log / ${label}-server.log for why." ;;
+              restart_failed)
+                echo "::error::$label crashed and the watchdog's restart never became reachable — treating as a hard failure, not a flaky one."
+                fail=1 ;;
+              crashed_twice)
+                echo "::error::$label crashed twice (including after one watchdog restart) — this is a real server-stability problem, not test flakiness."
+                fail=1 ;;
+              *)
+                echo "::warning::$label watchdog status file missing/unreadable ($status) — cannot confirm the server stayed up for this whole run." ;;
+            esac
+          done
+          exit $fail
+      - name: Upload a11y full-sweep results on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: a11y-full-sweep-diagnostics
+          path: |
+            apps/web/test-results/
+            apps/web/a11y-results.json
+            web-server.log
+            mock-gateway.log
+          retention-days: 7

@@ -112,26 +112,26 @@ export function AuditLogTable({ events }: { events: PlatformAuditEvent[] }) {
       {/* Filters */}
       <div style={{ padding: "12px 16px", display: "flex", flexWrap: "wrap", gap: 10, borderBottom: "1px solid var(--line)" }}>
         <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
-          <label style={{ fontSize: 11, fontWeight: 650, color: "var(--ink2)" }}>From</label>
-          <input type="date" style={inpSty} value={dateFrom} onChange={(e) => { setDateFrom(e.target.value); setPage(0); }} />
+          <label htmlFor="audit-log-date-from" style={{ fontSize: 11, fontWeight: 650, color: "var(--ink2)" }}>From</label>
+          <input id="audit-log-date-from" type="date" style={inpSty} value={dateFrom} onChange={(e) => { setDateFrom(e.target.value); setPage(0); }} />
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
-          <label style={{ fontSize: 11, fontWeight: 650, color: "var(--ink2)" }}>To</label>
-          <input type="date" style={inpSty} value={dateTo} onChange={(e) => { setDateTo(e.target.value); setPage(0); }} />
+          <label htmlFor="audit-log-date-to" style={{ fontSize: 11, fontWeight: 650, color: "var(--ink2)" }}>To</label>
+          <input id="audit-log-date-to" type="date" style={inpSty} value={dateTo} onChange={(e) => { setDateTo(e.target.value); setPage(0); }} />
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
-          <label style={{ fontSize: 11, fontWeight: 650, color: "var(--ink2)" }}>Actor</label>
-          <input type="search" placeholder="Name or email…" style={{ ...inpSty, minWidth: 160 }} value={actorSearch} onChange={(e) => { setActorSearch(e.target.value); setPage(0); }} />
+          <label htmlFor="audit-log-actor-search" style={{ fontSize: 11, fontWeight: 650, color: "var(--ink2)" }}>Actor</label>
+          <input id="audit-log-actor-search" type="search" placeholder="Name or email…" style={{ ...inpSty, minWidth: 160 }} value={actorSearch} onChange={(e) => { setActorSearch(e.target.value); setPage(0); }} />
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
-          <label style={{ fontSize: 11, fontWeight: 650, color: "var(--ink2)" }}>Action type</label>
-          <select style={selSty} value={actionType} onChange={(e) => { setActionType(e.target.value); setPage(0); }}>
+          <label htmlFor="audit-log-action-type" style={{ fontSize: 11, fontWeight: 650, color: "var(--ink2)" }}>Action type</label>
+          <select id="audit-log-action-type" style={selSty} value={actionType} onChange={(e) => { setActionType(e.target.value); setPage(0); }}>
             {ACTION_TYPES.map((t) => <option key={t}>{t}</option>)}
           </select>
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
-          <label style={{ fontSize: 11, fontWeight: 650, color: "var(--ink2)" }}>Outcome</label>
-          <select style={selSty} value={outcomeFilter} onChange={(e) => { setOutcomeFilter(e.target.value); setPage(0); }}>
+          <label htmlFor="audit-log-outcome" style={{ fontSize: 11, fontWeight: 650, color: "var(--ink2)" }}>Outcome</label>
+          <select id="audit-log-outcome" style={selSty} value={outcomeFilter} onChange={(e) => { setOutcomeFilter(e.target.value); setPage(0); }}>
             {["All", "Success", "Failure"].map((o) => <option key={o}>{o}</option>)}
           </select>
         </div>

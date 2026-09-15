@@ -95,14 +95,14 @@ export function TransferListFilters({ transfers }: Props) {
           {statuses.map((s) => <option key={s} value={s}>{s}</option>)}
         </select>
         <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-          <label style={{ fontSize: "0.8125rem", color: "var(--ink2)", whiteSpace: "nowrap" }}>From</label>
-          <input type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)}
+          <label htmlFor="transfer-filter-from-date" style={{ fontSize: "0.8125rem", color: "var(--ink2)", whiteSpace: "nowrap" }}>From</label>
+          <input id="transfer-filter-from-date" type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)}
             aria-label="From date"
             style={{ padding: "8px 10px", borderRadius: 8, border: "1px solid var(--line)", minHeight: 40, fontSize: "0.875rem" }} />
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-          <label style={{ fontSize: "0.8125rem", color: "var(--ink2)" }}>To</label>
-          <input type="date" value={toDate} onChange={(e) => setToDate(e.target.value)}
+          <label htmlFor="transfer-filter-to-date" style={{ fontSize: "0.8125rem", color: "var(--ink2)" }}>To</label>
+          <input id="transfer-filter-to-date" type="date" value={toDate} onChange={(e) => setToDate(e.target.value)}
             aria-label="To date"
             style={{ padding: "8px 10px", borderRadius: 8, border: "1px solid var(--line)", minHeight: 40, fontSize: "0.875rem" }} />
         </div>

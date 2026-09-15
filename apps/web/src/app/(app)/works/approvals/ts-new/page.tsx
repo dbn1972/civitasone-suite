@@ -103,8 +103,9 @@ export default function NewTsPage() {
             }}
           >
             <div>
-              <label style={labelStyle}>Work ID (UUID) *</label>
+              <label htmlFor="ts-new-work-id" style={labelStyle}>Work ID (UUID) *</label>
               <input
+                id="ts-new-work-id"
                 style={inputStyle}
                 type="text"
                 value={form.workId}
@@ -115,8 +116,9 @@ export default function NewTsPage() {
             </div>
 
             <div>
-              <label style={labelStyle}>TS Number *</label>
+              <label htmlFor="ts-new-ts-number" style={labelStyle}>TS Number *</label>
               <input
+                id="ts-new-ts-number"
                 style={inputStyle}
                 type="text"
                 value={form.tsNumber}
@@ -128,8 +130,9 @@ export default function NewTsPage() {
             </div>
 
             <div>
-              <label style={labelStyle}>Sanction date *</label>
+              <label htmlFor="ts-new-sanction-date" style={labelStyle}>Sanction date *</label>
               <input
+                id="ts-new-sanction-date"
                 style={inputStyle}
                 type="date"
                 value={form.tsDate}
@@ -139,8 +142,9 @@ export default function NewTsPage() {
             </div>
 
             <div>
-              <label style={labelStyle}>TS authority ID (UUID) *</label>
+              <label htmlFor="ts-new-authority-id" style={labelStyle}>TS authority ID (UUID) *</label>
               <input
+                id="ts-new-authority-id"
                 style={inputStyle}
                 type="text"
                 value={form.tsAuthorityId}
@@ -151,8 +155,9 @@ export default function NewTsPage() {
             </div>
 
             <div>
-              <label style={labelStyle}>SR Year (optional)</label>
+              <label htmlFor="ts-new-sr-year" style={labelStyle}>SR Year (optional)</label>
               <input
+                id="ts-new-sr-year"
                 style={inputStyle}
                 type="text"
                 value={form.srYear}
@@ -163,8 +168,9 @@ export default function NewTsPage() {
             </div>
 
             <div>
-              <label style={labelStyle}>Zone (optional)</label>
+              <label htmlFor="ts-new-zone" style={labelStyle}>Zone (optional)</label>
               <input
+                id="ts-new-zone"
                 style={inputStyle}
                 type="text"
                 value={form.zone}
@@ -175,8 +181,9 @@ export default function NewTsPage() {
             </div>
 
             <div>
-              <label style={labelStyle}>Sanction amount (&#8377;) *</label>
+              <label htmlFor="ts-new-amount" style={labelStyle}>Sanction amount (&#8377;) *</label>
               <input
+                id="ts-new-amount"
                 style={inputStyle}
                 type="number"
                 min="0"
@@ -190,8 +197,9 @@ export default function NewTsPage() {
           </div>
 
           <div>
-            <label style={labelStyle}>Remarks</label>
+            <label htmlFor="ts-new-remarks" style={labelStyle}>Remarks</label>
             <textarea
+              id="ts-new-remarks"
               style={{ ...inputStyle, minHeight: 80 }}
               value={form.remarks}
               onChange={set("remarks")}

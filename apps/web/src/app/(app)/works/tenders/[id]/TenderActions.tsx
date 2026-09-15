@@ -174,10 +174,11 @@ export function TenderActions({ tenderId, workId, awardId }: TenderActionsProps)
           >
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
               <div>
-                <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: "var(--ink3)", marginBottom: 4 }}>
+                <label htmlFor="tender-quot-contractor-name" style={{ display: "block", fontSize: 12, fontWeight: 600, color: "var(--ink3)", marginBottom: 4 }}>
                   Contractor Name <span aria-hidden>*</span>
                 </label>
                 <input
+                  id="tender-quot-contractor-name"
                   className="input"
                   required
                   value={contractorName}
@@ -189,10 +190,10 @@ export function TenderActions({ tenderId, workId, awardId }: TenderActionsProps)
                 )}
               </div>
               <div>
-                <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: "var(--ink3)", marginBottom: 4 }}>
+                <label htmlFor="tender-quot-method" style={{ display: "block", fontSize: 12, fontWeight: 600, color: "var(--ink3)", marginBottom: 4 }}>
                   Method <span aria-hidden>*</span>
                 </label>
-                <select className="input" value={method} onChange={(e) => setMethod(e.target.value as QuotationMethod)}>
+                <select id="tender-quot-method" className="input" value={method} onChange={(e) => setMethod(e.target.value as QuotationMethod)}>
                   <option value="item_rate">Item Rate</option>
                   <option value="percentage_rate">Percentage Rate</option>
                 </select>
@@ -201,10 +202,11 @@ export function TenderActions({ tenderId, workId, awardId }: TenderActionsProps)
 
             {method === "item_rate" ? (
               <div style={{ maxWidth: 280 }}>
-                <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: "var(--ink3)", marginBottom: 4 }}>
+                <label htmlFor="tender-quot-amount" style={{ display: "block", fontSize: 12, fontWeight: 600, color: "var(--ink3)", marginBottom: 4 }}>
                   Quoted Amount (₹) <span aria-hidden>*</span>
                 </label>
                 <input
+                  id="tender-quot-amount"
                   className="input"
                   type="number"
                   min="0"
@@ -221,10 +223,11 @@ export function TenderActions({ tenderId, workId, awardId }: TenderActionsProps)
             ) : (
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, maxWidth: 560 }}>
                 <div>
-                  <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: "var(--ink3)", marginBottom: 4 }}>
+                  <label htmlFor="tender-quot-percentage" style={{ display: "block", fontSize: 12, fontWeight: 600, color: "var(--ink3)", marginBottom: 4 }}>
                     Quoted % <span aria-hidden>*</span>
                   </label>
                   <input
+                    id="tender-quot-percentage"
                     className="input"
                     type="number"
                     step="0.01"
@@ -238,10 +241,11 @@ export function TenderActions({ tenderId, workId, awardId }: TenderActionsProps)
                   )}
                 </div>
                 <div>
-                  <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: "var(--ink3)", marginBottom: 4 }}>
+                  <label htmlFor="tender-quot-above-below" style={{ display: "block", fontSize: 12, fontWeight: 600, color: "var(--ink3)", marginBottom: 4 }}>
                     Above / Below / At Par
                   </label>
                   <select
+                    id="tender-quot-above-below"
                     className="input"
                     value={aboveBelow}
                     onChange={(e) => setAboveBelow(e.target.value as AboveBelow)}
@@ -288,10 +292,11 @@ export function TenderActions({ tenderId, workId, awardId }: TenderActionsProps)
             >
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
                 <div>
-                  <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: "var(--ink3)", marginBottom: 4 }}>
+                  <label htmlFor="tender-award-contractor-name" style={{ display: "block", fontSize: 12, fontWeight: 600, color: "var(--ink3)", marginBottom: 4 }}>
                     Contractor Name <span aria-hidden>*</span>
                   </label>
                   <input
+                    id="tender-award-contractor-name"
                     className="input"
                     required
                     value={awardContractor}
@@ -303,10 +308,11 @@ export function TenderActions({ tenderId, workId, awardId }: TenderActionsProps)
                   )}
                 </div>
                 <div>
-                  <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: "var(--ink3)", marginBottom: 4 }}>
+                  <label htmlFor="tender-award-amount" style={{ display: "block", fontSize: 12, fontWeight: 600, color: "var(--ink3)", marginBottom: 4 }}>
                     Accepted Amount (₹) <span aria-hidden>*</span>
                   </label>
                   <input
+                    id="tender-award-amount"
                     className="input"
                     type="number"
                     min="0"
@@ -321,29 +327,29 @@ export function TenderActions({ tenderId, workId, awardId }: TenderActionsProps)
                   )}
                 </div>
                 <div>
-                  <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: "var(--ink3)", marginBottom: 4 }}>Agreement Number</label>
-                  <input className="input" value={agreementNo} onChange={(e) => setAgreementNo(e.target.value)} placeholder="Optional" />
+                  <label htmlFor="tender-award-agreement-no" style={{ display: "block", fontSize: 12, fontWeight: 600, color: "var(--ink3)", marginBottom: 4 }}>Agreement Number</label>
+                  <input id="tender-award-agreement-no" className="input" value={agreementNo} onChange={(e) => setAgreementNo(e.target.value)} placeholder="Optional" />
                   {awardFormError.fieldError("agreementNumber") && (
                     <span style={{ fontSize: 12, color: "var(--bad)" }}>{awardFormError.fieldError("agreementNumber")}</span>
                   )}
                 </div>
                 <div>
-                  <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: "var(--ink3)", marginBottom: 4 }}>Work Order Number</label>
-                  <input className="input" value={workOrderNo} onChange={(e) => setWorkOrderNo(e.target.value)} placeholder="Optional" />
+                  <label htmlFor="tender-award-work-order-no" style={{ display: "block", fontSize: 12, fontWeight: 600, color: "var(--ink3)", marginBottom: 4 }}>Work Order Number</label>
+                  <input id="tender-award-work-order-no" className="input" value={workOrderNo} onChange={(e) => setWorkOrderNo(e.target.value)} placeholder="Optional" />
                   {awardFormError.fieldError("workOrderNumber") && (
                     <span style={{ fontSize: 12, color: "var(--bad)" }}>{awardFormError.fieldError("workOrderNumber")}</span>
                   )}
                 </div>
                 <div>
-                  <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: "var(--ink3)", marginBottom: 4 }}>Work Period (days)</label>
-                  <input className="input" type="number" min="1" value={workPeriodDays} onChange={(e) => setWorkPeriodDays(e.target.value)} placeholder="Optional" />
+                  <label htmlFor="tender-award-work-period-days" style={{ display: "block", fontSize: 12, fontWeight: 600, color: "var(--ink3)", marginBottom: 4 }}>Work Period (days)</label>
+                  <input id="tender-award-work-period-days" className="input" type="number" min="1" value={workPeriodDays} onChange={(e) => setWorkPeriodDays(e.target.value)} placeholder="Optional" />
                   {awardFormError.fieldError("workPeriodDays") && (
                     <span style={{ fontSize: 12, color: "var(--bad)" }}>{awardFormError.fieldError("workPeriodDays")}</span>
                   )}
                 </div>
                 <div>
-                  <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: "var(--ink3)", marginBottom: 4 }}>Bill Mode</label>
-                  <select className="input" value={billMode} onChange={(e) => setBillMode(e.target.value)}>
+                  <label htmlFor="tender-award-bill-mode" style={{ display: "block", fontSize: 12, fontWeight: 600, color: "var(--ink3)", marginBottom: 4 }}>Bill Mode</label>
+                  <select id="tender-award-bill-mode" className="input" value={billMode} onChange={(e) => setBillMode(e.target.value)}>
                     <option value="RA">RA (Running Account)</option>
                     <option value="lump_sum">Lump Sum</option>
                     <option value="milestone">Milestone</option>

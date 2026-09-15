@@ -140,8 +140,9 @@ export default function GatewayConfigPage() {
           <div className="card">
             <div className="card-h"><h3>Security</h3></div>
             <div style={{ padding: 16, display: "flex", flexDirection: "column", gap: 16 }}>
-              <FieldGroup label="JWT Edge Verification" hint="Verify token signatures at the gateway before proxying to upstream services." error={formError.fieldError("jwtEdgeVerify")}>
+              <FieldGroup htmlFor="gw-jwt-edge-verify" label="JWT Edge Verification" hint="Verify token signatures at the gateway before proxying to upstream services." error={formError.fieldError("jwtEdgeVerify")}>
                 <select
+                  id="gw-jwt-edge-verify"
                   value={config.jwtEdgeVerify}
                   onChange={(e) => updateField("jwtEdgeVerify", e.target.value as GatewayConfig["jwtEdgeVerify"])}
                   style={{ width: "100%", padding: "8px 12px", borderRadius: 6, border: "1px solid #d1d5db" }}
@@ -152,12 +153,12 @@ export default function GatewayConfigPage() {
                 </select>
               </FieldGroup>
 
-              <FieldGroup label="Auth Rate Limit" hint="Max login attempts per minute per username/IP (brute-force protection)." error={formError.fieldError("authRateLimitMax")}>
-                <NumberInput value={config.authRateLimitMax} min={3} max={1000} onChange={(v) => updateField("authRateLimitMax", v)} suffix="req/min" />
+              <FieldGroup htmlFor="gw-auth-rate-limit" label="Auth Rate Limit" hint="Max login attempts per minute per username/IP (brute-force protection)." error={formError.fieldError("authRateLimitMax")}>
+                <NumberInput id="gw-auth-rate-limit" value={config.authRateLimitMax} min={3} max={1000} onChange={(v) => updateField("authRateLimitMax", v)} suffix="req/min" />
               </FieldGroup>
 
-              <FieldGroup label="Request Body Limit" hint="Maximum request body size accepted by the gateway." error={formError.fieldError("bodyLimitBytes")}>
-                <NumberInput value={config.bodyLimitBytes} min={1024} max={52428800} step={1024} onChange={(v) => updateField("bodyLimitBytes", v)} suffix="bytes" />
+              <FieldGroup htmlFor="gw-body-limit" label="Request Body Limit" hint="Maximum request body size accepted by the gateway." error={formError.fieldError("bodyLimitBytes")}>
+                <NumberInput id="gw-body-limit" value={config.bodyLimitBytes} min={1024} max={52428800} step={1024} onChange={(v) => updateField("bodyLimitBytes", v)} suffix="bytes" />
                 <span style={{ fontSize: 12, color: "#6b7280" }}>{formatBytes(config.bodyLimitBytes)}</span>
               </FieldGroup>
             </div>
@@ -167,12 +168,12 @@ export default function GatewayConfigPage() {
           <div className="card">
             <div className="card-h"><h3>Rate Limiting</h3></div>
             <div style={{ padding: 16, display: "flex", flexDirection: "column", gap: 16 }}>
-              <FieldGroup label="Global Rate Limit" hint="Maximum requests per minute across all tenants combined." error={formError.fieldError("rateLimitMax")}>
-                <NumberInput value={config.rateLimitMax} min={10} max={100000} onChange={(v) => updateField("rateLimitMax", v)} suffix="req/min" />
+              <FieldGroup htmlFor="gw-rate-limit-global" label="Global Rate Limit" hint="Maximum requests per minute across all tenants combined." error={formError.fieldError("rateLimitMax")}>
+                <NumberInput id="gw-rate-limit-global" value={config.rateLimitMax} min={10} max={100000} onChange={(v) => updateField("rateLimitMax", v)} suffix="req/min" />
               </FieldGroup>
 
-              <FieldGroup label="Per-Tenant Rate Limit" hint="Maximum requests per minute for a single tenant." error={formError.fieldError("rateLimitTenantMax")}>
-                <NumberInput value={config.rateLimitTenantMax} min={10} max={10000} onChange={(v) => updateField("rateLimitTenantMax", v)} suffix="req/min" />
+              <FieldGroup htmlFor="gw-rate-limit-tenant" label="Per-Tenant Rate Limit" hint="Maximum requests per minute for a single tenant." error={formError.fieldError("rateLimitTenantMax")}>
+                <NumberInput id="gw-rate-limit-tenant" value={config.rateLimitTenantMax} min={10} max={10000} onChange={(v) => updateField("rateLimitTenantMax", v)} suffix="req/min" />
               </FieldGroup>
             </div>
           </div>
@@ -181,17 +182,17 @@ export default function GatewayConfigPage() {
           <div className="card">
             <div className="card-h"><h3>Circuit Breaker</h3></div>
             <div style={{ padding: 16, display: "flex", flexDirection: "column", gap: 16 }}>
-              <FieldGroup label="Failure Threshold" hint="Number of consecutive 5xx errors before the breaker trips open." error={formError.fieldError("cbFailureThreshold")}>
-                <NumberInput value={config.cbFailureThreshold} min={1} max={50} onChange={(v) => updateField("cbFailureThreshold", v)} suffix="failures" />
+              <FieldGroup htmlFor="gw-cb-failure-threshold" label="Failure Threshold" hint="Number of consecutive 5xx errors before the breaker trips open." error={formError.fieldError("cbFailureThreshold")}>
+                <NumberInput id="gw-cb-failure-threshold" value={config.cbFailureThreshold} min={1} max={50} onChange={(v) => updateField("cbFailureThreshold", v)} suffix="failures" />
               </FieldGroup>
 
-              <FieldGroup label="Recovery Window" hint="How long the breaker stays open before probing again." error={formError.fieldError("cbRecoveryMs")}>
-                <NumberInput value={config.cbRecoveryMs} min={1000} max={300000} step={1000} onChange={(v) => updateField("cbRecoveryMs", v)} suffix="ms" />
+              <FieldGroup htmlFor="gw-cb-recovery-window" label="Recovery Window" hint="How long the breaker stays open before probing again." error={formError.fieldError("cbRecoveryMs")}>
+                <NumberInput id="gw-cb-recovery-window" value={config.cbRecoveryMs} min={1000} max={300000} step={1000} onChange={(v) => updateField("cbRecoveryMs", v)} suffix="ms" />
                 <span style={{ fontSize: 12, color: "#6b7280" }}>{(config.cbRecoveryMs / 1000).toFixed(0)}s</span>
               </FieldGroup>
 
-              <FieldGroup label="Upstream Timeout" hint="Max time to wait for an upstream service response." error={formError.fieldError("upstreamTimeoutMs")}>
-                <NumberInput value={config.upstreamTimeoutMs} min={1000} max={120000} step={1000} onChange={(v) => updateField("upstreamTimeoutMs", v)} suffix="ms" />
+              <FieldGroup htmlFor="gw-upstream-timeout" label="Upstream Timeout" hint="Max time to wait for an upstream service response." error={formError.fieldError("upstreamTimeoutMs")}>
+                <NumberInput id="gw-upstream-timeout" value={config.upstreamTimeoutMs} min={1000} max={120000} step={1000} onChange={(v) => updateField("upstreamTimeoutMs", v)} suffix="ms" />
                 <span style={{ fontSize: 12, color: "#6b7280" }}>{(config.upstreamTimeoutMs / 1000).toFixed(0)}s</span>
               </FieldGroup>
             </div>
@@ -251,10 +252,10 @@ export default function GatewayConfigPage() {
   );
 }
 
-function FieldGroup({ label, hint, error, children }: { label: string; hint: string; error?: string; children: React.ReactNode }) {
+function FieldGroup({ label, hint, error, htmlFor, children }: { label: string; hint: string; error?: string; htmlFor?: string; children: React.ReactNode }) {
   return (
     <div>
-      <label style={{ fontWeight: 600, fontSize: 14, display: "block", marginBottom: 4 }}>{label}</label>
+      <label htmlFor={htmlFor} style={{ fontWeight: 600, fontSize: 14, display: "block", marginBottom: 4 }}>{label}</label>
       <p style={{ fontSize: 12, color: "#6b7280", marginBottom: 8 }}>{hint}</p>
       {children}
       {error && <span role="alert" style={{ display: "block", fontSize: 12, color: "#b42318", marginTop: 4 }}>{error}</span>}
@@ -262,10 +263,11 @@ function FieldGroup({ label, hint, error, children }: { label: string; hint: str
   );
 }
 
-function NumberInput({ value, min, max, step, onChange, suffix }: { value: number; min: number; max: number; step?: number; onChange: (v: number) => void; suffix: string }) {
+function NumberInput({ id, value, min, max, step, onChange, suffix }: { id?: string; value: number; min: number; max: number; step?: number; onChange: (v: number) => void; suffix: string }) {
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
       <input
+        id={id}
         type="number"
         value={value}
         min={min}

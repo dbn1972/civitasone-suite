@@ -246,18 +246,21 @@ export function CatalogueB1Form({ definitionId, initial, onSaveState, onPatternC
                 <div key={idx} style={{ display: "grid", gap: 8, padding: 12, border: "1px solid var(--line)", borderRadius: "var(--r-sm)" }}>
                   <input
                     className="input"
+                    aria-label={`Act name (statutory reference ${idx + 1})`}
                     placeholder="Act name"
                     value={row.act}
                     onChange={(e) => updateStatutory(idx, { act: e.target.value })}
                   />
                   <input
                     className="input"
+                    aria-label={`Section, optional (statutory reference ${idx + 1})`}
                     placeholder="Section (optional)"
                     value={row.section ?? ""}
                     onChange={(e) => updateStatutory(idx, { section: e.target.value })}
                   />
                   <input
                     className="input"
+                    aria-label={`Link, optional (statutory reference ${idx + 1})`}
                     placeholder="Link (optional)"
                     value={row.url ?? ""}
                     onChange={(e) => updateStatutory(idx, { url: e.target.value })}
