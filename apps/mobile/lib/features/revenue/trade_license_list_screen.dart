@@ -5,6 +5,7 @@ import 'package:dio/dio.dart';
 import '../../core/providers.dart';
 import '../../core/error_utils.dart';
 import '../../core/widgets/status_pill.dart';
+import '../../core/widgets/load_more_footer.dart';
 import 'models.dart';
 
 /// Trade License list — revenue officers/collectors look up a municipal
@@ -13,6 +14,10 @@ import 'models.dart';
 /// GET /v1/revenue/trade-licenses -> list of licenses for the tenant.
 /// Read-only in this first mobile slice: issue/renew/cancel/record-payment
 /// stay web-only for now (see COMP-008 roadmap in this PR's description).
+///
+/// Paginated: fetches [_pageSize] at a time and shows a "Load more" footer
+/// backed by the server's `meta.total`, so a tenant with more than one page
+/// of licenses gets an honest count instead of a silently truncated list.
 class TradeLicenseListScreen extends ConsumerStatefulWidget {
   const TradeLicenseListScreen({super.key});
 
@@ -23,9 +28,13 @@ class TradeLicenseListScreen extends ConsumerStatefulWidget {
 
 class _TradeLicenseListScreenState
     extends ConsumerState<TradeLicenseListScreen> {
+  static const _pageSize = 100;
+
   bool _loading = true;
+  bool _loadingMore = false;
   String? _error;
   List<TradeLicense> _licenses = [];
+  int _total = 0;
   bool _isOnline = true;
   final _searchCtrl = TextEditingController();
   String _query = '';
@@ -54,13 +63,19 @@ class _TradeLicenseListScreenState
       final api = ref.read(apiClientProvider);
       final res = await api.get<Map<String, dynamic>>(
         '/v1/revenue/trade-licenses',
-        params: {'limit': 100},
+        params: {'limit': _pageSize, 'offset': 0},
       );
-      final data = res.data?['data'] as List<dynamic>? ?? [];
+      final body = res.data ?? const <String, dynamic>{};
+      final data = body['data'] as List<dynamic>? ?? [];
+      final meta = body['meta'] as Map<String, dynamic>?;
       _licenses = data
           .cast<Map<String, dynamic>>()
           .map(TradeLicense.fromJson)
           .toList();
+      // Fall back to the loaded count when the server omits `meta` (e.g. an
+      // older/mocked response) so pagination degrades to "everything fits on
+      // one page" rather than showing a bogus "Load more".
+      _total = (meta?['total'] as num?)?.toInt() ?? _licenses.length;
       _isOnline = true;
     } catch (e) {
       _error = userFriendlyError(e);
@@ -69,6 +84,38 @@ class _TradeLicenseListScreenState
       }
     } finally {
       if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  /// Fetches the next page (offset = number already loaded) and appends it.
+  /// Failures surface as a snackbar rather than replacing the already-loaded
+  /// page with an error state.
+  Future<void> _loadMore() async {
+    if (_loadingMore || _licenses.length >= _total) return;
+    setState(() => _loadingMore = true);
+    try {
+      final api = ref.read(apiClientProvider);
+      final res = await api.get<Map<String, dynamic>>(
+        '/v1/revenue/trade-licenses',
+        params: {'limit': _pageSize, 'offset': _licenses.length},
+      );
+      final body = res.data ?? const <String, dynamic>{};
+      final data = body['data'] as List<dynamic>? ?? [];
+      final meta = body['meta'] as Map<String, dynamic>?;
+      final more =
+          data.cast<Map<String, dynamic>>().map(TradeLicense.fromJson).toList();
+      setState(() {
+        _licenses = [..._licenses, ...more];
+        _total = (meta?['total'] as num?)?.toInt() ?? _total;
+      });
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not load more: ${userFriendlyError(e)}')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _loadingMore = false);
     }
   }
 
@@ -154,15 +201,29 @@ class _TradeLicenseListScreenState
         subtitle: 'Try a different business name or license number',
       );
     }
+    // Pagination is scoped to the unfiltered feed. While actively searching,
+    // hide the footer rather than offering to "load more" of a total that
+    // doesn't describe the filtered view on screen.
+    final showFooter = _query.isEmpty && _licenses.length < _total;
     return RefreshIndicator(
       onRefresh: _fetchLicenses,
       child: ListView.builder(
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-        itemCount: visible.length,
-        itemBuilder: (ctx, i) => _LicenseCard(
-          license: visible[i],
-          onTap: () => context.go('/revenue/trade-licenses/${visible[i].id}'),
-        ),
+        itemCount: visible.length + (showFooter ? 1 : 0),
+        itemBuilder: (ctx, i) {
+          if (i == visible.length) {
+            return LoadMoreFooter(
+              loaded: _licenses.length,
+              total: _total,
+              loading: _loadingMore,
+              onLoadMore: _loadMore,
+            );
+          }
+          return _LicenseCard(
+            license: visible[i],
+            onTap: () => context.go('/revenue/trade-licenses/${visible[i].id}'),
+          );
+        },
       ),
     );
   }

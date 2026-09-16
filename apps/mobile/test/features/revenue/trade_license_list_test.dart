@@ -42,9 +42,15 @@ void main() {
     }
   }
 
-  Response<Map<String, dynamic>> _buildResponse(List<Map<String, dynamic>> licenses) {
+  Response<Map<String, dynamic>> _buildResponse(
+    List<Map<String, dynamic>> licenses, {
+    Map<String, dynamic>? meta,
+  }) {
     return Response(
-      data: {'data': licenses},
+      data: {
+        'data': licenses,
+        if (meta != null) 'meta': meta,
+      },
       statusCode: 200,
       requestOptions: RequestOptions(path: '/v1/revenue/trade-licenses'),
     );
@@ -244,6 +250,144 @@ void main() {
 
       final iconButton = tester.widget<IconButton>(find.byType(IconButton));
       expect(iconButton.tooltip, 'Refresh');
+    });
+
+    // ── Pagination (bug fix: was silently capped at 100, no indication more
+    // existed, and never read `meta.total`) ───────────────────────────────────
+
+    testWidgets('initial fetch requests limit and an explicit offset of 0',
+        (tester) async {
+      when(() => mockApi.get<Map<String, dynamic>>(
+            any(),
+            params: any(named: 'params'),
+          )).thenAnswer((_) async => _buildResponse([sampleLicense]));
+
+      await tester.pumpWidget(buildSubject());
+      await pumpUntilSettled(tester);
+
+      final captured = verify(() => mockApi.get<Map<String, dynamic>>(
+            '/v1/revenue/trade-licenses',
+            params: captureAny(named: 'params'),
+          )).captured;
+      expect(captured.single, {'limit': 100, 'offset': 0});
+    });
+
+    testWidgets(
+        'shows "Showing X of Y" and a Load more button when meta.total exceeds the loaded count',
+        (tester) async {
+      when(() => mockApi.get<Map<String, dynamic>>(
+            any(),
+            params: any(named: 'params'),
+          )).thenAnswer((_) async => _buildResponse(
+            [sampleLicense],
+            meta: {'page': 1, 'pageSize': 1, 'total': 2},
+          ));
+
+      await tester.pumpWidget(buildSubject());
+      await pumpUntilSettled(tester);
+
+      expect(find.textContaining('Showing 1 of 2'), findsOneWidget);
+      expect(find.text('Load more'), findsOneWidget);
+    });
+
+    testWidgets(
+        'no pagination footer when meta is absent (backwards compatible) or fully loaded',
+        (tester) async {
+      when(() => mockApi.get<Map<String, dynamic>>(
+            any(),
+            params: any(named: 'params'),
+          )).thenAnswer((_) async => _buildResponse([sampleLicense]));
+
+      await tester.pumpWidget(buildSubject());
+      await pumpUntilSettled(tester);
+
+      expect(find.textContaining('Showing'), findsNothing);
+      expect(find.text('Load more'), findsNothing);
+    });
+
+    testWidgets('Load more requests the next page by offset and appends results',
+        (tester) async {
+      final second = Map<String, dynamic>.from(sampleLicense)
+        ..['id'] = 'lic-2'
+        ..['licenseNo'] = 'TL-2026-0002'
+        ..['businessName'] = 'Riverside Hardware';
+
+      when(() => mockApi.get<Map<String, dynamic>>(
+            any(),
+            params: any(named: 'params'),
+          )).thenAnswer((invocation) async {
+        final params =
+            invocation.namedArguments[#params] as Map<String, dynamic>?;
+        final offset = params?['offset'] as int? ?? 0;
+        if (offset == 0) {
+          return _buildResponse([sampleLicense],
+              meta: {'page': 1, 'pageSize': 1, 'total': 2});
+        }
+        expect(offset, 1, reason: 'offset should equal the number already loaded');
+        return _buildResponse([second], meta: {'page': 2, 'pageSize': 1, 'total': 2});
+      });
+
+      await tester.pumpWidget(buildSubject());
+      await pumpUntilSettled(tester);
+
+      expect(find.text('Sunrise Bakery'), findsOneWidget);
+      expect(find.text('Riverside Hardware'), findsNothing);
+
+      await tester.tap(find.text('Load more'));
+      await pumpUntilSettled(tester);
+
+      expect(find.text('Riverside Hardware'), findsOneWidget);
+      // Fully loaded now (2 of 2) -- footer/button withdrawn, not stuck at "2 of 2".
+      expect(find.text('Load more'), findsNothing);
+      expect(find.textContaining('Showing'), findsNothing);
+    });
+
+    // ── Defensive model parsing ─────────────────────────────────────────────────
+
+    testWidgets('a license with a null id does not crash the list',
+        (tester) async {
+      final noId = Map<String, dynamic>.from(sampleLicense)..['id'] = null;
+      when(() => mockApi.get<Map<String, dynamic>>(
+            any(),
+            params: any(named: 'params'),
+          )).thenAnswer((_) async => _buildResponse([noId]));
+
+      await tester.pumpWidget(buildSubject());
+      await pumpUntilSettled(tester);
+
+      expect(find.text('Sunrise Bakery'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('an unrecognized status renders "Unknown", not "Pending"',
+        (tester) async {
+      final weirdStatus = Map<String, dynamic>.from(sampleLicense)
+        ..['status'] = 'some_future_status';
+      when(() => mockApi.get<Map<String, dynamic>>(
+            any(),
+            params: any(named: 'params'),
+          )).thenAnswer((_) async => _buildResponse([weirdStatus]));
+
+      await tester.pumpWidget(buildSubject());
+      await pumpUntilSettled(tester);
+
+      expect(find.text('Unknown'), findsOneWidget);
+      expect(find.text('Pending'), findsNothing);
+    });
+
+    testWidgets('a missing status renders "Unknown", not "Pending"',
+        (tester) async {
+      final nullStatus = Map<String, dynamic>.from(sampleLicense)..remove('status');
+      when(() => mockApi.get<Map<String, dynamic>>(
+            any(),
+            params: any(named: 'params'),
+          )).thenAnswer((_) async => _buildResponse([nullStatus]));
+
+      await tester.pumpWidget(buildSubject());
+      await pumpUntilSettled(tester);
+
+      expect(find.text('Unknown'), findsOneWidget);
+      expect(find.text('Pending'), findsNothing);
     });
   });
 }
