@@ -503,7 +503,7 @@ module.exports = {
     // ── Reporting & plugins ────────────────────────────────────────────────────
     svc("report",       3016, "report_svc",        "civitas_report", {}, { graceful: true }), // PERF-015
     svc("plugin",       3017, "plugin_svc",        "civitas_plugin", {}, { graceful: true }), // PERF-015
-    svc("theme",        3018, "theme_svc",         "civitas_theme"),
+    svc("theme",        3018, "theme_svc",         "civitas_theme", {}, { graceful: true }), // PERF-015
 
     // ── Government-specific ────────────────────────────────────────────────────
     svc("grant",        3019, "grant_svc",         "civitas_grant", {}, { graceful: true }), // PERF-015
