@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { formatRupees } from "@/lib/formatters";
-import { StatusPill } from "@/app/_components/ds";
+import { Button, StatusPill } from "@/app/_components/ds";
 
 type SlipRow = {
   id: string;
@@ -237,15 +237,6 @@ type TableProps = {
   onRunPayroll?: () => void;
 };
 
-const btnBase: React.CSSProperties = {
-  padding: "4px 10px",
-  fontSize: 12,
-  borderRadius: 6,
-  border: "1px solid var(--line,#e2e8f0)",
-  cursor: "pointer",
-  background: "var(--surface,#fff)",
-};
-
 export function SalarySlipsClientTable({
   slips,
   payPeriod,
@@ -305,27 +296,15 @@ export function SalarySlipsClientTable({
             maxWidth: 360,
           }}
         />
-        <button
-          type="button"
+        <Button
+          variant="primary"
+          size="sm"
           disabled={exceptionCount > 0}
           title={
             exceptionCount > 0
               ? `${exceptionCount} exception${exceptionCount !== 1 ? "s" : ""} must be resolved first`
               : "Run payroll for all employees"
           }
-          style={{
-            padding: "6px 14px",
-            fontSize: 13,
-            fontWeight: 700,
-            borderRadius: 8,
-            border: "none",
-            cursor: exceptionCount > 0 ? "not-allowed" : "pointer",
-            background: exceptionCount > 0 ? "var(--mut,#94a3b8)" : "var(--primary,#2563eb)",
-            color: "#fff",
-            display: "flex",
-            alignItems: "center",
-            gap: 6,
-          }}
         >
           Run Payroll
           {exceptionCount > 0 && (
@@ -348,7 +327,7 @@ export function SalarySlipsClientTable({
               {exceptionCount}
             </span>
           )}
-        </button>
+        </Button>
       </div>
 
       {/* Table */}
@@ -388,18 +367,9 @@ export function SalarySlipsClientTable({
                     <StatusPill status={slip.status} />
                   </td>
                   <td style={{ padding: "10px 12px" }}>
-                    <button
-                      type="button"
-                      onClick={() => setPreview(slip)}
-                      style={{
-                        ...btnBase,
-                        borderColor: "var(--primary,#2563eb)",
-                        color: "var(--primary,#2563eb)",
-                        fontWeight: 600,
-                      }}
-                    >
+                    <Button variant="ghost" size="sm" onClick={() => setPreview(slip)}>
                       Preview Slip
-                    </button>
+                    </Button>
                   </td>
                 </tr>
               ))
@@ -409,15 +379,15 @@ export function SalarySlipsClientTable({
 
         {totalVisible > SLIP_PAGE && (
           <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 0", fontSize: 13 }}>
-            <button className="btn" onClick={() => setPage((p) => Math.max(0, p - 1))} disabled={page === 0}>
+            <Button variant="ghost" onClick={() => setPage((p) => Math.max(0, p - 1))} disabled={page === 0}>
               {"←"} Previous
-            </button>
+            </Button>
             <span style={{ color: "var(--ink2)" }}>
               {page * SLIP_PAGE + 1}–{Math.min((page + 1) * SLIP_PAGE, totalVisible)} of {totalVisible}
             </span>
-            <button className="btn" onClick={() => setPage((p) => p + 1)} disabled={(page + 1) * SLIP_PAGE >= totalVisible}>
+            <Button variant="ghost" onClick={() => setPage((p) => p + 1)} disabled={(page + 1) * SLIP_PAGE >= totalVisible}>
               Next {"→"}
-            </button>
+            </Button>
           </div>
         )}
       </div>

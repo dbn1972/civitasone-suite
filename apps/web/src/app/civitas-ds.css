@@ -71,7 +71,19 @@ a{color:inherit;text-decoration:none}
 .btn.primary:hover{background:var(--primary-d)}
 .btn.ghost{background:#fff;border:1px solid var(--line);color:var(--ink)}
 .btn.ghost:hover{background:var(--line2)}
+/* UX-008 tranche 2: .btn.secondary had no rule at all (found in tranche 1,
+   left open) -- reuses the existing --primary-soft/--primary-d pair already
+   used fleet-wide for "soft-active" states (selected nav item, hovered
+   clickable row, focus ring), so a secondary button reads as a lower-emphasis
+   but still-branded filled action, distinct from ghost's outlined look. */
+.btn.secondary{background:var(--primary-soft);color:var(--primary-d)}
+.btn.secondary:hover{background:#c7ddfa}
 .btn.sm{padding:7px 12px;font-size:12.5px}
+/* UX-008 tranche 2: was scoped to `.dt-pager .btn:disabled` only (line ~342);
+   generalized here since disabled buttons outside a pager had zero disabled
+   styling (native browser default only) -- strictly additive, the .dt-pager
+   case still resolves to the exact same rule. */
+.btn:disabled{opacity:.5;cursor:not-allowed}
 
 /* segmented */
 .seg{display:inline-flex;background:var(--line2);border-radius:10px;padding:3px;font-size:12.5px;gap:2px}
@@ -339,7 +351,7 @@ tr.clickable:hover{background:var(--primary-soft)!important}
 .dt-filter input{border:0;background:transparent;width:100%;font-size:13px;color:var(--ink)}
 .dt-filter input:focus{outline:none}
 .dt-pager{display:flex;align-items:center;gap:10px;margin-top:14px;font-size:13px;color:var(--ink2)}
-.dt-pager .btn:disabled{opacity:.5;cursor:not-allowed}
+/* .btn:disabled generalized above (UX-008 tranche 2) now covers this case */
 
 /* ============================================================
    CONFIRM DIALOG (role=alertdialog)

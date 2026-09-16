@@ -1,3 +1,4 @@
+import { forwardRef } from "react";
 import type { ButtonHTMLAttributes, ReactNode } from "react";
 
 export type ButtonVariant = "primary" | "secondary" | "ghost" | "danger";
@@ -36,24 +37,35 @@ export type ButtonProps = Omit<ButtonHTMLAttributes<HTMLButtonElement>, "childre
  *    itself renders one of these `.btn` classes underneath.
  *
  * `variant="secondary"` reproduces existing `btn secondary` markup as-is;
- * note civitas-ds.css currently has no `.btn.secondary` rule (pre-existing,
- * tracked separately -- not introduced by this component).
+ * civitas-ds.css previously had no `.btn.secondary` rule (a pre-existing gap,
+ * not introduced by this component) -- fixed alongside the tranche 2
+ * conversions that surfaced it again.
+ *
+ * Forwards `ref` to the underlying `<button>` element (needed by callers
+ * that manage focus imperatively, e.g. focusing a dialog's close button on
+ * open per WCAG 2.4.3) -- added in tranche 2 when a real conversion turned
+ * out to depend on it; behavior-preserving for every existing caller, none
+ * of which pass a ref today.
  */
-export function Button({
-  variant = "primary",
-  size = "default",
-  loading = false,
-  disabled,
-  className = "",
-  children,
-  ...rest
-}: ButtonProps) {
+export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button(
+  {
+    variant = "primary",
+    size = "default",
+    loading = false,
+    disabled,
+    className = "",
+    children,
+    ...rest
+  },
+  ref,
+) {
   const classes = ["btn", variant, size === "sm" ? "sm" : null, className || null]
     .filter(Boolean)
     .join(" ");
 
   return (
     <button
+      ref={ref}
       type="button"
       {...rest}
       className={classes}
@@ -63,4 +75,4 @@ export function Button({
       {children}
     </button>
   );
-}
+});

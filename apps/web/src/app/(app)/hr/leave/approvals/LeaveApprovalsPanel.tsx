@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { PageHeader, Card, DataTable, ConfirmDialog, EmptyState } from "../../../../_components/ds";
+import { PageHeader, Card, DataTable, ConfirmDialog, EmptyState, Button } from "../../../../_components/ds";
 import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
 import { formatIndianDate } from "@/lib/formatters";
 import { useTranslations } from "next-intl";
@@ -191,9 +191,8 @@ export function LeaveApprovalsPanel() {
       sortable: false,
       render: (row) => (
         <div style={{ display: "flex", gap: 8 }}>
-          <button
-            type="button"
-            className="btn primary sm"
+          <Button
+            size="sm"
             style={{ minHeight: 44 }}
             onClick={() => {
               setDialogError(undefined);
@@ -201,10 +200,10 @@ export function LeaveApprovalsPanel() {
             }}
           >
             {t("approve")}
-          </button>
-          <button
-            type="button"
-            className="btn ghost sm"
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
             style={{ minHeight: 44 }}
             onClick={() => {
               setDialogError(undefined);
@@ -212,7 +211,7 @@ export function LeaveApprovalsPanel() {
             }}
           >
             {t("reject")}
-          </button>
+          </Button>
         </div>
       ),
     },
@@ -238,9 +237,9 @@ export function LeaveApprovalsPanel() {
             title={t("loadErrorTitle")}
             message={error}
             action={
-              <button type="button" className="btn ghost" onClick={() => void loadTasks()}>
+              <Button variant="ghost" onClick={() => void loadTasks()}>
                 {t("retry")}
-              </button>
+              </Button>
             }
           />
         ) : enriched.length === 0 ? (

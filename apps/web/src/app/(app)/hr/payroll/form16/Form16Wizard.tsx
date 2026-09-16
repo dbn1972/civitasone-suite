@@ -1,6 +1,7 @@
 "use client";
 
 import { useId, useState } from "react";
+import { Button } from "@/app/_components/ds";
 
 const STEPS = ["Select FY", "Review Deductions", "Generate & Download"] as const;
 
@@ -145,7 +146,7 @@ export function Form16Wizard({ defaultFy }: { defaultFy: string }) {
             </div>
           </div>
           <div>
-            <button type="button" className="btn" onClick={() => setStep(1)}>Next: Review Deductions →</button>
+            <Button onClick={() => setStep(1)}>Next: Review Deductions →</Button>
           </div>
         </div>
       )}
@@ -182,10 +183,10 @@ export function Form16Wizard({ defaultFy }: { defaultFy: string }) {
 
           {error && <p role="alert" style={{ color: "var(--bad, #c0392b)", fontSize: 13 }}>{error}</p>}
           <div style={{ display: "flex", gap: 10 }}>
-            <button type="button" className="btn ghost" onClick={() => setStep(0)}>← Back</button>
-            <button type="button" className="btn" onClick={() => void generateForm16()} disabled={busy}>
+            <Button variant="ghost" onClick={() => setStep(0)}>← Back</Button>
+            <Button onClick={() => void generateForm16()} disabled={busy} loading={busy}>
               {busy ? "Generating…" : "Generate Form 16 →"}
-            </button>
+            </Button>
           </div>
         </div>
       )}
@@ -204,9 +205,9 @@ export function Form16Wizard({ defaultFy }: { defaultFy: string }) {
               <a className="btn" href={`/api/proxy/v1/payroll/tax/form16/bulk-download?fy=${encodeURIComponent(fy)}`}>
                 ⬇ Download Form 16 ZIP
               </a>
-              <button type="button" className="btn ghost" onClick={() => { setStep(0); setJobId(null); setError(undefined); }}>
+              <Button variant="ghost" onClick={() => { setStep(0); setJobId(null); setError(undefined); }}>
                 Generate another
-              </button>
+              </Button>
             </div>
           </div>
         </div>

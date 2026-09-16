@@ -3,7 +3,7 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { Card, ConfirmDialog } from "../../../_components/ds";
+import { Card, ConfirmDialog, Button } from "../../../_components/ds";
 import { useFormError } from "@/lib/useFormError";
 
 type LeaveType = { id: string; code: string; name: string };
@@ -141,9 +141,9 @@ export function CreateLeavePolicyForm({ onCreated }: { onCreated?: () => void } 
   return (
     <div style={{ marginBottom: 16 }}>
       {!open ? (
-        <button type="button" className="btn primary" onClick={() => setOpen(true)}>
+        <Button onClick={() => setOpen(true)}>
           {t("newPolicyBtn")}
-        </button>
+        </Button>
       ) : (
         <form onSubmit={openConfirm} noValidate>
           <Card title={t("formTitle")} padding>
@@ -305,12 +305,12 @@ export function CreateLeavePolicyForm({ onCreated }: { onCreated?: () => void } 
             </details>
 
             <div style={{ display: "flex", gap: 8, marginTop: 16 }}>
-              <button type="submit" className="btn primary">
+              <Button type="submit">
                 {t("createPolicyBtn")}
-              </button>
-              <button type="button" className="btn ghost" onClick={() => { setOpen(false); setFieldError(null); }}>
+              </Button>
+              <Button variant="ghost" onClick={() => { setOpen(false); setFieldError(null); }}>
                 {t("cancelBtn")}
-              </button>
+              </Button>
             </div>
           </Card>
         </form>

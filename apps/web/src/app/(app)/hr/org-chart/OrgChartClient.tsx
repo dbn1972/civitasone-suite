@@ -2,6 +2,7 @@
 import { useState, useCallback, useRef } from 'react'
 import type { OrgChartNode } from '@civitasone/types'
 import { OrgTreeNode } from './OrgTreeNode'
+import { Button } from '@/app/_components/ds'
 
 function collectAllIds(nodes: OrgChartNode[]): string[] {
   return nodes.flatMap((n) => [n.id, ...collectAllIds((n.children ?? []) as OrgChartNode[])])
@@ -71,27 +72,15 @@ export function OrgChartClient({ data }: { data: OrgChartNode[] }) {
             }}
           />
         </label>
-        <button
-          onClick={expandAll}
-          style={toolbarBtn}
-          aria-label="Expand all nodes"
-        >
+        <Button variant="ghost" onClick={expandAll} aria-label="Expand all nodes">
           ⊞ Expand all
-        </button>
-        <button
-          onClick={collapseAll}
-          style={toolbarBtn}
-          aria-label="Collapse all nodes"
-        >
+        </Button>
+        <Button variant="ghost" onClick={collapseAll} aria-label="Collapse all nodes">
           ⊟ Collapse all
-        </button>
-        <button
-          onClick={handlePrint}
-          style={{ ...toolbarBtn, background: '#00439C', color: '#fff', borderColor: '#00439C' }}
-          aria-label="Print or export org chart as PDF"
-        >
+        </Button>
+        <Button onClick={handlePrint} aria-label="Print or export org chart as PDF">
           🖨 Print / PDF
-        </button>
+        </Button>
       </div>
 
       {/* Tree */}
@@ -147,17 +136,4 @@ export function OrgChartClient({ data }: { data: OrgChartNode[] }) {
       </p>
     </div>
   )
-}
-
-const toolbarBtn: React.CSSProperties = {
-  border: '1.5px solid var(--border, #e2e8f0)',
-  borderRadius: 6,
-  background: 'var(--surface, #fff)',
-  color: 'var(--fg, #0f172a)',
-  fontSize: 12,
-  fontWeight: 600,
-  padding: '8px 12px',
-  cursor: 'pointer',
-  whiteSpace: 'nowrap',
-  minHeight: 44,
 }

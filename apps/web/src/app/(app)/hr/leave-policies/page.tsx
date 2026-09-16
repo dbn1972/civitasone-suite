@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
-import { PageHeader, Card, DataTable, EmptyState, ConfirmDialog, StatGrid, StatCard } from "../../../_components/ds";
+import { PageHeader, Card, DataTable, EmptyState, ConfirmDialog, StatGrid, StatCard, Button } from "../../../_components/ds";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { CreateLeavePolicyForm } from "./CreateLeavePolicyForm";
 import { useFormError } from "@/lib/useFormError";
@@ -170,16 +170,16 @@ export default function LeavePoliciesPage() {
 
       <div role="group" aria-label={t("filterGroupLabel")} style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 16 }}>
         {[{ value: "all", label: t("allTypes") }, ...EMPLOYEE_TYPES.map((type) => ({ value: type, label: type.replace("_", " ") }))].map((o) => (
-          <button
+          <Button
             key={o.value}
-            type="button"
+            variant={filter === o.value ? "primary" : "ghost"}
+            size="sm"
             aria-pressed={filter === o.value}
-            className={`btn sm ${filter === o.value ? "primary" : "ghost"}`}
             style={{ textTransform: "capitalize", minHeight: 40 }}
             onClick={() => setFilter(o.value)}
           >
             {o.label}
-          </button>
+          </Button>
         ))}
       </div>
 
@@ -202,9 +202,9 @@ export default function LeavePoliciesPage() {
             title={t("errorTitle")}
             message={loadError ?? t("errorFallback")}
             action={
-              <button type="button" className="btn ghost" onClick={() => void fetchPolicies()}>
+              <Button variant="ghost" onClick={() => void fetchPolicies()}>
                 {t("retry")}
-              </button>
+              </Button>
             }
           />
         ) : policies.length === 0 ? ( // ux-001-ok: gated by `state === "error"` above (a real distinct branch with its own message + retry button, just spelled "state" not "source"/"status" so the guard's regex misses it)
@@ -413,24 +413,23 @@ export default function LeavePoliciesPage() {
                   if (editId === (p.id as string)) {
                     return (
                       <div style={{ display: "inline-flex", gap: 6 }}>
-                        <button
-                          type="button"
-                          className="btn primary sm"
+                        <Button
+                          size="sm"
                           disabled={saving}
                           onClick={() => { setSaveError(undefined); setConfirmOpen(true); }}
                         >
                           {t("saveBtn")}
-                        </button>
-                        <button type="button" className="btn ghost sm" onClick={() => setEditId(null)}>
+                        </Button>
+                        <Button variant="ghost" size="sm" onClick={() => setEditId(null)}>
                           {t("cancelBtn")}
-                        </button>
+                        </Button>
                       </div>
                     );
                   }
                   return (
-                    <button type="button" className="btn ghost sm" onClick={() => startEdit(p as Policy)}>
+                    <Button variant="ghost" size="sm" onClick={() => startEdit(p as Policy)}>
                       {t("editBtn")}
-                    </button>
+                    </Button>
                   );
                 },
               },

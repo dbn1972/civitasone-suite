@@ -15,6 +15,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useToast } from "@/app/_components/ds/Toast";
+import { Button } from "@/app/_components/ds";
 
 type Employee = { id: string; name?: string; designation?: string; departmentId?: string; department?: string };
 type Department = { id: string; name: string };
@@ -155,9 +156,9 @@ export function TransferWithApproval() {
 
   return (
     <>
-      <button className="btn primary" onClick={() => setOpen((v) => !v)}>
+      <Button onClick={() => setOpen((v) => !v)}>
         {open ? "Cancel" : "+ Transfer with approval"}
-      </button>
+      </Button>
 
       {open && (
         <div className="card" style={{ marginTop: 14 }}>
@@ -246,10 +247,10 @@ export function TransferWithApproval() {
               </div>
 
               <div style={{ display: "flex", justifyContent: "flex-end", gap: 10 }}>
-                <button className="btn ghost" onClick={() => { reset(); setOpen(false); }}>Cancel</button>
-                <button className="btn primary" style={{ minHeight: 44 }} onClick={() => validateStep1() && setStep(2)}>
+                <Button variant="ghost" onClick={() => { reset(); setOpen(false); }}>Cancel</Button>
+                <Button style={{ minHeight: 44 }} onClick={() => validateStep1() && setStep(2)}>
                   Next: Approval routing →
-                </button>
+                </Button>
               </div>
             </div>
           )}
@@ -332,10 +333,10 @@ export function TransferWithApproval() {
               </label>
 
               <div style={{ display: "flex", justifyContent: "space-between", gap: 10 }}>
-                <button className="btn ghost" onClick={() => setStep(1)}>← Back</button>
-                <button className="btn primary" style={{ minHeight: 44 }} disabled={saving} onClick={() => void submit()}>
+                <Button variant="ghost" onClick={() => setStep(1)}>← Back</Button>
+                <Button style={{ minHeight: 44 }} disabled={saving} loading={saving} onClick={() => void submit()}>
                   {saving ? "Raising…" : "Submit transfer to eOffice"}
-                </button>
+                </Button>
               </div>
             </div>
           )}

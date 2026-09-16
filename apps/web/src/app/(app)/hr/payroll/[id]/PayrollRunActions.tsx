@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { ConfirmDialog } from "../../../../_components/ds";
+import { ConfirmDialog, Button } from "../../../../_components/ds";
 import { useToast } from "@/app/_components/ds/Toast";
 import { formatRupees } from "@/lib/formatters";
 import { useFormError } from "@/lib/useFormError";
@@ -96,34 +96,29 @@ export function PayrollRunActions({
       <div className="pad">
         <div style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
           {canApprove && (
-            <button
-              type="button"
-              className="btn primary"
+            <Button
               style={{ minHeight: 44 }}
               onClick={() => { setError(undefined); setPending("approve"); }}
             >
               Approve Run
-            </button>
+            </Button>
           )}
           {canDisburse && (
-            <button
-              type="button"
-              className="btn primary"
+            <Button
               style={{ minHeight: 44 }}
               onClick={() => { setError(undefined); setPending("disburse"); }}
             >
               Disburse Run
-            </button>
+            </Button>
           )}
           {canRevert && (
-            <button
-              type="button"
-              className="btn secondary"
+            <Button
+              variant="secondary"
               style={{ minHeight: 44 }}
               onClick={() => { setError(undefined); setPending("revert"); }}
             >
               Revert to Draft
-            </button>
+            </Button>
           )}
         </div>
 

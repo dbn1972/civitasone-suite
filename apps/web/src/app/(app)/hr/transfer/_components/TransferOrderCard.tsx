@@ -6,7 +6,7 @@
  * Action buttons per stage. Horizontal progress timeline.
  */
 import { useState } from "react";
-import { StatusPill, ConfirmDialog } from "@/app/_components/ds";
+import { StatusPill, ConfirmDialog, Button } from "@/app/_components/ds";
 import { formatIndianDate } from "@/lib/formatters";
 import { useToast } from "@/app/_components/ds/Toast";
 import { useFormError } from "@/lib/useFormError";
@@ -216,7 +216,7 @@ export function TransferOrderCard({ transfer, onAction }: Props) {
         {!isClosed && (
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 12 }}>
             {(transfer.status === "pending" || transfer.status === "initiated") && (
-              <button className="btn primary" style={{ fontSize: 13 }} disabled={acting}
+              <Button style={{ fontSize: 13 }} disabled={acting} loading={acting}
                 onClick={() => setPending({
                   path: "issue-order",
                   body: { orderNo: `TO-${transfer.id.slice(0, 8).toUpperCase()}`, orderDate: today },
@@ -225,10 +225,10 @@ export function TransferOrderCard({ transfer, onAction }: Props) {
                   description: `This issues a formal transfer order for ${empLabel} (${fromLabel} → ${toLabel}), dated ${today}. The order number cannot be un-issued once created.`,
                 })}>
                 {acting ? "Processing…" : "Issue Order"}
-              </button>
+              </Button>
             )}
             {(transfer.status === "order_issued" || transfer.status === "approved") && !transfer.relievedDate && (
-              <button className="btn primary" style={{ fontSize: 13 }} disabled={acting}
+              <Button style={{ fontSize: 13 }} disabled={acting} loading={acting}
                 onClick={() => setPending({
                   path: "relieve",
                   body: { relievedDate: today },
@@ -237,10 +237,10 @@ export function TransferOrderCard({ transfer, onAction }: Props) {
                   description: `This records ${empLabel} as relieved from ${fromLabel} effective ${today}, ending their tenure at the current post.`,
                 })}>
                 {acting ? "Processing…" : "Mark Relieved"}
-              </button>
+              </Button>
             )}
             {transfer.status === "relieved" && !transfer.joinedDate && (
-              <button className="btn primary" style={{ fontSize: 13 }} disabled={acting}
+              <Button style={{ fontSize: 13 }} disabled={acting} loading={acting}
                 onClick={() => setPending({
                   path: "join",
                   body: { joinedDate: today },
@@ -249,7 +249,7 @@ export function TransferOrderCard({ transfer, onAction }: Props) {
                   description: `This records ${empLabel} as joined at ${toLabel} effective ${today} and completes the transfer.`,
                 })}>
                 {acting ? "Processing…" : "Mark Joined"}
-              </button>
+              </Button>
             )}
           </div>
         )}
