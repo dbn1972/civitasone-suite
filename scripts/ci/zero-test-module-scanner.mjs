@@ -59,6 +59,29 @@
  *     whose job is adding tests); flagging precisely so whoever picks this up next
  *     doesn't have to rediscover it, and doesn't miscount tenant-extensions as
  *     still-needing-tests.
+ *   - COMP-007 tranche 3: a SECOND, DIFFERENT false-positive class in the same
+ *     signal (c), unrelated to the template-literal issue above. Source-side
+ *     extraction (extractRouteLiterals(), run over the MODULE's own source
+ *     files, not the test) cuts each literal at its first `:` or `$` and
+ *     strips trailing slashes before the `length >= 12 && segments >= 3`
+ *     check -- so a module whose routes are all `/v1/<svc>/<name>` plus
+ *     `:id`-suffixed variants (e.g. `/v1/crm/rti`, `/v1/crm/rti/:id/forward`)
+ *     has every candidate literal collapse to the SAME short base path after
+ *     that cut. `/v1/crm/rti` is exactly 11 characters -- one under the
+ *     12-char floor -- so extractRouteLiterals() never emits ANY candidate
+ *     for this module from its own source, regardless of how a test is
+ *     phrased; there is nothing for signal (c) to search test files for in
+ *     the first place. Confirmed concretely: crm-service's rti module gained
+ *     a real, thorough, disposable-Postgres-verified test suite in tranche 3
+ *     (13 tests, tests/comp-007-rti-smoke.test.ts, covering every route
+ *     including the full statutory RTI Act lifecycle) and this scanner still
+ *     reports it zero-test -- a false positive, not a real gap. Not fixed
+ *     here, same reasoning as tenant-extensions above: retuning the 12-char/
+ *     3-segment thresholds (or the cut-point heuristic) is a real change to
+ *     this shared CI gate's matching behavior across all 65 services, not
+ *     something to retune blindly inside a tranche whose job is adding
+ *     tests -- it needs its own pass checking the effect on every other
+ *     service's routes, not just this one module.
  */
 import { readFileSync, readdirSync, statSync, existsSync } from "node:fs";
 import { join, relative } from "node:path";
