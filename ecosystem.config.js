@@ -723,7 +723,7 @@ module.exports = {
     svc("event",         3076, "event_svc",         "civitas_event", {}, { graceful: true }), // PERF-015
     svc("fire",          3072, "fire_svc",          "civitas_fire", {}, { graceful: true }), // PERF-015
     svc("market",        3085, "market_svc",        "civitas_market", {}, { graceful: true }), // PERF-015
-    svc("parking",       3084, "parking_svc",       "civitas_parking"),
+    svc("parking",       3084, "parking_svc",       "civitas_parking", {}, { graceful: true }), // PERF-015
     svc("parks",         3081, "parks_svc",         "civitas_parks"),
     svc("refund",        3077, "refund_svc",        "civitas_refund"),
     svc("roadcut",       3075, "roadcut_svc",       "civitas_roadcut"),
