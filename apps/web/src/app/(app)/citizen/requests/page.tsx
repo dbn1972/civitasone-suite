@@ -18,6 +18,7 @@ export default async function Page() {
       <PageHeader
         title={t("pageTitle")}
         subtitle={t("pageSubtitle")}
+        help="citizen"
         actions={<LogRequestButton />}
       />
       {source === "error" && <DataSourceBadge source={source} />}

@@ -1,5 +1,5 @@
 import { getEstabFiles } from "../../../_data/loaders";
-import { PageHeader, StatCard, StatGrid, EmptyState, RefreshErrorState } from "../../../_components/ds";
+import { PageHeader, StatCard, StatGrid, EmptyState, RefreshErrorState, Term } from "../../../_components/ds";
 import { toHumanError } from "@/lib/messages";
 import { FilesTable, type FileRow } from "./FilesTable";
 
@@ -38,8 +38,9 @@ export default async function EstabFilesListPage() {
   return (
     <>
       <PageHeader
-        title="Digital File Tracking (eOffice)"
-        subtitle="Create, route and track files with note sheets & movement trail."
+        title={<>Digital File Tracking (<Term name="eOffice" />)</>}
+        subtitle={<>Create, route and track files with <Term name="Note sheet" label="note sheets" /> & movement trail.</>}
+        help="estab"
         actions={
           <>
             <a className="btn ghost" href="/estab/inbox">My Desk</a>

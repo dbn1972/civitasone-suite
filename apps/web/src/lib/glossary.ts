@@ -73,6 +73,8 @@ export const GLOSSARY: Record<string, string> = {
   DPR: "Detailed Project Report — the full plan and cost estimate for a project.",
   WBS: "Work Breakdown Structure — a project split into phases, stages and tasks.",
   Beneficiary: "The person or group who receives the benefit of a scheme or grant.",
+  PMU: "Project Management Unit — the team that oversees and tracks project execution.",
+  RAG: "Red-Amber-Green — a traffic-light status showing whether something is on track (green), at risk (amber), or delayed (red).",
 
   // Citizen / Legal / Estab
   RTI: "Right to Information — a citizen's request to see official records, answered within 30 days.",
@@ -84,6 +86,7 @@ export const GLOSSARY: Record<string, string> = {
   Dak: "Incoming and outgoing post or correspondence handled by the office.",
   DAK: "Incoming and outgoing post or correspondence handled by the office.",
   MOM: "Minutes of Meeting — the official written record of what a meeting decided.",
+  SLA: "Service Level Agreement — the promised time limit to complete or respond to a task.",
 
   // Platform / Admin (kept simple, mostly hidden from clerks)
   Tenant: "Your office or organisation's own private workspace in the system.",

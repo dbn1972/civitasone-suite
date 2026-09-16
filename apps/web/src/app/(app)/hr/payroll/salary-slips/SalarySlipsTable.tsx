@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Card, DataTable } from "../../../../_components/ds";
+import { Card, DataTable, EmptyState } from "../../../../_components/ds";
 import { PrintDocumentLink } from "../../../../_components/PrintDocumentLink";
 import type { SalarySlipSummary } from "@civitasone/types";
 
@@ -47,16 +47,27 @@ export function SalarySlipsTable({ slips }: { slips: SalarySlipSummary[] }) {
 
   return (
     <Card title="All Salary Slips">
-      <DataTable<Row>
-        columns={columns}
-        rows={rows}
-        rowLinkPrefix="/hr/payroll/salary-slips/"
-        rowLinkKey="id"
-        sortable
-        filterable
-        filterPlaceholder="Filter by employee, department or period…"
-        pageSize={20}
-      />
+      {rows.length === 0 ? (
+        <EmptyState
+          icon="📄"
+          title="No salary slips yet"
+          message="Salary slips appear here once a payroll run has been processed."
+          action={<Link href="/hr/payroll" className="btn primary">Go to payroll runs</Link>}
+        />
+      ) : (
+        <DataTable<Row>
+          columns={columns}
+          rows={rows}
+          rowLinkPrefix="/hr/payroll/salary-slips/"
+          rowLinkKey="id"
+          sortable
+          filterable
+          filterPlaceholder="Filter by employee, department or period…"
+          pageSize={20}
+          emptyTitle="No slips match your filter"
+          emptyMessage="Try a different employee name, department or pay period."
+        />
+      )}
     </Card>
   );
 }

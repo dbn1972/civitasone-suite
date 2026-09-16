@@ -22,6 +22,7 @@ export default async function GrantApplicationsPage() {
         subtitle="All applications across schemes with disbursement status."
         back="/grants"
         backLabel="Grants"
+        help="grants"
         actions={
           <FilterButton />
         }

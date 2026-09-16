@@ -22,6 +22,7 @@ export default async function GrantSchemesPage() {
         subtitle="Browse and manage government grant schemes."
         back="/grants"
         backLabel="Grants"
+        help="grants"
         actions={
           <Link href="/grants/schemes/new" className="btn primary">
             + New Scheme

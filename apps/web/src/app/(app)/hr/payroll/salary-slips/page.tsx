@@ -18,6 +18,7 @@ export default async function SalarySlipsPage() {
         title="Salary Slips"
         subtitle="Individual employee salary statements."
         back="/hr/payroll"
+        help="payroll"
       />
       <DataSourceBadge source={source} message="Couldn't load — showing nothing" />
       <StatGrid>
