@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useFormError } from "@/lib/useFormError";
 
 type UserRole = "super_admin" | "platform_admin" | "tenant_admin" | string;
 
@@ -25,6 +26,7 @@ interface ModuleApprovalBannerProps {
 export function ModuleApprovalBanner({ roles, dirtyKeys, pendingState }: ModuleApprovalBannerProps) {
   const [requestStatus, setRequestStatus] = useState<"idle" | "submitting" | "submitted" | "error">("idle");
   const [errorMessage, setErrorMessage] = useState("");
+  const formError = useFormError("approval request");
 
   const isSuperAdmin = roles.includes("super_admin") || roles.includes("platform_admin");
 
@@ -33,6 +35,7 @@ export function ModuleApprovalBanner({ roles, dirtyKeys, pendingState }: ModuleA
   async function submitApprovalRequest() {
     setRequestStatus("submitting");
     setErrorMessage("");
+    formError.clear();
     try {
       const res = await fetch("/api/proxy/v1/workflow/module-change-requests", {
         method: "POST",
@@ -45,10 +48,14 @@ export function ModuleApprovalBanner({ roles, dirtyKeys, pendingState }: ModuleA
           reason: "Module configuration change requested by tenant admin",
         }),
       });
-      if (!res.ok) throw new Error(await res.text());
+      if (!res.ok) {
+        setErrorMessage((await formError.fromResponse(res, "save")).message);
+        setRequestStatus("error");
+        return;
+      }
       setRequestStatus("submitted");
-    } catch (err) {
-      setErrorMessage(err instanceof Error ? err.message : "Request failed");
+    } catch {
+      setErrorMessage(formError.fromException("save").message);
       setRequestStatus("error");
     }
   }

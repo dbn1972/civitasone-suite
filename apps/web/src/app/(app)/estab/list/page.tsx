@@ -74,7 +74,10 @@ export default async function EstabFilesListPage() {
       </div>
       {/* "Pending" (not "SLA Breached"): there is no due-date/SLA field here, so
           this is the count of pending files, not a breach count. Show "—" rather
-          than a fabricated 0 when the load failed. */}
+          than a fabricated 0 when the initial load errors. status-leak-ok (this
+          comment's prose was previously matched by the guard's line-based
+          literal check, which cannot see that a multi-line JSX comment is still
+          a comment past its first line — see UX-016/UX-020 in the gap report). */}
       <StatGrid>
         <StatCard icon="📁" iconBg="#e6f7f5" label="Active Files" value={errored ? "—" : active.toLocaleString("en-IN")} />
         <StatCard icon="⏱" iconBg="#fffaeb" label="Avg Pendency" value={errored ? "—" : avgPendencyDisplay} />

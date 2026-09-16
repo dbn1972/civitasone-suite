@@ -3,6 +3,7 @@
 import { useId, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Segmented, ConfirmDialog, DataTable } from "../../../_components/ds";
+import { useFormError } from "@/lib/useFormError";
 
 type Role = {
   id: string;
@@ -76,6 +77,7 @@ function NewRoleDialog({ open, onClose, onCreated }: { open: boolean; onClose: (
   const [nameErr, setNameErr] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | undefined>(undefined);
+  const formError = useFormError("role");
 
   const nameId = useId();
   const descId = useId();
@@ -110,6 +112,7 @@ function NewRoleDialog({ open, onClose, onCreated }: { open: boolean; onClose: (
         if (name.trim().length === 0) { setNameErr("Role name is required."); return; }
         setBusy(true);
         setError(undefined);
+        formError.clear();
         try {
           const res = await fetch("/api/proxy/policy/roles", {
             method: "POST",
@@ -117,15 +120,13 @@ function NewRoleDialog({ open, onClose, onCreated }: { open: boolean; onClose: (
             body: JSON.stringify({ name: name.trim(), ...(description.trim() ? { description: description.trim() } : {}) }),
           });
           if (!res.ok) {
-            const text = await res.text();
-            let msg = text || `Request failed (${res.status})`;
-            try { const j = JSON.parse(text) as { message?: string }; if (j.message) msg = j.message; } catch { /* */ }
-            throw new Error(msg);
+            setError((await formError.fromResponse(res, "save")).message);
+            return;
           }
           setName(""); setDescription("");
           onCreated();
-        } catch (err) {
-          setError(err instanceof Error ? err.message : "Failed to create role.");
+        } catch {
+          setError(formError.fromException("save").message);
         } finally {
           setBusy(false);
         }

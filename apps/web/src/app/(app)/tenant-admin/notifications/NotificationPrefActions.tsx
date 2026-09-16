@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 import { EmptyState } from "../../../_components/ds";
+import { useFormError } from "@/lib/useFormError";
 
 type Pref = {
   id: string;
@@ -47,6 +48,7 @@ export function NotificationPrefActions({ prefs }: { prefs: Pref[] }) {
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState("");
   const [error, setError] = useState("");
+  const formError = useFormError("preferences");
 
   const byModule = useMemo(() => {
     return prefs.reduce<Record<string, Pref[]>>((acc, p) => {
@@ -74,6 +76,7 @@ export function NotificationPrefActions({ prefs }: { prefs: Pref[] }) {
     setBusy(true);
     setStatus("");
     setError("");
+    formError.clear();
     try {
       for (const id of ids) {
         const res = await fetch(`/api/proxy/notification/prefs/${id}`, {
@@ -81,12 +84,15 @@ export function NotificationPrefActions({ prefs }: { prefs: Pref[] }) {
           headers: { "content-type": "application/json" },
           body: JSON.stringify({ email: target[id].email, inApp: target[id].inApp }),
         });
-        if (!res.ok) throw new Error(await res.text());
+        if (!res.ok) {
+          setError((await formError.fromResponse(res, "save")).message);
+          return;
+        }
       }
       setStatus(`${okVerb} ${ids.length} preference${ids.length === 1 ? "" : "s"}.`);
       router.refresh();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Save failed");
+    } catch {
+      setError(formError.fromException("save").message);
     } finally {
       setBusy(false);
     }

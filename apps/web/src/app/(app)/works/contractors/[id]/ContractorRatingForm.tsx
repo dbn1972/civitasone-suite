@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useToast } from "@/app/_components/ds/Toast";
 import { ConfirmDialog } from "@/app/_components/ds";
+import { useFormError } from "@/lib/useFormError";
 
 interface ContractorRatingFormProps {
   contractorId: string;
@@ -25,6 +26,7 @@ export function ContractorRatingForm({
   const [dialogOpen, setDialogOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | undefined>();
+  const formError = useFormError("rating");
 
   if (!canRate) {
     return (
@@ -39,6 +41,7 @@ export function ContractorRatingForm({
   async function handleConfirm() {
     setBusy(true);
     setErrorMessage(undefined);
+    formError.clear();
     try {
       const res = await fetch(
         `/api/proxy/v1/works/contractors/${contractorId}/rate`,
@@ -49,17 +52,15 @@ export function ContractorRatingForm({
         }
       );
       if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        throw new Error(data?.message ?? `Error ${res.status}`);
+        setErrorMessage((await formError.fromResponse(res, "save")).message);
+        return;
       }
       setDialogOpen(false);
       toast.success("Rating submitted.");
       setTimeout(() => router.refresh(), 600);
       setSelectedRating(0);
-    } catch (err: unknown) {
-      setErrorMessage(
-        err instanceof Error ? err.message : "Something went wrong."
-      );
+    } catch {
+      setErrorMessage(formError.fromException("save").message);
     } finally {
       setBusy(false);
     }

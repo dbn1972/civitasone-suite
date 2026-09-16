@@ -127,4 +127,20 @@ describe("RecordProgressPage", () => {
       ).toBeInTheDocument(),
     );
   });
+
+  it("shows a clerk-safe message, never the raw HTTP status, when recording progress fails (UX-016)", async () => {
+    searchParamsMock = new URLSearchParams();
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("", { status: 500 }));
+
+    render(<RecordProgressPage />);
+    fireEvent.change(screen.getByLabelText(/Work Scope/i), {
+      target: { value: "123e4567-e89b-12d3-a456-426614174000" },
+    });
+    fireEvent.change(screen.getByLabelText(/Progress this period/i), { target: { value: "20" } });
+    fireEvent.click(screen.getByRole("button", { name: "Record Progress" }));
+
+    const alert = await screen.findByRole("alert");
+    await waitFor(() => expect(alert).toHaveTextContent(/couldn't save/i));
+    expect(alert.textContent).not.toMatch(/\b500\b/);
+  });
 });

@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useId, useState } from "react";
 import { ConfirmDialog } from "../../../_components/ds";
+import { useFormError } from "@/lib/useFormError";
 
 type KeyRow = { id: string; keyName: string; status: string };
 
@@ -19,6 +20,7 @@ export function APIKeyActions({ keys }: { keys: KeyRow[] }) {
   const [okMessage, setOkMessage] = useState("");
   const [nameError, setNameError] = useState("");
   const [scopeError, setScopeError] = useState("");
+  const formError = useFormError("API key");
 
   // pending confirm: { kind: "revoke" | "rotate", id, label }
   const [pending, setPending] = useState<{ kind: "revoke" | "rotate"; id: string; label: string } | null>(null);
@@ -64,20 +66,24 @@ export function APIKeyActions({ keys }: { keys: KeyRow[] }) {
     setCopied(false);
     if (!validate()) return;
     setBusy(true);
+    formError.clear();
     try {
       const res = await fetch("/api/proxy/identity/api-keys", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ name: name.trim(), scopes: parsedScopes() }),
       });
-      if (!res.ok) throw new Error(await readError(res));
+      if (!res.ok) {
+        setMessage((await formError.fromResponse(res, "save")).message);
+        return;
+      }
       const body = (await res.json()) as { key?: string };
       setCreatedKey(body.key ?? "");
       setOkMessage("API key issued. Copy the secret now — it is shown only once.");
       setName("");
       router.refresh();
-    } catch (err) {
-      setMessage(err instanceof Error ? err.message : "Failed to create key");
+    } catch {
+      setMessage(formError.fromException("save").message);
     } finally {
       setBusy(false);
     }
@@ -87,6 +93,7 @@ export function APIKeyActions({ keys }: { keys: KeyRow[] }) {
     if (!pending) return;
     setDialogBusy(true);
     setDialogError(undefined);
+    formError.clear();
     try {
       const url = `/api/proxy/identity/api-keys/${pending.id}${pending.kind === "rotate" ? "/rotate" : ""}`;
       const res = await fetch(url, {
@@ -94,7 +101,10 @@ export function APIKeyActions({ keys }: { keys: KeyRow[] }) {
         headers: { "content-type": "application/json" },
         body: JSON.stringify(reason ? { reason } : {}),
       });
-      if (!res.ok) throw new Error(await readError(res));
+      if (!res.ok) {
+        setDialogError((await formError.fromResponse(res, "save")).message);
+        return;
+      }
       if (pending.kind === "rotate") {
         const body = (await res.json()) as { key?: string };
         setCreatedKey(body.key ?? "");
@@ -105,8 +115,8 @@ export function APIKeyActions({ keys }: { keys: KeyRow[] }) {
       }
       setPending(null);
       router.refresh();
-    } catch (err) {
-      setDialogError(err instanceof Error ? err.message : "Action failed. Please try again.");
+    } catch {
+      setDialogError(formError.fromException("save").message);
     } finally {
       setDialogBusy(false);
     }
@@ -221,20 +231,6 @@ export function APIKeyActions({ keys }: { keys: KeyRow[] }) {
       />
     </div>
   );
-}
-
-async function readError(res: Response): Promise<string> {
-  try {
-    const text = await res.text();
-    try {
-      const j = JSON.parse(text) as { message?: string; fieldErrors?: Array<{ field: string; message: string }> };
-      if (j.fieldErrors?.length) return j.fieldErrors.map((f) => `${f.field}: ${f.message}`).join("; ");
-      if (j.message) return j.message;
-    } catch { /* not json */ }
-    return text || `Request failed (${res.status})`;
-  } catch {
-    return `Request failed (${res.status})`;
-  }
 }
 
 const lbl: React.CSSProperties = { display: "block", fontSize: 12.5, fontWeight: 650, color: "var(--ink2)", marginBottom: 6 };

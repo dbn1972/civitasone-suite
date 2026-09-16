@@ -70,4 +70,27 @@ describe("NewAaForm", () => {
       ).toBeInTheDocument(),
     );
   });
+
+  it("shows a clerk-safe message, never the raw HTTP status or backend text, when the create fails (UX-016)", async () => {
+    window.history.replaceState({}, "", `/works/approvals/new?workId=${WORK_ID}`);
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ message: "duplicate aa_number constraint violated" }), {
+        status: 500,
+        headers: { "content-type": "application/json" },
+      }),
+    );
+
+    renderWithToast(<NewAaForm />);
+
+    fireEvent.change(screen.getByLabelText(/AA Number/i), { target: { value: "AA/2026-27/001" } });
+    fireEvent.change(screen.getByLabelText(/Approval date/i), { target: { value: "2026-08-26" } });
+    fireEvent.change(screen.getByLabelText(/Approving authority/i), { target: { value: "223e4567-e89b-12d3-a456-426614174999" } });
+    fireEvent.change(screen.getByLabelText(/Approved amount/i), { target: { value: "500000" } });
+    fireEvent.click(screen.getByRole("button", { name: "Create" }));
+
+    const alert = await screen.findByRole("alert");
+    await waitFor(() => expect(alert).toHaveTextContent(/couldn't save/i));
+    expect(alert.textContent).not.toMatch(/\b500\b/);
+    expect(alert.textContent).not.toMatch(/duplicate aa_number/i);
+  });
 });

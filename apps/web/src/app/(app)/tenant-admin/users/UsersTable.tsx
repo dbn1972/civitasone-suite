@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { StatusPill, Segmented, ConfirmDialog, DataTable } from "../../../_components/ds";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { useSeededResource } from "@/lib/sync/resource";
+import { useFormError } from "@/lib/useFormError";
 
 type AdminUser = {
   id: string;
@@ -110,6 +111,7 @@ function InviteUserDialog({ open, onClose, onCreated }: { open: boolean; onClose
   const [emailErr, setEmailErr] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | undefined>(undefined);
+  const formError = useFormError("invitation");
 
   const nameId = useId();
   const emailId = useId();
@@ -126,6 +128,7 @@ function InviteUserDialog({ open, onClose, onCreated }: { open: boolean; onClose
     if (name.trim().length === 0) { setNameErr("Name is required."); ok = false; }
     if (!EMAIL_RE.test(email.trim())) { setEmailErr("Enter a valid email address."); ok = false; }
     if (!ok) throw new Error("Please correct the highlighted fields.");
+    formError.clear();
     const res = await fetch("/api/proxy/v1/admin/users", {
       method: "POST",
       headers: { "content-type": "application/json" },
@@ -136,14 +139,7 @@ function InviteUserDialog({ open, onClose, onCreated }: { open: boolean; onClose
       }),
     });
     if (!res.ok) {
-      const text = await res.text();
-      let msg = text || `Request failed (${res.status})`;
-      try {
-        const j = JSON.parse(text) as { message?: string; fieldErrors?: Array<{ field: string; message: string }> };
-        if (j.fieldErrors?.length) msg = j.fieldErrors.map((f) => `${f.field}: ${f.message}`).join("; ");
-        else if (j.message) msg = j.message;
-      } catch { /* */ }
-      throw new Error(msg);
+      throw new Error((await formError.fromResponse(res, "save")).message);
     }
     reset();
   }

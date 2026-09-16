@@ -43,3 +43,55 @@ describe("DfaPanel — step-change announcement (Req 2.6)", () => {
     });
   });
 });
+
+describe("DfaPanel — UX-016 clerk-safe errors", () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("shows a clerk-safe message, never the raw HTTP status or backend text, when creating a draft fails", async () => {
+    vi.spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(jsonResponse({ data: [] })) // initial load
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ message: "dfa_seq exhausted for section" }), {
+          status: 500,
+          headers: { "content-type": "application/json" },
+        }),
+      ); // create failure
+
+    render(<DfaPanel />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "+ New draft" }));
+    fireEvent.change(screen.getByLabelText(/Subject/i), { target: { value: "Test outgoing letter" } });
+    fireEvent.change(screen.getByLabelText(/Draft body/i), { target: { value: "Body text of the letter." } });
+    fireEvent.click(screen.getByRole("button", { name: "Create draft" }));
+
+    await waitFor(() => {
+      const alerts = screen.getAllByText(/couldn't save/i);
+      expect(alerts.length).toBeGreaterThan(0);
+    });
+    expect(document.body.textContent).not.toMatch(/dfa_seq exhausted/i);
+    expect(document.body.textContent).not.toMatch(/\b500\b/);
+  });
+
+  it("propagates a clerk-safe message (prefixed with the action) when a lifecycle action fails", async () => {
+    const dfa = {
+      id: "dfa-2", dfaNo: "DFA-002", communicationType: "letter", subject: "Test 2",
+      status: "draft", editable: true, recipientName: null, updatedAt: "2026-08-17T00:00:00Z",
+    };
+    vi.spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(jsonResponse({ data: [dfa] })) // initial load
+      .mockResolvedValueOnce(new Response("", { status: 503 })); // submit action fails
+
+    render(<DfaPanel />);
+
+    const submitBtn = await screen.findByRole("button", { name: "Submit" });
+    fireEvent.click(submitBtn);
+    const dialog = await screen.findByRole("alertdialog");
+    const dialogConfirm = Array.from(dialog.querySelectorAll("button")).find((b) => b.textContent === "Submit");
+    fireEvent.click(dialogConfirm!);
+
+    await waitFor(() => expect(dialog.textContent).toMatch(/couldn't save/i));
+    expect(dialog.textContent).not.toMatch(/\b503\b/);
+  });
+});

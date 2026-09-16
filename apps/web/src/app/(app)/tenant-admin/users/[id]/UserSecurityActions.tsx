@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { useFormError } from "@/lib/useFormError";
 
 type Props = { userId: string };
 
@@ -18,18 +19,23 @@ export function UserSecurityActions({ userId }: Props) {
   const [busy, setBusy] = useState<null | "reset" | "revokeAll">(null);
   const [status, setStatus] = useState("");
   const [error, setError] = useState("");
+  const formError = useFormError("security action");
 
   async function post(path: string, kind: "reset" | "revokeAll", okMessage: string) {
     setBusy(kind);
     setStatus("");
     setError("");
+    formError.clear();
     try {
       const res = await fetch(path, { method: "POST" });
-      if (!res.ok) throw new Error(await res.text());
+      if (!res.ok) {
+        setError((await formError.fromResponse(res, "save")).message);
+        return;
+      }
       setStatus(okMessage);
       router.refresh();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Request failed");
+    } catch {
+      setError(formError.fromException("save").message);
     } finally {
       setBusy(null);
     }

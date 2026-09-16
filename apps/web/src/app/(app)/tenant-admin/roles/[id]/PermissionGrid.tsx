@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { DataTable, ConfirmDialog } from "../../../../_components/ds";
+import { useFormError } from "@/lib/useFormError";
 
 export type Perm = { module: string; action: string; resource?: string; allowed: boolean };
 
@@ -34,6 +35,7 @@ export function PermissionGrid({
   editable: boolean;
 }) {
   const router = useRouter();
+  const formError = useFormError("permission");
 
   const baseline = useMemo(() => {
     const map: Record<string, CellState> = {};
@@ -82,6 +84,7 @@ export function PermissionGrid({
   async function save(reason?: string) {
     setBusy(true);
     setError(undefined);
+    formError.clear();
     try {
       for (const [k, v] of savable) {
         const [resource, action] = k.split(":");
@@ -91,10 +94,8 @@ export function PermissionGrid({
           body: JSON.stringify({ resource, action, effect: v === "deny" ? "deny" : "allow" }),
         });
         if (!res.ok) {
-          const text = await res.text();
-          let msg = text || `Request failed (${res.status})`;
-          try { const j = JSON.parse(text) as { message?: string }; if (j.message) msg = j.message; } catch { /* */ }
-          throw new Error(`${resource}:${action} — ${msg}`);
+          const resolved = await formError.fromResponse(res, "save");
+          throw new Error(`${resource}:${action} — ${resolved.message}`);
         }
       }
       setConfirmOpen(false);

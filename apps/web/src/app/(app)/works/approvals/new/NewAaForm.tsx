@@ -2,6 +2,7 @@
 import { useRouter, useSearchParams } from "next/navigation";
 import { useState } from "react";
 import { useToast } from "@/app/_components/ds/Toast";
+import { useFormError } from "@/lib/useFormError";
 
 const inputStyle = { width: "100%", padding: 8, minHeight: 44, borderRadius: 8, border: "1px solid var(--line)" } as const;
 const labelStyle = { display: "block", fontSize: 12, color: "var(--muted)", marginBottom: 4, fontWeight: 600 } as const;
@@ -28,6 +29,7 @@ export function NewAaForm() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
+  const formError = useFormError("administrative approval");
 
   function set(field: keyof typeof form) {
     return (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
@@ -39,6 +41,7 @@ export function NewAaForm() {
     setBusy(true);
     setMessage("");
     setError("");
+    formError.clear();
     try {
       const body: Record<string, string> = {
         workId: form.workId.trim(),
@@ -54,15 +57,17 @@ export function NewAaForm() {
         headers: { "content-type": "application/json" },
         body: JSON.stringify(body),
       });
-      const data = (await res.json().catch(() => null)) as { id?: string; message?: string } | null;
-      if (!res.ok) throw new Error(data?.message ?? "Create failed");
+      if (!res.ok) {
+        setError((await formError.fromResponse(res, "save")).message);
+        return;
+      }
       // The service accepts the create asynchronously (HTTP 202) — the record is
       // queued, not yet written — so we say "submitted", not "created".
       setMessage("Administrative approval submitted. It will appear in the register once processed.");
       toast.success("Administrative approval submitted.");
       setTimeout(() => router.push("/works/approvals"), 700);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Something went wrong.");
+    } catch {
+      setError(formError.fromException("save").message);
     } finally {
       setBusy(false);
     }

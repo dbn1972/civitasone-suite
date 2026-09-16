@@ -53,4 +53,20 @@ describe("Add BoQ Item form", () => {
     expect(body.rate).toBe("1250"); // ₹12.50 → 1250 paise
     expect(body.workId).toBe(WORK);
   });
+
+  it("shows a clerk-safe message, never the raw HTTP status, when the create fails (UX-016)", async () => {
+    searchParamsMock = new URLSearchParams(`workId=${WORK}`);
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("", { status: 500 }));
+
+    render(<NewBoqItemPage />);
+    fireEvent.change(screen.getByLabelText(/Item description/i), { target: { value: "PCC 1:4:8" } });
+    fireEvent.change(screen.getByLabelText(/^Unit/i), { target: { value: "cum" } });
+    fireEvent.change(screen.getByLabelText(/Rate per unit/i), { target: { value: "12.50" } });
+    fireEvent.change(screen.getByLabelText(/Quantity/i), { target: { value: "3" } });
+    fireEvent.click(screen.getByRole("button", { name: "Add BoQ Item" }));
+
+    const alert = await screen.findByRole("alert");
+    await waitFor(() => expect(alert).toHaveTextContent(/couldn't save/i));
+    expect(alert.textContent).not.toMatch(/\b500\b/);
+  });
 });

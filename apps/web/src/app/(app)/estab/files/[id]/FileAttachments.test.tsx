@@ -13,6 +13,13 @@ function jsonResponse(body: unknown, status = 200): Response {
 
 const urlOf = (args: unknown[]): string => (typeof args[0] === "string" ? args[0] : "");
 
+function attachFile(input: HTMLInputElement) {
+  const file = new File(["%PDF-1.4 fake pdf content"], "Annexure-I.pdf", { type: "application/pdf" });
+  Object.defineProperty(file, "size", { value: 54321 });
+  Object.defineProperty(input, "files", { value: [file], configurable: true });
+  fireEvent.change(input);
+}
+
 describe("FileAttachments — real presigned-URL upload, not a fake placeholder (F2 fix)", () => {
   beforeEach(() => {
     vi.restoreAllMocks();
@@ -68,5 +75,33 @@ describe("FileAttachments — real presigned-URL upload, not a fake placeholder 
     expect(sentBody.sizeBytes).toBe(54321);
     expect(String(sentBody.storageRef)).not.toMatch(/^pending-upload:/);
     expect(sentBody.sizeBytes).not.toBe(0);
+  });
+
+  it("shows a clerk-safe message, never the raw backend text, when the attach POST fails (UX-016)", async () => {
+    const presignResponse = {
+      uploadUrl: "https://s3.example.com/upload/estab-annexure",
+      key: "attachment/estab/annexure-i-real-key.pdf",
+      headers: { "content-type": "application/pdf" },
+    };
+    vi.spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(jsonResponse(presignResponse)) // 1. presign
+      .mockResolvedValueOnce(new Response(null, { status: 200 })) // 2. S3 PUT
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ message: "attachment quota exceeded for this file" }), {
+          status: 422,
+          headers: { "content-type": "application/json" },
+        }),
+      ); // 3. attach POST fails
+
+    render(<FileAttachments fileId="file-1" attachments={[]} />);
+    const input = document.querySelector("input[type='file']") as HTMLInputElement;
+    attachFile(input);
+
+    await waitFor(() => expect(screen.getByRole("button", { name: "Add attachment" })).not.toBeDisabled());
+    fireEvent.click(screen.getByRole("button", { name: "Add attachment" }));
+
+    await waitFor(() => expect(screen.getByText(/couldn't save/i)).toBeInTheDocument());
+    expect(document.body.textContent).not.toMatch(/attachment quota exceeded/i);
+    expect(document.body.textContent).not.toMatch(/\b422\b/);
   });
 });
