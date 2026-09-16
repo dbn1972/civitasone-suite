@@ -17,38 +17,42 @@
  */
 import { useRouter } from "next/navigation";
 import { ActionButton, useToast } from "@/app/_components/ds";
+import { toHumanError } from "@/lib/messages";
 
-async function postJson(url: string, body: unknown): Promise<void> {
+/**
+ * Plain-language failure message for a failed finance maker-checker command.
+ * postJson/patchJson are plain async helpers shared across several exported
+ * components below, not a component or hook, so they can't call the
+ * useFormError hook; toHumanError is the same catalogued-message building
+ * block that hook is built on -- never the backend's own message/error text
+ * or the raw HTTP status. `area` names the specific action (e.g. "payment",
+ * "sanction") for a more specific summary line. See
+ * docs/ENTERPRISE-GAP-REPORT-2026-09-07.md UX-003/UX-016.
+ */
+function financeActionError(area: string): string {
+  const human = toHumanError("save", { area });
+  return `${human.what} ${human.next}`;
+}
+
+async function postJson(url: string, body: unknown, area = "request"): Promise<void> {
   const res = await fetch(url, {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify(body),
   });
   if (!(res.ok || res.status === 202)) {
-    const text = await res.text().catch(() => "");
-    let msg = `Request failed (${res.status}).`;
-    try {
-      const j = JSON.parse(text);
-      msg = j?.message ?? j?.error ?? msg;
-    } catch { if (text) msg = text; }
-    throw new Error(msg);
+    throw new Error(financeActionError(area));
   }
 }
 
-async function patchJson(url: string, body: unknown): Promise<void> {
+async function patchJson(url: string, body: unknown, area = "request"): Promise<void> {
   const res = await fetch(url, {
     method: "PATCH",
     headers: { "content-type": "application/json" },
     body: JSON.stringify(body),
   });
   if (!(res.ok || res.status === 202)) {
-    const text = await res.text().catch(() => "");
-    let msg = `Request failed (${res.status}).`;
-    try {
-      const j = JSON.parse(text);
-      msg = j?.message ?? j?.error ?? msg;
-    } catch { if (text) msg = text; }
-    throw new Error(msg);
+    throw new Error(financeActionError(area));
   }
 }
 
@@ -67,7 +71,7 @@ export function PaymentActions() {
         requireReason
         reasonLabel="Reason / approving authority"
         onConfirm={async (reason) => {
-          await postJson("/api/proxy/v1/finance/payments/eft", { action: "pfms-sync", reason });
+          await postJson("/api/proxy/v1/finance/payments/eft", { action: "pfms-sync", reason }, "PFMS sync");
         }}
         onSuccess={() => { toast.info("PFMS sync submitted — the register updates as instructions settle."); router.refresh(); }}
       />
@@ -81,7 +85,7 @@ export function PaymentActions() {
         requireReason
         reasonLabel="Authorising officer & reason (maker-checker)"
         onConfirm={async (reason) => {
-          await postJson("/api/proxy/v1/finance/payments/eft", { action: "release", reason });
+          await postJson("/api/proxy/v1/finance/payments/eft", { action: "release", reason }, "payment");
         }}
         onSuccess={() => { toast.info("Payment submitted to the gateway for processing — the status updates once it responds."); router.refresh(); }}
       />
@@ -104,7 +108,7 @@ export function SanctionApproveAction({ id }: { id: string }) {
       requireReason
       reasonLabel="Approving authority & reason"
       onConfirm={async (reason) => {
-        await patchJson(`/api/proxy/v1/finance/sanctions/${id}/approve`, { reason });
+        await patchJson(`/api/proxy/v1/finance/sanctions/${id}/approve`, { reason }, "sanction approval");
       }}
       onSuccess={() => { toast.info("Approval submitted — the sanction status updates once processing completes."); router.refresh(); }}
     />
@@ -128,7 +132,7 @@ export function BillPassPayActions({ id, status }: { id: string; status: string 
         requireReason
         reasonLabel="Pre-audit officer & reason"
         onConfirm={async (reason) => {
-          await patchJson(`/api/proxy/v1/finance/bills/${id}/approve`, { decision: "pass", reason });
+          await patchJson(`/api/proxy/v1/finance/bills/${id}/approve`, { decision: "pass", reason }, "bill");
         }}
         onSuccess={() => { toast.info("Bill passing submitted for processing."); router.refresh(); }}
       />
@@ -143,7 +147,7 @@ export function BillPassPayActions({ id, status }: { id: string; status: string 
         requireReason
         reasonLabel="Treasury officer & reason"
         onConfirm={async (reason) => {
-          await postJson("/api/proxy/v1/finance/payments/eft", { billId: id, action: "release", reason });
+          await postJson("/api/proxy/v1/finance/payments/eft", { billId: id, action: "release", reason }, "payment");
         }}
         onSuccess={() => { toast.info("Payment submitted to the gateway for processing."); router.refresh(); }}
       />
@@ -166,7 +170,7 @@ export function SanctionCreateAction() {
       requireReason
       reasonLabel="Proposing officer & purpose"
       onConfirm={async (reason) => {
-        await postJson("/api/proxy/v1/finance/sanctions", { reason, status: "pending" });
+        await postJson("/api/proxy/v1/finance/sanctions", { reason, status: "pending" }, "sanction");
       }}
       onSuccess={() => { toast.success("Draft sanction submitted for approval."); router.refresh(); }}
     />
@@ -186,7 +190,7 @@ export function BillCreateAction() {
       requireReason
       reasonLabel="Submitting officer & reason"
       onConfirm={async (reason) => {
-        await postJson("/api/proxy/v1/finance/bills", { reason, status: "pending" });
+        await postJson("/api/proxy/v1/finance/bills", { reason, status: "pending" }, "bill");
       }}
       onSuccess={() => { toast.success("Bill submitted for pre-audit."); router.refresh(); }}
     />

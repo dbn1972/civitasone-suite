@@ -97,4 +97,41 @@ describe("JournalEntryForm", () => {
     expect(screen.getByText("Please correct the highlighted fields before posting.")).toBeInTheDocument();
     expect(fetchSpy).not.toHaveBeenCalled();
   });
+
+  // UX-016: the failed-post branch used to build `msg` from the backend's
+  // own `message`/`error` field, the raw response text, or a literal
+  // `Request failed (${res.status})` -- both the same class of leak
+  // useFormError/toHumanError closes fleet-wide (UX-003). Proves the fix: a
+  // failed post shows a clerk-safe catalogued message, never the raw status
+  // or raw backend text.
+  it("shows a clerk-safe error when posting fails, never the raw status or backend text", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ message: "gl_period_closed: posting period is closed" }), { status: 409 }),
+    );
+
+    render(<JournalEntryForm accounts={accounts} />);
+    fillBalancedLines();
+
+    fireEvent.click(screen.getByRole("button", { name: "Post Journal Entry" }));
+    await waitFor(() => expect(screen.getByText("Post this journal entry?")).toBeInTheDocument());
+    fireEvent.change(screen.getByLabelText("Reason / authority for posting (maker-checker)"), {
+      target: { value: "Month-end accrual" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Post entry" }));
+
+    // Both the form's own top-level banner AND ConfirmDialog's errorMessage
+    // render the same clerk-safe text with role="alert" while the dialog is
+    // still open on a failed post -- assert every alert is clean, not just
+    // the first one findByRole would grab.
+    await waitFor(async () => {
+      const alerts = await screen.findAllByRole("alert");
+      expect(alerts.some((a) => /couldn't save/i.test(a.textContent ?? ""))).toBe(true);
+    });
+    const alerts = screen.getAllByRole("alert");
+    for (const alert of alerts) {
+      expect(alert.textContent).not.toMatch(/\b409\b/);
+      expect(alert.textContent).not.toMatch(/gl_period_closed/i);
+      expect(alert.textContent).not.toMatch(/request failed/i);
+    }
+  });
 });

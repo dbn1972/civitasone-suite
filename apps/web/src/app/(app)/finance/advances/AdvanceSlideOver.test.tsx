@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ refresh: vi.fn() }),
@@ -109,5 +109,32 @@ describe("AdvanceSlideOver", () => {
     fireEvent.click(screen.getByRole("button", { name: /new advance/i }));
     const submit = screen.getByRole("button", { name: /submit advance/i });
     expect(submit).toHaveStyle({ minHeight: "44px" });
+  });
+
+  // UX-016: the failed-response branch used to show `body.message ??
+  // \`Failed (${res.status})\`` -- a raw HTTP status code leak (UX-003).
+  // Proves the fix: a failed submit shows a clerk-safe catalogued message,
+  // never the raw status.
+  it("shows a clerk-safe message when submission fails, never the raw status", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({}), { status: 500 }),
+    );
+
+    render(<AdvanceSlideOver />);
+    fireEvent.click(screen.getByRole("button", { name: /new advance/i }));
+
+    fireEvent.change(screen.getByLabelText(/advance type/i), { target: { value: "TA" } });
+    fireEvent.change(screen.getByLabelText(/employee id/i), { target: { value: "EMP00123" } });
+    fireEvent.change(screen.getByLabelText(/amount/i), { target: { value: "50000" } });
+    fireEvent.change(screen.getByLabelText(/repayment months/i), { target: { value: "12" } });
+    fireEvent.change(screen.getByLabelText(/purpose/i), { target: { value: "Festival advance for Diwali" } });
+    fireEvent.change(screen.getByLabelText(/sanctioning authority/i), { target: { value: "Joint Secretary" } });
+
+    fireEvent.click(screen.getByRole("button", { name: /submit advance/i }));
+
+    const alert = await screen.findByRole("alert");
+    await waitFor(() => expect(alert).toHaveTextContent(/couldn't save/i));
+    expect(alert.textContent).not.toMatch(/\b500\b/);
+    expect(alert.textContent).not.toMatch(/failed \(/i);
   });
 });

@@ -16,6 +16,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { PageHeader, Card } from "../../../../_components/ds";
+import { useFormError } from "@/lib/useFormError";
 
 type AccountRow = { id: string; code?: string; name?: string; hoaCode?: string };
 
@@ -29,36 +30,29 @@ const LEVEL_OPTIONS = [
 
 const CLASSIFICATION_OPTIONS = ["", "asset", "liability", "equity", "income", "expense"] as const;
 
-/** Mirrors the { message } / { error } envelope shapes used across the finance
- * proxy routes (see FinanceActions.tsx / JournalEntryForm.tsx) so failures
- * show the real backend reason instead of a raw response body. */
-async function parseErrorMessage(res: Response): Promise<string> {
-  const text = await res.text().catch(() => "");
-  let msg = `Request failed (${res.status}).`;
-  try {
-    const j = JSON.parse(text);
-    msg = j?.message ?? j?.error ?? msg;
-  } catch {
-    if (text) msg = text;
-  }
-  return msg;
-}
-
 export default function MapHeadOfAccountPage() {
   const router = useRouter();
   const [accounts, setAccounts] = useState<AccountRow[]>([]);
   const [loadError, setLoadError] = useState("");
+  const loadFormError = useFormError("accounts");
 
   const loadAccounts = useCallback(async () => {
+    const res = await fetch("/api/proxy/v1/finance/accounts?limit=200", { headers: { accept: "application/json" } });
+    if (!res.ok) {
+      setLoadError((await loadFormError.fromResponse(res, "load")).message);
+      return;
+    }
     try {
-      const res = await fetch("/api/proxy/v1/finance/accounts?limit=200", { headers: { accept: "application/json" } });
-      if (!res.ok) throw new Error(`Failed to load accounts (${res.status}).`);
       const json = (await res.json()) as { data?: AccountRow[] } | AccountRow[];
       const rows = Array.isArray(json) ? json : json.data ?? [];
       setAccounts(rows);
-    } catch (e) {
-      setLoadError(e instanceof Error ? e.message : "Failed to load accounts.");
+    } catch {
+      setLoadError(loadFormError.fromException("load").message);
     }
+    // loadFormError.fromResponse/fromException are stable (useCallback'd on a
+    // fixed `area` string inside useFormError) even though the wrapping
+    // loadFormError object literal isn't, so omitting it here is safe and
+    // avoids re-creating loadAccounts (and re-running its effect) every render.
   }, []);
 
   useEffect(() => {
@@ -74,12 +68,14 @@ export default function MapHeadOfAccountPage() {
   const [createBusy, setCreateBusy] = useState(false);
   const [createMessage, setCreateMessage] = useState("");
   const [createIsError, setCreateIsError] = useState(false);
+  const createFormError = useFormError("head of account");
 
   async function submitCreate(e: React.FormEvent) {
     e.preventDefault();
     setCreateBusy(true);
     setCreateMessage("");
     setCreateIsError(false);
+    createFormError.clear();
     try {
       const res = await fetch("/api/proxy/v1/finance/accounts", {
         method: "POST",
@@ -92,7 +88,11 @@ export default function MapHeadOfAccountPage() {
           classification: classification || undefined,
         }),
       });
-      if (!res.ok) throw new Error(await parseErrorMessage(res));
+      if (!res.ok) {
+        setCreateIsError(true);
+        setCreateMessage((await createFormError.fromResponse(res, "save")).message);
+        return;
+      }
       setCreateMessage(`Head of account "${code}" created.`);
       setCode("");
       setName("");
@@ -101,9 +101,9 @@ export default function MapHeadOfAccountPage() {
       setCreateHoaCode("");
       await loadAccounts();
       router.refresh();
-    } catch (e) {
+    } catch {
       setCreateIsError(true);
-      setCreateMessage(e instanceof Error ? e.message : "Create failed.");
+      setCreateMessage(createFormError.fromException("save").message);
     } finally {
       setCreateBusy(false);
     }
@@ -115,26 +115,32 @@ export default function MapHeadOfAccountPage() {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [isError, setIsError] = useState(false);
+  const mapFormError = useFormError("HoA code");
 
   async function submitMap(e: React.FormEvent) {
     e.preventDefault();
     setBusy(true);
     setMessage("");
     setIsError(false);
+    mapFormError.clear();
     try {
       const res = await fetch(`/api/proxy/v1/finance/accounts/${accountId}/hoa`, {
         method: "PATCH",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ hoaCode }),
       });
-      if (!(res.ok || res.status === 202)) throw new Error(await parseErrorMessage(res));
+      if (!(res.ok || res.status === 202)) {
+        setIsError(true);
+        setMessage((await mapFormError.fromResponse(res, "save")).message);
+        return;
+      }
       setMessage("Head of Account code saved.");
       setHoaCode("");
       router.refresh();
       setTimeout(() => router.push("/finance/chart-of-accounts"), 700);
-    } catch (e) {
+    } catch {
       setIsError(true);
-      setMessage(e instanceof Error ? e.message : "Save failed.");
+      setMessage(mapFormError.fromException("save").message);
     } finally {
       setBusy(false);
     }
@@ -161,10 +167,16 @@ export default function MapHeadOfAccountPage() {
             <div className="fld" style={{ flexDirection: "column", alignItems: "flex-start" }}>
               <label className="l" htmlFor="new-code">Code</label>
               <input id="new-code" required maxLength={20} value={code} onChange={(e) => setCode(e.target.value)} style={inputStyle} placeholder="e.g. 2110" />
+              {createFormError.fieldError("code") && (
+                <span style={{ fontSize: 12, color: "#b91c1c" }}>{createFormError.fieldError("code")}</span>
+              )}
             </div>
             <div className="fld" style={{ flexDirection: "column", alignItems: "flex-start" }}>
               <label className="l" htmlFor="new-name">Name</label>
               <input id="new-name" required minLength={2} maxLength={200} value={name} onChange={(e) => setName(e.target.value)} style={inputStyle} placeholder="e.g. Sundry Creditors" />
+              {createFormError.fieldError("name") && (
+                <span style={{ fontSize: 12, color: "#b91c1c" }}>{createFormError.fieldError("name")}</span>
+              )}
             </div>
             <div className="fld" style={{ flexDirection: "column", alignItems: "flex-start" }}>
               <label className="l" htmlFor="new-level">Level</label>
@@ -195,6 +207,9 @@ export default function MapHeadOfAccountPage() {
                 onChange={(e) => setCreateHoaCode(e.target.value.replace(/\D/g, ""))}
                 style={inputStyle}
               />
+              {createFormError.fieldError("hoaCode") && (
+                <span style={{ fontSize: 12, color: "#b91c1c" }}>{createFormError.fieldError("hoaCode")}</span>
+              )}
             </div>
           </div>
           <button type="submit" className="btn primary" disabled={createBusy || !code || !name} aria-busy={createBusy} style={{ marginTop: 12 }}>
@@ -233,6 +248,9 @@ export default function MapHeadOfAccountPage() {
                 style={inputStyle}
               />
               <span id="hoa-help" className="sub" style={{ fontSize: 12 }}>Exactly 18 digits (PFMS format).</span>
+              {mapFormError.fieldError("hoaCode") && (
+                <span style={{ fontSize: 12, color: "#b91c1c" }}>{mapFormError.fieldError("hoaCode")}</span>
+              )}
             </div>
           </div>
           <button type="submit" className="btn primary" disabled={busy || !accountId} aria-busy={busy} style={{ marginTop: 12 }}>

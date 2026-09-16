@@ -1,12 +1,13 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import type { AccountSummary } from "@civitasone/types";
 import { formatMoney } from "@/lib/formatters";
 import { ConfirmDialog } from "@/app/_components/ds";
 import { HelpTip } from "@/app/_components/ds";
 import { explain } from "@/lib/glossary";
 import { trackActivation } from "@/lib/activation";
+import { useFormError } from "@/lib/useFormError";
 
 type Props = {
   accounts: AccountSummary[];
@@ -56,6 +57,7 @@ export function JournalEntryForm({ accounts, redirectTo }: Props) {
   const [status,  setStatus]  = useState<"idle" | "submitting" | "accepted" | "error">("idle");
   const [message, setMessage] = useState("");
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const formError = useFormError("journal entry");
 
   /* ── line helpers ───────────────────────────────────────────── */
   function updateLine(id: number, field: keyof Omit<JournalLine, "id">, value: string) {
@@ -119,6 +121,7 @@ export function JournalEntryForm({ accounts, redirectTo }: Props) {
   async function doPost(reason?: string) {
     setStatus("submitting");
     setMessage("");
+    formError.clear();
 
     const body = {
       voucherNo:   voucherNo.trim(),
@@ -143,8 +146,6 @@ export function JournalEntryForm({ accounts, redirectTo }: Props) {
       body: JSON.stringify(body),
     });
 
-    const text = await res.text();
-
     if (res.status === 200 || res.status === 201 || res.status === 202) {
       setConfirmOpen(false);
       setStatus("accepted");
@@ -168,17 +169,11 @@ export function JournalEntryForm({ accounts, redirectTo }: Props) {
       return;
     }
 
-    let msg: string;
-    try {
-      const json = JSON.parse(text);
-      msg = json?.message ?? json?.error ?? text ?? `Request failed (${res.status})`;
-    } catch {
-      msg = text || `Request failed (${res.status})`;
-    }
+    const resolved = await formError.fromResponse(res, "save");
     setStatus("error");
-    setMessage(msg);
+    setMessage(resolved.message);
     // Surface the error inside the dialog by throwing for ConfirmDialog's busy/error flow.
-    throw new Error(msg);
+    throw new Error(resolved.message);
   }
 
   const errId = "jv-form-error";
@@ -203,6 +198,7 @@ export function JournalEntryForm({ accounts, redirectTo }: Props) {
             aria-describedby={errors.voucherNo ? "jv-voucher-err" : undefined}
           />
           {errors.voucherNo && <span id="jv-voucher-err" style={{ fontSize: "0.75rem", color: "#b91c1c", marginTop: 2, display: "block" }} role="alert">{errors.voucherNo}</span>}
+          {formError.fieldError("voucherNo") && <span style={{ fontSize: "0.75rem", color: "#b91c1c", marginTop: 2, display: "block" }} role="alert">{formError.fieldError("voucherNo")}</span>}
         </div>
         <div className="field">
           <label className="label" htmlFor="jv-date">Posting Date</label>
@@ -216,6 +212,7 @@ export function JournalEntryForm({ accounts, redirectTo }: Props) {
             aria-describedby={errors.postingDate ? "jv-date-err" : undefined}
           />
           {errors.postingDate && <span id="jv-date-err" style={{ fontSize: "0.75rem", color: "#b91c1c", marginTop: 2, display: "block" }} role="alert">{errors.postingDate}</span>}
+          {formError.fieldError("postingDate") && <span style={{ fontSize: "0.75rem", color: "#b91c1c", marginTop: 2, display: "block" }} role="alert">{formError.fieldError("postingDate")}</span>}
         </div>
       </div>
 
@@ -231,6 +228,7 @@ export function JournalEntryForm({ accounts, redirectTo }: Props) {
           aria-describedby={errors.narration ? "jv-narration-err" : undefined}
         />
         {errors.narration && <span id="jv-narration-err" style={{ fontSize: "0.75rem", color: "#b91c1c", marginTop: 2, display: "block" }} role="alert">{errors.narration}</span>}
+        {formError.fieldError("narration") && <span style={{ fontSize: "0.75rem", color: "#b91c1c", marginTop: 2, display: "block" }} role="alert">{formError.fieldError("narration")}</span>}
       </div>
 
       {/* ── journal lines ── */}

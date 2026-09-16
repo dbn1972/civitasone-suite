@@ -3,6 +3,7 @@
 import { useId, useState } from "react";
 import type { CSSProperties } from "react";
 import { useRouter } from "next/navigation";
+import { useFormError } from "@/lib/useFormError";
 
 /**
  * MedicalClaimForm — CGHS / CS(MA) Rules 1944 reimbursement claim form.
@@ -69,6 +70,7 @@ export function MedicalClaimForm() {
   const [errs, setErrs] = useState<Set<string>>(new Set());
   const [message, setMessage] = useState<{ tone: "good" | "bad"; text: string } | null>(null);
   const [busy, setBusy] = useState(false);
+  const formError = useFormError("medical claim");
 
   function clearErr(f: string) {
     setErrs((s) => { const n = new Set(s); n.delete(f); return n; });
@@ -91,6 +93,7 @@ export function MedicalClaimForm() {
     if (!validate()) return;
     setBusy(true);
     setMessage(null);
+    formError.clear();
     try {
       const res = await fetch("/api/proxy/v1/finance/medical-claims", {
         method: "POST",
@@ -108,16 +111,16 @@ export function MedicalClaimForm() {
         }),
       });
       if (!res.ok) {
-        const body = await res.json().catch(() => ({})) as { message?: string };
-        setMessage({ tone: "bad", text: body.message ?? `Failed (${res.status})` });
+        const resolved = await formError.fromResponse(res, "save");
+        setMessage({ tone: "bad", text: resolved.message });
         return;
       }
       setMessage({ tone: "good", text: "Medical reimbursement claim submitted." });
       setEmployeeId(""); setTreatmentDate(""); setHospital(""); setDiagnosis("");
       setAmount(""); setRemarks("");
       router.refresh();
-    } catch (err) {
-      setMessage({ tone: "bad", text: err instanceof Error ? err.message : "Network error." });
+    } catch {
+      setMessage({ tone: "bad", text: formError.fromException("save").message });
     } finally {
       setBusy(false);
     }
@@ -161,6 +164,7 @@ export function MedicalClaimForm() {
               aria-invalid={errs.has("employeeId")}
             />
             {errs.has("employeeId") && <p role="alert" style={fieldErr}>Enter employee ID.</p>}
+            {formError.fieldError("employeeId") && <p role="alert" style={fieldErr}>{formError.fieldError("employeeId")}</p>}
           </div>
           <div>
             <label htmlFor={ids.treatmentDate} style={labelStyle}>Date of Treatment {req}</label>
@@ -173,6 +177,7 @@ export function MedicalClaimForm() {
               aria-invalid={errs.has("treatmentDate")}
             />
             {errs.has("treatmentDate") && <p role="alert" style={fieldErr}>Select date of treatment.</p>}
+            {formError.fieldError("treatmentDate") && <p role="alert" style={fieldErr}>{formError.fieldError("treatmentDate")}</p>}
           </div>
         </div>
 
@@ -189,6 +194,7 @@ export function MedicalClaimForm() {
             aria-invalid={errs.has("hospital")}
           />
           {errs.has("hospital") && <p role="alert" style={fieldErr}>Enter hospital name (min 3 chars).</p>}
+          {formError.fieldError("hospital") && <p role="alert" style={fieldErr}>{formError.fieldError("hospital")}</p>}
         </div>
 
         {/* Diagnosis */}
@@ -204,6 +210,7 @@ export function MedicalClaimForm() {
             aria-invalid={errs.has("diagnosis")}
           />
           {errs.has("diagnosis") && <p role="alert" style={fieldErr}>Enter diagnosis (min 3 chars).</p>}
+          {formError.fieldError("diagnosis") && <p role="alert" style={fieldErr}>{formError.fieldError("diagnosis")}</p>}
         </div>
 
         {/* Claim Type + Amount + CGHS Ward */}
@@ -233,6 +240,7 @@ export function MedicalClaimForm() {
               aria-invalid={errs.has("amount")}
             />
             {errs.has("amount") && <p role="alert" style={fieldErr}>Enter a valid amount.</p>}
+            {formError.fieldError("amountMinor") && <p role="alert" style={fieldErr}>{formError.fieldError("amountMinor")}</p>}
           </div>
           <div>
             <label htmlFor={ids.cghsWard} style={labelStyle}>CGHS Ward Entitlement</label>

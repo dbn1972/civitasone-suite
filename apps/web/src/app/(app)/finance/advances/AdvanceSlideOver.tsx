@@ -3,6 +3,7 @@
 import { useId, useState } from "react";
 import type { CSSProperties } from "react";
 import { useRouter } from "next/navigation";
+import { useFormError } from "@/lib/useFormError";
 
 /**
  * AdvanceSlideOver — slide-over form to raise a government advance.
@@ -50,6 +51,7 @@ export function AdvanceSlideOver() {
   const [errs, setErrs] = useState<Set<string>>(new Set());
   const [message, setMessage] = useState<{ tone: "good" | "bad"; text: string } | null>(null);
   const [busy, setBusy] = useState(false);
+  const formError = useFormError("advance");
 
   function clearErr(f: string) {
     setErrs((s) => { const n = new Set(s); n.delete(f); return n; });
@@ -74,6 +76,7 @@ export function AdvanceSlideOver() {
     if (!validate()) return;
     setBusy(true);
     setMessage(null);
+    formError.clear();
     try {
       const res = await fetch("/api/proxy/v1/finance/advances", {
         method: "POST",
@@ -88,16 +91,16 @@ export function AdvanceSlideOver() {
         }),
       });
       if (!res.ok) {
-        const body = await res.json().catch(() => ({})) as { message?: string };
-        setMessage({ tone: "bad", text: body.message ?? `Failed (${res.status})` });
+        const resolved = await formError.fromResponse(res, "save");
+        setMessage({ tone: "bad", text: resolved.message });
         return;
       }
       setMessage({ tone: "good", text: "Advance request submitted successfully." });
       setAdvanceType(""); setEmployeeId(""); setAmount(""); setPurpose(""); setMonths("12"); setSanctionedBy("");
       router.refresh();
       setTimeout(() => setOpen(false), 1400);
-    } catch (err) {
-      setMessage({ tone: "bad", text: err instanceof Error ? err.message : "Network error." });
+    } catch {
+      setMessage({ tone: "bad", text: formError.fromException("save").message });
     } finally {
       setBusy(false);
     }
@@ -179,6 +182,7 @@ export function AdvanceSlideOver() {
                   ))}
                 </select>
                 {errs.has("type") && <p role="alert" style={fieldErr}>Select an advance type.</p>}
+                {formError.fieldError("advanceType") && <p role="alert" style={fieldErr}>{formError.fieldError("advanceType")}</p>}
               </div>
 
               {/* Employee ID */}
@@ -194,6 +198,7 @@ export function AdvanceSlideOver() {
                   aria-invalid={errs.has("employee")}
                 />
                 {errs.has("employee") && <p role="alert" style={fieldErr}>Enter employee ID.</p>}
+                {formError.fieldError("employeeId") && <p role="alert" style={fieldErr}>{formError.fieldError("employeeId")}</p>}
               </div>
 
               {/* Sanctioned By — GFR Rule 290 */}
@@ -213,6 +218,7 @@ export function AdvanceSlideOver() {
                   aria-invalid={errs.has("sanctionedBy")}
                 />
                 {errs.has("sanctionedBy") && <p role="alert" style={fieldErr}>Enter sanctioning authority.</p>}
+                {formError.fieldError("sanctionedBy") && <p role="alert" style={fieldErr}>{formError.fieldError("sanctionedBy")}</p>}
               </div>
 
               {/* Amount + Months */}
@@ -231,6 +237,7 @@ export function AdvanceSlideOver() {
                     aria-invalid={errs.has("amount")}
                   />
                   {errs.has("amount") && <p role="alert" style={fieldErr}>Enter a valid amount.</p>}
+                  {formError.fieldError("amountMinor") && <p role="alert" style={fieldErr}>{formError.fieldError("amountMinor")}</p>}
                 </div>
                 <div>
                   <label htmlFor={ids.months} style={label14}>Repayment Months {required}</label>
@@ -266,6 +273,7 @@ export function AdvanceSlideOver() {
                   aria-invalid={errs.has("purpose")}
                 />
                 {errs.has("purpose") && <p role="alert" style={fieldErr}>Purpose must be at least 5 characters.</p>}
+                {formError.fieldError("purpose") && <p role="alert" style={fieldErr}>{formError.fieldError("purpose")}</p>}
               </div>
 
               <div style={{ display: "flex", gap: 12, justifyContent: "flex-end", marginTop: 8 }}>

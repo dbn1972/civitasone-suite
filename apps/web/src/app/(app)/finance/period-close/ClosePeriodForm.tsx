@@ -3,8 +3,20 @@
 import { useId, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Card, ConfirmDialog } from "@/app/_components/ds";
-import { browserFetch } from "@/lib/api/browserClient";
-import { parseErrorMessage } from "./PeriodsTable";
+import { browserFetch, errorMessageFromResponse } from "@/lib/api/browserClient";
+import { toHumanError } from "@/lib/messages";
+
+/**
+ * Plain-language fallback for a soft-close network exception (no Response to
+ * read). toHumanError is the same catalogued-message building block
+ * errorMessageFromResponse (used below for the failed-response path) is
+ * built on -- never a raw exception message. See
+ * docs/ENTERPRISE-GAP-REPORT-2026-09-07.md UX-003/UX-016.
+ */
+function softCloseExceptionMessage(): string {
+  const human = toHumanError("save", { area: "period action" });
+  return `${human.what} ${human.next}`;
+}
 
 // YYYY-MM with a valid month (01-12).
 const PERIOD_PATTERN = /^\d{4}-(0[1-9]|1[0-2])$/;
@@ -49,8 +61,7 @@ export function ClosePeriodForm() {
         method: "POST",
       });
       if (!res.ok) {
-        // Surface the server's code/message (e.g. "ALREADY_CLOSED: …"), not a bare HTTP status.
-        setDialogError(await parseErrorMessage(res));
+        setDialogError(await errorMessageFromResponse(res, "save", "period action"));
         return;
       }
       setConfirmOpen(false);
@@ -58,7 +69,7 @@ export function ClosePeriodForm() {
       setPeriod("");
       router.refresh();
     } catch {
-      setDialogError("Network error. Please try again.");
+      setDialogError(softCloseExceptionMessage());
     } finally {
       setBusy(false);
     }
