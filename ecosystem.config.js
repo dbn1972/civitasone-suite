@@ -676,7 +676,7 @@ module.exports = {
     svc("loyalty",      3048, "loyalty_svc",      "civitas_loyalty", {}, { graceful: true }), // PERF-015
     svc("document",     3049, "document_svc",     "civitas_document", {}, { graceful: true }), // PERF-015
     svc("recommendation", 3040, "recommendation_svc", "civitas_recommendation", {}, { graceful: true }), // PERF-015
-    svc("cdp",         3047, "cdp_svc",         "civitas_cdp"),
+    svc("cdp",         3047, "cdp_svc",         "civitas_cdp", {}, { graceful: true }), // PERF-015
     svc("revenue",      3038, "revenue_svc",      "civitas_revenue", {}, { graceful: true }), // PERF-003
     svc("inspection",   3037, "inspection_svc",   "civitas_inspection", {
       S3_BUCKET_NAME: process.env.S3_BUCKET_NAME ?? "civitas-inspection",
