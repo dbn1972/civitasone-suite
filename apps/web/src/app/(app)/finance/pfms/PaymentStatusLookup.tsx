@@ -1,6 +1,7 @@
 "use client";
 
 import { useId, useState } from "react";
+import { useTranslations } from "next-intl";
 import { Card } from "../../../_components/ds";
 import { browserJson } from "@/lib/api/browserClient";
 import type { PfmsMode } from "./types";
@@ -22,6 +23,7 @@ interface PaymentStatusLookupProps {
 
 /** GET /v1/finance/pfms/payments/:ref/status — e-Kuber payment status enquiry. */
 export function PaymentStatusLookup({ onModeObserved }: PaymentStatusLookupProps) {
+  const t = useTranslations("pfmsPaymentStatusLookup");
   const [ref, setRef] = useState("");
   const [invalid, setInvalid] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -48,19 +50,19 @@ export function PaymentStatusLookup({ onModeObserved }: PaymentStatusLookupProps
       setResult(res.data);
       if (res.data.mode) onModeObserved?.(res.data.mode);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not fetch payment status.");
+      setError(err instanceof Error ? err.message : t("fetchError"));
     } finally {
       setBusy(false);
     }
   }
 
   return (
-    <Card title="Check Payment Status" padding>
+    <Card title={t("title")} padding>
       <form onSubmit={handleSubmit} style={{ display: "grid", gap: 12 }}>
         <div style={{ display: "flex", gap: 12, alignItems: "flex-end", flexWrap: "wrap" }}>
           <div style={{ display: "grid", gap: 6, flex: "1 1 240px" }}>
             <label htmlFor={refId} style={{ fontSize: 13, fontWeight: 600 }}>
-              Payment Reference <span aria-hidden="true">*</span>
+              {t("label")} <span aria-hidden="true">*</span>
             </label>
             <input
               id={refId}
@@ -74,13 +76,13 @@ export function PaymentStatusLookup({ onModeObserved }: PaymentStatusLookupProps
             />
           </div>
           <button type="submit" className="btn" style={{ minHeight: 44 }} disabled={busy}>
-            {busy ? "Checking…" : "Check Status"}
+            {busy ? t("checking") : t("checkStatus")}
           </button>
         </div>
 
         {invalid && (
           <p id={errId} role="alert" className="pill bad" style={{ width: "fit-content" }}>
-            Enter a payment reference to look up.
+            {t("invalidMessage")}
           </p>
         )}
         {error && (
@@ -90,12 +92,12 @@ export function PaymentStatusLookup({ onModeObserved }: PaymentStatusLookupProps
         )}
         {result && (
           <dl className="fields">
-            <div className="fld"><dt className="l">Reference</dt><dd className="v" style={{ margin: 0 }}>{result.referenceId}</dd></div>
-            <div className="fld"><dt className="l">PFMS Transaction ID</dt><dd className="v" style={{ margin: 0 }}>{result.pfmsTransactionId}</dd></div>
-            <div className="fld"><dt className="l">Status</dt><dd className="v" style={{ margin: 0 }}>{result.status}</dd></div>
-            {result.utrNumber && <div className="fld"><dt className="l">UTR</dt><dd className="v" style={{ margin: 0 }}>{result.utrNumber}</dd></div>}
-            {result.processedAt && <div className="fld"><dt className="l">Processed At</dt><dd className="v" style={{ margin: 0 }}>{result.processedAt}</dd></div>}
-            {result.failureReason && <div className="fld"><dt className="l">Failure Reason</dt><dd className="v" style={{ margin: 0 }}>{result.failureReason}</dd></div>}
+            <div className="fld"><dt className="l">{t("colReference")}</dt><dd className="v" style={{ margin: 0 }}>{result.referenceId}</dd></div>
+            <div className="fld"><dt className="l">{t("colTxnId")}</dt><dd className="v" style={{ margin: 0 }}>{result.pfmsTransactionId}</dd></div>
+            <div className="fld"><dt className="l">{t("colStatus")}</dt><dd className="v" style={{ margin: 0 }}>{result.status}</dd></div>
+            {result.utrNumber && <div className="fld"><dt className="l">{t("colUtr")}</dt><dd className="v" style={{ margin: 0 }}>{result.utrNumber}</dd></div>}
+            {result.processedAt && <div className="fld"><dt className="l">{t("colProcessedAt")}</dt><dd className="v" style={{ margin: 0 }}>{result.processedAt}</dd></div>}
+            {result.failureReason && <div className="fld"><dt className="l">{t("colFailureReason")}</dt><dd className="v" style={{ margin: 0 }}>{result.failureReason}</dd></div>}
           </dl>
         )}
       </form>

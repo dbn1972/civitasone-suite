@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useTranslations } from "next-intl";
 import { SubmitPaymentForm } from "./SubmitPaymentForm";
 import { PaymentStatusLookup } from "./PaymentStatusLookup";
 import { SalaryBillForm } from "./SalaryBillForm";
@@ -28,16 +29,16 @@ interface PaymentsPanelProps {
  * sandbox/live state.
  */
 export function PaymentsPanel({ departments = [] }: PaymentsPanelProps) {
+  const t = useTranslations("pfmsPaymentsPanel");
   const [mode, setMode] = useState<PfmsMode | null>(null);
 
   return (
     <div style={{ display: "grid", gap: 16 }}>
       {mode && mode !== "live" && (
         <div className="alert warn" role="status" aria-live="polite">
-          <strong>Sandbox Mode</strong>
+          <strong>{t("sandboxModeTitle")}</strong>
           <p>
-            PFMS credentials are not configured. Submissions are simulated and will not reach the
-            government payment gateway.
+            {t("sandboxModeMessage")}
           </p>
         </div>
       )}

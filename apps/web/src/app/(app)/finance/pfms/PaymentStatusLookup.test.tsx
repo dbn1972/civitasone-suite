@@ -1,6 +1,19 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { NextIntlClientProvider } from "next-intl";
+import enMessages from "@/messages/en.json";
 import { PaymentStatusLookup } from "./PaymentStatusLookup";
+
+// UX-017: PaymentStatusLookup now reads its copy through next-intl
+// (useTranslations), so it needs a real provider in the tree -- same
+// pattern as hr/leave/apply/ApplyLeaveForm.test.tsx.
+function renderLookup() {
+  return render(
+    <NextIntlClientProvider locale="en" messages={enMessages}>
+      <PaymentStatusLookup />
+    </NextIntlClientProvider>,
+  );
+}
 
 describe("PaymentStatusLookup", () => {
   beforeEach(() => {
@@ -8,7 +21,7 @@ describe("PaymentStatusLookup", () => {
   });
 
   it("requires a reference before looking up", () => {
-    render(<PaymentStatusLookup />);
+    renderLookup();
     fireEvent.click(screen.getByText("Check Status"));
     expect(screen.getByText("Enter a payment reference to look up.")).toBeInTheDocument();
   });
@@ -23,7 +36,7 @@ describe("PaymentStatusLookup", () => {
       ),
     );
 
-    render(<PaymentStatusLookup />);
+    renderLookup();
     fireEvent.change(screen.getByLabelText(/Payment Reference/), { target: { value: "REF-1" } });
     fireEvent.click(screen.getByText("Check Status"));
 
@@ -35,7 +48,7 @@ describe("PaymentStatusLookup", () => {
   it("surfaces a server error", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(null, { status: 503 }));
 
-    render(<PaymentStatusLookup />);
+    renderLookup();
     fireEvent.change(screen.getByLabelText(/Payment Reference/), { target: { value: "REF-2" } });
     fireEvent.click(screen.getByText("Check Status"));
 

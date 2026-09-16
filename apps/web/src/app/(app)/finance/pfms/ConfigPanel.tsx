@@ -1,3 +1,6 @@
+"use client";
+
+import { useTranslations } from "next-intl";
 import { Card, EmptyState } from "../../../_components/ds";
 import type { PfmsConfig } from "./types";
 
@@ -7,25 +10,27 @@ import type { PfmsConfig } from "./types";
  * agency code / default DDO must be provisioned by an administrator directly.
  */
 export function ConfigPanel({ config }: { config: PfmsConfig | null }) {
+  const t = useTranslations("pfmsConfigPanel");
+
   if (!config || (!config.agencyCode && !config.defaultDdo)) {
     return (
       <EmptyState
         icon="⚙️"
-        title="No PFMS configuration set"
-        message="This tenant has no PFMS agency code or default DDO configured. The finance-service does not currently expose a way to set this from the UI — it must be provisioned by an administrator."
+        title={t("emptyTitle")}
+        message={t("emptyMessage")}
       />
     );
   }
 
   return (
-    <Card title="PFMS Configuration" padding>
+    <Card title={t("title")} padding>
       <dl className="fields">
         <div className="fld">
-          <dt className="l">Agency Code</dt>
+          <dt className="l">{t("agencyCode")}</dt>
           <dd className="v" style={{ margin: 0 }}>{config.agencyCode ?? "—"}</dd>
         </div>
         <div className="fld">
-          <dt className="l">Default DDO</dt>
+          <dt className="l">{t("defaultDdo")}</dt>
           <dd className="v" style={{ margin: 0 }}>{config.defaultDdo ?? "—"}</dd>
         </div>
       </dl>

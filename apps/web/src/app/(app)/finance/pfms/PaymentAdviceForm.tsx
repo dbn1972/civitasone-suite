@@ -1,6 +1,7 @@
 "use client";
 
 import { useId, useRef, useState } from "react";
+import { useTranslations } from "next-intl";
 import { Card, ConfirmDialog } from "../../../_components/ds";
 import { browserJson } from "@/lib/api/browserClient";
 import { formatMoney } from "@/lib/formatters";
@@ -29,15 +30,6 @@ type AdviceStatusResult = {
 
 type FieldKey = "billId" | "payeeName" | "payeeAccountNo" | "payeeIfsc" | "amountMinor" | "purposeCode";
 
-const FIELD_ERRORS: Record<FieldKey, string> = {
-  billId: "Bill ID must be a valid UUID.",
-  payeeName: "Payee name is required.",
-  payeeAccountNo: "Payee account number is required.",
-  payeeIfsc: "IFSC must be exactly 11 characters.",
-  amountMinor: "Amount must be a whole number of paise, at least 1.",
-  purposeCode: "Purpose code is required.",
-};
-
 interface PaymentAdviceFormProps {
   /** Reports the `mode` field of a successful response, once the backend adapter rollout starts sending it. */
   onModeObserved?: (mode: PfmsMode) => void;
@@ -52,6 +44,7 @@ interface PaymentAdviceFormProps {
  * URL/query string.
  */
 export function PaymentAdviceForm({ onModeObserved }: PaymentAdviceFormProps) {
+  const t = useTranslations("pfmsPaymentAdviceForm");
   const [billId, setBillId] = useState("");
   const [payeeName, setPayeeName] = useState("");
   const [payeeAccountNo, setPayeeAccountNo] = useState("");
@@ -80,6 +73,16 @@ export function PaymentAdviceForm({ onModeObserved }: PaymentAdviceFormProps) {
   const ifscRef = useRef<HTMLInputElement>(null);
   const amountRef = useRef<HTMLInputElement>(null);
   const purposeRef = useRef<HTMLInputElement>(null);
+
+  const FIELD_ERRORS: Record<FieldKey, string> = {
+    billId: t("billIdRequired"),
+    payeeName: t("payeeNameRequired"),
+    payeeAccountNo: t("payeeAccountNoRequired"),
+    payeeIfsc: t("payeeIfscRequired"),
+    amountMinor: t("amountRequired"),
+    purposeCode: t("purposeCodeRequired"),
+  };
+
   const focusRefs: Record<FieldKey, React.RefObject<HTMLInputElement | null>> = {
     billId: billRef,
     payeeName: nameRef,
@@ -132,7 +135,7 @@ export function PaymentAdviceForm({ onModeObserved }: PaymentAdviceFormProps) {
       setConfirmOpen(false);
       if (res.data.mode) onModeObserved?.(res.data.mode);
       setLastAdviceId(res.data.adviceId);
-      setMessage(`Payment advice ${res.data.pfmsRef} generated — status: ${res.data.status}.`);
+      setMessage(t("successMessage", { pfmsRef: res.data.pfmsRef, status: res.data.status }));
       setBillId("");
       setPayeeName("");
       setPayeeAccountNo("");
@@ -142,7 +145,7 @@ export function PaymentAdviceForm({ onModeObserved }: PaymentAdviceFormProps) {
       setDdoCode("");
       setErrors({});
     } catch (err) {
-      setDialogError(err instanceof Error ? err.message : "Network error. Please try again.");
+      setDialogError(err instanceof Error ? err.message : t("networkErrorFallback"));
     } finally {
       setBusy(false);
     }
@@ -153,12 +156,12 @@ export function PaymentAdviceForm({ onModeObserved }: PaymentAdviceFormProps) {
   return (
     <>
       <form onSubmit={handleSubmit}>
-        <Card title="Generate Payment Advice" padding>
+        <Card title={t("title")} padding>
           <div style={{ display: "grid", gap: 14 }}>
             <div style={{ display: "grid", gap: 14, gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))" }}>
               <div style={{ display: "grid", gap: 6 }}>
                 <label htmlFor={billIdId} style={{ fontSize: 13, fontWeight: 600 }}>
-                  Bill ID (UUID) <span aria-hidden="true">*</span>
+                  {t("billIdLabel")} <span aria-hidden="true">*</span>
                 </label>
                 <input
                   id={billIdId}
@@ -178,7 +181,7 @@ export function PaymentAdviceForm({ onModeObserved }: PaymentAdviceFormProps) {
               </div>
               <div style={{ display: "grid", gap: 6 }}>
                 <label htmlFor={nameId} style={{ fontSize: 13, fontWeight: 600 }}>
-                  Payee Name <span aria-hidden="true">*</span>
+                  {t("payeeNameLabel")} <span aria-hidden="true">*</span>
                 </label>
                 <input
                   id={nameId}
@@ -199,7 +202,7 @@ export function PaymentAdviceForm({ onModeObserved }: PaymentAdviceFormProps) {
               </div>
               <div style={{ display: "grid", gap: 6 }}>
                 <label htmlFor={acctId} style={{ fontSize: 13, fontWeight: 600 }}>
-                  Payee Account No. <span aria-hidden="true">*</span>
+                  {t("payeeAccountNoLabel")} <span aria-hidden="true">*</span>
                 </label>
                 <input
                   id={acctId}
@@ -220,7 +223,7 @@ export function PaymentAdviceForm({ onModeObserved }: PaymentAdviceFormProps) {
               </div>
               <div style={{ display: "grid", gap: 6 }}>
                 <label htmlFor={ifscId} style={{ fontSize: 13, fontWeight: 600 }}>
-                  Payee IFSC (11 chars) <span aria-hidden="true">*</span>
+                  {t("payeeIfscLabel")} <span aria-hidden="true">*</span>
                 </label>
                 <input
                   id={ifscId}
@@ -241,7 +244,7 @@ export function PaymentAdviceForm({ onModeObserved }: PaymentAdviceFormProps) {
               </div>
               <div style={{ display: "grid", gap: 6 }}>
                 <label htmlFor={amountId} style={{ fontSize: 13, fontWeight: 600 }}>
-                  Amount, in paise <span aria-hidden="true">*</span>
+                  {t("amountLabel")} <span aria-hidden="true">*</span>
                 </label>
                 <input
                   id={amountId}
@@ -263,7 +266,7 @@ export function PaymentAdviceForm({ onModeObserved }: PaymentAdviceFormProps) {
               </div>
               <div style={{ display: "grid", gap: 6 }}>
                 <label htmlFor={purposeId} style={{ fontSize: 13, fontWeight: 600 }}>
-                  Purpose Code <span aria-hidden="true">*</span>
+                  {t("purposeCodeLabel")} <span aria-hidden="true">*</span>
                 </label>
                 <input
                   id={purposeId}
@@ -283,7 +286,7 @@ export function PaymentAdviceForm({ onModeObserved }: PaymentAdviceFormProps) {
                 )}
               </div>
               <div style={{ display: "grid", gap: 6 }}>
-                <label htmlFor={ddoId} style={{ fontSize: 13, fontWeight: 600 }}>DDO Code</label>
+                <label htmlFor={ddoId} style={{ fontSize: 13, fontWeight: 600 }}>{t("ddoCodeLabel")}</label>
                 <input
                   id={ddoId}
                   value={ddoCode}
@@ -296,7 +299,7 @@ export function PaymentAdviceForm({ onModeObserved }: PaymentAdviceFormProps) {
 
             <div>
               <button type="submit" className="btn primary" style={{ minHeight: 44 }} disabled={busy}>
-                Generate Payment Advice
+                {t("title")}
               </button>
             </div>
 
@@ -310,16 +313,18 @@ export function PaymentAdviceForm({ onModeObserved }: PaymentAdviceFormProps) {
 
         <ConfirmDialog
           open={confirmOpen}
-          title="Generate this payment advice?"
-          confirmLabel="Generate advice"
+          title={t("confirmTitle")}
+          confirmLabel={t("confirmLabel")}
           danger
           busy={busy}
           errorMessage={dialogError}
           description={
             <>
-              Generate a treasury payment advice for <strong>{payeeName}</strong> (
-              {previewAmount ?? "amount above"}). This submits to the treasury workflow and cannot
-              be undone.
+              {t.rich("confirmDescription", {
+                payeeName,
+                amount: previewAmount ?? t("amountAboveFallback"),
+                b: (chunks) => <strong>{chunks}</strong>,
+              })}
             </>
           }
           onConfirm={() => void submit()}
@@ -340,6 +345,7 @@ function AdviceStatusLookup({
   prefillAdviceId: string | null;
   onModeObserved?: (mode: PfmsMode) => void;
 }) {
+  const t = useTranslations("pfmsAdviceStatusLookup");
   const [adviceId, setAdviceId] = useState(prefillAdviceId ?? "");
   const [invalid, setInvalid] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -366,19 +372,19 @@ function AdviceStatusLookup({
       setResult(res.data);
       if (res.data.mode) onModeObserved?.(res.data.mode);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not fetch advice status.");
+      setError(err instanceof Error ? err.message : t("fetchError"));
     } finally {
       setBusy(false);
     }
   }
 
   return (
-    <Card title="Check Payment Advice Status" padding>
+    <Card title={t("title")} padding>
       <form onSubmit={handleSubmit} style={{ display: "grid", gap: 12 }}>
         <div style={{ display: "flex", gap: 12, alignItems: "flex-end", flexWrap: "wrap" }}>
           <div style={{ display: "grid", gap: 6, flex: "1 1 240px" }}>
             <label htmlFor={idId} style={{ fontSize: 13, fontWeight: 600 }}>
-              Advice ID <span aria-hidden="true">*</span>
+              {t("adviceIdLabel")} <span aria-hidden="true">*</span>
             </label>
             <input
               id={idId}
@@ -391,12 +397,12 @@ function AdviceStatusLookup({
             />
           </div>
           <button type="submit" className="btn" style={{ minHeight: 44 }} disabled={busy}>
-            {busy ? "Checking…" : "Check Status"}
+            {busy ? t("checking") : t("checkStatus")}
           </button>
         </div>
         {invalid && (
           <p id={errId} role="alert" className="pill bad" style={{ width: "fit-content" }}>
-            Enter an advice ID to look up.
+            {t("invalidMessage")}
           </p>
         )}
         {error && (
@@ -406,11 +412,11 @@ function AdviceStatusLookup({
         )}
         {result && (
           <dl className="fields">
-            <div className="fld"><dt className="l">Advice ID</dt><dd className="v" style={{ margin: 0 }}>{result.adviceId}</dd></div>
-            <div className="fld"><dt className="l">Status</dt><dd className="v" style={{ margin: 0 }}>{result.status}</dd></div>
-            <div className="fld"><dt className="l">PFMS Transaction ID</dt><dd className="v" style={{ margin: 0 }}>{result.pfmsTransactionId}</dd></div>
-            <div className="fld"><dt className="l">UTR</dt><dd className="v" style={{ margin: 0 }}>{result.utrNumber}</dd></div>
-            <div className="fld"><dt className="l">Processed At</dt><dd className="v" style={{ margin: 0 }}>{result.processedAt}</dd></div>
+            <div className="fld"><dt className="l">{t("adviceIdLabel")}</dt><dd className="v" style={{ margin: 0 }}>{result.adviceId}</dd></div>
+            <div className="fld"><dt className="l">{t("colStatus")}</dt><dd className="v" style={{ margin: 0 }}>{result.status}</dd></div>
+            <div className="fld"><dt className="l">{t("colTxnId")}</dt><dd className="v" style={{ margin: 0 }}>{result.pfmsTransactionId}</dd></div>
+            <div className="fld"><dt className="l">{t("colUtr")}</dt><dd className="v" style={{ margin: 0 }}>{result.utrNumber}</dd></div>
+            <div className="fld"><dt className="l">{t("colProcessedAt")}</dt><dd className="v" style={{ margin: 0 }}>{result.processedAt}</dd></div>
           </dl>
         )}
       </form>

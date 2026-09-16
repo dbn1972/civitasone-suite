@@ -1,6 +1,7 @@
 "use client";
 
 import { useId, useRef, useState } from "react";
+import { useTranslations } from "next-intl";
 import { Card, ConfirmDialog } from "../../../_components/ds";
 import { browserJson } from "@/lib/api/browserClient";
 import { formatMoney } from "@/lib/formatters";
@@ -21,14 +22,6 @@ type SalaryBillResult = {
 
 type FieldKey = "month" | "departmentId" | "totalAmountMinor" | "employeeCount" | "ddoCode";
 
-const FIELD_ERRORS: Record<FieldKey, string> = {
-  month: "Month must be in YYYY-MM format.",
-  departmentId: "Please select a department.",
-  totalAmountMinor: "Total amount must be a whole number of paise, at least 1.",
-  employeeCount: "Employee count must be a whole number, at least 1.",
-  ddoCode: "DDO code is required.",
-};
-
 interface SalaryBillFormProps {
   /** Populates the department dropdown; see PfmsOpsConsolePage's getDepartments(). */
   departments?: PfmsDepartment[];
@@ -45,6 +38,7 @@ interface SalaryBillFormProps {
  * `totalAmountMinor` is paise (minor units) per the backend schema comment.
  */
 export function SalaryBillForm({ departments = [], onModeObserved }: SalaryBillFormProps) {
+  const t = useTranslations("pfmsSalaryBillForm");
   const [month, setMonth] = useState("");
   const [departmentId, setDepartmentId] = useState("");
   const [totalAmountMinor, setTotalAmountMinor] = useState("");
@@ -71,6 +65,15 @@ export function SalaryBillForm({ departments = [], onModeObserved }: SalaryBillF
   const amountRef = useRef<HTMLInputElement>(null);
   const countRef = useRef<HTMLInputElement>(null);
   const ddoRef = useRef<HTMLInputElement>(null);
+
+  const FIELD_ERRORS: Record<FieldKey, string> = {
+    month: t("monthRequired"),
+    departmentId: t("departmentRequired"),
+    totalAmountMinor: t("totalAmountRequired"),
+    employeeCount: t("employeeCountRequired"),
+    ddoCode: t("ddoCodeRequired"),
+  };
+
   const focusRefs: Record<FieldKey, React.RefObject<HTMLInputElement | HTMLSelectElement | null>> = {
     month: monthRef,
     departmentId: deptRef,
@@ -120,7 +123,7 @@ export function SalaryBillForm({ departments = [], onModeObserved }: SalaryBillF
       });
       setConfirmOpen(false);
       if (res.data.mode) onModeObserved?.(res.data.mode);
-      setMessage(`Salary bill ${res.data.pfmsBillNo} submitted for ${res.data.month} — status: ${res.data.status}.`);
+      setMessage(t("successMessage", { billNo: res.data.pfmsBillNo, month: res.data.month, status: res.data.status }));
       setMonth("");
       setDepartmentId("");
       setTotalAmountMinor("");
@@ -130,7 +133,7 @@ export function SalaryBillForm({ departments = [], onModeObserved }: SalaryBillF
       setRemarks("");
       setErrors({});
     } catch (err) {
-      setDialogError(err instanceof Error ? err.message : "Network error. Please try again.");
+      setDialogError(err instanceof Error ? err.message : t("networkErrorFallback"));
     } finally {
       setBusy(false);
     }
@@ -140,12 +143,12 @@ export function SalaryBillForm({ departments = [], onModeObserved }: SalaryBillF
 
   return (
     <form onSubmit={handleSubmit}>
-      <Card title="Generate Salary Bill" padding>
+      <Card title={t("title")} padding>
         <div style={{ display: "grid", gap: 14 }}>
           <div style={{ display: "grid", gap: 14, gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))" }}>
             <div style={{ display: "grid", gap: 6 }}>
               <label htmlFor={monthId} style={{ fontSize: 13, fontWeight: 600 }}>
-                Month (YYYY-MM) <span aria-hidden="true">*</span>
+                {t("monthLabel")} <span aria-hidden="true">*</span>
               </label>
               <input
                 id={monthId}
@@ -167,7 +170,7 @@ export function SalaryBillForm({ departments = [], onModeObserved }: SalaryBillF
             </div>
             <div style={{ display: "grid", gap: 6 }}>
               <label htmlFor={deptId} style={{ fontSize: 13, fontWeight: 600 }}>
-                Department <span aria-hidden="true">*</span>
+                {t("departmentLabel")} <span aria-hidden="true">*</span>
               </label>
               <select
                 id={deptId}
@@ -187,14 +190,14 @@ export function SalaryBillForm({ departments = [], onModeObserved }: SalaryBillF
                 }
                 style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
               >
-                <option value="">{departments.length === 0 ? "No departments available" : "Select department"}</option>
+                <option value="">{departments.length === 0 ? t("noDepartmentsOption") : t("selectDepartmentOption")}</option>
                 {departments.map((d) => (
                   <option key={d.id} value={d.id}>{d.name}</option>
                 ))}
               </select>
               {departments.length === 0 && (
                 <p id={`${deptId}-empty`} className="pill warn" style={{ width: "fit-content" }}>
-                  Unable to load departments. Contact an administrator if this persists.
+                  {t("departmentsUnavailable")}
                 </p>
               )}
               {errors.departmentId && (
@@ -205,7 +208,7 @@ export function SalaryBillForm({ departments = [], onModeObserved }: SalaryBillF
             </div>
             <div style={{ display: "grid", gap: 6 }}>
               <label htmlFor={amountId} style={{ fontSize: 13, fontWeight: 600 }}>
-                Total Amount, in paise <span aria-hidden="true">*</span>
+                {t("totalAmountLabel")} <span aria-hidden="true">*</span>
               </label>
               <input
                 id={amountId}
@@ -227,7 +230,7 @@ export function SalaryBillForm({ departments = [], onModeObserved }: SalaryBillF
             </div>
             <div style={{ display: "grid", gap: 6 }}>
               <label htmlFor={countId} style={{ fontSize: 13, fontWeight: 600 }}>
-                Employee Count <span aria-hidden="true">*</span>
+                {t("employeeCountLabel")} <span aria-hidden="true">*</span>
               </label>
               <input
                 id={countId}
@@ -248,7 +251,7 @@ export function SalaryBillForm({ departments = [], onModeObserved }: SalaryBillF
             </div>
             <div style={{ display: "grid", gap: 6 }}>
               <label htmlFor={ddoId} style={{ fontSize: 13, fontWeight: 600 }}>
-                DDO Code <span aria-hidden="true">*</span>
+                {t("ddoCodeLabel")} <span aria-hidden="true">*</span>
               </label>
               <input
                 id={ddoId}
@@ -268,7 +271,7 @@ export function SalaryBillForm({ departments = [], onModeObserved }: SalaryBillF
               )}
             </div>
             <div style={{ display: "grid", gap: 6 }}>
-              <label htmlFor={schemeId} style={{ fontSize: 13, fontWeight: 600 }}>Scheme Code</label>
+              <label htmlFor={schemeId} style={{ fontSize: 13, fontWeight: 600 }}>{t("schemeCodeLabel")}</label>
               <input
                 id={schemeId}
                 value={schemeCode}
@@ -279,7 +282,7 @@ export function SalaryBillForm({ departments = [], onModeObserved }: SalaryBillF
             </div>
           </div>
           <div style={{ display: "grid", gap: 6 }}>
-            <label htmlFor={remarksId} style={{ fontSize: 13, fontWeight: 600 }}>Remarks</label>
+            <label htmlFor={remarksId} style={{ fontSize: 13, fontWeight: 600 }}>{t("remarksLabel")}</label>
             <input
               id={remarksId}
               value={remarks}
@@ -291,7 +294,7 @@ export function SalaryBillForm({ departments = [], onModeObserved }: SalaryBillF
 
           <div>
             <button type="submit" className="btn primary" style={{ minHeight: 44 }} disabled={busy}>
-              Generate Salary Bill
+              {t("title")}
             </button>
           </div>
 
@@ -305,16 +308,19 @@ export function SalaryBillForm({ departments = [], onModeObserved }: SalaryBillF
 
       <ConfirmDialog
         open={confirmOpen}
-        title="Submit this salary bill to treasury?"
-        confirmLabel="Submit salary bill"
+        title={t("confirmTitle")}
+        confirmLabel={t("confirmLabel")}
         danger
         busy={busy}
         errorMessage={dialogError}
         description={
           <>
-            Submit the salary bill for <strong>{month}</strong> covering{" "}
-            <strong>{employeeCount}</strong> employees ({previewAmount ?? "amount above"}). This
-            action cannot be undone.
+            {t.rich("confirmDescription", {
+              month,
+              employeeCount,
+              amount: previewAmount ?? t("amountAboveFallback"),
+              b: (chunks) => <strong>{chunks}</strong>,
+            })}
           </>
         }
         onConfirm={() => void submit()}

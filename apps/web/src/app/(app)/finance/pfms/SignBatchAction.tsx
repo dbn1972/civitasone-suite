@@ -1,6 +1,7 @@
 "use client";
 
 import { useId, useRef, useState } from "react";
+import { useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
 import { ConfirmDialog, useConfirmAction } from "../../../_components/ds";
 import { browserJson } from "@/lib/api/browserClient";
@@ -12,13 +13,9 @@ interface SignBatchActionProps {
 
 type SignFieldKey = "certificateRef" | "signaturePayload";
 
-const FIELD_ERRORS: Record<SignFieldKey, string> = {
-  certificateRef: "Certificate reference is required.",
-  signaturePayload: "Signature payload is required.",
-};
-
 /** POST /v1/finance/pfms/:id/sign — applies a DSC signature to a PFMS batch. Irreversible. */
 export function SignBatchAction({ batchId, pfmsId }: SignBatchActionProps) {
+  const t = useTranslations("pfmsSignBatchAction");
   const router = useRouter();
   const [certificateRef, setCertificateRef] = useState("");
   const [signaturePayload, setSignaturePayload] = useState("");
@@ -27,6 +24,11 @@ export function SignBatchAction({ batchId, pfmsId }: SignBatchActionProps) {
   const payloadId = useId();
   const certRef = useRef<HTMLInputElement>(null);
   const payloadRef = useRef<HTMLTextAreaElement>(null);
+
+  const FIELD_ERRORS: Record<SignFieldKey, string> = {
+    certificateRef: t("certRequired"),
+    signaturePayload: t("payloadRequired"),
+  };
 
   const { open, busy, error, trigger, cancel, confirm } = useConfirmAction({
     onConfirm: async () => {
@@ -67,31 +69,30 @@ export function SignBatchAction({ batchId, pfmsId }: SignBatchActionProps) {
       <button
         type="button"
         className="btn primary"
-        aria-label={`Sign PFMS batch ${pfmsId}`}
+        aria-label={t("signAriaLabel", { pfmsId })}
         onClick={() => {
           setFieldErrors({});
           trigger();
         }}
         style={{ minHeight: 36 }}
       >
-        Sign
+        {t("signButtonLabel")}
       </button>
       <ConfirmDialog
         open={open}
-        title={`Sign PFMS batch ${pfmsId}?`}
-        confirmLabel="Sign batch"
+        title={t("confirmTitle", { pfmsId })}
+        confirmLabel={t("confirmLabel")}
         danger
         busy={busy}
         errorMessage={error}
         description={
           <div style={{ display: "grid", gap: 12 }}>
             <p>
-              This applies a digital signature to batch <strong>{pfmsId}</strong> and marks it
-              signed. This action cannot be undone.
+              {t.rich("description", { pfmsId, b: (chunks) => <strong>{chunks}</strong> })}
             </p>
             <div style={{ display: "grid", gap: 6 }}>
               <label htmlFor={certId} style={{ fontSize: 13, fontWeight: 600 }}>
-                Certificate reference <span aria-hidden="true">*</span>
+                {t("certificateRefLabel")} <span aria-hidden="true">*</span>
               </label>
               <input
                 id={certId}
@@ -112,7 +113,7 @@ export function SignBatchAction({ batchId, pfmsId }: SignBatchActionProps) {
             </div>
             <div style={{ display: "grid", gap: 6 }}>
               <label htmlFor={payloadId} style={{ fontSize: 13, fontWeight: 600 }}>
-                Signature payload <span aria-hidden="true">*</span>
+                {t("signaturePayloadLabel")} <span aria-hidden="true">*</span>
               </label>
               <textarea
                 id={payloadId}
