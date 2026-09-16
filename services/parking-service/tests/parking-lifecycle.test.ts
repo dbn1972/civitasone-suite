@@ -46,6 +46,7 @@ import { tenantScoped } from "../src/shared/tenant-queue.js";
 import { registerFacilityConsumers } from "../src/modules/facilities/consumer.js";
 import { registerBookingConsumers } from "../src/modules/bookings/consumer.js";
 import { registerEnforcementConsumers } from "../src/modules/enforcement/consumer.js";
+import { registerPassConsumers } from "../src/modules/passes/consumer.js";
 import * as facilitiesRepo from "../src/modules/facilities/repo.js";
 import * as bookingsRepo from "../src/modules/bookings/repo.js";
 import * as enforcementRepo from "../src/modules/enforcement/repo.js";
@@ -56,6 +57,16 @@ import * as enforcementRepo from "../src/modules/enforcement/repo.js";
 registerFacilityConsumers(tenantScoped(queue));
 registerBookingConsumers(tenantScoped(queue));
 registerEnforcementConsumers(tenantScoped(queue));
+// COMP-007: passes had zero test references anywhere in this service before
+// the describe block appended at the end of this file. Registered here
+// (not a separate comp-007-*.test.ts file) per this file's own header
+// comment: every DB-touching test in this service lives in ONE file because
+// they all share one real Postgres and vitest's fileParallelism is false
+// here specifically so files run sequentially, not concurrently -- a
+// separate file would still race THIS file's resetDb() truncating
+// parking.parking_passes out from under it whenever both happen to run in
+// the same suite invocation.
+registerPassConsumers(tenantScoped(queue));
 
 const T1 = "aaaaaaaa-0000-4000-8000-000000000001";
 // A second tenant, used ONLY by the RLS isolation tests below. Same reasoning
@@ -504,5 +515,196 @@ describe("parking-service — outbox idempotency", () => {
     // transaction, or after the insert instead of before it), the replay
     // would either throw on a duplicate primary key or silently reprocess —
     // exactly one clean row is the only correct outcome here.
+  });
+});
+
+// COMP-007: `passes` -- registered as both a route (POST/GET .../v1/parking/passes,
+// GET .../:id, POST .../:id/cancel) and a consumer (registerPassConsumers) but
+// had zero test references anywhere in this service before this block. Real
+// money: amountMinor is populated from the facility's own configured
+// monthlyPassMinor/annualPassMinor tariff (a fix already landed here, per
+// routes.ts/consumer.ts's own comments, for a prior hardcoded-flat-fee bug --
+// this suite proves that fix is actually in effect end to end, not just that
+// it compiles).
+describe("POST /v1/parking/passes -- facility tariff -> real pass, ownership, lifecycle", () => {
+  let facilityWithTariffId: string;
+  let facilityNoTariffId: string;
+
+  beforeAll(async () => {
+    const { buildApp } = await import("../src/app.js");
+    const app = await buildApp();
+
+    const withTariff = await app.inject({
+      method: "POST",
+      url: "/v1/parking/facilities",
+      headers: bearer(),
+      payload: { ...baseFacilityBody, facilityName: "Pass Lot With Tariff", monthlyPassMinor: 30000, annualPassMinor: 300000 },
+    });
+    expect(withTariff.statusCode).toBe(202);
+
+    const noTariff = await app.inject({
+      method: "POST",
+      url: "/v1/parking/facilities",
+      headers: bearer(),
+      payload: { ...baseFacilityBody, facilityName: "Pass Lot Without Tariff" },
+    });
+    expect(noTariff.statusCode).toBe(202);
+
+    await drain();
+    facilityWithTariffId = JSON.parse(withTariff.body).id;
+    facilityNoTariffId = JSON.parse(noTariff.body).id;
+    await app.close();
+  });
+
+  function passBody(overrides: Record<string, unknown> = {}) {
+    return {
+      facilityId: facilityWithTariffId,
+      holderName: "Comp007 Holder",
+      vehicleNumber: "MH12AB1234",
+      vehicleType: "car" as const,
+      passType: "monthly" as const,
+      validFrom: "2026-10-01",
+      ...overrides,
+    };
+  }
+
+  it("POST /v1/parking/passes with no token -> 401", async () => {
+    const { buildApp } = await import("../src/app.js");
+    const app = await buildApp();
+    const res = await app.inject({ method: "POST", url: "/v1/parking/passes", payload: passBody() });
+    expect(res.statusCode).toBe(401);
+    await app.close();
+  });
+
+  it("404s synchronously (no command ever published) for a nonexistent facility", async () => {
+    const { buildApp } = await import("../src/app.js");
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "POST", url: "/v1/parking/passes", headers: bearer(["parking_user"]),
+      payload: passBody({ facilityId: randomUUID() }),
+    });
+    expect(res.statusCode).toBe(404);
+    expect(res.json().code).toBe("FACILITY_NOT_FOUND");
+    await app.close();
+  });
+
+  it("422s synchronously for a facility that has not configured this pass type's tariff", async () => {
+    const { buildApp } = await import("../src/app.js");
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "POST", url: "/v1/parking/passes", headers: bearer(["parking_user"]),
+      payload: passBody({ facilityId: facilityNoTariffId }),
+    });
+    expect(res.statusCode).toBe(422);
+    expect(res.json().code).toBe("TARIFF_NOT_CONFIGURED");
+    await app.close();
+  });
+
+  it("creates a real monthly pass priced from the facility's monthlyPassMinor, valid for exactly one month", async () => {
+    const { buildApp } = await import("../src/app.js");
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "POST", url: "/v1/parking/passes", headers: bearer(["parking_user"], ACTOR),
+      payload: passBody(),
+    });
+    expect(res.statusCode).toBe(202);
+    const { id } = res.json();
+    await drain();
+
+    const get = await app.inject({ method: "GET", url: `/v1/parking/passes/${id}`, headers: bearer(["parking_user"], ACTOR) });
+    expect(get.statusCode).toBe(200);
+    const row = get.json().data;
+    expect(row.status).toBe("active");
+    expect(row.amountMinor).toBe("30000"); // real tariff, not a placeholder flat fee
+    expect(row.validFrom).toBe("2026-10-01");
+    expect(row.validUntil).toBe("2026-11-01");
+    expect(row.passNumber).toMatch(/ULB/);
+    await app.close();
+  });
+
+  it("creates a real annual pass priced from annualPassMinor, valid for exactly one year", async () => {
+    const { buildApp } = await import("../src/app.js");
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "POST", url: "/v1/parking/passes", headers: bearer(["parking_user"], ACTOR),
+      payload: passBody({ passType: "annual" }),
+    });
+    const { id } = res.json();
+    await drain();
+
+    const get = await app.inject({ method: "GET", url: `/v1/parking/passes/${id}`, headers: bearer(["parking_user"], ACTOR) });
+    const row = get.json().data;
+    expect(row.amountMinor).toBe("300000");
+    expect(row.validUntil).toBe("2027-10-01");
+    await app.close();
+  });
+
+  it("ownership: a different non-admin user in the same tenant cannot read someone else's pass (403), but an admin can", async () => {
+    const { buildApp } = await import("../src/app.js");
+    const app = await buildApp();
+    const create = await app.inject({
+      method: "POST", url: "/v1/parking/passes", headers: bearer(["parking_user"], ACTOR),
+      payload: passBody({ vehicleNumber: "MH12OWN001" }),
+    });
+    const { id } = create.json();
+    await drain();
+
+    const otherUser = await app.inject({ method: "GET", url: `/v1/parking/passes/${id}`, headers: bearer(["parking_user"], OTHER_ACTOR) });
+    expect(otherUser.statusCode).toBe(403);
+
+    const admin = await app.inject({ method: "GET", url: `/v1/parking/passes/${id}`, headers: bearer(["parking_admin"], OFFICER) });
+    expect(admin.statusCode).toBe(200);
+    await app.close();
+  });
+
+  it("cancel: active -> cancelled real state transition, and cancelling twice 422s the second time", async () => {
+    const { buildApp } = await import("../src/app.js");
+    const app = await buildApp();
+    const create = await app.inject({
+      method: "POST", url: "/v1/parking/passes", headers: bearer(["parking_user"], ACTOR),
+      payload: passBody({ vehicleNumber: "MH12CNL001" }),
+    });
+    const { id } = create.json();
+    await drain();
+
+    const cancel = await app.inject({ method: "POST", url: `/v1/parking/passes/${id}/cancel`, headers: bearer(["parking_user"], ACTOR) });
+    expect(cancel.statusCode).toBe(202);
+    await drain();
+
+    const get = await app.inject({ method: "GET", url: `/v1/parking/passes/${id}`, headers: bearer(["parking_user"], ACTOR) });
+    expect(get.json().data.status).toBe("cancelled");
+
+    const cancelAgain = await app.inject({ method: "POST", url: `/v1/parking/passes/${id}/cancel`, headers: bearer(["parking_user"], ACTOR) });
+    expect(cancelAgain.statusCode).toBe(422);
+    expect(cancelAgain.json().code).toBe("INVALID_STATUS");
+    await app.close();
+  });
+
+  it("list: a non-admin sees only their own passes; an admin sees all, and status filter narrows correctly", async () => {
+    const { buildApp } = await import("../src/app.js");
+    const app = await buildApp();
+    await app.inject({
+      method: "POST", url: "/v1/parking/passes", headers: bearer(["parking_user"], ACTOR),
+      payload: passBody({ vehicleNumber: "MH12LST001" }),
+    });
+    await app.inject({
+      method: "POST", url: "/v1/parking/passes", headers: bearer(["parking_user"], OTHER_ACTOR),
+      payload: passBody({ vehicleNumber: "MH12LST002" }),
+    });
+    await drain();
+
+    const ownList = await app.inject({ method: "GET", url: "/v1/parking/passes", headers: bearer(["parking_user"], ACTOR) });
+    const ownVehicles = ownList.json().data.map((p: any) => p.vehicleNumber);
+    expect(ownVehicles).toContain("MH12LST001");
+    expect(ownVehicles).not.toContain("MH12LST002"); // not scoped to admin -> only own
+
+    const adminList = await app.inject({ method: "GET", url: "/v1/parking/passes", headers: bearer(["parking_admin"], OFFICER) });
+    const adminVehicles = adminList.json().data.map((p: any) => p.vehicleNumber);
+    expect(adminVehicles).toContain("MH12LST001");
+    expect(adminVehicles).toContain("MH12LST002"); // admin sees everyone's
+
+    const activeOnly = await app.inject({ method: "GET", url: "/v1/parking/passes?status=active", headers: bearer(["parking_admin"], OFFICER) });
+    expect(activeOnly.json().data.every((p: any) => p.status === "active")).toBe(true);
+    await app.close();
   });
 });
