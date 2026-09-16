@@ -22,7 +22,15 @@ export async function listAssessees(tenantId: string, pagination: { limit: numbe
   const rows = await cache.getOrLoad(`${SERVICE}:${tenantId}:assessees`, async () => {
     return tenantTransaction(db, tenantId, async (tx) => {
       const t = tx as typeof db;
-      return t.select().from(assessees).where(eq(assessees.tenantId, tenantId));
+      // ORDER BY needed for the same reason as trade-license's listing (see
+      // that module's repo.ts): pagination slices this result in-memory, so
+      // without a deterministic order the page boundaries aren't stable.
+      // ownerName mirrors the mobile/web lookup-by-name UI; `id` breaks ties.
+      return t
+        .select()
+        .from(assessees)
+        .where(eq(assessees.tenantId, tenantId))
+        .orderBy(assessees.ownerName, assessees.id);
     });
   });
   const all = rows ?? [];

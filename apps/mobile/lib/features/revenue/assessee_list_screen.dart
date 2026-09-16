@@ -6,34 +6,29 @@ import '../../core/providers.dart';
 import '../../core/error_utils.dart';
 import '../../core/widgets/status_pill.dart';
 import '../../core/widgets/load_more_footer.dart';
-import 'models.dart';
+import 'assessee_models.dart';
 
-/// Trade License list — revenue officers/collectors look up a municipal
-/// business's license status and dues while out in the field.
+/// Assessee directory — revenue officers/collectors look up a property or
+/// water-connection ratepayer while out in the field.
 ///
-/// GET /v1/revenue/trade-licenses -> list of licenses for the tenant.
-/// Read-only in this first mobile slice: issue/renew/cancel/record-payment
-/// stay web-only for now (see COMP-008 roadmap in this PR's description).
-///
-/// Paginated: fetches [_pageSize] at a time and shows a "Load more" footer
-/// backed by the server's `meta.total`, so a tenant with more than one page
-/// of licenses gets an honest count instead of a silently truncated list.
-class TradeLicenseListScreen extends ConsumerStatefulWidget {
-  const TradeLicenseListScreen({super.key});
+/// GET /v1/revenue/assessees -> paginated list of assessees for the tenant.
+/// Read-only in this slice: create/update, and the bills/demands/receipts
+/// that hang off an assessee, stay web-only for now (see COMP-008 roadmap
+/// in this PR's description).
+class AssesseeListScreen extends ConsumerStatefulWidget {
+  const AssesseeListScreen({super.key});
 
   @override
-  ConsumerState<TradeLicenseListScreen> createState() =>
-      _TradeLicenseListScreenState();
+  ConsumerState<AssesseeListScreen> createState() => _AssesseeListScreenState();
 }
 
-class _TradeLicenseListScreenState
-    extends ConsumerState<TradeLicenseListScreen> {
+class _AssesseeListScreenState extends ConsumerState<AssesseeListScreen> {
   static const _pageSize = 100;
 
   bool _loading = true;
   bool _loadingMore = false;
   String? _error;
-  List<TradeLicense> _licenses = [];
+  List<Assessee> _assessees = [];
   int _total = 0;
   bool _isOnline = true;
   final _searchCtrl = TextEditingController();
@@ -45,7 +40,7 @@ class _TradeLicenseListScreenState
     _searchCtrl.addListener(() {
       setState(() => _query = _searchCtrl.text.trim().toLowerCase());
     });
-    _fetchLicenses();
+    _fetchAssessees();
   }
 
   @override
@@ -54,7 +49,7 @@ class _TradeLicenseListScreenState
     super.dispose();
   }
 
-  Future<void> _fetchLicenses() async {
+  Future<void> _fetchAssessees() async {
     setState(() {
       _loading = true;
       _error = null;
@@ -62,20 +57,15 @@ class _TradeLicenseListScreenState
     try {
       final api = ref.read(apiClientProvider);
       final res = await api.get<Map<String, dynamic>>(
-        '/v1/revenue/trade-licenses',
+        '/v1/revenue/assessees',
         params: {'limit': _pageSize, 'offset': 0},
       );
       final body = res.data ?? const <String, dynamic>{};
       final data = body['data'] as List<dynamic>? ?? [];
       final meta = body['meta'] as Map<String, dynamic>?;
-      _licenses = data
-          .cast<Map<String, dynamic>>()
-          .map(TradeLicense.fromJson)
-          .toList();
-      // Fall back to the loaded count when the server omits `meta` (e.g. an
-      // older/mocked response) so pagination degrades to "everything fits on
-      // one page" rather than showing a bogus "Load more".
-      _total = (meta?['total'] as num?)?.toInt() ?? _licenses.length;
+      _assessees =
+          data.cast<Map<String, dynamic>>().map(Assessee.fromJson).toList();
+      _total = (meta?['total'] as num?)?.toInt() ?? _assessees.length;
       _isOnline = true;
     } catch (e) {
       _error = userFriendlyError(e);
@@ -87,25 +77,22 @@ class _TradeLicenseListScreenState
     }
   }
 
-  /// Fetches the next page (offset = number already loaded) and appends it.
-  /// Failures surface as a snackbar rather than replacing the already-loaded
-  /// page with an error state.
   Future<void> _loadMore() async {
-    if (_loadingMore || _licenses.length >= _total) return;
+    if (_loadingMore || _assessees.length >= _total) return;
     setState(() => _loadingMore = true);
     try {
       final api = ref.read(apiClientProvider);
       final res = await api.get<Map<String, dynamic>>(
-        '/v1/revenue/trade-licenses',
-        params: {'limit': _pageSize, 'offset': _licenses.length},
+        '/v1/revenue/assessees',
+        params: {'limit': _pageSize, 'offset': _assessees.length},
       );
       final body = res.data ?? const <String, dynamic>{};
       final data = body['data'] as List<dynamic>? ?? [];
       final meta = body['meta'] as Map<String, dynamic>?;
       final more =
-          data.cast<Map<String, dynamic>>().map(TradeLicense.fromJson).toList();
+          data.cast<Map<String, dynamic>>().map(Assessee.fromJson).toList();
       setState(() {
-        _licenses = [..._licenses, ...more];
+        _assessees = [..._assessees, ...more];
         _total = (meta?['total'] as num?)?.toInt() ?? _total;
       });
     } catch (e) {
@@ -119,12 +106,12 @@ class _TradeLicenseListScreenState
     }
   }
 
-  List<TradeLicense> get _filtered {
-    if (_query.isEmpty) return _licenses;
-    return _licenses.where((l) {
-      return l.businessName.toLowerCase().contains(_query) ||
-          l.licenseNo.toLowerCase().contains(_query) ||
-          l.proprietorName.toLowerCase().contains(_query);
+  List<Assessee> get _filtered {
+    if (_query.isEmpty) return _assessees;
+    return _assessees.where((a) {
+      return a.ownerName.toLowerCase().contains(_query) ||
+          a.identifierNo.toLowerCase().contains(_query) ||
+          a.address.toLowerCase().contains(_query);
     }).toList();
   }
 
@@ -135,14 +122,14 @@ class _TradeLicenseListScreenState
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Trade Licenses'),
+        title: const Text('Assessees'),
         actions: [
           Semantics(
-            label: 'Refresh trade licenses',
+            label: 'Refresh assessees',
             child: IconButton(
               tooltip: 'Refresh',
               icon: const Icon(Icons.refresh),
-              onPressed: _fetchLicenses,
+              onPressed: _fetchAssessees,
             ),
           ),
         ],
@@ -161,13 +148,13 @@ class _TradeLicenseListScreenState
                     style: TextStyle(fontSize: 12, color: Colors.orange.shade800)),
               ]),
             ),
-          if (!_loading && _error == null && _licenses.isNotEmpty)
+          if (!_loading && _error == null && _assessees.isNotEmpty)
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
               child: TextField(
                 controller: _searchCtrl,
                 decoration: InputDecoration(
-                  hintText: 'Search business, proprietor, or license no.',
+                  hintText: 'Search owner, identifier no., or address',
                   prefixIcon: const Icon(Icons.search),
                   isDense: true,
                   border: OutlineInputBorder(
@@ -182,46 +169,43 @@ class _TradeLicenseListScreenState
     );
   }
 
-  Widget _buildBody(ThemeData theme, List<TradeLicense> visible) {
+  Widget _buildBody(ThemeData theme, List<Assessee> visible) {
     if (_loading) return const Center(child: CircularProgressIndicator());
-    if (_error != null && _licenses.isEmpty) {
-      return _ErrorState(message: _error!, onRetry: _fetchLicenses);
+    if (_error != null && _assessees.isEmpty) {
+      return _ErrorState(message: _error!, onRetry: _fetchAssessees);
     }
-    if (_licenses.isEmpty) {
+    if (_assessees.isEmpty) {
       return const _EmptyState(
-        icon: Icons.storefront_outlined,
-        title: 'No trade licenses found',
-        subtitle: 'Licenses issued for this tenant will appear here',
+        icon: Icons.home_work_outlined,
+        title: 'No assessees found',
+        subtitle: 'Property and water-connection records for this tenant will appear here',
       );
     }
     if (visible.isEmpty) {
       return const _EmptyState(
         icon: Icons.search_off,
         title: 'No matches',
-        subtitle: 'Try a different business name or license number',
+        subtitle: 'Try a different owner name, identifier, or address',
       );
     }
-    // Pagination is scoped to the unfiltered feed. While actively searching,
-    // hide the footer rather than offering to "load more" of a total that
-    // doesn't describe the filtered view on screen.
-    final showFooter = _query.isEmpty && _licenses.length < _total;
+    final showFooter = _query.isEmpty && _assessees.length < _total;
     return RefreshIndicator(
-      onRefresh: _fetchLicenses,
+      onRefresh: _fetchAssessees,
       child: ListView.builder(
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
         itemCount: visible.length + (showFooter ? 1 : 0),
         itemBuilder: (ctx, i) {
           if (i == visible.length) {
             return LoadMoreFooter(
-              loaded: _licenses.length,
+              loaded: _assessees.length,
               total: _total,
               loading: _loadingMore,
               onLoadMore: _loadMore,
             );
           }
-          return _LicenseCard(
-            license: visible[i],
-            onTap: () => context.go('/revenue/trade-licenses/${visible[i].id}'),
+          return _AssesseeCard(
+            assessee: visible[i],
+            onTap: () => context.go('/revenue/assessees/${visible[i].id}'),
           );
         },
       ),
@@ -229,18 +213,17 @@ class _TradeLicenseListScreenState
   }
 }
 
-class _LicenseCard extends StatelessWidget {
-  const _LicenseCard({required this.license, required this.onTap});
-  final TradeLicense license;
+class _AssesseeCard extends StatelessWidget {
+  const _AssesseeCard({required this.assessee, required this.onTap});
+  final Assessee assessee;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final due = license.dueMinor;
     return Semantics(
-      label: 'Trade license for ${license.businessName}, '
-          'status ${license.status.name}',
+      label: 'Assessee ${assessee.ownerName}, '
+          'type ${assesseeTypeLabel(assessee.assesseeType)}',
       child: Card(
         margin: const EdgeInsets.only(bottom: 12),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -259,17 +242,19 @@ class _LicenseCard extends StatelessWidget {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(license.businessName,
+                          Text(assessee.ownerName,
                               style: theme.textTheme.titleSmall
                                   ?.copyWith(fontWeight: FontWeight.w600)),
                           const SizedBox(height: 2),
-                          Text(license.proprietorName,
+                          Text(assessee.address.isEmpty ? '—' : assessee.address,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
                               style: theme.textTheme.bodySmall
                                   ?.copyWith(color: theme.colorScheme.outline)),
                         ],
                       ),
                     ),
-                    StatusPill(status: license.status.name),
+                    StatusPill(status: assesseeTypeLabel(assessee.assesseeType)),
                   ],
                 ),
                 const SizedBox(height: 12),
@@ -278,48 +263,24 @@ class _LicenseCard extends StatelessWidget {
                     Icon(Icons.badge_outlined,
                         size: 14, color: theme.colorScheme.outline),
                     const SizedBox(width: 4),
-                    Text(license.licenseNo,
+                    Text(assessee.identifierNo,
                         style: TextStyle(
                             fontSize: 12,
                             fontFamily: 'monospace',
                             color: theme.colorScheme.outline)),
-                    if (license.wardNo != null) ...[
+                    if (assessee.wardNo != null) ...[
                       const SizedBox(width: 12),
                       Icon(Icons.location_on_outlined,
                           size: 14, color: theme.colorScheme.outline),
                       const SizedBox(width: 4),
-                      Text('Ward ${license.wardNo}',
+                      Text('Ward ${assessee.wardNo}',
                           style: TextStyle(
                               fontSize: 12, color: theme.colorScheme.outline)),
                     ],
                     const Spacer(),
-                    if (due != null)
-                      Text(
-                        due == BigInt.zero
-                            ? 'Paid in full'
-                            : 'Due ${formatTradeLicenseAmount(due)}',
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                          color: due == BigInt.zero
-                              ? const Color(0xFF15803D)
-                              : theme.colorScheme.error,
-                        ),
-                      ),
+                    StatusPill(status: assessee.isActive ? 'active' : 'inactive'),
                   ],
                 ),
-                if (license.isExpiringSoon) ...[
-                  const SizedBox(height: 8),
-                  Row(children: [
-                    Icon(Icons.schedule, size: 14, color: Colors.orange.shade800),
-                    const SizedBox(width: 4),
-                    Text('Expiring soon',
-                        style: TextStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.w600,
-                            color: Colors.orange.shade800)),
-                  ]),
-                ],
               ],
             ),
           ),
@@ -370,7 +331,7 @@ class _ErrorState extends StatelessWidget {
         child: Column(mainAxisSize: MainAxisSize.min, children: [
           Icon(Icons.error_outline, size: 64, color: theme.colorScheme.error),
           const SizedBox(height: 16),
-          Text('Unable to load trade licenses', style: theme.textTheme.titleMedium),
+          Text('Unable to load assessees', style: theme.textTheme.titleMedium),
           const SizedBox(height: 8),
           Text(message,
               textAlign: TextAlign.center,

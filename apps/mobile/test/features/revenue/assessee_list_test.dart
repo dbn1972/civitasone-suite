@@ -6,7 +6,7 @@ import 'package:dio/dio.dart';
 import 'package:civitasone_mobile/core/providers.dart';
 import 'package:civitasone_mobile/core/api_client.dart';
 import 'package:civitasone_mobile/core/auth/pkce_auth.dart';
-import 'package:civitasone_mobile/features/revenue/trade_license_list_screen.dart';
+import 'package:civitasone_mobile/features/revenue/assessee_list_screen.dart';
 
 class MockApiClient extends Mock implements ApiClient {}
 
@@ -32,7 +32,7 @@ void main() {
         apiClientProvider.overrideWithValue(mockApi),
         authProvider.overrideWithValue(mockAuth),
       ],
-      child: const MaterialApp(home: TradeLicenseListScreen()),
+      child: const MaterialApp(home: AssesseeListScreen()),
     );
   }
 
@@ -43,38 +43,34 @@ void main() {
   }
 
   Response<Map<String, dynamic>> _buildResponse(
-    List<Map<String, dynamic>> licenses, {
+    List<Map<String, dynamic>> assessees, {
     Map<String, dynamic>? meta,
   }) {
     return Response(
       data: {
-        'data': licenses,
+        'data': assessees,
         if (meta != null) 'meta': meta,
       },
       statusCode: 200,
-      requestOptions: RequestOptions(path: '/v1/revenue/trade-licenses'),
+      requestOptions: RequestOptions(path: '/v1/revenue/assessees'),
     );
   }
 
-  final sampleLicense = {
-    'id': 'lic-1',
+  final sampleAssessee = {
+    'id': 'ass-1',
     'tenantId': 't1',
-    'licenseNo': 'TL-2026-0001',
-    'businessName': 'Sunrise Bakery',
-    'proprietorName': 'Asha Rao',
+    'assesseeType': 'property',
+    'identifierNo': 'PROP-0001',
+    'ownerName': 'Asha Rao',
     'address': '12 Market Road',
     'wardNo': '7',
-    'businessType': 'retail',
-    'category': 'A',
-    'status': 'active',
-    'issuedDate': '2026-04-01',
-    'expiryDate': '2027-03-31',
-    'feeMinor': '250000',
-    'feePaidMinor': '150000',
-    'renewalCount': 1,
+    'zoneNo': 'Z3',
+    'propertyType': 'residential',
+    'builtUpArea': '1200',
+    'isActive': true,
   };
 
-  group('TradeLicenseListScreen', () {
+  group('AssesseeListScreen', () {
     testWidgets('shows loading spinner initially', (tester) async {
       when(() => mockApi.get<Map<String, dynamic>>(
             any(),
@@ -99,14 +95,14 @@ void main() {
             any(),
             params: any(named: 'params'),
           )).thenThrow(DioException(
-        requestOptions: RequestOptions(path: '/v1/revenue/trade-licenses'),
+        requestOptions: RequestOptions(path: '/v1/revenue/assessees'),
         type: DioExceptionType.connectionTimeout,
       ));
 
       await tester.pumpWidget(buildSubject());
       await pumpUntilSettled(tester);
 
-      expect(find.text('Unable to load trade licenses'), findsOneWidget);
+      expect(find.text('Unable to load assessees'), findsOneWidget);
       expect(find.text('Retry'), findsOneWidget);
     });
 
@@ -116,11 +112,11 @@ void main() {
             any(),
             params: any(named: 'params'),
           )).thenThrow(DioException(
-        requestOptions: RequestOptions(path: '/v1/revenue/trade-licenses'),
+        requestOptions: RequestOptions(path: '/v1/revenue/assessees'),
         type: DioExceptionType.badResponse,
         response: Response(
           statusCode: 403,
-          requestOptions: RequestOptions(path: '/v1/revenue/trade-licenses'),
+          requestOptions: RequestOptions(path: '/v1/revenue/assessees'),
         ),
       ));
 
@@ -139,7 +135,7 @@ void main() {
         callCount++;
         if (callCount == 1) {
           throw DioException(
-            requestOptions: RequestOptions(path: '/v1/revenue/trade-licenses'),
+            requestOptions: RequestOptions(path: '/v1/revenue/assessees'),
             type: DioExceptionType.connectionTimeout,
           );
         }
@@ -156,7 +152,7 @@ void main() {
       expect(callCount, 2);
     });
 
-    testWidgets('shows empty state when no licenses', (tester) async {
+    testWidgets('shows empty state when no assessees', (tester) async {
       when(() => mockApi.get<Map<String, dynamic>>(
             any(),
             params: any(named: 'params'),
@@ -165,72 +161,54 @@ void main() {
       await tester.pumpWidget(buildSubject());
       await pumpUntilSettled(tester);
 
-      expect(find.text('No trade licenses found'), findsOneWidget);
+      expect(find.text('No assessees found'), findsOneWidget);
     });
 
-    testWidgets('renders license cards with business name, license no, and status',
+    testWidgets('renders assessee cards with owner name, identifier, and type',
         (tester) async {
       when(() => mockApi.get<Map<String, dynamic>>(
             any(),
             params: any(named: 'params'),
-          )).thenAnswer((_) async => _buildResponse([sampleLicense]));
+          )).thenAnswer((_) async => _buildResponse([sampleAssessee]));
 
       await tester.pumpWidget(buildSubject());
       await pumpUntilSettled(tester);
 
-      expect(find.text('Sunrise Bakery'), findsOneWidget);
-      expect(find.text('TL-2026-0001'), findsOneWidget);
+      expect(find.text('Asha Rao'), findsOneWidget);
+      expect(find.text('PROP-0001'), findsOneWidget);
+      expect(find.text('Property'), findsOneWidget);
       expect(find.text('Active'), findsOneWidget);
-      // 250000 - 150000 = 100000 paise = ₹1,000 due.
-      expect(find.textContaining('₹1,000'), findsOneWidget);
     });
 
-    testWidgets('a license with no fee data shows "—" rather than a fabricated amount',
-        (tester) async {
-      final noFeeLicense = Map<String, dynamic>.from(sampleLicense)
-        ..['feeMinor'] = null
-        ..['feePaidMinor'] = null;
+    testWidgets('search filters the list by owner name', (tester) async {
+      final other = Map<String, dynamic>.from(sampleAssessee)
+        ..['id'] = 'ass-2'
+        ..['identifierNo'] = 'WC-0002'
+        ..['ownerName'] = 'Vikram Singh'
+        ..['assesseeType'] = 'water_connection';
       when(() => mockApi.get<Map<String, dynamic>>(
             any(),
             params: any(named: 'params'),
-          )).thenAnswer((_) async => _buildResponse([noFeeLicense]));
+          )).thenAnswer((_) async => _buildResponse([sampleAssessee, other]));
 
       await tester.pumpWidget(buildSubject());
       await pumpUntilSettled(tester);
 
-      expect(find.textContaining('Due'), findsNothing);
-      expect(find.textContaining('Paid in full'), findsNothing);
-    });
+      expect(find.text('Asha Rao'), findsOneWidget);
+      expect(find.text('Vikram Singh'), findsOneWidget);
 
-    testWidgets('search filters the list by business name', (tester) async {
-      final other = Map<String, dynamic>.from(sampleLicense)
-        ..['id'] = 'lic-2'
-        ..['licenseNo'] = 'TL-2026-0002'
-        ..['businessName'] = 'Riverside Hardware'
-        ..['proprietorName'] = 'Vikram Singh';
-      when(() => mockApi.get<Map<String, dynamic>>(
-            any(),
-            params: any(named: 'params'),
-          )).thenAnswer((_) async => _buildResponse([sampleLicense, other]));
-
-      await tester.pumpWidget(buildSubject());
+      await tester.enterText(find.byType(TextField), 'vikram');
       await pumpUntilSettled(tester);
 
-      expect(find.text('Sunrise Bakery'), findsOneWidget);
-      expect(find.text('Riverside Hardware'), findsOneWidget);
-
-      await tester.enterText(find.byType(TextField), 'riverside');
-      await pumpUntilSettled(tester);
-
-      expect(find.text('Sunrise Bakery'), findsNothing);
-      expect(find.text('Riverside Hardware'), findsOneWidget);
+      expect(find.text('Asha Rao'), findsNothing);
+      expect(find.text('Vikram Singh'), findsOneWidget);
     });
 
     testWidgets('has RefreshIndicator for pull-to-refresh', (tester) async {
       when(() => mockApi.get<Map<String, dynamic>>(
             any(),
             params: any(named: 'params'),
-          )).thenAnswer((_) async => _buildResponse([sampleLicense]));
+          )).thenAnswer((_) async => _buildResponse([sampleAssessee]));
 
       await tester.pumpWidget(buildSubject());
       await pumpUntilSettled(tester);
@@ -252,21 +230,20 @@ void main() {
       expect(iconButton.tooltip, 'Refresh');
     });
 
-    // ── Pagination (bug fix: was silently capped at 100, no indication more
-    // existed, and never read `meta.total`) ───────────────────────────────────
+    // ── Pagination ───────────────────────────────────────────────────────────
 
     testWidgets('initial fetch requests limit and an explicit offset of 0',
         (tester) async {
       when(() => mockApi.get<Map<String, dynamic>>(
             any(),
             params: any(named: 'params'),
-          )).thenAnswer((_) async => _buildResponse([sampleLicense]));
+          )).thenAnswer((_) async => _buildResponse([sampleAssessee]));
 
       await tester.pumpWidget(buildSubject());
       await pumpUntilSettled(tester);
 
       final captured = verify(() => mockApi.get<Map<String, dynamic>>(
-            '/v1/revenue/trade-licenses',
+            '/v1/revenue/assessees',
             params: captureAny(named: 'params'),
           )).captured;
       expect(captured.single, {'limit': 100, 'offset': 0});
@@ -279,7 +256,7 @@ void main() {
             any(),
             params: any(named: 'params'),
           )).thenAnswer((_) async => _buildResponse(
-            [sampleLicense],
+            [sampleAssessee],
             meta: {'page': 1, 'pageSize': 1, 'total': 2},
           ));
 
@@ -290,27 +267,12 @@ void main() {
       expect(find.text('Load more'), findsOneWidget);
     });
 
-    testWidgets(
-        'no pagination footer when meta is absent (backwards compatible) or fully loaded',
-        (tester) async {
-      when(() => mockApi.get<Map<String, dynamic>>(
-            any(),
-            params: any(named: 'params'),
-          )).thenAnswer((_) async => _buildResponse([sampleLicense]));
-
-      await tester.pumpWidget(buildSubject());
-      await pumpUntilSettled(tester);
-
-      expect(find.textContaining('Showing'), findsNothing);
-      expect(find.text('Load more'), findsNothing);
-    });
-
     testWidgets('Load more requests the next page by offset and appends results',
         (tester) async {
-      final second = Map<String, dynamic>.from(sampleLicense)
-        ..['id'] = 'lic-2'
-        ..['licenseNo'] = 'TL-2026-0002'
-        ..['businessName'] = 'Riverside Hardware';
+      final second = Map<String, dynamic>.from(sampleAssessee)
+        ..['id'] = 'ass-2'
+        ..['identifierNo'] = 'WC-0002'
+        ..['ownerName'] = 'Vikram Singh';
 
       when(() => mockApi.get<Map<String, dynamic>>(
             any(),
@@ -320,7 +282,7 @@ void main() {
             invocation.namedArguments[#params] as Map<String, dynamic>?;
         final offset = params?['offset'] as int? ?? 0;
         if (offset == 0) {
-          return _buildResponse([sampleLicense],
+          return _buildResponse([sampleAssessee],
               meta: {'page': 1, 'pageSize': 1, 'total': 2});
         }
         expect(offset, 1, reason: 'offset should equal the number already loaded');
@@ -330,23 +292,20 @@ void main() {
       await tester.pumpWidget(buildSubject());
       await pumpUntilSettled(tester);
 
-      expect(find.text('Sunrise Bakery'), findsOneWidget);
-      expect(find.text('Riverside Hardware'), findsNothing);
+      expect(find.text('Vikram Singh'), findsNothing);
 
       await tester.tap(find.text('Load more'));
       await pumpUntilSettled(tester);
 
-      expect(find.text('Riverside Hardware'), findsOneWidget);
-      // Fully loaded now (2 of 2) -- footer/button withdrawn, not stuck at "2 of 2".
+      expect(find.text('Vikram Singh'), findsOneWidget);
       expect(find.text('Load more'), findsNothing);
-      expect(find.textContaining('Showing'), findsNothing);
     });
 
     // ── Defensive model parsing ─────────────────────────────────────────────────
 
-    testWidgets('a license with a null id does not crash the list',
+    testWidgets('an assessee with a null id does not crash the list',
         (tester) async {
-      final noId = Map<String, dynamic>.from(sampleLicense)..['id'] = null;
+      final noId = Map<String, dynamic>.from(sampleAssessee)..['id'] = null;
       when(() => mockApi.get<Map<String, dynamic>>(
             any(),
             params: any(named: 'params'),
@@ -355,39 +314,22 @@ void main() {
       await tester.pumpWidget(buildSubject());
       await pumpUntilSettled(tester);
 
-      expect(find.text('Sunrise Bakery'), findsOneWidget);
+      expect(find.text('Asha Rao'), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
 
-    testWidgets('an unrecognized status renders "Unknown", not "Pending"',
-        (tester) async {
-      final weirdStatus = Map<String, dynamic>.from(sampleLicense)
-        ..['status'] = 'some_future_status';
+    testWidgets('an unrecognized assesseeType renders "Unknown"', (tester) async {
+      final weirdType = Map<String, dynamic>.from(sampleAssessee)
+        ..['assesseeType'] = 'some_future_type';
       when(() => mockApi.get<Map<String, dynamic>>(
             any(),
             params: any(named: 'params'),
-          )).thenAnswer((_) async => _buildResponse([weirdStatus]));
+          )).thenAnswer((_) async => _buildResponse([weirdType]));
 
       await tester.pumpWidget(buildSubject());
       await pumpUntilSettled(tester);
 
       expect(find.text('Unknown'), findsOneWidget);
-      expect(find.text('Pending'), findsNothing);
-    });
-
-    testWidgets('a missing status renders "Unknown", not "Pending"',
-        (tester) async {
-      final nullStatus = Map<String, dynamic>.from(sampleLicense)..remove('status');
-      when(() => mockApi.get<Map<String, dynamic>>(
-            any(),
-            params: any(named: 'params'),
-          )).thenAnswer((_) async => _buildResponse([nullStatus]));
-
-      await tester.pumpWidget(buildSubject());
-      await pumpUntilSettled(tester);
-
-      expect(find.text('Unknown'), findsOneWidget);
-      expect(find.text('Pending'), findsNothing);
     });
   });
 }
