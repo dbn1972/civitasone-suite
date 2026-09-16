@@ -1,6 +1,6 @@
 import { fetchJson } from "@/app/_data/apiClient";
-import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
-import { EmptyState, PageHeader, StatCard, StatGrid } from "@/app/_components/ds";
+import { EmptyState, PageHeader, StatCard, StatGrid, RefreshErrorState } from "@/app/_components/ds";
+import { toHumanError } from "@/lib/messages";
 import { NewScheduledForm } from "./NewScheduledForm";
 
 type ScheduledReport = {
@@ -42,7 +42,6 @@ export default async function ScheduledReportsPage() {
 
   return (
     <div className="wrap">
-      {source === "error" && <DataSourceBadge source={source} />}
       <PageHeader
         title="Scheduled Reports"
         subtitle="Manage automated report delivery schedules."
@@ -58,7 +57,9 @@ export default async function ScheduledReportsPage() {
         <div className="card-h">
           <h3>Schedules</h3>
         </div>
-        {schedules.length === 0 ? (
+        {source === "error" ? (
+          <RefreshErrorState error={toHumanError("load", { area: "scheduled reports" })} backHref="/reports" />
+        ) : schedules.length === 0 ? (
           <EmptyState
             title="No scheduled reports"
             message="Create a schedule below to start automated delivery."

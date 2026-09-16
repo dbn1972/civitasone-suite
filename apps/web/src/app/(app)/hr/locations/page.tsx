@@ -1,7 +1,8 @@
 import Link from "next/link";
-import { PageHeader, Card, DataTable, EmptyState, StatGrid, StatCard } from "../../../_components/ds";
+import { PageHeader, Card, DataTable, EmptyState, StatGrid, StatCard, RefreshErrorState } from "../../../_components/ds";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
+import { toHumanError } from "@/lib/messages";
 import { getTranslations } from "next-intl/server";
 
 type Location = {
@@ -94,7 +95,9 @@ export default async function LocationsPage() {
         <StatCard icon="🏘️" iconBg="#f5f5f5" label={t("statBlockLabel")}   value={blockCount} />
       </StatGrid>
       <Card title={t("cardTitleWithCount", { count: locations.length })}>
-        {locations.length === 0 ? (
+        {source === "error" ? (
+          <RefreshErrorState error={toHumanError("load", { area: "locations" })} backHref="/hr" />
+        ) : locations.length === 0 ? (
           <EmptyState
             icon="📍"
             title={t("emptyTitle")}

@@ -2,10 +2,10 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { PageHeader, StatGrid, StatCard, Card } from "../../../../_components/ds";
-import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
+import { PageHeader, StatGrid, StatCard, Card, ErrorState } from "../../../../_components/ds";
 import { PrintButton } from "../../../../_components/PrintButton";
 import { useTranslations } from "next-intl";
+import { toHumanError } from "@/lib/messages";
 
 type EmployeeOption = { id: string; name: string; employeeNo: string };
 type Allocation = {
@@ -28,8 +28,8 @@ export default function LeaveBalancePage() {
   const [empId, setEmpId]         = useState("");
   const [ctx, setCtx]             = useState<LeaveContext | null>(null);
   const [loading, setLoading]     = useState(false);
-  const [error, setError]         = useState<string | null>(null);
   const [source, setSource]       = useState<"api" | "error">("api");
+  const [reloadTick, setReloadTick] = useState(0);
 
   useEffect(() => {
     const controller = new AbortController()
@@ -40,7 +40,7 @@ export default function LeaveBalancePage() {
         setEmployees(rows);
         if (rows[0]) setEmpId(rows[0].id);
       })
-      .catch((e) => { if (e.name !== 'AbortError') { setError(t("loadEmployeesError")); setSource("error"); } });
+      .catch((e) => { if (e.name !== 'AbortError') { setSource("error"); } });
     return () => controller.abort()
   }, [t]);
 
@@ -48,14 +48,14 @@ export default function LeaveBalancePage() {
     if (!empId) return;
     const controller = new AbortController()
     setLoading(true);
-    setError(null);
+    setSource("api");
     fetch(`/api/proxy/v1/hrms/leave-context?employeeId=${encodeURIComponent(empId)}`, { signal: controller.signal })
       .then((r) => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
       .then((data: LeaveContext) => setCtx(data))
-      .catch((e) => { if (e.name !== 'AbortError') { setError(t("loadBalanceError")); setSource("error"); } })
+      .catch((e) => { if (e.name !== 'AbortError') { setSource("error"); } })
       .finally(() => setLoading(false));
     return () => controller.abort()
-  }, [empId, t]);
+  }, [empId, t, reloadTick]);
 
   const usedByTypeId = (alloc: Allocation) => {
     const lt = ctx?.leaveTypes.find((leaveType) => leaveType.id === alloc.leaveTypeId);
@@ -82,7 +82,6 @@ export default function LeaveBalancePage() {
         subtitle={t("subtitle")}
         back="/hr/leave"
       />
-      <DataSourceBadge source={source} />
       <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 8 }} className="no-print">
         <PrintButton label={t("downloadButton")} />
       </div>
@@ -131,14 +130,16 @@ export default function LeaveBalancePage() {
           {t("loadingBalance")}
         </p>
       )}
-      {error && (
-        <p role="alert" style={{ color: "var(--color-error)", fontSize: 14, fontWeight: 500 }}>
-          {error}
-        </p>
-      )}
 
-      {!loading && ctx && (
-        ctx.allocations.length === 0 ? (
+      {!loading && (
+        source === "error" ? (
+          <Card title={t("entitlementCard")}>
+            <ErrorState
+              error={toHumanError("load", { area: "leave balance" })}
+              onRetry={() => setReloadTick((n) => n + 1)}
+            />
+          </Card>
+        ) : !ctx ? null : ctx.allocations.length === 0 ? (
           <Card title={t("entitlementCard")}>
             <div style={{ padding: "48px 24px", textAlign: "center", color: "var(--mut)" }}>
               <div style={{ fontSize: 40, marginBottom: 12 }}>🌴</div>

@@ -1,7 +1,7 @@
 import Link from "next/link";
-import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { getReportJobs } from "../../../_data/loaders";
-import { EmptyState, PageHeader, StatCard, StatGrid } from "../../../_components/ds";
+import { EmptyState, PageHeader, StatCard, StatGrid, RefreshErrorState } from "../../../_components/ds";
+import { toHumanError } from "@/lib/messages";
 import { ReportJobsTable, type JobRow } from "./ReportJobsTable";
 
 export default async function ReportsListPage() {
@@ -25,7 +25,6 @@ export default async function ReportsListPage() {
 
   return (
     <div className="wrap">
-      {source === "error" && <DataSourceBadge source={source} />}
       <PageHeader
         title="Report Jobs"
         subtitle="All report generation jobs and their status."
@@ -43,7 +42,9 @@ export default async function ReportsListPage() {
 
       <div className="card" style={{ marginTop: "18px" }}>
         <div className="card-h"><h3>Report jobs</h3></div>
-        {jobs.length === 0 ? (
+        {source === "error" ? (
+          <RefreshErrorState error={toHumanError("load", { area: "report jobs" })} backHref="/reports" />
+        ) : jobs.length === 0 ? (
           <EmptyState icon="📋" title="No report jobs found" message="Jobs will appear here once generated." />
         ) : (
           <ReportJobsTable rows={rows} />

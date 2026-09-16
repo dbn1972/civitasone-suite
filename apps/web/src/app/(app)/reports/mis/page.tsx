@@ -1,7 +1,7 @@
 import Link from "next/link";
-import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { getMISSummary } from "../../../_data/loaders";
-import { EmptyState, PageHeader, StatCard, StatGrid } from "../../../_components/ds";
+import { EmptyState, PageHeader, StatCard, StatGrid, RefreshErrorState } from "../../../_components/ds";
+import { toHumanError } from "@/lib/messages";
 import { MISMetricsTable, type MetricRow } from "./MISMetricsTable";
 
 export default async function MISDashboardPage() {
@@ -23,7 +23,6 @@ export default async function MISDashboardPage() {
 
   return (
     <div className="wrap">
-      {source === "error" && <DataSourceBadge source={source} />}
       <PageHeader
         title="Management Information System"
         subtitle="Consolidated metrics across all modules."
@@ -39,7 +38,12 @@ export default async function MISDashboardPage() {
         <StatCard icon="📊" iconBg="#fffaeb" label="Negative Trends" value={negativeTrends} />
       </StatGrid>
 
-      {modules.length === 0 ? (
+      {source === "error" ? (
+        <div className="card" style={{ marginTop: "18px" }}>
+          <div className="card-h"><h3>Cross-department datasets</h3></div>
+          <RefreshErrorState error={toHumanError("load", { area: "MIS data" })} backHref="/reports" />
+        </div>
+      ) : modules.length === 0 ? (
         <EmptyState icon="📊" title="MIS data compiling" message="Please check back shortly." />
       ) : (
         <div className="card" style={{ marginTop: "18px" }}>

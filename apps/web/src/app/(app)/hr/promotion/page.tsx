@@ -1,6 +1,7 @@
-import { PageHeader, StatGrid, StatCard, Card, DataTable } from "../../../_components/ds";
+import { PageHeader, StatGrid, StatCard, Card, DataTable, RefreshErrorState } from "../../../_components/ds";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
+import { toHumanError } from "@/lib/messages";
 import { PromoteWithApproval } from "./PromoteWithApproval";
 import { PromotionCard, type PromotionRow } from "./_components/PromotionCard";
 
@@ -12,6 +13,15 @@ async function getData(): Promise<LoaderResult<PromotionRow[]>> {
       return Array.isArray(arr) ? arr : null;
     },
   });
+  // A genuine fetch error must not be silently papered over by the legacy
+  // fallback (UX-013) -- `r.data` is [] on error too, so the old
+  // `r.data.length === 0` check alone tried the fallback endpoint on error
+  // as if the lifecycle endpoint had simply never had any rows, discarding
+  // the real failure. Only fall back when the primary source truly
+  // succeeded with zero rows.
+  if (r.source === "error") {
+    return r;
+  }
   if (r.data.length === 0) {
     return fetchJson<unknown, PromotionRow[]>("/api/v1/hrms/promotions", [], {
       telemetryKey: "hr.promotion",
@@ -76,17 +86,21 @@ export default async function PromotionPage() {
 
       {/* Table view */}
       <Card title="Promotions — Table View">
-        <DataTable<PromotionRow>
-          columns={tableColumns}
-          rows={items}
-          sortable
-          filterable
-          filterPlaceholder="Filter by employee, department or grade…"
-          pageSize={15}
-          emptyIcon="📈"
-          emptyTitle="No promotion orders"
-          emptyMessage="Promotion orders appear here once raised and approved. Use '+ Raise Promotion' to initiate a grade progression."
-        />
+        {source === "error" ? (
+          <RefreshErrorState error={toHumanError("load", { area: "promotions" })} backHref="/hr" />
+        ) : (
+          <DataTable<PromotionRow>
+            columns={tableColumns}
+            rows={items}
+            sortable
+            filterable
+            filterPlaceholder="Filter by employee, department or grade…"
+            pageSize={15}
+            emptyIcon="📈"
+            emptyTitle="No promotion orders"
+            emptyMessage="Promotion orders appear here once raised and approved. Use '+ Raise Promotion' to initiate a grade progression."
+          />
+        )}
       </Card>
     </main>
   );

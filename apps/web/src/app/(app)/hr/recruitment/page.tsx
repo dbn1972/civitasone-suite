@@ -1,8 +1,9 @@
 import Link from "next/link";
 import { getTranslations } from "next-intl/server";
-import { PageHeader, StatGrid, StatCard, Card, DataTable, EmptyState } from "../../../_components/ds";
+import { PageHeader, StatGrid, StatCard, Card, DataTable, EmptyState, RefreshErrorState } from "../../../_components/ds";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
+import { toHumanError } from "@/lib/messages";
 
 type DashboardStats = {
   totalOpenings: number;
@@ -76,7 +77,9 @@ export default async function RecruitmentPage() {
       </StatGrid>
 
       <Card title={t("allVacanciesTitle")}>
-        {openings.length === 0 ? (
+        {openingSource === "error" ? (
+          <RefreshErrorState error={toHumanError("load", { area: "job openings" })} />
+        ) : openings.length === 0 ? (
           <EmptyState
             icon="💼"
             title={t("emptyTitle")}

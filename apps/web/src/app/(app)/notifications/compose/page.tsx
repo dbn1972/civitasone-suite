@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useId, useMemo, useState } from "react";
-import { PageHeader, Card, EmptyState, ConfirmDialog } from "../../../_components/ds";
+import { PageHeader, Card, EmptyState, ErrorState, ConfirmDialog } from "../../../_components/ds";
+import { toHumanError } from "@/lib/messages";
 
 /**
  * Compose / send a notification — wired to POST /notification/send.
@@ -39,6 +40,7 @@ export default function ComposeNotificationPage() {
   const [templates, setTemplates] = useState<Template[]>([]);
   const [templatesError, setTemplatesError] = useState<string | null>(null);
   const [templatesLoading, setTemplatesLoading] = useState(true);
+  const [reloadTick, setReloadTick] = useState(0);
 
   const [templateId, setTemplateId] = useState("");
   const [recipient, setRecipient] = useState("");
@@ -51,6 +53,8 @@ export default function ComposeNotificationPage() {
 
   useEffect(() => {
     let active = true;
+    setTemplatesLoading(true);
+    setTemplatesError(null);
     void (async () => {
       try {
         const res = await fetch(`/api/proxy/notification/templates`, {
@@ -72,7 +76,7 @@ export default function ComposeNotificationPage() {
     return () => {
       active = false;
     };
-  }, []);
+  }, [reloadTick]);
 
   const canSend = useMemo(
     () => templateId.trim().length > 0 && recipient.trim().length > 0,
@@ -117,12 +121,6 @@ export default function ComposeNotificationPage() {
 
       <div className="grid g-main" style={{ marginTop: 18 }}>
         <Card title="Compose" padding>
-          {templatesError ? (
-            <p role="alert" aria-live="assertive" style={{ fontSize: 12, color: "var(--bad)", margin: "0 0 12px" }}>
-              {templatesError}
-            </p>
-          ) : null}
-
           <form
             onSubmit={(e) => {
               e.preventDefault();
@@ -133,7 +131,12 @@ export default function ComposeNotificationPage() {
               <label htmlFor={templateFieldId} style={{ display: "block", fontSize: 12, fontWeight: 600, marginBottom: 4 }}>
                 Template
               </label>
-              {templates.length === 0 && !templatesLoading ? (
+              {templatesError ? (
+                <ErrorState
+                  error={toHumanError("load", { area: "templates" })}
+                  onRetry={() => setReloadTick((t) => t + 1)}
+                />
+              ) : templates.length === 0 && !templatesLoading ? (
                 <EmptyState
                   icon="📝"
                   title="No templates available"

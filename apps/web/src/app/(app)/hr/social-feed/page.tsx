@@ -1,6 +1,7 @@
-import { PageHeader, StatGrid, StatCard, Card } from "../../../_components/ds";
+import { PageHeader, StatGrid, StatCard, Card, RefreshErrorState } from "../../../_components/ds";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
+import { toHumanError } from "@/lib/messages";
 import { getTranslations } from "next-intl/server";
 
 type FeedItem = {
@@ -61,7 +62,11 @@ export default async function SocialFeedPage() {
         <StatCard icon="📢" iconBg="#e6f0ff" label={t("statAnnouncementsLabel")} value={announcementCount} />
       </StatGrid>
 
-      {feed.length === 0 ? (
+      {source === "error" ? (
+        <Card title={t("cardTitleEmpty")}>
+          <RefreshErrorState error={toHumanError("load", { area: "social feed" })} backHref="/hr" />
+        </Card>
+      ) : feed.length === 0 ? (
         <Card title={t("cardTitleEmpty")}>
           <div style={{ padding: "48px 24px", textAlign: "center", color: "var(--mut)" }}>
             <div style={{ fontSize: 40, marginBottom: 12 }}>🎉</div>

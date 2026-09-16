@@ -1,7 +1,8 @@
 import Link from "next/link";
-import { PageHeader, StatGrid, StatCard, EmptyState } from "../../../_components/ds";
+import { PageHeader, StatGrid, StatCard, EmptyState, RefreshErrorState } from "../../../_components/ds";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
+import { toHumanError } from "@/lib/messages";
 import { JoineeCard, type JoineeCardData } from "./_components/JoineeCard";
 
 type Row = {
@@ -75,7 +76,18 @@ export default async function OnboardingPage() {
       </StatGrid>
 
       {/* ── Joinee card grid (manager view) ─────────────────────────────────── */}
-      {items.length === 0 ? (
+      {source === "error" ? (
+        <div
+          style={{
+            marginTop: 24,
+            border: "1px solid var(--border, #e2e8f0)",
+            borderRadius: 12,
+            padding: 32,
+          }}
+        >
+          <RefreshErrorState error={toHumanError("load", { area: "onboarding tracker" })} backHref="/hr" />
+        </div>
+      ) : items.length === 0 ? (
         <div
           style={{
             marginTop: 24,

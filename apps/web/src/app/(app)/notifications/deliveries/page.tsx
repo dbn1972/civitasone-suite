@@ -2,8 +2,9 @@
 
 import { useState } from "react";
 import type { NotificationDelivery } from "@civitasone/types";
-import { PageHeader, StatCard, StatGrid, DataTable, Segmented, EmptyState } from "../../../_components/ds";
+import { PageHeader, StatCard, StatGrid, DataTable, Segmented, EmptyState, ErrorState } from "../../../_components/ds";
 import { useOfflineResource } from "@/lib/sync/resource";
+import { toHumanError } from "@/lib/messages";
 import { formatIndianDate } from "@/lib/formatters";
 import { StatusBadge } from "../_components/StatusBadge";
 
@@ -30,7 +31,7 @@ function toArray(payload: unknown): NotificationDelivery[] {
 const TABS = ["All", "Failed", "Pending"] as const;
 
 export default function NotificationDeliveriesPage() {
-  const { data: deliveries, source, offline, cachedAt, loading } = useOfflineResource<unknown, NotificationDelivery[]>(
+  const { data: deliveries, source, offline, cachedAt, loading, error, refresh } = useOfflineResource<unknown, NotificationDelivery[]>(
     "notifications.deliveries",
     "/notification/deliveries",
     { map: toArray, initialData: [] },
@@ -89,7 +90,9 @@ export default function NotificationDeliveriesPage() {
             <Segmented options={[...TABS]} value={tab} onChange={setTab} />
           </div>
         </div>
-        {deliveries.length === 0 ? (
+        {error ? (
+          <ErrorState error={toHumanError("load", { area: "delivery log" })} onRetry={refresh} />
+        ) : deliveries.length === 0 ? (
           <EmptyState
             icon="📤"
             title={loading ? "Loading deliveries…" : "No delivery records"}

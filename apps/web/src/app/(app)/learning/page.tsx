@@ -1,15 +1,36 @@
 import Link from "next/link";
-import { PageHeader, DataTable, EmptyState, StatGrid, StatCard } from "@/app/_components/ds";
-import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
+import { PageHeader, DataTable, EmptyState, StatGrid, StatCard, RefreshErrorState } from "@/app/_components/ds";
+import { combineResourceState } from "@/app/_data/useResource";
+import { toHumanError } from "@/lib/messages";
 import { getCourses, getLmsDashboard } from "./_data";
 
 type Row = { id: string; code: string; title: string; category: string; creditHours: string; status: string };
 
 export default async function Page() {
-  const [{ data: courses, source }, { data: stats }] = await Promise.all([
+  const [coursesResult, dashboardResult] = await Promise.all([
     getCourses(),
     getLmsDashboard(),
   ]);
+  const { data: courses } = coursesResult;
+  const { data: stats } = dashboardResult;
+
+  // Two independent loaders feed this dashboard (course catalogue + LMS
+  // stats) -- a failure in either must not render as a quietly-empty
+  // dashboard (UX-013). combineResourceState treats a real error in EITHER
+  // input as an error for the whole page, never just the one whose `source`
+  // happens to be checked.
+  const resource = combineResourceState([coursesResult, dashboardResult], courses);
+  if (resource.status === "error") {
+    return (
+      <>
+        <PageHeader
+          title="Learning & Development"
+          subtitle="Course catalogue, training calendar, my learning progress and competencies."
+        />
+        <RefreshErrorState error={toHumanError("load", { area: "learning dashboard" })} />
+      </>
+    );
+  }
 
   const rows: Row[] = courses.map((c) => ({
     id: c.id, code: c.code, title: c.title, category: c.category,
@@ -22,7 +43,6 @@ export default async function Page() {
         title="Learning & Development"
         subtitle="Course catalogue, training calendar, my learning progress and competencies."
       />
-      {source === "error" && <DataSourceBadge source={source} />}
       <StatGrid>
         <Link href="/learning/my-learning">
           <StatCard icon="📚" iconBg="var(--panel)" label="Enrolled" value={stats.enrolled} />

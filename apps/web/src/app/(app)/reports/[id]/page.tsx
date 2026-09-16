@@ -7,7 +7,7 @@ import { formatIndianDate } from "@/lib/formatters";
 export default async function ReportDetailPage({ params }: { params: { id: string } }) {
   const { data: job, source } = await getReportJobById(params.id);
 
-  if (!job) {
+  if (!job || source === "error") {
     return (
       <div className="wrap">
         {source === "error" && <DataSourceBadge source={source} />}
@@ -37,7 +37,6 @@ export default async function ReportDetailPage({ params }: { params: { id: strin
 
   return (
     <div className="wrap">
-      {source === "error" && <DataSourceBadge source={source} />}
       <PageHeader
         title={job.reportName}
         subtitle={`${job.module} · Requested by ${job.requestedBy}`}

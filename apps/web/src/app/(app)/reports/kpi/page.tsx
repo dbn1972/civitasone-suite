@@ -1,7 +1,7 @@
 import Link from "next/link";
-import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { getKPIs } from "../../../_data/loaders";
-import { EmptyState, PageHeader, StatCard, StatGrid } from "../../../_components/ds";
+import { EmptyState, PageHeader, StatCard, StatGrid, RefreshErrorState } from "../../../_components/ds";
+import { toHumanError } from "@/lib/messages";
 import { KpiClient } from "./KpiClient";
 
 export default async function KPITrackerPage() {
@@ -49,7 +49,6 @@ export default async function KPITrackerPage() {
 
   return (
     <div className="wrap">
-      {source === "error" && <DataSourceBadge source={source} />}
       <PageHeader
         title="KPI Monitoring"
         subtitle="Department KPIs &amp; outcome indicators with targets."
@@ -69,7 +68,9 @@ export default async function KPITrackerPage() {
         <div className="card-h">
           <h3>KPI monitoring</h3>
         </div>
-        {kpis.length === 0 ? (
+        {source === "error" ? (
+          <RefreshErrorState error={toHumanError("load", { area: "KPI data" })} backHref="/reports" />
+        ) : kpis.length === 0 ? (
           <EmptyState icon="🎯" title="No KPI data available" message="KPIs will appear once the service has processed data." />
         ) : (
           <KpiClient rows={rows} />

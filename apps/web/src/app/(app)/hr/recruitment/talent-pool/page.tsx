@@ -1,8 +1,9 @@
 import Link from "next/link";
 import { getTranslations } from "next-intl/server";
-import { PageHeader, StatGrid, StatCard, Card, DataTable, EmptyState } from "../../../../_components/ds";
+import { PageHeader, StatGrid, StatCard, Card, DataTable, EmptyState, RefreshErrorState } from "../../../../_components/ds";
 import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
+import { toHumanError } from "@/lib/messages";
 
 type Candidate = {
   id: string;
@@ -89,7 +90,9 @@ export default async function TalentPoolPage({
       </Card>
 
       <Card title={t("candidatesTitle", { count: rows.length })}>
-        {rows.length === 0 ? (
+        {source === "error" ? (
+          <RefreshErrorState error={toHumanError("load", { area: "talent pool" })} backHref="/hr/recruitment" />
+        ) : rows.length === 0 ? (
           <EmptyState
             icon="👥"
             title={t("noCandidatesFound")}
