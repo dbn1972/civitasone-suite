@@ -1,7 +1,20 @@
 import { describe, it, expect } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
+import { NextIntlClientProvider } from "next-intl";
+import enMessages from "@/messages/en.json";
 import { PfmsConsole } from "./PfmsConsole";
-import type { PfmsBatchRow } from "./types";
+import type { PfmsBatchRow, PfmsConfig } from "./types";
+
+// UX-017: PfmsConsole (and every panel it renders) now reads its copy
+// through next-intl (useTranslations), so it needs a real provider in the
+// tree -- same pattern as hr/leave/apply/ApplyLeaveForm.test.tsx.
+function renderConsole(props: { batches: PfmsBatchRow[]; config: PfmsConfig | null }) {
+  return render(
+    <NextIntlClientProvider locale="en" messages={enMessages}>
+      <PfmsConsole {...props} />
+    </NextIntlClientProvider>,
+  );
+}
 
 const batches: PfmsBatchRow[] = [
   {
@@ -13,18 +26,18 @@ const batches: PfmsBatchRow[] = [
 
 describe("PfmsConsole", () => {
   it("shows the Batches tab by default", () => {
-    render(<PfmsConsole batches={batches} config={{ agencyCode: "AG01", defaultDdo: "DDO01" }} />);
+    renderConsole({ batches, config: { agencyCode: "AG01", defaultDdo: "DDO01" } });
     expect(screen.getByText("PFMS-0001")).toBeInTheDocument();
   });
 
   it("switches to the Config tab", () => {
-    render(<PfmsConsole batches={batches} config={{ agencyCode: "AG01", defaultDdo: "DDO01" }} />);
+    renderConsole({ batches, config: { agencyCode: "AG01", defaultDdo: "DDO01" } });
     fireEvent.click(screen.getByText("Config"));
     expect(screen.getByText("AG01")).toBeInTheDocument();
   });
 
   it("switches to the Payments tab", () => {
-    render(<PfmsConsole batches={batches} config={null} />);
+    renderConsole({ batches, config: null });
     fireEvent.click(screen.getByText("Payments"));
     expect(screen.getByText("Submit Payment to PFMS")).toBeInTheDocument();
   });

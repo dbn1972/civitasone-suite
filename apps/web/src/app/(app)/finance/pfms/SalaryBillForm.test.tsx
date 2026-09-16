@@ -1,9 +1,23 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { NextIntlClientProvider } from "next-intl";
+import enMessages from "@/messages/en.json";
 import { SalaryBillForm } from "./SalaryBillForm";
+import type { PfmsDepartment } from "./types";
 
 const VALID_DEPT = "11111111-1111-1111-1111-111111111111";
 const DEPARTMENTS = [{ id: VALID_DEPT, name: "Finance Department" }];
+
+// UX-017: SalaryBillForm now reads its copy through next-intl
+// (useTranslations), so it needs a real provider in the tree -- same
+// pattern as hr/leave/apply/ApplyLeaveForm.test.tsx.
+function renderForm(departments: PfmsDepartment[]) {
+  return render(
+    <NextIntlClientProvider locale="en" messages={enMessages}>
+      <SalaryBillForm departments={departments} />
+    </NextIntlClientProvider>,
+  );
+}
 
 describe("SalaryBillForm", () => {
   beforeEach(() => {
@@ -11,7 +25,7 @@ describe("SalaryBillForm", () => {
   });
 
   it("requires all core fields before opening the confirm dialog, with field-specific messages", () => {
-    render(<SalaryBillForm departments={DEPARTMENTS} />);
+    renderForm(DEPARTMENTS);
     fireEvent.click(screen.getByRole("button", { name: "Generate Salary Bill" }));
 
     const monthInput = screen.getByLabelText(/Month \(YYYY-MM\)/);
@@ -39,7 +53,7 @@ describe("SalaryBillForm", () => {
       ),
     );
 
-    render(<SalaryBillForm departments={DEPARTMENTS} />);
+    renderForm(DEPARTMENTS);
     fireEvent.change(screen.getByLabelText(/Month \(YYYY-MM\)/), { target: { value: "2026-08" } });
     fireEvent.change(screen.getByLabelText(/Department/), { target: { value: VALID_DEPT } });
     fireEvent.change(screen.getByLabelText(/Total Amount, in paise/), { target: { value: "1000000" } });
@@ -58,7 +72,7 @@ describe("SalaryBillForm", () => {
   it("surfaces a server error on the confirm dialog (error path)", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(null, { status: 500 }));
 
-    render(<SalaryBillForm departments={DEPARTMENTS} />);
+    renderForm(DEPARTMENTS);
     fireEvent.change(screen.getByLabelText(/Month \(YYYY-MM\)/), { target: { value: "2026-08" } });
     fireEvent.change(screen.getByLabelText(/Department/), { target: { value: VALID_DEPT } });
     fireEvent.change(screen.getByLabelText(/Total Amount, in paise/), { target: { value: "1000000" } });
@@ -76,7 +90,7 @@ describe("SalaryBillForm", () => {
   });
 
   it("shows a fallback message and disables the select when no departments are available", () => {
-    render(<SalaryBillForm departments={[]} />);
+    renderForm([]);
     const select = screen.getByLabelText(/Department/) as HTMLSelectElement;
     expect(select).toBeDisabled();
     expect(

@@ -1,5 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen } from "@testing-library/react";
+import { NextIntlClientProvider } from "next-intl";
+import enMessages from "@/messages/en.json";
 
 const fetchJsonMock = vi.fn();
 vi.mock("@/app/_data/apiClient", () => ({
@@ -10,6 +12,22 @@ vi.mock("next/navigation", () => ({
 }));
 
 import PfmsOpsConsolePage from "./page";
+
+// UX-017: PfmsOpsConsolePage itself reads its copy through getTranslations
+// (mocked centrally in vitest.setup.ts, per tranche 3), but it also renders
+// <PfmsConsole> -- a "use client" component that calls useTranslations() --
+// so the rendered tree still needs a real NextIntlClientProvider, same as
+// any other client-component test (hr/leave/apply/ApplyLeaveForm.test.tsx).
+// Unlike hr/recruitment's page.test.tsx/talent-pool/page.test.tsx (tranche 4),
+// which passed unchanged because neither nests a translated client
+// component, this page's PfmsConsole subtree does.
+function renderPage(ui: React.ReactElement) {
+  return render(
+    <NextIntlClientProvider locale="en" messages={enMessages}>
+      {ui}
+    </NextIntlClientProvider>,
+  );
+}
 
 describe("PfmsOpsConsolePage", () => {
   beforeEach(() => {
@@ -42,7 +60,7 @@ describe("PfmsOpsConsolePage", () => {
     });
 
     const ui = await PfmsOpsConsolePage();
-    render(ui);
+    renderPage(ui);
 
     expect(screen.getByText("PFMS Ops Console")).toBeInTheDocument();
     expect(screen.getByText("PFMS-0001")).toBeInTheDocument();
@@ -57,7 +75,7 @@ describe("PfmsOpsConsolePage", () => {
     });
 
     const ui = await PfmsOpsConsolePage();
-    render(ui);
+    renderPage(ui);
 
     expect(screen.getByText("No PFMS batches yet")).toBeInTheDocument();
   });
@@ -70,7 +88,7 @@ describe("PfmsOpsConsolePage", () => {
     });
 
     const ui = await PfmsOpsConsolePage();
-    render(ui);
+    renderPage(ui);
 
     expect(screen.getByText("Couldn't load — showing nothing")).toBeInTheDocument();
   });

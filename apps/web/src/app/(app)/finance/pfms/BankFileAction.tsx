@@ -1,5 +1,6 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import { useConfirmAction, ConfirmDialog } from "../../../_components/ds";
 import { browserFetch, errorMessageFromResponse } from "@/lib/api/browserClient";
 
@@ -19,6 +20,7 @@ interface BankFileActionProps {
  * returns 400 INVALID_STATE otherwise).
  */
 export function BankFileAction({ batchId, pfmsId, submissionStatus }: BankFileActionProps) {
+  const t = useTranslations("pfmsBankFileAction");
   const eligible = submissionStatus === "signed" || submissionStatus === "pending";
 
   const { open, busy, error, trigger, cancel, confirm } = useConfirmAction({
@@ -42,26 +44,24 @@ export function BankFileAction({ batchId, pfmsId, submissionStatus }: BankFileAc
       <button
         type="button"
         className="btn"
-        aria-label={`Download bank file for PFMS batch ${pfmsId}`}
+        aria-label={t("downloadAriaLabel", { pfmsId })}
         onClick={trigger}
         disabled={!eligible}
-        title={eligible ? undefined : "Bank file is only available for pending or signed batches."}
+        title={eligible ? undefined : t("disabledTitle")}
         style={{ minHeight: 36 }}
       >
-        Bank File
+        {t("buttonLabel")}
       </button>
       <ConfirmDialog
         open={open}
-        title={`Download bank file for batch ${pfmsId}?`}
-        confirmLabel="Download"
+        title={t("confirmTitle", { pfmsId })}
+        confirmLabel={t("confirmLabel")}
         danger
         busy={busy}
         errorMessage={error}
         description={
           <>
-            This generates and downloads the NEFT beneficiary bank file (account numbers, IFSC,
-            amounts) for batch <strong>{pfmsId}</strong>. Handle the downloaded file per your
-            department&apos;s data-handling policy.
+            {t.rich("description", { pfmsId, b: (chunks) => <strong>{chunks}</strong> })}
           </>
         }
         onConfirm={() => void confirm()}

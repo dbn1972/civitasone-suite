@@ -1,6 +1,19 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { NextIntlClientProvider } from "next-intl";
+import enMessages from "@/messages/en.json";
 import { SubmitPaymentForm } from "./SubmitPaymentForm";
+
+// UX-017: SubmitPaymentForm now reads its copy through next-intl
+// (useTranslations), so it needs a real provider in the tree -- same
+// pattern as hr/leave/apply/ApplyLeaveForm.test.tsx.
+function renderForm() {
+  return render(
+    <NextIntlClientProvider locale="en" messages={enMessages}>
+      <SubmitPaymentForm />
+    </NextIntlClientProvider>,
+  );
+}
 
 describe("SubmitPaymentForm", () => {
   beforeEach(() => {
@@ -8,7 +21,7 @@ describe("SubmitPaymentForm", () => {
   });
 
   it("requires the core fields before opening the confirm dialog, with field-specific messages", () => {
-    render(<SubmitPaymentForm />);
+    renderForm();
     fireEvent.click(screen.getByText("Submit Payment"));
 
     const refInput = screen.getByLabelText(/Reference ID/);
@@ -34,7 +47,7 @@ describe("SubmitPaymentForm", () => {
       ),
     );
 
-    render(<SubmitPaymentForm />);
+    renderForm();
     fireEvent.change(screen.getByLabelText(/Reference ID/), { target: { value: "REF-1" } });
     fireEvent.change(screen.getByLabelText(/Beneficiary Code/), { target: { value: "BEN-1" } });
     fireEvent.change(screen.getByLabelText(/Amount, in paise/), { target: { value: "150000" } });
@@ -52,7 +65,7 @@ describe("SubmitPaymentForm", () => {
   it("surfaces a server error on the confirm dialog (error path)", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(null, { status: 503 }));
 
-    render(<SubmitPaymentForm />);
+    renderForm();
     fireEvent.change(screen.getByLabelText(/Reference ID/), { target: { value: "REF-2" } });
     fireEvent.change(screen.getByLabelText(/Beneficiary Code/), { target: { value: "BEN-2" } });
     fireEvent.change(screen.getByLabelText(/Amount, in paise/), { target: { value: "1000" } });

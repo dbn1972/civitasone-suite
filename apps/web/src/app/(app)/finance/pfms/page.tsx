@@ -1,3 +1,4 @@
+import { getTranslations } from "next-intl/server";
 import { PageHeader, StatGrid, StatCard } from "../../../_components/ds";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
@@ -45,6 +46,7 @@ async function getDepartments(): Promise<LoaderResult<PfmsDepartment[]>> {
 }
 
 export default async function PfmsOpsConsolePage() {
+  const t = await getTranslations("pfms");
   const [
     { data: batches, source: batchesSource },
     { data: config, source: configSource },
@@ -60,20 +62,20 @@ export default async function PfmsOpsConsolePage() {
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
-        title="PFMS Ops Console"
-        subtitle="Operational console for PFMS batches, tenant configuration, salary bills, payment advices, and e-Kuber payment submission."
+        title={t("title")}
+        subtitle={t("subtitle")}
         back="/finance"
       />
       {source === "error" && <DataSourceBadge source="error" />}
 
       <StatGrid>
-        <StatCard icon="📦" iconBg="#eff6ff" label="PFMS Batches" value={batches.length} />
-        <StatCard icon="✍️" iconBg="#ecfdf3" label="Signed" value={signedCount} />
-        <StatCard icon="⏳" iconBg="#fffbe6" label="Pending Signature" value={pendingCount} />
+        <StatCard icon="📦" iconBg="#eff6ff" label={t("statBatches")} value={batches.length} />
+        <StatCard icon="✍️" iconBg="#ecfdf3" label={t("statSigned")} value={signedCount} />
+        <StatCard icon="⏳" iconBg="#fffbe6" label={t("statPendingSignature")} value={pendingCount} />
         <StatCard
           icon="💰"
           iconBg="#fef3f2"
-          label="Total Batch Value"
+          label={t("statTotalBatchValue")}
           // Money formatting: amountMinor is paise (minor units) — use formatMoney,
           // not formatRupees.
           value={formatMoney(totalMinor)}

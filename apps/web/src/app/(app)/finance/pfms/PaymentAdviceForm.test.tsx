@@ -1,8 +1,21 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { NextIntlClientProvider } from "next-intl";
+import enMessages from "@/messages/en.json";
 import { PaymentAdviceForm } from "./PaymentAdviceForm";
 
 const VALID_BILL = "22222222-2222-2222-2222-222222222222";
+
+// UX-017: PaymentAdviceForm (and the AdviceStatusLookup it renders) now read
+// their copy through next-intl (useTranslations), so they need a real
+// provider in the tree -- same pattern as hr/leave/apply/ApplyLeaveForm.test.tsx.
+function renderForm() {
+  return render(
+    <NextIntlClientProvider locale="en" messages={enMessages}>
+      <PaymentAdviceForm />
+    </NextIntlClientProvider>,
+  );
+}
 
 function fillValidForm() {
   fireEvent.change(screen.getByLabelText(/Bill ID/), { target: { value: VALID_BILL } });
@@ -19,7 +32,7 @@ describe("PaymentAdviceForm", () => {
   });
 
   it("requires the core fields before opening the confirm dialog, with field-specific messages", () => {
-    render(<PaymentAdviceForm />);
+    renderForm();
     fireEvent.click(screen.getByRole("button", { name: "Generate Payment Advice" }));
 
     const billInput = screen.getByLabelText(/Bill ID/);
@@ -43,7 +56,7 @@ describe("PaymentAdviceForm", () => {
       ),
     );
 
-    render(<PaymentAdviceForm />);
+    renderForm();
     fillValidForm();
     fireEvent.click(screen.getByRole("button", { name: "Generate Payment Advice" }));
 
@@ -58,7 +71,7 @@ describe("PaymentAdviceForm", () => {
   it("surfaces a server error on the confirm dialog (error path)", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(null, { status: 400 }));
 
-    render(<PaymentAdviceForm />);
+    renderForm();
     fillValidForm();
     fireEvent.click(screen.getByRole("button", { name: "Generate Payment Advice" }));
 
@@ -84,7 +97,7 @@ describe("PaymentAdviceForm", () => {
       ),
     );
 
-    render(<PaymentAdviceForm />);
+    renderForm();
     fireEvent.change(screen.getByLabelText(/Advice ID/), { target: { value: "adv-1" } });
     fireEvent.click(screen.getByText("Check Status"));
 

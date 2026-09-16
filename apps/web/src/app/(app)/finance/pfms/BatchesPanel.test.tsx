@@ -1,5 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor, within } from "@testing-library/react";
+import { NextIntlClientProvider } from "next-intl";
+import enMessages from "@/messages/en.json";
 
 const refreshMock = vi.fn();
 vi.mock("next/navigation", () => ({
@@ -8,6 +10,17 @@ vi.mock("next/navigation", () => ({
 
 import { BatchesPanel } from "./BatchesPanel";
 import type { PfmsBatchRow } from "./types";
+
+// UX-017: BatchesPanel (and the SignBatchAction/BankFileAction it renders)
+// now read their copy through next-intl (useTranslations), so they need a
+// real provider in the tree -- same pattern as hr/leave/apply/ApplyLeaveForm.test.tsx.
+function renderPanel(props: { batches: PfmsBatchRow[] }) {
+  return render(
+    <NextIntlClientProvider locale="en" messages={enMessages}>
+      <BatchesPanel {...props} />
+    </NextIntlClientProvider>,
+  );
+}
 
 const rows: PfmsBatchRow[] = [
   {
@@ -24,17 +37,17 @@ describe("BatchesPanel", () => {
   });
 
   it("renders batch rows", () => {
-    render(<BatchesPanel batches={rows} />);
+    renderPanel({ batches: rows });
     expect(screen.getByText("PFMS-0001")).toBeInTheDocument();
   });
 
   it("renders an empty state when there are no batches", () => {
-    render(<BatchesPanel batches={[]} />);
+    renderPanel({ batches: [] });
     expect(screen.getByText("No PFMS batches yet")).toBeInTheDocument();
   });
 
   it("has distinct accessible names for the sign and bank-file actions on a row", () => {
-    render(<BatchesPanel batches={rows} />);
+    renderPanel({ batches: rows });
     expect(screen.getByRole("button", { name: "Sign PFMS batch PFMS-0001" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Download bank file for PFMS batch PFMS-0001" })).toBeInTheDocument();
   });
@@ -44,7 +57,7 @@ describe("BatchesPanel", () => {
       new Response(JSON.stringify({ id: "b1", signatureRef: "DSC:abc:def", submissionStatus: "signed" }), { status: 200 }),
     );
 
-    render(<BatchesPanel batches={rows} />);
+    renderPanel({ batches: rows });
     fireEvent.click(screen.getByRole("button", { name: "Sign PFMS batch PFMS-0001" }));
 
     const dialog = await screen.findByRole("alertdialog");
@@ -56,7 +69,7 @@ describe("BatchesPanel", () => {
   });
 
   it("surfaces a field-specific validation error and focuses the empty cert field when signing without required fields", async () => {
-    render(<BatchesPanel batches={rows} />);
+    renderPanel({ batches: rows });
     fireEvent.click(screen.getByRole("button", { name: "Sign PFMS batch PFMS-0001" }));
 
     const dialog = await screen.findByRole("alertdialog");
@@ -78,7 +91,7 @@ describe("BatchesPanel", () => {
   it("surfaces a server error when the bank-file download fails", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(null, { status: 400 }));
 
-    render(<BatchesPanel batches={rows} />);
+    renderPanel({ batches: rows });
     fireEvent.click(screen.getByRole("button", { name: "Download bank file for PFMS batch PFMS-0001" }));
 
     const dialog = await screen.findByRole("alertdialog");

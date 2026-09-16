@@ -1,6 +1,7 @@
 "use client";
 
 import { useId, useRef, useState } from "react";
+import { useTranslations } from "next-intl";
 import { Card, ConfirmDialog } from "../../../_components/ds";
 import { browserJson } from "@/lib/api/browserClient";
 import type { PfmsMode } from "./types";
@@ -16,13 +17,6 @@ type SubmitResult = {
 
 type FieldKey = "referenceId" | "beneficiaryCode" | "amount" | "purposeCode";
 
-const FIELD_ERRORS: Record<FieldKey, string> = {
-  referenceId: "Reference ID is required.",
-  beneficiaryCode: "Beneficiary code is required.",
-  amount: "Amount must be a numeric paise value (digits only).",
-  purposeCode: "Purpose code is required.",
-};
-
 interface SubmitPaymentFormProps {
   /** Reports the `mode` field of a successful response, once the backend adapter rollout starts sending it. */
   onModeObserved?: (mode: PfmsMode) => void;
@@ -37,6 +31,7 @@ interface SubmitPaymentFormProps {
  * not set in this environment; that surfaces as a server error in the dialog.
  */
 export function SubmitPaymentForm({ onModeObserved }: SubmitPaymentFormProps) {
+  const t = useTranslations("pfmsSubmitPaymentForm");
   const [referenceId, setReferenceId] = useState("");
   const [beneficiaryCode, setBeneficiaryCode] = useState("");
   const [amount, setAmount] = useState("");
@@ -50,6 +45,13 @@ export function SubmitPaymentForm({ onModeObserved }: SubmitPaymentFormProps) {
   const [dialogError, setDialogError] = useState<string | undefined>();
   const [result, setResult] = useState<SubmitResult | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+
+  const FIELD_ERRORS: Record<FieldKey, string> = {
+    referenceId: t("referenceIdRequired"),
+    beneficiaryCode: t("beneficiaryCodeRequired"),
+    amount: t("amountRequired"),
+    purposeCode: t("purposeCodeRequired"),
+  };
 
   const ids: Record<FieldKey | "scheme" | "ddo" | "remarks", string> = {
     referenceId: useId(),
@@ -109,7 +111,7 @@ export function SubmitPaymentForm({ onModeObserved }: SubmitPaymentFormProps) {
       setConfirmOpen(false);
       setResult(res.data);
       if (res.data.mode) onModeObserved?.(res.data.mode);
-      setMessage(`Payment ${res.data.referenceId} submitted to PFMS — status: ${res.data.status}.`);
+      setMessage(t("successMessage", { ref: res.data.referenceId, status: res.data.status }));
       setReferenceId("");
       setBeneficiaryCode("");
       setAmount("");
@@ -119,7 +121,7 @@ export function SubmitPaymentForm({ onModeObserved }: SubmitPaymentFormProps) {
       setRemarks("");
       setErrors({});
     } catch (err) {
-      setDialogError(err instanceof Error ? err.message : "Network error. Please try again.");
+      setDialogError(err instanceof Error ? err.message : t("networkErrorFallback"));
     } finally {
       setBusy(false);
     }
@@ -127,12 +129,12 @@ export function SubmitPaymentForm({ onModeObserved }: SubmitPaymentFormProps) {
 
   return (
     <form onSubmit={handleSubmit}>
-      <Card title="Submit Payment to PFMS" padding>
+      <Card title={t("title")} padding>
         <div style={{ display: "grid", gap: 14 }}>
           <div style={{ display: "grid", gap: 14, gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))" }}>
             <div style={{ display: "grid", gap: 6 }}>
               <label htmlFor={ids.referenceId} style={{ fontSize: 13, fontWeight: 600 }}>
-                Reference ID <span aria-hidden="true">*</span>
+                {t("referenceIdLabel")} <span aria-hidden="true">*</span>
               </label>
               <input
                 id={ids.referenceId}
@@ -153,7 +155,7 @@ export function SubmitPaymentForm({ onModeObserved }: SubmitPaymentFormProps) {
             </div>
             <div style={{ display: "grid", gap: 6 }}>
               <label htmlFor={ids.beneficiaryCode} style={{ fontSize: 13, fontWeight: 600 }}>
-                Beneficiary Code <span aria-hidden="true">*</span>
+                {t("beneficiaryCodeLabel")} <span aria-hidden="true">*</span>
               </label>
               <input
                 id={ids.beneficiaryCode}
@@ -174,7 +176,7 @@ export function SubmitPaymentForm({ onModeObserved }: SubmitPaymentFormProps) {
             </div>
             <div style={{ display: "grid", gap: 6 }}>
               <label htmlFor={ids.amount} style={{ fontSize: 13, fontWeight: 600 }}>
-                Amount, in paise <span aria-hidden="true">*</span>
+                {t("amountLabel")} <span aria-hidden="true">*</span>
               </label>
               <input
                 id={ids.amount}
@@ -186,7 +188,7 @@ export function SubmitPaymentForm({ onModeObserved }: SubmitPaymentFormProps) {
                 aria-required="true"
                 aria-invalid={!!errors.amount || undefined}
                 aria-describedby={errors.amount ? `${ids.amount}-error` : undefined}
-                placeholder="e.g. 1500000 for ₹15,000.00"
+                placeholder={t("amountPlaceholder")}
                 style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
               />
               {errors.amount && (
@@ -197,7 +199,7 @@ export function SubmitPaymentForm({ onModeObserved }: SubmitPaymentFormProps) {
             </div>
             <div style={{ display: "grid", gap: 6 }}>
               <label htmlFor={ids.purposeCode} style={{ fontSize: 13, fontWeight: 600 }}>
-                Purpose Code <span aria-hidden="true">*</span>
+                {t("purposeCodeLabel")} <span aria-hidden="true">*</span>
               </label>
               <input
                 id={ids.purposeCode}
@@ -217,7 +219,7 @@ export function SubmitPaymentForm({ onModeObserved }: SubmitPaymentFormProps) {
               )}
             </div>
             <div style={{ display: "grid", gap: 6 }}>
-              <label htmlFor={ids.scheme} style={{ fontSize: 13, fontWeight: 600 }}>Scheme Code</label>
+              <label htmlFor={ids.scheme} style={{ fontSize: 13, fontWeight: 600 }}>{t("schemeCodeLabel")}</label>
               <input
                 id={ids.scheme}
                 value={schemeCode}
@@ -227,7 +229,7 @@ export function SubmitPaymentForm({ onModeObserved }: SubmitPaymentFormProps) {
               />
             </div>
             <div style={{ display: "grid", gap: 6 }}>
-              <label htmlFor={ids.ddo} style={{ fontSize: 13, fontWeight: 600 }}>DDO Code</label>
+              <label htmlFor={ids.ddo} style={{ fontSize: 13, fontWeight: 600 }}>{t("ddoCodeLabel")}</label>
               <input
                 id={ids.ddo}
                 value={ddoCode}
@@ -238,7 +240,7 @@ export function SubmitPaymentForm({ onModeObserved }: SubmitPaymentFormProps) {
             </div>
           </div>
           <div style={{ display: "grid", gap: 6 }}>
-            <label htmlFor={ids.remarks} style={{ fontSize: 13, fontWeight: 600 }}>Remarks</label>
+            <label htmlFor={ids.remarks} style={{ fontSize: 13, fontWeight: 600 }}>{t("remarksLabel")}</label>
             <input
               id={ids.remarks}
               value={remarks}
@@ -250,14 +252,14 @@ export function SubmitPaymentForm({ onModeObserved }: SubmitPaymentFormProps) {
 
           <div>
             <button type="submit" className="btn primary" style={{ minHeight: 44 }} disabled={busy}>
-              Submit Payment
+              {t("submitButton")}
             </button>
           </div>
 
           {message && (
             <p role="status" className="pill good" style={{ width: "fit-content" }}>
               {message}
-              {result?.pfmsTransactionId ? ` (PFMS txn ${result.pfmsTransactionId})` : ""}
+              {result?.pfmsTransactionId ? t("txnSuffix", { txn: result.pfmsTransactionId }) : ""}
             </p>
           )}
         </div>
@@ -265,16 +267,18 @@ export function SubmitPaymentForm({ onModeObserved }: SubmitPaymentFormProps) {
 
       <ConfirmDialog
         open={confirmOpen}
-        title="Submit this payment to PFMS?"
-        confirmLabel="Submit payment"
+        title={t("confirmTitle")}
+        confirmLabel={t("confirmLabel")}
         danger
         busy={busy}
         errorMessage={dialogError}
         description={
           <>
-            Submit payment <strong>{referenceId}</strong> for beneficiary{" "}
-            <strong>{beneficiaryCode}</strong> to PFMS/e-Kuber. This initiates a real payment
-            submission and cannot be recalled from this console.
+            {t.rich("confirmDescription", {
+              referenceId,
+              beneficiaryCode,
+              b: (chunks) => <strong>{chunks}</strong>,
+            })}
           </>
         }
         onConfirm={() => void submit()}

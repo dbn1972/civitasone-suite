@@ -1,5 +1,6 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import { DataTable, EmptyState } from "../../../_components/ds";
 import { SignBatchAction } from "./SignBatchAction";
 import { BankFileAction } from "./BankFileAction";
@@ -11,12 +12,14 @@ import type { PfmsBatchRow } from "./types";
  * are created by the payments workflow, not from this console.
  */
 export function BatchesPanel({ batches }: { batches: PfmsBatchRow[] }) {
+  const t = useTranslations("pfmsBatchesPanel");
+
   if (batches.length === 0) {
     return (
       <EmptyState
         icon="📦"
-        title="No PFMS batches yet"
-        message="PFMS batches are created by the payments workflow when a bill is routed for PFMS/treasury disbursement. None have been recorded for this tenant yet."
+        title={t("emptyTitle")}
+        message={t("emptyMessage")}
       />
     );
   }
@@ -24,16 +27,16 @@ export function BatchesPanel({ batches }: { batches: PfmsBatchRow[] }) {
   return (
     <DataTable<PfmsBatchRow>
       columns={[
-        { key: "pfmsId", label: "PFMS ID" },
-        { key: "type", label: "Type" },
-        { key: "amountMinor", label: "Amount", align: "right", cellType: "amount" },
-        { key: "agencyCode", label: "Agency" },
-        { key: "schemeCode", label: "Scheme" },
-        { key: "ddoCode", label: "DDO" },
-        { key: "submissionStatus", label: "Status", cellType: "status" },
+        { key: "pfmsId", label: t("colPfmsId") },
+        { key: "type", label: t("colType") },
+        { key: "amountMinor", label: t("colAmount"), align: "right", cellType: "amount" },
+        { key: "agencyCode", label: t("colAgency") },
+        { key: "schemeCode", label: t("colScheme") },
+        { key: "ddoCode", label: t("colDdo") },
+        { key: "submissionStatus", label: t("colStatus"), cellType: "status" },
         {
           key: "id",
-          label: "Actions",
+          label: t("colActions"),
           sortable: false,
           render: (row) => (
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
@@ -48,7 +51,7 @@ export function BatchesPanel({ batches }: { batches: PfmsBatchRow[] }) {
       rows={batches}
       sortable
       filterable
-      filterPlaceholder="Filter by PFMS ID, agency, or scheme…"
+      filterPlaceholder={t("filterPlaceholder")}
       pageSize={15}
     />
   );
