@@ -660,7 +660,7 @@ module.exports = {
       },
     },
 
-    svc("analytics",    3031, "analytics_svc",    "civitas_analytics"),
+    svc("analytics",    3031, "analytics_svc",    "civitas_analytics", {}, { graceful: true }), // PERF-015
     svc("ml",           3032, "ml_svc",           "civitas_ml", {}, { graceful: true }), // PERF-015
     svc("meeting",      3033, "meeting_svc",      "civitas_meeting", { MEETING_PII_KEY }, { graceful: true }), // PERF-015
     svc("court",        3034, "court_svc",        "civitas_court", { COURT_PII_KEY }, { graceful: true }), // REL-012: validated subset
