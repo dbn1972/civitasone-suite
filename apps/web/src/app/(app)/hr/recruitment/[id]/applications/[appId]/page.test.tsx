@@ -1,5 +1,7 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { NextIntlClientProvider } from "next-intl";
+import enMessages from "@/messages/en.json";
 
 vi.mock("next/navigation", () => ({
   useParams: () => ({ id: "job-1", appId: "app-2" }),
@@ -7,6 +9,17 @@ vi.mock("next/navigation", () => ({
 }));
 
 import ApplicationDetailPage from "./page";
+
+// UX-017: ApplicationDetailPage now reads its copy through next-intl
+// (useTranslations("recruitmentApplicationDetail")), so it needs a real
+// provider in the tree -- same pattern as hr/leave/apply/ApplyLeaveForm.test.tsx.
+function renderPage() {
+  return render(
+    <NextIntlClientProvider locale="en" messages={enMessages}>
+      <ApplicationDetailPage />
+    </NextIntlClientProvider>,
+  );
+}
 
 const LIST_RESPONSE = {
   data: [
@@ -29,7 +42,7 @@ describe("ApplicationDetailPage", () => {
     });
     vi.stubGlobal("fetch", fetchMock);
 
-    render(<ApplicationDetailPage />);
+    renderPage();
 
     expect(await screen.findByRole("heading", { name: "Rahul Singh" })).toBeInTheDocument();
     expect(screen.getByText("Screening decision")).toBeInTheDocument();
@@ -39,7 +52,7 @@ describe("ApplicationDetailPage", () => {
 
   it("shows a clean not-found state when the id isn't in the pipeline, with a working way back", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => ({ ok: true, status: 200, json: async () => ({ data: [] }) } as Response)));
-    render(<ApplicationDetailPage />);
+    renderPage();
 
     expect(await screen.findByText("Application not found.")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /back/i })).toHaveAttribute("href", "/hr/recruitment/job-1");
@@ -47,7 +60,7 @@ describe("ApplicationDetailPage", () => {
 
   it("links back to the job opening detail page, not the broken relative '.' (which 404s under this nested route)", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => ({ ok: true, status: 200, json: async () => LIST_RESPONSE } as Response)));
-    render(<ApplicationDetailPage />);
+    renderPage();
     await screen.findByRole("heading", { name: "Rahul Singh" });
     expect(screen.getByRole("link", { name: /back/i })).toHaveAttribute("href", "/hr/recruitment/job-1");
   });
@@ -64,7 +77,7 @@ describe("ApplicationDetailPage", () => {
     });
     vi.stubGlobal("fetch", fetchMock);
 
-    render(<ApplicationDetailPage />);
+    renderPage();
     fireEvent.click(await screen.findByRole("button", { name: "Hire" }));
 
     fireEvent.change(screen.getByLabelText(/employee no/i), { target: { value: "EMP-2026-001" } });
@@ -88,7 +101,7 @@ describe("ApplicationDetailPage", () => {
   describe("UX-016 clerk-safe errors", () => {
     it("shows a clerk-safe message, never the raw HTTP status, when the pipeline fails to load", async () => {
       vi.stubGlobal("fetch", vi.fn(async () => new Response("", { status: 500 })));
-      render(<ApplicationDetailPage />);
+      renderPage();
 
       // Scoped to the toHumanError "area" text (not just /couldn't load/i)
       // since this page's own DataSourceBadge also shows a generic
@@ -109,7 +122,7 @@ describe("ApplicationDetailPage", () => {
       });
       vi.stubGlobal("fetch", fetchMock);
 
-      render(<ApplicationDetailPage />);
+      renderPage();
       fireEvent.click(await screen.findByRole("button", { name: "Hire" }));
       fireEvent.change(screen.getByLabelText(/employee no/i), { target: { value: "EMP-2026-001" } });
       fireEvent.change(screen.getByLabelText(/date of joining/i), { target: { value: "2026-09-01" } });

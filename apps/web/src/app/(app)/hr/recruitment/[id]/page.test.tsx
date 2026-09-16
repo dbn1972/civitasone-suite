@@ -1,5 +1,7 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { render, screen, fireEvent, waitFor, within } from "@testing-library/react";
+import { NextIntlClientProvider } from "next-intl";
+import enMessages from "@/messages/en.json";
 
 type FetchMock = ReturnType<typeof vi.fn> & { lastScreeningBody?: Record<string, unknown>; lastWithdrawBody?: Record<string, unknown> };
 
@@ -9,6 +11,17 @@ vi.mock("next/navigation", () => ({
 }));
 
 import JobOpeningDetailPage from "./page";
+
+// UX-017: JobOpeningDetailPage (and its ContextMenu) now read their copy
+// through next-intl (useTranslations("recruitmentDetail")), so they need a
+// real provider in the tree -- same pattern as hr/leave/apply/ApplyLeaveForm.test.tsx.
+function renderPage() {
+  return render(
+    <NextIntlClientProvider locale="en" messages={enMessages}>
+      <JobOpeningDetailPage />
+    </NextIntlClientProvider>,
+  );
+}
 
 const OPENING = {
   id: "job-1",
@@ -75,14 +88,14 @@ describe("JobOpeningDetailPage — applications pipeline", () => {
 
   it("links the applicant's name to the application detail page (the only route the Hire flow is reachable from)", async () => {
     mockFetchSequence([SELECTED_APP]);
-    render(<JobOpeningDetailPage />);
+    renderPage();
     const link = await screen.findByRole("link", { name: "Rahul Singh" });
     expect(link).toHaveAttribute("href", "/hr/recruitment/job-1/applications/app-2");
   });
 
   it("requires confirmation before rejecting an application (no bare one-click reject)", async () => {
     mockFetchSequence([APPLIED_APP]);
-    render(<JobOpeningDetailPage />);
+    renderPage();
     await screen.findByText("Asha Verma");
     const row = await openActionsMenu(/Asha Verma/);
     fireEvent.click(within(row).getByRole("menuitem", { name: "Reject" }));
@@ -95,7 +108,7 @@ describe("JobOpeningDetailPage — applications pipeline", () => {
 
   it("sends a valid reasonCode on reject (backend enum is eligibility|skill|experience|qualification|incomplete_documents|duplicate|position_hold|other)", async () => {
     const fetchMock = mockFetchSequence([APPLIED_APP]);
-    render(<JobOpeningDetailPage />);
+    renderPage();
     await screen.findByText("Asha Verma");
     const row = await openActionsMenu(/Asha Verma/);
     fireEvent.click(within(row).getByRole("menuitem", { name: "Reject" }));
@@ -109,7 +122,7 @@ describe("JobOpeningDetailPage — applications pipeline", () => {
 
   it("withdraw calls the real /withdraw endpoint with a required reason, not the nonexistent /stage endpoint", async () => {
     const fetchMock = mockFetchSequence([SELECTED_APP]);
-    render(<JobOpeningDetailPage />);
+    renderPage();
     await screen.findByText("Rahul Singh");
     const row = await openActionsMenu(/Rahul Singh/);
     fireEvent.click(within(row).getByRole("menuitem", { name: "Withdraw" }));
@@ -139,7 +152,7 @@ describe("JobOpeningDetailPage — applications pipeline", () => {
     });
     vi.stubGlobal("fetch", fn);
 
-    render(<JobOpeningDetailPage />);
+    renderPage();
     await screen.findByText("Asha Verma");
     const row = await openActionsMenu(/Asha Verma/);
     fireEvent.click(within(row).getByRole("menuitem", { name: "Shortlist" }));
@@ -165,7 +178,7 @@ describe("JobOpeningDetailPage — applications pipeline", () => {
           return new Response(JSON.stringify({ data: [] }), { status: 200 });
         }),
       );
-      render(<JobOpeningDetailPage />);
+      renderPage();
 
       await waitFor(() => expect(screen.getByText(/couldn't load/i)).toBeInTheDocument());
       expect(screen.queryByText(/\b500\b/)).not.toBeInTheDocument();
@@ -182,7 +195,7 @@ describe("JobOpeningDetailPage — applications pipeline", () => {
         }),
       );
 
-      render(<JobOpeningDetailPage />);
+      renderPage();
       await screen.findByText("Asha Verma");
       const row = await openActionsMenu(/Asha Verma/);
       fireEvent.click(within(row).getByRole("menuitem", { name: "Reject" }));
