@@ -103,56 +103,133 @@ function resolvePt(slabs: Array<{ from: bigint; to: bigint; amount: bigint }>, i
   return s ? s.amount : 0n;
 }
 
-/** Employee's submitted tax declaration for the FY (drives old-regime TDS exemptions). */
-async function resolveDeclaration(tx: typeof db, tenantId: string, employeeId: string, fy: string): Promise<{
-  // tenantTransaction re-audit: reads through the caller's outer tx,
-  // see resolvePtSlabs comment above.
+/**
+ * PERF-021 (Site A): batched sibling of resolvePtSlabs's per-employee,
+ * state_code-keyed call inside processPayrollRun's loop. PT slabs are
+ * tenant+state reference config (payroll.payroll_professional_tax), not
+ * written anywhere in the run's transaction, and the set of DISTINCT state
+ * codes among a run's employees is tiny (India has 28 states + 8 UTs) even
+ * when the employee count is large -- so one query keyed on every distinct
+ * state code the run actually needs replaces one query per employee.
+ * Reads through the caller's tx (same deadlock-avoidance reasoning as
+ * resolvePtSlabs itself -- see its own comment above).
+ *
+ * A state code with zero active slab rows is simply absent from the
+ * returned Map; callers must default a miss to `[]` (NOT the tenant-level
+ * fallback), exactly matching resolvePtSlabs(tx, tenantId, stateCode)'s own
+ * "no rows for this exact state" behaviour (rows.map on an empty result is
+ * `[]`, not a fallback to the no-state-filter query).
+ */
+export async function resolvePtSlabsByStatesTx(tx: typeof db, tenantId: string, stateCodes: string[]): Promise<Map<string, Array<{ from: bigint; to: bigint; amount: bigint }>>> {
+  const result = new Map<string, Array<{ from: bigint; to: bigint; amount: bigint }>>();
+  if (stateCodes.length === 0) return result;
+  const rows = (await tx.execute(sql`
+    SELECT state_code, slab_from_minor, slab_to_minor, pt_amount_minor
+    FROM payroll.payroll_professional_tax
+    WHERE tenant_id = ${tenantId}::uuid AND is_active = true
+      AND state_code = ANY(${sql`ARRAY[${sql.join(stateCodes.map((s) => sql`${s}`), sql`, `)}]`})
+    ORDER BY state_code, slab_from_minor
+  `)) as unknown as Array<{ state_code: string; slab_from_minor: string | number; slab_to_minor: string | number; pt_amount_minor: string | number }>;
+  for (const r of rows) {
+    let list = result.get(r.state_code);
+    if (!list) { list = []; result.set(r.state_code, list); }
+    list.push({ from: BigInt(r.slab_from_minor), to: BigInt(r.slab_to_minor), amount: BigInt(r.pt_amount_minor) });
+  }
+  return result;
+}
+
+export type Declaration = {
   regime: "old" | "new"; rentPaidAnnualMinor: bigint; ded80cMinor: bigint; ded80dMinor: bigint; otherDedMinor: bigint;
   prevEmployerSalaryMinor: bigint; prevEmployerTdsMinor: bigint; otherSourcesIncomeMinor: bigint; perquisitesMinor: bigint;
-} | null> {
+};
+
+/**
+ * PERF-021 (Site A): batched fetch of every run employee's submitted tax
+ * declaration for the FY (drives old-regime TDS exemptions), replacing what
+ * was previously a per-employee query inside processPayrollRun's loop. Tax
+ * declarations are employee-submitted reference data
+ * (payroll.payroll_tax_declarations), not written anywhere in the run's
+ * transaction, so fetching every run employee's latest-for-the-FY
+ * declaration once, up front, is safe. Reads through the caller's tx
+ * (tenantTransaction re-audit: a bare db.execute()/scopedRead() from inside
+ * an already-open outer db.transaction() checks out a SEPARATE pool
+ * connection -- the same deadlock class as a nested db.transaction() --
+ * see salary-revision-tenanttransaction-nested-tx-deadlock.test.ts).
+ *
+ * `DISTINCT ON (employee_id) ... ORDER BY employee_id, created_at DESC`
+ * picks the latest declaration per employee (payroll_tax_declarations has
+ * UNIQUE(tenant_id, employee_id, fy), so in practice at most one row exists
+ * per employee+FY; DISTINCT ON still makes this correct if that ever
+ * changes). An employee with no declaration row for the FY is simply absent
+ * from the returned Map; callers must default a miss to `null`.
+ */
+export async function resolveDeclarationsTx(tx: typeof db, tenantId: string, employeeIds: string[], fy: string): Promise<Map<string, Declaration>> {
+  const result = new Map<string, Declaration>();
+  if (employeeIds.length === 0) return result;
   const rows = (await tx.execute(sql`
-    SELECT regime, section_80c, section_80d, other_deductions,
+    SELECT DISTINCT ON (employee_id) employee_id, regime, section_80c, section_80d, other_deductions,
            COALESCE(rent_paid_minor, 0) AS rent_paid_minor,
            COALESCE(prev_employer_salary_minor, 0) AS prev_employer_salary_minor,
            COALESCE(prev_employer_tds_minor, 0)    AS prev_employer_tds_minor,
            COALESCE(other_sources_income_minor, 0) AS other_sources_income_minor,
            COALESCE(perquisites_minor, 0)          AS perquisites_minor
     FROM payroll.payroll_tax_declarations
-    WHERE tenant_id = ${tenantId}::uuid AND employee_id = ${employeeId}::uuid AND fy = ${fy}
-    ORDER BY created_at DESC LIMIT 1
-  `)) as unknown as Array<{ regime: string; section_80c: string | number; section_80d: string | number; other_deductions: string | number; rent_paid_minor: string | number; prev_employer_salary_minor: string | number; prev_employer_tds_minor: string | number; other_sources_income_minor: string | number; perquisites_minor: string | number }>;
-  const d = rows[0];
-  if (!d) return null;
-  return {
-    regime: d.regime === "old" ? "old" : "new",
-    rentPaidAnnualMinor: BigInt(d.rent_paid_minor),
-    ded80cMinor: BigInt(d.section_80c),
-    ded80dMinor: BigInt(d.section_80d),
-    otherDedMinor: BigInt(d.other_deductions),
-    prevEmployerSalaryMinor: BigInt(d.prev_employer_salary_minor),
-    prevEmployerTdsMinor: BigInt(d.prev_employer_tds_minor),
-    otherSourcesIncomeMinor: BigInt(d.other_sources_income_minor),
-    perquisitesMinor: BigInt(d.perquisites_minor),
-  };
+    WHERE tenant_id = ${tenantId}::uuid AND employee_id = ANY(${sql`ARRAY[${sql.join(employeeIds.map((id) => sql`${id}::uuid`), sql`, `)}]`}) AND fy = ${fy}
+    ORDER BY employee_id, created_at DESC
+  `)) as unknown as Array<{ employee_id: string; regime: string; section_80c: string | number; section_80d: string | number; other_deductions: string | number; rent_paid_minor: string | number; prev_employer_salary_minor: string | number; prev_employer_tds_minor: string | number; other_sources_income_minor: string | number; perquisites_minor: string | number }>;
+  for (const d of rows) {
+    result.set(d.employee_id, {
+      regime: d.regime === "old" ? "old" : "new",
+      rentPaidAnnualMinor: BigInt(d.rent_paid_minor),
+      ded80cMinor: BigInt(d.section_80c),
+      ded80dMinor: BigInt(d.section_80d),
+      otherDedMinor: BigInt(d.other_deductions),
+      prevEmployerSalaryMinor: BigInt(d.prev_employer_salary_minor),
+      prevEmployerTdsMinor: BigInt(d.prev_employer_tds_minor),
+      otherSourcesIncomeMinor: BigInt(d.other_sources_income_minor),
+      perquisitesMinor: BigInt(d.perquisites_minor),
+    });
+  }
+  return result;
 }
 
 /**
- * TDS already deducted this FY before the given run month (for Sec 192 true-up).
- * M3: only count TDS whose source run is approved/disbursed. A draft/processing/
- * failed (or out-of-order/abandoned) run must not corrupt the YTD true-up.
+ * PERF-021 (Site A): batched fetch of TDS already deducted this FY before
+ * the run month, for every run employee (Sec 192 true-up), replacing what
+ * was previously a per-employee query inside processPayrollRun's loop.
+ * M3: only counts TDS whose source run is approved/disbursed -- a draft/
+ * processing/failed (or out-of-order/abandoned) run must not corrupt the
+ * YTD true-up. This joins to OTHER runs' TDS rows filtered to `status IN
+ * ('approved','disbursed')` -- the CURRENT run being processed is always
+ * 'processing' for the entirety of its own transaction (it is only ever set
+ * to 'processing' inside this same transaction, by repo.updateRun at the
+ * very end, and even that never sets 'approved'/'disbursed'), so this
+ * batched read is safe regardless of whether it runs before or after any
+ * employee's own computeAndInsertSlip has inserted this run's own
+ * (not-yet-approved) payroll_tds row. Reads through the caller's tx
+ * (tenantTransaction re-audit: a bare db.execute()/scopedRead() from inside
+ * an already-open outer db.transaction() checks out a SEPARATE pool
+ * connection -- the same deadlock class as a nested db.transaction()).
+ *
+ * GROUP BY only returns a row for employee ids with a matching approved/
+ * disbursed TDS row; an employee id with none is absent from the Map --
+ * callers must default a miss to `0n` (COALESCE(SUM(...), 0)'s own value
+ * for that same "no matching rows" case).
  */
-async function resolveTdsYtdMinor(tx: typeof db, tenantId: string, employeeId: string, fyStart: number, beforeMonth: string): Promise<bigint> {
-  // tenantTransaction re-audit: reads through the caller's outer tx,
-  // see resolvePtSlabs comment above.
+export async function resolveTdsYtdMinorsTx(tx: typeof db, tenantId: string, employeeIds: string[], fyStart: number, beforeMonth: string): Promise<Map<string, bigint>> {
+  const result = new Map<string, bigint>();
+  if (employeeIds.length === 0) return result;
   const rows = (await tx.execute(sql`
-    SELECT COALESCE(SUM(t.tds_minor), 0)::text AS ytd
+    SELECT t.employee_id, COALESCE(SUM(t.tds_minor), 0)::text AS ytd
     FROM statutory.payroll_tds t
     JOIN payroll.payroll_runs r ON r.id = t.run_id
-    WHERE t.tenant_id = ${tenantId}::uuid AND t.employee_id = ${employeeId}::uuid
+    WHERE t.tenant_id = ${tenantId}::uuid AND t.employee_id = ANY(${sql`ARRAY[${sql.join(employeeIds.map((id) => sql`${id}::uuid`), sql`, `)}]`})
       AND t.period >= ${`${fyStart}-04`} AND t.period < ${beforeMonth}
       AND r.status IN ('approved', 'disbursed')
-  `)) as unknown as Array<{ ytd: string | number }>;
-  return BigInt(rows[0]?.ytd ?? 0);
+    GROUP BY t.employee_id
+  `)) as unknown as Array<{ employee_id: string; ytd: string | number }>;
+  for (const r of rows) result.set(r.employee_id, BigInt(r.ytd));
+  return result;
 }
 
 /** P3: configurable protected-net floor (paise) for the tenant; 0 if unset. */
@@ -182,6 +259,41 @@ export async function resolveLatestRevision(tx: typeof db, tenantId: string, emp
   const r = rows[0];
   if (!r) return null;
   return { newBasicMinor: BigInt(r.new_basic_minor), effectiveDate: r.effective_date };
+}
+
+/**
+ * PERF-021 (Site A): batched sibling of resolveLatestRevision for
+ * processPayrollRun's per-employee loop. Salary revisions are HR-entered
+ * reference data (payroll.payroll_salary_revisions) -- nothing in the run's
+ * own transaction writes this table (generateRetroArrears, which runs
+ * per-employee inside the same loop, writes payroll.payroll_arrears, a
+ * different table, and is left as its own per-employee read+write in this
+ * fix -- see PR description), so fetching every run employee's latest
+ * on-or-before-run-month revision once, up front, is safe. Reads through
+ * the caller's tx (see salary-revision-tenanttransaction-nested-tx-deadlock
+ * .test.ts for why a bare db.execute()/scopedRead() here would deadlock).
+ *
+ * `DISTINCT ON (employee_id) ... ORDER BY employee_id, effective_date DESC,
+ * created_at DESC` picks exactly the same row per employee that
+ * resolveLatestRevision's own `ORDER BY effective_date DESC, created_at DESC
+ * LIMIT 1` picks when called per-employee. An employee with no qualifying
+ * revision is simply absent from the returned Map; callers must default a
+ * miss to `null`, matching resolveLatestRevision's own null return.
+ */
+export async function resolveLatestRevisionsTx(tx: typeof db, tenantId: string, employeeIds: string[], month: string): Promise<Map<string, { newBasicMinor: bigint; effectiveDate: string }>> {
+  const result = new Map<string, { newBasicMinor: bigint; effectiveDate: string }>();
+  if (employeeIds.length === 0) return result;
+  const rows = (await tx.execute(sql`
+    SELECT DISTINCT ON (employee_id) employee_id, new_basic_minor, effective_date::text AS effective_date
+    FROM payroll.payroll_salary_revisions
+    WHERE tenant_id = ${tenantId}::uuid AND employee_id = ANY(${sql`ARRAY[${sql.join(employeeIds.map((id) => sql`${id}::uuid`), sql`, `)}]`})
+      AND effective_date <= ${month + "-01"}::date
+    ORDER BY employee_id, effective_date DESC, created_at DESC
+  `)) as unknown as Array<{ employee_id: string; new_basic_minor: string | number; effective_date: string }>;
+  for (const r of rows) {
+    result.set(r.employee_id, { newBasicMinor: BigInt(r.new_basic_minor), effectiveDate: r.effective_date });
+  }
+  return result;
 }
 
 /**
@@ -1040,16 +1152,62 @@ async function processPayrollRun(
   const alreadyComputed = new Set(existingSlips.map((s) => s.employeeId));
 
   await db.transaction(async (tx) => {
-    for (const emp of input.employees) {
-      if (p.departmentId && emp.departmentId !== p.departmentId) continue;
+    // PERF-021 (Site A): compute the run's actual employee set ONCE (the
+    // same filters the loop applied per-iteration before this change --
+    // department/DDO scope, M1 already-computed, DIC payroll-eligibility)
+    // instead of filtering inline in the loop below. This is the single
+    // source of truth the batched pre-fetches below key off of: one filter
+    // instead of two copies (one sizing the pre-fetch, one in the loop)
+    // removes the risk of them silently drifting apart, which would show up
+    // as a Map miss quietly falling back to an empty/default value for a
+    // real, processed employee -- exactly the kind of bug this run cannot
+    // afford. See PR description for the full per-site batching analysis.
+    const runEmployees = input.employees.filter((emp) => {
+      if (p.departmentId && emp.departmentId !== p.departmentId) return false;
       // Multi-DDO: only pay employees whose department belongs to this run's DDO.
-      if (ddoDepartments && !ddoDepartments.has(emp.departmentId)) continue;
-      if (alreadyComputed.has(emp.id)) continue; // M1: skip already-computed employees
+      if (ddoDepartments && !ddoDepartments.has(emp.departmentId)) return false;
+      if (alreadyComputed.has(emp.id)) return false; // M1: skip already-computed employees
       // DIC engagement gate: consultants (invoice/194J), third-party (agency/194C)
       // and apprentices (stipend) are NOT paid through the salary run — their pay
       // is handled by their own flows. Skip like the department/DDO filters above.
-      if (!isPayrollEligible(emp as { paymentRoute?: string; eligibleForPayroll?: boolean })) continue;
+      if (!isPayrollEligible(emp as { paymentRoute?: string; eligibleForPayroll?: boolean })) return false;
+      return true;
+    });
+    const runEmployeeIds = runEmployees.map((emp) => emp.id);
 
+    // FY/month-index derived from p.month only -- constant for the whole
+    // run. Was recomputed identically once per employee inside the loop;
+    // hoisted here both as a minor cleanup and because the batched
+    // declaration/TDS-YTD pre-fetches below need fyStr/fyStart up front.
+    const fyStart = Number(p.month.slice(5, 7)) >= 4 ? Number(p.month.slice(0, 4)) : Number(p.month.slice(0, 4)) - 1;
+    const fyStr = `${fyStart}-${String((fyStart + 1) % 100).padStart(2, "0")}`;
+    const monthIdxInFy = (Number(p.month.slice(5, 7)) - 4 + 12) % 12; // Apr=0..Mar=11
+
+    // PERF-021 (Site A): batch-fetch, once for the whole run instead of once
+    // per employee, 6 of the ~9-12 per-employee round trips processPayrollRun
+    // previously issued: latest salary revision, LOP ledger, active loans,
+    // tax declaration, TDS-YTD, and per-state PT slabs. Each is pure
+    // reference/historical data that nothing in this transaction writes, and
+    // none has an ordering dependency on any other per-employee step (full
+    // per-site analysis in the PR description). Deliberately NOT batched
+    // here, for documented correctness reasons: generateRetroArrears's own
+    // revision read (stays with its write, per-employee, in-loop, entirely
+    // unchanged) and collectAdHocEarnings's 3 FOR UPDATE reads (their lock
+    // timing, and the this-run-generated-arrears-must-be-collectible-this
+    // -run ordering against generateRetroArrears, are load-bearing).
+    const latestRevisionByEmployee = await resolveLatestRevisionsTx(tx as unknown as typeof db, p.tenantId, runEmployeeIds, p.month);
+    const lopByEmployee = await lopRepo.getLopForMonthsTx(tx, p.tenantId, runEmployeeIds, p.month);
+    const loansByEmployee = await loansRepo.findLoansByEmployeesTx(tx, p.tenantId, runEmployeeIds);
+    const declarationByEmployee = await resolveDeclarationsTx(tx as unknown as typeof db, p.tenantId, runEmployeeIds, fyStr);
+    const tdsYtdByEmployee = await resolveTdsYtdMinorsTx(tx as unknown as typeof db, p.tenantId, runEmployeeIds, fyStart, p.month);
+    const distinctStateCodes = [...new Set(
+      runEmployees
+        .map((emp) => (emp as { stateCode?: string }).stateCode)
+        .filter((s): s is string => !!s),
+    )];
+    const ptSlabsByState = await resolvePtSlabsByStatesTx(tx as unknown as typeof db, p.tenantId, distinctStateCodes);
+
+    for (const emp of runEmployees) {
       const cityClass = emp.cityClass ?? "X";
       // P2: generate retro-arrears for any back-dated salary revision BEFORE
       // collecting earnings, so this run pays them. Only the regular run
@@ -1060,7 +1218,10 @@ async function processPayrollRun(
 
       // P2: source current Basic from the latest revision effective on/before the
       // run month; fall back to the HRMS-provided basic when no revision exists.
-      const revision = await resolveLatestRevision(tx as unknown as typeof db, p.tenantId, emp.id, p.month);
+      // PERF-021 (Site A): batched pre-fetch (latestRevisionByEmployee)
+      // replaces the per-employee resolveLatestRevision query; a miss means
+      // no qualifying revision, matching resolveLatestRevision's own null.
+      const revision = latestRevisionByEmployee.get(emp.id) ?? null;
       const basicMinor = revision ? revision.newBasicMinor : BigInt(emp.basicMinor);
       const daMinor = (basicMinor * daRateBps) / 10000n;
       // M2 (LOP double-count): one authoritative source per (employee, month).
@@ -1068,7 +1229,10 @@ async function processPayrollRun(
       // when any ledger row exists for the month; otherwise we fall back to the
       // HRMS payroll-input feed. We never add the two together — that deducted
       // the same LOP twice.
-      const ledgerLop = await lopRepo.getLopForMonthTx(tx as unknown as typeof db, p.tenantId, emp.id, p.month);
+      // PERF-021 (Site A): batched pre-fetch (lopByEmployee) replaces the
+      // per-employee getLopForMonthTx query; a miss means no ledger rows for
+      // the month, matching getLopForMonthTx's own { hasLedger:false, days:0 }.
+      const ledgerLop = lopByEmployee.get(emp.id) ?? { hasLedger: false, days: 0 };
       const attendanceLopDays = ledgerLop.hasLedger ? ledgerLop.days : (input.lopDays[emp.id] ?? 0);
       // BUG-1 fix: mid-month joining pro-ration. Days in the run month BEFORE
       // dateOfJoining are unpaid, on top of (added to, not instead of) the
@@ -1101,7 +1265,9 @@ async function processPayrollRun(
       // until AFTER computeSlip tells us how much recovery was actually applied.
       // The carried-forward (unrecovered) portion must NOT reduce the loan
       // outstanding — it is recovered in a future run.
-      const loans = await loansRepo.findLoansByEmployeeTx(tx, p.tenantId, emp.id);
+      // PERF-021 (Site A): batched pre-fetch (loansByEmployee) replaces the
+      // per-employee findLoansByEmployeeTx query; a miss means no loans.
+      const loans = loansByEmployee.get(emp.id) ?? [];
       const loanPlans: Array<{ loanId: string; principal: bigint; interest: bigint; outstanding: bigint }> = [];
       let emiTotal = 0n;
       for (const l of loans) {
@@ -1128,12 +1294,15 @@ async function processPayrollRun(
       const earned = await collectAdHocEarnings(tx as unknown as typeof db, p.tenantId, emp.id, p.month);
       for (const c of earned.components) adHoc.push(c);
 
-      const fyStart = Number(p.month.slice(5, 7)) >= 4 ? Number(p.month.slice(0, 4)) : Number(p.month.slice(0, 4)) - 1;
-      const fyStr = `${fyStart}-${String((fyStart + 1) % 100).padStart(2, "0")}`;
-      const decl = await resolveDeclaration(tx as unknown as typeof db, p.tenantId, emp.id, fyStr);
-      const monthIdxInFy = (Number(p.month.slice(5, 7)) - 4 + 12) % 12; // Apr=0..Mar=11
+      // PERF-021 (Site A): fyStart/fyStr/monthIdxInFy now hoisted above the
+      // loop (p.month-only, constant for the run); decl/tdsYtdMinor now come
+      // from the batched pre-fetches (declarationByEmployee/tdsYtdByEmployee)
+      // instead of a per-employee resolveDeclaration/resolveTdsYtdMinor
+      // query. A miss on either matches that function's own "no rows" value
+      // (null for declaration, 0n for TDS-YTD).
+      const decl = declarationByEmployee.get(emp.id) ?? null;
       // Sec 192 true-up: prev-employer TDS counts toward tax already deducted this FY.
-      const tdsYtdMinor = (await resolveTdsYtdMinor(tx as unknown as typeof db, p.tenantId, emp.id, fyStart, p.month))
+      const tdsYtdMinor = (tdsYtdByEmployee.get(emp.id) ?? 0n)
         + (decl?.prevEmployerTdsMinor ?? 0n);
 
       // Engagement statutory gates carried on the run input (default: on).
@@ -1155,8 +1324,12 @@ async function processPayrollRun(
         ptMinor: resolvePt(
           // H14 FIX: use employee's state_code for PT schedule lookup.
           // Falls back to tenant-level slabs when employee has no state.
+          // PERF-021 (Site A): batched pre-fetch (ptSlabsByState) replaces
+          // the per-employee resolvePtSlabs query; a state with no active
+          // slabs is absent from the Map, matching resolvePtSlabs's own
+          // "no rows for this state" `[]` (never the tenant-wide fallback).
           (emp as { stateCode?: string }).stateCode
-            ? await resolvePtSlabs(tx as unknown as typeof db, p.tenantId, (emp as { stateCode?: string }).stateCode)
+            ? (ptSlabsByState.get((emp as { stateCode?: string }).stateCode!) ?? [])
             : ptSlabsFallback,
           basicMinor + daMinor,
         ),

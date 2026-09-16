@@ -1,4 +1,4 @@
-import { eq, and } from "drizzle-orm";
+import { eq, and, inArray } from "drizzle-orm";
 import { db, scopedRead } from "../../shared/db.js";
 import { payrollLoans, payrollLoanRepayments, type LoanRow } from "./schema.js";
 
@@ -31,6 +31,45 @@ export async function findLoansByEmployeeTx(tx: Writer, tenantId: string, employ
   return (tx as typeof db).select().from(payrollLoans)
     .where(and(eq(payrollLoans.tenantId, tenantId), eq(payrollLoans.employeeId, employeeId)))
     .limit(limit);
+}
+
+/**
+ * PERF-021 (Site A): batched sibling of findLoansByEmployeeTx for
+ * payroll/consumer.ts's processPayrollRun, which previously called
+ * findLoansByEmployeeTx once PER EMPLOYEE from inside its own already-open
+ * outer db.transaction(). findLoansByEmployeeTx takes no row lock (plain
+ * SELECT, no .for("update")) and nothing in that transaction writes
+ * `payroll_loans` for any employee OTHER than the one whose own loop
+ * iteration is currently running -- so fetching every run-employee's loans
+ * once, up front, is safe: no employee's loan rows are touched by another
+ * employee's turn. Reads through the caller's tx, same deadlock-avoidance
+ * reasoning as findLoansByEmployeeTx itself (see its own comment above).
+ *
+ * The original per-employee query has no ORDER BY (so "first `limit`
+ * rows" was already implementation-defined even before this change) and
+ * caps at `limit` (default 200) PER EMPLOYEE. A single query cannot apply
+ * a per-group LIMIT, so this fetches every matching row for the whole
+ * employee set and slices each employee's own list down to `limit`
+ * in-process -- preserving the "at most `limit` loans per employee"
+ * contract exactly, including in the pathological case of one employee
+ * having more than `limit` active loans.
+ */
+export async function findLoansByEmployeesTx(
+  tx: Writer,
+  tenantId: string,
+  employeeIds: string[],
+  limit = 200,
+): Promise<Map<string, LoanRow[]>> {
+  const result = new Map<string, LoanRow[]>();
+  if (employeeIds.length === 0) return result;
+  const rows = await (tx as typeof db).select().from(payrollLoans)
+    .where(and(eq(payrollLoans.tenantId, tenantId), inArray(payrollLoans.employeeId, employeeIds)));
+  for (const row of rows) {
+    let list = result.get(row.employeeId);
+    if (!list) { list = []; result.set(row.employeeId, list); }
+    if (list.length < limit) list.push(row);
+  }
+  return result;
 }
 
 export async function insertLoan(tx: Writer, row: typeof payrollLoans.$inferInsert): Promise<void> {
