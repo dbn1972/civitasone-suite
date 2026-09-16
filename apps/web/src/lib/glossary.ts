@@ -20,6 +20,8 @@ export const GLOSSARY: Record<string, string> = {
   Budget: "The money set aside for a purpose in a financial year.",
   "Trial balance": "A check that total debits equal total credits across all accounts.",
   Depreciation: "The yearly reduction in an asset's value as it ages.",
+  LMMHA: "List of Major & Minor Heads of Account — the government's standard list of account classifications, maintained by the CGA.",
+  CGA: "Comptroller General of Accounts — the central government office that sets and maintains the standard chart of accounts.",
   PFMS: "Public Financial Management System — the government's central payment platform.",
   TDS: "Tax Deducted at Source — tax held back from a payment and sent to the tax department.",
   DBT: "Direct Benefit Transfer — scheme money sent straight to the beneficiary's bank account.",

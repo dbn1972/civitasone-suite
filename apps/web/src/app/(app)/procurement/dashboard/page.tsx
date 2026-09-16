@@ -22,6 +22,7 @@ export default async function ProcurementDashboardPage() {
       <PageHeader
         title="Procurement Management"
         subtitle="Real-time snapshot of procurement activity and pending actions."
+        help="procurement"
         actions={
           <>
             <Link href="/procurement/indents" className="btn ghost">View all</Link>
