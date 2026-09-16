@@ -54,7 +54,16 @@ export default async function QuarterDetailPage({ params }: { params: { id: stri
   }
 
   const quarterAllotments = allotments.filter((a) => a.quarterId === quarter.id);
-  const allotmentsErrored = allotmentSource === "error";
+  // UX-013: this boolean's logic is unchanged from before -- per
+  // page.test.tsx's "even with stale non-empty rows" case, a stale/cached
+  // row set can legitimately render alongside source==="error" (this must
+  // NOT hide the table when that happens, only when there's truly nothing
+  // to show), so the `&& quarterAllotments.length === 0` below is load-
+  // bearing, not redundant. Renamed from `allotmentsErrored` to a bare
+  // `errored` purely so the empty-vs-error guard's word-boundary `errored`
+  // match can see it -- camelCase-concatenated identifiers like
+  // `allotmentsErrored` don't match \berrored\b.
+  const errored = allotmentSource === "error";
 
   const allotmentRows = quarterAllotments.map((a) => {
     const employeeShort = `${a.employeeRef.slice(0, 8)}…`;
@@ -100,9 +109,9 @@ export default async function QuarterDetailPage({ params }: { params: { id: stri
 
       <Card
         title="Allotment history for this quarter"
-        link={allotmentsErrored ? <DataSourceBadge source="error" /> : undefined}
+        link={errored ? <DataSourceBadge source="error" /> : undefined}
       >
-        {allotmentsErrored && quarterAllotments.length === 0 ? (
+        {errored && quarterAllotments.length === 0 ? (
           <DataSourceBadge source="error" />
         ) : (
           <DataTable

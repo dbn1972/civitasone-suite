@@ -1,12 +1,14 @@
 import Link from "next/link";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { getKnowledgeDocs } from "../../../_data/loaders";
-import { EmptyState, PageHeader, StatCard, StatGrid } from "../../../_components/ds";
+import { EmptyState, PageHeader, StatCard, StatGrid, RefreshErrorState } from "../../../_components/ds";
+import { toHumanError } from "@/lib/messages";
 import { ImportButton } from "./ImportButton";
 import { KnowledgeDocsTable, type DocRow } from "./KnowledgeDocsTable";
 
 export default async function KnowledgeListPage() {
   const { data: docs, source } = await getKnowledgeDocs();
+  const errored = source === "error";
 
   const total = docs.length;
   const approved = docs.filter((d) => d.status === "approved").length;
@@ -54,15 +56,17 @@ export default async function KnowledgeListPage() {
       />
 
       <StatGrid>
-        <StatCard icon="📂" iconBg="#fef9e7" label="Total Documents" value={total.toLocaleString("en-IN")} />
-        <StatCard icon="✅" iconBg="#ecfdf3" label="Published" value={approved.toLocaleString("en-IN")} />
-        <StatCard icon="⏳" iconBg="#fffaeb" label="Under Review" value={pendingReview.toLocaleString("en-IN")} />
-        <StatCard icon="🏷️" iconBg="#eff6ff" label="Categories" value={categories.toLocaleString("en-IN")} />
+        <StatCard icon="📂" iconBg="#fef9e7" label="Total Documents" value={errored ? "—" : total.toLocaleString("en-IN")} />
+        <StatCard icon="✅" iconBg="#ecfdf3" label="Published" value={errored ? "—" : approved.toLocaleString("en-IN")} />
+        <StatCard icon="⏳" iconBg="#fffaeb" label="Under Review" value={errored ? "—" : pendingReview.toLocaleString("en-IN")} />
+        <StatCard icon="🏷️" iconBg="#eff6ff" label="Categories" value={errored ? "—" : categories.toLocaleString("en-IN")} />
       </StatGrid>
 
       <div className="card" style={{ marginTop: "18px" }}>
         <div className="card-h"><h3>Documents</h3></div>
-        {docs.length === 0 ? (
+        {errored ? (
+          <RefreshErrorState error={toHumanError("load", { area: "knowledge documents" })} backHref="/knowledge" />
+        ) : docs.length === 0 ? (
           <EmptyState icon="📂" title="No documents found" message="No documents found in the knowledge base." />
         ) : (
           <KnowledgeDocsTable rows={rows} />

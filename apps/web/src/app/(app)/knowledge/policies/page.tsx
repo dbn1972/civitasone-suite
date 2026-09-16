@@ -1,7 +1,8 @@
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
-import { PageHeader, StatCard, StatGrid, DataTable, EmptyState } from "../../../_components/ds";
+import { PageHeader, StatCard, StatGrid, DataTable, EmptyState, RefreshErrorState } from "../../../_components/ds";
 import { getKnowledgePolicies, getReviewDuePolicies } from "../_data/loaders";
 import { formatIndianDate } from "@/lib/formatters";
+import { toHumanError } from "@/lib/messages";
 import type { PolicySummary } from "../_data/types";
 
 type Row = {
@@ -29,13 +30,14 @@ function toRow(p: PolicySummary): Row {
 }
 
 export default async function Page() {
-  const [{ data: policies, source }, { data: reviewDue }] = await Promise.all([
+  const [{ data: policies, source }, { data: reviewDue, source: reviewDueSource }] = await Promise.all([
     getKnowledgePolicies(),
     getReviewDuePolicies(),
   ]);
+  const errored = source === "error";
 
-  const published = policies.filter((p) => p.status === "published").length;
-  const inReview = policies.filter((p) => p.status === "under_review" || p.status === "approved").length;
+  const published = errored ? 0 : policies.filter((p) => p.status === "published").length;
+  const inReview = errored ? 0 : policies.filter((p) => p.status === "under_review" || p.status === "approved").length;
   const rows = policies.map(toRow);
 
   return (
@@ -47,14 +49,16 @@ export default async function Page() {
       />
       {source === "error" && <DataSourceBadge source={source} />}
       <StatGrid>
-        <StatCard icon="📘" iconBg="#eef2ff" label="Total documents" value={policies.length.toLocaleString("en-IN")} />
-        <StatCard icon="✅" iconBg="#ecfdf5" label="Published" value={published.toLocaleString("en-IN")} />
-        <StatCard icon="🕓" iconBg="#fffbeb" label="In review / approved" value={inReview.toLocaleString("en-IN")} />
-        <StatCard icon="🔁" iconBg="#fef2f2" label="Review due" value={reviewDue.length.toLocaleString("en-IN")} />
+        <StatCard icon="📘" iconBg="#eef2ff" label="Total documents" value={errored ? "—" : policies.length.toLocaleString("en-IN")} />
+        <StatCard icon="✅" iconBg="#ecfdf5" label="Published" value={errored ? "—" : published.toLocaleString("en-IN")} />
+        <StatCard icon="🕓" iconBg="#fffbeb" label="In review / approved" value={errored ? "—" : inReview.toLocaleString("en-IN")} />
+        <StatCard icon="🔁" iconBg="#fef2f2" label="Review due" value={reviewDueSource === "error" ? "—" : reviewDue.length.toLocaleString("en-IN")} />
       </StatGrid>
       <div className="card">
         <div className="card-h"><h3>All governed documents</h3></div>
-        {rows.length === 0 ? (
+        {errored ? (
+          <RefreshErrorState error={toHumanError("load", { area: "governed documents" })} backHref="/knowledge" />
+        ) : rows.length === 0 ? (
           <EmptyState icon="📘" title="No governed documents yet" message="Create a SOP, policy or circular to begin the lifecycle." />
         ) : (
           <DataTable<Row>

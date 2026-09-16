@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
-import { PageHeader, StatCard, StatGrid, DataTable, EmptyState } from "../../../_components/ds";
+import { PageHeader, StatCard, StatGrid, DataTable, EmptyState, RefreshErrorState } from "../../../_components/ds";
 import { getCatalogueOfferings } from "../../../_data/loaders";
+import { toHumanError } from "@/lib/messages";
 
 type Row = {
   id: string;
@@ -14,6 +15,7 @@ type Row = {
 
 export default async function Page() {
   const { data: offerings, source } = await getCatalogueOfferings();
+  const errored = source === "error";
 
   const categories = new Set(offerings.map((o) => o.category));
   const needsApproval = offerings.filter((o) => o.approvalRequired).length;
@@ -36,9 +38,9 @@ export default async function Page() {
       />
       {source === "error" && <DataSourceBadge source={source} />}
       <StatGrid>
-        <StatCard icon="🧾" label="Offerings" value={offerings.length.toLocaleString("en-IN")} />
-        <StatCard icon="🗂️" label="Categories" value={categories.size.toLocaleString("en-IN")} />
-        <StatCard icon="✅" label="Approval Required" value={needsApproval.toLocaleString("en-IN")} />
+        <StatCard icon="🧾" label="Offerings" value={errored ? "—" : offerings.length.toLocaleString("en-IN")} />
+        <StatCard icon="🗂️" label="Categories" value={errored ? "—" : categories.size.toLocaleString("en-IN")} />
+        <StatCard icon="✅" label="Approval Required" value={errored ? "—" : needsApproval.toLocaleString("en-IN")} />
         <StatCard icon="📥" label="My Requests" value="—" />
       </StatGrid>
       <div style={{ display: "flex", gap: 8, margin: "12px 0" }}>
@@ -47,7 +49,9 @@ export default async function Page() {
       </div>
       <div className="card">
         <div className="card-h"><h3>Catalogue offerings</h3></div>
-        {rows.length === 0 ? (
+        {errored ? (
+          <RefreshErrorState error={toHumanError("load", { area: "catalogue offerings" })} backHref="/helpdesk" />
+        ) : rows.length === 0 ? (
           <EmptyState icon="🧾" title="No offerings yet" message="An administrator can publish catalogue offerings to enable self-service requests." />
         ) : (
           <DataTable<Row>

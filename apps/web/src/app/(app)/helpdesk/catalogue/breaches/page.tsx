@@ -1,8 +1,9 @@
 import Link from "next/link";
 import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
-import { PageHeader, StatCard, StatGrid, DataTable, EmptyState } from "../../../../_components/ds";
+import { PageHeader, StatCard, StatGrid, DataTable, EmptyState, RefreshErrorState } from "../../../../_components/ds";
 import { getRequestBreachReport } from "../../../../_data/loaders";
 import { formatIndianDate } from "@/lib/formatters";
+import { toHumanError } from "@/lib/messages";
 
 type Row = {
   id: string;
@@ -14,6 +15,7 @@ type Row = {
 
 export default async function Page() {
   const { data: report, source } = await getRequestBreachReport();
+  const errored = source === "error";
 
   const rows: Row[] = report.data.map((r) => ({
     id: r.id,
@@ -33,14 +35,16 @@ export default async function Page() {
       />
       {source === "error" && <DataSourceBadge source={source} />}
       <StatGrid>
-        <StatCard icon="🚨" label="Breached" value={report.summary.breached.toLocaleString("en-IN")} />
-        <StatCard icon="⚠️" label="At Risk" value={report.summary.atRisk.toLocaleString("en-IN")} />
-        <StatCard icon="📣" label="Escalated" value={report.summary.escalated.toLocaleString("en-IN")} />
-        <StatCard icon="📊" label="Tracked" value={report.summary.total.toLocaleString("en-IN")} />
+        <StatCard icon="🚨" label="Breached" value={errored ? "—" : report.summary.breached.toLocaleString("en-IN")} />
+        <StatCard icon="⚠️" label="At Risk" value={errored ? "—" : report.summary.atRisk.toLocaleString("en-IN")} />
+        <StatCard icon="📣" label="Escalated" value={errored ? "—" : report.summary.escalated.toLocaleString("en-IN")} />
+        <StatCard icon="📊" label="Tracked" value={errored ? "—" : report.summary.total.toLocaleString("en-IN")} />
       </StatGrid>
       <div className="card">
         <div className="card-h"><h3>Breached service requests</h3></div>
-        {rows.length === 0 ? (
+        {errored ? (
+          <RefreshErrorState error={toHumanError("load", { area: "SLA breach report" })} backHref="/helpdesk/catalogue" />
+        ) : rows.length === 0 ? (
           <EmptyState icon="✅" title="No SLA breaches" message="No service requests have breached their SLA." />
         ) : (
           <DataTable<Row>

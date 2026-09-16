@@ -1,7 +1,9 @@
-import { PageHeader, StatCard, StatGrid, Card, EmptyState } from "@/app/_components/ds";
+import { PageHeader, StatCard, StatGrid, Card, EmptyState, RefreshErrorState } from "@/app/_components/ds";
 import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
 import { Breadcrumb } from "../Breadcrumb";
 import { getComplianceOverview } from "@/app/_data/loaders";
+import { useResource } from "@/app/_data/useResource";
+import { toHumanError } from "@/lib/messages";
 
 function resultColor(result: string): string {
   if (result === "pass") return "#16a34a";
@@ -16,7 +18,10 @@ function resultIcon(result: string): string {
 }
 
 export default async function ComplianceDashboardPage() {
-  const { data: overview, source } = await getComplianceOverview();
+  const result = await getComplianceOverview();
+  const { data: overview } = result;
+  const resource = useResource(result, (data) => data.checks.length === 0);
+  const errored = resource.status === "error";
 
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
@@ -26,16 +31,20 @@ export default async function ComplianceDashboardPage() {
         title="Compliance Dashboard"
         subtitle="DPDP Act compliance, CERT-In readiness, data retention policy status, and recent compliance checks."
       />
-      <DataSourceBadge source={source} />
+      <DataSourceBadge source={result.source} />
 
       <StatGrid>
-        <StatCard icon="📋" iconBg="#eff6ff" label="DPDP Score" value={`${overview.dpdpScore}%`} />
-        <StatCard icon="🛡️" iconBg="#ecfdf3" label="CERT-In Readiness" value={`${overview.certInReadiness}%`} />
-        <StatCard icon="🗄️" iconBg="#f1f5f9" label="Data Retention" value={overview.retentionStatus} />
-        <StatCard icon="✅" iconBg="#ecfdf3" label="Checks Passed" value={`${overview.checks.filter((c) => c.result === "pass").length}/${overview.checks.length}`} />
+        <StatCard icon="📋" iconBg="#eff6ff" label="DPDP Score" value={errored ? "—" : `${overview.dpdpScore}%`} />
+        <StatCard icon="🛡️" iconBg="#ecfdf3" label="CERT-In Readiness" value={errored ? "—" : `${overview.certInReadiness}%`} />
+        <StatCard icon="🗄️" iconBg="#f1f5f9" label="Data Retention" value={errored ? "—" : overview.retentionStatus} />
+        <StatCard icon="✅" iconBg="#ecfdf3" label="Checks Passed" value={errored ? "—" : `${overview.checks.filter((c) => c.result === "pass").length}/${overview.checks.length}`} />
       </StatGrid>
 
-      {overview.checks.length === 0 ? (
+      {errored ? (
+        <Card title="Recent Compliance Checks" padding>
+          <RefreshErrorState error={toHumanError("load", { area: "compliance checks" })} backHref="/tenant-admin" />
+        </Card>
+      ) : overview.checks.length === 0 ? (
         <Card title="Recent Compliance Checks" padding>
           <EmptyState icon="📋" title="No compliance checks recorded" message="Compliance check results will appear here after your first automated scan." />
         </Card>

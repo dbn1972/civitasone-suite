@@ -1,23 +1,25 @@
 import Link from "next/link";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { getKnowledgeRecords } from "../../../_data/loaders";
-import { EmptyState, PageHeader, StatCard, StatGrid } from "../../../_components/ds";
+import { EmptyState, PageHeader, StatCard, StatGrid, RefreshErrorState } from "../../../_components/ds";
+import { toHumanError } from "@/lib/messages";
 import { RecordsClient } from "./RecordsClient";
 
 export default async function KnowledgeRecordsPage() {
   const { data: records, source } = await getKnowledgeRecords();
+  const errored = source === "error";
 
   const now = new Date();
   const thirtyDaysFromNow = new Date();
   thirtyDaysFromNow.setDate(now.getDate() + 30);
 
   const total = records.length;
-  const dueForDisposal = records.filter((r) => {
+  const dueForDisposal = errored ? 0 : records.filter((r) => {
     if (!r.disposalDueDate) return false;
     const dueDate = new Date(r.disposalDueDate);
     return dueDate <= thirtyDaysFromNow && r.status === "active";
   }).length;
-  const permanent = records.filter((r) => r.retentionPeriod?.toLowerCase().includes("perm")).length;
+  const permanent = errored ? 0 : records.filter((r) => r.retentionPeriod?.toLowerCase().includes("perm")).length;
 
   function recordStatusPill(s: string) {
     if (s === "active") return "active";
@@ -74,17 +76,19 @@ export default async function KnowledgeRecordsPage() {
       />
 
       <StatGrid>
-        <StatCard icon="🗃️" iconBg="#fef9e7" label="Record Series" value={total.toLocaleString("en-IN")} />
-        <StatCard icon="📅" iconBg="#eff6ff" label="Due Review" value={dueForDisposal.toLocaleString("en-IN")} />
-        <StatCard icon="🗑️" iconBg="#fef3f2" label="Weeding Due" value={records.filter((r) => r.status === "disposed").length.toLocaleString("en-IN")} />
-        <StatCard icon="🔒" iconBg="#ecfdf3" label="Permanent" value={permanent.toLocaleString("en-IN")} />
+        <StatCard icon="🗃️" iconBg="#fef9e7" label="Record Series" value={errored ? "—" : total.toLocaleString("en-IN")} />
+        <StatCard icon="📅" iconBg="#eff6ff" label="Due Review" value={errored ? "—" : dueForDisposal.toLocaleString("en-IN")} />
+        <StatCard icon="🗑️" iconBg="#fef3f2" label="Weeding Due" value={errored ? "—" : records.filter((r) => r.status === "disposed").length.toLocaleString("en-IN")} />
+        <StatCard icon="🔒" iconBg="#ecfdf3" label="Permanent" value={errored ? "—" : permanent.toLocaleString("en-IN")} />
       </StatGrid>
 
       <div className="card" style={{ marginTop: "18px" }}>
         <div className="card-h">
           <h3>Retention schedules</h3>
         </div>
-        {records.length === 0 ? (
+        {errored ? (
+          <RefreshErrorState error={toHumanError("load", { area: "retention schedules" })} />
+        ) : records.length === 0 ? (
           <EmptyState icon="🗃️" title="No records found" message="No retention schedules configured yet." />
         ) : (
           <RecordsClient rows={rows} />

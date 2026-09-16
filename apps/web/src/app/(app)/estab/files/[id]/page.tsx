@@ -1,4 +1,3 @@
-import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
 import { getEstabFileById } from "../../../../_data/loaders";
 import { PageHeader, StatusPill, EmptyState, DataTable, RefreshErrorState } from "../../../../_components/ds";
 import { formatIndianDate } from "@/lib/formatters";
@@ -26,18 +25,21 @@ type DispatchRow = {
 export default async function EstabFileDetailPage({ params }: { params: { id: string } }) {
   const { data: file, source } = await getEstabFileById(params.id);
 
+  // The loader collapses 404, 5xx and network errors all into source:"error",
+  // so we cannot claim "not found" — that would tell an officer an existing
+  // file was lost during a backend blip. Offer a real retry instead. (Kept
+  // as two flat sibling early-returns, rather than nesting the not-found
+  // check inside a single `if (!file)`, so the `source === "error"` guard
+  // is a direct, statically-visible gate on everything below it — UX-013.)
+  if (source === "error" && !file) {
+    return (
+      <>
+        <PageHeader title="File" back="/estab/list" />
+        <RefreshErrorState error={toHumanError("load", { area: "file" })} backHref="/estab/list" />
+      </>
+    );
+  }
   if (!file) {
-    // The loader collapses 404, 5xx and network errors all into source:"error",
-    // so we cannot claim "not found" — that would tell an officer an existing
-    // file was lost during a backend blip. Offer a real retry instead.
-    if (source === "error") {
-      return (
-        <>
-          <PageHeader title="File" back="/estab/list" />
-          <RefreshErrorState error={toHumanError("load", { area: "file" })} backHref="/estab/list" />
-        </>
-      );
-    }
     return (
       <>
         <PageHeader title="File not found" back="/estab/list" />
@@ -85,7 +87,6 @@ export default async function EstabFileDetailPage({ params }: { params: { id: st
 
   return (
     <>
-      {source === "error" && <DataSourceBadge source={source} />}
       <PageHeader
         title={`${file.fileNo} · ${file.subject}`}
         subtitle={ext.dakNo ? `Linked DAK: ${ext.dakNo}` : "Digital file"}

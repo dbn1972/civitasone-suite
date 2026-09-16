@@ -1,6 +1,7 @@
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
-import { PageHeader, StatCard, StatGrid, DataTable, EmptyState } from "../../../_components/ds";
+import { PageHeader, StatCard, StatGrid, DataTable, EmptyState, RefreshErrorState } from "../../../_components/ds";
 import { getTicketAnalytics } from "../../../_data/loaders";
+import { toHumanError } from "@/lib/messages";
 
 type PriorityRow = {
   priority: string;
@@ -16,6 +17,7 @@ type ChannelRow = {
 
 export default async function Page() {
   const { data: analytics, source } = await getTicketAnalytics();
+  const errored = source === "error";
 
   const priorityRows: PriorityRow[] = analytics.byPriority.map((row) => ({
     priority: row.priority.charAt(0).toUpperCase() + row.priority.slice(1),
@@ -38,15 +40,17 @@ export default async function Page() {
       />
       {source === "error" && <DataSourceBadge source={source} />}
       <StatGrid>
-        <StatCard icon="🎫" label="Total Tickets" value={analytics.totalTickets.toLocaleString("en-IN")} />
-        <StatCard icon="🔵" label="Open" value={analytics.openTickets.toLocaleString("en-IN")} />
-        <StatCard icon="✅" label="Resolved (MTD)" value={analytics.resolvedThisMonth.toLocaleString("en-IN")} />
-        <StatCard icon="🚨" label="SLA Breached" value={analytics.slaBreachedCount.toLocaleString("en-IN")} />
+        <StatCard icon="🎫" label="Total Tickets" value={errored ? "—" : analytics.totalTickets.toLocaleString("en-IN")} />
+        <StatCard icon="🔵" label="Open" value={errored ? "—" : analytics.openTickets.toLocaleString("en-IN")} />
+        <StatCard icon="✅" label="Resolved (MTD)" value={errored ? "—" : analytics.resolvedThisMonth.toLocaleString("en-IN")} />
+        <StatCard icon="🚨" label="SLA Breached" value={errored ? "—" : analytics.slaBreachedCount.toLocaleString("en-IN")} />
       </StatGrid>
       <div className="grid g-2">
         <div className="card">
           <div className="card-h"><h3>By Priority</h3></div>
-          {priorityRows.length === 0 ? (
+          {errored ? (
+            <RefreshErrorState error={toHumanError("load", { area: "priority breakdown" })} backHref="/helpdesk" />
+          ) : priorityRows.length === 0 ? (
             <EmptyState icon="📊" title="No data" message="Priority breakdown will appear here." />
           ) : (
             <DataTable<PriorityRow>
@@ -62,7 +66,9 @@ export default async function Page() {
         </div>
         <div className="card">
           <div className="card-h"><h3>By Channel</h3></div>
-          {channelRows.length === 0 ? (
+          {errored ? (
+            <RefreshErrorState error={toHumanError("load", { area: "channel breakdown" })} backHref="/helpdesk" />
+          ) : channelRows.length === 0 ? (
             <EmptyState icon="📊" title="No data" message="Channel breakdown will appear here." />
           ) : (
             <DataTable<ChannelRow>
@@ -80,7 +86,7 @@ export default async function Page() {
       <div className="card">
         <div className="card-h"><h3>Performance</h3></div>
         <div className="fields">
-          <div className="fld"><div className="fl">Avg Resolution Time</div><div className="fv">{analytics.avgResolutionHours.toFixed(1)} hrs</div></div>
+          <div className="fld"><div className="fl">Avg Resolution Time</div><div className="fv">{errored ? "—" : `${analytics.avgResolutionHours.toFixed(1)} hrs`}</div></div>
         </div>
       </div>
     </>

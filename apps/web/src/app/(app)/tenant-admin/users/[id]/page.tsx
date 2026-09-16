@@ -1,6 +1,6 @@
-import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
-import { PageHeader, StatusPill, EmptyState } from "../../../../_components/ds";
+import { PageHeader, StatusPill, EmptyState, RefreshErrorState } from "../../../../_components/ds";
 import { formatIndianDate } from "@/lib/formatters";
+import { toHumanError } from "@/lib/messages";
 import { getAdminUserById } from "../../../../_data/loaders";
 import { Breadcrumb } from "../../Breadcrumb";
 import { UserSecurityActions } from "./UserSecurityActions";
@@ -8,6 +8,21 @@ import { UserSessionsTable } from "./UserSessionsTable";
 
 export default async function AdminUserDetailPage({ params }: { params: { id: string } }) {
   const { data: user, source } = await getAdminUserById(params.id);
+
+  // UX-013: `!user` used to be the only check here, so a real fetch failure
+  // (getAdminUserById resolves { data: null, source: "error" } on any
+  // failure, per fetchJson's contract) rendered pixel-identical to a
+  // genuine "no such user" 404 -- both showed "User not found". Check
+  // `source` first so an outage gets a retry-able error state instead of
+  // looking like the user was deleted.
+  if (source === "error") {
+    return (
+      <main className="page-main wrap" aria-labelledby="page-heading">
+        <Breadcrumb items={[{ label: "Tenant Admin", href: "/tenant-admin" }, { label: "Users", href: "/tenant-admin/users" }, { label: "Error" }]} />
+        <RefreshErrorState error={toHumanError("load", { area: "user" })} backHref="/tenant-admin/users" />
+      </main>
+    );
+  }
 
   if (!user) {
     return (
@@ -25,12 +40,7 @@ export default async function AdminUserDetailPage({ params }: { params: { id: st
         back="/tenant-admin/users"
         title={user.name ?? user.email}
         subtitle={user.email}
-        actions={
-          <>
-            <UserSecurityActions userId={user.id} />
-            {source === "error" && <DataSourceBadge source={source} />}
-          </>
-        }
+        actions={<UserSecurityActions userId={user.id} />}
       />
       <div className="grid g-main" style={{ alignItems: "start" }}>
         <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>

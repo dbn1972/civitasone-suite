@@ -1,5 +1,4 @@
 import Link from "next/link";
-import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
 import { getMeetingById } from "../../../../_data/loaders";
 import { PageHeader, RefreshErrorState, StatusPill } from "../../../../_components/ds";
 import { ActionPointsTable, AttendeesTable } from "./MeetingDetailTables";
@@ -15,10 +14,13 @@ export default async function MeetingDetailPage({
   const { data: meeting, source } = await getMeetingById(params.id);
   const onAgendaTab = searchParams?.tab === "agenda";
 
-  if (!meeting) {
+  if (source === "error" || !meeting) {
     // Same note as meeting/meetings/[meetingId]/page.tsx: fetchJson folds a
-    // real 404 and a transient failure into the same source:"error" signal,
-    // so one truthful message + a real retry covers both.
+    // real 404 and a transient failure into the same source:"error" signal
+    // (getMeetingById's empty value is `null`, so source==="error" always
+    // implies !meeting already) — one truthful message + a real retry
+    // covers both, and everything below this point can now rely on
+    // `meeting` being real, loaded data, not a masked failure (UX-013).
     return (
       <>
         <PageHeader title="Meeting not available" back="/estab/meetings" />
@@ -36,9 +38,6 @@ export default async function MeetingDetailPage({
 
   return (
     <>
-      {source === "error" && (
-        <DataSourceBadge source={source} message="Couldn't load — showing nothing" />
-      )}
       <a className="back" href="/estab/meetings">← Back</a>
       <div className="ph" style={{ marginTop: 6 }}>
         <div>

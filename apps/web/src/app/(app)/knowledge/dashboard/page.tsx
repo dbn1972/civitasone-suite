@@ -1,8 +1,9 @@
 import Link from "next/link";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { getKnowledgeDocs } from "../../../_data/loaders";
-import { EmptyState, PageHeader, StatCard, StatGrid } from "../../../_components/ds";
+import { EmptyState, PageHeader, StatCard, StatGrid, RefreshErrorState } from "../../../_components/ds";
 import { formatIndianDate } from "@/lib/formatters";
+import { toHumanError } from "@/lib/messages";
 import { RecentDocsTable, type RecentDocRow } from "./RecentDocsTable";
 
 const BAR_W = 640;
@@ -13,7 +14,7 @@ const LABEL_H = 16;
 
 function CategoryBarChart({ categories }: { categories: { name: string; count: number }[] }) {
   const items = categories.slice(0, 7);
-  if (items.length === 0) return null;
+  if (items.length === 0) return null; // ux-001-ok: presentational chart helper with no fetch/source of its own -- the caller (KnowledgeDashboardPage) already gates its `errored` state before this ever renders, so an empty array here only means "fewer than 1 category," never a load failure
 
   const maxVal = Math.max(...items.map((c) => c.count), 1);
   const n = items.length;
@@ -74,11 +75,12 @@ function docStatusLabel(s: string) {
 
 export default async function KnowledgeDashboardPage() {
   const { data: docs, source } = await getKnowledgeDocs();
+  const errored = source === "error";
 
   const total = docs.length;
-  const circulars = docs.filter((d) => d.category?.toLowerCase().includes("circular")).length;
-  const underRetention = docs.filter((d) => d.status === "approved" || d.status === "under_review").length;
-  const dueForArchival = docs.filter((d) => d.status === "archived").length;
+  const circulars = errored ? 0 : docs.filter((d) => d.category?.toLowerCase().includes("circular")).length;
+  const underRetention = errored ? 0 : docs.filter((d) => d.status === "approved" || d.status === "under_review").length;
+  const dueForArchival = errored ? 0 : docs.filter((d) => d.status === "archived").length;
 
   const categoryMap = docs.reduce<Record<string, number>>((acc, d) => {
     acc[d.category] = (acc[d.category] ?? 0) + 1;
@@ -118,13 +120,22 @@ export default async function KnowledgeDashboardPage() {
       />
 
       <StatGrid>
-        <StatCard icon="📂" iconBg="#fef9e7" label="Documents" value={total.toLocaleString("en-IN")} />
-        <StatCard icon="📜" iconBg="#eff6ff" label="Circulars/Policies" value={circulars.toLocaleString("en-IN")} />
-        <StatCard icon="🗃️" iconBg="#ecfdf3" label="Under Retention" value={underRetention.toLocaleString("en-IN")} />
-        <StatCard icon="📦" iconBg="#fffaeb" label="Due for Archival" value={dueForArchival.toLocaleString("en-IN")} />
+        <StatCard icon="📂" iconBg="#fef9e7" label="Documents" value={errored ? "—" : total.toLocaleString("en-IN")} />
+        <StatCard icon="📜" iconBg="#eff6ff" label="Circulars/Policies" value={errored ? "—" : circulars.toLocaleString("en-IN")} />
+        <StatCard icon="🗃️" iconBg="#ecfdf3" label="Under Retention" value={errored ? "—" : underRetention.toLocaleString("en-IN")} />
+        <StatCard icon="📦" iconBg="#fffaeb" label="Due for Archival" value={errored ? "—" : dueForArchival.toLocaleString("en-IN")} />
       </StatGrid>
 
-      {total === 0 ? (
+      {errored ? (
+        // UX-013: `total === 0` (total = docs.length, computed above) is the
+        // same "is there anything to show" check as `docs.length === 0`,
+        // just one variable-assignment away from the guard's literal
+        // `.length === 0` pattern -- a fetch failure used to collapse to
+        // this same "No documents yet" EmptyState below, silently hiding
+        // the entire dashboard (recent docs, category chart, storage,
+        // search) behind a cheerful first-run message.
+        <RefreshErrorState error={toHumanError("load", { area: "knowledge dashboard" })} />
+      ) : total === 0 ? (
         <EmptyState
           icon="📂"
           title="No documents yet"
