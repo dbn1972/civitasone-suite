@@ -1,4 +1,4 @@
-import { eq, and, sql } from "drizzle-orm";
+import { eq, and, inArray, sql } from "drizzle-orm";
 import { db, scopedRead } from "../../shared/db.js";
 import { payrollLopLedger } from "./schema.js";
 
@@ -75,4 +75,50 @@ export async function getLopForMonthTx(
       eq(payrollLopLedger.month, month),
     ));
   return { hasLedger: (row?.cnt ?? 0) > 0, days: row?.total ?? 0 };
+}
+
+/**
+ * PERF-021 (Site A): batched sibling of getLopForMonthTx for
+ * payroll/consumer.ts's processPayrollRun, which previously called
+ * getLopForMonthTx once PER EMPLOYEE from inside its own already-open outer
+ * db.transaction() -- an O(N) read for reference data
+ * (`payroll_lop_ledger`, fed by leave/attendance events) that nothing in
+ * that transaction writes, so it is safe to read once for every employee in
+ * the run instead of once per employee. Reads through the caller's tx, same
+ * as getLopForMonthTx (see its sibling's "tenantTransaction re-audit" /
+ * salary-revision-tenanttransaction-nested-tx-deadlock.test.ts history --
+ * a bare db.execute()/scopedRead() here would reintroduce that exact
+ * nested-connection deadlock class, just moved from N call sites to 1).
+ *
+ * GROUP BY only returns a row for employee ids that actually have ledger
+ * rows for the month, so an employee id with none is simply absent from the
+ * returned Map -- callers must default a miss to { hasLedger: false, days: 0 },
+ * exactly what getLopForMonthTx returns for that same "no rows" case (its
+ * bare aggregate, with no GROUP BY, always returns exactly one row with
+ * cnt=0/total=0 rather than zero rows).
+ */
+export async function getLopForMonthsTx(
+  tx: Writer,
+  tenantId: string,
+  employeeIds: string[],
+  month: string,
+): Promise<Map<string, { hasLedger: boolean; days: number }>> {
+  const result = new Map<string, { hasLedger: boolean; days: number }>();
+  if (employeeIds.length === 0) return result;
+  const rows = await tx.select({
+    employeeId: payrollLopLedger.employeeId,
+    cnt: sql<number>`count(*)::int`,
+    total: sql<number>`coalesce(sum(${payrollLopLedger.lopDays}), 0)::int`,
+  })
+    .from(payrollLopLedger)
+    .where(and(
+      eq(payrollLopLedger.tenantId, tenantId),
+      inArray(payrollLopLedger.employeeId, employeeIds),
+      eq(payrollLopLedger.month, month),
+    ))
+    .groupBy(payrollLopLedger.employeeId);
+  for (const row of rows) {
+    result.set(row.employeeId, { hasLedger: row.cnt > 0, days: row.total });
+  }
+  return result;
 }
