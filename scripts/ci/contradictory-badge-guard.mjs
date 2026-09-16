@@ -49,11 +49,38 @@ walk(ROOT, allFiles);
 const pageFiles = allFiles.filter((f) => f.endsWith("page.tsx"));
 
 function importsDataSourceBadge(src) {
-  return /from\s+["'][^"']*_components\/DataSourceBadge["']/.test(src);
+  // Match on the import specifier's final path segment being exactly
+  // "DataSourceBadge", not a literal "_components/DataSourceBadge"
+  // substring. A file that itself lives inside _components/ (e.g. a shared
+  // ModuleListPage.tsx) imports its sibling via a bare "./DataSourceBadge"
+  // or "../DataSourceBadge" — neither contains "_components/" — so the old
+  // substring check silently never matched those, regardless of whether the
+  // file actually had the legacy badge usage. (Found in review: this made
+  // the sharedModuleListPageTablePair special case below permanently dead.)
+  return /from\s+["'](?:[^"']*\/)?DataSourceBadge["']/.test(src);
+}
+function dataSourceBadgeLocalName(src) {
+  // Resolve the local binding name for the DataSourceBadge import, honoring
+  // `import { DataSourceBadge as X } from ...` aliasing (and multiple named
+  // specifiers in the same braces, e.g. `{ DataSourceBadge, type DataSource }`).
+  // Returns null if there's no DataSourceBadge import at all.
+  const importStmt = src.match(/import\s*\{([^}]*)\}\s*from\s*["'](?:[^"']*\/)?DataSourceBadge["']/);
+  if (!importStmt) return null;
+  for (const spec of importStmt[1].split(",").map((s) => s.trim()).filter(Boolean)) {
+    const m = spec.match(/^DataSourceBadge(?:\s+as\s+(\w+))?$/);
+    if (m) return m[1] || "DataSourceBadge";
+  }
+  return null;
 }
 function usesLegacySourceBadge(src) {
-  // <DataSourceBadge ... source={ ...   (allow multiline attrs before source=)
-  return /<DataSourceBadge\b[\s\S]{0,400}?\bsource=/.test(src);
+  // <LocalName ... source={ ...   (allow multiline attrs before source=)
+  // LocalName is resolved from the actual import, not hardcoded, so an
+  // aliased import (`DataSourceBadge as Badge` + `<Badge source={...} />`)
+  // is still caught. (Found in review: the old hardcoded `<DataSourceBadge`
+  // tag-name check was defeated by any import alias.)
+  const localName = dataSourceBadgeLocalName(src);
+  if (!localName) return false;
+  return new RegExp(`<${localName}\\b[\\s\\S]{0,400}?\\bsource=`).test(src);
 }
 function importsUseSeededResource(src) {
   return /useSeededResource/.test(src) && /from\s+["'][^"']*lib\/sync\/resource["']/.test(src);

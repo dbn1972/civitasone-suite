@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { EmptyState } from "@/app/_components/ds";
+import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
 import { useSeededResource } from "@/lib/sync/resource";
 import type { PlansData } from "@/app/_data/loaders";
 
@@ -12,7 +13,7 @@ function formatCurrency(paise: number): string {
 }
 
 export function PlansClient({ plansData, source }: { plansData: PlansData; source: "api" | "error" }) {
-  const { data } = useSeededResource("admin.plans", plansData, source, (d) => d.plans.length === 0);
+  const { data, provenance, offline, cachedAt } = useSeededResource("admin.plans", plansData, source, (d) => d.plans.length === 0);
   const [currentPlanId, setCurrentPlanId] = useState(data.currentPlanId);
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
   const [showDowngradeModal, setShowDowngradeModal] = useState(false);
@@ -29,6 +30,12 @@ export function PlansClient({ plansData, source }: { plansData: PlansData; sourc
   if (plans.length === 0) {
     return (
       <div className="card" style={{ marginTop: 18 }}>
+        {/* UX-012: this badge is the ONLY place that reports data provenance —
+            it reads the same useSeededResource call as `data`, so it can
+            never disagree with what this component shows (UX-002's
+            pattern; the page used to render a second, independent badge
+            from the raw `source` prop — removed). */}
+        <DataSourceBadge provenance={provenance ?? "live"} cachedAt={cachedAt} offline={offline} />
         <EmptyState icon="📋" title="No plans available" message="Plans will appear here once configured by the platform admin." />
       </div>
     );
@@ -64,6 +71,12 @@ export function PlansClient({ plansData, source }: { plansData: PlansData; sourc
 
   return (
     <>
+      {/* UX-012: this badge is the ONLY place that reports data provenance —
+          it reads the same useSeededResource call as `data`, so it can
+          never disagree with what this component shows (UX-002's pattern;
+          the page used to render a second, independent badge from the raw
+          `source` prop — removed). */}
+      <DataSourceBadge provenance={provenance ?? "live"} cachedAt={cachedAt} offline={offline} />
       {trialDaysLeft !== null && (
         <div style={{ background: "#fef3c7", border: "1px solid #f59e0b", borderRadius: 8, padding: "12px 16px", marginBottom: 18, display: "flex", justifyContent: "space-between", alignItems: "center" }} role="alert">
           <span>⚠️ <strong>{trialDaysLeft} days left</strong> in your trial. Upgrade now to keep access.</span>

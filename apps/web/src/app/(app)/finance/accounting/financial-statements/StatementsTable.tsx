@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { DataTable, Segmented, EmptyState } from "../../../../_components/ds";
+import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
 import type { FinancialStatementSummary } from "@civitasone/types";
 import { formatMoney } from "@/lib/formatters";
 import { useSeededResource } from "@/lib/sync/resource";
@@ -33,7 +34,7 @@ type StatRow = FinancialStatementSummary & Record<string, unknown>;
 
 export function StatementsTable({ statements, source = "api", fy }: StatementsTableProps) {
   const [activeType, setActiveType] = useState<StatementType>("R&P");
-  const { data: rows, fromCache, offline, cachedAt } = useSeededResource<FinancialStatementSummary[]>(
+  const { data: rows, provenance, offline, cachedAt } = useSeededResource<FinancialStatementSummary[]>(
     "finance.financialStatements",
     statements,
     source,
@@ -48,18 +49,14 @@ export function StatementsTable({ statements, source = "api", fy }: StatementsTa
   const totalPayments = filtered.reduce((s, st) => s + (st.payments as number), 0);
   const totalClosing = filtered.reduce((s, st) => s + (st.closingBalance as number), 0);
 
-  const cacheNote =
-    offline || fromCache
-      ? `Showing saved data${cachedAt ? ` from ${new Date(cachedAt).toLocaleString("en-IN")}` : ""}${offline ? " — you're offline" : ""}.`
-      : null;
-
   return (
     <div>
-      {cacheNote ? (
-        <p role="status" aria-live="polite" style={{ fontSize: 12, color: "#92400e", margin: "0 0 8px" }}>
-          {cacheNote}
-        </p>
-      ) : null}
+      {/* UX-012: this badge is the ONLY place that reports data provenance for
+          the rows shown below — it reads the same useSeededResource call as
+          `rows`, so it can never disagree with what the table shows
+          (UX-002's pattern; the page used to render a second, independent
+          badge from the raw `source` prop — removed). */}
+      <DataSourceBadge provenance={provenance ?? "live"} cachedAt={cachedAt} offline={offline} />
       <div className="card-h" style={{ marginBottom: "1rem" }}>
         <span style={{ fontWeight: 500, color: "var(--ink2)" }}>
           {TYPE_LABEL[activeType]}{fy ? ` · FY ${fy}` : ""}

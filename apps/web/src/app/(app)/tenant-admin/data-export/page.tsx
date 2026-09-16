@@ -1,5 +1,4 @@
 import { PageHeader, StatGrid, StatCard } from "@/app/_components/ds";
-import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
 import { getDataExports } from "@/app/_data/loaders";
 import { DataExportClient } from "./DataExportClient";
 
@@ -10,8 +9,11 @@ export default async function DataExportPage() {
 
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
+      {/* UX-012: the data-source badge now lives inside DataExportClient,
+          driven by the same useSeededResource call that produces its rows —
+          not a second, independent read of `source` here that could
+          disagree with the client's own cache state (UX-002's pattern). */}
       <PageHeader title="Data Export" subtitle="Export your organisation's data under DPDP Act 2023 compliance." back="/tenant-admin" />
-      <DataSourceBadge source={source} />
 
       <div style={{ background: "#eff6ff", border: "1px solid #bfdbfe", borderRadius: 8, padding: 16, marginBottom: 24 }}>
         <p style={{ margin: 0, fontSize: 14, color: "#1e40af" }}>

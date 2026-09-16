@@ -1,4 +1,3 @@
-import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { PrintExportButton } from "../../../_components/PrintExportButton";
 import { PageHeader, StatCard } from "../../../_components/ds";
 import { getAdminUsers } from "../../../_data/loaders";
@@ -28,7 +27,10 @@ export default async function AdminUsersPage() {
         <StatCard icon="⛔" iconBg="#fef3f2" label="Suspended" value={suspended} />
         <StatCard icon="🔐" iconBg="#eff6ff" label="MFA Enabled" value={mfaEnabled} />
       </div>
-      {source === "error" && <DataSourceBadge source={source} />}
+      {/* UX-012: the data-source badge now lives inside UsersTable, driven by
+          the same useSeededResource call that produces its rows — not a
+          second, independent read of `source` here that could disagree
+          with the table's own cache state (UX-002's pattern). */}
       <UsersTable users={users} source={source} />
     </main>
   );

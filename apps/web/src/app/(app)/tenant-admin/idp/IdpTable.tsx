@@ -1,14 +1,22 @@
 "use client";
 
 import { DataTable, StatusPill } from "@/app/_components/ds";
+import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
 import { useSeededResource } from "@/lib/sync/resource";
 import type { IdpProviderSummary } from "@/app/_data/loaders";
 
 export function IdpTable({ providers, source }: { providers: IdpProviderSummary[]; source: "api" | "error" }) {
-  const { data } = useSeededResource("admin.idp.providers", providers, source, (d) => d.length === 0);
+  const { data, provenance, offline, cachedAt } = useSeededResource("admin.idp.providers", providers, source, (d) => d.length === 0);
 
   return (
-    <DataTable<IdpProviderSummary & Record<string, unknown>>
+    <>
+      {/* UX-012: this badge is the ONLY place that reports data provenance for
+          the rows shown below — it reads the same useSeededResource call as
+          `data`, so it can never disagree with what the table shows
+          (UX-002's pattern; the page used to render a second, independent
+          badge from the raw `source` prop — removed). */}
+      <DataSourceBadge provenance={provenance ?? "live"} cachedAt={cachedAt} offline={offline} />
+      <DataTable<IdpProviderSummary & Record<string, unknown>>
       columns={[
         { key: "name", label: "Provider" },
         { key: "protocol", label: "Protocol" },
@@ -24,6 +32,7 @@ export function IdpTable({ providers, source }: { providers: IdpProviderSummary[
       pageSize={15}
       exportable
       exportFilename="idp-providers"
-    />
+      />
+    </>
   );
 }

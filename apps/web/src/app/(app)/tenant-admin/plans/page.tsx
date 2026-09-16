@@ -1,5 +1,4 @@
 import { PageHeader, StatGrid, StatCard } from "@/app/_components/ds";
-import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
 import { getPlansData } from "@/app/_data/loaders";
 import { PlansClient } from "./PlansClient";
 
@@ -13,8 +12,11 @@ export default async function PlansPage() {
 
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
+      {/* UX-012: the data-source badge now lives inside PlansClient, driven by
+          the same useSeededResource call that produces its data — not a
+          second, independent read of `source` here that could disagree
+          with the client's own cache state (UX-002's pattern). */}
       <PageHeader title="Plans & Subscription" subtitle="Compare plans, upgrade, or manage your subscription." back="/tenant-admin" />
-      <DataSourceBadge source={source} />
 
       <StatGrid>
         <StatCard icon="📋" iconBg="#eef2ff" label="Current Plan" value={currentPlan?.name ?? "—"} />

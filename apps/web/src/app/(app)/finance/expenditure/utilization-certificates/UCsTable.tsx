@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Segmented, DataTable } from "../../../../_components/ds";
+import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
 import type { UCSummary } from "@civitasone/types";
 import { formatIndianDate } from "@/lib/formatters";
 import { useSeededResource } from "@/lib/sync/resource";
@@ -20,7 +21,7 @@ type Row = UCSummary & { period: string };
 
 export function UCsTable({ ucs, source = "api" }: { ucs: UCSummary[]; source?: "api" | "error" }) {
   const [activeTab, setActiveTab] = useState<Tab>("All");
-  const { data: rows, fromCache, offline, cachedAt } = useSeededResource<UCSummary[]>(
+  const { data: rows, provenance, offline, cachedAt } = useSeededResource<UCSummary[]>(
     "finance.ucs",
     ucs,
     source,
@@ -34,18 +35,14 @@ export function UCsTable({ ucs, source = "api" }: { ucs: UCSummary[]; source?: "
 
   const tableRows: Row[] = filtered.map((u) => ({ ...u, period: `${u.periodFrom} – ${u.periodTo}` }));
 
-  const cacheNote =
-    offline || fromCache
-      ? `Showing saved data${cachedAt ? ` from ${new Date(cachedAt).toLocaleString("en-IN")}` : ""}${offline ? " — you're offline" : ""}.`
-      : null;
-
   return (
     <>
-      {cacheNote ? (
-        <p role="status" aria-live="polite" style={{ fontSize: 12, color: "#92400e", margin: "0 0 8px" }}>
-          {cacheNote}
-        </p>
-      ) : null}
+      {/* UX-012: this badge is the ONLY place that reports data provenance for
+          the rows shown below — it reads the same useSeededResource call as
+          `rows`, so it can never disagree with what the table shows
+          (UX-002's pattern; the page used to render a second, independent
+          badge from the raw `source` prop — removed). */}
+      <DataSourceBadge provenance={provenance ?? "live"} cachedAt={cachedAt} offline={offline} />
       <div style={{ marginBottom: 12 }}>
         <Segmented options={TABS} value={activeTab} onChange={(v) => setActiveTab(v as Tab)} />
       </div>

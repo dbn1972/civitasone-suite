@@ -1,4 +1,3 @@
-import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
 import { PageHeader, StatGrid, StatCard, Card } from "@/app/_components/ds";
 import { getFinanceOutcomeBudget } from "@/app/_data/loaders";
 import { OutcomeBudgetTable } from "./OutcomeBudgetTable";
@@ -16,7 +15,6 @@ export default async function OutcomeBudgetPage() {
         title="Outcome Budget"
         subtitle="Scheme output indicators and achievement tracking."
         back="/finance"
-        actions={source === "error" ? <DataSourceBadge source={source} /> : null}
       />
       <StatGrid>
         <StatCard icon="🎯" iconBg="#e7edfd" label="Total Indicators" value={outcomes.length} />
@@ -24,6 +22,10 @@ export default async function OutcomeBudgetPage() {
         <StatCard icon="📈" iconBg="#fffaeb" label="In Progress" value={inProgress} />
         <StatCard icon="⏳" iconBg="#eff6ff" label="Not Started" value={outcomes.length - achieved - inProgress} />
       </StatGrid>
+      {/* UX-012: the data-source badge now lives inside OutcomeBudgetTable,
+          driven by the same useSeededResource call that produces its rows —
+          not a second, independent read of `source` here that could
+          disagree with the table's own cache state (UX-002's pattern). */}
       <Card title="Outcome Indicators">
         <OutcomeBudgetTable outcomes={outcomes} source={source === "error" ? "error" : "api"} />
       </Card>

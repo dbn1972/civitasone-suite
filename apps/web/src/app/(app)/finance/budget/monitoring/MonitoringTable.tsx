@@ -1,5 +1,6 @@
 "use client";
 import { DataTable } from "@/app/_components/ds";
+import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
 import { useSeededResource } from "@/lib/sync/resource";
 
 type Row = Record<string, unknown>;
@@ -48,12 +49,9 @@ function progressBar(utilisationBps: unknown): React.ReactNode {
 import React from "react";
 
 export function MonitoringTable({ lines, source = "api" }: { lines: Row[]; source?: "api" | "error" }) {
-  const { data: rows, fromCache, offline, cachedAt } = useSeededResource<Row[]>(
+  const { data: rows, provenance, offline, cachedAt } = useSeededResource<Row[]>(
     "finance.budget-monitoring-lines", lines, source, (d) => d.length === 0
   );
-  const cacheNote = offline || fromCache
-    ? `Showing saved data${cachedAt ? ` from ${new Date(cachedAt).toLocaleString("en-IN")}` : ""}${offline ? " — you're offline" : ""}.`
-    : null;
 
   const enriched = rows.map((r) => ({
     ...r,
@@ -66,11 +64,12 @@ export function MonitoringTable({ lines, source = "api" }: { lines: Row[]; sourc
 
   return (
     <>
-      {cacheNote && (
-        <p role="status" aria-live="polite" style={{ fontSize: 12, color: "#92400e", margin: "0 0 8px" }}>
-          {cacheNote}
-        </p>
-      )}
+      {/* UX-012: this badge is the ONLY place that reports data provenance for
+          the rows shown below — it reads the same useSeededResource call as
+          `rows`, so it can never disagree with what the table shows
+          (UX-002's pattern; the page used to render a second, independent
+          badge from the raw `source` prop — removed). */}
+      <DataSourceBadge provenance={provenance ?? "live"} cachedAt={cachedAt} offline={offline} />
       <DataTable<Row>
         columns={[
           { key: "headId", label: "Head ID" },

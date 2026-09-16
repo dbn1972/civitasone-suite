@@ -1,4 +1,3 @@
-import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
 import { PageHeader, StatGrid, StatCard, Card } from "@/app/_components/ds";
 import { getFinanceDebt } from "@/app/_data/loaders";
 import { DebtTable } from "./DebtTable";
@@ -14,7 +13,6 @@ export default async function DebtPage() {
         title="Debt Management"
         subtitle="Loans, EMI schedules, and lender-wise outstanding debt."
         back="/finance"
-        actions={source === "error" ? <DataSourceBadge source={source} /> : null}
       />
       <StatGrid>
         <StatCard icon="🏦" iconBg="#e7edfd" label="Total Loans" value={loans.length} />
@@ -23,6 +21,10 @@ export default async function DebtPage() {
         {/* treasury.finance_debt has no "lender" column — "source" (RBI|market|central_govt) is the closest real field. */}
         <StatCard icon="💰" iconBg="#eff6ff" label="Sources" value={new Set(loans.map((l) => l.source)).size} />
       </StatGrid>
+      {/* UX-012: the data-source badge now lives inside DebtTable, driven by
+          the same useSeededResource call that produces its rows — not a
+          second, independent read of `source` here that could disagree
+          with the table's own cache state (UX-002's pattern). */}
       <Card title="Loan Portfolio">
         <DebtTable loans={loans} source={source === "error" ? "error" : "api"} />
       </Card>

@@ -1,4 +1,3 @@
-import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
 import { PageHeader, StatGrid, StatCard, Card } from "@/app/_components/ds";
 import { getFinanceDemandGrants } from "@/app/_data/loaders";
 import { DemandGrantsTable } from "./DemandGrantsTable";
@@ -15,7 +14,6 @@ export default async function DemandGrantsPage() {
         title="Demand for Grants"
         subtitle="Parliamentary demand for grants with voted/charged breakup."
         back="/finance"
-        actions={source === "error" ? <DataSourceBadge source={source} /> : null}
       />
       <StatGrid>
         <StatCard icon="🏛️" iconBg="#e7edfd" label="Total Demands" value={grants.length} />
@@ -23,6 +21,10 @@ export default async function DemandGrantsPage() {
         <StatCard icon="⚖️" iconBg="#fffaeb" label="Charged" value={charged} />
         <StatCard icon="📊" iconBg="#eff6ff" label="Services" value={new Set(grants.map((g) => g.service)).size} />
       </StatGrid>
+      {/* UX-012: the data-source badge now lives inside DemandGrantsTable,
+          driven by the same useSeededResource call that produces its rows —
+          not a second, independent read of `source` here that could
+          disagree with the table's own cache state (UX-002's pattern). */}
       <Card title="Demand for Grants">
         <DemandGrantsTable grants={grants} source={source === "error" ? "error" : "api"} />
       </Card>

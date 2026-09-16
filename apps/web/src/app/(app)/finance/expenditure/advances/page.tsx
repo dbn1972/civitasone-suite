@@ -1,4 +1,3 @@
-import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
 import { PageHeader, StatGrid, StatCard, Card } from "../../../../_components/ds";
 import { getFinanceAdvances } from "../../../../_data/loaders";
 import { AdvancesTable } from "./AdvancesTable";
@@ -25,7 +24,6 @@ export default async function AdvancesPage() {
           <>
             <PrintExportButton label="Ageing" documentTitle="Advance Ageing" />
             <a href="/finance/expenditure/advances/new" className="btn primary">+ New Advance</a>
-            {source === "error" ? <DataSourceBadge source={source} /> : null}
           </>
         }
       />
@@ -37,6 +35,10 @@ export default async function AdvancesPage() {
         <StatCard icon="⚠️" iconBg="#fef3f2" label="Overdue > 90d" value={overdue} />
       </StatGrid>
 
+      {/* UX-012: the data-source badge now lives inside AdvancesTable, driven
+          by the same useSeededResource call that produces its rows — not a
+          second, independent read of `source` here that could disagree
+          with the table's own cache state (UX-002's pattern). */}
       <Card title="Advance management">
         <AdvancesTable advances={advances} source={source} />
       </Card>

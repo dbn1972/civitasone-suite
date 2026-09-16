@@ -3,6 +3,7 @@
 import { useState } from "react";
 import type { AccountSummary } from "@civitasone/types";
 import { Card, DataTable, Segmented, StatusPill, EmptyState } from "../../../_components/ds";
+import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { useSeededResource } from "@/lib/sync/resource";
 
 interface AccountsTableProps {
@@ -20,7 +21,7 @@ export function AccountsTable({ accounts, source = "api" }: AccountsTableProps) 
   const [typeFilter, setTypeFilter] = useState<TypeFilter>("all");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
 
-  const { data: rows, fromCache, offline, cachedAt } = useSeededResource<AccountSummary[]>(
+  const { data: rows, provenance, offline, cachedAt } = useSeededResource<AccountSummary[]>(
     "finance.chartOfAccounts",
     accounts,
     source,
@@ -38,11 +39,6 @@ export function AccountsTable({ accounts, source = "api" }: AccountsTableProps) 
     const matchesStatus = statusFilter === "all" || a.status === statusFilter;
     return matchesSearch && matchesType && matchesStatus;
   }) as AccountRow[];
-
-  const cacheNote =
-    offline || fromCache
-      ? `Showing saved data${cachedAt ? ` from ${new Date(cachedAt).toLocaleString("en-IN")}` : ""}${offline ? " — you're offline" : ""}.`
-      : null;
 
   const SEG_OPTIONS = ["All", "Asset", "Liability", "Income", "Expense"] as const;
   const segValue = typeFilter === "all" ? "All" : typeFilter.charAt(0).toUpperCase() + typeFilter.slice(1);
@@ -62,11 +58,12 @@ export function AccountsTable({ accounts, source = "api" }: AccountsTableProps) 
         />
       }
     >
-      {cacheNote ? (
-        <p role="status" aria-live="polite" style={{ fontSize: 12, color: "#92400e", margin: "0", padding: "8px 16px 0" }}>
-          {cacheNote}
-        </p>
-      ) : null}
+      {/* UX-012: this badge is the ONLY place that reports data provenance for
+          the rows shown below — it reads the same useSeededResource call as
+          `rows`, so it can never disagree with what the table shows
+          (UX-002's pattern; the page used to render a second, independent
+          badge from the raw `source` prop — removed). */}
+      <DataSourceBadge provenance={provenance ?? "live"} cachedAt={cachedAt} offline={offline} />
       {/* Search and filter bar */}
       <div
         style={{

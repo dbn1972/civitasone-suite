@@ -1,4 +1,3 @@
-import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
 import { PageHeader, StatGrid, StatCard, Card } from "../../../../_components/ds";
 import { getFinanceBills } from "../../../../_data/loaders";
 import { formatMoney } from "@/lib/formatters";
@@ -29,7 +28,6 @@ export default async function BillsPage() {
                 real destination rather than promising content that doesn't exist. */}
             <Link href="/finance/config" className="btn ghost">Finance Configuration</Link>
             <BillCreateAction />
-            {source === "error" ? <DataSourceBadge source={source} /> : null}
           </>
         }
       />
@@ -41,6 +39,10 @@ export default async function BillsPage() {
         <StatCard icon="✅" iconBg="#ecfdf3" label="Paid (MTD)" value={formatMoney(paidAmount)} />
       </StatGrid>
 
+      {/* UX-012: the data-source badge now lives inside BillsTable, driven by
+          the same useSeededResource call that produces its rows — not a
+          second, independent read of `source` here that could disagree
+          with the table's own cache state (UX-002's pattern). */}
       <Card title="Bill processing">
         <BillsTable bills={bills} source={source} />
       </Card>

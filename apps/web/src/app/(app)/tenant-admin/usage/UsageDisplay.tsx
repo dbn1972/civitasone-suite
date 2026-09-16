@@ -1,6 +1,7 @@
 "use client";
 
 import { EmptyState } from "@/app/_components/ds";
+import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
 import { useSeededResource } from "@/lib/sync/resource";
 
 type EnrichedResource = {
@@ -35,11 +36,17 @@ export function UsageDisplay({
   anyWarning: boolean;
   source: "api" | "error";
 }) {
-  const { data } = useSeededResource("admin.usage", resources, source, (d) => d.length === 0);
+  const { data, provenance, offline, cachedAt } = useSeededResource("admin.usage", resources, source, (d) => d.length === 0);
 
   if (data.length === 0) {
     return (
       <div className="card" style={{ marginTop: 24 }}>
+        {/* UX-012: this badge is the ONLY place that reports data provenance —
+            it reads the same useSeededResource call as `data`, so it can
+            never disagree with what this component shows (UX-002's
+            pattern; the page used to render a second, independent badge
+            from the raw `source` prop — removed). */}
+        <DataSourceBadge provenance={provenance ?? "live"} cachedAt={cachedAt} offline={offline} />
         <EmptyState icon="📊" title="No usage data" message="Usage metrics will appear here once your tenant has active resources." />
       </div>
     );
@@ -47,6 +54,12 @@ export function UsageDisplay({
 
   return (
     <>
+      {/* UX-012: this badge is the ONLY place that reports data provenance —
+          it reads the same useSeededResource call as `data`, so it can
+          never disagree with what this component shows (UX-002's pattern;
+          the page used to render a second, independent badge from the raw
+          `source` prop — removed). */}
+      <DataSourceBadge provenance={provenance ?? "live"} cachedAt={cachedAt} offline={offline} />
       {anyWarning && (
         <div role="alert" style={{ background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 8, padding: 16, marginBottom: 24 }}>
           <p style={{ margin: 0, fontSize: 14, color: "#991b1b", fontWeight: 600 }}>🚨 Usage Warning</p>
