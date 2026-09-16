@@ -11,6 +11,7 @@ import type {
 } from "@/app/_components/ds/designer/engineBindingTypes";
 import { emptyEngineBindingConfig } from "@/app/_components/ds/designer/engineBindingTypes";
 import { updateServiceDefinition } from "./designerApi";
+import { toHumanError } from "@/lib/messages";
 
 function asConfig(raw: unknown): EngineBindingConfigUi {
   const base = emptyEngineBindingConfig();
@@ -64,7 +65,10 @@ export function normalizeBindingsFromApi(raw: unknown): EngineBindingUi[] {
 export async function fetchEngineRegistry(block?: EngineBlockUi): Promise<EngineDescriptorUi[]> {
   const qs = block ? `?block=${encodeURIComponent(block)}` : "";
   const res = await fetch(`/api/proxy/v1/citizen/engines${qs}`, { cache: "no-store" });
-  if (!res.ok) throw new Error(`Could not load engine registry (${res.status}).`);
+  if (!res.ok) {
+    const human = toHumanError("load", { area: "engine registry" });
+    throw new Error(`${human.what} ${human.next}`);
+  }
   const json = (await res.json()) as { data?: EngineDescriptorUi[] };
   return Array.isArray(json.data) ? json.data.map((e) => ({
     ...e,
@@ -85,8 +89,8 @@ export async function previewEngineBinding(input: {
     body: JSON.stringify(input),
   });
   if (!res.ok) {
-    const text = await res.text().catch(() => "");
-    throw new Error(text || `Preview failed (${res.status}).`);
+    const human = toHumanError("save", { area: "engine preview" });
+    throw new Error(`${human.what} ${human.next}`);
   }
   return res.json() as Promise<EnginePreviewResultUi>;
 }

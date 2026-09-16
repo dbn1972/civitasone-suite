@@ -1,10 +1,11 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
 import {
   buildSampleCalculation,
   computeFlatFeeLocal,
   computeSlabFeeLocal,
   emptyFeeDesign,
   exemptionsUiToApi,
+  persistFeeDesign,
   rupeesInputToPaise,
 } from "./feeBuilderApi";
 import type { FeeExemptionUi, SlabRowUi } from "@/app/_components/ds/designer/feeTypes";
@@ -86,5 +87,43 @@ describe("feeBuilderApi", () => {
     const late = buildSampleCalculation(design, {}, 0, "late");
     expect(late.totalPaise).toBe(10500);
     expect(late.lines.some((l) => l.kind === "penalty")).toBe(true);
+  });
+});
+
+/**
+ * UX-016: persistFeeDesign's parseJson used to throw the raw response body
+ * text (or a `Request failed (${status})` fallback) on a failed fee-schedule
+ * save — the same class of leak useFormError closes for components
+ * (UX-003). This module is a plain async data client, not a component, so
+ * it can't use that hook; it now goes through the same catalogued
+ * toHumanError vocabulary instead and never reads the response body at
+ * all, so it structurally cannot leak it.
+ */
+describe("feeBuilderApi — persistFeeDesign never leaks raw status or server text", () => {
+  const fetchMock = vi.fn();
+
+  beforeEach(() => {
+    fetchMock.mockReset();
+    vi.stubGlobal("fetch", fetchMock);
+  });
+
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("throws a clerk-safe message, never the raw HTTP status or server text, when saving a flat fee schedule fails", async () => {
+    fetchMock.mockResolvedValue(
+      new Response(JSON.stringify({ message: "revenue-service unavailable" }), {
+        status: 503,
+        headers: { "content-type": "application/json" },
+      }),
+    );
+
+    const design = { ...emptyFeeDesign("Trade License"), feeModel: "flat" as const };
+    const err = await persistFeeDesign(design, "svc-1", "Trade License").catch((e: unknown) => e);
+
+    expect(err).toBeInstanceOf(Error);
+    const message = (err as Error).message;
+    expect(message).not.toMatch(/\b503\b/);
+    expect(message).not.toContain("revenue-service unavailable");
+    expect(message).toMatch(/couldn't save/i);
   });
 });

@@ -2,6 +2,7 @@
 
 import type { TestRunStep } from "@/app/_components/ds/designer";
 import { mapSandboxSteps } from "./sandboxTestModel";
+import { toHumanError } from "@/lib/messages";
 
 export interface SandboxTestRunDto {
   id: string;
@@ -25,8 +26,8 @@ export async function runSandboxTest(definitionId: string): Promise<SandboxTestR
     headers: { "content-type": "application/json" },
   });
   if (!res.ok) {
-    const text = await res.text().catch(() => "");
-    throw new Error(text || `Sandbox test failed (${res.status})`);
+    const human = toHumanError("save", { area: "sandbox test" });
+    throw new Error(`${human.what} ${human.next}`);
   }
   const body = await res.json() as Record<string, unknown>;
   return {
