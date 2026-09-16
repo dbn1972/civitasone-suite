@@ -1,4 +1,3 @@
-import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
 import { PageHeader, StatGrid, StatCard, Card } from "@/app/_components/ds";
 import { getSATenants } from "@/app/_data/loaders";
 import { TenantsTable } from "./TenantsTable";
@@ -11,7 +10,11 @@ export default async function TenantsPage() {
 
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
-      <PageHeader title="Tenants" subtitle="All registered tenants with edition, status and usage details." back="/admin" actions={source === "error" ? <DataSourceBadge source={source} /> : null} />
+      {/* UX-012: the data-source badge now lives inside TenantsTable,
+          driven by the same useSeededResource call that produces its rows —
+          not a second, independent read of `source` here that could
+          disagree with the table's own cache state (UX-002's pattern). */}
+      <PageHeader title="Tenants" subtitle="All registered tenants with edition, status and usage details." back="/admin" />
       <StatGrid>
         <StatCard icon="🏢" iconBg="#eef2ff" label="Total Tenants" value={tenants.length} />
         <StatCard icon="✅" iconBg="#ecfdf3" label="Active" value={active} />

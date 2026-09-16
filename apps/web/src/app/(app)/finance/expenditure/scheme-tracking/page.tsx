@@ -1,4 +1,3 @@
-import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
 import { PageHeader, StatGrid, StatCard, Card } from "@/app/_components/ds";
 import { getFinanceSchemes } from "@/app/_data/loaders";
 import { SchemeTable } from "./SchemeTable";
@@ -14,7 +13,6 @@ export default async function SchemeTrackingPage() {
         title="Scheme Tracking"
         subtitle="Scheme expenditure with milestones, UC status, and progress."
         back="/finance"
-        actions={source === "error" ? <DataSourceBadge source={source} /> : null}
       />
       <StatGrid>
         <StatCard icon="🎯" iconBg="#e7edfd" label="Total Schemes" value={schemes.length} />
@@ -22,6 +20,10 @@ export default async function SchemeTrackingPage() {
         <StatCard icon="✅" iconBg="#fffaeb" label="Completed" value={completed} />
         <StatCard icon="⏳" iconBg="#eff6ff" label="Pending UC" value={schemes.length - active - completed} />
       </StatGrid>
+      {/* UX-012: the data-source badge now lives inside SchemeTable, driven
+          by the same useSeededResource call that produces its rows — not a
+          second, independent read of `source` here that could disagree
+          with the table's own cache state (UX-002's pattern). */}
       <Card title="Scheme Expenditure">
         <SchemeTable schemes={schemes} source={source === "error" ? "error" : "api"} />
       </Card>

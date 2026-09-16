@@ -1,4 +1,3 @@
-import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
 import { PageHeader, StatGrid, StatCard, Card } from "@/app/_components/ds";
 import { getFinancePFMSScrolls } from "@/app/_data/loaders";
 import { PFMSTable } from "./PFMSTable";
@@ -20,7 +19,6 @@ export default async function PfmsPage() {
         title="PFMS Integration"
         subtitle="Public Financial Management System — payment scroll tracking and beneficiary verification."
         back="/finance"
-        actions={source === "error" ? <DataSourceBadge source={source} /> : null}
       />
       <StatGrid>
         <StatCard icon="📜" iconBg="#e7edfd" label="Total Scrolls" value={scrolls.length} />
@@ -28,6 +26,10 @@ export default async function PfmsPage() {
         <StatCard icon="⏳" iconBg="#fffaeb" label="Pending" value={pending} />
         <StatCard icon="📤" iconBg="#eff6ff" label="Submitted" value={submitted} />
       </StatGrid>
+      {/* UX-012: the data-source badge now lives inside PFMSTable, driven by
+          the same useSeededResource call that produces its rows — not a
+          second, independent read of `source` here that could disagree
+          with the table's own cache state (UX-002's pattern). */}
       <Card title="Payment Scrolls">
         <PFMSTable scrolls={scrolls} source={source === "error" ? "error" : "api"} />
       </Card>

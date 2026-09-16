@@ -1,4 +1,3 @@
-import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
 import { PageHeader, StatGrid, StatCard, Card } from "@/app/_components/ds";
 import { getFinanceCashBook } from "@/app/_data/loaders";
 import { CashBankTable } from "./CashBankTable";
@@ -17,7 +16,6 @@ export default async function CashBankPage() {
         title="Cash & Bank Book"
         subtitle="Day book with receipts, payments, and running balance."
         back="/finance"
-        actions={source === "error" ? <DataSourceBadge source={source} /> : null}
       />
       <StatGrid>
         <StatCard icon="📖" iconBg="#e7edfd" label="Total Entries" value={entries.length} />
@@ -28,6 +26,10 @@ export default async function CashBankPage() {
             new Date().toISOString(), which is always UTC. */}
         <StatCard icon="📊" iconBg="#fffaeb" label="Today" value={entries.filter((e) => String(e.entry_date) === new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" })).length} />
       </StatGrid>
+      {/* UX-012: the data-source badge now lives inside CashBankTable, driven
+          by the same useSeededResource call that produces its rows — not a
+          second, independent read of `source` here that could disagree
+          with the table's own cache state (UX-002's pattern). */}
       <Card title="Cash & Bank Entries">
         <CashBankTable entries={entries} source={source === "error" ? "error" : "api"} />
       </Card>

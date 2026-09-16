@@ -1,4 +1,3 @@
-import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
 import { PageHeader, StatGrid, StatCard, Card } from "@/app/_components/ds";
 import { getSAOnboarding } from "@/app/_data/loaders";
 import { OnboardingTable } from "./OnboardingTable";
@@ -11,7 +10,11 @@ export default async function OnboardingPage() {
 
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
-      <PageHeader title="Tenant Onboarding Queue" subtitle="New tenant requests and onboarding pipeline status." back="/admin" actions={source === "error" ? <DataSourceBadge source={source} /> : null} />
+      {/* UX-012: the data-source badge now lives inside OnboardingTable,
+          driven by the same useSeededResource call that produces its rows —
+          not a second, independent read of `source` here that could
+          disagree with the table's own cache state (UX-002's pattern). */}
+      <PageHeader title="Tenant Onboarding Queue" subtitle="New tenant requests and onboarding pipeline status." back="/admin" />
       <StatGrid>
         <StatCard icon="📥" iconBg="#eef2ff" label="In Queue" value={queue.length} />
         <StatCard icon="🆕" iconBg="#ecfdf3" label="New Requests" value={newReqs} />

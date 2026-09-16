@@ -1,5 +1,4 @@
 import { PageHeader, StatGrid, StatCard, Card } from "@/app/_components/ds";
-import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
 import { getFinanceFundReleases } from "@/app/_data/loaders";
 import { FundReleasesTable } from "./FundReleasesTable";
 
@@ -16,7 +15,6 @@ export default async function FundReleasesPage() {
         title="Fund Releases"
         subtitle="Allocation distributions issued to subordinate offices and departments."
         back="/finance"
-        actions={source === "error" ? <DataSourceBadge source={source} /> : null}
       />
 
       <StatGrid>
@@ -26,6 +24,10 @@ export default async function FundReleasesPage() {
         <StatCard icon="⏳" iconBg="#fffaeb"        label="Pending"         value={pending} up={false} />
       </StatGrid>
 
+      {/* UX-012: the data-source badge now lives inside FundReleasesTable,
+          driven by the same useSeededResource call that produces its rows —
+          not a second, independent read of `source` here that could
+          disagree with the table's own cache state (UX-002's pattern). */}
       <Card title="Allocation Distributions (Fund Releases)">
         <FundReleasesTable releases={releases} source={source === "error" ? "error" : "api"} />
       </Card>

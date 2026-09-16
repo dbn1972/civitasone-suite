@@ -1,4 +1,3 @@
-import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
 import { PageHeader, StatGrid, StatCard, Card } from "../../../../_components/ds";
 import { getFinanceSanctions } from "../../../../_data/loaders";
 import { formatMoney } from "@/lib/formatters";
@@ -22,7 +21,6 @@ export default async function SanctionsPage() {
         actions={
           <>
             <SanctionCreateAction />
-            {source === "error" ? <DataSourceBadge source={source} /> : null}
           </>
         }
       />
@@ -34,6 +32,10 @@ export default async function SanctionsPage() {
         <StatCard icon="📊" iconBg="#ecfdf3" label="Approved" value={approved} delta="approved" up={true} />
       </StatGrid>
 
+      {/* UX-012: the data-source badge now lives inside SanctionsTable,
+          driven by the same useSeededResource call that produces its rows —
+          not a second, independent read of `source` here that could
+          disagree with the table's own cache state (UX-002's pattern). */}
       <Card title="Administrative & financial sanctions">
         <SanctionsTable sanctions={sanctions} source={source} />
       </Card>

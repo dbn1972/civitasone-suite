@@ -1,5 +1,4 @@
 import { PageHeader, StatGrid, StatCard, Card } from "@/app/_components/ds";
-import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
 import { getFinanceBudgetMonitoring, getFinanceBudgetMonitoringLines } from "@/app/_data/loaders";
 import { currentFinancialYear } from "@/lib/fiscalYear";
 import { FyFilter } from "../../_components/FyFilter";
@@ -47,7 +46,6 @@ export default async function BudgetMonitoringPage({
         actions={
           <>
             <FyFilter />
-            {source === "error" ? <DataSourceBadge source={source} /> : null}
           </>
         }
       />
@@ -104,6 +102,10 @@ export default async function BudgetMonitoringPage({
         </div>
       )}
 
+      {/* UX-012: the data-source badge now lives inside MonitoringTable,
+          driven by the same useSeededResource call that produces its rows —
+          not a second, independent read of `source` here that could
+          disagree with the table's own cache state (UX-002's pattern). */}
       <Card title="Head-wise Budget vs Expenditure">
         <MonitoringTable lines={lines} source={source === "error" ? "error" : "api"} />
       </Card>

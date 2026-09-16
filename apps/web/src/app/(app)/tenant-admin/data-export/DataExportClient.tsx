@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { EmptyState } from "@/app/_components/ds";
+import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
 import { useSeededResource } from "@/lib/sync/resource";
 import type { DataExportRequest } from "@/app/_data/loaders";
 
@@ -34,7 +35,7 @@ function statusBadge(status: ExportStatus) {
 }
 
 export function DataExportClient({ exports: initialExports, source }: { exports: DataExportRequest[]; source: "api" | "error" }) {
-  const { data: seededExports } = useSeededResource("admin.data-exports", initialExports, source, (d) => d.length === 0);
+  const { data: seededExports, provenance, offline, cachedAt } = useSeededResource("admin.data-exports", initialExports, source, (d) => d.length === 0);
   const [exportType, setExportType] = useState<ExportType>("full");
   const [moduleFilter, setModuleFilter] = useState("");
   const [format, setFormat] = useState<ExportFormat>("json");
@@ -66,6 +67,12 @@ export function DataExportClient({ exports: initialExports, source }: { exports:
 
   return (
     <>
+      {/* UX-012: this badge is the ONLY place that reports data provenance for
+          the rows shown below — it reads the same useSeededResource call as
+          `seededExports`, so it can never disagree with what this component
+          shows (UX-002's pattern; the page used to render a second,
+          independent badge from the raw `source` prop — removed). */}
+      <DataSourceBadge provenance={provenance ?? "live"} cachedAt={cachedAt} offline={offline} />
       <div className="card" style={{ marginBottom: 24 }}>
         <div className="card-h"><h3>Export My Data</h3></div>
         <form onSubmit={handleSubmit} style={{ padding: 16 }}>

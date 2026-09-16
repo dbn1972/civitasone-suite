@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { EmptyState } from "@/app/_components/ds";
+import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
 import { useSeededResource } from "@/lib/sync/resource";
 import type { CustomDomain } from "@/app/_data/loaders";
 
@@ -26,7 +27,7 @@ function getSslBadge(status: string) {
 }
 
 export function DomainClient({ domains: initialDomains, source }: { domains: CustomDomain[]; source: "api" | "error" }) {
-  const { data: seededDomains } = useSeededResource("admin.domains", initialDomains, source, (d) => d.length === 0);
+  const { data: seededDomains, provenance, offline, cachedAt } = useSeededResource("admin.domains", initialDomains, source, (d) => d.length === 0);
   const [domains, setDomains] = useState<CustomDomain[]>(seededDomains);
   const [showAddModal, setShowAddModal] = useState(false);
   const [showInstructions, setShowInstructions] = useState<string | null>(null);
@@ -74,6 +75,12 @@ export function DomainClient({ domains: initialDomains, source }: { domains: Cus
 
   return (
     <>
+      {/* UX-012: this badge is the ONLY place that reports data provenance for
+          the rows shown below — it reads the same useSeededResource call as
+          `seededDomains`, so it can never disagree with what this component
+          shows (UX-002's pattern; the page used to render a second,
+          independent badge from the raw `source` prop — removed). */}
+      <DataSourceBadge provenance={provenance ?? "live"} cachedAt={cachedAt} offline={offline} />
       <div className="card" style={{ marginTop: 18 }}>
         <div className="card-h" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <h3>Custom Domains</h3>

@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { DataTable, Segmented, EmptyState } from "../../../../_components/ds";
+import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
 import { PrintDocumentLink } from "../../../../_components/PrintDocumentLink";
 import type { GLEntrySummary } from "@civitasone/types";
 import { formatIndianDate, formatMoney } from "@/lib/formatters";
@@ -29,7 +30,7 @@ type GLRow = GLEntrySummary & Record<string, unknown>;
 export function GLTable({ entries, source = "api" }: GLTableProps) {
   const [activeTab, setActiveTab] = useState<Tab>("All");
   const [query, setQuery] = useState("");
-  const { data: rows, fromCache, offline, cachedAt } = useSeededResource<GLEntrySummary[]>(
+  const { data: rows, provenance, offline, cachedAt } = useSeededResource<GLEntrySummary[]>(
     "finance.glEntries",
     entries,
     source,
@@ -58,18 +59,14 @@ export function GLTable({ entries, source = "api" }: GLTableProps) {
   const totalDebit = filtered.reduce((s, e) => s + BigInt((e.debit as string) || "0"), 0n);
   const totalCredit = filtered.reduce((s, e) => s + BigInt((e.credit as string) || "0"), 0n);
 
-  const cacheNote =
-    offline || fromCache
-      ? `Showing saved data${cachedAt ? ` from ${new Date(cachedAt).toLocaleString("en-IN")}` : ""}${offline ? " — you're offline" : ""}.`
-      : null;
-
   return (
     <div>
-      {cacheNote ? (
-        <p role="status" aria-live="polite" style={{ fontSize: 12, color: "#92400e", margin: "0 0 8px" }}>
-          {cacheNote}
-        </p>
-      ) : null}
+      {/* UX-012: this badge is the ONLY place that reports data provenance for
+          the rows shown below — it reads the same useSeededResource call as
+          `rows`, so it can never disagree with what the table shows
+          (UX-002's pattern; the page used to render a second, independent
+          badge from the raw `source` prop — removed). */}
+      <DataSourceBadge provenance={provenance ?? "live"} cachedAt={cachedAt} offline={offline} />
       <div className="dt-toolbar">
         <div className="dt-filter">
           <span aria-hidden="true" style={{ fontSize: 13 }}>🔍</span>

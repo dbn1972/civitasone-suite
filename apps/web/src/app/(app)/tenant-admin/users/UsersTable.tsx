@@ -3,6 +3,7 @@
 import { useId, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { StatusPill, Segmented, ConfirmDialog, DataTable } from "../../../_components/ds";
+import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { useSeededResource } from "@/lib/sync/resource";
 
 type AdminUser = {
@@ -19,7 +20,7 @@ const FILTERS = ["All", "Active", "Suspended"] as const;
 
 export function UsersTable({ users, source = "api" }: { users: AdminUser[]; source?: "api" | "error" }) {
   const router = useRouter();
-  const { data: rows, fromCache, offline, cachedAt } = useSeededResource<AdminUser[]>(
+  const { data: rows, provenance, offline, cachedAt } = useSeededResource<AdminUser[]>(
     "tenantAdmin.users",
     users,
     source,
@@ -34,11 +35,6 @@ export function UsersTable({ users, source = "api" }: { users: AdminUser[]; sour
     return rows.filter((u) => u.status === filter.toLowerCase());
   }, [rows, filter]);
 
-  const cacheNote =
-    offline || fromCache
-      ? `Showing saved data${cachedAt ? ` from ${new Date(cachedAt).toLocaleString("en-IN")}` : ""}${offline ? " — you're offline" : ""}.`
-      : null;
-
   return (
     <div className="card">
       <div className="card-h">
@@ -50,11 +46,12 @@ export function UsersTable({ users, source = "api" }: { users: AdminUser[]; sour
           <button type="button" className="btn primary sm" onClick={() => setInviteOpen(true)}>+ Invite User</button>
         </div>
       </div>
-      {cacheNote ? (
-        <p role="status" aria-live="polite" style={{ fontSize: 12, color: "#92400e", margin: "0", padding: "8px 16px 0" }}>
-          {cacheNote}
-        </p>
-      ) : null}
+      {/* UX-012: this badge is the ONLY place that reports data provenance for
+          the rows shown below — it reads the same useSeededResource call as
+          `rows`, so it can never disagree with what the table shows
+          (UX-002's pattern; the page used to render a second, independent
+          badge from the raw `source` prop — removed). */}
+      <DataSourceBadge provenance={provenance ?? "live"} cachedAt={cachedAt} offline={offline} />
       <DataTable<AdminUser>
         rowHref={(user) => `/tenant-admin/users/${user.id}`}
         columns={[

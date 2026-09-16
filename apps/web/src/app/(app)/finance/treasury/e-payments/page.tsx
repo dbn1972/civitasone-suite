@@ -1,4 +1,3 @@
-import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
 import { PageHeader, StatGrid, StatCard, Card } from "@/app/_components/ds";
 import { getFinanceEPayments } from "@/app/_data/loaders";
 import { EPaymentsTable } from "./EPaymentsTable";
@@ -17,7 +16,6 @@ export default async function EPaymentsPage() {
         title="e-Payment Orders"
         subtitle="Electronic payment orders with bank references and status tracking."
         back="/finance"
-        actions={source === "error" ? <DataSourceBadge source={source} /> : null}
       />
       <StatGrid>
         <StatCard icon="💳" iconBg="#e7edfd" label="Total Orders" value={orders.length} />
@@ -26,6 +24,10 @@ export default async function EPaymentsPage() {
         {/* PaymentSummary has no "bank" field (referenceId/beneficiary/amountDisplay/status only) — beneficiary is the closest real field. */}
         <StatCard icon="🏦" iconBg="#eff6ff" label="Beneficiaries" value={new Set(orders.map((o) => o.beneficiary)).size} />
       </StatGrid>
+      {/* UX-012: the data-source badge now lives inside EPaymentsTable,
+          driven by the same useSeededResource call that produces its rows —
+          not a second, independent read of `source` here that could
+          disagree with the table's own cache state (UX-002's pattern). */}
       <Card title="Payment Orders">
         <EPaymentsTable orders={orders} source={source === "error" ? "error" : "api"} />
       </Card>

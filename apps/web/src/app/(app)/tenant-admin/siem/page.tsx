@@ -1,5 +1,4 @@
 import { PageHeader, StatCard, StatGrid, Card, EmptyState } from "@/app/_components/ds";
-import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
 import { Breadcrumb } from "../Breadcrumb";
 import { getSiemAlerts } from "@/app/_data/loaders";
 import { SiemTable } from "./SiemTable";
@@ -18,7 +17,10 @@ export default async function SiemPage() {
         title="SIEM & Threat Monitoring"
         subtitle="Real-time threat intelligence, blocked IPs, suspicious activity, and security alert management."
       />
-      <DataSourceBadge source={source} />
+      {/* UX-012: the data-source badge now lives inside SiemTable, driven by
+          the same useSeededResource call that produces its rows — not a
+          second, independent read of `source` here that could disagree
+          with the table's own cache state (UX-002's pattern). */}
 
       <StatGrid>
         <StatCard icon="🚨" iconBg="#fef3f2" label="Critical Alerts" value={criticalAlerts} />

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { EmptyState } from "@/app/_components/ds";
+import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
 import { useSeededResource } from "@/lib/sync/resource";
 import type { WebhookSummary, WebhookDelivery } from "@/app/_data/loaders";
 
@@ -23,7 +24,7 @@ function statusCodeBadge(code: number | null) {
 }
 
 export function WebhooksClient({ webhooks: initialWebhooks, source }: { webhooks: WebhookSummary[]; source: "api" | "error" }) {
-  const { data: seededWebhooks } = useSeededResource("admin.webhooks", initialWebhooks, source, (d) => d.length === 0);
+  const { data: seededWebhooks, provenance, offline, cachedAt } = useSeededResource("admin.webhooks", initialWebhooks, source, (d) => d.length === 0);
   const [webhooks, setWebhooks] = useState<WebhookSummary[]>(seededWebhooks);
   const [selectedWebhook, setSelectedWebhook] = useState<string | null>(null);
   const [deliveries, setDeliveries] = useState<WebhookDelivery[]>([]);
@@ -79,6 +80,12 @@ export function WebhooksClient({ webhooks: initialWebhooks, source }: { webhooks
 
   return (
     <>
+      {/* UX-012: this badge is the ONLY place that reports data provenance for
+          the rows shown below — it reads the same useSeededResource call as
+          `seededWebhooks`, so it can never disagree with what this component
+          shows (UX-002's pattern; the page used to render a second,
+          independent badge from the raw `source` prop — removed). */}
+      <DataSourceBadge provenance={provenance ?? "live"} cachedAt={cachedAt} offline={offline} />
       {testResult && (
         <div role="alert" style={{ background: "#ecfdf5", border: "1px solid #a7f3d0", borderRadius: 8, padding: 12, marginBottom: 16 }}>
           <p style={{ margin: 0, fontSize: 13, color: "#065f46" }}>✅ {testResult}</p>

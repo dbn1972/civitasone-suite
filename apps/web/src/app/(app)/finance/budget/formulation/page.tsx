@@ -1,4 +1,3 @@
-import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
 import { PageHeader, StatGrid, StatCard, Card } from "../../../../_components/ds";
 import { getFinanceBudgets } from "../../../../_data/loaders";
 import { FormulationTable } from "./FormulationTable";
@@ -27,7 +26,6 @@ export default async function BudgetFormulationPage() {
                 duplicate (misleading) action is removed rather than left as a
                 dead second button to the same form. */}
             <a href="/finance/budget/formulation/new" className="btn primary">+ New Estimate</a>
-            {source === "error" ? <DataSourceBadge source={source} /> : null}
           </>
         }
       />
@@ -39,6 +37,10 @@ export default async function BudgetFormulationPage() {
         <StatCard icon="⏳" iconBg="#fef3f2" label="Pending Review" value={pending} />
       </StatGrid>
 
+      {/* UX-012: the data-source badge now lives inside FormulationTable,
+          driven by the same useSeededResource call that produces its rows —
+          not a second, independent read of `source` here that could
+          disagree with the table's own cache state (UX-002's pattern). */}
       <Card title="Budget estimates (BE) — all fiscal years">
         <FormulationTable budgets={budgets} source={source} />
       </Card>

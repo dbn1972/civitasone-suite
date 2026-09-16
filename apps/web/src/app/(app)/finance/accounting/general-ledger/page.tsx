@@ -1,4 +1,3 @@
-import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
 import { PageHeader, StatGrid, StatCard, Card } from "../../../../_components/ds";
 import { getFinanceGLEntries } from "../../../../_data/loaders";
 import { GLTable } from "./GLTable";
@@ -26,7 +25,6 @@ export default async function GeneralLedgerPage() {
           <>
             <PrintExportButton label="Export PDF" documentTitle="General Ledger" />
             <a href="/finance/accounting/vouchers/new" className="btn primary">+ New Voucher</a>
-            {source === "error" ? <DataSourceBadge source={source} /> : null}
           </>
         }
       />
@@ -38,6 +36,10 @@ export default async function GeneralLedgerPage() {
         <StatCard icon="📥" iconBg="#ecfdf3" label="Total Credit" value={formatMoney(totalCredit)} delta={isBalanced ? "Balanced" : "Unbalanced"} up={isBalanced} />
       </StatGrid>
 
+      {/* UX-012: the data-source badge now lives inside GLTable, driven by
+          the same useSeededResource call that produces its rows — not a
+          second, independent read of `source` here that could disagree
+          with the table's own cache state (UX-002's pattern). */}
       <Card title="General ledger — all fiscal years">
         <GLTable entries={entries} source={source} />
       </Card>

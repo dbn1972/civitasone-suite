@@ -1,4 +1,3 @@
-import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
 import { PageHeader, StatGrid, StatCard, Card } from "../../../../_components/ds";
 import { getFinancialStatements } from "../../../../_data/loaders";
 import { StatementsTable } from "./StatementsTable";
@@ -25,7 +24,6 @@ export default async function FinancialStatementsPage({ searchParams }: { search
           <>
             <PrintExportButton label="Export PDF" documentTitle="Financial Statements" />
             <FyFilter />
-            {source === "error" ? <DataSourceBadge source={source} /> : null}
           </>
         }
       />
@@ -37,6 +35,10 @@ export default async function FinancialStatementsPage({ searchParams }: { search
         <StatCard icon="💰" iconBg="#eff6ff" label="Closing Balance" value={formatMoney(totalClosing)} />
       </StatGrid>
 
+      {/* UX-012: the data-source badge now lives inside StatementsTable,
+          driven by the same useSeededResource call that produces its rows —
+          not a second, independent read of `source` here that could
+          disagree with the table's own cache state (UX-002's pattern). */}
       <Card title={`Financial Statements · FY ${fy}`}>
         <StatementsTable statements={statements} source={source} fy={fy} />
       </Card>

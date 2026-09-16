@@ -1,4 +1,3 @@
-import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { PageHeader, StatGrid, StatCard } from "../../../_components/ds";
 import { getPayments } from "../../../_data/loaders";
 import { PaymentsTable } from "./PaymentsTable";
@@ -19,7 +18,6 @@ export default async function PaymentsPage() {
         actions={
           <>
             <PaymentActions />
-            {source === "error" ? <DataSourceBadge source={source} /> : null}
           </>
         }
       />
@@ -31,6 +29,10 @@ export default async function PaymentsPage() {
         <StatCard icon="❌" iconBg="#fef3f2" label="Failed" value={failed} />
       </StatGrid>
 
+      {/* UX-012: the data-source badge now lives inside PaymentsTable, driven
+          by the same useSeededResource call that produces its rows — not a
+          second, independent read of `source` here that could disagree
+          with the table's own cache state (UX-002's pattern). */}
       <PaymentsTable payments={payments} source={source} />
     </>
   );

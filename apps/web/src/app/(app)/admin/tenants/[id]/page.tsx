@@ -1,4 +1,3 @@
-import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
 import { PageHeader, StatGrid, StatCard, Card, EmptyState, RefreshErrorState } from "@/app/_components/ds";
 import { getAdminTenantDetail, getAdminTenantModules } from "@/app/_data/loaders";
 import { toHumanError } from "@/lib/messages";
@@ -40,7 +39,6 @@ export default async function TenantDetailPage({ params }: { params: Promise<{ i
         subtitle={`Edition: ${tenant.edition} · Status: ${tenant.status} · Region: ${tenant.region}`}
         back="/admin/tenants"
       />
-      {source === "error" && <DataSourceBadge source="error" />}
       <StatGrid>
         <StatCard icon="📦" iconBg="#eef2ff" label="Modules Enabled" value={enabledCount} />
         <StatCard icon="👥" iconBg="#ecfdf3" label="Active Users" value={totalUsers} />
@@ -48,6 +46,10 @@ export default async function TenantDetailPage({ params }: { params: Promise<{ i
         <StatCard icon="🔒" iconBg="#fce7ee" label="Status" value={tenant.status} />
       </StatGrid>
       <Card title="Module Usage">
+        {/* UX-012: the data-source badge now lives inside TenantModulesTable,
+            driven by the same useSeededResource call that produces its rows —
+            not a second, independent read of `source` here that could
+            disagree with the table's own cache state (UX-002's pattern). */}
         {source === "error" ? (
           <RefreshErrorState error={toHumanError("load", { area: "tenant modules" })} />
         ) : modules.length === 0 ? (

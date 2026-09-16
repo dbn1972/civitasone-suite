@@ -1,4 +1,3 @@
-import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
 import { PageHeader, StatGrid, StatCard, Card } from "@/app/_components/ds";
 import { getFinanceAuditParas } from "@/app/_data/loaders";
 import { AuditParasTable } from "./AuditParasTable";
@@ -20,7 +19,6 @@ export default async function AuditParasPage() {
         title="Audit Paras"
         subtitle="CAG audit observations and department responses."
         back="/finance"
-        actions={source === "error" ? <DataSourceBadge source={source} /> : null}
       />
       <StatGrid>
         <StatCard icon="📋" iconBg="#e7edfd" label="Total Paras" value={paras.length} />
@@ -28,6 +26,10 @@ export default async function AuditParasPage() {
         <StatCard icon="📝" iconBg="#fffaeb" label="Responded" value={responded} />
         <StatCard icon="✅" iconBg="#ecfdf3" label="Settled" value={settled} />
       </StatGrid>
+      {/* UX-012: the data-source badge now lives inside AuditParasTable,
+          driven by the same useSeededResource call that produces its rows —
+          not a second, independent read of `source` here that could
+          disagree with the table's own cache state (UX-002's pattern). */}
       <Card title="Audit Observations">
         <AuditParasTable paras={paras} source={source === "error" ? "error" : "api"} />
       </Card>
