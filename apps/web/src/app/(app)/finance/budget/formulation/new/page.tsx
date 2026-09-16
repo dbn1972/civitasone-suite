@@ -15,6 +15,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { PageHeader } from "../../../../../_components/ds";
+import { useFormError } from "@/lib/useFormError";
 
 type AccountRow = { id: string; code?: string; name?: string };
 
@@ -36,20 +37,28 @@ export default function NewBudgetEstimatePage() {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [isError, setIsError] = useState(false);
+  const formError = useFormError("budget estimate");
 
   useEffect(() => {
     let active = true;
     (async () => {
       try {
         const res = await fetch("/api/proxy/v1/finance/accounts?limit=200", { headers: { accept: "application/json" } });
-        if (!res.ok) throw new Error(`Failed to load budget heads (${res.status}).`);
+        if (!res.ok) {
+          if (active) setLoadError((await formError.fromResponse(res, "load")).message);
+          return;
+        }
         const json = (await res.json()) as { data?: AccountRow[] } | AccountRow[];
         if (active) setAccounts(Array.isArray(json) ? json : json.data ?? []);
-      } catch (e) {
-        if (active) setLoadError(e instanceof Error ? e.message : "Failed to load budget heads.");
+      } catch {
+        if (active) setLoadError(formError.fromException("load").message);
       }
     })();
     return () => { active = false; };
+    // formError.fromResponse/fromException are stable (useCallback'd on a
+    // fixed `area` string inside useFormError) even though the wrapping
+    // formError object literal isn't, so omitting it here is safe and avoids
+    // re-running this load effect every render.
   }, []);
 
   async function submit(e: React.FormEvent) {
@@ -57,6 +66,7 @@ export default function NewBudgetEstimatePage() {
     setBusy(true);
     setMessage("");
     setIsError(false);
+    formError.clear();
     try {
       // BUG FIX: beMinor must be sent as a base-10 integer STRING -- the
       // backend's createBudgetBody schema no longer accepts a raw number
@@ -67,14 +77,18 @@ export default function NewBudgetEstimatePage() {
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ headId, fy, beMinor }),
       });
-      if (!(res.ok || res.status === 202)) throw new Error(await res.text());
+      if (!(res.ok || res.status === 202)) {
+        setIsError(true);
+        setMessage((await formError.fromResponse(res, "save")).message);
+        return;
+      }
       setMessage("Budget estimate submitted.");
       setAmount("");
       router.refresh();
       setTimeout(() => router.push("/finance/budget/formulation"), 700);
-    } catch (e) {
+    } catch {
       setIsError(true);
-      setMessage(e instanceof Error ? e.message : "Submit failed.");
+      setMessage(formError.fromException("save").message);
     } finally {
       setBusy(false);
     }
@@ -105,14 +119,23 @@ export default function NewBudgetEstimatePage() {
                   <option key={a.id} value={a.id}>{[a.code, a.name].filter(Boolean).join(" · ") || a.id}</option>
                 ))}
               </select>
+              {formError.fieldError("headId") && (
+                <span style={{ fontSize: 12, color: "#b91c1c" }}>{formError.fieldError("headId")}</span>
+              )}
             </div>
             <div className="fld" style={{ flexDirection: "column", alignItems: "flex-start" }}>
               <label className="l" htmlFor="be-fy">Financial year</label>
               <input id="be-fy" required pattern="\d{4}-\d{2}" placeholder="YYYY-YY" value={fy} onChange={(e) => setFy(e.target.value)} style={inputStyle} />
+              {formError.fieldError("fy") && (
+                <span style={{ fontSize: 12, color: "#b91c1c" }}>{formError.fieldError("fy")}</span>
+              )}
             </div>
             <div className="fld" style={{ flexDirection: "column", alignItems: "flex-start" }}>
               <label className="l" htmlFor="be-amt">Budget estimate (₹)</label>
               <input id="be-amt" required type="number" min="0" step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} style={inputStyle} />
+              {formError.fieldError("beMinor") && (
+                <span style={{ fontSize: 12, color: "#b91c1c" }}>{formError.fieldError("beMinor")}</span>
+              )}
             </div>
           </div>
           <button type="submit" className="btn primary" disabled={busy || !headId} aria-busy={busy} style={{ marginTop: 12 }}>

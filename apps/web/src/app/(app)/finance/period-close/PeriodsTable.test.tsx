@@ -78,7 +78,13 @@ describe("PeriodsTable", () => {
     expect(refreshMock).toHaveBeenCalled();
   });
 
-  it("surfaces a 409 server error code on the confirm dialog (error path)", async () => {
+  // UX-016: this used to assert the raw backend `code`/`message` ("ALREADY_
+  // CLOSED: period is already hard-closed") was echoed verbatim on the
+  // confirm dialog -- the same class of leak useFormError/toHumanError
+  // closes fleet-wide (UX-003). The clerk-safe replacement never shows
+  // backend-authored text or the status code, so this now asserts a
+  // catalogued message instead, and explicitly that the raw text is absent.
+  it("shows a clerk-safe error on the confirm dialog when a period action fails (error path)", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(
       new Response(JSON.stringify({ code: "ALREADY_CLOSED", message: "period is already hard-closed" }), {
         status: 409,
@@ -91,9 +97,10 @@ describe("PeriodsTable", () => {
     await waitFor(() => expect(screen.getByText("Hard-close period 2026-04?")).toBeInTheDocument());
     fireEvent.click(screen.getByRole("button", { name: "Hard-close" }));
 
-    await waitFor(() => {
-      expect(screen.getByText(/ALREADY_CLOSED: period is already hard-closed/)).toBeInTheDocument();
-    });
+    const alert = await screen.findByRole("alert");
+    await waitFor(() => expect(alert).toHaveTextContent(/couldn't save/i));
+    expect(alert.textContent).not.toMatch(/ALREADY_CLOSED/);
+    expect(alert.textContent).not.toMatch(/period is already hard-closed/);
   });
 
   it("requires a reason before allowing a reopen to be confirmed", async () => {

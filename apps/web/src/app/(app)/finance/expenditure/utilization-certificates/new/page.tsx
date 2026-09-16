@@ -14,23 +14,9 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { PageHeader } from "../../../../../_components/ds";
+import { useFormError } from "@/lib/useFormError";
 
 const inputStyle = { width: "100%", padding: 8, borderRadius: 8, border: "1px solid var(--line)" } as const;
-
-/** Mirrors the { message } / { error } envelope parsing in FinanceActions.tsx
- * and JournalEntryForm.tsx, so a failed submit shows the real backend reason
- * instead of the raw, unparsed response body. */
-async function parseErrorMessage(res: Response): Promise<string> {
-  const text = await res.text().catch(() => "");
-  let msg = `Request failed (${res.status}).`;
-  try {
-    const j = JSON.parse(text);
-    msg = j?.message ?? j?.error ?? msg;
-  } catch {
-    if (text) msg = text;
-  }
-  return msg;
-}
 
 export default function NewUCPage() {
   const router = useRouter();
@@ -38,12 +24,14 @@ export default function NewUCPage() {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [isError, setIsError] = useState(false);
+  const formError = useFormError("utilization certificate");
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setBusy(true);
     setMessage("");
     setIsError(false);
+    formError.clear();
     try {
       // BUG FIX: amountMinor must be sent as a base-10 integer STRING -- the
       // backend's createUCBody schema no longer accepts a raw number (see
@@ -54,13 +42,17 @@ export default function NewUCPage() {
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ ucNo: form.ucNo, purpose: form.purpose, scheme: form.scheme || undefined, amountMinor, currency: "INR" }),
       });
-      if (!(res.ok || res.status === 202)) throw new Error(await parseErrorMessage(res));
+      if (!(res.ok || res.status === 202)) {
+        setIsError(true);
+        setMessage((await formError.fromResponse(res, "save")).message);
+        return;
+      }
       setMessage("Utilization certificate submitted.");
       router.refresh();
       setTimeout(() => router.push("/finance/expenditure/utilization-certificates"), 700);
-    } catch (e) {
+    } catch {
       setIsError(true);
-      setMessage(e instanceof Error ? e.message : "Submit failed.");
+      setMessage(formError.fromException("save").message);
     } finally {
       setBusy(false);
     }
@@ -83,18 +75,30 @@ export default function NewUCPage() {
             <div className="fld" style={{ flexDirection: "column", alignItems: "flex-start" }}>
               <label className="l" htmlFor="uc-no">UC number</label>
               <input id="uc-no" required value={form.ucNo} onChange={(e) => setForm({ ...form, ucNo: e.target.value })} style={inputStyle} />
+              {formError.fieldError("ucNo") && (
+                <span style={{ fontSize: 12, color: "#b91c1c" }}>{formError.fieldError("ucNo")}</span>
+              )}
             </div>
             <div className="fld" style={{ flexDirection: "column", alignItems: "flex-start" }}>
               <label className="l" htmlFor="uc-scheme">Scheme / grant</label>
               <input id="uc-scheme" value={form.scheme} onChange={(e) => setForm({ ...form, scheme: e.target.value })} style={inputStyle} />
+              {formError.fieldError("scheme") && (
+                <span style={{ fontSize: 12, color: "#b91c1c" }}>{formError.fieldError("scheme")}</span>
+              )}
             </div>
             <div className="fld" style={{ flexDirection: "column", alignItems: "flex-start" }}>
               <label className="l" htmlFor="uc-amt">Amount utilised (₹)</label>
               <input id="uc-amt" required type="number" min="0" step="0.01" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} style={inputStyle} />
+              {formError.fieldError("amountMinor") && (
+                <span style={{ fontSize: 12, color: "#b91c1c" }}>{formError.fieldError("amountMinor")}</span>
+              )}
             </div>
             <div className="fld" style={{ flexDirection: "column", alignItems: "flex-start" }}>
               <label className="l" htmlFor="uc-purpose">Purpose</label>
               <input id="uc-purpose" required value={form.purpose} onChange={(e) => setForm({ ...form, purpose: e.target.value })} style={inputStyle} />
+              {formError.fieldError("purpose") && (
+                <span style={{ fontSize: 12, color: "#b91c1c" }}>{formError.fieldError("purpose")}</span>
+              )}
             </div>
           </div>
           <button type="submit" className="btn primary" disabled={busy} aria-busy={busy} style={{ marginTop: 12 }}>

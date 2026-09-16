@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { useFormError } from "@/lib/useFormError";
 
 const CATEGORIES = [
   { value: "office_supplies", label: "Office Supplies" },
@@ -20,11 +21,13 @@ export function ExpenseClaimForm() {
     amount: "",
     receiptAttached: false,
   });
+  const formError = useFormError("expense claim");
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
     setBusy(true);
+    formError.clear();
     try {
       const res = await fetch("/api/proxy/v1/finance/expenses", {
         method: "POST",
@@ -37,15 +40,13 @@ export function ExpenseClaimForm() {
         }),
       });
       if (!res.ok) {
-        const text = await res.text().catch(() => "");
-        let msg = `Submission failed (${res.status}).`;
-        try { const j = JSON.parse(text); msg = j?.message ?? j?.error ?? msg; } catch { if (text) msg = text; }
-        throw new Error(msg);
+        setError((await formError.fromResponse(res, "save")).message);
+        return;
       }
       setSuccess(true);
       router.refresh();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+    } catch {
+      setError(formError.fromException("save").message);
     } finally {
       setBusy(false);
     }
@@ -82,6 +83,9 @@ export function ExpenseClaimForm() {
             <option key={c.value} value={c.value}>{c.label}</option>
           ))}
         </select>
+        {formError.fieldError("category") && (
+          <p role="alert" className="mt-1 text-xs text-red-600">{formError.fieldError("category")}</p>
+        )}
       </div>
 
       <div>
@@ -98,6 +102,9 @@ export function ExpenseClaimForm() {
           value={form.description}
           onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
         />
+        {formError.fieldError("description") && (
+          <p role="alert" className="mt-1 text-xs text-red-600">{formError.fieldError("description")}</p>
+        )}
       </div>
 
       <div>
@@ -116,6 +123,9 @@ export function ExpenseClaimForm() {
           value={form.amount}
           onChange={(e) => setForm((f) => ({ ...f, amount: e.target.value }))}
         />
+        {formError.fieldError("amount") && (
+          <p role="alert" className="mt-1 text-xs text-red-600">{formError.fieldError("amount")}</p>
+        )}
       </div>
 
       <div>

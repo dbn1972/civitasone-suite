@@ -76,7 +76,14 @@ describe("ExceptionsPanel", () => {
     expect(refreshMock).toHaveBeenCalled();
   });
 
-  it("surfaces the server error code on a failed action (error path)", async () => {
+  // UX-016: this used to assert the raw backend `code`/`message`
+  // ("INVALID_TRANSITION: cannot resolve an exception in status resolved")
+  // was echoed verbatim on the confirm dialog -- the same class of leak
+  // useFormError/toHumanError closes fleet-wide (UX-003). The clerk-safe
+  // replacement never shows backend-authored text or the status code, so
+  // this now asserts a catalogued message instead, and explicitly that the
+  // raw text is absent.
+  it("shows a clerk-safe error on a failed action (error path)", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(
       new Response(JSON.stringify({ code: "INVALID_TRANSITION", message: "cannot resolve an exception in status resolved" }), {
         status: 409,
@@ -89,8 +96,9 @@ describe("ExceptionsPanel", () => {
     await waitFor(() => expect(screen.getByText("Resolve this exception?")).toBeInTheDocument());
     fireEvent.click(screen.getByRole("button", { name: "Resolve" }));
 
-    await waitFor(() => {
-      expect(screen.getByText(/INVALID_TRANSITION/)).toBeInTheDocument();
-    });
+    const alert = await screen.findByRole("alert");
+    await waitFor(() => expect(alert).toHaveTextContent(/couldn't save/i));
+    expect(alert.textContent).not.toMatch(/INVALID_TRANSITION/);
+    expect(alert.textContent).not.toMatch(/cannot resolve an exception/);
   });
 });

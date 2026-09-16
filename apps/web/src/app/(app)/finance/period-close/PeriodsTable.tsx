@@ -3,8 +3,9 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { DataTable, ConfirmDialog } from "@/app/_components/ds";
-import { browserFetch } from "@/lib/api/browserClient";
+import { browserFetch, errorMessageFromResponse } from "@/lib/api/browserClient";
 import { formatIndianDate } from "@/lib/formatters";
+import { toHumanError } from "@/lib/messages";
 
 export type PeriodRow = {
   period: string;
@@ -36,16 +37,16 @@ const AVAILABLE_ACTIONS: Record<string, PeriodAction[]> = {
   hard_close: ["reopen"],
 };
 
-export async function parseErrorMessage(res: Response): Promise<string> {
-  try {
-    const body = (await res.json()) as { code?: string; message?: string; error?: { code?: string; message?: string } };
-    const code = body.code ?? body.error?.code;
-    const message = body.message ?? body.error?.message;
-    if (code && message) return `${code}: ${message}`;
-    return message ?? code ?? `Request failed (${res.status}).`;
-  } catch {
-    return `Request failed (${res.status}).`;
-  }
+/**
+ * Plain-language fallback for a period-action network exception (no Response
+ * to read). toHumanError is the same catalogued-message building block
+ * errorMessageFromResponse (used below for the failed-response path) is
+ * built on -- never a raw exception message. See
+ * docs/ENTERPRISE-GAP-REPORT-2026-09-07.md UX-003/UX-016/UX-020.
+ */
+function periodActionExceptionMessage(): string {
+  const human = toHumanError("save", { area: "period action" });
+  return `${human.what} ${human.next}`;
 }
 
 export function PeriodsTable({ periods, canReopen = false }: { periods: PeriodRow[]; canReopen?: boolean }) {
@@ -65,13 +66,14 @@ export function PeriodsTable({ periods, canReopen = false }: { periods: PeriodRo
         body: pending.action === "reopen" ? JSON.stringify({ reason }) : undefined,
       });
       if (!res.ok) {
-        throw new Error(await parseErrorMessage(res));
+        setDialogError(await errorMessageFromResponse(res, "save", "period action"));
+        return;
       }
       setMessage(`Period ${pending.row.period}: ${ACTION_LABEL[pending.action].toLowerCase()} applied.`);
       setPending(null);
       router.refresh();
-    } catch (err) {
-      setDialogError(err instanceof Error ? err.message : "Network error. Please try again.");
+    } catch {
+      setDialogError(periodActionExceptionMessage());
     } finally {
       setBusy(false);
     }

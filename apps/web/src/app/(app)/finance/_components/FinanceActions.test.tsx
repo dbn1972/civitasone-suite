@@ -51,3 +51,44 @@ describe("FinanceActions confirms an accepted (202) submission", () => {
     expect(refreshMock).toHaveBeenCalled();
   });
 });
+
+/**
+ * UX-016: postJson/patchJson used to build the confirm-dialog error message
+ * by hand -- a literal "Request failed (${res.status})." fallback, or (when
+ * the body wasn't JSON) the RAW response text verbatim. Both are the same
+ * class of leak useFormError/toHumanError closes fleet-wide (UX-003). This
+ * proves the fix: a failed submit shows a clerk-safe catalogued message,
+ * never the raw status or raw body text.
+ */
+describe("FinanceActions surfaces a clerk-safe error on a failed submission", () => {
+  beforeEach(() => {
+    refreshMock.mockReset();
+    vi.restoreAllMocks();
+  });
+
+  it("shows a clerk-safe message on the confirm dialog, never the raw status or body", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response("<html>502 Bad Gateway</html>", { status: 502 }),
+    );
+
+    render(
+      <ToastProvider>
+        <SanctionCreateAction />
+      </ToastProvider>,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "+ New Sanction" }));
+    await waitFor(() => expect(screen.getByText("Raise a new sanction?")).toBeInTheDocument());
+
+    fireEvent.change(screen.getByLabelText("Proposing officer & purpose"), {
+      target: { value: "DDO / office contingency" },
+    });
+    fireEvent.click(screen.getByText("Create draft"));
+
+    const alert = await screen.findByRole("alert");
+    await waitFor(() => expect(alert).toHaveTextContent(/couldn't save/i));
+    expect(alert.textContent).not.toMatch(/502/);
+    expect(alert.textContent).not.toMatch(/Bad Gateway/i);
+    expect(alert.textContent).not.toMatch(/request failed/i);
+  });
+});
