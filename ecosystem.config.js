@@ -673,7 +673,7 @@ module.exports = {
     svc("field",        3046, "field_svc",        "civitas_field"),
     svc("catalogue",    3044, "catalogue_svc",    "civitas_catalogue"),
     svc("journey",      3045, "journey_svc",      "civitas_journey"),
-    svc("loyalty",      3048, "loyalty_svc",      "civitas_loyalty"),
+    svc("loyalty",      3048, "loyalty_svc",      "civitas_loyalty", {}, { graceful: true }), // PERF-015
     svc("document",     3049, "document_svc",     "civitas_document", {}, { graceful: true }), // PERF-015
     svc("recommendation", 3040, "recommendation_svc", "civitas_recommendation"),
     svc("cdp",         3047, "cdp_svc",         "civitas_cdp"),
