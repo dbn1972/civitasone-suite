@@ -1,7 +1,8 @@
 import Link from "next/link";
-import { PageHeader, StatGrid, StatCard, Card, DataTable, EmptyState } from "../../../_components/ds";
+import { PageHeader, StatGrid, StatCard, Card, DataTable, EmptyState, RefreshErrorState } from "../../../_components/ds";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
+import { toHumanError } from "@/lib/messages";
 
 type OTRequest = {
   id: string;
@@ -58,7 +59,9 @@ export default async function OvertimePage() {
         <StatCard icon="🕐" iconBg="#f5f5f5" label="Total Hours" value={`${totalHrs.toFixed(1)} h`} />
       </StatGrid>
       <Card title="All Overtime Requests">
-        {requests.length === 0 ? (
+        {result.source === "error" ? (
+          <RefreshErrorState error={toHumanError("load", { area: "overtime requests" })} backHref="/hr" />
+        ) : requests.length === 0 ? (
           <EmptyState
             icon="⏱️"
             title="No overtime requests yet"

@@ -1,6 +1,7 @@
-import { PageHeader, StatGrid, StatCard, Card } from "../../../_components/ds";
+import { PageHeader, StatGrid, StatCard, Card, RefreshErrorState } from "../../../_components/ds";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
+import { toHumanError } from "@/lib/messages";
 import { SkillMatrix, type SkillRecord } from "./_components/SkillMatrix";
 
 type Row = {
@@ -69,7 +70,9 @@ export default async function SkillsPage() {
 
       <Card title="Competency Grid">
         <div style={{ padding: "12px 16px 16px" }}>
-          {matrixRecords.length === 0 ? (
+          {source === "error" ? (
+            <RefreshErrorState error={toHumanError("load", { area: "skill matrix" })} backHref="/hr" />
+          ) : matrixRecords.length === 0 ? (
             <div style={{ padding: 32, textAlign: "center", color: "#94a3b8" }}>
               <p style={{ fontSize: 32, margin: "0 0 8px" }}>🎯</p>
               <p style={{ fontWeight: 600, color: "#475569", margin: 0 }}>No skill assessments recorded</p>
