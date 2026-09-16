@@ -1,5 +1,5 @@
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
-import { PageHeader, StatGrid, StatCard } from "../../../_components/ds";
+import { PageHeader, StatGrid, StatCard, Term } from "../../../_components/ds";
 import { getChartOfAccounts } from "../../../_data/loaders";
 import { AccountsTable } from "./AccountsTable";
 
@@ -12,8 +12,9 @@ export default async function ChartOfAccountsPage() {
   return (
     <>
       <PageHeader
-        title="Chart of Accounts (LMMHA)"
-        subtitle="Standard government head-of-account structure synced with CGA."
+        title={<>Chart of Accounts (<Term name="LMMHA" />)</>}
+        subtitle={<>Standard government head-of-account structure synced with <Term name="CGA" />.</>}
+        help="finance"
         actions={
           <>
             {/* "Import LMMHA" used to point at the same href as "+ Add Head" —

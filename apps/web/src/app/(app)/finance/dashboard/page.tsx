@@ -30,6 +30,7 @@ export default async function FinanceDashboardPage() {
       <PageHeader
         title={t("title")}
         subtitle={t("subtitle")}
+        help="finance"
         actions={
           <>
             <FyFilter />

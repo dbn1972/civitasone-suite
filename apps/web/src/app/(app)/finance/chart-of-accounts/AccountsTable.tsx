@@ -123,7 +123,14 @@ export function AccountsTable({ accounts, source = "api" }: AccountsTableProps) 
         )}
       </div>
 
-      {filtered.length === 0 ? (
+      {rows.length === 0 ? (
+        <EmptyState
+          icon="🧱"
+          title="No accounts set up yet"
+          message="Your chart of accounts lists every head you record money against, like a bank account or an expense category. Add your first head to get started."
+          action={<a href="/finance/chart-of-accounts/new" className="btn primary">+ Add Head</a>}
+        />
+      ) : filtered.length === 0 ? (
         <EmptyState
           icon="🔍"
           title="No accounts match"
