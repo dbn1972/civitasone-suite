@@ -964,7 +964,10 @@
   "lang": {
     "switch": "Language",
     "en": "English",
-    "hi": "हिन्दी"
+    "hi": "हिन्दी",
+    "ta": "தமிழ்",
+    "te": "తెలుగు",
+    "kn": "ಕನ್ನಡ"
   },
   "leave": {
     "title": "Leave Management",
