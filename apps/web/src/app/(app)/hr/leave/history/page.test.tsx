@@ -83,7 +83,7 @@ describe("LeaveHistoryPage", () => {
     vi.stubGlobal("fetch", mockFetch([], { appsOk: false }));
     renderPage();
     await waitFor(() => {
-      expect(screen.getByRole("alert")).toHaveTextContent(/failed to load leave history/i);
+      expect(screen.getByRole("alert")).toHaveTextContent(/couldn.t load this leave history/i);
     });
     // Must not silently render as "no applications" for what is actually a fetch failure.
     expect(screen.queryByText(/no leave applications/i)).not.toBeInTheDocument();

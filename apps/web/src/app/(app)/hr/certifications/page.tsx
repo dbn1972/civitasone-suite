@@ -1,6 +1,7 @@
-import { PageHeader, StatGrid, StatCard, Card } from "../../../_components/ds";
+import { PageHeader, StatGrid, StatCard, Card, RefreshErrorState } from "../../../_components/ds";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
+import { toHumanError } from "@/lib/messages";
 import { CertificationCard } from "./_components/CertificationCard";
 
 type Row = {
@@ -95,7 +96,9 @@ export default async function CertificationsPage() {
       )}
 
       <Card title="Certifications Register">
-        {sorted.length === 0 ? (
+        {source === "error" ? (
+          <RefreshErrorState error={toHumanError("load", { area: "certifications" })} backHref="/hr" />
+        ) : sorted.length === 0 ? (
           <div style={{ padding: 32, textAlign: "center", color: "#94a3b8" }}>
             <p style={{ fontSize: 32, margin: "0 0 8px" }}>🏅</p>
             <p style={{ fontWeight: 600, color: "#475569", margin: 0 }}>No certifications recorded yet</p>

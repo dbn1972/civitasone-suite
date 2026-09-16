@@ -2,10 +2,10 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { PageHeader, StatGrid, StatCard, Card, EmptyState, ConfirmDialog, useConfirmAction } from "../../../../_components/ds";
-import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
+import { PageHeader, StatGrid, StatCard, Card, EmptyState, ErrorState, ConfirmDialog, useConfirmAction } from "../../../../_components/ds";
 import { useTranslations } from "next-intl";
 import { useFormError } from "@/lib/useFormError";
+import { toHumanError } from "@/lib/messages";
 
 type EmployeeOption = { id: string; name: string; employeeNo: string };
 type LeaveApp = {
@@ -40,10 +40,10 @@ export default function LeaveHistoryPage() {
   const [empId, setEmpId]           = useState("");
   const [apps, setApps]             = useState<LeaveApp[]>([]);
   const [loading, setLoading]       = useState(false);
-  const [error, setError]           = useState<string | null>(null);
   const [cancelling, setCancelling] = useState<string | null>(null);
   const [cancelError, setCancelError] = useState<string | null>(null);
   const [source, setSource]         = useState<"api" | "error">("api");
+  const [reloadTick, setReloadTick] = useState(0);
   const [pendingCancel, setPendingCancel] = useState<LeaveApp | null>(null);
   const formError = useFormError("leave application");
 
@@ -63,7 +63,7 @@ export default function LeaveHistoryPage() {
         setEmployees(rows);
         if (rows[0]) setEmpId(rows[0].id);
       })
-      .catch((e) => { if (e.name !== 'AbortError') { setError(t("loadEmployeesError")); setSource("error"); } });
+      .catch((e) => { if (e.name !== 'AbortError') { setSource("error"); } });
     return () => controller.abort()
   }, [t]);
 
@@ -71,17 +71,17 @@ export default function LeaveHistoryPage() {
     if (!empId) return;
     const controller = new AbortController()
     setLoading(true);
-    setError(null);
+    setSource("api");
     fetch(`/api/proxy/v1/hrms/leave/applications?empId=${encodeURIComponent(empId)}&limit=50`, { signal: controller.signal })
       .then((r) => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
       .then((body) => {
         const rows: LeaveApp[] = Array.isArray(body) ? body : (body.data ?? []);
         setApps(rows);
       })
-      .catch((e) => { if (e.name !== 'AbortError') { setError(t("loadHistoryError")); setSource("error"); } })
+      .catch((e) => { if (e.name !== 'AbortError') { setSource("error"); } })
       .finally(() => setLoading(false));
     return () => controller.abort()
-  }, [empId, t]);
+  }, [empId, t, reloadTick]);
 
   async function handleCancel(appId: string) {
     setCancelling(appId);
@@ -137,7 +137,6 @@ export default function LeaveHistoryPage() {
         back="/hr/leave"
         actions={<Link href="/hr/leave/apply" className="btn primary">{t("applyLeaveAction")}</Link>}
       />
-      <DataSourceBadge source={source} />
 
       <StatGrid>
         <StatCard icon="📋" iconBg="var(--infobg)" label={t("statTotalApplications")} value={apps.length} />
@@ -184,12 +183,16 @@ export default function LeaveHistoryPage() {
           {t("loadingHistory")}
         </p>
       )}
-      {error && (
-        <p role="alert" style={{ color: "var(--color-error)", fontSize: 14, fontWeight: 500 }}>{error}</p>
-      )}
 
-      {!loading && !error && (
-        apps.length === 0 ? (
+      {!loading && (
+        source === "error" ? (
+          <Card title={t("applicationsCard")}>
+            <ErrorState
+              error={toHumanError("load", { area: "leave history" })}
+              onRetry={() => setReloadTick((n) => n + 1)}
+            />
+          </Card>
+        ) : apps.length === 0 ? (
           <Card title={t("applicationsCard")}>
             <EmptyState
               icon="🌴"

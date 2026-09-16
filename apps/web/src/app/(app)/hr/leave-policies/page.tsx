@@ -207,7 +207,7 @@ export default function LeavePoliciesPage() {
               </button>
             }
           />
-        ) : policies.length === 0 ? (
+        ) : policies.length === 0 ? ( // ux-001-ok: gated by `state === "error"` above (a real distinct branch with its own message + retry button, just spelled "state" not "source"/"status" so the guard's regex misses it)
           <EmptyState
             icon="📋"
             title={t("emptyTitle")}

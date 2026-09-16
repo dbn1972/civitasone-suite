@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { PageHeader } from "../../../_components/ds";
+import { PageHeader, RefreshErrorState } from "../../../_components/ds";
+import { toHumanError } from "@/lib/messages";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "JD Template Library — HR" };
@@ -25,7 +26,13 @@ const TYPE_LABELS: Record<string, { label: string; color: string; bg: string }> 
   deputation:    { label: "Deputation",    color: "#475569", bg: "#e2e8f0" },
 };
 
-async function fetchTemplates(token: string, type?: string): Promise<JdTemplate[]> {
+type TemplatesResult = { data: JdTemplate[]; source: "api" | "error" };
+
+// The catch-all try/catch here used to swallow every failure into a plain []
+// (identical to a tenant with zero templates yet created) -- this was the
+// UX-013 bug at the fetch layer itself, not just in how the page rendered
+// it. Now surfaces a real source so the page can tell the two apart.
+async function fetchTemplates(token: string, type?: string): Promise<TemplatesResult> {
   const base = (process.env.CIVITASONE_API_BASE_URL ?? "http://localhost:8080").replace(/\/$/, "");
   const url = type ? `${base}/api/v1/hrms/jd-templates?vacancyType=${type}` : `${base}/api/v1/hrms/jd-templates`;
   try {
@@ -33,17 +40,19 @@ async function fetchTemplates(token: string, type?: string): Promise<JdTemplate[
       headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
       cache: "no-store",
     });
-    if (!res.ok) return [];
+    if (!res.ok) return { data: [], source: "error" };
     const json = await res.json() as { data: JdTemplate[] };
-    return json.data ?? [];
-  } catch { return []; }
+    return { data: json.data ?? [], source: "api" };
+  } catch {
+    return { data: [], source: "error" };
+  }
 }
 
 export default async function JdTemplatesPage({ searchParams }: { searchParams: { type?: string } }) {
   const { cookies } = await import("next/headers");
   const token = cookies().get("civitasone_at")?.value ?? "";
   const activeType = searchParams.type ?? "";
-  const templates = await fetchTemplates(token, activeType || undefined);
+  const { data: templates, source } = await fetchTemplates(token, activeType || undefined);
 
   const typeOptions = [
     { value: "", label: "All types" },
@@ -88,7 +97,9 @@ export default async function JdTemplatesPage({ searchParams }: { searchParams: 
         ))}
       </div>
 
-      {templates.length === 0 ? (
+      {source === "error" ? (
+        <RefreshErrorState error={toHumanError("load", { area: "JD templates" })} />
+      ) : templates.length === 0 ? (
         <div style={{ textAlign: "center", padding: "48px 24px", background: "#fff", borderRadius: 12, border: "1px solid #e2e8f0" }}>
           <p style={{ fontSize: 40, margin: "0 0 12px" }}>📄</p>
           <h2 style={{ fontSize: 18, fontWeight: 700, margin: "0 0 8px" }}>No templates yet</h2>
