@@ -1,6 +1,6 @@
 import Link from "next/link";
-import { PageHeader, DataTable, EmptyState } from "@/app/_components/ds";
-import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
+import { PageHeader, DataTable, EmptyState, RefreshErrorState } from "@/app/_components/ds";
+import { toHumanError } from "@/lib/messages";
 import { getCourses } from "../_data";
 
 type Search = { [k: string]: string | string[] | undefined };
@@ -22,13 +22,14 @@ export default async function Page({ searchParams }: { searchParams?: Search }) 
         subtitle="Browse all published courses and enrol to start learning."
         back="/learning"
       />
-      {source === "error" && <DataSourceBadge source={source} />}
       <div className="card">
         <div className="card-h">
           <h3>All courses</h3>
           <span style={{ color: "var(--ink2)", fontSize: "0.875rem" }}>{rows.length} course{rows.length !== 1 ? "s" : ""}</span>
         </div>
-        {rows.length === 0 ? (
+        {source === "error" ? (
+          <RefreshErrorState error={toHumanError("load", { area: "course catalogue" })} backHref="/learning" />
+        ) : rows.length === 0 ? (
           <EmptyState icon="📚" title="No courses published yet" message="Published courses will appear here for enrolment." />
         ) : (
           <DataTable<Row>

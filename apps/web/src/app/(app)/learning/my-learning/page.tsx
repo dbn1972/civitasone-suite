@@ -1,5 +1,5 @@
-import { PageHeader, DataTable, EmptyState } from "@/app/_components/ds";
-import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
+import { PageHeader, DataTable, EmptyState, RefreshErrorState } from "@/app/_components/ds";
+import { toHumanError } from "@/lib/messages";
 import { getMyLearning } from "../_data";
 
 type Search = { [k: string]: string | string[] | undefined };
@@ -26,10 +26,11 @@ export default async function Page({ searchParams }: { searchParams?: Search }) 
   return (
     <>
       <PageHeader title="My Learning" subtitle="Your course enrolments, progress and resume point." back="/learning" />
-      {source === "error" && <DataSourceBadge source={source} />}
       <div className="card">
         <div className="card-h"><h3>Enrolments</h3></div>
-        {rows.length === 0 ? (
+        {source === "error" ? (
+          <RefreshErrorState error={toHumanError("load", { area: "learning enrolments" })} backHref="/learning" />
+        ) : rows.length === 0 ? (
           <EmptyState icon="📚" title="No enrolments yet" message="Enrol in a published course from the catalogue to start learning." />
         ) : (
           <DataTable<Row>

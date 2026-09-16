@@ -1,5 +1,5 @@
-import { PageHeader, DataTable, EmptyState } from "@/app/_components/ds";
-import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
+import { PageHeader, DataTable, EmptyState, RefreshErrorState } from "@/app/_components/ds";
+import { toHumanError } from "@/lib/messages";
 import { getTrainingPlans } from "../_data";
 
 type Row = { id: string; title: string; planYear: string; scope: string; status: string };
@@ -22,7 +22,6 @@ export default async function Page() {
         subtitle="Annual training plans assigned by department or role."
         back="/learning"
       />
-      {source === "error" && <DataSourceBadge source={source} />}
       <div className="card">
         <div className="card-h">
           <h3>Annual plans</h3>
@@ -30,7 +29,9 @@ export default async function Page() {
             {rows.length} plan{rows.length !== 1 ? "s" : ""}
           </span>
         </div>
-        {rows.length === 0 ? (
+        {source === "error" ? (
+          <RefreshErrorState error={toHumanError("load", { area: "training plans" })} backHref="/learning" />
+        ) : rows.length === 0 ? (
           <EmptyState
             icon="📋"
             title="No training plans yet"

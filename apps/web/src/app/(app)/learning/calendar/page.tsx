@@ -1,5 +1,6 @@
-import { PageHeader, DataTable, EmptyState } from "@/app/_components/ds";
+import { PageHeader, DataTable, EmptyState, RefreshErrorState } from "@/app/_components/ds";
 import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
+import { toHumanError } from "@/lib/messages";
 import { getTrainingPrograms, getMyNominations } from "../_data";
 
 type Search = { [k: string]: string | string[] | undefined };
@@ -51,7 +52,6 @@ export default async function Page({ searchParams }: { searchParams?: Search }) 
         subtitle="Scheduled programmes and sessions. Nominations follow a maker-checker approval (approver ≠ nominator); once a session's capacity is full, further approvals are waitlisted."
         back="/learning"
       />
-      {source === "error" && <DataSourceBadge source={source} />}
 
       <div className="card">
         <div className="card-h"><h3>My Nominations</h3></div>
@@ -86,7 +86,9 @@ export default async function Page({ searchParams }: { searchParams?: Search }) 
 
       <div className="card">
         <div className="card-h"><h3>Programmes</h3></div>
-        {rows.length === 0 ? (
+        {source === "error" ? (
+          <RefreshErrorState error={toHumanError("load", { area: "training programmes" })} backHref="/learning" />
+        ) : rows.length === 0 ? (
           <EmptyState icon="📅" title="No training programmes scheduled" message="Scheduled training programmes will appear here." />
         ) : (
           <DataTable<Row>
