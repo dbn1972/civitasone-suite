@@ -56,7 +56,11 @@ export function LanguageSwitcher() {
     };
   }, [open]);
 
-  const currentFlag = locale === "hi" ? "🇮🇳" : "🇬🇧";
+  // UX-004 follow-up: was `locale === "hi" ? "🇮🇳" : "🇬🇧"`, which only ever
+  // distinguished Hindi from a fixed English default. Restoring ta/te/kn
+  // (all Indian regional languages) made that binary wrong — inverted so
+  // every non-English locale gets the Indian flag instead of English's.
+  const currentFlag = locale === "en" ? "🇬🇧" : "🇮🇳";
 
   return (
     <div ref={menuRef} style={{ position: "relative", display: "inline-block" }}>
