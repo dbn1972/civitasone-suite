@@ -43,6 +43,22 @@
  *   - signal (c)'s route-literal matching is a static-text heuristic, not a real HTTP
  *     black-box probe -- it can't tell a route that's merely mentioned in a test's URL
  *     string apart from one that's actually invoked and asserted on.
+ *   - COMP-007 tranche 2: signal (c)'s regex (`["'`](\/[a-zA-Z][a-zA-Z0-9_\-\/:]*)["'`]`)
+ *     requires the literal to run uninterrupted from the opening quote/backtick to the
+ *     closing one. A template literal that interpolates a path param BEFORE the route
+ *     ends -- e.g. `` `/v1/tenants/${tenantId}/feature-flags` `` -- has no substring
+ *     that satisfies this (the match attempt dies at `$`, which isn't in the allowed
+ *     character class, before reaching a closing backtick), so it contributes no
+ *     route-literal signal at all. Confirmed concretely: tenant-service's
+ *     tenant-extensions module gained a real, thorough, disposable-Postgres-verified
+ *     test suite in tranche 2 (11 tests, tests/comp-007-tenant-extensions-smoke.test.ts)
+ *     that builds every URL this exact way, and this scanner still reports it
+ *     zero-test afterward -- a false positive, not a real gap. Not fixed here
+ *     (a template-aware rewrite of signal (c) is a real change to a shared, heavily
+ *     relied-on CI gate and deserves its own review, not a drive-by inside a tranche
+ *     whose job is adding tests); flagging precisely so whoever picks this up next
+ *     doesn't have to rediscover it, and doesn't miscount tenant-extensions as
+ *     still-needing-tests.
  */
 import { readFileSync, readdirSync, statSync, existsSync } from "node:fs";
 import { join, relative } from "node:path";
