@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
+    "analyze": "ANALYZE=true next build",
     "start": "next start",
     "lint": "eslint \"src/**/*.{ts,tsx}\"",
     "typecheck": "tsc --noEmit",
@@ -39,6 +40,7 @@
   "devDependencies": {
     "@axe-core/playwright": "4.12.1",
     "@lhci/cli": "0.15.1",
+    "@next/bundle-analyzer": "14.2.35",
     "@playwright/test": "^1.61.0",
     "@testing-library/jest-dom": "6.4.6",
     "@testing-library/react": "14.3.1",

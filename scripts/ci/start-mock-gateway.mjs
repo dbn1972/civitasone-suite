@@ -60,6 +60,7 @@ const FIXTURES = {
   '/api/v1/crm/dashboard': { totalContacts: 1, openDeals: 0, activitiesToday: 0, pipelineValue: 0 },
 
   '/api/v1/citizen/tickets': [{ id: 't1', ticketNo: 'TKT-001', subject: 'Portal access issue', requesterName: 'Ravi Shankar', priority: 'high', slaStatus: 'within_sla', status: 'open', channel: 'web', createdAt: '2024-01-01T00:00:00Z', updatedAt: '2024-01-01T00:00:00Z', comments: [] }],
+  '/api/v1/citizen/grievances/gr1': { id: 'gr1', category: 'sanitation', subject: 'Garbage not collected', description: 'Garbage has not been collected from the street for 5 days.', priority: 'high', status: 'open', departmentRef: 'Sanitation Dept', assignedTo: null, createdAt: '2024-01-01T00:00:00Z', updatedAt: '2024-01-02T00:00:00Z', actions: [{ id: 'ga1', actionType: 'acknowledged', note: 'Assigned to ward officer', createdAt: '2024-01-02T00:00:00Z' }] },
   '/api/v1/citizen/analytics/sla-rules': { data: [{ queue: 'General', targetDisplay: '4 hours', breachedCount: 0 }] },
   '/api/v1/citizen/analytics/metrics': { data: [{ label: 'Total Tickets', value: '1', note: 'This month' }] },
   '/api/v1/citizen/requests': [{ id: 'req-001', requestNo: 'REQ-001', serviceType: 'Birth Certificate', citizenName: 'Ramesh Kumar', phone: '+91-9876543210', submittedAt: '2024-01-01T00:00:00Z', expectedResolution: '2024-01-08', status: 'submitted' }],
