@@ -1239,7 +1239,7 @@ services:
       PORT: "4012"
       DATABASE_URL: ${DATABASE_URL_LOCATION:?per-service least-privilege DSN required (set DATABASE_URL for civitas_location; do NOT use the cluster superuser)}
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:4012/health >/dev/null 2>&1 || exit 1"]
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:4012/ready >/dev/null 2>&1 || exit 1"]  # PERF-015
       interval: 20s
       timeout: 5s
       retries: 5

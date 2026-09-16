@@ -684,7 +684,7 @@ module.exports = {
       S3_REGION: process.env.S3_REGION ?? "ap-south-1",
       HRMS_SERVICE_URL: "http://127.0.0.1:3012",
     }, { graceful: true }), // PERF-015
-    svc("location",     4012, "location_svc",     "civitas_location"),
+    svc("location",     4012, "location_svc",     "civitas_location", {}, { graceful: true }), // PERF-015
 
     // ── Municipal Sec5 services (BRD Section 5) ─────────────────────────────────
     // 17 municipal licence/permit services landed on `services/*` via an
