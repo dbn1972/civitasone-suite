@@ -1,5 +1,5 @@
 "use client";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { PageHeader } from "@/app/_components/ds";
 import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
 import type { AdminOrgUnit } from "@/app/_data/loaders";
@@ -74,6 +74,10 @@ function CreateUnitForm({
   const [code, setCode] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const nameInputRef = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    nameInputRef.current?.focus();
+  }, []);
 
   async function submit() {
     if (!name.trim()) { setError("Name is required."); return; }
@@ -93,13 +97,13 @@ function CreateUnitForm({
   return (
     <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", padding: "8px 10px", background: "var(--surface2, #f8fafc)", borderRadius: 8, marginTop: 4 }}>
       <input
+        ref={nameInputRef}
         className="input"
         placeholder="Unit name"
         value={name}
         onChange={(e) => setName(e.target.value)}
         style={{ minWidth: 180 }}
         aria-label="New unit name"
-        autoFocus
       />
       <select className="input" value={type} onChange={(e) => setType(e.target.value as AdminOrgUnit["type"])} aria-label="New unit type">
         {UNIT_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
@@ -147,6 +151,10 @@ function OrgTreeNode({
   const isEditing = editingId === node.id;
   const isAddingChild = addingChildOf === node.id;
   const color = TYPE_COLORS[node.type];
+  const renameInputRef = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    if (isEditing) renameInputRef.current?.focus();
+  }, [isEditing]);
 
   return (
     <li style={{ listStyle: "none", margin: 0, padding: 0 }}>
@@ -154,8 +162,8 @@ function OrgTreeNode({
         <span style={{ display: "inline-block", width: 10, height: 10, borderRadius: 3, background: color, flexShrink: 0 }} aria-hidden="true" />
         {isEditing ? (
           <input
+            ref={renameInputRef}
             defaultValue={node.name}
-            autoFocus
             onBlur={(e) => onRename(node.id, e.target.value)}
             onKeyDown={(e) => {
               if (e.key === "Enter") onRename(node.id, e.currentTarget.value);

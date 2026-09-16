@@ -21,7 +21,7 @@ export default async function SSOPage() {
         title="SSO & Identity Providers"
         subtitle="Configure SAML/OIDC identity providers for single sign-on authentication."
         actions={
-          <a href="/tenant-admin/idp" className="btn primary" role="link" aria-label="Configure Identity Provider" style={{ minHeight: 44 }}>
+          <a href="/tenant-admin/idp" className="btn primary" aria-label="Configure Identity Provider" style={{ minHeight: 44 }}>
             Configure IDP
           </a>
         }

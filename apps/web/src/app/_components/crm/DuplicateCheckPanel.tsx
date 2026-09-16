@@ -49,7 +49,6 @@ export function DuplicateCheckPanel({
   return (
     <section
       aria-label="Potential duplicates"
-      role="region"
       style={{
         marginTop: 12,
         padding: 12,

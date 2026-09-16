@@ -74,7 +74,6 @@ export function SortableList<T extends SortableListItem>({
   return (
     <ul
       ref={scrollRef}
-      role="list"
       aria-label={ariaLabel}
       onScroll={virtualize ? onScroll : undefined}
       style={{

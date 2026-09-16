@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { PageHeader } from "../../../_components/ds";
 import { formatMoney } from "@/lib/formatters";
 
@@ -18,6 +18,10 @@ export default function MobileScanPage() {
   const [result, setResult] = useState<ScanResult | null>(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const barcodeInputRef = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    barcodeInputRef.current?.focus();
+  }, []);
 
   async function scan(e: React.FormEvent) {
     e.preventDefault();
@@ -49,7 +53,7 @@ export default function MobileScanPage() {
           <label htmlFor="scan-input" className="l">Asset tag / barcode</label>
           <input
             id="scan-input"
-            autoFocus
+            ref={barcodeInputRef}
             value={barcode}
             onChange={(e) => setBarcode(e.target.value)}
             placeholder="Type or paste a barcode…"

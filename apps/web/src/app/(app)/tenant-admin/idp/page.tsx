@@ -17,7 +17,7 @@ export default async function IdpListPage() {
         title="Identity Providers"
         subtitle="Configured identity providers — Keycloak, LDAP, Azure AD, Google Workspace with sync status and user counts."
         actions={
-          <a href="/tenant-admin/sso" className="btn primary" role="link" aria-label="Add new identity provider" style={{ minHeight: 44 }}>
+          <a href="/tenant-admin/sso" className="btn primary" aria-label="Add new identity provider" style={{ minHeight: 44 }}>
             Add Provider
           </a>
         }

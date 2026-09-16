@@ -6,7 +6,7 @@
  * Fire-and-forget POST to admin feedback endpoint.
  * Remembers dismissal per page for 24h via localStorage.
  */
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
 import { X } from "lucide-react";
 
@@ -20,6 +20,11 @@ export function FeedbackWidget() {
   const [comment, setComment] = useState("");
   const [submitted, setSubmitted] = useState(false);
   const [rating, setRating] = useState<"positive" | "negative" | null>(null);
+  const commentInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (expanded) commentInputRef.current?.focus();
+  }, [expanded]);
 
   useEffect(() => {
     // Check if we already collected feedback for this page recently
@@ -167,12 +172,12 @@ export function FeedbackWidget() {
           </label>
           <input
             id="feedback-widget-comment"
+            ref={commentInputRef}
             type="text"
             value={comment}
             onChange={(e) => setComment(e.target.value)}
             placeholder="Tell us more…"
             maxLength={500}
-            autoFocus
             style={{
               border: "1px solid #d1d5db",
               borderRadius: 6,

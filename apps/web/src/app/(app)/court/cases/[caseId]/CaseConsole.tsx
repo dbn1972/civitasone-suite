@@ -754,10 +754,10 @@ function OrderRow({
 
       {mode === "issue" && (
         <div style={{ display: "grid", gap: 8, marginTop: 10 }}>
-          <label style={{ fontSize: 12.5, color: "var(--ink2)" }}>
+          <p style={{ fontSize: 12.5, color: "var(--ink2)" }}>
             Digital Signature Certificate (DSC) — paste the detached signature blob. Issuance is a
             human, DSC-signed act by an officer other than the drafter.
-          </label>
+          </p>
           <textarea
             aria-label="DSC signature"
             placeholder="-----BEGIN PKCS7----- …"

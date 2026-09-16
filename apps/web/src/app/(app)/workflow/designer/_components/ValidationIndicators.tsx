@@ -47,7 +47,7 @@ export function ValidationIndicators({ violations, nodes }: Props) {
       <h2 className="text-xs font-semibold uppercase tracking-wide text-red-600 mb-2">
         Validation ({violations.length} {violations.length === 1 ? "issue" : "issues"})
       </h2>
-      <ul className="list-none m-0 p-0 grid gap-2" role="list">
+      <ul className="list-none m-0 p-0 grid gap-2">
         {violations.map((v, idx) => {
           const node = nodeMap.get(v.elementId);
           const elementLabel = node?.data?.label ?? v.elementId;

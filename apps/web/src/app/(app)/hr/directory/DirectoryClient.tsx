@@ -25,7 +25,7 @@ function EmployeeCard({ emp, onClick }: { emp: Employee; onClick: (id: string) =
   const color = avatarColors[(emp.name.charCodeAt(0) ?? 0) % avatarColors.length]
 
   return (
-    <article
+    <div
       onClick={() => onClick(emp.id)}
       onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && onClick(emp.id)}
       role="button"
@@ -109,7 +109,7 @@ function EmployeeCard({ emp, onClick }: { emp: Employee; onClick: (id: string) =
           </div>
         )}
       </div>
-    </article>
+    </div>
   )
 }
 
@@ -121,21 +121,36 @@ function EmployeeDetailModal({
   onClose: () => void
 }) {
   const closeRef = useRef<HTMLButtonElement>(null)
+  const dialogRef = useRef<HTMLDivElement>(null)
   useEffect(() => {
     // Move focus into modal when it opens (WCAG 2.4.3 Focus Order)
     closeRef.current?.focus()
   }, [])
+
+  useEffect(() => {
+    function handlePointerDown(e: MouseEvent) {
+      if (e.target === dialogRef.current) onClose()
+    }
+    function handleKeyDown(e: KeyboardEvent) {
+      if (e.key === 'Escape') onClose()
+    }
+    document.addEventListener('mousedown', handlePointerDown)
+    document.addEventListener('keydown', handleKeyDown)
+    return () => {
+      document.removeEventListener('mousedown', handlePointerDown)
+      document.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [onClose])
 
   const avatarColors = [ASHOKA_BLUE, '#1a6d3c', '#7c2d12', '#4c1d95', '#064e3b', '#831843', '#92400e']
   const color = avatarColors[(emp.name.charCodeAt(0) ?? 0) % avatarColors.length]
 
   return (
     <div
+      ref={dialogRef}
       role="dialog"
       aria-modal="true"
       aria-label={`Employee details: ${emp.name}`}
-      onClick={(e) => e.target === e.currentTarget && onClose()}
-      onKeyDown={(e) => e.key === 'Escape' && onClose()}
       style={{
         position: 'fixed',
         inset: 0,

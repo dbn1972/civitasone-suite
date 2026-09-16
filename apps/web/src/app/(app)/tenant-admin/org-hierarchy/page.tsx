@@ -36,6 +36,7 @@ function TreeNode({ node, depth }: { node: OrgHierarchyNode; depth: number }) {
     <>
       <li
         role="treeitem"
+        aria-selected={false}
         aria-expanded={node.children ? true : undefined}
         style={{ paddingLeft: depth * 24, display: "flex", alignItems: "center", gap: 8, padding: `8px 12px 8px ${depth * 24 + 12}px`, borderBottom: "1px solid var(--border, #e2e8f0)" }}
       >

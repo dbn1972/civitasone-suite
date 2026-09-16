@@ -53,7 +53,6 @@ export function PredictionBadge({
 
   const badge = (
     <span
-      tabIndex={0}
       role="status"
       aria-label={ariaLabel}
       className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs font-medium leading-5 focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-blue-500 ${colorClasses}`}

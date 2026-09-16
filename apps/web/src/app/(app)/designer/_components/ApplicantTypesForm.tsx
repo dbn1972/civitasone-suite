@@ -151,6 +151,7 @@ export function ApplicantTypesForm({ definitionId, initial, servicePattern, onSa
                     checked={values.allowedApplicantTypes.includes(opt.id)}
                     disabled={disabled}
                     onChange={() => toggleType(opt.id)}
+                    aria-label={opt.label}
                     style={{ marginTop: 3 }}
                   />
                   <span>

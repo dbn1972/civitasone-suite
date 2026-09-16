@@ -30,6 +30,7 @@ function WbsTreeNode({ node, depth }: { node: TreeNode; depth: number }) {
     <>
       <li
         role="treeitem"
+        aria-selected={false}
         aria-expanded={node.children.length > 0 ? true : undefined}
         style={{
           display: "flex",

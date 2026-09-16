@@ -82,6 +82,7 @@ export function OrgTreeNode({ node, depth, search, expanded, onToggle, onFocus }
       {/* Node card */}
       <div
         role="treeitem"
+        aria-selected={false}
         aria-expanded={hasChildren ? isExpanded : undefined}
         aria-label={`${node.name}, ${node.designation}, ${node.department}${
           hasChildren ? (isExpanded ? ', collapse' : ', expand') : ''

@@ -85,12 +85,15 @@ export function FileUpload({
       </label>
 
       {!file ? (
-        <div
+        <button
+          type="button"
           onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
           onDragLeave={() => setDragOver(false)}
           onDrop={handleDrop}
           onClick={() => inputRef.current?.click()}
           style={{
+            display: "block",
+            width: "100%",
             border: `2px dashed ${dragOver ? "#4f46e5" : "#d1d5db"}`,
             borderRadius: 8,
             padding: "32px 16px",
@@ -98,6 +101,8 @@ export function FileUpload({
             cursor: "pointer",
             background: dragOver ? "#eef2ff" : "#f9fafb",
             transition: "all 0.2s",
+            font: "inherit",
+            color: "inherit",
           }}
         >
           <div style={{ fontSize: 28, marginBottom: 8 }}>📁</div>
@@ -107,7 +112,7 @@ export function FileUpload({
           <p style={{ margin: "4px 0 0", fontSize: 11, color: "#9ca3af" }}>
             Max {maxSizeMB}MB{accept ? ` • ${accept}` : ""}
           </p>
-        </div>
+        </button>
       ) : (
         <div
           style={{
