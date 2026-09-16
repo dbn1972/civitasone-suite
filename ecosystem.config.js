@@ -484,7 +484,7 @@ module.exports = {
     svc("tenant",       3002, "tenant_svc",        "civitas_tenant", {}, { graceful: true }), // PERF-015
     svc("policy",       3003, "policy_svc",        "civitas_policy", {}, { graceful: true }), // PERF-015
     svc("audit",        3004, "audit_svc",         "civitas_audit", {}, { graceful: true }), // PERF-015
-    svc("install",      3005, "install_svc",       "civitas_install"),
+    svc("install",      3005, "install_svc",       "civitas_install", {}, { graceful: true }), // PERF-015
     svc("notification", 3006, "notification_svc",  "civitas_notification", {}, { graceful: true }), // PERF-015
 
     // ── Finance & procurement ──────────────────────────────────────────────────
@@ -502,8 +502,8 @@ module.exports = {
 
     // ── Reporting & plugins ────────────────────────────────────────────────────
     svc("report",       3016, "report_svc",        "civitas_report", {}, { graceful: true }), // PERF-015
-    svc("plugin",       3017, "plugin_svc",        "civitas_plugin"),
-    svc("theme",        3018, "theme_svc",         "civitas_theme"),
+    svc("plugin",       3017, "plugin_svc",        "civitas_plugin", {}, { graceful: true }), // PERF-015
+    svc("theme",        3018, "theme_svc",         "civitas_theme", {}, { graceful: true }), // PERF-015
 
     // ── Government-specific ────────────────────────────────────────────────────
     svc("grant",        3019, "grant_svc",         "civitas_grant", {}, { graceful: true }), // PERF-015
@@ -521,7 +521,7 @@ module.exports = {
     svc("helpdesk",     3027, "helpdesk_svc",      "civitas_helpdesk", {}, { graceful: true }), // PERF-015
 
     // ── Intelligence & automation ──────────────────────────────────────────────
-    svc("knowledge",    3028, "knowledge_svc",     "civitas_knowledge"),
+    svc("knowledge",    3028, "knowledge_svc",     "civitas_knowledge", {}, { graceful: true }), // PERF-015
     svc("workflow",     3029, "workflow_svc",      "civitas_workflow", {}, { graceful: true }), // PERF-015
 
     // ── CQRS workers (async writes + outbox relay) ─────────────────────────────
@@ -660,23 +660,23 @@ module.exports = {
       },
     },
 
-    svc("analytics",    3031, "analytics_svc",    "civitas_analytics"),
-    svc("ml",           3032, "ml_svc",           "civitas_ml"),
+    svc("analytics",    3031, "analytics_svc",    "civitas_analytics", {}, { graceful: true }), // PERF-015
+    svc("ml",           3032, "ml_svc",           "civitas_ml", {}, { graceful: true }), // PERF-015
     svc("meeting",      3033, "meeting_svc",      "civitas_meeting", { MEETING_PII_KEY }, { graceful: true }), // PERF-015
     svc("court",        3034, "court_svc",        "civitas_court", { COURT_PII_KEY }, { graceful: true }), // REL-012: validated subset
     svc("visitor",      3035, "visitor_svc",      "civitas_visitor", { VISITOR_PII_KEY }, { graceful: true }), // PERF-015
     // Previously absent from this file entirely, so they could never be started.
     // Boot-probed 2026-07-27: works listens cleanly with no extra config.
     svc("works",        3036, "works_svc",        "civitas_works", {}, { graceful: true }), // PERF-015
-    svc("metadata",     3039, "metadata_svc",     "civitas_metadata"),
-    svc("ai-agent",     3041, "ai_agent_svc",     "civitas_ai_agent"),
-    svc("field",        3046, "field_svc",        "civitas_field"),
-    svc("catalogue",    3044, "catalogue_svc",    "civitas_catalogue"),
-    svc("journey",      3045, "journey_svc",      "civitas_journey"),
-    svc("loyalty",      3048, "loyalty_svc",      "civitas_loyalty"),
+    svc("metadata",     3039, "metadata_svc",     "civitas_metadata", {}, { graceful: true }), // PERF-015
+    svc("ai-agent",     3041, "ai_agent_svc",     "civitas_ai_agent", {}, { graceful: true }), // PERF-015
+    svc("field",        3046, "field_svc",        "civitas_field", {}, { graceful: true }), // PERF-015
+    svc("catalogue",    3044, "catalogue_svc",    "civitas_catalogue", {}, { graceful: true }), // PERF-015
+    svc("journey",      3045, "journey_svc",      "civitas_journey", {}, { graceful: true }), // PERF-015
+    svc("loyalty",      3048, "loyalty_svc",      "civitas_loyalty", {}, { graceful: true }), // PERF-015
     svc("document",     3049, "document_svc",     "civitas_document", {}, { graceful: true }), // PERF-015
-    svc("recommendation", 3040, "recommendation_svc", "civitas_recommendation"),
-    svc("cdp",         3047, "cdp_svc",         "civitas_cdp"),
+    svc("recommendation", 3040, "recommendation_svc", "civitas_recommendation", {}, { graceful: true }), // PERF-015
+    svc("cdp",         3047, "cdp_svc",         "civitas_cdp", {}, { graceful: true }), // PERF-015
     svc("revenue",      3038, "revenue_svc",      "civitas_revenue", {}, { graceful: true }), // PERF-003
     svc("inspection",   3037, "inspection_svc",   "civitas_inspection", {
       S3_BUCKET_NAME: process.env.S3_BUCKET_NAME ?? "civitas-inspection",
@@ -684,7 +684,7 @@ module.exports = {
       S3_REGION: process.env.S3_REGION ?? "ap-south-1",
       HRMS_SERVICE_URL: "http://127.0.0.1:3012",
     }, { graceful: true }), // PERF-015
-    svc("location",     4012, "location_svc",     "civitas_location"),
+    svc("location",     4012, "location_svc",     "civitas_location", {}, { graceful: true }), // PERF-015
 
     // ── Municipal Sec5 services (BRD Section 5) ─────────────────────────────────
     // 17 municipal licence/permit services landed on `services/*` via an
@@ -715,23 +715,23 @@ module.exports = {
     // until migrations are authored. That's runtime readiness, a different
     // lane per this guard's own docstring, not a reason to withhold the
     // static "startable + reachable" declaration below.
-    svc("advertisement", 3073, "advertisement_svc", "civitas_advertisement"),
-    svc("animal",        3082, "animal_svc",        "civitas_animal"),
-    svc("building",      3071, "building_svc",      "civitas_building"),
-    svc("crematorium",   3083, "crematorium_svc",   "civitas_crematorium"),
-    svc("drainage",      3080, "drainage_svc",      "civitas_drainage"),
-    svc("event",         3076, "event_svc",         "civitas_event"),
-    svc("fire",          3072, "fire_svc",          "civitas_fire"),
-    svc("market",        3085, "market_svc",        "civitas_market"),
-    svc("parking",       3084, "parking_svc",       "civitas_parking"),
-    svc("parks",         3081, "parks_svc",         "civitas_parks"),
-    svc("refund",        3077, "refund_svc",        "civitas_refund"),
-    svc("roadcut",       3075, "roadcut_svc",       "civitas_roadcut"),
-    svc("sewerage",      3078, "sewerage_svc",      "civitas_sewerage"),
-    svc("shop",          3060, "shop_svc",          "civitas_shop"),
-    svc("swm",           3079, "swm_svc",           "civitas_swm"),
-    svc("trade",         3070, "trade_svc",         "civitas_trade"),
-    svc("vendor",        3074, "vendor_svc",        "civitas_vendor"),
+    svc("advertisement", 3073, "advertisement_svc", "civitas_advertisement", {}, { graceful: true }), // PERF-015
+    svc("animal",        3082, "animal_svc",        "civitas_animal", {}, { graceful: true }), // PERF-015
+    svc("building",      3071, "building_svc",      "civitas_building", {}, { graceful: true }), // PERF-015
+    svc("crematorium",   3083, "crematorium_svc",   "civitas_crematorium", {}, { graceful: true }), // PERF-015
+    svc("drainage",      3080, "drainage_svc",      "civitas_drainage", {}, { graceful: true }), // PERF-015
+    svc("event",         3076, "event_svc",         "civitas_event", {}, { graceful: true }), // PERF-015
+    svc("fire",          3072, "fire_svc",          "civitas_fire", {}, { graceful: true }), // PERF-015
+    svc("market",        3085, "market_svc",        "civitas_market", {}, { graceful: true }), // PERF-015
+    svc("parking",       3084, "parking_svc",       "civitas_parking", {}, { graceful: true }), // PERF-015
+    svc("parks",         3081, "parks_svc",         "civitas_parks", {}, { graceful: true }), // PERF-015
+    svc("refund",        3077, "refund_svc",        "civitas_refund", {}, { graceful: true }), // PERF-015
+    svc("roadcut",       3075, "roadcut_svc",       "civitas_roadcut", {}, { graceful: true }), // PERF-015
+    svc("sewerage",      3078, "sewerage_svc",      "civitas_sewerage", {}, { graceful: true }), // PERF-015
+    svc("shop",          3060, "shop_svc",          "civitas_shop", {}, { graceful: true }), // PERF-015
+    svc("swm",           3079, "swm_svc",           "civitas_swm", {}, { graceful: true }), // PERF-015
+    svc("trade",         3070, "trade_svc",         "civitas_trade", {}, { graceful: true }), // PERF-015
+    svc("vendor",        3074, "vendor_svc",        "civitas_vendor", {}, { graceful: true }), // PERF-015
 
     // ── Gateway ────────────────────────────────────────────────────────────────
     // DATABASE_URL required to mount CAP-052 catalogue routes (FORCE-RLS reads)
