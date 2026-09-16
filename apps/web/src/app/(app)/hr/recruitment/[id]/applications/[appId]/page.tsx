@@ -2,6 +2,7 @@
 
 import { useEffect, useId, useState } from "react";
 import type { CSSProperties } from "react";
+import { useTranslations } from "next-intl";
 import { useParams, useRouter } from "next/navigation";
 import { PageHeader, Card } from "../../../../../../_components/ds";
 import { DataSourceBadge } from "../../../../../../_components/DataSourceBadge";
@@ -27,6 +28,7 @@ type Application = {
 };
 
 export default function ApplicationDetailPage() {
+  const t = useTranslations("recruitmentApplicationDetail");
   const { id: jobOpeningId, appId } = useParams<{ id: string; appId: string }>();
   const router = useRouter();
 
@@ -70,7 +72,7 @@ export default function ApplicationDetailPage() {
         const data = await res.json() as { data?: Application[] };
         const found = (data.data ?? []).find((a) => a.id === appId) ?? null;
         if (!found) {
-          setError("Application not found.");
+          setError(t("notFoundMessage"));
           return;
         }
         setApplication(found);
@@ -88,7 +90,7 @@ export default function ApplicationDetailPage() {
     e.preventDefault();
     if (!employeeNo.trim() || !dateOfJoining || !departmentId.trim() || !designationId.trim()) {
       setHireStatus("error");
-      setHireMessage("All fields are required.");
+      setHireMessage(t("allFieldsRequired"));
       return;
     }
     setHireStatus("submitting");
@@ -106,7 +108,7 @@ export default function ApplicationDetailPage() {
         return;
       }
       setHireStatus("success");
-      setHireMessage("Hire initiated. Employee record is being created.");
+      setHireMessage(t("hireSuccessMessage"));
       setShowHireDialog(false);
       router.refresh();
     } catch {
@@ -118,7 +120,7 @@ export default function ApplicationDetailPage() {
   if (loading) {
     return (
       <main className="page-main wrap" aria-labelledby="page-heading">
-        <p style={{ textAlign: "center", color: "var(--mut)", padding: "48px 0" }}>Loading application…</p>
+        <p style={{ textAlign: "center", color: "var(--mut)", padding: "48px 0" }}>{t("loading")}</p>
       </main>
     );
   }
@@ -126,10 +128,10 @@ export default function ApplicationDetailPage() {
   if (error || !application) {
     return (
       <main className="page-main wrap" aria-labelledby="page-heading">
-        <PageHeader title="Application" subtitle="Not found" back={`/hr/recruitment/${jobOpeningId}`} />
+        <PageHeader title={t("notFoundTitle")} subtitle={t("notFoundSubtitle")} back={`/hr/recruitment/${jobOpeningId}`} />
         <DataSourceBadge source={source} />
         <Card padding>
-          <p style={{ color: "var(--mut)", textAlign: "center" }}>{error ?? "Application not found."}</p>
+          <p style={{ color: "var(--mut)", textAlign: "center" }}>{error ?? t("notFoundMessage")}</p>
         </Card>
       </main>
     );
@@ -141,12 +143,12 @@ export default function ApplicationDetailPage() {
     <main className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
         title={application.applicantName}
-        subtitle="Application detail"
+        subtitle={t("subtitle")}
         back={`/hr/recruitment/${jobOpeningId}`}
         actions={
           canHire && hireStatus !== "success" ? (
             <button onClick={() => setShowHireDialog(true)} className="btn primary">
-              Hire
+              {t("hire")}
             </button>
           ) : undefined
         }
@@ -159,16 +161,16 @@ export default function ApplicationDetailPage() {
         </p>
       )}
 
-      <Card title="Application Summary">
+      <Card title={t("summaryTitle")}>
         <div style={{ padding: "16px 20px", display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px 24px", fontSize: 14 }}>
-          <div><span style={{ color: "var(--mut)", marginRight: 8 }}>Application ID</span><code style={{ fontSize: 12 }}>{application.id}</code></div>
-          <div><span style={{ color: "var(--mut)", marginRight: 8 }}>Stage</span><span style={{ textTransform: "capitalize" }}>{application.stage}</span></div>
-          <div><span style={{ color: "var(--mut)", marginRight: 8 }}>Screening decision</span><span style={{ textTransform: "capitalize" }}>{application.screeningDecision}</span></div>
-          <div><span style={{ color: "var(--mut)", marginRight: 8 }}>Source</span>{application.source}</div>
-          {application.email && <div><span style={{ color: "var(--mut)", marginRight: 8 }}>Email</span>{application.email}</div>}
-          {application.qualification && <div><span style={{ color: "var(--mut)", marginRight: 8 }}>Qualification</span>{application.qualification}</div>}
-          {application.experienceYears != null && <div><span style={{ color: "var(--mut)", marginRight: 8 }}>Experience</span>{application.experienceYears} yr{application.experienceYears !== 1 ? "s" : ""}</div>}
-          <div><span style={{ color: "var(--mut)", marginRight: 8 }}>Applied</span>{application.appliedAt}</div>
+          <div><span style={{ color: "var(--mut)", marginRight: 8 }}>{t("applicationId")}</span><code style={{ fontSize: 12 }}>{application.id}</code></div>
+          <div><span style={{ color: "var(--mut)", marginRight: 8 }}>{t("stage")}</span><span style={{ textTransform: "capitalize" }}>{application.stage}</span></div>
+          <div><span style={{ color: "var(--mut)", marginRight: 8 }}>{t("screeningDecision")}</span><span style={{ textTransform: "capitalize" }}>{application.screeningDecision}</span></div>
+          <div><span style={{ color: "var(--mut)", marginRight: 8 }}>{t("source")}</span>{application.source}</div>
+          {application.email && <div><span style={{ color: "var(--mut)", marginRight: 8 }}>{t("email")}</span>{application.email}</div>}
+          {application.qualification && <div><span style={{ color: "var(--mut)", marginRight: 8 }}>{t("qualification")}</span>{application.qualification}</div>}
+          {application.experienceYears != null && <div><span style={{ color: "var(--mut)", marginRight: 8 }}>{t("experience")}</span>{t("experienceYears", { count: application.experienceYears })}</div>}
+          <div><span style={{ color: "var(--mut)", marginRight: 8 }}>{t("applied")}</span>{application.appliedAt}</div>
         </div>
       </Card>
 
@@ -179,40 +181,40 @@ export default function ApplicationDetailPage() {
         >
           <div style={{ background: "var(--bg)", borderRadius: 12, boxShadow: "0 20px 60px rgba(0,0,0,0.3)", width: "100%", maxWidth: 520, padding: 28, margin: "0 16px" }}>
             <h2 id="hire-dialog-title" style={{ fontSize: 18, fontWeight: 700, marginBottom: 20 }}>
-              Hire — {application.applicantName}
+              {t("hireDialogTitle", { name: application.applicantName })}
             </h2>
             <form onSubmit={handleHire} style={{ display: "grid", gap: 14 }}>
               <div>
-                <label htmlFor={empNoId} style={{ fontSize: 13, fontWeight: 500 }}>Employee No <span aria-hidden="true" style={{ color: "var(--color-error)" }}>*</span></label>
-                <input id={empNoId} type="text" value={employeeNo} onChange={(e) => setEmployeeNo(e.target.value)} placeholder="e.g. EMP-2025-001" maxLength={32} style={inputStyle} required />
+                <label htmlFor={empNoId} style={{ fontSize: 13, fontWeight: 500 }}>{t("employeeNo")} <span aria-hidden="true" style={{ color: "var(--color-error)" }}>*</span></label>
+                <input id={empNoId} type="text" value={employeeNo} onChange={(e) => setEmployeeNo(e.target.value)} placeholder={t("employeeNoPlaceholder")} maxLength={32} style={inputStyle} required />
               </div>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
                 <div>
-                  <label htmlFor={dojId} style={{ fontSize: 13, fontWeight: 500 }}>Date of Joining <span aria-hidden="true" style={{ color: "var(--color-error)" }}>*</span></label>
+                  <label htmlFor={dojId} style={{ fontSize: 13, fontWeight: 500 }}>{t("dateOfJoining")} <span aria-hidden="true" style={{ color: "var(--color-error)" }}>*</span></label>
                   <input id={dojId} type="date" value={dateOfJoining} onChange={(e) => setDateOfJoining(e.target.value)} style={inputStyle} required />
                 </div>
                 <div>
-                  <label htmlFor={basicId} style={{ fontSize: 13, fontWeight: 500 }}>Basic Pay (₹)</label>
-                  <input id={basicId} type="number" min={0} value={basicMinor} onChange={(e) => setBasicMinor(Number(e.target.value))} placeholder="in paise" style={inputStyle} />
+                  <label htmlFor={basicId} style={{ fontSize: 13, fontWeight: 500 }}>{t("basicPay")}</label>
+                  <input id={basicId} type="number" min={0} value={basicMinor} onChange={(e) => setBasicMinor(Number(e.target.value))} placeholder={t("basicPayPlaceholder")} style={inputStyle} />
                 </div>
               </div>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
                 <div>
-                  <label htmlFor={deptId} style={{ fontSize: 13, fontWeight: 500 }}>Department ID <span aria-hidden="true" style={{ color: "var(--color-error)" }}>*</span></label>
-                  <input id={deptId} type="text" value={departmentId} onChange={(e) => setDepartmentId(e.target.value)} placeholder="UUID" style={inputStyle} required />
+                  <label htmlFor={deptId} style={{ fontSize: 13, fontWeight: 500 }}>{t("departmentId")} <span aria-hidden="true" style={{ color: "var(--color-error)" }}>*</span></label>
+                  <input id={deptId} type="text" value={departmentId} onChange={(e) => setDepartmentId(e.target.value)} placeholder={t("uuidPlaceholder")} style={inputStyle} required />
                 </div>
                 <div>
-                  <label htmlFor={desigId} style={{ fontSize: 13, fontWeight: 500 }}>Designation ID <span aria-hidden="true" style={{ color: "var(--color-error)" }}>*</span></label>
-                  <input id={desigId} type="text" value={designationId} onChange={(e) => setDesignationId(e.target.value)} placeholder="UUID" style={inputStyle} required />
+                  <label htmlFor={desigId} style={{ fontSize: 13, fontWeight: 500 }}>{t("designationId")} <span aria-hidden="true" style={{ color: "var(--color-error)" }}>*</span></label>
+                  <input id={desigId} type="text" value={designationId} onChange={(e) => setDesignationId(e.target.value)} placeholder={t("uuidPlaceholder")} style={inputStyle} required />
                 </div>
               </div>
               <div>
-                <label htmlFor={typeId} style={{ fontSize: 13, fontWeight: 500 }}>Employee Type</label>
+                <label htmlFor={typeId} style={{ fontSize: 13, fontWeight: 500 }}>{t("employeeType")}</label>
                 <select id={typeId} value={employeeType} onChange={(e) => setEmployeeType(e.target.value as typeof employeeType)} style={inputStyle}>
-                  <option value="permanent">Permanent</option>
-                  <option value="temporary">Temporary</option>
-                  <option value="contract">Contract</option>
-                  <option value="deputation">Deputation</option>
+                  <option value="permanent">{t("typePermanent")}</option>
+                  <option value="temporary">{t("typeTemporary")}</option>
+                  <option value="contract">{t("typeContract")}</option>
+                  <option value="deputation">{t("typeDeputation")}</option>
                 </select>
               </div>
 
@@ -221,9 +223,9 @@ export default function ApplicationDetailPage() {
               )}
 
               <div style={{ display: "flex", gap: 12, justifyContent: "flex-end", marginTop: 4 }}>
-                <button type="button" className="btn ghost" onClick={() => setShowHireDialog(false)}>Cancel</button>
+                <button type="button" className="btn ghost" onClick={() => setShowHireDialog(false)}>{t("cancel")}</button>
                 <button type="submit" className="btn primary" disabled={hireStatus === "submitting"} style={{ minWidth: 140 }}>
-                  {hireStatus === "submitting" ? "Processing…" : "Confirm Hire"}
+                  {hireStatus === "submitting" ? t("processing") : t("confirmHire")}
                 </button>
               </div>
             </form>

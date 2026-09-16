@@ -1,12 +1,6 @@
 "use client";
 
-const ORDERED_STAGES: { key: string; label: string }[] = [
-  { key: "applied",      label: "Received" },
-  { key: "shortlisted",  label: "Shortlisted" },
-  { key: "interviewing", label: "Interview" },
-  { key: "offered",      label: "Offer" },
-  { key: "hired",        label: "Joined" },
-];
+import { useTranslations } from "next-intl";
 
 interface ApplicationPipelineProps {
   applications: { stage: string }[];
@@ -19,15 +13,25 @@ export function ApplicationPipeline({
   activeStage,
   onStageClick,
 }: ApplicationPipelineProps) {
+  const t = useTranslations("recruitmentPipeline");
+
+  const ORDERED_STAGES: { key: string; label: string }[] = [
+    { key: "applied",      label: t("stageReceived") },
+    { key: "shortlisted",  label: t("stageShortlisted") },
+    { key: "interviewing", label: t("stageInterview") },
+    { key: "offered",      label: t("stageOffer") },
+    { key: "hired",        label: t("stageJoined") },
+  ];
+
   const counts = ORDERED_STAGES.reduce<Record<string, number>>((acc, { key }) => {
     acc[key] = applications.filter((a) => a.stage === key).length;
     return acc;
   }, {});
 
   return (
-    <div className="mb-5" aria-label="Application pipeline">
+    <div className="mb-5" aria-label={t("ariaLabel")}>
       <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">
-        Application Pipeline
+        {t("heading")}
       </p>
       <div className="flex rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
         {ORDERED_STAGES.map(({ key, label }, idx) => {
@@ -39,7 +43,7 @@ export function ApplicationPipeline({
               type="button"
               onClick={() => onStageClick(isActive ? "all" : key)}
               aria-pressed={isActive}
-              aria-label={`${label}: ${count} applications. Click to filter.`}
+              aria-label={t("stageAriaLabel", { label, count })}
               className={[
                 "flex-1 flex flex-col items-center justify-center gap-1 py-3 px-2",
                 "transition-colors duration-150 relative",

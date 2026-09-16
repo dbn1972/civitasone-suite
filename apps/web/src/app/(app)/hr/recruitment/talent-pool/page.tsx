@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { getTranslations } from "next-intl/server";
 import { PageHeader, StatGrid, StatCard, Card, DataTable, EmptyState } from "../../../../_components/ds";
 import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
@@ -35,6 +36,7 @@ export default async function TalentPoolPage({
 }: {
   searchParams: { skill?: string; minExp?: string };
 }) {
+  const t = await getTranslations("recruitmentTalentPool");
   const { data: candidates, source } = await getCandidates(searchParams.skill, searchParams.minExp);
 
   const withSkills  = candidates.filter((c) => c.skills && c.skills.length > 0).length;
@@ -49,73 +51,73 @@ export default async function TalentPoolPage({
     // reads as a rendering glitch), not the placeholder every other empty
     // field in this table uses. Both shapes now render the same placeholder.
     skillsDisplay: c.skills && c.skills.length > 0 ? c.skills.join(", ") : "—",
-    expDisplay: c.experienceYears != null ? `${c.experienceYears} yr` : "—",
+    expDisplay: c.experienceYears != null ? t("expYearShort", { years: c.experienceYears }) : "—",
     appliedDate: new Date(c.appliedAt).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" }),
   }));
 
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
-        title="Talent Pool"
-        subtitle="All candidates who applied — search by skills, experience, or source to find the right fit for a new vacancy."
+        title={t("title")}
+        subtitle={t("subtitle")}
         back="/hr/recruitment"
-        backLabel="Recruitment"
+        backLabel={t("backLabel")}
         help="hr"
       />
       <DataSourceBadge source={source} />
       <StatGrid>
-        <StatCard icon="\ud83d\udc65" iconBg="var(--infobg)" label="Total Candidates"   value={candidates.length} />
-        <StatCard icon="\ud83d\udca1" iconBg="var(--primary-soft)" label="With Skills"        value={withSkills} />
-        <StatCard icon="\ud83e\udde0" iconBg="var(--warnbg)" label="Experienced (5+ yr)" value={experienced} />
-        <StatCard icon="\u2705"       iconBg="var(--line2)" label="Active Stages"     value={activeStage} />
+        <StatCard icon="\ud83d\udc65" iconBg="var(--infobg)" label={t("statTotalCandidates")}   value={candidates.length} />
+        <StatCard icon="\ud83d\udca1" iconBg="var(--primary-soft)" label={t("statWithSkills")}        value={withSkills} />
+        <StatCard icon="\ud83e\udde0" iconBg="var(--warnbg)" label={t("statExperienced")} value={experienced} />
+        <StatCard icon="\u2705"       iconBg="var(--line2)" label={t("statActiveStages")}     value={activeStage} />
       </StatGrid>
 
       {/* Filters */}
       <Card padding>
         <form method="GET" style={{ display: "flex", flexWrap: "wrap", gap: 12, alignItems: "flex-end" }}>
           <div>
-            <label htmlFor="tp-skill" style={{ display: "block", fontSize: 12, fontWeight: 600, color: "var(--ink2)", marginBottom: 4 }}>Skill</label>
-            <input id="tp-skill" name="skill" defaultValue={searchParams.skill ?? ""} placeholder="e.g. Excel, Python, Tally" className="input" style={{ minWidth: 180 }} />
+            <label htmlFor="tp-skill" style={{ display: "block", fontSize: 12, fontWeight: 600, color: "var(--ink2)", marginBottom: 4 }}>{t("skillLabel")}</label>
+            <input id="tp-skill" name="skill" defaultValue={searchParams.skill ?? ""} placeholder={t("skillPlaceholder")} className="input" style={{ minWidth: 180 }} />
           </div>
           <div>
-            <label htmlFor="tp-exp" style={{ display: "block", fontSize: 12, fontWeight: 600, color: "var(--ink2)", marginBottom: 4 }}>Min. experience (years)</label>
-            <input id="tp-exp" name="minExp" type="number" min="0" defaultValue={searchParams.minExp ?? ""} placeholder="e.g. 2" className="input" style={{ width: 100 }} />
+            <label htmlFor="tp-exp" style={{ display: "block", fontSize: 12, fontWeight: 600, color: "var(--ink2)", marginBottom: 4 }}>{t("minExpLabel")}</label>
+            <input id="tp-exp" name="minExp" type="number" min="0" defaultValue={searchParams.minExp ?? ""} placeholder={t("minExpPlaceholder")} className="input" style={{ width: 100 }} />
           </div>
-          <button type="submit" className="btn primary" style={{ minHeight: 44 }}>Search</button>
-          <Link href="/hr/recruitment/talent-pool" className="btn ghost" style={{ minHeight: 44 }}>Clear</Link>
+          <button type="submit" className="btn primary" style={{ minHeight: 44 }}>{t("search")}</button>
+          <Link href="/hr/recruitment/talent-pool" className="btn ghost" style={{ minHeight: 44 }}>{t("clear")}</Link>
         </form>
       </Card>
 
-      <Card title={`Candidates (${rows.length})`}>
+      <Card title={t("candidatesTitle", { count: rows.length })}>
         {rows.length === 0 ? (
           <EmptyState
             icon="👥"
-            title="No candidates found"
+            title={t("noCandidatesFound")}
             message={searchParams.skill || searchParams.minExp
-              ? "No one matches that filter. Try broadening your search."
-              : "When candidates apply through the public careers page or internally, they appear here."
+              ? t("noneMatchFilter")
+              : t("candidatesAppearHere")
             }
-            action={<Link href="/careers" target="_blank" className="btn ghost">View public careers page</Link>}
+            action={<Link href="/careers" target="_blank" className="btn ghost">{t("viewPublicCareersPage")}</Link>}
           />
         ) : (
           <DataTable
             columns={[
-              { key: "applicantName", label: "Name" },
-              { key: "email", label: "Email" },
-              { key: "qualification", label: "Qualification" },
-              { key: "expDisplay", label: "Experience", align: "right" },
-              { key: "skillsDisplay", label: "Skills" },
-              { key: "source", label: "Source", cellType: "status" },
-              { key: "stage", label: "Stage", cellType: "status" },
-              { key: "appliedDate", label: "Applied" },
+              { key: "applicantName", label: t("colName") },
+              { key: "email", label: t("colEmail") },
+              { key: "qualification", label: t("colQualification") },
+              { key: "expDisplay", label: t("colExperience"), align: "right" },
+              { key: "skillsDisplay", label: t("colSkills") },
+              { key: "source", label: t("colSource"), cellType: "status" },
+              { key: "stage", label: t("colStage"), cellType: "status" },
+              { key: "appliedDate", label: t("colApplied") },
             ]}
             rows={rows}
             sortable
             filterable
-        filterPlaceholder="Filter by name, email, skills…"
+        filterPlaceholder={t("filterPlaceholder")}
           emptyIcon="🧑‍💼"
-          emptyTitle="No candidates in talent pool"
-          emptyMessage="Candidates appear here once they apply to a vacancy. Use the Recruitment module to post a job."
+          emptyTitle={t("emptyTitleNoCandidates")}
+          emptyMessage={t("emptyMessageNoCandidates")}
             pageSize={20}
             exportable
           />

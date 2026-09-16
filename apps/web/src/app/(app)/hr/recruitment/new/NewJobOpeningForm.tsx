@@ -1,6 +1,7 @@
 "use client";
 
 import { useId, useState, useEffect } from "react";
+import { useTranslations } from "next-intl";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useFormError } from "@/lib/useFormError";
@@ -33,6 +34,7 @@ const inputInvalidStyle: React.CSSProperties = {
 };
 
 export function NewJobOpeningForm() {
+  const t = useTranslations("recruitmentNewJob");
   const searchParams = useSearchParams();
   const templateId = searchParams.get("templateId");
 
@@ -78,31 +80,31 @@ export function NewJobOpeningForm() {
     if (!refNo.trim()) {
       setStatus("error");
       setInvalidField("refNo");
-      setMessage("Reference No is required.");
+      setMessage(t("referenceNoRequired"));
       return;
     }
     if (refNo.trim().length > 64) {
       setStatus("error");
       setInvalidField("refNo");
-      setMessage("Reference No must be 64 characters or fewer.");
+      setMessage(t("referenceNoTooLong"));
       return;
     }
     if (!title.trim()) {
       setStatus("error");
       setInvalidField("title");
-      setMessage("Title is required.");
+      setMessage(t("titleRequired"));
       return;
     }
     if (!UUID_RE.test(departmentId.trim())) {
       setStatus("error");
       setInvalidField("departmentId");
-      setMessage("Department ID must be a valid UUID.");
+      setMessage(t("departmentIdInvalid"));
       return;
     }
     if (vacancies < 1) {
       setStatus("error");
       setInvalidField("vacancies");
-      setMessage("Vacancies must be at least 1.");
+      setMessage(t("vacanciesMin"));
       return;
     }
 
@@ -137,7 +139,7 @@ export function NewJobOpeningForm() {
       // this page so the confirmation is actually seen (a redirect would
       // race it off-screen).
       setStatus("success");
-      setMessage("Job opening submitted. It will appear in the vacancy list shortly.");
+      setMessage(t("submitSuccessMessage"));
     } catch {
       setStatus("error");
       setMessage(formError.fromException("save").message);
@@ -153,20 +155,20 @@ export function NewJobOpeningForm() {
     >
       {templateName && (
         <div style={{ padding: "10px 14px", background: "#dbeafe", border: "1px solid #93c5fd", borderRadius: 8, fontSize: 13, color: "#1e40af" }}>
-          Pre-filled from template: <strong>{templateName}</strong>. You can edit any field before saving.
+          {t("prefilledFromTemplatePrefix")} <strong>{templateName}</strong>{t("prefilledFromTemplateSuffix")}
         </div>
       )}
 
       <div>
         <label htmlFor={refNoId} style={labelStyle}>
-          Reference No <span aria-hidden="true">*</span>
+          {t("referenceNo")} <span aria-hidden="true">*</span>
         </label>
         <input
           id={refNoId}
           type="text"
           value={refNo}
           onChange={(e) => setRefNo(e.target.value)}
-          placeholder="e.g. JOB-2024-0042"
+          placeholder={t("referenceNoPlaceholder")}
           style={invalidField === "refNo" ? inputInvalidStyle : inputStyle}
           required
           aria-required="true"
@@ -177,14 +179,14 @@ export function NewJobOpeningForm() {
 
       <div>
         <label htmlFor={titleId} style={labelStyle}>
-          Title <span aria-hidden="true">*</span>
+          {t("title")} <span aria-hidden="true">*</span>
         </label>
         <input
           id={titleId}
           type="text"
           value={title}
           onChange={(e) => setTitle(e.target.value)}
-          placeholder="e.g. Senior Software Engineer"
+          placeholder={t("titlePlaceholder")}
           style={invalidField === "title" ? inputInvalidStyle : inputStyle}
           required
           aria-required="true"
@@ -194,14 +196,14 @@ export function NewJobOpeningForm() {
 
       <div>
         <label htmlFor={deptId} style={labelStyle}>
-          Department ID (UUID) <span aria-hidden="true">*</span>
+          {t("departmentIdUuid")} <span aria-hidden="true">*</span>
         </label>
         <input
           id={deptId}
           type="text"
           value={departmentId}
           onChange={(e) => setDepartmentId(e.target.value)}
-          placeholder="e.g. 3f2504e0-4f89-41d3-9a0c-0305e82c3301"
+          placeholder={t("departmentIdPlaceholder")}
           style={invalidField === "departmentId" ? inputInvalidStyle : inputStyle}
           required
           aria-required="true"
@@ -211,7 +213,7 @@ export function NewJobOpeningForm() {
 
       <div>
         <label htmlFor={vacanciesId} style={labelStyle}>
-          Vacancies
+          {t("vacancies")}
         </label>
         <input
           id={vacanciesId}
@@ -227,21 +229,21 @@ export function NewJobOpeningForm() {
 
       <div>
         <label htmlFor={descId} style={labelStyle}>
-          Description
+          {t("description")}
         </label>
         <textarea
           id={descId}
           value={description}
           onChange={(e) => setDescription(e.target.value)}
           rows={4}
-          placeholder="Job responsibilities, requirements, and qualifications"
+          placeholder={t("descriptionPlaceholder")}
           style={{ ...inputStyle, resize: "none", minHeight: 96 }}
         />
       </div>
 
       <div>
         <label htmlFor={closesAtId} style={labelStyle}>
-          Closing Date
+          {t("closingDate")}
         </label>
         <input
           id={closesAtId}
@@ -259,11 +261,11 @@ export function NewJobOpeningForm() {
           className="btn primary"
           style={{ minHeight: 44, alignSelf: "flex-start" }}
         >
-          {status === "submitting" ? "Creating…" : status === "success" ? "Submitted" : "Create Job Opening"}
+          {status === "submitting" ? t("creating") : status === "success" ? t("submitted") : t("createJobOpening")}
         </button>
         {status === "success" && (
           <Link href="/hr/recruitment" className="btn ghost" style={{ minHeight: 44, display: "inline-flex", alignItems: "center" }}>
-            Back to Recruitment
+            {t("backToRecruitment")}
           </Link>
         )}
       </div>
@@ -279,7 +281,7 @@ export function NewJobOpeningForm() {
             margin: 0,
           }}
         >
-          <strong>{status === "error" ? "Error: " : "Success: "}</strong>
+          <strong>{status === "error" ? t("errorPrefix") : t("successPrefix")}</strong>
           {message}
         </p>
       )}

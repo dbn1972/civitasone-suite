@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { getTranslations } from "next-intl/server";
 import { PageHeader, StatGrid, StatCard, Card, DataTable, EmptyState } from "../../../_components/ds";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
@@ -43,6 +44,7 @@ async function getOpenings(): Promise<LoaderResult<Opening[]>> {
 }
 
 export default async function RecruitmentPage() {
+  const t = await getTranslations("recruitment");
   const [{ data: stats, source: statsSource }, { data: openings, source: openingSource }] = await Promise.all([getDashboard(), getOpenings()]);
   const totalApps = stats.applicationsInternal + stats.applicationsPublic;
   // Either fetch failing is worth telling the clerk about -- the stat cards
@@ -54,63 +56,63 @@ export default async function RecruitmentPage() {
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
-        title="Recruitment"
-        subtitle="Publish vacancies, track applications, and hire — for regular positions, internships, and apprenticeships."
+        title={t("title")}
+        subtitle={t("subtitle")}
         help="hr"
         actions={
           <>
-            <Link href="/hr/recruitment/talent-pool" className="btn ghost">Talent Pool</Link>
-            <Link href="/hr/recruitment/new" className="btn primary">+ New Vacancy</Link>
+            <Link href="/hr/recruitment/talent-pool" className="btn ghost">{t("talentPool")}</Link>
+            <Link href="/hr/recruitment/new" className="btn primary">{t("newVacancy")}</Link>
           </>
         }
       />
 
       <DataSourceBadge source={pageSource} />
       <StatGrid>
-        <StatCard icon="📋" iconBg="var(--infobg)" label="Total Vacancies" value={stats.totalOpenings} />
-        <StatCard icon="🟢" iconBg="var(--goodbg)" label="Open Now" value={stats.openVacancies} />
-        <StatCard icon="📨" iconBg="var(--line2)" label="Applications Received" value={totalApps} />
-        <StatCard icon="🌐" iconBg="var(--infobg)" label="Published (Public)" value={stats.publishedVacancies} />
+        <StatCard icon="📋" iconBg="var(--infobg)" label={t("statTotalVacancies")} value={stats.totalOpenings} />
+        <StatCard icon="🟢" iconBg="var(--goodbg)" label={t("statOpenNow")} value={stats.openVacancies} />
+        <StatCard icon="📨" iconBg="var(--line2)" label={t("statApplicationsReceived")} value={totalApps} />
+        <StatCard icon="🌐" iconBg="var(--infobg)" label={t("statPublishedPublic")} value={stats.publishedVacancies} />
       </StatGrid>
 
-      <Card title="All vacancies">
+      <Card title={t("allVacanciesTitle")}>
         {openings.length === 0 ? (
           <EmptyState
             icon="💼"
-            title="No active job postings yet"
-            message="Post your first vacancy to start attracting talent. Positions appear here once published."
-            action={<Link href="/hr/recruitment/new" className="btn primary">Post First Job</Link>}
+            title={t("emptyTitle")}
+            message={t("emptyMessage")}
+            action={<Link href="/hr/recruitment/new" className="btn primary">{t("postFirstJob")}</Link>}
           />
         ) : (
           <DataTable<Opening>
             columns={[
-              { key: "jobTitle", label: "Position" },
-              { key: "department", label: "Department" },
-              { key: "vacancies", label: "Posts", align: "right" },
-              { key: "applicationsReceived", label: "Applications", align: "right" },
-              { key: "postedDate", label: "Posted" },
-              { key: "status", label: "Status", cellType: "status" },
+              { key: "jobTitle", label: t("colPosition") },
+              { key: "department", label: t("colDepartment") },
+              { key: "vacancies", label: t("colPosts"), align: "right" },
+              { key: "applicationsReceived", label: t("colApplications"), align: "right" },
+              { key: "postedDate", label: t("colPosted") },
+              { key: "status", label: t("colStatus"), cellType: "status" },
             ]}
             rows={openings}
             rowLinkKey="id"
             rowLinkPrefix="/hr/recruitment/"
             sortable
             filterable
-            filterPlaceholder="Search vacancies…"
+            filterPlaceholder={t("filterPlaceholder")}
             pageSize={15}
             emptyIcon="📋"
-            emptyTitle="No vacancies match"
-            emptyMessage="Try a different search."
+            emptyTitle={t("noVacanciesMatch")}
+            emptyMessage={t("tryDifferentSearch")}
           />
         )}
       </Card>
 
       <div style={{ marginTop: 16, display: "flex", gap: 12, flexWrap: "wrap" }}>
         <Link href="/careers" target="_blank" className="btn ghost">
-          🌐 View public careers page
+          {t("viewPublicCareersPage")}
         </Link>
         <Link href="/hr/recruitment/talent-pool" className="btn ghost">
-          👥 Browse talent pool
+          {t("browseTalentPool")}
         </Link>
       </div>
     </main>
