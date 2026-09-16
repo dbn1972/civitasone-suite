@@ -1,6 +1,12 @@
-import { describe, expect, it } from "vitest";
-import { lanesToBpmn } from "./workflowBuilderApi";
-import { defaultLanes, lanesToBindings, narrateWorkflow, slaDaysToMinutes } from "./workflowConstants";
+import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
+import { lanesToBpmn, persistWorkflowDesign } from "./workflowBuilderApi";
+import {
+  defaultLanes,
+  emptyWorkflowDesign,
+  lanesToBindings,
+  narrateWorkflow,
+  slaDaysToMinutes,
+} from "./workflowConstants";
 
 describe("workflowConstants", () => {
   it("narrates enabled approval steps", () => {
@@ -58,5 +64,48 @@ describe("lanesToBpmn (re-export)", () => {
     const node = elements.find((e) => e.properties?.laneKey === "inspection");
     expect(node?.properties?.slaMinutes).toBe(7 * 1440);
     expect(node?.properties?.escalationDesignationId).toBe("pos-officer");
+  });
+});
+
+/**
+ * UX-016: persistWorkflowDesign's parseJson used to throw the raw response
+ * body text (or a `Request failed (${status})` fallback) on a failed
+ * workflow-design save — the same class of leak useFormError closes for
+ * components (UX-003). This module is a plain async data client, not a
+ * component, so it can't use that hook; it now goes through the same
+ * catalogued toHumanError vocabulary instead and never reads the response
+ * body at all, so it structurally cannot leak it.
+ */
+describe("workflowBuilderApi — persistWorkflowDesign never leaks raw status or server text", () => {
+  const fetchMock = vi.fn();
+
+  beforeEach(() => {
+    fetchMock.mockReset();
+    vi.stubGlobal("fetch", fetchMock);
+  });
+
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("throws a clerk-safe message, never the raw HTTP status or server text, creating a new definition", async () => {
+    fetchMock.mockResolvedValue(
+      new Response("workflow-service circuit open", { status: 502 }),
+    );
+    const design = emptyWorkflowDesign("Trade License");
+    const err = await persistWorkflowDesign(design).catch((e: unknown) => e);
+
+    expect(err).toBeInstanceOf(Error);
+    const message = (err as Error).message;
+    expect(message).not.toMatch(/\b502\b/);
+    expect(message).not.toContain("workflow-service circuit open");
+    expect(message).toMatch(/couldn't save/i);
+  });
+
+  it("throws the same clerk-safe message updating an existing definition", async () => {
+    fetchMock.mockResolvedValue(new Response("", { status: 500 }));
+    const design = { ...emptyWorkflowDesign("Trade License"), definitionId: "wf-1", version: 2 };
+    const err = await persistWorkflowDesign(design).catch((e: unknown) => e);
+
+    expect(err).toBeInstanceOf(Error);
+    expect((err as Error).message).not.toMatch(/\b500\b/);
   });
 });

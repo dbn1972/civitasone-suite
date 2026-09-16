@@ -1,5 +1,7 @@
 "use client";
 
+import { toHumanError } from "@/lib/messages";
+
 export interface ServicePackDto {
   id: string;
   packKey: string;
@@ -14,10 +16,18 @@ export interface ServicePackDto {
   status: string;
 }
 
+/**
+ * Plain-language failure message for a failed pack export/import call. This
+ * is a plain async data client, not a component, so it can't use the
+ * useFormError hook; toHumanError is the same catalogued-message building
+ * block that hook is built on — never the backend's own response text or
+ * the raw HTTP status. See docs/ENTERPRISE-GAP-REPORT-2026-09-07.md
+ * UX-003/UX-016.
+ */
 async function parseAccepted(res: Response): Promise<string> {
   if (!(res.ok || res.status === 202)) {
-    const text = await res.text().catch(() => "");
-    throw new Error(text || `Import failed (${res.status})`);
+    const human = toHumanError("save", { area: "service pack" });
+    throw new Error(`${human.what} ${human.next}`);
   }
   const body = await res.json() as { id?: string };
   return body.id ?? "";

@@ -7,6 +7,7 @@ import type {
   NotificationsDesignState,
 } from "@/app/_components/ds/designer/notificationTypes";
 import { emptyNotificationsDesign } from "@/app/_components/ds/designer/notificationTypes";
+import { toHumanError } from "@/lib/messages";
 
 export interface NotificationBindingsConfig {
   kind: "notifications";
@@ -29,10 +30,18 @@ interface ApiTemplate {
   subject?: string | null;
 }
 
+/**
+ * Plain-language failure message for a failed notification-template save.
+ * This is a plain async data client, not a component, so it can't use the
+ * useFormError hook; toHumanError is the same catalogued-message building
+ * block that hook is built on — never the backend's own response text or
+ * the raw HTTP status. See docs/ENTERPRISE-GAP-REPORT-2026-09-07.md
+ * UX-003/UX-016.
+ */
 async function parseJson(res: Response): Promise<unknown> {
   if (!(res.ok || res.status === 202)) {
-    const text = await res.text().catch(() => "");
-    throw new Error(text || `Request failed (${res.status})`);
+    const human = toHumanError("save", { area: "notification template" });
+    throw new Error(`${human.what} ${human.next}`);
   }
   return res.json();
 }

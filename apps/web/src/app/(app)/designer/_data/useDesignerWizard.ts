@@ -8,6 +8,7 @@ import { DEFAULT_BLOCKS, hiddenBlocksForPattern, SERVICE_PATTERN_OPTIONS } from 
 import { fetchLatestSandboxTest } from "./sandboxTestApi";
 import { submitForApproval } from "./designerReviewApi";
 import { adjacentBlocks } from "./designerNavigation";
+import { toHumanError } from "@/lib/messages";
 
 function blockStatusForDef(def: ServiceDefinitionDto, blockId: string, hidden: Set<string>): DesignerBlock["status"] {
   if (hidden.has(blockId)) return "empty";
@@ -107,7 +108,12 @@ export function useDesignerWizard(definitionId: string, activeBlockId: string) {
       await reload();
       router.push(`/designer/${definitionId}/review`);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Submit failed.");
+      if (e instanceof Error) {
+        setError(e.message);
+      } else {
+        const human = toHumanError("save", { area: "submission" });
+        setError(`${human.what} ${human.next}`);
+      }
     } finally {
       setSubmitting(false);
     }

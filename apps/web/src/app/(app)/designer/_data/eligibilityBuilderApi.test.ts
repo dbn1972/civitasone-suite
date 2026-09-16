@@ -1,7 +1,8 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
 import {
   buildSampleSubjectFields,
   evaluateEligibilityLocal,
+  persistEligibilityDesign,
   rulesApiToUi,
   rulesUiToApi,
   subjectFromSampleValues,
@@ -61,5 +62,59 @@ describe("eligibilityBuilderApi", () => {
     const failVals = suggestFailingSampleValues(rules, formFields);
     const failSubject = subjectFromSampleValues(fields, failVals);
     expect(evaluateEligibilityLocal(rules, failSubject).outcome).toBe("not_eligible");
+  });
+});
+
+/**
+ * UX-016: persistEligibilityDesign's parseJson used to throw the raw
+ * response body text (or a `Request failed (${status})` fallback) —
+ * the same class of leak useFormError closes for components (UX-003).
+ * This module is a plain async data client, not a component, so it can't
+ * use that hook; it now goes through the same catalogued toHumanError
+ * vocabulary instead and never reads the response body at all, so it
+ * structurally cannot leak it.
+ */
+describe("eligibilityBuilderApi — persistEligibilityDesign never leaks raw status or server text", () => {
+  const fetchMock = vi.fn();
+
+  beforeEach(() => {
+    fetchMock.mockReset();
+    vi.stubGlobal("fetch", fetchMock);
+  });
+
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("throws a clerk-safe message, never the raw HTTP status or server text, when creating a rule set fails", async () => {
+    fetchMock.mockResolvedValue(
+      new Response(JSON.stringify({ error: "eligibility-service unavailable" }), {
+        status: 503,
+        headers: { "content-type": "application/json" },
+      }),
+    );
+
+    const err = await persistEligibilityDesign(
+      { name: "Eligibility", rules: [] },
+      "svc-1",
+      "Trade License",
+    ).catch((e: unknown) => e);
+
+    expect(err).toBeInstanceOf(Error);
+    const message = (err as Error).message;
+    expect(message).not.toMatch(/\b503\b/);
+    expect(message).not.toContain("eligibility-service unavailable");
+    expect(message).toMatch(/couldn't save/i);
+  });
+
+  it("throws the same clerk-safe message when updating an existing rule set fails", async () => {
+    fetchMock.mockResolvedValue(new Response("", { status: 500 }));
+
+    const err = await persistEligibilityDesign(
+      { ruleSetId: "rs-1", name: "Eligibility", rules: [] },
+      "svc-1",
+      "Trade License",
+    ).catch((e: unknown) => e);
+
+    expect(err).toBeInstanceOf(Error);
+    expect((err as Error).message).not.toMatch(/\b500\b/);
   });
 });

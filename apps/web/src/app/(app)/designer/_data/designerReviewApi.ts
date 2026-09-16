@@ -1,16 +1,23 @@
 "use client";
 
+import { toHumanError } from "@/lib/messages";
+
+/**
+ * Plain-language failure message for a failed submit/publish/reject call.
+ * This is a plain async data client, not a component, so it can't use the
+ * useFormError hook; toHumanError is the same catalogued-message building
+ * block that hook is built on — never the backend's own message/error text
+ * or the raw HTTP status. See docs/ENTERPRISE-GAP-REPORT-2026-09-07.md
+ * UX-003/UX-016.
+ */
+function serviceDefinitionSaveError(): string {
+  const human = toHumanError("save", { area: "service definition" });
+  return `${human.what} ${human.next}`;
+}
+
 async function parseAccepted(res: Response): Promise<{ id: string }> {
   if (!(res.ok || res.status === 202)) {
-    const text = await res.text().catch(() => "");
-    let msg = `Request failed (${res.status}).`;
-    try {
-      const j = JSON.parse(text);
-      msg = j?.message ?? j?.error ?? msg;
-    } catch {
-      if (text) msg = text;
-    }
-    throw new Error(msg);
+    throw new Error(serviceDefinitionSaveError());
   }
   return res.json() as Promise<{ id: string }>;
 }

@@ -11,6 +11,7 @@ import {
   type EligibilityOp,
   type EligibilityRuleUi,
 } from "@/app/_components/ds/designer/eligibilityTypes";
+import { toHumanError } from "@/lib/messages";
 
 export type SampleFieldGroup = "profile" | "form";
 
@@ -37,10 +38,18 @@ interface RuleSetDto {
   status: string;
 }
 
+/**
+ * Plain-language failure message for a failed eligibility-rules save. This
+ * is a plain async data client, not a component, so it can't use the
+ * useFormError hook; toHumanError is the same catalogued-message building
+ * block that hook is built on — never the backend's own response text or
+ * the raw HTTP status. See docs/ENTERPRISE-GAP-REPORT-2026-09-07.md
+ * UX-003/UX-016.
+ */
 async function parseJson(res: Response): Promise<unknown> {
   if (!(res.ok || res.status === 202)) {
-    const text = await res.text().catch(() => "");
-    throw new Error(text || `Request failed (${res.status})`);
+    const human = toHumanError("save", { area: "eligibility rules" });
+    throw new Error(`${human.what} ${human.next}`);
   }
   return res.json();
 }

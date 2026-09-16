@@ -1,5 +1,7 @@
 "use client";
 
+import { toHumanError } from "@/lib/messages";
+
 export interface StatutoryReference {
   act: string;
   section?: string;
@@ -107,17 +109,22 @@ export interface UpdateDefinitionPayload {
   profileAttributeBindings?: ProfileAttributeBindingDto[];
 }
 
+/**
+ * Plain-language failure message for a failed service-definition create/update
+ * call. This is a plain async data client, not a component, so it can't use
+ * the useFormError hook; toHumanError is the same catalogued-message
+ * building block that hook is built on — never the backend's own
+ * message/error text or the raw HTTP status. See
+ * docs/ENTERPRISE-GAP-REPORT-2026-09-07.md UX-003/UX-016.
+ */
+function serviceDefinitionSaveError(): string {
+  const human = toHumanError("save", { area: "service definition" });
+  return `${human.what} ${human.next}`;
+}
+
 async function parseAccepted(res: Response): Promise<{ id: string }> {
   if (!(res.ok || res.status === 202)) {
-    const text = await res.text().catch(() => "");
-    let msg = `Request failed (${res.status}).`;
-    try {
-      const j = JSON.parse(text);
-      msg = j?.message ?? j?.error ?? msg;
-    } catch {
-      if (text) msg = text;
-    }
-    throw new Error(msg);
+    throw new Error(serviceDefinitionSaveError());
   }
   return res.json() as Promise<{ id: string }>;
 }
@@ -158,7 +165,8 @@ export async function updateServiceDefinition(id: string, body: UpdateDefinition
 export async function fetchServiceDefinition(id: string): Promise<ServiceDefinitionDto> {
   const res = await fetch(`/api/proxy/v1/citizen/catalogue/services/${id}`, { cache: "no-store" });
   if (!res.ok) {
-    throw new Error(`Could not load service definition (${res.status}).`);
+    const human = toHumanError("load", { area: "service definition" });
+    throw new Error(`${human.what} ${human.next}`);
   }
   return res.json() as Promise<ServiceDefinitionDto>;
 }
@@ -214,7 +222,10 @@ export interface ServiceAnalyticsDto {
 /** FN-32 — WCAG/GIGW preview of the generated form. */
 export async function fetchA11yPreview(id: string): Promise<A11yPreviewDto> {
   const res = await fetch(`/api/proxy/v1/citizen/catalogue/services/${id}/a11y-preview`, { cache: "no-store" });
-  if (!res.ok) throw new Error(`Could not run the accessibility preview (${res.status}).`);
+  if (!res.ok) {
+    const human = toHumanError("load", { area: "accessibility preview" });
+    throw new Error(`${human.what} ${human.next}`);
+  }
   const body = (await res.json()) as { data: A11yPreviewDto };
   return body.data;
 }
@@ -222,7 +233,10 @@ export async function fetchA11yPreview(id: string): Promise<A11yPreviewDto> {
 /** FN-16 + FN-31 — reports and KPI tiles this service will get on publish. */
 export async function fetchServiceAnalytics(id: string): Promise<ServiceAnalyticsDto> {
   const res = await fetch(`/api/proxy/v1/citizen/catalogue/services/${id}/analytics`, { cache: "no-store" });
-  if (!res.ok) throw new Error(`Could not load reporting configuration (${res.status}).`);
+  if (!res.ok) {
+    const human = toHumanError("load", { area: "reporting configuration" });
+    throw new Error(`${human.what} ${human.next}`);
+  }
   const body = (await res.json()) as { data: ServiceAnalyticsDto };
   return body.data;
 }
