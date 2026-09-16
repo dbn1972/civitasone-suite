@@ -1,5 +1,7 @@
-import { PageHeader, Card, DataTable, EmptyState } from "../../../../_components/ds";
-import { fetchJson } from "@/app/_data/apiClient";
+import { PageHeader, Card, DataTable, EmptyState, RefreshErrorState } from "../../../../_components/ds";
+import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
+import { useResource } from "@/app/_data/useResource";
+import { toHumanError } from "@/lib/messages";
 
 type Channel = {
   id: string;
@@ -10,19 +12,25 @@ type Channel = {
   status: string;
 } & Record<string, unknown>;
 
-async function getChannels(): Promise<Channel[]> {
-  const r = await fetchJson<unknown, Channel[]>("/api/notification/channels", [], {
+// UX-013: this used to return only `r.data`, discarding `r.source` — any
+// fetch failure (network error, missing auth, non-2xx) collapsed to the
+// same `[]` as a tenant with genuinely zero channels configured, so the
+// page below could never tell the two apart. Return the full LoaderResult
+// so the page can gate on `source` like every other fixed page.
+async function getChannels(): Promise<LoaderResult<Channel[]>> {
+  return fetchJson<unknown, Channel[]>("/api/notification/channels", [], {
     telemetryKey: "notifications.channels",
     mapResponse: (p) => {
       const arr = Array.isArray(p) ? p : (p as { data?: Channel[] })?.data;
       return Array.isArray(arr) ? arr as Channel[] : null;
     },
   });
-  return r.data;
 }
 
 export default async function NotificationChannelsPage() {
-  const channels = await getChannels();
+  const result = await getChannels();
+  const { data: channels } = result;
+  const errored = useResource(result).status === "error";
 
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
@@ -34,7 +42,9 @@ export default async function NotificationChannelsPage() {
       />
 
       <Card title="Configured Channels">
-        {channels.length === 0 ? (
+        {errored ? (
+          <RefreshErrorState error={toHumanError("load", { area: "notification channels" })} backHref="/tenant-admin" />
+        ) : channels.length === 0 ? (
           <EmptyState
             icon="🔔"
             title="No notification channels configured"

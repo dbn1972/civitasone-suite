@@ -1,12 +1,16 @@
-import { PageHeader, StatCard, StatGrid, Card, EmptyState } from "@/app/_components/ds";
+import { PageHeader, StatCard, StatGrid, Card, EmptyState, RefreshErrorState } from "@/app/_components/ds";
 import { Breadcrumb } from "../Breadcrumb";
 import { getIdpProviders } from "@/app/_data/loaders";
+import { useResource } from "@/app/_data/useResource";
+import { toHumanError } from "@/lib/messages";
 import { IdpTable } from "./IdpTable";
 
 export default async function IdpListPage() {
-  const { data: providers, source } = await getIdpProviders();
-  const activeProviders = providers.filter((p) => p.status === "active").length;
-  const totalSynced = providers.reduce((sum, p) => sum + p.usersSynced, 0);
+  const result = await getIdpProviders();
+  const { data: providers, source } = result;
+  const errored = useResource(result).status === "error";
+  const activeProviders = errored ? 0 : providers.filter((p) => p.status === "active").length;
+  const totalSynced = errored ? 0 : providers.reduce((sum, p) => sum + p.usersSynced, 0);
 
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
@@ -27,13 +31,17 @@ export default async function IdpListPage() {
           with the table's own cache state (UX-002's pattern). */}
 
       <StatGrid>
-        <StatCard icon="🔗" iconBg="#eff6ff" label="Total Providers" value={providers.length} />
-        <StatCard icon="✅" iconBg="#ecfdf3" label="Active" value={activeProviders} />
-        <StatCard icon="👥" iconBg="#f1f5f9" label="Users Synced" value={totalSynced} />
-        <StatCard icon="🔄" iconBg="#ecfdf3" label="Last Sync" value={providers.length > 0 ? "Recent" : "—"} />
+        <StatCard icon="🔗" iconBg="#eff6ff" label="Total Providers" value={errored ? "—" : providers.length} />
+        <StatCard icon="✅" iconBg="#ecfdf3" label="Active" value={errored ? "—" : activeProviders} />
+        <StatCard icon="👥" iconBg="#f1f5f9" label="Users Synced" value={errored ? "—" : totalSynced} />
+        <StatCard icon="🔄" iconBg="#ecfdf3" label="Last Sync" value={errored ? "—" : providers.length > 0 ? "Recent" : "—"} />
       </StatGrid>
 
-      {providers.length === 0 ? (
+      {errored ? (
+        <Card title="Configured Providers">
+          <RefreshErrorState error={toHumanError("load", { area: "identity providers" })} backHref="/tenant-admin" />
+        </Card>
+      ) : providers.length === 0 ? (
         <Card title="Configured Providers">
           <EmptyState
             icon="🔗"

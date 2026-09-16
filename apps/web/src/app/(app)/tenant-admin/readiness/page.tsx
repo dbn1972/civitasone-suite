@@ -1,7 +1,9 @@
-import { PageHeader, StatCard, StatGrid, Card, ProgressBar, StatusPill, EmptyState } from "@/app/_components/ds";
+import { PageHeader, StatCard, StatGrid, Card, ProgressBar, StatusPill, EmptyState, RefreshErrorState } from "@/app/_components/ds";
 import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
 import { Breadcrumb } from "../Breadcrumb";
 import { getTenantAdminDashboard } from "@/app/_data/loaders";
+import { useResource } from "@/app/_data/useResource";
+import { toHumanError } from "@/lib/messages";
 
 type ReadinessItem = {
   id: string;
@@ -28,7 +30,9 @@ function statusIcon(status: string): string {
 }
 
 export default async function ReadinessPage() {
-  const { data: dashboard, source } = await getTenantAdminDashboard();
+  const result = await getTenantAdminDashboard();
+  const { data: dashboard, source } = result;
+  const errored = useResource(result).status === "error";
   const readiness = dashboard.readiness;
 
   const passed = readiness
@@ -48,38 +52,46 @@ export default async function ReadinessPage() {
       <DataSourceBadge source={source} />
 
       <StatGrid>
-        <StatCard icon="🎯" iconBg="#eff6ff" label="Overall Readiness" value={`${overallPct}%`} />
-        <StatCard icon="✅" iconBg="#ecfdf3" label="Passed" value={passed} />
-        <StatCard icon="🔄" iconBg="#fffaeb" label="In Progress" value={readinessChecklist.filter((i) => i.status === "in-progress").length} />
-        <StatCard icon="❌" iconBg="#fef3f2" label="Failed" value={readinessChecklist.filter((i) => i.status === "fail").length} />
+        <StatCard icon="🎯" iconBg="#eff6ff" label="Overall Readiness" value={errored ? "—" : `${overallPct}%`} />
+        <StatCard icon="✅" iconBg="#ecfdf3" label="Passed" value={errored ? "—" : passed} />
+        <StatCard icon="🔄" iconBg="#fffaeb" label="In Progress" value={errored ? "—" : readinessChecklist.filter((i) => i.status === "in-progress").length} />
+        <StatCard icon="❌" iconBg="#fef3f2" label="Failed" value={errored ? "—" : readinessChecklist.filter((i) => i.status === "fail").length} />
       </StatGrid>
-      <Card title="Readiness Progress" padding>
-        <div style={{ marginBottom: 16 }}>
-          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6, fontSize: 13, fontWeight: 500 }}>
-            <span>Overall completion</span>
-            <span>{overallPct}%</span>
-          </div>
-          <ProgressBar value={overallPct} color="#16a34a" />
-        </div>
-      </Card>
-      <Card title="Readiness Checklist" padding>
-        {readinessChecklist.length === 0 ? (
-          <EmptyState icon="🎯" title="No readiness checks configured" message="Readiness checks will appear here once your organisation setup is in progress." />
-        ) : (
-          <ul aria-label="Readiness items" style={{ listStyle: "none", padding: 0, margin: 0 }}>
-            {readinessChecklist.map((item) => (
-              <li key={item.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 0", borderBottom: "1px solid var(--border, #e2e8f0)" }}>
-                <span aria-hidden="true" style={{ fontSize: 16, flexShrink: 0 }}>{statusIcon(item.status)}</span>
-                <div style={{ flex: 1 }}>
-                  <p style={{ margin: 0, fontWeight: 500, fontSize: 14 }}>{item.label}</p>
-                  <p style={{ margin: "2px 0 0", fontSize: 12, color: "var(--ink2)" }}>{item.description}</p>
-                </div>
-                <StatusPill status={item.status === "pass" ? "active" : item.status === "fail" ? "failed" : "in progress"} label={item.status === "pass" ? "Pass" : item.status === "fail" ? "Fail" : "In Progress"} />
-              </li>
-            ))}
-          </ul>
-        )}
-      </Card>
+      {errored ? (
+        <Card title="Readiness Progress" padding>
+          <RefreshErrorState error={toHumanError("load", { area: "readiness score" })} backHref="/tenant-admin" />
+        </Card>
+      ) : (
+        <>
+          <Card title="Readiness Progress" padding>
+            <div style={{ marginBottom: 16 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6, fontSize: 13, fontWeight: 500 }}>
+                <span>Overall completion</span>
+                <span>{overallPct}%</span>
+              </div>
+              <ProgressBar value={overallPct} color="#16a34a" />
+            </div>
+          </Card>
+          <Card title="Readiness Checklist" padding>
+            {readinessChecklist.length === 0 ? ( // ux-001-ok: readinessChecklist is a fixed local const, always 8 items -- never sourced from getTenantAdminDashboard's fetch, so this branch can't reflect a load error (see the `errored` gate above for the live dashboard data)
+              <EmptyState icon="🎯" title="No readiness checks configured" message="Readiness checks will appear here once your organisation setup is in progress." />
+            ) : (
+              <ul aria-label="Readiness items" style={{ listStyle: "none", padding: 0, margin: 0 }}>
+                {readinessChecklist.map((item) => (
+                  <li key={item.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 0", borderBottom: "1px solid var(--border, #e2e8f0)" }}>
+                    <span aria-hidden="true" style={{ fontSize: 16, flexShrink: 0 }}>{statusIcon(item.status)}</span>
+                    <div style={{ flex: 1 }}>
+                      <p style={{ margin: 0, fontWeight: 500, fontSize: 14 }}>{item.label}</p>
+                      <p style={{ margin: "2px 0 0", fontSize: 12, color: "var(--ink2)" }}>{item.description}</p>
+                    </div>
+                    <StatusPill status={item.status === "pass" ? "active" : item.status === "fail" ? "failed" : "in progress"} label={item.status === "pass" ? "Pass" : item.status === "fail" ? "Fail" : "In Progress"} />
+                  </li>
+                ))}
+              </ul>
+            )}
+          </Card>
+        </>
+      )}
     </main>
   );
 }

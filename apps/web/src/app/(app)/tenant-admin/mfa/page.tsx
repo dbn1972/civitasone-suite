@@ -1,10 +1,14 @@
-import { PageHeader, StatCard, StatGrid, Card, EmptyState } from "@/app/_components/ds";
+import { PageHeader, StatCard, StatGrid, Card, EmptyState, RefreshErrorState } from "@/app/_components/ds";
 import { Breadcrumb } from "../Breadcrumb";
 import { getMfaUsers } from "@/app/_data/loaders";
+import { useResource } from "@/app/_data/useResource";
+import { toHumanError } from "@/lib/messages";
 import { MfaTable } from "./MfaTable";
 
 export default async function MfaManagementPage() {
-  const { data: users, source } = await getMfaUsers();
+  const result = await getMfaUsers();
+  const { data: users, source } = result;
+  const errored = useResource(result).status === "error";
   const totalUsers = users.length;
   const enrolled = users.filter((u) => u.mfaStatus === "active").length;
   const pending = users.filter((u) => u.mfaStatus === "pending").length;
@@ -24,13 +28,17 @@ export default async function MfaManagementPage() {
           with the table's own cache state (UX-002's pattern). */}
 
       <StatGrid>
-        <StatCard icon="👥" iconBg="#f1f5f9" label="Total Users" value={totalUsers} />
-        <StatCard icon="🔐" iconBg="#ecfdf3" label="MFA Enrolled" value={enrolled} />
-        <StatCard icon="📊" iconBg="#eff6ff" label="Enrollment %" value={`${enrollmentPct}%`} />
-        <StatCard icon="⏳" iconBg="#fffaeb" label="Pending" value={pending} />
+        <StatCard icon="👥" iconBg="#f1f5f9" label="Total Users" value={errored ? "—" : totalUsers} />
+        <StatCard icon="🔐" iconBg="#ecfdf3" label="MFA Enrolled" value={errored ? "—" : enrolled} />
+        <StatCard icon="📊" iconBg="#eff6ff" label="Enrollment %" value={errored ? "—" : `${enrollmentPct}%`} />
+        <StatCard icon="⏳" iconBg="#fffaeb" label="Pending" value={errored ? "—" : pending} />
       </StatGrid>
 
-      {users.length === 0 ? (
+      {errored ? (
+        <Card title="User MFA Status">
+          <RefreshErrorState error={toHumanError("load", { area: "MFA status" })} backHref="/tenant-admin" />
+        </Card>
+      ) : users.length === 0 ? (
         <Card title="User MFA Status">
           <EmptyState icon="🔐" title="No users found" message="Users with MFA status will appear here once your directory is populated." />
         </Card>

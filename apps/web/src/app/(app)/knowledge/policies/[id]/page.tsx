@@ -1,8 +1,9 @@
 import { notFound } from "next/navigation";
 import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
-import { PageHeader, StatCard, StatGrid, EmptyState } from "../../../../_components/ds";
+import { PageHeader, StatCard, StatGrid, EmptyState, RefreshErrorState } from "../../../../_components/ds";
 import { getKnowledgePolicy, getPolicyAcknowledgements } from "../../_data/loaders";
 import { formatIndianDate } from "@/lib/formatters";
+import { toHumanError } from "@/lib/messages";
 import { PolicyActions } from "./PolicyActions";
 
 export default async function Page({ params }: { params: { id: string } }) {
@@ -18,7 +19,8 @@ export default async function Page({ params }: { params: { id: string } }) {
     );
   }
 
-  const { data: acks } = await getPolicyAcknowledgements(params.id);
+  const { data: acks, source: acksSource } = await getPolicyAcknowledgements(params.id);
+  const acksErrored = acksSource === "error";
   const isPublished = policy.status === "published";
 
   return (
@@ -32,7 +34,7 @@ export default async function Page({ params }: { params: { id: string } }) {
         <StatCard icon="🚦" iconBg="#eef2ff" label="Status" value={policy.status.replace(/_/g, " ")} />
         <StatCard icon="📅" iconBg="#ecfdf5" label="Effective" value={policy.effectiveDate ? formatIndianDate(policy.effectiveDate) : "—"} />
         <StatCard icon="🔁" iconBg="#fffbeb" label="Review due" value={policy.reviewDueDate ? formatIndianDate(policy.reviewDueDate) : "—"} />
-        <StatCard icon="👥" iconBg="#f0f9ff" label="Acknowledged" value={acks.acknowledgedCount.toLocaleString("en-IN")} />
+        <StatCard icon="👥" iconBg="#f0f9ff" label="Acknowledged" value={acksErrored ? "—" : acks.acknowledgedCount.toLocaleString("en-IN")} />
       </StatGrid>
 
       <div className="card">
@@ -45,8 +47,10 @@ export default async function Page({ params }: { params: { id: string } }) {
       <PolicyActions policyId={policy.id} status={policy.status} />
 
       <div className="card">
-        <div className="card-h"><h3>Who has acknowledged ({acks.acknowledgedCount})</h3></div>
-        {acks.employeeIds.length === 0 ? (
+        <div className="card-h"><h3>Who has acknowledged ({acksErrored ? "—" : acks.acknowledgedCount})</h3></div>
+        {acksErrored ? (
+          <RefreshErrorState error={toHumanError("load", { area: "acknowledgements" })} />
+        ) : acks.employeeIds.length === 0 ? (
           <EmptyState
             icon={isPublished ? "🕓" : "🔒"}
             title={isPublished ? "No acknowledgements yet" : "Not open for acknowledgement"}

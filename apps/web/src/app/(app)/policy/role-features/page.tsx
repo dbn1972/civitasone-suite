@@ -1,14 +1,16 @@
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
-import { PageHeader, StatGrid, StatCard, Card, EmptyState, StatusPill } from "@/app/_components/ds";
+import { PageHeader, StatGrid, StatCard, Card, EmptyState, StatusPill, RefreshErrorState } from "@/app/_components/ds";
 import { getRoleFeatureGrants } from "../_data";
+import { toHumanError } from "@/lib/messages";
 import { RoleFeatureGrantForm } from "./RoleFeatureGrantForm";
 
 export const dynamic = "force-dynamic";
 
 export default async function PolicyRoleFeaturesPage() {
   const { data: grants, source } = await getRoleFeatureGrants();
-  const granted = grants.filter((g) => g.granted).length;
-  const roles = new Set(grants.map((g) => g.roleName)).size;
+  const errored = source === "error";
+  const granted = errored ? 0 : grants.filter((g) => g.granted).length;
+  const roles = errored ? 0 : new Set(grants.map((g) => g.roleName)).size;
 
   return (
     <main className="page-main wrap" aria-label="Role feature grants">
@@ -19,9 +21,9 @@ export default async function PolicyRoleFeaturesPage() {
       />
       {source === "error" && <DataSourceBadge source="error" />}
       <StatGrid>
-        <StatCard icon="🎛️" iconBg="#eff8ff" label="Grants" value={grants.length} />
-        <StatCard icon="✅" iconBg="#dcfce7" label="Granted" value={granted} />
-        <StatCard icon="👤" iconBg="#faf5ff" label="Roles" value={roles} />
+        <StatCard icon="🎛️" iconBg="#eff8ff" label="Grants" value={errored ? "—" : grants.length} />
+        <StatCard icon="✅" iconBg="#dcfce7" label="Granted" value={errored ? "—" : granted} />
+        <StatCard icon="👤" iconBg="#faf5ff" label="Roles" value={errored ? "—" : roles} />
       </StatGrid>
 
       <Card title="Grant a feature" padding>
@@ -29,7 +31,9 @@ export default async function PolicyRoleFeaturesPage() {
       </Card>
 
       <Card title="Grants">
-        {grants.length === 0 ? (
+        {errored ? (
+          <RefreshErrorState error={toHumanError("load", { area: "role-feature grants" })} backHref="/policy" />
+        ) : grants.length === 0 ? (
           <EmptyState
             icon="🎛️"
             title="No role-feature grants"

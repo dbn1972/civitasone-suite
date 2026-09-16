@@ -1,8 +1,9 @@
 import Link from "next/link";
 import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
-import { PageHeader, StatCard, StatGrid, DataTable, EmptyState } from "../../../../_components/ds";
+import { PageHeader, StatCard, StatGrid, DataTable, EmptyState, RefreshErrorState } from "../../../../_components/ds";
 import { getMyServiceRequests } from "../../../../_data/loaders";
 import { formatIndianDate } from "@/lib/formatters";
+import { toHumanError } from "@/lib/messages";
 
 type Row = {
   id: string;
@@ -24,10 +25,11 @@ const STATUS_LABEL: Record<string, string> = {
 
 export default async function Page() {
   const { data: requests, source } = await getMyServiceRequests();
+  const errored = source === "error";
 
-  const open = requests.filter((r) => !["fulfilled", "rejected", "cancelled"].includes(r.status)).length;
-  const breached = requests.filter((r) => r.slaStatus === "breached").length;
-  const fulfilled = requests.filter((r) => r.status === "fulfilled").length;
+  const open = errored ? 0 : requests.filter((r) => !["fulfilled", "rejected", "cancelled"].includes(r.status)).length;
+  const breached = errored ? 0 : requests.filter((r) => r.slaStatus === "breached").length;
+  const fulfilled = errored ? 0 : requests.filter((r) => r.status === "fulfilled").length;
 
   const rows: Row[] = requests.map((r) => ({
     id: r.id,
@@ -47,14 +49,16 @@ export default async function Page() {
       />
       {source === "error" && <DataSourceBadge source={source} />}
       <StatGrid>
-        <StatCard icon="📥" label="Open" value={open.toLocaleString("en-IN")} />
-        <StatCard icon="🚨" label="SLA Breached" value={breached.toLocaleString("en-IN")} />
-        <StatCard icon="✅" label="Fulfilled" value={fulfilled.toLocaleString("en-IN")} />
-        <StatCard icon="🧾" label="Total" value={requests.length.toLocaleString("en-IN")} />
+        <StatCard icon="📥" label="Open" value={errored ? "—" : open.toLocaleString("en-IN")} />
+        <StatCard icon="🚨" label="SLA Breached" value={errored ? "—" : breached.toLocaleString("en-IN")} />
+        <StatCard icon="✅" label="Fulfilled" value={errored ? "—" : fulfilled.toLocaleString("en-IN")} />
+        <StatCard icon="🧾" label="Total" value={errored ? "—" : requests.length.toLocaleString("en-IN")} />
       </StatGrid>
       <div className="card">
         <div className="card-h"><h3>My service requests</h3></div>
-        {rows.length === 0 ? (
+        {errored ? (
+          <RefreshErrorState error={toHumanError("load", { area: "your requests" })} backHref="/helpdesk/catalogue" />
+        ) : rows.length === 0 ? (
           <EmptyState
             icon="🧾"
             title="No requests yet"

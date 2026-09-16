@@ -1,19 +1,21 @@
 import Link from "next/link";
-import { PageHeader, StatCard, StatGrid, EmptyState } from "../../_components/ds";
+import { PageHeader, StatCard, StatGrid, EmptyState, RefreshErrorState } from "../../_components/ds";
 import { DataSourceBadge } from "../../_components/DataSourceBadge";
 import { getHelpdeskTicketList, getTicketAnalytics } from "../../_data/loaders";
+import { toHumanError } from "@/lib/messages";
 
 export default async function Page() {
   const [{ data: tickets, source: ticketSource }, { data: analytics }] = await Promise.all([
     getHelpdeskTicketList(),
     getTicketAnalytics(),
   ]);
+  const ticketsErrored = ticketSource === "error";
 
-  const open = tickets.filter((t) => t.status === "open").length;
-  const inProgress = tickets.filter((t) => t.status === "in_progress").length;
-  const pending = tickets.filter((t) => t.status === "pending").length;
-  const resolved = tickets.filter((t) => t.status === "resolved" || t.status === "closed").length;
-  const breached = tickets.filter((t) => t.slaStatus === "breached").length;
+  const open = ticketsErrored ? 0 : tickets.filter((t) => t.status === "open").length;
+  const inProgress = ticketsErrored ? 0 : tickets.filter((t) => t.status === "in_progress").length;
+  const pending = ticketsErrored ? 0 : tickets.filter((t) => t.status === "pending").length;
+  const resolved = ticketsErrored ? 0 : tickets.filter((t) => t.status === "resolved" || t.status === "closed").length;
+  const breached = ticketsErrored ? 0 : tickets.filter((t) => t.slaStatus === "breached").length;
   const total = tickets.length;
   const slaBreachPct = total > 0 ? Math.round((breached / total) * 100) : 0;
 
@@ -36,14 +38,14 @@ export default async function Page() {
       {ticketSource === "error" && <DataSourceBadge source={ticketSource} />}
 
       <StatGrid>
-        <StatCard icon="🟠" label="Open" value={open.toLocaleString("en-IN")} />
-        <StatCard icon="🔵" label="In Progress" value={inProgress.toLocaleString("en-IN")} />
-        <StatCard icon="⏳" label="Pending" value={pending.toLocaleString("en-IN")} />
-        <StatCard icon="✅" label="Resolved / Closed" value={resolved.toLocaleString("en-IN")} />
-        <StatCard icon="🚨" label="SLA Breached" value={breached.toLocaleString("en-IN")} />
-        <StatCard icon="📊" label="SLA Breach %" value={`${slaBreachPct}%`} />
+        <StatCard icon="🟠" label="Open" value={ticketsErrored ? "—" : open.toLocaleString("en-IN")} />
+        <StatCard icon="🔵" label="In Progress" value={ticketsErrored ? "—" : inProgress.toLocaleString("en-IN")} />
+        <StatCard icon="⏳" label="Pending" value={ticketsErrored ? "—" : pending.toLocaleString("en-IN")} />
+        <StatCard icon="✅" label="Resolved / Closed" value={ticketsErrored ? "—" : resolved.toLocaleString("en-IN")} />
+        <StatCard icon="🚨" label="SLA Breached" value={ticketsErrored ? "—" : breached.toLocaleString("en-IN")} />
+        <StatCard icon="📊" label="SLA Breach %" value={ticketsErrored ? "—" : `${slaBreachPct}%`} />
         <StatCard icon="⏱" label="Avg Resolution" value={avgResolutionDisplay} />
-        <StatCard icon="🎫" label="Total Tickets" value={total.toLocaleString("en-IN")} />
+        <StatCard icon="🎫" label="Total Tickets" value={ticketsErrored ? "—" : total.toLocaleString("en-IN")} />
       </StatGrid>
 
       <div className="card" style={{ marginTop: 24 }}>
@@ -69,8 +71,12 @@ export default async function Page() {
         </div>
       </div>
 
-      {tickets.length === 0 && (
-        <EmptyState icon="🎫" title="No tickets yet" message="Create a ticket to get started with helpdesk management." />
+      {ticketsErrored ? (
+        <RefreshErrorState error={toHumanError("load", { area: "tickets" })} />
+      ) : (
+        tickets.length === 0 && (
+          <EmptyState icon="🎫" title="No tickets yet" message="Create a ticket to get started with helpdesk management." />
+        )
       )}
     </>
   );

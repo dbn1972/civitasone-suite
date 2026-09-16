@@ -1,15 +1,17 @@
 import Link from "next/link";
 import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
 import { getProjectTasks } from "../../../../_data/loaders";
-import { PageHeader, Card, EmptyState, StatGrid, StatCard } from "@/app/_components/ds";
+import { PageHeader, Card, EmptyState, StatGrid, StatCard, RefreshErrorState } from "@/app/_components/ds";
+import { toHumanError } from "@/lib/messages";
 
 export default async function ProjectTasksPage({ params }: { params: { id: string } }) {
   const { data: tasks, source } = await getProjectTasks(params.id);
+  const errored = source === "error";
 
-  const pending   = tasks.filter((t) => t.status === "pending").length;
-  const inProg    = tasks.filter((t) => t.status === "in_progress").length;
-  const completed = tasks.filter((t) => t.status === "completed").length;
-  const blocked   = tasks.filter((t) => t.status === "blocked").length;
+  const pending   = errored ? 0 : tasks.filter((t) => t.status === "pending").length;
+  const inProg    = errored ? 0 : tasks.filter((t) => t.status === "in_progress").length;
+  const completed = errored ? 0 : tasks.filter((t) => t.status === "completed").length;
+  const blocked   = errored ? 0 : tasks.filter((t) => t.status === "blocked").length;
 
   function statusColor(status: string): string {
     if (status === "completed") return "var(--good)";
@@ -39,13 +41,15 @@ export default async function ProjectTasksPage({ params }: { params: { id: strin
       />
       {source === "error" && <DataSourceBadge source="error" />}
       <StatGrid>
-        <StatCard icon="📋" iconBg="#eef0fe" label="Pending"     value={pending} />
-        <StatCard icon="⚙️" iconBg="#fffaeb" label="In Progress" value={inProg} />
-        <StatCard icon="✅" iconBg="#ecfdf3" label="Completed"   value={completed} />
-        <StatCard icon="🔴" iconBg="#fef3f2" label="Blocked"     value={blocked} />
+        <StatCard icon="📋" iconBg="#eef0fe" label="Pending"     value={errored ? "—" : pending} />
+        <StatCard icon="⚙️" iconBg="#fffaeb" label="In Progress" value={errored ? "—" : inProg} />
+        <StatCard icon="✅" iconBg="#ecfdf3" label="Completed"   value={errored ? "—" : completed} />
+        <StatCard icon="🔴" iconBg="#fef3f2" label="Blocked"     value={errored ? "—" : blocked} />
       </StatGrid>
       <Card title="Tasks">
-        {tasks.length === 0 ? (
+        {errored ? (
+          <RefreshErrorState error={toHumanError("load", { area: "project tasks" })} backHref={`/projects/${params.id}`} />
+        ) : tasks.length === 0 ? (
           <EmptyState
             icon="📋"
             title="No tasks"

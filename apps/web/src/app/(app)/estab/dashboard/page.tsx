@@ -1,8 +1,9 @@
 import Link from "next/link";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { getEstabDashboard, getEstabFiles } from "../../../_data/loaders";
-import { PageHeader, StatCard, StatGrid, DataTable, EmptyState, Term } from "../../../_components/ds";
+import { PageHeader, StatCard, StatGrid, DataTable, EmptyState, RefreshErrorState, Term } from "../../../_components/ds";
 import { formatIndianDate } from "@/lib/formatters";
+import { toHumanError } from "@/lib/messages";
 
 type RecentFileRow = {
   id: string;
@@ -13,10 +14,12 @@ type RecentFileRow = {
 };
 
 export default async function EstabDashboardPage() {
-  const [{ data, source }, { data: files }] = await Promise.all([
+  const [{ data, source }, { data: files, source: filesSource }] = await Promise.all([
     getEstabDashboard(),
     getEstabFiles(),
   ]);
+  const errored = source === "error";
+  const filesErrored = filesSource === "error";
 
   const recent = (files ?? []).slice(0, 8);
   const recentRows: RecentFileRow[] = recent.map((f) => ({
@@ -42,12 +45,12 @@ export default async function EstabDashboardPage() {
         }
       />
       <StatGrid>
-        <StatCard icon="📁" iconBg="#e6f7f5" label="Active Files" value={data.filesPending.toLocaleString("en-IN")} />
-        <StatCard icon="⏱" iconBg="#fef2f2" label="SLA Breached" value={data.slaBreached.toLocaleString("en-IN")} />
-        <StatCard icon="📬" iconBg="#eff6ff" label="DAK Pending" value={data.dakPending.toLocaleString("en-IN")} />
-        <StatCard icon="📊" iconBg="#fffaeb" label="Avg Pendency (days)" value={String(data.avgPendencyDays)} />
-        <StatCard icon="📅" iconBg="#f5f3ff" label="Meetings Today" value={data.meetingsToday.toLocaleString("en-IN")} />
-        <StatCard icon="✅" iconBg="#ecfdf5" label="Compliance Due" value={data.complianceItemsDue.toLocaleString("en-IN")} />
+        <StatCard icon="📁" iconBg="#e6f7f5" label="Active Files" value={errored ? "—" : data.filesPending.toLocaleString("en-IN")} />
+        <StatCard icon="⏱" iconBg="#fef2f2" label="SLA Breached" value={errored ? "—" : data.slaBreached.toLocaleString("en-IN")} />
+        <StatCard icon="📬" iconBg="#eff6ff" label="DAK Pending" value={errored ? "—" : data.dakPending.toLocaleString("en-IN")} />
+        <StatCard icon="📊" iconBg="#fffaeb" label="Avg Pendency (days)" value={errored ? "—" : String(data.avgPendencyDays)} />
+        <StatCard icon="📅" iconBg="#f5f3ff" label="Meetings Today" value={errored ? "—" : data.meetingsToday.toLocaleString("en-IN")} />
+        <StatCard icon="✅" iconBg="#ecfdf5" label="Compliance Due" value={errored ? "—" : data.complianceItemsDue.toLocaleString("en-IN")} />
       </StatGrid>
       <div className="grid g-main" style={{ marginTop: 18 }}>
         <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
@@ -56,7 +59,9 @@ export default async function EstabDashboardPage() {
               <h3>Recent files (<Term name="eOffice" />)</h3>
               <Link className="lnk" href="/estab/list">All files →</Link>
             </div>
-            {recentRows.length === 0 ? (
+            {filesErrored ? (
+              <RefreshErrorState error={toHumanError("load", { area: "recent files" })} />
+            ) : recentRows.length === 0 ? (
               <EmptyState icon="📁" title="No files yet" message="Register DAK or create a file to get started." />
             ) : (
               <DataTable<RecentFileRow>
@@ -91,10 +96,10 @@ export default async function EstabDashboardPage() {
               <h3>Pendency snapshot</h3>
             </div>
             <div className="fields pad">
-              <div className="fld"><div className="l">Active files</div><div className="v">{data.filesPending}</div></div>
-              <div className="fld"><div className="l">Unlinked DAK</div><div className="v">{data.dakPending}</div></div>
-              <div className="fld"><div className="l">SLA breached</div><div className="v">{data.slaBreached}</div></div>
-              <div className="fld"><div className="l">Avg pendency</div><div className="v">{data.avgPendencyDays} days</div></div>
+              <div className="fld"><div className="l">Active files</div><div className="v">{errored ? "—" : data.filesPending}</div></div>
+              <div className="fld"><div className="l">Unlinked DAK</div><div className="v">{errored ? "—" : data.dakPending}</div></div>
+              <div className="fld"><div className="l">SLA breached</div><div className="v">{errored ? "—" : data.slaBreached}</div></div>
+              <div className="fld"><div className="l">Avg pendency</div><div className="v">{errored ? "—" : `${data.avgPendencyDays} days`}</div></div>
             </div>
           </div>
         </div>

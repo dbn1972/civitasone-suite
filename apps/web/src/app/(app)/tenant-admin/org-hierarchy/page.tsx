@@ -1,7 +1,9 @@
-import { PageHeader, StatCard, StatGrid, Card, EmptyState } from "@/app/_components/ds";
+import { PageHeader, StatCard, StatGrid, Card, EmptyState, RefreshErrorState } from "@/app/_components/ds";
 import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
 import { Breadcrumb } from "../Breadcrumb";
 import { getOrgHierarchy, type OrgHierarchyNode } from "@/app/_data/loaders";
+import { useResource } from "@/app/_data/useResource";
+import { toHumanError } from "@/lib/messages";
 
 function countAll(nodes: OrgHierarchyNode[]): number {
   let total = 0;
@@ -52,10 +54,12 @@ function TreeNode({ node, depth }: { node: OrgHierarchyNode; depth: number }) {
 }
 
 export default async function OrgHierarchyPage() {
-  const { data: orgTree, source } = await getOrgHierarchy();
-  const totalDepts = countDepts(orgTree);
-  const totalStaff = countAll(orgTree);
-  const levels = maxDepth(orgTree);
+  const result = await getOrgHierarchy();
+  const { data: orgTree, source } = result;
+  const errored = useResource(result).status === "error";
+  const totalDepts = errored ? 0 : countDepts(orgTree);
+  const totalStaff = errored ? 0 : countAll(orgTree);
+  const levels = errored ? 0 : maxDepth(orgTree);
   const rootName = orgTree.length > 0 ? orgTree[0].name : "—";
 
   return (
@@ -69,13 +73,17 @@ export default async function OrgHierarchyPage() {
       <DataSourceBadge source={source} />
 
       <StatGrid>
-        <StatCard icon="🏛️" iconBg="#eff6ff" label="Departments" value={totalDepts} />
-        <StatCard icon="👥" iconBg="#ecfdf3" label="Total Staff" value={totalStaff} />
-        <StatCard icon="📊" iconBg="#f1f5f9" label="Levels" value={levels} />
-        <StatCard icon="🌳" iconBg="#ecfdf3" label="Root Org" value={rootName} />
+        <StatCard icon="🏛️" iconBg="#eff6ff" label="Departments" value={errored ? "—" : totalDepts} />
+        <StatCard icon="👥" iconBg="#ecfdf3" label="Total Staff" value={errored ? "—" : totalStaff} />
+        <StatCard icon="📊" iconBg="#f1f5f9" label="Levels" value={errored ? "—" : levels} />
+        <StatCard icon="🌳" iconBg="#ecfdf3" label="Root Org" value={errored ? "—" : rootName} />
       </StatGrid>
 
-      {orgTree.length === 0 ? (
+      {errored ? (
+        <Card title="Department Tree" padding>
+          <RefreshErrorState error={toHumanError("load", { area: "organization hierarchy" })} backHref="/tenant-admin" />
+        </Card>
+      ) : orgTree.length === 0 ? (
         <Card title="Department Tree" padding>
           <EmptyState icon="🏛️" title="No organisation hierarchy configured" message="Set up your department structure to see it here." />
         </Card>

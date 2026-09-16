@@ -1,13 +1,15 @@
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
-import { PageHeader, StatGrid, StatCard, Card, EmptyState, StatusPill } from "@/app/_components/ds";
+import { PageHeader, StatGrid, StatCard, Card, EmptyState, StatusPill, RefreshErrorState } from "@/app/_components/ds";
 import { getAbacRules } from "../_data";
+import { toHumanError } from "@/lib/messages";
 
 export const dynamic = "force-dynamic";
 
 export default async function PolicyAbacPage() {
   const { data: rules, source } = await getAbacRules();
-  const enabled = rules.filter((r) => r.enabled).length;
-  const deny = rules.filter((r) => r.expression?.effect === "deny").length;
+  const errored = source === "error";
+  const enabled = errored ? 0 : rules.filter((r) => r.enabled).length;
+  const deny = errored ? 0 : rules.filter((r) => r.expression?.effect === "deny").length;
 
   return (
     <main className="page-main wrap" aria-label="ABAC rules">
@@ -18,13 +20,15 @@ export default async function PolicyAbacPage() {
       />
       {source === "error" && <DataSourceBadge source="error" />}
       <StatGrid>
-        <StatCard icon="🛡️" iconBg="#eff8ff" label="Rules" value={rules.length} />
-        <StatCard icon="✅" iconBg="#dcfce7" label="Enabled" value={enabled} />
-        <StatCard icon="🚫" iconBg="#fee2e2" label="Deny effect" value={deny} />
+        <StatCard icon="🛡️" iconBg="#eff8ff" label="Rules" value={errored ? "—" : rules.length} />
+        <StatCard icon="✅" iconBg="#dcfce7" label="Enabled" value={errored ? "—" : enabled} />
+        <StatCard icon="🚫" iconBg="#fee2e2" label="Deny effect" value={errored ? "—" : deny} />
       </StatGrid>
 
       <Card title="Rules">
-        {rules.length === 0 ? (
+        {errored ? (
+          <RefreshErrorState error={toHumanError("load", { area: "ABAC rules" })} backHref="/policy" />
+        ) : rules.length === 0 ? (
           <EmptyState
             icon="🛡️"
             title="No ABAC rules"

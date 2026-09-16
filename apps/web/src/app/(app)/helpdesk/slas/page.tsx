@@ -1,7 +1,8 @@
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
-import { PageHeader, StatCard, StatGrid, DataTable, EmptyState } from "../../../_components/ds";
+import { PageHeader, StatCard, StatGrid, DataTable, EmptyState, RefreshErrorState } from "../../../_components/ds";
 import { getBreachedSLATickets } from "../../../_data/loaders";
 import { formatIndianDate } from "@/lib/formatters";
+import { toHumanError } from "@/lib/messages";
 
 type TicketRow = {
   id: string;
@@ -16,6 +17,7 @@ type TicketRow = {
 
 export default async function Page() {
   const { data: tickets, source } = await getBreachedSLATickets();
+  const errored = source === "error";
 
   const breached = tickets.filter((t) => t.slaStatus === "breached");
   const dueSoon = tickets.filter((t) => t.slaStatus === "due_soon").length;
@@ -45,14 +47,16 @@ export default async function Page() {
       />
       {source === "error" && <DataSourceBadge source={source} />}
       <StatGrid>
-        <StatCard icon="🚨" label="SLA Breached" value={breached.length.toLocaleString("en-IN")} />
-        <StatCard icon="⚠️" label="Due Soon" value={dueSoon.toLocaleString("en-IN")} />
-        <StatCard icon="✅" label="Within SLA" value={withinSla.toLocaleString("en-IN")} />
-        <StatCard icon="📊" label="Total Tickets" value={tickets.length.toLocaleString("en-IN")} />
+        <StatCard icon="🚨" label="SLA Breached" value={errored ? "—" : breached.length.toLocaleString("en-IN")} />
+        <StatCard icon="⚠️" label="Due Soon" value={errored ? "—" : dueSoon.toLocaleString("en-IN")} />
+        <StatCard icon="✅" label="Within SLA" value={errored ? "—" : withinSla.toLocaleString("en-IN")} />
+        <StatCard icon="📊" label="Total Tickets" value={errored ? "—" : tickets.length.toLocaleString("en-IN")} />
       </StatGrid>
       <div className="card">
         <div className="card-h"><h3>Breached SLA tickets</h3></div>
-        {rows.length === 0 ? (
+        {errored ? (
+          <RefreshErrorState error={toHumanError("load", { area: "SLA queue" })} backHref="/helpdesk" />
+        ) : rows.length === 0 ? (
           <EmptyState icon="✅" title="All clear — no SLA breaches" message="No tickets have exceeded their SLA threshold." />
         ) : (
           <DataTable<TicketRow>

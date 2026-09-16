@@ -1,13 +1,15 @@
 import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
 import { getProjectRisks } from "../../../../_data/loaders";
-import { PageHeader, Card, EmptyState, StatGrid, StatCard } from "@/app/_components/ds";
+import { PageHeader, Card, EmptyState, StatGrid, StatCard, RefreshErrorState } from "@/app/_components/ds";
+import { toHumanError } from "@/lib/messages";
 
 export default async function ProjectRisksPage({ params }: { params: { id: string } }) {
   const { data: risks, source } = await getProjectRisks(params.id);
+  const errored = source === "error";
 
-  const open     = risks.filter((r) => r.status === "open").length;
-  const critical = risks.filter((r) => r.riskScore >= 9).length;
-  const mitigated = risks.filter((r) => r.status === "mitigated").length;
+  const open     = errored ? 0 : risks.filter((r) => r.status === "open").length;
+  const critical = errored ? 0 : risks.filter((r) => r.riskScore >= 9).length;
+  const mitigated = errored ? 0 : risks.filter((r) => r.status === "mitigated").length;
 
   function statusBg(status: string): string {
     if (status === "open")      return "rgba(220,38,38,0.12)";
@@ -41,13 +43,15 @@ export default async function ProjectRisksPage({ params }: { params: { id: strin
       />
       {source === "error" && <DataSourceBadge source="error" />}
       <StatGrid>
-        <StatCard icon="⚠️" iconBg="#fef3f2" label="Open"      value={open} />
-        <StatCard icon="🔴" iconBg="#fef3f2" label="Critical"  value={critical} />
-        <StatCard icon="✅" iconBg="#ecfdf3" label="Mitigated" value={mitigated} />
-        <StatCard icon="📋" iconBg="#eef0fe" label="Total"     value={risks.length} />
+        <StatCard icon="⚠️" iconBg="#fef3f2" label="Open"      value={errored ? "—" : open} />
+        <StatCard icon="🔴" iconBg="#fef3f2" label="Critical"  value={errored ? "—" : critical} />
+        <StatCard icon="✅" iconBg="#ecfdf3" label="Mitigated" value={errored ? "—" : mitigated} />
+        <StatCard icon="📋" iconBg="#eef0fe" label="Total"     value={errored ? "—" : risks.length} />
       </StatGrid>
       <Card title="Risks">
-        {risks.length === 0 ? (
+        {errored ? (
+          <RefreshErrorState error={toHumanError("load", { area: "project risks" })} backHref={`/projects/${params.id}`} />
+        ) : risks.length === 0 ? (
           <EmptyState
             icon="✅"
             title="No risks registered"

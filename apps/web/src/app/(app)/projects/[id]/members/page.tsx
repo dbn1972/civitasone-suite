@@ -1,11 +1,13 @@
 import Link from "next/link";
 import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
 import { getProjectMembers } from "../../../../_data/loaders";
-import { PageHeader, Card, EmptyState } from "@/app/_components/ds";
+import { PageHeader, Card, EmptyState, RefreshErrorState } from "@/app/_components/ds";
+import { toHumanError } from "@/lib/messages";
 import { AddMemberForm } from "./AddMemberForm";
 
 export default async function ProjectMembersPage({ params }: { params: { id: string } }) {
   const { data: members, source } = await getProjectMembers(params.id);
+  const errored = source === "error";
 
   function roleColor(role: string): string {
     if (role === "project_manager") return "var(--good)";
@@ -31,7 +33,9 @@ export default async function ProjectMembersPage({ params }: { params: { id: str
         <AddMemberForm projectId={params.id} />
       </Card>
       <Card title="Team Members">
-        {members.length === 0 ? (
+        {errored ? (
+          <RefreshErrorState error={toHumanError("load", { area: "team members" })} backHref={`/projects/${params.id}`} />
+        ) : members.length === 0 ? (
           <EmptyState
             icon="👥"
             title="No team members"
