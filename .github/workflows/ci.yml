@@ -741,11 +741,36 @@ jobs:
       - name: Build packages first
         run: pnpm turbo build --filter='./packages/*'
       - name: Build web app
-        run: pnpm --filter @civitasone/web build
+        run: pnpm --filter @civitasone/web build | tee /tmp/web-build.log
         env:
           CIVITASONE_API_BASE_URL: http://localhost:8080
           NEXT_PUBLIC_API_BASE_URL: http://localhost:8080
           SKIP_ENV_VALIDATION: true
+      - name: Report bundle size
+        # PERF-009 tranche 2: cheap, always-on visibility into route bundle
+        # sizes on every PR -- NOT a historical delta against a stored
+        # baseline (no baseline is tracked yet; see docs/PERFORMANCE.md /
+        # PR description for that as remaining follow-up). Deeper,
+        # per-module attribution is available on demand via
+        # `pnpm --filter @civitasone/web run analyze` (wraps
+        # @next/bundle-analyzer; opt-in, gated behind ANALYZE=true so it
+        # never adds cost to a normal build), which writes
+        # apps/web/.next/analyze/{client,nodejs,edge}.html.
+        # Purely informational -- must never fail the job itself, including
+        # when the preceding build step failed (no route table to report).
+        if: always()
+        run: |
+          {
+            echo "### Web bundle size (this build)"
+            echo '```'
+            if grep -q "First Load JS shared by all" /tmp/web-build.log 2>/dev/null; then
+              echo "Routes built: $(grep -cE '^(├|└) [○●ƒ] ' /tmp/web-build.log || true)"
+              grep -A4 "First Load JS shared by all" /tmp/web-build.log
+            else
+              echo "(build did not reach the bundle summary -- see the build step's own log)"
+            fi
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY" || true
 
   # ─────────────────────────────────────────────
   # Job 5: Contract tests (gateway routing + screen chain)

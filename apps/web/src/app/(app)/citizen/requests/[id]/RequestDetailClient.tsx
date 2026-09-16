@@ -1,45 +1,47 @@
 "use client";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { PageHeader, EmptyState, StatusPill, ActionButton } from "@/app/_components/ds";
 import { formatIndianDate } from "@/lib/formatters";
-
-/** Shape returned by GET /v1/citizen/grievances/:id (grievance row + actions). */
-interface GrievanceAction {
-  id: string;
-  actionType: string;
-  note?: string | null;
-  createdAt: string;
-}
-interface Grievance {
-  id: string;
-  category: string;
-  subject: string;
-  description: string;
-  priority: string;
-  status: string;
-  departmentRef?: string | null;
-  assignedTo?: string | null;
-  createdAt: string;
-  updatedAt: string;
-  actions: GrievanceAction[];
-}
+import type { Grievance } from "../../_data/loaders";
 
 const inputStyle = { width: "100%", padding: 8, minHeight: 44, marginBottom: 8, borderRadius: 8, border: "1px solid var(--line)" } as const;
 const labelStyle = { display: "block", fontSize: 12, color: "var(--muted)", marginBottom: 4, fontWeight: 600 } as const;
 
-export function RequestDetailClient({ id }: { id: string }) {
+export function RequestDetailClient({
+  id,
+  initialGrievance = null,
+  initialSource = "error",
+}: {
+  id: string;
+  /**
+   * PERF-009 tranche 2: initial data fetched server-side by page.tsx via the
+   * citizen loader, so the first paint already has real data instead of
+   * shipping empty and waiting on a post-hydration client fetch. Optional
+   * (defaults preserve the exact pre-existing client-only behavior) so this
+   * component still works if ever rendered without a server loader upstream.
+   */
+  initialGrievance?: Grievance | null;
+  /** "api" = trust initialGrievance (even if null -- that's a real not-found). "error" = the server loader couldn't get an answer; fall back to the original always-fetch-on-mount behavior. */
+  initialSource?: "api" | "error";
+}) {
   const t = useTranslations("citizenRequests");
   const router = useRouter();
-  const [grievance, setGrievance] = useState<Grievance | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [grievance, setGrievance] = useState<Grievance | null>(initialGrievance);
+  const [loading, setLoading] = useState(initialSource !== "api");
   const [loadError, setLoadError] = useState("");
   const [notice, setNotice] = useState("");
   const [showAction, setShowAction] = useState(false);
   const [actionForm, setActionForm] = useState({ actionType: "comment", note: "" });
   const [busy, setBusy] = useState(false);
   const [formError, setFormError] = useState("");
+  // True only across the very first effect run, and only when the server
+  // loader already gave us a trustworthy answer -- skips the redundant
+  // client-side fetch-on-mount in that case. Any later run (id changed) or a
+  // first run where the server loader itself failed behaves exactly as
+  // before (unconditional fetch).
+  const skipFirstFetch = useRef(initialSource === "api");
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -56,7 +58,13 @@ export function RequestDetailClient({ id }: { id: string }) {
     }
   }, [id]);
 
-  useEffect(() => { void load(); }, [load]);
+  useEffect(() => {
+    if (skipFirstFetch.current) {
+      skipFirstFetch.current = false;
+      return;
+    }
+    void load();
+  }, [load]);
 
   // Endpoints accept asynchronously (202). Surface that honestly.
   const afterMutate = useCallback((msg: string) => {
