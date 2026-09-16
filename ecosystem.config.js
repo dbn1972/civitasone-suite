@@ -729,7 +729,7 @@ module.exports = {
     svc("roadcut",       3075, "roadcut_svc",       "civitas_roadcut", {}, { graceful: true }), // PERF-015
     svc("sewerage",      3078, "sewerage_svc",      "civitas_sewerage", {}, { graceful: true }), // PERF-015
     svc("shop",          3060, "shop_svc",          "civitas_shop", {}, { graceful: true }), // PERF-015
-    svc("swm",           3079, "swm_svc",           "civitas_swm"),
+    svc("swm",           3079, "swm_svc",           "civitas_swm", {}, { graceful: true }), // PERF-015
     svc("trade",         3070, "trade_svc",         "civitas_trade"),
     svc("vendor",        3074, "vendor_svc",        "civitas_vendor"),
 
