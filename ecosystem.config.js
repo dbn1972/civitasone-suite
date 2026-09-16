@@ -717,7 +717,7 @@ module.exports = {
     // static "startable + reachable" declaration below.
     svc("advertisement", 3073, "advertisement_svc", "civitas_advertisement", {}, { graceful: true }), // PERF-015
     svc("animal",        3082, "animal_svc",        "civitas_animal", {}, { graceful: true }), // PERF-015
-    svc("building",      3071, "building_svc",      "civitas_building"),
+    svc("building",      3071, "building_svc",      "civitas_building", {}, { graceful: true }), // PERF-015
     svc("crematorium",   3083, "crematorium_svc",   "civitas_crematorium"),
     svc("drainage",      3080, "drainage_svc",      "civitas_drainage"),
     svc("event",         3076, "event_svc",         "civitas_event"),
