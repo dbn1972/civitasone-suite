@@ -1,11 +1,24 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { NextIntlClientProvider } from "next-intl";
+import enMessages from "@/messages/en.json";
 
 vi.mock("next/navigation", () => ({
   useSearchParams: () => ({ get: () => null }),
 }));
 
 import { NewJobOpeningForm } from "./NewJobOpeningForm";
+
+// UX-017: NewJobOpeningForm now reads its copy through next-intl
+// (useTranslations("recruitmentNewJob")), so it needs a real provider in the
+// tree -- same pattern as hr/leave/apply/ApplyLeaveForm.test.tsx.
+function renderForm() {
+  return render(
+    <NextIntlClientProvider locale="en" messages={enMessages}>
+      <NewJobOpeningForm />
+    </NextIntlClientProvider>,
+  );
+}
 
 function fillRequiredFields() {
   fireEvent.change(screen.getByLabelText(/reference no/i), { target: { value: "JOB-2026-0001" } });
@@ -29,7 +42,7 @@ describe("NewJobOpeningForm", () => {
       status: 202,
       text: async () => JSON.stringify({ taskId: "t1" }),
     });
-    render(<NewJobOpeningForm />);
+    renderForm();
     fillRequiredFields();
     fireEvent.click(screen.getByRole("button", { name: /create job opening/i }));
 
@@ -46,7 +59,7 @@ describe("NewJobOpeningForm", () => {
       status: 202,
       text: async () => "{}",
     });
-    render(<NewJobOpeningForm />);
+    renderForm();
     fillRequiredFields();
     fireEvent.click(screen.getByRole("button", { name: /create job opening/i }));
 
@@ -63,7 +76,7 @@ describe("NewJobOpeningForm", () => {
       status: 202,
       text: async () => "{}",
     });
-    render(<NewJobOpeningForm />);
+    renderForm();
     fillRequiredFields();
     const btn = screen.getByRole("button", { name: /create job opening/i });
     fireEvent.click(btn);
@@ -74,7 +87,7 @@ describe("NewJobOpeningForm", () => {
   });
 
   it("still blocks submit client-side when Reference No is empty", () => {
-    render(<NewJobOpeningForm />);
+    renderForm();
     fireEvent.click(screen.getByRole("button", { name: /create job opening/i }));
     expect(screen.getByText(/reference no is required/i)).toBeInTheDocument();
     expect(fetch).not.toHaveBeenCalled();
@@ -86,7 +99,7 @@ describe("NewJobOpeningForm", () => {
       status: 409,
       text: async () => "duplicate refNo",
     });
-    render(<NewJobOpeningForm />);
+    renderForm();
     fillRequiredFields();
     fireEvent.click(screen.getByRole("button", { name: /create job opening/i }));
 
@@ -106,7 +119,7 @@ describe("NewJobOpeningForm", () => {
       status: 409,
       text: async () => "duplicate refNo",
     });
-    render(<NewJobOpeningForm />);
+    renderForm();
     fillRequiredFields();
     fireEvent.click(screen.getByRole("button", { name: /create job opening/i }));
 

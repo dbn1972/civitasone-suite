@@ -1,5 +1,7 @@
 "use client";
 
+import { useTranslations } from "next-intl";
+
 function formatIndianDateTime(iso: string): string {
   const d = new Date(iso);
   if (isNaN(d.getTime())) return iso;
@@ -36,6 +38,7 @@ export function InterviewCard({
   onReschedule,
   onCancel,
 }: InterviewCardProps) {
+  const t = useTranslations("recruitmentInterviewCard");
   const slotLabel = formatIndianDateTime(slotISO);
 
   return (
@@ -47,18 +50,18 @@ export function InterviewCard({
           <p className="text-xs text-slate-500 mt-0.5 truncate">{roleApplied}</p>
         </div>
         <span className="inline-flex items-center gap-1 shrink-0 rounded-full bg-purple-50 border border-purple-200 px-2.5 py-0.5 text-xs font-semibold text-purple-700">
-          <span aria-hidden="true">📅</span> Interview
+          <span aria-hidden="true">📅</span> {t("interview")}
         </span>
       </div>
 
       {/* Slot + interviewer details */}
       <dl className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
         <div>
-          <dt className="text-slate-500">Slot</dt>
+          <dt className="text-slate-500">{t("slot")}</dt>
           <dd className="font-semibold text-slate-800 mt-0.5">{slotLabel}</dd>
         </div>
         <div>
-          <dt className="text-slate-500">Interviewer</dt>
+          <dt className="text-slate-500">{t("interviewer")}</dt>
           <dd className="font-medium text-slate-800 mt-0.5">{interviewerName}</dd>
         </div>
       </dl>
@@ -72,11 +75,11 @@ export function InterviewCard({
             rel="noopener noreferrer"
             className="inline-flex items-center gap-1.5 rounded-md bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-indigo-500 transition-colors"
           >
-            <span aria-hidden="true">🎥</span> Join Meet
+            <span aria-hidden="true">🎥</span> {t("joinMeet")}
           </a>
         ) : (
           <span className="inline-flex items-center gap-1.5 rounded-md bg-slate-100 px-3 py-1.5 text-xs font-medium text-slate-400 cursor-not-allowed">
-            <span aria-hidden="true">🎥</span> No link yet
+            <span aria-hidden="true">🎥</span> {t("noLinkYet")}
           </span>
         )}
         {onReschedule && (
@@ -85,7 +88,7 @@ export function InterviewCard({
             onClick={onReschedule}
             className="inline-flex items-center gap-1 rounded-md border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 transition-colors"
           >
-            Reschedule
+            {t("reschedule")}
           </button>
         )}
         {onCancel && (
@@ -94,7 +97,7 @@ export function InterviewCard({
             onClick={onCancel}
             className="inline-flex items-center gap-1 rounded-md border border-red-100 bg-red-50 px-3 py-1.5 text-xs font-medium text-red-600 hover:bg-red-100 transition-colors"
           >
-            Cancel
+            {t("cancel")}
           </button>
         )}
       </div>

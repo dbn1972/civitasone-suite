@@ -49,6 +49,7 @@ export default async function IndentsPage() {
       <PageHeader
         title="Purchase Indents"
         subtitle="Track material requisitions from departments through to PO conversion."
+        help="procurement"
         actions={
           <>
             <Link href="/procurement/indents/new" className="btn primary">+ New Indent</Link>

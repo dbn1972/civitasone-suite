@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useId, useState, useCallback, useRef } from "react";
+import { useTranslations } from "next-intl";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { ApplicationPipeline } from "../_components/ApplicationPipeline";
@@ -77,48 +78,6 @@ type ActionDef = {
   confirm?: ConfirmConfig;
 };
 
-const REJECT_CONFIRM: ConfirmConfig = {
-  title: "Reject this application?",
-  description: "The applicant will be marked ineligible for this vacancy and removed from further pipeline stages. This cannot be undone from here.",
-  confirmLabel: "Reject application",
-};
-
-const WITHDRAW_CONFIRM: ConfirmConfig = {
-  title: "Withdraw this application?",
-  description: "The application will be marked withdrawn and taken out of the selection pipeline for this vacancy.",
-  confirmLabel: "Withdraw application",
-  requireReason: true,
-};
-
-// COMP-004 detector note: static reference -- this is the fixed action-menu
-// (which buttons appear) per recruitment-pipeline stage, a UX/state-machine
-// decision, not data. The applications it acts on are real-loaded above.
-const STAGE_ACTIONS: Record<string, ActionDef[]> = {
-  applied: [
-    { label: "Shortlist",         key: "shortlist",   variant: "primary" },
-    { label: "Reject",            key: "reject",      variant: "danger", confirm: REJECT_CONFIRM },
-  ],
-  shortlisted: [
-    { label: "Schedule Interview", key: "schedule_interview", variant: "primary", disabled: true, disabledReason: "Interview scheduling isn't available in this release yet" },
-    { label: "Reject",             key: "reject",             variant: "danger", confirm: REJECT_CONFIRM },
-  ],
-  interviewing: [
-    { label: "Send Offer", key: "send_offer", variant: "primary", disabled: true, disabledReason: "Offer management isn't available in this release yet" },
-    { label: "Reject",     key: "reject",     variant: "danger", confirm: REJECT_CONFIRM },
-  ],
-  selected: [
-    { label: "Mark Joined", key: "mark_joined", variant: "primary", disabled: true, disabledReason: "Open this applicant to complete the hire" },
-    { label: "Withdraw",    key: "withdraw",    variant: "danger", confirm: WITHDRAW_CONFIRM },
-  ],
-  offered: [
-    { label: "Mark Joined", key: "mark_joined", variant: "primary", disabled: true, disabledReason: "Open this applicant to complete the hire" },
-    { label: "Withdraw",    key: "withdraw",    variant: "danger", confirm: WITHDRAW_CONFIRM },
-  ],
-  hired:     [],
-  rejected:  [],
-  withdrawn: [],
-};
-
 function ContextMenu({
   app,
   onAction,
@@ -128,9 +87,53 @@ function ContextMenu({
   onAction: (appId: string, key: string, reason?: string) => Promise<void>;
   actionState: "idle" | "submitting" | "done" | "error";
 }) {
+  const t = useTranslations("recruitmentDetail");
   const [open, setOpen] = useState(false);
   const [pendingAction, setPendingAction] = useState<ActionDef | null>(null);
   const ref = useRef<HTMLDivElement>(null);
+
+  const REJECT_CONFIRM: ConfirmConfig = {
+    title: t("rejectConfirmTitle"),
+    description: t("rejectConfirmDescription"),
+    confirmLabel: t("rejectConfirmLabel"),
+  };
+
+  const WITHDRAW_CONFIRM: ConfirmConfig = {
+    title: t("withdrawConfirmTitle"),
+    description: t("withdrawConfirmDescription"),
+    confirmLabel: t("withdrawConfirmLabel"),
+    requireReason: true,
+  };
+
+  // COMP-004 detector note: static reference -- this is the fixed action-menu
+  // (which buttons appear) per recruitment-pipeline stage, a UX/state-machine
+  // decision, not data. The applications it acts on are real-loaded above.
+  const STAGE_ACTIONS: Record<string, ActionDef[]> = {
+    applied: [
+      { label: t("actionShortlist"), key: "shortlist", variant: "primary" },
+      { label: t("actionReject"),    key: "reject",    variant: "danger", confirm: REJECT_CONFIRM },
+    ],
+    shortlisted: [
+      { label: t("actionScheduleInterview"), key: "schedule_interview", variant: "primary", disabled: true, disabledReason: t("actionScheduleInterviewDisabledReason") },
+      { label: t("actionReject"),            key: "reject",             variant: "danger", confirm: REJECT_CONFIRM },
+    ],
+    interviewing: [
+      { label: t("actionSendOffer"), key: "send_offer", variant: "primary", disabled: true, disabledReason: t("actionSendOfferDisabledReason") },
+      { label: t("actionReject"),   key: "reject",     variant: "danger", confirm: REJECT_CONFIRM },
+    ],
+    selected: [
+      { label: t("actionMarkJoined"), key: "mark_joined", variant: "primary", disabled: true, disabledReason: t("actionMarkJoinedDisabledReason") },
+      { label: t("actionWithdraw"),   key: "withdraw",    variant: "danger", confirm: WITHDRAW_CONFIRM },
+    ],
+    offered: [
+      { label: t("actionMarkJoined"), key: "mark_joined", variant: "primary", disabled: true, disabledReason: t("actionMarkJoinedDisabledReason") },
+      { label: t("actionWithdraw"),   key: "withdraw",    variant: "danger", confirm: WITHDRAW_CONFIRM },
+    ],
+    hired:     [],
+    rejected:  [],
+    withdrawn: [],
+  };
+
   const actions = STAGE_ACTIONS[app.stage] ?? [];
 
   const {
@@ -159,7 +162,7 @@ function ContextMenu({
 
   if (actions.length === 0) { // ux-001-ok: static STAGE_ACTIONS lookup keyed by app.stage (see the COMP-004 note above) -- not a loader result
     return (
-      <span className="text-xs text-slate-400 italic">No actions</span>
+      <span className="text-xs text-slate-400 italic">{t("noActions")}</span>
     );
   }
 
@@ -169,12 +172,12 @@ function ContextMenu({
         type="button"
         onClick={() => setOpen((o) => !o)}
         disabled={actionState === "submitting"}
-        aria-label="Application actions"
+        aria-label={t("applicationActionsAriaLabel")}
         aria-haspopup="true"
         aria-expanded={open}
         className="inline-flex items-center gap-1 rounded-md border border-slate-200 bg-white px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
       >
-        {actionState === "submitting" ? "…" : "Actions"}
+        {actionState === "submitting" ? "…" : t("actionsButton")}
         <span aria-hidden="true" className="text-slate-400">▾</span>
       </button>
 
@@ -228,7 +231,7 @@ function ContextMenu({
             </div>
           ))}
           {actionState === "error" && (
-            <p className="px-4 py-1 text-[10px] text-red-500">Action failed — try again</p>
+            <p className="px-4 py-1 text-[10px] text-red-500">{t("actionFailed")}</p>
           )}
         </div>
       )}
@@ -241,7 +244,7 @@ function ContextMenu({
           confirmLabel={pendingAction.confirm.confirmLabel}
           danger
           requireReason={pendingAction.confirm.requireReason}
-          reasonLabel="Reason"
+          reasonLabel={t("reasonLabel")}
           busy={confirmBusy}
           errorMessage={confirmError}
           onConfirm={confirmAction}
@@ -256,6 +259,7 @@ function ContextMenu({
 }
 
 export default function JobOpeningDetailPage() {
+  const t = useTranslations("recruitmentDetail");
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
 
@@ -341,7 +345,7 @@ export default function JobOpeningDetailPage() {
         res = await fetch(`/api/proxy/v1/hrms/applications/${appId}/withdraw`, {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ reason: reason && reason.trim().length > 0 ? reason.trim() : "Withdrawn by HR" }),
+          body: JSON.stringify({ reason: reason && reason.trim().length > 0 ? reason.trim() : t("withdrawnByHrDefaultReason") }),
         });
         if (res.ok) {
           setApplications((prev) => prev.map((a) => a.id === appId ? { ...a, stage: "withdrawn" } : a));
@@ -379,7 +383,7 @@ export default function JobOpeningDetailPage() {
   if (loadingOpening) {
     return (
       <main className="page-main">
-        <p className="text-center text-slate-500 py-12">Loading vacancy…</p>
+        <p className="text-center text-slate-500 py-12">{t("loadingVacancy")}</p>
       </main>
     );
   }
@@ -388,10 +392,10 @@ export default function JobOpeningDetailPage() {
     return (
       <main className="page-main">
         <button onClick={() => router.back()} className="text-sm text-indigo-600 hover:underline mb-4 block">
-          ← Back to Recruitment
+          {t("backToRecruitment")}
         </button>
         <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
-          <p className="text-center text-slate-400">{error ?? "Vacancy not found."}</p>
+          <p className="text-center text-slate-400">{error ?? t("vacancyNotFound")}</p>
         </div>
       </main>
     );
@@ -405,7 +409,7 @@ export default function JobOpeningDetailPage() {
       <div className="mb-5 flex flex-wrap items-start justify-between gap-3">
         <div>
           <button onClick={() => router.back()} className="text-sm text-indigo-600 hover:underline mb-1 block">
-            ← Recruitment
+            {t("recruitmentBack")}
           </button>
           <h1 id="page-heading" className="text-2xl font-bold text-slate-800">
             {opening.jobTitle}
@@ -414,7 +418,7 @@ export default function JobOpeningDetailPage() {
         </div>
         <div className="flex items-center gap-2">
           <span className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold ${published ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-500"}`}>
-            {published ? "Published" : "Not published"}
+            {published ? t("published") : t("notPublished")}
           </span>
           <span className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold ${STAGE_COLOR[opening.status] ?? "bg-slate-100 text-slate-700"}`}>
             {opening.status}
@@ -425,10 +429,10 @@ export default function JobOpeningDetailPage() {
       {/* ── Vacancy meta ── */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
         {[
-          { label: "Posts",         value: opening.vacancies },
-          { label: "Type",          value: opening.vacancyType ?? "Regular" },
-          { label: "Applications",  value: loadingApps ? "—" : applications.length },
-          { label: "Deadline",      value: opening.applicationDeadline ? new Date(opening.applicationDeadline).toLocaleDateString("en-IN") : "Open" },
+          { label: t("metaPosts"),        value: opening.vacancies },
+          { label: t("metaType"),         value: opening.vacancyType ?? t("vacancyTypeRegular") },
+          { label: t("metaApplications"), value: loadingApps ? "—" : applications.length },
+          { label: t("metaDeadline"),     value: opening.applicationDeadline ? new Date(opening.applicationDeadline).toLocaleDateString("en-IN") : t("deadlineOpen") },
         ].map(({ label, value }) => (
           <div key={label} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm text-center">
             <p className="text-2xl font-bold text-slate-800">{String(value)}</p>
@@ -453,7 +457,7 @@ export default function JobOpeningDetailPage() {
       <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
         <div className="px-5 py-4 border-b border-slate-100 flex flex-wrap items-center justify-between gap-3">
           <h2 className="text-base font-semibold text-slate-800">
-            Applications Inbox
+            {t("applicationsInbox")}
             {!loadingApps && (
               <span className="ml-2 inline-flex items-center rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">
                 {filtered.length} / {applications.length}
@@ -461,11 +465,11 @@ export default function JobOpeningDetailPage() {
             )}
           </h2>
           <div className="flex items-center gap-2">
-            <label htmlFor={searchId} className="sr-only">Search applicants</label>
+            <label htmlFor={searchId} className="sr-only">{t("searchApplicants")}</label>
             <input
               id={searchId}
               type="search"
-              placeholder="Search applicants…"
+              placeholder={t("searchApplicantsPlaceholder")}
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm w-52 focus:outline-none focus:ring-2 focus:ring-indigo-500"
@@ -476,14 +480,14 @@ export default function JobOpeningDetailPage() {
                 onClick={() => setStageFilter("all")}
                 className="text-xs text-indigo-600 hover:underline"
               >
-                Clear filter
+                {t("clearFilter")}
               </button>
             )}
           </div>
         </div>
 
         {loadingApps ? (
-          <div className="px-5 py-10 text-center text-slate-500 text-sm">Loading applications…</div>
+          <div className="px-5 py-10 text-center text-slate-500 text-sm">{t("loadingApplications")}</div>
         ) : appsLoadError ? (
           <div className="px-5 py-8">
             <ErrorState error={toHumanError("load", { area: "applications" })} onRetry={() => loadApplications()} />
@@ -493,8 +497,8 @@ export default function JobOpeningDetailPage() {
             <p className="text-3xl mb-2">📭</p>
             <p className="text-slate-500 text-sm">
               {applications.length === 0
-                ? "No applications received yet."
-                : "No applications match the current filter."}
+                ? t("noApplicationsYet")
+                : t("noApplicationsMatchFilter")}
             </p>
             {stageFilter !== "all" && (
               <button
@@ -502,7 +506,7 @@ export default function JobOpeningDetailPage() {
                 onClick={() => setStageFilter("all")}
                 className="mt-2 text-xs text-indigo-600 hover:underline"
               >
-                Show all stages
+                {t("showAllStages")}
               </button>
             )}
           </div>
@@ -525,7 +529,7 @@ export default function JobOpeningDetailPage() {
                       </p>
                       {app.qualification && (
                         <p className="text-xs text-slate-600 mt-1">
-                          {app.qualification}{app.experienceYears != null ? ` · ${app.experienceYears} yr exp` : ""}
+                          {app.qualification}{app.experienceYears != null ? ` · ${t("yearsExpSuffix", { count: app.experienceYears })}` : ""}
                         </p>
                       )}
                       {(app.skills ?? []).length > 0 && (
@@ -534,7 +538,7 @@ export default function JobOpeningDetailPage() {
                             <span key={sk} className="rounded bg-indigo-50 px-1.5 py-0.5 text-xs text-indigo-700">{sk}</span>
                           ))}
                           {(app.skills ?? []).length > 5 && (
-                            <span className="text-xs text-slate-400">+{(app.skills ?? []).length - 5} more</span>
+                            <span className="text-xs text-slate-400">{t("moreSkills", { count: (app.skills ?? []).length - 5 })}</span>
                           )}
                         </div>
                       )}
@@ -582,14 +586,14 @@ export default function JobOpeningDetailPage() {
             }}
             className="rounded-lg border border-blue-200 bg-blue-50 px-4 py-2 text-sm font-semibold text-blue-700 hover:bg-blue-100"
           >
-            Shortlist All Pending ({applications.filter((a) => a.screeningDecision === "pending" && a.stage === "applied").length})
+            {t("shortlistAllPending", { count: applications.filter((a) => a.screeningDecision === "pending" && a.stage === "applied").length })}
           </button>
           <button
             type="button"
             onClick={() => loadApplications()}
             className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50"
           >
-            Refresh
+            {t("refresh")}
           </button>
         </div>
       )}

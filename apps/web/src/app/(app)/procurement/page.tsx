@@ -17,7 +17,7 @@ const procurementTiles: NavTile[] = [
 	{ title: "Bid Evaluation", href: "/procurement/bid-evaluation", description: "Technical and financial scoring matrix" },
 	{ title: "Reverse Auction", href: "/procurement/reverse-auction", description: "Live and scheduled reverse auctions" },
 	{ title: "GeM", href: "/procurement/gem", description: "Government e-Marketplace integration" },
-	{ title: "EMD & BG", href: "/procurement/emd-bg", description: "EMD and bank guarantee register" },
+	{ title: "EMD & BG", href: "/procurement/emd-bg", description: "Earnest Money Deposit (EMD) and bank guarantee (BG) register" },
 	{ title: "Empanelment", href: "/procurement/empanelment", description: "Vendor empanelment management" },
 	{ title: "Pre-Bid", href: "/procurement/pre-bid", description: "Pre-bid conference log" },
 ];

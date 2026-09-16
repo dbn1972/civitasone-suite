@@ -11,7 +11,7 @@
 /// (see the web app's UX-006/UX-018 `minorToRupeesOrNull` fix).
 library;
 
-enum TradeLicenseStatus { pending, active, suspended, cancelled, expired }
+enum TradeLicenseStatus { pending, active, suspended, cancelled, expired, unknown }
 
 class TradeLicense {
   const TradeLicense({
@@ -73,10 +73,13 @@ class TradeLicense {
     return daysLeft >= 0 && daysLeft <= 30;
   }
 
+  /// Falls back to [TradeLicenseStatus.unknown] — not `.pending` — for a
+  /// null or unrecognized server value, so a bad/future status value renders
+  /// as "Unknown" in the UI rather than silently lying that it's pending.
   static TradeLicenseStatus _statusFromJson(String? s) =>
       TradeLicenseStatus.values.firstWhere(
         (v) => v.name == s,
-        orElse: () => TradeLicenseStatus.pending,
+        orElse: () => TradeLicenseStatus.unknown,
       );
 
   /// `fee_minor`/`fee_paid_minor` travel over the wire as decimal strings
@@ -93,7 +96,9 @@ class TradeLicense {
   }
 
   factory TradeLicense.fromJson(Map<String, dynamic> json) => TradeLicense(
-        id: json['id'] as String,
+        // Defensive fallback, matching every other field here -- a missing
+        // `id` must not crash the whole list with a cast exception.
+        id: json['id'] as String? ?? '',
         tenantId: json['tenantId'] as String? ?? '',
         licenseNo: json['licenseNo'] as String? ?? '—',
         businessName: json['businessName'] as String? ?? 'Unknown business',

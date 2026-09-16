@@ -1,13 +1,7 @@
 "use client";
 
 import { useState } from "react";
-
-const GFR_QUOTAS = [
-  { key: "sc",  label: "SC",  pct: 15,  color: "#3b82f6", note: "Scheduled Caste" },
-  { key: "st",  label: "ST",  pct: 7.5, color: "#8b5cf6", note: "Scheduled Tribe" },
-  { key: "obc", label: "OBC", pct: 27,  color: "#f59e0b", note: "Other Backward Classes" },
-  { key: "ph",  label: "PH",  pct: 3,   color: "#10b981", note: "Persons with Disability" },
-] as const;
+import { useTranslations } from "next-intl";
 
 interface GOIReservationCardProps {
   totalVacancies: number;
@@ -16,7 +10,15 @@ interface GOIReservationCardProps {
 }
 
 export function GOIReservationCard({ totalVacancies, fill = {} }: GOIReservationCardProps) {
+  const t = useTranslations("recruitmentGoiCard");
   const [open, setOpen] = useState(false);
+
+  const GFR_QUOTAS = [
+    { key: "sc",  label: "SC",  pct: 15,  color: "#3b82f6", note: t("noteSc") },
+    { key: "st",  label: "ST",  pct: 7.5, color: "#8b5cf6", note: t("noteSt") },
+    { key: "obc", label: "OBC", pct: 27,  color: "#f59e0b", note: t("noteObc") },
+    { key: "ph",  label: "PH",  pct: 3,   color: "#10b981", note: t("notePh") },
+  ] as const;
 
   return (
     <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden mb-6">
@@ -28,8 +30,8 @@ export function GOIReservationCard({ totalVacancies, fill = {} }: GOIReservation
       >
         <span className="flex items-center gap-2">
           <span aria-hidden="true" className="text-base">🏛️</span>
-          Reservation Status
-          <span className="text-xs font-normal text-slate-400 ml-0.5">(GFR 2017)</span>
+          {t("reservationStatus")}
+          <span className="text-xs font-normal text-slate-400 ml-0.5">{t("gfr2017")}</span>
         </span>
         <span
           aria-hidden="true"
@@ -45,9 +47,7 @@ export function GOIReservationCard({ totalVacancies, fill = {} }: GOIReservation
       {open && (
         <div className="px-5 pb-5 pt-3 border-t border-slate-100">
           <p className="text-xs text-slate-500 mb-4">
-            Prescribed quotas for{" "}
-            <span className="font-semibold text-slate-700">{totalVacancies}</span>{" "}
-            post{totalVacancies !== 1 ? "s" : ""} per GOI reservation policy (GFR 2017 / DoPT OM).
+            {t("prescribedQuotasFor", { count: totalVacancies })}
           </p>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             {GFR_QUOTAS.map(({ key, label, pct, color, note }) => {
@@ -63,10 +63,10 @@ export function GOIReservationCard({ totalVacancies, fill = {} }: GOIReservation
                     <span className="text-xs text-slate-500">
                       {pct}%
                       <span className="ml-1 text-slate-400">·</span>
-                      <span className="ml-1">{posts} post{posts !== 1 ? "s" : ""}</span>
+                      <span className="ml-1">{t("postsCount", { count: posts })}</span>
                       {fillPct > 0 && (
                         <span className="ml-1 text-emerald-600 font-medium">
-                          · {filledPosts} filled
+                          · {t("filledCount", { count: filledPosts })}
                         </span>
                       )}
                     </span>
@@ -90,14 +90,14 @@ export function GOIReservationCard({ totalVacancies, fill = {} }: GOIReservation
                     />
                   </div>
                   <p className="text-[10px] text-slate-400 mt-0.5">
-                    Prescribed: {pct}% of total posts
+                    {t("prescribedPercentOfTotal", { pct })}
                   </p>
                 </div>
               );
             })}
           </div>
           <p className="text-[10px] text-slate-400 mt-4 border-t border-slate-100 pt-3">
-            * Reservation percentages as per DoPT policy. Actual allocations subject to roaster maintenance and horizontal/vertical reservation rules.
+            {t("footnote")}
           </p>
         </div>
       )}

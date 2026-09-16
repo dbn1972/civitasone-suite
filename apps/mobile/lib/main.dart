@@ -71,6 +71,8 @@ import 'features/procurement/grn_receipt_screen.dart';
 import 'features/grants/grant_status_screen.dart';
 import 'features/revenue/trade_license_list_screen.dart';
 import 'features/revenue/trade_license_detail_screen.dart';
+import 'features/revenue/assessee_list_screen.dart';
+import 'features/revenue/assessee_detail_screen.dart';
 import 'features/inventory/inventory_screen.dart';
 import 'features/works/works_hub_screen.dart';
 import 'features/works/work_proposals_screen.dart';
@@ -217,6 +219,8 @@ class _CivitasOneAppState extends ConsumerState<CivitasOneApp> with WidgetsBindi
             GoRoute(path: '/grants/status', builder: (_, __) => const GrantStatusScreen()),
             GoRoute(path: '/revenue/trade-licenses', builder: (_, __) => const TradeLicenseListScreen()),
             GoRoute(path: '/revenue/trade-licenses/:id', builder: (_, state) => TradeLicenseDetailScreen(licenseId: state.pathParameters['id']!)),
+            GoRoute(path: '/revenue/assessees', builder: (_, __) => const AssesseeListScreen()),
+            GoRoute(path: '/revenue/assessees/:id', builder: (_, state) => AssesseeDetailScreen(assesseeId: state.pathParameters['id']!)),
             GoRoute(path: '/inventory', builder: (_, __) => const InventoryScreen()),
             GoRoute(path: '/works', builder: (_, __) => const WorksHubScreen()),
             GoRoute(path: '/works/proposals', builder: (_, __) => const WorkProposalsScreen()),
@@ -567,6 +571,7 @@ class DashboardScreen extends ConsumerWidget {
     (label: 'Meetings', icon: Icons.groups, route: '/meetings', color: Color(0xFF0284C7), description: 'Schedule, action items'),
     (label: 'Grants', icon: Icons.card_giftcard, route: '/grants/status', color: Color(0xFF059669), description: 'Application status tracking'),
     (label: 'Trade Licenses', icon: Icons.storefront, route: '/revenue/trade-licenses', color: Color(0xFFB45309), description: 'Look up license status and dues in the field'),
+    (label: 'Assessees', icon: Icons.home_work, route: '/revenue/assessees', color: Color(0xFF0369A1), description: 'Property and water-connection ratepayer lookup'),
     (label: 'Inventory', icon: Icons.inventory_2, route: '/inventory', color: Color(0xFFCA8A04), description: 'Issue, receipt, stock levels'),
     (label: 'Works & Billing', icon: Icons.engineering, route: '/works', color: Color(0xFF0F766E), description: 'Proposals, approvals, BoQ, tenders, billing'),
   ];

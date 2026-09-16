@@ -109,7 +109,7 @@ const hrCategories: { title: string; icon: string; tiles: NavTile[] }[] = [
 		icon: "⭐",
 		tiles: [
 			{ title: "Appraisals (APAR)", href: "/hr/apar", description: "SPARROW multi-authority appraisal workflow" },
-			{ title: "Goals / KRA", href: "/hr/goals", description: "Targets and tracking" },
+			{ title: "Goals / KRA", href: "/hr/goals", description: "Targets and tracking against each employee's Key Result Areas (KRA)" },
 			{ title: "Training", href: "/hr/training", description: "Programs and capacity building" },
 			{ title: "Skills", href: "/hr/skills", description: "Skill matrix" },
 			{ title: "Certifications", href: "/hr/certifications", description: "Certification tracker" },

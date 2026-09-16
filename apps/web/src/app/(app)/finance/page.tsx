@@ -26,7 +26,7 @@ const financeSections: NavTile[] = [
 	{ title: "Scheme Tracking", section: "Expenditure", description: "Scheme expenditure with milestones and UC status.", href: "/finance/expenditure/scheme-tracking" },
 
 	// Treasury & Banking
-	{ title: "PFMS Integration", section: "Treasury & Banking", description: "PFMS payment scroll tracking and beneficiary verification.", href: "/finance/treasury/pfms" },
+	{ title: "PFMS Integration", section: "Treasury & Banking", description: "PFMS (Public Financial Management System) payment scroll tracking and beneficiary verification.", href: "/finance/treasury/pfms" },
 	{ title: "e-Payment Orders", section: "Treasury & Banking", description: "Electronic payment orders with bank references.", href: "/finance/treasury/e-payments" },
 	{ title: "Cheque Register", section: "Treasury & Banking", description: "Cheque/DD register with clearance tracking.", href: "/finance/treasury/cheques" },
 	{ title: "Fixed Deposits", section: "Treasury & Banking", description: "Fixed and term deposits across treasury banks.", href: "/finance/treasury/deposits" },
@@ -56,7 +56,7 @@ const financeSections: NavTile[] = [
 	{ title: "TDS Returns", section: "Statutory", description: "Quarterly vendor TDS deduction register with CSV export.", href: "/finance/statutory/tds-returns" },
 	{ title: "GST & ITC", section: "Statutory", description: "GST summary, ledger, and input-tax-credit reconciliation.", href: "/finance/gst" },
 	{ title: "Reconciliation", section: "Statutory", description: "Bank/subledger reconciliation runs and break resolution.", href: "/finance/reconciliation" },
-	{ title: "PFMS Operations", section: "Statutory", description: "PFMS batches, salary bills, payment advice, bank file and e-sign.", href: "/finance/pfms" },
+	{ title: "PFMS Operations", section: "Statutory", description: "PFMS (the government's central payment platform) batches, salary bills, payment advice, bank file and e-sign.", href: "/finance/pfms" },
 ];
 
 export default async function Page() {

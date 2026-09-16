@@ -58,7 +58,8 @@ export default async function EmployeeDirectoryPage({ searchParams }: { searchPa
     <main className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
         title={t("employees.title")}
-        subtitle={t("common.search")}
+        subtitle="Your organisation's workforce directory and profiles."
+        help="hr"
         actions={
           <Link href="/hr/employees/new" className="btn primary">{t("employees.add")}</Link>
         }

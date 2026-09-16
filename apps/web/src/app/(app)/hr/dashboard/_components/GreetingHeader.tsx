@@ -29,6 +29,14 @@ export function GreetingHeader({ userName, pendingCount, payrollDaysLeft, today,
           </p>
         </div>
         <div className="greeting-actions">
+          <Link
+            href="/help/hr"
+            className="btn-ghost-nav"
+            aria-label="How this works — plain-language help"
+            title="How this works"
+          >
+            ❓ How this works
+          </Link>
           <Link href="/hr/payroll" className="btn-ghost-nav">Export Report</Link>
           <Link href="/hr/employees/new" className="btn-primary-nav">+ Add Employee</Link>
         </div>
