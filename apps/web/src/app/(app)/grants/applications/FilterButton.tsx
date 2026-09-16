@@ -43,7 +43,7 @@ export function FilterButton() {
               type="button"
               role="menuitem"
               className="btn ghost"
-              style={{ width: "100%", textAlign: "left", borderRadius: 0, minHeight: 40 }}
+              style={{ width: "100%", textAlign: "left", justifyContent: "flex-start", borderRadius: 0, minHeight: 40 }}
               onClick={() => {
                 const params = new URLSearchParams(searchParams.toString());
                 params.set("status", status);

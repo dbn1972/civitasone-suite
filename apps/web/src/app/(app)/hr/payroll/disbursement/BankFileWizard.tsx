@@ -3,6 +3,7 @@
 import { useId, useState } from "react";
 import { browserFetch } from "@/lib/api/browserClient";
 import { useFormError } from "@/lib/useFormError";
+import { Button } from "@/app/_components/ds";
 
 type RunOption = { id: string; payPeriod: string; netAmount: number };
 type Format = "csv" | "nach" | "apbs";
@@ -150,9 +151,9 @@ export function BankFileWizard({ runs, dscConfig }: { runs: RunOption[]; dscConf
             </div>
           </div>
           <div>
-            <button type="button" className="btn" disabled={!runId} onClick={() => setStep(1)}>
+            <Button disabled={!runId} onClick={() => setStep(1)}>
               Next: Preview →
-            </button>
+            </Button>
           </div>
         </div>
       )}
@@ -184,8 +185,8 @@ export function BankFileWizard({ runs, dscConfig }: { runs: RunOption[]; dscConf
             </div>
           </div>
           <div style={{ display: "flex", gap: 10 }}>
-            <button type="button" className="btn ghost" onClick={() => setStep(0)}>← Back</button>
-            <button type="button" className="btn" onClick={() => setStep(2)}>Next: DSC →</button>
+            <Button variant="ghost" onClick={() => setStep(0)}>← Back</Button>
+            <Button onClick={() => setStep(2)}>Next: DSC →</Button>
           </div>
         </div>
       )}
@@ -229,8 +230,8 @@ export function BankFileWizard({ runs, dscConfig }: { runs: RunOption[]; dscConf
             )}
           </div>
           <div style={{ display: "flex", gap: 10 }}>
-            <button type="button" className="btn ghost" onClick={() => setStep(1)}>← Back</button>
-            <button type="button" className="btn" onClick={() => setStep(3)}>Next: Download →</button>
+            <Button variant="ghost" onClick={() => setStep(1)}>← Back</Button>
+            <Button onClick={() => setStep(3)}>Next: Download →</Button>
           </div>
         </div>
       )}
@@ -255,18 +256,18 @@ export function BankFileWizard({ runs, dscConfig }: { runs: RunOption[]; dscConf
                 {error && (
                   <p role="alert" style={{ color: "var(--bad, #c0392b)", fontSize: 13, marginBottom: 10 }}>{error}</p>
                 )}
-                <button type="button" className="btn" onClick={() => void downloadFile()} disabled={busy}>
+                <Button onClick={() => void downloadFile()} disabled={busy} loading={busy}>
                   {busy ? "Generating…" : "Download Bank File"}
-                </button>
+                </Button>
               </>
             )}
           </div>
           <div style={{ display: "flex", gap: 10 }}>
-            {!filename && <button type="button" className="btn ghost" onClick={() => setStep(2)}>← Back</button>}
+            {!filename && <Button variant="ghost" onClick={() => setStep(2)}>← Back</Button>}
             {filename && (
-              <button type="button" className="btn ghost" onClick={() => { setStep(0); setFilename(null); setError(undefined); }}>
+              <Button variant="ghost" onClick={() => { setStep(0); setFilename(null); setError(undefined); }}>
                 Generate another file
-              </button>
+              </Button>
             )}
           </div>
         </div>

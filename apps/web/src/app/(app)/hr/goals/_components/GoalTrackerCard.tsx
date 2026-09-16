@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
+import { Button } from "@/app/_components/ds";
 
 export type GoalStatus = "active" | "on_track" | "at_risk" | "behind" | "achieved" | "completed";
 export type CascadeLevel = "org" | "dept" | "individual";
@@ -169,26 +170,13 @@ export function GoalTrackerCard({
         <div>{dueDate && <DueDateChip dueDate={dueDate} />}</div>
         <div style={{ display: "flex", gap: 6 }}>
           {onEdit && (
-            <button
-              onClick={() => onEdit(id)}
-              style={{
-                fontSize: 12, padding: "4px 10px", border: "1px solid #e2e8f0",
-                borderRadius: 6, background: "#fff", color: "#475569", cursor: "pointer",
-              }}
-            >
+            <Button variant="ghost" size="sm" onClick={() => onEdit(id)}>
               Edit
-            </button>
+            </Button>
           )}
-          <button
-            onClick={() => setShowCheckin(!showCheckin)}
-            style={{
-              fontSize: 12, padding: "4px 10px", border: "none",
-              borderRadius: 6, background: "#1d4ed8", color: "#fff", cursor: "pointer",
-              fontWeight: 600,
-            }}
-          >
+          <Button size="sm" onClick={() => setShowCheckin(!showCheckin)}>
             Check-in
-          </button>
+          </Button>
         </div>
       </div>
 
@@ -227,18 +215,12 @@ export function GoalTrackerCard({
             />
           </label>
           <div style={{ display: "flex", gap: 6, justifyContent: "flex-end" }}>
-            <button
-              onClick={() => setShowCheckin(false)}
-              style={{ fontSize: 12, padding: "4px 10px", border: "1px solid #e2e8f0", borderRadius: 6, background: "#fff", cursor: "pointer" }}
-            >
+            <Button variant="ghost" size="sm" onClick={() => setShowCheckin(false)}>
               Cancel
-            </button>
-            <button
-              onClick={handleCheckin}
-              style={{ fontSize: 12, padding: "4px 10px", border: "none", borderRadius: 6, background: "#1d4ed8", color: "#fff", cursor: "pointer", fontWeight: 600 }}
-            >
+            </Button>
+            <Button size="sm" onClick={handleCheckin}>
               Save
-            </button>
+            </Button>
           </div>
         </div>
       )}

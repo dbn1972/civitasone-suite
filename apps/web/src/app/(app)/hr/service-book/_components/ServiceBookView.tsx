@@ -8,6 +8,7 @@
 import { useState, useMemo } from "react";
 import { useTranslations } from "next-intl";
 import { formatIndianDate } from "@/lib/formatters";
+import { Button } from "@/app/_components/ds";
 
 export type ServiceEntry = {
   id: string;
@@ -274,20 +275,14 @@ export function ServiceBookView({ entries, employeeId }: Props) {
             })}
           </span>
           <div style={{ display: "flex", gap: 4 }}>
-            <button
+            <Button
+              variant="ghost"
               onClick={() => gotoPage(safePage - 1)}
               disabled={safePage === 0}
               aria-label={t("prevPageAriaLabel")}
-              style={{
-                padding: "5px 12px", borderRadius: 5,
-                border: "1px solid var(--line)",
-                background: "var(--bg)",
-                cursor: safePage === 0 ? "not-allowed" : "pointer",
-                opacity: safePage === 0 ? 0.4 : 1,
-              }}
             >
               ←
-            </button>
+            </Button>
             {pageNumbers.map((pg) => (
               <button
                 key={pg}
@@ -303,20 +298,14 @@ export function ServiceBookView({ entries, employeeId }: Props) {
                 {pg + 1}
               </button>
             ))}
-            <button
+            <Button
+              variant="ghost"
               onClick={() => gotoPage(safePage + 1)}
               disabled={safePage >= totalPages - 1}
               aria-label={t("nextPageAriaLabel")}
-              style={{
-                padding: "5px 12px", borderRadius: 5,
-                border: "1px solid var(--line)",
-                background: "var(--bg)",
-                cursor: safePage >= totalPages - 1 ? "not-allowed" : "pointer",
-                opacity: safePage >= totalPages - 1 ? 0.4 : 1,
-              }}
             >
               →
-            </button>
+            </Button>
           </div>
         </div>
       )}

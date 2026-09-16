@@ -1,6 +1,6 @@
 'use client'
 import { useState, useMemo, useCallback, useEffect, useRef } from 'react'
-import { Avatar } from '@/app/_components/ds'
+import { Avatar, Button } from '@/app/_components/ds'
 
 type Employee = {
   id: string
@@ -207,26 +207,14 @@ function EmployeeDetailModal({
               </div>
             ))}
         </dl>
-        <button
+        <Button
           ref={closeRef}
           onClick={onClose}
           aria-label="Close employee details"
-          style={{
-            marginTop: 20,
-            width: '100%',
-            padding: '10px 0',
-            background: ASHOKA_BLUE,
-            color: '#fff',
-            border: 'none',
-            borderRadius: 6,
-            fontWeight: 700,
-            fontSize: 13,
-            cursor: 'pointer',
-            minHeight: 44,
-          }}
+          style={{ marginTop: 20, width: '100%', minHeight: 44 }}
         >
           Close
-        </button>
+        </Button>
       </div>
     </div>
   )
@@ -421,14 +409,14 @@ export function DirectoryClient({ employees }: DirectoryClientProps) {
           aria-label="Directory pagination"
           style={{ display: 'flex', gap: 6, justifyContent: 'center', marginTop: 16, flexWrap: 'wrap' }}
         >
-          <button
+          <Button
+            variant="ghost"
             onClick={() => setPage((p) => Math.max(1, p - 1))}
             disabled={page === 1}
             aria-label="Previous page"
-            style={paginationBtn(page === 1)}
           >
             ← Prev
-          </button>
+          </Button>
           {Array.from({ length: Math.min(totalPages, 7) }, (_, i) => {
             const pg = totalPages <= 7 ? i + 1 : page <= 4 ? i + 1 : page + i - 3
             if (pg < 1 || pg > totalPages) return null
@@ -450,14 +438,14 @@ export function DirectoryClient({ employees }: DirectoryClientProps) {
               </button>
             )
           })}
-          <button
+          <Button
+            variant="ghost"
             onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
             disabled={page === totalPages}
             aria-label="Next page"
-            style={paginationBtn(page === totalPages)}
           >
             Next →
-          </button>
+          </Button>
         </nav>
       )}
 

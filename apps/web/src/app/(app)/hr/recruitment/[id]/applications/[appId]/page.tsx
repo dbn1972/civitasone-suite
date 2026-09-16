@@ -4,7 +4,7 @@ import { useEffect, useId, useState } from "react";
 import type { CSSProperties } from "react";
 import { useTranslations } from "next-intl";
 import { useParams, useRouter } from "next/navigation";
-import { PageHeader, Card } from "../../../../../../_components/ds";
+import { PageHeader, Card, Button } from "../../../../../../_components/ds";
 import { DataSourceBadge } from "../../../../../../_components/DataSourceBadge";
 import { useFormError } from "@/lib/useFormError";
 
@@ -147,9 +147,9 @@ export default function ApplicationDetailPage() {
         back={`/hr/recruitment/${jobOpeningId}`}
         actions={
           canHire && hireStatus !== "success" ? (
-            <button onClick={() => setShowHireDialog(true)} className="btn primary">
+            <Button onClick={() => setShowHireDialog(true)}>
               {t("hire")}
-            </button>
+            </Button>
           ) : undefined
         }
       />
@@ -223,10 +223,10 @@ export default function ApplicationDetailPage() {
               )}
 
               <div style={{ display: "flex", gap: 12, justifyContent: "flex-end", marginTop: 4 }}>
-                <button type="button" className="btn ghost" onClick={() => setShowHireDialog(false)}>{t("cancel")}</button>
-                <button type="submit" className="btn primary" disabled={hireStatus === "submitting"} style={{ minWidth: 140 }}>
+                <Button variant="ghost" onClick={() => setShowHireDialog(false)}>{t("cancel")}</Button>
+                <Button type="submit" disabled={hireStatus === "submitting"} loading={hireStatus === "submitting"} style={{ minWidth: 140 }}>
                   {hireStatus === "submitting" ? t("processing") : t("confirmHire")}
-                </button>
+                </Button>
               </div>
             </form>
           </div>

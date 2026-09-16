@@ -2,7 +2,7 @@
 
 import { useId, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Card, ConfirmDialog } from "../../../../_components/ds";
+import { Card, ConfirmDialog, Button } from "../../../../_components/ds";
 import { browserJson } from "@/lib/api/browserClient";
 import { formatMoney } from "@/lib/formatters";
 import { currentFinancialYear } from "@/lib/fiscalYear";
@@ -216,36 +216,34 @@ export function CreateFlexPlanForm() {
                       />
                       <label htmlFor={compExemptId} style={{ fontSize: 12 }}>Tax exempt</label>
                     </div>
-                    <button
-                      type="button"
-                      className="btn ghost"
+                    <Button
+                      variant="ghost"
                       style={{ minHeight: 40 }}
                       aria-label={`Remove component ${idx + 1}${c.name ? `: ${c.name}` : ""}`}
                       onClick={() => setComponents((prev) => prev.filter((_, i) => i !== idx))}
                       disabled={components.length === 1}
                     >
                       Remove
-                    </button>
+                    </Button>
                   </div>
                 );
               })}
               <div>
-                <button
-                  type="button"
-                  className="btn ghost"
+                <Button
+                  variant="ghost"
                   style={{ minHeight: 40 }}
                   onClick={() => setComponents((prev) => [...prev, emptyComponent()])}
                 >
                   + Add component
-                </button>
+                </Button>
               </div>
             </div>
           </fieldset>
 
           <div>
-            <button type="submit" className="btn primary" style={{ minHeight: 44 }} disabled={busy}>
+            <Button type="submit" style={{ minHeight: 44 }} disabled={busy} loading={busy}>
               Create Plan
-            </button>
+            </Button>
           </div>
 
           {message && (

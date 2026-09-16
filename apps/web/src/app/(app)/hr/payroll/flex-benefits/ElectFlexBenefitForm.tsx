@@ -2,7 +2,7 @@
 
 import { useId, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Card, ConfirmDialog } from "../../../../_components/ds";
+import { Card, ConfirmDialog, Button } from "../../../../_components/ds";
 import { browserJson } from "@/lib/api/browserClient";
 import { formatMoney } from "@/lib/formatters";
 import { currentFinancialYear } from "@/lib/fiscalYear";
@@ -181,28 +181,26 @@ export function ElectFlexBenefitForm() {
                         style={{ padding: "8px 10px", borderRadius: 8, border: "1px solid var(--line)", minHeight: 40 }}
                       />
                     </div>
-                    <button
-                      type="button"
-                      className="btn ghost"
+                    <Button
+                      variant="ghost"
                       style={{ minHeight: 40 }}
                       aria-label={`Remove election line ${idx + 1}${l.component ? `: ${l.component}` : ""}`}
                       onClick={() => setLines((prev) => prev.filter((_, i) => i !== idx))}
                       disabled={lines.length === 1}
                     >
                       Remove
-                    </button>
+                    </Button>
                   </div>
                 );
               })}
               <div>
-                <button
-                  type="button"
-                  className="btn ghost"
+                <Button
+                  variant="ghost"
                   style={{ minHeight: 40 }}
                   onClick={() => setLines((prev) => [...prev, emptyLine()])}
                 >
                   + Add line
-                </button>
+                </Button>
               </div>
             </div>
           </fieldset>
@@ -212,9 +210,9 @@ export function ElectFlexBenefitForm() {
           </p>
 
           <div>
-            <button type="submit" className="btn primary" style={{ minHeight: 44 }} disabled={busy}>
+            <Button type="submit" style={{ minHeight: 44 }} disabled={busy} loading={busy}>
               Submit Election
-            </button>
+            </Button>
           </div>
 
           {message && (

@@ -1,6 +1,7 @@
 'use client'
 import { useState, useRef, useCallback } from 'react'
 import type { OrgChartNode } from '@civitasone/types'
+import { Button } from '@/app/_components/ds'
 
 function OrgNode({
   node,
@@ -165,19 +166,6 @@ export function OrgChartClient({ data }: { data: OrgChartNode[] }) {
 
   const clampZoom = (z: number) => Math.min(Math.max(z, 0.3), 2.5)
 
-  const btnStyle: React.CSSProperties = {
-    padding: '6px 12px',
-    border: '1px solid var(--border, #e2e8f0)',
-    borderRadius: 6,
-    background: 'var(--surface, #fff)',
-    color: 'var(--text, #1e293b)',
-    cursor: 'pointer',
-    fontSize: 12,
-    fontWeight: 600,
-    lineHeight: 1,
-    flexShrink: 0,
-  }
-
   if (data.length === 0) {
     return <p style={{ textAlign: 'center', color: 'var(--text-3)' }}>No organisation chart data available.</p>
   }
@@ -214,38 +202,44 @@ export function OrgChartClient({ data }: { data: OrgChartNode[] }) {
         />
 
         {/* Zoom controls */}
-        <button
+        <Button
+          variant="ghost"
+          size="sm"
           onClick={() => setZoom((z) => clampZoom(z - 0.15))}
           aria-label="Zoom out"
           title="Zoom out"
-          style={btnStyle}
+          style={{ flexShrink: 0 }}
         >
           −
-        </button>
-        <button
+        </Button>
+        <Button
+          variant="ghost"
+          size="sm"
           onClick={() => setZoom(1)}
           aria-label="Reset zoom"
           title="Reset zoom"
-          style={{ ...btnStyle, minWidth: 48 }}
+          style={{ flexShrink: 0, minWidth: 48 }}
         >
           {Math.round(zoom * 100)}%
-        </button>
-        <button
+        </Button>
+        <Button
+          variant="ghost"
+          size="sm"
           onClick={() => setZoom((z) => clampZoom(z + 0.15))}
           aria-label="Zoom in"
           title="Zoom in"
-          style={btnStyle}
+          style={{ flexShrink: 0 }}
         >
           +
-        </button>
+        </Button>
 
         {/* Expand / collapse */}
-        <button onClick={expandAll} style={btnStyle} title="Expand all nodes">
+        <Button variant="ghost" size="sm" onClick={expandAll} title="Expand all nodes" style={{ flexShrink: 0 }}>
           Expand all
-        </button>
-        <button onClick={collapseAll} style={btnStyle} title="Collapse all nodes">
+        </Button>
+        <Button variant="ghost" size="sm" onClick={collapseAll} title="Collapse all nodes" style={{ flexShrink: 0 }}>
           Collapse all
-        </button>
+        </Button>
       </div>
 
       {/* ── Chart canvas ── */}

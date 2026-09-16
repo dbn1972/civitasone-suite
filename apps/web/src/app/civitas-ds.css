@@ -66,12 +66,25 @@ a{color:inherit;text-decoration:none}
 .back:hover{color:var(--primary-d)}
 
 /* buttons */
-.btn{border:0;border-radius:10px;padding:10px 16px;font-size:13.5px;font-weight:650;cursor:pointer;display:inline-flex;align-items:center;gap:7px;transition:.12s}
+/* UX-008 tranche 2 review follow-up: base .btn had no justify-content, defaulting to flex-start. Invisible for the fleet-wide auto-width case, but for the handful of buttons stretched wider than their content (e.g. a width:100% modal-close button, a minWidth reset-zoom button) the raw <button> elements this tranche converted used to center via the native UA button default -- the new flex layout left-aligned instead. Centering here restores that for every width-constrained .btn; content-sized buttons (the fleet-wide majority) are unaffected since there is no extra space to redistribute. One known exception: menu-item-style .btn rows that set width:100% + textAlign (which flex ignores) to fake left alignment -- see grants/applications/FilterButton.tsx -- now render centered too; flagged separately, not fixed here. */
+.btn{border:0;border-radius:10px;padding:10px 16px;font-size:13.5px;font-weight:650;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:7px;transition:.12s}
 .btn.primary{background:var(--primary);color:#fff;box-shadow:0 8px 16px -8px var(--primary)}
 .btn.primary:hover{background:var(--primary-d)}
 .btn.ghost{background:#fff;border:1px solid var(--line);color:var(--ink)}
 .btn.ghost:hover{background:var(--line2)}
+/* UX-008 tranche 2: .btn.secondary had no rule at all (found in tranche 1,
+   left open) -- reuses the existing --primary-soft/--primary-d pair already
+   used fleet-wide for "soft-active" states (selected nav item, hovered
+   clickable row, focus ring), so a secondary button reads as a lower-emphasis
+   but still-branded filled action, distinct from ghost's outlined look. */
+.btn.secondary{background:var(--primary-soft);color:var(--primary-d)}
+.btn.secondary:hover{background:#c7ddfa}
 .btn.sm{padding:7px 12px;font-size:12.5px}
+/* UX-008 tranche 2: was scoped to `.dt-pager .btn:disabled` only (line ~342);
+   generalized here since disabled buttons outside a pager had zero disabled
+   styling (native browser default only) -- strictly additive, the .dt-pager
+   case still resolves to the exact same rule. */
+.btn:disabled{opacity:.5;cursor:not-allowed}
 
 /* segmented */
 .seg{display:inline-flex;background:var(--line2);border-radius:10px;padding:3px;font-size:12.5px;gap:2px}
@@ -339,7 +352,7 @@ tr.clickable:hover{background:var(--primary-soft)!important}
 .dt-filter input{border:0;background:transparent;width:100%;font-size:13px;color:var(--ink)}
 .dt-filter input:focus{outline:none}
 .dt-pager{display:flex;align-items:center;gap:10px;margin-top:14px;font-size:13px;color:var(--ink2)}
-.dt-pager .btn:disabled{opacity:.5;cursor:not-allowed}
+/* .btn:disabled generalized above (UX-008 tranche 2) now covers this case */
 
 /* ============================================================
    CONFIRM DIALOG (role=alertdialog)

@@ -1,3 +1,4 @@
+import { createRef } from "react";
 import { describe, it, expect, vi } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { Button } from "./Button";
@@ -68,5 +69,16 @@ describe("Button", () => {
     fireEvent.click(btn);
     expect(onClick).toHaveBeenCalledTimes(1);
     expect(btn).toHaveAttribute("aria-expanded", "true");
+  });
+
+  it("forwards ref to the underlying button element", () => {
+    const ref = createRef<HTMLButtonElement>();
+    render(<Button ref={ref}>Close</Button>);
+    expect(ref.current).toBeInstanceOf(HTMLButtonElement);
+    expect(ref.current?.textContent).toBe("Close");
+    // Proves the ref is live (not just present) -- callers like a dialog's
+    // close button rely on imperative .focus() for WCAG 2.4.3 focus-on-open.
+    ref.current?.focus();
+    expect(ref.current).toHaveFocus();
   });
 });

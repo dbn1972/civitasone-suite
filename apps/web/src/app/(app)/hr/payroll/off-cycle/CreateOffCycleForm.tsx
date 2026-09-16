@@ -2,7 +2,7 @@
 
 import { useId, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Card, ConfirmDialog } from "../../../../_components/ds";
+import { Card, ConfirmDialog, Button } from "../../../../_components/ds";
 import { browserJson } from "@/lib/api/browserClient";
 import { formatMoney } from "@/lib/formatters";
 
@@ -207,23 +207,22 @@ export function CreateOffCycleForm() {
                       style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
                     />
                   </div>
-                  <button
-                    type="button"
-                    className="btn"
+                  <Button
+                    variant="ghost"
                     onClick={() => removeItem(index)}
                     disabled={items.length === 1}
                     aria-label={`Remove item ${index + 1}`}
                     style={{ minHeight: 44 }}
                   >
                     Remove
-                  </button>
+                  </Button>
                 </div>
               );
             })}
             <div>
-              <button type="button" className="btn" onClick={addItem} style={{ minHeight: 44 }}>
+              <Button variant="ghost" onClick={addItem} style={{ minHeight: 44 }}>
                 Add Item
-              </button>
+              </Button>
             </div>
           </div>
 
@@ -234,9 +233,9 @@ export function CreateOffCycleForm() {
           )}
 
           <div>
-            <button type="submit" className="btn primary" style={{ minHeight: 44 }} disabled={busy}>
+            <Button type="submit" style={{ minHeight: 44 }} disabled={busy} loading={busy}>
               Create Off-Cycle Run
-            </button>
+            </Button>
           </div>
 
           {message && (

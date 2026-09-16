@@ -7,6 +7,7 @@
  * Pure client-side step tracker — no API mutation in Phase 2.
  */
 import { useState } from "react";
+import { Button } from "@/app/_components/ds";
 
 const STEPS = [
   {
@@ -341,31 +342,17 @@ export function RetirementProcessWizard({ employeeName }: Props) {
                 alignItems: "center", marginTop: 20, gap: 8,
               }}
             >
-              <button
+              <Button
+                variant="ghost"
                 onClick={() => setActiveStep(Math.max(0, si - 1))}
                 disabled={si === 0}
-                style={{
-                  padding: "8px 20px", borderRadius: 6,
-                  border: "1px solid var(--line)",
-                  background: "transparent",
-                  cursor: si === 0 ? "not-allowed" : "pointer",
-                  opacity: si === 0 ? 0.4 : 1,
-                  fontSize: "0.875rem", color: "var(--ink)",
-                }}
               >
                 ← Previous
-              </button>
+              </Button>
               {si < STEPS.length - 1 ? (
-                <button
-                  onClick={() => setActiveStep(si + 1)}
-                  style={{
-                    padding: "8px 20px", borderRadius: 6, border: "none",
-                    background: "var(--primary, #2563eb)", color: "#fff",
-                    cursor: "pointer", fontSize: "0.875rem", fontWeight: 500,
-                  }}
-                >
+                <Button onClick={() => setActiveStep(si + 1)}>
                   Next Step →
-                </button>
+                </Button>
               ) : allDone ? (
                 <span
                   style={{
