@@ -2,8 +2,9 @@
 
 import { useState } from "react";
 import type { NotificationItem } from "@civitasone/types";
-import { PageHeader, StatCard, StatGrid, DataTable, Segmented, EmptyState } from "../../../_components/ds";
+import { PageHeader, StatCard, StatGrid, DataTable, Segmented, EmptyState, ErrorState } from "../../../_components/ds";
 import { useOfflineResource } from "@/lib/sync/resource";
+import { toHumanError } from "@/lib/messages";
 import { formatIndianDate } from "@/lib/formatters";
 import { StatusBadge } from "../_components/StatusBadge";
 
@@ -30,7 +31,7 @@ function toArray(payload: unknown): NotificationItem[] {
 const TABS = ["All", "Unread", "Failed"] as const;
 
 export default function NotificationsListPage() {
-  const { data: notifications, source, offline, cachedAt, loading } = useOfflineResource<unknown, NotificationItem[]>(
+  const { data: notifications, source, offline, cachedAt, loading, error, refresh } = useOfflineResource<unknown, NotificationItem[]>(
     "notifications.list",
     "/notification/notifications",
     { map: toArray, initialData: [] },
@@ -96,7 +97,9 @@ export default function NotificationsListPage() {
             <Segmented options={[...TABS]} value={tab} onChange={setTab} />
           </div>
         </div>
-        {notifications.length === 0 ? (
+        {error ? (
+          <ErrorState error={toHumanError("load", { area: "notifications" })} onRetry={refresh} />
+        ) : notifications.length === 0 ? (
           <EmptyState
             icon="🔔"
             title={loading ? "Loading notifications…" : "No notifications yet"}

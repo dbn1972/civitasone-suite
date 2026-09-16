@@ -1,8 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { PageHeader, StatCard, StatGrid, DataTable, Segmented, EmptyState } from "../../../_components/ds";
+import { PageHeader, StatCard, StatGrid, DataTable, Segmented, EmptyState, ErrorState } from "../../../_components/ds";
 import { useOfflineResource } from "@/lib/sync/resource";
+import { toHumanError } from "@/lib/messages";
 import { StatusBadge } from "../_components/StatusBadge";
 
 /**
@@ -44,7 +45,7 @@ function toArray(payload: unknown): TemplateView[] {
 const TABS = ["All", "Active", "Superseded"] as const;
 
 export default function NotificationTemplatesPage() {
-  const { data: templates, source, offline, cachedAt, loading } = useOfflineResource<unknown, TemplateView[]>(
+  const { data: templates, source, offline, cachedAt, loading, error, refresh } = useOfflineResource<unknown, TemplateView[]>(
     "notifications.templates",
     "/notification/templates",
     { map: toArray, initialData: [] },
@@ -101,7 +102,9 @@ export default function NotificationTemplatesPage() {
             <Segmented options={[...TABS]} value={tab} onChange={setTab} />
           </div>
         </div>
-        {templates.length === 0 ? (
+        {error ? (
+          <ErrorState error={toHumanError("load", { area: "templates" })} onRetry={refresh} />
+        ) : templates.length === 0 ? (
           <EmptyState
             icon="📝"
             title={loading ? "Loading templates…" : "No templates yet"}
