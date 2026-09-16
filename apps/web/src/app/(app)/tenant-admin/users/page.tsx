@@ -1,8 +1,9 @@
 import { PrintExportButton } from "../../../_components/PrintExportButton";
-import { PageHeader, StatCard } from "../../../_components/ds";
+import { PageHeader, StatCard, Term } from "../../../_components/ds";
 import { getAdminUsers } from "../../../_data/loaders";
 import { Breadcrumb } from "../Breadcrumb";
 import { UsersTable } from "./UsersTable";
+import { LABELS } from "@/lib/labels";
 
 export default async function AdminUsersPage() {
   const { data: users, source } = await getAdminUsers();
@@ -18,7 +19,8 @@ export default async function AdminUsersPage() {
       <PageHeader
         back="/tenant-admin"
         title="Manage Users"
-        subtitle="Tenant user directory with role assignment and MFA status."
+        subtitle={<>Your {LABELS.tenant}&apos;s user directory with role assignment and <Term name="MFA" /> status.</>}
+        help="tenant-admin"
         actions={<PrintExportButton label="Export" style={{ minHeight: 44 }} documentTitle="Users" />}
       />
       <div className="grid g-4" style={{ marginBottom: 18 }}>

@@ -6,6 +6,7 @@ import {
   Card,
   EmptyState,
   RefreshErrorState,
+  Term,
 } from "@/app/_components/ds";
 import { formatMoney } from "@/lib/formatters";
 import { DashboardProjectsTable, type DashboardProjectRow } from "./DashboardProjectsTable";
@@ -44,8 +45,9 @@ export default async function ProjectsDashboardPage() {
   return (
     <>
       <PageHeader
-        title="PMU Dashboard"
+        title={<><Term name="PMU" /> Dashboard</>}
         subtitle="Real-time project monitoring — schemes, funds and delays."
+        help="projects"
       />
       <StatGrid>
         <StatCard icon="🏛️" iconBg="#eef0fe" label="Schemes" value={anyError ? "—" : schemes.length} />

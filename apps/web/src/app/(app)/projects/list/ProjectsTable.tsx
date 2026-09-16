@@ -1,6 +1,6 @@
 "use client";
 
-import { DataTable } from "@/app/_components/ds";
+import { DataTable, EmptyState } from "@/app/_components/ds";
 import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
 import { useSeededResource } from "@/lib/sync/resource";
 
@@ -35,7 +35,15 @@ export function ProjectsTable({ rows, source = "api" }: { rows: ProjectRow[]; so
           (UX-002's pattern; the page used to render a second, independent
           badge from the raw `source` prop — removed). */}
       <DataSourceBadge provenance={provenance ?? "live"} cachedAt={cachedAt} offline={offline} />
-      <DataTable<ProjectRow> columns={COLUMNS} rows={data} rowLinkPrefix="/projects/" rowLinkKey="id" identifyingColumnKey="name" />
+      {data.length === 0 ? (
+        <EmptyState
+          icon="📁"
+          title="No projects yet"
+          message="Projects will appear here once schemes are sanctioned and projects created."
+        />
+      ) : (
+        <DataTable<ProjectRow> columns={COLUMNS} rows={data} rowLinkPrefix="/projects/" rowLinkKey="id" identifyingColumnKey="name" />
+      )}
     </>
   );
 }

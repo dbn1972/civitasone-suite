@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { getProjects } from "../../../_data/loaders";
-import { PageHeader, StatGrid, StatCard, Card } from "@/app/_components/ds";
+import { PageHeader, StatGrid, StatCard, Card, Term } from "@/app/_components/ds";
 import { ProjectsTable, type ProjectRow } from "./ProjectsTable";
 
 export default async function ProjectsListPage() {
@@ -25,7 +25,8 @@ export default async function ProjectsListPage() {
     <>
       <PageHeader
         title="Projects"
-        subtitle="All projects with physical progress & RAG status."
+        subtitle={<>All projects with physical progress & <Term name="RAG" label="RAG status" />.</>}
+        help="projects"
         actions={
           <Link href="/projects/new" className="btn primary">
             + New Project

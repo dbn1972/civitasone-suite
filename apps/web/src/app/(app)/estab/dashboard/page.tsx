@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { getEstabDashboard, getEstabFiles } from "../../../_data/loaders";
-import { PageHeader, StatCard, StatGrid, DataTable, EmptyState } from "../../../_components/ds";
+import { PageHeader, StatCard, StatGrid, DataTable, EmptyState, Term } from "../../../_components/ds";
 import { formatIndianDate } from "@/lib/formatters";
 
 type RecentFileRow = {
@@ -32,7 +32,8 @@ export default async function EstabDashboardPage() {
       {source === "error" && <DataSourceBadge source={source} />}
       <PageHeader
         title="Establishment & Administration"
-        subtitle="Integrated eOffice — DAK, noting, multi-hop approval, pendency."
+        subtitle={<>Integrated <Term name="eOffice" /> — <Term name="DAK" />, noting, multi-hop approval, pendency.</>}
+        help="estab"
         actions={
           <>
             <Link href="/estab/dak" className="btn ghost">DAK Registry</Link>
@@ -52,7 +53,7 @@ export default async function EstabDashboardPage() {
         <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
           <div className="card">
             <div className="card-h">
-              <h3>Recent files (eOffice)</h3>
+              <h3>Recent files (<Term name="eOffice" />)</h3>
               <Link className="lnk" href="/estab/list">All files →</Link>
             </div>
             {recentRows.length === 0 ? (

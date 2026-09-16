@@ -4,6 +4,7 @@ import { PageHeader, StatCard } from "../../../_components/ds";
 import { getAdminRoles } from "../../../_data/loaders";
 import { Breadcrumb } from "../Breadcrumb";
 import { RolesTable } from "./RolesTable";
+import { LABELS } from "@/lib/labels";
 
 export default async function AdminRolesPage() {
   const { data: roles, source } = await getAdminRoles();
@@ -19,7 +20,8 @@ export default async function AdminRolesPage() {
       <PageHeader
         back="/tenant-admin"
         title="Manage Roles"
-        subtitle="Role definitions and permission assignment for this tenant."
+        subtitle={`Role definitions and permission assignment for your ${LABELS.tenant}.`}
+        help="tenant-admin"
         actions={<PrintExportButton label="Export" style={{ minHeight: 44 }} documentTitle="Roles" />}
       />
       <div className="grid g-4" style={{ marginBottom: 18 }}>

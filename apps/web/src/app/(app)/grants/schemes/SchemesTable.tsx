@@ -1,7 +1,8 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { DataTable, StatusPill } from "@/app/_components/ds";
+import Link from "next/link";
+import { DataTable, StatusPill, EmptyState } from "@/app/_components/ds";
 import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
 import { formatMoney, formatIndianDate } from "@/lib/formatters";
 import { useSeededResource } from "@/lib/sync/resource";
@@ -64,17 +65,28 @@ export function SchemesTable({
           (UX-002's pattern; the page used to render a second, independent
           badge from the raw `source` prop — removed). */}
       <DataSourceBadge provenance={provenance ?? "live"} cachedAt={cachedAt} offline={offline} />
-      <DataTable<GrantSchemeSummary>
-        columns={columns}
-        rows={rows}
-        rowLinkPrefix="/grants/schemes/"
-        rowLinkKey="id"
-        identifyingColumnKey="name"
-        sortable
-        filterable
-        filterPlaceholder="Filter schemes…"
-        pageSize={15}
-      />
+      {rows.length === 0 ? (
+        <EmptyState
+          icon="🎁"
+          title="No grant schemes yet"
+          message="Create your first scheme to start tracking grant funding and applications."
+          action={<Link href="/grants/schemes/new" className="btn primary">+ New Scheme</Link>}
+        />
+      ) : (
+        <DataTable<GrantSchemeSummary>
+          columns={columns}
+          rows={rows}
+          rowLinkPrefix="/grants/schemes/"
+          rowLinkKey="id"
+          identifyingColumnKey="name"
+          sortable
+          filterable
+          filterPlaceholder="Filter schemes…"
+          pageSize={15}
+          emptyTitle="No schemes match your filter"
+          emptyMessage="Try a different code, name, or status."
+        />
+      )}
     </>
   );
 }

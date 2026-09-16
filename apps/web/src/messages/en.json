@@ -366,7 +366,7 @@
   },
   "citizenRequests": {
     "pageTitle": "Citizen Service Requests",
-    "pageSubtitle": "Grievances and service requests with SLA &amp; routing.",
+    "pageSubtitle": "Grievances and service requests with SLA & routing.",
     "statOpen": "Open",
     "statRejected": "Rejected",
     "statResolved": "Resolved (MTD)",
@@ -429,7 +429,7 @@
   },
   "citizenRti": {
     "pageTitle": "RTI Applications",
-    "pageSubtitle": "RTI applications, 30-day response tracking &amp; transfers.",
+    "pageSubtitle": "RTI applications, 30-day response tracking & transfers.",
     "statApplications": "RTI Applications",
     "statDue": "Due (30-day)",
     "statReplied": "Replied",

@@ -1,7 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { DataTable, StatusPill } from "@/app/_components/ds";
+import { DataTable, StatusPill, EmptyState } from "@/app/_components/ds";
 import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
 import { formatMoney, formatIndianDate } from "@/lib/formatters";
 import { useSeededResource } from "@/lib/sync/resource";
@@ -68,16 +68,26 @@ export function ApplicationsTable({
           (UX-002's pattern; the page used to render a second, independent
           badge from the raw `source` prop — removed). */}
       <DataSourceBadge provenance={provenance ?? "live"} cachedAt={cachedAt} offline={offline} />
-      <DataTable<GrantApplicationSummary>
-        columns={columns}
-        rows={rows}
-        rowLinkPrefix="/grants/applications/"
-        rowLinkKey="id"
-        sortable
-        filterable
-        filterPlaceholder="Filter applications…"
-        pageSize={15}
-      />
+      {rows.length === 0 ? (
+        <EmptyState
+          icon="📄"
+          title="No grant applications yet"
+          message="Applications will appear here once a grantee applies against one of your schemes."
+        />
+      ) : (
+        <DataTable<GrantApplicationSummary>
+          columns={columns}
+          rows={rows}
+          rowLinkPrefix="/grants/applications/"
+          rowLinkKey="id"
+          sortable
+          filterable
+          filterPlaceholder="Filter applications…"
+          pageSize={15}
+          emptyTitle="No applications match your filter"
+          emptyMessage="Try a different grant number, grantee, or status."
+        />
+      )}
     </>
   );
 }

@@ -1,4 +1,4 @@
-import { PageHeader, Card, DataTable, EmptyState, StatGrid, StatCard, RefreshErrorState } from "../../../../_components/ds";
+import { PageHeader, Card, DataTable, EmptyState, StatGrid, StatCard, RefreshErrorState, Term } from "../../../../_components/ds";
 import { getGpfStatements } from "../../../../_data/loaders";
 import { Chart } from "../../../../_components/Chart";
 import { useResource } from "../../../../_data/useResource";
@@ -71,9 +71,10 @@ export default async function GpfStatementsPage() {
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
-        title="GPF Statements"
+        title={<><Term name="GPF" /> Statements</>}
         subtitle="General Provident Fund contributions — interest @ 7.1% p.a. (GoI Q1 FY 2026-27)."
         back="/hr/payroll"
+        help="payroll"
       />
 
       <StatGrid>
