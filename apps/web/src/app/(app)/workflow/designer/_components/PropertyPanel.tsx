@@ -155,9 +155,9 @@ export function PropertyPanel({ selectedNode, onLabelChange, onPropertyChange }:
 
         {/* Position (read-only) */}
         <div>
-          <label className="block text-xs font-medium text-slate-500 mb-1">
+          <span className="block text-xs font-medium text-slate-500 mb-1">
             Position
-          </label>
+          </span>
           <div className="flex gap-2">
             <span className="rounded-md bg-slate-50 border border-slate-200 px-2 py-1 text-xs text-slate-500 font-mono">
               x: {Math.round(selectedNode.position.x)}

@@ -182,7 +182,7 @@ export function ExportConsole() {
           <label className="lbl" htmlFor="exp-to">To date</label>
           <input id="exp-to" type="date" className="inp" value={to} min={from} onChange={(e) => setTo(e.target.value)} />
 
-          <label className="lbl" id="fmt-label">Format</label>
+          <span className="lbl" id="fmt-label">Format</span>
           <div role="radiogroup" aria-labelledby="fmt-label" style={{ display: "flex", gap: 8, marginTop: 6 }}>
             {(["json", "csv"] as const).map((f) => {
               const on = format === f;

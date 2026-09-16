@@ -254,7 +254,6 @@ export function CivitasMap({
         sandbox="allow-scripts"
         onFocus={handleFocus}
         onBlur={handleBlur}
-        tabIndex={0}
       />
 
       {/* Marker count indicator */}

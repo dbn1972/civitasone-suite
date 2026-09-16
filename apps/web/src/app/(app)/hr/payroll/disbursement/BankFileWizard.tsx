@@ -140,7 +140,7 @@ export function BankFileWizard({ runs, dscConfig }: { runs: RunOption[]; dscConf
                     background: format === f ? "var(--infobg)" : "transparent",
                   }}
                 >
-                  <input type="radio" name="wiz-format" value={f} checked={format === f} onChange={() => setFormat(f)} style={{ accentColor: "var(--accent)" }} />
+                  <input type="radio" name="wiz-format" value={f} checked={format === f} onChange={() => setFormat(f)} aria-label={meta.label} style={{ accentColor: "var(--accent)" }} />
                   <div>
                     <div style={{ fontWeight: 600, fontSize: 13 }}>{meta.label}</div>
                     <div style={{ fontSize: 12, color: "var(--ink2)" }}>{meta.desc}</div>

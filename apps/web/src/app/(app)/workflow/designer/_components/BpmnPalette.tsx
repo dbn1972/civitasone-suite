@@ -17,7 +17,7 @@ export function BpmnPalette() {
       <h2 className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-3">
         Elements
       </h2>
-      <ul className="list-none m-0 p-0 grid gap-1.5" role="list">
+      <ul className="list-none m-0 p-0 grid gap-1.5">
         {PALETTE_ITEMS.map((item) => (
           <li key={item.type}>
             <button

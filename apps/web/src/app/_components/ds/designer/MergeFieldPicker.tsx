@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 export interface MergeField {
   key: string;
@@ -38,6 +38,7 @@ export function MergeFieldPicker({
 }: MergeFieldPickerProps) {
   const [open, setOpen] = useState(false);
   const [internalQuery, setInternalQuery] = useState("");
+  const searchInputRef = useRef<HTMLInputElement>(null);
   const query = searchQuery ?? internalQuery;
   const setQuery = onSearchQueryChange ?? setInternalQuery;
 
@@ -61,6 +62,10 @@ export function MergeFieldPicker({
     }
     return [...map.entries()];
   }, [filtered]);
+
+  useEffect(() => {
+    if (open) searchInputRef.current?.focus();
+  }, [open]);
 
   return (
     <div style={{ position: "relative", display: "inline-block" }}>
@@ -99,6 +104,7 @@ export function MergeFieldPicker({
           <label style={{ display: "block", marginBottom: 8 }}>
             <span className="sr-only">Search fields</span>
             <input
+              ref={searchInputRef}
               type="search"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
@@ -106,7 +112,6 @@ export function MergeFieldPicker({
               aria-label="Search merge fields"
               data-testid="merge-field-search"
               style={{ width: "100%", fontSize: 13 }}
-              autoFocus
             />
           </label>
           {grouped.length === 0 ? (

@@ -23,7 +23,7 @@ export default async function InstallStatusPage() {
         title="Installer Status"
         subtitle="Setup wizard progress — track completed and pending installation steps."
         actions={
-          <a href="/install" className="btn primary" role="link" aria-label="Go to main installer page" style={{ minHeight: 44 }}>
+          <a href="/install" className="btn primary" aria-label="Go to main installer page" style={{ minHeight: 44 }}>
             Open Installer
           </a>
         }

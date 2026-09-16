@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useId, useState } from "react";
+import { useCallback, useEffect, useId, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ConfirmDialog } from "../../../../_components/ds";
 
@@ -33,6 +33,14 @@ function Dialog({
   // Confirm gate: shown before submitting the irreversible action
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
+
+  useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape" && !busy && !confirmOpen) onClose();
+    }
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [busy, confirmOpen, onClose]);
 
   function validateForm(): boolean {
     if (mode === "reply") {
@@ -103,7 +111,6 @@ function Dialog({
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
-        onKeyDown={(e) => { if (e.key === "Escape" && !busy && !confirmOpen) onClose(); }}
         style={{ position: "fixed", inset: 0, background: "rgba(16,24,40,.45)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100, padding: 16 }}
       >
         <div className="card" style={{ width: "min(520px,100%)", maxHeight: "90vh", overflowY: "auto" }}>

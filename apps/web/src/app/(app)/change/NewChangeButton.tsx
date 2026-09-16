@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useId, useState } from "react";
+import { useCallback, useEffect, useId, useState } from "react";
 import { useRouter } from "next/navigation";
 
 const TYPES = ["standard", "normal", "emergency"] as const;
@@ -21,6 +21,15 @@ export function NewChangeButton() {
   const [rollbackPlan, setRollbackPlan] = useState("");
 
   const close = useCallback(() => { if (!busy) { setOpen(false); setError(null); } }, [busy]);
+
+  useEffect(() => {
+    if (!open) return;
+    function handleKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape") close();
+    }
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [open, close]);
 
   const submit = useCallback(async () => {
     setError(null);
@@ -57,7 +66,6 @@ export function NewChangeButton() {
       <button type="button" className="btn primary" onClick={() => setOpen(true)}>+ Raise change</button>
       {open && (
         <div role="dialog" aria-modal="true" aria-labelledby={titleId}
-          onKeyDown={(e) => { if (e.key === "Escape") close(); }}
           style={{ position: "fixed", inset: 0, background: "rgba(16,24,40,.45)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100, padding: 16 }}>
           <div className="card" style={{ width: "min(560px,100%)", maxHeight: "90vh", overflowY: "auto" }}>
             <div className="card-h"><h3 id={titleId}>Raise change request</h3></div>

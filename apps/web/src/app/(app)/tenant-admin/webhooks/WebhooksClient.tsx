@@ -187,8 +187,8 @@ export function WebhooksClient({ webhooks: initialWebhooks, source }: { webhooks
                 <label htmlFor="wh-desc">Description</label>
                 <input id="wh-desc" name="description" type="text" className="input" placeholder="Finance event sync" />
               </div>
-              <div style={{ marginBottom: 12 }}>
-                <label style={{ fontWeight: 500, marginBottom: 8, display: "block" }}>Events to Subscribe</label>
+              <fieldset style={{ marginBottom: 12, border: "none", padding: 0 }}>
+                <legend style={{ fontWeight: 500, marginBottom: 8, display: "block" }}>Events to Subscribe</legend>
                 {Object.entries(EVENT_GROUPS).map(([group, events]) => (
                   <div key={group} style={{ marginBottom: 8 }}>
                     <strong style={{ fontSize: 12, color: "#374151" }}>{group}</strong>
@@ -202,7 +202,7 @@ export function WebhooksClient({ webhooks: initialWebhooks, source }: { webhooks
                     </div>
                   </div>
                 ))}
-              </div>
+              </fieldset>
               <div style={{ background: "#f9fafb", padding: 12, borderRadius: 6, marginBottom: 16 }}>
                 <p style={{ margin: 0, fontSize: 12, color: "#6b7280" }}>
                   🔑 A signing secret will be auto-generated and shown once after creation.
