@@ -731,7 +731,7 @@ module.exports = {
     svc("shop",          3060, "shop_svc",          "civitas_shop", {}, { graceful: true }), // PERF-015
     svc("swm",           3079, "swm_svc",           "civitas_swm", {}, { graceful: true }), // PERF-015
     svc("trade",         3070, "trade_svc",         "civitas_trade", {}, { graceful: true }), // PERF-015
-    svc("vendor",        3074, "vendor_svc",        "civitas_vendor"),
+    svc("vendor",        3074, "vendor_svc",        "civitas_vendor", {}, { graceful: true }), // PERF-015
 
     // ── Gateway ────────────────────────────────────────────────────────────────
     // DATABASE_URL required to mount CAP-052 catalogue routes (FORCE-RLS reads)
