@@ -56,6 +56,24 @@ describe("NewBudgetEstimatePage", () => {
     expect(alert.textContent).not.toMatch(/failed to load/i);
   });
 
+  // Regression: the initial-load fetch() (and its `if (!res.ok)` branch) had
+  // been moved outside the try block during the UX-016 raw-status-leak fix,
+  // so a REJECTED fetch promise (offline, DNS failure, CORS -- as opposed to
+  // a resolved non-2xx Response) escaped as an unhandled rejection inside the
+  // detached async IIFE instead of being caught and routed through
+  // fromException. Proves the fetch (and its ok-check) are back inside the
+  // try, same as every other file in this PR.
+  it("shows a clerk-safe message when the initial fetch itself rejects (network failure), never hangs or crashes", async () => {
+    vi.spyOn(globalThis, "fetch").mockRejectedValueOnce(new TypeError("Failed to fetch"));
+
+    render(<NewBudgetEstimatePage />);
+
+    const alert = await screen.findByRole("alert");
+    await waitFor(() => expect(alert).toHaveTextContent(/check your internet connection/i));
+    expect(alert.textContent).not.toMatch(/TypeError/);
+    expect(alert.textContent).not.toMatch(/Failed to fetch/);
+  });
+
   it("shows a clerk-safe message when submitting fails, never the raw response body", async () => {
     vi.spyOn(globalThis, "fetch").mockImplementation(async (url) => {
       if (String(url).includes("/finance/accounts")) {

@@ -37,12 +37,12 @@ export default function MapHeadOfAccountPage() {
   const loadFormError = useFormError("accounts");
 
   const loadAccounts = useCallback(async () => {
-    const res = await fetch("/api/proxy/v1/finance/accounts?limit=200", { headers: { accept: "application/json" } });
-    if (!res.ok) {
-      setLoadError((await loadFormError.fromResponse(res, "load")).message);
-      return;
-    }
     try {
+      const res = await fetch("/api/proxy/v1/finance/accounts?limit=200", { headers: { accept: "application/json" } });
+      if (!res.ok) {
+        setLoadError((await loadFormError.fromResponse(res, "load")).message);
+        return;
+      }
       const json = (await res.json()) as { data?: AccountRow[] } | AccountRow[];
       const rows = Array.isArray(json) ? json : json.data ?? [];
       setAccounts(rows);

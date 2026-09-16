@@ -33,6 +33,24 @@ describe("MapHeadOfAccountPage", () => {
     expect(alert.textContent).not.toMatch(/failed to load/i);
   });
 
+  // Regression: loadAccounts' fetch() (and its `if (!res.ok)` branch) had
+  // been moved outside the try block during the UX-016 raw-status-leak fix.
+  // loadAccounts is invoked as `void loadAccounts()` from the mount effect,
+  // so a REJECTED fetch promise (offline, DNS failure, CORS -- as opposed to
+  // a resolved non-2xx Response) escaped as an unhandled rejection instead of
+  // being caught and routed through fromException. Proves the fetch (and its
+  // ok-check) are back inside the try, same as every other file in this PR.
+  it("shows a clerk-safe message when the initial accounts fetch itself rejects (network failure), never hangs or crashes", async () => {
+    vi.spyOn(globalThis, "fetch").mockRejectedValueOnce(new TypeError("Failed to fetch"));
+
+    render(<MapHeadOfAccountPage />);
+
+    const alert = await screen.findByRole("alert");
+    await waitFor(() => expect(alert).toHaveTextContent(/check your internet connection/i));
+    expect(alert.textContent).not.toMatch(/TypeError/);
+    expect(alert.textContent).not.toMatch(/Failed to fetch/);
+  });
+
   it("shows a clerk-safe message when creating a head of account fails, never the raw backend text", async () => {
     vi.spyOn(globalThis, "fetch").mockImplementation(async (url, init) => {
       if (String(url).includes("/finance/accounts") && (!init || init.method === undefined)) {

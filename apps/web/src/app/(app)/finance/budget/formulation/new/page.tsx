@@ -42,12 +42,12 @@ export default function NewBudgetEstimatePage() {
   useEffect(() => {
     let active = true;
     (async () => {
-      const res = await fetch("/api/proxy/v1/finance/accounts?limit=200", { headers: { accept: "application/json" } });
-      if (!res.ok) {
-        if (active) setLoadError((await formError.fromResponse(res, "load")).message);
-        return;
-      }
       try {
+        const res = await fetch("/api/proxy/v1/finance/accounts?limit=200", { headers: { accept: "application/json" } });
+        if (!res.ok) {
+          if (active) setLoadError((await formError.fromResponse(res, "load")).message);
+          return;
+        }
         const json = (await res.json()) as { data?: AccountRow[] } | AccountRow[];
         if (active) setAccounts(Array.isArray(json) ? json : json.data ?? []);
       } catch {
