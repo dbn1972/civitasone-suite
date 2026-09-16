@@ -521,7 +521,7 @@ module.exports = {
     svc("helpdesk",     3027, "helpdesk_svc",      "civitas_helpdesk", {}, { graceful: true }), // PERF-015
 
     // ── Intelligence & automation ──────────────────────────────────────────────
-    svc("knowledge",    3028, "knowledge_svc",     "civitas_knowledge"),
+    svc("knowledge",    3028, "knowledge_svc",     "civitas_knowledge", {}, { graceful: true }), // PERF-015
     svc("workflow",     3029, "workflow_svc",      "civitas_workflow", {}, { graceful: true }), // PERF-015
 
     // ── CQRS workers (async writes + outbox relay) ─────────────────────────────
