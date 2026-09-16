@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { PageHeader } from "@/app/_components/ds";
+import { useFormError } from "@/lib/useFormError";
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -28,6 +29,7 @@ export default function NewGuesthouseBookingPage() {
     message: string;
   } | null>(null);
   const [fieldError, setFieldError] = useState("");
+  const formError = useFormError("booking");
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -57,6 +59,7 @@ export default function NewGuesthouseBookingPage() {
       return;
     }
     setSubmitting(true);
+    formError.clear();
     try {
       const payload = {
         roomId: roomId.trim(),
@@ -78,11 +81,13 @@ export default function NewGuesthouseBookingPage() {
         });
         setTimeout(() => router.push("/estab/guesthouse"), 900);
       } else {
-        const text = await res.text();
-        setToast({ type: "error", message: text || `Error ${res.status}` });
+        setToast({
+          type: "error",
+          message: (await formError.fromResponse(res, "save")).message,
+        });
       }
     } catch {
-      setToast({ type: "error", message: "Network error. Please try again." });
+      setToast({ type: "error", message: formError.fromException("save").message });
     } finally {
       setSubmitting(false);
       setTimeout(() => setToast(null), 5000);

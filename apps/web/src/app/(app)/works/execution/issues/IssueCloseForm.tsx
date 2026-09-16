@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { ConfirmDialog } from "@/app/_components/ds";
 import { useToast } from "@/app/_components/ds/Toast";
+import { useFormError } from "@/lib/useFormError";
 
 const inputStyle: React.CSSProperties = {
   width: "100%",
@@ -30,10 +31,12 @@ export function IssueCloseForm() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const formError = useFormError("issue");
 
   async function handleConfirm() {
     setError(null);
     setBusy(true);
+    formError.clear();
 
     try {
       const res = await fetch(
@@ -42,18 +45,17 @@ export function IssueCloseForm() {
       );
 
       if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        throw new Error(
-          (data as { message?: string })?.message ?? `Error ${res.status}`
-        );
+        setError((await formError.fromResponse(res, "save")).message);
+        setBusy(false);
+        return;
       }
 
       setDialogOpen(false);
       toast.success("Issue closed.");
       setIssueId("");
       setTimeout(() => router.refresh(), 600);
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Something went wrong.");
+    } catch {
+      setError(formError.fromException("save").message);
       setBusy(false);
     }
   }

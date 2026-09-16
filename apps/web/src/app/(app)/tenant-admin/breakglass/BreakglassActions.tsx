@@ -3,16 +3,19 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { ConfirmDialog } from "../../../_components/ds";
+import { useFormError } from "@/lib/useFormError";
 
 export function BreakglassActions({ id, requester }: { id: string; requester?: string }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | undefined>(undefined);
+  const formError = useFormError("break-glass session");
 
   async function close(reason?: string) {
     setBusy(true);
     setError(undefined);
+    formError.clear();
     try {
       const res = await fetch(`/api/proxy/identity/break-glass/${id}/close`, {
         method: "POST",
@@ -20,18 +23,13 @@ export function BreakglassActions({ id, requester }: { id: string; requester?: s
         body: JSON.stringify(reason ? { reason } : {}),
       });
       if (!res.ok) {
-        const text = await res.text();
-        let msg = text || `Request failed (${res.status})`;
-        try {
-          const j = JSON.parse(text) as { message?: string };
-          if (j.message) msg = j.message;
-        } catch { /* not json */ }
-        throw new Error(msg);
+        setError((await formError.fromResponse(res, "save")).message);
+        return;
       }
       setOpen(false);
       router.refresh();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to close session. Please try again.");
+    } catch {
+      setError(formError.fromException("save").message);
     } finally {
       setBusy(false);
     }

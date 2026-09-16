@@ -3,6 +3,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { useToast } from "@/app/_components/ds/Toast";
 import { PageHeader } from "@/app/_components/ds";
+import { useFormError } from "@/lib/useFormError";
 
 const inputStyle = { width: "100%", padding: 8, minHeight: 44, borderRadius: 8, border: "1px solid var(--line)" } as const;
 const labelStyle = { display: "block", fontSize: 12, color: "var(--muted)", marginBottom: 4, fontWeight: 600 } as const;
@@ -26,6 +27,7 @@ export default function NewTsPage() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
+  const formError = useFormError("technical sanction");
 
   function set(field: keyof typeof form) {
     return (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
@@ -37,6 +39,7 @@ export default function NewTsPage() {
     setBusy(true);
     setMessage("");
     setError("");
+    formError.clear();
     try {
       const body: Record<string, string> = {
         workId: form.workId.trim(),
@@ -54,13 +57,15 @@ export default function NewTsPage() {
         headers: { "content-type": "application/json" },
         body: JSON.stringify(body),
       });
-      const data = (await res.json().catch(() => null)) as { id?: string; message?: string } | null;
-      if (!res.ok) throw new Error(data?.message ?? "Create failed");
+      if (!res.ok) {
+        setError((await formError.fromResponse(res, "save")).message);
+        return;
+      }
       setMessage("Technical sanction created.");
       toast.success("Technical sanction created.");
       setTimeout(() => router.push("/works/approvals"), 600);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Something went wrong.");
+    } catch {
+      setError(formError.fromException("save").message);
     } finally {
       setBusy(false);
     }

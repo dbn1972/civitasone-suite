@@ -4,6 +4,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useState, Suspense } from "react";
 import { useToast } from "@/app/_components/ds/Toast";
 import { PageHeader } from "@/app/_components/ds";
+import { useFormError } from "@/lib/useFormError";
 
 const inputStyle = {
   width: "100%",
@@ -70,6 +71,7 @@ function RecordMeasurementForm() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
+  const formError = useFormError("measurement");
 
   function set(field: keyof MeasurementForm) {
     return (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
@@ -100,14 +102,17 @@ function RecordMeasurementForm() {
     if (form.depthVal)   body.depthVal   = parseFloat(form.depthVal);
     if (form.remarks.trim()) body.remarks = form.remarks.trim();
 
+    formError.clear();
     try {
       const res = await fetch("/api/proxy/v1/works/billing/measurements", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify(body),
       });
-      const data = (await res.json().catch(() => null)) as { message?: string } | null;
-      if (!res.ok) throw new Error(data?.message ?? "Submit failed");
+      if (!res.ok) {
+        setError((await formError.fromResponse(res, "save")).message);
+        return;
+      }
       setMessage("Measurement recorded.");
       toast.success("Measurement recorded.");
       const workId = searchParams.get("workId");
@@ -115,8 +120,8 @@ function RecordMeasurementForm() {
         if (workId) router.push("/works/billing/" + workId);
         else router.push("/works/billing");
       }, 600);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Something went wrong.");
+    } catch {
+      setError(formError.fromException("save").message);
     } finally {
       setBusy(false);
     }

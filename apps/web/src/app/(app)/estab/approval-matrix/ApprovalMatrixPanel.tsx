@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { DataTable, StatusPill, ActionButton } from "../../../_components/ds";
+import { useFormError } from "@/lib/useFormError";
 
 type Step = { role: string; label: string };
 
@@ -58,21 +59,25 @@ export function ApprovalMatrixPanel() {
   const [error, setError] = useState("");
   const [form, setForm] = useState({ ...EMPTY_FORM });
   const [saving, setSaving] = useState(false);
+  const { fromResponse, fromException, clear } = useFormError("approval rule");
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
       const res = await fetch("/api/proxy/v1/estab/approval-rules");
-      if (!res.ok) throw new Error(await res.text());
+      if (!res.ok) {
+        setError((await fromResponse(res, "load")).message);
+        return;
+      }
       const body = (await res.json()) as { data?: Rule[] };
       setRules(body.data ?? []);
       setError("");
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load rules");
+    } catch {
+      setError(fromException("load").message);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [fromResponse, fromException]);
 
   useEffect(() => { void load(); }, [load]);
 
@@ -90,6 +95,7 @@ export function ApprovalMatrixPanel() {
     setSaving(true);
     setMessage("");
     setError("");
+    clear();
     try {
       const steps: Step[] = form.rolesCsv
         .split(",")
@@ -116,16 +122,21 @@ export function ApprovalMatrixPanel() {
         headers: { "content-type": "application/json" },
         body: JSON.stringify(payload),
       });
-      if (!res.ok) throw new Error((await res.text()) || "Create failed");
+      if (!res.ok) {
+        setError((await fromResponse(res, "save")).message);
+        return;
+      }
       setMessage(`Rule "${form.label}" queued. It will appear once processed.`);
       setForm({ ...EMPTY_FORM });
       setTimeout(() => void load(), 800);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Create failed");
+      // "Add at least one approver role" above is already clerk-safe,
+      // client-side validation copy — preserved verbatim via err.message.
+      setError(err instanceof Error ? err.message : fromException("save").message);
     } finally {
       setSaving(false);
     }
-  }, [form, load]);
+  }, [form, load, fromResponse, fromException, clear]);
 
   const toggleActive = useCallback(
     async (rule: Rule) => {
@@ -134,11 +145,13 @@ export function ApprovalMatrixPanel() {
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ active: !rule.active }),
       });
-      if (!res.ok) throw new Error((await res.text()) || "Update failed");
+      if (!res.ok) {
+        throw new Error((await fromResponse(res, "save")).message);
+      }
       setMessage(`Rule "${rule.label}" ${rule.active ? "deactivated" : "activated"}.`);
       setTimeout(() => void load(), 800);
     },
-    [load],
+    [load, fromResponse],
   );
 
   return (

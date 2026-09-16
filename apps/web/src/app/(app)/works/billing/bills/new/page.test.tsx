@@ -75,4 +75,19 @@ describe("Generate Bill form", () => {
     expect(screen.getByRole("alert")).toHaveTextContent(/Deductions cannot exceed/i);
     expect(fetchSpy).not.toHaveBeenCalled();
   });
+
+  it("shows a clerk-safe message, never the raw HTTP status, when the create fails (UX-016)", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response("", { status: 503 }),
+    );
+
+    render(<NewBillPage />);
+    fireEvent.change(screen.getByLabelText(/Bill Number/i), { target: { value: "RA/2024-25/002" } });
+    fireEvent.change(screen.getByLabelText(/Gross Amount/i), { target: { value: "1000" } });
+    fireEvent.click(screen.getByRole("button", { name: "Generate Bill" }));
+
+    const alert = await screen.findByRole("alert");
+    await waitFor(() => expect(alert).toHaveTextContent(/couldn't save/i));
+    expect(alert.textContent).not.toMatch(/\b503\b/);
+  });
 });

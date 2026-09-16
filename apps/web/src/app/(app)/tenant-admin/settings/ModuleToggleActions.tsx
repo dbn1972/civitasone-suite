@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 import { EmptyState } from "../../../_components/ds";
+import { useFormError } from "@/lib/useFormError";
 
 type ModuleRow = { moduleKey: string; moduleName: string; enabled: boolean; enabledAt?: string | null };
 
@@ -31,6 +32,7 @@ export function ModuleToggleActions({ modules }: { modules: ModuleRow[] }) {
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState("");
   const [error, setError] = useState("");
+  const formError = useFormError("module");
 
   const dirtyKeys = modules.filter((mod) => pending[mod.moduleKey] !== initial[mod.moduleKey]).map((m) => m.moduleKey);
   const dirty = dirtyKeys.length > 0;
@@ -45,6 +47,7 @@ export function ModuleToggleActions({ modules }: { modules: ModuleRow[] }) {
     setBusy(true);
     setStatus("");
     setError("");
+    formError.clear();
     try {
       for (const key of dirtyKeys) {
         const res = await fetch(`/api/proxy/v1/admin/tenant/modules/${encodeURIComponent(key)}/toggle`, {
@@ -52,12 +55,15 @@ export function ModuleToggleActions({ modules }: { modules: ModuleRow[] }) {
           headers: { "content-type": "application/json" },
           body: JSON.stringify({ enabled: pending[key] }),
         });
-        if (!res.ok) throw new Error(await res.text());
+        if (!res.ok) {
+          setError((await formError.fromResponse(res, "save")).message);
+          return;
+        }
       }
       setStatus(`Saved ${dirtyKeys.length} module${dirtyKeys.length === 1 ? "" : "s"}.`);
       router.refresh();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Save failed");
+    } catch {
+      setError(formError.fromException("save").message);
     } finally {
       setBusy(false);
     }

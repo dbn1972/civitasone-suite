@@ -46,4 +46,20 @@ describe("NewVehiclePage — vehicle create (L1/L2)", () => {
     expect(await screen.findByRole("alert")).toBeTruthy();
     expect(fetchSpy).not.toHaveBeenCalled();
   });
+
+  it("shows a clerk-safe message, never the raw backend text, when the create POST fails (UX-016)", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response("regNo already registered to another vehicle", { status: 409 }),
+    );
+
+    render(<NewVehiclePage />);
+
+    fireEvent.change(screen.getByLabelText(/Registration number/), { target: { value: "DL 01 CA 1234" } });
+    fireEvent.change(screen.getByLabelText(/Make .* model/), { target: { value: "Toyota Innova" } });
+    fireEvent.click(screen.getByRole("button", { name: "Add Vehicle" }));
+
+    await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent(/couldn't save/i));
+    expect(screen.getByRole("alert").textContent).not.toMatch(/already registered/i);
+    expect(screen.getByRole("alert").textContent).not.toMatch(/\b409\b/);
+  });
 });

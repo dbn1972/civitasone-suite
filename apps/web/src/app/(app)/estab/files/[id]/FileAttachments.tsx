@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { FileUpload, type UploadedFileMeta } from "../../../../_components/ds";
+import { useFormError } from "@/lib/useFormError";
 
 type Attachment = {
   id: string;
@@ -32,12 +33,14 @@ export function FileAttachments({ fileId, attachments }: Props) {
   const [pending, setPending] = useState<PendingUpload | null>(null);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
+  const formError = useFormError("attachment");
 
   async function upload(e: React.FormEvent) {
     e.preventDefault();
     if (!pending) return;
     setBusy(true);
     setMessage("");
+    formError.clear();
     try {
       // F2 — real presigned-URL upload flow: fileName/fileType/sizeBytes/
       // storageRef all come from the actual uploaded file (via FileUpload's
@@ -52,12 +55,15 @@ export function FileAttachments({ fileId, attachments }: Props) {
           storageRef: pending.storageRef,
         }),
       });
-      if (!res.ok) throw new Error(await res.text());
+      if (!res.ok) {
+        setMessage((await formError.fromResponse(res, "save")).message);
+        return;
+      }
       setPending(null);
       setMessage("Attachment uploaded.");
       router.refresh();
-    } catch (err) {
-      setMessage(err instanceof Error ? err.message : "Upload failed");
+    } catch {
+      setMessage(formError.fromException("save").message);
     } finally {
       setBusy(false);
     }

@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Segmented, ConfirmDialog, DataTable } from "../../../_components/ds";
 import { formatIndianDate } from "@/lib/formatters";
+import { useFormError } from "@/lib/useFormError";
 
 type Session = {
   id: string;
@@ -40,6 +41,7 @@ export function SessionsTable({ sessions }: { sessions: Session[] }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | undefined>(undefined);
   const [notice, setNotice] = useState("");
+  const formError = useFormError("session");
 
   const rows = useMemo(() => {
     if (filter === "All") return sessions;
@@ -50,6 +52,7 @@ export function SessionsTable({ sessions }: { sessions: Session[] }) {
     if (!pending) return;
     setBusy(true);
     setError(undefined);
+    formError.clear();
     try {
       const res = await fetch(`/api/proxy/identity/sessions/${pending.id}`, {
         method: "DELETE",
@@ -57,16 +60,14 @@ export function SessionsTable({ sessions }: { sessions: Session[] }) {
         body: JSON.stringify(reason ? { reason } : {}),
       });
       if (!res.ok) {
-        const text = await res.text();
-        let msg = text || `Request failed (${res.status})`;
-        try { const j = JSON.parse(text) as { message?: string }; if (j.message) msg = j.message; } catch { /* */ }
-        throw new Error(msg);
+        setError((await formError.fromResponse(res, "save")).message);
+        return;
       }
       setNotice(`Session for ${pending.userName ?? pending.userEmail} revoked.`);
       setPending(null);
       router.refresh();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to revoke session. Please try again.");
+    } catch {
+      setError(formError.fromException("save").message);
     } finally {
       setBusy(false);
     }

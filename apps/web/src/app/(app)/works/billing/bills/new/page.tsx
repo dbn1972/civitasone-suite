@@ -4,6 +4,7 @@ import { useState, Suspense } from "react";
 import { useToast } from "@/app/_components/ds/Toast";
 import { PageHeader } from "@/app/_components/ds";
 import { formatMoney } from "@/lib/formatters";
+import { useFormError } from "@/lib/useFormError";
 
 const inputStyle = { width: "100%", padding: 8, minHeight: 44, borderRadius: 8, border: "1px solid var(--line)" } as const;
 const labelStyle = { display: "block", fontSize: 12, color: "var(--muted)", marginBottom: 4, fontWeight: 600 } as const;
@@ -35,6 +36,7 @@ function NewBillForm() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
+  const formError = useFormError("bill");
 
   function set(field: keyof typeof form) {
     return (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
@@ -65,6 +67,7 @@ function NewBillForm() {
     }
 
     setBusy(true);
+    formError.clear();
     try {
       const body: Record<string, unknown> = {
         workId: form.workId.trim(),
@@ -81,16 +84,18 @@ function NewBillForm() {
         headers: { "content-type": "application/json" },
         body: JSON.stringify(body),
       });
-      const data = (await res.json().catch(() => null)) as { id?: string; message?: string } | null;
-      if (!res.ok) throw new Error(data?.message ?? "Create failed");
+      if (!res.ok) {
+        setError((await formError.fromResponse(res, "save")).message);
+        return;
+      }
       setMessage("Bill created.");
       toast.success("Bill created.");
       setTimeout(
         () => router.push(form.workId.trim() ? `/works/billing/${form.workId.trim()}` : "/works/billing"),
         600,
       );
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Something went wrong.");
+    } catch {
+      setError(formError.fromException("save").message);
     } finally {
       setBusy(false);
     }

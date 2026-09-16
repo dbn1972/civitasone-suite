@@ -53,4 +53,22 @@ describe("NewGuesthouseBookingPage — booking create (L1/L2)", () => {
     expect(await screen.findByRole("alert")).toBeTruthy();
     expect(fetchSpy).not.toHaveBeenCalled();
   });
+
+  it("shows a clerk-safe message, never the raw backend text, when the booking POST fails (UX-016)", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response("room already booked for that window", { status: 409 }),
+    );
+
+    render(<NewGuesthouseBookingPage />);
+
+    fireEvent.change(screen.getByLabelText(/Room ID/), { target: { value: ROOM_ID } });
+    fireEvent.change(screen.getByLabelText(/Guest name/), { target: { value: "Shri A. Kumar" } });
+    fireEvent.change(screen.getByLabelText(/Check-in/), { target: { value: "2026-09-01T10:00" } });
+    fireEvent.change(screen.getByLabelText(/Check-out/), { target: { value: "2026-09-03T10:00" } });
+    fireEvent.click(screen.getByRole("button", { name: "Create booking" }));
+
+    await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent(/couldn't save/i));
+    expect(screen.getByRole("alert").textContent).not.toMatch(/room already booked/i);
+    expect(screen.getByRole("alert").textContent).not.toMatch(/\b409\b/);
+  });
 });

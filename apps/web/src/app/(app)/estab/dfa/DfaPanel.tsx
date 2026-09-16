@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { DataTable, StatusPill, ActionButton, Segmented } from "../../../_components/ds";
+import { useFormError } from "@/lib/useFormError";
 
 type Dfa = {
   id: string;
@@ -45,27 +46,32 @@ export function DfaPanel() {
   const [form, setForm] = useState({ ...EMPTY });
   const [saving, setSaving] = useState(false);
   const [currentStepTitle, setCurrentStepTitle] = useState("");
+  const { fromResponse, fromException, clear } = useFormError("DFA");
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
       const qs = filter === "all" ? "?limit=100" : `?status=${filter}&limit=100`;
       const res = await fetch(`/api/proxy/v1/estab/dfa${qs}`);
-      if (!res.ok) throw new Error(await res.text());
+      if (!res.ok) {
+        setError((await fromResponse(res, "load")).message);
+        return;
+      }
       const body = (await res.json()) as { data?: Dfa[] };
       setRows(body.data ?? []);
       setError("");
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load DFAs");
+    } catch {
+      setError(fromException("load").message);
     } finally {
       setLoading(false);
     }
-  }, [filter]);
+  }, [filter, fromResponse, fromException]);
 
   useEffect(() => { void load(); }, [load]);
 
   const create = useCallback(async () => {
     setSaving(true); setMessage(""); setError("");
+    clear();
     try {
       if (form.subject.trim().length < 3) throw new Error("Subject is required");
       if (form.body.trim().length < 1) throw new Error("Draft body is required");
@@ -79,29 +85,37 @@ export function DfaPanel() {
       const res = await fetch("/api/proxy/v1/estab/dfa", {
         method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(payload),
       });
-      if (!res.ok) throw new Error((await res.text()) || "Create failed");
+      if (!res.ok) {
+        setError((await fromResponse(res, "save")).message);
+        return;
+      }
       setMessage("Draft created. Submit it for approval when ready.");
       setCurrentStepTitle(stepTitleFor("draft"));
       setForm({ ...EMPTY }); setShowForm(false);
       setTimeout(() => void load(), 800);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Create failed");
+      // "Subject is required" / "Draft body is required" above are already
+      // clerk-safe, client-side validation copy — preserved via err.message.
+      setError(err instanceof Error ? err.message : fromException("save").message);
     } finally {
       setSaving(false);
     }
-  }, [form, load]);
+  }, [form, load, fromResponse, fromException, clear]);
 
   const act = useCallback(async (id: string, action: string, reason?: string) => {
     const res = await fetch(`/api/proxy/v1/estab/dfa/${id}/${action}`, {
       method: "POST", headers: { "content-type": "application/json" },
       body: reason ? JSON.stringify({ reason }) : JSON.stringify({}),
     });
-    if (!res.ok) throw new Error((await res.text()) || `${action} failed`);
+    if (!res.ok) {
+      const resolved = await fromResponse(res, "save");
+      throw new Error(`${action}: ${resolved.message}`);
+    }
     setMessage(`DFA ${action} done.`);
     const nextStatus = ACTION_STEP_STATUS[action];
     if (nextStatus) setCurrentStepTitle(stepTitleFor(nextStatus));
     setTimeout(() => void load(), 800);
-  }, [load]);
+  }, [load, fromResponse]);
 
   const actionsFor = (d: Dfa) => {
     switch (d.status) {

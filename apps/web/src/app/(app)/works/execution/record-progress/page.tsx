@@ -3,6 +3,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState, Suspense } from "react";
 import { useToast } from "@/app/_components/ds/Toast";
 import { PageHeader } from "@/app/_components/ds";
+import { useFormError } from "@/lib/useFormError";
 
 const inputStyle = { width: "100%", padding: 8, minHeight: 44, borderRadius: 8, border: "1px solid var(--line)" } as const;
 const labelStyle = { display: "block", fontSize: 12, color: "var(--muted)", marginBottom: 4, fontWeight: 600 } as const;
@@ -62,6 +63,7 @@ function RecordProgressForm() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
+  const formError = useFormError("progress");
 
   // When arriving from a work's execution page, load that work's scopes so the
   // clerk can pick one by name instead of hand-pasting a scope UUID.
@@ -74,7 +76,11 @@ function RecordProgressForm() {
         const res = await fetch(`/api/proxy/v1/works/execution/${workId}/scopes`, {
           headers: { "content-type": "application/json" },
         });
-        if (!res.ok) throw new Error(String(res.status));
+        // Never shown to the user — this is a best-effort preload that falls
+        // back to manual UUID entry below on any failure, so the message
+        // itself is only for a developer reading a stack trace, not a status
+        // leak (see docs/ENTERPRISE-GAP-REPORT-2026-09-07.md UX-016/UX-020).
+        if (!res.ok) throw new Error("Could not preload scopes.");
         const json = await res.json();
         if (!active) return;
         const list = pickScopes(json);
@@ -105,6 +111,7 @@ function RecordProgressForm() {
     setBusy(true);
     setMessage("");
     setError("");
+    formError.clear();
     try {
       const body = {
         workScopeId: form.workScopeId.trim(),
@@ -118,13 +125,15 @@ function RecordProgressForm() {
         headers: { "content-type": "application/json" },
         body: JSON.stringify(body),
       });
-      const data = (await res.json().catch(() => null)) as { id?: string; message?: string } | null;
-      if (!res.ok) throw new Error(data?.message ?? "Create failed");
+      if (!res.ok) {
+        setError((await formError.fromResponse(res, "save")).message);
+        return;
+      }
       setMessage("Progress recorded.");
       toast.success("Progress recorded.");
       setTimeout(() => router.push(workId ? `/works/execution/${workId}` : "/works/execution"), 600);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Something went wrong.");
+    } catch {
+      setError(formError.fromException("save").message);
     } finally {
       setBusy(false);
     }

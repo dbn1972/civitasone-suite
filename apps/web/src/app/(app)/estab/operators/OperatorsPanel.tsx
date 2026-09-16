@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { DataTable, StatusPill, ActionButton, ErrorState } from "../../../_components/ds";
 import { toHumanError } from "@/lib/messages";
+import { useFormError } from "@/lib/useFormError";
 
 type Operator = {
   id: string;
@@ -42,13 +43,18 @@ export function OperatorsPanel() {
   const [loadError, setLoadError] = useState(false);
   const [form, setForm] = useState({ ...EMPTY });
   const [saving, setSaving] = useState(false);
+  const { fromResponse, fromException, clear } = useFormError("operator");
 
   const load = useCallback(async () => {
     setLoading(true);
     setLoadError(false);
     try {
       const res = await fetch("/api/proxy/v1/estab/operators?activeOnly=false&limit=500");
-      if (!res.ok) throw new Error(await res.text());
+      // Never shown verbatim — a failed load only ever flips loadError below,
+      // which renders the catalogued ErrorState — but still routed through a
+      // safe, static message rather than the raw response body, for the same
+      // hygiene reason as every other fix in this tranche.
+      if (!res.ok) throw new Error("Could not load operators.");
       const body = (await res.json()) as { data?: Operator[] };
       setOperators(body.data ?? []);
     } catch {
@@ -90,6 +96,7 @@ export function OperatorsPanel() {
 
   const enrol = useCallback(async () => {
     setSaving(true); setMessage(""); setError("");
+    clear();
     try {
       if (!/^[0-9a-f-]{36}$/i.test(form.employeeId)) throw new Error("Pick an employee or enter a valid employee ID");
       if (!form.division.trim()) throw new Error("Division is required");
@@ -103,26 +110,33 @@ export function OperatorsPanel() {
       const res = await fetch("/api/proxy/v1/estab/operators", {
         method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(payload),
       });
-      if (!res.ok) throw new Error((await res.text()) || "Enrol failed");
+      if (!res.ok) {
+        setError((await fromResponse(res, "save")).message);
+        return;
+      }
       setMessage("Operator enrolled. They can now be marked files in this division.");
       setForm({ ...EMPTY });
       setTimeout(() => void load(), 800);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Enrol failed");
+      // "Pick an employee..." / "Division is required" above are already
+      // clerk-safe, client-side validation copy — preserved via err.message.
+      setError(err instanceof Error ? err.message : fromException("save").message);
     } finally {
       setSaving(false);
     }
-  }, [form, load]);
+  }, [form, load, fromResponse, fromException, clear]);
 
   const toggle = useCallback(async (op: Operator) => {
     const res = await fetch(`/api/proxy/v1/estab/operators/${op.id}`, {
       method: "PATCH", headers: { "content-type": "application/json" },
       body: JSON.stringify({ active: !op.active }),
     });
-    if (!res.ok) throw new Error((await res.text()) || "Update failed");
+    if (!res.ok) {
+      throw new Error((await fromResponse(res, "save")).message);
+    }
     setMessage(`Operator ${op.active ? "deactivated" : "reactivated"}.`);
     setTimeout(() => void load(), 800);
-  }, [load]);
+  }, [load, fromResponse]);
 
   return (
     <div style={{ display: "grid", gap: 18, marginTop: 18 }}>

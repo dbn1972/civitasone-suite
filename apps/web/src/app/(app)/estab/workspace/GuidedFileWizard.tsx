@@ -9,6 +9,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { toHumanError } from "@/lib/messages";
 
 type Operator = { id: string; employeeId: string; division: string; deskRole: string; active: boolean };
 
@@ -17,9 +18,16 @@ const CLASSIFICATIONS = ["public", "confidential", "secret", "top_secret"] as co
 const COMM_TYPES = ["letter", "order", "memo", "notification", "circular", "do_letter"] as const;
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+// Plain async helper (not a component), so it can't use the useFormError hook
+// — toHumanError is the same catalogued-message building block that hook is
+// built on, mirroring works/_data/client.ts's readError() precedent. Never
+// echoes the response status or body — see UX-016 in the gap report.
 async function postJson(path: string, body: unknown): Promise<Record<string, unknown>> {
   const res = await fetch(path, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
-  if (!res.ok) throw new Error((await res.text()) || `Request failed (${res.status})`);
+  if (!res.ok) {
+    const human = toHumanError("save", { area: "step" });
+    throw new Error(`${human.what} ${human.next}`);
+  }
   return (await res.json()) as Record<string, unknown>;
 }
 

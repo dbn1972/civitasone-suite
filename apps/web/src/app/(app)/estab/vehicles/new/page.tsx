@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { PageHeader } from "@/app/_components/ds";
+import { useFormError } from "@/lib/useFormError";
 
 const FUEL_TYPES = [
   { value: "petrol", label: "Petrol" },
@@ -33,6 +34,7 @@ export default function NewVehiclePage() {
     message: string;
   } | null>(null);
   const [fieldError, setFieldError] = useState("");
+  const formError = useFormError("vehicle");
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -52,6 +54,7 @@ export default function NewVehiclePage() {
       return;
     }
     setSubmitting(true);
+    formError.clear();
     try {
       const payload = {
         regNo: regNo.trim(),
@@ -71,11 +74,13 @@ export default function NewVehiclePage() {
         });
         setTimeout(() => router.push("/estab/vehicles"), 800);
       } else {
-        const text = await res.text();
-        setToast({ type: "error", message: text || `Error ${res.status}` });
+        setToast({
+          type: "error",
+          message: (await formError.fromResponse(res, "save")).message,
+        });
       }
     } catch {
-      setToast({ type: "error", message: "Network error. Please try again." });
+      setToast({ type: "error", message: formError.fromException("save").message });
     } finally {
       setSubmitting(false);
       setTimeout(() => setToast(null), 5000);

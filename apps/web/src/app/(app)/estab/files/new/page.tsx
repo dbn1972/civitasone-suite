@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { PageHeader, Term } from "@/app/_components/ds";
+import { useFormError } from "@/lib/useFormError";
 
 const CLASS_MAP: Record<string, string> = {
   unclassified: "public",
@@ -25,10 +26,12 @@ export default function NewFilePage() {
     type: "success" | "error";
     message: string;
   } | null>(null);
+  const formError = useFormError("file");
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSubmitting(true);
+    formError.clear();
     try {
       // Do NOT invent a file number on the client — the gapless CSMOP file
       // number is allocated server-side (per section + year). Sending a random
@@ -59,16 +62,13 @@ export default function NewFilePage() {
           setTimeout(() => router.push(`/estab/files/${body.id}`), 800);
         }
       } else {
-        const body = (await res.json().catch(() => ({}))) as {
-          message?: string;
-        };
         setToast({
           type: "error",
-          message: body.message ?? `Error ${res.status}`,
+          message: (await formError.fromResponse(res, "save")).message,
         });
       }
     } catch {
-      setToast({ type: "error", message: "Network error. Please try again." });
+      setToast({ type: "error", message: formError.fromException("save").message });
     } finally {
       setSubmitting(false);
       setTimeout(() => setToast(null), 5000);

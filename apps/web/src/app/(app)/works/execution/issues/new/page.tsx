@@ -4,6 +4,7 @@ import { useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { PageHeader } from "@/app/_components/ds";
 import { useToast } from "@/app/_components/ds/Toast";
+import { useFormError } from "@/lib/useFormError";
 
 const inputStyle: React.CSSProperties = {
   width: "100%",
@@ -34,11 +35,13 @@ function RaiseIssueForm() {
   const [description, setDescription] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const formError = useFormError("issue");
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
     setBusy(true);
+    formError.clear();
 
     try {
       const body: Record<string, string> = { workId, description };
@@ -51,16 +54,15 @@ function RaiseIssueForm() {
       });
 
       if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        throw new Error(
-          (data as { message?: string })?.message ?? `Error ${res.status}`
-        );
+        setError((await formError.fromResponse(res, "save")).message);
+        setBusy(false);
+        return;
       }
 
       toast.success("Issue raised.");
       setTimeout(() => router.push(`/works/execution/${workId}`), 600);
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Something went wrong.");
+    } catch {
+      setError(formError.fromException("save").message);
       setBusy(false);
     }
   }

@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useToast } from "@/app/_components/ds";
+import { useFormError } from "@/lib/useFormError";
 
 // ─── Field spec types ─────────────────────────────────────────────────────────
 
@@ -206,6 +207,7 @@ export function MasterCreateForm({
   const [form, setForm]   = useState<Record<string, string | boolean>>({});
   const [busy, setBusy]   = useState(false);
   const [error, setError] = useState("");
+  const formError = useFormError("master data");
 
   const fields    = getFields(masterType);
   const typeLabel = humanizeMaster(masterType);
@@ -224,6 +226,7 @@ export function MasterCreateForm({
     e.preventDefault();
     setBusy(true);
     setError("");
+    formError.clear();
 
     try {
       const body: Record<string, unknown> = {};
@@ -259,8 +262,7 @@ export function MasterCreateForm({
       });
 
       if (res.status !== 202) {
-        const data = (await res.json().catch(() => null)) as { message?: string } | null;
-        throw new Error(data?.message ?? `Server returned ${res.status}`);
+        throw new Error((await formError.fromResponse(res, "save")).message);
       }
 
       toast.success("Created. Changes will reflect shortly.");
