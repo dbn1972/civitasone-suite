@@ -719,7 +719,7 @@ module.exports = {
     svc("animal",        3082, "animal_svc",        "civitas_animal", {}, { graceful: true }), // PERF-015
     svc("building",      3071, "building_svc",      "civitas_building", {}, { graceful: true }), // PERF-015
     svc("crematorium",   3083, "crematorium_svc",   "civitas_crematorium", {}, { graceful: true }), // PERF-015
-    svc("drainage",      3080, "drainage_svc",      "civitas_drainage"),
+    svc("drainage",      3080, "drainage_svc",      "civitas_drainage", {}, { graceful: true }), // PERF-015
     svc("event",         3076, "event_svc",         "civitas_event"),
     svc("fire",          3072, "fire_svc",          "civitas_fire"),
     svc("market",        3085, "market_svc",        "civitas_market"),
