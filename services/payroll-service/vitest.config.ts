@@ -8,6 +8,16 @@ export default defineConfig({
       JWT_ALGORITHM: "HS256",
       JWT_SECRET: "test_secret_for_civitasone_32chr",
       PII_ENC_KEY: "test_pii_key_for_civitasone_dev_32chars",
+      // PERF-021 review follow-up: countQueriesDuring() (packages/db/src/pool.ts)
+      // only counts queries when DB_QUERY_DEBUG=true was set before the sql
+      // client was created -- without it queryCount is always 0 and
+      // tests/perf-021-sitea-payroll-nplus1.test.ts's query-count assertions
+      // (e.g. `expect(large.queryCount).toBe(small.queryCount)`) pass
+      // regardless of whether the N+1 pattern is actually present. Set here
+      // (test bootstrap), never in service env files -- see the `debug`
+      // comment in createSqlClient(). Mirrors hrms-service/vitest.config.ts's
+      // PERF-006 fix.
+      DB_QUERY_DEBUG: "true",
       DATABASE_URL:
         process.env.DATABASE_URL ??
         (process.env.CI === "true" || process.env.GITHUB_ACTIONS === "true"
