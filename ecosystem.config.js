@@ -669,7 +669,7 @@ module.exports = {
     // Boot-probed 2026-07-27: works listens cleanly with no extra config.
     svc("works",        3036, "works_svc",        "civitas_works", {}, { graceful: true }), // PERF-015
     svc("metadata",     3039, "metadata_svc",     "civitas_metadata"),
-    svc("ai-agent",     3041, "ai_agent_svc",     "civitas_ai_agent"),
+    svc("ai-agent",     3041, "ai_agent_svc",     "civitas_ai_agent", {}, { graceful: true }), // PERF-015
     svc("field",        3046, "field_svc",        "civitas_field"),
     svc("catalogue",    3044, "catalogue_svc",    "civitas_catalogue"),
     svc("journey",      3045, "journey_svc",      "civitas_journey"),
