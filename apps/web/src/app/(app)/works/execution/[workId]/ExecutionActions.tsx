@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { ConfirmDialog, useToast, Card } from "@/app/_components/ds";
+import { ConfirmDialog, useToast, Card, Button } from "@/app/_components/ds";
 import { useFormError } from "@/lib/useFormError";
 
 interface ExecutionActionsProps {
@@ -123,14 +123,13 @@ export function ExecutionActions({ workId }: ExecutionActionsProps) {
                 onChange={(e) => setCompletionDate(e.target.value)}
               />
             </div>
-            <button
-              type="button"
+            <Button
               onClick={() => setPhysDialog(true)}
-              className="btn primary"
+              variant="primary"
               style={{ minHeight: 36 }}
             >
               Mark Complete
-            </button>
+            </Button>
           </div>
           {physError && (
             <p style={{ color: "var(--red)", fontSize: 13, margin: 0 }}>{physError}</p>
@@ -181,14 +180,13 @@ export function ExecutionActions({ workId }: ExecutionActionsProps) {
                 <option value="dropped">Dropped</option>
               </select>
             </div>
-            <button
-              type="button"
+            <Button
               onClick={() => setClosureDialog(true)}
-              className="btn primary"
+              variant="primary"
               style={{ minHeight: 36 }}
             >
               Close Work
-            </button>
+            </Button>
           </div>
           {closureError && (
             <p style={{ color: "var(--red)", fontSize: 13, margin: 0 }}>{closureError}</p>

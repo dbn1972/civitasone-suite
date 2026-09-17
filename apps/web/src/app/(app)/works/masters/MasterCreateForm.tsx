@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { useToast } from "@/app/_components/ds";
+import { useToast, Button } from "@/app/_components/ds";
 import { useFormError } from "@/lib/useFormError";
 
 // ─── Field spec types ─────────────────────────────────────────────────────────
@@ -279,14 +279,13 @@ export function MasterCreateForm({
   // ── Collapsed: just the "+ Add" button ──────────────────────────────────────
   if (!open) {
     return (
-      <button
-        type="button"
-        className="btn primary"
+      <Button
+        variant="primary"
         onClick={() => setOpen(true)}
         style={{ minHeight: 38, marginBottom: 4 }}
       >
         + Add {typeLabel}
-      </button>
+      </Button>
     );
   }
 
@@ -384,23 +383,22 @@ export function MasterCreateForm({
         </div>
 
         <div style={{ display: "flex", gap: 8, marginTop: 18 }}>
-          <button
+          <Button
             type="submit"
-            className="btn primary"
+            variant="primary"
             disabled={busy}
             style={{ minHeight: 38 }}
           >
             {busy ? "Saving…" : "Create"}
-          </button>
-          <button
-            type="button"
-            className="btn ghost"
+          </Button>
+          <Button
+            variant="ghost"
             onClick={handleClose}
             disabled={busy}
             style={{ minHeight: 38 }}
           >
             Cancel
-          </button>
+          </Button>
         </div>
       </form>
     </div>

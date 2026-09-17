@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { ConfirmDialog } from "@/app/_components/ds";
+import { ConfirmDialog, Button } from "@/app/_components/ds";
 import { useToast } from "@/app/_components/ds/Toast";
 import { useFormError } from "@/lib/useFormError";
 
@@ -80,27 +80,16 @@ export function IssueCloseForm() {
         />
       </div>
 
-      <button
-        type="button"
+      <Button
+        variant="primary"
         disabled={!issueId.trim()}
         onClick={() => {
           setError(null);
           setDialogOpen(true);
         }}
-        style={{
-          padding: "10px 24px",
-          borderRadius: 8,
-          border: "none",
-          background: "var(--accent)",
-          color: "#fff",
-          fontWeight: 600,
-          fontSize: 14,
-          cursor: !issueId.trim() ? "not-allowed" : "pointer",
-          opacity: !issueId.trim() ? 0.5 : 1,
-        }}
       >
         Close Issue
-      </button>
+      </Button>
 
       <ConfirmDialog
         open={dialogOpen}

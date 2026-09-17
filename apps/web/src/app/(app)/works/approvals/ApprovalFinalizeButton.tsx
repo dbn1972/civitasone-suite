@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { ConfirmDialog, useToast } from "@/app/_components/ds";
+import { ConfirmDialog, useToast, Button } from "@/app/_components/ds";
 import { useFormError } from "@/lib/useFormError";
 
 interface ApprovalFinalizeButtonProps {
@@ -127,22 +127,12 @@ export function ApprovalFinalizeButton({
 
   return (
     <>
-      <button
-        type="button"
+      <Button
+        variant="primary"
         onClick={() => setOpen(true)}
-        style={{
-          padding: "8px 20px",
-          borderRadius: 8,
-          background: "var(--accent)",
-          color: "#fff",
-          border: "none",
-          fontWeight: 600,
-          fontSize: 14,
-          cursor: "pointer",
-        }}
       >
         {type === "aa" ? "Finalize AA" : "Finalize TS"}
-      </button>
+      </Button>
       <ConfirmDialog
         open={open}
         title={

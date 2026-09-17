@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useToast } from "@/app/_components/ds/Toast";
-import { ConfirmDialog } from "@/app/_components/ds";
+import { ConfirmDialog, Button } from "@/app/_components/ds";
 import { useFormError } from "@/lib/useFormError";
 
 interface ContractorRatingFormProps {
@@ -105,24 +105,13 @@ export function ContractorRatingForm({
       </div>
 
       <div>
-        <button
-          type="button"
+        <Button
+          variant="primary"
           disabled={selectedRating === 0}
           onClick={() => setDialogOpen(true)}
-          style={{
-            background: "var(--accent)",
-            color: "#fff",
-            border: "none",
-            borderRadius: 6,
-            padding: "8px 18px",
-            fontSize: 14,
-            fontWeight: 600,
-            cursor: selectedRating === 0 ? "not-allowed" : "pointer",
-            opacity: selectedRating === 0 ? 0.5 : 1,
-          }}
         >
           Submit Rating
-        </button>
+        </Button>
       </div>
 
       <ConfirmDialog

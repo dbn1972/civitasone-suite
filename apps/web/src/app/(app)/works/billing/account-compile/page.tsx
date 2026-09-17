@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { PageHeader, Card } from "@/app/_components/ds";
+import { PageHeader, Card, Button } from "@/app/_components/ds";
 import { useToast } from "@/app/_components/ds/Toast";
 import { useFormError } from "@/lib/useFormError";
 
@@ -207,23 +207,13 @@ export default function AccountCompilePage() {
             >
               Cancel
             </Link>
-            <button
+            <Button
               type="submit"
+              variant="primary"
               disabled={busy || done}
-              style={{
-                padding: "9px 22px",
-                borderRadius: 8,
-                background: "var(--accent)",
-                color: "#fff",
-                border: "none",
-                fontWeight: 600,
-                fontSize: 14,
-                cursor: busy || done ? "not-allowed" : "pointer",
-                opacity: busy || done ? 0.7 : 1,
-              }}
             >
               {busy ? "Submitting…" : "Compile Account"}
-            </button>
+            </Button>
           </div>
         </form>
       </Card>

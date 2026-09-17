@@ -2,7 +2,7 @@
 import { useRouter, useSearchParams } from "next/navigation";
 import { useState, Suspense } from "react";
 import { useToast } from "@/app/_components/ds/Toast";
-import { PageHeader } from "@/app/_components/ds";
+import { PageHeader, Button } from "@/app/_components/ds";
 import { formatMoney } from "@/lib/formatters";
 import { useFormError } from "@/lib/useFormError";
 
@@ -198,22 +198,21 @@ function NewBillForm() {
           ) : null}
 
           <div style={{ display: "flex", gap: 12, justifyContent: "flex-end", marginTop: 8 }}>
-            <button
-              type="button"
+            <Button
+              variant="ghost"
               onClick={() => router.push(backHref)}
-              style={{ padding: "10px 20px", borderRadius: 8, border: "1px solid var(--line)", background: "transparent", cursor: "pointer" }}
               disabled={busy}
             >
               Cancel
-            </button>
-            <button
+            </Button>
+            <Button
               type="submit"
-              className="btn primary"
+              variant="primary"
               disabled={busy}
               style={{ minHeight: 44, padding: "10px 24px" }}
             >
               {busy ? "Creating…" : "Generate Bill"}
-            </button>
+            </Button>
           </div>
         </form>
       </div>

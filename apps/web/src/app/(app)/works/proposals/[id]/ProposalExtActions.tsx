@@ -4,7 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { useToast } from "@/app/_components/ds/Toast";
 import { PROPOSAL_WRITE_ROLES } from "@/lib/auth/workRoles";
-import { ConfirmDialog, useConfirmAction } from "@/app/_components/ds";
+import { ConfirmDialog, useConfirmAction, Button } from "@/app/_components/ds";
 import { useFormError } from "@/lib/useFormError";
 
 
@@ -68,23 +68,14 @@ const gridStyle: React.CSSProperties = {
 
 function SubmitBtn({ busy, label }: { busy: boolean; label: string }) {
   return (
-    <button
+    <Button
       type="submit"
+      variant="primary"
       disabled={busy}
-      style={{
-        padding: "10px 20px",
-        borderRadius: 8,
-        background: "var(--accent)",
-        color: "#fff",
-        border: "none",
-        cursor: busy ? "not-allowed" : "pointer",
-        fontWeight: 600,
-        fontSize: 13,
-        opacity: busy ? 0.7 : 1,
-      }}
+      style={{ padding: "10px 20px", fontSize: 13 }}
     >
       {busy ? "Submitting…" : label}
-    </button>
+    </Button>
   );
 }
 
@@ -172,20 +163,13 @@ function SplitProposalForm({
             >
               View child work →
             </Link>
-            <button
-              type="button"
+            <Button
+              variant="ghost"
               onClick={onClose}
-              style={{
-                padding: "6px 14px",
-                borderRadius: 8,
-                border: "1px solid var(--line)",
-                background: "transparent",
-                cursor: "pointer",
-                fontSize: 13,
-              }}
+              style={{ padding: "6px 14px", fontSize: 13 }}
             >
               Close
-            </button>
+            </Button>
           </div>
         </div>
       </div>

@@ -2,7 +2,7 @@
 
 import { useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { PageHeader, Card, FileUpload } from "@/app/_components/ds";
+import { PageHeader, Card, FileUpload, Button } from "@/app/_components/ds";
 import { useToast } from "@/app/_components/ds/Toast";
 
 const inputStyle: React.CSSProperties = {
@@ -199,23 +199,13 @@ function PhotoForm() {
           >
             Cancel
           </a>
-          <button
+          <Button
             type="submit"
+            variant="primary"
             disabled={submitting}
-            style={{
-              padding: "8px 20px",
-              borderRadius: 8,
-              background: "var(--accent)",
-              color: "#fff",
-              border: "none",
-              fontWeight: 600,
-              fontSize: 14,
-              cursor: submitting ? "not-allowed" : "pointer",
-              opacity: submitting ? 0.7 : 1,
-            }}
           >
             {submitting ? "Registering…" : "Register Photo"}
-          </button>
+          </Button>
         </div>
       </Card>
     </form>

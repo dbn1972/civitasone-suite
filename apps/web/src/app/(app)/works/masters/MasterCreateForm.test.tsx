@@ -5,11 +5,15 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({ refresh: vi.fn() }),
 }));
 
-vi.mock("@/app/_components/ds", () => ({
-  useToast: () => ({
-    toast: { success: vi.fn(), error: vi.fn(), info: vi.fn(), warning: vi.fn() },
-  }),
-}));
+vi.mock("@/app/_components/ds", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/app/_components/ds")>();
+  return {
+    ...actual,
+    useToast: () => ({
+      toast: { success: vi.fn(), error: vi.fn(), info: vi.fn(), warning: vi.fn() },
+    }),
+  };
+});
 
 import { MasterCreateForm } from "./MasterCreateForm";
 
