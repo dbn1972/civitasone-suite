@@ -630,6 +630,23 @@ const FIXTURES: Record<string, unknown> = {
       department: 'IT',
       status: 'active',
     },
+    // REL-023 tranche 3: /assets/infra had no seeded row of its own (the only
+    // fixture asset above is type: 'fixed'), so it always rendered the empty
+    // state instead of a populated register -- the same missing-fixture
+    // pattern REL-010/tranche-1 fixed for HRMS-workforce, just for this one.
+    {
+      id: 'ast-002',
+      assetCode: 'AST-002',
+      name: 'Sector 12 Approach Road',
+      category: 'Roads',
+      type: 'infra',
+      purchaseDate: '2022-06-01',
+      purchaseCost: 45000000,
+      currentValue: 38000000,
+      location: 'Sector 12',
+      department: 'PWD',
+      status: 'active',
+    },
   ],
   '/api/v1/asset/maintenance': [
     {
