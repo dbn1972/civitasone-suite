@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useMemo, useState } from "react";
-import { DataTable } from "@/app/_components/ds";
+import { Button, DataTable } from "@/app/_components/ds";
 import type { AdminUserSummary, AdminRoleSummary } from "@/app/_data/loaders";
 import { useFormError } from "@/lib/useFormError";
 import { toHumanError } from "@/lib/messages";
@@ -127,19 +127,22 @@ function EditRolesSheet({
   return (
     <div role="dialog" aria-modal="true" aria-labelledby="sheet-title" style={{ position: "fixed", inset: 0, display: "flex", zIndex: 50 }}>
       <div style={{ flex: 1, background: "rgba(0,0,0,0.35)" }} onClick={onClose} aria-hidden="true" />
-      <div style={{ width: 380, background: "var(--surface)", height: "100%", padding: 28, overflowY: "auto", display: "flex", flexDirection: "column", gap: 20, boxShadow: "-4px 0 24px rgba(0,0,0,0.15)" }}>
+      <div style={{ width: 380, background: "var(--panel)", height: "100%", padding: 28, overflowY: "auto", display: "flex", flexDirection: "column", gap: 20, boxShadow: "-4px 0 24px rgba(0,0,0,0.15)" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
           <div>
             <h2 id="sheet-title" style={{ margin: "0 0 4px", fontSize: 16, fontWeight: 700 }}>Edit Roles</h2>
-            <p style={{ margin: 0, fontSize: 12.5, color: "var(--ink3)" }}>{user.name} · {user.email}</p>
+            <p style={{ margin: 0, fontSize: 12.5, color: "var(--mut)" }}>{user.name} · {user.email}</p>
           </div>
-          <button type="button" onClick={onClose} aria-label="Close" style={{ background: "none", border: "none", cursor: "pointer", fontSize: 20, color: "var(--ink3)", lineHeight: 1 }}>×</button>
+          {/* Icon-only close glyph with no .btn/.iconbtn convention applied
+              today -- out of scope for the shared Button (text-button-shaped,
+              not icon-only per its own doc comment); left as-is. */}
+          <button type="button" onClick={onClose} aria-label="Close" style={{ background: "none", border: "none", cursor: "pointer", fontSize: 20, color: "var(--mut)", lineHeight: 1 }}>×</button>
         </div>
         {error && <p role="alert" style={{ margin: 0, fontSize: 12.5, color: "#b42318" }}>{error}</p>}
         {loading ? (
-          <p style={{ color: "var(--ink3)", fontSize: 13 }}>Loading current roles…</p>
+          <p style={{ color: "var(--mut)", fontSize: 13 }}>Loading current roles…</p>
         ) : roles.length === 0 ? (
-          <p style={{ color: "var(--ink3)", fontSize: 13 }}>No roles are defined for this tenant yet.</p>
+          <p style={{ color: "var(--mut)", fontSize: 13 }}>No roles are defined for this tenant yet.</p>
         ) : (
           <div style={{ display: "grid", gap: 10 }}>
             {roles.map((r) => {
@@ -149,7 +152,7 @@ function EditRolesSheet({
                   <input type="checkbox" checked={active} onChange={() => toggleRole(r.key)} style={{ width: 15, height: 15, cursor: "pointer" }} />
                   <div>
                     <div style={{ fontSize: 13, fontWeight: 600 }}>{r.name}</div>
-                    {r.description && <div style={{ fontSize: 11.5, color: "var(--ink3)" }}>{r.description}</div>}
+                    {r.description && <div style={{ fontSize: 11.5, color: "var(--mut)" }}>{r.description}</div>}
                   </div>
                 </label>
               );
@@ -157,10 +160,10 @@ function EditRolesSheet({
           </div>
         )}
         <div style={{ display: "flex", gap: 10, marginTop: "auto" }}>
-          <button type="button" className="btn primary sm" disabled={busy || loading || !changed} onClick={() => void save()} aria-busy={busy}>
+          <Button type="button" size="sm" disabled={busy || loading || !changed} onClick={() => void save()} loading={busy}>
             {busy ? "Saving…" : "Save roles"}
-          </button>
-          <button type="button" className="btn ghost sm" onClick={onClose}>Cancel</button>
+          </Button>
+          <Button type="button" variant="ghost" size="sm" onClick={onClose}>Cancel</Button>
         </div>
       </div>
     </div>
@@ -241,7 +244,7 @@ export function AdminUsersManager({
                 </span>
               ))}
             </div>
-            <button type="button" className="btn ghost sm" onClick={downloadCsv}>Export CSV</button>
+            <Button type="button" variant="ghost" size="sm" onClick={downloadCsv}>Export CSV</Button>
           </div>
         </div>
         <DataTable<Row>
@@ -256,7 +259,7 @@ export function AdminUsersManager({
                   </div>
                   <div>
                     <div style={{ fontSize: 13.5, fontWeight: 550 }}>{String(u.name) || "—"}</div>
-                    <div style={{ fontSize: 12, color: "var(--ink3)" }}>{String(u.email)}</div>
+                    <div style={{ fontSize: 12, color: "var(--mut)" }}>{String(u.email)}</div>
                   </div>
                 </div>
               ),
@@ -274,28 +277,30 @@ export function AdminUsersManager({
               sortable: false,
               render: (u) => (
                 <div style={{ display: "flex", gap: 6, whiteSpace: "nowrap" }}>
-                  <button type="button" className="btn ghost sm" onClick={() => setEditUser(u as AdminUserSummary)} style={{ fontSize: 11.5 }}>
+                  <Button type="button" variant="ghost" size="sm" onClick={() => setEditUser(u as AdminUserSummary)} style={{ fontSize: 11.5 }}>
                     Edit Roles
-                  </button>
-                  <button
+                  </Button>
+                  <Button
                     type="button"
-                    className="btn ghost sm"
+                    variant="ghost"
+                    size="sm"
                     disabled={busyId === u.id || u.status === "locked" || u.status === "deactivated"}
                     onClick={() => void toggleStatus(u as AdminUserSummary)}
                     style={{ fontSize: 11.5, color: u.status === "active" ? "#b42318" : "#027a48" }}
                   >
                     {busyId === u.id ? "…" : u.status === "active" ? "Suspend" : "Activate"}
-                  </button>
-                  <button
+                  </Button>
+                  <Button
                     type="button"
-                    className="btn ghost sm"
+                    variant="ghost"
+                    size="sm"
                     disabled
                     title="Password reset is managed via Keycloak — use the Keycloak Admin console"
                     aria-disabled="true"
                     style={{ fontSize: 11.5, opacity: 0.45, cursor: "not-allowed" }}
                   >
                     Reset Password
-                  </button>
+                  </Button>
                 </div>
               ),
             },

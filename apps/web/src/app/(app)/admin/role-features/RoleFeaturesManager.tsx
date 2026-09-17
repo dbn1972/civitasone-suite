@@ -1,6 +1,6 @@
 "use client";
 import { useMemo, useState } from "react";
-import { PageHeader, StatGrid, StatCard } from "@/app/_components/ds";
+import { Button, PageHeader, StatGrid, StatCard } from "@/app/_components/ds";
 import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
 import type { AdminRoleSummary, RoleFeatureGrant } from "@/app/_data/loaders";
 import { toHumanError } from "@/lib/messages";
@@ -169,7 +169,7 @@ export function RoleFeaturesManager({
               {roles.map((r) => <option key={r.id} value={r.key}>{r.name}</option>)}
             </select>
           </div>
-          <button type="button" className="btn" onClick={() => setShowPreview(true)} disabled={!selectedRole}>👁 Preview</button>
+          <Button type="button" onClick={() => setShowPreview(true)} disabled={!selectedRole}>👁 Preview</Button>
         </div>
       </div>
 
@@ -178,15 +178,15 @@ export function RoleFeaturesManager({
           <h4 style={{ margin: "0 0 8px" }}>Quick Presets — apply to {selectedRole || "…"}</h4>
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
             {presets.map((preset) => (
-              <button
+              <Button
                 key={preset.label}
-                className="btn btn-sm"
+                size="sm"
                 disabled={!selectedRole || busyKey !== null}
                 onClick={() => void handlePresetApply(selectedRole, preset.features)}
                 style={{ fontSize: 12 }}
               >
                 {preset.label}
-              </button>
+              </Button>
             ))}
           </div>
         </div>
@@ -195,12 +195,12 @@ export function RoleFeaturesManager({
       <div className="card" style={{ marginTop: 12, overflowX: "auto" }}>
         <h4 style={{ margin: "0 0 12px" }}>Feature Matrix</h4>
         {roles.length === 0 ? (
-          <p style={{ color: "var(--ink3)", fontSize: 13 }}>No roles are defined for this tenant yet.</p>
+          <p style={{ color: "var(--mut)", fontSize: 13 }}>No roles are defined for this tenant yet.</p>
         ) : (
           <table className="data-table" role="table" aria-label="Role-feature matrix">
             <thead>
               <tr>
-                <th scope="col" style={{ position: "sticky", left: 0, background: "var(--surface)", zIndex: 1 }}>Feature</th>
+                <th scope="col" style={{ position: "sticky", left: 0, background: "var(--panel)", zIndex: 1 }}>Feature</th>
                 {roles.map((r) => (
                   <th scope="col" key={r.id} style={{ textAlign: "center", fontSize: 11 }}>{r.name}</th>
                 ))}
@@ -209,7 +209,7 @@ export function RoleFeaturesManager({
             <tbody>
               {FEATURE_KEYS.map((feature) => (
                 <tr key={feature}>
-                  <td style={{ position: "sticky", left: 0, background: "var(--surface)", fontFamily: "monospace", fontSize: 12 }}>{feature}</td>
+                  <td style={{ position: "sticky", left: 0, background: "var(--panel)", fontFamily: "monospace", fontSize: 12 }}>{feature}</td>
                   {roles.map((r) => {
                     const cellKey = `${r.key}:${feature}`;
                     return (
@@ -236,7 +236,7 @@ export function RoleFeaturesManager({
           <div className="modal-content" style={{ maxWidth: 500, padding: 24, borderRadius: 8, background: "#fff" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
               <h3>Preview: As {roles.find((r) => r.key === selectedRole)?.name ?? selectedRole}</h3>
-              <button className="btn" onClick={() => setShowPreview(false)} aria-label="Close preview">✕</button>
+              <Button variant="ghost" onClick={() => setShowPreview(false)} aria-label="Close preview">✕</Button>
             </div>
             <p style={{ color: "#666", margin: "8px 0 16px" }}>This role's real granted features:</p>
             <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>

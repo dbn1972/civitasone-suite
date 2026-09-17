@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { PageHeader, StatGrid, StatCard, ErrorState } from "@/app/_components/ds";
+import { Button, PageHeader, StatGrid, StatCard, ErrorState } from "@/app/_components/ds";
 import { useFormError } from "@/lib/useFormError";
 import { toHumanError } from "@/lib/messages";
 
@@ -243,21 +243,9 @@ export default function GatewayConfigPage() {
       {/* Save button */}
       {config && (
         <div style={{ marginTop: 24, display: "flex", justifyContent: "flex-end" }}>
-          <button
-            onClick={handleSave}
-            disabled={saving}
-            style={{
-              padding: "10px 24px",
-              borderRadius: 8,
-              background: saving ? "#9ca3af" : "#4f46e5",
-              color: "white",
-              fontWeight: 600,
-              border: "none",
-              cursor: saving ? "not-allowed" : "pointer",
-            }}
-          >
+          <Button onClick={handleSave} disabled={saving} loading={saving}>
             {saving ? "Saving..." : "Save Changes"}
-          </button>
+          </Button>
         </div>
       )}
     </main>

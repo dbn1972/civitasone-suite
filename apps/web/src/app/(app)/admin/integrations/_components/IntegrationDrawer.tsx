@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { StatusPill } from "@/app/_components/ds";
+import { Button, StatusPill } from "@/app/_components/ds";
 import {
   ENV_SCOPES,
   type EnvScope,
@@ -238,7 +238,7 @@ export function IntegrationDrawer({
           <h3 id="int-drawer-title" style={{ display: "flex", alignItems: "center", gap: 9 }}>
             <span aria-hidden>{provider.icon}</span> {provider.label}
           </h3>
-          <button className="btn ghost sm" onClick={onClose} aria-label="Close">✕</button>
+          <Button variant="ghost" size="sm" onClick={onClose} aria-label="Close">✕</Button>
         </div>
 
         <div className="pad" style={{ padding: 18, display: "flex", flexDirection: "column", gap: 16 }}>
@@ -327,9 +327,9 @@ export function IntegrationDrawer({
 
               {/* test connection */}
               <div>
-                <button className="btn ghost" onClick={runTest} disabled={testing} aria-busy={testing}>
+                <Button variant="ghost" onClick={runTest} loading={testing}>
                   {testing ? "Testing…" : "🔌 Test connection"}
-                </button>
+                </Button>
                 <div aria-live="polite">
                   {testResult && (
                     <div className={`alert ${testResult.ok ? "" : "bad"}`} style={{ marginTop: 10, marginBottom: 0, fontSize: 12.5, background: testResult.ok ? "var(--goodbg)" : undefined, borderColor: testResult.ok ? "var(--goodbd)" : undefined, color: testResult.ok ? "var(--good)" : undefined }}>
@@ -348,8 +348,8 @@ export function IntegrationDrawer({
                       Proposed by {pending.proposedBy.slice(0, 8)}… {pending.note ? `— "${pending.note}"` : ""}
                     </div>
                     <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
-                      <button className="btn primary sm" onClick={() => decide("approve")} disabled={busy}>Approve</button>
-                      <button className="btn danger sm" onClick={() => decide("reject")} disabled={busy}>Reject</button>
+                      <Button size="sm" onClick={() => decide("approve")} disabled={busy}>Approve</Button>
+                      <Button variant="danger" size="sm" onClick={() => decide("reject")} disabled={busy}>Reject</Button>
                     </div>
                     <div style={{ fontSize: 11, color: "var(--mut)", marginTop: 8 }}>
                       A proposer cannot approve their own change (segregation of duties).
@@ -385,10 +385,10 @@ export function IntegrationDrawer({
 
         {/* footer actions */}
         <div className="card-h" style={{ borderTop: "1px solid var(--line)", borderBottom: 0, justifyContent: "flex-end", gap: 10 }}>
-          <button className="btn ghost" onClick={onClose} disabled={busy}>Close</button>
-          <button className="btn primary" onClick={save} disabled={busy || loading} aria-busy={busy}>
+          <Button variant="ghost" onClick={onClose} disabled={busy}>Close</Button>
+          <Button onClick={save} disabled={loading} loading={busy}>
             {busy ? "Saving…" : "Propose change"}
-          </button>
+          </Button>
         </div>
       </div>
     </div>

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { PageHeader } from "@/app/_components/ds";
+import { Button, PageHeader } from "@/app/_components/ds";
 import { useFormError } from "@/lib/useFormError";
 
 const inputStyle = { width: "100%", padding: "8px 12px", borderRadius: 6, border: "1px solid #d1d5db", fontSize: 14 } as const;
@@ -232,22 +232,9 @@ export default function AdminConfigPage() {
         </div>
 
         <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, marginBottom: 32 }}>
-          <button
-            type="submit"
-            disabled={saving}
-            style={{
-              padding: "10px 28px",
-              borderRadius: 8,
-              background: saving ? "#9ca3af" : "#4f46e5",
-              color: "#fff",
-              fontWeight: 600,
-              border: "none",
-              cursor: saving ? "not-allowed" : "pointer",
-              fontSize: 14,
-            }}
-          >
+          <Button type="submit" disabled={saving} loading={saving}>
             {saving ? "Saving…" : "Save Configuration"}
-          </button>
+          </Button>
         </div>
       </form>
     </main>

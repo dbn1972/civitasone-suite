@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useMemo, useState } from "react";
-import { PageHeader, StatCard } from "@/app/_components/ds";
+import { Button, PageHeader, StatCard } from "@/app/_components/ds";
 import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
 import type { AdminRoleSummary, AdminPermissionSummary } from "@/app/_data/loaders";
 import { toHumanError, type MessageKind } from "@/lib/messages";
@@ -153,30 +153,30 @@ export function RolesPermissionsManager({
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
             {saveState === "saved" && <span role="status" style={{ fontSize: 12, color: "#027a48" }}>Saved.</span>}
             {saveState === "error" && <span role="alert" style={{ fontSize: 12, color: "#b42318" }}>{saveError}</span>}
-            <button
+            <Button
               type="button"
-              className="btn primary sm"
-              disabled={!selectedRole || selectedRole.isSystem || changedCount === 0 || saveState === "saving" || loading}
+              size="sm"
+              disabled={!selectedRole || selectedRole.isSystem || changedCount === 0 || loading}
               onClick={() => void save()}
-              aria-busy={saveState === "saving"}
+              loading={saveState === "saving"}
             >
               {saveState === "saving" ? "Saving…" : changedCount > 0 ? `Save ${changedCount} change${changedCount === 1 ? "" : "s"}` : "Save changes"}
-            </button>
+            </Button>
           </div>
         </div>
 
         {!selectedRole ? (
-          <p style={{ padding: 24, color: "var(--ink3)", fontSize: 13 }}>No role selected.</p>
+          <p style={{ padding: 24, color: "var(--mut)", fontSize: 13 }}>No role selected.</p>
         ) : selectedRole.isSystem ? (
-          <p style={{ padding: 24, color: "var(--ink3)", fontSize: 13 }}>
+          <p style={{ padding: 24, color: "var(--mut)", fontSize: 13 }}>
             <strong>{selectedRole.name}</strong> is a system role — its permissions are fixed and cannot be edited here.
           </p>
         ) : loading ? (
-          <p style={{ padding: 24, color: "var(--ink3)", fontSize: 13 }}>Loading current permissions…</p>
+          <p style={{ padding: 24, color: "var(--mut)", fontSize: 13 }}>Loading current permissions…</p>
         ) : loadError ? (
           <p role="alert" style={{ padding: 24, color: "#b42318", fontSize: 13 }}>{loadError}</p>
         ) : permissions.length === 0 ? (
-          <p style={{ padding: 24, color: "var(--ink3)", fontSize: 13 }}>No permissions are defined for this tenant yet.</p>
+          <p style={{ padding: 24, color: "var(--mut)", fontSize: 13 }}>No permissions are defined for this tenant yet.</p>
         ) : (
           <div style={{ padding: "12px 16px 20px", display: "grid", gap: 8 }}>
             {permissions.map((perm) => {
@@ -193,8 +193,8 @@ export function RolesPermissionsManager({
                 >
                   <input type="checkbox" checked={checked} onChange={() => toggle(perm.key)} style={{ width: 15, height: 15, cursor: "pointer", marginTop: 2 }} />
                   <div>
-                    <div style={{ fontSize: 13, fontWeight: 600 }}>{perm.name} <code style={{ fontSize: 11, color: "var(--ink3)", fontWeight: 400 }}>{perm.key}</code></div>
-                    {perm.description && <div style={{ fontSize: 11.5, color: "var(--ink3)", marginTop: 1 }}>{perm.description}</div>}
+                    <div style={{ fontSize: 13, fontWeight: 600 }}>{perm.name} <code style={{ fontSize: 11, color: "var(--mut)", fontWeight: 400 }}>{perm.key}</code></div>
+                    {perm.description && <div style={{ fontSize: 11.5, color: "var(--mut)", marginTop: 1 }}>{perm.description}</div>}
                   </div>
                 </label>
               );
