@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
+import { Button } from "@/app/_components/ds";
 
 export type Proficiency = 0 | 1 | 2 | 3 | 4; // 0=none,1=Beginner,2=Developing,3=Proficient,4=Expert
 export const PROFICIENCY_LABELS: Record<number, string> = {
@@ -90,17 +91,14 @@ export function SkillMatrix({ records, onExportPdf }: SkillMatrixProps) {
           {categories.map((c) => <option key={c}>{c}</option>)}
         </select>
         {onExportPdf && (
-          <button
+          <Button
+            variant="ghost"
+            size="sm"
             onClick={onExportPdf}
-            style={{
-              padding: "5px 12px", fontSize: 12, fontWeight: 600,
-              border: "1px solid #cbd5e1", borderRadius: 6,
-              background: "#fff", color: "#475569", cursor: "pointer",
-              marginLeft: "auto",
-            }}
+            style={{ marginLeft: "auto" }}
           >
             Export PDF
-          </button>
+          </Button>
         )}
       </div>
 

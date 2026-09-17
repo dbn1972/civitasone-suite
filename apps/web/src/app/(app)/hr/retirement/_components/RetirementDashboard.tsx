@@ -5,7 +5,7 @@
  * Each card: name, designation, retirement date (Indian dd/MM/yyyy), years of service,
  * clearance status chips (Library / Store / IT / Finance).
  */
-import { StatusPill } from "@/app/_components/ds";
+import { StatusPill, Button } from "@/app/_components/ds";
 import { formatIndianDate } from "@/lib/formatters";
 
 export type RetirementRow = {
@@ -225,15 +225,14 @@ export function RetirementDashboard({ rows, selectedId, onSelect }: Props) {
             </div>
             {onSelect && (
               <div style={{ padding: "0 16px 14px" }}>
-                <button
-                  type="button"
-                  className={selected ? "btn primary" : "btn ghost"}
+                <Button
+                  variant={selected ? "primary" : "ghost"}
                   style={{ width: "100%", minHeight: 40, fontSize: "0.8125rem" }}
                   aria-pressed={selected}
                   onClick={() => onSelect(row)}
                 >
                   {selected ? "✓ Processing this retirement" : "Process this retirement →"}
-                </button>
+                </Button>
               </div>
             )}
           </article>

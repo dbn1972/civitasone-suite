@@ -7,6 +7,7 @@
 import { useMemo, useState, useCallback } from "react";
 import type { TransferRow } from "./TransferOrderCard";
 import { TransferOrderCard } from "./TransferOrderCard";
+import { Button } from "@/app/_components/ds";
 
 interface Props {
   transfers: TransferRow[];
@@ -106,14 +107,14 @@ export function TransferListFilters({ transfers }: Props) {
             aria-label="To date"
             style={{ padding: "8px 10px", borderRadius: 8, border: "1px solid var(--line)", minHeight: 40, fontSize: "0.875rem" }} />
         </div>
-        <button
+        <Button
+          variant="ghost"
           onClick={exportExcel}
-          className="btn ghost"
           style={{ fontSize: 13, whiteSpace: "nowrap" }}
           aria-label="Export filtered transfers to CSV/Excel"
         >
           ⬇ Export Excel
-        </button>
+        </Button>
       </div>
 
       {/* Result count */}

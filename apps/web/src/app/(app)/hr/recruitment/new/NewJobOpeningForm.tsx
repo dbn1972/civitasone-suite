@@ -5,6 +5,7 @@ import { useTranslations } from "next-intl";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useFormError } from "@/lib/useFormError";
+import { Button } from "@/app/_components/ds";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -255,14 +256,14 @@ export function NewJobOpeningForm() {
       </div>
 
       <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
-        <button
+        <Button
           type="submit"
           disabled={status === "submitting" || status === "success"}
-          className="btn primary"
+          variant="primary"
           style={{ minHeight: 44, alignSelf: "flex-start" }}
         >
           {status === "submitting" ? t("creating") : status === "success" ? t("submitted") : t("createJobOpening")}
-        </button>
+        </Button>
         {status === "success" && (
           <Link href="/hr/recruitment" className="btn ghost" style={{ minHeight: 44, display: "inline-flex", alignItems: "center" }}>
             {t("backToRecruitment")}

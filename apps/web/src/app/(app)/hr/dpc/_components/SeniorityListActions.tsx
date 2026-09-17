@@ -20,7 +20,7 @@
  */
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Card, ConfirmDialog } from "@/app/_components/ds";
+import { Card, ConfirmDialog, Button } from "@/app/_components/ds";
 import { browserJson } from "@/lib/api/browserClient";
 
 type AcceptedResponse = { id: string; status: string; correlationId?: string };
@@ -102,9 +102,8 @@ export function SeniorityListActions({ canAdminister }: { canAdminister: boolean
           Generate a point-in-time seniority snapshot for DPC records, then approve it once reviewed.
         </p>
         <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
-          <button
-            type="button"
-            className="btn primary"
+          <Button
+            variant="primary"
             style={{ minHeight: 44 }}
             disabled={generateBusy}
             onClick={() => {
@@ -113,11 +112,9 @@ export function SeniorityListActions({ canAdminister }: { canAdminister: boolean
             }}
           >
             {generateBusy ? "Generating…" : "Generate Seniority List"}
-          </button>
+          </Button>
           {generatedId && (
-            <button
-              type="button"
-              className="btn"
+            <Button
               style={{ minHeight: 44 }}
               disabled={approveBusy}
               onClick={() => {
@@ -126,7 +123,7 @@ export function SeniorityListActions({ canAdminister }: { canAdminister: boolean
               }}
             >
               {approveBusy ? "Approving…" : `Approve List ${generatedId.slice(0, 8)}…`}
-            </button>
+            </Button>
           )}
         </div>
 
