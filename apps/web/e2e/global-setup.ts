@@ -630,6 +630,23 @@ const FIXTURES: Record<string, unknown> = {
       department: 'IT',
       status: 'active',
     },
+    // REL-023 tranche 3: /assets/infra had no seeded row of its own (the only
+    // fixture asset above is type: 'fixed'), so it always rendered the empty
+    // state instead of a populated register -- the same missing-fixture
+    // pattern REL-010/tranche-1 fixed for HRMS-workforce, just for this one.
+    {
+      id: 'ast-002',
+      assetCode: 'AST-002',
+      name: 'Sector 12 Approach Road',
+      category: 'Roads',
+      type: 'infra',
+      purchaseDate: '2022-06-01',
+      purchaseCost: 45000000,
+      currentValue: 38000000,
+      location: 'Sector 12',
+      department: 'PWD',
+      status: 'active',
+    },
   ],
   '/api/v1/asset/maintenance': [
     {
@@ -756,7 +773,11 @@ const FIXTURES: Record<string, unknown> = {
     { id: 'notif-001', title: 'Bill Approved', message: 'Your bill PAY-001 has been approved.', module: 'finance', eventType: 'bill.approved', recipient: 'admin@example.com', channel: 'email', status: 'sent', createdAt: '2024-01-15T10:00:00Z' },
   ],
   '/api/v1/contract/contracts': [
-    { id: 'con-001', contractNo: 'CON/2024/001', title: 'Annual AMC - IT Equipment', vendor: 'Tech Corp', startDate: '2024-01-01', endDate: '2024-12-31', value: 50000000, status: 'active' },
+    // vendorId is the field mapContractsListRows (loaders.ts) actually reads
+    // for the "Vendor ID" column -- contract-service has no joined vendor
+    // display name yet, so `vendor` (kept for any other/future consumer) is
+    // not what renders in ContractsTable.
+    { id: 'con-001', contractNo: 'CON/2024/001', title: 'Annual AMC - IT Equipment', vendor: 'Tech Corp', vendorId: 'VEN-TECHCORP-001', startDate: '2024-01-01', endDate: '2024-12-31', value: 50000000, status: 'active' },
   ],
   '/api/v1/contract/rate-contracts': [
     { id: 'rc-001', contractNo: 'RC/2024/001', title: 'Stationery Rate Contract', vendor: 'Paper Mart', status: 'active' },

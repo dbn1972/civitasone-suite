@@ -15,6 +15,10 @@ test.describe('Web offline-first', () => {
 
   test('service worker registers and controls the page', async ({ page }) => {
     await page.goto('/dashboard');
+    // Registration (navigator.serviceWorker.register(), in a client script)
+    // is async and wasn't given any time to complete here -- give it the
+    // same moment the next test below already relies on.
+    await page.waitForTimeout(1000);
     const hasSW = await page.evaluate(async () => {
       if (!('serviceWorker' in navigator)) return false;
       const reg = await navigator.serviceWorker.getRegistration();
@@ -42,12 +46,21 @@ test.describe('Web offline-first', () => {
     await page.goto('/dashboard');
     await context.setOffline(true);
     await page.evaluate(() => window.dispatchEvent(new Event('offline')));
-    await expect(page.getByText(/offline/i)).toBeVisible();
+    // Full exact text: an unrelated feature-announcement banner ("New:
+    // Module configuration...") also renders with role="status", so scoping
+    // by role alone isn't enough -- and a bare /offline/i search separately
+    // matches that same banner's own text too.
+    await expect(page.getByText('Offline — changes will sync when you reconnect')).toBeVisible();
     await context.setOffline(false);
   });
 
   test('a mutation made offline is persisted in the local request queue', async ({ page, context }) => {
     await page.goto('/dashboard');
+    // Same missing moment as the "service worker registers" test above --
+    // without it, going offline and reloading before the SW is controlling
+    // the page fails outright (net::ERR_INTERNET_DISCONNECTED, no cache and
+    // no network to serve the reload from).
+    await page.waitForTimeout(1000);
     await context.setOffline(true);
 
     // Enqueue a mutation through the durable IndexedDB request store the forms use.

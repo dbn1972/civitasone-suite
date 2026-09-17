@@ -27,7 +27,9 @@ test.describe('Locations', () => {
 
   test('locations list shows location type office', async ({ page }) => {
     await page.goto('/locations/list');
-    await expect(page.getByText('office')).toBeVisible();
+    // cell role + exact: true -- a loose "office" text search also matches the
+    // page heading ("Offices & branches") and subtitle ("Your head office...").
+    await expect(page.getByRole('cell', { name: 'office', exact: true })).toBeVisible();
   });
 
   test('locations list shows active status', async ({ page }) => {
@@ -39,7 +41,10 @@ test.describe('Locations', () => {
 
   test('clicking locations link from hub navigates to list', async ({ page }) => {
     await page.goto('/locations');
-    await page.getByRole('link', { name: /location/i }).first().click();
+    // href-scoped: an unqualified /location/i search's DOM-order .first()
+    // match is the sidebar's own "Locations" link (back to /locations
+    // itself, not the hub tile going to /locations/list).
+    await page.locator('a.mtile[href="/locations/list"]').click();
     await expect(page).toHaveURL(/\/locations\/list/);
     await expect(page.getByRole('heading').first()).toBeVisible();
   });

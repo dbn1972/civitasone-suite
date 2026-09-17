@@ -53,6 +53,12 @@ test.describe('Citizen', () => {
 
   test('RTI applications page shows seeded application data', async ({ page }) => {
     await page.goto('/citizen/rti');
-    await expect(page.getByRole('cell', { name: 'RTI-001' })).toBeVisible();
+    // getByText, not getByRole('cell', ...): the row's own link cell is named
+    // "Open RTI-001" (UX-015), and the same row's Transfer-action button
+    // carries an aria-label that also embeds the RTI number ("Transfer RTI
+    // RTI-001 to...") -- both cells' accessible names contain "RTI-001", so a
+    // role-based name search is ambiguous. getByText matches the visible text
+    // node itself, which the aria-label text isn't.
+    await expect(page.getByText('RTI-001')).toBeVisible();
   });
 });

@@ -10,7 +10,10 @@ test.describe('Contracts', () => {
 
   test('contracts hub shows navigation link to contracts list', async ({ page }) => {
     await page.goto('/contracts');
-    await expect(page.getByRole('link', { name: 'Contracts' })).toBeVisible();
+    // href-scoped: the hub also has a "Rate Contracts" tile, whose label
+    // itself contains "Contracts", so a loose name search on this tile's own
+    // label ("Contracts") resolves to both (strict-mode violation).
+    await expect(page.locator('a.mtile[href="/contracts/list"]')).toBeVisible();
   });
 
   // ── Contracts list ────────────────────────────────────────────────────────
@@ -25,9 +28,14 @@ test.describe('Contracts', () => {
     await expect(page.getByText('CON/2024/001')).toBeVisible();
   });
 
-  test('contracts list shows vendor name Tech Corp', async ({ page }) => {
+  test('contracts list shows vendor ID', async ({ page }) => {
+    // mapContractsListRows (loaders.ts) is deliberate about this: contract-
+    // service exposes only a raw vendorId, with no joined vendor display
+    // name today (see the mapper's own comment / PR #813 fixup), so the
+    // "Vendor ID" column shows the fixture's vendorId -- a human vendor
+    // *name* like "Tech Corp" is never rendered anywhere in this table.
     await page.goto('/contracts/list');
-    await expect(page.getByText('Tech Corp')).toBeVisible();
+    await expect(page.getByText('VEN-TECHCORP-001')).toBeVisible();
   });
 
   test('contracts list shows contract title Annual AMC', async ({ page }) => {
@@ -39,7 +47,7 @@ test.describe('Contracts', () => {
 
   test('clicking Contracts link from hub navigates to contracts list', async ({ page }) => {
     await page.goto('/contracts');
-    await page.getByRole('link', { name: 'Contracts' }).click();
+    await page.locator('a.mtile[href="/contracts/list"]').click();
     await expect(page).toHaveURL(/\/contracts\/list/);
     await expect(page.getByRole('heading').first()).toBeVisible();
   });
