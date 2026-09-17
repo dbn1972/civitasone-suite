@@ -12,6 +12,7 @@
 import { useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { PageHeader, ConfirmDialog, useConfirmAction } from "../../../../_components/ds";
+import { useFormError } from "@/lib/useFormError";
 
 const ENTRY_LABELS: Record<string, string> = {
   receipt: "Receipt",
@@ -40,20 +41,28 @@ export default function NewStockEntryPage() {
   const [notes, setNotes] = useState("");
   const [message, setMessage] = useState("");
   const [isError, setIsError] = useState(false);
+  const formError = useFormError("stock item");
 
   useEffect(() => {
     let active = true;
     (async () => {
       try {
         const res = await fetch("/api/proxy/v1/stock/items?limit=200", { headers: { accept: "application/json" } });
-        if (!res.ok) throw new Error(`Failed to load items (${res.status}).`);
+        if (!res.ok) {
+          if (active) setLoadError((await formError.fromResponse(res, "load")).message);
+          return;
+        }
         const json = (await res.json()) as { data?: ItemRow[] } | ItemRow[];
         if (active) setItems(Array.isArray(json) ? json : json.data ?? []);
-      } catch (e) {
-        if (active) setLoadError(e instanceof Error ? e.message : "Failed to load items.");
+      } catch {
+        if (active) setLoadError(formError.fromException("load").message);
       }
     })();
     return () => { active = false; };
+    // formError.fromResponse/fromException are stable (useCallback'd on a
+    // fixed `area` string inside useFormError) even though the wrapping
+    // `formError` object literal isn't, so omitting it here is safe.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -86,7 +95,7 @@ export default function NewStockEntryPage() {
       headers: { "content-type": "application/json" },
       body: JSON.stringify(body),
     });
-    if (!(res.ok || res.status === 202)) throw new Error(await res.text());
+    if (!(res.ok || res.status === 202)) throw new Error((await formError.fromResponse(res, "save")).message);
   }
 
   const post = useConfirmAction({

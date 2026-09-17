@@ -2,6 +2,7 @@
 
 import type { FormDesignState } from "@/app/_components/ds/designer/formTypes";
 import { formDesignFromService } from "@/app/_components/ds/designer/StatusTimeline";
+import { toHumanError } from "@/lib/messages";
 
 export interface PublishedServiceRuntime {
   id: string;
@@ -125,20 +126,22 @@ export async function saveDraft(payload: {
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ applicantType: "citizen", ...payload }),
   });
-  if (!res.ok) throw new Error(await readErrorMessage(res, "Could not save draft."));
+  if (!res.ok) throw new Error(await readErrorMessage());
   const body = (await res.json()) as { id?: string };
   return body.id ?? "";
 }
 
-async function readErrorMessage(res: Response, fallback: string): Promise<string> {
-  const text = await res.text();
-  try {
-    const parsed = JSON.parse(text) as { message?: string };
-    if (typeof parsed.message === "string" && parsed.message.length > 0) return parsed.message;
-  } catch {
-    /* use raw text */
-  }
-  return text || fallback;
+/**
+ * Plain-language failure message for a failed application-draft save/submit.
+ * This is a plain async data-fetching module, not a component, so it can't
+ * use the useFormError hook; toHumanError is the same catalogued-message
+ * building block that hook is built on — never the backend's own `message`
+ * or the raw HTTP status/body. See docs/ENTERPRISE-GAP-REPORT-2026-09-07.md
+ * UX-003/UX-016.
+ */
+async function readErrorMessage(): Promise<string> {
+  const human = toHumanError("save", { area: "application draft" });
+  return `${human.what} ${human.next}`;
 }
 
 export async function updateDraft(draftId: string, formData: Record<string, unknown>): Promise<void> {
@@ -147,7 +150,7 @@ export async function updateDraft(draftId: string, formData: Record<string, unkn
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ formData }),
   });
-  if (!(res.ok || res.status === 202)) throw new Error((await res.text()) || "Autosave failed.");
+  if (!(res.ok || res.status === 202)) throw new Error(await readErrorMessage());
 }
 
 export async function submitDraft(draftId: string): Promise<TrackingAck> {
@@ -156,7 +159,7 @@ export async function submitDraft(draftId: string): Promise<TrackingAck> {
     headers: { "content-type": "application/json" },
     body: JSON.stringify({}),
   });
-  if (!(res.ok || res.status === 202)) throw new Error(await readErrorMessage(res, "Submit failed."));
+  if (!(res.ok || res.status === 202)) throw new Error(await readErrorMessage());
   // Poll tracking after consumer processes
   await new Promise((r) => setTimeout(r, 200));
   const draftsRes = await fetch(`/api/proxy/v1/citizen/intake/drafts/${draftId}`, { cache: "no-store" });

@@ -4,6 +4,7 @@ import { useId, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button, Card, ConfirmDialog } from "../../../../_components/ds";
 import { browserJson } from "@/lib/api/browserClient";
+import { useFormError } from "@/lib/useFormError";
 
 const SEPARATION_TYPES = ["retirement", "superannuation", "resignation", "retrenchment", "vrs", "death"] as const;
 const EMPLOYEE_CATEGORIES = ["govt", "non_govt_covered", "non_govt_uncovered"] as const;
@@ -64,6 +65,7 @@ export function ComputeFnfForm() {
   const [error, setError] = useState<string | undefined>();
   const [message, setMessage] = useState<string | null>(null);
   const [invalidFields, setInvalidFields] = useState<Set<FieldKey>>(new Set());
+  const formError = useFormError("F&F settlement");
 
   const baseId = useId();
   const empIdField = useId();
@@ -169,8 +171,8 @@ export function ComputeFnfForm() {
       setConfirmOpen(false);
       setMessage(res.data.message ?? "F&F compute queued.");
       router.refresh();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Network error. Please try again.");
+    } catch {
+      setError(formError.fromException("save").message);
     } finally {
       setBusy(false);
     }

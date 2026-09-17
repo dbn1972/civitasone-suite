@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { useFormError } from "@/lib/useFormError";
 
 export function AssignmentActions() {
   const router = useRouter();
@@ -13,6 +14,7 @@ export function AssignmentActions() {
   const [inspectionTypeId, setInspectionTypeId] = useState("");
   const [entityId, setEntityId] = useState("");
   const [scheduledDate, setScheduledDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const formError = useFormError("assignment");
 
   async function createAssignment() {
     setBusy(true);
@@ -31,12 +33,12 @@ export function AssignmentActions() {
         }),
       });
       if (res.status !== 202 && !res.ok) {
-        throw new Error((await res.text()) || "Create assignment failed");
+        throw new Error((await formError.fromResponse(res, "save")).message);
       }
       setMessage("Assignment creation accepted (queued).");
       router.refresh();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Assignment create failed");
+    } catch {
+      setError(formError.fromException("save").message);
     } finally {
       setBusy(false);
     }

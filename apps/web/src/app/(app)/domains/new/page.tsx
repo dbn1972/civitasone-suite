@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { PageHeader } from "@/app/_components/ds";
+import { useFormError } from "@/lib/useFormError";
 
 const inputStyle = { width: "100%", padding: "8px 12px", borderRadius: 6, border: "1px solid #d1d5db", fontSize: 14 } as const;
 const labelStyle = { display: "block", fontSize: 13, fontWeight: 600, color: "var(--muted)", marginBottom: 4 } as const;
@@ -33,6 +34,7 @@ export default function NewDomainPage() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const formError = useFormError("domain");
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -57,13 +59,13 @@ export default function NewDomainPage() {
         body: JSON.stringify(form),
       });
       if (!res.ok) {
-        const body = await res.json().catch(() => ({})) as { message?: string };
-        throw new Error(body.message ?? `Registration failed: ${res.status}`);
+        setError((await formError.fromResponse(res, "save")).message);
+        return;
       }
       const body = await res.json() as { id?: string };
       router.push(body.id ? `/domains/${body.id}` : "/domains");
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not register domain.");
+    } catch {
+      setError(formError.fromException("save").message);
     } finally {
       setBusy(false);
     }

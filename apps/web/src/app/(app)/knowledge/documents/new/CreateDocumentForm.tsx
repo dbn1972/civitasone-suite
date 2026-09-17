@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { useFormError } from "@/lib/useFormError";
 
 /**
  * Publishes a document via POST /api/v1/knowledge/documents
@@ -20,6 +21,7 @@ export function CreateDocumentForm({
   const [category, setCategory] = useState(defaultCategory);
   const [status, setStatus] = useState<"idle" | "submitting" | "error">("idle");
   const [message, setMessage] = useState("");
+  const formError = useFormError("document");
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -40,17 +42,16 @@ export function CreateDocumentForm({
         headers: { "content-type": "application/json" },
         body: JSON.stringify(body),
       });
-      const text = await res.text();
       if (!res.ok) {
         setStatus("error");
-        setMessage(text || `Request failed (${res.status})`);
+        setMessage((await formError.fromResponse(res, "save")).message);
         return;
       }
       router.push(backHref);
       router.refresh();
-    } catch (err) {
+    } catch {
       setStatus("error");
-      setMessage(err instanceof Error ? err.message : "Network error");
+      setMessage(formError.fromException("save").message);
     }
   }
 

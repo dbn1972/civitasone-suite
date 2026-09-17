@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useId, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useFormError } from "@/lib/useFormError";
 
 const TYPES = ["standard", "normal", "emergency"] as const;
 const RISKS = ["low", "medium", "high"] as const;
@@ -19,6 +20,7 @@ export function NewChangeButton() {
   const [services, setServices] = useState("");
   const [description, setDescription] = useState("");
   const [rollbackPlan, setRollbackPlan] = useState("");
+  const formError = useFormError("change request");
 
   const close = useCallback(() => { if (!busy) { setOpen(false); setError(null); } }, [busy]);
 
@@ -50,12 +52,16 @@ export function NewChangeButton() {
           ...(rollbackPlan.trim() ? { rollbackPlan: rollbackPlan.trim() } : {}),
         }),
       });
-      if (!res.ok) { const t = await res.text(); throw new Error(`Could not raise change (${res.status}). ${t.slice(0, 160)}`); }
+      if (!res.ok) {
+        setError((await formError.fromResponse(res, "save")).message);
+        setBusy(false);
+        return;
+      }
       const body = await res.json();
       setOpen(false);
       if (body.id) router.push(`/change/${body.id}`); else router.refresh();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to raise change.");
+    } catch {
+      setError(formError.fromException("save").message);
     } finally {
       setBusy(false);
     }

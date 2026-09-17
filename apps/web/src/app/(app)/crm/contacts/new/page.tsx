@@ -164,15 +164,15 @@ export default function NewContactPage() {
         if (fe) {
           setFieldErrors({ [fe.field]: fe.message });
         } else {
-          setError(body?.message ?? body?.code ?? "Could not create the contact.");
+          setError("Could not create the contact.");
         }
         return;
       }
       setMessage("Contact created.");
       toast.success("Contact created successfully.");
       if (body?.id) setTimeout(() => router.push(`/crm/contacts/${body.id}`), 500);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not create the contact.");
+    } catch {
+      setError("Could not create the contact.");
     } finally {
       setBusy(false);
     }

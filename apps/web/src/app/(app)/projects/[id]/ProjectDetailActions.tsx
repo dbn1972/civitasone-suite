@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { ConfirmDialog } from "@/app/_components/ds";
+import { useFormError } from "@/lib/useFormError";
 
 type Milestone = { id: string; title: string; status: string };
 
@@ -14,6 +15,7 @@ export function ProjectDetailActions({ projectId, milestones }: Props) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | undefined>(undefined);
   const [message, setMessage] = useState("");
+  const formError = useFormError("milestone");
 
   const pending = milestones.filter((m) => m.status === "pending");
 
@@ -30,12 +32,15 @@ export function ProjectDetailActions({ projectId, milestones }: Props) {
           body: JSON.stringify({ reason }),
         },
       );
-      if (!res.ok) throw new Error((await res.text()) || "Request failed");
+      if (!res.ok) {
+        setError((await formError.fromResponse(res, "save")).message);
+        return;
+      }
       setMessage(`Milestone “${target.title}” marked complete.`);
       setTarget(null);
       router.refresh();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to complete milestone.");
+    } catch {
+      setError(formError.fromException("save").message);
     } finally {
       setBusy(false);
     }

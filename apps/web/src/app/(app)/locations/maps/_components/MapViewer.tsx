@@ -16,6 +16,7 @@ import { type CSSProperties, useCallback, useEffect, useMemo, useState } from "r
 import { PageHeader } from "@/app/_components/ds/PageHeader";
 import { EmptyState } from "@/app/_components/ds/EmptyState";
 import { CivitasMap, type MapLayer, type MapLayerSourceType } from "@/app/_components/maps";
+import { useFormError } from "@/lib/useFormError";
 
 const API = "/api/proxy/v1/locations/map-layers";
 
@@ -66,20 +67,28 @@ export function MapViewer({ canManage = false }: { canManage?: boolean }) {
   const [draft, setDraft] = useState<DraftLayer>(EMPTY_DRAFT);
   const [saving, setSaving] = useState(false);
   const [formOpen, setFormOpen] = useState(false);
+  const formError = useFormError("map layer");
 
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
       const res = await fetch(API);
-      if (!res.ok) throw new Error(`Failed to load map layers (${res.status})`);
+      if (!res.ok) {
+        setError((await formError.fromResponse(res, "load")).message);
+        return;
+      }
       const body = await res.json();
       setLayers(normalizeLayers(body));
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load map layers");
+    } catch {
+      setError(formError.fromException("load").message);
     } finally {
       setLoading(false);
     }
+    // formError.fromResponse/fromException are stable (useCallback'd on a
+    // fixed `area` string inside useFormError) even though the wrapping
+    // `formError` object literal isn't, so omitting it here is safe.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -104,12 +113,15 @@ export function MapViewer({ canManage = false }: { canManage?: boolean }) {
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ ...draft, visible: true }),
       });
-      if (!res.ok) throw new Error(`Failed to create layer (${res.status})`);
+      if (!res.ok) {
+        setError((await formError.fromResponse(res, "save")).message);
+        return;
+      }
       setDraft(EMPTY_DRAFT);
       setFormOpen(false);
       await load();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to create layer");
+    } catch {
+      setError(formError.fromException("save").message);
     } finally {
       setSaving(false);
     }
@@ -120,10 +132,13 @@ export function MapViewer({ canManage = false }: { canManage?: boolean }) {
       setError(null);
       try {
         const res = await fetch(`${API}/${encodeURIComponent(id)}`, { method: "DELETE" });
-        if (!res.ok) throw new Error(`Failed to delete layer (${res.status})`);
+        if (!res.ok) {
+          setError((await formError.fromResponse(res, "save")).message);
+          return;
+        }
         await load();
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "Failed to delete layer");
+      } catch {
+        setError(formError.fromException("save").message);
       }
     },
     [load],

@@ -1,6 +1,7 @@
 "use client";
 
 import { useId, useRef, useState } from "react";
+import { useFormError } from "@/lib/useFormError";
 
 /** Real metadata of the file that was just uploaded (from the browser File object). */
 export type UploadedFileMeta = {
@@ -36,6 +37,7 @@ export function FileUpload({
   const fileInputId = useId();
   const [status, setStatus] = useState<"idle" | "uploading" | "done" | "error">("idle");
   const [message, setMessage] = useState("");
+  const formError = useFormError("file upload");
 
   async function handleChange() {
     const file = fileRef.current?.files?.[0];
@@ -59,9 +61,8 @@ export function FileUpload({
       });
 
       if (!presignRes.ok) {
-        const err = await presignRes.json().catch(() => ({}));
         setStatus("error");
-        setMessage((err as { message?: string }).message || "Could not prepare upload. Try again.");
+        setMessage((await formError.fromResponse(presignRes, "save")).message);
         return;
       }
 
@@ -76,7 +77,7 @@ export function FileUpload({
 
       if (!uploadRes.ok) {
         setStatus("error");
-        setMessage("Upload failed. Please try again.");
+        setMessage(formError.fromException("save").message);
         return;
       }
 
@@ -85,7 +86,7 @@ export function FileUpload({
       onUploaded?.(key, { fileName: file.name, size: file.size, mimeType: file.type });
     } catch {
       setStatus("error");
-      setMessage("Network error during upload. Check your connection.");
+      setMessage(formError.fromException("save").message);
     }
   }
 

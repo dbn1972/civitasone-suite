@@ -31,12 +31,13 @@ describe("AssignmentActions", () => {
     expect(refreshMock).toHaveBeenCalled();
   });
 
-  it("surfaces error text when create fails", async () => {
+  it("surfaces a clerk-safe message when create fails, never the raw response text (UX-016)", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(
       new Response("validation failed", { status: 400 }),
     );
     render(<AssignmentActions />);
     fireEvent.click(screen.getByRole("button", { name: /create|assign|submit/i }));
-    await waitFor(() => expect(screen.getByText(/validation failed|failed/i)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(/couldn't save/i)).toBeInTheDocument());
+    expect(screen.queryByText(/validation failed/i)).not.toBeInTheDocument();
   });
 });

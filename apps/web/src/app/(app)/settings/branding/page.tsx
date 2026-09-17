@@ -442,7 +442,7 @@ export default function BrandingPage() {
       // nothing. A tenant admin had no way to know their branding never
       // stuck.
       if (!res.ok) {
-        throw new Error(`HTTP ${res.status}`);
+        throw new Error("branding_save_failed");
       }
       setSaved(true);
       setDirty(false);

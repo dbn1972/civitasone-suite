@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ConfirmDialog, useConfirmAction } from "../../../../_components/ds";
+import { useFormError } from "@/lib/useFormError";
 
 type Panel = "brief" | "affidavit" | null;
 
@@ -32,6 +33,7 @@ export function CaseActions({ caseId }: { caseId: string }) {
   const [message, setMessage] = useState("");
   const dialogRef = useRef<HTMLDivElement>(null);
   const firstFieldRef = useRef<HTMLInputElement | HTMLTextAreaElement>(null);
+  const formError = useFormError("case action");
 
   // brief counsel fields
   const [counselName, setCounselName] = useState("");
@@ -75,16 +77,15 @@ export function CaseActions({ caseId }: { caseId: string }) {
         headers: { "content-type": "application/json" },
         body: JSON.stringify(body),
       });
-      const text = await res.text();
       if (!res.ok) {
-        setMessage(text || `Request failed (${res.status})`);
+        setMessage((await formError.fromResponse(res, "save")).message);
         return false;
       }
       close();
       router.refresh();
       return true;
-    } catch (err) {
-      setMessage(err instanceof Error ? err.message : "Network error");
+    } catch {
+      setMessage(formError.fromException("save").message);
       return false;
     } finally {
       setBusy(false);
@@ -104,8 +105,7 @@ export function CaseActions({ caseId }: { caseId: string }) {
         }),
       });
       if (!res.ok) {
-        const text = await res.text();
-        throw new Error(text || `Request failed (${res.status})`);
+        throw new Error((await formError.fromResponse(res, "save")).message);
       }
     },
     onSuccess: () => {

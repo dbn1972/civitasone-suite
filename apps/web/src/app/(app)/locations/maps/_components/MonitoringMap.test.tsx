@@ -91,9 +91,10 @@ describe("MonitoringMap (SVC-119)", () => {
     await waitFor(() => expect(screen.getByText("No markers")).toBeInTheDocument());
   });
 
-  it("surfaces an error when the endpoint fails", async () => {
+  it("surfaces a clerk-safe message when the endpoint fails, never the raw status (UX-016)", async () => {
     vi.stubGlobal("fetch", fetchReturning({}, false, 502));
     render(<MonitoringMap />);
-    await waitFor(() => expect(screen.getByText(/Failed to load markers/)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(/couldn't load/i)).toBeInTheDocument());
+    expect(screen.queryByText(/Failed to load markers/)).not.toBeInTheDocument();
   });
 });

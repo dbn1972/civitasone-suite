@@ -54,6 +54,16 @@ export default function TenderDocumentsPage({
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
   const [downloadError, setDownloadError] = useState("");
 
+  function tenderDocDownloadError(): string {
+    const human = toHumanError("load", { area: "download link" });
+    return `${human.what} ${human.next}`;
+  }
+
+  function tenderDocSaveError(): string {
+    const human = toHumanError("save", { area: "tender document" });
+    return `${human.what} ${human.next}`;
+  }
+
   async function load() {
     setLoading(true);
     try {
@@ -86,23 +96,17 @@ export default function TenderDocumentsPage({
         "/api/proxy/v1/admin/uploads/" + encodeURIComponent(storageRef),
       );
       if (!res.ok) {
-        setDownloadError(
-          (await res.text()) || "Could not prepare the download link.",
-        );
+        setDownloadError(tenderDocDownloadError());
         return;
       }
       const { downloadUrl } = (await res.json()) as { downloadUrl?: string };
       if (!downloadUrl) {
-        setDownloadError("Could not prepare the download link.");
+        setDownloadError(tenderDocDownloadError());
         return;
       }
       window.open(downloadUrl, "_blank", "noopener,noreferrer");
-    } catch (err) {
-      setDownloadError(
-        err instanceof Error
-          ? err.message
-          : "Network error preparing the download.",
-      );
+    } catch {
+      setDownloadError(tenderDocDownloadError());
     } finally {
       setDownloadingId(null);
     }
@@ -139,8 +143,7 @@ export default function TenderDocumentsPage({
         },
       );
       if (!res.ok) {
-        const t = await res.text();
-        setSaveMsg(t || "Save failed");
+        setSaveMsg(tenderDocSaveError());
         return;
       }
       setSaveMsg("Document uploaded.");
@@ -149,8 +152,8 @@ export default function TenderDocumentsPage({
       setDocType("other");
       setFileUploadNonce((n) => n + 1); // remounts FileUpload to clear its own "done" state
       void load();
-    } catch (err) {
-      setSaveMsg(err instanceof Error ? err.message : "Upload error");
+    } catch {
+      setSaveMsg(tenderDocSaveError());
     } finally {
       setSaving(false);
     }

@@ -3,18 +3,26 @@
 import { useCallback, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { ChangeStatus } from "../_data/types";
+import { toHumanError } from "@/lib/messages";
+
+/**
+ * Plain-language failure message for a failed change-request action. This is
+ * a module-scope helper, not a component, so it can't use the useFormError
+ * hook; toHumanError is the same catalogued-message building block that hook
+ * is built on — never the backend's own `message` or the raw HTTP status.
+ * See docs/ENTERPRISE-GAP-REPORT-2026-09-07.md UX-003/UX-016.
+ */
+function changeActionError(): string {
+  const human = toHumanError("save", { area: "change request" });
+  return `${human.what} ${human.next}`;
+}
 
 async function post(path: string, body?: unknown): Promise<void> {
   const res = await fetch(`/api/proxy/v1/admin/change/${path}`, {
     method: "POST",
     ...(body ? { headers: { "content-type": "application/json" }, body: JSON.stringify(body) } : {}),
   });
-  if (!res.ok) {
-    const t = await res.text();
-    let msg = `Request failed (${res.status}).`;
-    try { const j = JSON.parse(t); if (j.message) msg = j.message; } catch { /* keep default */ }
-    throw new Error(msg);
-  }
+  if (!res.ok) throw new Error(changeActionError());
 }
 
 export function ChangeActions({ id, status, hasRollbackPlan }: { id: string; status: ChangeStatus; hasRollbackPlan: boolean }) {
@@ -34,7 +42,7 @@ export function ChangeActions({ id, status, hasRollbackPlan }: { id: string; sta
   const run = useCallback(async (fn: () => Promise<void>) => {
     setError(null); setBusy(true);
     try { await fn(); router.refresh(); }
-    catch (e) { setError(e instanceof Error ? e.message : "Action failed."); }
+    catch { setError(changeActionError()); }
     finally { setBusy(false); }
   }, [router]);
 

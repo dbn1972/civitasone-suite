@@ -18,6 +18,7 @@
  */
 
 import { useCallback, useEffect, useId, useRef, useState } from "react";
+import { useFormError } from "@/lib/useFormError";
 
 // ─── Catalog types ────────────────────────────────────────────────────────────
 
@@ -55,6 +56,8 @@ function newFilterRow(operators: string[], filters: FilterDef[]): FilterRow {
 
 export function RunQueryForm() {
   const formId = useId();
+  const catalogFormError = useFormError("analytics catalog");
+  const queryFormError = useFormError("query");
 
   // Catalog state
   const [catalog, setCatalog] = useState<Catalog | null>(null);
@@ -84,15 +87,19 @@ export function RunQueryForm() {
     async function loadCatalog() {
       try {
         const res = await fetch("/api/proxy/v1/analytics/catalog");
-        if (!res.ok) throw new Error(`Catalog fetch failed: ${res.status}`);
+        if (!res.ok) {
+          const resolved = await catalogFormError.fromResponse(res, "load");
+          if (!cancelled) setCatalogError(resolved.message);
+          return;
+        }
         const data: Catalog = await res.json();
         if (cancelled) return;
         setCatalog(data);
         // Initialise metric to first option
         if (data.metrics.length > 0) setMetric(data.metrics[0].key);
-      } catch (err) {
+      } catch {
         if (cancelled) return;
-        setCatalogError(err instanceof Error ? err.message : "Failed to load catalog.");
+        setCatalogError(catalogFormError.fromException("load").message);
       }
     }
 
@@ -184,22 +191,15 @@ export function RunQueryForm() {
         });
 
         if (res.status !== 202) {
-          let detail = "";
-          try {
-            const json: unknown = await res.json();
-            if (typeof json === "object" && json !== null && "message" in json) {
-              detail = String((json as Record<string, unknown>).message);
-            }
-          } catch {
-            // ignore parse error
-          }
-          throw new Error(detail || `Unexpected response: ${res.status}`);
+          const resolved = await queryFormError.fromResponse(res, "save");
+          setSubmitError(resolved.message);
+          return;
         }
 
         setSuccessMsg("Query queued — results appear in Query Results once processed.");
         resetForm();
-      } catch (err) {
-        setSubmitError(err instanceof Error ? err.message : "Submission failed. Please try again.");
+      } catch {
+        setSubmitError(queryFormError.fromException("save").message);
       } finally {
         setSubmitting(false);
       }

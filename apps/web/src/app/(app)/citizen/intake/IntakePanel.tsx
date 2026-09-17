@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useTranslations } from "next-intl";
+import { useFormError } from "@/lib/useFormError";
 
 const inputStyle = { width: "100%", padding: 8, minHeight: 44, marginBottom: 8, borderRadius: 8, border: "1px solid var(--line)" } as const;
 const labelStyle = { display: "block", fontSize: 12, color: "var(--muted)", marginBottom: 4, fontWeight: 600 } as const;
@@ -21,10 +22,11 @@ export function IntakePanel() {
   const [ack, setAck] = useState<Ack | null>(null);
   const [trackNo, setTrackNo] = useState("");
   const [track, setTrack] = useState<Track | null>(null);
+  const formError = useFormError("intake application");
 
   async function post<T>(path: string, body: unknown): Promise<T> {
     const res = await fetch(`/api/proxy${path}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
-    if (!res.ok) throw new Error((await res.text()) || "Request failed.");
+    if (!res.ok) throw new Error((await formError.fromResponse(res, "save")).message);
     return (await res.json()) as T;
   }
 
@@ -33,7 +35,7 @@ export function IntakePanel() {
     setBusy(true); setError(""); setAck(null);
     try {
       setDraft(await post<Draft>("/v1/citizen/intake/drafts", { serviceId, channel }));
-    } catch (e) { setError(e instanceof Error ? e.message : "Failed."); } finally { setBusy(false); }
+    } catch { setError(formError.fromException("save").message); } finally { setBusy(false); }
   }
 
   async function submitDraft() {
@@ -42,7 +44,7 @@ export function IntakePanel() {
     try {
       const a = await post<Ack>(`/v1/citizen/intake/drafts/${draft.id}/submit`, {});
       setAck(a); setTrackNo(a.trackingNo); setDraft(null);
-    } catch (e) { setError(e instanceof Error ? e.message : "Failed."); } finally { setBusy(false); }
+    } catch { setError(formError.fromException("save").message); } finally { setBusy(false); }
   }
 
   async function doTrack(e: React.FormEvent) {
@@ -50,9 +52,9 @@ export function IntakePanel() {
     setBusy(true); setError(""); setTrack(null);
     try {
       const res = await fetch(`/api/proxy/v1/citizen/intake/track/${encodeURIComponent(trackNo)}`);
-      if (!res.ok) throw new Error((await res.text()) || "Not found.");
+      if (!res.ok) throw new Error((await formError.fromResponse(res, "load")).message);
       setTrack((await res.json()) as Track);
-    } catch (e) { setError(e instanceof Error ? e.message : "Failed."); } finally { setBusy(false); }
+    } catch { setError(formError.fromException("load").message); } finally { setBusy(false); }
   }
 
   return (

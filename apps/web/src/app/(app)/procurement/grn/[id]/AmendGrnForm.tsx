@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { useFormError } from "@/lib/useFormError";
 
 // Req 1.2 — GRN partial-delivery amendment. Only receivedQty/acceptedQty per
 // line are editable; grnNo, vendorId, poRef stay immutable and are not part
@@ -27,6 +28,7 @@ export function AmendGrnForm({ grnId, items }: {
   );
   const [status, setStatus] = useState<"idle" | "submitting" | "saved" | "error">("idle");
   const [message, setMessage] = useState("");
+  const formError = useFormError("GRN amendment");
 
   function updateLine(idx: number, patch: Partial<AmendLine>) {
     setLines((prev) => prev.map((l, i) => (i === idx ? { ...l, ...patch } : l)));
@@ -60,18 +62,17 @@ export function AmendGrnForm({ grnId, items }: {
           })),
         }),
       });
-      const text = await res.text();
       if (!res.ok) {
         setStatus("error");
-        setMessage(text || `Save failed (${res.status})`);
+        setMessage((await formError.fromResponse(res, "save")).message);
         return;
       }
       setStatus("saved");
       setMessage("GRN amended — quantities updated.");
       router.refresh();
-    } catch (err) {
+    } catch {
       setStatus("error");
-      setMessage(err instanceof Error ? err.message : "Network error");
+      setMessage(formError.fromException("save").message);
     }
   }
 

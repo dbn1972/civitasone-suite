@@ -43,7 +43,7 @@ export function EndConversationButton({
           setError("You do not have permission to end this conversation.");
           return;
         }
-        setError(body.message || "Could not end the conversation.");
+        setError("Could not end the conversation.");
         return;
       }
       setMessage("Conversation ended. The transcript is preserved.");

@@ -153,3 +153,28 @@ describe("LeaveApprovalsPanel — UX-016 clerk-safe errors", () => {
     expect(dialog.textContent).not.toMatch(/\b500\b/);
   });
 });
+
+// UX-016 tranche 8 — this file was tranche 2's own settled-outlier: it kept
+// reading a caught exception's own `.message` on the load path (fixed here),
+// while tranche 7 established the fleet-wide rule never to (see
+// docs/ENTERPRISE-GAP-REPORT-2026-09-07.md UX-016 tranche 7). Neither
+// existing describe block above exercised a genuine network exception (as
+// opposed to an ok:false HTTP response) on the *load* path, so the previous
+// leak had no regression coverage at all.
+describe("LeaveApprovalsPanel — network failure on load (UX-016)", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("shows a clerk-safe message on a genuine network failure, never the raw browser exception text", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => {
+        throw new TypeError("Failed to fetch");
+      }),
+    );
+    renderPanel();
+
+    const el = await screen.findByText(/couldn't load this leave application/i, {}, { timeout: 3000 });
+    expect(el).toBeInTheDocument();
+    expect(screen.queryByText(/Failed to fetch/i)).not.toBeInTheDocument();
+  });
+});

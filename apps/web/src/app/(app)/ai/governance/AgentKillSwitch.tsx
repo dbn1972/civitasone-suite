@@ -28,17 +28,18 @@ export function AgentKillSwitch({ agents }: { agents: AgentStatus[] }) {
         body: JSON.stringify({}),
       });
       if (!res.ok) {
-        const body = (await res.json().catch(() => ({}))) as { code?: string; message?: string };
-        throw new Error(
+        const body = (await res.json().catch(() => ({}))) as { code?: string };
+        setError(
           body.code === "FORBIDDEN"
             ? "You need the AI administrator role to pause or resume an agent."
-            : body.message || `Could not ${pausing ? "pause" : "resume"} the agent.`,
+            : `Could not ${pausing ? "pause" : "resume"} the agent.`,
         );
+        return;
       }
       setMessage(`${agent.name} ${pausing ? "paused" : "resumed"}.`);
       router.refresh();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not change the agent state.");
+    } catch {
+      setError("Could not change the agent state.");
     } finally {
       setBusyId(null);
     }

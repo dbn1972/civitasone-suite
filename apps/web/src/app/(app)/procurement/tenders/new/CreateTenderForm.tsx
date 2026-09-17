@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { formatMoney } from "@/lib/formatters";
+import { useFormError } from "@/lib/useFormError";
 
 const TYPES = [
   { value: "open", label: "Open" },
@@ -23,6 +24,7 @@ export function CreateTenderForm() {
   const [bidClosingDate, setBidClosingDate] = useState("");
   const [status, setStatus] = useState<"idle" | "submitting" | "accepted" | "error">("idle");
   const [message, setMessage] = useState("");
+  const formError = useFormError("tender");
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -48,20 +50,19 @@ export function CreateTenderForm() {
         headers: { "content-type": "application/json" },
         body: JSON.stringify(body),
       });
-      const text = await res.text();
       if (!res.ok) {
         setStatus("error");
-        setMessage(text || `Create failed (${res.status})`);
+        setMessage((await formError.fromResponse(res, "save")).message);
         return;
       }
-      const parsed = JSON.parse(text) as { id?: string };
+      const parsed = (await res.json()) as { id?: string };
       setStatus("accepted");
       setMessage("Tender created and entered the workflow.");
       router.push(parsed.id ? `/procurement/tenders/${parsed.id}` : "/procurement/tenders");
       router.refresh();
-    } catch (err) {
+    } catch {
       setStatus("error");
-      setMessage(err instanceof Error ? err.message : "Network error");
+      setMessage(formError.fromException("save").message);
     }
   }
 

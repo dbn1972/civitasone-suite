@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { toHumanError } from "@/lib/messages";
 
 // DOM-002 — the real, second-actor inspection step. Deliberately does NOT
 // collect or send an inspector id: PATCH /grns/:id/accept and
@@ -11,6 +12,17 @@ import { useState } from "react";
 // is the same person who created the GRN, the server rejects with 403
 // SOD_VIOLATION — this page does not try to pre-empt that; it just surfaces
 // whatever the server says.
+/**
+ * Plain-language failure message for a failed GRN inspection decision. Kept
+ * separate from useFormError since this component must also branch on the
+ * server's SOD_VIOLATION code with a specific, catalogued explanation (not a
+ * raw echo) — see docs/ENTERPRISE-GAP-REPORT-2026-09-07.md UX-003/UX-016.
+ */
+function grnInspectError(): string {
+  const human = toHumanError("save", { area: "GRN inspection" });
+  return `${human.what} ${human.next}`;
+}
+
 export function InspectGrnForm({ grnId }: { grnId: string }) {
   const router = useRouter();
   const [remarks, setRemarks] = useState("");
@@ -32,17 +44,15 @@ export function InspectGrnForm({ grnId }: { grnId: string }) {
         headers: { "content-type": "application/json" },
         body: JSON.stringify(action === "accept" ? { remarks: remarks.trim() || undefined } : { reason: reason.trim() }),
       });
-      const text = await res.text();
       if (!res.ok) {
-        let human = `Could not ${action} this GRN (${res.status}).`;
+        let human = grnInspectError();
         try {
-          const parsed = JSON.parse(text) as { code?: string; message?: string };
+          const text = await res.text();
+          const parsed = JSON.parse(text) as { code?: string };
           if (parsed.code === "SOD_VIOLATION") {
             human = "You created this GRN, so you cannot also inspect it — a different officer must accept or reject it.";
-          } else if (parsed.message) {
-            human = parsed.message;
           }
-        } catch { /* ignore */ }
+        } catch { /* keep the catalogued fallback above */ }
         setStatus("error");
         setMessage(human);
         return;
@@ -50,9 +60,9 @@ export function InspectGrnForm({ grnId }: { grnId: string }) {
       setStatus("done");
       setMessage(action === "accept" ? "GRN accepted — three-way match computed." : "GRN rejected.");
       router.refresh();
-    } catch (err) {
+    } catch {
       setStatus("error");
-      setMessage(err instanceof Error ? err.message : "Network error");
+      setMessage(grnInspectError());
     }
   }
 

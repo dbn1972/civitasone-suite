@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { ConfirmDialog, useConfirmAction } from "../../../../_components/ds";
+import { useFormError } from "@/lib/useFormError";
 
 type CaseOption = { id: string; label: string };
 
@@ -23,6 +24,7 @@ export function RecordOrderForm({ cases }: { cases: CaseOption[] }) {
   const [direction, setDirection] = useState("");
   const [deptRef, setDeptRef] = useState("");
   const [message, setMessage] = useState("");
+  const formError = useFormError("court order");
 
   const { open, busy, error, trigger, cancel, confirm } = useConfirmAction({
     onConfirm: async () => {
@@ -39,8 +41,7 @@ export function RecordOrderForm({ cases }: { cases: CaseOption[] }) {
         body: JSON.stringify(body),
       });
       if (!res.ok) {
-        const text = await res.text();
-        throw new Error(text || `Request failed (${res.status})`);
+        throw new Error((await formError.fromResponse(res, "save")).message);
       }
     },
     onSuccess: () => {

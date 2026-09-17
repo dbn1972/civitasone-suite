@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { useFormError } from "@/lib/useFormError";
 
 export function CreateCaseForm() {
   const router = useRouter();
@@ -14,6 +15,7 @@ export function CreateCaseForm() {
   const [counselRef, setCounselRef] = useState("");
   const [status, setStatus] = useState<"idle" | "submitting" | "error">("idle");
   const [message, setMessage] = useState("");
+  const formError = useFormError("case");
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -38,17 +40,16 @@ export function CreateCaseForm() {
         headers: { "content-type": "application/json" },
         body: JSON.stringify(body),
       });
-      const text = await res.text();
       if (!res.ok) {
         setStatus("error");
-        setMessage(text || `Request failed (${res.status})`);
+        setMessage((await formError.fromResponse(res, "save")).message);
         return;
       }
       router.push("/legal/list");
       router.refresh();
-    } catch (err) {
+    } catch {
       setStatus("error");
-      setMessage(err instanceof Error ? err.message : "Network error");
+      setMessage(formError.fromException("save").message);
     }
   }
 

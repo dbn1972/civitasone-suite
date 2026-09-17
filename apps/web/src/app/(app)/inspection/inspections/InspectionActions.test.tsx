@@ -64,12 +64,13 @@ describe("InspectionRowAction", () => {
     expect((init.headers as Record<string, string> | undefined)?.["Content-Type"]).toBeUndefined();
   });
 
-  it("shows error when transition fails", async () => {
+  it("shows a clerk-safe message when transition fails, never the raw response text (UX-016)", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(
       new Response("invalid transition", { status: 422 }),
     );
     render(<InspectionRowAction id="11111111-2222-4333-8444-555555555555" status="scheduled" />);
     fireEvent.click(screen.getByRole("button", { name: "Start" }));
-    await waitFor(() => expect(screen.getByText(/invalid transition|failed/i)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(/couldn't save/i)).toBeInTheDocument());
+    expect(screen.queryByText(/invalid transition/i)).not.toBeInTheDocument();
   });
 });

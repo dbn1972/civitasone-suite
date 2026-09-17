@@ -81,9 +81,9 @@ export function LeaveApprovalsPanel() {
         for (const l of leaveRows) if (l?.id) map[l.id] = l;
         setLeaveById(map);
       }
-    } catch (err) {
+    } catch {
       setSource("error");
-      setError(err instanceof Error ? err.message : formError.fromException("load").message);
+      setError(formError.fromException("load").message);
     } finally {
       setLoading(false);
     }

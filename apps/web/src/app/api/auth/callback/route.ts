@@ -105,7 +105,7 @@ async function createBackendSession(accessToken: string, req: Request): Promise<
       body: JSON.stringify({ tenantId, userId, ip, device }),
     });
     if (!res.ok) {
-      throw new Error(`identity-service POST /identity/sessions responded ${res.status}: ${await res.text().catch(() => "")}`);
+      throw new Error(`identity-service POST /identity/sessions responded ${res.status}: ${await res.text().catch(() => "")}`); // status-leak-ok — server-only diagnostic, fed only to captureError() below, never returned to the browser (see the SEC-027 comment above)
     }
   } catch (err) {
     // SEC-027: this best-effort write had zero operational signal beyond a

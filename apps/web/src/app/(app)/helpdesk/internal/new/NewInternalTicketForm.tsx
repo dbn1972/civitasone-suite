@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { useToast } from "@/app/_components/ds/Toast";
+import { useFormError } from "@/lib/useFormError";
 
 type Priority = "Low" | "Medium" | "High" | "Critical";
 
@@ -26,6 +27,7 @@ export function NewInternalTicketForm() {
   const [priority, setPriority] = useState<Priority>("Medium");
   const [status, setStatus] = useState<"idle" | "submitting" | "error">("idle");
   const [message, setMessage] = useState("");
+  const formError = useFormError("ticket");
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -54,18 +56,17 @@ export function NewInternalTicketForm() {
         headers: { "content-type": "application/json" },
         body: JSON.stringify(body),
       });
-      const text = await res.text();
       if (!res.ok) {
         setStatus("error");
-        setMessage(text || `Request failed (${res.status})`);
+        setMessage((await formError.fromResponse(res, "save")).message);
         return;
       }
       toast.success("Ticket created.");
       router.push("/helpdesk/internal");
       router.refresh();
-    } catch (err) {
+    } catch {
       setStatus("error");
-      setMessage(err instanceof Error ? err.message : "Network error");
+      setMessage(formError.fromException("save").message);
     }
   }
 

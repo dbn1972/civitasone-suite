@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { useFormError } from "@/lib/useFormError";
 
 /**
  * Queues a report generation job via POST /api/v1/reports/jobs
@@ -14,6 +15,7 @@ export function CreateReportForm({ defaultReportType = "" }: { defaultReportType
   const [reportType, setReportType] = useState(defaultReportType);
   const [status, setStatus] = useState<"idle" | "submitting" | "error">("idle");
   const [message, setMessage] = useState("");
+  const formError = useFormError("report");
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -34,17 +36,16 @@ export function CreateReportForm({ defaultReportType = "" }: { defaultReportType
         headers: { "content-type": "application/json" },
         body: JSON.stringify(body),
       });
-      const text = await res.text();
       if (!res.ok) {
         setStatus("error");
-        setMessage(text || `Request failed (${res.status})`);
+        setMessage((await formError.fromResponse(res, "save")).message);
         return;
       }
       router.push("/reports/list");
       router.refresh();
-    } catch (err) {
+    } catch {
       setStatus("error");
-      setMessage(err instanceof Error ? err.message : "Network error");
+      setMessage(formError.fromException("save").message);
     }
   }
 

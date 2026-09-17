@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useFormError } from "@/lib/useFormError";
 
 type FormState = { status: "idle" | "submitting" | "success" | "error"; message?: string };
 
@@ -29,6 +30,7 @@ export function NewScheduledForm() {
   const [cadence, setCadence] = useState("daily");
   const [recipients, setRecipients] = useState("");
   const [format, setFormat] = useState("pdf");
+  const formError = useFormError("scheduled report");
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -46,15 +48,14 @@ export function NewScheduledForm() {
         body: JSON.stringify(body),
       });
       if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        setState({ status: "error", message: (err as { message?: string }).message ?? "Request failed" });
+        setState({ status: "error", message: (await formError.fromResponse(res, "save")).message });
         return;
       }
       setState({ status: "success", message: "Scheduled report created." });
       setTemplateId("");
       setRecipients("");
     } catch {
-      setState({ status: "error", message: "Network error — please try again." });
+      setState({ status: "error", message: formError.fromException("save").message });
     }
   }
 

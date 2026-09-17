@@ -60,7 +60,7 @@ describe("PredictionHistory", () => {
   });
 
   describe("error state", () => {
-    it("shows error message on HTTP error", async () => {
+    it("shows a clerk-safe message on HTTP error, never the raw status (UX-016)", async () => {
       const fetchFn = mockFetch([], 500);
       render(
         <PredictionHistory entityId="entity-1" domain="leads" fetchFn={fetchFn} />
@@ -68,10 +68,11 @@ describe("PredictionHistory", () => {
       await waitFor(() => {
         expect(screen.getByRole("alert")).toBeInTheDocument();
       });
-      expect(screen.getByRole("alert")).toHaveTextContent("Failed to load predictions (500)");
+      expect(screen.getByRole("alert")).toHaveTextContent(/couldn't load/i);
+      expect(screen.queryByText(/\(500\)/)).not.toBeInTheDocument();
     });
 
-    it("shows error message on network failure", async () => {
+    it("shows the same clerk-safe message on network failure, never the raw browser error (UX-016)", async () => {
       const fetchFn = mockFetchNetworkError();
       render(
         <PredictionHistory entityId="entity-1" domain="leads" fetchFn={fetchFn} />
@@ -79,7 +80,7 @@ describe("PredictionHistory", () => {
       await waitFor(() => {
         expect(screen.getByRole("alert")).toBeInTheDocument();
       });
-      expect(screen.getByRole("alert")).toHaveTextContent("Network error loading predictions");
+      expect(screen.getByRole("alert")).toHaveTextContent(/couldn't load/i);
     });
   });
 

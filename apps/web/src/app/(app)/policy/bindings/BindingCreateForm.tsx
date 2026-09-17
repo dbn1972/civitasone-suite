@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useFormError } from "@/lib/useFormError";
 
 /**
  * Client form — POST /api/proxy/v1/policy/bindings → gateway /api/v1/policy/bindings.
@@ -10,6 +11,7 @@ export function BindingCreateForm() {
   const [roleId, setRoleId] = useState("");
   const [status, setStatus] = useState<"idle" | "pending" | "ok" | "error">("idle");
   const [message, setMessage] = useState<string>("");
+  const formError = useFormError("role binding");
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -21,19 +23,19 @@ export function BindingCreateForm() {
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ userId, roleId }),
       });
-      const body = await res.json().catch(() => ({}));
       if (!res.ok) {
         setStatus("error");
-        setMessage(body?.message ?? `Request failed (${res.status})`);
+        setMessage((await formError.fromResponse(res, "save")).message);
         return;
       }
+      const body = await res.json().catch(() => ({}));
       setStatus("ok");
       setMessage(body?.id ? `Accepted — id ${body.id}` : "Accepted (202)");
       setUserId("");
       setRoleId("");
     } catch {
       setStatus("error");
-      setMessage("Network error");
+      setMessage(formError.fromException("save").message);
     }
   }
 

@@ -51,7 +51,7 @@ export function AskCopilotForm() {
         return;
       }
       if (res.status === 422) {
-        setError(body.message || "That prompt could not be used. Rephrase it and try again.");
+        setError("That prompt could not be used. Rephrase it and try again.");
         return;
       }
       if (res.status === 403) {
@@ -59,7 +59,7 @@ export function AskCopilotForm() {
         return;
       }
       if (!res.ok) {
-        setError(body.message || "The copilot could not be reached. Try again shortly.");
+        setError("The copilot could not be reached. Try again shortly.");
         return;
       }
 

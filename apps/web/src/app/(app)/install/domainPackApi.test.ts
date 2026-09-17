@@ -71,13 +71,21 @@ describe("domainPackApi HTTP", () => {
     expect(result.packKeys).toHaveLength(3);
   });
 
-  it("activateDomainPackStage3 surfaces API error message", async () => {
+  it("activateDomainPackStage3 surfaces a clerk-safe message, never the raw API error text (UX-016)", async () => {
     vi.mocked(fetch).mockResolvedValue({
       ok: false,
       status: 403,
       text: async () => JSON.stringify({ message: "forbidden for tenant" }),
     } as Response);
 
-    await expect(activateDomainPackStage3("municipal-in-v1")).rejects.toThrow(/forbidden for tenant/i);
+    await expect(activateDomainPackStage3("municipal-in-v1")).rejects.toThrow(/couldn't save/i);
+    let caught: unknown;
+    try {
+      await activateDomainPackStage3("municipal-in-v1");
+    } catch (e) {
+      caught = e;
+    }
+    expect(caught).toBeInstanceOf(Error);
+    expect((caught as Error).message).not.toMatch(/forbidden for tenant/i);
   });
 });

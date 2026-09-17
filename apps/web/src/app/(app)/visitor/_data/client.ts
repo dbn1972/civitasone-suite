@@ -8,6 +8,7 @@
  * plain-language error state.
  */
 import { browserFetch } from "@/lib/api/browserClient";
+import { toHumanError, type MessageKind } from "@/lib/messages";
 import type {
   ConfigEntry,
   PassVerifyResult,
@@ -16,19 +17,19 @@ import type {
   VisitRequest,
 } from "./types";
 
-async function readError(res: Response): Promise<string> {
-  try {
-    const text = await res.text();
-    if (!text) return `Request failed (${res.status})`;
-    try {
-      const j = JSON.parse(text) as { message?: string; code?: string };
-      return j.message ?? j.code ?? text;
-    } catch {
-      return text;
-    }
-  } catch {
-    return `Request failed (${res.status})`;
-  }
+/**
+ * Plain-language failure message for any non-2xx response from a
+ * visitor-data mutation/read. Every exported function below throws
+ * `Error(readError())` and callers render that message directly as the UI's
+ * error state, so it must never be (or contain) a raw HTTP status code or raw
+ * server response body — see docs/ENTERPRISE-GAP-REPORT-2026-09-07.md
+ * UX-003/UX-016. This module is a plain async data-fetching client, not a
+ * component, so it can't use the useFormError hook; toHumanError is the same
+ * catalogued-message building block that hook is built on.
+ */
+function readError(kind: MessageKind): string {
+  const human = toHumanError(kind, { area: "visitor data" });
+  return `${human.what} ${human.next}`;
 }
 
 async function post<T>(path: string, body?: unknown): Promise<T> {
@@ -36,7 +37,7 @@ async function post<T>(path: string, body?: unknown): Promise<T> {
     method: "POST",
     ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
   });
-  if (!res.ok) throw new Error(await readError(res));
+  if (!res.ok) throw new Error(readError("save"));
   return (await res.json()) as T;
 }
 
@@ -67,7 +68,7 @@ export async function fetchRoster(locationId: string): Promise<RosterEntry[]> {
   const res = await browserFetch(
     `v1/visitor/evacuation/roster?locationId=${encodeURIComponent(locationId)}`,
   );
-  if (!res.ok) throw new Error(await readError(res));
+  if (!res.ok) throw new Error(readError("load"));
   const out = (await res.json()) as { data?: RosterEntry[] };
   return out.data ?? [];
 }
@@ -85,7 +86,7 @@ export async function fetchVisitRequests(status: string): Promise<VisitRequest[]
   const res = await browserFetch(
     `v1/visitor/visit-requests?status=${encodeURIComponent(status)}`,
   );
-  if (!res.ok) throw new Error(await readError(res));
+  if (!res.ok) throw new Error(readError("load"));
   const out = (await res.json()) as { data?: VisitRequest[] };
   return out.data ?? [];
 }
@@ -108,7 +109,7 @@ export async function setConfig(input: {
 
 export async function fetchConfigNamespace(namespace: string): Promise<ConfigEntry[]> {
   const res = await browserFetch(`v1/visitor/config/${encodeURIComponent(namespace)}`);
-  if (!res.ok) throw new Error(await readError(res));
+  if (!res.ok) throw new Error(readError("load"));
   const out = (await res.json()) as { items?: ConfigEntry[] };
   return out.items ?? [];
 }

@@ -71,7 +71,7 @@ export function HandoffButton({
           setError("You do not have permission to hand off this conversation.");
           return;
         }
-        setError(body.message || "Could not hand off the conversation.");
+        setError("Could not hand off the conversation.");
         return;
       }
       setMessage("Handed off. The agent receives the transcript so far.");

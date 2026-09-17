@@ -3,6 +3,7 @@ import { useState } from "react";
 import { useTranslations } from "next-intl";
 import { DataTable, Segmented, EmptyState, ConfirmDialog } from "@/app/_components/ds";
 import { formatIndianDate } from "@/lib/formatters";
+import { useFormError } from "@/lib/useFormError";
 
 interface RTIApplication {
   id: string;
@@ -82,6 +83,7 @@ export function RTIClient({ rtis, today }: Props) {
   const [transferId, setTransferId] = useState<string | null>(null);
   const [transferBusy, setTransferBusy] = useState(false);
   const [transferError, setTransferError] = useState<string | undefined>(undefined);
+  const formError = useFormError("RTI transfer");
 
   const labels: ClockLabels = {
     closed: t("closed"),
@@ -101,16 +103,15 @@ export function RTIClient({ rtis, today }: Props) {
         body: JSON.stringify({ toAuthority: toAuthority.trim() }),
       });
       if (!res.ok) {
-        const text = await res.text();
-        setTransferError(text || `Request failed (${res.status})`);
+        setTransferError((await formError.fromResponse(res, "save")).message);
         setTransferBusy(false);
         return;
       }
       setTransferBusy(false);
       setTransferId(null);
       // Soft-refresh: the server component will revalidate on next navigation.
-    } catch (err) {
-      setTransferError(err instanceof Error ? err.message : "Network error");
+    } catch {
+      setTransferError(formError.fromException("save").message);
       setTransferBusy(false);
     }
   }

@@ -121,10 +121,9 @@ async function getForm24Q(fy: string, quarter: Quarter): Promise<Form24QLookup> 
     return data ? { state: "ok", data } : { state: "error" };
   }
   if (r.kind === "http_error" && r.status === 409) {
-    const body = r.body as { message?: string } | null;
     return {
       state: "reconciliation_blocked",
-      message: body?.message ?? "TDS deducted does not match deposited challans (TRACES reconciliation gate).",
+      message: "TDS deducted does not match deposited challans (TRACES reconciliation gate).",
     };
   }
   return { state: "error" };
