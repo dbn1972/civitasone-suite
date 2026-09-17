@@ -14,6 +14,7 @@ import type { EmployeeDetail } from "@civitasone/types";
 // both problems at once and removes the duplication; see EditEmployeeForm.tsx
 // (now deleted -- it had zero remaining references after this change).
 import { EditEmployeeForm } from "./edit/EditEmployeeForm";
+import { Button } from "@/app/_components/ds";
 
 interface EditEmployeeToggleProps {
   employee: EmployeeDetail;
@@ -24,31 +25,27 @@ export function EditEmployeeToggle({ employee }: EditEmployeeToggleProps) {
 
   if (!open) {
     return (
-      <button
-        type="button"
-        className="btn"
+      <Button
         onClick={() => setOpen(true)}
         aria-expanded={false}
         aria-controls="edit-employee-form"
         style={{ minHeight: 44 }}
       >
         ✏️ Edit
-      </button>
+      </Button>
     );
   }
 
   return (
     <>
-      <button
-        type="button"
-        className="btn"
+      <Button
         onClick={() => setOpen(false)}
         aria-expanded={true}
         aria-controls="edit-employee-form"
         style={{ minHeight: 44 }}
       >
         ✏️ Edit
-      </button>
+      </Button>
       <div id="edit-employee-form">
         {/* edit/EditEmployeeForm.tsx manages its own cancel/redirect via
             useRouter (it does not take an onCancel prop) -- it navigates back

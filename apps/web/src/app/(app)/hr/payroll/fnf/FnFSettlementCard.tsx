@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { StatusPill, ConfirmDialog } from "../../../../_components/ds";
+import { StatusPill, ConfirmDialog, Button } from "../../../../_components/ds";
 import { browserJson } from "@/lib/api/browserClient";
 
 export type FnFCardRow = {
@@ -67,14 +67,13 @@ function FnFCard({ row, onAction }: { row: FnFCardRow; onAction: (row: FnFCardRo
         <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
           <StatusPill status={row.status} />
           {nextAction && (
-            <button
-              type="button"
-              className="btn"
+            <Button
+              variant="primary"
               style={{ minHeight: 32, fontSize: 12, padding: "0 14px" }}
               onClick={() => onAction(row)}
             >
               {nextAction.label}
-            </button>
+            </Button>
           )}
         </div>
       </div>
@@ -86,15 +85,14 @@ function FnFCard({ row, onAction }: { row: FnFCardRow; onAction: (row: FnFCardRo
           <div style={{ fontSize: 22, fontWeight: 700 }}>{rupees(Number(row.netPayableMinor))}</div>
         </div>
         {components.length > 0 && (
-          <button
-            type="button"
-            className="btn ghost"
+          <Button
+            variant="ghost"
             style={{ fontSize: 12, minHeight: 30 }}
             onClick={() => setExpanded((e) => !e)}
             aria-expanded={expanded}
           >
             {expanded ? "Hide breakdown ▲" : "Show breakdown ▼"}
-          </button>
+          </Button>
         )}
       </div>
 

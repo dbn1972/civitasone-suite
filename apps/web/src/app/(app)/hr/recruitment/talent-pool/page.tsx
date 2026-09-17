@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { getTranslations } from "next-intl/server";
-import { PageHeader, StatGrid, StatCard, Card, DataTable, EmptyState, RefreshErrorState } from "../../../../_components/ds";
+import { PageHeader, StatGrid, StatCard, Card, DataTable, EmptyState, RefreshErrorState, Button } from "../../../../_components/ds";
 import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import { toHumanError } from "@/lib/messages";
@@ -84,7 +84,7 @@ export default async function TalentPoolPage({
             <label htmlFor="tp-exp" style={{ display: "block", fontSize: 12, fontWeight: 600, color: "var(--ink2)", marginBottom: 4 }}>{t("minExpLabel")}</label>
             <input id="tp-exp" name="minExp" type="number" min="0" defaultValue={searchParams.minExp ?? ""} placeholder={t("minExpPlaceholder")} className="input" style={{ width: 100 }} />
           </div>
-          <button type="submit" className="btn primary" style={{ minHeight: 44 }}>{t("search")}</button>
+          <Button type="submit" variant="primary" style={{ minHeight: 44 }}>{t("search")}</Button>
           <Link href="/hr/recruitment/talent-pool" className="btn ghost" style={{ minHeight: 44 }}>{t("clear")}</Link>
         </form>
       </Card>

@@ -2,7 +2,7 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { useToast } from "@/app/_components/ds/Toast";
-import { PageHeader } from "@/app/_components/ds";
+import { PageHeader, Button } from "@/app/_components/ds";
 import { useFormError } from "@/lib/useFormError";
 
 const inputStyle = { width: "100%", padding: 8, minHeight: 44, borderRadius: 8, border: "1px solid var(--line)" } as const;
@@ -213,14 +213,14 @@ export default function NewTsPage() {
             />
           </div>
 
-          <button
+          <Button
             type="submit"
-            className="btn primary"
+            variant="primary"
             disabled={busy}
             style={{ minHeight: 44 }}
           >
             {busy ? "Submitting..." : "Create"}
-          </button>
+          </Button>
         </form>
       </div>
     </>

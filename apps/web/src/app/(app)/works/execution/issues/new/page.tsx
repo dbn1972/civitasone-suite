@@ -2,7 +2,7 @@
 
 import { useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { PageHeader } from "@/app/_components/ds";
+import { PageHeader, Button } from "@/app/_components/ds";
 import { useToast } from "@/app/_components/ds/Toast";
 import { useFormError } from "@/lib/useFormError";
 
@@ -143,23 +143,13 @@ function RaiseIssueForm() {
       </div>
 
       <div>
-        <button
+        <Button
           type="submit"
+          variant="primary"
           disabled={busy}
-          style={{
-            padding: "10px 24px",
-            borderRadius: 8,
-            border: "none",
-            background: "var(--accent)",
-            color: "#fff",
-            fontWeight: 600,
-            fontSize: 14,
-            cursor: busy ? "not-allowed" : "pointer",
-            opacity: busy ? 0.7 : 1,
-          }}
         >
           {busy ? "Raising..." : "Raise Issue"}
-        </button>
+        </Button>
       </div>
     </form>
   );

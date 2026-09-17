@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { ConfirmDialog, useToast, Card } from "@/app/_components/ds";
+import { ConfirmDialog, useToast, Card, Button } from "@/app/_components/ds";
 import { useFormError } from "@/lib/useFormError";
 
 type BillItem = { id: string; billNo: string; status: string };
@@ -157,16 +157,15 @@ export function BillingActions({ bills }: BillingActionsProps) {
                       Current: {statusLabel(bill.status)}
                     </span>
                   </div>
-                  <button
-                    type="button"
+                  <Button
                     onClick={() =>
                       setBillDialog({ billId: bill.id, billNo: bill.billNo, nextStatus: next })
                     }
-                    className="btn primary"
+                    variant="primary"
                     style={{ minHeight: 32, fontSize: 12, padding: "4px 12px" }}
                   >
                     → {statusLabel(next)}
-                  </button>
+                  </Button>
                 </div>
               );
             })}
@@ -237,14 +236,14 @@ export function BillingActions({ bills }: BillingActionsProps) {
                 ))}
               </select>
             </div>
-            <button
+            <Button
               type="submit"
-              className="btn primary"
+              variant="primary"
               disabled={mbBusy}
               style={{ minHeight: 36 }}
             >
               {mbBusy ? "Saving…" : "Advance MB"}
-            </button>
+            </Button>
           </div>
           {mbError && (
             <p style={{ color: "var(--red)", fontSize: 13, margin: 0 }}>{mbError}</p>

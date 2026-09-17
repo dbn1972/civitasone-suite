@@ -2,7 +2,7 @@
 
 import { useId, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ConfirmDialog } from "../../../../_components/ds";
+import { ConfirmDialog, Button } from "../../../../_components/ds";
 import { formatIndianDate } from "@/lib/formatters";
 import { browserJson } from "@/lib/api/browserClient";
 import { useFormError } from "@/lib/useFormError";
@@ -179,13 +179,12 @@ export function DscConfigForm({ initial }: { initial: DscConfig | null }) {
         </div>
         <p style={{ fontSize: 11, color: "var(--mut)", marginTop: 6 }}>Maximum 10 KB. No private key material is ever displayed after upload.</p>
         <div style={{ marginTop: 14, display: "flex", gap: 10, flexWrap: "wrap" }}>
-          <button type="submit" className="btn primary" style={{ minHeight: 44 }} disabled={busy}>
+          <Button type="submit" variant="primary" style={{ minHeight: 44 }} disabled={busy}>
             {initial ? "Replace Certificate" : "Upload Certificate"}
-          </button>
+          </Button>
           {initial && (
-            <button
-              type="button"
-              className="btn secondary"
+            <Button
+              variant="secondary"
               style={{ minHeight: 44 }}
               disabled={busy}
               onClick={() => {
@@ -194,7 +193,7 @@ export function DscConfigForm({ initial }: { initial: DscConfig | null }) {
               }}
             >
               Remove Certificate
-            </button>
+            </Button>
           )}
         </div>
         {error && !confirmOpen && (

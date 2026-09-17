@@ -4,6 +4,7 @@ import { useId, useState } from "react";
 import { useRouter } from "next/navigation";
 import { minorToRupeesOrNull } from "@/lib/formatters";
 import { useFormError } from "@/lib/useFormError";
+import { Button } from "@/app/_components/ds";
 
 interface ProposalData {
   id: string;
@@ -48,16 +49,14 @@ export function ProposalEditToggle({ proposal, roles }: ProposalEditToggleProps)
 
   return (
     <>
-      <button
-        type="button"
-        className="btn"
+      <Button
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
         aria-controls="proposal-edit-form"
         style={{ minHeight: 44 }}
       >
         ✏️ Edit
-      </button>
+      </Button>
       {open && (
         <div id="proposal-edit-form" style={{ marginTop: 16 }}>
           <ProposalEditForm proposal={proposal} onClose={() => setOpen(false)} />
@@ -284,23 +283,22 @@ function ProposalEditForm({
         </div>
 
         <div style={{ display: "flex", gap: 10 }}>
-          <button
+          <Button
             type="submit"
-            className="btn primary"
+            variant="primary"
             disabled={busy}
             style={{ minHeight: 44 }}
           >
             {busy ? "Saving…" : "Save Changes"}
-          </button>
-          <button
-            type="button"
-            className="btn"
+          </Button>
+          <Button
+            variant="ghost"
             onClick={onClose}
             disabled={busy}
             style={{ minHeight: 44 }}
           >
             Cancel
-          </button>
+          </Button>
         </div>
       </div>
     </form>

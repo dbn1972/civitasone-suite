@@ -3,7 +3,7 @@
 import { useRouter, useSearchParams } from "next/navigation";
 import { useState, Suspense } from "react";
 import { useToast } from "@/app/_components/ds/Toast";
-import { PageHeader } from "@/app/_components/ds";
+import { PageHeader, Button } from "@/app/_components/ds";
 import { useFormError } from "@/lib/useFormError";
 
 const inputStyle = {
@@ -266,42 +266,24 @@ function RecordMeasurementForm() {
           </div>
 
           <div style={{ display: "flex", gap: 12, justifyContent: "flex-end", marginTop: 4 }}>
-            <button
-              type="button"
+            <Button
+              variant="ghost"
               onClick={() => {
                 const workId = searchParams.get("workId");
                 if (workId) router.push("/works/billing/" + workId);
                 else router.push("/works/billing");
               }}
-              style={{
-                padding: "10px 20px",
-                borderRadius: 8,
-                border: "1px solid var(--line)",
-                background: "transparent",
-                cursor: "pointer",
-                fontSize: 14,
-              }}
               disabled={busy}
             >
               Cancel
-            </button>
-            <button
+            </Button>
+            <Button
               type="submit"
-              style={{
-                padding: "10px 24px",
-                borderRadius: 8,
-                border: "none",
-                background: "var(--accent)",
-                color: "#fff",
-                fontWeight: 600,
-                cursor: busy ? "not-allowed" : "pointer",
-                opacity: busy ? 0.7 : 1,
-                fontSize: 14,
-              }}
+              variant="primary"
               disabled={busy}
             >
               {busy ? "Saving…" : "Record Measurement"}
-            </button>
+            </Button>
           </div>
         </form>
       </div>

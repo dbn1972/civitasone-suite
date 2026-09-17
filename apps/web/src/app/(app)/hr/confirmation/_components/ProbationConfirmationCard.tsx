@@ -13,7 +13,7 @@
  * a refresh silently reverted it).
  */
 import { useState } from "react";
-import { StatusPill, ConfirmDialog, useConfirmAction } from "@/app/_components/ds";
+import { StatusPill, ConfirmDialog, useConfirmAction, Button } from "@/app/_components/ds";
 import { formatIndianDate } from "@/lib/formatters";
 import { useFormError } from "@/lib/useFormError";
 
@@ -173,34 +173,26 @@ function ProbationCard({ row }: { row: ConfirmationRow }) {
 
         {isActionable && (
           <div style={{ display: "flex", gap: 8 }}>
-            <button
+            <Button
+              variant="primary"
+              size="sm"
               onClick={trigger}
-              style={{
-                padding: "6px 16px", borderRadius: 6, border: "none",
-                background: "#16a34a", color: "#fff",
-                fontSize: "0.8125rem", fontWeight: 600, cursor: "pointer",
-              }}
               aria-label={`Confirm ${row.employee}`}
             >
               Confirm
-            </button>
+            </Button>
             <span
               style={{ position: "relative" }}
               title="Probation extension isn't available in this release yet"
             >
-              <button
+              <Button
+                variant="ghost"
+                size="sm"
                 disabled
-                style={{
-                  padding: "6px 16px", borderRadius: 6,
-                  border: "1px solid var(--line, #e2e8f0)",
-                  background: "var(--bg2, #f8fafc)",
-                  fontSize: "0.8125rem", fontWeight: 500,
-                  cursor: "not-allowed", color: "var(--ink3, #94a3b8)",
-                }}
                 aria-label={`Extend probation for ${row.employee} — not available yet`}
               >
                 Extend
-              </button>
+              </Button>
             </span>
           </div>
         )}

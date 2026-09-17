@@ -1,4 +1,4 @@
-import { PageHeader, StatGrid, StatCard, Card, EmptyState } from "../../../../_components/ds";
+import { PageHeader, StatGrid, StatCard, Card, EmptyState, Button } from "../../../../_components/ds";
 import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import { formatMoney } from "@/lib/formatters";
@@ -82,7 +82,7 @@ export default async function PayrollComparisonPage({
           />
         </div>
         <div style={{ display: "flex", alignItems: "flex-end" }}>
-          <button type="submit" className="btn primary" style={{ minHeight: 44 }}>Compare</button>
+          <Button type="submit" variant="primary" style={{ minHeight: 44 }}>Compare</Button>
         </div>
       </form>
     </Card>

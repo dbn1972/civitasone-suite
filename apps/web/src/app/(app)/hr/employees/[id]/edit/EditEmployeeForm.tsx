@@ -4,6 +4,7 @@ import { useId, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { EmployeeDetail } from "@civitasone/types";
 import { useFormError } from "@/lib/useFormError";
+import { Button } from "@/app/_components/ds";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const PHONE_RE = /^\+?[\d\s\-()]{7,20}$/;
@@ -358,24 +359,22 @@ export function EditEmployeeForm({ employee }: Props) {
 
         {/* Actions */}
         <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-          <button
+          <Button
             type="submit"
-            className="btn primary"
-            disabled={busy}
-            aria-busy={busy}
+            variant="primary"
+            loading={busy}
             style={{ minHeight: 44, minWidth: 140 }}
           >
             {busy ? "Saving…" : "Save Changes"}
-          </button>
-          <button
-            type="button"
-            className="btn"
+          </Button>
+          <Button
+            variant="ghost"
             onClick={() => router.push(`/hr/employees/${employee.id}`)}
             disabled={busy}
             style={{ minHeight: 44 }}
           >
             Cancel
-          </button>
+          </Button>
         </div>
       </div>
     </form>

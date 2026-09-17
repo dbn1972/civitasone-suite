@@ -1,7 +1,7 @@
 "use client";
 import { useState, useId } from "react";
 import { useRouter } from "next/navigation";
-import { PageHeader, Card } from "../../../../_components/ds";
+import { PageHeader, Card, Button } from "../../../../_components/ds";
 import { useFormError } from "@/lib/useFormError";
 
 export default function OvertimeNewPage() {
@@ -81,10 +81,10 @@ export default function OvertimeNewPage() {
             </p>
           )}
           <div style={{ display: "flex", gap: 12, justifyContent: "flex-end" }}>
-            <button type="button" className="btn ghost" onClick={() => router.push("/hr/overtime")}>Cancel</button>
-            <button type="submit" className="btn primary" disabled={status === "submitting"}>
+            <Button variant="ghost" onClick={() => router.push("/hr/overtime")}>Cancel</Button>
+            <Button type="submit" variant="primary" disabled={status === "submitting"}>
               {status === "submitting" ? "Submitting…" : "Submit Request"}
-            </button>
+            </Button>
           </div>
         </form>
       </Card>

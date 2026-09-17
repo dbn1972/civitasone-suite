@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { ConfirmDialog, useToast, Card } from "@/app/_components/ds";
+import { ConfirmDialog, useToast, Card, Button } from "@/app/_components/ds";
 import { useFormError } from "@/lib/useFormError";
 
 interface TenderActionsProps {
@@ -159,13 +159,12 @@ export function TenderActions({ tenderId, workId, awardId }: TenderActionsProps)
       <Card title="Add Quotation">
         {!quotOpen ? (
           <div style={{ padding: "12px 20px" }}>
-            <button
-              type="button"
+            <Button
               onClick={() => setQuotOpen(true)}
-              className="btn primary"
+              variant="primary"
             >
               + Add Quotation
-            </button>
+            </Button>
           </div>
         ) : (
           <form
@@ -261,12 +260,12 @@ export function TenderActions({ tenderId, workId, awardId }: TenderActionsProps)
             {quotError && <p style={{ color: "var(--red)", fontSize: 13, margin: 0 }}>{quotError}</p>}
 
             <div style={{ display: "flex", gap: 8 }}>
-              <button type="submit" className="btn primary" disabled={quotBusy}>
+              <Button type="submit" variant="primary" disabled={quotBusy}>
                 {quotBusy ? "Saving…" : "Submit Quotation"}
-              </button>
-              <button type="button" className="btn ghost" onClick={() => { setQuotOpen(false); setQuotError(""); }}>
+              </Button>
+              <Button variant="ghost" onClick={() => { setQuotOpen(false); setQuotError(""); }}>
                 Cancel
-              </button>
+              </Button>
             </div>
           </form>
         )}
@@ -277,13 +276,12 @@ export function TenderActions({ tenderId, workId, awardId }: TenderActionsProps)
         <Card title="Create Work Award">
           {!awardOpen ? (
             <div style={{ padding: "12px 20px" }}>
-              <button
-                type="button"
+              <Button
                 onClick={() => setAwardOpen(true)}
-                className="btn secondary"
+                variant="secondary"
               >
                 + Create Award
-              </button>
+              </Button>
             </div>
           ) : (
             <form
@@ -360,12 +358,12 @@ export function TenderActions({ tenderId, workId, awardId }: TenderActionsProps)
               {awardError && <p style={{ color: "var(--red)", fontSize: 13, margin: 0 }}>{awardError}</p>}
 
               <div style={{ display: "flex", gap: 8 }}>
-                <button type="submit" className="btn primary" disabled={awardBusy}>
+                <Button type="submit" variant="primary" disabled={awardBusy}>
                   {awardBusy ? "Saving…" : "Create Award"}
-                </button>
-                <button type="button" className="btn ghost" onClick={() => { setAwardOpen(false); setAwardError(""); }}>
+                </Button>
+                <Button variant="ghost" onClick={() => { setAwardOpen(false); setAwardError(""); }}>
                   Cancel
-                </button>
+                </Button>
               </div>
             </form>
           )}
@@ -376,12 +374,12 @@ export function TenderActions({ tenderId, workId, awardId }: TenderActionsProps)
       {awardId && (
         <Card title="Award Finalization">
           <div style={{ padding: "12px 20px", display: "flex", gap: 12 }}>
-            <button type="button" onClick={() => setDaoDialog(true)} className="btn primary">
+            <Button onClick={() => setDaoDialog(true)} variant="primary">
               DAO Finalize Award
-            </button>
-            <button type="button" onClick={() => setDoDialog(true)} className="btn secondary">
+            </Button>
+            <Button onClick={() => setDoDialog(true)} variant="secondary">
               DO Finalize Award
-            </button>
+            </Button>
           </div>
         </Card>
       )}

@@ -1,7 +1,7 @@
 "use client";
 
 import { useId, useRef, useState } from "react";
-import { ConfirmDialog } from "../../../../_components/ds";
+import { ConfirmDialog, Button } from "../../../../_components/ds";
 import { browserJson, browserFetch } from "@/lib/api/browserClient";
 import { useFormError } from "@/lib/useFormError";
 
@@ -243,9 +243,9 @@ export function NachMandateForm() {
           </div>
         </div>
         <div style={{ marginTop: 14 }}>
-          <button type="submit" className="btn primary" style={{ minHeight: 44 }} disabled={busy}>
+          <Button type="submit" variant="primary" style={{ minHeight: 44 }} disabled={busy}>
             Submit NACH Mandate
-          </button>
+          </Button>
         </div>
         {error && !confirmOpen && (
           <p id={errId} role="alert" className="pill bad" style={{ marginTop: 10, width: "fit-content" }}>
@@ -293,9 +293,9 @@ export function NachMandateForm() {
               style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
             />
           </div>
-          <button type="submit" className="btn secondary" style={{ minHeight: 44 }} disabled={statusBusy}>
+          <Button type="submit" variant="secondary" style={{ minHeight: 44 }} disabled={statusBusy}>
             Check Status
-          </button>
+          </Button>
         </div>
         {statusError && (
           <p id={statusErrId} role="alert" className="pill bad" style={{ marginTop: 10, width: "fit-content" }}>

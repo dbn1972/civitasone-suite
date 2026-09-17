@@ -1,6 +1,7 @@
 "use client";
 import { useRouter } from "next/navigation";
 import { useTransition, type FormEvent } from "react";
+import { Button } from "@/app/_components/ds";
 
 interface ReportFiltersProps {
   fromDate?: string;
@@ -77,17 +78,16 @@ export function ReportFilters({ fromDate, toDate, divisionId }: ReportFiltersPro
           style={{ width: 140 }}
         />
       </label>
-      <button type="submit" className="btn" disabled={pending}>
+      <Button type="submit" disabled={pending}>
         {pending ? "Applying…" : "Apply"}
-      </button>
-      <button
-        type="button"
-        className="btn ghost"
+      </Button>
+      <Button
+        variant="ghost"
         disabled={pending}
         onClick={handleClear}
       >
         Clear
-      </button>
+      </Button>
     </form>
   );
 }
