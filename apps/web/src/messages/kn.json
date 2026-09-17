@@ -116,7 +116,8 @@
     "clearAll": "ಎಲ್ಲಾ ತೆರವುಗೊಳಿಸಿ",
     "noOptions": "ಯಾವುದೇ ಆಯ್ಕೆಗಳಿಲ್ಲ",
     "optional": "ಐಚ್ಛಿಕ",
-    "required": "ಕಡ್ಡಾಯ"
+    "required": "ಕಡ್ಡಾಯ",
+    "skipToContent": "ವಿಷಯಕ್ಕೆ ಹೋಗಿ"
   },
   "msg": {
     "noRecords": "ದಾಖಲೆಗಳು ಕಂಡುಬಂದಿಲ್ಲ",
