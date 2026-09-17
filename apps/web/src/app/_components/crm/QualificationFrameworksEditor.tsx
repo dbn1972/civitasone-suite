@@ -8,7 +8,7 @@
  */
 import { useEffect, useId, useState } from "react";
 import { DataSourceBadge } from "../DataSourceBadge";
-import { ConfirmDialog, EmptyState } from "../ds";
+import { ConfirmDialog, EmptyState, Button } from "../ds";
 import {
   getFrameworks,
   createFramework,
@@ -147,9 +147,9 @@ export function QualificationFrameworksEditor() {
         {message ? <p role="status" aria-live="polite" style={{ fontSize: 13, color: "#047857", padding: "0 12px" }}>{message}</p> : null}
         {error ? <p role="alert" aria-live="assertive" style={{ fontSize: 13, color: "#b42318", padding: "0 12px" }}>{error}</p> : null}
         <div className="pad">
-          <button type="button" className="btn ghost" onClick={() => setFrameworks((prev) => [...prev, blankFramework()])}>
+          <Button type="button" variant="ghost" onClick={() => setFrameworks((prev) => [...prev, blankFramework()])}>
             + Add framework
-          </button>
+          </Button>
         </div>
       </div>
 
@@ -183,7 +183,7 @@ export function QualificationFrameworksEditor() {
               <div>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                   <h4 style={{ margin: "8px 0" }}>Questions</h4>
-                  <button type="button" className="btn ghost sm" onClick={() => addQuestion(fi)}>+ Add question</button>
+                  <Button type="button" variant="ghost" size="sm" onClick={() => addQuestion(fi)}>+ Add question</Button>
                 </div>
                 {fw.questions.length === 0 ? (
                   <p style={{ fontSize: 13, color: "var(--muted)" }}>No questions yet.</p>
@@ -215,7 +215,7 @@ export function QualificationFrameworksEditor() {
                             />
                           </td>
                           <td>
-                            <button type="button" className="btn ghost sm" onClick={() => removeQuestion(fi, qi)} aria-label={`Remove question ${qi + 1}`}>Remove</button>
+                            <Button type="button" variant="ghost" size="sm" onClick={() => removeQuestion(fi, qi)} aria-label={`Remove question ${qi + 1}`}>Remove</Button>
                           </td>
                         </tr>
                       ))}
@@ -225,12 +225,12 @@ export function QualificationFrameworksEditor() {
               </div>
 
               <div style={{ display: "flex", gap: 8 }}>
-                <button type="button" className="btn primary" disabled={busyIdx === fi} onClick={() => void save(fi)}>
+                <Button type="button" disabled={busyIdx === fi} onClick={() => void save(fi)}>
                   {busyIdx === fi ? "Saving…" : "Save framework"}
-                </button>
-                <button type="button" className="btn danger" disabled={busyIdx === fi} onClick={() => setConfirmIdx(fi)}>
+                </Button>
+                <Button type="button" variant="danger" disabled={busyIdx === fi} onClick={() => setConfirmIdx(fi)}>
                   Delete
-                </button>
+                </Button>
               </div>
             </div>
           </div>

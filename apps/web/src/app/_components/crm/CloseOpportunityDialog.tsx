@@ -14,6 +14,7 @@
  * REASON_REQUIRED.
  */
 import { useEffect, useId, useState } from "react";
+import { Button } from "../ds";
 import {
   closeOpportunity,
   CLOSE_OUTCOMES,
@@ -179,18 +180,17 @@ export function CloseOpportunityDialog({
         </div>
 
         <div className="cd-actions">
-          <button type="button" className="btn ghost" onClick={onClose} disabled={busy}>
+          <Button type="button" variant="ghost" onClick={onClose} disabled={busy}>
             Cancel
-          </button>
-          <button
+          </Button>
+          <Button
             type="button"
-            className="btn primary"
             onClick={() => void submit()}
             disabled={busy}
             aria-busy={busy}
           >
             {busy ? "Closing…" : "Close opportunity"}
-          </button>
+          </Button>
         </div>
       </div>
     </div>

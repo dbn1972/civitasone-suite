@@ -9,7 +9,7 @@
  */
 import { useEffect, useId, useState } from "react";
 import { DataSourceBadge } from "../DataSourceBadge";
-import { ConfirmDialog, EmptyState } from "../ds";
+import { ConfirmDialog, EmptyState, Button } from "../ds";
 import { formatIndianDate } from "@/lib/formatters";
 import {
   getContactRoles,
@@ -117,9 +117,9 @@ export function ContactRolesEditor({ contactId }: { contactId: string }) {
             />
           </div>
           <div>
-            <button type="submit" className="btn primary" disabled={busy} style={{ minHeight: 44 }}>
+            <Button type="submit" disabled={busy} style={{ minHeight: 44 }}>
               {busy ? "Saving…" : "Add role"}
-            </button>
+            </Button>
           </div>
           {message ? <p role="status" aria-live="polite" style={{ fontSize: 13, color: "#047857", margin: 0 }}>{message}</p> : null}
           {error ? <p role="alert" aria-live="assertive" style={{ fontSize: 13, color: "#b42318", margin: 0 }}>{error}</p> : null}
@@ -144,9 +144,9 @@ export function ContactRolesEditor({ contactId }: { contactId: string }) {
                     <td>{r.dealId ? <a href={`/crm/deals/${r.dealId}`}>{r.dealId.slice(0, 8)}…</a> : "—"}</td>
                     <td style={{ fontSize: 13 }}>{r.createdAt ? formatIndianDate(r.createdAt) : "—"}</td>
                     <td style={{ textAlign: "right" }}>
-                      <button type="button" className="btn danger" aria-label={`Remove ${CONTACT_ROLE_LABELS[r.role as ContactRoleType] ?? r.role} role${r.dealId ? ` for deal ${r.dealId.slice(0, 8)}` : ""}`} disabled={busy} onClick={() => r.id && setConfirmId(r.id)} style={{ minHeight: 36 }}>
+                      <Button type="button" variant="danger" aria-label={`Remove ${CONTACT_ROLE_LABELS[r.role as ContactRoleType] ?? r.role} role${r.dealId ? ` for deal ${r.dealId.slice(0, 8)}` : ""}`} disabled={busy} onClick={() => r.id && setConfirmId(r.id)} style={{ minHeight: 36 }}>
                         Remove
-                      </button>
+                      </Button>
                     </td>
                   </tr>
                 ))}

@@ -10,7 +10,7 @@
  */
 import { useEffect, useId, useState } from "react";
 import { DataSourceBadge } from "../DataSourceBadge";
-import { ConfirmDialog, EmptyState } from "../ds";
+import { ConfirmDialog, EmptyState, Button } from "../ds";
 import { rupeesToMinorString, percentToBps } from "@/lib/money";
 import { formatMoney, formatIndianDate } from "@/lib/formatters";
 import { QuotationApprovalPanel } from "./QuotationApprovalPanel";
@@ -330,9 +330,9 @@ export function QuotationBuilder() {
                   <td className="num">{formatMoney(quotationTotalMinor(q.lines))}</td>
                   <td>{q.status}</td>
                   <td>
-                    <button type="button" className="btn ghost sm" onClick={() => openQuote(q)}>
+                    <Button type="button" variant="ghost" size="sm" onClick={() => openQuote(q)}>
                       Open
-                    </button>
+                    </Button>
                   </td>
                 </tr>
               ))}
@@ -340,9 +340,9 @@ export function QuotationBuilder() {
           </table>
         )}
         <div style={{ padding: 12 }}>
-          <button type="button" className="btn ghost" onClick={startNew}>
+          <Button type="button" variant="ghost" onClick={startNew}>
             + New quotation
-          </button>
+          </Button>
         </div>
       </div>
 
@@ -377,9 +377,9 @@ export function QuotationBuilder() {
               Seed prices for segment
               <input aria-label="Resolve segment for pricing" value={rSegment} onChange={(e) => setRSegment(e.target.value)} style={inputStyle} placeholder="government" />
             </label>
-            <button type="button" className="btn ghost" onClick={() => void runResolve()}>
+            <Button type="button" variant="ghost" onClick={() => void runResolve()}>
               Resolve price book
-            </button>
+            </Button>
             {resolvedBook ? <span style={{ fontSize: 12, color: "var(--muted)" }}>Applicable book: {resolvedBook.name}</span> : null}
           </div>
 
@@ -439,9 +439,9 @@ export function QuotationBuilder() {
                       <td className="num">{tax !== null ? formatMoney(tax) : "—"}</td>
                       <td className="num">{total !== null ? formatMoney(total) : "—"}</td>
                       <td>
-                        <button type="button" className="btn ghost sm" onClick={() => setLines((prev) => prev.filter((_, i) => i !== idx))} aria-label={`Remove line ${n}`}>
+                        <Button type="button" variant="ghost" size="sm" onClick={() => setLines((prev) => prev.filter((_, i) => i !== idx))} aria-label={`Remove line ${n}`}>
                           ✕
-                        </button>
+                        </Button>
                       </td>
                     </tr>
                   );
@@ -471,32 +471,32 @@ export function QuotationBuilder() {
           </div>
 
           <div style={{ display: "flex", gap: 8, padding: 12, flexWrap: "wrap" }}>
-            <button type="button" className="btn ghost sm" onClick={() => setLines((prev) => [...prev, newLine()])}>
+            <Button type="button" variant="ghost" size="sm" onClick={() => setLines((prev) => [...prev, newLine()])}>
               + Add line
-            </button>
+            </Button>
             <span style={{ flex: 1 }} />
-            <button type="button" className="btn primary" onClick={() => void save()} disabled={busy}>
+            <Button type="button" onClick={() => void save()} disabled={busy}>
               {busy ? "Saving…" : selected?.id ? "Save quotation" : "Create quotation"}
-            </button>
+            </Button>
           </div>
 
           {selected?.id ? (
             <div style={{ display: "flex", gap: 8, padding: "0 12px 12px", flexWrap: "wrap" }}>
-              <button type="button" className="btn primary sm" onClick={() => void doSend()} disabled={busy || blocking} title={blocking ? "An approval is outstanding" : undefined}>
+              <Button type="button" size="sm" onClick={() => void doSend()} disabled={busy || blocking} title={blocking ? "An approval is outstanding" : undefined}>
                 Send / Finalize
-              </button>
-              <button type="button" className="btn ghost sm" onClick={() => void runAction(() => acceptQuotation(selected.id!), "Quotation accepted.")} disabled={busy}>
+              </Button>
+              <Button type="button" variant="ghost" size="sm" onClick={() => void runAction(() => acceptQuotation(selected.id!), "Quotation accepted.")} disabled={busy}>
                 Accept
-              </button>
-              <button type="button" className="btn ghost sm" onClick={() => setRejecting(true)} disabled={busy}>
+              </Button>
+              <Button type="button" variant="ghost" size="sm" onClick={() => setRejecting(true)} disabled={busy}>
                 Reject
-              </button>
-              <button type="button" className="btn ghost sm" onClick={() => void runAction(() => newQuotationVersion(selected.id!), "New version created.")} disabled={busy}>
+              </Button>
+              <Button type="button" variant="ghost" size="sm" onClick={() => void runAction(() => newQuotationVersion(selected.id!), "New version created.")} disabled={busy}>
                 New version
-              </button>
-              <button type="button" className="btn ghost sm" onClick={() => setConfirmConvert(true)} disabled={busy}>
+              </Button>
+              <Button type="button" variant="ghost" size="sm" onClick={() => setConfirmConvert(true)} disabled={busy}>
                 Convert to order
-              </button>
+              </Button>
             </div>
           ) : null}
 

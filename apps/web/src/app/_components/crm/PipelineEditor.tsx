@@ -9,7 +9,7 @@
  */
 import { useEffect, useId, useState } from "react";
 import { DataSourceBadge } from "../DataSourceBadge";
-import { ConfirmDialog, EmptyState } from "../ds";
+import { ConfirmDialog, EmptyState, Button } from "../ds";
 import {
   getPipelines,
   createPipeline,
@@ -198,17 +198,18 @@ export function PipelineEditor() {
                 </span>
               </span>
               <span style={{ display: "flex", gap: 6 }}>
-                <button type="button" className="btn ghost sm" onClick={() => edit(p)}>
+                <Button type="button" variant="ghost" size="sm" onClick={() => edit(p)}>
                   Edit
-                </button>
-                <button
+                </Button>
+                <Button
                   type="button"
-                  className="btn ghost sm"
+                  variant="ghost"
+                  size="sm"
                   onClick={() => setConfirmDelete(p)}
                   aria-label={`Delete pipeline ${p.name}`}
                 >
                   Delete
-                </button>
+                </Button>
               </span>
             </li>
           ))}
@@ -217,9 +218,9 @@ export function PipelineEditor() {
 
       <div style={{ padding: 12 }}>
         {!draft ? (
-          <button type="button" className="btn ghost" onClick={startNew}>
+          <Button type="button" variant="ghost" onClick={startNew}>
             + New pipeline
-          </button>
+          </Button>
         ) : (
           <fieldset style={{ border: "1px solid var(--line)", borderRadius: 10, padding: 12 }}>
             <legend style={{ fontSize: 13, fontWeight: 600 }}>{draft.id ? "Edit pipeline" : "New pipeline"}</legend>
@@ -266,15 +267,16 @@ export function PipelineEditor() {
                       />
                       Gate
                     </label>
-                    <button
+                    <Button
                       type="button"
-                      className="btn ghost sm"
+                      variant="ghost"
+                      size="sm"
                       onClick={() => removeStage(idx)}
                       disabled={draft.stages.length <= 1}
                       aria-label={`Remove stage ${idx + 1}`}
                     >
                       ✕
-                    </button>
+                    </Button>
                   </div>
 
                   <fieldset style={{ border: "none", padding: 0, margin: 0 }}>
@@ -322,16 +324,16 @@ export function PipelineEditor() {
             </div>
 
             <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
-              <button type="button" className="btn ghost sm" onClick={addStage}>
+              <Button type="button" variant="ghost" size="sm" onClick={addStage}>
                 + Add stage
-              </button>
+              </Button>
               <span style={{ flex: 1 }} />
-              <button type="button" className="btn ghost" onClick={() => setDraft(null)} disabled={busy}>
+              <Button type="button" variant="ghost" onClick={() => setDraft(null)} disabled={busy}>
                 Cancel
-              </button>
-              <button type="button" className="btn primary" onClick={() => void save()} disabled={busy}>
+              </Button>
+              <Button type="button" onClick={() => void save()} disabled={busy}>
                 {busy ? "Saving…" : draft.id ? "Save pipeline" : "Create pipeline"}
-              </button>
+              </Button>
             </div>
           </fieldset>
         )}

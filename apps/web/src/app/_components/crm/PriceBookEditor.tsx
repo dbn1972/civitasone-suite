@@ -8,7 +8,7 @@
  */
 import { useEffect, useId, useState } from "react";
 import { DataSourceBadge } from "../DataSourceBadge";
-import { ConfirmDialog, EmptyState } from "../ds";
+import { ConfirmDialog, EmptyState, Button } from "../ds";
 import { rupeesToMinorString } from "@/lib/money";
 import { formatMoney } from "@/lib/formatters";
 import {
@@ -206,12 +206,12 @@ export function PriceBookEditor() {
                   </span>
                 </span>
                 <span style={{ display: "flex", gap: 6 }}>
-                  <button type="button" className="btn ghost sm" onClick={() => edit(b)}>
+                  <Button type="button" variant="ghost" size="sm" onClick={() => edit(b)}>
                     Edit
-                  </button>
-                  <button type="button" className="btn ghost sm" onClick={() => setConfirmBook(b)} aria-label={`Delete price book ${b.name}`}>
+                  </Button>
+                  <Button type="button" variant="ghost" size="sm" onClick={() => setConfirmBook(b)} aria-label={`Delete price book ${b.name}`}>
                     Delete
-                  </button>
+                  </Button>
                 </span>
               </li>
             ))}
@@ -220,9 +220,9 @@ export function PriceBookEditor() {
 
         <div style={{ padding: 12 }}>
           {!draft ? (
-            <button type="button" className="btn ghost" onClick={startNew}>
+            <Button type="button" variant="ghost" onClick={startNew}>
               + New price book
-            </button>
+            </Button>
           ) : (
             <fieldset style={{ border: "1px solid var(--line)", borderRadius: 10, padding: 12 }}>
               <legend style={{ fontSize: 13, fontWeight: 600 }}>{draft.id ? "Edit price book" : "New price book"}</legend>
@@ -280,23 +280,23 @@ export function PriceBookEditor() {
                       style={{ ...inputStyle, textAlign: "right" }}
                       placeholder="0.00"
                     />
-                    <button type="button" className="btn ghost sm" onClick={() => setEntries((prev) => prev.filter((_, i) => i !== idx))} aria-label={`Remove entry ${idx + 1}`}>
+                    <Button type="button" variant="ghost" size="sm" onClick={() => setEntries((prev) => prev.filter((_, i) => i !== idx))} aria-label={`Remove entry ${idx + 1}`}>
                       ✕
-                    </button>
+                    </Button>
                   </div>
                 ))}
               </div>
               <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
-                <button type="button" className="btn ghost sm" onClick={() => setEntries((prev) => [...prev, newEntry()])}>
+                <Button type="button" variant="ghost" size="sm" onClick={() => setEntries((prev) => [...prev, newEntry()])}>
                   + Add price
-                </button>
+                </Button>
                 <span style={{ flex: 1 }} />
-                <button type="button" className="btn ghost" onClick={() => setDraft(null)} disabled={busy}>
+                <Button type="button" variant="ghost" onClick={() => setDraft(null)} disabled={busy}>
                   Cancel
-                </button>
-                <button type="button" className="btn primary" onClick={() => void save()} disabled={busy || !draftValid(draft)}>
+                </Button>
+                <Button type="button" onClick={() => void save()} disabled={busy || !draftValid(draft)}>
                   {busy ? "Saving…" : draft.id ? "Save book" : "Create book"}
-                </button>
+                </Button>
               </div>
             </fieldset>
           )}
@@ -326,9 +326,9 @@ export function PriceBookEditor() {
             Channel
             <input aria-label="Resolve channel" value={rChannel} onChange={(e) => setRChannel(e.target.value)} style={inputStyle} />
           </label>
-          <button type="button" className="btn primary" onClick={() => void runResolve()} disabled={resolveSource === "loading"}>
+          <Button type="button" onClick={() => void runResolve()} disabled={resolveSource === "loading"}>
             {resolveSource === "loading" ? "Resolving…" : "Resolve"}
-          </button>
+          </Button>
         </div>
         <div style={{ padding: "0 12px 12px", fontSize: 14 }} aria-live="polite">
           {resolveSource === "idle" ? (

@@ -9,7 +9,7 @@
  */
 import { useCallback, useEffect, useId, useMemo, useState } from "react";
 import { DataSourceBadge } from "../DataSourceBadge";
-import { ConfirmDialog, EmptyState, Tabs } from "../ds";
+import { ConfirmDialog, EmptyState, Tabs, Button } from "../ds";
 import { formatMoney, formatIndianDate } from "@/lib/formatters";
 import { CloseOpportunityDialog } from "./CloseOpportunityDialog";
 import {
@@ -277,9 +277,9 @@ export function OpportunityViews() {
                     {d.status === "closed" || d.outcome ? (
                       <span style={{ fontSize: 12, color: "var(--muted)" }}>Closed{d.outcome ? ` · ${d.outcome}` : ""}</span>
                     ) : (
-                      <button type="button" className="btn ghost sm" onClick={() => setCloseTarget(d)}>
+                      <Button type="button" variant="ghost" size="sm" onClick={() => setCloseTarget(d)}>
                         Close
-                      </button>
+                      </Button>
                     )}
                   </td>
                 </tr>

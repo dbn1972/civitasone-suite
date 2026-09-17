@@ -9,6 +9,7 @@
  */
 import { useMemo, useState, useId } from "react";
 import { ConfirmDialog } from "../ds/ConfirmDialog";
+import { Button } from "../ds/Button";
 import { mergeEntities, type DqEntity } from "@/lib/crm/dataQuality";
 
 export interface MergeOption {
@@ -101,8 +102,8 @@ export function MergeDialog({
               Merge submitted. It completes in the background; the list updates once processing finishes.
             </p>
             <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
-              <button type="button" className="btn ghost" onClick={reset}>Merge another</button>
-              <button type="button" className="btn primary" onClick={close}>Done</button>
+              <Button type="button" variant="ghost" onClick={reset}>Merge another</Button>
+              <Button type="button" onClick={close}>Done</Button>
             </div>
           </>
         ) : (
@@ -184,15 +185,14 @@ export function MergeDialog({
             ) : null}
 
             <div style={{ display: "flex", gap: 8, marginTop: 16 }}>
-              <button
+              <Button
                 type="button"
-                className="btn primary"
                 disabled={!primaryId || !duplicateId || sameSelection}
                 onClick={() => setConfirmOpen(true)}
               >
                 Review &amp; merge
-              </button>
-              <button type="button" className="btn ghost" onClick={close}>Cancel</button>
+              </Button>
+              <Button type="button" variant="ghost" onClick={close}>Cancel</Button>
             </div>
           </>
         )}

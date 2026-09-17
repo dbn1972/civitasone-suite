@@ -10,7 +10,7 @@
  */
 import { useId, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ConfirmDialog, Segmented } from "../ds";
+import { ConfirmDialog, Segmented, Button } from "../ds";
 import { assignLead, acceptLead, transferOwnership } from "@/lib/crm/assignment";
 
 type Pending = "assign" | "accept" | "transfer" | null;
@@ -140,9 +140,9 @@ export function LeadAssignmentControl({ leadId }: { leadId: string }) {
             </p>
           )}
           <div>
-            <button type="button" className="btn primary" onClick={beginAssign} style={{ minHeight: 44 }}>
+            <Button type="button" onClick={beginAssign} style={{ minHeight: 44 }}>
               {bySpecificOwner ? "Assign to owner" : "Run assignment rules"}
-            </button>
+            </Button>
           </div>
         </section>
 
@@ -153,9 +153,9 @@ export function LeadAssignmentControl({ leadId }: { leadId: string }) {
             Confirm you are taking on this lead so it stops counting as unaccepted.
           </p>
           <div>
-            <button type="button" className="btn" onClick={() => { setError(""); setMessage(""); setPending("accept"); }} style={{ minHeight: 44 }}>
+            <Button type="button" onClick={() => { setError(""); setMessage(""); setPending("accept"); }} style={{ minHeight: 44 }}>
               Accept lead
-            </button>
+            </Button>
           </div>
         </section>
 
@@ -175,9 +175,9 @@ export function LeadAssignmentControl({ leadId }: { leadId: string }) {
             />
           </div>
           <div>
-            <button type="button" className="btn" onClick={beginTransfer} style={{ minHeight: 44 }}>
+            <Button type="button" onClick={beginTransfer} style={{ minHeight: 44 }}>
               Transfer lead
-            </button>
+            </Button>
           </div>
         </section>
 

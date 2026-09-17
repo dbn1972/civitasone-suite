@@ -7,7 +7,7 @@
  */
 import { useEffect, useId, useState } from "react";
 import { DataSourceBadge } from "../DataSourceBadge";
-import { EmptyState } from "../ds";
+import { EmptyState, Button } from "../ds";
 import {
   getDedupRules,
   saveDedupRules,
@@ -200,9 +200,9 @@ export function DedupRulesEditor() {
                   </label>
                 </td>
                 <td>
-                  <button type="button" className="btn ghost sm" onClick={() => removeRule(idx)} aria-label={`Remove rule ${idx + 1}`}>
+                  <Button type="button" variant="ghost" size="sm" onClick={() => removeRule(idx)} aria-label={`Remove rule ${idx + 1}`}>
                     Remove
-                  </button>
+                  </Button>
                 </td>
               </tr>
             ))}
@@ -211,10 +211,10 @@ export function DedupRulesEditor() {
       )}
 
       <div style={{ display: "flex", gap: 8, padding: 12 }}>
-        <button type="button" className="btn ghost" onClick={addRule}>+ Add rule</button>
-        <button type="button" className="btn primary" onClick={() => void save()} disabled={busy}>
+        <Button type="button" variant="ghost" onClick={addRule}>+ Add rule</Button>
+        <Button type="button" onClick={() => void save()} disabled={busy}>
           {busy ? "Saving…" : "Save rules"}
-        </button>
+        </Button>
       </div>
     </div>
   );

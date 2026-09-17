@@ -9,7 +9,7 @@
  */
 import { useEffect, useId, useState } from "react";
 import { DataSourceBadge } from "../DataSourceBadge";
-import { ConfirmDialog, EmptyState } from "../ds";
+import { ConfirmDialog, EmptyState, Button } from "../ds";
 import { rupeesToMinorString, percentToBps } from "@/lib/money";
 import { formatMoney, formatBps } from "@/lib/formatters";
 import {
@@ -238,12 +238,12 @@ export function ProductCatalogueEditor() {
                     </td>
                     <td>
                       <div style={{ display: "flex", gap: 6 }}>
-                        <button type="button" className="btn primary sm" onClick={() => void save(row)} disabled={busy}>
+                        <Button type="button" size="sm" onClick={() => void save(row)} disabled={busy}>
                           {busy ? "…" : row.id ? "Save" : "Create"}
-                        </button>
-                        <button type="button" className="btn ghost sm" onClick={() => setConfirmKey(row.key)} disabled={busy} aria-label={`Delete product ${n}`}>
+                        </Button>
+                        <Button type="button" variant="ghost" size="sm" onClick={() => setConfirmKey(row.key)} disabled={busy} aria-label={`Delete product ${n}`}>
                           Delete
-                        </button>
+                        </Button>
                       </div>
                     </td>
                   </tr>
@@ -255,9 +255,9 @@ export function ProductCatalogueEditor() {
       )}
 
       <div style={{ padding: 12 }}>
-        <button type="button" className="btn ghost" onClick={addRow}>
+        <Button type="button" variant="ghost" onClick={addRow}>
           + Add product
-        </button>
+        </Button>
       </div>
 
       <ConfirmDialog

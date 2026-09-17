@@ -8,7 +8,7 @@
  */
 import { useEffect, useId, useState } from "react";
 import { DataSourceBadge } from "../DataSourceBadge";
-import { EmptyState } from "../ds";
+import { EmptyState, Button } from "../ds";
 import {
   getFrameworks,
   qualifyLead,
@@ -144,9 +144,9 @@ export function QualifyPanel({ leadId, businessLine }: { leadId: string; busines
             </div>
           ) : null}
 
-          <button type="submit" className="btn primary" disabled={busy || !selected?.id} style={{ marginTop: 16, minHeight: 44 }}>
+          <Button type="submit" disabled={busy || !selected?.id} style={{ marginTop: 16, minHeight: 44 }}>
             {busy ? "Qualifying…" : "Qualify lead"}
-          </button>
+          </Button>
         </form>
       )}
     </div>
