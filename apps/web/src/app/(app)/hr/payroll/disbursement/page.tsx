@@ -1,3 +1,4 @@
+import { getTranslations } from "next-intl/server";
 import { PageHeader, StatGrid, StatCard, Card, EmptyState, RefreshErrorState } from "../../../../_components/ds";
 import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
@@ -78,6 +79,7 @@ async function getTransfers(): Promise<LoaderResult<TransferRow[]>> {
 }
 
 export default async function DisbursementPage() {
+  const t = await getTranslations("disbursement");
   const [runsResult, sponsorResult, dscResult, transfersResult] = await Promise.all([
     getRuns(),
     getSponsorConfig(),
@@ -114,53 +116,57 @@ export default async function DisbursementPage() {
     maximumFractionDigits: 2,
   });
 
-  const credited = transfersErrored ? null : transfers.filter((t) => t.status === "credited").length;
-  const failed = transfersErrored ? null : transfers.filter((t) => t.status === "failed").length;
+  // UX-017: this page now also holds `t`, the translation function, in
+  // scope -- renamed these two filter callbacks' parameter from the more
+  // obvious `t` (for "transfer") to `tx` to avoid shadowing it, the exact
+  // tranche-7-discovered bug class (see also DisbursementTransferTable.tsx).
+  const credited = transfersErrored ? null : transfers.filter((tx) => tx.status === "credited").length;
+  const failed = transfersErrored ? null : transfers.filter((tx) => tx.status === "failed").length;
 
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
-        title="Disbursement & Settlement"
-        subtitle="Employee bank transfers, NACH mandates, bank file generation, DSC signing."
+        title={t("title")}
+        subtitle={t("subtitle")}
         back="/hr/payroll"
       />
-      {anyError && <DataSourceBadge source="error" message="Couldn't load — showing nothing" />}
+      {anyError && <DataSourceBadge source="error" message={t("loadErrorMessage")} />}
 
       <StatGrid>
-        <StatCard icon="🏦" iconBg="var(--infobg)" label="Runs Ready for Disbursement" value={runsErrored ? "—" : eligibleRuns.length} />
-        <StatCard icon="✅" iconBg="var(--goodbg)" label="Transfers Credited" value={credited ?? "—"} />
-        <StatCard icon="⚠️" iconBg={failed && failed > 0 ? "var(--badbg)" : "var(--line2)"} label="Transfers Failed" value={failed ?? "—"} />
+        <StatCard icon="🏦" iconBg="var(--infobg)" label={t("statRunsReady")} value={runsErrored ? "—" : eligibleRuns.length} />
+        <StatCard icon="✅" iconBg="var(--goodbg)" label={t("statTransfersCredited")} value={credited ?? "—"} />
+        <StatCard icon="⚠️" iconBg={failed && failed > 0 ? "var(--badbg)" : "var(--line2)"} label={t("statTransfersFailed")} value={failed ?? "—"} />
         <StatCard
           icon="🔐"
           iconBg="var(--warnbg)"
-          label="DSC Status"
-          value={dscErrored ? "—" : dscConfig ? "Active" : "Not configured"}
+          label={t("statDscStatus")}
+          value={dscErrored ? "—" : dscConfig ? t("dscActive") : t("dscNotConfigured")}
         />
       </StatGrid>
 
       {/* Employee bank transfer dashboard */}
-      <Card title="Employee Bank Transfers">
+      <Card title={t("transfersCardTitle")}>
         <DisbursementTransferTable transfers={transfers} />
       </Card>
 
       {/* Bank file generation wizard */}
-      <Card title="Generate Bank Transfer File">
+      <Card title={t("bankFileCardTitle")}>
         <BankFileWizard
           runs={eligibleRuns.map((r) => ({ id: r.id, payPeriod: r.payPeriod, netAmount: r.netAmount }))}
           dscConfig={dscConfig}
         />
       </Card>
 
-      <Card title="NACH Mandates">
+      <Card title={t("nachMandatesCardTitle")}>
         <NachMandateForm />
         <EmptyState
           icon="📋"
-          title="Mandate list not yet available"
-          message="There is no mandate-listing endpoint yet — use the form above to submit a new mandate, or check an existing one by reference."
+          title={t("mandateEmptyTitle")}
+          message={t("mandateEmptyMessage")}
         />
       </Card>
 
-      <Card title="NACH Return File">
+      <Card title={t("nachReturnCardTitle")}>
         {runsErrored ? (
           <div className="pad">
             <RefreshErrorState error={toHumanError("load", { area: "payroll runs" })} backHref="/hr/payroll" />
@@ -168,19 +174,19 @@ export default async function DisbursementPage() {
         ) : eligibleRuns.length === 0 ? (
           <EmptyState
             icon="↩️"
-            title="No runs to reconcile"
-            message="A NACH return file can be processed against an approved or disbursed run."
+            title={t("nachReturnEmptyTitle")}
+            message={t("nachReturnEmptyMessage")}
           />
         ) : (
           <NachReturnForm runs={eligibleRuns.map((r) => ({ id: r.id, payPeriod: r.payPeriod }))} />
         )}
       </Card>
 
-      <Card title="Sponsor Bank Configuration">
+      <Card title={t("sponsorConfigCardTitle")}>
         <SponsorBankConfigForm initial={sponsorConfig} />
       </Card>
 
-      <Card title="Digital Signature Certificate (DSC)">
+      <Card title={t("dscCardTitle")}>
         <DscConfigForm initial={rawDsc} />
       </Card>
     </main>

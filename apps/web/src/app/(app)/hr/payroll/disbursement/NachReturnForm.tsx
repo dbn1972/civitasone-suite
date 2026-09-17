@@ -1,6 +1,7 @@
 "use client";
 
 import { useId, useRef, useState } from "react";
+import { useTranslations } from "next-intl";
 import { Button, ConfirmDialog } from "../../../../_components/ds";
 import { browserJson } from "@/lib/api/browserClient";
 
@@ -8,6 +9,7 @@ type RunOption = { id: string; payPeriod: string };
 type ReturnSummary = { credited: number; returned: number; unmatched: number };
 
 export function NachReturnForm({ runs }: { runs: RunOption[] }) {
+  const t = useTranslations("nachReturnForm");
   const [runId, setRunId] = useState(runs[0]?.id ?? "");
   const [content, setContent] = useState("");
   const [confirmOpen, setConfirmOpen] = useState(false);
@@ -32,7 +34,7 @@ export function NachReturnForm({ runs }: { runs: RunOption[] }) {
     setRunInvalid(runMissing);
     setContentInvalid(contentMissing);
     if (runMissing || contentMissing) {
-      setError("Select a payroll run and paste the NACH return file content.");
+      setError(t("requiredFieldsError"));
       if (runMissing) {
         runSelectRef.current?.focus();
       } else {
@@ -55,7 +57,7 @@ export function NachReturnForm({ runs }: { runs: RunOption[] }) {
       setResult(res.data);
       setContent("");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Network error. Please try again.");
+      setError(err instanceof Error ? err.message : t("networkError"));
     } finally {
       setBusy(false);
     }
@@ -66,7 +68,7 @@ export function NachReturnForm({ runs }: { runs: RunOption[] }) {
       <div style={{ display: "grid", gap: 14 }}>
         <div style={{ display: "grid", gap: 6, maxWidth: 320 }}>
           <label htmlFor={runSelectId} style={{ fontSize: 13, fontWeight: 600 }}>
-            Payroll Run <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
+            {t("payrollRunLabel")} <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
           </label>
           <select
             id={runSelectId}
@@ -88,7 +90,7 @@ export function NachReturnForm({ runs }: { runs: RunOption[] }) {
         </div>
         <div style={{ display: "grid", gap: 6 }}>
           <label htmlFor={contentId} style={{ fontSize: 13, fontWeight: 600 }}>
-            Return File Content <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
+            {t("returnFileContentLabel")} <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
           </label>
           <textarea
             id={contentId}
@@ -102,14 +104,14 @@ export function NachReturnForm({ runs }: { runs: RunOption[] }) {
             aria-required="true"
             aria-invalid={contentInvalid || undefined}
             aria-describedby={contentInvalid ? errId : undefined}
-            placeholder="Paste the fixed-width bank return file content here…"
+            placeholder={t("returnFileContentPlaceholder")}
             style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", fontFamily: "monospace", fontSize: 12 }}
           />
         </div>
       </div>
       <div style={{ marginTop: 14 }}>
         <Button type="submit" style={{ minHeight: 44 }} disabled={busy || runs.length === 0}>
-          Process Return File
+          {t("processBtn")}
         </Button>
       </div>
       {error && !confirmOpen && (
@@ -119,23 +121,18 @@ export function NachReturnForm({ runs }: { runs: RunOption[] }) {
       )}
       {result && (
         <p role="status" className="pill good" style={{ marginTop: 10, width: "fit-content" }}>
-          Processed: {result.credited} credited, {result.returned} returned, {result.unmatched} unmatched.
+          {t("processedMessage", { credited: result.credited, returned: result.returned, unmatched: result.unmatched })}
         </p>
       )}
 
       <ConfirmDialog
         open={confirmOpen}
-        title="Process this NACH return file?"
+        title={t("confirmTitle")}
         danger
-        confirmLabel="Process file"
+        confirmLabel={t("confirmLabel")}
         busy={busy}
         errorMessage={error}
-        description={
-          <>
-            This queues the return file for reconciliation against the selected run. It cannot be
-            un-submitted once queued.
-          </>
-        }
+        description={t("confirmDescription")}
         onConfirm={() => void processReturn()}
         onCancel={() => !busy && setConfirmOpen(false)}
       />

@@ -2,6 +2,7 @@
 
 import { useId, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { Button, ConfirmDialog } from "../../../../_components/ds";
 import { browserJson } from "@/lib/api/browserClient";
 
@@ -15,6 +16,7 @@ type SponsorConfig = {
 } & Record<string, unknown>;
 
 export function SponsorBankConfigForm({ initial }: { initial: SponsorConfig | null }) {
+  const t = useTranslations("sponsorBankConfigForm");
   const router = useRouter();
   const [sponsorCode, setSponsorCode] = useState(initial?.sponsorCode ?? "");
   const [sponsorIfsc, setSponsorIfsc] = useState(initial?.sponsorIfsc ?? "");
@@ -52,7 +54,7 @@ export function SponsorBankConfigForm({ initial }: { initial: SponsorConfig | nu
     setIfscInvalid(ifscMissing);
     setAcctInvalid(acctMissing);
     if (codeMissing || ifscMissing || acctMissing) {
-      setError("Sponsor code, IFSC and sponsor account are required.");
+      setError(t("requiredFieldsError"));
       if (codeMissing) {
         codeRef.current?.focus();
       } else if (ifscMissing) {
@@ -81,10 +83,10 @@ export function SponsorBankConfigForm({ initial }: { initial: SponsorConfig | nu
         }),
       });
       setConfirmOpen(false);
-      setMessage("Sponsor bank configuration saved.");
+      setMessage(t("savedMessage"));
       router.refresh();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Network error. Please try again.");
+      setError(err instanceof Error ? err.message : t("networkError"));
     } finally {
       setBusy(false);
     }
@@ -94,14 +96,17 @@ export function SponsorBankConfigForm({ initial }: { initial: SponsorConfig | nu
     <form onSubmit={openConfirm}>
       {initial && (
         <p style={{ fontSize: 13, color: "var(--mut)", marginBottom: 10 }}>
-          Currently configured: sponsor account ending in{" "}
-          <strong>{initial.sponsorAccount.slice(-4)}</strong>, settlement offset {initial.settlementOffsetDays} day(s).
+          {t.rich("currentConfigNote", {
+            last4: initial.sponsorAccount.slice(-4),
+            days: initial.settlementOffsetDays,
+            strong: (chunks) => <strong>{chunks}</strong>,
+          })}
         </p>
       )}
       <div style={{ display: "grid", gap: 14, gridTemplateColumns: "repeat(auto-fit,minmax(200px,1fr))" }}>
         <div style={{ display: "grid", gap: 6 }}>
           <label htmlFor={codeId} style={{ fontSize: 13, fontWeight: 600 }}>
-            Sponsor Code <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
+            {t("sponsorCodeLabel")} <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
           </label>
           <input
             id={codeId}
@@ -120,7 +125,7 @@ export function SponsorBankConfigForm({ initial }: { initial: SponsorConfig | nu
         </div>
         <div style={{ display: "grid", gap: 6 }}>
           <label htmlFor={ifscId} style={{ fontSize: 13, fontWeight: 600 }}>
-            Sponsor IFSC <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
+            {t("sponsorIfscLabel")} <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
           </label>
           <input
             id={ifscId}
@@ -139,7 +144,7 @@ export function SponsorBankConfigForm({ initial }: { initial: SponsorConfig | nu
         </div>
         <div style={{ display: "grid", gap: 6 }}>
           <label htmlFor={acctId} style={{ fontSize: 13, fontWeight: 600 }}>
-            Sponsor Account {!initial && <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>}
+            {t("sponsorAccountLabel")} {!initial && <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>}
           </label>
           <input
             id={acctId}
@@ -152,12 +157,12 @@ export function SponsorBankConfigForm({ initial }: { initial: SponsorConfig | nu
             aria-required={!initial}
             aria-invalid={acctInvalid || undefined}
             aria-describedby={acctInvalid ? errId : undefined}
-            placeholder={initial ? "Leave blank to keep existing account" : undefined}
+            placeholder={initial ? t("sponsorAccountPlaceholder") : undefined}
             style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
           />
         </div>
         <div style={{ display: "grid", gap: 6 }}>
-          <label htmlFor={offsetId} style={{ fontSize: 13, fontWeight: 600 }}>Settlement Offset (days)</label>
+          <label htmlFor={offsetId} style={{ fontSize: 13, fontWeight: 600 }}>{t("settlementOffsetLabel")}</label>
           <input
             id={offsetId}
             type="number"
@@ -169,16 +174,16 @@ export function SponsorBankConfigForm({ initial }: { initial: SponsorConfig | nu
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 8, paddingTop: 22 }}>
           <input id={nachId} type="checkbox" checked={nachEnabled} onChange={(e) => setNachEnabled(e.target.checked)} style={{ width: 18, height: 18 }} />
-          <label htmlFor={nachId} style={{ fontSize: 13, fontWeight: 600 }}>NACH Enabled</label>
+          <label htmlFor={nachId} style={{ fontSize: 13, fontWeight: 600 }}>{t("nachEnabledLabel")}</label>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 8, paddingTop: 22 }}>
           <input id={apbsId} type="checkbox" checked={apbsEnabled} onChange={(e) => setApbsEnabled(e.target.checked)} style={{ width: 18, height: 18 }} />
-          <label htmlFor={apbsId} style={{ fontSize: 13, fontWeight: 600 }}>APBS Enabled</label>
+          <label htmlFor={apbsId} style={{ fontSize: 13, fontWeight: 600 }}>{t("apbsEnabledLabel")}</label>
         </div>
       </div>
       <div style={{ marginTop: 14 }}>
         <Button type="submit" style={{ minHeight: 44 }} disabled={busy}>
-          {initial ? "Update Configuration" : "Save Configuration"}
+          {initial ? t("updateBtn") : t("saveBtn")}
         </Button>
       </div>
       {error && !confirmOpen && (
@@ -194,17 +199,12 @@ export function SponsorBankConfigForm({ initial }: { initial: SponsorConfig | nu
 
       <ConfirmDialog
         open={confirmOpen}
-        title="Save sponsor bank configuration?"
+        title={t("confirmTitle")}
         danger
-        confirmLabel="Save configuration"
+        confirmLabel={t("confirmLabel")}
         busy={busy}
         errorMessage={error}
-        description={
-          <>
-            This updates the sponsor bank account used to generate all future disbursement files.
-            Existing NACH/APBS files already generated are unaffected.
-          </>
-        }
+        description={t("confirmDescription")}
         onConfirm={() => void save()}
         onCancel={() => !busy && setConfirmOpen(false)}
       />

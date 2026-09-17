@@ -1,5 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { NextIntlClientProvider } from "next-intl";
+import enMessages from "@/messages/en.json";
 
 const refreshMock = vi.fn();
 vi.mock("next/navigation", () => ({
@@ -16,6 +18,17 @@ const existing = {
   sha256Fingerprint: "AA:BB:CC",
 };
 
+// UX-017: DscConfigForm now reads its copy through next-intl
+// (useTranslations("dscConfigForm")), so every render needs a real provider
+// in the tree -- same pattern as hr/employees/[id]/edit/EditEmployeeForm.test.tsx.
+function renderForm(initial: typeof existing | null) {
+  render(
+    <NextIntlClientProvider locale="en" messages={enMessages}>
+      <DscConfigForm initial={initial} />
+    </NextIntlClientProvider>,
+  );
+}
+
 function selectP12File() {
   const fileInput = screen.getByLabelText(/P12 Keystore File/) as HTMLInputElement;
   const file = new File(["dummy-p12-bytes"], "cert.p12", { type: "application/x-pkcs12" });
@@ -29,7 +42,7 @@ describe("DscConfigForm", () => {
   });
 
   it("requires a file and passphrase before opening the confirm dialog", () => {
-    render(<DscConfigForm initial={null} />);
+    renderForm(null);
     fireEvent.click(screen.getByRole("button", { name: "Upload Certificate" }));
     expect(screen.getByText("Select a P12 file and enter its passphrase.")).toBeInTheDocument();
   });
@@ -39,7 +52,7 @@ describe("DscConfigForm", () => {
       new Response(JSON.stringify({ data: { ...existing, subjectCn: "CN=New Tenant" } }), { status: 200 }),
     );
 
-    render(<DscConfigForm initial={null} />);
+    renderForm(null);
     selectP12File();
     fireEvent.change(screen.getByLabelText(/Passphrase/), { target: { value: "secret123" } });
     fireEvent.click(screen.getByRole("button", { name: "Upload Certificate" }));
@@ -56,7 +69,7 @@ describe("DscConfigForm", () => {
   it("surfaces a server error on the upload confirm dialog (error path)", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(null, { status: 400 }));
 
-    render(<DscConfigForm initial={null} />);
+    renderForm(null);
     selectP12File();
     fireEvent.change(screen.getByLabelText(/Passphrase/), { target: { value: "secret123" } });
     fireEvent.click(screen.getByRole("button", { name: "Upload Certificate" }));
@@ -73,7 +86,7 @@ describe("DscConfigForm", () => {
   it("removes the certificate on confirm (happy path)", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({ status: "ok" }), { status: 200 }));
 
-    render(<DscConfigForm initial={existing} />);
+    renderForm(existing);
     fireEvent.click(screen.getByRole("button", { name: "Remove Certificate" }));
 
     await waitFor(() => expect(screen.getByText("Remove the DSC configuration?")).toBeInTheDocument());
@@ -88,7 +101,7 @@ describe("DscConfigForm", () => {
   it("surfaces a server error on the delete confirm dialog, separate from the upload error (error path)", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(null, { status: 500 }));
 
-    render(<DscConfigForm initial={existing} />);
+    renderForm(existing);
     fireEvent.click(screen.getByRole("button", { name: "Remove Certificate" }));
 
     await waitFor(() => expect(screen.getByText("Remove the DSC configuration?")).toBeInTheDocument());

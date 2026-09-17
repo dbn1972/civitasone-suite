@@ -1,6 +1,7 @@
 "use client";
 
 import { useId, useRef, useState } from "react";
+import { useTranslations } from "next-intl";
 import { Button, ConfirmDialog } from "../../../../_components/ds";
 import { browserFetch } from "@/lib/api/browserClient";
 import { useFormError } from "@/lib/useFormError";
@@ -9,7 +10,16 @@ type RunOption = { id: string; payPeriod: string; netAmount: number };
 
 type Format = "csv" | "nach" | "apbs";
 
+// UX-017: this component is not currently imported anywhere (page.tsx uses
+// BankFileWizard instead, a later multi-step version of the same flow) --
+// confirmed via a fleet-wide grep for "BankFileForm", the only other match
+// is this file's own test. Left in place (deleting dead code is a separate,
+// out-of-scope decision) but still translated: it is still reachable by its
+// own test and by any future re-wiring, and leaving hardcoded English text
+// in it would not serve this gap's "0 findings" goal for the disbursement/
+// slice. Disclosed as a scope surprise in this tranche's PR description.
 export function BankFileForm({ runs }: { runs: RunOption[] }) {
+  const t = useTranslations("bankFileForm");
   const [runId, setRunId] = useState(runs[0]?.id ?? "");
   const [format, setFormat] = useState<Format>("csv");
   const [confirmOpen, setConfirmOpen] = useState(false);
@@ -32,7 +42,7 @@ export function BankFileForm({ runs }: { runs: RunOption[] }) {
     setMessage(null);
     setRunInvalid(false);
     if (!runId) {
-      setError("Select a payroll run first.");
+      setError(t("selectRunError"));
       setRunInvalid(true);
       runSelectRef.current?.focus();
       return;
@@ -63,7 +73,7 @@ export function BankFileForm({ runs }: { runs: RunOption[] }) {
       a.click();
       URL.revokeObjectURL(url);
       setConfirmOpen(false);
-      setMessage(`Bank file "${filename}" generated and downloaded.`);
+      setMessage(t("generatedMessage", { filename }));
     } catch {
       setError(formError.fromException("save").message);
     } finally {
@@ -76,7 +86,7 @@ export function BankFileForm({ runs }: { runs: RunOption[] }) {
       <div style={{ display: "grid", gap: 14, gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))" }}>
         <div style={{ display: "grid", gap: 6 }}>
           <label htmlFor={runSelectId} style={{ fontSize: 13, fontWeight: 600 }}>
-            Payroll Run <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
+            {t("payrollRunLabel")} <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
           </label>
           <select
             id={runSelectId}
@@ -100,7 +110,7 @@ export function BankFileForm({ runs }: { runs: RunOption[] }) {
         </div>
         <div style={{ display: "grid", gap: 6 }}>
           <label htmlFor={formatSelectId} style={{ fontSize: 13, fontWeight: 600 }}>
-            File Format <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
+            {t("fileFormatLabel")} <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
           </label>
           <select
             id={formatSelectId}
@@ -109,15 +119,15 @@ export function BankFileForm({ runs }: { runs: RunOption[] }) {
             aria-required="true"
             style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
           >
-            <option value="csv">CSV (NEFT/RTGS)</option>
-            <option value="nach">NACH</option>
-            <option value="apbs">APBS</option>
+            <option value="csv">{t("formatCsvOption")}</option>
+            <option value="nach">{t("formatNachOption")}</option>
+            <option value="apbs">{t("formatApbsOption")}</option>
           </select>
         </div>
       </div>
       <div style={{ marginTop: 14 }}>
         <Button type="submit" style={{ minHeight: 44 }} disabled={busy || runs.length === 0}>
-          Generate &amp; Download
+          {t("generateDownloadBtn")}
         </Button>
       </div>
       {error && !confirmOpen && (
@@ -133,19 +143,16 @@ export function BankFileForm({ runs }: { runs: RunOption[] }) {
 
       <ConfirmDialog
         open={confirmOpen}
-        title="Generate this bank transfer file?"
+        title={t("confirmTitle")}
         danger
-        confirmLabel="Generate file"
+        confirmLabel={t("confirmLabel")}
         busy={busy}
         errorMessage={error}
-        description={
-          <>
-            This generates a {format.toUpperCase()} bank transfer file for{" "}
-            <strong>{selectedRun?.payPeriod ?? "the selected run"}</strong>. The file contains beneficiary
-            account numbers and IFSC codes and is downloaded to this device — handle it as sensitive
-            financial data.
-          </>
-        }
+        description={t.rich("confirmDescription", {
+          format: format.toUpperCase(),
+          period: selectedRun?.payPeriod ?? t("confirmDescriptionFallbackRun"),
+          strong: (chunks) => <strong>{chunks}</strong>,
+        })}
         onConfirm={() => void generate()}
         onCancel={() => !busy && setConfirmOpen(false)}
       />
