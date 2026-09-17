@@ -4,6 +4,7 @@ import { useId, useState } from "react";
 import type { CSSProperties } from "react";
 import { useRouter } from "next/navigation";
 import { useFormError } from "@/lib/useFormError";
+import { Button } from "../../../../../_components/ds";
 
 const PAN_REGEX = /^[A-Z]{5}[0-9]{4}[A-Z]$/;
 
@@ -291,9 +292,9 @@ export function CreatePensionerForm() {
         </fieldset>
 
         <div>
-          <button type="submit" className="btn primary" style={{ minHeight: 44 }} disabled={status === "submitting"}>
+          <Button type="submit" style={{ minHeight: 44 }} disabled={status === "submitting"}>
             {status === "submitting" ? "Creating…" : "Create Pensioner"}
-          </button>
+          </Button>
         </div>
 
         {message && (

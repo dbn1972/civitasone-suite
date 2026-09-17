@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { StatusPill, ConfirmDialog } from "../../../../_components/ds";
+import { Button, StatusPill, ConfirmDialog } from "../../../../_components/ds";
 import { browserJson } from "@/lib/api/browserClient";
 
 export type TransferRow = {
@@ -158,15 +158,15 @@ export function DisbursementTransferTable({ transfers }: { transfers: TransferRo
                 </td>
                 <td style={{ padding: "10px 12px" }}>
                   {t.status === "failed" ? (
-                    <button
+                    <Button
                       type="button"
-                      className="btn"
+                      variant="primary"
                       style={{ minHeight: 32, fontSize: 12 }}
                       aria-label={"Retry transfer for " + t.employeeName}
                       onClick={() => { setDialogError(undefined); setPendingRetry(t); }}
                     >
                       Retry
-                    </button>
+                    </Button>
                   ) : (
                     <span style={{ color: "var(--ink2)" }}>—</span>
                   )}

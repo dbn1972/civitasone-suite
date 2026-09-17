@@ -2,7 +2,7 @@
 
 import { useId, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Card, ConfirmDialog } from "../../../../_components/ds";
+import { Button, Card, ConfirmDialog } from "../../../../_components/ds";
 import { browserJson } from "@/lib/api/browserClient";
 
 const SEPARATION_TYPES = ["retirement", "superannuation", "resignation", "retrenchment", "vrs", "death"] as const;
@@ -319,9 +319,9 @@ export function ComputeFnfForm() {
           </fieldset>
 
           <div>
-            <button type="submit" className="btn primary" style={{ minHeight: 44 }} disabled={busy}>
+            <Button type="submit" style={{ minHeight: 44 }} disabled={busy}>
               Compute Settlement
-            </button>
+            </Button>
           </div>
 
           {error && !confirmOpen && (

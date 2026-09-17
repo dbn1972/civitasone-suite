@@ -1,4 +1,4 @@
-import { PageHeader, StatGrid, StatCard, Card, DataTable } from "../../../../_components/ds";
+import { Button, PageHeader, StatGrid, StatCard, Card, DataTable } from "../../../../_components/ds";
 import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import { formatMoney } from "@/lib/formatters";
@@ -94,7 +94,7 @@ export default async function PayrollRegisterPage({
             />
           </div>
           <div style={{ display: "flex", alignItems: "flex-end" }}>
-            <button type="submit" className="btn primary" style={{ minHeight: 44 }}>Apply Filter</button>
+            <Button type="submit" style={{ minHeight: 44 }}>Apply Filter</Button>
           </div>
         </form>
       </Card>

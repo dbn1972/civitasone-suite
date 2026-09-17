@@ -5,6 +5,7 @@ import type { CSSProperties } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { useFormError } from "@/lib/useFormError";
+import { Button } from "../../../../_components/ds";
 
 type EmployeeOption = { id: string; name: string; employeeNo: string };
 type LeaveTypeOption = { id: string; code: string; name: string };
@@ -207,12 +208,12 @@ export function AllocateLeaveForm() {
       </div>
 
       <div style={{ display: "flex", gap: 10, marginTop: 4 }}>
-        <button type="submit" className="btn primary" disabled={status === "submitting" || employees.length === 0} style={{ minHeight: 44, minWidth: 140 }}>
+        <Button type="submit" disabled={status === "submitting" || employees.length === 0} style={{ minHeight: 44, minWidth: 140 }}>
           {status === "submitting" ? t("submitAllocating") : t("submitLabel")}
-        </button>
-        <button type="button" className="btn ghost" style={{ minHeight: 44 }} onClick={() => router.push("/hr/leave")}>
+        </Button>
+        <Button type="button" variant="ghost" style={{ minHeight: 44 }} onClick={() => router.push("/hr/leave")}>
           {t("cancel")}
-        </button>
+        </Button>
       </div>
     </form>
   );

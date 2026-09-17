@@ -1,7 +1,7 @@
 "use client";
 
 import { useId, useRef, useState } from "react";
-import { Card, ConfirmDialog } from "../../../../../_components/ds";
+import { Button, Card, ConfirmDialog } from "../../../../../_components/ds";
 import { browserFetch, errorMessageFromResponse } from "@/lib/api/browserClient";
 
 const MONTH_RE = /^\d{4}-\d{2}$/;
@@ -78,9 +78,9 @@ export function EcrGeneratorForm() {
             />
           </div>
           <div>
-            <button type="submit" className="btn primary" style={{ minHeight: 44 }} disabled={busy}>
+            <Button type="submit" style={{ minHeight: 44 }} disabled={busy}>
               Generate ECR
-            </button>
+            </Button>
           </div>
           {message && (
             <p

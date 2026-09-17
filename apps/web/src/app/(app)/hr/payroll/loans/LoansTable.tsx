@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { DataTable, ConfirmDialog } from "../../../../_components/ds";
+import { Button, DataTable, ConfirmDialog } from "../../../../_components/ds";
 import { browserJson } from "@/lib/api/browserClient";
 
 export type LoanRow = {
@@ -58,9 +58,10 @@ export function LoansTable({ rows }: { rows: LoanRow[] }) {
       label: "Action",
       render: (row) =>
         row.status === "applied" ? (
-          <button
+          <Button
             type="button"
-            className="btn secondary sm"
+            variant="secondary"
+            size="sm"
             aria-label={`Disburse loan ${row.loanNo}`}
             onClick={() => {
               setError(undefined);
@@ -68,7 +69,7 @@ export function LoansTable({ rows }: { rows: LoanRow[] }) {
             }}
           >
             Disburse
-          </button>
+          </Button>
         ) : (
           <span style={{ color: "var(--mut)", fontSize: 12 }}>—</span>
         ),

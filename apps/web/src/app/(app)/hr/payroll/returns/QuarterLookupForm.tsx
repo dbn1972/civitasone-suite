@@ -1,3 +1,5 @@
+import { Button } from "../../../../_components/ds";
+
 /**
  * Server-safe (no JS required) FY + quarter lookup — a plain GET form that
  * re-navigates this page with ?fy=YYYY-YY&quarter=Qn, letting the server
@@ -43,9 +45,9 @@ export function QuarterLookupForm({
           ))}
         </select>
       </div>
-      <button type="submit" className="btn ghost" style={{ minHeight: 44 }}>
+      <Button type="submit" variant="ghost" style={{ minHeight: 44 }}>
         View returns
-      </button>
+      </Button>
       <span id="ret-fy-hint" style={{ fontSize: 12, color: "var(--mut)" }}>
         Format YYYY-YY, e.g. 2025-26
       </span>

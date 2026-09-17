@@ -2,7 +2,7 @@
 
 import { useId, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Card } from "../../../../../_components/ds";
+import { Button, Card } from "../../../../../_components/ds";
 
 export function EmployeeFyLookup({ employeeId, fy }: { employeeId: string; fy: string }) {
   const router = useRouter();
@@ -63,7 +63,7 @@ export function EmployeeFyLookup({ employeeId, fy }: { employeeId: string; fy: s
               style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
             />
           </div>
-          <button type="submit" className="btn" style={{ minHeight: 44 }}>View Form 12BA</button>
+          <Button type="submit" variant="primary" style={{ minHeight: 44 }}>View Form 12BA</Button>
         </div>
         {error && (
           <p id={errId} role="alert" className="pill bad" style={{ width: "fit-content", marginTop: 10 }}>

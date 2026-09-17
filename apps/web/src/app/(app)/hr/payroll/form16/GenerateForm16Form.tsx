@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Card, ConfirmDialog, StatusPill, Segmented } from "../../../../_components/ds";
+import { Button, Card, ConfirmDialog, StatusPill, Segmented } from "../../../../_components/ds";
 import { browserJson } from "@/lib/api/browserClient";
 
 type Mode = "single" | "bulk";
@@ -184,9 +184,9 @@ export function GenerateForm16Form({ defaultFy }: { defaultFy: string }) {
           </div>
 
           <div>
-            <button type="submit" className="btn primary" style={{ minHeight: 44 }} disabled={busy}>
+            <Button type="submit" style={{ minHeight: 44 }} disabled={busy}>
               {mode === "single" ? "Generate Form-16" : "Generate Form-16 for whole run"}
-            </button>
+            </Button>
           </div>
 
           {validationError && (

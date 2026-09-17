@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { Button } from "../../../../_components/ds";
 
 const VACANCY_TYPES = [
   { value: "regular", label: "Regular Position" },
@@ -130,10 +131,9 @@ export function NewTemplateForm() {
       )}
 
       <div style={{ display: "flex", gap: 10 }}>
-        <button type="submit" disabled={status === "submitting"}
-          style={{ padding: "10px 24px", fontSize: 14, fontWeight: 700, color: "#fff", background: status === "submitting" ? "#94a3b8" : "#154089", border: "none", borderRadius: 8, cursor: status === "submitting" ? "wait" : "pointer" }}>
+        <Button type="submit" variant="primary" disabled={status === "submitting"}>
           {status === "submitting" ? "Saving…" : "Save template"}
-        </button>
+        </Button>
         <a href="/hr/jd-templates" style={{ padding: "10px 20px", fontSize: 14, fontWeight: 600, color: "#475569", background: "#f1f5f9", borderRadius: 8, textDecoration: "none" }}>
           Cancel
         </a>

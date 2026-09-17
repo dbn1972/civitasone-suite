@@ -3,6 +3,7 @@
 import { useId, useState } from "react";
 import { useTranslations } from "next-intl";
 import { useFormError } from "@/lib/useFormError";
+import { Button } from "../../../../_components/ds";
 
 interface Props {
   onCancel: () => void;
@@ -194,24 +195,22 @@ export function AddDepartmentForm({ onCancel, onSuccess }: Props) {
 
         {/* Actions */}
         <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-          <button
+          <Button
             type="submit"
-            className="btn primary"
-            disabled={busy}
-            aria-busy={busy}
+            loading={busy}
             style={{ minHeight: 44, minWidth: 140 }}
           >
             {busy ? t("addingBtn") : t("addBtn")}
-          </button>
-          <button
+          </Button>
+          <Button
             type="button"
-            className="btn"
+            variant="ghost"
             onClick={handleCancel}
             disabled={busy}
             style={{ minHeight: 44 }}
           >
             {t("cancelBtn")}
-          </button>
+          </Button>
         </div>
       </div>
     </form>

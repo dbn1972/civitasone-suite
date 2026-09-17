@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { DataTable, ConfirmDialog } from "../../../../_components/ds";
+import { Button, DataTable, ConfirmDialog } from "../../../../_components/ds";
 import { browserJson } from "@/lib/api/browserClient";
 import { formatMoney } from "@/lib/formatters";
 
@@ -63,9 +63,9 @@ export function OffCycleList({ rows }: { rows: OffCycleRow[] }) {
       sortable: false,
       render: (row: OffCycleRow) =>
         row.status === "draft" ? (
-          <button
+          <Button
             type="button"
-            className="btn"
+            variant="primary"
             style={{ minHeight: 36 }}
             aria-label={`Process ${row.run_type} off-cycle run for ${row.period}`}
             onClick={() => {
@@ -74,7 +74,7 @@ export function OffCycleList({ rows }: { rows: OffCycleRow[] }) {
             }}
           >
             Process
-          </button>
+          </Button>
         ) : (
           <span style={{ color: "var(--ink2)", fontSize: 13 }}>—</span>
         ),

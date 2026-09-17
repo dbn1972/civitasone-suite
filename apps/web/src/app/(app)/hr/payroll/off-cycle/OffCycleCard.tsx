@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { StatusPill, ConfirmDialog } from "../../../../_components/ds";
+import { Button, StatusPill, ConfirmDialog } from "../../../../_components/ds";
 import { browserJson } from "@/lib/api/browserClient";
 import { formatMoney } from "@/lib/formatters";
 import type { OffCycleRow } from "./OffCycleList";
@@ -37,15 +37,15 @@ function RunCard({ row, onProcess }: { row: OffCycleRow; onProcess: (row: OffCyc
         <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
           <StatusPill status={row.status} />
           {row.status === "draft" && (
-            <button
+            <Button
               type="button"
-              className="btn"
+              variant="primary"
               style={{ minHeight: 32, fontSize: 12, padding: "0 14px" }}
               onClick={() => onProcess(row)}
               aria-label={"Process " + reasonLabel + " run for " + row.period}
             >
               Process Run
-            </button>
+            </Button>
           )}
         </div>
       </div>

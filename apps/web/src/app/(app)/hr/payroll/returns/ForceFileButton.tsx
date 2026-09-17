@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { ConfirmDialog } from "../../../../_components/ds";
+import { Button, ConfirmDialog } from "../../../../_components/ds";
 import { useToast } from "@/app/_components/ds/Toast";
 import { formatMoney } from "@/lib/formatters";
 import { useFormError } from "@/lib/useFormError";
@@ -75,16 +75,16 @@ export function ForceFileButton({ fy, quarter }: { fy: string; quarter: string }
 
   return (
     <div style={{ marginTop: 12 }}>
-      <button
+      <Button
         type="button"
-        className="btn ghost"
+        variant="ghost"
         onClick={() => {
           setError(undefined);
           setOpen(true);
         }}
       >
         File anyway — bypass reconciliation (force)
-      </button>
+      </Button>
 
       {/* Honest, response-driven feedback — this is a synchronous filing (the
           server returns the flagged return directly, no async job), and the

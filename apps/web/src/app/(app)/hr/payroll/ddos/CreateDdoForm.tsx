@@ -2,7 +2,7 @@
 
 import { useId, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Card, ConfirmDialog } from "../../../../_components/ds";
+import { Button, Card, ConfirmDialog } from "../../../../_components/ds";
 import { browserJson } from "@/lib/api/browserClient";
 
 type DdoResponse = { ddoCode: string; name: string; departmentIds: string[] };
@@ -113,9 +113,9 @@ export function CreateDdoForm() {
           </div>
         </div>
         <div style={{ marginTop: 14 }}>
-          <button type="submit" className="btn primary" style={{ minHeight: 44 }} disabled={busy}>
+          <Button type="submit" style={{ minHeight: 44 }} disabled={busy}>
             Save DDO
-          </button>
+          </Button>
         </div>
         {error && !confirmOpen && (
           <p id={errId} role="alert" className="pill bad" style={{ marginTop: 10, width: "fit-content" }}>{error}</p>

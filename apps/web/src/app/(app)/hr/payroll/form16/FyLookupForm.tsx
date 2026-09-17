@@ -1,3 +1,5 @@
+import { Button } from "../../../../_components/ds";
+
 /**
  * Server-safe (no JS required) financial-year lookup — a plain GET form that
  * re-navigates this page with ?fy=YYYY-YY, letting the server component below
@@ -21,9 +23,9 @@ export function FyLookupForm({ defaultFy }: { defaultFy: string }) {
           style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44, width: 140 }}
         />
       </div>
-      <button type="submit" className="btn ghost" style={{ minHeight: 44 }}>
+      <Button type="submit" variant="ghost" style={{ minHeight: 44 }}>
         Check run
-      </button>
+      </Button>
       <span id="fy-lookup-hint" style={{ fontSize: 12, color: "var(--mut)" }}>
         Format YYYY-YY, e.g. 2025-26
       </span>
