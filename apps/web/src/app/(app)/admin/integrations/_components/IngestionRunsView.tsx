@@ -11,7 +11,7 @@
  */
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
-import { ConfirmDialog } from "@/app/_components/ds";
+import { Button, ConfirmDialog } from "@/app/_components/ds";
 import {
   getIngestionRuns,
   triggerIngestion,
@@ -79,14 +79,14 @@ export function IngestionRunsView({ provider, env }: { provider: string; env: st
         <h3 id={headingId} style={{ fontSize: 13.5 }}>Ingestion runs</h3>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           {isError ? <DataSourceBadge source="error" /> : null}
-          <button
-            type="button"
-            className="btn ghost sm"
+          <Button
+            variant="ghost"
+            size="sm"
             onClick={() => { setTriggerError(null); setConfirmOpen(true); }}
             disabled={triggering}
           >
             ▶ Run now
-          </button>
+          </Button>
         </div>
       </div>
 

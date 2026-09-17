@@ -40,7 +40,7 @@ export default function AdminBulkScanPage() {
       <div className="card" style={{ marginBottom: 20 }}>
         <div className="card-h"><h3>New Scan Job</h3></div>
         <div style={{ padding: 20 }}>
-          <p style={{ margin: "0 0 14px", fontSize: 13.5, color: "var(--ink3)" }}>
+          <p style={{ margin: "0 0 14px", fontSize: 13.5, color: "var(--mut)" }}>
             Queueing a bulk scan requires a real scan-job backend, which doesn&apos;t exist yet.
           </p>
           <button
@@ -67,7 +67,7 @@ export default function AdminBulkScanPage() {
 
       <div className="card">
         <div className="card-h"><h3>Recent Jobs</h3></div>
-        <div style={{ padding: 32, textAlign: "center", color: "var(--ink3)" }}>
+        <div style={{ padding: 32, textAlign: "center", color: "var(--mut)" }}>
           <p style={{ margin: "0 0 4px", fontSize: 14 }}>No job history available.</p>
           <p style={{ margin: 0, fontSize: 12.5 }}>Nothing is shown here because nothing real can be loaded yet.</p>
         </div>

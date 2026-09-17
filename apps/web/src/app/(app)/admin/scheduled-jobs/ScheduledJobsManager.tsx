@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { PageHeader, StatGrid, StatCard } from "@/app/_components/ds";
+import { Button, PageHeader, StatGrid, StatCard } from "@/app/_components/ds";
 import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
 import type { AdminScheduledJob } from "@/app/_data/loaders";
 import { useFormError } from "@/lib/useFormError";
@@ -205,7 +205,7 @@ export function ScheduledJobsManager({ initialJobs, source }: { initialJobs: Adm
       <div className="card" style={{ marginTop: 18 }}>
         <div className="card-h" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <h3>Job Registry</h3>
-          <button className="btn btn-primary" onClick={() => setShowModal(true)}>+ Create Job</button>
+          <Button onClick={() => setShowModal(true)}>+ Create Job</Button>
         </div>
 
         <div style={{ overflowX: "auto" }}>
@@ -238,9 +238,9 @@ export function ScheduledJobsManager({ initialJobs, source }: { initialJobs: Adm
                   </td>
                   <td>
                     <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
-                      <button className="btn btn-sm" onClick={() => void handleRunNow(job.id)} disabled={busyId === job.id} aria-label={`Run ${job.name} now`} style={{ fontSize: 12 }}>▶ Run Now</button>
-                      <button className="btn btn-sm" onClick={() => void openHistory(job.id)} style={{ fontSize: 12 }}>📋 History</button>
-                      <button className="btn btn-sm btn-danger" onClick={() => void handleDelete(job.id)} disabled={busyId === job.id} style={{ fontSize: 12, color: "#dc2626" }}>🗑️</button>
+                      <Button size="sm" onClick={() => void handleRunNow(job.id)} disabled={busyId === job.id} aria-label={`Run ${job.name} now`} style={{ fontSize: 12 }}>▶ Run Now</Button>
+                      <Button size="sm" onClick={() => void openHistory(job.id)} style={{ fontSize: 12 }}>📋 History</Button>
+                      <Button variant="danger" size="sm" onClick={() => void handleDelete(job.id)} disabled={busyId === job.id} aria-label={`Delete ${job.name}`}>🗑️</Button>
                     </div>
                   </td>
                 </tr>
@@ -309,8 +309,8 @@ export function ScheduledJobsManager({ initialJobs, source }: { initialJobs: Adm
                 )}
               </div>
               <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
-                <button type="button" className="btn" onClick={() => setShowModal(false)} disabled={saving}>Cancel</button>
-                <button type="submit" className="btn btn-primary" disabled={saving} aria-busy={saving}>{saving ? "Saving…" : "Save"}</button>
+                <Button type="button" onClick={() => setShowModal(false)} disabled={saving}>Cancel</Button>
+                <Button type="submit" disabled={saving} loading={saving}>{saving ? "Saving…" : "Save"}</Button>
               </div>
             </form>
           </div>
@@ -322,7 +322,7 @@ export function ScheduledJobsManager({ initialJobs, source }: { initialJobs: Adm
           <div style={{ position: "fixed", right: 0, top: 0, bottom: 0, width: 480, background: "#fff", boxShadow: "-4px 0 12px rgba(0,0,0,0.1)", padding: 24, overflowY: "auto" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
               <h3>Execution History</h3>
-              <button className="btn" onClick={() => setHistoryJobId(null)} aria-label="Close history panel">✕</button>
+              <Button onClick={() => setHistoryJobId(null)} aria-label="Close history panel">✕</Button>
             </div>
             {historyLoading ? (
               <p style={{ color: "var(--mut)", textAlign: "center", marginTop: 48 }}>Loading…</p>

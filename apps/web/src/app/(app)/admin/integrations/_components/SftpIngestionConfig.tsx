@@ -8,6 +8,7 @@
  * lib/admin/sftpIngestion so it stays unit-testable.
  */
 import { useId } from "react";
+import { Button } from "@/app/_components/ds";
 import {
   LEAD_FIELDS,
   LEAD_FIELD_LABELS,
@@ -180,14 +181,14 @@ export function SftpIngestionConfig({
                       <option key={f} value={f}>{LEAD_FIELD_LABELS[f]}</option>
                     ))}
                   </select>
-                  <button
-                    type="button"
-                    className="btn ghost sm"
+                  <Button
+                    variant="ghost"
+                    size="sm"
                     aria-label={`Remove mapping ${idx + 1}`}
                     onClick={() => removeRow(idx)}
                   >
                     ✕
-                  </button>
+                  </Button>
                 </li>
               );
             })}
@@ -195,9 +196,9 @@ export function SftpIngestionConfig({
         )}
 
         <div>
-          <button type="button" className="btn ghost sm" onClick={addRow}>
+          <Button variant="ghost" size="sm" onClick={addRow}>
             + Add column mapping
-          </button>
+          </Button>
         </div>
 
         {errors.mapping && (

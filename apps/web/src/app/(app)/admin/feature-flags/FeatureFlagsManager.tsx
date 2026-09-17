@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { PageHeader, StatGrid, StatCard } from "@/app/_components/ds";
+import { Button, PageHeader, StatGrid, StatCard } from "@/app/_components/ds";
 import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
 import type { AdminFeatureFlagRow } from "@/app/_data/loaders";
 import { useFormError } from "@/lib/useFormError";
@@ -135,9 +135,9 @@ export function FeatureFlagsManager({ initialFlags, source }: { initialFlags: Ad
       <div className="card" style={{ marginTop: 18 }}>
         <div className="card-h" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <h3>Flag Registry</h3>
-          <button className="btn btn-primary" onClick={() => setShowModal(true)}>
+          <Button onClick={() => setShowModal(true)}>
             + Create Flag
-          </button>
+          </Button>
         </div>
 
         <div style={{ overflowX: "auto" }}>
@@ -171,15 +171,16 @@ export function FeatureFlagsManager({ initialFlags, source }: { initialFlags: Ad
                     </label>
                   </td>
                   <td>
-                    <button
-                      className="btn btn-danger btn-sm"
+                    <Button
+                      variant="danger"
+                      size="sm"
                       onClick={() => void handleKillSwitch(flag.id)}
                       disabled={flag.killSwitch || busyId === flag.id}
                       aria-label={`Kill switch for ${flag.name}`}
-                      style={{ backgroundColor: flag.killSwitch ? "#ccc" : "#dc2626", color: "#fff", border: "none", padding: "4px 12px", borderRadius: 4, cursor: flag.killSwitch ? "not-allowed" : "pointer" }}
+                      style={{ backgroundColor: flag.killSwitch ? "#ccc" : "#dc2626", color: "#fff", border: "none", padding: "4px 12px", borderRadius: 4, cursor: flag.killSwitch ? "not-allowed" : "pointer", boxShadow: "none" }}
                     >
                       {flag.killSwitch ? "Killed" : "🛑 Kill"}
-                    </button>
+                    </Button>
                   </td>
                 </tr>
               ))}
@@ -229,8 +230,8 @@ export function FeatureFlagsManager({ initialFlags, source }: { initialFlags: Ad
                 )}
               </div>
               <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
-                <button type="button" className="btn" onClick={() => setShowModal(false)} disabled={creating}>Cancel</button>
-                <button type="submit" className="btn btn-primary" disabled={creating} aria-busy={creating}>{creating ? "Creating…" : "Save"}</button>
+                <Button type="button" variant="primary" onClick={() => setShowModal(false)} disabled={creating}>Cancel</Button>
+                <Button type="submit" disabled={creating} loading={creating}>{creating ? "Creating…" : "Save"}</Button>
               </div>
             </form>
           </div>

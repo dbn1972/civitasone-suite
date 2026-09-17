@@ -1,6 +1,6 @@
 "use client";
 import { useMemo, useState } from "react";
-import { DataTable, StatusPill } from "@/app/_components/ds";
+import { Button, DataTable, StatusPill } from "@/app/_components/ds";
 import type { AdminAuditLogEntry } from "@/app/_data/loaders";
 
 type Row = AdminAuditLogEntry & Record<string, unknown>;
@@ -26,16 +26,16 @@ export function AuditLogTable({ entries }: { entries: AdminAuditLogEntry[] }) {
         <h3>Activity log</h3>
         <div style={{ display: "flex", gap: 6 }} role="group" aria-label="Filter by outcome">
           {(["all", "success", "failure"] as const).map((o) => (
-            <button
+            <Button
               key={o}
-              type="button"
               onClick={() => setOutcomeFilter(o)}
               aria-pressed={outcomeFilter === o}
-              className={`btn ${outcomeFilter === o ? "primary" : "ghost"} sm`}
+              variant={outcomeFilter === o ? "primary" : "ghost"}
+              size="sm"
               style={{ fontSize: 11.5, textTransform: "capitalize" }}
             >
               {o}
-            </button>
+            </Button>
           ))}
         </div>
       </div>

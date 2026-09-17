@@ -1,6 +1,6 @@
 "use client";
 import { useState, useId } from "react";
-import { PageHeader, Card } from "@/app/_components/ds";
+import { Button, PageHeader, Card } from "@/app/_components/ds";
 import { useFormError } from "@/lib/useFormError";
 
 // ── UX decisions (ux-auditor criteria applied) ───────────────────────────────
@@ -72,15 +72,15 @@ function SaveButton({
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
       {dirty && <span title="Unsaved changes" aria-label="Unsaved changes" style={{ display: "inline-block", width: 8, height: 8, borderRadius: "50%", background: "#f59e0b" }} />}
-      <button
+      <Button
         type="button"
-        className="btn primary sm"
+        size="sm"
         disabled={!dirty || saveState === "saving"}
         onClick={onSave}
-        aria-busy={saveState === "saving"}
+        loading={saveState === "saving"}
       >
         {saveState === "saving" ? "Saving…" : saveState === "saved" ? "Saved" : "Save changes"}
-      </button>
+      </Button>
       {saveState === "error" && (
         <span role="alert" style={{ fontSize: 12, color: "#b42318" }}>{errorMessage}</span>
       )}
@@ -115,7 +115,7 @@ function FieldRow({
   );
 }
 
-const inp: React.CSSProperties = { width: "100%", padding: "9px 12px", borderRadius: 8, border: "1px solid var(--line)", fontSize: 13.5, fontFamily: "inherit", color: "var(--ink)", background: "var(--surface)" };
+const inp: React.CSSProperties = { width: "100%", padding: "9px 12px", borderRadius: 8, border: "1px solid var(--line)", fontSize: 13.5, fontFamily: "inherit", color: "var(--ink)", background: "var(--panel)" };
 
 // ── GENERAL TAB ──────────────────────────────────────────────────────────────
 function GeneralSection() {
@@ -143,10 +143,10 @@ function GeneralSection() {
           <input id={`${id}-orgName`} value={values.orgName} onChange={(e) => update({ orgName: e.target.value })} style={inp} />
         </FieldRow>
         <FieldRow label="Logo" htmlFor={`${id}-logo`} error={formError.fieldError("logoUrl")}>
-          <div style={{ border: "2px dashed var(--line)", borderRadius: 10, padding: "24px 16px", textAlign: "center", cursor: "pointer", background: "var(--surface2)" }}>
+          <div style={{ border: "2px dashed var(--line)", borderRadius: 10, padding: "24px 16px", textAlign: "center", cursor: "pointer", background: "var(--line2)" }}>
             <span style={{ fontSize: 28 }}>🖼️</span>
             <p style={{ margin: "8px 0 0", fontSize: 13, color: "var(--ink2)" }}>Drop PNG/SVG here or <span style={{ color: "var(--primary)", textDecoration: "underline", cursor: "pointer" }}>browse</span></p>
-            <p style={{ margin: "4px 0 0", fontSize: 11, color: "var(--ink3)" }}>Max 2 MB — 200×200 px minimum</p>
+            <p style={{ margin: "4px 0 0", fontSize: 11, color: "var(--mut)" }}>Max 2 MB — 200×200 px minimum</p>
             <input id={`${id}-logo`} type="file" accept="image/png,image/svg+xml" aria-label="Upload organisation logo" style={{ position: "absolute", opacity: 0, width: 0, height: 0 }} onChange={(e) => { const f = e.target.files?.[0]; if (f) update({ logoUrl: f.name }); }} />
           </div>
         </FieldRow>
@@ -243,9 +243,9 @@ function EmailSection() {
           Use STARTTLS / TLS
         </label>
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <button type="button" className="btn ghost sm" disabled={testStatus === "sending"} onClick={() => void sendTest()} aria-busy={testStatus === "sending"}>
+          <Button type="button" variant="ghost" size="sm" onClick={() => void sendTest()} loading={testStatus === "sending"}>
             {testStatus === "sending" ? "Sending…" : "Send test email"}
-          </button>
+          </Button>
           {testStatus === "ok" && <span role="status" style={{ fontSize: 12, color: "#027a48" }}>Test email sent.</span>}
           {testStatus === "fail" && <span role="alert" style={{ fontSize: 12, color: "#b42318" }}>Send failed — check credentials.</span>}
         </div>
@@ -304,14 +304,14 @@ function SecuritySection() {
             <p style={{ margin: 0, fontSize: 13.5, fontWeight: 600 }}>Disable MFA enforcement?</p>
             <p style={{ margin: 0, fontSize: 12.5, color: "var(--ink2)" }}>Disabling MFA reduces platform security. All users will no longer be required to authenticate with a second factor.</p>
             <div style={{ display: "flex", gap: 8 }}>
-              <button type="button" className="btn danger sm" onClick={() => { update({ mfaRequired: false }); setMfaConfirm(false); }}>Yes, disable MFA</button>
-              <button type="button" className="btn ghost sm" onClick={() => setMfaConfirm(false)}>Cancel</button>
+              <Button type="button" variant="danger" size="sm" onClick={() => { update({ mfaRequired: false }); setMfaConfirm(false); }}>Yes, disable MFA</Button>
+              <Button type="button" variant="ghost" size="sm" onClick={() => setMfaConfirm(false)}>Cancel</Button>
             </div>
           </div>
         )}
         <FieldRow label="IP whitelist (one CIDR per line)" htmlFor={`${id}-ip`} error={formError.fieldError("ipWhitelist")}>
           <textarea id={`${id}-ip`} rows={4} value={values.ipWhitelist} onChange={(e) => update({ ipWhitelist: e.target.value })} placeholder={"10.0.0.0/8\n192.168.1.0/24"} style={{ ...inp, resize: "vertical", fontFamily: "monospace", fontSize: 13 }} aria-describedby={`${id}-ip-hint`} />
-          <p id={`${id}-ip-hint`} style={{ margin: "4px 0 0", fontSize: 11.5, color: "var(--ink3)" }}>Leave blank to allow all IPs. Enter one CIDR range per line.</p>
+          <p id={`${id}-ip-hint`} style={{ margin: "4px 0 0", fontSize: 11.5, color: "var(--mut)" }}>Leave blank to allow all IPs. Enter one CIDR range per line.</p>
         </FieldRow>
       </div>
     </Card>
@@ -354,7 +354,7 @@ function IntegrationsSection() {
               <input type="checkbox" id={`${id}-${key}`} role="switch" checked={values[key]} onChange={(e) => update({ [key]: e.target.checked } as Record<string, boolean>)} style={{ width: 16, height: 16, cursor: "pointer", marginTop: 2, flexShrink: 0 }} />
               <span>
                 <span style={{ display: "block", fontSize: 13.5, fontWeight: 550 }}>{label}</span>
-                <span style={{ display: "block", fontSize: 12, color: "var(--ink3)" }}>{desc}</span>
+                <span style={{ display: "block", fontSize: 12, color: "var(--mut)" }}>{desc}</span>
               </span>
               {values[key] && <span className="pill good" style={{ fontSize: 11, flexShrink: 0 }}>Active</span>}
             </label>
@@ -379,7 +379,7 @@ function TenantConfigSection() {
           <h3 style={{ margin: 0 }}>Tenant Configuration</h3>
           <span className="pill info" style={{ fontSize: 11 }}>Read-only — platform_admin</span>
         </div>
-        <p style={{ margin: 0, fontSize: 12.5, color: "var(--ink3)" }}>Infrastructure details managed by the CivitasOne platform team. Contact support to change these values.</p>
+        <p style={{ margin: 0, fontSize: 12.5, color: "var(--mut)" }}>Infrastructure details managed by the CivitasOne platform team. Contact support to change these values.</p>
         {([
           { label: "Tenant name", value: "Ministry of Finance" },
           { label: "Domain", value: "finmin.nic.in" },

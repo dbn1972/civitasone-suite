@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { PageHeader } from "@/app/_components/ds";
+import { Button, PageHeader } from "@/app/_components/ds";
 import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
 import type { AdminOrgUnit } from "@/app/_data/loaders";
 import { toHumanError } from "@/lib/messages";
@@ -116,10 +116,10 @@ function CreateUnitForm({
         style={{ width: 110 }}
         aria-label="New unit code"
       />
-      <button type="button" className="btn primary sm" disabled={busy} onClick={() => void submit()} aria-busy={busy}>
+      <Button size="sm" onClick={() => void submit()} loading={busy}>
         {busy ? "Adding…" : "Add"}
-      </button>
-      <button type="button" className="btn ghost sm" disabled={busy} onClick={onCancel}>Cancel</button>
+      </Button>
+      <Button variant="ghost" size="sm" disabled={busy} onClick={onCancel}>Cancel</Button>
       {error && <span role="alert" style={{ fontSize: 12, color: "#b42318", width: "100%" }}>{error}</span>}
     </div>
   );
@@ -173,11 +173,11 @@ function OrgTreeNode({
             aria-label={`Rename ${node.name}`}
           />
         ) : (
-          <span style={{ flex: 1, fontSize: 13.5 }}>{node.name}{node.code ? <span style={{ color: "var(--ink3)", fontSize: 11.5 }}> · {node.code}</span> : null}</span>
+          <span style={{ flex: 1, fontSize: 13.5 }}>{node.name}{node.code ? <span style={{ color: "var(--mut)", fontSize: 11.5 }}> · {node.code}</span> : null}</span>
         )}
         <span style={{ fontSize: 10.5, color, background: `${color}18`, padding: "2px 7px", borderRadius: 10, fontWeight: 650, flexShrink: 0 }}>{node.type}</span>
-        <button type="button" className="btn ghost sm" style={{ fontSize: 11 }} onClick={() => onStartRename(node.id)}>Rename</button>
-        <button type="button" className="btn ghost sm" style={{ fontSize: 11 }} onClick={() => onStartAddChild(node.id)}>+ Add child</button>
+        <Button variant="ghost" size="sm" style={{ fontSize: 11 }} onClick={() => onStartRename(node.id)}>Rename</Button>
+        <Button variant="ghost" size="sm" style={{ fontSize: 11 }} onClick={() => onStartAddChild(node.id)}>+ Add child</Button>
       </div>
       {isAddingChild && (
         <div style={{ marginLeft: (depth + 1) * 22 }}>
@@ -255,7 +255,7 @@ export function OrgHierarchyManager({ initialUnits, source }: { initialUnits: Ad
         title="Org Hierarchy"
         subtitle="Organisational structure — department, division, section, unit, branch."
         back="/admin"
-        actions={<button type="button" className="btn primary sm" onClick={() => setAddingRoot((v) => !v)}>+ Add top-level unit</button>}
+        actions={<Button size="sm" onClick={() => setAddingRoot((v) => !v)}>+ Add top-level unit</Button>}
       />
       <DataSourceBadge source={source} message="Couldn't load the org hierarchy — showing nothing" />
       {error && (
@@ -266,7 +266,7 @@ export function OrgHierarchyManager({ initialUnits, source }: { initialUnits: Ad
       <div className="card">
         <div className="card-h">
           <h3>Organisation tree</h3>
-          <p style={{ fontSize: 12, color: "var(--ink3)", margin: 0 }}>{busy ? "Saving…" : "Rename or add children below. Every change saves immediately."}</p>
+          <p style={{ fontSize: 12, color: "var(--mut)", margin: 0 }}>{busy ? "Saving…" : "Rename or add children below. Every change saves immediately."}</p>
         </div>
         {addingRoot && (
           <div style={{ padding: "8px 16px" }}>
@@ -275,7 +275,7 @@ export function OrgHierarchyManager({ initialUnits, source }: { initialUnits: Ad
         )}
         <div style={{ padding: "12px 8px" }}>
           {tree.length === 0 ? (
-            <p style={{ padding: 16, color: "var(--ink3)", fontSize: 13 }}>
+            <p style={{ padding: 16, color: "var(--mut)", fontSize: 13 }}>
               {source === "error" ? "Couldn't load the org hierarchy." : "No organisational units yet — add a top-level unit to get started."}
             </p>
           ) : (
@@ -300,7 +300,7 @@ export function OrgHierarchyManager({ initialUnits, source }: { initialUnits: Ad
         </div>
         <div style={{ padding: "8px 16px 16px", display: "flex", gap: 12, flexWrap: "wrap" }}>
           {UNIT_TYPES.map((t) => (
-            <span key={t} style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 11.5, color: "var(--ink3)" }}>
+            <span key={t} style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 11.5, color: "var(--mut)" }}>
               <span style={{ width: 10, height: 10, borderRadius: 2, background: TYPE_COLORS[t], display: "inline-block" }} />
               {t}
             </span>
