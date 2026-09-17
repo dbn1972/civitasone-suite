@@ -38,7 +38,7 @@ export function APIKeysTable({ keys }: { keys: KeyRow[] }) {
             render: (key) => (
               <>
                 <div style={{ fontWeight: 500 }}>{key.keyName}</div>
-                <div style={{ fontSize: 11, color: "#98a2b3" }}><span className="mono">{key.keyPrefix}****</span></div>
+                <div style={{ fontSize: 11, color: "var(--mut)" }}><span className="mono">{key.keyPrefix}****</span></div>
               </>
             ),
           },

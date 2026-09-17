@@ -69,7 +69,11 @@ export default async function MLInsightsHubPage() {
                   <dd className="text-end font-medium truncate">{domainData.topFactor}</dd>
                 </dl>
               ) : (
-                <p className="text-sm text-gray-400">No model active</p>
+                /* text-gray-500 (#6b7280) is 4.46:1 here against this card's
+                   var(--bg) page background (#f4f6f8), just under the 4.5:1
+                   minimum -- it only clears on white/near-white. var(--mut)
+                   (#667085) reaches 4.59:1 on this background. UX-005 tranche 5. */
+                <p className="text-sm" style={{ color: "var(--mut)" }}>No model active</p>
               )}
             </a>
           );

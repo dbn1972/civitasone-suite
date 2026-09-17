@@ -116,7 +116,7 @@ export function NewTemplateForm() {
         <label htmlFor="tpl-tags" style={labelStyle}>Tags (comma-separated)</label>
         <input id="tpl-tags" type="text" value={tags} onChange={(e) => setTags(e.target.value)}
           placeholder="e.g. data, analytics, graduate, entry-level" style={inputStyle} />
-        <p style={{ margin: "4px 0 0", fontSize: 12, color: "#94a3b8" }}>Tags help HR search and find templates quickly.</p>
+        <p style={{ margin: "4px 0 0", fontSize: 12, color: "var(--mut)" }}>Tags help HR search and find templates quickly.</p>
       </div>
 
       {status === "error" && (

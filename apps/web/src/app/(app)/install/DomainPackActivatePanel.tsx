@@ -118,7 +118,13 @@ export function DomainPackActivatePanel({
       </div>
 
       {loading ? (
-        <p className="mt-4 text-sm text-slate-500" role="status">
+        /* Not part of the original catalogue -- found during tranche 5
+           verification: text-slate-500 (#64748b) measured 4.43:1 here
+           (this card's background is slightly off-white, #f4f7fd, not
+           pure white), just under 4.5:1, and only surfaced on some runs
+           depending on load-state timing. var(--ink2) clears both
+           backgrounds with a comfortable margin. */
+        <p className="mt-4 text-sm" style={{ color: "var(--ink2)" }} role="status">
           Loading Domain Packs…
         </p>
       ) : (
@@ -263,7 +269,7 @@ function OutcomePreview({ pack }: { pack: DomainPackCatalogEntry }) {
             <div className="min-w-0 flex-1">
               <p className="font-medium text-slate-900">{o.label}</p>
               <p className="text-xs text-slate-500">{o.description}</p>
-              <p className="mt-0.5 font-mono text-[11px] text-slate-400">{o.packKey}</p>
+              <p className="mt-0.5 font-mono text-[11px] text-slate-500">{o.packKey}</p>
             </div>
             <span className="text-xs text-slate-500">draft</span>
           </li>

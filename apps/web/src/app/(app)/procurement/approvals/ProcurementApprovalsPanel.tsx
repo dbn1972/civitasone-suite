@@ -189,7 +189,7 @@ export function ProcurementApprovalsPanel() {
       ) : null}
 
       {loading && tasks.length === 0 ? (
-        <p className="pad" style={{ textAlign: "center", color: "#94a3b8" }}>Loading workflow tasks…</p>
+        <p className="pad" style={{ textAlign: "center", color: "var(--mut)" }}>Loading workflow tasks…</p>
       ) : error && tasks.length === 0 ? (
         <ErrorState error={toHumanError("load", { area: "workflow approval queue" })} onRetry={refresh} />
       ) : tasks.length === 0 ? (

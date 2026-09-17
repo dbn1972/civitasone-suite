@@ -126,30 +126,37 @@ export default async function ReconciliationWorkbenchPage() {
                     <p style={{ color: "var(--ink2)", fontSize: 13 }}>No data available.</p>
                   )
                 ) : (
-                  <dl style={{ display: "grid", gap: 6, margin: 0, fontSize: 13.5 }}>
-                    <div style={{ display: "flex", justifyContent: "space-between" }}>
-                      <dt>Control account</dt>
-                      <dd>
-                        {recon.controlAccountCode}
-                        {!recon.controlAccountResolved ? " (unresolved)" : ""}
-                      </dd>
-                    </div>
-                    <div style={{ display: "flex", justifyContent: "space-between" }}>
-                      <dt>Subledger balance</dt>
-                      <dd className="mono">{formatMoney(recon.subledgerBalanceMinor)}</dd>
-                    </div>
-                    <div style={{ display: "flex", justifyContent: "space-between" }}>
-                      <dt>Control (GL) balance</dt>
-                      <dd className="mono">{formatMoney(recon.controlAccountBalanceMinor)}</dd>
-                    </div>
-                    <div style={{ display: "flex", justifyContent: "space-between", fontWeight: 600 }}>
-                      <dt>Difference</dt>
-                      <dd className="mono">{formatMoney(recon.differenceMinor)}</dd>
-                    </div>
-                    <div>
+                  // definition-list: a <dl>'s only valid direct children are
+                  // dt/dd (optionally grouped in <div>s that each contain a
+                  // dt+dd pair), plus <script>/<template>. The StatusPill row
+                  // below is neither a term nor a description, so it moved
+                  // outside the <dl> as a sibling instead. UX-005 tranche 5.
+                  <>
+                    <dl style={{ display: "grid", gap: 6, margin: 0, fontSize: 13.5 }}>
+                      <div style={{ display: "flex", justifyContent: "space-between" }}>
+                        <dt>Control account</dt>
+                        <dd>
+                          {recon.controlAccountCode}
+                          {!recon.controlAccountResolved ? " (unresolved)" : ""}
+                        </dd>
+                      </div>
+                      <div style={{ display: "flex", justifyContent: "space-between" }}>
+                        <dt>Subledger balance</dt>
+                        <dd className="mono">{formatMoney(recon.subledgerBalanceMinor)}</dd>
+                      </div>
+                      <div style={{ display: "flex", justifyContent: "space-between" }}>
+                        <dt>Control (GL) balance</dt>
+                        <dd className="mono">{formatMoney(recon.controlAccountBalanceMinor)}</dd>
+                      </div>
+                      <div style={{ display: "flex", justifyContent: "space-between", fontWeight: 600 }}>
+                        <dt>Difference</dt>
+                        <dd className="mono">{formatMoney(recon.differenceMinor)}</dd>
+                      </div>
+                    </dl>
+                    <div style={{ marginTop: 6 }}>
                       <StatusPill status={recon.isReconciled ? "cleared" : "breached"} label={recon.isReconciled ? "Reconciled" : "Not reconciled"} />
                     </div>
-                  </dl>
+                  </>
                 )}
               </div>
             ))}

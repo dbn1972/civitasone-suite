@@ -99,7 +99,7 @@ export default async function CertificationsPage() {
         {source === "error" ? (
           <RefreshErrorState error={toHumanError("load", { area: "certifications" })} backHref="/hr" />
         ) : sorted.length === 0 ? (
-          <div style={{ padding: 32, textAlign: "center", color: "#94a3b8" }}>
+          <div style={{ padding: 32, textAlign: "center", color: "var(--mut)" }}>
             <p style={{ fontSize: 32, margin: "0 0 8px" }}>🏅</p>
             <p style={{ fontWeight: 600, color: "#475569", margin: 0 }}>No certifications recorded yet</p>
             <p style={{ fontSize: 13, margin: "4px 0 0" }}>

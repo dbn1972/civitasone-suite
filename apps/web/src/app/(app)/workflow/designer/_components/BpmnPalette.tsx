@@ -38,7 +38,7 @@ export function BpmnPalette() {
                 <div className="text-sm font-medium text-slate-700 truncate">
                   {item.label}
                 </div>
-                <div className="text-[11px] text-slate-400 truncate">
+                <div className="text-[11px] text-slate-500 truncate">
                   {item.description}
                 </div>
               </div>
@@ -48,7 +48,7 @@ export function BpmnPalette() {
       </ul>
 
       <div className="mt-4 pt-3 border-t border-slate-100">
-        <h3 className="text-[11px] font-semibold uppercase tracking-wide text-slate-400 mb-2">
+        <h3 className="text-[11px] font-semibold uppercase tracking-wide text-slate-500 mb-2">
           Instructions
         </h3>
         <p className="text-xs text-slate-500 leading-relaxed">

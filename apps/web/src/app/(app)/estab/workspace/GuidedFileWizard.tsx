@@ -159,7 +159,7 @@ export function GuidedFileWizard() {
         {STEPS.map((s, i) => (
           <div key={s} style={{
             display: "flex", alignItems: "center", gap: 6, fontSize: "0.8125rem",
-            color: i === step ? "#0f172a" : i < step ? "var(--good)" : "#94a3b8", fontWeight: i === step ? 600 : 400,
+            color: i === step ? "#0f172a" : i < step ? "var(--good)" : "var(--mut)", fontWeight: i === step ? 600 : 400,
           }}>
             <span style={{
               width: 22, height: 22, borderRadius: "50%", display: "grid", placeItems: "center", fontSize: 12,

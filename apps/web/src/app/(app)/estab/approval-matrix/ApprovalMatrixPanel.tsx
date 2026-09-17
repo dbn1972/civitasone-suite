@@ -205,9 +205,9 @@ export function ApprovalMatrixPanel() {
 
       {/* Existing rules grouped by source type */}
       {loading ? (
-        <p className="pad" style={{ textAlign: "center", color: "#94a3b8" }}>Loading…</p>
+        <p className="pad" style={{ textAlign: "center", color: "var(--mut)" }}>Loading…</p>
       ) : grouped.length === 0 ? (
-        <div className="card"><p className="pad" style={{ color: "#94a3b8" }}>No approval rules yet. Add one above — until then, modules use their explicitly supplied approval chain.</p></div>
+        <div className="card"><p className="pad" style={{ color: "var(--mut)" }}>No approval rules yet. Add one above — until then, modules use their explicitly supplied approval chain.</p></div>
       ) : (
         grouped.map(([sourceType, list]) => (
           <div className="card" key={sourceType}>

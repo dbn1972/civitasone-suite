@@ -102,7 +102,7 @@ export function CompetencyRadarChart({
           const r   = (lvl / MAX_VAL) * maxR;
           const pt  = polarToCartesian(cx, cy, r, angleFor(0));
           return (
-            <text key={lvl} x={pt.x + 4} y={pt.y} style={{ fontSize: 9, fill: "#94a3b8" }}>
+            <text key={lvl} x={pt.x + 4} y={pt.y} style={{ fontSize: 9, fill: "var(--mut)" }}>
               {lvl}
             </text>
           );
@@ -159,11 +159,11 @@ export function CompetencyRadarChart({
       <div style={{ display: "flex", gap: 20, justifyContent: "center", flexWrap: "wrap" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
           <svg width={20} height={4}><line x1={0} y1={2} x2={20} y2={2} stroke="#10b981" strokeWidth={2.5} /></svg>
-          <span style={{ fontSize: 12, color: "#10b981", fontWeight: 600 }}>Current</span>
+          <span style={{ fontSize: 12, color: "var(--good)", fontWeight: 600 }}>Current</span>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
           <svg width={20} height={4}><line x1={0} y1={2} x2={20} y2={2} stroke="#3b82f6" strokeWidth={2} strokeDasharray="5 3" /></svg>
-          <span style={{ fontSize: 12, color: "#3b82f6", fontWeight: 600 }}>Required</span>
+          <span style={{ fontSize: 12, color: "var(--info)", fontWeight: 600 }}>Required</span>
         </div>
       </div>
 
@@ -173,8 +173,8 @@ export function CompetencyRadarChart({
           <thead>
             <tr style={{ background: "#f8fafc" }}>
               <th style={{ textAlign: "left", padding: "6px 10px", border: "1px solid #e2e8f0", color: "#1e293b" }}>Competency</th>
-              <th style={{ textAlign: "center", padding: "6px 10px", border: "1px solid #e2e8f0", color: "#10b981" }}>Current</th>
-              <th style={{ textAlign: "center", padding: "6px 10px", border: "1px solid #e2e8f0", color: "#3b82f6" }}>Required</th>
+              <th style={{ textAlign: "center", padding: "6px 10px", border: "1px solid #e2e8f0", color: "var(--good)" }}>Current</th>
+              <th style={{ textAlign: "center", padding: "6px 10px", border: "1px solid #e2e8f0", color: "var(--info)" }}>Required</th>
               <th style={{ textAlign: "center", padding: "6px 10px", border: "1px solid #e2e8f0", color: "#1e293b" }}>Gap</th>
             </tr>
           </thead>
@@ -185,8 +185,8 @@ export function CompetencyRadarChart({
               return (
                 <tr key={i} style={{ background: i % 2 === 0 ? "#fff" : "#f8fafc" }}>
                   <td style={{ padding: "6px 10px", border: "1px solid #e2e8f0", fontWeight: 500 }}>{s.label}</td>
-                  <td style={{ textAlign: "center", padding: "6px 10px", border: "1px solid #e2e8f0", color: "#10b981", fontWeight: 700 }}>{s.current}</td>
-                  <td style={{ textAlign: "center", padding: "6px 10px", border: "1px solid #e2e8f0", color: "#3b82f6", fontWeight: 700 }}>{s.required}</td>
+                  <td style={{ textAlign: "center", padding: "6px 10px", border: "1px solid #e2e8f0", color: "var(--good)", fontWeight: 700 }}>{s.current}</td>
+                  <td style={{ textAlign: "center", padding: "6px 10px", border: "1px solid #e2e8f0", color: "var(--info)", fontWeight: 700 }}>{s.required}</td>
                   <td style={{ textAlign: "center", padding: "6px 10px", border: "1px solid #e2e8f0", color: gapColor, fontWeight: 700 }}>
                     {gap > 0 ? `−${gap}` : gap < 0 ? `+${Math.abs(gap)}` : "✓"}
                   </td>

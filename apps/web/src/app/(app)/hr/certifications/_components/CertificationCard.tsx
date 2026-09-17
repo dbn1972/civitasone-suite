@@ -89,20 +89,20 @@ export function CertificationCard({
       {/* Dates */}
       <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
         <div>
-          <p style={{ margin: 0, fontSize: 10, color: "#94a3b8", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em" }}>Obtained</p>
+          <p style={{ margin: 0, fontSize: 10, color: "var(--mut)", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em" }}>Obtained</p>
           <p style={{ margin: "2px 0 0", fontSize: 13, fontWeight: 600, color: "#1e293b" }}>{formatDate(obtainedDate)}</p>
         </div>
         {expiryDate ? (
           <div>
-            <p style={{ margin: 0, fontSize: 10, color: "#94a3b8", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em" }}>Expires</p>
+            <p style={{ margin: 0, fontSize: 10, color: "var(--mut)", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em" }}>Expires</p>
             <p style={{ margin: "2px 0 0", fontSize: 13, fontWeight: 600, color: status === "expired" ? "#dc2626" : "#1e293b" }}>
               {formatDate(expiryDate)}
             </p>
           </div>
         ) : (
           <div>
-            <p style={{ margin: 0, fontSize: 10, color: "#94a3b8", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em" }}>Expires</p>
-            <p style={{ margin: "2px 0 0", fontSize: 13, color: "#94a3b8" }}>No expiry</p>
+            <p style={{ margin: 0, fontSize: 10, color: "var(--mut)", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em" }}>Expires</p>
+            <p style={{ margin: "2px 0 0", fontSize: 13, color: "var(--mut)" }}>No expiry</p>
           </div>
         )}
       </div>

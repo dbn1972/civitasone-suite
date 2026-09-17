@@ -45,13 +45,13 @@ export function NotificationsPanel() {
   return (
     <div style={{ marginTop: 18 }}>
       {loading ? (
-        <p className="pad" style={{ textAlign: "center", color: "#94a3b8" }}>Loading…</p>
+        <p className="pad" style={{ textAlign: "center", color: "var(--mut)" }}>Loading…</p>
       ) : error ? (
         // A failed load must NOT show "All clear" — that would tell an officer
         // nothing is pending when we simply couldn't check.
         <div className="card"><div className="pad"><ErrorState error={toHumanError("load", { area: "notifications" })} onRetry={() => void load()} /></div></div>
       ) : items.length === 0 ? (
-        <div className="card"><p className="pad" style={{ color: "#94a3b8" }}>All clear — nothing needs your attention.</p></div>
+        <div className="card"><p className="pad" style={{ color: "var(--mut)" }}>All clear — nothing needs your attention.</p></div>
       ) : (
         <div aria-live="polite" aria-atomic="false" style={{ display: "grid", gap: 10 }}>
           {items.map((n) => {
@@ -71,7 +71,7 @@ export function NotificationsPanel() {
                     </div>
                     <div style={{ fontSize: "0.8125rem", color: "#475569" }}>{n.detail}</div>
                   </div>
-                  <time style={{ fontSize: "0.75rem", color: "#94a3b8", whiteSpace: "nowrap" }}>
+                  <time style={{ fontSize: "0.75rem", color: "var(--mut)", whiteSpace: "nowrap" }}>
                     {new Date(n.at).toLocaleDateString("en-IN", { day: "2-digit", month: "short" })}
                   </time>
                 </div>

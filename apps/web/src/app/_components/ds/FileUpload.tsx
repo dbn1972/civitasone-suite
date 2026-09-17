@@ -109,7 +109,7 @@ export function FileUpload({
         {status === "done" && <span style={{ fontSize: 12, color: "#166534" }}>✅ {message}</span>}
         {status === "error" && <span style={{ fontSize: 12, color: "#b91c1c" }}>❌ {message}</span>}
       </div>
-      <p style={{ margin: "4px 0 0", fontSize: 11, color: "#94a3b8" }}>
+      <p style={{ margin: "4px 0 0", fontSize: 11, color: "var(--mut)" }}>
         Max {maxSizeMb}MB. Uploaded securely — no file passes through the server.
       </p>
     </div>

@@ -73,7 +73,7 @@ export default async function SkillsPage() {
           {source === "error" ? (
             <RefreshErrorState error={toHumanError("load", { area: "skill matrix" })} backHref="/hr" />
           ) : matrixRecords.length === 0 ? (
-            <div style={{ padding: 32, textAlign: "center", color: "#94a3b8" }}>
+            <div style={{ padding: 32, textAlign: "center", color: "var(--mut)" }}>
               <p style={{ fontSize: 32, margin: "0 0 8px" }}>🎯</p>
               <p style={{ fontWeight: 600, color: "#475569", margin: 0 }}>No skill assessments recorded</p>
               <p style={{ fontSize: 13, margin: "4px 0 0" }}>

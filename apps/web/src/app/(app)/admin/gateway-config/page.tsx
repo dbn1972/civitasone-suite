@@ -133,14 +133,14 @@ export default function GatewayConfigPage() {
       </StatGrid>
 
       {error && (
-        <div className="card" style={{ marginTop: 16, background: "#fef2f2", border: "1px solid #fecaca", padding: 12, borderRadius: 8 }}>
-          <span style={{ color: "#dc2626" }}>⚠️ {error}</span>
+        <div className="card" style={{ marginTop: 16, background: "var(--badbg)", border: "1px solid var(--badbd)", padding: 12, borderRadius: 8 }}>
+          <span style={{ color: "var(--bad)" }}>⚠️ {error}</span>
         </div>
       )}
 
       {success && (
-        <div className="card" style={{ marginTop: 16, background: "#ecfdf5", border: "1px solid #a7f3d0", padding: 12, borderRadius: 8 }}>
-          <span style={{ color: "#059669" }}>✓ {success}</span>
+        <div className="card" style={{ marginTop: 16, background: "var(--goodbg)", border: "1px solid var(--goodbd)", padding: 12, borderRadius: 8 }}>
+          <span style={{ color: "var(--good)" }}>✓ {success}</span>
         </div>
       )}
 

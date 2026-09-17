@@ -184,7 +184,7 @@ export default function RegisterGrievancePage() {
               section: (chunks) => <strong>{chunks}</strong>,
               days: (chunks) => <strong>{chunks}</strong>,
               email: (chunks) => (
-                <a href="mailto:dpo@gov.in" style={{ color: "#7a5200" }}>
+                <a href="mailto:dpo@gov.in" style={{ color: "#7a5200", textDecoration: "underline" }}>
                   {chunks}
                 </a>
               ),

@@ -40,7 +40,7 @@ export default async function NotificationPrefsPage() {
               prefs.map((pref) => (
                 <div key={pref.id} className={`ntf${pref.inAppEnabled ? " unread" : ""}`}>
                   <div style={{ fontWeight: 500, fontSize: 13 }}>{pref.label}</div>
-                  <div style={{ fontSize: 12, color: "#98a2b3" }}><span className="mono">{pref.module}</span> · {pref.eventType}</div>
+                  <div style={{ fontSize: 12, color: "var(--mut)" }}><span className="mono">{pref.module}</span> · {pref.eventType}</div>
                 </div>
               ))
             ) : (

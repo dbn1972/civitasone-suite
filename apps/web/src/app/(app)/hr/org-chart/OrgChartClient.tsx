@@ -83,27 +83,37 @@ export function OrgChartClient({ data }: { data: OrgChartNode[] }) {
         </Button>
       </div>
 
-      {/* Tree */}
-      <div
-        role="tree"
-        aria-label="Organisation hierarchy"
-        style={{
-          overflowX: 'auto',
-          padding: '8px 0 16px',
-        }}
-      >
+      {/* Tree.
+          aria-required-children: role="tree"'s required owned elements are
+          group/treeitem, checked transitively -- an empty role="group" with
+          no treeitem descendants still leaves the requirement unmet (axe
+          reports it against the outer tree either way). The earlier fix
+          added role="group" unconditionally, which didn't clear the empty
+          case. The structurally correct fix: only claim role="tree" (and
+          its group wrapper) when there is at least one real treeitem to
+          hold it; the empty state is plain informational text, not an
+          empty tree widget. UX-005 tranche 5. */}
+      {roots.length > 0 ? (
         <div
+          role="tree"
+          aria-label="Organisation hierarchy"
           style={{
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            gap: 0,
-            minWidth: 'max-content',
-            margin: '0 auto',
+            overflowX: 'auto',
+            padding: '8px 0 16px',
           }}
         >
-          {roots.length > 0 ? (
-            roots.map((root) => (
+          <div
+            role="group"
+            style={{
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              gap: 0,
+              minWidth: 'max-content',
+              margin: '0 auto',
+            }}
+          >
+            {roots.map((root) => (
               <OrgTreeNode
                 key={root.id}
                 node={root}
@@ -112,14 +122,14 @@ export function OrgChartClient({ data }: { data: OrgChartNode[] }) {
                 expanded={expanded}
                 onToggle={onToggle}
               />
-            ))
-          ) : (
-            <p style={{ color: 'var(--muted, #64748b)', fontSize: 14 }}>
-              No organisational hierarchy data available.
-            </p>
-          )}
+            ))}
+          </div>
         </div>
-      </div>
+      ) : (
+        <p style={{ color: 'var(--muted, #64748b)', fontSize: 14 }}>
+          No organisational hierarchy data available.
+        </p>
+      )}
 
       {/* GFR note */}
       <p

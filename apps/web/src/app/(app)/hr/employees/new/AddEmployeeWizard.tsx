@@ -393,7 +393,7 @@ export function AddEmployeeWizard({ departments, designations, managers }: Props
         <span
           style={{
             fontSize: 12,
-            color: "#94a3b8",
+            color: "var(--mut)",
             flexGrow: 1,
             textAlign: "center",
           }}
