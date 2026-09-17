@@ -55,6 +55,12 @@ export function UsersTable({ users, source = "api" }: { users: AdminUser[]; sour
       <DataSourceBadge provenance={provenance ?? "live"} cachedAt={cachedAt} offline={offline} />
       <DataTable<AdminUser>
         rowHref={(user) => `/tenant-admin/users/${user.id}`}
+        // REL-023: without this, the row-link's aria-label fell back to
+        // `columns[0].key` (email) -- "Open admin@example.com" instead of
+        // "Open Admin User" -- so a11y tooling and role-based lookups keyed
+        // on the person's name (the actual identifying value here) couldn't
+        // find the link at all. See DataTable's identifyingColumnKey doc.
+        identifyingColumnKey="name"
         columns={[
           {
             key: "email",

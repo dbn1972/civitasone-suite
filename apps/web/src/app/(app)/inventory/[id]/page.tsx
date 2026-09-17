@@ -6,7 +6,7 @@ import {
   DataTable,
   PageHeader,
 } from "../../../_components/ds";
-import { PrintExportButton } from "../_components/PrintExportButton";
+import { PrintExportButton } from "../../stock/_components/PrintExportButton";
 import { formatMoney, formatIndianDate } from "@/lib/formatters";
 
 const LEDGER_COLUMNS = [
@@ -16,6 +16,17 @@ const LEDGER_COLUMNS = [
   { key: "balance" as const, label: "Balance", align: "right" as const },
 ];
 
+// REL-023: relocated from apps/web/src/app/(app)/stock/[id]/page.tsx.
+// next.config.mjs permanently redirects /stock/:path* -> /inventory/:path*
+// ("Legacy /stock/* routes -> /inventory/* (requirement 1.7)"), which made
+// this exact page unreachable dead code (Next applies redirects() before
+// matching any page file) while every row-link in InventoryStockListClient
+// and every "back" link on this page itself still pointed at /stock/<id> --
+// so a real user clicking a stock item row landed on inventory/not-found.tsx.
+// Content is unchanged from the old page other than the two /stock/list ->
+// /inventory/list "back" links below (the redirect already made the old
+// href work, just via an extra hop); everything else (loader, ledger table,
+// field labels) is identical to what was already live before the rename.
 export default async function StockItemDetailPage({
   params,
 }: {
@@ -26,7 +37,7 @@ export default async function StockItemDetailPage({
   if (!item) {
     return (
       <main className="page-main wrap" aria-labelledby="page-heading">
-        <PageHeader title="Item not found" back="/stock/list" />
+        <PageHeader title="Item not found" back="/inventory/list" />
         <p className="sub">The requested stock item could not be found.</p>
       </main>
     );
@@ -52,7 +63,7 @@ export default async function StockItemDetailPage({
             />
           </>
         }
-        back="/stock/list"
+        back="/inventory/list"
         actions={
           <>
             {source === "error" && <DataSourceBadge source={source} />}

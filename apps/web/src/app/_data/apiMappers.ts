@@ -913,7 +913,13 @@ export function mapStockItemDetail(payload: unknown): StockItemDetail | null {
   return {
     ...base,
     description: toText(payload.description) ?? undefined,
-    stockLedger: [],
+    // REL-023: was hardcoded to [] regardless of what the API returned --
+    // the item detail page's "Stock Ledger" table silently showed "No
+    // ledger entries" for every item, always, even with real backend data.
+    // mapStockLedgerEntries already exists and is already correct (it's
+    // the same mapper getStockLedger() uses for the standalone ledger-list
+    // page) -- it just was never called here.
+    stockLedger: mapStockLedgerEntries(payload.stockLedger) ?? [],
   };
 }
 
