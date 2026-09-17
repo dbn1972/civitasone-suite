@@ -5,6 +5,7 @@
  * DPC meeting date, order number, increment in pay. Approval chain:
  * Dept Head → HR → Finance → Signed.
  */
+import { useTranslations } from "next-intl";
 import { StatusPill } from "@/app/_components/ds";
 import { formatIndianDate, formatMoney } from "@/lib/formatters";
 
@@ -28,22 +29,25 @@ export type PromotionRow = {
   createdAt?: string;
 } & Record<string, unknown>;
 
-const STATUS_LABEL: Record<string, string> = {
-  pending: "Initiated",
-  dept_approved: "Dept Head Approved",
-  hr_approved: "HR Approved",
-  finance_approved: "Finance Approved",
-  approved: "Finance Approved",
-  signed: "Signed & Issued",
-  completed: "Completed",
-  cancelled: "Cancelled",
+// UX-017: values are looked up by key through t() at render time (see
+// PromotionCard below) so status/chain labels stay in the active locale;
+// these lookup tables only carry the status-string -> key mapping.
+const STATUS_LABEL_KEYS: Record<string, string> = {
+  pending: "statusInitiated",
+  dept_approved: "statusDeptApproved",
+  hr_approved: "statusHrApproved",
+  finance_approved: "statusFinanceApproved",
+  approved: "statusFinanceApproved",
+  signed: "statusSignedIssued",
+  completed: "statusCompleted",
+  cancelled: "statusCancelled",
 };
 
-const CHAIN: Array<{ key: string; label: string; icon: string }> = [
-  { key: "dept_approved",    label: "Dept Head", icon: "🏢" },
-  { key: "hr_approved",      label: "HR",        icon: "👥" },
-  { key: "finance_approved", label: "Finance",   icon: "💰" },
-  { key: "signed",           label: "Signed",    icon: "✍️" },
+const CHAIN: Array<{ key: string; labelKey: string; icon: string }> = [
+  { key: "dept_approved",    labelKey: "chainDeptHead", icon: "🏢" },
+  { key: "hr_approved",      labelKey: "chainHr",        icon: "👥" },
+  { key: "finance_approved", labelKey: "chainFinance",   icon: "💰" },
+  { key: "signed",           labelKey: "chainSigned",    icon: "✍️" },
 ];
 
 function chainIndex(status: string): number {
@@ -60,7 +64,9 @@ function chainIndex(status: string): number {
 interface Props { promotion: PromotionRow; }
 
 export function PromotionCard({ promotion }: Props) {
-  const statusLabel = STATUS_LABEL[promotion.status] ?? promotion.status;
+  const t           = useTranslations("promotionCard");
+  const statusKey   = STATUS_LABEL_KEYS[promotion.status];
+  const statusLabel = statusKey ? t(statusKey) : promotion.status;
   const chainIdx    = chainIndex(promotion.status);
   const empLabel    = promotion.employee ?? promotion.employeeId ?? "Unknown";
   const fromLabel   = promotion.fromDesignation ?? promotion.fromGrade ?? promotion.fromDesigId ?? "—";
@@ -70,7 +76,7 @@ export function PromotionCard({ promotion }: Props) {
     : null;
 
   return (
-    <div className="card" style={{ marginBottom: 0 }} aria-label={`Promotion for ${empLabel}`}>
+    <div className="card" style={{ marginBottom: 0 }} aria-label={t("cardAriaLabel", { name: empLabel })}>
       <div className="card-h" style={{ alignItems: "flex-start", gap: 12 }}>
         <div style={{ flex: 1, minWidth: 0 }}>
           <h3 style={{ margin: 0, fontSize: "0.9375rem", fontWeight: 600 }}>{empLabel}</h3>
@@ -89,17 +95,17 @@ export function PromotionCard({ promotion }: Props) {
           borderRadius: 10, marginBottom: 14, flexWrap: "wrap",
         }}>
           <div style={{ textAlign: "center" }}>
-            <p style={{ margin: 0, fontSize: "0.6875rem", color: "var(--ink3)", textTransform: "uppercase", letterSpacing: "0.04em" }}>Current</p>
+            <p style={{ margin: 0, fontSize: "0.6875rem", color: "var(--ink3)", textTransform: "uppercase", letterSpacing: "0.04em" }}>{t("currentLabel")}</p>
             <p style={{ margin: "4px 0 0", fontSize: "0.9375rem", fontWeight: 600 }}>{fromLabel}</p>
           </div>
           <div style={{ fontSize: 22, color: "#2563eb", flexShrink: 0 }}>&#8594;</div>
           <div style={{ textAlign: "center" }}>
-            <p style={{ margin: 0, fontSize: "0.6875rem", color: "var(--ink3)", textTransform: "uppercase", letterSpacing: "0.04em" }}>Promoted To</p>
+            <p style={{ margin: 0, fontSize: "0.6875rem", color: "var(--ink3)", textTransform: "uppercase", letterSpacing: "0.04em" }}>{t("promotedToLabel")}</p>
             <p style={{ margin: "4px 0 0", fontSize: "0.9375rem", fontWeight: 700, color: "#16a34a" }}>{toLabel}</p>
           </div>
           {payStr && (
             <div style={{ marginLeft: "auto", textAlign: "right" }}>
-              <p style={{ margin: 0, fontSize: "0.6875rem", color: "var(--ink3)", textTransform: "uppercase", letterSpacing: "0.04em" }}>New Basic</p>
+              <p style={{ margin: 0, fontSize: "0.6875rem", color: "var(--ink3)", textTransform: "uppercase", letterSpacing: "0.04em" }}>{t("newBasicLabel")}</p>
               <p style={{ margin: "4px 0 0", fontSize: "1rem", fontWeight: 700, color: "#0f766e" }}>{payStr}</p>
             </div>
           )}
@@ -109,7 +115,7 @@ export function PromotionCard({ promotion }: Props) {
         <div className="fields">
           {(promotion.orderNo ?? promotion.orderRef) && (
             <div className="fld">
-              <span className="l">Order No.</span>
+              <span className="l">{t("orderNoLabel")}</span>
               <span className="v" style={{ fontFamily: "monospace", fontSize: "0.8125rem" }}>
                 {promotion.orderNo ?? promotion.orderRef}
               </span>
@@ -117,13 +123,13 @@ export function PromotionCard({ promotion }: Props) {
           )}
           {promotion.effectiveDate && (
             <div className="fld">
-              <span className="l">Effective Date</span>
+              <span className="l">{t("effectiveDateLabel")}</span>
               <span className="v">{formatIndianDate(promotion.effectiveDate)}</span>
             </div>
           )}
           {promotion.dpcDate && (
             <div className="fld">
-              <span className="l">DPC Meeting Date</span>
+              <span className="l">{t("dpcMeetingDateLabel")}</span>
               <span className="v">{formatIndianDate(promotion.dpcDate)}</span>
             </div>
           )}
@@ -132,10 +138,10 @@ export function PromotionCard({ promotion }: Props) {
         {/* Approval chain */}
         <div style={{ marginTop: 16 }}>
           <p style={{ margin: "0 0 8px", fontSize: "0.75rem", color: "var(--ink3)", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em" }}>
-            Approval Chain
+            {t("approvalChainLabel")}
           </p>
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-            {CHAIN.map(({ key, label, icon }, i) => {
+            {CHAIN.map(({ key, labelKey, icon }, i) => {
               const done   = i <= chainIdx;
               const active = i === chainIdx + 1;
               return (
@@ -148,7 +154,7 @@ export function PromotionCard({ promotion }: Props) {
                   color: done ? "#16a34a" : active ? "#2563eb" : "var(--ink3)",
                 }}>
                   <span>{done ? "✓" : icon}</span>
-                  <span>{label}</span>
+                  <span>{t(labelKey)}</span>
                 </div>
               );
             })}

@@ -1,5 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { NextIntlClientProvider } from "next-intl";
+import enMessages from "@/messages/en.json";
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }),
@@ -20,6 +22,18 @@ describe("AparNewPage — UX-016 clerk-safe errors", () => {
   });
   afterEach(() => vi.unstubAllGlobals());
 
+  // UX-017: AparNewPage now reads its copy through next-intl
+  // (useTranslations("aparNew")), so it needs a real provider in the tree —
+  // same pattern as citizen/grievances/GrievancesTable.test.tsx and
+  // hr/employees/[id]/edit/EditEmployeeForm.test.tsx.
+  function renderPage() {
+    render(
+      <NextIntlClientProvider locale="en" messages={enMessages}>
+        <AparNewPage />
+      </NextIntlClientProvider>,
+    );
+  }
+
   function fillAndSubmit() {
     fireEvent.change(screen.getByLabelText(/employee id/i), {
       target: { value: "550e8400-e29b-41d4-a716-446655440000" },
@@ -39,7 +53,7 @@ describe("AparNewPage — UX-016 clerk-safe errors", () => {
 
   it("shows a clerk-safe message, never the raw HTTP status, when initiation fails", async () => {
     fetchMock.mockResolvedValue(new Response("", { status: 500 }));
-    render(<AparNewPage />);
+    renderPage();
     fillAndSubmit();
 
     await waitFor(() => expect(screen.getByText(/couldn't save/i)).toBeInTheDocument());
@@ -57,7 +71,7 @@ describe("AparNewPage — UX-016 clerk-safe errors", () => {
         { status: 400, headers: { "content-type": "application/json" } },
       ),
     );
-    render(<AparNewPage />);
+    renderPage();
     fillAndSubmit();
 
     expect(await screen.findByText("Employee not found.")).toBeInTheDocument();

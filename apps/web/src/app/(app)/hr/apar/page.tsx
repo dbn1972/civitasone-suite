@@ -5,6 +5,7 @@
  * and deadline countdown.
  */
 import Link from "next/link";
+import { getTranslations } from "next-intl/server";
 import { PageHeader, StatGrid, StatCard, Card } from "../../../_components/ds";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { fetchJson } from "@/app/_data/apiClient";
@@ -21,6 +22,7 @@ async function getApars() {
 }
 
 export default async function AparListPage() {
+  const t = await getTranslations("apar");
   const result = await getApars();
   const apars  = result.data;
 
@@ -40,27 +42,27 @@ export default async function AparListPage() {
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
-        title="APAR — Annual Performance Appraisal"
-        subtitle="SPARROW-style multi-authority appraisal: Self-Appraisal → Reporting Officer → Counter-signing Officer → Acceptance."
+        title={t("title")}
+        subtitle={t("subtitle")}
         back="/hr"
         help="hr"
         actions={
           <Link href="/hr/apar/new" className="btn primary">
-            + Initiate APAR
+            {t("initiateBtn")}
           </Link>
         }
       />
       <DataSourceBadge source={result.source} />
 
       <StatGrid>
-        <StatCard icon="📋" iconBg="#e6f0ff" label="Total APARs"      value={apars.length} />
-        <StatCard icon="✍️" iconBg="#fffbe6" label="Self-Appraisal"   value={pending} />
-        <StatCard icon="🔍" iconBg="#e6f0ff" label="Under Review"     value={inReview} />
-        <StatCard icon="⚠️" iconBg="#fff1f0" label="Disputed"          value={disputed} />
-        <StatCard icon="✅" iconBg="#e6f7f0" label="Closed / Accepted" value={completed} />
+        <StatCard icon="📋" iconBg="#e6f0ff" label={t("statTotal")}        value={apars.length} />
+        <StatCard icon="✍️" iconBg="#fffbe6" label={t("statSelfAppraisal")} value={pending} />
+        <StatCard icon="🔍" iconBg="#e6f0ff" label={t("statUnderReview")}   value={inReview} />
+        <StatCard icon="⚠️" iconBg="#fff1f0" label={t("statDisputed")}      value={disputed} />
+        <StatCard icon="✅" iconBg="#e6f7f0" label={t("statClosed")}        value={completed} />
       </StatGrid>
 
-      <Card title="APAR Flow — Active Records">
+      <Card title={t("flowCardTitle")}>
         <div style={{ padding: 16 }}>
           <APARFlowList records={apars} />
         </div>

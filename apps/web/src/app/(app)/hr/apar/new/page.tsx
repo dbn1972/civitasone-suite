@@ -1,10 +1,12 @@
 "use client";
 import { useState, useId } from "react";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { PageHeader, Card, Button } from "../../../../_components/ds";
 import { useFormError } from "@/lib/useFormError";
 
 export default function AparNewPage() {
+  const t = useTranslations("aparNew");
   const router = useRouter();
   const [status, setStatus] = useState<"idle" | "submitting" | "done" | "error">("idle");
   const [msg, setMsg] = useState("");
@@ -49,38 +51,38 @@ export default function AparNewPage() {
 
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
-      <PageHeader title="Initiate APAR" subtitle="Start a new Annual Performance Appraisal for an employee." back="/hr/apar" />
+      <PageHeader title={t("title")} subtitle={t("subtitle")} back="/hr/apar" />
 
       <div style={{ maxWidth: 600, marginTop: 20 }}>
-      <Card title="APAR Details">
+      <Card title={t("cardTitle")}>
         <form onSubmit={handleSubmit} style={{ padding: "20px 24px", display: "flex", flexDirection: "column", gap: 16 }}>
           <div>
-            <label htmlFor={empId} style={{ fontSize: 13, color: "var(--mut)", display: "block", marginBottom: 4 }}>Employee ID (UUID)</label>
+            <label htmlFor={empId} style={{ fontSize: 13, color: "var(--mut)", display: "block", marginBottom: 4 }}>{t("employeeIdLabel")}</label>
             <input id={empId} value={employeeId} onChange={(e) => setEmployeeId(e.target.value)}
-              placeholder="e.g. 550e8400-e29b-41d4-a716-446655440000" required pattern="[0-9a-f-]{36}" />
+              placeholder={t("employeeIdPlaceholder")} required pattern="[0-9a-f-]{36}" />
             {formError.fieldError("employeeId") && (
               <p style={{ color: "var(--red, #c00)", fontSize: 12, margin: "4px 0 0" }}>{formError.fieldError("employeeId")}</p>
             )}
           </div>
           <div>
-            <label htmlFor={periodId} style={{ fontSize: 13, color: "var(--mut)", display: "block", marginBottom: 4 }}>Appraisal Period</label>
+            <label htmlFor={periodId} style={{ fontSize: 13, color: "var(--mut)", display: "block", marginBottom: 4 }}>{t("periodLabel")}</label>
             <input id={periodId} value={appraisalPeriod} onChange={(e) => setAppraisalPeriod(e.target.value)}
-              placeholder="e.g. 2025-26" required maxLength={16} />
+              placeholder={t("periodPlaceholder")} required maxLength={16} />
           </div>
           <div>
-            <label htmlFor={roId} style={{ fontSize: 13, color: "var(--mut)", display: "block", marginBottom: 4 }}>Reporting Officer ID (UUID)</label>
+            <label htmlFor={roId} style={{ fontSize: 13, color: "var(--mut)", display: "block", marginBottom: 4 }}>{t("reportingOfficerLabel")}</label>
             <input id={roId} value={reportingOfficerId} onChange={(e) => setReportingOfficerId(e.target.value)}
-              placeholder="UUID of Reporting Officer" required pattern="[0-9a-f-]{36}" />
+              placeholder={t("reportingOfficerPlaceholder")} required pattern="[0-9a-f-]{36}" />
           </div>
           <div>
-            <label htmlFor={rvId} style={{ fontSize: 13, color: "var(--mut)", display: "block", marginBottom: 4 }}>Reviewing Officer ID (UUID)</label>
+            <label htmlFor={rvId} style={{ fontSize: 13, color: "var(--mut)", display: "block", marginBottom: 4 }}>{t("reviewingOfficerLabel")}</label>
             <input id={rvId} value={reviewingOfficerId} onChange={(e) => setReviewingOfficerId(e.target.value)}
-              placeholder="UUID of Reviewing Officer" required pattern="[0-9a-f-]{36}" />
+              placeholder={t("reviewingOfficerPlaceholder")} required pattern="[0-9a-f-]{36}" />
           </div>
           <div>
-            <label htmlFor={aaId} style={{ fontSize: 13, color: "var(--mut)", display: "block", marginBottom: 4 }}>Accepting Authority ID (UUID)</label>
+            <label htmlFor={aaId} style={{ fontSize: 13, color: "var(--mut)", display: "block", marginBottom: 4 }}>{t("acceptingAuthorityLabel")}</label>
             <input id={aaId} value={acceptingAuthorityId} onChange={(e) => setAcceptingAuthorityId(e.target.value)}
-              placeholder="UUID of Accepting Authority" required pattern="[0-9a-f-]{36}" />
+              placeholder={t("acceptingAuthorityPlaceholder")} required pattern="[0-9a-f-]{36}" />
           </div>
           {msg && (
             <p style={{ color: status === "error" ? "var(--red, #c00)" : "var(--green, #0a0)", fontSize: 13 }}>
@@ -88,9 +90,9 @@ export default function AparNewPage() {
             </p>
           )}
           <div style={{ display: "flex", gap: 12, justifyContent: "flex-end" }}>
-            <Button variant="ghost" onClick={() => router.push("/hr/apar")}>Cancel</Button>
+            <Button variant="ghost" onClick={() => router.push("/hr/apar")}>{t("cancelBtn")}</Button>
             <Button type="submit" variant="primary" disabled={status === "submitting"}>
-              {status === "submitting" ? "Initiating…" : "Initiate APAR"}
+              {status === "submitting" ? t("initiatingBtn") : t("initiateBtn")}
             </Button>
           </div>
         </form>

@@ -4,6 +4,7 @@
  * DPC batch promotions: shows all employees in the DPC with individual
  * promotion status. Summary counts at top.
  */
+import { useTranslations } from "next-intl";
 import type { PromotionRow } from "../../promotion/_components/PromotionCard";
 import { PromotionCard } from "../../promotion/_components/PromotionCard";
 import { StatGrid, StatCard } from "@/app/_components/ds";
@@ -13,13 +14,14 @@ interface Props {
 }
 
 export function PromotionBatchView({ promotions }: Props) {
+  const t = useTranslations("dpcBatchView");
   if (promotions.length === 0) {
     return (
       <div style={{ textAlign: "center", padding: "40px 20px", color: "var(--ink3)" }}>
         <div style={{ fontSize: 40, marginBottom: 12 }}>📈</div>
-        <p style={{ margin: 0, fontWeight: 600 }}>No DPC promotions recorded</p>
+        <p style={{ margin: 0, fontWeight: 600 }}>{t("emptyTitle")}</p>
         <p style={{ margin: "6px 0 0", fontSize: "0.875rem" }}>
-          Raise promotions from employee profiles or use the Promotions module.
+          {t("emptyMessage")}
         </p>
       </div>
     );
@@ -33,12 +35,12 @@ export function PromotionBatchView({ promotions }: Props) {
   return (
     <div>
       <StatGrid>
-        <StatCard icon="📋" iconBg="var(--infobg, #e0f2fe)" label="Total in Batch"   value={promotions.length} />
-        <StatCard icon="⏳" iconBg="var(--warnbg, #fef9c3)" label="Initiated"        value={initiated} />
-        <StatCard icon="🔄" iconBg="#ede9fe"                 label="In Approval"      value={inProgress} />
-        <StatCard icon="✅" iconBg="var(--goodbg, #dcfce7)"  label="Signed & Issued"  value={signed} />
+        <StatCard icon="📋" iconBg="var(--infobg, #e0f2fe)" label={t("statTotalInBatch")}  value={promotions.length} />
+        <StatCard icon="⏳" iconBg="var(--warnbg, #fef9c3)" label={t("statInitiated")}      value={initiated} />
+        <StatCard icon="🔄" iconBg="#ede9fe"                 label={t("statInApproval")}     value={inProgress} />
+        <StatCard icon="✅" iconBg="var(--goodbg, #dcfce7)"  label={t("statSignedIssued")}  value={signed} />
         {cancelled > 0 && (
-          <StatCard icon="❌" iconBg="#fee2e2" label="Cancelled" value={cancelled} />
+          <StatCard icon="❌" iconBg="#fee2e2" label={t("statCancelled")} value={cancelled} />
         )}
       </StatGrid>
       <div style={{ display: "grid", gap: 16, gridTemplateColumns: "repeat(auto-fill, minmax(340px, 1fr))", marginTop: 16 }}>

@@ -20,12 +20,14 @@
  */
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { Card, ConfirmDialog, Button } from "@/app/_components/ds";
 import { browserJson } from "@/lib/api/browserClient";
 
 type AcceptedResponse = { id: string; status: string; correlationId?: string };
 
 export function SeniorityListActions({ canAdminister }: { canAdminister: boolean }) {
+  const t = useTranslations("dpcSeniorityActions");
   const router = useRouter();
 
   const [generateOpen, setGenerateOpen] = useState(false);
@@ -53,13 +55,11 @@ export function SeniorityListActions({ canAdminister }: { canAdminister: boolean
       setGenerateOpen(false);
       setGeneratedId(res.id);
       setTone("good");
-      setMessage(
-        `Seniority list generation queued (list ID ${res.id}). It will be ready to approve shortly.`,
-      );
+      setMessage(t("generateQueuedMessage", { id: res.id }));
       router.refresh();
     } catch (err) {
       setGenerateError(
-        err instanceof Error ? err.message : "Could not queue seniority list generation. Please try again.",
+        err instanceof Error ? err.message : t("generateErrorFallback"),
       );
     } finally {
       setGenerateBusy(false);
@@ -81,14 +81,12 @@ export function SeniorityListActions({ canAdminister }: { canAdminister: boolean
       // the consumer's status-guarded UPDATE can still silently no-op (see
       // routes.ts). Don't claim "approved" as a done fact; state what we
       // actually know, matching generate's "queued" phrasing below.
-      setMessage(
-        `Seniority list approval submitted (list ID ${generatedId}). It will be confirmed shortly.`,
-      );
+      setMessage(t("approveSubmittedMessage", { id: generatedId }));
       setGeneratedId(null);
       router.refresh();
     } catch (err) {
       setApproveError(
-        err instanceof Error ? err.message : "Could not approve the seniority list. Please try again.",
+        err instanceof Error ? err.message : t("approveErrorFallback"),
       );
     } finally {
       setApproveBusy(false);
@@ -96,10 +94,10 @@ export function SeniorityListActions({ canAdminister }: { canAdminister: boolean
   }
 
   return (
-    <Card title="Seniority List Actions" padding>
+    <Card title={t("cardTitle")} padding>
       <div style={{ display: "grid", gap: 12 }}>
         <p style={{ fontSize: 13, color: "var(--ink2)", margin: 0 }}>
-          Generate a point-in-time seniority snapshot for DPC records, then approve it once reviewed.
+          {t("description")}
         </p>
         <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
           <Button
@@ -111,7 +109,7 @@ export function SeniorityListActions({ canAdminister }: { canAdminister: boolean
               setGenerateOpen(true);
             }}
           >
-            {generateBusy ? "Generating…" : "Generate Seniority List"}
+            {generateBusy ? t("generatingBtn") : t("generateBtn")}
           </Button>
           {generatedId && (
             <Button
@@ -122,7 +120,7 @@ export function SeniorityListActions({ canAdminister }: { canAdminister: boolean
                 setApproveOpen(true);
               }}
             >
-              {approveBusy ? "Approving…" : `Approve List ${generatedId.slice(0, 8)}…`}
+              {approveBusy ? t("approvingBtn") : t("approveListBtn", { idPrefix: generatedId.slice(0, 8) })}
             </Button>
           )}
         </div>
@@ -141,28 +139,28 @@ export function SeniorityListActions({ canAdminister }: { canAdminister: boolean
 
       <ConfirmDialog
         open={generateOpen}
-        title="Generate a new seniority list?"
-        confirmLabel="Generate"
+        title={t("generateConfirmTitle")}
+        confirmLabel={t("generateConfirmLabel")}
         busy={generateBusy}
         errorMessage={generateError}
-        description="This creates a new point-in-time seniority snapshot for DPC review, ranked by date of joining, date of birth and merit — matching the live seniority list above."
+        description={t("generateConfirmDescription")}
         onConfirm={() => void generate()}
         onCancel={() => !generateBusy && setGenerateOpen(false)}
       />
 
       <ConfirmDialog
         open={approveOpen}
-        title="Approve this seniority list?"
-        confirmLabel="Approve"
+        title={t("approveConfirmTitle")}
+        confirmLabel={t("approveConfirmLabel")}
         busy={approveBusy}
         errorMessage={approveError}
         requireReason
-        reasonLabel="Remarks (optional)"
+        reasonLabel={t("approveReasonLabel")}
         minReasonLength={0}
         maxReasonLength={2000}
         description={
           generatedId
-            ? `Approve seniority list ${generatedId}. This finalizes the DPC snapshot for promotion consideration.`
+            ? t("approveConfirmDescription", { id: generatedId })
             : undefined
         }
         onConfirm={(reason) => void approve(reason)}
