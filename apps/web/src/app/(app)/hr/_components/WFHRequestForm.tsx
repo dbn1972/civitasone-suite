@@ -8,6 +8,7 @@
 import { useState, useId } from "react";
 import { useRouter } from "next/navigation";
 import { useFormError } from "@/lib/useFormError";
+import { Button } from "../../../_components/ds";
 
 interface WFHRequestFormProps {
   /** Pre-fill employee UUID (optional — admin filing on behalf) */
@@ -229,24 +230,23 @@ export function WFHRequestForm({
       )}
 
       <div style={{ display: "flex", gap: 12, justifyContent: "flex-end" }}>
-        <button
+        <Button
           type="button"
-          className="btn ghost"
+          variant="ghost"
           style={{ minHeight: 44 }}
           onClick={() => router.push("/hr/workforce/wfh")}
         >
           Cancel
-        </button>
-        <button
+        </Button>
+        <Button
           type="submit"
-          className="btn primary"
           style={{ minHeight: 44 }}
           disabled={submitDisabled}
           aria-busy={state === "submitting"}
           aria-disabled={submitDisabled}
         >
           {state === "submitting" ? "Submitting…" : "Submit Request"}
-        </button>
+        </Button>
       </div>
     </form>
   );

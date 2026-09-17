@@ -8,6 +8,7 @@
 import { useState, useId } from "react";
 import { useRouter } from "next/navigation";
 import { useFormError } from "@/lib/useFormError";
+import { Button } from "../../../_components/ds";
 
 type SubmitState = "idle" | "submitting" | "done" | "error";
 type CompMode = "cash" | "comp_off";
@@ -213,23 +214,21 @@ export function OvertimeClaimForm() {
       )}
 
       <div style={{ display: "flex", gap: 12, justifyContent: "flex-end" }}>
-        <button
+        <Button
           type="button"
-          className="btn ghost"
+          variant="ghost"
           style={{ minHeight: 44 }}
           onClick={() => router.push("/hr/workforce/overtime")}
         >
           Cancel
-        </button>
-        <button
+        </Button>
+        <Button
           type="submit"
-          className="btn primary"
           style={{ minHeight: 44 }}
-          disabled={state === "submitting"}
-          aria-busy={state === "submitting"}
+          loading={state === "submitting"}
         >
           {state === "submitting" ? "Submitting…" : "Submit Claim"}
-        </button>
+        </Button>
       </div>
     </form>
   );

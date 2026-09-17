@@ -14,8 +14,11 @@ vi.mock("@/app/_components/ds/Toast", () => ({
 
 vi.mock("@/lib/activation", () => ({ trackActivation: vi.fn() }));
 
-vi.mock("../../../_components/ds", () => ({
-  ConfirmDialog: ({
+vi.mock("../../../_components/ds", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../../../_components/ds")>();
+  return {
+    ...actual,
+    ConfirmDialog: ({
     open,
     errorMessage,
     onConfirm,
@@ -30,7 +33,8 @@ vi.mock("../../../_components/ds", () => ({
         <button onClick={onConfirm}>Confirm create run</button>
       </div>
     ) : null,
-}));
+  };
+});
 
 import { CreatePayrollRunForm } from "./CreatePayrollRunForm";
 

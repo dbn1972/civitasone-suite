@@ -3,6 +3,7 @@
 import { useId, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useFormError } from "@/lib/useFormError";
+import { Button } from "../../../_components/ds";
 
 const inputStyle: React.CSSProperties = {
   width: "100%", padding: "8px 12px", border: "1px solid var(--line)",
@@ -75,15 +76,15 @@ export function AddHolidayForm() {
     <div className="card" style={{ marginBottom: 0 }}>
       <div className="card-h" style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <h3>Add Holiday</h3>
-        <button
+        <Button
           type="button"
-          className="btn primary sm"
+          size="sm"
           style={{ minHeight: 36 }}
           onClick={() => { setOpen((o) => !o); setMessage(null); }}
           aria-expanded={open}
         >
           {open ? "✕ Cancel" : "+ Add Holiday"}
-        </button>
+        </Button>
       </div>
 
       {open && (
@@ -167,14 +168,13 @@ export function AddHolidayForm() {
           </div>
 
           <div style={{ display: "flex", justifyContent: "flex-end" }}>
-            <button
+            <Button
               type="submit"
-              className="btn primary"
               disabled={busy}
               style={{ minHeight: 44, minWidth: 140 }}
             >
               {busy ? "Saving…" : "Add Holiday"}
-            </button>
+            </Button>
           </div>
         </form>
       )}

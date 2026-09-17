@@ -1,7 +1,7 @@
 "use client";
 
 import { useId, useRef, useState } from "react";
-import { ConfirmDialog } from "../../../../_components/ds";
+import { Button, ConfirmDialog } from "../../../../_components/ds";
 import { browserJson } from "@/lib/api/browserClient";
 
 type RunOption = { id: string; payPeriod: string };
@@ -108,9 +108,9 @@ export function NachReturnForm({ runs }: { runs: RunOption[] }) {
         </div>
       </div>
       <div style={{ marginTop: 14 }}>
-        <button type="submit" className="btn primary" style={{ minHeight: 44 }} disabled={busy || runs.length === 0}>
+        <Button type="submit" style={{ minHeight: 44 }} disabled={busy || runs.length === 0}>
           Process Return File
-        </button>
+        </Button>
       </div>
       {error && !confirmOpen && (
         <p id={errId} role="alert" className="pill bad" style={{ marginTop: 10, width: "fit-content" }}>

@@ -2,7 +2,7 @@
 
 import { useId, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ConfirmDialog } from "../../../../_components/ds";
+import { Button, ConfirmDialog } from "../../../../_components/ds";
 import { browserJson } from "@/lib/api/browserClient";
 
 type SponsorConfig = {
@@ -177,9 +177,9 @@ export function SponsorBankConfigForm({ initial }: { initial: SponsorConfig | nu
         </div>
       </div>
       <div style={{ marginTop: 14 }}>
-        <button type="submit" className="btn primary" style={{ minHeight: 44 }} disabled={busy}>
+        <Button type="submit" style={{ minHeight: 44 }} disabled={busy}>
           {initial ? "Update Configuration" : "Save Configuration"}
-        </button>
+        </Button>
       </div>
       {error && !confirmOpen && (
         <p id={errId} role="alert" className="pill bad" style={{ marginTop: 10, width: "fit-content" }}>

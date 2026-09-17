@@ -1,7 +1,7 @@
 "use client";
 
 import { useId, useRef, useState } from "react";
-import { ConfirmDialog } from "../../../../_components/ds";
+import { Button, ConfirmDialog } from "../../../../_components/ds";
 import { browserFetch } from "@/lib/api/browserClient";
 import { useFormError } from "@/lib/useFormError";
 
@@ -116,9 +116,9 @@ export function BankFileForm({ runs }: { runs: RunOption[] }) {
         </div>
       </div>
       <div style={{ marginTop: 14 }}>
-        <button type="submit" className="btn primary" style={{ minHeight: 44 }} disabled={busy || runs.length === 0}>
+        <Button type="submit" style={{ minHeight: 44 }} disabled={busy || runs.length === 0}>
           Generate &amp; Download
-        </button>
+        </Button>
       </div>
       {error && !confirmOpen && (
         <p id={errId} role="alert" className="pill bad" style={{ marginTop: 10, width: "fit-content" }}>

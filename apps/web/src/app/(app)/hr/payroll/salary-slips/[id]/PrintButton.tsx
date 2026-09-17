@@ -1,14 +1,15 @@
 "use client";
 
+import { Button } from "../../../../../_components/ds";
+
 export function PrintButton() {
   return (
-    <button
+    <Button
       type="button"
-      className="btn primary"
       onClick={() => window.print()}
       style={{ minHeight: 40 }}
     >
       🖨️ Print / Save PDF
-    </button>
+    </Button>
   );
 }

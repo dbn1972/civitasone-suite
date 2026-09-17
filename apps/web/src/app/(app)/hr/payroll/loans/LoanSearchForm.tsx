@@ -2,6 +2,7 @@
 
 import { useId, useState } from "react";
 import { useRouter } from "next/navigation";
+import { Button } from "../../../../_components/ds";
 
 export function LoanSearchForm({ initialEmpId }: { initialEmpId: string }) {
   const router = useRouter();
@@ -35,9 +36,9 @@ export function LoanSearchForm({ initialEmpId }: { initialEmpId: string }) {
           style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
         />
       </div>
-      <button type="submit" className="btn primary" style={{ minHeight: 44 }}>
+      <Button type="submit" style={{ minHeight: 44 }}>
         Search
-      </button>
+      </Button>
       {error && (
         <p id={`${fieldId}-err`} role="alert" className="pill bad" style={{ width: "fit-content" }}>
           {error}

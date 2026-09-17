@@ -1,7 +1,7 @@
 "use client";
 
 import { useId, useRef, useState } from "react";
-import { Card } from "../../../../_components/ds";
+import { Button, Card } from "../../../../_components/ds";
 import { browserJson } from "@/lib/api/browserClient";
 
 type VerifyResponse = {
@@ -100,9 +100,9 @@ export function VerifyForm16Form() {
           </div>
 
           <div>
-            <button type="submit" className="btn primary" style={{ minHeight: 44 }} disabled={busy}>
+            <Button type="submit" style={{ minHeight: 44 }} disabled={busy}>
               {busy ? "Verifying…" : "Verify signature"}
-            </button>
+            </Button>
           </div>
 
           {error && (

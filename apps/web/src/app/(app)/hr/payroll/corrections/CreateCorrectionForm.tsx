@@ -2,7 +2,7 @@
 
 import { useId, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Card, ConfirmDialog } from "../../../../_components/ds";
+import { Button, Card, ConfirmDialog } from "../../../../_components/ds";
 import { browserJson } from "@/lib/api/browserClient";
 import { formatMoney } from "@/lib/formatters";
 
@@ -231,9 +231,9 @@ export function CreateCorrectionForm() {
           </div>
 
           <div>
-            <button type="submit" className="btn primary" style={{ minHeight: 44 }} disabled={busy}>
+            <Button type="submit" style={{ minHeight: 44 }} disabled={busy}>
               Record Correction
-            </button>
+            </Button>
           </div>
 
           {message && (

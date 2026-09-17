@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useId, useState } from "react";
-import { ConfirmDialog } from "../../../_components/ds";
+import { Button, ConfirmDialog } from "../../../_components/ds";
 import { useToast } from "@/app/_components/ds/Toast";
 import { trackActivation } from "@/lib/activation";
 import { useFormError } from "@/lib/useFormError";
@@ -207,9 +207,9 @@ export function CreatePayrollRunForm({ structures, existingPeriods = [] }: Props
         )}
 
         <div>
-          <button type="submit" className="btn primary" style={{ minHeight: 44 }} disabled={busy || periodDuplicate}>
+          <Button type="submit" style={{ minHeight: 44 }} disabled={busy || periodDuplicate}>
             Create Run
-          </button>
+          </Button>
         </div>
 
         {message && (

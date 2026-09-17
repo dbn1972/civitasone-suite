@@ -3,6 +3,7 @@
 import { useEffect, useId, useState } from "react";
 import { currentFinancialYear } from "@/lib/fiscalYear";
 import { useFormError } from "@/lib/useFormError";
+import { Button } from "../../../../_components/ds";
 
 /** Convert INR (rupees) input to paise. */
 function toPaise(inr: string): number {
@@ -264,9 +265,9 @@ export function TaxDeclarationForm() {
         </div>
 
         <div>
-          <button type="submit" className="btn primary" style={{ minHeight: 44 }} disabled={busy}>
+          <Button type="submit" style={{ minHeight: 44 }} disabled={busy}>
             {busy ? "Submitting…" : "Submit Declaration"}
-          </button>
+          </Button>
         </div>
 
         {message && (

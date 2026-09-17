@@ -2,6 +2,7 @@
 
 import { useId, useState } from "react";
 import { useRouter } from "next/navigation";
+import { Button } from "../../../../_components/ds";
 
 export function CostingPeriodForm({ initialPeriod }: { initialPeriod: string }) {
   const router = useRouter();
@@ -36,9 +37,9 @@ export function CostingPeriodForm({ initialPeriod }: { initialPeriod: string }) 
           style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
         />
       </div>
-      <button type="submit" className="btn primary" style={{ minHeight: 44 }}>
+      <Button type="submit" style={{ minHeight: 44 }}>
         View Report
-      </button>
+      </Button>
       {error && (
         <p id={`${fieldId}-err`} role="alert" className="pill bad" style={{ width: "fit-content" }}>
           {error}

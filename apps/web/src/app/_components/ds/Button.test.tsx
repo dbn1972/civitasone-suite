@@ -57,6 +57,25 @@ describe("Button", () => {
     expect(screen.getByRole("button", { name: "Save" })).not.toHaveAttribute("aria-busy");
   });
 
+  it("passes through a caller-supplied aria-busy independently of loading", () => {
+    // A real tranche 3 conversion (WFHRequestForm) drives `disabled` and
+    // `aria-busy` from two different conditions, so it cannot use `loading`
+    // for both. Before this fix, any explicit aria-busy was silently
+    // discarded because the internal aria-busy computation was spread
+    // after ...rest and always won -- including collapsing an explicit
+    // `false` into a missing attribute.
+    const { rerender } = render(<Button aria-busy={false}>Submit</Button>);
+    expect(screen.getByRole("button", { name: "Submit" })).toHaveAttribute("aria-busy", "false");
+
+    rerender(<Button aria-busy={true}>Submit</Button>);
+    expect(screen.getByRole("button", { name: "Submit" })).toHaveAttribute("aria-busy", "true");
+  });
+
+  it("lets loading win over an explicit aria-busy when both are set", () => {
+    render(<Button loading aria-busy={false}>Save</Button>);
+    expect(screen.getByRole("button", { name: "Save" })).toHaveAttribute("aria-busy", "true");
+  });
+
   it("allows overriding type to submit", () => {
     render(<Button type="submit">Submit</Button>);
     expect(screen.getByRole("button", { name: "Submit" })).toHaveAttribute("type", "submit");
