@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { DataTable, ConfirmDialog } from "../../../../_components/ds";
+import { Button, DataTable, ConfirmDialog } from "../../../../_components/ds";
 import { useFormError } from "@/lib/useFormError";
 
 export type Perm = { module: string; action: string; resource?: string; allowed: boolean };
@@ -151,9 +151,9 @@ export function PermissionGrid({
       <div className="card-h">
         <h3 id="perm-grid-heading">Permission grid</h3>
         {editable ? (
-          <button type="button" className="btn primary sm" disabled={!dirty || busy} onClick={() => { setError(undefined); setConfirmOpen(true); }}>
+          <Button size="sm" disabled={!dirty || busy} onClick={() => { setError(undefined); setConfirmOpen(true); }}>
             {busy ? "Saving…" : dirty ? `Save ${savable.length || ""} change${savable.length === 1 ? "" : "s"}`.trim() : "Save changes"}
-          </button>
+          </Button>
         ) : (
           <span className="pill mut">Read-only (system role)</span>
         )}

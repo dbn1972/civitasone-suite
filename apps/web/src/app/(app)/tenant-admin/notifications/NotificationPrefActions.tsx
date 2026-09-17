@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
-import { EmptyState } from "../../../_components/ds";
+import { Button, EmptyState } from "../../../_components/ds";
 import { useFormError } from "@/lib/useFormError";
 
 type Pref = {
@@ -117,12 +117,12 @@ export function NotificationPrefActions({ prefs }: { prefs: Pref[] }) {
       <div className="card-h">
         <h3>Channel settings</h3>
         <div style={{ display: "flex", gap: 8 }}>
-          <button className="btn ghost" disabled={busy} aria-busy={busy} onClick={() => resetToDefaults()}>
+          <Button variant="ghost" disabled={busy} aria-busy={busy} onClick={() => resetToDefaults()}>
             Reset to defaults
-          </button>
-          <button className="btn primary" disabled={busy || !dirty} aria-busy={busy} onClick={() => save()}>
+          </Button>
+          <Button disabled={busy || !dirty} aria-busy={busy} onClick={() => save()}>
             {busy ? "Saving…" : "Save changes"}
-          </button>
+          </Button>
         </div>
       </div>
       <div className="pad">

@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
-import { EmptyState } from "../../../_components/ds";
+import { Button, EmptyState } from "../../../_components/ds";
 import { useFormError } from "@/lib/useFormError";
 
 type ModuleRow = { moduleKey: string; moduleName: string; enabled: boolean; enabledAt?: string | null };
@@ -73,9 +73,9 @@ export function ModuleToggleActions({ modules }: { modules: ModuleRow[] }) {
     <div className="card">
       <div className="card-h">
         <h3>Module toggles</h3>
-        <button className="btn primary" disabled={busy || !dirty} aria-busy={busy} onClick={() => void save()}>
+        <Button disabled={busy || !dirty} aria-busy={busy} onClick={() => void save()}>
           {busy ? "Saving…" : "Save changes"}
-        </button>
+        </Button>
       </div>
       <div className="pad">
         {modules.length > 0 ? (

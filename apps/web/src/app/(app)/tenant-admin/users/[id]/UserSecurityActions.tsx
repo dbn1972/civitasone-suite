@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { Button } from "../../../../_components/ds";
 import { useFormError } from "@/lib/useFormError";
 
 type Props = { userId: string };
@@ -43,22 +44,22 @@ export function UserSecurityActions({ userId }: Props) {
 
   return (
     <>
-      <button
-        className="btn ghost"
+      <Button
+        variant="ghost"
         disabled={busy !== null}
         aria-busy={busy === "reset"}
         onClick={() => void post(`/api/proxy/identity/users/${userId}/reset-password`, "reset", "Password reset requested.")}
       >
         {busy === "reset" ? "Resetting…" : "Reset password"}
-      </button>
-      <button
-        className="btn ghost"
+      </Button>
+      <Button
+        variant="ghost"
         disabled={busy !== null}
         aria-busy={busy === "revokeAll"}
         onClick={() => void post(`/api/proxy/identity/users/${userId}/sessions/revoke-all`, "revokeAll", "All sessions revoked.")}
       >
         {busy === "revokeAll" ? "Revoking…" : "Revoke all sessions"}
-      </button>
+      </Button>
       <span role="status" aria-live="polite" style={{ fontSize: 12, color: "#067647", alignSelf: "center" }}>{status}</span>
       <span role="alert" aria-live="assertive" style={{ fontSize: 12, color: "var(--bad)", alignSelf: "center" }}>{error}</span>
     </>

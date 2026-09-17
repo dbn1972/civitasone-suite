@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { Button } from "../../../../_components/ds";
 
 type Props = { sessionId: string; active: boolean };
 
@@ -35,8 +36,8 @@ export function SessionRevokeCell({ sessionId, active }: Props) {
 
   return (
     <>
-      <button
-        className="btn ghost"
+      <Button
+        variant="ghost"
         style={{ fontSize: 12, padding: "2px 8px" }}
         disabled={busy}
         aria-busy={busy}
@@ -44,7 +45,7 @@ export function SessionRevokeCell({ sessionId, active }: Props) {
         onClick={() => void revoke()}
       >
         {busy ? "Revoking…" : "Revoke"}
-      </button>
+      </Button>
       {error ? <span role="alert" aria-live="assertive" style={{ fontSize: 11, color: "var(--bad)", marginLeft: 6 }}>{error}</span> : null}
     </>
   );

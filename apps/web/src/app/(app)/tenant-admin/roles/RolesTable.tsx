@@ -2,7 +2,7 @@
 
 import { useId, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Segmented, ConfirmDialog, DataTable } from "../../../_components/ds";
+import { Button, Segmented, ConfirmDialog, DataTable } from "../../../_components/ds";
 import { useFormError } from "@/lib/useFormError";
 
 type Role = {
@@ -34,7 +34,7 @@ export function RolesTable({ roles }: { roles: Role[] }) {
           <div role="group" aria-label="Filter roles by type">
             <Segmented options={[...FILTERS]} value={filter} onChange={setFilter} />
           </div>
-          <button type="button" className="btn primary sm" onClick={() => setCreateOpen(true)}>+ New Role</button>
+          <Button size="sm" onClick={() => setCreateOpen(true)}>+ New Role</Button>
         </div>
       </div>
       <DataTable<Role>

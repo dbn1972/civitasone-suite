@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { ConfirmDialog } from "../../../_components/ds";
+import { Button, ConfirmDialog } from "../../../_components/ds";
 import { useFormError } from "@/lib/useFormError";
 
 export function BreakglassActions({ id, requester }: { id: string; requester?: string }) {
@@ -37,9 +37,9 @@ export function BreakglassActions({ id, requester }: { id: string; requester?: s
 
   return (
     <>
-      <button type="button" className="btn danger sm" disabled={busy} onClick={() => { setError(undefined); setOpen(true); }}>
+      <Button variant="danger" size="sm" disabled={busy} onClick={() => { setError(undefined); setOpen(true); }}>
         {busy ? "Closing…" : "Close session"}
-      </button>
+      </Button>
       <ConfirmDialog
         open={open}
         title="Close this break-glass session?"
