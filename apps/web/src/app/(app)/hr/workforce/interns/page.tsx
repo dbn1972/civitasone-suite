@@ -1,3 +1,4 @@
+import { getTranslations } from "next-intl/server";
 import { PageHeader, StatGrid, StatCard, Card, DataTable } from "../../../../_components/ds";
 import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
@@ -81,52 +82,52 @@ async function getInterns(): Promise<LoaderResult<Row[]>> {
   });
 }
 
-const COLUMNS: { key: keyof Row & string; label: string; cellType?: "status" }[] = [
-  { key: "name", label: "Name" },
-  { key: "institution", label: "Institution" },
-  { key: "department", label: "Department" },
-  { key: "projectAssigned", label: "Project" },
-  { key: "stipend", label: "Stipend" },
-  { key: "periodFrom", label: "From" },
-  { key: "periodTo", label: "End Date" },
-  { key: "mentor", label: "Mentor" },
-  { key: "type", label: "Type" },
-  { key: "status", label: "Status", cellType: "status" },
-];
-
 export default async function InternsPage() {
+  const t = await getTranslations("workforceInterns");
   const { data: items, source } = await getInterns();
 
   const active = items.filter((i) => i.status === "active").length;
   const interns = items.filter((i) => ["intern", "internship"].includes(i.type.toLowerCase())).length;
   const apprentices = items.filter((i) => ["apprentice", "apprenticeship"].includes(i.type.toLowerCase())).length;
-  const institutions = new Set(items.map((i) => i.institution).filter((v) => v !== "—")).size;
+
+  const COLUMNS: { key: keyof Row & string; label: string; cellType?: "status" }[] = [
+    { key: "name", label: t("colName") },
+    { key: "institution", label: t("colInstitution") },
+    { key: "department", label: t("colDepartment") },
+    { key: "projectAssigned", label: t("colProject") },
+    { key: "stipend", label: t("colStipend") },
+    { key: "periodFrom", label: t("colFrom") },
+    { key: "periodTo", label: t("colEndDate") },
+    { key: "mentor", label: t("colMentor") },
+    { key: "type", label: t("colType") },
+    { key: "status", label: t("colStatus"), cellType: "status" },
+  ];
 
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
-        title="Interns & Apprentices"
-        subtitle="Intern cohort management — institution, stipend, project assignment, and end date tracking."
+        title={t("title")}
+        subtitle={t("subtitle")}
         back="/hr/workforce"
       />
       <DataSourceBadge source={source} />
       <StatGrid>
-        <StatCard icon="🎓" iconBg="#e6f0ff" label="Total" value={items.length} />
-        <StatCard icon="✅" iconBg="#e6f7f0" label="Active" value={active} />
-        <StatCard icon="📚" iconBg="#fffbe6" label="Interns" value={interns} />
-        <StatCard icon="🔧" iconBg="#f5f5f5" label="Apprentices" value={apprentices} />
+        <StatCard icon="🎓" iconBg="#e6f0ff" label={t("statTotal")} value={items.length} />
+        <StatCard icon="✅" iconBg="#e6f7f0" label={t("statActive")} value={active} />
+        <StatCard icon="📚" iconBg="#fffbe6" label={t("statInterns")} value={interns} />
+        <StatCard icon="🔧" iconBg="#f5f5f5" label={t("statApprentices")} value={apprentices} />
       </StatGrid>
-      <Card title="Intern Cohort">
+      <Card title={t("cardTitle")}>
         <DataTable<Row>
           columns={COLUMNS}
           rows={items}
           sortable
           filterable
-          filterPlaceholder="Filter by name, institution or mentor…"
+          filterPlaceholder={t("filterPlaceholder")}
           pageSize={15}
           emptyIcon="🎓"
-          emptyTitle="No interns or apprentices"
-          emptyMessage="Intern and apprenticeship engagements appear here with stipend, assigned project, mentor, and duration details."
+          emptyTitle={t("emptyTitle")}
+          emptyMessage={t("emptyMessage")}
         />
       </Card>
     </main>

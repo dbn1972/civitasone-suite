@@ -1,3 +1,4 @@
+import { getTranslations } from 'next-intl/server'
 import { PageHeader, StatGrid, StatCard, Card } from '../../../../_components/ds'
 import { DataSourceBadge } from '../../../../_components/DataSourceBadge'
 import { fetchJson, type LoaderResult } from '@/app/_data/apiClient'
@@ -22,6 +23,8 @@ interface AnalyticsKpis {
   genderRatioM: number
   monthlyTrend: { month: string; headcount: number }[]
 }
+
+type AnalyticsT = Awaited<ReturnType<typeof getTranslations>>
 
 /* ── Loaders ───────────────────────────────────────────────────────────── */
 
@@ -72,13 +75,15 @@ async function getKpis(): Promise<LoaderResult<AnalyticsKpis>> {
 
 function TrendChart({
   data,
+  t,
 }: {
   data: { month: string; headcount: number }[]
+  t: AnalyticsT
 }) {
   if (data.length < 2) {
     return (
       <p style={{ color: 'var(--muted, #64748b)', fontSize: 13, padding: '16px 0' }}>
-        Monthly trend data not yet available.
+        {t('trendNotAvailable')}
       </p>
     )
   }
@@ -115,11 +120,11 @@ function TrendChart({
       <svg
         viewBox={`0 0 ${W} ${H}`}
         role="img"
-        aria-label={`Monthly headcount trend, ${data[0]?.month ?? ''} to ${data[n - 1]?.month ?? ''}`}
+        aria-label={t('trendAriaLabel', { from: data[0]?.month ?? '', to: data[n - 1]?.month ?? '' })}
         style={{ width: '100%', maxWidth: W, minWidth: 280, display: 'block' }}
         xmlns="http://www.w3.org/2000/svg"
       >
-        <title>Monthly headcount trend</title>
+        <title>{t('trendChartTitle')}</title>
         {/* Y-axis grid lines and labels */}
         {yTicks.map((tick) => (
           <g key={tick}>
@@ -188,16 +193,16 @@ function TrendChart({
 
 /* ── Gender ratio bar ──────────────────────────────────────────────────── */
 
-function GenderBar({ female, male }: { female: number; male: number }) {
+function GenderBar({ female, male, t }: { female: number; male: number; t: AnalyticsT }) {
   const total = female + male
-  if (total === 0) return <span style={{ fontSize: 12, color: 'var(--muted)' }}>No data</span>
+  if (total === 0) return <span style={{ fontSize: 12, color: 'var(--muted)' }}>{t('genderNoData')}</span>
   const fPct = Math.round((female / total) * 100)
   const mPct = 100 - fPct
   return (
     <div
       style={{ display: 'flex', flexDirection: 'column', gap: 4, maxWidth: 300 }}
       role="img"
-      aria-label={`Gender ratio: ${fPct}% female, ${mPct}% male`}
+      aria-label={t('genderRatioAriaLabel', { female: fPct, male: mPct })}
     >
       <div style={{ display: 'flex', height: 18, borderRadius: 4, overflow: 'hidden' }}>
         <div style={{ width: `${fPct}%`, background: '#e040fb', transition: 'width 0.3s' }} aria-hidden />
@@ -206,11 +211,11 @@ function GenderBar({ female, male }: { female: number; male: number }) {
       <div style={{ display: 'flex', gap: 16, fontSize: 11, color: 'var(--muted, #64748b)' }}>
         <span>
           <span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: 2, background: '#e040fb', marginRight: 4 }} aria-hidden />
-          Female {fPct}%
+          {t('genderFemaleLabel', { pct: fPct })}
         </span>
         <span>
           <span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: 2, background: '#00439C', marginRight: 4 }} aria-hidden />
-          Male {mPct}%
+          {t('genderMaleLabel', { pct: mPct })}
         </span>
       </div>
     </div>
@@ -220,6 +225,7 @@ function GenderBar({ female, male }: { female: number; male: number }) {
 /* ── Page ──────────────────────────────────────────────────────────────── */
 
 export default async function WorkforceAnalyticsPage() {
+  const t = await getTranslations('workforceAnalytics')
   const [hc, rt, kpis] = await Promise.all([getHeadcount(), getRetirements(), getKpis()])
   const headcount = hc.data
   const retirements = rt.data
@@ -237,25 +243,25 @@ export default async function WorkforceAnalyticsPage() {
     {
       icon: '📉',
       iconBg: '#fff1f0',
-      label: 'Turnover Rate',
+      label: t('statTurnoverRate'),
       value: `${analytics.turnoverPct.toFixed(1)}%`,
     },
     {
       icon: '🏥',
       iconBg: '#fffbe6',
-      label: 'Absenteeism Rate',
+      label: t('statAbsenteeismRate'),
       value: `${analytics.absenteeismPct.toFixed(1)}%`,
     },
     {
       icon: '📅',
       iconBg: '#e6f7f0',
-      label: 'Avg. Tenure (yrs)',
+      label: t('statAvgTenure'),
       value: analytics.avgTenureYears.toFixed(1),
     },
     {
       icon: '👥',
       iconBg: '#e6f0ff',
-      label: 'Total Headcount',
+      label: t('statTotalHeadcount'),
       value: totalHeadcount,
     },
   ]
@@ -263,8 +269,8 @@ export default async function WorkforceAnalyticsPage() {
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
-        title="Workforce Analytics"
-        subtitle="KPI overview: turnover, absenteeism, tenure, and gender diversity."
+        title={t('title')}
+        subtitle={t('subtitle')}
         back="/hr/workforce"
       />
       <DataSourceBadge source={source} />
@@ -276,21 +282,21 @@ export default async function WorkforceAnalyticsPage() {
       </StatGrid>
 
       {/* Monthly trend chart */}
-      <Card title="Monthly Headcount Trend">
+      <Card title={t('cardMonthlyTrend')}>
         <div style={{ padding: '8px 0' }}>
-          <TrendChart data={analytics.monthlyTrend} />
+          <TrendChart data={analytics.monthlyTrend} t={t} />
         </div>
       </Card>
 
       {/* Gender diversity */}
-      <Card title="Gender Diversity">
+      <Card title={t('cardGenderDiversity')}>
         <div style={{ padding: '12px 0' }}>
-          <GenderBar female={analytics.genderRatioF} male={analytics.genderRatioM} />
+          <GenderBar female={analytics.genderRatioF} male={analytics.genderRatioM} t={t} />
         </div>
       </Card>
 
       {/* Retirement risk */}
-      <Card title="Retirement Forecast">
+      <Card title={t('cardRetirementForecast')}>
         <div style={{ padding: '12px 0', display: 'flex', gap: 24, flexWrap: 'wrap' }}>
           <div>
             <div
@@ -299,7 +305,7 @@ export default async function WorkforceAnalyticsPage() {
               {retiringSoon}
             </div>
             <div style={{ fontSize: 12, color: 'var(--muted, #64748b)' }}>
-              Retiring within 6 months
+              {t('retiringWithin6')}
             </div>
           </div>
           <div>
@@ -307,7 +313,7 @@ export default async function WorkforceAnalyticsPage() {
               {retiring12}
             </div>
             <div style={{ fontSize: 12, color: 'var(--muted, #64748b)' }}>
-              Retiring within 12 months
+              {t('retiringWithin12')}
             </div>
           </div>
         </div>
@@ -315,11 +321,11 @@ export default async function WorkforceAnalyticsPage() {
           <div style={{ marginTop: 12, overflowX: 'auto' }}>
             <table
               style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}
-              aria-label="Upcoming retirements"
+              aria-label={t('ariaUpcomingRetirements')}
             >
               <thead>
                 <tr>
-                  {['Officer Name', 'Department', 'Months Left'].map((h) => (
+                  {[t('colOfficerName'), t('colDepartment'), t('colMonthsLeft')].map((h) => (
                     <th
                       key={h}
                       scope="col"

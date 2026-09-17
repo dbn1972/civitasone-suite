@@ -1,3 +1,4 @@
+import { getTranslations } from "next-intl/server";
 import { PageHeader, StatGrid, StatCard, Card, DataTable } from "../../../../_components/ds";
 import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
@@ -65,48 +66,49 @@ async function getData(): Promise<LoaderResult<Row[]>> {
   });
 }
 
-const COLUMNS: { key: keyof Row & string; label: string; cellType?: "status"; align?: "left" | "right" }[] = [
-  { key: "vendor", label: "Vendor / Agency" },
-  { key: "department", label: "Department" },
-  { key: "service", label: "Service Category" },
-  { key: "deploymentLocation", label: "Location" },
-  { key: "headcount", label: "Headcount", align: "right" },
-  { key: "contractEnd", label: "Contract End" },
-  { key: "status", label: "Status", cellType: "status" },
-];
-
 export default async function OutsourcedPage() {
+  const t = await getTranslations("workforceOutsourced");
   const { data: items, source } = await getData();
 
   const vendors = new Set(items.map((i) => i.vendor).filter((v) => v !== "—")).size;
   const active = items.filter((i) => i.status?.toLowerCase() === "active").length;
   const totalHeadcount = items.reduce((s, i) => s + (Number(i.headcount) || 0), 0);
 
+  const COLUMNS: { key: keyof Row & string; label: string; cellType?: "status"; align?: "left" | "right" }[] = [
+    { key: "vendor", label: t("colVendorAgency") },
+    { key: "department", label: t("colDepartment") },
+    { key: "service", label: t("colServiceCategory") },
+    { key: "deploymentLocation", label: t("colLocation") },
+    { key: "headcount", label: t("colHeadcount"), align: "right" },
+    { key: "contractEnd", label: t("colContractEnd") },
+    { key: "status", label: t("colStatus"), cellType: "status" },
+  ];
+
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
-        title="Outsourced Workforce"
-        subtitle="Vendor-wise outsourced staff, service categories, and deployment locations. GFR 2017 Ch. 8."
+        title={t("title")}
+        subtitle={t("subtitle")}
         back="/hr/workforce"
       />
       <DataSourceBadge source={source} />
       <StatGrid>
-        <StatCard icon="🏭" iconBg="#e6f0ff" label="Vendors" value={vendors} />
-        <StatCard icon="✅" iconBg="#e6f7f0" label="Active Contracts" value={active} />
-        <StatCard icon="👷" iconBg="#fffbe6" label="Total Headcount" value={totalHeadcount} />
-        <StatCard icon="📋" iconBg="#f5f5f5" label="Total Records" value={items.length} />
+        <StatCard icon="🏭" iconBg="#e6f0ff" label={t("statVendors")} value={vendors} />
+        <StatCard icon="✅" iconBg="#e6f7f0" label={t("statActiveContracts")} value={active} />
+        <StatCard icon="👷" iconBg="#fffbe6" label={t("statTotalHeadcount")} value={totalHeadcount} />
+        <StatCard icon="📋" iconBg="#f5f5f5" label={t("statTotalRecords")} value={items.length} />
       </StatGrid>
-      <Card title="Outsourced Workforce">
+      <Card title={t("cardTitle")}>
         <DataTable<Row>
           columns={COLUMNS}
           rows={items}
           sortable
           filterable
-          filterPlaceholder="Filter by vendor, department or service…"
+          filterPlaceholder={t("filterPlaceholder")}
           pageSize={15}
           emptyIcon="🏢"
-          emptyTitle="No outsourced staff records"
-          emptyMessage="Outsourced workforce records appear here, tracking vendor-supplied staff per GFR 2017 Chapter 8 contractor management requirements."
+          emptyTitle={t("emptyTitle")}
+          emptyMessage={t("emptyMessage")}
         />
       </Card>
     </main>

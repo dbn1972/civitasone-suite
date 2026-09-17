@@ -1,3 +1,4 @@
+import { getTranslations } from "next-intl/server";
 import { PageHeader, StatGrid, StatCard, Card, DataTable } from "../../../_components/ds";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
@@ -26,6 +27,7 @@ async function getRetirements(): Promise<LoaderResult<RetirementRow[]>> {
 }
 
 export default async function WorkforcePage() {
+  const t = await getTranslations("workforce");
   const [hc, rt] = await Promise.all([getHeadcount(), getRetirements()]);
   const headcount = hc.data;
   const retirements = rt.data;
@@ -36,57 +38,57 @@ export default async function WorkforcePage() {
   const retiring12 = retirements.filter((r) => Number(r.monthsLeft ?? 99) <= 12).length;
 
   const hcCols: { key: keyof HeadcountRow & string; label: string; align?: "left" | "right" }[] = [
-    { key: "group_key", label: "Department" },
-    { key: "count", label: "Headcount", align: "right" },
+    { key: "group_key", label: t("colDepartment") },
+    { key: "count", label: t("colHeadcount"), align: "right" },
   ];
 
   const rtCols: { key: keyof RetirementRow & string; label: string; align?: "left" | "right" }[] = [
-    { key: "fullName", label: "Officer Name" },
-    { key: "department", label: "Department" },
-    { key: "dateOfRetirement", label: "Retirement Date" },
-    { key: "monthsLeft", label: "Months Left", align: "right" },
+    { key: "fullName", label: t("colOfficerName") },
+    { key: "department", label: t("colDepartment") },
+    { key: "dateOfRetirement", label: t("colRetirementDate") },
+    { key: "monthsLeft", label: t("colMonthsLeft"), align: "right" },
   ];
 
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
-        title="Workforce Analytics"
-        subtitle="Department-wise headcount, retirement forecasting, and vacancy pipeline."
+        title={t("title")}
+        subtitle={t("subtitle")}
         back="/hr"
         actions={<span />}
       />
       <DataSourceBadge source={source} />
       <StatGrid>
-        <StatCard icon="👥" iconBg="#e6f0ff" label="Total Headcount" value={totalHeadcount} />
-        <StatCard icon="🏢" iconBg="#f5f5f5" label="Departments" value={headcount.length} />
-        <StatCard icon="⏳" iconBg="#fff1f0" label="Retiring ≤6 months" value={retiringSoon} />
-        <StatCard icon="📅" iconBg="#fffbe6" label="Retiring ≤12 months" value={retiring12} />
+        <StatCard icon="👥" iconBg="#e6f0ff" label={t("statTotalHeadcount")} value={totalHeadcount} />
+        <StatCard icon="🏢" iconBg="#f5f5f5" label={t("statDepartments")} value={headcount.length} />
+        <StatCard icon="⏳" iconBg="#fff1f0" label={t("statRetiringSoon")} value={retiringSoon} />
+        <StatCard icon="📅" iconBg="#fffbe6" label={t("statRetiring12")} value={retiring12} />
       </StatGrid>
-      <Card title="Headcount by Department">
+      <Card title={t("cardHeadcountByDept")}>
         <DataTable<HeadcountRow>
           columns={hcCols}
           rows={headcount}
           sortable
           filterable
-          filterPlaceholder="Filter by department…"
+          filterPlaceholder={t("filterPlaceholderDept")}
           pageSize={15}
           emptyIcon="👥"
-          emptyTitle="No headcount data"
-          emptyMessage="Active employee counts grouped by department appear here for workforce planning and DPC preparation."
+          emptyTitle={t("emptyHeadcountTitle")}
+          emptyMessage={t("emptyHeadcountMessage")}
         />
       </Card>
       <div style={{ marginTop: 16 }}>
-        <Card title="Upcoming Retirements">
+        <Card title={t("cardUpcomingRetirements")}>
           <DataTable<RetirementRow>
             columns={rtCols}
             rows={retirements}
             sortable
             filterable
-            filterPlaceholder="Filter by name or department…"
+            filterPlaceholder={t("filterPlaceholderName")}
             pageSize={10}
             emptyIcon="📅"
-            emptyTitle="No retirements forecast"
-            emptyMessage="Officers due for superannuation appear here 12 months in advance for succession and handover planning."
+            emptyTitle={t("emptyRetirementsTitle")}
+            emptyMessage={t("emptyRetirementsMessage")}
           />
         </Card>
       </div>

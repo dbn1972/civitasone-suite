@@ -1,3 +1,4 @@
+import { getTranslations } from 'next-intl/server'
 import { PageHeader, StatGrid, StatCard, Card, DataTable } from '../../../../_components/ds'
 import { DataSourceBadge } from '../../../../_components/DataSourceBadge'
 import { fetchJson, type LoaderResult } from '@/app/_data/apiClient'
@@ -60,6 +61,7 @@ async function getData(): Promise<LoaderResult<Row[]>> {
 }
 
 export default async function StaffingPlanPage() {
+  const t = await getTranslations('workforceStaffingPlan')
   const { data: items, source } = await getData()
 
   const totalSanctioned = items.reduce((s, i) => s + i.sanctionedPosts, 0)
@@ -74,29 +76,29 @@ export default async function StaffingPlanPage() {
     cellType?: 'status'
     align?: 'left' | 'right'
   }[] = [
-    { key: 'department', label: 'Department / Cadre' },
-    { key: 'sanctionedPosts', label: 'Sanctioned', align: 'right' },
-    { key: 'filled', label: 'Filled', align: 'right' },
-    { key: 'vacant', label: 'Vacant', align: 'right' },
-    { key: 'fillPercentage', label: 'Fill %', align: 'right' },
-    { key: 'lastReview', label: 'Last Review' },
-    { key: 'status', label: 'Status', cellType: 'status' },
+    { key: 'department', label: t('colDeptCadre') },
+    { key: 'sanctionedPosts', label: t('colSanctioned'), align: 'right' },
+    { key: 'filled', label: t('colFilled'), align: 'right' },
+    { key: 'vacant', label: t('colVacant'), align: 'right' },
+    { key: 'fillPercentage', label: t('colFillPercent'), align: 'right' },
+    { key: 'lastReview', label: t('colLastReview') },
+    { key: 'status', label: t('colStatus'), cellType: 'status' },
   ]
 
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
-        title="Staffing Plan"
-        subtitle="Sanctioned strength vs filled positions per department. Vacancy >10% highlighted per GFR 2017 Rule 228."
+        title={t('title')}
+        subtitle={t('subtitle')}
         back="/hr/workforce"
       />
       <DataSourceBadge source={source} />
 
       <StatGrid>
-        <StatCard icon="📊" iconBg="#e6f0ff" label="Sanctioned Posts" value={totalSanctioned} />
-        <StatCard icon="👥" iconBg="#e6f7f0" label="Filled Positions" value={totalFilled} />
-        <StatCard icon="⬜" iconBg="#fff1f0" label="Vacant Posts" value={totalVacant} />
-        <StatCard icon="📈" iconBg="#fffbe6" label="Fill Rate %" value={overallFill} />
+        <StatCard icon="📊" iconBg="#e6f0ff" label={t('statSanctionedPosts')} value={totalSanctioned} />
+        <StatCard icon="👥" iconBg="#e6f7f0" label={t('statFilledPositions')} value={totalFilled} />
+        <StatCard icon="⬜" iconBg="#fff1f0" label={t('statVacantPosts')} value={totalVacant} />
+        <StatCard icon="📈" iconBg="#fffbe6" label={t('statFillRate')} value={overallFill} />
       </StatGrid>
 
       {highVacancyCount > 0 && (
@@ -113,18 +115,16 @@ export default async function StaffingPlanPage() {
             marginBottom: 12,
           }}
         >
-          <strong>Vacancy Alert:</strong> {highVacancyCount} department
-          {highVacancyCount > 1 ? 's have' : ' has'} vacancy exceeding 10% of sanctioned
-          strength. Initiation of recruitment process is required as per GFR 2017 Rule 228.
+          <strong>{t('vacancyAlertLabel')}</strong> {t('vacancyAlertMessage', { count: highVacancyCount })}
         </div>
       )}
 
-      <Card title="Sanctioned vs Filled Strength">
+      <Card title={t('cardTitle')}>
         {items.length > 0 ? (
-          <div role="region" aria-label="Staffing plan table">
+          <div role="region" aria-label={t('ariaTableRegion')}>
             <table
               style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}
-              aria-label="Staffing plan — sanctioned vs filled per department"
+              aria-label={t('ariaTable')}
             >
               <thead>
                 <tr>
@@ -161,7 +161,7 @@ export default async function StaffingPlanPage() {
                       }}
                       aria-label={
                         isHighVacancy
-                          ? `${row.department}: high vacancy — ${row.vacant} posts vacant`
+                          ? t('highVacancyRowAriaLabel', { department: row.department, vacant: row.vacant })
                           : undefined
                       }
                     >
@@ -169,8 +169,8 @@ export default async function StaffingPlanPage() {
                         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                           {isHighVacancy && (
                             <span
-                              aria-label="High vacancy alert"
-                              title="Vacancy >10% of sanctioned strength"
+                              aria-label={t('highVacancyIconAriaLabel')}
+                              title={t('highVacancyIconTitle')}
                               style={{ color: '#cf1322', fontWeight: 700, fontSize: 14 }}
                             >
                               ⚠
@@ -210,7 +210,7 @@ export default async function StaffingPlanPage() {
                             aria-valuenow={row.fillPercentage}
                             aria-valuemin={0}
                             aria-valuemax={100}
-                            aria-label={`Fill rate: ${row.fillPercentage}%`}
+                            aria-label={t('fillRateAriaLabel', { pct: row.fillPercentage })}
                             style={{
                               width: 50,
                               height: 6,
@@ -263,19 +263,17 @@ export default async function StaffingPlanPage() {
             rows={items}
             sortable
             filterable
-            filterPlaceholder="Filter by department, cadre or status…"
+            filterPlaceholder={t('filterPlaceholder')}
             pageSize={20}
             emptyIcon="📊"
-            emptyTitle="No staffing plan data"
-            emptyMessage="Sanctioned posts versus filled positions are recorded here for DPC planning and vacancy circulars."
+            emptyTitle={t('emptyTitle')}
+            emptyMessage={t('emptyMessage')}
           />
         )}
       </Card>
 
       <p style={{ fontSize: 11, color: 'var(--muted, #64748b)', marginTop: 8 }}>
-        GFR 2017 Rule 228 — Departments shall maintain sanctioned strength registers and initiate
-        recruitment action immediately when vacancies exceed 10% of authorised strength.
-        Data sourced from service records as of the last approval cycle.
+        {t('footerNote')}
       </p>
     </main>
   )

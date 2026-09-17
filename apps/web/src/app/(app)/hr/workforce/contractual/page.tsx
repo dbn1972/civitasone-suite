@@ -1,3 +1,4 @@
+import { getTranslations } from "next-intl/server";
 import { PageHeader, StatGrid, StatCard, Card, DataTable } from "../../../../_components/ds";
 import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
@@ -74,6 +75,7 @@ async function getContractual(): Promise<LoaderResult<Row[]>> {
 }
 
 export default async function ContractualPage() {
+  const t = await getTranslations("workforceContractual");
   const { data: items, source } = await getContractual();
 
   const active = items.filter((i) => i.status === "active").length;
@@ -92,25 +94,25 @@ export default async function ContractualPage() {
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
-        title="Contractual Employees"
-        subtitle="GFR 2017 Ch. 8 — contractor management, contract periods, and renewal alerts."
+        title={t("title")}
+        subtitle={t("subtitle")}
         back="/hr/workforce"
       />
       <DataSourceBadge source={source} />
       <StatGrid>
-        <StatCard icon="📋" iconBg="#e6f0ff" label="Total Contractual" value={items.length} />
-        <StatCard icon="✅" iconBg="#e6f7f0" label="Active" value={active} />
-        <StatCard icon="⚠️" iconBg="#fffbe6" label="Expiring ≤30d" value={expiring} />
-        <StatCard icon="🏢" iconBg="#f5f5f5" label="Agencies" value={agencies} />
+        <StatCard icon="📋" iconBg="#e6f0ff" label={t("statTotalContractual")} value={items.length} />
+        <StatCard icon="✅" iconBg="#e6f7f0" label={t("statActive")} value={active} />
+        <StatCard icon="⚠️" iconBg="#fffbe6" label={t("statExpiring30d")} value={expiring} />
+        <StatCard icon="🏢" iconBg="#f5f5f5" label={t("statAgencies")} value={agencies} />
       </StatGrid>
 
-      <Card title="Contractual Staff">
+      <Card title={t("cardTitle")}>
         {items.length > 0 ? (
           <div style={{ overflowX: "auto" }}>
-            <table style={{ width: "100%", borderCollapse: "collapse" }} aria-label="Contractual staff list">
+            <table style={{ width: "100%", borderCollapse: "collapse" }} aria-label={t("ariaStaffList")}>
               <thead>
                 <tr style={{ background: "var(--surface-2, #f9fafb)", textAlign: "left" }}>
-                  {["Name", "Agency", "Department", "Designation", "From", "To", "Status"].map((h) => (
+                  {[t("colName"), t("colAgency"), t("colDepartment"), t("colDesignation"), t("colFrom"), t("colTo"), t("colStatus")].map((h) => (
                     <th key={h} scope="col" style={{ padding: "10px 12px", fontSize: 12, fontWeight: 600, color: "var(--muted, #6b7280)", whiteSpace: "nowrap" }}>{h}</th>
                   ))}
                 </tr>
@@ -125,22 +127,22 @@ export default async function ContractualPage() {
         ) : (
           <DataTable<Row>
             columns={[
-              { key: "name", label: "Name" },
-              { key: "agency", label: "Agency" },
-              { key: "department", label: "Department" },
-              { key: "designation", label: "Designation" },
-              { key: "contractFrom", label: "From" },
-              { key: "contractTo", label: "To" },
-              { key: "status", label: "Status", cellType: "status" },
+              { key: "name", label: t("colName") },
+              { key: "agency", label: t("colAgency") },
+              { key: "department", label: t("colDepartment") },
+              { key: "designation", label: t("colDesignation") },
+              { key: "contractFrom", label: t("colFrom") },
+              { key: "contractTo", label: t("colTo") },
+              { key: "status", label: t("colStatus"), cellType: "status" },
             ]}
             rows={items}
             sortable
             filterable
-            filterPlaceholder="Filter by name, agency or department…"
+            filterPlaceholder={t("filterPlaceholder")}
             pageSize={15}
             emptyIcon="📑"
-            emptyTitle="No contractual staff"
-            emptyMessage="Contractual staff appear here once engaged. GFR 2017 Chapter 8 mandates tracking contract periods and renewal dates."
+            emptyTitle={t("emptyTitle")}
+            emptyMessage={t("emptyMessage")}
           />
         )}
       </Card>
