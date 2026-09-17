@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import type { EmployeeDetail } from "@civitasone/types";
 import { useFormError } from "@/lib/useFormError";
 import { Button } from "@/app/_components/ds";
+import { useTranslations } from "next-intl";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const PHONE_RE = /^\+?[\d\s\-()]{7,20}$/;
@@ -32,6 +33,7 @@ const labelStyle: React.CSSProperties = {
 };
 
 export function EditEmployeeForm({ employee }: Props) {
+  const t = useTranslations("employeeEdit");
   const formId = useId();
   const router = useRouter();
 
@@ -80,7 +82,7 @@ export function EditEmployeeForm({ employee }: Props) {
     if (errs.size > 0) {
       setInvalidFields(errs);
       setTone("error");
-      setMessage("Please fix the highlighted fields.");
+      setMessage(t("fixHighlightedFields"));
       return;
     }
 
@@ -101,7 +103,7 @@ export function EditEmployeeForm({ employee }: Props) {
 
     if (Object.keys(patch).length === 0) {
       setTone("error");
-      setMessage("No changes detected. Update a field before saving.");
+      setMessage(t("noChangesDetected"));
       return;
     }
 
@@ -123,7 +125,7 @@ export function EditEmployeeForm({ employee }: Props) {
       // PATCH /v1/hrms/employees/:id returns 202 (queued command) -- the
       // update is being applied, not already confirmed done.
       setTone("success");
-      setMessage("Update submitted. Redirecting…");
+      setMessage(t("updateSubmitted"));
       setTimeout(() => {
         router.push(`/hr/employees/${employee.id}`);
         router.refresh();
@@ -141,16 +143,15 @@ export function EditEmployeeForm({ employee }: Props) {
       onSubmit={(e) => {
         void handleSubmit(e);
       }}
-      aria-label="Edit employee"
+      aria-label={t("formAriaLabel")}
       noValidate
       className="card"
       style={{ marginTop: 16 }}
     >
       <div className="card-h">
-        <h3>Contact &amp; Assignment</h3>
+        <h3>{t("formHeading")}</h3>
         <p style={{ margin: 0, fontSize: 13, color: "#64748b" }}>
-          Only the fields below can be updated. For structural changes (name,
-          department, designation) contact HR administration.
+          {t("formIntro")}
         </p>
       </div>
 
@@ -188,10 +189,10 @@ export function EditEmployeeForm({ employee }: Props) {
           }}
         >
           {[
-            { label: "Employee ID", value: employee.employeeId },
-            { label: "Department", value: employee.department },
-            { label: "Designation", value: employee.designation },
-            { label: "Status", value: employee.status },
+            { label: t("roLabelEmployeeId"), value: employee.employeeId },
+            { label: t("roLabelDepartment"), value: employee.department },
+            { label: t("roLabelDesignation"), value: employee.designation },
+            { label: t("roLabelStatus"), value: employee.status },
           ].map(({ label, value }) => (
             <div key={label}>
               <div style={{ fontSize: 11, color: "#64748b", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: 2 }}>
@@ -214,14 +215,14 @@ export function EditEmployeeForm({ employee }: Props) {
         >
           <div style={{ display: "grid", gap: 6 }}>
             <label htmlFor={ids.mobile} style={labelStyle}>
-              Mobile
+              {t("mobileLabel")}
             </label>
             <input
               id={ids.mobile}
               type="tel"
               value={mobile}
               onChange={(e) => setMobile(e.target.value)}
-              placeholder="+91 98765 43210"
+              placeholder={t("mobilePlaceholder")}
               autoComplete="tel"
               aria-invalid={invalidFields.has("mobile")}
               style={{
@@ -238,14 +239,14 @@ export function EditEmployeeForm({ employee }: Props) {
 
           <div style={{ display: "grid", gap: 6 }}>
             <label htmlFor={ids.email} style={labelStyle}>
-              Email
+              {t("emailLabel")}
             </label>
             <input
               id={ids.email}
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              placeholder="employee@example.gov.in"
+              placeholder={t("emailPlaceholder")}
               autoComplete="email"
               aria-invalid={invalidFields.has("email")}
               style={{
@@ -262,7 +263,7 @@ export function EditEmployeeForm({ employee }: Props) {
 
           <div style={{ display: "grid", gap: 6 }}>
             <label htmlFor={ids.managerId} style={labelStyle}>
-              Manager ID
+              {t("managerIdLabel")}
               <span
                 style={{
                   marginLeft: 6,
@@ -271,7 +272,7 @@ export function EditEmployeeForm({ employee }: Props) {
                   color: "#64748b",
                 }}
               >
-                (UUID)
+                {t("uuidHint")}
               </span>
             </label>
             <input
@@ -279,14 +280,14 @@ export function EditEmployeeForm({ employee }: Props) {
               type="text"
               value={managerId}
               onChange={(e) => setManagerId(e.target.value)}
-              placeholder="Manager employee UUID"
+              placeholder={t("managerIdPlaceholder")}
               style={inputStyle}
             />
           </div>
 
           <div style={{ display: "grid", gap: 6 }}>
             <label htmlFor={ids.payStructureId} style={labelStyle}>
-              Pay Structure ID
+              {t("payStructureIdLabel")}
               <span
                 style={{
                   marginLeft: 6,
@@ -295,7 +296,7 @@ export function EditEmployeeForm({ employee }: Props) {
                   color: "#64748b",
                 }}
               >
-                (UUID)
+                {t("uuidHint")}
               </span>
             </label>
             <input
@@ -303,7 +304,7 @@ export function EditEmployeeForm({ employee }: Props) {
               type="text"
               value={payStructureId}
               onChange={(e) => setPayStructureId(e.target.value)}
-              placeholder="Pay structure UUID"
+              placeholder={t("payStructureIdPlaceholder")}
               style={inputStyle}
             />
           </div>
@@ -313,47 +314,47 @@ export function EditEmployeeForm({ employee }: Props) {
         {/* Statutory & Financial Details */}
         <div style={{ borderTop: "1px solid var(--border)", paddingTop: 20 }}>
           <h3 style={{ fontSize: 15, fontWeight: 600, marginBottom: 16, color: "var(--ink1)" }}>
-            Statutory &amp; Financial Details
+            {t("statutoryHeading")}
           </h3>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(200px,1fr))", gap: 16 }}>
             <div style={{ display: "grid", gap: 6 }}>
-              <label htmlFor={ids.bankAccountNo} style={labelStyle}>Bank Account No.</label>
+              <label htmlFor={ids.bankAccountNo} style={labelStyle}>{t("bankAccountLabel")}</label>
               <input id={ids.bankAccountNo} type="text" value={bankAccountNo}
                 onChange={(e) => setBankAccountNo(e.target.value)}
-                placeholder="e.g. 0012345678901"
+                placeholder={t("bankAccountPlaceholder")}
                 style={inputStyle} autoComplete="off" />
             </div>
             <div style={{ display: "grid", gap: 6 }}>
-              <label htmlFor={ids.bankIfsc} style={labelStyle}>Bank IFSC Code</label>
+              <label htmlFor={ids.bankIfsc} style={labelStyle}>{t("bankIfscLabel")}</label>
               <input id={ids.bankIfsc} type="text" value={bankIfsc}
                 onChange={(e) => setBankIfsc(e.target.value)}
-                placeholder="e.g. SBIN0001234" maxLength={11}
+                placeholder={t("bankIfscPlaceholder")} maxLength={11}
                 style={inputStyle} autoComplete="off" />
             </div>
             <div style={{ display: "grid", gap: 6 }}>
-              <label htmlFor={ids.uanNumber} style={labelStyle}>EPFO UAN Number</label>
+              <label htmlFor={ids.uanNumber} style={labelStyle}>{t("uanLabel")}</label>
               <input id={ids.uanNumber} type="text" value={uanNumber}
                 onChange={(e) => setUanNumber(e.target.value)}
-                placeholder="12-digit UAN" maxLength={12}
+                placeholder={t("uanPlaceholder")} maxLength={12}
                 style={inputStyle} autoComplete="off" />
             </div>
             <div style={{ display: "grid", gap: 6 }}>
-              <label htmlFor={ids.esicIpNumber} style={labelStyle}>ESIC IP Number</label>
+              <label htmlFor={ids.esicIpNumber} style={labelStyle}>{t("esicLabel")}</label>
               <input id={ids.esicIpNumber} type="text" value={esicIpNumber}
                 onChange={(e) => setEsicIpNumber(e.target.value)}
-                placeholder="Employee ESIC insurance number"
+                placeholder={t("esicPlaceholder")}
                 style={inputStyle} autoComplete="off" />
             </div>
             <div style={{ display: "grid", gap: 6 }}>
-              <label htmlFor={ids.pran} style={labelStyle}>PRAN (NPS Account)</label>
+              <label htmlFor={ids.pran} style={labelStyle}>{t("pranLabel")}</label>
               <input id={ids.pran} type="text" value={pran}
                 onChange={(e) => setPran(e.target.value)}
-                placeholder="12-digit PRAN" maxLength={12}
+                placeholder={t("pranPlaceholder")} maxLength={12}
                 style={inputStyle} autoComplete="off" />
             </div>
           </div>
           <p style={{ fontSize: 12, color: "var(--ink3)", marginTop: 12 }}>
-            Bank account and IFSC are required for salary disbursement. UAN is required for EPFO credit.
+            {t("statutoryNote")}
           </p>
         </div>
 
@@ -365,7 +366,7 @@ export function EditEmployeeForm({ employee }: Props) {
             loading={busy}
             style={{ minHeight: 44, minWidth: 140 }}
           >
-            {busy ? "Saving…" : "Save Changes"}
+            {busy ? t("savingBtn") : t("saveChangesBtn")}
           </Button>
           <Button
             variant="ghost"
@@ -373,7 +374,7 @@ export function EditEmployeeForm({ employee }: Props) {
             disabled={busy}
             style={{ minHeight: 44 }}
           >
-            Cancel
+            {t("cancelBtn")}
           </Button>
         </div>
       </div>

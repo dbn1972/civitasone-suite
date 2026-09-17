@@ -1,5 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { NextIntlClientProvider } from "next-intl";
+import enMessages from "@/messages/en.json";
 import { EditEmployeeForm } from "./EditEmployeeForm";
 
 const EMPLOYEE = {
@@ -26,9 +28,17 @@ describe("EditEmployeeForm — UX-016 clerk-safe errors", () => {
   });
   afterEach(() => vi.unstubAllGlobals());
 
+  // UX-017: EditEmployeeForm now reads its copy through next-intl
+  // (useTranslations("employeeEdit")), so it needs a real provider in the
+  // tree — same pattern as citizen/grievances/GrievancesTable.test.tsx and
+  // hr/leave/approvals/LeaveApprovalsPanel.test.tsx.
   function fillAndSubmit() {
-    // @ts-expect-error minimal fixture, not the full EmployeeDetail type
-    render(<EditEmployeeForm employee={EMPLOYEE} />);
+    render(
+      <NextIntlClientProvider locale="en" messages={enMessages}>
+        {/* @ts-expect-error minimal fixture, not the full EmployeeDetail type */}
+        <EditEmployeeForm employee={EMPLOYEE} />
+      </NextIntlClientProvider>,
+    );
     fireEvent.change(screen.getByLabelText(/mobile/i), { target: { value: "9123456780" } });
     fireEvent.click(screen.getByRole("button", { name: /save changes/i }));
   }

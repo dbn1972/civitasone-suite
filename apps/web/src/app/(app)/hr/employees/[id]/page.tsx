@@ -6,6 +6,7 @@ import { formatIndianDate } from "@/lib/formatters";
 import { EditEmployeeToggle } from "./EditEmployeeToggle";
 import { LifecycleTimeline, type LifecycleEvent } from "../../_components/LifecycleTimeline";
 import { fetchJson } from "@/app/_data/apiClient";
+import { getTranslations } from "next-intl/server";
 
 type TransferItem = {
   id: string; status: string; toOffice?: string; fromOffice?: string;
@@ -92,14 +93,15 @@ async function getLifecycleEvents(employeeId: string): Promise<LifecycleEvent[]>
 
 export default async function EmployeeDetailPage({ params }: { params: { id: string } }) {
   const { data: employee, source } = await getEmployeeById(params.id);
+  const t = await getTranslations("employeeDetail");
 
   if (!employee) {
     return (
       <main className="page-main wrap" aria-labelledby="page-heading">
-        <PageHeader title="Employee Profile" back="/hr/employees" />
+        <PageHeader title={t("notFoundTitle")} back="/hr/employees" />
         <DataSourceBadge source={source} />
         <Card padding>
-          <p className="text-center text-slate-600">Employee not found.</p>
+          <p className="text-center text-slate-600">{t("notFoundMessage")}</p>
         </Card>
       </main>
     );
@@ -142,56 +144,56 @@ export default async function EmployeeDetailPage({ params }: { params: { id: str
 
       {/* Quick Actions */}
       {isActive && (
-        <Card title="Quick Actions" padding>
+        <Card title={t("quickActionsTitle")} padding>
           <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
             <Link href={`/hr/leave/apply?empId=${params.id}`} className="btn ghost" style={{ fontSize: 13 }}>
-              🌴 Apply Leave
+              {t("actionApplyLeave")}
             </Link>
             <Link href={`/hr/payroll/salary-slips?empId=${params.id}`} className="btn ghost" style={{ fontSize: 13 }}>
-              🧾 Salary Slips
+              {t("actionSalarySlips")}
             </Link>
             <Link href={`/hr/transfer?empId=${params.id}`} className="btn ghost" style={{ fontSize: 13 }}>
-              🔄 Initiate Transfer
+              {t("actionInitiateTransfer")}
             </Link>
             <Link href={`/hr/promotion?empId=${params.id}`} className="btn ghost" style={{ fontSize: 13 }}>
-              ⬆️ Initiate Promotion
+              {t("actionInitiatePromotion")}
             </Link>
             <Link href={`/hr/attendance?empId=${params.id}`} className="btn ghost" style={{ fontSize: 13 }}>
-              📅 View Attendance
+              {t("actionViewAttendance")}
             </Link>
             <Link href={`/hr/service-book?empId=${params.id}`} className="btn ghost" style={{ fontSize: 13 }}>
-              📖 Service Book
+              {t("actionServiceBook")}
             </Link>
           </div>
         </Card>
       )}
 
-      <Card title="Personal Information" padding>
+      <Card title={t("personalInfoTitle")} padding>
         <div className="fields">
           <div className="fld">
-            <span className="l">Employee ID</span>
+            <span className="l">{t("fieldEmployeeId")}</span>
             <span className="v">{employee.employeeId}</span>
           </div>
           <div className="fld">
-            <span className="l">Department</span>
+            <span className="l">{t("fieldDepartment")}</span>
             <span className="v">{employee.department}</span>
           </div>
           <div className="fld">
-            <span className="l">Designation</span>
+            <span className="l">{t("fieldDesignation")}</span>
             <span className="v">{employee.designation}</span>
           </div>
           {employee.grade && (
             <div className="fld">
-              <span className="l">Grade</span>
+              <span className="l">{t("fieldGrade")}</span>
               <span className="v">{employee.grade}</span>
             </div>
           )}
           <div className="fld">
-            <span className="l">Joining Date</span>
+            <span className="l">{t("fieldJoiningDate")}</span>
             <span className="v">{formatIndianDate(employee.joiningDate as string)}</span>
           </div>
           <div className="fld">
-            <span className="l">Status</span>
+            <span className="l">{t("fieldStatus")}</span>
             <span className="v">
               <StatusPill
                 status={employee.status}
@@ -201,25 +203,25 @@ export default async function EmployeeDetailPage({ params }: { params: { id: str
           </div>
           {employee.postingLocation && (
             <div className="fld">
-              <span className="l">Posting Location</span>
+              <span className="l">{t("fieldPostingLocation")}</span>
               <span className="v">{employee.postingLocation}</span>
             </div>
           )}
           {employee.reportingTo && (
             <div className="fld">
-              <span className="l">Reports To</span>
+              <span className="l">{t("fieldReportsTo")}</span>
               <span className="v">{employee.reportingTo}</span>
             </div>
           )}
           {employee.email && (
             <div className="fld">
-              <span className="l">Email</span>
+              <span className="l">{t("fieldEmail")}</span>
               <span className="v">{employee.email}</span>
             </div>
           )}
           {employee.phone && (
             <div className="fld">
-              <span className="l">Phone</span>
+              <span className="l">{t("fieldPhone")}</span>
               <span className="v">{employee.phone}</span>
             </div>
           )}
@@ -227,7 +229,7 @@ export default async function EmployeeDetailPage({ params }: { params: { id: str
       </Card>
 
       {/* Lifecycle Timeline */}
-      <Card title="Service History / Lifecycle Timeline">
+      <Card title={t("lifecycleTitle")}>
         <LifecycleTimeline events={allEvents} />
       </Card>
     </main>
