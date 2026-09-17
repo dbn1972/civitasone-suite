@@ -60,7 +60,7 @@ export default async function LegalDashboardPage() {
               <div style={{ fontSize: 36, fontWeight: 800 }}>
                 {data.activeCases > 0 ? Math.round((data.activeCases / (data.activeCases + data.opinionsDue)) * 100) : 64}%
               </div>
-              <div style={{ fontSize: 12, color: "#98a2b3" }}>disposed</div>
+              <div style={{ fontSize: 12, color: "var(--mut)" }}>disposed</div>
             </div>
           </div>
           <div className="card">

@@ -150,7 +150,7 @@ export function APIKeyActions({ keys }: { keys: KeyRow[] }) {
         />
         {nameError ? <p id={nameErrId} style={fieldErr} role="alert">{nameError}</p> : null}
 
-        <label htmlFor={scopesId} style={lbl}>Scopes <span style={{ fontWeight: 400, color: "#98a2b3" }}>(resource:action, comma separated)</span></label>
+        <label htmlFor={scopesId} style={lbl}>Scopes <span style={{ fontWeight: 400, color: "var(--mut)" }}>(resource:action, comma separated)</span></label>
         <input
           id={scopesId}
           value={scopes}
@@ -182,7 +182,7 @@ export function APIKeyActions({ keys }: { keys: KeyRow[] }) {
 
       <div className="pad" style={{ paddingTop: createdKey ? 8 : 0 }}>
         {activeKeys.length === 0 ? (
-          <p style={{ fontSize: 12.5, color: "#98a2b3", margin: 0 }}>No active keys to manage.</p>
+          <p style={{ fontSize: 12.5, color: "var(--mut)", margin: 0 }}>No active keys to manage.</p>
         ) : (
           activeKeys.map((key) => (
             <div key={key.id} className="prefrow" style={prefRow}>

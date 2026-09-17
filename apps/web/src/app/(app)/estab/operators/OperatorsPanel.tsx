@@ -188,11 +188,11 @@ export function OperatorsPanel() {
       </div>
 
       {loading ? (
-        <p className="pad" style={{ textAlign: "center", color: "#94a3b8" }}>Loading…</p>
+        <p className="pad" style={{ textAlign: "center", color: "var(--mut)" }}>Loading…</p>
       ) : loadError ? (
         <div className="card"><div className="pad"><ErrorState error={toHumanError("load", { area: "operator roster" })} onRetry={() => void load()} /></div></div>
       ) : grouped.length === 0 ? (
-        <div className="card"><p className="pad" style={{ color: "#94a3b8" }}>No operators enrolled yet. Until you enrol operators, files cannot be marked to anyone.</p></div>
+        <div className="card"><p className="pad" style={{ color: "var(--mut)" }}>No operators enrolled yet. Until you enrol operators, files cannot be marked to anyone.</p></div>
       ) : (
         grouped.map(([division, list]) => (
           <div className="card" key={division}>

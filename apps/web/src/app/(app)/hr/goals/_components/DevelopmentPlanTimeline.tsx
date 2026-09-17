@@ -53,7 +53,7 @@ function formatDate(s: string): string {
 export function DevelopmentPlanTimeline({ activities }: DevelopmentPlanTimelineProps) {
   if (activities.length === 0) {
     return (
-      <div style={{ padding: 24, textAlign: "center", color: "#94a3b8", fontSize: 14 }}>
+      <div style={{ padding: 24, textAlign: "center", color: "var(--mut)", fontSize: 14 }}>
         No development activities planned. Add activities from the Development Plan section.
       </div>
     );

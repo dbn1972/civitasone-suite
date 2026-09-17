@@ -13,7 +13,7 @@ interface FactorBreakdownProps {
 export function FactorBreakdown({ factors }: FactorBreakdownProps) {
   if (factors.length === 0) {
     return (
-      <div className="text-center text-gray-400 py-6">
+      <div className="text-center text-gray-500 py-6">
         <p>No factor data available yet.</p>
       </div>
     );

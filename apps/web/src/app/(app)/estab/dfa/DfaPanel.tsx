@@ -153,7 +153,7 @@ export function DfaPanel() {
             confirmLabel="Dispatch" onConfirm={() => act(d.id, "dispatch")} />
         );
       default:
-        return <span style={{ color: "#94a3b8" }}>—</span>;
+        return <span style={{ color: "var(--mut)" }}>—</span>;
     }
   };
 
@@ -214,9 +214,9 @@ export function DfaPanel() {
 
       <div className="card">
         {loading ? (
-          <p className="pad" style={{ textAlign: "center", color: "#94a3b8" }}>Loading…</p>
+          <p className="pad" style={{ textAlign: "center", color: "var(--mut)" }}>Loading…</p>
         ) : rows.length === 0 ? (
-          <p className="pad" style={{ color: "#94a3b8" }}>No drafts in this view.</p>
+          <p className="pad" style={{ color: "var(--mut)" }}>No drafts in this view.</p>
         ) : (
           <DataTable<Dfa>
             columns={[

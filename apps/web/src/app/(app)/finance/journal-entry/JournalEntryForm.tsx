@@ -362,10 +362,14 @@ export function JournalEntryForm({ accounts, redirectTo }: Props) {
         }}
       >
         <span style={{ color: "var(--ink2, #475569)" }}>Totals</span>
-        <span className="num" style={{ color: totalDebitPaise > 0 ? "var(--primary-d, #1e40af)" : "#94a3b8" }}>
+        {/* Zero-total color: var(--mut) measured 4.2:1 against this totals
+            row's actual background (#eaecf0 / --line) -- just under 4.5:1,
+            since --mut was tuned for white/near-white. var(--ink2) reaches
+            6.5:1 here. UX-005 tranche 5. */}
+        <span className="num" style={{ color: totalDebitPaise > 0 ? "var(--primary-d, #1e40af)" : "var(--ink2)" }}>
           {formatMoney(totalDebitPaise)}
         </span>
-        <span className="num" style={{ color: totalCreditPaise > 0 ? "var(--primary-d, #1e40af)" : "#94a3b8" }}>
+        <span className="num" style={{ color: totalCreditPaise > 0 ? "var(--primary-d, #1e40af)" : "var(--ink2)" }}>
           {formatMoney(totalCreditPaise)}
         </span>
         <span

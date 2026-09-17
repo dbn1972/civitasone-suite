@@ -109,9 +109,9 @@ export function MigrationPanel() {
       <div className="card">
         <div className="card-h"><h3>Migration register</h3></div>
         {loading ? (
-          <p className="pad" style={{ textAlign: "center", color: "#94a3b8" }}>Loading…</p>
+          <p className="pad" style={{ textAlign: "center", color: "var(--mut)" }}>Loading…</p>
         ) : rows.length === 0 ? (
-          <p className="pad" style={{ color: "#94a3b8" }}>No legacy files registered yet.</p>
+          <p className="pad" style={{ color: "var(--mut)" }}>No legacy files registered yet.</p>
         ) : (
           <DataTable<MigrationRow>
             columns={[

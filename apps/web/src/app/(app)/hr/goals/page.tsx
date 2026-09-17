@@ -140,7 +140,7 @@ export default async function GoalsPage() {
         {errored ? (
           <RefreshErrorState error={toHumanError("load", { area: "goals" })} />
         ) : items.length === 0 ? (
-          <div style={{ padding: 32, textAlign: "center", color: "#94a3b8" }}>
+          <div style={{ padding: 32, textAlign: "center", color: "var(--mut)" }}>
             <p style={{ fontSize: 32, margin: "0 0 8px" }}>🎯</p>
             <p style={{ fontWeight: 600, color: "#475569", margin: 0 }}>No goals set</p>
             <p style={{ fontSize: 13, margin: "4px 0 0" }}>

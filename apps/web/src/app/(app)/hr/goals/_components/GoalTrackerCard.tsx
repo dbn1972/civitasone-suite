@@ -99,13 +99,13 @@ export function GoalTrackerCard({
           <div style={{ display: "flex", alignItems: "center", gap: 4, marginBottom: 4, flexWrap: "wrap" }}>
             {cascadeLevel !== "org" && (
               <>
-                <span style={{ fontSize: 11, color: "#94a3b8" }}>Org</span>
+                <span style={{ fontSize: 11, color: "var(--mut)" }}>Org</span>
                 <span style={{ fontSize: 11, color: "#cbd5e1" }}>→</span>
               </>
             )}
             {cascadeLevel === "individual" && (
               <>
-                <span style={{ fontSize: 11, color: "#94a3b8" }}>Dept</span>
+                <span style={{ fontSize: 11, color: "var(--mut)" }}>Dept</span>
                 <span style={{ fontSize: 11, color: "#cbd5e1" }}>→</span>
               </>
             )}
@@ -125,7 +125,7 @@ export function GoalTrackerCard({
             <p style={{ margin: "3px 0 0", fontSize: 12, color: "#64748b", lineHeight: 1.4 }}>{description}</p>
           )}
           {parentGoalTitle && (
-            <p style={{ margin: "3px 0 0", fontSize: 11, color: "#94a3b8" }}>
+            <p style={{ margin: "3px 0 0", fontSize: 11, color: "var(--mut)" }}>
               Cascaded from: <em>{parentGoalTitle}</em>
             </p>
           )}

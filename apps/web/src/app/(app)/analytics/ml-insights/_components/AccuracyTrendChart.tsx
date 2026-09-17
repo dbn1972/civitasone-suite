@@ -13,7 +13,7 @@ interface AccuracyTrendChartProps {
 export function AccuracyTrendChart({ data }: AccuracyTrendChartProps) {
   if (data.length === 0) {
     return (
-      <div className="text-center text-gray-400 py-8" role="img" aria-label="No accuracy trend data available">
+      <div className="text-center text-gray-500 py-8" role="img" aria-label="No accuracy trend data available">
         <p>No trend data available yet.</p>
       </div>
     );

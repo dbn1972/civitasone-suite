@@ -76,7 +76,7 @@ export function EstabApprovalsPanel() {
         {message ? <p className="pad" style={{ color: "var(--good)", fontSize: "0.875rem", paddingBottom: 0 }}>{message}</p> : null}
       </div>
       {loading ? (
-        <p className="pad" style={{ textAlign: "center", color: "#94a3b8" }}>Loading…</p>
+        <p className="pad" style={{ textAlign: "center", color: "var(--mut)" }}>Loading…</p>
       ) : loadError ? (
         <div className="pad"><ErrorState error={toHumanError("load", { area: "approval queue" })} onRetry={() => void loadTasks()} /></div>
       ) : tasks.length === 0 ? (

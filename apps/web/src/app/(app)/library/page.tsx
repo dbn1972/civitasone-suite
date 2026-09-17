@@ -14,19 +14,26 @@ type AuditIssue = {
   remediationSummary: string;
 };
 
+// UX-005 tranche 5: critical/high/low's original literal hex pairings measured
+// 4.41:1 / 3.07:1 / 3.58:1 against their own badge background (WCAG 2.2 AA
+// needs 4.5:1) -- axe's full sweep caught this on the rendered page even
+// though each color looks fine in isolation on white. Swapped to this
+// codebase's existing --bad/--warn/--good semantic pairs (already verified
+// compliant: 6.05 / 5.20 / 5.40) instead of inventing new colors. medium
+// (4.75:1) and info (4.63:1) already passed and are unchanged.
 const SEVERITY_COLOR: Record<Severity, string> = {
-  critical: "#dc2626",
-  high: "#d97706",
+  critical: "var(--bad)",
+  high: "var(--warn)",
   medium: "#2563eb",
-  low: "#059669",
+  low: "var(--good)",
   info: "#6b7280",
 };
 
 const SEVERITY_BG: Record<Severity, string> = {
-  critical: "#fef2f2",
-  high: "#fffbeb",
+  critical: "var(--badbg)",
+  high: "var(--warnbg)",
   medium: "#eff6ff",
-  low: "#ecfdf5",
+  low: "var(--goodbg)",
   info: "#f9fafb",
 };
 

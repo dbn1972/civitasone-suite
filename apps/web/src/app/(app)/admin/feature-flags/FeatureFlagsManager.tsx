@@ -155,7 +155,7 @@ export function FeatureFlagsManager({ initialFlags, source }: { initialFlags: Ad
             </thead>
             <tbody>
               {flags.length === 0 && (
-                <tr><td colSpan={7} style={{ textAlign: "center", padding: 32, color: "#888" }}>No feature flags configured yet.</td></tr>
+                <tr><td colSpan={7} style={{ textAlign: "center", padding: 32, color: "var(--mut)" }}>No feature flags configured yet.</td></tr>
               )}
               {flags.map((flag) => (
                 <tr key={flag.id}>

@@ -120,7 +120,7 @@ export function SkillMatrix({ records, onExportPdf }: SkillMatrixProps) {
       {/* Matrix table */}
       <div style={{ overflowX: "auto" }}>
         {skills.length === 0 ? (
-          <p style={{ color: "#94a3b8", textAlign: "center", padding: 24 }}>No skill records match the filter.</p>
+          <p style={{ color: "var(--mut)", textAlign: "center", padding: 24 }}>No skill records match the filter.</p>
         ) : (
           <table style={{ borderCollapse: "collapse", fontSize: 12, minWidth: 640, width: "100%" }}>
             <thead>

@@ -236,6 +236,10 @@ export function TelemetryForm() {
                 type="checkbox"
                 checked={engineOn}
                 onChange={(e) => setEngineOn(e.target.checked)}
+                // WCAG 2.2 SC 2.5.8 Target Size Minimum: a native checkbox's
+                // default box (and clickable space) is ~13x13px, well under
+                // the required 24x24 -- UX-005 tranche 5.
+                style={{ width: 24, height: 24, cursor: "pointer" }}
               />
               <label htmlFor={engineOnId} style={{ fontSize: 13, fontWeight: 600 }}>Engine on</label>
             </div>

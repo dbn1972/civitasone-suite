@@ -248,7 +248,12 @@ export function RolePermissionsMatrix({
             <span className="pill info">{orderedRoles.length} roles · {modules.length} modules · {actions.length} actions</span>
           </div>
           <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-            <select style={selSty} value={selectedRole} onChange={(e) => setSelectedRole(e.target.value)}>
+            <select
+              style={selSty}
+              value={selectedRole}
+              onChange={(e) => setSelectedRole(e.target.value)}
+              aria-label="Filter by role"
+            >
               <option value="all">All roles</option>
               {orderedRoles.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
             </select>

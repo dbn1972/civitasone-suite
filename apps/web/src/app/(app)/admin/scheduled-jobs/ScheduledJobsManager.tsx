@@ -222,7 +222,7 @@ export function ScheduledJobsManager({ initialJobs, source }: { initialJobs: Adm
             </thead>
             <tbody>
               {jobs.length === 0 && (
-                <tr><td colSpan={6} style={{ textAlign: "center", padding: 32, color: "#888" }}>No scheduled jobs configured. Create one to get started.</td></tr>
+                <tr><td colSpan={6} style={{ textAlign: "center", padding: 32, color: "var(--mut)" }}>No scheduled jobs configured. Create one to get started.</td></tr>
               )}
               {jobs.map((job) => (
                 <tr key={job.id}>
@@ -325,9 +325,9 @@ export function ScheduledJobsManager({ initialJobs, source }: { initialJobs: Adm
               <button className="btn" onClick={() => setHistoryJobId(null)} aria-label="Close history panel">✕</button>
             </div>
             {historyLoading ? (
-              <p style={{ color: "#888", textAlign: "center", marginTop: 48 }}>Loading…</p>
+              <p style={{ color: "var(--mut)", textAlign: "center", marginTop: 48 }}>Loading…</p>
             ) : historyRecords.length === 0 ? (
-              <p style={{ color: "#888", textAlign: "center", marginTop: 48 }}>No execution history available.</p>
+              <p style={{ color: "var(--mut)", textAlign: "center", marginTop: 48 }}>No execution history available.</p>
             ) : (
               <table className="data-table" role="table" aria-label="Execution history">
                 <thead>
