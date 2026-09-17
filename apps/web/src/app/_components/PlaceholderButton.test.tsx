@@ -45,10 +45,16 @@ describe("PlaceholderButton — honest disabled state, not a window.alert (UX-00
     expect(screen.getByRole("button", { name: "Revoke this session" })).toBeDisabled();
   });
 
-  it("applies the caller's className and style, defaulting className to 'btn ghost'", () => {
+  it("defaults to the ghost variant and applies the caller's style", () => {
     render(<PlaceholderButton label="Search precedents" style={{ minHeight: 44 }} />);
     const btn = screen.getByRole("button", { name: /Search precedents/i });
     expect(btn).toHaveClass("btn", "ghost");
     expect(btn).toHaveStyle({ minHeight: "44px" });
+  });
+
+  it("applies the caller's variant override (e.g. primary, as tenant-admin's 'Invite user' uses)", () => {
+    render(<PlaceholderButton label="Invite user" variant="primary" />);
+    const btn = screen.getByRole("button", { name: /Invite user/i });
+    expect(btn).toHaveClass("btn", "primary");
   });
 });

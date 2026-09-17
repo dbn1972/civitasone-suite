@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect } from "react";
 import { SUPPORT_REFERENCE_PREFIX } from "@/lib/messages";
+import { Button } from "./ds";
 
 /**
  * RouteError — the one standard error boundary UI for every route.
@@ -49,15 +50,15 @@ export function RouteError({
           We couldn&apos;t open this {area ?? "page"}. Please try again — your information is safe.
         </p>
         {error.digest && (
-          <p style={{ fontSize: 12, color: "var(--ink3)", marginTop: 8 }}>
+          <p style={{ fontSize: 12, color: "var(--mut)", marginTop: 8 }}>
             {SUPPORT_REFERENCE_PREFIX} {error.digest}
           </p>
         )}
       </div>
       <div style={{ display: "flex", gap: 12, flexWrap: "wrap", justifyContent: "center" }}>
-        <button type="button" className="btn primary" onClick={reset}>
+        <Button variant="primary" onClick={reset}>
           Try again
-        </button>
+        </Button>
         <Link href={backHref} className="btn ghost">
           {backLabel}
         </Link>

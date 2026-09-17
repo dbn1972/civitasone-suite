@@ -15,6 +15,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import { Button } from "./Button";
 
 export interface ConfirmDialogProps {
   open: boolean;
@@ -204,18 +205,17 @@ export function ConfirmDialog({
         </div>
 
         <div className="cd-actions">
-          <button type="button" className="btn ghost" onClick={onCancel} disabled={busy}>
+          <Button variant="ghost" onClick={onCancel} disabled={busy}>
             {cancelLabel}
-          </button>
-          <button
-            type="button"
-            className={`btn ${danger ? "danger" : "primary"}`}
+          </Button>
+          <Button
+            variant={danger ? "danger" : "primary"}
             onClick={() => onConfirm(requireReason ? reason.trim() : undefined)}
             disabled={confirmDisabled}
             aria-busy={busy}
           >
             {busy ? "Working…" : confirmLabel}
-          </button>
+          </Button>
         </div>
       </div>
     </div>

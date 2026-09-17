@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { ACTION_LABELS, type HumanError, type SafeAction } from "@/lib/messages";
+import { Button } from "./Button";
 
 /**
  * ErrorState — renders a plain-language {what, next, actions} message with safe
@@ -33,9 +34,9 @@ export function ErrorState({
         {error.actions.map((action: SafeAction) => {
           if (action === "retry") {
             return onRetry ? (
-              <button key={action} type="button" className="btn primary" onClick={onRetry}>
+              <Button key={action} variant="primary" onClick={onRetry}>
                 {ACTION_LABELS.retry}
-              </button>
+              </Button>
             ) : null;
           }
           if (action === "back") {
@@ -47,9 +48,9 @@ export function ErrorState({
               );
             }
             return onBack ? (
-              <button key={action} type="button" className="btn ghost" onClick={onBack}>
+              <Button key={action} variant="ghost" onClick={onBack}>
                 {ACTION_LABELS.back}
-              </button>
+              </Button>
             ) : null;
           }
           // help
