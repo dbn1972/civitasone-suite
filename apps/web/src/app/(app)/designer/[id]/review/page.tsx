@@ -97,7 +97,7 @@ export default function DesignerReviewPage() {
   if (wizard.error || !wizard.def) {
     return (
       <div>
-        <p style={{ color: "var(--bad-fg)" }}>{wizard.error ?? "Draft not found."}</p>
+        <p style={{ color: "var(--bad)" }}>{wizard.error ?? "Draft not found."}</p>
         <Link href="/designer" className="btn ghost">← Library</Link>
       </div>
     );
@@ -141,7 +141,7 @@ export default function DesignerReviewPage() {
         ) : null}
 
         {actionError ? (
-          <p style={{ color: "var(--bad-fg)", marginTop: 16 }} role="alert">{actionError}</p>
+          <p style={{ color: "var(--bad)", marginTop: 16 }} role="alert">{actionError}</p>
         ) : null}
       </WizardShell>
 

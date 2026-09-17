@@ -257,7 +257,7 @@ export function OutputIssuanceBuilder({
             Require digital signature at issue time
           </label>
           {sigWarn ? (
-            <p data-testid="signatory-warning" style={{ marginTop: 12, fontSize: 13, color: "var(--warn-fg)" }}>
+            <p data-testid="signatory-warning" style={{ marginTop: 12, fontSize: 13, color: "var(--warn)" }}>
               {sigWarn}
             </p>
           ) : null}

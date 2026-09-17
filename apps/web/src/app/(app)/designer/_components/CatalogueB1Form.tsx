@@ -234,7 +234,7 @@ export function CatalogueB1Form({ definitionId, initial, onSaveState, onPatternC
             <Button variant="ghost" onClick={addStatutory}>Add reference</Button>
           </div>
           {showCertWarning ? (
-            <p style={{ margin: "0 0 12px", padding: "10px 12px", background: "var(--warn-bg)", border: "1px solid var(--warn-border)", borderRadius: "var(--r-sm)", fontSize: 13 }}>
+            <p style={{ margin: "0 0 12px", padding: "10px 12px", background: "var(--warnbg)", border: "1px solid var(--warnbd)", borderRadius: "var(--r-sm)", fontSize: 13 }}>
               Certificates usually cite the empowering act — required before cross-tenant sharing.
             </p>
           ) : null}

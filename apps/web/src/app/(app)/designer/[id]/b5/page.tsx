@@ -130,7 +130,7 @@ export default function DesignerB5Page() {
   if (error) {
     return (
       <div>
-        <p style={{ color: "var(--bad-fg)" }}>{error}</p>
+        <p style={{ color: "var(--bad)" }}>{error}</p>
         <Link href="/designer" className="btn ghost">← Library</Link>
       </div>
     );
@@ -162,10 +162,10 @@ export default function DesignerB5Page() {
             margin: "0 0 12px",
             padding: "8px 12px",
             fontSize: 13,
-            color: "var(--bad-fg)",
+            color: "var(--bad)",
             background: "var(--bad-bg, #fdecea)",
             borderRadius: "var(--r-sm)",
-            border: "1px solid var(--bad-fg)",
+            border: "1px solid var(--bad)",
           }}
         >
           {hoaGate} Next is disabled until HOA is attached.

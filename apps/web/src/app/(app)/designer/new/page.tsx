@@ -108,7 +108,7 @@ export default function PatternPickerPage() {
               <span style={{ fontSize: 13 }}>{pattern.activeBlocks.join(" · ")}</span>
             </div>
             {error ? (
-              <p role="alert" style={{ margin: 0, color: "var(--bad-fg)", fontSize: 13 }}>{error}</p>
+              <p role="alert" style={{ margin: 0, color: "var(--bad)", fontSize: 13 }}>{error}</p>
             ) : null}
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
               <Button disabled={!name.trim() || busy} onClick={() => { void handleCreate(); }}>
