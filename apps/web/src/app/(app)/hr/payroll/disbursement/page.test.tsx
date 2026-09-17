@@ -1,5 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
+import { NextIntlClientProvider } from "next-intl";
+import enMessages from "@/messages/en.json";
 
 const fetchJsonMock = vi.fn();
 vi.mock("@/app/_data/apiClient", () => ({
@@ -10,6 +12,21 @@ vi.mock("next/navigation", () => ({
 }));
 
 import DisbursementPage from "./page";
+
+// UX-017: DisbursementPage is a server component (translated via
+// getTranslations(), which vitest.setup.ts mocks centrally -- no provider
+// needed just for that call), but it also renders DisbursementTransferTable,
+// a CLIENT component that now calls useTranslations(). Once rendered for
+// real by testing-library, that child needs a genuine NextIntlClientProvider
+// in the tree -- a module-level mock of next-intl/server cannot substitute
+// for React context read by a hook. Discovered by this tranche: every prior
+// server-page-with-a-translated-client-child test in this codebase either
+// didn't exist yet or didn't render one; this is the first page.test.tsx
+// hitting it directly.
+async function renderPage() {
+  const ui = await DisbursementPage();
+  render(<NextIntlClientProvider locale="en" messages={enMessages}>{ui}</NextIntlClientProvider>);
+}
 
 describe("DisbursementPage", () => {
   beforeEach(() => {
@@ -55,8 +72,7 @@ describe("DisbursementPage", () => {
       ],
     });
 
-    const ui = await DisbursementPage();
-    render(ui);
+    await renderPage();
 
     // "2026-07" appears as run-selector option text, with the eligible run
     // auto-selected so the wizard's first-step CTA is immediately usable.
@@ -79,8 +95,7 @@ describe("DisbursementPage", () => {
       ],
     });
 
-    const ui = await DisbursementPage();
-    render(ui);
+    await renderPage();
 
     // The amount only renders as its own exact text node on the Preview
     // step's "Net Amount" table row (the step-0 dropdown option concatenates
@@ -95,8 +110,7 @@ describe("DisbursementPage", () => {
   it("renders an empty state when there are no eligible runs", async () => {
     mockResponses({ runs: [] });
 
-    const ui = await DisbursementPage();
-    render(ui);
+    await renderPage();
 
     expect(screen.getByText("No runs ready for a bank file")).toBeInTheDocument();
   });
@@ -104,8 +118,7 @@ describe("DisbursementPage", () => {
   it("shows the error data-source badge when the API is unreachable", async () => {
     mockResponses({ source: "error" });
 
-    const ui = await DisbursementPage();
-    render(ui);
+    await renderPage();
 
     expect(screen.getByText("Couldn't load — showing nothing")).toBeInTheDocument();
   });
@@ -113,8 +126,7 @@ describe("DisbursementPage", () => {
   it("notes the mandate list endpoint is not available, without fabricating data", async () => {
     mockResponses({});
 
-    const ui = await DisbursementPage();
-    render(ui);
+    await renderPage();
 
     expect(screen.getByText("Mandate list not yet available")).toBeInTheDocument();
   });
@@ -129,8 +141,7 @@ describe("DisbursementPage", () => {
   it("[UX-013] shows the error state for the NACH Return File section — not 'no runs to reconcile' — when the RUNS loader specifically fails", async () => {
     mockResponses({ runsSource: "error" });
 
-    const ui = await DisbursementPage();
-    render(ui);
+    await renderPage();
 
     expect(screen.getByText("We couldn't load this payroll runs.")).toBeInTheDocument();
     expect(screen.queryByText("No runs to reconcile")).not.toBeInTheDocument();
@@ -141,8 +152,7 @@ describe("DisbursementPage", () => {
   it("[UX-013] still shows the honest 'no runs to reconcile' empty state when runs genuinely has zero completed/paid runs (source: api, [])", async () => {
     mockResponses({ runs: [] });
 
-    const ui = await DisbursementPage();
-    render(ui);
+    await renderPage();
 
     expect(screen.getByText("No runs to reconcile")).toBeInTheDocument();
   });
@@ -157,8 +167,7 @@ describe("DisbursementPage", () => {
       dscSource: "error",
     });
 
-    const ui = await DisbursementPage();
-    render(ui);
+    await renderPage();
 
     expect(screen.queryByText(/We couldn't load this payroll runs\./)).not.toBeInTheDocument();
     expect(screen.getByText("Runs Ready for Disbursement").parentElement).toHaveTextContent("1");
@@ -171,8 +180,7 @@ describe("DisbursementPage", () => {
       transfersSource: "error",
     });
 
-    const ui = await DisbursementPage();
-    render(ui);
+    await renderPage();
 
     expect(screen.getByText("Runs Ready for Disbursement").parentElement).toHaveTextContent("1");
     expect(screen.getByText("Transfers Credited").parentElement).toHaveTextContent("—");

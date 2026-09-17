@@ -1,5 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { NextIntlClientProvider } from "next-intl";
+import enMessages from "@/messages/en.json";
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }),
@@ -15,6 +17,17 @@ import { BankFileForm } from "./BankFileForm";
 
 const runs = [{ id: "run-1", payPeriod: "2026-07", netAmount: 90000 }];
 
+// UX-017: BankFileForm now reads its copy through next-intl
+// (useTranslations("bankFileForm")), so every render needs a real provider
+// in the tree -- same pattern as hr/employees/[id]/edit/EditEmployeeForm.test.tsx.
+function renderForm() {
+  render(
+    <NextIntlClientProvider locale="en" messages={enMessages}>
+      <BankFileForm runs={runs} />
+    </NextIntlClientProvider>,
+  );
+}
+
 describe("BankFileForm", () => {
   beforeEach(() => {
     vi.restoreAllMocks();
@@ -28,7 +41,7 @@ describe("BankFileForm", () => {
       }),
     );
 
-    render(<BankFileForm runs={runs} />);
+    renderForm();
     fireEvent.click(screen.getByText("Generate & Download"));
 
     await waitFor(() => expect(screen.getByText("Generate this bank transfer file?")).toBeInTheDocument());
@@ -50,7 +63,7 @@ describe("BankFileForm", () => {
       }),
     );
 
-    render(<BankFileForm runs={runs} />);
+    renderForm();
     fireEvent.click(screen.getByText("Generate & Download"));
 
     await waitFor(() => expect(screen.getByText("Generate this bank transfer file?")).toBeInTheDocument());
@@ -66,7 +79,7 @@ describe("BankFileForm", () => {
   it("never surfaces a raw HTTP status code on a plain-text failure with no body", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("", { status: 502 }));
 
-    render(<BankFileForm runs={runs} />);
+    renderForm();
     fireEvent.click(screen.getByText("Generate & Download"));
 
     await waitFor(() => expect(screen.getByText("Generate this bank transfer file?")).toBeInTheDocument());

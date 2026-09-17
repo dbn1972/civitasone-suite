@@ -2,6 +2,7 @@
 
 import { useId, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { ConfirmDialog, Button } from "../../../../_components/ds";
 import { formatIndianDate } from "@/lib/formatters";
 import { browserJson } from "@/lib/api/browserClient";
@@ -15,7 +16,10 @@ type DscConfig = {
   sha256Fingerprint: string;
 } & Record<string, unknown>;
 
-function fileToBase64(file: File): Promise<string> {
+// UX-017: now takes the read-error message as a parameter -- this function
+// lives outside the component (no hook access), so the translated string is
+// resolved by the caller and threaded through instead.
+function fileToBase64(file: File, readErrorMessage: string): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => {
@@ -23,12 +27,13 @@ function fileToBase64(file: File): Promise<string> {
       const base64 = result.includes(",") ? result.split(",")[1] : result;
       resolve(base64);
     };
-    reader.onerror = () => reject(new Error("Could not read the P12 file."));
+    reader.onerror = () => reject(new Error(readErrorMessage));
     reader.readAsDataURL(file);
   });
 }
 
 export function DscConfigForm({ initial }: { initial: DscConfig | null }) {
+  const t = useTranslations("dscConfigForm");
   const router = useRouter();
   const [passphrase, setPassphrase] = useState("");
   const fileRef = useRef<HTMLInputElement>(null);
@@ -58,7 +63,7 @@ export function DscConfigForm({ initial }: { initial: DscConfig | null }) {
     setFileInvalid(!hasFile);
     setPassInvalid(!hasPass);
     if (!hasFile || !hasPass) {
-      setError("Select a P12 file and enter its passphrase.");
+      setError(t("requiredFieldsError"));
       if (!hasFile) {
         fileRef.current?.focus();
       } else {
@@ -75,13 +80,13 @@ export function DscConfigForm({ initial }: { initial: DscConfig | null }) {
     setBusy(true);
     setError(undefined);
     try {
-      const p12Base64 = await fileToBase64(file);
+      const p12Base64 = await fileToBase64(file, t("p12ReadError"));
       const res = await browserJson<{ data: DscConfig }>("v1/payroll/dsc-config", {
         method: "PUT",
         body: JSON.stringify({ p12Base64, passphrase }),
       });
       setConfirmOpen(false);
-      setMessage(`DSC certificate uploaded for ${res.data.subjectCn}. Valid until ${formatIndianDate(res.data.notAfter)}.`);
+      setMessage(t("uploadedMessage", { subjectCn: res.data.subjectCn, date: formatIndianDate(res.data.notAfter) }));
       setPassphrase("");
       if (fileRef.current) fileRef.current.value = "";
       router.refresh();
@@ -98,7 +103,7 @@ export function DscConfigForm({ initial }: { initial: DscConfig | null }) {
     try {
       await browserJson("v1/payroll/dsc-config", { method: "DELETE" });
       setDeleteConfirmOpen(false);
-      setMessage("DSC configuration removed. This tenant now runs in unsigned mode.");
+      setMessage(t("removedMessage"));
       router.refresh();
     } catch (err) {
       setDeleteError(err instanceof Error ? err.message : formError.fromException("save").message);
@@ -112,30 +117,29 @@ export function DscConfigForm({ initial }: { initial: DscConfig | null }) {
       {initial ? (
         <div className="fields" style={{ marginBottom: 16 }}>
           <div className="fld">
-            <div className="l">Subject CN</div>
+            <div className="l">{t("subjectCnLabel")}</div>
             <div className="v">{initial.subjectCn}</div>
           </div>
           <div className="fld">
-            <div className="l">Serial Number</div>
+            <div className="l">{t("serialNumberLabel")}</div>
             <div className="v">{initial.serialNumber}</div>
           </div>
           <div className="fld">
-            <div className="l">Valid From</div>
+            <div className="l">{t("validFromLabel")}</div>
             <div className="v">{formatIndianDate(initial.notBefore)}</div>
           </div>
           <div className="fld">
-            <div className="l">Valid Until</div>
+            <div className="l">{t("validUntilLabel")}</div>
             <div className="v">{formatIndianDate(initial.notAfter)}</div>
           </div>
           <div className="fld">
-            <div className="l">SHA-256 Fingerprint</div>
+            <div className="l">{t("sha256Label")}</div>
             <div className="v" style={{ fontFamily: "monospace", fontSize: 12 }}>{initial.sha256Fingerprint}</div>
           </div>
         </div>
       ) : (
         <p style={{ fontSize: 13, color: "var(--mut)", marginBottom: 14 }}>
-          No DSC is configured for this tenant. Digitally signed disbursement outputs are unavailable
-          until a certificate is uploaded.
+          {t("noneConfiguredMessage")}
         </p>
       )}
 
@@ -143,7 +147,7 @@ export function DscConfigForm({ initial }: { initial: DscConfig | null }) {
         <div style={{ display: "grid", gap: 14, gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))" }}>
           <div style={{ display: "grid", gap: 6 }}>
             <label htmlFor={fileId} style={{ fontSize: 13, fontWeight: 600 }}>
-              P12 Keystore File <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
+              {t("fileLabel")} <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
             </label>
             <input
               id={fileId}
@@ -159,7 +163,7 @@ export function DscConfigForm({ initial }: { initial: DscConfig | null }) {
           </div>
           <div style={{ display: "grid", gap: 6 }}>
             <label htmlFor={passId} style={{ fontSize: 13, fontWeight: 600 }}>
-              Passphrase <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
+              {t("passphraseLabel")} <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
             </label>
             <input
               id={passId}
@@ -177,10 +181,10 @@ export function DscConfigForm({ initial }: { initial: DscConfig | null }) {
             />
           </div>
         </div>
-        <p style={{ fontSize: 11, color: "var(--mut)", marginTop: 6 }}>Maximum 10 KB. No private key material is ever displayed after upload.</p>
+        <p style={{ fontSize: 11, color: "var(--mut)", marginTop: 6 }}>{t("maxSizeHint")}</p>
         <div style={{ marginTop: 14, display: "flex", gap: 10, flexWrap: "wrap" }}>
           <Button type="submit" variant="primary" style={{ minHeight: 44 }} disabled={busy}>
-            {initial ? "Replace Certificate" : "Upload Certificate"}
+            {initial ? t("replaceBtn") : t("uploadBtn")}
           </Button>
           {initial && (
             <Button
@@ -192,7 +196,7 @@ export function DscConfigForm({ initial }: { initial: DscConfig | null }) {
                 setDeleteConfirmOpen(true);
               }}
             >
-              Remove Certificate
+              {t("removeBtn")}
             </Button>
           )}
         </div>
@@ -209,24 +213,24 @@ export function DscConfigForm({ initial }: { initial: DscConfig | null }) {
 
         <ConfirmDialog
           open={confirmOpen}
-          title="Upload this DSC certificate?"
+          title={t("uploadConfirmTitle")}
           danger
-          confirmLabel="Upload certificate"
+          confirmLabel={t("uploadConfirmLabel")}
           busy={busy}
           errorMessage={error}
-          description={<>This will {initial ? "replace the existing" : "install a new"} digital signature certificate used to sign disbursement outputs for this tenant.</>}
+          description={initial ? t("uploadConfirmDescriptionReplace") : t("uploadConfirmDescriptionNew")}
           onConfirm={() => void upload()}
           onCancel={() => !busy && setConfirmOpen(false)}
         />
 
         <ConfirmDialog
           open={deleteConfirmOpen}
-          title="Remove the DSC configuration?"
+          title={t("removeConfirmTitle")}
           danger
-          confirmLabel="Remove certificate"
+          confirmLabel={t("removeConfirmLabel")}
           busy={busy}
           errorMessage={deleteError}
-          description={<>This tenant will revert to unsigned mode until a new certificate is uploaded. This action is irreversible.</>}
+          description={t("removeConfirmDescription")}
           onConfirm={() => void remove()}
           onCancel={() => !busy && setDeleteConfirmOpen(false)}
         />

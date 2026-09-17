@@ -1,11 +1,25 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { NextIntlClientProvider } from "next-intl";
+import enMessages from "@/messages/en.json";
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }),
 }));
 
 import { NachMandateForm } from "./NachMandateForm";
+
+// UX-017: NachMandateForm now reads its copy through next-intl
+// (useTranslations("nachMandateForm")), so every render needs a real
+// provider in the tree -- same pattern as
+// hr/employees/[id]/edit/EditEmployeeForm.test.tsx.
+function renderForm() {
+  render(
+    <NextIntlClientProvider locale="en" messages={enMessages}>
+      <NachMandateForm />
+    </NextIntlClientProvider>,
+  );
+}
 
 function fillMandateFields() {
   fireEvent.change(screen.getByLabelText(/Employee Reference/), { target: { value: "11111111-1111-1111-1111-111111111111" } });
@@ -20,7 +34,7 @@ describe("NachMandateForm", () => {
   });
 
   it("requires the mandatory fields before opening the confirm dialog", () => {
-    render(<NachMandateForm />);
+    renderForm();
     fireEvent.click(screen.getByText("Submit NACH Mandate"));
     expect(screen.getByText(/are required/)).toBeInTheDocument();
   });
@@ -30,7 +44,7 @@ describe("NachMandateForm", () => {
       new Response(JSON.stringify({ data: { umrn: "UMRN123", status: "submitted" } }), { status: 201 }),
     );
 
-    render(<NachMandateForm />);
+    renderForm();
     fillMandateFields();
     fireEvent.click(screen.getByText("Submit NACH Mandate"));
 
@@ -45,7 +59,7 @@ describe("NachMandateForm", () => {
   it("surfaces a server error on the submit confirm dialog (error path)", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(null, { status: 500 }));
 
-    render(<NachMandateForm />);
+    renderForm();
     fillMandateFields();
     fireEvent.click(screen.getByText("Submit NACH Mandate"));
 
@@ -59,7 +73,7 @@ describe("NachMandateForm", () => {
   });
 
   it("requires a reference before checking mandate status", () => {
-    render(<NachMandateForm />);
+    renderForm();
     fireEvent.click(screen.getByText("Check Status"));
     expect(screen.getByText("Enter a mandate reference to check its status.")).toBeInTheDocument();
   });
@@ -69,7 +83,7 @@ describe("NachMandateForm", () => {
       new Response(JSON.stringify({ data: { status: "active" } }), { status: 200 }),
     );
 
-    render(<NachMandateForm />);
+    renderForm();
     fireEvent.change(screen.getByLabelText(/Check Mandate Status by Reference/), { target: { value: "REF-1" } });
     fireEvent.click(screen.getByText("Check Status"));
 
@@ -87,7 +101,7 @@ describe("NachMandateForm", () => {
       new Response(JSON.stringify({ error: { code: "NOT_FOUND", message: "mandate not found" } }), { status: 404 }),
     );
 
-    render(<NachMandateForm />);
+    renderForm();
     fireEvent.change(screen.getByLabelText(/Check Mandate Status by Reference/), { target: { value: "REF-missing" } });
     fireEvent.click(screen.getByText("Check Status"));
 
@@ -101,7 +115,7 @@ describe("NachMandateForm", () => {
   it("never surfaces a raw HTTP status code on a plain-text status-lookup failure", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("", { status: 500 }));
 
-    render(<NachMandateForm />);
+    renderForm();
     fireEvent.change(screen.getByLabelText(/Check Mandate Status by Reference/), { target: { value: "REF-2" } });
     fireEvent.click(screen.getByText("Check Status"));
 

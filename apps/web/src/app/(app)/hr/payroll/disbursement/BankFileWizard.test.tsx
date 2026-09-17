@@ -1,5 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { NextIntlClientProvider } from "next-intl";
+import enMessages from "@/messages/en.json";
 import { BankFileWizard } from "./BankFileWizard";
 
 const RUNS = [{ id: "r1", payPeriod: "2026-09", netAmount: 450000 }];
@@ -8,6 +10,10 @@ const RUNS = [{ id: "r1", payPeriod: "2026-09", netAmount: 450000 }];
  * UX-016: this used to show the raw backend `error.message`/`error.code`
  * (falling back to `Bank file generation failed (${res.status}).`) verbatim
  * — the same class of leak useFormError closes fleet-wide (UX-003).
+ *
+ * UX-017: BankFileWizard now reads its copy through next-intl
+ * (useTranslations("bankFileWizard")), so the render below needs a real
+ * provider in the tree.
  */
 describe("BankFileWizard — UX-016 clerk-safe errors", () => {
   const fetchMock = vi.fn();
@@ -24,7 +30,11 @@ describe("BankFileWizard — UX-016 clerk-safe errors", () => {
         headers: { "content-type": "application/json" },
       }),
     );
-    render(<BankFileWizard runs={RUNS} dscConfig={null} />);
+    render(
+      <NextIntlClientProvider locale="en" messages={enMessages}>
+        <BankFileWizard runs={RUNS} dscConfig={null} />
+      </NextIntlClientProvider>,
+    );
 
     fireEvent.click(screen.getByRole("button", { name: /next: preview/i }));
     fireEvent.click(screen.getByRole("button", { name: /next: dsc/i }));
