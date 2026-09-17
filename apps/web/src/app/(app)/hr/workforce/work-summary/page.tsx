@@ -1,3 +1,4 @@
+import { getTranslations } from 'next-intl/server'
 import { PageHeader, StatGrid, StatCard, Card, DataTable } from '../../../../_components/ds'
 import { DataSourceBadge } from '../../../../_components/DataSourceBadge'
 import { fetchJson, type LoaderResult } from '@/app/_data/apiClient'
@@ -55,6 +56,7 @@ async function getData(): Promise<LoaderResult<Row[]>> {
 }
 
 export default async function WorkSummaryPage() {
+  const t = await getTranslations('workforceWorkSummary')
   const { data: items, source } = await getData()
 
   const reviewed = items.filter((i) =>
@@ -71,48 +73,47 @@ export default async function WorkSummaryPage() {
     cellType?: 'status'
     align?: 'left' | 'right'
   }[] = [
-    { key: 'employee', label: 'Employee' },
-    { key: 'department', label: 'Department' },
-    { key: 'period', label: 'Period' },
-    { key: 'periodType', label: 'Type' },
-    { key: 'tasks', label: 'Tasks Completed' },
-    { key: 'rating', label: 'Supervisor Rating' },
-    { key: 'status', label: 'Status', cellType: 'status' },
+    { key: 'employee', label: t('colEmployee') },
+    { key: 'department', label: t('colDepartment') },
+    { key: 'period', label: t('colPeriod') },
+    { key: 'periodType', label: t('colType') },
+    { key: 'tasks', label: t('colTasksCompleted') },
+    { key: 'rating', label: t('colSupervisorRating') },
+    { key: 'status', label: t('colStatus'), cellType: 'status' },
   ]
 
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
-        title="Work Summaries"
-        subtitle="Annual appraisal period work summaries — task completions and supervisor ratings."
+        title={t('title')}
+        subtitle={t('subtitle')}
         back="/hr/workforce"
       />
       <DataSourceBadge source={source} />
 
       <StatGrid>
-        <StatCard icon="📝" iconBg="#e6f0ff" label="Total Records" value={items.length} />
-        <StatCard icon="👤" iconBg="#f5f5f5" label="Employees" value={employees} />
-        <StatCard icon="✅" iconBg="#e6f7f0" label="Reviewed" value={reviewed} />
-        <StatCard icon="⏳" iconBg="#fffbe6" label="Pending Review" value={pending} />
+        <StatCard icon="📝" iconBg="#e6f0ff" label={t('statTotalRecords')} value={items.length} />
+        <StatCard icon="👤" iconBg="#f5f5f5" label={t('statEmployees')} value={employees} />
+        <StatCard icon="✅" iconBg="#e6f7f0" label={t('statReviewed')} value={reviewed} />
+        <StatCard icon="⏳" iconBg="#fffbe6" label={t('statPendingReview')} value={pending} />
       </StatGrid>
 
-      <Card title="Work Summary Records">
+      <Card title={t('cardTitle')}>
         <DataTable<Row>
           columns={columns}
           rows={items}
           sortable
           filterable
-          filterPlaceholder="Filter by employee, department, period or status…"
+          filterPlaceholder={t('filterPlaceholder')}
           pageSize={20}
           emptyIcon="📝"
-          emptyTitle="No work summaries yet"
-          emptyMessage="Work summaries are derived from APAR appraisal records. Each annual appraisal cycle generates a summary of tasks completed and supervisor ratings."
+          emptyTitle={t('emptyTitle')}
+          emptyMessage={t('emptyMessage')}
         />
       </Card>
 
       <p style={{ fontSize: 11, color: 'var(--muted, #64748b)', marginTop: 8 }}>
-        APAR work summaries are prepared in accordance with DoPT O.M. No. 21011/1/2005-Estt.(A)
-        and constitute the official record of officer performance for the appraisal year.
+        {t('footerNote')}
       </p>
     </main>
   )

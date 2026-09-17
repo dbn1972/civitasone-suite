@@ -1,3 +1,4 @@
+import { getTranslations } from "next-intl/server";
 import { PageHeader, StatGrid, StatCard, Card, DataTable } from "../../../../_components/ds";
 import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
@@ -37,17 +38,8 @@ async function getData(): Promise<LoaderResult<Row[]>> {
   });
 }
 
-const COLUMNS: { key: keyof Row & string; label: string; cellType?: "status" }[] = [
-  { key: "employeeName", label: "Employee" },
-  { key: "department", label: "Department" },
-  { key: "fromDate", label: "From" },
-  { key: "toDate", label: "To" },
-  { key: "days", label: "Days" },
-  { key: "reason", label: "Reason" },
-  { key: "status", label: "Status", cellType: "status" },
-];
-
 export default async function WFHPage() {
+  const t = await getTranslations("workforceWfh");
   const { data: items, source } = await getData();
 
   const approved = items.filter((i) => i.status === "approved").length;
@@ -55,37 +47,47 @@ export default async function WFHPage() {
   const rejected = items.filter((i) => ["rejected", "declined"].includes(i.status)).length;
   const recalled = items.filter((i) => i.status === "recalled").length;
 
+  const COLUMNS: { key: keyof Row & string; label: string; cellType?: "status" }[] = [
+    { key: "employeeName", label: t("colEmployee") },
+    { key: "department", label: t("colDepartment") },
+    { key: "fromDate", label: t("colFrom") },
+    { key: "toDate", label: t("colTo") },
+    { key: "days", label: t("colDays") },
+    { key: "reason", label: t("colReason") },
+    { key: "status", label: t("colStatus"), cellType: "status" },
+  ];
+
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
-        title="Work From Home"
-        subtitle="Submit and track WFH requests. DoPT policy: eligible cadres may WFH up to 2 days/week."
+        title={t("title")}
+        subtitle={t("subtitle")}
         back="/hr/workforce"
       />
       <DataSourceBadge source={source} />
       <StatGrid>
-        <StatCard icon="🏠" iconBg="#e6f0ff" label="Total Requests" value={items.length} />
-        <StatCard icon="✅" iconBg="#e6f7f0" label="Approved" value={approved} />
-        <StatCard icon="⏳" iconBg="#fffbe6" label="Pending" value={pending} />
-        <StatCard icon="↩️" iconBg="#fff0f0" label="Rejected / Recalled" value={rejected + recalled} />
+        <StatCard icon="🏠" iconBg="#e6f0ff" label={t("statTotalRequests")} value={items.length} />
+        <StatCard icon="✅" iconBg="#e6f7f0" label={t("statApproved")} value={approved} />
+        <StatCard icon="⏳" iconBg="#fffbe6" label={t("statPending")} value={pending} />
+        <StatCard icon="↩️" iconBg="#fff0f0" label={t("statRejectedRecalled")} value={rejected + recalled} />
       </StatGrid>
 
-      <Card title="New WFH Request">
+      <Card title={t("cardNewRequest")}>
         <WFHRequestForm />
       </Card>
 
       <div style={{ marginTop: 16 }}>
-        <Card title="WFH Requests">
+        <Card title={t("cardRequests")}>
           <DataTable<Row>
             columns={COLUMNS}
             rows={items}
             sortable
             filterable
-            filterPlaceholder="Filter by employee, department or status…"
+            filterPlaceholder={t("filterPlaceholder")}
             pageSize={15}
             emptyIcon="🏠"
-            emptyTitle="No WFH requests"
-            emptyMessage="Work-from-home requests appear here once employees raise them. Approved by the reporting officer per DoPT WFH guidelines."
+            emptyTitle={t("emptyTitle")}
+            emptyMessage={t("emptyMessage")}
           />
         </Card>
       </div>

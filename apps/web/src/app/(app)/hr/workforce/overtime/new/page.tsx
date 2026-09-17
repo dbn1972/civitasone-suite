@@ -1,3 +1,4 @@
+import { getTranslations } from "next-intl/server";
 import { PageHeader, Card } from "../../../../../_components/ds";
 import { OvertimeClaimForm } from "../../../_components/OvertimeClaimForm";
 
@@ -5,16 +6,17 @@ import { OvertimeClaimForm } from "../../../_components/OvertimeClaimForm";
  * OvertimeNewPage — submit a new overtime claim via OvertimeClaimForm.
  * CCS (Leave) Rules: OT compensation as cash or comp-off.
  */
-export default function OvertimeNewPage() {
+export default async function OvertimeNewPage() {
+  const t = await getTranslations("workforceOvertimeNew");
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
-        title="New Overtime Claim"
-        subtitle="Submit an overtime claim for duty officer approval. CCS Rules apply."
+        title={t("title")}
+        subtitle={t("subtitle")}
         back="/hr/workforce/overtime"
       />
       <div style={{ maxWidth: 540, marginTop: 20 }}>
-        <Card title="Claim Details">
+        <Card title={t("cardTitle")}>
           <OvertimeClaimForm />
         </Card>
       </div>
