@@ -15,12 +15,14 @@ import type { EmployeeDetail } from "@civitasone/types";
 // (now deleted -- it had zero remaining references after this change).
 import { EditEmployeeForm } from "./edit/EditEmployeeForm";
 import { Button } from "@/app/_components/ds";
+import { useTranslations } from "next-intl";
 
 interface EditEmployeeToggleProps {
   employee: EmployeeDetail;
 }
 
 export function EditEmployeeToggle({ employee }: EditEmployeeToggleProps) {
+  const t = useTranslations("employeeEdit");
   const [open, setOpen] = useState(false);
 
   if (!open) {
@@ -31,7 +33,7 @@ export function EditEmployeeToggle({ employee }: EditEmployeeToggleProps) {
         aria-controls="edit-employee-form"
         style={{ minHeight: 44 }}
       >
-        ✏️ Edit
+        {t("editButton")}
       </Button>
     );
   }
@@ -44,7 +46,7 @@ export function EditEmployeeToggle({ employee }: EditEmployeeToggleProps) {
         aria-controls="edit-employee-form"
         style={{ minHeight: 44 }}
       >
-        ✏️ Edit
+        {t("editButton")}
       </Button>
       <div id="edit-employee-form">
         {/* edit/EditEmployeeForm.tsx manages its own cancel/redirect via

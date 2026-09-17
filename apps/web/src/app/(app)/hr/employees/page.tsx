@@ -20,7 +20,7 @@ export default async function EmployeeDirectoryPage({ searchParams }: { searchPa
     getEmployees(PAGE_SIZE, page * PAGE_SIZE, typeFilter === "all" ? undefined : typeFilter),
     getHRDashboard(),
   ]);
-  const t = await getTranslations();
+  const t = await getTranslations("employees");
   const employees = rawEmployees as EmpRow[];
 
   const SERVING = new Set(["probation", "confirmed", "deputation"]);
@@ -40,11 +40,11 @@ export default async function EmployeeDirectoryPage({ searchParams }: { searchPa
   );
 
   const TYPE_TABS = [
-    { key: "all", label: `All (${total})` },
-    { key: "permanent", label: countByType.permanent ? `Permanent (${countByType.permanent})` : "Permanent" },
-    { key: "contractual", label: countByType.contractual ? `Contractual (${countByType.contractual})` : "Contractual" },
-    { key: "deputation", label: countByType.deputation ? `Deputation (${countByType.deputation})` : "Deputation" },
-    { key: "consultant", label: countByType.consultant ? `Consultant (${countByType.consultant})` : "Consultant" },
+    { key: "all", label: t("tabAll", { count: total }) },
+    { key: "permanent", label: countByType.permanent ? t("tabPermanentCount", { count: countByType.permanent }) : t("tabPermanent") },
+    { key: "contractual", label: countByType.contractual ? t("tabContractualCount", { count: countByType.contractual }) : t("tabContractual") },
+    { key: "deputation", label: countByType.deputation ? t("tabDeputationCount", { count: countByType.deputation }) : t("tabDeputation") },
+    { key: "consultant", label: countByType.consultant ? t("tabConsultantCount", { count: countByType.consultant }) : t("tabConsultant") },
   ];
 
   // The backend now applies the type filter itself (see getEmployees' employeeType
@@ -57,11 +57,11 @@ export default async function EmployeeDirectoryPage({ searchParams }: { searchPa
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
-        title={t("employees.title")}
-        subtitle="Your organisation's workforce directory and profiles."
+        title={t("title")}
+        subtitle={t("subtitle")}
         help="hr"
         actions={
-          <Link href="/hr/employees/new" className="btn primary">{t("employees.add")}</Link>
+          <Link href="/hr/employees/new" className="btn primary">{t("add")}</Link>
         }
       />
       {/* UX-012: the data-source badge now lives inside EmployeesTable, driven
@@ -69,10 +69,10 @@ export default async function EmployeeDirectoryPage({ searchParams }: { searchPa
           second, independent read of `source` here that could disagree with
           the table's own cache state (UX-002's pattern). */}
       <StatGrid>
-        <StatCard icon="👥" iconBg="#e6f7f0" label="Total" value={total} />
-        <StatCard icon="✅" iconBg="#e6f0ff" label="Active (Serving)" value={active} />
-        <StatCard icon="🌴" iconBg="#fffbe6" label="On Leave" value={onLeave} />
-        <StatCard icon="📋" iconBg="#f5f5f5" label="Others" value={others} />
+        <StatCard icon="👥" iconBg="#e6f7f0" label={t("statTotal")} value={total} />
+        <StatCard icon="✅" iconBg="#e6f0ff" label={t("statActive")} value={active} />
+        <StatCard icon="🌴" iconBg="#fffbe6" label={t("statOnLeave")} value={onLeave} />
+        <StatCard icon="📋" iconBg="#f5f5f5" label={t("statOthers")} value={others} />
       </StatGrid>
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 12 }}>
         {TYPE_TABS.map((tab) => (
@@ -92,29 +92,29 @@ export default async function EmployeeDirectoryPage({ searchParams }: { searchPa
           </Link>
         ))}
       </div>
-      <Card title="All Employees">
+      <Card title={t("cardTitle")}>
         <EmployeesTable employees={filtered} source={source} />
       </Card>
 
       {filteredTotal > PAGE_SIZE && (
-        <nav aria-label="Employee list pagination" style={{ display: "flex", alignItems: "center", gap: 12, marginTop: 12, fontSize: 13 }}>
+        <nav aria-label={t("paginationAriaLabel")} style={{ display: "flex", alignItems: "center", gap: 12, marginTop: 12, fontSize: 13 }}>
           {page > 0 && (
             <Link
               href={empPageHref(typeFilter, page - 1)}
               className="btn"
             >
-              {"←"} Previous
+              {"←"} {t("prevLabel")}
             </Link>
           )}
           <span style={{ color: "var(--ink2)" }}>
-            Showing {page * PAGE_SIZE + 1}–{Math.min((page + 1) * PAGE_SIZE, filteredTotal)} of {filteredTotal} employees
+            {t("showingRange", { from: page * PAGE_SIZE + 1, to: Math.min((page + 1) * PAGE_SIZE, filteredTotal), total: filteredTotal })}
           </span>
           {(page + 1) * PAGE_SIZE < filteredTotal && (
             <Link
               href={empPageHref(typeFilter, page + 1)}
               className="btn"
             >
-              Next {"→"}
+              {t("nextLabel")} {"→"}
             </Link>
           )}
         </nav>
