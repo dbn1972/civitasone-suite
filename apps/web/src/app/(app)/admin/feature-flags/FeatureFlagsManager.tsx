@@ -230,7 +230,7 @@ export function FeatureFlagsManager({ initialFlags, source }: { initialFlags: Ad
                 )}
               </div>
               <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
-                <Button type="button" variant="primary" onClick={() => setShowModal(false)} disabled={creating}>Cancel</Button>
+                <Button type="button" variant="ghost" onClick={() => setShowModal(false)} disabled={creating}>Cancel</Button>
                 <Button type="submit" disabled={creating} loading={creating}>{creating ? "Creating…" : "Save"}</Button>
               </div>
             </form>

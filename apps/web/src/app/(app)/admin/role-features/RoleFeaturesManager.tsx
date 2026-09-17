@@ -236,7 +236,7 @@ export function RoleFeaturesManager({
           <div className="modal-content" style={{ maxWidth: 500, padding: 24, borderRadius: 8, background: "#fff" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
               <h3>Preview: As {roles.find((r) => r.key === selectedRole)?.name ?? selectedRole}</h3>
-              <Button onClick={() => setShowPreview(false)} aria-label="Close preview">✕</Button>
+              <Button variant="ghost" onClick={() => setShowPreview(false)} aria-label="Close preview">✕</Button>
             </div>
             <p style={{ color: "#666", margin: "8px 0 16px" }}>This role's real granted features:</p>
             <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
