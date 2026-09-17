@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Card } from "@/app/_components/ds";
+import { Button, Card } from "@/app/_components/ds";
 import {
   FeeExemptionBuilder,
   SlabTableEditor,
@@ -53,8 +53,8 @@ const SCENARIOS: { id: SamplePaymentScenario; label: string }[] = [
 ];
 
 function lineColor(kind: string | undefined, amountPaise: number): string | undefined {
-  if (kind === "exemption" || kind === "rebate" || amountPaise < 0) return "var(--good-fg)";
-  if (kind === "penalty") return "var(--bad-fg)";
+  if (kind === "exemption" || kind === "rebate" || amountPaise < 0) return "var(--good)";
+  if (kind === "penalty") return "var(--bad)";
   if (kind === "info") return "var(--mut)";
   return undefined;
 }
@@ -181,7 +181,7 @@ export function FeeBuilder({
                 borderRadius: 999,
                 border: "1px solid var(--line)",
                 background: s.done ? "var(--good-bg, #e8f5e9)" : "var(--panel)",
-                color: s.done ? "var(--good-fg)" : "var(--mut)",
+                color: s.done ? "var(--good)" : "var(--mut)",
                 fontWeight: 600,
               }}
             >
@@ -230,7 +230,7 @@ export function FeeBuilder({
                       </span>
                     ) : null}
                     {disabled ? (
-                      <span style={{ display: "block", marginTop: 8, fontSize: 12, color: "var(--warn-fg)" }}>
+                      <span style={{ display: "block", marginTop: 8, fontSize: 12, color: "var(--warn)" }}>
                         No assessment engine is bound to this service yet.
                       </span>
                     ) : null}
@@ -296,14 +296,14 @@ export function FeeBuilder({
                 previewAmountPaise={sampleCalc.totalPaise}
               />
               <div style={{ marginTop: 16 }}>
-                <button
-                  type="button"
-                  className="btn ghost sm"
+                <Button
+                  variant="ghost"
+                  size="sm"
                   onClick={() => setShowFormula((v) => !v)}
                   aria-expanded={showFormula}
                 >
                   {showFormula ? "Hide advanced formula" : "Advanced: formula"}
-                </button>
+                </Button>
                 {showFormula ? (
                   <label style={{ display: "grid", gap: 4, marginTop: 10, fontSize: 13 }}>
                     <span style={{ fontWeight: 600 }}>Formula</span>
@@ -366,9 +366,9 @@ export function FeeBuilder({
                     marginBottom: 12,
                     padding: "10px 12px",
                     borderRadius: "var(--r-sm)",
-                    border: "1px solid var(--bad-fg)",
+                    border: "1px solid var(--bad)",
                     background: "var(--bad-bg, #fdecea)",
-                    color: "var(--bad-fg)",
+                    color: "var(--bad)",
                     fontSize: 13,
                     fontWeight: 600,
                   }}
@@ -379,7 +379,7 @@ export function FeeBuilder({
 
               <label style={{ display: "grid", gap: 4, marginBottom: 12, fontSize: 13 }}>
                 <span style={{ fontWeight: 600 }}>
-                  Head of Account <span style={{ color: "var(--bad-fg)" }}>*</span>
+                  Head of Account <span style={{ color: "var(--bad)" }}>*</span>
                 </span>
                 <div style={{ position: "relative" }}>
                   <input
@@ -437,9 +437,8 @@ export function FeeBuilder({
                       ) : (
                         filteredHoa.map((h) => (
                           <li key={h.code} role="option" aria-selected={design.hoaCode === h.code}>
-                            <button
-                              type="button"
-                              className="btn ghost"
+                            <Button
+                              variant="ghost"
                               style={{
                                 width: "100%",
                                 justifyContent: "flex-start",
@@ -451,7 +450,7 @@ export function FeeBuilder({
                               onClick={() => selectHoa(h.code)}
                             >
                               {h.label}
-                            </button>
+                            </Button>
                           </li>
                         ))
                       )}
@@ -459,11 +458,11 @@ export function FeeBuilder({
                   ) : null}
                 </div>
                 {design.hoaCode ? (
-                  <span style={{ color: "var(--good-fg)", fontSize: 12 }}>
+                  <span style={{ color: "var(--good)", fontSize: 12 }}>
                     Attached: {design.hoaCode}
                   </span>
                 ) : (
-                  <span style={{ color: "var(--warn-fg)", fontSize: 12 }}>
+                  <span style={{ color: "var(--warn)", fontSize: 12 }}>
                     Required before Next / Submit — choose the account that receives this fee.
                   </span>
                 )}
@@ -553,29 +552,29 @@ export function FeeBuilder({
               <>
                 {design.feeModel === "flat" ? (
                   <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 12 }}>
-                    <button
-                      type="button"
-                      className="btn ghost sm"
+                    <Button
+                      variant="ghost"
+                      size="sm"
                       onClick={() => setSampleValues(suggestFullFeeSampleValues(design.exemptions, formFields))}
                     >
                       Full fee
-                    </button>
-                    <button
-                      type="button"
-                      className="btn ghost sm"
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
                       onClick={() => setSampleValues(suggestExemptSampleValues(design.exemptions))}
                       disabled={design.exemptions.length === 0}
                       title={design.exemptions.length === 0 ? "Add an exemption first" : undefined}
                     >
                       Exempt sample
-                    </button>
-                    <button
-                      type="button"
-                      className="btn ghost sm"
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
                       onClick={() => setSampleValues({})}
                     >
                       Clear
-                    </button>
+                    </Button>
                   </div>
                 ) : null}
 
@@ -693,7 +692,7 @@ export function FeeBuilder({
                   <span>Total</span>
                   <span data-testid="sample-total">{formatMoney(sampleCalc.totalPaise)}</span>
                 </p>
-                <p style={{ margin: "8px 0 0", fontSize: 12, color: hoaBlocking ? "var(--warn-fg)" : "var(--mut)" }}>
+                <p style={{ margin: "8px 0 0", fontSize: 12, color: hoaBlocking ? "var(--warn)" : "var(--mut)" }}>
                   HOA: {design.hoaCode || "not attached"}
                 </p>
               </>

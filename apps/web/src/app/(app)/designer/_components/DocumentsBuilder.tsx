@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Card, EmptyState } from "@/app/_components/ds";
+import { Button, Card, EmptyState } from "@/app/_components/ds";
 import {
   LocaleTabs,
   SortableList,
@@ -80,15 +80,14 @@ function CitizenUploadPreview({
         </span>
         <div role="group" aria-label="Preview language" style={{ display: "flex", gap: 4 }}>
           {(["en", "hi"] as LocaleKey[]).map((key) => (
-            <button
+            <Button
               key={key}
-              type="button"
-              className={locale === key ? "btn primary" : "btn ghost"}
+              variant={locale === key ? "primary" : "ghost"}
               onClick={() => onLocaleChange(key)}
               style={{ fontSize: 11, padding: "2px 8px" }}
             >
               {key === "en" ? "EN" : "हिंदी"}
-            </button>
+            </Button>
           ))}
         </div>
       </div>
@@ -107,7 +106,7 @@ function CitizenUploadPreview({
               style={{
                 fontSize: 11,
                 fontWeight: 600,
-                color: "var(--warn-fg)",
+                color: "var(--warn)",
                 background: "var(--warn-bg, #fff7ed)",
                 border: "1px solid var(--warn-border, #fdba74)",
                 borderRadius: 999,
@@ -138,13 +137,13 @@ function CitizenUploadPreview({
         >
           <div style={{ fontSize: 12, color: "var(--mut)", marginBottom: 10 }}>{preview.dropHint}</div>
           <div style={{ display: "flex", gap: 8, justifyContent: "center", flexWrap: "wrap" }}>
-            <button type="button" className="btn ghost" disabled style={{ fontSize: 12, padding: "4px 12px" }}>
+            <Button variant="ghost" disabled style={{ fontSize: 12, padding: "4px 12px" }}>
               {preview.chooseFileLabel}
-            </button>
+            </Button>
             {preview.showCameraHint ? (
-              <button type="button" className="btn ghost" disabled style={{ fontSize: 12, padding: "4px 12px" }}>
+              <Button variant="ghost" disabled style={{ fontSize: 12, padding: "4px 12px" }}>
                 {preview.cameraLabel}
-              </button>
+              </Button>
             ) : null}
           </div>
         </div>
@@ -277,7 +276,7 @@ export function DocumentsBuilder({
             borderRadius: "var(--r-sm)",
             background: "var(--warn-bg, #fff7ed)",
             border: "1px solid var(--warn-border, #fdba74)",
-            color: "var(--warn-fg)",
+            color: "var(--warn)",
             fontSize: 13,
           }}
         >
@@ -311,7 +310,7 @@ export function DocumentsBuilder({
               icon="📄"
               title="No documents yet"
               message="Most services need at least one supporting document. Add what applicants must upload."
-              action={<button type="button" className="btn primary" onClick={addDoc}>Add document</button>}
+              action={<Button variant="primary" onClick={addDoc}>Add document</Button>}
             />
           ) : (
             <>
@@ -344,7 +343,7 @@ export function DocumentsBuilder({
                       {w ? (
                         <div
                           data-testid={`doc-warning-${item.id}`}
-                          style={{ fontSize: 12, color: "var(--warn-fg)", marginTop: 4 }}
+                          style={{ fontSize: 12, color: "var(--warn)", marginTop: 4 }}
                         >
                           {w.message}
                         </div>
@@ -353,9 +352,9 @@ export function DocumentsBuilder({
                   );
                 }}
               />
-              <button type="button" className="btn ghost" onClick={addDoc} style={{ marginTop: 12 }}>
+              <Button variant="ghost" onClick={addDoc} style={{ marginTop: 12 }}>
                 + Add document
-              </button>
+              </Button>
             </>
           )}
         </Card>
@@ -390,15 +389,14 @@ export function DocumentsBuilder({
                 </span>
                 <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
                   {DOCUMENT_FORMAT_OPTIONS.map((fmt) => (
-                    <button
+                    <Button
                       key={fmt.id}
-                      type="button"
-                      className={selected.formats.includes(fmt.id) ? "btn primary" : "btn ghost"}
+                      variant={selected.formats.includes(fmt.id) ? "primary" : "ghost"}
                       onClick={() => toggleFormat(selected.id, fmt.id)}
                       style={{ fontSize: 12, padding: "2px 10px" }}
                     >
                       {fmt.label}
-                    </button>
+                    </Button>
                   ))}
                 </div>
               </div>
@@ -447,7 +445,7 @@ export function DocumentsBuilder({
                 {verificationLanes.length === 0 ? (
                   <p
                     data-testid="no-verification-lanes"
-                    style={{ margin: "8px 0 0", fontSize: 12, color: "var(--warn-fg)" }}
+                    style={{ margin: "8px 0 0", fontSize: 12, color: "var(--warn)" }}
                   >
                     No verifying lanes are enabled in the approval chain.{" "}
                     {serviceId ? (
@@ -460,32 +458,30 @@ export function DocumentsBuilder({
                   </p>
                 ) : null}
                 {selectedWarning?.kind === "missing_lane" && suggestedLane ? (
-                  <button
-                    type="button"
-                    className="btn ghost"
+                  <Button
+                    variant="ghost"
                     data-testid="suggest-verified-at"
                     onClick={() => applySuggestedLane(selected.id)}
                     style={{ marginTop: 8, fontSize: 12 }}
                   >
                     Link to {suggestedLane.name}
-                  </button>
+                  </Button>
                 ) : null}
                 {selectedWarning?.kind === "stale_lane" ? (
-                  <button
-                    type="button"
-                    className="btn ghost"
+                  <Button
+                    variant="ghost"
                     data-testid="clear-stale-lane"
                     onClick={() => updateDoc(selected.id, { verifiedAtLane: "" })}
                     style={{ marginTop: 8, fontSize: 12 }}
                   >
                     Clear invalid lane
-                  </button>
+                  </Button>
                 ) : null}
                 {selectedWarning ? (
                   <p
                     data-testid="selected-doc-warning"
                     role="status"
-                    style={{ margin: "8px 0 0", fontSize: 12, color: "var(--warn-fg)" }}
+                    style={{ margin: "8px 0 0", fontSize: 12, color: "var(--warn)" }}
                   >
                     {selectedWarning.message}
                   </p>

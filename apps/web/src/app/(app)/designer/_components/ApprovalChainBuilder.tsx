@@ -2,7 +2,7 @@
 
 import dynamic from "next/dynamic";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Card, ConfirmDialog } from "@/app/_components/ds";
+import { Button, Card, ConfirmDialog } from "@/app/_components/ds";
 import { narrateWorkflow, type WorkflowDesignState, type WorkflowLane } from "../_data/workflowConstants";
 import { fetchTenantPositions, persistWorkflowDesign } from "../_data/workflowBuilderApi";
 import {
@@ -121,9 +121,9 @@ export function ApprovalChainBuilder({
           style={{
             padding: "10px 14px",
             borderRadius: "var(--r-sm)",
-            background: "var(--warn-bg)",
-            border: "1px solid var(--warn-border)",
-            color: "var(--warn-fg)",
+            background: "var(--warnbg)",
+            border: "1px solid var(--warnbd)",
+            color: "var(--warn)",
             fontSize: 13,
           }}
         >
@@ -137,12 +137,12 @@ export function ApprovalChainBuilder({
           embedded
         />
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-          <button type="button" className="btn ghost" onClick={() => setRevertOpen(true)}>
+          <Button variant="ghost" onClick={() => setRevertOpen(true)}>
             Revert to template
-          </button>
-          <button type="button" className="btn ghost" onClick={() => setAdvanced(false)}>
+          </Button>
+          <Button variant="ghost" onClick={() => setAdvanced(false)}>
             Back to guided chain
-          </button>
+          </Button>
         </div>
         <RevertDiffDialog
           open={revertOpen}
@@ -162,9 +162,9 @@ export function ApprovalChainBuilder({
           style={{
             padding: "10px 14px",
             borderRadius: "var(--r-sm)",
-            background: "var(--warn-bg)",
-            border: "1px solid var(--warn-border)",
-            color: "var(--warn-fg)",
+            background: "var(--warnbg)",
+            border: "1px solid var(--warnbd)",
+            color: "var(--warn)",
             fontSize: 13,
           }}
         >
@@ -219,13 +219,13 @@ export function ApprovalChainBuilder({
       </Card>
 
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-        <button type="button" className="btn ghost" onClick={openAdvanced}>
+        <Button variant="ghost" onClick={openAdvanced}>
           {isCustom ? "Open visual editor" : "Open visual editor (Advanced)"}
-        </button>
+        </Button>
         {isCustom ? (
-          <button type="button" className="btn ghost" onClick={() => setRevertOpen(true)}>
+          <Button variant="ghost" onClick={() => setRevertOpen(true)}>
             Revert to template
-          </button>
+          </Button>
         ) : null}
       </div>
 

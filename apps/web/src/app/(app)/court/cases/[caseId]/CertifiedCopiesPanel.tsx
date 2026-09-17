@@ -14,7 +14,7 @@
  * decision on a citizen's application always carries a reason on record.
  */
 import { useCallback, useId, useRef, useState } from "react";
-import { Card, EmptyState, StatusPill } from "@/app/_components/ds";
+import { Button, Card, EmptyState, StatusPill } from "@/app/_components/ds";
 import type { CertifiedCopy, CopyStatus } from "../../_data/types";
 import { COPY_TRANSITIONS } from "../../_data/types";
 import { fmtDateTime, humanize, copyPillStatus } from "../../_data/format";
@@ -220,9 +220,9 @@ function RequestCopyForm({
         </p>
       )}
       <div>
-        <button type="submit" className="btn primary" disabled={busy}>
+        <Button type="submit" variant="primary" disabled={busy}>
           {busy ? "Submitting…" : "Apply for certified copy"}
-        </button>
+        </Button>
       </div>
     </form>
   );
@@ -312,14 +312,14 @@ function CopyRow({
           <StatusPill status={copyPillStatus(copy.status)} label={humanize(copy.status)} />
           {mode === "none" &&
             nextStates.map((s) => (
-              <button
+              <Button
                 key={s}
-                type="button"
-                className={s === "rejected" ? "btn ghost sm" : "btn primary sm"}
+                variant={s === "rejected" ? "ghost" : "primary"}
+                size="sm"
                 onClick={() => setMode(s)}
               >
                 {s === "fee_paid" ? "Record fee paid" : s === "rejected" ? "Reject" : `Mark ${humanize(s)}`}
-              </button>
+              </Button>
             ))}
         </div>
       </div>
@@ -388,17 +388,17 @@ function CopyRow({
             </p>
           )}
           <div style={{ display: "flex", gap: 8 }}>
-            <button
-              type="button"
-              className="btn primary sm"
+            <Button
+              variant="primary"
+              size="sm"
               disabled={busy}
               onClick={() => void apply(mode)}
             >
               {busy ? "…" : `Confirm ${mode === "fee_paid" ? "fee paid" : humanize(mode).toLowerCase()}`}
-            </button>
-            <button type="button" className="btn ghost sm" onClick={() => { setMode("none"); setError(null); }}>
+            </Button>
+            <Button variant="ghost" size="sm" onClick={() => { setMode("none"); setError(null); }}>
               Cancel
-            </button>
+            </Button>
           </div>
         </div>
       )}

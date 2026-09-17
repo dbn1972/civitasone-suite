@@ -22,6 +22,11 @@ vi.mock("next/dynamic", () => ({
 
 vi.mock("@/app/_components/ds", () => ({
   Card: ({ children }: { children?: ReactNode }) => <div data-testid="card">{children}</div>,
+  Button: ({ children, onClick }: { children?: ReactNode; onClick?: () => void }) => (
+    <button type="button" onClick={onClick}>
+      {children}
+    </button>
+  ),
   ConfirmDialog: ({
     open,
     title,

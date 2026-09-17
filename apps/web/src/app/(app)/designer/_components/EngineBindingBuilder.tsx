@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Card, EmptyState } from "@/app/_components/ds";
+import { Button, Card, EmptyState } from "@/app/_components/ds";
 import {
   bpsToPercentInput,
   percentInputToBps,
@@ -187,7 +187,7 @@ export function EngineBindingBuilder({
             </label>
 
             {registryError ? (
-              <p style={{ color: "var(--bad-fg)", fontSize: 13 }}>{registryError}</p>
+              <p style={{ color: "var(--bad)", fontSize: 13 }}>{registryError}</p>
             ) : null}
 
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 12 }}>
@@ -213,12 +213,12 @@ export function EngineBindingBuilder({
                     <strong style={{ display: "block", marginBottom: 4 }}>{eng.label}</strong>
                     <span style={{ fontSize: 13, color: "var(--mut)" }}>{eng.description}</span>
                     {disabled ? (
-                      <span style={{ display: "block", marginTop: 8, fontSize: 12, color: "var(--warn-fg)" }}>
+                      <span style={{ display: "block", marginTop: 8, fontSize: 12, color: "var(--warn)" }}>
                         {eng.unavailableReason ?? "Engine not available in this environment."}
                       </span>
                     ) : null}
                     {bound ? (
-                      <span style={{ display: "block", marginTop: 8, fontSize: 12, color: "var(--good-fg)" }}>
+                      <span style={{ display: "block", marginTop: 8, fontSize: 12, color: "var(--good)" }}>
                         Bound
                       </span>
                     ) : null}
@@ -241,18 +241,17 @@ export function EngineBindingBuilder({
               <div style={{ display: "flex", justifyContent: "space-between", gap: 12, marginBottom: 12 }}>
                 <h3 style={{ margin: 0, fontSize: 16 }}>Parameters</h3>
                 {selected ? (
-                  <button type="button" className="btn ghost" onClick={removeSelected}>
+                  <Button variant="ghost" onClick={removeSelected}>
                     Remove binding
-                  </button>
+                  </Button>
                 ) : null}
               </div>
 
               <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 16 }}>
                 {bindings.map((b) => (
-                  <button
+                  <Button
                     key={b.id}
-                    type="button"
-                    className="btn ghost"
+                    variant="ghost"
                     onClick={() => setSelectedId(b.id)}
                     style={{
                       borderColor: b.id === selectedId ? "var(--info)" : undefined,
@@ -260,7 +259,7 @@ export function EngineBindingBuilder({
                     }}
                   >
                     {b.block} · {b.engineKey}
-                  </button>
+                  </Button>
                 ))}
               </div>
 
@@ -269,7 +268,7 @@ export function EngineBindingBuilder({
               ) : (
                 <div style={{ display: "grid", gap: 14 }}>
                   {!selectedDescriptor?.available ? (
-                    <p style={{ margin: 0, fontSize: 13, color: "var(--warn-fg)" }}>
+                    <p style={{ margin: 0, fontSize: 13, color: "var(--warn)" }}>
                       {selectedDescriptor?.unavailableReason
                         ?? "This engine is stubbed — sandbox test will fail until a live engine is bound."}
                     </p>
@@ -288,7 +287,7 @@ export function EngineBindingBuilder({
                     <>
                       <label style={{ display: "grid", gap: 4, fontSize: 13, maxWidth: 320 }}>
                         <span style={{ fontWeight: 600 }}>
-                          Head of Account <span style={{ color: "var(--bad-fg)" }}>*</span>
+                          Head of Account <span style={{ color: "var(--bad)" }}>*</span>
                         </span>
                         <input
                           className="input"
@@ -348,29 +347,27 @@ export function EngineBindingBuilder({
                                   patchConfig({ exemptionCategories });
                                 }}
                               />
-                              <button
-                                type="button"
-                                className="btn ghost"
+                              <Button
+                                variant="ghost"
                                 onClick={() => {
                                   const exemptionCategories = selected.config.exemptionCategories.filter((_, i) => i !== idx);
                                   patchConfig({ exemptionCategories });
                                 }}
                               >
                                 Remove
-                              </button>
+                              </Button>
                             </div>
                           ))}
                         </div>
-                        <button
-                          type="button"
-                          className="btn ghost"
+                        <Button
+                          variant="ghost"
                           style={{ marginTop: 8 }}
                           onClick={() => patchConfig({
                             exemptionCategories: [...selected.config.exemptionCategories, newExemptionRow()],
                           })}
                         >
                           Add exemption category
-                        </button>
+                        </Button>
                       </div>
 
                       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
@@ -486,10 +483,10 @@ export function EngineBindingBuilder({
                 Apply penalty
               </label>
               {previewError ? (
-                <p style={{ margin: 0, fontSize: 12, color: "var(--bad-fg)" }}>{previewError}</p>
+                <p style={{ margin: 0, fontSize: 12, color: "var(--bad)" }}>{previewError}</p>
               ) : null}
               {preview && !preview.available ? (
-                <p style={{ margin: 0, fontSize: 12, color: "var(--warn-fg)" }}>{preview.note}</p>
+                <p style={{ margin: 0, fontSize: 12, color: "var(--warn)" }}>{preview.note}</p>
               ) : null}
               {preview?.available ? (
                 <>
