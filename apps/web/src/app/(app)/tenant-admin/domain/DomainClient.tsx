@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { EmptyState } from "@/app/_components/ds";
+import { Button, EmptyState } from "@/app/_components/ds";
 import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
 import { useSeededResource } from "@/lib/sync/resource";
 import type { CustomDomain } from "@/app/_data/loaders";
@@ -84,10 +84,10 @@ export function DomainClient({ domains: initialDomains, source }: { domains: Cus
       <div className="card" style={{ marginTop: 18 }}>
         <div className="card-h" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <h3>Custom Domains</h3>
-          <button className="btn btn-primary" onClick={() => setShowAddModal(true)}>+ Add Domain</button>
+          <Button onClick={() => setShowAddModal(true)}>+ Add Domain</Button>
         </div>
         {domains.length === 0 ? (
-          <EmptyState icon="🌐" title="No custom domains configured" message="Add a custom domain to brand your organisation's login and portal URLs." action={<button className="btn btn-primary" onClick={() => setShowAddModal(true)}>+ Add Domain</button>} />
+          <EmptyState icon="🌐" title="No custom domains configured" message="Add a custom domain to brand your organisation's login and portal URLs." action={<Button onClick={() => setShowAddModal(true)}>+ Add Domain</Button>} />
         ) : (
           <table className="data-table" role="table" aria-label="Custom domains list">
             <thead>
@@ -106,9 +106,13 @@ export function DomainClient({ domains: initialDomains, source }: { domains: Cus
                   <td>
                     <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
                       {d.status === "pending_verification" && (
-                        <button className="btn btn-sm" onClick={() => handleVerify(d.id)} style={{ fontSize: 12 }}>✓ Verify</button>
+                        <Button size="sm" onClick={() => handleVerify(d.id)} style={{ fontSize: 12 }}>✓ Verify</Button>
                       )}
-                      <button className="btn btn-sm" onClick={() => setShowInstructions(d.id)} style={{ fontSize: 12 }}>📋 DNS</button>
+                      <Button size="sm" onClick={() => setShowInstructions(d.id)} style={{ fontSize: 12 }}>📋 DNS</Button>
+                      {/* UX-008: icon-only (no text label, no aria-label) — left as a raw
+                          button per Button's documented icon-only exclusion. The missing
+                          aria-label is a pre-existing a11y gap, not fixed here (out of
+                          scope for a design-system class conversion). */}
                       <button className="btn btn-sm" onClick={() => handleDelete(d.id)} style={{ fontSize: 12, color: "#dc2626" }}>🗑️</button>
                     </div>
                   </td>
@@ -136,8 +140,8 @@ export function DomainClient({ domains: initialDomains, source }: { domains: Cus
                 </select>
               </div>
               <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
-                <button type="button" className="btn" onClick={() => setShowAddModal(false)}>Cancel</button>
-                <button type="submit" className="btn btn-primary">Register</button>
+                <Button type="button" variant="ghost" onClick={() => setShowAddModal(false)}>Cancel</Button>
+                <Button type="submit">Register</Button>
               </div>
             </form>
           </div>
@@ -164,15 +168,15 @@ export function DomainClient({ domains: initialDomains, source }: { domains: Cus
                 </>
               )}
             </div>
-            <button
-              className="btn btn-sm" style={{ marginTop: 12 }}
+            <Button
+              size="sm" style={{ marginTop: 12 }}
               onClick={() => navigator.clipboard.writeText(instructionDomain.verificationToken)}
               aria-label="Copy verification token"
             >
               📋 Copy Token
-            </button>
+            </Button>
             <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 16 }}>
-              <button className="btn" onClick={() => setShowInstructions(null)}>Close</button>
+              <Button variant="ghost" onClick={() => setShowInstructions(null)}>Close</Button>
             </div>
           </div>
         </div>

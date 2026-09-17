@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useId, useState } from "react";
-import { ConfirmDialog } from "../../../_components/ds";
+import { Button, ConfirmDialog } from "../../../_components/ds";
 import { useFormError } from "@/lib/useFormError";
 
 type KeyRow = { id: string; keyName: string; status: string };
@@ -162,9 +162,9 @@ export function APIKeyActions({ keys }: { keys: KeyRow[] }) {
         />
         {scopeError ? <p id={scopeErrId} style={fieldErr} role="alert">{scopeError}</p> : null}
 
-        <button type="submit" className="btn primary" disabled={busy} aria-busy={busy}>
+        <Button type="submit" disabled={busy} aria-busy={busy}>
           {busy ? "Issuing…" : "Create API Key"}
-        </button>
+        </Button>
       </form>
 
       {okMessage ? (
@@ -174,9 +174,9 @@ export function APIKeyActions({ keys }: { keys: KeyRow[] }) {
       {createdKey ? (
         <div className="pad" style={{ paddingTop: 0 }}>
           <code style={{ display: "block", overflowWrap: "anywhere", background: "#f8fafc", padding: 10, borderRadius: 8, border: "1px solid var(--line)" }}>{createdKey}</code>
-          <button type="button" className="btn ghost sm" style={{ marginTop: 8 }} onClick={() => void copyKey()}>
+          <Button variant="ghost" size="sm" style={{ marginTop: 8 }} onClick={() => void copyKey()}>
             {copied ? "Copied ✓" : "Copy secret"}
-          </button>
+          </Button>
         </div>
       ) : null}
 
@@ -188,22 +188,22 @@ export function APIKeyActions({ keys }: { keys: KeyRow[] }) {
             <div key={key.id} className="prefrow" style={prefRow}>
               <span style={{ fontSize: 13, fontWeight: 500 }}>{key.keyName}</span>
               <span style={{ display: "inline-flex", gap: 8 }}>
-                <button
-                  type="button"
-                  className="btn ghost sm"
+                <Button
+                  variant="ghost"
+                  size="sm"
                   disabled={busy || dialogBusy}
                   onClick={() => { setMessage(""); setDialogError(undefined); setPending({ kind: "rotate", id: key.id, label: key.keyName }); }}
                 >
                   Rotate
-                </button>
-                <button
-                  type="button"
-                  className="btn danger sm"
+                </Button>
+                <Button
+                  variant="danger"
+                  size="sm"
                   disabled={busy || dialogBusy}
                   onClick={() => { setMessage(""); setDialogError(undefined); setPending({ kind: "revoke", id: key.id, label: key.keyName }); }}
                 >
                   Revoke
-                </button>
+                </Button>
               </span>
             </div>
           ))

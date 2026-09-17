@@ -4,7 +4,7 @@ import Link from "next/link";
 import dynamic from "next/dynamic";
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
-import { HelpTip } from "@/app/_components/ds";
+import { Button, HelpTip } from "@/app/_components/ds";
 import { WizardShell, type DesignerBlock } from "@/app/_components/ds/designer";
 import type { FormFieldDefinition } from "@/app/_components/ds/designer/formTypes";
 import { OfficeOverridesBuilder } from "../../_components/OfficeOverridesBuilder";
@@ -130,7 +130,7 @@ export default function DesignerB5Page() {
   if (error) {
     return (
       <div>
-        <p style={{ color: "var(--bad-fg)" }}>{error}</p>
+        <p style={{ color: "var(--bad)" }}>{error}</p>
         <Link href="/designer" className="btn ghost">← Library</Link>
       </div>
     );
@@ -162,10 +162,10 @@ export default function DesignerB5Page() {
             margin: "0 0 12px",
             padding: "8px 12px",
             fontSize: 13,
-            color: "var(--bad-fg)",
+            color: "var(--bad)",
             background: "var(--bad-bg, #fdecea)",
             borderRadius: "var(--r-sm)",
-            border: "1px solid var(--bad-fg)",
+            border: "1px solid var(--bad)",
           }}
         >
           {hoaGate} Next is disabled until HOA is attached.
@@ -184,9 +184,9 @@ export default function DesignerB5Page() {
       <div style={{ marginTop: 16, display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
         <Link href={`/designer/${params.id}/${prev}`} className="btn ghost">← Previous block</Link>
         {hoaBlocked ? (
-          <button type="button" className="btn primary" disabled title={hoaGate ?? undefined}>
+          <Button disabled title={hoaGate ?? undefined}>
             Next blocked — attach HOA
-          </button>
+          </Button>
         ) : (
           <Link href={`/designer/${params.id}/${next}`} className="btn primary">Next block →</Link>
         )}

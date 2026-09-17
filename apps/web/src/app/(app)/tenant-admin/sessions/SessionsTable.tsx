@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Segmented, ConfirmDialog, DataTable } from "../../../_components/ds";
+import { Button, Segmented, ConfirmDialog, DataTable } from "../../../_components/ds";
 import { formatIndianDate } from "@/lib/formatters";
 import { useFormError } from "@/lib/useFormError";
 
@@ -127,9 +127,9 @@ export function SessionsTable({ sessions }: { sessions: Session[] }) {
             render: (s) =>
               s.status === "active"
                 ? (
-                  <button type="button" className="btn danger sm" disabled={busy} onClick={() => { setError(undefined); setPending(s); }}>
+                  <Button variant="danger" size="sm" disabled={busy} onClick={() => { setError(undefined); setPending(s); }}>
                     Revoke
-                  </button>
+                  </Button>
                 )
                 : <span style={{ fontSize: 12, color: "#98a2b3" }}>—</span>,
           },

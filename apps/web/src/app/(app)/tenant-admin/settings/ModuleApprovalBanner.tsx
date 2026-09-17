@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { Button } from "@/app/_components/ds";
 import { useFormError } from "@/lib/useFormError";
 
 type UserRole = "super_admin" | "platform_admin" | "tenant_admin" | string;
@@ -89,15 +90,13 @@ export function ModuleApprovalBanner({ roles, dirtyKeys, pendingState }: ModuleA
             ✅ Request submitted. Awaiting super admin approval.
           </div>
         ) : (
-          <button
-            type="button"
-            className="btn primary"
+          <Button
             disabled={requestStatus === "submitting"}
             aria-busy={requestStatus === "submitting"}
             onClick={() => void submitApprovalRequest()}
           >
             {requestStatus === "submitting" ? "Submitting…" : "Request Approval"}
-          </button>
+          </Button>
         )}
         {requestStatus === "error" && (
           <div role="alert" aria-live="assertive" className="approval-banner__error">

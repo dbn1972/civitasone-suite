@@ -14,6 +14,7 @@
  */
 
 import { useState } from "react";
+import { Button } from "@/app/_components/ds";
 
 export interface OfficeOverrideRow {
   officeId: string;
@@ -117,14 +118,13 @@ export function OfficeOverridesBuilder({
               <span style={hint}>For auditors. This is not shown to citizens.</span>
             </label>
 
-            <button
-              type="button"
-              className="btn ghost"
+            <Button
+              variant="ghost"
               style={{ marginTop: 12 }}
               onClick={() => onChange(value.filter((_, idx) => idx !== i))}
             >
               Remove variant
-            </button>
+            </Button>
           </li>
         ))}
       </ul>
@@ -152,9 +152,9 @@ export function OfficeOverridesBuilder({
             for an office that never runs the service is config that silently does nothing.
           </span>
         </label>
-        <button type="button" className="btn" style={{ marginTop: 10 }} onClick={add} disabled={!draftOffice.trim()}>
+        <Button style={{ marginTop: 10 }} onClick={add} disabled={!draftOffice.trim()}>
           Add variant
-        </button>
+        </Button>
       </div>
 
       <p style={{ ...hint, marginTop: 16 }}>

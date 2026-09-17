@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { EmptyState } from "@/app/_components/ds";
+import { Button, EmptyState } from "@/app/_components/ds";
 import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
 import { useSeededResource } from "@/lib/sync/resource";
 import type { PlansData } from "@/app/_data/loaders";
@@ -80,7 +80,7 @@ export function PlansClient({ plansData, source }: { plansData: PlansData; sourc
       {trialDaysLeft !== null && (
         <div style={{ background: "#fef3c7", border: "1px solid #f59e0b", borderRadius: 8, padding: "12px 16px", marginBottom: 18, display: "flex", justifyContent: "space-between", alignItems: "center" }} role="alert">
           <span>⚠️ <strong>{trialDaysLeft} days left</strong> in your trial. Upgrade now to keep access.</span>
-          <button className="btn btn-primary btn-sm" onClick={() => handleUpgrade(plans[1]?.id ?? plans[0].id)}>Upgrade Now</button>
+          <Button size="sm" onClick={() => handleUpgrade(plans[1]?.id ?? plans[0].id)}>Upgrade Now</Button>
         </div>
       )}
 
@@ -111,11 +111,11 @@ export function PlansClient({ plansData, source }: { plansData: PlansData; sourc
               </div>
               <div style={{ marginTop: 16 }}>
                 {isCurrent ? (
-                  <button className="btn" disabled style={{ width: "100%", opacity: 0.5 }}>Current Plan</button>
+                  <Button variant="ghost" disabled style={{ width: "100%" }}>Current Plan</Button>
                 ) : isUpgrade ? (
-                  <button className="btn btn-primary" style={{ width: "100%" }} onClick={() => handleUpgrade(plan.id)}>⬆ Upgrade</button>
+                  <Button style={{ width: "100%" }} onClick={() => handleUpgrade(plan.id)}>⬆ Upgrade</Button>
                 ) : (
-                  <button className="btn" style={{ width: "100%", color: "#dc2626" }} onClick={() => handleDowngrade(plan.id)}>⬇ Downgrade</button>
+                  <Button variant="danger" style={{ width: "100%" }} onClick={() => handleDowngrade(plan.id)}>⬇ Downgrade</Button>
                 )}
               </div>
             </div>
@@ -126,7 +126,7 @@ export function PlansClient({ plansData, source }: { plansData: PlansData; sourc
       <div className="card" style={{ marginTop: 18 }}>
         <div className="card-h" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <h3>Invoice History</h3>
-          <button className="btn btn-sm" onClick={() => setShowInvoices(!showInvoices)}>{showInvoices ? "Hide" : "Show"}</button>
+          <Button size="sm" onClick={() => setShowInvoices(!showInvoices)}>{showInvoices ? "Hide" : "Show"}</Button>
         </div>
         {showInvoices && (
           invoices.length === 0 ? (
@@ -142,7 +142,7 @@ export function PlansClient({ plansData, source }: { plansData: PlansData; sourc
                     <td>{new Date(inv.date).toLocaleDateString("en-IN")}</td>
                     <td>{formatCurrency(inv.amount)}</td>
                     <td>{getInvoiceStatusBadge(inv.status)}</td>
-                    <td><button className="btn btn-sm" style={{ fontSize: 11 }}>📥 PDF</button></td>
+                    <td><Button size="sm" style={{ fontSize: 11 }}>📥 PDF</Button></td>
                   </tr>
                 ))}
               </tbody>
@@ -167,8 +167,8 @@ export function PlansClient({ plansData, source }: { plansData: PlansData; sourc
                 </ul>
                 <p style={{ margin: "12px 0", fontWeight: 600 }}>New price: {formatCurrency(targetPlan.pricePerMonth)}/month</p>
                 <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 16 }}>
-                  <button className="btn" onClick={() => { setShowUpgradeModal(false); setUpgradeStep(0); }}>Cancel</button>
-                  <button className="btn btn-primary" onClick={confirmUpgrade}>Pay via Razorpay</button>
+                  <Button variant="ghost" onClick={() => { setShowUpgradeModal(false); setUpgradeStep(0); }}>Cancel</Button>
+                  <Button onClick={confirmUpgrade}>Pay via Razorpay</Button>
                 </div>
               </>
             )}
@@ -183,7 +183,7 @@ export function PlansClient({ plansData, source }: { plansData: PlansData; sourc
                 <div style={{ fontSize: 48 }}>✅</div>
                 <h3 style={{ marginTop: 12 }}>Upgrade Successful!</h3>
                 <p style={{ color: "#666", margin: "8px 0" }}>Changes take effect immediately.</p>
-                <button className="btn btn-primary" onClick={() => { setShowUpgradeModal(false); setUpgradeStep(0); }}>Done</button>
+                <Button onClick={() => { setShowUpgradeModal(false); setUpgradeStep(0); }}>Done</Button>
               </div>
             )}
           </div>
@@ -208,8 +208,8 @@ export function PlansClient({ plansData, source }: { plansData: PlansData; sourc
               </ul>
             </div>
             <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 16 }}>
-              <button className="btn" onClick={() => setShowDowngradeModal(false)}>Cancel</button>
-              <button className="btn" style={{ background: "#dc2626", color: "#fff", border: "none" }} onClick={() => { setCurrentPlanId(targetPlanId!); setShowDowngradeModal(false); }}>Confirm Downgrade</button>
+              <Button variant="ghost" onClick={() => setShowDowngradeModal(false)}>Cancel</Button>
+              <Button variant="danger" onClick={() => { setCurrentPlanId(targetPlanId!); setShowDowngradeModal(false); }}>Confirm Downgrade</Button>
             </div>
           </div>
         </div>

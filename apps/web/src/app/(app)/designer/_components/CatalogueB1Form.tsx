@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Card, ConfirmDialog } from "@/app/_components/ds";
+import { Button, Card, ConfirmDialog } from "@/app/_components/ds";
 import type { StatutoryReference } from "../_data/designerApi";
 import { updateServiceDefinition } from "../_data/designerApi";
 import { patternChangeImpact, SERVICE_PATTERN_OPTIONS } from "../_data/designerConstants";
@@ -231,10 +231,10 @@ export function CatalogueB1Form({ definitionId, initial, onSaveState, onPatternC
         <div>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
             <span style={{ fontWeight: 600 }}>Statutory references</span>
-            <button type="button" className="btn ghost" onClick={addStatutory}>Add reference</button>
+            <Button variant="ghost" onClick={addStatutory}>Add reference</Button>
           </div>
           {showCertWarning ? (
-            <p style={{ margin: "0 0 12px", padding: "10px 12px", background: "var(--warn-bg)", border: "1px solid var(--warn-border)", borderRadius: "var(--r-sm)", fontSize: 13 }}>
+            <p style={{ margin: "0 0 12px", padding: "10px 12px", background: "var(--warnbg)", border: "1px solid var(--warnbd)", borderRadius: "var(--r-sm)", fontSize: 13 }}>
               Certificates usually cite the empowering act — required before cross-tenant sharing.
             </p>
           ) : null}
@@ -265,7 +265,7 @@ export function CatalogueB1Form({ definitionId, initial, onSaveState, onPatternC
                     value={row.url ?? ""}
                     onChange={(e) => updateStatutory(idx, { url: e.target.value })}
                   />
-                  <button type="button" className="btn ghost" onClick={() => removeStatutory(idx)}>Remove</button>
+                  <Button variant="ghost" onClick={() => removeStatutory(idx)}>Remove</Button>
                 </div>
               ))}
             </div>

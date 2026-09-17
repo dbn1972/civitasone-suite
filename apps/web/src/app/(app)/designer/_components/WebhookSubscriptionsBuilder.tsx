@@ -17,6 +17,7 @@
  */
 
 import { useState } from "react";
+import { Button } from "@/app/_components/ds";
 
 export interface WebhookRow {
   id: string;
@@ -147,14 +148,13 @@ export function WebhookSubscriptionsBuilder({
               </span>
             </label>
 
-            <button
-              type="button"
-              className="btn ghost"
+            <Button
+              variant="ghost"
               style={{ marginTop: 12 }}
               onClick={() => onChange(value.filter((_, idx) => idx !== i))}
             >
               Remove {row.id}
-            </button>
+            </Button>
           </li>
         ))}
       </ul>
@@ -169,9 +169,9 @@ export function WebhookSubscriptionsBuilder({
             style={input}
           />
         </label>
-        <button type="button" className="btn" style={{ marginTop: 10 }} onClick={add} disabled={!draftId.trim()}>
+        <Button style={{ marginTop: 10 }} onClick={add} disabled={!draftId.trim()}>
           Add webhook
-        </button>
+        </Button>
       </div>
     </section>
   );

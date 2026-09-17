@@ -2,7 +2,7 @@
 
 import { useId, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { StatusPill, Segmented, ConfirmDialog, DataTable } from "../../../_components/ds";
+import { Button, StatusPill, Segmented, ConfirmDialog, DataTable } from "../../../_components/ds";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { useSeededResource } from "@/lib/sync/resource";
 import { useFormError } from "@/lib/useFormError";
@@ -44,7 +44,7 @@ export function UsersTable({ users, source = "api" }: { users: AdminUser[]; sour
           <div role="group" aria-label="Filter users by status">
             <Segmented options={[...FILTERS]} value={filter} onChange={setFilter} />
           </div>
-          <button type="button" className="btn primary sm" onClick={() => setInviteOpen(true)}>+ Invite User</button>
+          <Button size="sm" onClick={() => setInviteOpen(true)}>+ Invite User</Button>
         </div>
       </div>
       {/* UX-012: this badge is the ONLY place that reports data provenance for

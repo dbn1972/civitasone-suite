@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { EmptyState } from "@/app/_components/ds";
+import { Button, EmptyState } from "@/app/_components/ds";
 import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
 import { useSeededResource } from "@/lib/sync/resource";
 import type { DataExportRequest } from "@/app/_data/loaders";
@@ -105,9 +105,9 @@ export function DataExportClient({ exports: initialExports, source }: { exports:
               </select>
             </div>
 
-            <button type="submit" className="btn btn-primary" disabled={submitting || (exportType === "module" && !moduleFilter)}>
+            <Button type="submit" disabled={submitting || (exportType === "module" && !moduleFilter)}>
               {submitting ? "Processing..." : "🚀 Export"}
-            </button>
+            </Button>
           </div>
         </form>
       </div>
@@ -138,7 +138,7 @@ export function DataExportClient({ exports: initialExports, source }: { exports:
                   <td>{statusBadge(exp.status)}</td>
                   <td>
                     {exp.status === "ready" && (
-                      <button className="btn btn-sm" aria-label={`Download export from ${exp.createdAt}`}>⬇️ Download</button>
+                      <Button size="sm" aria-label={`Download export from ${exp.createdAt}`}>⬇️ Download</Button>
                     )}
                     {exp.status === "processing" && <span style={{ color: "#3b82f6", fontSize: 12 }}>⏳ ~2 min</span>}
                     {exp.status === "expired" && <span style={{ color: "#6b7280", fontSize: 12 }}>Expired</span>}

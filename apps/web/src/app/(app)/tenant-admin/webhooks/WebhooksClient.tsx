@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { EmptyState } from "@/app/_components/ds";
+import { Button, EmptyState } from "@/app/_components/ds";
 import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
 import { useSeededResource } from "@/lib/sync/resource";
 import type { WebhookSummary, WebhookDelivery } from "@/app/_data/loaders";
@@ -95,11 +95,11 @@ export function WebhooksClient({ webhooks: initialWebhooks, source }: { webhooks
       <div className="card" style={{ marginTop: 24 }}>
         <div className="card-h" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <h3>Registered Webhooks</h3>
-          <button className="btn btn-primary" onClick={() => setShowCreate(true)}>+ Add Webhook</button>
+          <Button onClick={() => setShowCreate(true)}>+ Add Webhook</Button>
         </div>
 
         {webhooks.length === 0 ? (
-          <EmptyState icon="🔗" title="No webhooks configured" message="Add a webhook to receive HTTP callbacks when domain events occur." action={<button className="btn btn-primary" onClick={() => setShowCreate(true)}>+ Add Webhook</button>} />
+          <EmptyState icon="🔗" title="No webhooks configured" message="Add a webhook to receive HTTP callbacks when domain events occur." action={<Button onClick={() => setShowCreate(true)}>+ Add Webhook</Button>} />
         ) : (
           <table className="data-table" role="table" aria-label="Webhooks list">
             <thead>
@@ -132,12 +132,12 @@ export function WebhooksClient({ webhooks: initialWebhooks, source }: { webhooks
                   </td>
                   <td>{statusCodeBadge(wh.lastDeliveryStatus)}</td>
                   <td style={{ display: "flex", gap: 6 }}>
-                    <button className="btn btn-sm" onClick={() => handleViewDeliveries(wh.id)} aria-label={`View deliveries for ${wh.url}`}>
+                    <Button size="sm" onClick={() => handleViewDeliveries(wh.id)} aria-label={`View deliveries for ${wh.url}`}>
                       📋 Log
-                    </button>
-                    <button className="btn btn-sm" onClick={() => handleTest(wh.id)} aria-label={`Send test event to ${wh.url}`}>
+                    </Button>
+                    <Button size="sm" onClick={() => handleTest(wh.id)} aria-label={`Send test event to ${wh.url}`}>
                       🧪 Test
-                    </button>
+                    </Button>
                   </td>
                 </tr>
               ))}
@@ -150,7 +150,7 @@ export function WebhooksClient({ webhooks: initialWebhooks, source }: { webhooks
         <div className="card" style={{ marginTop: 24 }}>
           <div className="card-h" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <h3>Delivery Log</h3>
-            <button className="btn btn-sm" onClick={() => setSelectedWebhook(null)}>✕ Close</button>
+            <Button size="sm" onClick={() => setSelectedWebhook(null)}>✕ Close</Button>
           </div>
           {deliveries.length === 0 ? (
             <EmptyState icon="📋" title="No deliveries yet" message="Deliveries will appear here once events are dispatched." />
@@ -216,8 +216,8 @@ export function WebhooksClient({ webhooks: initialWebhooks, source }: { webhooks
                 </p>
               </div>
               <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
-                <button type="button" className="btn" onClick={() => setShowCreate(false)}>Cancel</button>
-                <button type="submit" className="btn btn-primary">Create Webhook</button>
+                <Button type="button" variant="ghost" onClick={() => setShowCreate(false)}>Cancel</Button>
+                <Button type="submit">Create Webhook</Button>
               </div>
             </form>
           </div>

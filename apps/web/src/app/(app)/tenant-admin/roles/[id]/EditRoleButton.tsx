@@ -2,7 +2,7 @@
 
 import { useId, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ConfirmDialog } from "../../../../_components/ds";
+import { Button, ConfirmDialog } from "../../../../_components/ds";
 import { useFormError } from "@/lib/useFormError";
 
 export function EditRoleButton({ roleId, name, description }: { roleId: string; name: string; description?: string }) {
@@ -20,9 +20,9 @@ export function EditRoleButton({ roleId, name, description }: { roleId: string; 
 
   return (
     <>
-      <button type="button" className="btn primary" onClick={() => { setNm(name); setDesc(description ?? ""); setError(undefined); setOpen(true); }}>
+      <Button onClick={() => { setNm(name); setDesc(description ?? ""); setError(undefined); setOpen(true); }}>
         Edit role
-      </button>
+      </Button>
       {open && (
         <ConfirmDialog
           open={open}

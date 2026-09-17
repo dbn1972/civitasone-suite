@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { ConfirmDialog, HelpTip } from "@/app/_components/ds";
+import { Button, ConfirmDialog, HelpTip } from "@/app/_components/ds";
 import { VersionDiff, WizardShell } from "@/app/_components/ds/designer";
 import { AccessibilityPreview } from "../../_components/AccessibilityPreview";
 import type { ServiceDefinitionDto } from "../../_data/designerApi";
@@ -97,7 +97,7 @@ export default function DesignerReviewPage() {
   if (wizard.error || !wizard.def) {
     return (
       <div>
-        <p style={{ color: "var(--bad-fg)" }}>{wizard.error ?? "Draft not found."}</p>
+        <p style={{ color: "var(--bad)" }}>{wizard.error ?? "Draft not found."}</p>
         <Link href="/designer" className="btn ghost">← Library</Link>
       </div>
     );
@@ -141,7 +141,7 @@ export default function DesignerReviewPage() {
         ) : null}
 
         {actionError ? (
-          <p style={{ color: "var(--bad-fg)", marginTop: 16 }} role="alert">{actionError}</p>
+          <p style={{ color: "var(--bad)", marginTop: 16 }} role="alert">{actionError}</p>
         ) : null}
       </WizardShell>
 
@@ -160,12 +160,12 @@ export default function DesignerReviewPage() {
             zIndex: 5,
           }}
         >
-          <button type="button" className="btn ghost" onClick={() => setRejectOpen(true)} disabled={busy}>
+          <Button variant="ghost" onClick={() => setRejectOpen(true)} disabled={busy}>
             Reject
-          </button>
-          <button type="button" className="btn primary" onClick={() => setApproveOpen(true)} disabled={busy}>
+          </Button>
+          <Button onClick={() => setApproveOpen(true)} disabled={busy}>
             Approve &amp; Publish
-          </button>
+          </Button>
         </div>
       ) : null}
 
