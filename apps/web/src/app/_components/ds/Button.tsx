@@ -46,6 +46,16 @@ export type ButtonProps = Omit<ButtonHTMLAttributes<HTMLButtonElement>, "childre
  * open per WCAG 2.4.3) -- added in tranche 2 when a real conversion turned
  * out to depend on it; behavior-preserving for every existing caller, none
  * of which pass a ref today.
+ *
+ * Accepts a caller-supplied `aria-busy` independently of `loading` --
+ * added in tranche 3 when a real conversion (`WFHRequestForm`) needed
+ * `disabled` and `aria-busy` driven by two different conditions (a
+ * broader "submit blocked" check vs. the narrower "currently submitting"
+ * one). Before this fix any explicit `aria-busy` prop was silently
+ * discarded, because the internal `aria-busy={loading || undefined}` was
+ * spread after `...rest` and always won. `loading` still takes priority
+ * when both are set; behavior-preserving for every existing caller, none
+ * of which pass `aria-busy` directly today.
  */
 export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button(
   {
@@ -55,6 +65,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
     disabled,
     className = "",
     children,
+    "aria-busy": ariaBusy,
     ...rest
   },
   ref,
@@ -70,7 +81,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
       {...rest}
       className={classes}
       disabled={disabled || loading}
-      aria-busy={loading || undefined}
+      aria-busy={loading ? true : ariaBusy}
     >
       {children}
     </button>
