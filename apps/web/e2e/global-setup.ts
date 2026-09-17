@@ -773,7 +773,11 @@ const FIXTURES: Record<string, unknown> = {
     { id: 'notif-001', title: 'Bill Approved', message: 'Your bill PAY-001 has been approved.', module: 'finance', eventType: 'bill.approved', recipient: 'admin@example.com', channel: 'email', status: 'sent', createdAt: '2024-01-15T10:00:00Z' },
   ],
   '/api/v1/contract/contracts': [
-    { id: 'con-001', contractNo: 'CON/2024/001', title: 'Annual AMC - IT Equipment', vendor: 'Tech Corp', startDate: '2024-01-01', endDate: '2024-12-31', value: 50000000, status: 'active' },
+    // vendorId is the field mapContractsListRows (loaders.ts) actually reads
+    // for the "Vendor ID" column -- contract-service has no joined vendor
+    // display name yet, so `vendor` (kept for any other/future consumer) is
+    // not what renders in ContractsTable.
+    { id: 'con-001', contractNo: 'CON/2024/001', title: 'Annual AMC - IT Equipment', vendor: 'Tech Corp', vendorId: 'VEN-TECHCORP-001', startDate: '2024-01-01', endDate: '2024-12-31', value: 50000000, status: 'active' },
   ],
   '/api/v1/contract/rate-contracts': [
     { id: 'rc-001', contractNo: 'RC/2024/001', title: 'Stationery Rate Contract', vendor: 'Paper Mart', status: 'active' },
