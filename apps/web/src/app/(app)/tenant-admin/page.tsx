@@ -25,7 +25,7 @@ export default async function TenantAdminPage() {
           <>
             <a href="/tenant-admin/audit?export=true" className="btn ghost" style={{ minHeight: 44 }}>Export report</a>
             {canViewOperations && <a className="btn ghost" href="/tenant-admin/operations" style={{ minHeight: 44 }}>Operations</a>}
-            <PlaceholderButton label="Invite user" className="btn primary" style={{ minHeight: 44 }} />
+            <PlaceholderButton label="Invite user" variant="primary" style={{ minHeight: 44 }} />
           </>
         }
       />

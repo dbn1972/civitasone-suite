@@ -20,7 +20,7 @@
  */
 
 import { useCallback, useEffect, useState } from "react";
-import { StatusPill } from "./ds";
+import { Button, StatusPill } from "./ds";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -146,9 +146,9 @@ export function RaiseEOfficeNote(props: RaiseEOfficeNoteProps) {
             <a className="btn ghost" href={`/estab/files/${file.id}`}>Open file</a>
           </span>
         ) : (
-          <button className="btn primary" onClick={() => setOpen((v) => !v)}>
+          <Button variant="primary" onClick={() => setOpen((v) => !v)}>
             {open ? "Cancel" : "Raise for approval"}
-          </button>
+          </Button>
         )}
       </div>
 
@@ -178,9 +178,9 @@ export function RaiseEOfficeNote(props: RaiseEOfficeNoteProps) {
             <textarea value={note} rows={3} placeholder="Justification / proposal for approval…" onChange={(e) => setNote(e.target.value)} />
           </label>
           <div>
-            <button className="btn primary" disabled={saving} onClick={() => void submit()}>
+            <Button variant="primary" disabled={saving} onClick={() => void submit()}>
               {saving ? "Raising…" : "Submit to eOffice"}
-            </button>
+            </Button>
           </div>
         </div>
       ) : null}

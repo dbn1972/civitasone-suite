@@ -1,6 +1,7 @@
 "use client";
 import { useMemo, useState, type ReactNode, type KeyboardEvent } from "react";
 import { useRouter } from "next/navigation";
+import { Button } from "./Button";
 import { EmptyState } from "./EmptyState";
 import { StatusPill } from "./StatusPill";
 import { formatMoney } from "@/lib/formatters";
@@ -223,9 +224,9 @@ export function DataTable<T extends Record<string, unknown>>({
             </div>
           )}
           {exportable && sorted.length > 0 && (
-            <button type="button" className="btn ghost sm" onClick={downloadCsv} style={{ whiteSpace: "nowrap" }}>
+            <Button variant="ghost" size="sm" onClick={downloadCsv} style={{ whiteSpace: "nowrap" }}>
               ⬇ CSV
-            </button>
+            </Button>
           )}
         </div>
       )}
@@ -315,26 +316,26 @@ export function DataTable<T extends Record<string, unknown>>({
 
       {usePaging && sorted.length > 0 && (
         <div className="dt-pager">
-          <button
-            type="button"
-            className="btn ghost sm"
+          <Button
+            variant="ghost"
+            size="sm"
             disabled={safePage === 0}
             onClick={() => setPage((p) => Math.max(0, p - 1))}
           >
             ← Prev
-          </button>
+          </Button>
           <span aria-live="polite">
             Page {safePage + 1} of {pageCount}
             <span className="sr-only"> ({sorted.length} records)</span>
           </span>
-          <button
-            type="button"
-            className="btn ghost sm"
+          <Button
+            variant="ghost"
+            size="sm"
             disabled={safePage >= pageCount - 1}
             onClick={() => setPage((p) => Math.min(pageCount - 1, p + 1))}
           >
             Next →
-          </button>
+          </Button>
         </div>
       )}
     </div>

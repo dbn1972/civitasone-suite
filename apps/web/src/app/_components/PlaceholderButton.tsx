@@ -1,5 +1,7 @@
 "use client";
 
+import { Button, type ButtonVariant } from "./ds";
+
 /**
  * PlaceholderButton — a wrapper for action buttons that are not yet
  * connected to a backend endpoint. Renders as an honest, clearly-disabled
@@ -11,22 +13,26 @@
  *
  * Use this in server-component pages where a button placeholder is needed
  * but the backend action is not yet implemented.
+ *
+ * UX-008 tranche 9: renders through the shared `Button`, so the visual style
+ * is now selected via the typed `variant` prop instead of a raw `className`
+ * string (the only real caller passing a non-default value, tenant-admin's
+ * "Invite user", updated from `className="btn primary"` to `variant="primary"`).
  */
 export function PlaceholderButton({
   label,
-  className = "btn ghost",
+  variant = "ghost",
   style,
   "aria-label": ariaLabel,
 }: {
   label: string;
-  className?: string;
+  variant?: ButtonVariant;
   style?: React.CSSProperties;
   "aria-label"?: string;
 }) {
   return (
-    <button
-      type="button"
-      className={className}
+    <Button
+      variant={variant}
       style={style}
       disabled
       aria-disabled="true"
@@ -35,6 +41,6 @@ export function PlaceholderButton({
     >
       {label}{" "}
       <span style={{ fontSize: 11, fontWeight: 500, opacity: 0.85 }}>(coming soon)</span>
-    </button>
+    </Button>
   );
 }
