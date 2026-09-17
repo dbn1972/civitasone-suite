@@ -1,6 +1,7 @@
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
-import { PageHeader, EmptyState } from "../../../_components/ds";
+import { PageHeader, EmptyState, RefreshErrorState } from "../../../_components/ds";
 import { getProcurementAnnualPlans } from "../../../_data/loaders";
+import { toHumanError } from "@/lib/messages";
 import Link from "next/link";
 
 const STATUS_COLOR: Record<string, string> = {
@@ -32,7 +33,9 @@ export default async function AnnualProcurementPlanPage() {
         }
       />
 
-      {!plans || plans.length === 0 ? (
+      {source === "error" ? (
+        <RefreshErrorState error={toHumanError("load", { area: "procurement plans" })} />
+      ) : !plans || plans.length === 0 ? (
         <EmptyState icon="📋" title="No plans yet" message="Create an annual procurement plan to aggregate department-level demand for the financial year." />
       ) : (
         <div className="card">

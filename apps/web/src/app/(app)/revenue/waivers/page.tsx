@@ -44,7 +44,7 @@ export default function WaiversPage() {
     if (!amountMinor.trim() || !/^\d+$/.test(amountMinor.trim())) next.amountMinor = "Enter a valid amount in paise (digits only).";
     if (!reason.trim()) next.reason = "Reason is required.";
     setErrors(next);
-    return Object.keys(next).length === 0;
+    return Object.keys(next).length === 0; // ux-001-ok: `next` is a FieldErrors object built synchronously from this form's own client-side field validation (UUID/required-field checks) -- there is no fetch/loader/source in this path
   }
 
   async function handleSubmit(e: React.FormEvent) {

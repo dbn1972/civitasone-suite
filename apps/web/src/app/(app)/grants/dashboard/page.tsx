@@ -1,6 +1,7 @@
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
-import { PageHeader, StatGrid, StatCard, Card, DataTable, EmptyState } from "@/app/_components/ds";
+import { PageHeader, StatGrid, StatCard, Card, DataTable, EmptyState, RefreshErrorState } from "@/app/_components/ds";
 import { formatMoney } from "@/lib/formatters";
+import { toHumanError } from "@/lib/messages";
 import { getGrantsDashboard, getGrants } from "../../../_data/loaders";
 import type { GrantSummary } from "@civitasone/types";
 
@@ -32,8 +33,8 @@ export default async function GrantsDashboardPage() {
   const grants = grantsResult.data;
   const anyError = source === "error" || grantsResult.source === "error";
 
-  const activeGrants = grants.filter((g) => g.status === "active").length;
-  const sanctionedTotal = grants.reduce((s, g) => s + g.totalAmount, 0);
+  const activeGrants = anyError ? null : grants.filter((g) => g.status === "active").length;
+  const sanctionedTotal = anyError ? null : grants.reduce((s, g) => s + g.totalAmount, 0);
 
   return (
     <>
@@ -43,13 +44,15 @@ export default async function GrantsDashboardPage() {
       />
       {anyError && <DataSourceBadge source="error" />}
       <StatGrid>
-        <StatCard icon="🎁" iconBg="#dcfce7" label="Active Grants" value={activeGrants} />
-        <StatCard icon="💰" iconBg="#f1f5f9" label="Sanctioned (FY)" value={formatMoney(sanctionedTotal)} />
-        <StatCard icon="📤" iconBg="#dbeafe" label="Disbursed" value={formatMoney(data.disbursedAmount)} />
-        <StatCard icon="📋" iconBg="#fef3c7" label="UC Pending" value={data.pendingUCs} />
+        <StatCard icon="🎁" iconBg="#dcfce7" label="Active Grants" value={activeGrants === null ? "—" : activeGrants} />
+        <StatCard icon="💰" iconBg="#f1f5f9" label="Sanctioned (FY)" value={sanctionedTotal === null ? "—" : formatMoney(sanctionedTotal)} />
+        <StatCard icon="📤" iconBg="#dbeafe" label="Disbursed" value={anyError ? "—" : formatMoney(data.disbursedAmount)} />
+        <StatCard icon="📋" iconBg="#fef3c7" label="UC Pending" value={anyError ? "—" : data.pendingUCs} />
       </StatGrid>
       <Card title="Grants">
-        {grants.length === 0 ? (
+        {anyError ? (
+          <RefreshErrorState error={toHumanError("load", { area: "grants" })} />
+        ) : grants.length === 0 ? (
           <EmptyState
             icon="🎁"
             title="No grants yet"

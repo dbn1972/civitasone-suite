@@ -1,8 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { PageHeader, DataTable, EmptyState, ConfirmDialog, useConfirmAction } from "../../../_components/ds";
+import { PageHeader, DataTable, EmptyState, ErrorState, ConfirmDialog, useConfirmAction } from "../../../_components/ds";
 import { formatIndianDate } from "@/lib/formatters";
+import { toHumanError } from "@/lib/messages";
 
 type Verification = { id: string; status: string; verificationDate?: string; location?: string };
 
@@ -77,12 +78,7 @@ export default function AssetVerificationPage() {
         {loading ? (
           <EmptyState icon="⏳" title="Loading verification sessions…" />
         ) : loadError ? (
-          <EmptyState
-            icon="⚠️"
-            title="Couldn't load verification sessions"
-            message="There was a problem reaching the asset service."
-            action={<button type="button" className="btn ghost" onClick={() => void load()}>Retry</button>}
-          />
+          <ErrorState error={toHumanError("load", { area: "verification sessions" })} onRetry={() => void load()} />
         ) : tableRows.length === 0 ? (
           <EmptyState
             icon="🔍"

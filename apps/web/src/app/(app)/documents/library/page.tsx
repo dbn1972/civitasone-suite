@@ -1,8 +1,9 @@
 import Link from "next/link";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
-import { EmptyState, PageHeader, StatCard, StatGrid } from "../../../_components/ds";
+import { EmptyState, PageHeader, StatCard, StatGrid, RefreshErrorState } from "../../../_components/ds";
 import { getDocumentFiles, getDocumentFolders, getDocumentStats } from "../_data/loaders";
 import type { FileSummary, FolderSummary } from "../_data/types";
+import { toHumanError } from "@/lib/messages";
 
 function formatBytes(n: number | null): string {
   if (n == null) return "—";
@@ -64,11 +65,20 @@ export default async function DocumentLibraryPage({
 }) {
   const folderId = searchParams.folderId;
 
-  const [{ data: files, source: fSource }, { data: folders }, { data: stats }] = await Promise.all([
+  const [
+    { data: files, source: fSource },
+    { data: folders, source: foldersSource },
+    { data: stats, source: statsSource },
+  ] = await Promise.all([
     getDocumentFiles(folderId),
     getDocumentFolders(),
     getDocumentStats(),
   ]);
+
+  // UX-013: each loader can fail independently -- a folders-fetch failure
+  // must not render the same "empty folder, upload the first file" prompt
+  // as a genuinely empty directory.
+  const errored = fSource === "error" || foldersSource === "error";
 
   const currentFolders = folderId
     ? folders.filter((f) => f.parentId === folderId)
@@ -90,10 +100,10 @@ export default async function DocumentLibraryPage({
       />
 
       <StatGrid>
-        <StatCard icon="📂" iconBg="var(--panel)" label="Total Files" value={files.length.toLocaleString("en-IN")} />
-        <StatCard icon="🗂️" iconBg="var(--panel)" label="Folders" value={folders.length.toLocaleString("en-IN")} />
-        <StatCard icon="📥" iconBg="var(--panel)" label="Inbox" value={stats.inboxCount.toLocaleString("en-IN")} />
-        <StatCard icon="⚡" iconBg="var(--panel)" label="Urgent" value={stats.urgentCount.toLocaleString("en-IN")} />
+        <StatCard icon="📂" iconBg="var(--panel)" label="Total Files" value={fSource === "error" ? "—" : files.length.toLocaleString("en-IN")} />
+        <StatCard icon="🗂️" iconBg="var(--panel)" label="Folders" value={foldersSource === "error" ? "—" : folders.length.toLocaleString("en-IN")} />
+        <StatCard icon="📥" iconBg="var(--panel)" label="Inbox" value={statsSource === "error" ? "—" : stats.inboxCount.toLocaleString("en-IN")} />
+        <StatCard icon="⚡" iconBg="var(--panel)" label="Urgent" value={statsSource === "error" ? "—" : stats.urgentCount.toLocaleString("en-IN")} />
       </StatGrid>
 
       <div className="card" style={{ marginTop: 18 }}>
@@ -111,7 +121,9 @@ export default async function DocumentLibraryPage({
           </h3>
         </div>
 
-        {currentFolders.length === 0 && files.length === 0 ? (
+        {errored ? (
+          <RefreshErrorState error={toHumanError("load", { area: "document library" })} />
+        ) : currentFolders.length === 0 && files.length === 0 ? (
           <EmptyState icon="📂" title="Empty folder" message="No files or sub-folders here yet. Upload the first file." />
         ) : (
           <div className="tbl-wrap">

@@ -196,7 +196,7 @@ export default function LibraryPage() {
         </div>
       </div>
 
-      {filtered.length === 0 ? (
+      {filtered.length === 0 ? ( // ux-001-ok: `filtered` is a client-side filter of the hardcoded, static ISSUE_LIBRARY reference catalogue (see comment above) by the operator's own search/severity selections -- there is no fetch/loader/source in this path
         <div
           style={{
             padding: "40px 24px",

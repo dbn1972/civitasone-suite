@@ -39,7 +39,11 @@ const TYPE_FILTER_OPTIONS = [
   { value: "volunteership", label: "Volunteer" },
 ];
 
-async function getVacancies(): Promise<Vacancy[]> {
+// UX-013: this used to return `[]` on ANY failure (bad response or network
+// error) with no signal preserved anywhere -- a real outage of the careers
+// service rendered pixel-identical to "no openings right now" for every job
+// seeker hitting this public, unauthenticated page.
+async function getVacancies(): Promise<{ vacancies: Vacancy[]; errored: boolean }> {
   const base = (process.env.CIVITASONE_API_BASE_URL || "http://127.0.0.1:8080").replace(/\/$/, "");
   const tenantId = process.env.DEMO_TENANT_ID || "00000000-0000-0000-0000-000000000001";
   try {
@@ -48,16 +52,16 @@ async function getVacancies(): Promise<Vacancy[]> {
       cache: "no-store",
       signal: AbortSignal.timeout(5000),
     });
-    if (!res.ok) return [];
+    if (!res.ok) return { vacancies: [], errored: true };
     const json = await res.json();
-    return (json.data || json) as Vacancy[];
+    return { vacancies: (json.data || json) as Vacancy[], errored: false };
   } catch {
-    return [];
+    return { vacancies: [], errored: true };
   }
 }
 
 export default async function CareersPage({ searchParams }: { searchParams: { type?: string } }) {
-  const allVacancies = await getVacancies();
+  const { vacancies: allVacancies, errored } = await getVacancies();
   const activeType = searchParams.type ?? "";
   const vacancies = activeType
     ? allVacancies.filter((v) => v.vacancyType === activeType)
@@ -109,7 +113,16 @@ export default async function CareersPage({ searchParams }: { searchParams: { ty
 
       {/* Vacancies */}
       <section style={{ maxWidth: 880, margin: "0 auto", padding: "0 24px 64px" }} aria-label="Open positions">
-        {vacancies.length === 0 ? (
+        {errored ? (
+          <div style={{ textAlign: "center", padding: "48px 24px", background: "#fff", borderRadius: 16, border: "1px solid #e2e8f0" }}>
+            <p style={{ fontSize: 44, marginBottom: 12 }} aria-hidden="true">⚠️</p>
+            <h2 style={{ fontSize: 20, fontWeight: 700, color: "#0f172a", margin: "0 0 8px" }}>Couldn&apos;t load openings</h2>
+            <p style={{ color: "#64748b", fontSize: 15, margin: "0 0 16px" }}>We couldn&apos;t reach the careers service. Please try again in a moment.</p>
+            <Link href="/careers" style={{ display: "inline-block", padding: "10px 20px", background: "#154089", color: "#fff", borderRadius: 8, fontWeight: 700, fontSize: 14, textDecoration: "none" }}>
+              Try again
+            </Link>
+          </div>
+        ) : vacancies.length === 0 ? (
           <div style={{ textAlign: "center", padding: "48px 24px", background: "#fff", borderRadius: 16, border: "1px solid #e2e8f0" }}>
             <p style={{ fontSize: 44, marginBottom: 12 }} aria-hidden="true">📋</p>
             <h2 style={{ fontSize: 20, fontWeight: 700, color: "#0f172a", margin: "0 0 8px" }}>No openings right now</h2>

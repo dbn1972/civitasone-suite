@@ -28,7 +28,7 @@ const MODULES = [
 
 function visibleModules(roles: string[]) {
   if (roles.includes("super_admin")) return MODULES;
-  return MODULES.filter((m) => m.roles.length === 0 || m.roles.some((prefix) => roles.some((r) => r.includes(prefix))));
+  return MODULES.filter((m) => m.roles.length === 0 || m.roles.some((prefix) => roles.some((r) => r.includes(prefix)))); // ux-001-ok: `m.roles` is a hardcoded property of the module-static MODULES array literal above, not fetched data -- no loader/source in this path
 }
 
 export default async function DashboardPage() {
@@ -75,7 +75,7 @@ export default async function DashboardPage() {
         <div className="card-h" style={{ marginBottom: 12 }}>
           <h2 id="dash-modules-h" style={{ margin: 0, fontSize: 15 }}>{t("yourModules")}</h2>
         </div>
-        {modules.length === 0 ? (
+        {modules.length === 0 ? ( // ux-001-ok: `modules` is a synchronous filter of the hardcoded MODULES list against `getSessionRoles()` (a local JWT-cookie decode, not a network fetch) -- zero matches means the signed-in user's roles genuinely grant no module, never a fetch failure
           <div className="card">
             <div className="pad">
               <EmptyState

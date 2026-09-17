@@ -104,7 +104,7 @@ export default async function AuditParaDetailPage({ params }: { params: { id: st
       </Card>
 
       <Card title="Timeline" padding>
-        {timeline.length === 0 ? (
+        {timeline.length === 0 ? ( // ux-001-ok: `timeline` is derived purely from `para`, only reachable past the earlier `if (!para) return` guard above (source==="error" implies a null para per the loader contract) -- this is a genuinely history-free record, never a masked fetch failure
           <EmptyState icon="🕒" title="No timeline recorded" message="No history events have been recorded for this audit para." />
         ) : (
           <ol style={{ listStyle: "none", padding: 0, margin: 0 }} aria-label="Audit para timeline">

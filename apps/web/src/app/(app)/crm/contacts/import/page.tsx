@@ -63,7 +63,7 @@ export default function ImportContactsPage() {
         company: c.company || undefined,
         leadStatus: c.leadStatus as "new",
       }));
-      if (contacts.length === 0) throw new Error("No valid rows to import.");
+      if (contacts.length === 0) throw new Error("No valid rows to import."); // ux-001-ok: `contacts` is parsed client-side from the operator's own pasted CSV text (parseCsv), never a fetch result -- there is no loader/source in this path
       const res = await browserFetch("v1/crm/contacts/bulk/import", {
         method: "POST",
         body: JSON.stringify({ contacts }),
@@ -163,7 +163,7 @@ export default function ImportContactsPage() {
           <button
             type="submit"
             className="btn primary"
-            disabled={busy || preview.length === 0}
+            disabled={busy || preview.length === 0} // ux-001-ok: same client-parsed CSV preview as above -- no loader/source involved
             style={{ marginTop: 12, minHeight: 44 }}
           >
             {busy

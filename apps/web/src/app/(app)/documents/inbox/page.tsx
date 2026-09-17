@@ -1,8 +1,9 @@
 import Link from "next/link";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
-import { EmptyState, PageHeader, StatCard, StatGrid } from "../../../_components/ds";
+import { EmptyState, PageHeader, StatCard, StatGrid, RefreshErrorState } from "../../../_components/ds";
 import { getDocumentInbox, getDocumentStats } from "../_data/loaders";
 import type { DakSummary } from "../_data/types";
+import { toHumanError } from "@/lib/messages";
 
 function priorityPill(p: string) {
   if (p === "urgent") return "bad";
@@ -53,9 +54,10 @@ export default async function DocumentInboxPage() {
     getDocumentStats(),
   ]);
 
-  const urgent = items.filter((d) => d.priority === "urgent").length;
-  const pending = items.filter((d) => d.status === "pending").length;
-  const forwarded = items.filter((d) => d.status === "forwarded").length;
+  const errored = source === "error";
+  const urgent = errored ? null : items.filter((d) => d.priority === "urgent").length;
+  const pending = errored ? null : items.filter((d) => d.status === "pending").length;
+  const forwarded = errored ? null : items.filter((d) => d.status === "forwarded").length;
 
   return (
     <div className="wrap">
@@ -73,15 +75,17 @@ export default async function DocumentInboxPage() {
       />
 
       <StatGrid>
-        <StatCard icon="📥" iconBg="var(--panel)" label="Total in Inbox" value={items.length.toLocaleString("en-IN")} />
-        <StatCard icon="⚡" iconBg="var(--panel)" label="Urgent" value={urgent.toLocaleString("en-IN")} />
-        <StatCard icon="⏳" iconBg="var(--panel)" label="Pending Action" value={pending.toLocaleString("en-IN")} />
-        <StatCard icon="➡️" iconBg="var(--panel)" label="Forwarded" value={forwarded.toLocaleString("en-IN")} />
+        <StatCard icon="📥" iconBg="var(--panel)" label="Total in Inbox" value={errored ? "—" : items.length.toLocaleString("en-IN")} />
+        <StatCard icon="⚡" iconBg="var(--panel)" label="Urgent" value={urgent === null ? "—" : urgent.toLocaleString("en-IN")} />
+        <StatCard icon="⏳" iconBg="var(--panel)" label="Pending Action" value={pending === null ? "—" : pending.toLocaleString("en-IN")} />
+        <StatCard icon="➡️" iconBg="var(--panel)" label="Forwarded" value={forwarded === null ? "—" : forwarded.toLocaleString("en-IN")} />
       </StatGrid>
 
       <div className="card" style={{ marginTop: 18 }}>
         <div className="card-h"><h3>Inbox</h3></div>
-        {items.length === 0 ? (
+        {errored ? (
+          <RefreshErrorState error={toHumanError("load", { area: "e-Office inbox" })} />
+        ) : items.length === 0 ? (
           <EmptyState icon="📥" title="Inbox is empty" message="No daks or files are assigned to you right now." />
         ) : (
           <div className="tbl-wrap">

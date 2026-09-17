@@ -82,7 +82,11 @@ export default async function TenderDetailPage({
   const awardedCount = quotations.filter((q) => q.awardId !== null).length;
 
   const lowestBid: string = (() => {
-    if (quotations.length === 0) return "—";
+    // UX-013: folded into the same guard as the empty-check -- a failed
+    // quotations fetch and a genuinely bid-free tender both show "—" here,
+    // which was already the intent (a dash stat fallback covers both), but
+    // now it says so explicitly instead of only being true by coincidence.
+    if (quotationsResult.source === "error" || quotations.length === 0) return "—";
     const minPaise = quotations.reduce((min, q) => {
       const v = Number(q.quotedAmountMinor);
       return v < min ? v : min;

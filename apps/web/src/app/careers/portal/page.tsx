@@ -34,9 +34,13 @@ const STAGE_COLOR: Record<string, { bg: string; color: string }> = {
   hired:       { bg: "#d1fae5", color: "#065f46" },
 };
 
-async function fetchApplications(token: string): Promise<AppSummary[]> {
+// UX-013: this used to return `[]` on ANY failure (bad response or network
+// error) with no signal preserved anywhere -- a real outage of the careers
+// portal service rendered pixel-identical to "no applications yet" for a
+// candidate who may well have applications on record.
+async function fetchApplications(token: string): Promise<{ applications: AppSummary[]; errored: boolean }> {
   const parts = token.split(".");
-  if (parts.length !== 2) return [];
+  if (parts.length !== 2) return { applications: [], errored: false };
   try {
     const payload = JSON.parse(Buffer.from(parts[0]!, "base64url").toString()) as { tenantId?: string };
     const tenantId = payload.tenantId ?? TENANT_ID;
@@ -47,10 +51,12 @@ async function fetchApplications(token: string): Promise<AppSummary[]> {
       },
       cache: "no-store",
     });
-    if (!res.ok) return [];
+    if (!res.ok) return { applications: [], errored: true };
     const json = await res.json() as { data: AppSummary[] };
-    return json.data ?? [];
-  } catch { return []; }
+    return { applications: json.data ?? [], errored: false };
+  } catch {
+    return { applications: [], errored: true };
+  }
 }
 
 export const metadata = { title: "My Applications — Careers Portal" };
@@ -59,7 +65,7 @@ export default async function PortalPage() {
   const token = cookies().get("cand_token")?.value;
   if (!token) redirect("/careers/portal/login");
 
-  const applications = await fetchApplications(token);
+  const { applications, errored } = await fetchApplications(token);
 
   return (
     <main style={{ minHeight: "100vh", background: "#f0f4f8", paddingBottom: 64 }}>
@@ -75,10 +81,19 @@ export default async function PortalPage() {
       <div style={{ maxWidth: 680, margin: "0 auto", padding: "24px 16px" }}>
         <h1 style={{ fontSize: 22, fontWeight: 800, margin: "0 0 6px" }}>Your Applications</h1>
         <p style={{ margin: "0 0 20px", color: "#64748b", fontSize: 14 }}>
-          {applications.length} application{applications.length !== 1 ? "s" : ""} on record
+          {errored ? "Couldn't load your application count." : `${applications.length} application${applications.length !== 1 ? "s" : ""} on record`}
         </p>
 
-        {applications.length === 0 ? (
+        {errored ? (
+          <div style={{ textAlign: "center", padding: "48px 24px", background: "#fff", borderRadius: 12, border: "1px solid #e2e8f0" }}>
+            <p style={{ fontSize: 36, margin: "0 0 12px" }}>⚠️</p>
+            <h2 style={{ fontSize: 18, fontWeight: 700, margin: "0 0 8px" }}>Couldn&apos;t load your applications</h2>
+            <p style={{ color: "#64748b", fontSize: 14, margin: "0 0 16px" }}>We couldn&apos;t reach the careers service. Please try again in a moment.</p>
+            <Link href="/careers/portal" style={{ display: "inline-block", padding: "10px 20px", background: "#154089", color: "#fff", borderRadius: 8, fontWeight: 700, fontSize: 14, textDecoration: "none" }}>
+              Try again
+            </Link>
+          </div>
+        ) : applications.length === 0 ? (
           <div style={{ textAlign: "center", padding: "48px 24px", background: "#fff", borderRadius: 12, border: "1px solid #e2e8f0" }}>
             <p style={{ fontSize: 36, margin: "0 0 12px" }}>📭</p>
             <h2 style={{ fontSize: 18, fontWeight: 700, margin: "0 0 8px" }}>No applications yet</h2>

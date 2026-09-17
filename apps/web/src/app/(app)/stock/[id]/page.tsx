@@ -120,7 +120,7 @@ export default async function StockItemDetailPage({
             <div className="card-h">
               <h3>Stock ledger</h3>
             </div>
-            {item.stockLedger.length === 0 ? (
+            {item.stockLedger.length === 0 ? ( // ux-001-ok: `item` is only reachable past the earlier `if (!item) return` guard above (source==="error" implies a null item per the loader contract) -- this is a genuinely ledger-free item, never a masked fetch failure
               <EmptyState
                 icon="📋"
                 title="No ledger entries"
