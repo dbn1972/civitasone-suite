@@ -300,10 +300,18 @@ export function FormBuilder({
             return (
               <div
                 key={section.id}
+                role="button"
+                tabIndex={0}
                 onDragOver={(e) => onSectionDragOver(e, section.id)}
                 onDragLeave={() => setDropTargetSectionId((cur) => (cur === section.id ? null : cur))}
                 onDrop={(e) => onSectionDrop(e, section.id)}
                 onClick={() => setActiveSectionId(section.id)}
+                onKeyDown={(e) => {
+                  if ((e.key === "Enter" || e.key === " ") && e.target === e.currentTarget) {
+                    e.preventDefault();
+                    setActiveSectionId(section.id);
+                  }
+                }}
                 style={{
                   marginBottom: 16,
                   padding: 12,

@@ -238,8 +238,15 @@ export function GlobalSearch() {
   }, [debouncedQuery, open]);
 
   // ── Keyboard navigation within the dialog ─────────────────────────────────
+  // Attached at the document level (not a JSX onKeyDown prop on the
+  // role="dialog" panel) so it doesn't trip jsx-a11y's
+  // non-interactive-element-interactions check; guarded to fire only while
+  // the search input itself is focused, matching the old scoped-to-the-dialog
+  // behaviour (GlobalSearch has no focus trap, so without this guard the keys
+  // would also act on results after focus moved elsewhere on the page).
   const handleDialogKeyDown = useCallback(
-    (e: React.KeyboardEvent) => {
+    (e: KeyboardEvent) => {
+      if (document.activeElement !== inputRef.current) return;
       if (e.key === "ArrowDown") {
         e.preventDefault();
         setActiveIndex((prev) => {
@@ -261,6 +268,12 @@ export function GlobalSearch() {
     },
     [results, activeIndex],
   );
+
+  useEffect(() => {
+    if (!open) return;
+    document.addEventListener("keydown", handleDialogKeyDown);
+    return () => document.removeEventListener("keydown", handleDialogKeyDown);
+  }, [open, handleDialogKeyDown]);
 
   function scrollToItem(index: number) {
     const list = listRef.current;
@@ -301,7 +314,6 @@ export function GlobalSearch() {
         aria-modal="true"
         aria-label="Global search"
         className="relative w-full max-w-[560px] bg-white dark:bg-gray-900 rounded-xl shadow-2xl overflow-hidden border border-gray-200 dark:border-gray-700"
-        onKeyDown={handleDialogKeyDown}
       >
         {/* Input row */}
         <div className="flex items-center gap-2 px-4 py-3 border-b border-gray-200 dark:border-gray-700">
@@ -360,6 +372,12 @@ export function GlobalSearch() {
                     : "hover:bg-gray-50 dark:hover:bg-gray-800"
                 }`}
                 onClick={() => navigate(result)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    navigate(result);
+                  }
+                }}
                 onMouseEnter={() => setActiveIndex(index)}
               >
                 {/* Module badge */}

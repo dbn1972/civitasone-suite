@@ -222,11 +222,13 @@ export function IntegrationDrawer({
   const pending = detail?.pendingChange ?? null;
 
   return (
-    <div className="cd-overlay" role="dialog" aria-modal="true" aria-labelledby="int-drawer-title" onClick={onClose}>
+    <div className="cd-overlay" role="presentation" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
       <div
         className="card"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="int-drawer-title"
         style={{ maxWidth: 560, width: "100%", maxHeight: "90vh", overflow: "auto" }}
-        onClick={(e) => e.stopPropagation()}
       >
         <div className="card-h">
           <h3 id="int-drawer-title" style={{ display: "flex", alignItems: "center", gap: 9 }}>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useId, useRef, useState, type KeyboardEvent } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { DataTable, ConfirmDialog } from "@/app/_components/ds";
@@ -124,8 +124,12 @@ function FieldPanel({
     if (error) inputRef.current?.focus();
   }, [error]);
 
-  const handleKeyDown = useCallback(
-    (e: KeyboardEvent<HTMLDivElement>) => {
+  // Escape + Tab-trap via a document-level listener (not a JSX onKeyDown prop
+  // on the role="dialog" panel) so it doesn't trip jsx-a11y's
+  // non-interactive-element-interactions check, and keeps working regardless
+  // of exactly what inside the panel currently has focus.
+  useEffect(() => {
+    function onKeyDown(e: globalThis.KeyboardEvent) {
       if (e.key === "Escape") {
         e.preventDefault();
         onCancel();
@@ -145,16 +149,16 @@ function FieldPanel({
         e.preventDefault();
         first.focus();
       }
-    },
-    [onCancel],
-  );
+    }
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [onCancel]);
 
   return createPortal(
     <div
       role="dialog"
       aria-modal="true"
       aria-labelledby={titleId}
-      onKeyDown={handleKeyDown}
       style={{
         position: "fixed",
         inset: 0,

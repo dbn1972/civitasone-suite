@@ -208,6 +208,19 @@ function CreateCampaignDialog({
     };
   }, [open]);
 
+  // Escape closes the dialog — a document-level listener (not a JSX onKeyDown
+  // prop on the role="dialog" panel) so it works regardless of which control
+  // inside the panel currently has focus, and doesn't trip jsx-a11y's
+  // non-interactive-element-interactions check.
+  useEffect(() => {
+    if (!open) return;
+    function onKeyDown(e: globalThis.KeyboardEvent) {
+      if (e.key === "Escape" && !busy) onClose();
+    }
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [open, busy, onClose]);
+
   // Budget is optional. When present it must convert cleanly to paise.
   const budgetMinor = useMemo(() => (budget.trim() ? rupeesToMinorString(budget) : null), [budget]);
   const budgetInvalid = budget.trim().length > 0 && budgetMinor === null;
@@ -256,6 +269,7 @@ function CreateCampaignDialog({
   return (
     <div
       className="cd-overlay"
+      role="presentation"
       onMouseDown={(e) => {
         if (e.target === e.currentTarget && !busy) onClose();
       }}
@@ -265,9 +279,6 @@ function CreateCampaignDialog({
         role="dialog"
         aria-modal="true"
         aria-labelledby={`${nameId}-title`}
-        onKeyDown={(e) => {
-          if (e.key === "Escape" && !busy) onClose();
-        }}
       >
         <h2 className="cd-title" id={`${nameId}-title`}>
           New campaign
