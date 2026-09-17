@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { ArrowRight } from "lucide-react";
 import { getSessionRoles } from "@/lib/auth/roleGuard";
 
 type Action = { label: string; href: string; note: string; priority: "urgent" | "normal" };
@@ -107,7 +108,9 @@ export function RoleCommandCenter() {
           <div className="card-h">
             <h2 id={`cc-${center.id}-h`} style={{ margin: 0 }}>{center.title}</h2>
             <Link href="/workflow" className="btn ghost" style={{ fontSize: 12 }}>
-              All approvals <span aria-hidden="true">→</span>
+              All approvals{" "}
+              {/* Icon, not a "→" text glyph -- see page.tsx's ArrowRight for why. */}
+              <ArrowRight aria-hidden="true" size={12} style={{ verticalAlign: "middle" }} />
             </Link>
           </div>
           <div className="pad">

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { ArrowRight } from "lucide-react";
 import { PageHeader, EmptyState } from "../../_components/ds";
 import { RoleCommandCenter } from "./RoleCommandCenter";
 import { FirstRunTour } from "./FirstRunTour";
@@ -67,7 +68,14 @@ export default async function DashboardPage() {
             <div style={{ fontWeight: 700, color: "var(--ink)" }}>{t("setupBannerTitle")}</div>
             <div style={{ fontSize: 13, color: "var(--ink2)" }}>{t("setupBannerDesc")}</div>
           </div>
-          <span aria-hidden="true" style={{ color: "var(--primary-d)", fontWeight: 700 }}>→</span>
+          {/*
+            An icon, not a "→" text glyph: axe's color-contrast rule cannot
+            reliably measure contrast for decorative Unicode arrow characters
+            and treats that as an undecided, blocking result (same pattern as
+            PageHeader.tsx's back arrow). An SVG icon isn't subject to that
+            text-contrast heuristic.
+          */}
+          <ArrowRight aria-hidden="true" size={14} style={{ color: "var(--primary-d)" }} />
         </div>
       </Link>
       <RoleCommandCenter />
