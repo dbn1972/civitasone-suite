@@ -7,6 +7,7 @@
  */
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { Button } from "../ds";
 import { TEMPERATURES, PRIORITIES, LEAD_STATUSES } from "@/lib/crm/leadQualification";
 
 export interface LeadFilterValues {
@@ -97,8 +98,8 @@ export function LeadFilters({ initial }: { initial: Partial<LeadFilterValues> })
           <input id="lf-source" value={v.source} onChange={(e) => set({ source: e.target.value })} placeholder="Any source" style={inputStyle} />
         </div>
         <div style={{ display: "flex", gap: 8 }}>
-          <button type="button" className="btn primary" onClick={apply} style={{ minHeight: 44 }}>Apply filters</button>
-          <button type="button" className="btn ghost" onClick={clear} style={{ minHeight: 44 }}>Clear</button>
+          <Button type="button" onClick={apply} style={{ minHeight: 44 }}>Apply filters</Button>
+          <Button type="button" variant="ghost" onClick={clear} style={{ minHeight: 44 }}>Clear</Button>
         </div>
       </div>
     </section>

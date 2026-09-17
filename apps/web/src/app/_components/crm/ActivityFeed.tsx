@@ -9,7 +9,7 @@
  */
 import { useEffect, useId, useState } from "react";
 import { DataSourceBadge } from "../DataSourceBadge";
-import { EmptyState } from "../ds";
+import { EmptyState, Button } from "../ds";
 import { formatIndianDate } from "@/lib/formatters";
 import {
   getActivities,
@@ -198,9 +198,9 @@ export function ActivityFeed({ subjectType, subjectId }: Props) {
             />
           </div>
           <div>
-            <button type="submit" className="btn primary" disabled={busy} style={{ minHeight: 44 }}>
+            <Button type="submit" disabled={busy} style={{ minHeight: 44 }}>
               {busy ? "Saving…" : "Log activity"}
-            </button>
+            </Button>
           </div>
           {message ? <p role="status" aria-live="polite" style={{ fontSize: 13, color: "#047857", margin: 0 }}>{message}</p> : null}
           {error ? <p role="alert" aria-live="assertive" style={{ fontSize: 13, color: "#b42318", margin: 0 }}>{error}</p> : null}

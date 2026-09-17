@@ -8,7 +8,7 @@
  */
 import { useEffect, useId, useState } from "react";
 import { DataSourceBadge } from "../DataSourceBadge";
-import { ConfirmDialog, EmptyState } from "../ds";
+import { ConfirmDialog, EmptyState, Button } from "../ds";
 import {
   getLinkedAccounts,
   connectLinkedAccount,
@@ -128,9 +128,9 @@ export function LinkedAccountsPanel() {
             />
           </div>
           <div>
-            <button type="submit" className="btn primary" disabled={busy} style={{ minHeight: 44 }}>
+            <Button type="submit" disabled={busy} style={{ minHeight: 44 }}>
               {busy ? "Connecting…" : "Connect provider"}
-            </button>
+            </Button>
           </div>
           {message ? <p role="status" aria-live="polite" style={{ fontSize: 13, color: "#047857", margin: 0 }}>{message}</p> : null}
           {error ? <p role="alert" aria-live="assertive" style={{ fontSize: 13, color: "#b42318", margin: 0 }}>{error}</p> : null}
@@ -156,9 +156,9 @@ export function LinkedAccountsPanel() {
                     <td style={{ fontSize: 13 }}>{a.externalEmail || "—"}</td>
                     <td><span className="pill info">{STATUS_LABEL[a.status]}</span></td>
                     <td style={{ textAlign: "right" }}>
-                      <button type="button" className="btn danger" aria-label={`Disconnect ${a.externalEmail || a.provider}`} disabled={busy || !a.id} onClick={() => a.id && setConfirmId(a.id)} style={{ minHeight: 36 }}>
+                      <Button type="button" variant="danger" aria-label={`Disconnect ${a.externalEmail || a.provider}`} disabled={busy || !a.id} onClick={() => a.id && setConfirmId(a.id)} style={{ minHeight: 36 }}>
                         Disconnect
-                      </button>
+                      </Button>
                     </td>
                   </tr>
                 ))}

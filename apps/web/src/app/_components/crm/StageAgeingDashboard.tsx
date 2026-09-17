@@ -8,7 +8,7 @@
  */
 import { useEffect, useId, useState } from "react";
 import { DataSourceBadge } from "../DataSourceBadge";
-import { ConfirmDialog, EmptyState } from "../ds";
+import { ConfirmDialog, EmptyState, Button } from "../ds";
 import {
   getStageAgeing,
   getStageLimits,
@@ -242,12 +242,12 @@ export function StageAgeingDashboard() {
                     </td>
                     <td>
                       <div style={{ display: "flex", gap: 6 }}>
-                        <button type="button" className="btn primary sm" onClick={() => void saveLimit(row)} disabled={busy}>
+                        <Button type="button" size="sm" onClick={() => void saveLimit(row)} disabled={busy}>
                           {busy ? "…" : row.id ? "Save" : "Create"}
-                        </button>
-                        <button type="button" className="btn ghost sm" onClick={() => setConfirmKey(row.key)} disabled={busy} aria-label={`Delete limit ${n}`}>
+                        </Button>
+                        <Button type="button" variant="ghost" size="sm" onClick={() => setConfirmKey(row.key)} disabled={busy} aria-label={`Delete limit ${n}`}>
                           Delete
-                        </button>
+                        </Button>
                       </div>
                     </td>
                   </tr>
@@ -257,9 +257,9 @@ export function StageAgeingDashboard() {
           </table>
         )}
         <div style={{ padding: 12 }}>
-          <button type="button" className="btn ghost" onClick={addLimit}>
+          <Button type="button" variant="ghost" onClick={addLimit}>
             + Add stage limit
-          </button>
+          </Button>
         </div>
       </div>
 

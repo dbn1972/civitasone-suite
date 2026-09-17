@@ -7,7 +7,7 @@
  */
 import { useEffect, useId, useState } from "react";
 import { DataSourceBadge } from "../DataSourceBadge";
-import { EmptyState } from "../ds";
+import { EmptyState, Button } from "../ds";
 import {
   getReasonCodes,
   saveReasonCodes,
@@ -137,7 +137,7 @@ export function ReasonCodesEditor() {
                   </label>
                 </td>
                 <td>
-                  <button type="button" className="btn ghost sm" onClick={() => removeCode(idx)} aria-label={`Remove reason ${idx + 1}`}>Remove</button>
+                  <Button type="button" variant="ghost" size="sm" onClick={() => removeCode(idx)} aria-label={`Remove reason ${idx + 1}`}>Remove</Button>
                 </td>
               </tr>
             ))}
@@ -146,10 +146,10 @@ export function ReasonCodesEditor() {
       )}
 
       <div style={{ display: "flex", gap: 8, padding: 12 }}>
-        <button type="button" className="btn ghost" onClick={addCode}>+ Add reason code</button>
-        <button type="button" className="btn primary" onClick={() => void save()} disabled={busy}>
+        <Button type="button" variant="ghost" onClick={addCode}>+ Add reason code</Button>
+        <Button type="button" onClick={() => void save()} disabled={busy}>
           {busy ? "Saving…" : "Save reason codes"}
-        </button>
+        </Button>
       </div>
     </div>
   );

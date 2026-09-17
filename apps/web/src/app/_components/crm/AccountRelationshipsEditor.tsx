@@ -8,7 +8,7 @@
  */
 import { useEffect, useId, useMemo, useState } from "react";
 import { DataSourceBadge } from "../DataSourceBadge";
-import { ConfirmDialog, EmptyState } from "../ds";
+import { ConfirmDialog, EmptyState, Button } from "../ds";
 import {
   getAccountRelationships,
   createAccountRelationship,
@@ -147,9 +147,9 @@ export function AccountRelationshipsEditor({ accountId, accountOptions = [] }: P
             )}
           </div>
           <div>
-            <button type="submit" className="btn primary" disabled={busy} style={{ minHeight: 44 }}>
+            <Button type="submit" disabled={busy} style={{ minHeight: 44 }}>
               {busy ? "Saving…" : "Add relationship"}
-            </button>
+            </Button>
           </div>
           {message ? <p role="status" aria-live="polite" style={{ fontSize: 13, color: "#047857", margin: 0 }}>{message}</p> : null}
           {error ? <p role="alert" aria-live="assertive" style={{ fontSize: 13, color: "#b42318", margin: 0 }}>{error}</p> : null}
@@ -173,16 +173,16 @@ export function AccountRelationshipsEditor({ accountId, accountOptions = [] }: P
                     {grouped.get(t)!.map((r) => (
                       <li key={r.id ?? r.toAccountId} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
                         <a href={`/crm/accounts/${r.toAccountId}`}>{r.toAccountName ?? nameOf(r.toAccountId)}</a>
-                        <button
+                        <Button
                           type="button"
-                          className="btn danger"
+                          variant="danger"
                           aria-label={`Remove ${RELATIONSHIP_TYPE_LABELS[t]} link to ${r.toAccountName ?? nameOf(r.toAccountId)}`}
                           disabled={busy || !r.id}
                           onClick={() => r.id && setConfirmId(r.id)}
                           style={{ minHeight: 36 }}
                         >
                           Remove
-                        </button>
+                        </Button>
                       </li>
                     ))}
                   </ul>

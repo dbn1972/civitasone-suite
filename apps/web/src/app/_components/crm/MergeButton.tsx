@@ -6,6 +6,7 @@
  */
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { Button } from "../ds";
 import { MergeDialog, type MergeOption } from "./MergeDialog";
 import type { DqEntity } from "@/lib/crm/dataQuality";
 
@@ -23,15 +24,15 @@ export function MergeButton({
 
   return (
     <>
-      <button
+      <Button
         type="button"
-        className="btn ghost"
+        variant="ghost"
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
         style={{ minHeight: 44 }}
       >
         {label}
-      </button>
+      </Button>
       <MergeDialog
         entity={entity}
         options={options}

@@ -6,6 +6,7 @@
  */
 import type { DuplicateCandidate } from "@/lib/crm/dataQuality";
 import { DataSourceBadge } from "../DataSourceBadge";
+import { Button } from "../ds";
 
 export function DuplicateCheckPanel({
   candidates,
@@ -97,22 +98,23 @@ export function DuplicateCheckPanel({
               </div>
             </div>
             {onMerge ? (
-              <button
+              <Button
                 type="button"
-                className="btn ghost sm"
+                variant="ghost"
+                size="sm"
                 onClick={() => onMerge(c)}
                 style={{ whiteSpace: "nowrap" }}
               >
                 Merge instead
-              </button>
+              </Button>
             ) : null}
           </li>
         ))}
       </ul>
       {onContinueAnyway ? (
-        <button type="button" className="btn ghost sm" onClick={onContinueAnyway} style={{ marginTop: 10 }}>
+        <Button type="button" variant="ghost" size="sm" onClick={onContinueAnyway} style={{ marginTop: 10 }}>
           Continue anyway — this is a new record
-        </button>
+        </Button>
       ) : null}
     </section>
   );

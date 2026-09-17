@@ -9,7 +9,7 @@
  */
 import { useEffect, useId, useState } from "react";
 import { DataSourceBadge } from "../DataSourceBadge";
-import { ConfirmDialog, EmptyState } from "../ds";
+import { ConfirmDialog, EmptyState, Button } from "../ds";
 import {
   getDocumentTypes,
   createDocumentType,
@@ -192,12 +192,12 @@ export function DocumentTypesEditor() {
                   </label>
                 </div>
                 <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
-                  <button type="button" className="btn primary" style={{ minHeight: 40 }} disabled={busyKey === row.key || !rowValid(row)} onClick={() => save(row)}>
+                  <Button type="button" style={{ minHeight: 40 }} disabled={busyKey === row.key || !rowValid(row)} onClick={() => save(row)}>
                     {busyKey === row.key ? "Saving…" : "Save"}
-                  </button>
-                  <button type="button" className="btn danger" style={{ minHeight: 40 }} disabled={busyKey === row.key} onClick={() => setConfirmKey(row.key)}>
+                  </Button>
+                  <Button type="button" variant="danger" style={{ minHeight: 40 }} disabled={busyKey === row.key} onClick={() => setConfirmKey(row.key)}>
                     Delete
-                  </button>
+                  </Button>
                 </div>
               </li>
             ))}
@@ -206,9 +206,9 @@ export function DocumentTypesEditor() {
 
         {source !== "error" && source !== "loading" ? (
           <div>
-            <button type="button" className="btn ghost" style={{ minHeight: 40 }} onClick={addRow}>
+            <Button type="button" variant="ghost" style={{ minHeight: 40 }} onClick={addRow}>
               + Add document type
-            </button>
+            </Button>
           </div>
         ) : null}
       </div>

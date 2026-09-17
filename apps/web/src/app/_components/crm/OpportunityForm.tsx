@@ -9,6 +9,7 @@
  */
 import { useEffect, useId, useMemo, useState } from "react";
 import { DataSourceBadge } from "../DataSourceBadge";
+import { Button } from "../ds";
 import { rupeesToMinorString } from "@/lib/money";
 import { formatMoney } from "@/lib/formatters";
 import {
@@ -264,9 +265,9 @@ export function OpportunityForm({ opportunity, onSaved }: OpportunityFormProps) 
         </label>
 
         <div style={{ display: "flex", gap: 8 }}>
-          <button type="button" className="btn primary" onClick={() => void submit()} disabled={busy} aria-busy={busy}>
+          <Button type="button" onClick={() => void submit()} disabled={busy} aria-busy={busy}>
             {busy ? "Saving…" : opportunity ? "Save opportunity" : "Create opportunity"}
-          </button>
+          </Button>
         </div>
       </div>
     </div>

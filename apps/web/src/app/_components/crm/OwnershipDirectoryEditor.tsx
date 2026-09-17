@@ -9,7 +9,7 @@
  */
 import { useEffect, useId, useState } from "react";
 import { DataSourceBadge } from "../DataSourceBadge";
-import { ConfirmDialog, EmptyState, Tabs } from "../ds";
+import { ConfirmDialog, EmptyState, Tabs, Button } from "../ds";
 import {
   getResources,
   createResource,
@@ -173,12 +173,12 @@ function ResourceTable({ resource }: { resource: OwnershipResource }) {
                   </td>
                   <td>
                     <div style={{ display: "flex", gap: 6 }}>
-                      <button type="button" className="btn primary sm" onClick={() => void saveRow(row)} disabled={busy}>
+                      <Button type="button" size="sm" onClick={() => void saveRow(row)} disabled={busy}>
                         {busy ? "…" : row.id ? "Save" : "Create"}
-                      </button>
-                      <button type="button" className="btn ghost sm" onClick={() => setConfirmKey(row.key)} disabled={busy} aria-label={`Delete entry ${n}`}>
+                      </Button>
+                      <Button type="button" variant="ghost" size="sm" onClick={() => setConfirmKey(row.key)} disabled={busy} aria-label={`Delete entry ${n}`}>
                         Delete
-                      </button>
+                      </Button>
                     </div>
                   </td>
                 </tr>
@@ -189,7 +189,7 @@ function ResourceTable({ resource }: { resource: OwnershipResource }) {
       )}
 
       <div style={{ display: "flex", gap: 8, padding: 12 }}>
-        <button type="button" className="btn ghost" onClick={addRow}>+ Add {label.replace(/s$/, "").toLowerCase()}</button>
+        <Button type="button" variant="ghost" onClick={addRow}>+ Add {label.replace(/s$/, "").toLowerCase()}</Button>
       </div>
 
       <ConfirmDialog

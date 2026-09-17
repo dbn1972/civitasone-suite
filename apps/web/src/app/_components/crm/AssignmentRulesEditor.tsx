@@ -9,7 +9,7 @@
  */
 import { useEffect, useId, useState } from "react";
 import { DataSourceBadge } from "../DataSourceBadge";
-import { ConfirmDialog, EmptyState } from "../ds";
+import { ConfirmDialog, EmptyState, Button } from "../ds";
 import {
   getAssignmentRules,
   createAssignmentRule,
@@ -263,12 +263,12 @@ export function AssignmentRulesEditor() {
                     </td>
                     <td>
                       <div style={{ display: "flex", gap: 6 }}>
-                        <button type="button" className="btn primary sm" onClick={() => void saveRow(row)} disabled={busy}>
+                        <Button type="button" size="sm" onClick={() => void saveRow(row)} disabled={busy}>
                           {busy ? "…" : row.id ? "Save" : "Create"}
-                        </button>
-                        <button type="button" className="btn ghost sm" onClick={() => setConfirmKey(row.key)} disabled={busy} aria-label={`Delete rule ${n}`}>
+                        </Button>
+                        <Button type="button" variant="ghost" size="sm" onClick={() => setConfirmKey(row.key)} disabled={busy} aria-label={`Delete rule ${n}`}>
                           Delete
-                        </button>
+                        </Button>
                       </div>
                     </td>
                   </tr>
@@ -279,7 +279,7 @@ export function AssignmentRulesEditor() {
       )}
 
       <div style={{ display: "flex", gap: 8, padding: 12 }}>
-        <button type="button" className="btn ghost" onClick={addRule}>+ Add rule</button>
+        <Button type="button" variant="ghost" onClick={addRule}>+ Add rule</Button>
       </div>
 
       <ConfirmDialog

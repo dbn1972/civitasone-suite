@@ -8,7 +8,7 @@
  */
 import { useEffect, useId, useState } from "react";
 import { DataSourceBadge } from "../DataSourceBadge";
-import { EmptyState } from "../ds";
+import { EmptyState, Button } from "../ds";
 import { formatBps } from "@/lib/formatters";
 import { percentToBps } from "@/lib/money";
 import {
@@ -166,9 +166,9 @@ export function QuotationApprovalPanel({ quotationId, onBlockingChange }: Quotat
                   <td>{isApproved(a) ? <span style={{ color: "#047857" }}>Approved</span> : <span style={{ color: "#b42318" }}>{a.status || "Pending"}</span>}</td>
                   <td>
                     {isApproved(a) ? null : (
-                      <button type="button" className="btn primary sm" onClick={() => void grant(a)} disabled={busy}>
+                      <Button type="button" size="sm" onClick={() => void grant(a)} disabled={busy}>
                         Approve
-                      </button>
+                      </Button>
                     )}
                   </td>
                 </tr>
@@ -203,9 +203,9 @@ export function QuotationApprovalPanel({ quotationId, onBlockingChange }: Quotat
             Reason
             <input aria-label="Approval reason" value={reason} aria-invalid={reason.trim() ? undefined : true} onChange={(e) => setReason(e.target.value)} style={inputStyle} placeholder="Strategic account, board-approved" />
           </label>
-          <button type="button" className="btn primary" onClick={() => void submitRequest()} disabled={busy}>
+          <Button type="button" onClick={() => void submitRequest()} disabled={busy}>
             {busy ? "…" : "Request"}
-          </button>
+          </Button>
         </div>
       </fieldset>
     </div>

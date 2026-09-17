@@ -10,7 +10,7 @@
  */
 import { useEffect, useId, useState } from "react";
 import { DataSourceBadge } from "../DataSourceBadge";
-import { ConfirmDialog, EmptyState } from "../ds";
+import { ConfirmDialog, EmptyState, Button } from "../ds";
 import {
   getAddresses,
   createAddress,
@@ -226,21 +226,21 @@ export function AddressesEditor({ ownerType, ownerId }: Props) {
                 </div>
               </div>
               <div style={{ display: "flex", gap: 8 }}>
-                <button type="button" className="btn primary" disabled={busyKey === row.key} onClick={() => void saveRow(row)} style={{ minHeight: 40 }}>
+                <Button type="button" disabled={busyKey === row.key} onClick={() => void saveRow(row)} style={{ minHeight: 40 }}>
                   {busyKey === row.key ? "Saving…" : "Save"}
-                </button>
-                <button type="button" className="btn danger" aria-label={`Delete address ${i + 1}`} disabled={busyKey === row.key} onClick={() => setConfirmKey(row.key)} style={{ minHeight: 40 }}>
+                </Button>
+                <Button type="button" variant="danger" aria-label={`Delete address ${i + 1}`} disabled={busyKey === row.key} onClick={() => setConfirmKey(row.key)} style={{ minHeight: 40 }}>
                   Delete
-                </button>
+                </Button>
               </div>
             </fieldset>
           ))
         )}
 
         <div>
-          <button type="button" className="btn" onClick={addAddress} style={{ minHeight: 44 }}>
+          <Button type="button" onClick={addAddress} style={{ minHeight: 44 }}>
             + Add address
-          </button>
+          </Button>
         </div>
         {message ? <p role="status" aria-live="polite" style={{ fontSize: 13, color: "#047857", margin: 0 }}>{message}</p> : null}
         {error ? <p role="alert" aria-live="assertive" style={{ fontSize: 13, color: "#b42318", margin: 0 }}>{error}</p> : null}

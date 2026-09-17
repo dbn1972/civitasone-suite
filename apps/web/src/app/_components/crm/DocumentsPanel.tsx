@@ -12,7 +12,7 @@
  */
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { DataSourceBadge } from "../DataSourceBadge";
-import { ConfirmDialog, EmptyState } from "../ds";
+import { ConfirmDialog, EmptyState, Button } from "../ds";
 import { formatIndianDate } from "@/lib/formatters";
 import {
   getDocuments,
@@ -233,9 +233,9 @@ export function DocumentsPanel({ subjectType, subjectId, canVerify = false }: Pr
           {supersedesId ? (
             <p role="status" style={{ margin: 0, fontSize: 13, color: "#4f46e5" }}>
               Uploading a new version.{" "}
-              <button type="button" className="btn ghost" style={{ minHeight: 28, padding: "2px 8px" }} onClick={() => setSupersedesId("")}>
+              <Button type="button" variant="ghost" style={{ minHeight: 28, padding: "2px 8px" }} onClick={() => setSupersedesId("")}>
                 Cancel
-              </button>
+              </Button>
             </p>
           ) : null}
           <div>
@@ -246,9 +246,9 @@ export function DocumentsPanel({ subjectType, subjectId, canVerify = false }: Pr
             </p>
           </div>
           <div>
-            <button type="submit" className="btn primary" disabled={busy} style={{ minHeight: 44 }}>
+            <Button type="submit" disabled={busy} style={{ minHeight: 44 }}>
               {busy ? "Uploading…" : supersedesId ? "Upload new version" : "Upload document"}
-            </button>
+            </Button>
           </div>
           {message ? <p role="status" aria-live="polite" style={{ fontSize: 13, color: "#047857", margin: 0 }}>{message}</p> : null}
           {error ? <p role="alert" aria-live="assertive" style={{ fontSize: 13, color: "#b42318", margin: 0 }}>{error}</p> : null}
@@ -313,57 +313,57 @@ export function DocumentsPanel({ subjectType, subjectId, canVerify = false }: Pr
                       </div>
                       <div style={{ display: "flex", gap: 6, alignItems: "flex-start", flexWrap: "wrap" }}>
                         {isDownloadable(doc) ? (
-                          <button type="button" className="btn ghost" style={{ minHeight: 36 }} onClick={() => onDownload(doc)}>
+                          <Button type="button" variant="ghost" style={{ minHeight: 36 }} onClick={() => onDownload(doc)}>
                             Download
-                          </button>
+                          </Button>
                         ) : null}
-                        <button
+                        <Button
                           type="button"
-                          className="btn ghost"
+                          variant="ghost"
                           style={{ minHeight: 36 }}
                           onClick={() => setSupersedesId(doc.id)}
                         >
                           New version
-                        </button>
+                        </Button>
                         {canVerify ? (
                           <>
-                            <button
+                            <Button
                               type="button"
-                              className="btn ghost"
+                              variant="ghost"
                               style={{ minHeight: 36 }}
                               disabled={busy || doc.verificationStatus === "verified"}
                               onClick={() => onVerify(doc, "verified")}
                             >
                               Verify
-                            </button>
-                            <button
+                            </Button>
+                            <Button
                               type="button"
-                              className="btn ghost"
+                              variant="ghost"
                               style={{ minHeight: 36 }}
                               disabled={busy || doc.verificationStatus === "rejected"}
                               onClick={() => setConfirmReject(doc)}
                             >
                               Reject
-                            </button>
+                            </Button>
                           </>
                         ) : null}
-                        <button type="button" className="btn danger" style={{ minHeight: 36 }} onClick={() => setConfirmDeleteId(doc.id)}>
+                        <Button type="button" variant="danger" style={{ minHeight: 36 }} onClick={() => setConfirmDeleteId(doc.id)}>
                           Delete
-                        </button>
+                        </Button>
                       </div>
                     </div>
 
                     {chain.versions.length > 1 ? (
                       <div style={{ marginTop: 10 }}>
-                        <button
+                        <Button
                           type="button"
-                          className="btn ghost"
+                          variant="ghost"
                           style={{ minHeight: 28, padding: "2px 8px", fontSize: 12 }}
                           aria-expanded={open}
                           onClick={() => setExpanded((prev) => ({ ...prev, [doc.id]: !open }))}
                         >
                           {open ? "Hide" : "Show"} version history ({chain.versions.length})
-                        </button>
+                        </Button>
                         {open ? (
                           <ul style={{ listStyle: "none", margin: "8px 0 0", padding: 0, display: "grid", gap: 6 }} aria-label={`Version history for ${doc.title}`}>
                             {chain.versions.map((v) => (
@@ -373,9 +373,9 @@ export function DocumentsPanel({ subjectType, subjectId, canVerify = false }: Pr
                                 {v.createdAt ? <> · {formatIndianDate(v.createdAt)}</> : null}
                                 <ScanBadge status={v.scanStatus} />
                                 {isDownloadable(v) ? (
-                                  <button type="button" className="btn ghost" style={{ minHeight: 26, padding: "1px 6px" }} onClick={() => onDownload(v)}>
+                                  <Button type="button" variant="ghost" style={{ minHeight: 26, padding: "1px 6px" }} onClick={() => onDownload(v)}>
                                     Download
-                                  </button>
+                                  </Button>
                                 ) : (
                                   <span role={v.scanStatus === "pending" ? "status" : "alert"} style={{ fontStyle: "italic" }}>
                                     {v.scanStatus === "pending"

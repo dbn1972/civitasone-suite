@@ -9,7 +9,7 @@
  */
 import { useEffect, useId, useState } from "react";
 import { DataSourceBadge } from "../DataSourceBadge";
-import { EmptyState } from "../ds";
+import { EmptyState, Button } from "../ds";
 import {
   getAgents,
   updateAgentCapacity,
@@ -152,9 +152,9 @@ export function AgentWorkloadEditor() {
                     </label>
                   </td>
                   <td>
-                    <button type="button" className="btn primary sm" onClick={() => void save(a)} disabled={busy}>
+                    <Button type="button" size="sm" onClick={() => void save(a)} disabled={busy}>
                       {busy ? "Saving…" : "Save"}
-                    </button>
+                    </Button>
                   </td>
                 </tr>
               );

@@ -10,7 +10,7 @@
 import { useEffect, useId, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { DataSourceBadge } from "../DataSourceBadge";
-import { ConfirmDialog } from "../ds";
+import { ConfirmDialog, Button } from "../ds";
 import {
   getReasonCodes,
   reasonCodesForStatus,
@@ -177,9 +177,9 @@ export function LeadTransitionControl({ leadId, currentStatus }: { leadId: strin
             </div>
 
             <div>
-              <button type="button" className="btn primary" onClick={beginTransition} style={{ minHeight: 44 }}>
+              <Button type="button" onClick={beginTransition} style={{ minHeight: 44 }}>
                 {isDisqualified ? "Re-open lead" : "Apply status change"}
-              </button>
+              </Button>
             </div>
           </>
         )}
