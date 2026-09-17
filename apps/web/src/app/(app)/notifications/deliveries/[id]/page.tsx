@@ -6,6 +6,7 @@ import { PageHeader, Card, EmptyState } from "../../../../_components/ds";
 import { formatIndianDate } from "@/lib/formatters";
 import { StatusBadge } from "../../_components/StatusBadge";
 import { ResendAction } from "./ResendAction";
+import { useFormError } from "@/lib/useFormError";
 
 /**
  * Delivery detail — GET /notification/deliveries/:id returns the raw delivery
@@ -49,6 +50,7 @@ export default function DeliveryDetailPage() {
   const [delivery, setDelivery] = useState<Delivery | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const formError = useFormError("delivery");
 
   function load() {
     if (!id) return;
@@ -65,10 +67,14 @@ export default function DeliveryDetailPage() {
           setError("not_found");
           return;
         }
-        if (!res.ok) throw new Error(`HTTP_${res.status}`);
+        if (!res.ok) {
+          const resolved = await formError.fromResponse(res, "load");
+          setError(resolved.message);
+          return;
+        }
         setDelivery((await res.json()) as Delivery);
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "load failed");
+      } catch {
+        setError(formError.fromException("load").message);
       } finally {
         setLoading(false);
       }

@@ -2,6 +2,19 @@
 
 import { useState } from "react";
 import { ActionButton } from "../../../../_components/ds";
+import { toHumanError } from "@/lib/messages";
+
+/**
+ * Plain-language failure message for a failed resend. `resend` is a plain
+ * async helper, not a component or hook, so it can't call the useFormError
+ * hook; toHumanError is the same catalogued-message building block that hook
+ * is built on -- never the backend's own message/error text or the raw HTTP
+ * status. See docs/ENTERPRISE-GAP-REPORT-2026-09-07.md UX-003/UX-016.
+ */
+function resendActionError(): string {
+  const human = toHumanError("save", { area: "notification" });
+  return `${human.what} ${human.next}`;
+}
 
 /**
  * Resend a failed delivery. The notification-service has no per-delivery HTTP
@@ -36,8 +49,7 @@ export function ResendAction({
       body: JSON.stringify({ templateId, recipient, ...(channelEnum ? { channel: channelEnum } : {}) }),
     });
     if (!res.ok) {
-      const text = await res.text().catch(() => "");
-      throw new Error(text || `Resend failed (HTTP ${res.status})`);
+      throw new Error(resendActionError());
     }
   }
 

@@ -2,6 +2,20 @@
 
 import { useRouter } from "next/navigation";
 import { ActionButton } from "../../../../_components/ds";
+import { toHumanError } from "@/lib/messages";
+
+/**
+ * Plain-language failure message for a failed service-request status
+ * transition. `setStatus` is a plain async helper, not a component or hook,
+ * so it can't call the useFormError hook; toHumanError is the same
+ * catalogued-message building block that hook is built on -- never the
+ * backend's own message/error text or the raw HTTP status. See
+ * docs/ENTERPRISE-GAP-REPORT-2026-09-07.md UX-003/UX-016.
+ */
+function serviceRequestActionError(): string {
+  const human = toHumanError("save", { area: "service request" });
+  return `${human.what} ${human.next}`;
+}
 
 /**
  * Service request lifecycle actions.
@@ -23,8 +37,7 @@ export function ServiceRequestActions({ id, status }: { id: string; status: stri
       body: JSON.stringify({ status: next, ...(resolution ? { resolution } : {}) }),
     });
     if (!res.ok) {
-      const json = await res.json().catch(() => ({}));
-      throw new Error((json as { message?: string }).message ?? `Could not update status (HTTP ${res.status})`);
+      throw new Error(serviceRequestActionError());
     }
     router.refresh();
   }

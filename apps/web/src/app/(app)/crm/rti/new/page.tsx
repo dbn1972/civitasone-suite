@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { PageHeader } from "../../../../_components/ds";
+import { useFormError } from "@/lib/useFormError";
 
 const RTI_SECTIONS = [
   { value: "s.6",  label: "§6 — Information Request" },
@@ -23,12 +24,12 @@ const SAMPLE_DEPARTMENTS = [
 export default function NewRtiPage() {
   const router = useRouter();
   const [saving, setSaving] = useState(false);
-  const [error, setError]   = useState<string | null>(null);
+  const formError = useFormError("RTI request");
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setSaving(true);
-    setError(null);
+    formError.clear();
     const fd = new FormData(e.currentTarget);
 
     const feeAmountRaw = fd.get("feeAmount");
@@ -50,15 +51,14 @@ export default function NewRtiPage() {
         body: JSON.stringify(body),
       });
       if (!res.ok) {
-        const json = await res.json().catch(() => ({}));
-        throw new Error(
-          (json as { message?: string }).message ?? `HTTP ${res.status}`,
-        );
+        await formError.fromResponse(res, "save");
+        setSaving(false);
+        return;
       }
       const { data } = (await res.json()) as { data: { id: string } };
       router.push(`/crm/rti/${data.id}`);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Unexpected error");
+    } catch {
+      formError.fromException("save");
       setSaving(false);
     }
   }
@@ -106,7 +106,7 @@ export default function NewRtiPage() {
           maxWidth: 680,
         }}
       >
-        {error && (
+        {formError.message && (
           <div
             role="alert"
             style={{
@@ -119,7 +119,7 @@ export default function NewRtiPage() {
               fontSize: 14,
             }}
           >
-            {error}
+            {formError.message}
           </div>
         )}
 
@@ -146,6 +146,9 @@ export default function NewRtiPage() {
                       </option>
                     ))}
                   </select>
+                  {formError.fieldError("section") && (
+                    <span style={{ fontSize: 12, color: "var(--bad)" }}>{formError.fieldError("section")}</span>
+                  )}
                 </label>
 
                 <label style={labelStyle}>
@@ -163,6 +166,9 @@ export default function NewRtiPage() {
                       <option key={d} value={d} />
                     ))}
                   </datalist>
+                  {formError.fieldError("departmentRef") && (
+                    <span style={{ fontSize: 12, color: "var(--bad)" }}>{formError.fieldError("departmentRef")}</span>
+                  )}
                 </label>
               </div>
 
@@ -175,6 +181,9 @@ export default function NewRtiPage() {
                   placeholder="Brief one-line subject of the RTI request"
                   style={fieldStyle}
                 />
+                {formError.fieldError("subject") && (
+                  <span style={{ fontSize: 12, color: "var(--bad)" }}>{formError.fieldError("subject")}</span>
+                )}
               </label>
 
               <label style={labelStyle}>
@@ -187,6 +196,9 @@ export default function NewRtiPage() {
                   placeholder="Describe the information sought under the RTI Act…"
                   style={{ ...fieldStyle, resize: "vertical" }}
                 />
+                {formError.fieldError("description") && (
+                  <span style={{ fontSize: 12, color: "var(--bad)" }}>{formError.fieldError("description")}</span>
+                )}
               </label>
             </div>
           </fieldset>
@@ -206,6 +218,9 @@ export default function NewRtiPage() {
                   placeholder="Applicant's full name"
                   style={fieldStyle}
                 />
+                {formError.fieldError("applicantName") && (
+                  <span style={{ fontSize: 12, color: "var(--bad)" }}>{formError.fieldError("applicantName")}</span>
+                )}
               </label>
 
               <label style={labelStyle}>

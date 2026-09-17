@@ -2,6 +2,19 @@
 
 import { useRouter } from "next/navigation";
 import { ActionButton } from "../../../../_components/ds";
+import { toHumanError } from "@/lib/messages";
+
+/**
+ * Plain-language failure message for a failed RTI lifecycle action. `patch`
+ * is a plain async helper, not a component or hook, so it can't call the
+ * useFormError hook; toHumanError is the same catalogued-message building
+ * block that hook is built on -- never the backend's own message/error text
+ * or the raw HTTP status. See docs/ENTERPRISE-GAP-REPORT-2026-09-07.md UX-003/UX-016.
+ */
+function rtiActionError(): string {
+  const human = toHumanError("save", { area: "RTI request" });
+  return `${human.what} ${human.next}`;
+}
 
 /**
  * RTI Act 2005 lifecycle actions.
@@ -36,9 +49,7 @@ export function RtiActions({ id, status }: { id: string; status: string }) {
       ...(payload ? { body: JSON.stringify(payload) } : {}),
     });
     if (!res.ok) {
-      const json = await res.json().catch(() => ({}));
-      const msg = (json as { message?: string }).message;
-      throw new Error(msg ?? `Could not ${action} this RTI request (HTTP ${res.status})`);
+      throw new Error(rtiActionError());
     }
     router.refresh();
   }

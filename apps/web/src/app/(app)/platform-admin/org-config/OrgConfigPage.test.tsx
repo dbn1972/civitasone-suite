@@ -89,7 +89,12 @@ describe("OrgConfigPage (COMP-014: real per-tenant org-hierarchy-levels)", () =>
   // saved.")` ran even when the save had actually failed. Sabotage check
   // for that exact bug: a failing PUT must surface a real, visible error
   // and must NEVER show the success notice.
-  it("shows a real error and does not claim success when the save request fails", async () => {
+  //
+  // UX-016: this error text used to be the backend's raw `message` field (or
+  // a bare `Save failed (HTTP ${status})` fallback) shown verbatim. It must
+  // now show only the catalogued, clerk-safe copy — never the raw server
+  // text.
+  it("shows a clerk-safe error, not the raw server text, and does not claim success when the save request fails", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(
       new Response(JSON.stringify({ message: "validation failed: level ids must be unique" }), { status: 400 }),
     );
@@ -97,22 +102,29 @@ describe("OrgConfigPage (COMP-014: real per-tenant org-hierarchy-levels)", () =>
     render(<OrgConfigPage initialLevels={LEVELS} source="api" />);
     clickSaveOrder();
 
-    // Found by its exact text, not by role="alert" — ConfirmDialog renders
-    // its OWN (always-present-while-open, initially empty) role="alert" div
-    // for its own error slot, which OrgConfigPage never populates; querying
-    // by role would resolve against that one instead of the page's own error
+    // Found by regex, not by role="alert" — ConfirmDialog renders its OWN
+    // (always-present-while-open, initially empty) role="alert" div for its
+    // own error slot, which OrgConfigPage never populates; querying by role
+    // would resolve against that one instead of the page's own error
     // paragraph.
-    expect(await screen.findByText("validation failed: level ids must be unique")).toBeInTheDocument();
+    expect(await screen.findByText(/couldn't save/i)).toBeInTheDocument();
+    expect(screen.queryByText("validation failed: level ids must be unique")).not.toBeInTheDocument();
     expect(screen.queryByText("Org hierarchy saved.")).not.toBeInTheDocument();
   });
 
-  it("also surfaces an error on a genuine network failure (fetch() rejecting)", async () => {
+  // UX-016 (beyond the guard's own regex): the catch block used to read the
+  // caught exception's own `.message` directly, so a genuine browser-level
+  // fetch() rejection leaked a raw, non-catalogued technical string (e.g.
+  // "Failed to fetch") instead of the same clerk-safe copy used for a failed
+  // HTTP response.
+  it("also surfaces a clerk-safe error, not the raw exception text, on a genuine network failure (fetch() rejecting)", async () => {
     vi.spyOn(globalThis, "fetch").mockRejectedValue(new TypeError("Failed to fetch"));
 
     render(<OrgConfigPage initialLevels={LEVELS} source="api" />);
     clickSaveOrder();
 
-    expect(await screen.findByText("Failed to fetch")).toBeInTheDocument();
+    expect(await screen.findByText(/couldn't save/i)).toBeInTheDocument();
+    expect(screen.queryByText("Failed to fetch")).not.toBeInTheDocument();
     expect(screen.queryByText("Org hierarchy saved.")).not.toBeInTheDocument();
   });
 });

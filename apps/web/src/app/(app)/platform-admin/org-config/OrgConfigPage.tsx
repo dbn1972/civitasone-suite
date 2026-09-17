@@ -3,6 +3,7 @@
 import { useRef, useState } from "react";
 import { ConfirmDialog } from "@/app/_components/ds";
 import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
+import { useFormError } from "@/lib/useFormError";
 import type { OrgHierarchyLevel } from "@/app/_data/loaders";
 
 /* ─── Types ─────────────────────────────────────────────────────────── */
@@ -37,6 +38,7 @@ export function OrgConfigPage({ initialLevels, source }: { initialLevels: OrgLev
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [confirmSave, setConfirmSave] = useState(false);
+  const formError = useFormError("org hierarchy");
 
   // Drag state
   const dragIndex = useRef<number | null>(null);
@@ -116,12 +118,13 @@ export function OrgConfigPage({ initialLevels, source }: { initialLevels: OrgLev
         // A resolved non-2xx response never rejects fetch()'s promise, so a
         // bare `.catch()` (the pre-fix code) never sees it — this explicit
         // res.ok check is the actual fix for the silent-failure bug.
-        const body = await res.json().catch(() => ({}) as { message?: string });
-        throw new Error(body.message ?? `Save failed (HTTP ${res.status})`);
+        const resolved = await formError.fromResponse(res, "save");
+        setError(resolved.message);
+        return;
       }
       setNotice("Org hierarchy saved.");
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not save order.");
+    } catch {
+      setError(formError.fromException("save").message);
     } finally {
       setBusy(false);
       setConfirmSave(false);

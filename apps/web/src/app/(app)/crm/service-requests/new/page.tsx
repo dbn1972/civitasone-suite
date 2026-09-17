@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { PageHeader } from "../../../../_components/ds";
+import { useFormError } from "@/lib/useFormError";
 
 /**
  * Service types a citizen can raise a request against. Kept alongside the
@@ -37,12 +38,12 @@ const LABEL: React.CSSProperties = { display: "flex", flexDirection: "column", g
 export default function NewServiceRequestPage() {
   const router = useRouter();
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const formError = useFormError("service request");
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setSaving(true);
-    setError(null);
+    formError.clear();
     const fd = new FormData(e.currentTarget);
     const body = {
       citizenName: fd.get("citizenName"),
@@ -61,13 +62,14 @@ export default function NewServiceRequestPage() {
         body: JSON.stringify(body),
       });
       if (!res.ok) {
-        const json = await res.json().catch(() => ({}));
-        throw new Error((json as { message?: string }).message ?? `HTTP ${res.status}`);
+        await formError.fromResponse(res, "save");
+        setSaving(false);
+        return;
       }
       const { data } = (await res.json()) as { data: { id: string } };
       router.push(`/crm/service-requests/${data.id}`);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Unexpected error");
+    } catch {
+      formError.fromException("save");
       setSaving(false);
     }
   }
@@ -89,7 +91,7 @@ export default function NewServiceRequestPage() {
           maxWidth: 640,
         }}
       >
-        {error && (
+        {formError.message && (
           <div
             role="alert"
             style={{
@@ -102,7 +104,7 @@ export default function NewServiceRequestPage() {
               fontSize: 14,
             }}
           >
-            {error}
+            {formError.message}
           </div>
         )}
         <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 16 }}>
@@ -114,6 +116,9 @@ export default function NewServiceRequestPage() {
                   Full Name <span aria-hidden="true" style={{ color: "var(--bad)" }}>*</span>
                 </span>
                 <input name="citizenName" required maxLength={200} placeholder="Enter citizen's full name" style={FIELD} />
+                {formError.fieldError("citizenName") && (
+                  <span style={{ fontSize: 12, color: "var(--bad)" }}>{formError.fieldError("citizenName")}</span>
+                )}
               </label>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
                 <label style={LABEL}>
@@ -142,6 +147,9 @@ export default function NewServiceRequestPage() {
                       <option key={s} value={s}>{s}</option>
                     ))}
                   </select>
+                  {formError.fieldError("serviceType") && (
+                    <span style={{ fontSize: 12, color: "var(--bad)" }}>{formError.fieldError("serviceType")}</span>
+                  )}
                 </label>
                 <label style={LABEL}>
                   <span style={{ color: "var(--ink)" }}>Priority</span>
@@ -158,6 +166,9 @@ export default function NewServiceRequestPage() {
                   Subject <span aria-hidden="true" style={{ color: "var(--bad)" }}>*</span>
                 </span>
                 <input name="subject" required maxLength={500} placeholder="Brief one-line description of the request" style={FIELD} />
+                {formError.fieldError("subject") && (
+                  <span style={{ fontSize: 12, color: "var(--bad)" }}>{formError.fieldError("subject")}</span>
+                )}
               </label>
               <label style={LABEL}>
                 <span style={{ color: "var(--ink)" }}>Description</span>
@@ -168,6 +179,9 @@ export default function NewServiceRequestPage() {
                   placeholder="Detailed description of the service request…"
                   style={{ ...FIELD, resize: "vertical" }}
                 />
+                {formError.fieldError("description") && (
+                  <span style={{ fontSize: 12, color: "var(--bad)" }}>{formError.fieldError("description")}</span>
+                )}
               </label>
             </div>
           </fieldset>

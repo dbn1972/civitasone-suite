@@ -100,7 +100,10 @@ describe("GrievanceActions", () => {
     expect(url).toBe(`/api/proxy/v1/crm/grievances/${GRIEVANCE_ID}/close`);
   });
 
-  it("surfaces a server error inside the dialog instead of refreshing", async () => {
+  // UX-016: this used to surface the backend's raw `message` field (or a
+  // bare `HTTP ${status}` fallback) verbatim in the dialog. It must now show
+  // only the catalogued, clerk-safe copy — never the raw server text.
+  it("surfaces a clerk-safe error inside the dialog instead of the raw server text, and does not refresh", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(
       new Response(JSON.stringify({ message: "Grievance already disposed" }), { status: 409 }),
     );
@@ -110,7 +113,8 @@ describe("GrievanceActions", () => {
     await waitFor(() => expect(screen.getByText("Close this grievance?")).toBeInTheDocument());
     fireEvent.click(screen.getByRole("button", { name: "Confirm" }));
 
-    await waitFor(() => expect(screen.getByText("Grievance already disposed")).toBeInTheDocument());
+    expect(await screen.findByText(/couldn't save/i)).toBeInTheDocument();
+    expect(screen.queryByText("Grievance already disposed")).not.toBeInTheDocument();
     expect(refreshMock).not.toHaveBeenCalled();
   });
 });
