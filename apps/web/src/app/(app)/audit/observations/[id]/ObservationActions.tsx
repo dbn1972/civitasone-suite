@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useId, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ConfirmDialog } from "../../../../_components/ds";
+import { useFormError } from "@/lib/useFormError";
 
 type Mode = "reply" | "refer";
 
@@ -32,7 +33,8 @@ function Dialog({
 
   // Confirm gate: shown before submitting the irreversible action
   const [confirmOpen, setConfirmOpen] = useState(false);
-  const [formError, setFormError] = useState<string | null>(null);
+  const [validationError, setValidationError] = useState<string | null>(null);
+  const formError = useFormError("observation action");
 
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
@@ -45,16 +47,16 @@ function Dialog({
   function validateForm(): boolean {
     if (mode === "reply") {
       if (!replyText.trim() || !respondedByRef.trim()) {
-        setFormError("Reply text and responder are required.");
+        setValidationError("Reply text and responder are required.");
         return false;
       }
     } else {
       if (!paraNo.trim() || !deptRef.trim() || !paraBody.trim()) {
-        setFormError("Para no., department and para body are required.");
+        setValidationError("Para no., department and para body are required.");
         return false;
       }
     }
-    setFormError(null);
+    setValidationError(null);
     return true;
   }
 
@@ -92,17 +94,21 @@ function Dialog({
         body: JSON.stringify(payload),
       });
       if (!res.ok) {
-        const txt = await res.text();
-        throw new Error(`Action failed (${res.status}). ${txt.slice(0, 160)}`);
+        const resolved = await formError.fromResponse(res, "save");
+        setError(resolved.message);
+        return;
       }
       setConfirmOpen(false);
       onClose();
       router.refresh();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Action failed.");
+    } catch {
+      setError(formError.fromException("save").message);
     } finally {
       setBusy(false);
     }
+    // formError.fromResponse/fromException are stable (useCallback'd on a
+    // fixed `area` string inside useFormError) even though the wrapping
+    // `formError` object literal isn't, so omitting it here is safe.
   }, [mode, obsId, replyText, respondedByRef, paraNo, deptRef, paraBody, onClose, router]);
 
   return (
@@ -120,20 +126,35 @@ function Dialog({
               <>
                 <label className="lbl" htmlFor="rep-by">Responded by (dept / officer ref)</label>
                 <input id="rep-by" className="inp" value={respondedByRef} onChange={(e) => setRespondedByRef(e.target.value)} placeholder="Finance Wing" />
+                {formError.fieldError("respondedByRef") && (
+                  <span style={{ fontSize: 12, color: "var(--bad)" }}>{formError.fieldError("respondedByRef")}</span>
+                )}
                 <label className="lbl" htmlFor="rep-text">Compliance reply</label>
                 <textarea id="rep-text" className="inp" rows={5} value={replyText} onChange={(e) => setReplyText(e.target.value)} placeholder="Auditee response / action taken note…" />
+                {formError.fieldError("replyText") && (
+                  <span style={{ fontSize: 12, color: "var(--bad)" }}>{formError.fieldError("replyText")}</span>
+                )}
               </>
             ) : (
               <>
                 <label className="lbl" htmlFor="para-no">Para no.</label>
                 <input id="para-no" className="inp" value={paraNo} onChange={(e) => setParaNo(e.target.value)} placeholder="PARA-2026-014" />
+                {formError.fieldError("paraNo") && (
+                  <span style={{ fontSize: 12, color: "var(--bad)" }}>{formError.fieldError("paraNo")}</span>
+                )}
                 <label className="lbl" htmlFor="para-dept">Department ref</label>
                 <input id="para-dept" className="inp" value={deptRef} onChange={(e) => setDeptRef(e.target.value)} placeholder="Finance Wing" />
+                {formError.fieldError("deptRef") && (
+                  <span style={{ fontSize: 12, color: "var(--bad)" }}>{formError.fieldError("deptRef")}</span>
+                )}
                 <label className="lbl" htmlFor="para-body">Para body</label>
                 <textarea id="para-body" className="inp" rows={5} value={paraBody} onChange={(e) => setParaBody(e.target.value)} placeholder="Draft para to refer to the audit committee…" />
+                {formError.fieldError("body") && (
+                  <span style={{ fontSize: 12, color: "var(--bad)" }}>{formError.fieldError("body")}</span>
+                )}
               </>
             )}
-            {formError && <div role="alert" style={{ color: "var(--bad)", fontSize: 13, marginTop: 4 }}>{formError}</div>}
+            {validationError && <div role="alert" style={{ color: "var(--bad)", fontSize: 13, marginTop: 4 }}>{validationError}</div>}
             <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 12 }}>
               <button type="button" className="btn ghost" onClick={onClose} disabled={busy}>Cancel</button>
               <button type="button" className="btn primary" onClick={handleProceedClick} disabled={busy}>

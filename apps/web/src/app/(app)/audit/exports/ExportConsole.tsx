@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { formatIndianDate } from "@/lib/formatters";
 import { ActionButton } from "@/app/_components/ds";
+import { useFormError } from "@/lib/useFormError";
 
 type ExportFormat = "json" | "csv";
 
@@ -65,6 +66,7 @@ export function ExportConsole() {
 
   const [verifyBusy, setVerifyBusy] = useState(false);
   const [verify, setVerify] = useState<VerifyResult | null>(null);
+  const formError = useFormError("export");
 
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -87,7 +89,10 @@ export function ExportConsole() {
     async (id: string) => {
       try {
         const res = await fetch(`/api/proxy/v1/audit/exports/${id}`, { cache: "no-store" });
-        if (!res.ok) throw new Error(`status ${res.status}`);
+        // Transient failure — skip this tick and keep polling (see the catch
+        // below); no message is ever shown for a single missed poll, so
+        // there is nothing to build here, human-safe or otherwise.
+        if (!res.ok) return;
         const body = (await res.json()) as { data: ExportStatus };
         setJob(body.data);
         if (TERMINAL.has(body.data.status)) {
@@ -125,8 +130,8 @@ export function ExportConsole() {
       body: JSON.stringify({ from: isoStart(from), to: isoEnd(to), format, includePii }),
     });
     if (!res.ok) {
-      const txt = await res.text();
-      throw new Error(`Export request rejected (${res.status}). ${txt.slice(0, 160)}`);
+      const resolved = await formError.fromResponse(res, "save");
+      throw new Error(resolved.message);
     }
     const body = (await res.json()) as { id?: string };
     if (!body.id) throw new Error("Backend did not return an export id.");
@@ -149,6 +154,9 @@ export function ExportConsole() {
     });
     flash("info", "Export queued — generating signed artifact…");
     startPolling(body.id);
+    // formError.fromResponse is stable (useCallback'd on a fixed `area`
+    // string inside useFormError) even though the wrapping `formError`
+    // object literal isn't, so omitting it here is safe.
   }, [from, to, format, includePii, flash, startPolling]);
 
   const runVerify = useCallback(async () => {
@@ -158,17 +166,21 @@ export function ExportConsole() {
     try {
       const res = await fetch(`/api/proxy/v1/audit/exports/${job.id}/verify`, { cache: "no-store" });
       if (!res.ok) {
-        const txt = await res.text();
-        throw new Error(`Verify failed (${res.status}). ${txt.slice(0, 160)}`);
+        const resolved = await formError.fromResponse(res, "load");
+        flash("err", resolved.message);
+        return;
       }
       const body = (await res.json()) as { data: VerifyResult };
       setVerify(body.data);
       flash(body.data.verified ? "ok" : "err", body.data.verified ? "Integrity verified." : "Integrity check failed.");
-    } catch (e) {
-      flash("err", e instanceof Error ? e.message : "Verify failed.");
+    } catch {
+      flash("err", formError.fromException("load").message);
     } finally {
       setVerifyBusy(false);
     }
+    // formError.fromResponse/fromException are stable (useCallback'd on a
+    // fixed `area` string inside useFormError) even though the wrapping
+    // `formError` object literal isn't, so omitting it here is safe.
   }, [job, flash]);
 
   return (

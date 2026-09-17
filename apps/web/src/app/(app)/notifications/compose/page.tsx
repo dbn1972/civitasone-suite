@@ -3,6 +3,7 @@
 import { useEffect, useId, useMemo, useState } from "react";
 import { PageHeader, Card, EmptyState, ErrorState, ConfirmDialog } from "../../../_components/ds";
 import { toHumanError } from "@/lib/messages";
+import { useFormError } from "@/lib/useFormError";
 
 /**
  * Compose / send a notification — wired to POST /notification/send.
@@ -50,6 +51,7 @@ export default function ComposeNotificationPage() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | undefined>(undefined);
   const [result, setResult] = useState("");
+  const formError = useFormError("notification");
 
   useEffect(() => {
     let active = true;
@@ -61,7 +63,10 @@ export default function ComposeNotificationPage() {
           headers: { "content-type": "application/json" },
           credentials: "same-origin",
         });
-        if (!res.ok) throw new Error(`HTTP_${res.status}`);
+        // The message text is discarded below regardless (templatesError is
+        // always the one catalogued string), but the guard still scans this
+        // source line, so it must not embed a raw status either.
+        if (!res.ok) throw new Error("Could not load templates.");
         const raw = (await res.json()) as unknown;
         const list = Array.isArray(raw)
           ? (raw as Template[])
@@ -89,6 +94,7 @@ export default function ComposeNotificationPage() {
     setBusy(true);
     setError(undefined);
     setResult("");
+    formError.clear();
     try {
       const body: Record<string, unknown> = { templateId, recipient: recipient.trim() };
       if (channel) body.channel = channel;
@@ -98,14 +104,15 @@ export default function ComposeNotificationPage() {
         body: JSON.stringify(body),
       });
       if (!res.ok) {
-        const text = await res.text().catch(() => "");
-        throw new Error(text || `Send failed (HTTP ${res.status})`);
+        const resolved = await formError.fromResponse(res, "save");
+        setError(resolved.message);
+        return;
       }
       setConfirmOpen(false);
       setResult("Notification queued. It will appear in Deliveries once the send is processed.");
       setRecipient("");
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Send failed. Please try again.");
+    } catch {
+      setError(formError.fromException("save").message);
     } finally {
       setBusy(false);
     }

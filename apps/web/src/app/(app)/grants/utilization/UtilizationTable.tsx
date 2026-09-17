@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { DataTable, StatusPill, ActionButton } from "@/app/_components/ds";
 import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
 import { formatMoney, formatIndianDate } from "@/lib/formatters";
+import { toHumanError } from "@/lib/messages";
 import type { GrantUtilization } from "@civitasone/types";
 import { useSeededResource } from "@/lib/sync/resource";
 
@@ -15,6 +16,19 @@ type Col = {
   render?: (row: GrantUtilization) => ReactNode;
 };
 
+/**
+ * Plain-language failure message for a failed UC verify/reject action.
+ * postAction is a plain async helper, not a component or hook, so it can't
+ * call the useFormError hook; toHumanError is the same catalogued-message
+ * building block that hook is built on -- never the backend's own
+ * message/error text or the raw HTTP status. See
+ * docs/ENTERPRISE-GAP-REPORT-2026-09-07.md UX-003/UX-016.
+ */
+function grantActionError(): string {
+  const human = toHumanError("save", { area: "grant action" });
+  return `${human.what} ${human.next}`;
+}
+
 async function postAction(url: string, body: unknown): Promise<void> {
   const res = await fetch(url, {
     method: "POST",
@@ -22,8 +36,7 @@ async function postAction(url: string, body: unknown): Promise<void> {
     body: JSON.stringify(body),
   });
   if (!res.ok) {
-    const txt = await res.text().catch(() => "");
-    throw new Error(`Action failed (${res.status}). ${txt.slice(0, 200) || "No response body."}`);
+    throw new Error(grantActionError());
   }
 }
 

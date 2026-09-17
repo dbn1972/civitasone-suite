@@ -43,7 +43,10 @@ describe("NewRtiPage", () => {
     expect(body.applicantName).toBe("Anil Sharma");
   });
 
-  it("shows the server error instead of navigating away on failure", async () => {
+  // UX-016: this used to surface the backend's raw `message` field (or a
+  // bare `HTTP ${status}` fallback) verbatim. It must now show only the
+  // catalogued, clerk-safe copy — never the raw server text.
+  it("shows a clerk-safe error instead of the raw server text, and does not navigate away, on failure", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(
       new Response(JSON.stringify({ message: "Description is required" }), { status: 422 }),
     );
@@ -56,7 +59,8 @@ describe("NewRtiPage", () => {
     fireEvent.change(screen.getByLabelText(/full name/i), { target: { value: "Anil Sharma" } });
     fireEvent.click(screen.getByRole("button", { name: "File RTI Request" }));
 
-    expect(await screen.findByRole("alert")).toHaveTextContent("Description is required");
+    expect(await screen.findByRole("alert")).toHaveTextContent(/couldn't save/i);
+    expect(screen.queryByText("Description is required")).not.toBeInTheDocument();
     expect(pushMock).not.toHaveBeenCalled();
   });
 });

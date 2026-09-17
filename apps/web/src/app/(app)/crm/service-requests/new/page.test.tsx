@@ -36,7 +36,10 @@ describe("NewServiceRequestPage", () => {
     expect(body.serviceType).toBe("Birth Certificate");
   });
 
-  it("shows the server error instead of navigating away on failure", async () => {
+  // UX-016: this used to surface the backend's raw `message` field (or a
+  // bare `HTTP ${status}` fallback) verbatim. It must now show only the
+  // catalogued, clerk-safe copy — never the raw server text.
+  it("shows a clerk-safe error instead of the raw server text, and does not navigate away, on failure", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(
       new Response(JSON.stringify({ message: "Service type required" }), { status: 422 }),
     );
@@ -47,7 +50,8 @@ describe("NewServiceRequestPage", () => {
     fireEvent.change(screen.getByLabelText(/subject/i), { target: { value: "Need birth certificate" } });
     fireEvent.click(screen.getByRole("button", { name: "Submit Request" }));
 
-    expect(await screen.findByRole("alert")).toHaveTextContent("Service type required");
+    expect(await screen.findByRole("alert")).toHaveTextContent(/couldn't save/i);
+    expect(screen.queryByText("Service type required")).not.toBeInTheDocument();
     expect(pushMock).not.toHaveBeenCalled();
   });
 });

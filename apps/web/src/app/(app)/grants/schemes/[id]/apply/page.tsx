@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, use } from "react";
 import { PageHeader } from "@/app/_components/ds";
+import { useFormError } from "@/lib/useFormError";
 
 type FormStatus = "idle" | "submitting" | "success" | "error";
 
@@ -21,6 +22,7 @@ export default function ApplyPage({ params }: ApplyPageProps) {
   const [currency, setCurrency] = useState("INR");
   const [formStatus, setFormStatus] = useState<FormStatus>("idle");
   const [message, setMessage] = useState("");
+  const formError = useFormError("grant application");
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -46,6 +48,7 @@ export default function ApplyPage({ params }: ApplyPageProps) {
 
     setFormStatus("submitting");
     setMessage("");
+    formError.clear();
 
     const amountMinor = Math.round(rupees * 100);
 
@@ -63,20 +66,17 @@ export default function ApplyPage({ params }: ApplyPageProps) {
           }),
         },
       );
-      const text = await res.text();
       if (!res.ok) {
         setFormStatus("error");
-        setMessage(text || `Submission failed (HTTP ${res.status})`);
+        await formError.fromResponse(res, "save");
         return;
       }
       setFormStatus("success");
       setMessage("Application submitted successfully. It is now under review.");
       setTimeout(() => router.push("/grants/applications"), 2000);
-    } catch (err) {
+    } catch {
       setFormStatus("error");
-      setMessage(
-        err instanceof Error ? err.message : "Network error — please retry.",
-      );
+      formError.fromException("save");
     }
   }
 
@@ -142,6 +142,11 @@ export default function ApplyPage({ params }: ApplyPageProps) {
                 Browse grantees →
               </Link>
             </span>
+            {formError.fieldError("beneficiaryId") && (
+              <span style={{ fontSize: 12, color: "var(--bad)", marginTop: 4, display: "block" }}>
+                {formError.fieldError("beneficiaryId")}
+              </span>
+            )}
           </div>
 
           <div
@@ -180,6 +185,11 @@ export default function ApplyPage({ params }: ApplyPageProps) {
             >
               {purpose.length} / 2000 characters
             </span>
+            {formError.fieldError("purpose") && (
+              <span style={{ fontSize: 12, color: "var(--bad)", marginTop: 4, display: "block" }}>
+                {formError.fieldError("purpose")}
+              </span>
+            )}
           </div>
 
           <div
@@ -217,6 +227,11 @@ export default function ApplyPage({ params }: ApplyPageProps) {
             >
               Enter in rupees (₹). Stored as paise internally.
             </span>
+            {formError.fieldError("amountRequestedMinor") && (
+              <span style={{ fontSize: 12, color: "var(--bad)", marginTop: 4, display: "block" }}>
+                {formError.fieldError("amountRequestedMinor")}
+              </span>
+            )}
           </div>
 
           <div
@@ -256,6 +271,11 @@ export default function ApplyPage({ params }: ApplyPageProps) {
               {message}
             </p>
           )}
+          {formError.message ? (
+            <p role="alert" style={{ color: "var(--bad)", fontSize: "0.875rem", margin: 0 }}>
+              {formError.message}
+            </p>
+          ) : null}
         </div>
 
         <div style={{ marginTop: 20, display: "flex", gap: 8 }}>

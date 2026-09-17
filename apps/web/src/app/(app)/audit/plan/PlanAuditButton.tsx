@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useId, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useFormError } from "@/lib/useFormError";
 
 export function PlanAuditButton() {
   const router = useRouter();
@@ -9,6 +10,7 @@ export function PlanAuditButton() {
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const formError = useFormError("audit plan");
 
   const [planNo, setPlanNo] = useState("");
   const [title, setTitle] = useState("");
@@ -48,14 +50,21 @@ export function PlanAuditButton() {
           riskLevel,
         }),
       });
-      if (!res.ok) { const t = await res.text(); throw new Error(`Could not plan audit (${res.status}). ${t.slice(0, 160)}`); }
+      if (!res.ok) {
+        const resolved = await formError.fromResponse(res, "save");
+        setError(resolved.message);
+        return;
+      }
       setOpen(false);
       router.refresh();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to plan audit.");
+    } catch {
+      setError(formError.fromException("save").message);
     } finally {
       setBusy(false);
     }
+    // formError.fromResponse/fromException are stable (useCallback'd on a
+    // fixed `area` string inside useFormError) even though the wrapping
+    // `formError` object literal isn't, so omitting it here is safe.
   }, [planNo, title, area, periodFrom, periodTo, riskLevel, router]);
 
   return (
@@ -69,10 +78,19 @@ export function PlanAuditButton() {
             <div className="pad" style={{ display: "flex", flexDirection: "column", gap: 4 }}>
               <label className="lbl" htmlFor="ps-no">Plan no.</label>
               <input id="ps-no" className="inp" value={planNo} onChange={(e) => setPlanNo(e.target.value)} placeholder="PLAN-FY26-03" />
+              {formError.fieldError("planNo") && (
+                <span style={{ fontSize: 12, color: "var(--bad)" }}>{formError.fieldError("planNo")}</span>
+              )}
               <label className="lbl" htmlFor="ps-title">Title</label>
               <input id="ps-title" className="inp" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Procurement compliance audit" />
+              {formError.fieldError("title") && (
+                <span style={{ fontSize: 12, color: "var(--bad)" }}>{formError.fieldError("title")}</span>
+              )}
               <label className="lbl" htmlFor="ps-area">Audit area / unit</label>
               <input id="ps-area" className="inp" value={area} onChange={(e) => setArea(e.target.value)} placeholder="Procurement Wing" />
+              {formError.fieldError("area") && (
+                <span style={{ fontSize: 12, color: "var(--bad)" }}>{formError.fieldError("area")}</span>
+              )}
               <div style={{ display: "flex", gap: 12 }}>
                 <div style={{ flex: 1 }}>
                   <label className="lbl" htmlFor="ps-from">Planned from</label>

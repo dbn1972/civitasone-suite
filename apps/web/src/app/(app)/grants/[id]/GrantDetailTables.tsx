@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { DataTable, StatusPill, ActionButton } from "@/app/_components/ds";
 import { formatMoney, formatIndianDate } from "@/lib/formatters";
+import { toHumanError } from "@/lib/messages";
 import type { GrantDetail } from "@civitasone/types";
 
 type Installment = GrantDetail["installments"][number];
@@ -16,6 +17,19 @@ type Col<T> = {
   render?: (row: T) => ReactNode;
 };
 
+/**
+ * Plain-language failure message for a failed grant installment/UC action.
+ * postAction is a plain async helper shared across the exported table
+ * components below, not a component or hook, so it can't call the
+ * useFormError hook; toHumanError is the same catalogued-message building
+ * block that hook is built on -- never the backend's own message/error text
+ * or the raw HTTP status. See docs/ENTERPRISE-GAP-REPORT-2026-09-07.md UX-003/UX-016.
+ */
+function grantActionError(): string {
+  const human = toHumanError("save", { area: "grant action" });
+  return `${human.what} ${human.next}`;
+}
+
 async function postAction(url: string, body: unknown): Promise<void> {
   const res = await fetch(url, {
     method: "POST",
@@ -23,11 +37,7 @@ async function postAction(url: string, body: unknown): Promise<void> {
     body: JSON.stringify(body),
   });
   if (!res.ok) {
-    const txt = await res.text().catch(() => "");
-    // Surface the server response so a missing/erroring endpoint is visible.
-    throw new Error(
-      `Action failed (${res.status}). ${txt.slice(0, 200) || "No response body."}`,
-    );
+    throw new Error(grantActionError());
   }
 }
 

@@ -130,7 +130,10 @@ describe("RolePermissionsMatrix (COMP-013: real per-role, real per-permission ma
     expect(screen.queryAllByTitle(/click to (grant|revoke)/i)).toHaveLength(0);
   });
 
-  it("shows a real load error for a role instead of silently rendering an empty grant set", async () => {
+  // UX-016: this error text used to be the backend's raw `message` field (or
+  // a bare `HTTP ${status}` fallback) shown verbatim. It must now show only
+  // the catalogued, clerk-safe copy — never the raw server text.
+  it("shows a clerk-safe load error for a role, not the raw server text, instead of silently rendering an empty grant set", async () => {
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
       const url = String(input);
       if (url === "/api/proxy/v1/admin/roles/role-hr-admin") {
@@ -139,6 +142,7 @@ describe("RolePermissionsMatrix (COMP-013: real per-role, real per-permission ma
       return new Response(JSON.stringify({ id: "role-super-admin", permissions: [] }), { status: 200 });
     });
     render(<RolePermissionsMatrix roles={roles} permissions={permissions} source="api" />);
-    expect(await screen.findByRole("alert")).toHaveTextContent(/not found|http 404/i);
+    expect(await screen.findByRole("alert")).toHaveTextContent(/couldn't load/i);
+    expect(screen.queryByText("role not found")).not.toBeInTheDocument();
   });
 });

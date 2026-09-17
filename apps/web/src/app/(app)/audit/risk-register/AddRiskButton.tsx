@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useId, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useFormError } from "@/lib/useFormError";
 
 const LIKELIHOOD = ["rare", "unlikely", "possible", "likely", "almost_certain"] as const;
 const IMPACT = ["negligible", "minor", "moderate", "major", "catastrophic"] as const;
@@ -20,6 +21,7 @@ export function AddRiskButton() {
   const [likelihood, setLikelihood] = useState<(typeof LIKELIHOOD)[number]>("possible");
   const [impact, setImpact] = useState<(typeof IMPACT)[number]>("moderate");
   const [owner, setOwner] = useState("");
+  const formError = useFormError("risk");
 
   const close = useCallback(() => { if (!busy) { setOpen(false); setError(null); } }, [busy]);
 
@@ -49,14 +51,21 @@ export function AddRiskButton() {
           ...(owner.trim() ? { owner: owner.trim() } : {}),
         }),
       });
-      if (!res.ok) { const t = await res.text(); throw new Error(`Could not add risk (${res.status}). ${t.slice(0, 160)}`); }
+      if (!res.ok) {
+        const resolved = await formError.fromResponse(res, "save");
+        setError(resolved.message);
+        return;
+      }
       setOpen(false);
       router.refresh();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to add risk.");
+    } catch {
+      setError(formError.fromException("save").message);
     } finally {
       setBusy(false);
     }
+    // formError.fromResponse/fromException are stable (useCallback'd on a
+    // fixed `area` string inside useFormError) even though the wrapping
+    // `formError` object literal isn't, so omitting it here is safe.
   }, [riskCode, title, category, likelihood, impact, owner, router]);
 
   return (
@@ -70,8 +79,14 @@ export function AddRiskButton() {
             <div className="pad" style={{ display: "flex", flexDirection: "column", gap: 4 }}>
               <label className="lbl" htmlFor="rk-code">Risk code</label>
               <input id="rk-code" className="inp" value={riskCode} onChange={(e) => setRiskCode(e.target.value)} placeholder="RISK-2026-007" />
+              {formError.fieldError("riskCode") && (
+                <span style={{ fontSize: 12, color: "var(--bad)" }}>{formError.fieldError("riskCode")}</span>
+              )}
               <label className="lbl" htmlFor="rk-title">Title</label>
               <input id="rk-title" className="inp" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Vendor concentration in payments" />
+              {formError.fieldError("title") && (
+                <span style={{ fontSize: 12, color: "var(--bad)" }}>{formError.fieldError("title")}</span>
+              )}
               <label className="lbl" htmlFor="rk-cat">Category</label>
               <select id="rk-cat" className="inp" value={category} onChange={(e) => setCategory(e.target.value as typeof category)}>
                 {CATEGORY.map((c) => <option key={c} value={c}>{c}</option>)}

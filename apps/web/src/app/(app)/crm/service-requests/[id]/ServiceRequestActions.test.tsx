@@ -83,4 +83,23 @@ describe("ServiceRequestActions", () => {
       resolution: "Duplicate request",
     });
   });
+
+  // UX-016: `setStatus` used to echo the backend's raw `message` field (or a
+  // bare `HTTP ${status}` fallback) verbatim. It must now show only the
+  // catalogued, clerk-safe copy — never the raw server text — and must not
+  // refresh on failure.
+  it("surfaces a clerk-safe error inside the dialog instead of the raw server text, and does not refresh", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ message: "request already closed" }), { status: 409 }),
+    );
+
+    render(<ServiceRequestActions id={SR_ID} status="open" />);
+    fireEvent.click(screen.getByRole("button", { name: "Start work" }));
+    await waitFor(() => expect(screen.getByText("Move to in progress?")).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: "Confirm" }));
+
+    expect(await screen.findByText(/couldn't save/i)).toBeInTheDocument();
+    expect(screen.queryByText("request already closed")).not.toBeInTheDocument();
+    expect(refreshMock).not.toHaveBeenCalled();
+  });
 });

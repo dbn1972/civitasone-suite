@@ -173,6 +173,31 @@ describe("KanbanBoard", () => {
     });
   });
 
+  // UX-016: the generic (non-409) failure branch used to echo the backend's
+  // raw `error.message` field (or a bare `Server error (${status})`
+  // fallback) verbatim. It must now show only the catalogued, clerk-safe
+  // copy — never the raw server text.
+  it("shows a clerk-safe error, not the raw server text, on a generic (non-409) move failure", async () => {
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 500,
+      json: async () => ({ error: { message: "deal_service unavailable: connection refused" } }),
+    });
+
+    render(<KanbanBoard pipeline={PIPELINE} deals={DEALS} source="api" />);
+
+    const card = screen.getByRole("button", { name: /Enterprise License/i });
+    await act(async () => {
+      fireEvent.keyDown(card, { key: "ArrowRight" });
+    });
+
+    await waitFor(() => {
+      expect(screen.getByRole("alert")).toBeInTheDocument();
+      expect(screen.getByRole("alert").textContent).toMatch(/couldn't save/i);
+    });
+    expect(screen.queryByText(/deal_service unavailable/)).not.toBeInTheDocument();
+  });
+
   it("reverts optimistic move on network error", async () => {
     global.fetch = vi.fn().mockRejectedValue(new Error("Network error"));
 

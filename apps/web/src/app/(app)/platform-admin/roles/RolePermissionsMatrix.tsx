@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { ConfirmDialog } from "@/app/_components/ds";
 import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
+import { toHumanError } from "@/lib/messages";
 import type { AdminRoleSummary, AdminPermissionSummary } from "@/app/_data/loaders";
 
 /* ─── SoD policy (GFR 2017) ──────────────────────────────────────────────
@@ -20,17 +21,29 @@ function sodViolation(roleKey: string, module: string, granted: (action: string)
   return granted("submit") && granted("approve");
 }
 
+/**
+ * Plain-language failure message for a failed role-permissions read/write.
+ * These are plain async API helpers, not components, so they can't use the
+ * useFormError hook; toHumanError is the same catalogued-message building
+ * block that hook is built on -- never the backend's own `message` or the
+ * raw HTTP status. See docs/ENTERPRISE-GAP-REPORT-2026-09-07.md UX-003/UX-016.
+ */
+function rolePermissionsError(kind: "load" | "save"): string {
+  const human = toHumanError(kind, { area: "role permissions" });
+  return `${human.what} ${human.next}`;
+}
+
 /* ─── Real per-role permission fetch/save (identity-service RBAC via
  * admin-service, same contract COMP-004 established for admin/roles) ──── */
 async function fetchRolePermissions(roleId: string): Promise<{ ok: boolean; keys?: string[]; message?: string }> {
   try {
     const res = await fetch(`/api/proxy/v1/admin/roles/${roleId}`);
+    if (!res.ok) return { ok: false, message: rolePermissionsError("load") };
     const body = await res.json().catch(() => undefined);
-    if (!res.ok) return { ok: false, message: (body as { message?: string } | undefined)?.message ?? `HTTP ${res.status}` };
     const permissions = (body as { permissions?: unknown } | undefined)?.permissions;
     return { ok: true, keys: Array.isArray(permissions) ? permissions.map(String) : [] };
-  } catch (err) {
-    return { ok: false, message: err instanceof Error ? err.message : "Network error" };
+  } catch {
+    return { ok: false, message: rolePermissionsError("load") };
   }
 }
 
@@ -41,13 +54,10 @@ async function saveRolePermissions(roleId: string, permissionKeys: string[]): Pr
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ permissionKeys }),
     });
-    if (!res.ok) {
-      const body = await res.json().catch(() => ({}));
-      return { ok: false, message: (body as { message?: string }).message ?? `HTTP ${res.status}` };
-    }
+    if (!res.ok) return { ok: false, message: rolePermissionsError("save") };
     return { ok: true };
-  } catch (err) {
-    return { ok: false, message: err instanceof Error ? err.message : "Network error" };
+  } catch {
+    return { ok: false, message: rolePermissionsError("save") };
   }
 }
 
@@ -209,7 +219,7 @@ export function RolePermissionsMatrix({
       const result = await saveRolePermissions(roleId, [...draft]);
       if (!result.ok) {
         const role = orderedRoles.find((r) => r.id === roleId);
-        failures.push(`${role?.name ?? roleId}: ${result.message ?? "save failed"}`);
+        failures.push(`${role?.name ?? roleId}: ${result.message ?? rolePermissionsError("save")}`);
         continue;
       }
       setBaselineByRole((prev) => ({ ...prev, [roleId]: new Set(draft) }));

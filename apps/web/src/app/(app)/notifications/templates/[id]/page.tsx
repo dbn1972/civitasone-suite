@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import { PageHeader, Card, DataTable, EmptyState } from "../../../../_components/ds";
 import { StatusBadge } from "../../_components/StatusBadge";
+import { useFormError } from "@/lib/useFormError";
 
 /**
  * Template detail — backed by GET /notification/templates/:id/versions, which
@@ -55,6 +56,7 @@ export default function TemplateDetailPage() {
   const [versions, setVersions] = useState<TemplateView[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const formError = useFormError("template");
 
   function load() {
     if (!id) return;
@@ -66,10 +68,14 @@ export default function TemplateDetailPage() {
           headers: { "content-type": "application/json" },
           credentials: "same-origin",
         });
-        if (!res.ok) throw new Error(`HTTP_${res.status}`);
+        if (!res.ok) {
+          const resolved = await formError.fromResponse(res, "load");
+          setError(resolved.message);
+          return;
+        }
         setVersions(toArray(await res.json()));
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "load failed");
+      } catch {
+        setError(formError.fromException("load").message);
       } finally {
         setLoading(false);
       }

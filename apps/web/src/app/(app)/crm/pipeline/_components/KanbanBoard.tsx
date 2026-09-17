@@ -2,6 +2,7 @@
 
 import { useCallback, useRef, useState } from "react";
 import { useSeededResource } from "@/lib/sync/resource";
+import { useFormError } from "@/lib/useFormError";
 import { EmptyState } from "../../../../_components/ds";
 import type { PipelineDealCard, PipelineView } from "../../../../_data/loaders";
 import { DealCard } from "./DealCard";
@@ -56,6 +57,7 @@ export function KanbanBoard({ pipeline, deals: serverDeals, source }: Props) {
   const [moveError, setMoveError] = useState<MoveError | null>(null);
   const [movingDealId, setMovingDealId] = useState<string | null>(null);
   const announcerRef = useRef<HTMLDivElement>(null);
+  const formError = useFormError("deal");
 
   // Keep local deals in sync when server data changes
   // (after initial render, seeded resource handles offline)
@@ -137,10 +139,9 @@ export function KanbanBoard({ pipeline, deals: serverDeals, source }: Props) {
           });
           announce(`Move failed for engagement ${deal.name}: version conflict. Please refresh.`);
         } else {
-          const errBody = await res.json().catch(() => ({ error: { message: "Failed to move deal" } }));
-          const msg = errBody?.error?.message ?? `Server error (${res.status})`;
-          setMoveError({ dealId: deal.id, message: msg });
-          announce(`Move failed for engagement ${deal.name}: ${msg}`);
+          const resolved = await formError.fromResponse(res, "save");
+          setMoveError({ dealId: deal.id, message: resolved.message });
+          announce(`Move failed for engagement ${deal.name}: ${resolved.message}`);
         }
       } else {
         // Success — increment version locally
@@ -159,6 +160,11 @@ export function KanbanBoard({ pipeline, deals: serverDeals, source }: Props) {
     } finally {
       setMovingDealId(null);
     }
+    // formError.fromResponse is stable (useCallback'd on a fixed `area`
+    // string inside useFormError) even though the wrapping `formError`
+    // object literal isn't, so omitting it here is safe and avoids
+    // re-creating moveDealToStage every render (see hr/leave/approvals/
+    // LeaveApprovalsPanel.tsx for the same, first-established pattern).
   }, [localDeals, stages, hasRealPipeline, announce]);
 
   const handleDrop = useCallback(async (targetStageId: string) => {

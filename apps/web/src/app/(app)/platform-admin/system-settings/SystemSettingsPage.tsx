@@ -2,6 +2,7 @@
 
 import { useEffect, useId, useRef, useState } from "react";
 import { ConfirmDialog } from "@/app/_components/ds";
+import { toHumanError } from "@/lib/messages";
 
 /* ─── Types ─────────────────────────────────────────────────────────── */
 type GeneralSettings = {
@@ -129,6 +130,19 @@ function Field({ label: fieldLabel, id, editing, children }: { label: string; id
   );
 }
 
+/**
+ * Plain-language failure message for a failed settings-section save.
+ * fakeSave is a plain async helper, not a component or hook, so it can't
+ * call the useFormError hook; toHumanError is the same catalogued-message
+ * building block that hook is built on -- never the backend's own
+ * message/error text or the raw HTTP status. See
+ * docs/ENTERPRISE-GAP-REPORT-2026-09-07.md UX-003/UX-016.
+ */
+function settingsSaveError(): string {
+  const human = toHumanError("save", { area: "settings" });
+  return `${human.what} ${human.next}`;
+}
+
 async function fakeSave(section: string): Promise<void> {
   const res = await fetch(`/api/proxy/v1/admin/settings/${section}`, {
     method: "PUT",
@@ -137,7 +151,7 @@ async function fakeSave(section: string): Promise<void> {
   }).catch(() => null);
   // tolerate 404 — settings API may not exist yet
   if (res && !res.ok && res.status !== 404 && res.status !== 405) {
-    throw new Error(`Server error (${res.status})`);
+    throw new Error(settingsSaveError());
   }
 }
 
@@ -192,7 +206,12 @@ export function SystemSettingsPage() {
       setEditSection(null);
       setSuccessMsg(`${section.replace(/-/g, " ")} settings saved.`);
     } catch (err) {
-      setErrors((e) => ({ ...e, [section]: err instanceof Error ? err.message : "Save failed." }));
+      // fakeSave only ever throws its own already-catalogued Error (a
+      // resolved non-2xx response); a genuine fetch()-level rejection is
+      // already absorbed by fakeSave's own `.catch(() => null)`, so this
+      // fallback is unreachable in practice but still routed through the
+      // same catalogued builder rather than a hand-written literal.
+      setErrors((e) => ({ ...e, [section]: err instanceof Error ? err.message : settingsSaveError() }));
     } finally {
       setBusy(false);
     }

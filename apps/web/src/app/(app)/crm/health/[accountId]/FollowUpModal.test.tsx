@@ -43,7 +43,10 @@ describe("FollowUpModal", () => {
     expect(body.relatedAccountId).toBe(ACCOUNT_ID);
   });
 
-  it("shows the server error inside the modal instead of navigating away", async () => {
+  // UX-016: this used to surface the backend's raw `message` field (or a
+  // bare `HTTP ${status}` fallback) verbatim. It must now show only the
+  // catalogued, clerk-safe copy — never the raw server text.
+  it("shows a clerk-safe error inside the modal instead of the raw server text, and does not navigate away", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(
       new Response(JSON.stringify({ message: "subject is required" }), { status: 422 }),
     );
@@ -54,7 +57,8 @@ describe("FollowUpModal", () => {
     fireEvent.change(screen.getByLabelText(/service type/i), { target: { value: "Renewal Support" } });
     fireEvent.click(screen.getByRole("button", { name: "Create Service Request" }));
 
-    expect(await screen.findByRole("alert")).toHaveTextContent("subject is required");
+    expect(await screen.findByRole("alert")).toHaveTextContent(/couldn't save/i);
+    expect(screen.queryByText("subject is required")).not.toBeInTheDocument();
     expect(pushMock).not.toHaveBeenCalled();
   });
 });

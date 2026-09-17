@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { useFormError } from "@/lib/useFormError";
 
 type FormStatus = "idle" | "submitting" | "error";
 
@@ -27,6 +28,7 @@ export function CreateSchemeForm() {
   const [description, setDescription] = useState("");
   const [status, setStatus] = useState<FormStatus>("idle");
   const [message, setMessage] = useState("");
+  const formError = useFormError("grant scheme");
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -51,6 +53,7 @@ export function CreateSchemeForm() {
 
     setStatus("submitting");
     setMessage("");
+    formError.clear();
 
     // Convert rupees → paise (minor units × 100)
     const budgetMinor = Math.round(budgetRupees * 100);
@@ -70,17 +73,16 @@ export function CreateSchemeForm() {
         headers: { "content-type": "application/json" },
         body: JSON.stringify(body),
       });
-      const text = await res.text();
       if (!res.ok) {
         setStatus("error");
-        setMessage(text || `Request failed (${res.status})`);
+        await formError.fromResponse(res, "save");
         return;
       }
       router.push("/grants/schemes");
       router.refresh();
-    } catch (err) {
+    } catch {
       setStatus("error");
-      setMessage(err instanceof Error ? err.message : "Network error");
+      formError.fromException("save");
     }
   }
 
@@ -106,6 +108,9 @@ export function CreateSchemeForm() {
             placeholder="e.g. PM Kisan Samman Nidhi"
             aria-required="true"
           />
+          {formError.fieldError("name") && (
+            <span style={{ fontSize: 12, color: "#b91c1c", marginTop: 4, display: "block" }}>{formError.fieldError("name")}</span>
+          )}
         </div>
 
         <div className="field" style={{ background: "#fff", padding: "13px 16px" }}>
@@ -122,6 +127,9 @@ export function CreateSchemeForm() {
             placeholder="e.g. PM-KISAN-2024"
             aria-required="true"
           />
+          {formError.fieldError("code") && (
+            <span style={{ fontSize: 12, color: "#b91c1c", marginTop: 4, display: "block" }}>{formError.fieldError("code")}</span>
+          )}
         </div>
 
         <div className="field" style={{ background: "#fff", padding: "13px 16px" }}>
@@ -165,6 +173,9 @@ export function CreateSchemeForm() {
           <span id="budget-hint" style={{ fontSize: 12, color: "#64748b", marginTop: 4, display: "block" }}>
             Enter in rupees. Stored internally as paise.
           </span>
+          {formError.fieldError("budgetMinor") && (
+            <span style={{ fontSize: 12, color: "#b91c1c", marginTop: 4, display: "block" }}>{formError.fieldError("budgetMinor")}</span>
+          )}
         </div>
 
         <div
@@ -196,6 +207,11 @@ export function CreateSchemeForm() {
             }}
           >
             {message}
+          </p>
+        ) : null}
+        {formError.message ? (
+          <p role="alert" style={{ marginTop: 12, color: "#b91c1c", fontSize: "0.875rem" }}>
+            {formError.message}
           </p>
         ) : null}
       </div>

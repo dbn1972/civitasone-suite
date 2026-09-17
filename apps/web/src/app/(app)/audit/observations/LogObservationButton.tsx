@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useId, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useFormError } from "@/lib/useFormError";
 
 interface FormState {
   obsNo: string;
@@ -28,6 +29,7 @@ export function LogObservationButton() {
   const [error, setError] = useState<string | null>(null);
   const [form, setForm] = useState<FormState>(EMPTY);
   const titleId = useId();
+  const formError = useFormError("observation");
 
   const set = <K extends keyof FormState>(k: K, v: FormState[K]) => setForm((f) => ({ ...f, [k]: v }));
 
@@ -35,7 +37,11 @@ export function LogObservationButton() {
     if (busy) return;
     setOpen(false);
     setError(null);
+    formError.clear();
     setForm(EMPTY);
+    // formError.clear is stable (useCallback'd on a fixed `area` string
+    // inside useFormError) even though the wrapping `formError` object
+    // literal isn't, so omitting it here is safe.
   }, [busy]);
 
   useEffect(() => {
@@ -78,17 +84,21 @@ export function LogObservationButton() {
         }),
       });
       if (!res.ok) {
-        const txt = await res.text();
-        throw new Error(`Could not log observation (${res.status}). ${txt.slice(0, 160)}`);
+        const resolved = await formError.fromResponse(res, "save");
+        setError(resolved.message);
+        return;
       }
       setOpen(false);
       setForm(EMPTY);
       router.refresh();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to log observation.");
+    } catch {
+      setError(formError.fromException("save").message);
     } finally {
       setBusy(false);
     }
+    // formError.fromResponse/fromException are stable (useCallback'd on a
+    // fixed `area` string inside useFormError) even though the wrapping
+    // `formError` object literal isn't, so omitting it here is safe.
   }, [form, router]);
 
   return (
@@ -106,12 +116,21 @@ export function LogObservationButton() {
             <div className="pad" style={{ display: "flex", flexDirection: "column", gap: 4 }}>
               <label className="lbl" htmlFor="obs-no">Observation no.</label>
               <input id="obs-no" className="inp" value={form.obsNo} onChange={(e) => set("obsNo", e.target.value)} placeholder="OBS-2026-001" />
+              {formError.fieldError("obsNo") && (
+                <span style={{ fontSize: 12, color: "var(--bad)" }}>{formError.fieldError("obsNo")}</span>
+              )}
 
               <label className="lbl" htmlFor="obs-auditee">Auditee (dept / unit ref)</label>
               <input id="obs-auditee" className="inp" value={form.auditeeRef} onChange={(e) => set("auditeeRef", e.target.value)} placeholder="Finance Wing" />
+              {formError.fieldError("auditeeRef") && (
+                <span style={{ fontSize: 12, color: "var(--bad)" }}>{formError.fieldError("auditeeRef")}</span>
+              )}
 
               <label className="lbl" htmlFor="obs-finding">Finding</label>
               <textarea id="obs-finding" className="inp" rows={4} value={form.finding} onChange={(e) => set("finding", e.target.value)} placeholder="Describe the audit finding…" />
+              {formError.fieldError("finding") && (
+                <span style={{ fontSize: 12, color: "var(--bad)" }}>{formError.fieldError("finding")}</span>
+              )}
 
               <div style={{ display: "flex", gap: 12 }}>
                 <div style={{ flex: 1 }}>

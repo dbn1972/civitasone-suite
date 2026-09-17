@@ -2,6 +2,20 @@
 
 import { useRouter } from "next/navigation";
 import { ActionButton } from "../../../../_components/ds";
+import { toHumanError } from "@/lib/messages";
+
+/**
+ * Plain-language failure message for a failed grievance lifecycle action.
+ * `patch` is a plain async helper, not a component or hook, so it can't call
+ * the useFormError hook; toHumanError is the same catalogued-message
+ * building block that hook is built on -- never the backend's own
+ * message/error text or the raw HTTP status. See
+ * docs/ENTERPRISE-GAP-REPORT-2026-09-07.md UX-003/UX-016.
+ */
+function grievanceActionError(): string {
+  const human = toHumanError("save", { area: "grievance" });
+  return `${human.what} ${human.next}`;
+}
 
 /**
  * Grievance lifecycle actions — CPGRAMS-aligned.
@@ -36,9 +50,7 @@ export function GrievanceActions({ id, status }: { id: string; status: string })
       ...(payload ? { body: JSON.stringify(payload) } : {}),
     });
     if (!res.ok) {
-      const json = await res.json().catch(() => ({}));
-      const msg = (json as { message?: string }).message;
-      throw new Error(msg ?? `Could not ${action} this grievance (HTTP ${res.status})`);
+      throw new Error(grievanceActionError());
     }
     router.refresh();
   }
