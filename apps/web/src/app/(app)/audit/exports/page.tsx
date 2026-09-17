@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
-import { PageHeader, EmptyState } from "../../../_components/ds";
+import { PageHeader, EmptyState, RefreshErrorState } from "../../../_components/ds";
 import { getAuditExports } from "../../../_data/loaders";
+import { toHumanError } from "@/lib/messages";
 import { ExportConsole } from "./ExportConsole";
 import { ExportsTable, type ExportRow } from "./ExportsTable";
 
@@ -27,7 +28,9 @@ export default async function AuditExportsPage() {
 
       <div className="card" style={{ marginTop: 18 }}>
         <div className="card-h"><h3>Recent exports</h3></div>
-        {rows.length === 0 ? (
+        {source === "error" ? (
+          <RefreshErrorState error={toHumanError("load", { area: "export jobs" })} />
+        ) : rows.length === 0 ? (
           <EmptyState icon="📤" title="No export jobs" message="Generated exports will appear here." />
         ) : (
           <ExportsTable rows={rows} />

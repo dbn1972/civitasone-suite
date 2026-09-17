@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { DataSourceBadge } from "../../../../../_components/DataSourceBadge";
-import { FileUpload, PageHeader } from "../../../../../_components/ds";
+import { FileUpload, PageHeader, ErrorState } from "../../../../../_components/ds";
+import { toHumanError } from "@/lib/messages";
 
 type TenderDoc = {
   id: string;
@@ -309,15 +310,11 @@ export default function TenderDocumentsPage({
                   </tr>
                 ) : error ? (
                   <tr>
-                    <td
-                      colSpan={5}
-                      style={{
-                        textAlign: "center",
-                        padding: "24px",
-                        color: "var(--bad)",
-                      }}
-                    >
-                      {error}
+                    <td colSpan={5} style={{ padding: "24px 12px" }}>
+                      <ErrorState
+                        error={toHumanError("load", { area: "documents" })}
+                        onRetry={() => void load()}
+                      />
                     </td>
                   </tr>
                 ) : docs.length === 0 ? (

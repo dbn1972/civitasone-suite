@@ -89,10 +89,10 @@ export default async function ReconciliationWorkbenchPage() {
       />
 
       <StatGrid>
-        <StatCard icon="🔁" iconBg="#e7edfd" label="Recon Runs" value={runs.length} />
-        <StatCard icon="⚠️" iconBg="#fef3f2" label="Unbalanced Runs" value={unbalancedRuns} />
-        <StatCard icon="🧩" iconBg="#fffaeb" label="Open Exceptions" value={openExceptions} />
-        <StatCard icon="🔌" iconBg="#eff6ff" label="Providers" value={providers.length} />
+        <StatCard icon="🔁" iconBg="#e7edfd" label="Recon Runs" value={runsResult.source === "error" ? "—" : runs.length} />
+        <StatCard icon="⚠️" iconBg="#fef3f2" label="Unbalanced Runs" value={runsResult.source === "error" ? "—" : unbalancedRuns} />
+        <StatCard icon="🧩" iconBg="#fffaeb" label="Open Exceptions" value={exceptionsResult.source === "error" ? "—" : openExceptions} />
+        <StatCard icon="🔌" iconBg="#eff6ff" label="Providers" value={providersResult.source === "error" ? "—" : providers.length} />
       </StatGrid>
 
       <Card title="Reconciliation Runs">
@@ -157,7 +157,9 @@ export default async function ReconciliationWorkbenchPage() {
       </Card>
 
       <Card title="Providers">
-        {providers.length === 0 ? (
+        {providersResult.source === "error" ? (
+          <DataSourceBadge source="error" />
+        ) : providers.length === 0 ? (
           <p style={{ color: "var(--ink2)", fontSize: 13 }}>No reconciliation providers registered.</p>
         ) : (
           <ul style={{ margin: 0, paddingLeft: 20, fontSize: 13.5 }}>

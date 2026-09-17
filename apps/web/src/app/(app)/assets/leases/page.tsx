@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { PageHeader, DataTable, EmptyState } from "../../../_components/ds";
+import { PageHeader, DataTable, EmptyState, ErrorState } from "../../../_components/ds";
 import { formatMoney, formatIndianDate } from "@/lib/formatters";
+import { toHumanError } from "@/lib/messages";
 
 type Lease = {
   id: string;
@@ -23,16 +24,26 @@ export default function LeasesPage() {
   const [isError, setIsError] = useState(false);
   const [busy, setBusy] = useState(false);
   const [loaded, setLoaded] = useState(false);
+  const [loadError, setLoadError] = useState(false);
 
   async function load(signal?: AbortSignal) {
     try {
       const res = await fetch("/api/proxy/v1/asset/leases", { signal });
       setLoaded(true);
-      if (!res.ok) return;
+      if (!res.ok) {
+        // UX-013: a failed fetch used to fall through to the same "No
+        // leases yet" empty state as a genuinely empty register.
+        setLoadError(true);
+        return;
+      }
       const body = await res.json() as { data: Lease[] };
       setRows(body.data ?? []);
+      setLoadError(false);
     } catch (e) {
-      if (e instanceof Error && e.name !== 'AbortError') setLoaded(true);
+      if (e instanceof Error && e.name !== 'AbortError') {
+        setLoaded(true);
+        setLoadError(true);
+      }
     }
   }
 
@@ -129,7 +140,9 @@ export default function LeasesPage() {
       </div>
       <div className="card">
         <div className="card-h"><h3>Active leases</h3></div>
-        {tableRows.length === 0 ? (
+        {loadError ? (
+          <ErrorState error={toHumanError("load", { area: "leases" })} onRetry={() => void load()} />
+        ) : tableRows.length === 0 ? (
           <EmptyState icon="📄" title={loaded ? "No leases yet" : "Loading leases…"} message={loaded ? "Register an IFRS 16 lease to track ROU assets and liabilities." : undefined} />
         ) : (
           <DataTable

@@ -1,6 +1,7 @@
 import Link from "next/link";
-import { PageHeader, EmptyState } from "../../../_components/ds";
+import { PageHeader, EmptyState, RefreshErrorState } from "../../../_components/ds";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
+import { toHumanError } from "@/lib/messages";
 import { formatIndianDate } from "@/lib/formatters";
 import { getContractById } from "../../../_data/loaders";
 import { RaiseEOfficeNote } from "../../../_components/RaiseEOfficeNote";
@@ -92,7 +93,9 @@ export default async function ContractDetailPage({ params }: { params: { id: str
       <div className="card" style={{ marginTop: 18 }}>
         <div className="card-h"><h3>Milestones</h3></div>
         <div className="pad">
-          {milestonesRes.data.length === 0 ? (
+          {milestonesRes.source === "error" ? (
+            <RefreshErrorState error={toHumanError("load", { area: "milestones" })} />
+          ) : milestonesRes.data.length === 0 ? (
             <EmptyState icon="📋" title="No milestones" message="No milestones on this contract." />
           ) : (
             <ul style={{ margin: "0 0 12px", paddingLeft: 18 }}>
@@ -118,35 +121,43 @@ export default async function ContractDetailPage({ params }: { params: { id: str
       <div className="card" style={{ marginTop: 18 }}>
         <div className="card-h"><h3>Performance bonds</h3></div>
         <div className="pad">
-          <BondActions
-            contractId={params.id}
-            canRegister={statusLower === "active" || statusLower === "approved"}
-            bonds={bondsRes.data.map((b) => ({
-              id: String(b.id),
-              referenceNo: typeof b.referenceNo === "string" ? b.referenceNo : undefined,
-              status: String(b.status ?? "held"),
-              amountMinor: b.amountMinor as string | number | undefined,
-              bondType: typeof b.bondType === "string" ? b.bondType : undefined,
-            }))}
-          />
+          {bondsRes.source === "error" ? (
+            <RefreshErrorState error={toHumanError("load", { area: "performance bonds" })} />
+          ) : (
+            <BondActions
+              contractId={params.id}
+              canRegister={statusLower === "active" || statusLower === "approved"}
+              bonds={bondsRes.data.map((b) => ({
+                id: String(b.id),
+                referenceNo: typeof b.referenceNo === "string" ? b.referenceNo : undefined,
+                status: String(b.status ?? "held"),
+                amountMinor: b.amountMinor as string | number | undefined,
+                bondType: typeof b.bondType === "string" ? b.bondType : undefined,
+              }))}
+            />
+          )}
         </div>
       </div>
 
       <div className="card" style={{ marginTop: 18 }}>
         <div className="card-h"><h3>Obligations</h3></div>
         <div className="pad">
-          <ObligationsPanel
-            contractId={params.id}
-            obligations={obligationsRes.data.map((o) => ({
-              id: String(o.id),
-              title: String(o.title ?? "Obligation"),
-              description: typeof o.description === "string" ? o.description : undefined,
-              dueDate: typeof o.dueDate === "string" ? o.dueDate : undefined,
-              status: String(o.status ?? "pending"),
-              ownerId: typeof o.ownerId === "string" ? o.ownerId : undefined,
-              ...(typeof o.version === "number" ? { version: o.version } : {}),
-            }))}
-          />
+          {obligationsRes.source === "error" ? (
+            <RefreshErrorState error={toHumanError("load", { area: "obligations" })} />
+          ) : (
+            <ObligationsPanel
+              contractId={params.id}
+              obligations={obligationsRes.data.map((o) => ({
+                id: String(o.id),
+                title: String(o.title ?? "Obligation"),
+                description: typeof o.description === "string" ? o.description : undefined,
+                dueDate: typeof o.dueDate === "string" ? o.dueDate : undefined,
+                status: String(o.status ?? "pending"),
+                ownerId: typeof o.ownerId === "string" ? o.ownerId : undefined,
+                ...(typeof o.version === "number" ? { version: o.version } : {}),
+              }))}
+            />
+          )}
         </div>
       </div>
 

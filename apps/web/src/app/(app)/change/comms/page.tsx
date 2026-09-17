@@ -1,10 +1,12 @@
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
-import { PageHeader, StatCard, StatGrid, EmptyState } from "../../../_components/ds";
+import { PageHeader, StatCard, StatGrid, EmptyState, RefreshErrorState } from "../../../_components/ds";
 import { getChangeRequests } from "../_data/loaders";
 import { formatIndianDate } from "@/lib/formatters";
+import { toHumanError } from "@/lib/messages";
 
 export default async function Page() {
   const { data: changes, source } = await getChangeRequests();
+  const errored = source === "error";
 
   // Released changes that carry user-communication release notes.
   const released = changes
@@ -20,10 +22,14 @@ export default async function Page() {
       />
       {source === "error" && <DataSourceBadge source={source} />}
       <StatGrid>
-        <StatCard icon="📣" iconBg="#eef2ff" label="Published releases" value={released.length.toLocaleString("en-IN")} />
+        <StatCard icon="📣" iconBg="#eef2ff" label="Published releases" value={errored ? "—" : released.length.toLocaleString("en-IN")} />
       </StatGrid>
 
-      {released.length === 0 ? (
+      {errored ? (
+        <div className="card">
+          <RefreshErrorState error={toHumanError("load", { area: "release notes" })} />
+        </div>
+      ) : released.length === 0 ? (
         <div className="card">
           <EmptyState icon="📣" title="No release notes published yet" message="Completing a change with release notes broadcasts them to users via the notification service." />
         </div>

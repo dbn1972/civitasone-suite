@@ -250,12 +250,20 @@ export default function DedupCandidatesPage() {
         </div>
       )}
 
-      {!loading && pairs.length === 0 && source !== "error" && (
-        <EmptyState
-          icon="✓"
-          title="No duplicate candidates found — data is clean"
-          message="No flagged contact pairs at this time."
-        />
+      {!loading && (
+        // UX-013: restructured from a flat `&&` chain (pairs.length === 0 &&
+        // source !== "error") into explicit nested ternaries. Behaviour is
+        // unchanged -- this only makes the error-gate structurally visible
+        // to empty-vs-error-guard.mjs, whose connectivity check walks
+        // ternary/if ancestors but does not inspect every operand of an
+        // arbitrary `&&` chain.
+        source === "error" ? null : pairs.length === 0 ? (
+          <EmptyState
+            icon="✓"
+            title="No duplicate candidates found — data is clean"
+            message="No flagged contact pairs at this time."
+          />
+        ) : null
       )}
 
       {!loading && pairs.length > 0 && (

@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
-import { PageHeader, StatGrid, StatCard, EmptyState, Card } from "../../../_components/ds";
+import { PageHeader, StatGrid, StatCard, EmptyState, Card, RefreshErrorState } from "../../../_components/ds";
 import { getStockLedger } from "../../../_data/loaders";
+import { toHumanError } from "@/lib/messages";
 import { StockLedgerTable } from "./StockLedgerTable";
 
 type LedgerEntry = {
@@ -44,7 +45,14 @@ export default async function InventoryReconcilePage() {
         actions={source === "error" ? <DataSourceBadge source={source} /> : undefined}
       />
 
-      {entries.length === 0 && source !== "error" ? (
+      {source === "error" ? (
+        // UX-013: previously `entries.length === 0 && source !== "error"`
+        // was false on any load failure (second operand false regardless of
+        // length), which fell through to the ELSE branch below and rendered
+        // a full, silently-zeroed StatGrid + an empty ledger table -- pixel
+        // identical to a genuinely reconciled, zero-movement ledger.
+        <RefreshErrorState error={toHumanError("load", { area: "stock ledger" })} />
+      ) : entries.length === 0 ? (
         <EmptyState
           icon="📦"
           title="No stock movements to reconcile"

@@ -1,8 +1,9 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { PageHeader, StatGrid, StatCard } from "@/app/_components/ds";
+import { PageHeader, StatGrid, StatCard, ErrorState } from "@/app/_components/ds";
 import { useFormError } from "@/lib/useFormError";
+import { toHumanError } from "@/lib/messages";
 
 type GatewayConfig = {
   jwtEdgeVerify: "true" | "audit" | "off";
@@ -20,6 +21,7 @@ type BreakerState = { service: string; state: string };
 export default function GatewayConfigPage() {
   const [config, setConfig] = useState<GatewayConfig | null>(null);
   const [breakers, setBreakers] = useState<BreakerState[]>([]);
+  const [breakersError, setBreakersError] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
@@ -55,9 +57,17 @@ export default function GatewayConfigPage() {
       if (res.ok) {
         const body = await res.json();
         setBreakers(body.breakers ?? []);
+        setBreakersError(false);
+      } else {
+        // UX-013: a failed status check must not look identical to "no
+        // breakers contacted yet" — an ops clerk relying on this panel
+        // during an incident needs to know the check itself is broken.
+        setBreakersError(true);
       }
-    } catch {
-      // Non-critical — breaker state is informational
+    } catch (err) {
+      if (err instanceof Error && err.name !== 'AbortError') {
+        setBreakersError(true);
+      }
     }
   }, []);
 
@@ -118,7 +128,7 @@ export default function GatewayConfigPage() {
       <StatGrid>
         <StatCard icon="🛡️" iconBg="#eef2ff" label="JWT Verification" value={config?.jwtEdgeVerify === "true" ? "Enforcing" : config?.jwtEdgeVerify === "audit" ? "Audit" : "Off"} />
         <StatCard icon="⚡" iconBg="#ecfdf3" label="Upstream Timeout" value={`${(config?.upstreamTimeoutMs ?? 15000) / 1000}s`} />
-        <StatCard icon="🔌" iconBg={openBreakers > 0 ? "#fef2f2" : "#ecfdf3"} label="Circuit Breakers" value={openBreakers > 0 ? `${openBreakers} open` : "All closed"} />
+        <StatCard icon="🔌" iconBg={breakersError ? "#f2f4f7" : openBreakers > 0 ? "#fef2f2" : "#ecfdf3"} label="Circuit Breakers" value={breakersError ? "—" : openBreakers > 0 ? `${openBreakers} open` : "All closed"} />
         <StatCard icon="📊" iconBg="#fffaeb" label="Rate Limit" value={`${config?.rateLimitMax ?? 1000}/min`} />
       </StatGrid>
 
@@ -202,7 +212,9 @@ export default function GatewayConfigPage() {
           <div className="card">
             <div className="card-h"><h3>Circuit Breaker Status</h3></div>
             <div style={{ padding: 16 }}>
-              {breakers.length === 0 ? (
+              {breakersError ? (
+                <ErrorState error={toHumanError("load", { area: "circuit breaker status" })} onRetry={() => void fetchBreakers()} />
+              ) : breakers.length === 0 ? (
                 <p style={{ color: "#6b7280", fontSize: 14 }}>No upstream services have been contacted yet. Breaker states appear after the first request to each service.</p>
               ) : (
                 <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>

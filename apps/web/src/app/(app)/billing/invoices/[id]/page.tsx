@@ -145,7 +145,7 @@ export default async function InvoiceDetailPage({ params }: { params: { id: stri
       </Card>
 
       <Card title="Line items" padding>
-        {invoice.items.length === 0 ? (
+        {invoice.items.length === 0 ? ( // ux-001-ok: `invoice` is only reachable past the earlier `if (!invoice) return` guard above, and fetchJson's contract guarantees source==="error" always pairs with data:null -- so invoiceSource is provably "api" here and this is a genuine zero-line-item invoice, never a masked fetch failure
           <EmptyState icon="📄" title="No line items" message="This invoice has no recorded line items." />
         ) : (
           <DataTable<InvoiceItemRow>

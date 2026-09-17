@@ -94,7 +94,7 @@ export default async function ChequeDetailPage({ params }: { params: { id: strin
       </Card>
 
       <Card title="Clearance Timeline" padding>
-        {timeline.length === 0 ? (
+        {timeline.length === 0 ? ( // ux-001-ok: `timeline` is derived purely from `cheque`, only reachable past the earlier `if (!cheque) return` guard above (source==="error" implies a null cheque per the loader contract) -- this is a genuinely history-free instrument, never a masked fetch failure
           <EmptyState icon="🕒" title="No timeline recorded" message="No lifecycle events have been recorded for this instrument." />
         ) : (
           <ol style={{ listStyle: "none", padding: 0, margin: 0 }} aria-label="Cheque clearance timeline">

@@ -1,8 +1,9 @@
 import { DataSourceBadge } from "../../_components/DataSourceBadge";
-import { PageHeader, StatCard, StatGrid, DataTable, EmptyState } from "../../_components/ds";
+import { PageHeader, StatCard, StatGrid, DataTable, EmptyState, RefreshErrorState } from "../../_components/ds";
 import { getChangeRequests } from "./_data/loaders";
 import { NewChangeButton } from "./NewChangeButton";
 import { formatIndianDate } from "@/lib/formatters";
+import { toHumanError } from "@/lib/messages";
 
 type Row = {
   id: string;
@@ -18,10 +19,11 @@ const OPEN_STATES = new Set(["draft", "submitted", "approved", "scheduled", "in_
 
 export default async function Page() {
   const { data: changes, source } = await getChangeRequests();
+  const errored = source === "error";
 
-  const awaitingCab = changes.filter((c) => c.status === "submitted").length;
-  const scheduled = changes.filter((c) => c.status === "scheduled").length;
-  const open = changes.filter((c) => OPEN_STATES.has(c.status)).length;
+  const awaitingCab = errored ? null : changes.filter((c) => c.status === "submitted").length;
+  const scheduled = errored ? null : changes.filter((c) => c.status === "scheduled").length;
+  const open = errored ? null : changes.filter((c) => OPEN_STATES.has(c.status)).length;
 
   const rows: Row[] = changes.map((c) => ({
     id: c.id,
@@ -43,17 +45,19 @@ export default async function Page() {
       />
       {source === "error" && <DataSourceBadge source={source} />}
       <StatGrid>
-        <StatCard icon="📋" iconBg="#eef2ff" label="Total Changes" value={changes.length.toLocaleString("en-IN")} />
-        <StatCard icon="🧑‍⚖️" iconBg="#fffbeb" label="Awaiting CAB" value={awaitingCab.toLocaleString("en-IN")} />
-        <StatCard icon="🗓️" iconBg="#ecfdf5" label="Scheduled" value={scheduled.toLocaleString("en-IN")} />
-        <StatCard icon="🔓" iconBg="#f0f9ff" label="Open" value={open.toLocaleString("en-IN")} />
+        <StatCard icon="📋" iconBg="#eef2ff" label="Total Changes" value={errored ? "—" : changes.length.toLocaleString("en-IN")} />
+        <StatCard icon="🧑‍⚖️" iconBg="#fffbeb" label="Awaiting CAB" value={awaitingCab === null ? "—" : awaitingCab.toLocaleString("en-IN")} />
+        <StatCard icon="🗓️" iconBg="#ecfdf5" label="Scheduled" value={scheduled === null ? "—" : scheduled.toLocaleString("en-IN")} />
+        <StatCard icon="🔓" iconBg="#f0f9ff" label="Open" value={open === null ? "—" : open.toLocaleString("en-IN")} />
       </StatGrid>
       <div className="card">
         <div className="card-h" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <h3>Change requests</h3>
           <a className="btn ghost" href="/change/calendar">Release calendar →</a>
         </div>
-        {rows.length === 0 ? (
+        {errored ? (
+          <RefreshErrorState error={toHumanError("load", { area: "change requests" })} />
+        ) : rows.length === 0 ? (
           <EmptyState icon="📋" title="No change requests yet" message="Raise the first change to start the governed release process." />
         ) : (
           <DataTable<Row>

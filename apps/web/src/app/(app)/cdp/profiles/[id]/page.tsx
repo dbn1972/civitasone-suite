@@ -178,7 +178,7 @@ export default async function CustomerProfilePage({ params }: { params: { id: st
           </Card>
 
           <Card title="Contributing Systems">
-            {systems.length === 0 ? (
+            {systems.length === 0 ? ( // ux-001-ok: `systems` is derived purely from `profile.sourceLineage`, and `profile` is only reachable past the earlier `if (!profile) return` guard above (source==="error" implies a null profile per the loader contract) -- this can only be a genuinely lineage-free profile, never a masked fetch failure
               <EmptyState
                 icon="🛰️"
                 title="No contributors"

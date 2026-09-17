@@ -1,6 +1,7 @@
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
-import { PageHeader, StatGrid, StatCard, EmptyState } from "../../../_components/ds";
+import { PageHeader, StatGrid, StatCard, EmptyState, RefreshErrorState } from "../../../_components/ds";
 import { getPlugins } from "../../../_data/loaders";
+import { toHumanError } from "@/lib/messages";
 import { PluginsTable } from "../PluginsTable";
 
 type PluginRow = {
@@ -17,9 +18,10 @@ export default async function Page() {
 	const { data, source } = await getPlugins();
 	const plugins = data as PluginRow[];
 
-	const total = plugins.length;
-	const enabled = plugins.filter((p) => isEnabled(p.status)).length;
-	const disabled = total - enabled;
+	const errored = source === "error";
+	const total = errored ? null : plugins.length;
+	const enabled = errored ? null : plugins.filter((p) => isEnabled(p.status)).length;
+	const disabled = errored || total === null || enabled === null ? null : total - enabled;
 
 	return (
 		<main className="wrap">
@@ -32,9 +34,9 @@ export default async function Page() {
 			/>
 
 			<StatGrid>
-				<StatCard icon="🧩" iconBg="#eff8ff" label="Total Plugins" value={total} />
-				<StatCard icon="✅" iconBg="#e6f7f0" label="Enabled" value={enabled} />
-				<StatCard icon="⏸️" iconBg="#f4f5f7" label="Disabled" value={disabled} />
+				<StatCard icon="🧩" iconBg="#eff8ff" label="Total Plugins" value={total === null ? "—" : total} />
+				<StatCard icon="✅" iconBg="#e6f7f0" label="Enabled" value={enabled === null ? "—" : enabled} />
+				<StatCard icon="⏸️" iconBg="#f4f5f7" label="Disabled" value={disabled === null ? "—" : disabled} />
 			</StatGrid>
 
 			{source === "error" && (
@@ -47,7 +49,9 @@ export default async function Page() {
 				<div className="card-h">
 					<h3>Installed plugins</h3>
 				</div>
-				{plugins.length === 0 ? (
+				{errored ? (
+					<RefreshErrorState error={toHumanError("load", { area: "plugins" })} />
+				) : plugins.length === 0 ? (
 					<EmptyState
 						icon="🧩"
 						title="No plugins available"

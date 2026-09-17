@@ -70,7 +70,7 @@ export default async function AccountHealthDetailPage({ params }: PageProps) {
       </StatGrid>
 
       <Card title="Contributing Signals">
-        {breakdown.contributingFactors.length === 0 ? (
+        {breakdown.contributingFactors.length === 0 ? ( // ux-001-ok: `breakdown` is only reachable past the earlier `if (!breakdown) return` guard above (source==="error" implies a null breakdown per the loader contract) -- this is a genuinely signal-free stored score, never a masked fetch failure
           <EmptyState
             icon="🧮"
             title="No signals recorded"
