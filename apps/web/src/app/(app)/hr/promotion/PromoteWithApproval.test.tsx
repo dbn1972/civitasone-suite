@@ -1,5 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor, within } from "@testing-library/react";
+import { NextIntlClientProvider } from "next-intl";
+import enMessages from "@/messages/en.json";
 
 const toastSuccess = vi.fn();
 vi.mock("@/app/_components/ds/Toast", () => ({
@@ -45,6 +47,17 @@ function mockFetchRouting(opts: { submitApproval: () => Response; fromModule: ()
   return { submitApprovalCalls, fromModuleCalls };
 }
 
+// UX-017: PromoteWithApproval now reads its copy through next-intl
+// (useTranslations("promotionApprove")), so it needs a real provider in the
+// tree — same pattern as hr/employees/[id]/edit/EditEmployeeForm.test.tsx.
+function renderWidget() {
+  render(
+    <NextIntlClientProvider locale="en" messages={enMessages}>
+      <PromoteWithApproval />
+    </NextIntlClientProvider>,
+  );
+}
+
 async function openAndFillWizard() {
   fireEvent.click(screen.getByRole("button", { name: "+ Promotion with approval" }));
   await waitFor(() => expect(screen.getByRole("option", { name: /Asha Verma/ })).toBeInTheDocument());
@@ -77,7 +90,7 @@ describe("PromoteWithApproval", () => {
       fromModule: () => new Response("", { status: 502 }),
     });
 
-    render(<PromoteWithApproval />);
+    renderWidget();
     await openAndFillWizard();
 
     fireEvent.click(screen.getByRole("button", { name: "Submit promotion to eOffice" }));
@@ -102,7 +115,7 @@ describe("PromoteWithApproval", () => {
       fromModule: () => jsonResponse({ fileNo: "HR/2026/002" }),
     });
 
-    render(<PromoteWithApproval />);
+    renderWidget();
     await openAndFillWizard();
     fireEvent.click(screen.getByRole("button", { name: "Submit promotion to eOffice" }));
 

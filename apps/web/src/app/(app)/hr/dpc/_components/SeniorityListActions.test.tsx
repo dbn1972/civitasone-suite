@@ -1,5 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { NextIntlClientProvider } from "next-intl";
+import enMessages from "@/messages/en.json";
 
 const refreshMock = vi.fn();
 vi.mock("next/navigation", () => ({
@@ -8,6 +10,20 @@ vi.mock("next/navigation", () => ({
 
 import { SeniorityListActions } from "./SeniorityListActions";
 
+// UX-017: SeniorityListActions now reads its copy through next-intl
+// (useTranslations("dpcSeniorityActions")), so every render needs a real
+// provider in the tree — same pattern as
+// hr/employees/[id]/edit/EditEmployeeForm.test.tsx. This file renders the
+// component many times across its cases, so a small local helper keeps each
+// call site short instead of repeating the wrap seven times.
+function renderActions(props: { canAdminister: boolean }) {
+  render(
+    <NextIntlClientProvider locale="en" messages={enMessages}>
+      <SeniorityListActions {...props} />
+    </NextIntlClientProvider>,
+  );
+}
+
 describe("SeniorityListActions", () => {
   beforeEach(() => {
     vi.restoreAllMocks();
@@ -15,12 +31,12 @@ describe("SeniorityListActions", () => {
   });
 
   it("renders no action for a role outside the backend's HR_ROLES gate", () => {
-    render(<SeniorityListActions canAdminister={false} />);
+    renderActions({ canAdminister: false });
     expect(screen.queryByRole("button", { name: "Generate Seniority List" })).not.toBeInTheDocument();
   });
 
   it("renders the Generate action for an hr_admin/hr_officer/super_admin-gated caller", () => {
-    render(<SeniorityListActions canAdminister={true} />);
+    renderActions({ canAdminister: true });
     expect(screen.getByRole("button", { name: "Generate Seniority List" })).toBeInTheDocument();
     // Approve has nothing to act on until a list has been generated.
     expect(screen.queryByRole("button", { name: /Approve List/ })).not.toBeInTheDocument();
@@ -34,7 +50,7 @@ describe("SeniorityListActions", () => {
       ),
     );
 
-    render(<SeniorityListActions canAdminister={true} />);
+    renderActions({ canAdminister: true });
     fireEvent.click(screen.getByRole("button", { name: "Generate Seniority List" }));
 
     await waitFor(() => expect(screen.getByText("Generate a new seniority list?")).toBeInTheDocument());
@@ -61,7 +77,7 @@ describe("SeniorityListActions", () => {
       new Response(JSON.stringify({ code: "FORBIDDEN", message: "HR admin role required." }), { status: 403 }),
     );
 
-    render(<SeniorityListActions canAdminister={true} />);
+    renderActions({ canAdminister: true });
     fireEvent.click(screen.getByRole("button", { name: "Generate Seniority List" }));
     await waitFor(() => expect(screen.getByText("Generate a new seniority list?")).toBeInTheDocument());
     fireEvent.click(screen.getByRole("button", { name: "Generate" }));
@@ -87,7 +103,7 @@ describe("SeniorityListActions", () => {
         new Response(JSON.stringify({ id: listId, status: "accepted" }), { status: 202 }),
       );
 
-    render(<SeniorityListActions canAdminister={true} />);
+    renderActions({ canAdminister: true });
     fireEvent.click(screen.getByRole("button", { name: "Generate Seniority List" }));
     await waitFor(() => expect(screen.getByText("Generate a new seniority list?")).toBeInTheDocument());
     fireEvent.click(screen.getByRole("button", { name: "Generate" }));
@@ -122,7 +138,7 @@ describe("SeniorityListActions", () => {
       .mockResolvedValueOnce(new Response(JSON.stringify({ id: listId, status: "accepted" }), { status: 202 }))
       .mockResolvedValueOnce(new Response(null, { status: 500 }));
 
-    render(<SeniorityListActions canAdminister={true} />);
+    renderActions({ canAdminister: true });
     fireEvent.click(screen.getByRole("button", { name: "Generate Seniority List" }));
     await waitFor(() => expect(screen.getByText("Generate a new seniority list?")).toBeInTheDocument());
     fireEvent.click(screen.getByRole("button", { name: "Generate" }));
@@ -154,7 +170,7 @@ describe("SeniorityListActions", () => {
         ),
       );
 
-    render(<SeniorityListActions canAdminister={true} />);
+    renderActions({ canAdminister: true });
     fireEvent.click(screen.getByRole("button", { name: "Generate Seniority List" }));
     await waitFor(() => expect(screen.getByText("Generate a new seniority list?")).toBeInTheDocument());
     fireEvent.click(screen.getByRole("button", { name: "Generate" }));

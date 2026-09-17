@@ -8,6 +8,7 @@
  */
 
 import { useCallback, useEffect, useState } from "react";
+import { useTranslations } from "next-intl";
 import { useToast } from "@/app/_components/ds/Toast";
 import { Button } from "@/app/_components/ds";
 
@@ -16,6 +17,7 @@ type Designation = { id: string; name: string; grade?: string };
 type Officer = { id: string; name: string; designation?: string };
 
 export function PromoteWithApproval() {
+  const t = useTranslations("promotionApprove");
   const [open, setOpen] = useState(false);
   const [step, setStep] = useState<1 | 2>(1);
   const [employees, setEmployees] = useState<Employee[]>([]);
@@ -76,17 +78,17 @@ export function PromoteWithApproval() {
   const selectedEmployee = employees.find((e) => e.id === employeeId);
 
   const validateStep1 = (): boolean => {
-    if (!employeeId) { setError("Select an employee."); return false; }
-    if (!toDesigId) { setError("Select the new designation."); return false; }
-    if (!effectiveDate) { setError("Effective date is required."); return false; }
+    if (!employeeId) { setError(t("errSelectEmployee")); return false; }
+    if (!toDesigId) { setError(t("errSelectDesignation")); return false; }
+    if (!effectiveDate) { setError(t("errEffectiveDateRequired")); return false; }
     setError("");
     return true;
   };
 
   const validateStep2 = (): boolean => {
-    if (!initiatedBy) { setError("Select the initiating officer."); return false; }
-    if (!currentWith) { setError("Select who should approve this promotion."); return false; }
-    if (note.trim().length < 3) { setError("Add a justification note (at least 3 characters)."); return false; }
+    if (!initiatedBy) { setError(t("errSelectInitiator")); return false; }
+    if (!currentWith) { setError(t("errSelectApprover")); return false; }
+    if (note.trim().length < 3) { setError(t("errJustificationNote")); return false; }
     setError("");
     return true;
   };
@@ -109,13 +111,20 @@ export function PromoteWithApproval() {
           headers: { "content-type": "application/json" },
           body: JSON.stringify(reqBody),
         });
-        if (!subRes.ok) throw new Error((await subRes.text()) || "Could not create promotion request");
+        if (!subRes.ok) throw new Error((await subRes.text()) || t("errCreateRequestFallback"));
         const sub = (await subRes.json()) as { id?: string };
-        if (!sub.id) throw new Error("Promotion request id missing in response");
+        if (!sub.id) throw new Error(t("errMissingIdFallback"));
         promotionId = sub.id;
         setSubmittedPromotionId(promotionId);
       }
 
+      // NOTE (UX-017 scope note): `subject` below is composed for a
+      // downstream backend record (the estab eFile-noting service), not
+      // rendered as page UI at submission time -- left in English as a
+      // data-contract concern (a mixed-locale subject line would read worse
+      // than a consistent one, and this app has no i18n story yet for the
+      // estab module that stores/searches it), not a UI string in this
+      // tranche's scope.
       const raiseRes = await fetch("/api/proxy/v1/estab/files/from-module", {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -135,32 +144,35 @@ export function PromoteWithApproval() {
       });
       if (!raiseRes.ok) {
         throw new Error(
-          (await raiseRes.text()) ||
-          "Promotion request created, but raising the eFile failed. It is safe to click Submit again — it will retry only the eFile step, not create another promotion request.",
+          (await raiseRes.text()) || t("errEfileRaiseFailedFallback"),
         );
       }
       const file = (await raiseRes.json()) as { fileNo?: string };
-      toast.success(`Promotion raised for approval${file.fileNo ? ` (eFile ${file.fileNo})` : ""}. On approval the new grade is effected automatically.`);
+      toast.success(
+        file.fileNo
+          ? t("raisedToastWithFile", { fileNo: file.fileNo })
+          : t("raisedToastNoFile"),
+      );
       reset();
       setOpen(false);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed");
+      setError(err instanceof Error ? err.message : t("errGenericFallback"));
     } finally {
       setSaving(false);
     }
-  }, [employeeId, fromDesigId, toDesigId, effectiveDate, orderRef, initiatedBy, currentWith, note, selectedEmployee, submittedPromotionId, toast]);
+  }, [employeeId, fromDesigId, toDesigId, effectiveDate, orderRef, initiatedBy, currentWith, note, selectedEmployee, submittedPromotionId, toast, t]);
 
   return (
     <>
       <Button onClick={() => setOpen((v) => !v)}>
-        {open ? "Cancel" : "+ Promotion with approval"}
+        {open ? t("cancelToggleBtn") : t("openBtn")}
       </Button>
 
       {open && (
         <div className="card" style={{ marginTop: 14 }}>
           <div className="card-h">
-            <h3>Raise a promotion for eOffice approval</h3>
-            <span style={{ fontSize: "0.75rem", color: "var(--ink2)" }}>Step {step} of 2</span>
+            <h3>{t("heading")}</h3>
+            <span style={{ fontSize: "0.75rem", color: "var(--ink2)" }}>{t("stepIndicator", { step })}</span>
           </div>
 
           {error && (
@@ -172,11 +184,11 @@ export function PromoteWithApproval() {
           {step === 1 && (
             <div className="pad" style={{ display: "grid", gap: 16 }}>
               <p style={{ fontSize: "0.8125rem", color: "var(--ink2)", margin: 0 }}>
-                Select the employee and the new designation they are being promoted to.
+                {t("step1Intro")}
               </p>
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: 14 }}>
                 <label style={{ display: "grid", gap: 4, fontSize: "0.8125rem" }}>
-                  <span style={{ fontWeight: 600 }}>Employee</span>
+                  <span style={{ fontWeight: 600 }}>{t("employeeLabel")}</span>
                   <select
                     value={employeeId}
                     onChange={(e) => {
@@ -190,7 +202,7 @@ export function PromoteWithApproval() {
                     }}
                     style={{ padding: "10px 12px", borderRadius: 8, border: "1px solid var(--line)", minHeight: 44 }}
                   >
-                    <option value="">Select employee…</option>
+                    <option value="">{t("selectEmployeeOption")}</option>
                     {employees.map((e) => (
                       <option key={e.id} value={e.id}>
                         {e.name ?? e.id}{e.designation ? ` · ${e.designation}` : ""}
@@ -200,31 +212,31 @@ export function PromoteWithApproval() {
                 </label>
 
                 <label style={{ display: "grid", gap: 4, fontSize: "0.8125rem" }}>
-                  <span style={{ fontWeight: 600 }}>Current designation</span>
+                  <span style={{ fontWeight: 600 }}>{t("currentDesignationLabel")}</span>
                   <input
                     value={fromDesigName || (designations.find((d) => d.id === fromDesigId)?.name ?? fromDesigId)}
                     disabled
                     style={{ padding: "10px 12px", borderRadius: 8, border: "1px solid var(--line)", minHeight: 44, background: "#f9fafb", color: "var(--ink2)" }}
-                    aria-label="Current designation (auto-filled)"
+                    aria-label={t("currentDesignationAutoFilledAria")}
                   />
                 </label>
 
                 <label style={{ display: "grid", gap: 4, fontSize: "0.8125rem" }}>
-                  <span style={{ fontWeight: 600 }}>Promote to (new designation)</span>
+                  <span style={{ fontWeight: 600 }}>{t("promoteToLabel")}</span>
                   <select
                     value={toDesigId}
                     onChange={(e) => setToDesigId(e.target.value)}
                     style={{ padding: "10px 12px", borderRadius: 8, border: "1px solid var(--line)", minHeight: 44 }}
                   >
-                    <option value="">Select new designation…</option>
+                    <option value="">{t("selectDesignationOption")}</option>
                     {designations.filter((d) => d.id !== fromDesigId).map((d) => (
-                      <option key={d.id} value={d.id}>{d.name}{d.grade ? ` (Grade ${d.grade})` : ""}</option>
+                      <option key={d.id} value={d.id}>{d.name}{d.grade ? ` ${t("gradeSuffix", { grade: d.grade })}` : ""}</option>
                     ))}
                   </select>
                   {designations.length === 0 && (
                     <input
                       value={toDesigId}
-                      placeholder="Designation ID (loading…)"
+                      placeholder={t("designationIdLoadingPlaceholder")}
                       onChange={(e) => setToDesigId(e.target.value)}
                       style={{ padding: "10px 12px", borderRadius: 8, border: "1px solid var(--line)", minHeight: 44 }}
                     />
@@ -232,7 +244,7 @@ export function PromoteWithApproval() {
                 </label>
 
                 <label style={{ display: "grid", gap: 4, fontSize: "0.8125rem" }}>
-                  <span style={{ fontWeight: 600 }}>Effective date</span>
+                  <span style={{ fontWeight: 600 }}>{t("effectiveDateLabel")}</span>
                   <input
                     type="date"
                     value={effectiveDate}
@@ -242,10 +254,10 @@ export function PromoteWithApproval() {
                 </label>
 
                 <label style={{ display: "grid", gap: 4, fontSize: "0.8125rem" }}>
-                  <span style={{ fontWeight: 600 }}>Order reference (optional)</span>
+                  <span style={{ fontWeight: 600 }}>{t("orderRefLabel")}</span>
                   <input
                     value={orderRef}
-                    placeholder="e.g. PROMO/2024/001"
+                    placeholder={t("orderRefPlaceholder")}
                     onChange={(e) => setOrderRef(e.target.value)}
                     style={{ padding: "10px 12px", borderRadius: 8, border: "1px solid var(--line)", minHeight: 44 }}
                   />
@@ -253,9 +265,9 @@ export function PromoteWithApproval() {
               </div>
 
               <div style={{ display: "flex", justifyContent: "flex-end", gap: 10 }}>
-                <Button variant="ghost" onClick={() => { reset(); setOpen(false); }}>Cancel</Button>
+                <Button variant="ghost" onClick={() => { reset(); setOpen(false); }}>{t("cancelBtn")}</Button>
                 <Button style={{ minHeight: 44 }} onClick={() => validateStep1() && setStep(2)}>
-                  Next: Approval routing →
+                  {t("nextStepBtn")}
                 </Button>
               </div>
             </div>
@@ -265,73 +277,73 @@ export function PromoteWithApproval() {
             <div className="pad" style={{ display: "grid", gap: 16 }}>
               {submittedPromotionId && (
                 <div style={{ fontSize: "0.8125rem", padding: "10px 14px", background: "#fffbeb", borderRadius: 8, border: "1px solid #fde68a" }}>
-                  The promotion request was already created — retrying now only raises the eFile, it will not create a duplicate.
+                  {t("resumeNotice")}
                 </div>
               )}
               {selectedEmployee && (
                 <div style={{ fontSize: "0.8125rem", padding: "10px 14px", background: "#f0fdf4", borderRadius: 8, border: "1px solid #bbf7d0" }}>
                   <strong>{selectedEmployee.name}</strong>: {fromDesigName} → {designations.find((d) => d.id === toDesigId)?.name ?? toDesigId}
-                  {effectiveDate && <> · Effective {effectiveDate}</>}
+                  {effectiveDate && <> · {t("effectiveOn", { date: effectiveDate })}</>}
                 </div>
               )}
 
               <p style={{ fontSize: "0.8125rem", color: "var(--ink2)", margin: 0 }}>
-                Select who initiates this file and who should approve it.
+                {t("step2Intro")}
               </p>
 
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: 14 }}>
                 <label style={{ display: "grid", gap: 4, fontSize: "0.8125rem" }}>
-                  <span style={{ fontWeight: 600 }}>Initiating officer</span>
+                  <span style={{ fontWeight: 600 }}>{t("initiatingOfficerLabel")}</span>
                   {officers.length > 0 ? (
                     <select
                       value={initiatedBy}
                       onChange={(e) => setInitiatedBy(e.target.value)}
                       style={{ padding: "10px 12px", borderRadius: 8, border: "1px solid var(--line)", minHeight: 44 }}
                     >
-                      <option value="">Select initiating officer…</option>
+                      <option value="">{t("selectInitiatorOption")}</option>
                       {officers.map((o) => (
                         <option key={o.id} value={o.id}>{o.name}{o.designation ? ` · ${o.designation}` : ""}</option>
                       ))}
                     </select>
                   ) : (
-                    <input value={initiatedBy} placeholder="Officer ID" onChange={(e) => setInitiatedBy(e.target.value)} style={{ padding: "10px 12px", borderRadius: 8, border: "1px solid var(--line)", minHeight: 44 }} />
+                    <input value={initiatedBy} placeholder={t("officerIdPlaceholder")} onChange={(e) => setInitiatedBy(e.target.value)} style={{ padding: "10px 12px", borderRadius: 8, border: "1px solid var(--line)", minHeight: 44 }} />
                   )}
                 </label>
 
                 <label style={{ display: "grid", gap: 4, fontSize: "0.8125rem" }}>
-                  <span style={{ fontWeight: 600 }}>Forward to (approving officer)</span>
+                  <span style={{ fontWeight: 600 }}>{t("forwardToLabel")}</span>
                   {officers.length > 0 ? (
                     <select
                       value={currentWith}
                       onChange={(e) => setCurrentWith(e.target.value)}
                       style={{ padding: "10px 12px", borderRadius: 8, border: "1px solid var(--line)", minHeight: 44 }}
                     >
-                      <option value="">Select approving officer…</option>
+                      <option value="">{t("selectApproverOption")}</option>
                       {officers.filter((o) => o.id !== initiatedBy).map((o) => (
                         <option key={o.id} value={o.id}>{o.name}{o.designation ? ` · ${o.designation}` : ""}</option>
                       ))}
                     </select>
                   ) : (
-                    <input value={currentWith} placeholder="Officer ID" onChange={(e) => setCurrentWith(e.target.value)} style={{ padding: "10px 12px", borderRadius: 8, border: "1px solid var(--line)", minHeight: 44 }} />
+                    <input value={currentWith} placeholder={t("officerIdPlaceholder")} onChange={(e) => setCurrentWith(e.target.value)} style={{ padding: "10px 12px", borderRadius: 8, border: "1px solid var(--line)", minHeight: 44 }} />
                   )}
                 </label>
               </div>
 
               <label style={{ display: "grid", gap: 4, fontSize: "0.8125rem" }}>
-                <span style={{ fontWeight: 600 }}>Justification note</span>
+                <span style={{ fontWeight: 600 }}>{t("justificationNoteLabel")}</span>
                 <textarea
                   rows={3}
                   value={note}
                   onChange={(e) => setNote(e.target.value)}
-                  placeholder="Why is this promotion being recommended? This will appear in the eFile noting."
+                  placeholder={t("justificationPlaceholder")}
                   style={{ padding: "10px 12px", borderRadius: 8, border: "1px solid var(--line)", resize: "vertical" }}
                 />
               </label>
 
               <div style={{ display: "flex", justifyContent: "space-between", gap: 10 }}>
-                <Button variant="ghost" onClick={() => setStep(1)}>← Back</Button>
+                <Button variant="ghost" onClick={() => setStep(1)}>{t("backBtn")}</Button>
                 <Button style={{ minHeight: 44 }} disabled={saving} loading={saving} onClick={() => void submit()}>
-                  {saving ? "Raising…" : "Submit promotion to eOffice"}
+                  {saving ? t("raisingBtn") : t("submitBtn")}
                 </Button>
               </div>
             </div>

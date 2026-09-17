@@ -1,3 +1,4 @@
+import { getTranslations } from "next-intl/server";
 import { PageHeader, StatGrid, StatCard, Card, DataTable, RefreshErrorState } from "../../../_components/ds";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
@@ -35,6 +36,7 @@ async function getData(): Promise<LoaderResult<PromotionRow[]>> {
 }
 
 export default async function PromotionPage() {
+  const t = await getTranslations("promotion");
   const { data: items, source } = await getData();
 
   const approved  = items.filter((i) => ["approved", "signed", "completed", "finance_approved"].includes(i.status)).length;
@@ -43,38 +45,38 @@ export default async function PromotionPage() {
   const completed = items.filter((i) => ["signed", "completed"].includes(i.status)).length;
 
   const tableColumns: { key: keyof PromotionRow & string; label: string; cellType?: "status" }[] = [
-    { key: "employee",     label: "Employee"       },
-    { key: "department",   label: "Department"     },
-    { key: "fromGrade",    label: "From Grade"     },
-    { key: "toGrade",      label: "To Grade"       },
-    { key: "effectiveDate",label: "Effective Date" },
-    { key: "orderNo",      label: "Order No."      },
-    { key: "status",       label: "Status", cellType: "status" },
+    { key: "employee",     label: t("colEmployee")       },
+    { key: "department",   label: t("colDepartment")     },
+    { key: "fromGrade",    label: t("colFromGrade")     },
+    { key: "toGrade",      label: t("colToGrade")       },
+    { key: "effectiveDate",label: t("colEffectiveDate") },
+    { key: "orderNo",      label: t("colOrderNo")      },
+    { key: "status",       label: t("colStatus"), cellType: "status" },
   ];
 
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
-        title="Promotions"
-        subtitle="Grade progression — DPC seniority list, individual promotions, and approval chain."
+        title={t("title")}
+        subtitle={t("subtitle")}
         back="/hr"
         actions={<PromoteWithApproval />}
       />
-      <DataSourceBadge source={source} message="Couldn't load — showing nothing" />
+      <DataSourceBadge source={source} message={t("loadErrorMessage")} />
 
       <StatGrid>
-        <StatCard icon="⬆️" iconBg="#e6f7f0"  label="Total Promotions" value={items.length} />
-        <StatCard icon="✅" iconBg="#e6f0ff"  label="Approved / Signed" value={approved} />
-        <StatCard icon="🔄" iconBg="#ede9fe"  label="In Approval"       value={inApproval} />
-        <StatCard icon="⏳" iconBg="#fffbe6"  label="Initiated"         value={pending} />
-        <StatCard icon="📋" iconBg="#f5f5f5"  label="Signed & Issued"   value={completed} />
+        <StatCard icon="⬆️" iconBg="#e6f7f0"  label={t("statTotal")} value={items.length} />
+        <StatCard icon="✅" iconBg="#e6f0ff"  label={t("statApprovedSigned")} value={approved} />
+        <StatCard icon="🔄" iconBg="#ede9fe"  label={t("statInApproval")}       value={inApproval} />
+        <StatCard icon="⏳" iconBg="#fffbe6"  label={t("statInitiated")}         value={pending} />
+        <StatCard icon="📋" iconBg="#f5f5f5"  label={t("statSignedIssued")}   value={completed} />
       </StatGrid>
 
       {/* Card grid view */}
       {items.length > 0 && (
         <div style={{ marginBottom: 24 }}>
           <h2 style={{ fontSize: "0.875rem", fontWeight: 600, color: "var(--ink2)", textTransform: "uppercase", letterSpacing: "0.05em", margin: "0 0 14px" }}>
-            Promotion Orders
+            {t("ordersHeading")}
           </h2>
           <div style={{ display: "grid", gap: 16, gridTemplateColumns: "repeat(auto-fill, minmax(360px, 1fr))" }}>
             {items.map((p) => (
@@ -85,7 +87,7 @@ export default async function PromotionPage() {
       )}
 
       {/* Table view */}
-      <Card title="Promotions — Table View">
+      <Card title={t("tableViewTitle")}>
         {source === "error" ? (
           <RefreshErrorState error={toHumanError("load", { area: "promotions" })} backHref="/hr" />
         ) : (
@@ -94,11 +96,11 @@ export default async function PromotionPage() {
             rows={items}
             sortable
             filterable
-            filterPlaceholder="Filter by employee, department or grade…"
+            filterPlaceholder={t("filterPlaceholder")}
             pageSize={15}
             emptyIcon="📈"
-            emptyTitle="No promotion orders"
-            emptyMessage="Promotion orders appear here once raised and approved. Use '+ Raise Promotion' to initiate a grade progression."
+            emptyTitle={t("noOrdersTitle")}
+            emptyMessage={t("noOrdersMessage")}
           />
         )}
       </Card>

@@ -5,6 +5,7 @@
  * Self-Appraisal → Reporting Officer → Counter-signing Officer → Acceptance / Dispute.
  * Active stage highlighted, deadline countdown shown on each card.
  */
+import { useTranslations } from "next-intl";
 import { formatIndianDate } from "@/lib/formatters";
 
 export type AparRecord = {
@@ -21,33 +22,36 @@ export type AparRecord = {
 
 interface Stage {
   key: string;
-  label: string;
+  labelKey: string;
   icon: string;
   matchStatuses: string[];
 }
 
+// UX-017: display labels are looked up through t(stage.labelKey) at render
+// time (see APARCard below) so the pipeline stays in the active locale;
+// this array only carries structural/lookup data.
 const STAGES: Stage[] = [
   {
     key: "self",
-    label: "Self-Appraisal",
+    labelKey: "stageSelf",
     icon: "✍️",
     matchStatuses: ["initiated", "pending", "self_submitted"],
   },
   {
     key: "ro",
-    label: "Reporting Officer",
+    labelKey: "stageRo",
     icon: "📋",
     matchStatuses: ["ro_review", "ro_submitted"],
   },
   {
     key: "cso",
-    label: "Counter-signing Officer",
+    labelKey: "stageCso",
     icon: "🔍",
     matchStatuses: ["rv_submitted", "under_review", "cso_review"],
   },
   {
     key: "accept",
-    label: "Acceptance / Dispute",
+    labelKey: "stageAccept",
     icon: "✅",
     matchStatuses: ["accepted", "disputed", "closed"],
   },
@@ -60,20 +64,24 @@ function stageIndex(status: string): number {
   return 0;
 }
 
+type Translate = ReturnType<typeof useTranslations>;
+
 function deadlineMeta(
   dl: string | null | undefined,
+  t: Translate,
 ): { text: string; color: string } | null {
   if (!dl) return null;
   const days = Math.ceil((new Date(dl).getTime() - Date.now()) / 86_400_000);
-  if (days < 0)  return { text: `${Math.abs(days)}d overdue`, color: "#dc2626" };
-  if (days === 0) return { text: "Due today",                 color: "#dc2626" };
-  if (days <= 7)  return { text: `${days}d left`,             color: "#b45309" };
-  return { text: `${days}d left`,                             color: "#2563eb" };
+  if (days < 0)  return { text: t("overdueDays", { days: Math.abs(days) }), color: "#dc2626" };
+  if (days === 0) return { text: t("dueToday"),                            color: "#dc2626" };
+  if (days <= 7)  return { text: t("daysLeft", { days }),                  color: "#b45309" };
+  return { text: t("daysLeft", { days }),                                  color: "#2563eb" };
 }
 
 function APARCard({ record }: { record: AparRecord }) {
+  const t          = useTranslations("aparFlowCard");
   const si         = stageIndex(record.status);
-  const dl         = deadlineMeta(record.deadline);
+  const dl         = deadlineMeta(record.deadline, t);
   const empLabel   = record.employeeName ?? record.employeeId ?? "Unknown";
   const isDisputed = record.status === "disputed";
   const isClosed   = record.status === "closed" || record.status === "accepted";
@@ -82,14 +90,14 @@ function APARCard({ record }: { record: AparRecord }) {
     <article
       className="card"
       style={{ marginBottom: 0 }}
-      aria-label={`APAR for ${empLabel}, period ${record.appraisalPeriod}`}
+      aria-label={t("cardAriaLabel", { name: empLabel, period: record.appraisalPeriod })}
     >
       {/* Header */}
       <div className="card-h" style={{ alignItems: "flex-start", gap: 10 }}>
         <div style={{ flex: 1, minWidth: 0 }}>
           <h3 style={{ margin: 0, fontSize: "0.9375rem", fontWeight: 600 }}>{empLabel}</h3>
           <p style={{ margin: "2px 0 0", fontSize: "0.8125rem", color: "var(--ink2)" }}>
-            Period: <strong>{record.appraisalPeriod}</strong>
+            {t("periodPrefix")} <strong>{record.appraisalPeriod}</strong>
           </p>
         </div>
         <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 4 }}>
@@ -101,7 +109,7 @@ function APARCard({ record }: { record: AparRecord }) {
                 fontSize: "0.75rem", fontWeight: 700,
               }}
             >
-              Band: {record.overallBand}
+              {t("bandPrefix", { band: record.overallBand })}
             </span>
           )}
           {dl && (
@@ -120,7 +128,7 @@ function APARCard({ record }: { record: AparRecord }) {
           position: "relative",
         }}
         role="list"
-        aria-label="APAR workflow stages"
+        aria-label={t("stagesAriaLabel")}
       >
         {/* Connector line */}
         <div
@@ -136,6 +144,7 @@ function APARCard({ record }: { record: AparRecord }) {
           const isDone    = i < si || isClosed;
           const isActive  = i === si && !isClosed;
           const isDisp    = isDisputed && i === STAGES.length - 1;
+          const stageState = isDone ? t("stateDone") : isActive ? t("stateActive") : t("statePending");
 
           return (
             <div
@@ -179,9 +188,7 @@ function APARCard({ record }: { record: AparRecord }) {
                   boxShadow: isActive ? "0 0 0 4px #dbeafe" : "none",
                   transition: "all 0.2s",
                 }}
-                aria-label={`${stage.label}: ${
-                  isDone ? "done" : isActive ? "active" : "pending"
-                }`}
+                aria-label={t("stageBubbleAriaLabel", { stage: t(stage.labelKey), state: stageState })}
               >
                 {isDisp ? "⚠" : isDone ? "✓" : stage.icon}
               </div>
@@ -199,7 +206,7 @@ function APARCard({ record }: { record: AparRecord }) {
                   maxWidth: 66,
                 }}
               >
-                {stage.label}
+                {t(stage.labelKey)}
               </span>
             </div>
           );
@@ -216,16 +223,16 @@ function APARCard({ record }: { record: AparRecord }) {
         }}
       >
         <span>
-          Stage:&nbsp;
+          {t("stagePrefix")}&nbsp;
           <strong style={{ color: isDisputed ? "#dc2626" : "var(--ink)" }}>
             {isDisputed
-              ? "⚠️ Disputed"
+              ? t("statusDisputed")
               : isClosed
-              ? "✅ Closed"
-              : (STAGES[si]?.label ?? record.status)}
+              ? t("statusClosed")
+              : (STAGES[si] ? t(STAGES[si].labelKey) : record.status)}
           </strong>
         </span>
-        <span>Updated {formatIndianDate(record.updatedAt)}</span>
+        <span>{t("updatedPrefix", { date: formatIndianDate(record.updatedAt) })}</span>
       </div>
     </article>
   );
@@ -234,12 +241,13 @@ function APARCard({ record }: { record: AparRecord }) {
 interface ListProps { records: AparRecord[] }
 
 export function APARFlowList({ records }: ListProps) {
+  const t = useTranslations("aparFlowCard");
   if (records.length === 0) {
     return (
       <div style={{ padding: "40px 0", textAlign: "center", color: "var(--ink3)" }}>
         <div style={{ fontSize: 40, marginBottom: 12 }}>📋</div>
         <p style={{ margin: 0, fontSize: "0.9375rem", fontWeight: 500 }}>
-          No APAR records found
+          {t("emptyText")}
         </p>
       </div>
     );

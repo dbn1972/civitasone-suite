@@ -1,3 +1,4 @@
+import { getTranslations } from "next-intl/server";
 import { PageHeader, StatGrid, StatCard, Card, DataTable, Tabs } from "../../../_components/ds";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { fetchJson } from "@/app/_data/apiClient";
@@ -55,6 +56,7 @@ async function getBatchPromotions(): Promise<PromotionRow[]> {
 }
 
 export default async function DpcPage() {
+  const t = await getTranslations("dpc");
   const roles = getSessionRoles();
   const canAdministerSeniority = roles.some((r) => SENIORITY_ADMIN_ROLES.includes(r));
 
@@ -65,50 +67,50 @@ export default async function DpcPage() {
   const totalOfficers = (eligibleCount ?? 0) + (ineligibleCount ?? 0);
 
   const eligibleCols: { key: keyof EligibleRow & string; label: string; align?: "left" | "right" }[] = [
-    { key: "eligibilityRank",  label: "Rank",              align: "right" },
-    { key: "fullName",         label: "Officer Name"                        },
-    { key: "department",       label: "Department"                          },
-    { key: "designation",      label: "Designation"                         },
-    { key: "grade",            label: "Pay Grade"                           },
-    { key: "qualifyingYears",  label: "Qualifying Service",align: "right" },
-    { key: "dateOfJoining",    label: "Date of Joining"                     },
+    { key: "eligibilityRank",  label: t("colRank"),              align: "right" },
+    { key: "fullName",         label: t("colOfficerName")                        },
+    { key: "department",       label: t("colDepartment")                          },
+    { key: "designation",      label: t("colDesignation")                         },
+    { key: "grade",            label: t("colPayGrade")                           },
+    { key: "qualifyingYears",  label: t("colQualifyingService"), align: "right" },
+    { key: "dateOfJoining",    label: t("colDateOfJoining")                     },
   ];
 
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
-        title="DPC — Departmental Promotion Committee"
-        subtitle={`Seniority list as of ${asOf}. Minimum qualifying service: 5 years.`}
+        title={t("title")}
+        subtitle={t("subtitle", { asOf })}
         back="/hr"
         actions={<span />}
       />
-      <DataSourceBadge source={source} message="Couldn't load — showing nothing" />
+      <DataSourceBadge source={source} message={t("loadErrorMessage")} />
 
       <SeniorityListActions canAdminister={canAdministerSeniority} />
 
       <StatGrid>
-        <StatCard icon="📋" iconBg="#e6f0ff" label="Eligible Officers"  value={eligibleCount} />
-        <StatCard icon="⏳" iconBg="#fffbe6" label="Not Yet Eligible"   value={ineligibleCount} />
-        <StatCard icon="📅" iconBg="#f5f5f5" label="As On Date"         value={asOf} />
-        <StatCard icon="👥" iconBg="#e6f7f0" label="Total Officers"     value={totalOfficers} />
+        <StatCard icon="📋" iconBg="#e6f0ff" label={t("statEligible")}       value={eligibleCount} />
+        <StatCard icon="⏳" iconBg="#fffbe6" label={t("statNotYetEligible")} value={ineligibleCount} />
+        <StatCard icon="📅" iconBg="#f5f5f5" label={t("statAsOnDate")}       value={asOf} />
+        <StatCard icon="👥" iconBg="#e6f7f0" label={t("statTotalOfficers")}  value={totalOfficers} />
       </StatGrid>
 
       {/* Eligible Officers seniority list */}
-      <Card title="Eligible Officers — Seniority List">
+      <Card title={t("eligibleListTitle")}>
         <DataTable<EligibleRow>
           columns={eligibleCols}
           rows={eligible}
           sortable filterable
-          filterPlaceholder="Filter by name, department or grade…"
+          filterPlaceholder={t("filterPlaceholder")}
           pageSize={20}
           emptyIcon="📋"
-          emptyTitle="No eligible officers"
-          emptyMessage="Officers who complete the minimum qualifying service period appear here in seniority order for DPC consideration."
+          emptyTitle={t("noEligibleTitle")}
+          emptyMessage={t("noEligibleMessage")}
         />
       </Card>
 
       {/* DPC Batch Promotion View */}
-      <Card title="DPC Batch Promotions">
+      <Card title={t("batchPromotionsTitle")}>
         <div className="pad">
           <PromotionBatchView promotions={batchPromotions} />
         </div>
@@ -118,15 +120,15 @@ export default async function DpcPage() {
         <div className="mt-4"><Card>
           <DataTable<EligibleRow>
             columns={[
-              { key: "fullName",        label: "Officer Name"           },
-              { key: "department",      label: "Department"             },
-              { key: "grade",           label: "Pay Grade"              },
-              { key: "qualifyingYears", label: "Service Years", align: "right" },
+              { key: "fullName",        label: t("colOfficerName")           },
+              { key: "department",      label: t("colDepartment")             },
+              { key: "grade",           label: t("colPayGrade")              },
+              { key: "qualifyingYears", label: t("colServiceYears"), align: "right" },
             ]}
             rows={ineligible}
             sortable pageSize={10}
             emptyIcon="⏳"
-            emptyTitle="All officers are eligible"
+            emptyTitle={t("allEligibleTitle")}
             emptyMessage=""
           />
         </Card></div>
