@@ -298,7 +298,7 @@ export function DesignerCanvas({ definitions: _definitions, seedGraph, embedded 
             >
               ✓ Validate
             </button>
-            <span className="rounded-lg bg-slate-100 px-3 py-1.5 text-xs text-slate-500" aria-live="polite">
+            <span className="rounded-lg bg-slate-100 px-3 py-1.5 text-xs text-slate-700" aria-live="polite">
               {totalElements} / 500 elements
             </span>
           </Panel>
