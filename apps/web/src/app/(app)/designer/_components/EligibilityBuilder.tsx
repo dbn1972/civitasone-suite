@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Card, EmptyState } from "@/app/_components/ds";
+import { Button, Card, EmptyState } from "@/app/_components/ds";
 import {
   EligibilityConditionBuilder,
   type FormFieldDefinition,
@@ -142,27 +142,24 @@ export function EligibilityBuilder({
             </p>
 
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 14 }}>
-              <button
-                type="button"
-                className="btn ghost"
+              <Button
+                variant="ghost"
                 onClick={() => setSampleValues(suggestPassingSampleValues(design.rules, formFields))}
               >
                 Fill eligible sample
-              </button>
-              <button
-                type="button"
-                className="btn ghost"
+              </Button>
+              <Button
+                variant="ghost"
                 onClick={() => setSampleValues(suggestFailingSampleValues(design.rules, formFields))}
               >
                 Fill failing sample
-              </button>
-              <button
-                type="button"
-                className="btn ghost"
+              </Button>
+              <Button
+                variant="ghost"
                 onClick={() => setSampleValues({})}
               >
                 Clear sample
-              </button>
+              </Button>
             </div>
 
             <div style={{ display: "grid", gap: 16, maxWidth: 520 }}>
@@ -193,9 +190,9 @@ export function EligibilityBuilder({
                   borderRadius: "var(--r-sm)",
                   border: "1px solid var(--line)",
                   background:
-                    testResult.outcome === "eligible" ? "var(--good-bg)"
-                      : testResult.outcome === "not_eligible" ? "var(--bad-bg)"
-                        : "var(--warn-bg)",
+                    testResult.outcome === "eligible" ? "var(--goodbg)"
+                      : testResult.outcome === "not_eligible" ? "var(--badbg)"
+                        : "var(--warnbg)",
                 }}
               >
                 <p
@@ -203,9 +200,9 @@ export function EligibilityBuilder({
                     margin: "0 0 8px",
                     fontWeight: 600,
                     color:
-                      testResult.outcome === "eligible" ? "var(--good-fg)"
-                        : testResult.outcome === "not_eligible" ? "var(--bad-fg)"
-                          : "var(--warn-fg)",
+                      testResult.outcome === "eligible" ? "var(--good)"
+                        : testResult.outcome === "not_eligible" ? "var(--bad)"
+                          : "var(--warn)",
                   }}
                 >
                   Outcome: {outcomeLabel(testResult.outcome)}
@@ -217,7 +214,7 @@ export function EligibilityBuilder({
                       <li
                         key={r.ruleId}
                         style={{
-                          color: r.passed ? "var(--good-fg)" : "var(--bad-fg)",
+                          color: r.passed ? "var(--good)" : "var(--bad)",
                           fontWeight: r.passed ? 400 : 600,
                           marginBottom: 4,
                         }}

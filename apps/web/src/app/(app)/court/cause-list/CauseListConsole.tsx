@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Card, EmptyState, StatusPill } from "@/app/_components/ds";
+import { Button, Card, EmptyState, StatusPill } from "@/app/_components/ds";
 import type { CauseListItem, CourtCase } from "../_data/types";
 import { fmtDate, humanize, todayIso } from "../_data/format";
 import { addCauseListItem, createCauseList, fetchCauseListItems } from "../_data/client";
@@ -135,14 +135,13 @@ export function CauseListConsole({
               onChange={(e) => setListDate(e.target.value)}
               style={fieldStyle}
             />
-            <button
-              type="button"
-              className="btn primary"
+            <Button
+              variant="primary"
               disabled={busy || !courtId || !listDate}
               onClick={() => void generate()}
             >
               {busy ? "Generating…" : "Generate list"}
-            </button>
+            </Button>
             {causeListId && (
               <StatusPill status="active" label={`List ${causeListId.slice(0, 8)}`} />
             )}
@@ -299,14 +298,13 @@ function AddItemForm({
             onChange={(e) => setCourtroom(e.target.value)}
             style={{ ...fieldStyle, width: 140 }}
           />
-          <button
-            type="button"
-            className="btn primary"
+          <Button
+            variant="primary"
             disabled={busy || !caseId || !slot.trim() || !courtroom.trim()}
             onClick={() => void add()}
           >
             {busy ? "Listing…" : "List case"}
-          </button>
+          </Button>
         </div>
       )}
     </Card>

@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Card, EmptyState, StatusPill } from "@/app/_components/ds";
+import { Button, Card, EmptyState, StatusPill } from "@/app/_components/ds";
 import type { ConfigEntry, PresetName } from "../_data/types";
 import { PRESET_NAMES } from "../_data/types";
 import {
@@ -111,15 +111,14 @@ export function AdminConfig({
         </p>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
           {PRESET_NAMES.map((p) => (
-            <button
+            <Button
               key={p}
-              type="button"
-              className="btn ghost"
+              variant="ghost"
               disabled={presetBusy !== null}
               onClick={() => void onApplyPreset(p)}
             >
               {presetBusy === p ? "Applying…" : (PRESET_LABELS[p] ?? p)}
-            </button>
+            </Button>
           ))}
         </div>
       </Card>
@@ -222,14 +221,14 @@ function SlaEditor({
             style={{ ...fieldStyle, width: 92, ...mono, textAlign: "right" }}
           />
           <span style={{ fontSize: 12.5, color: "var(--ink2)" }}>days</span>
-          <button
-            type="button"
-            className="btn ghost sm"
+          <Button
+            variant="ghost"
+            size="sm"
             disabled={busy || draft.trim() === "" || Number(draft) === current}
             onClick={() => void save()}
           >
             {busy ? "…" : "Save"}
-          </button>
+          </Button>
         </div>
       </div>
     </Card>
@@ -315,17 +314,17 @@ function EnumEditor({
             >
               <span style={{ fontWeight: 600 }}>{e.label ?? e.configKey}</span>
               <span style={{ ...mono, color: "var(--ink2)" }}>{e.configKey}</span>
-              <button
-                type="button"
+              <Button
                 aria-label={`Retire ${e.configKey}`}
                 title="Retire this value"
-                className="btn ghost sm"
+                variant="ghost"
+                size="sm"
                 disabled={rowBusy === e.id}
                 onClick={() => void retire(e)}
                 style={{ padding: "0 6px", lineHeight: 1.4 }}
               >
                 {rowBusy === e.id ? "…" : "✕"}
-              </button>
+              </Button>
             </span>
           ))}
         </div>
@@ -361,14 +360,14 @@ function EnumEditor({
           onChange={(e) => setLabel(e.target.value)}
           style={{ ...fieldStyle, flex: "1 1 180px" }}
         />
-        <button
-          type="button"
-          className="btn primary sm"
+        <Button
+          variant="primary"
+          size="sm"
           disabled={busy || key.trim() === ""}
           onClick={() => void add()}
         >
           {busy ? "Adding…" : "Add value"}
-        </button>
+        </Button>
       </div>
     </Card>
   );

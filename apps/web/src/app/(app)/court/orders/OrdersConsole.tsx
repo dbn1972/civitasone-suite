@@ -18,7 +18,7 @@
  */
 import { useCallback, useId, useRef, useState } from "react";
 import Link from "next/link";
-import { Card, ConfirmDialog, EmptyState, StatusPill } from "@/app/_components/ds";
+import { Button, Card, ConfirmDialog, EmptyState, StatusPill } from "@/app/_components/ds";
 import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
 import type { CourtOrder } from "../_data/types";
 import { fmtDate, fmtDateTime, humanize, orderPillStatus, todayIso } from "../_data/format";
@@ -305,9 +305,9 @@ function DraftOrderForm({
           </p>
         )}
         <div>
-          <button type="submit" className="btn primary" disabled={busy}>
+          <Button type="submit" variant="primary" disabled={busy}>
             {busy ? "Drafting…" : "Draft order"}
-          </button>
+          </Button>
         </div>
       </form>
     </Card>
@@ -377,45 +377,45 @@ function OrderRow({
         <div style={{ display: "flex", gap: 8, alignItems: "flex-start", flexWrap: "wrap" }}>
           <StatusPill status={orderPillStatus(order.status)} label={humanize(order.status)} />
           {order.status === "draft" && (
-            <button
-              type="button"
-              className="btn ghost sm"
+            <Button
+              variant="ghost"
+              size="sm"
               disabled={submitBusy}
               aria-label={`Submit the ${rowLabel} for approval`}
               onClick={() => void doSubmit()}
             >
               {submitBusy ? "Submitting…" : "Submit for approval"}
-            </button>
+            </Button>
           )}
           {order.status === "pending_approval" && (
             <>
-              <button
-                type="button"
-                className="btn primary sm"
+              <Button
+                variant="primary"
+                size="sm"
                 aria-label={`Approve and issue the ${rowLabel}`}
                 onClick={() => setShowIssue(true)}
               >
                 Approve &amp; issue
-              </button>
-              <button
-                type="button"
-                className="btn ghost sm"
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
                 aria-label={`Send back the ${rowLabel}`}
                 onClick={() => setShowSendBack(true)}
               >
                 Send back
-              </button>
+              </Button>
             </>
           )}
           {order.status === "issued" && (
-            <button
-              type="button"
-              className="btn ghost sm"
+            <Button
+              variant="ghost"
+              size="sm"
               aria-label={`Recall the ${rowLabel}`}
               onClick={() => setShowRecall(true)}
             >
               Recall
-            </button>
+            </Button>
           )}
         </div>
       </div>
@@ -573,12 +573,12 @@ function ApproveIssueDialog({
         )}
       </div>
       <div style={{ display: "flex", gap: 8 }}>
-        <button type="button" className="btn primary sm" onClick={proceed}>
+        <Button variant="primary" size="sm" onClick={proceed}>
           Approve &amp; issue
-        </button>
-        <button type="button" className="btn ghost sm" onClick={onClose}>
+        </Button>
+        <Button variant="ghost" size="sm" onClick={onClose}>
           Cancel
-        </button>
+        </Button>
       </div>
 
       <ConfirmDialog
@@ -649,12 +649,12 @@ function SendBackPanel({
         </p>
       )}
       <div style={{ display: "flex", gap: 8 }}>
-        <button type="button" className="btn primary sm" disabled={busy} onClick={() => void send()}>
+        <Button variant="primary" size="sm" disabled={busy} onClick={() => void send()}>
           {busy ? "…" : "Confirm send back"}
-        </button>
-        <button type="button" className="btn ghost sm" onClick={onClose}>
+        </Button>
+        <Button variant="ghost" size="sm" onClick={onClose}>
           Cancel
-        </button>
+        </Button>
       </div>
     </div>
   );
@@ -732,12 +732,12 @@ function RecallDialog({
         )}
       </div>
       <div style={{ display: "flex", gap: 8 }}>
-        <button type="button" className="btn primary sm" onClick={proceed}>
+        <Button variant="primary" size="sm" onClick={proceed}>
           Recall order
-        </button>
-        <button type="button" className="btn ghost sm" onClick={onClose}>
+        </Button>
+        <Button variant="ghost" size="sm" onClick={onClose}>
           Cancel
-        </button>
+        </Button>
       </div>
 
       <ConfirmDialog

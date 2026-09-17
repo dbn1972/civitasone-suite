@@ -15,7 +15,7 @@
  */
 import { useCallback, useId, useRef, useState } from "react";
 import Link from "next/link";
-import { Card, ConfirmDialog, EmptyState, StatusPill } from "@/app/_components/ds";
+import { Button, Card, ConfirmDialog, EmptyState, StatusPill } from "@/app/_components/ds";
 import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
 import type { Hearing } from "../_data/types";
 import { fmtDate, fmtDateTime, hearingPillStatus, humanize, todayIso } from "../_data/format";
@@ -236,9 +236,9 @@ function ScheduleHearingForm({
           </p>
         )}
         <div>
-          <button type="submit" className="btn primary" disabled={busy}>
+          <Button type="submit" variant="primary" disabled={busy}>
             {busy ? "Scheduling…" : "Schedule hearing"}
-          </button>
+          </Button>
         </div>
       </form>
     </Card>
@@ -291,22 +291,22 @@ function HearingRow({
           <StatusPill status={hearingPillStatus(hearing.status)} label={humanize(hearing.status)} />
           {canAct && (
             <>
-              <button
-                type="button"
-                className="btn ghost sm"
+              <Button
+                variant="ghost"
+                size="sm"
                 aria-label={`Adjourn the ${rowLabel}`}
                 onClick={() => setShowAdjourn(true)}
               >
                 Adjourn
-              </button>
-              <button
-                type="button"
-                className="btn ghost sm"
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
                 aria-label={`Record outcome for the ${rowLabel}`}
                 onClick={() => setShowOutcome(true)}
               >
                 Record outcome
-              </button>
+              </Button>
             </>
           )}
         </div>
@@ -454,12 +454,12 @@ function AdjournDialog({
         )}
       </div>
       <div style={{ display: "flex", gap: 8 }}>
-        <button type="button" className="btn primary sm" onClick={proceed}>
+        <Button variant="primary" size="sm" onClick={proceed}>
           Adjourn hearing
-        </button>
-        <button type="button" className="btn ghost sm" onClick={onClose}>
+        </Button>
+        <Button variant="ghost" size="sm" onClick={onClose}>
           Cancel
-        </button>
+        </Button>
       </div>
 
       <ConfirmDialog
@@ -547,12 +547,12 @@ function OutcomeDialog({
         <input id={notesId} value={notes} onChange={(e) => setNotes(e.target.value)} style={fieldStyle} />
       </div>
       <div style={{ display: "flex", gap: 8 }}>
-        <button type="button" className="btn primary sm" onClick={() => setConfirmOpen(true)}>
+        <Button variant="primary" size="sm" onClick={() => setConfirmOpen(true)}>
           Record outcome
-        </button>
-        <button type="button" className="btn ghost sm" onClick={onClose}>
+        </Button>
+        <Button variant="ghost" size="sm" onClick={onClose}>
           Cancel
-        </button>
+        </Button>
       </div>
 
       <ConfirmDialog

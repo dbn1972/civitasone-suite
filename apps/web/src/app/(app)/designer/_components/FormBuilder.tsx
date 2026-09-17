@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent } from "react";
-import { Card } from "@/app/_components/ds";
+import { Button, Card } from "@/app/_components/ds";
 import {
   ConditionBuilder,
   FormRenderer,
@@ -203,7 +203,7 @@ export function FormBuilder({
     <div>
       <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 10, gap: 8, flexWrap: "wrap" }}>
         <h3 style={{ margin: 0, fontSize: 14, fontWeight: 600 }}>Field palette</h3>
-        <button type="button" className="btn ghost" onClick={() => setPreviewOpen(true)}>Preview</button>
+        <Button variant="ghost" onClick={() => setPreviewOpen(true)}>Preview</Button>
       </div>
       <p style={{ margin: "0 0 12px", fontSize: 12, color: "var(--mut)" }}>
         Click or drag a field onto a section. New fields go to{" "}
@@ -216,10 +216,9 @@ export function FormBuilder({
             <p style={{ margin: "0 0 8px", fontSize: 12, fontWeight: 600, color: "var(--ink2)" }}>{group.label}</p>
             <div style={{ display: "grid", gap: 6 }}>
               {group.items.map((item) => (
-                <button
+                <Button
                   key={item.type}
-                  type="button"
-                  className="btn ghost"
+                  variant="ghost"
                   draggable
                   onDragStart={(e) => onPaletteDragStart(e, item.type)}
                   style={{ justifyContent: "flex-start", display: "flex", gap: 10, alignItems: "center", cursor: "grab" }}
@@ -228,7 +227,7 @@ export function FormBuilder({
                 >
                   <span aria-hidden style={{ width: 28, textAlign: "center" }}>{item.icon}</span>
                   {item.label}
-                </button>
+                </Button>
               ))}
             </div>
           </div>
@@ -254,7 +253,7 @@ export function FormBuilder({
           }}
         >
           <span>Field deleted — Undo</span>
-          <button type="button" className="btn ghost" onClick={undoDelete}>Undo</button>
+          <Button variant="ghost" onClick={undoDelete}>Undo</Button>
         </div>
       ) : null}
 
@@ -276,9 +275,8 @@ export function FormBuilder({
                 ? " · large forms window the field list for smooth scrolling"
                 : null}
             </p>
-            <button
-              type="button"
-              className="btn ghost"
+            <Button
+              variant="ghost"
               onClick={() => {
                 const next = addSection(design, `Section ${design.sections.length + 1}`);
                 commit(next);
@@ -287,7 +285,7 @@ export function FormBuilder({
               }}
             >
               Add section
-            </button>
+            </Button>
           </div>
 
           {design.sections.map((section, sectionIndex) => {
@@ -325,9 +323,8 @@ export function FormBuilder({
                 }}
               >
                 <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", marginBottom: 8 }}>
-                  <button
-                    type="button"
-                    className="btn ghost"
+                  <Button
+                    variant="ghost"
                     aria-expanded={!section.collapsed}
                     aria-label={section.collapsed ? "Expand section" : "Collapse section"}
                     onClick={(e) => {
@@ -337,7 +334,7 @@ export function FormBuilder({
                     style={{ padding: "2px 8px", minWidth: 32 }}
                   >
                     {section.collapsed ? "▸" : "▾"}
-                  </button>
+                  </Button>
                   <input
                     className="input"
                     value={section.label}
@@ -349,9 +346,8 @@ export function FormBuilder({
                   <span style={{ fontSize: 12, color: "var(--mut)" }}>
                     {items.length} field{items.length === 1 ? "" : "s"}
                   </span>
-                  <button
-                    type="button"
-                    className="btn ghost"
+                  <Button
+                    variant="ghost"
                     aria-label="Move section up"
                     disabled={sectionIndex === 0}
                     onClick={(e) => {
@@ -361,10 +357,9 @@ export function FormBuilder({
                     style={{ padding: "2px 8px" }}
                   >
                     ↑
-                  </button>
-                  <button
-                    type="button"
-                    className="btn ghost"
+                  </Button>
+                  <Button
+                    variant="ghost"
                     aria-label="Move section down"
                     disabled={sectionIndex === design.sections.length - 1}
                     onClick={(e) => {
@@ -374,10 +369,9 @@ export function FormBuilder({
                     style={{ padding: "2px 8px" }}
                   >
                     ↓
-                  </button>
-                  <button
-                    type="button"
-                    className="btn ghost"
+                  </Button>
+                  <Button
+                    variant="ghost"
                     disabled={design.sections.length <= 1}
                     onClick={(e) => {
                       e.stopPropagation();
@@ -386,7 +380,7 @@ export function FormBuilder({
                     title={design.sections.length <= 1 ? "Keep at least one section" : "Remove section (fields move to the first section)"}
                   >
                     Remove
-                  </button>
+                  </Button>
                 </div>
 
                 {section.collapsed ? (
@@ -413,10 +407,10 @@ export function FormBuilder({
                       <span style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 14, flexWrap: "wrap" }}>
                         <span aria-hidden>{typeIcon(field.type)}</span>
                         <span>{field.label}</span>
-                        {field.required ? <span aria-label="Required" style={{ color: "var(--bad-fg)" }}>*</span> : null}
+                        {field.required ? <span aria-label="Required" style={{ color: "var(--bad)" }}>*</span> : null}
                         {field.visibility?.length ? <span aria-label="Conditional" title="Has visibility rule">👁</span> : null}
                         {(field.type === "address" || field.type === "ward") ? (
-                          <span style={{ fontSize: 11, color: "var(--info-fg)", padding: "2px 6px", background: "var(--info-bg)", borderRadius: 999 }}>
+                          <span style={{ fontSize: 11, color: "var(--info)", padding: "2px 6px", background: "var(--infobg)", borderRadius: 999 }}>
                             bound to: {field.type === "ward" ? "ULB ward list" : "location hierarchy"}
                           </span>
                         ) : null}
@@ -536,8 +530,8 @@ export function FormBuilder({
               </div>
 
               <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                <button type="button" className="btn ghost" onClick={() => duplicateField(selectedField.id)}>Duplicate</button>
-                <button type="button" className="btn ghost" onClick={() => deleteField(selectedField.id)}>Delete field</button>
+                <Button variant="ghost" onClick={() => duplicateField(selectedField.id)}>Duplicate</Button>
+                <Button variant="ghost" onClick={() => deleteField(selectedField.id)}>Delete field</Button>
               </div>
             </>
           ) : null}

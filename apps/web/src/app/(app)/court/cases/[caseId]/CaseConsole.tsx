@@ -2,7 +2,7 @@
 
 import { useCallback, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Card, EmptyState, StatusPill } from "@/app/_components/ds";
+import { Button, Card, EmptyState, StatusPill } from "@/app/_components/ds";
 import type { CaseStatus, CertifiedCopy, CourtCaseDetail, CourtOrder, Hearing } from "../../_data/types";
 import { CASE_TRANSITIONS } from "../../_data/types";
 import { CertifiedCopiesPanel } from "./CertifiedCopiesPanel";
@@ -264,14 +264,13 @@ function LifecyclePanel({
             onChange={(e) => setReason(e.target.value)}
             style={{ ...fieldStyle, width: "auto", flex: "1 1 240px" }}
           />
-          <button
-            type="button"
-            className="btn primary"
+          <Button
+            variant="primary"
             disabled={busy || !toStatus}
             onClick={() => void move()}
           >
             {busy ? "Moving…" : "Apply transition"}
-          </button>
+          </Button>
         </div>
       )}
     </Card>
@@ -377,14 +376,13 @@ function HearingsPanel({
           onChange={(e) => setPurpose(e.target.value)}
           style={{ ...fieldStyle, width: "auto", flex: "1 1 200px" }}
         />
-        <button
-          type="button"
-          className="btn primary"
+        <Button
+          variant="primary"
           disabled={busy || !scheduledAt}
           onClick={() => void schedule()}
         >
           {busy ? "Scheduling…" : "Schedule hearing"}
-        </button>
+        </Button>
       </div>
 
       {source === "error" ? (
@@ -485,12 +483,12 @@ function HearingRow({
           <StatusPill status={hearingPillStatus(hearing.status)} label={humanize(hearing.status)} />
           {canAct && mode === "none" && (
             <>
-              <button type="button" className="btn ghost sm" onClick={() => setMode("adjourn")}>
+              <Button variant="ghost" size="sm" onClick={() => setMode("adjourn")}>
                 Adjourn
-              </button>
-              <button type="button" className="btn ghost sm" onClick={() => setMode("outcome")}>
+              </Button>
+              <Button variant="ghost" size="sm" onClick={() => setMode("outcome")}>
                 Record outcome
-              </button>
+              </Button>
             </>
           )}
         </div>
@@ -512,17 +510,17 @@ function HearingRow({
             onChange={(e) => setNextDate(e.target.value)}
             style={{ ...fieldStyle, width: "auto" }}
           />
-          <button
-            type="button"
-            className="btn primary sm"
+          <Button
+            variant="primary"
+            size="sm"
             disabled={busy || !reason.trim()}
             onClick={() => void doAdjourn()}
           >
             {busy ? "…" : "Confirm adjourn"}
-          </button>
-          <button type="button" className="btn ghost sm" onClick={() => setMode("none")}>
+          </Button>
+          <Button variant="ghost" size="sm" onClick={() => setMode("none")}>
             Cancel
-          </button>
+          </Button>
         </div>
       )}
 
@@ -544,12 +542,12 @@ function HearingRow({
             onChange={(e) => setNotes(e.target.value)}
             style={{ ...fieldStyle, width: "auto", flex: "1 1 220px" }}
           />
-          <button type="button" className="btn primary sm" disabled={busy} onClick={() => void doOutcome()}>
+          <Button variant="primary" size="sm" disabled={busy} onClick={() => void doOutcome()}>
             {busy ? "…" : "Save outcome"}
-          </button>
-          <button type="button" className="btn ghost sm" onClick={() => setMode("none")}>
+          </Button>
+          <Button variant="ghost" size="sm" onClick={() => setMode("none")}>
             Cancel
-          </button>
+          </Button>
         </div>
       )}
     </div>
@@ -630,14 +628,13 @@ function OrdersPanel({
           style={{ ...fieldStyle, resize: "vertical" }}
         />
         <div>
-          <button
-            type="button"
-            className="btn primary"
+          <Button
+            variant="primary"
             disabled={busy || !orderType.trim() || !orderText.trim()}
             onClick={() => void draft()}
           >
             {busy ? "Drafting…" : "Draft order"}
-          </button>
+          </Button>
         </div>
       </div>
 
@@ -719,9 +716,9 @@ function OrderRow({
         <div style={{ display: "flex", gap: 8, alignItems: "flex-start", flexWrap: "wrap" }}>
           <StatusPill status={orderPillStatus(order.status)} label={humanize(order.status)} />
           {mode === "none" && order.status === "draft" && (
-            <button
-              type="button"
-              className="btn ghost sm"
+            <Button
+              variant="ghost"
+              size="sm"
               disabled={busy}
               onClick={() =>
                 void run(
@@ -732,22 +729,22 @@ function OrderRow({
               }
             >
               Submit for approval
-            </button>
+            </Button>
           )}
           {mode === "none" && order.status === "pending_approval" && (
             <>
-              <button type="button" className="btn primary sm" onClick={() => setMode("issue")}>
+              <Button variant="primary" size="sm" onClick={() => setMode("issue")}>
                 Approve &amp; issue
-              </button>
-              <button type="button" className="btn ghost sm" onClick={() => setMode("sendback")}>
+              </Button>
+              <Button variant="ghost" size="sm" onClick={() => setMode("sendback")}>
                 Send back
-              </button>
+              </Button>
             </>
           )}
           {mode === "none" && order.status === "issued" && (
-            <button type="button" className="btn ghost sm" onClick={() => setMode("recall")}>
+            <Button variant="ghost" size="sm" onClick={() => setMode("recall")}>
               Recall
-            </button>
+            </Button>
           )}
         </div>
       </div>
@@ -767,9 +764,9 @@ function OrderRow({
             style={{ ...fieldStyle, resize: "vertical", ...mono }}
           />
           <div style={{ display: "flex", gap: 8 }}>
-            <button
-              type="button"
-              className="btn primary sm"
+            <Button
+              variant="primary"
+              size="sm"
               disabled={busy || dsc.trim().length === 0}
               onClick={() =>
                 void run(
@@ -784,10 +781,10 @@ function OrderRow({
               }
             >
               {busy ? "Issuing…" : "Confirm approve & issue"}
-            </button>
-            <button type="button" className="btn ghost sm" onClick={() => setMode("none")}>
+            </Button>
+            <Button variant="ghost" size="sm" onClick={() => setMode("none")}>
               Cancel
-            </button>
+            </Button>
           </div>
         </div>
       )}
@@ -801,9 +798,9 @@ function OrderRow({
             onChange={(e) => setRemarks(e.target.value)}
             style={{ ...fieldStyle, width: "auto", flex: "1 1 240px" }}
           />
-          <button
-            type="button"
-            className="btn primary sm"
+          <Button
+            variant="primary"
+            size="sm"
             disabled={busy}
             onClick={() =>
               void run(
@@ -818,10 +815,10 @@ function OrderRow({
             }
           >
             {busy ? "…" : "Confirm send back"}
-          </button>
-          <button type="button" className="btn ghost sm" onClick={() => setMode("none")}>
+          </Button>
+          <Button variant="ghost" size="sm" onClick={() => setMode("none")}>
             Cancel
-          </button>
+          </Button>
         </div>
       )}
 
@@ -834,9 +831,9 @@ function OrderRow({
             onChange={(e) => setRecallReason(e.target.value)}
             style={{ ...fieldStyle, width: "auto", flex: "1 1 240px" }}
           />
-          <button
-            type="button"
-            className="btn primary sm"
+          <Button
+            variant="primary"
+            size="sm"
             disabled={busy || recallReason.trim().length === 0}
             onClick={() =>
               void run(
@@ -851,10 +848,10 @@ function OrderRow({
             }
           >
             {busy ? "…" : "Confirm recall"}
-          </button>
-          <button type="button" className="btn ghost sm" onClick={() => setMode("none")}>
+          </Button>
+          <Button variant="ghost" size="sm" onClick={() => setMode("none")}>
             Cancel
-          </button>
+          </Button>
         </div>
       )}
     </div>
