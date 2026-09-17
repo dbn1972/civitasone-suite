@@ -206,13 +206,17 @@ export function IntegrationDrawer({
       });
       const body = await res.json().catch(() => ({}));
       if (res.status === 409) {
-        setTestResult({ ok: false, status: "unconfigured", error: body.message ?? "Not configured", detail: null });
+        setTestResult({ ok: false, status: "unconfigured", error: "Not configured. Add connection details above and save before testing.", detail: null });
       } else {
+        // body.status/error/detail here are this test endpoint's own
+        // purpose-built connectivity-diagnostic envelope (not a generic
+        // HTTP error body), so surfacing them is intentional, catalogued
+        // product behaviour, not a raw backend-error passthrough.
         setTestResult({ ok: Boolean(body.ok), status: body.status ?? "failed", error: body.error ?? null, detail: body.detail ?? null });
       }
       onChanged();
-    } catch (err) {
-      setTestResult({ ok: false, status: "failed", error: err instanceof Error ? err.message : "Test failed", detail: null });
+    } catch {
+      setTestResult({ ok: false, status: "failed", error: formError.fromException("load").message, detail: null });
     } finally {
       setTesting(false);
     }

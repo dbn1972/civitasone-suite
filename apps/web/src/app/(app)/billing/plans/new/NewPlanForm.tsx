@@ -2,6 +2,7 @@
 
 import { useId, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useFormError } from "@/lib/useFormError";
 
 const INTERVALS = ["monthly", "quarterly", "yearly"] as const;
 const CURRENCIES = ["INR", "USD", "EUR", "GBP"] as const;
@@ -19,6 +20,7 @@ export function NewPlanForm() {
   const [status, setStatus] = useState<"idle" | "submitting" | "success" | "error">("idle");
   const [message, setMessage] = useState("");
   const [invalidField, setInvalidField] = useState<string | null>(null);
+  const formError = useFormError("plan");
 
   const nameId = useId();
   const codeId = useId();
@@ -75,19 +77,18 @@ export function NewPlanForm() {
         }),
       });
 
-      const text = await res.text();
       if (!res.ok) {
         setStatus("error");
-        setMessage(text || `Request failed (${res.status})`);
+        setMessage((await formError.fromResponse(res, "save")).message);
         return;
       }
 
       setStatus("success");
       setMessage("Plan created successfully.");
       router.push("/billing/plans");
-    } catch (err) {
+    } catch {
       setStatus("error");
-      setMessage(err instanceof Error ? err.message : "Network error");
+      setMessage(formError.fromException("save").message);
     }
   }
 

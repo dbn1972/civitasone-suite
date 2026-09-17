@@ -81,11 +81,12 @@ describe("MapViewer (SVC-112)", () => {
     await waitFor(() => expect(screen.getByText("No layers yet")).toBeInTheDocument());
   });
 
-  it("surfaces an error when the endpoint fails", async () => {
+  it("surfaces a clerk-safe message when the endpoint fails, never the raw status (UX-016)", async () => {
     vi.stubGlobal("fetch", mockFetchOnce({}, false, 500));
     render(<MapViewer />);
     await waitFor(() =>
-      expect(screen.getByText(/Failed to load map layers/)).toBeInTheDocument(),
+      expect(screen.getByText(/couldn't load/i)).toBeInTheDocument(),
     );
+    expect(screen.queryByText(/Failed to load map layers/)).not.toBeInTheDocument();
   });
 });

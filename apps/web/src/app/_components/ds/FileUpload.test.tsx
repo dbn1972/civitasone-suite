@@ -73,7 +73,7 @@ describe("ds/FileUpload", () => {
     });
   });
 
-  it("shows error when presign request fails", async () => {
+  it("shows a clerk-safe message when presign request fails, never the raw response text (UX-016)", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
       new Response(JSON.stringify({ message: "Forbidden" }), { status: 403 }),
     );
@@ -85,7 +85,8 @@ describe("ds/FileUpload", () => {
     fireEvent.change(input);
 
     await waitFor(() => {
-      expect(screen.getByText(/Forbidden|Could not prepare upload/)).toBeInTheDocument();
+      expect(screen.getByText(/couldn't save/i)).toBeInTheDocument();
     });
+    expect(screen.queryByText(/Forbidden/)).not.toBeInTheDocument();
   });
 });

@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { PageHeader, EmptyState, ErrorState } from "../../../_components/ds";
 import { toHumanError } from "@/lib/messages";
+import { useFormError } from "@/lib/useFormError";
 
 type Location = { id: string; code: string; name: string; orgUnit?: string | null };
 
@@ -14,6 +15,7 @@ export default function LocationsPage() {
   const [busy, setBusy] = useState(false);
   const [loaded, setLoaded] = useState(false);
   const [loadError, setLoadError] = useState(false);
+  const formError = useFormError("functional location");
 
   async function load(signal?: AbortSignal) {
     setLoadError(false);
@@ -55,13 +57,17 @@ export default function LocationsPage() {
           orgUnit: form.orgUnit || undefined,
         }),
       });
-      if (!res.ok) throw new Error(await res.text());
+      if (!res.ok) {
+        setIsError(true);
+        setMessage((await formError.fromResponse(res, "save")).message);
+        return;
+      }
       setMessage("Functional location created.");
       setForm({ code: "", name: "", orgUnit: "" });
       await load();
-    } catch (e) {
+    } catch {
       setIsError(true);
-      setMessage(e instanceof Error ? e.message : "Create failed");
+      setMessage(formError.fromException("save").message);
     } finally {
       setBusy(false);
     }

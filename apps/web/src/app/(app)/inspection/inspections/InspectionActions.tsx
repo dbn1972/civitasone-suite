@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { ActionButton } from "@/app/_components/ds";
+import { useFormError } from "@/lib/useFormError";
 
 export type InspectionRow = {
   id: string;
@@ -65,6 +66,7 @@ export function InspectionRowAction({ id, status }: RowProps) {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState<string | undefined>();
+  const formError = useFormError("inspection action");
 
   const action = actionForStatus(status);
   if (!action) return <span style={{ color: "var(--ink2)", fontSize: 12 }}>—</span>;
@@ -89,7 +91,7 @@ export function InspectionRowAction({ id, status }: RowProps) {
       body: spec.body ? JSON.stringify(spec.body) : undefined,
     });
     if (res.status !== 202 && !res.ok) {
-      throw new Error((await res.text()) || "Request failed");
+      throw new Error((await formError.fromResponse(res, "save")).message);
     }
   }
 
@@ -102,8 +104,8 @@ export function InspectionRowAction({ id, status }: RowProps) {
       await callApi(action);
       setMessage(`${action.label} accepted (queued).`);
       router.refresh();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Inspection action failed");
+    } catch {
+      setError(formError.fromException("save").message);
     } finally {
       setBusy(false);
     }

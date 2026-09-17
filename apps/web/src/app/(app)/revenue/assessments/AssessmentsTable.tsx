@@ -5,6 +5,7 @@ import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { DataTable, ConfirmDialog } from "@/app/_components/ds";
 import { formatMoney } from "@/lib/formatters";
+import { toHumanError } from "@/lib/messages";
 
 export type AssessmentRow = {
   id: string;
@@ -23,23 +24,30 @@ function rupeesToPaiseString(val: string): string {
   return Math.round(n * 100).toString();
 }
 
+/**
+ * Plain-language failure message for a failed assessment action (revise,
+ * remit, or a remission decision). `patchJson`/`postJson` are plain
+ * module-scope helpers, not components, so they can't use the useFormError
+ * hook; toHumanError is the same catalogued-message building block that hook
+ * is built on — never the backend's own `message`/`error`/`code` or the raw
+ * HTTP status. Reused by the component's own catch blocks below so a genuine
+ * network exception (which these helpers never see, since `fetch()` itself
+ * can throw before either function's own res.ok check runs) also never
+ * surfaces its raw browser message. See
+ * docs/ENTERPRISE-GAP-REPORT-2026-09-07.md UX-003/UX-016.
+ */
+function assessmentActionError(): string {
+  const human = toHumanError("save", { area: "assessment" });
+  return `${human.what} ${human.next}`;
+}
+
 async function patchJson(url: string, body: unknown): Promise<void> {
   const res = await fetch(`/api/proxy/${url}`, {
     method: "PATCH",
     headers: { "content-type": "application/json" },
     body: JSON.stringify(body),
   });
-  if (!(res.ok || res.status === 202)) {
-    const text = await res.text().catch(() => "");
-    let msg = `Request failed (${res.status}).`;
-    try {
-      const j = JSON.parse(text);
-      msg = j?.error?.message ? `${j.error.code}: ${j.error.message}` : (j?.message ?? j?.error ?? msg);
-    } catch {
-      if (text) msg = text;
-    }
-    throw new Error(msg);
-  }
+  if (!(res.ok || res.status === 202)) throw new Error(assessmentActionError());
 }
 
 async function postJson(url: string, body: unknown): Promise<void> {
@@ -48,17 +56,7 @@ async function postJson(url: string, body: unknown): Promise<void> {
     headers: { "content-type": "application/json" },
     body: JSON.stringify(body),
   });
-  if (!(res.ok || res.status === 202)) {
-    const text = await res.text().catch(() => "");
-    let msg = `Request failed (${res.status}).`;
-    try {
-      const j = JSON.parse(text);
-      msg = j?.error?.message ? `${j.error.code}: ${j.error.message}` : (j?.message ?? j?.error ?? msg);
-    } catch {
-      if (text) msg = text;
-    }
-    throw new Error(msg);
-  }
+  if (!(res.ok || res.status === 202)) throw new Error(assessmentActionError());
 }
 
 const FOCUSABLE =
@@ -253,8 +251,8 @@ export function AssessmentsTable({ assessments }: { assessments: AssessmentRow[]
       setRevisingRow(null);
       setMessage(`Assessment for FY ${revisingRow.financialYear} revised.`);
       router.refresh();
-    } catch (err) {
-      setDialogError(err instanceof Error ? err.message : "Network error. Please try again.");
+    } catch {
+      setDialogError(assessmentActionError());
     } finally {
       setBusy(false);
     }
@@ -290,8 +288,8 @@ export function AssessmentsTable({ assessments }: { assessments: AssessmentRow[]
       setRemittingRow(null);
       setMessage(`Remission of ${remissionPercent}% requested for FY ${remittingRow.financialYear} (pending checker approval).`);
       router.refresh();
-    } catch (err) {
-      setDialogError(err instanceof Error ? err.message : "Network error. Please try again.");
+    } catch {
+      setDialogError(assessmentActionError());
     } finally {
       setBusy(false);
     }
@@ -318,8 +316,8 @@ export function AssessmentsTable({ assessments }: { assessments: AssessmentRow[]
       );
       setDecidingRow(null);
       router.refresh();
-    } catch (err) {
-      setDialogError(err instanceof Error ? err.message : "Network error. Please try again.");
+    } catch {
+      setDialogError(assessmentActionError());
     } finally {
       setBusy(false);
     }

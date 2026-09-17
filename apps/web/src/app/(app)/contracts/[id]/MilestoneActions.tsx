@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { ActionButton } from "../../../_components/ds";
+import { useFormError } from "@/lib/useFormError";
 
 export type ContractMilestone = {
   id: string;
@@ -21,6 +22,7 @@ export function MilestoneActions({ contractId, milestones }: Props) {
   // exclusive outcomes for the same row.
   const [busyId, setBusyId] = useState<string | null>(null);
   const [message, setMessage] = useState("");
+  const formError = useFormError("milestone");
 
   const actionable = milestones.filter(
     (m) => m.status !== "completed" && m.status !== "completed_late",
@@ -51,7 +53,7 @@ export function MilestoneActions({ contractId, milestones }: Props) {
         },
       );
       if (res.status !== 202 && !res.ok) {
-        throw new Error((await res.text()) || "Request failed");
+        throw new Error((await formError.fromResponse(res, "save")).message);
       }
       setMessage(kind === "late" ? "Late milestone accepted (queued)." : "Milestone completion accepted (queued).");
       router.refresh();

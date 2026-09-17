@@ -6,6 +6,7 @@ import { ConfirmDialog, DataTable, Segmented } from "../../../_components/ds";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { formatIndianDate } from "@/lib/formatters";
 import { useSeededResource } from "@/lib/sync/resource";
+import { useFormError } from "@/lib/useFormError";
 
 type Hearing = {
   id: string;
@@ -103,6 +104,7 @@ export function HearingsTable({ items, source = "api" }: { items: Hearing[]; sou
   const [reminderRow, setReminderRow] = useState<HearingRow | null>(null);
   const [reminderBusy, setReminderBusy] = useState(false);
   const [reminderError, setReminderError] = useState<string | undefined>(undefined);
+  const formError = useFormError("hearing reminder");
 
   const today = new Date().toISOString().slice(0, 10);
 
@@ -159,16 +161,15 @@ export function HearingsTable({ items, source = "api" }: { items: Hearing[]; sou
         },
       );
       if (!res.ok) {
-        const text = await res.text();
-        setReminderError(text || `Request failed (${res.status})`);
+        setReminderError((await formError.fromResponse(res, "save")).message);
         setReminderBusy(false);
         return;
       }
       setReminderBusy(false);
       setReminderRow(null);
       router.refresh();
-    } catch (err) {
-      setReminderError(err instanceof Error ? err.message : "Network error");
+    } catch {
+      setReminderError(formError.fromException("save").message);
       setReminderBusy(false);
     }
   }

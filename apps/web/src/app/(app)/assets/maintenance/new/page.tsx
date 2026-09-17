@@ -9,6 +9,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { PageHeader } from "../../../../_components/ds";
+import { useFormError } from "@/lib/useFormError";
 
 type AssetRow = { id: string; code?: string; name?: string };
 
@@ -24,20 +25,29 @@ export default function NewWorkOrderPage() {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [isError, setIsError] = useState(false);
+  const formError = useFormError("work order");
 
   useEffect(() => {
     let active = true;
     (async () => {
       try {
         const res = await fetch("/api/proxy/v1/asset/assets?limit=200", { headers: { accept: "application/json" } });
-        if (!res.ok) throw new Error(`Failed to load assets (${res.status}).`);
+        if (!res.ok) {
+          if (active) setLoadError((await formError.fromResponse(res, "load")).message);
+          return;
+        }
         const json = (await res.json()) as { data?: AssetRow[] } | AssetRow[];
         if (active) setAssets(Array.isArray(json) ? json : json.data ?? []);
-      } catch (e) {
-        if (active) setLoadError(e instanceof Error ? e.message : "Failed to load assets.");
+      } catch {
+        if (active) setLoadError(formError.fromException("load").message);
       }
     })();
     return () => { active = false; };
+    // formError.fromResponse/fromException are stable (useCallback'd on a
+    // fixed `area` string inside useFormError) even though the wrapping
+    // `formError` object literal isn't, so omitting it here is safe and
+    // avoids re-running this effect every render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   async function submit(e: React.FormEvent) {
@@ -51,14 +61,18 @@ export default function NewWorkOrderPage() {
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ assetId, scheduledDate, notes: notes || undefined }),
       });
-      if (!(res.ok || res.status === 202)) throw new Error(await res.text());
+      if (!(res.ok || res.status === 202)) {
+        setIsError(true);
+        setMessage((await formError.fromResponse(res, "save")).message);
+        return;
+      }
       setMessage("Maintenance job logged.");
       setNotes("");
       router.refresh();
       setTimeout(() => router.push("/assets/maintenance"), 700);
-    } catch (e) {
+    } catch {
       setIsError(true);
-      setMessage(e instanceof Error ? e.message : "Submit failed.");
+      setMessage(formError.fromException("save").message);
     } finally {
       setBusy(false);
     }

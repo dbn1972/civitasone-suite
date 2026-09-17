@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { useToast } from "@/app/_components/ds/Toast";
+import { useFormError } from "@/lib/useFormError";
 
 type Priority = "Low" | "Medium" | "High" | "Critical";
 
@@ -28,6 +29,7 @@ export function NewTicketForm() {
   const [priority, setPriority] = useState<Priority>("Medium");
   const [status, setStatus] = useState<"idle" | "submitting" | "error">("idle");
   const [message, setMessage] = useState("");
+  const formError = useFormError("ticket");
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -57,24 +59,16 @@ export function NewTicketForm() {
         body: JSON.stringify(body),
       });
       if (!res.ok) {
-        const text = await res.text();
-        let human = text || `Request failed (${res.status})`;
-        try {
-          const parsed = JSON.parse(text) as { message?: string };
-          if (parsed.message) human = parsed.message;
-        } catch {
-          /* not JSON — fall back to the raw text above */
-        }
         setStatus("error");
-        setMessage(human);
+        setMessage((await formError.fromResponse(res, "save")).message);
         return;
       }
       toast.success("Ticket submitted successfully.");
       router.push("/helpdesk/tickets");
       router.refresh();
-    } catch (err) {
+    } catch {
       setStatus("error");
-      setMessage(err instanceof Error ? err.message : "Network error");
+      setMessage(formError.fromException("save").message);
     }
   }
 

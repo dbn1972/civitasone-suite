@@ -16,6 +16,19 @@
 import { useCallback, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ActionButton } from "@/app/_components/ds";
+import { toHumanError } from "@/lib/messages";
+
+/**
+ * Plain-language failure message for a failed workflow-task action. This is
+ * a module-scope helper, not a component, so it can't use the useFormError
+ * hook; toHumanError is the same catalogued-message building block that hook
+ * is built on — never the backend's own `message`/`error` or the raw HTTP
+ * status. See docs/ENTERPRISE-GAP-REPORT-2026-09-07.md UX-003/UX-016.
+ */
+function taskActionError(): string {
+  const human = toHumanError("save", { area: "task" });
+  return `${human.what} ${human.next}`;
+}
 
 async function postJson(url: string, body?: unknown): Promise<void> {
   const res = await fetch(url, {
@@ -23,17 +36,7 @@ async function postJson(url: string, body?: unknown): Promise<void> {
     headers: { "content-type": "application/json" },
     ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
   });
-  if (!(res.ok || res.status === 202)) {
-    const text = await res.text().catch(() => "");
-    let msg = `Request failed (${res.status}).`;
-    try {
-      const j = JSON.parse(text);
-      msg = j?.message ?? j?.error ?? msg;
-    } catch {
-      if (text) msg = text;
-    }
-    throw new Error(msg);
-  }
+  if (!(res.ok || res.status === 202)) throw new Error(taskActionError());
 }
 
 /** Shared polite live-region for action outcomes. */

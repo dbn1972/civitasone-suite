@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { ConfidenceBar } from "./ConfidenceBar";
+import { useFormError } from "@/lib/useFormError";
 
 export interface PredictionHistoryEntry {
   /** Unique prediction ID */
@@ -63,6 +64,7 @@ export function PredictionHistory({
   const [entries, setEntries] = useState<PredictionHistoryEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const formError = useFormError("prediction history");
 
   useEffect(() => {
     let cancelled = false;
@@ -74,7 +76,7 @@ export function PredictionHistory({
         const url = `/api/v1/ml/predictions?entityId=${encodeURIComponent(entityId)}&domain=${encodeURIComponent(domain)}&limit=${limit}`;
         const res = await fetcher(url);
         if (!res.ok) {
-          setError(`Failed to load predictions (${res.status})`);
+          setError((await formError.fromResponse(res, "load")).message);
           setEntries([]);
           return;
         }
@@ -92,9 +94,9 @@ export function PredictionHistory({
         if (!cancelled) {
           setEntries(mapped);
         }
-      } catch (err) {
+      } catch {
         if (!cancelled) {
-          setError("Network error loading predictions");
+          setError(formError.fromException("load").message);
           setEntries([]);
         }
       } finally {
@@ -107,6 +109,10 @@ export function PredictionHistory({
     return () => {
       cancelled = true;
     };
+    // formError.fromResponse/fromException are stable (useCallback'd on a
+    // fixed `area` string inside useFormError) even though the wrapping
+    // `formError` object literal isn't, so omitting it here is safe.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [entityId, domain, limit, fetchFn]);
 
   if (loading) {

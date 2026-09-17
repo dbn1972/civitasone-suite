@@ -28,7 +28,7 @@ const syncApi: SyncApiClient = {
         ...(typeof body === "object" ? body : {}),
       };
     }
-    if (!res.ok) throw new Error(`SYNC_PUSH_FAILED: ${res.status}`);
+    if (!res.ok) throw new Error("SYNC_PUSH_FAILED");
     return res.json();
   },
   async pull(req, headers) {
@@ -38,7 +38,7 @@ const syncApi: SyncApiClient = {
       body: JSON.stringify(req),
       credentials: "same-origin",
     });
-    if (!res.ok) throw new Error(`SYNC_PULL_FAILED: ${res.status}`);
+    if (!res.ok) throw new Error("SYNC_PULL_FAILED");
     return res.json();
   },
 };

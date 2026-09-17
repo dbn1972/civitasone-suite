@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useFormError } from "@/lib/useFormError";
 
 type Decision = {
   decision?: string;
@@ -20,6 +21,7 @@ export function EvaluateForm() {
   const [status, setStatus] = useState<"idle" | "pending" | "ok" | "error">("idle");
   const [result, setResult] = useState<Decision | null>(null);
   const [error, setError] = useState("");
+  const formError = useFormError("policy evaluation");
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -49,17 +51,17 @@ export function EvaluateForm() {
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ permissionKey, resource }),
       });
-      const body = (await res.json().catch(() => ({}))) as Decision & { message?: string };
       if (!res.ok) {
         setStatus("error");
-        setError(body?.message ?? `Request failed (${res.status})`);
+        setError((await formError.fromResponse(res, "save")).message);
         return;
       }
+      const body = (await res.json().catch(() => ({}))) as Decision;
       setStatus("ok");
       setResult(body);
     } catch {
       setStatus("error");
-      setError("Network error");
+      setError(formError.fromException("save").message);
     }
   }
 

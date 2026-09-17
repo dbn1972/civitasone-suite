@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { useFormError } from "@/lib/useFormError";
 
 /**
  * The backend's qcInspectionBody enum (services/inventory-service/.../validators.ts)
@@ -24,6 +25,7 @@ export function QcInspectionForm({ goodsReturnId }: { goodsReturnId: string }) {
   const [remarks, setRemarks] = useState("");
   const [status, setStatus] = useState<"idle" | "submitting" | "error">("idle");
   const [message, setMessage] = useState("");
+  const formError = useFormError("QC inspection");
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -39,17 +41,16 @@ export function QcInspectionForm({ goodsReturnId }: { goodsReturnId: string }) {
           qcNotes: remarks.trim() || undefined,
         }),
       });
-      const text = await res.text();
       if (!res.ok) {
         setStatus("error");
-        setMessage(text || `Submission failed (${res.status})`);
+        setMessage((await formError.fromResponse(res, "save")).message);
         return;
       }
       router.push(`/inventory/goods-returns/${goodsReturnId}`);
       router.refresh();
-    } catch (err) {
+    } catch {
       setStatus("error");
-      setMessage(err instanceof Error ? err.message : "Network error");
+      setMessage(formError.fromException("save").message);
     }
   }
 

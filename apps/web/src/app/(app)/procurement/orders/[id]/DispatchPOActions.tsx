@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { ConfirmDialog } from "@/app/_components/ds";
+import { useFormError } from "@/lib/useFormError";
 
 export function DispatchPOActions({ poId, canDispatch }: { poId: string; canDispatch: boolean }) {
   const router = useRouter();
@@ -10,6 +11,7 @@ export function DispatchPOActions({ poId, canDispatch }: { poId: string; canDisp
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | undefined>(undefined);
   const [message, setMessage] = useState("");
+  const formError = useFormError("purchase order dispatch");
 
   if (!canDispatch) {
     return (
@@ -29,11 +31,9 @@ export function DispatchPOActions({ poId, canDispatch }: { poId: string; canDisp
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ notes: "Dispatched from web UI" }),
       });
-      const text = await res.text();
       if (!res.ok) {
-        const msg = text || `Dispatch failed (${res.status})`;
-        setError(msg);
-        throw new Error(msg);
+        setError((await formError.fromResponse(res, "save")).message);
+        return;
       }
       setOpen(false);
       // L3 fix: `/dispatch` is a 202-accepted async command (processed by a
@@ -43,10 +43,8 @@ export function DispatchPOActions({ poId, canDispatch }: { poId: string; canDisp
       // processing) and let the refreshed StatusPill show the real state.
       setMessage("Dispatch request submitted. The status above will update to “Dispatched” once processing completes.");
       router.refresh();
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : "Network error";
-      setError(msg);
-      throw err instanceof Error ? err : new Error(msg);
+    } catch {
+      setError(formError.fromException("save").message);
     } finally {
       setBusy(false);
     }

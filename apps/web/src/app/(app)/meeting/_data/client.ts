@@ -13,6 +13,7 @@
  * write with 400 otherwise). We mint a UUID per call.
  */
 import { browserFetch } from "@/lib/api/browserClient";
+import { toHumanError, type MessageKind } from "@/lib/messages";
 import type {
   ActiveVote,
   CommitteeSummary,
@@ -36,19 +37,19 @@ function idempotencyKey(): Record<string, string> {
   return { "x-idempotency-key": uuid };
 }
 
-async function readError(res: Response): Promise<string> {
-  try {
-    const text = await res.text();
-    if (!text) return `Request failed (${res.status})`;
-    try {
-      const j = JSON.parse(text) as { message?: string; code?: string };
-      return j.message ?? j.code ?? text;
-    } catch {
-      return text;
-    }
-  } catch {
-    return `Request failed (${res.status})`;
-  }
+/**
+ * Plain-language failure message for any non-2xx response from a meeting-data
+ * mutation/read. Every exported function below throws `Error(readError())`
+ * and callers render that message directly as the UI's error state, so it
+ * must never be (or contain) a raw HTTP status code or raw server response
+ * body — see docs/ENTERPRISE-GAP-REPORT-2026-09-07.md UX-003/UX-016. This
+ * module is a plain async data-fetching client, not a component, so it can't
+ * use the useFormError hook; toHumanError is the same catalogued-message
+ * building block that hook is built on.
+ */
+function readError(kind: MessageKind): string {
+  const human = toHumanError(kind, { area: "meeting data" });
+  return `${human.what} ${human.next}`;
 }
 
 async function send<T>(
@@ -61,14 +62,14 @@ async function send<T>(
     ...(opts.headers ? { headers: opts.headers } : {}),
     ...(opts.body !== undefined ? { body: JSON.stringify(opts.body) } : {}),
   });
-  if (!res.ok) throw new Error(await readError(res));
+  if (!res.ok) throw new Error(readError("save"));
   const text = await res.text();
   return (text ? JSON.parse(text) : {}) as T;
 }
 
 async function get<T>(path: string): Promise<T> {
   const res = await browserFetch(path);
-  if (!res.ok) throw new Error(await readError(res));
+  if (!res.ok) throw new Error(readError("load"));
   return (await res.json()) as T;
 }
 
@@ -102,7 +103,7 @@ export async function fetchVoteResults(
 export async function fetchMinutes(meetingId: string): Promise<Minutes | null> {
   const res = await browserFetch(`v1/meeting/${meetingId}/minutes`);
   if (res.status === 404) return null;
-  if (!res.ok) throw new Error(await readError(res));
+  if (!res.ok) throw new Error(readError("load"));
   const out = (await res.json()) as { data?: Minutes };
   return out.data ?? null;
 }

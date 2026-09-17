@@ -50,7 +50,7 @@ describe("ComputeFnfForm", () => {
     expect(refreshMock).toHaveBeenCalled();
   });
 
-  it("surfaces a server error on the confirm dialog (error path)", async () => {
+  it("surfaces a clerk-safe message on the confirm dialog, never the raw API error code (UX-016)", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(null, { status: 500 }));
 
     render(<ComputeFnfForm />);

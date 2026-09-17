@@ -2,6 +2,7 @@
 import { useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { PageHeader } from "../../../_components/ds";
+import { useFormError } from "@/lib/useFormError";
 
 export default function UploadDocumentPage() {
   const router = useRouter();
@@ -9,6 +10,7 @@ export default function UploadDocumentPage() {
   const [tags, setTags] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const formError = useFormError("document");
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -24,13 +26,13 @@ export default function UploadDocumentPage() {
         }),
       });
       if (!res.ok) {
-        const body = await res.json().catch(() => ({})) as Record<string, unknown>;
-        throw new Error(typeof body.message === "string" ? body.message : `HTTP ${res.status}`);
+        setError((await formError.fromResponse(res, "save")).message);
+        return;
       }
       router.push("/documents/library");
       router.refresh();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Upload failed");
+    } catch {
+      setError(formError.fromException("save").message);
     } finally {
       setSubmitting(false);
     }

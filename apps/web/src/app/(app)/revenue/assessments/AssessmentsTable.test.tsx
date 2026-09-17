@@ -81,7 +81,7 @@ describe("AssessmentsTable", () => {
     expect(refreshMock).toHaveBeenCalled();
   });
 
-  it("surfaces the server maker-checker error on a same-user decision (error path)", async () => {
+  it("surfaces a clerk-safe message on a same-user decision, never the raw server code/message (UX-016)", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(
       new Response(JSON.stringify({ error: { code: "MAKER_CHECKER_VIOLATION", message: "decider must differ from maker" } }), {
         status: 409,
@@ -94,7 +94,8 @@ describe("AssessmentsTable", () => {
     fireEvent.click(screen.getByText("Reject remission"));
 
     await waitFor(() => {
-      expect(screen.getByText(/MAKER_CHECKER_VIOLATION: decider must differ from maker/)).toBeInTheDocument();
+      expect(screen.getByText(/couldn't save/i)).toBeInTheDocument();
     });
+    expect(screen.queryByText(/MAKER_CHECKER_VIOLATION/)).not.toBeInTheDocument();
   });
 });

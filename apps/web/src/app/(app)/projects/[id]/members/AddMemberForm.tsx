@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { useFormError } from "@/lib/useFormError";
 
 type Props = { projectId: string };
 
@@ -13,6 +14,7 @@ export function AddMemberForm({ projectId }: Props) {
   const [role, setRole]       = useState<typeof ROLES[number]>("viewer");
   const [status, setStatus]   = useState<"idle" | "submitting" | "success" | "error">("idle");
   const [message, setMessage] = useState("");
+  const formError = useFormError("project member");
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -30,9 +32,8 @@ export function AddMemberForm({ projectId }: Props) {
         body: JSON.stringify({ userId: userId.trim(), role }),
       });
       if (!res.ok) {
-        const text = await res.text();
         setStatus("error");
-        setMessage(text || `Request failed (${res.status})`);
+        setMessage((await formError.fromResponse(res, "save")).message);
         return;
       }
       setStatus("success");
@@ -40,9 +41,9 @@ export function AddMemberForm({ projectId }: Props) {
       setUserId("");
       setRole("viewer");
       router.refresh();
-    } catch (err) {
+    } catch {
       setStatus("error");
-      setMessage(err instanceof Error ? err.message : "Network error");
+      setMessage(formError.fromException("save").message);
     }
   }
 

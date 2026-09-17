@@ -9,6 +9,7 @@ import {
   findCatalogEntry,
   type DomainPackCatalogEntry,
 } from "./domainPackCatalog";
+import { toHumanError } from "@/lib/messages";
 
 export type DomainPackListItem = DomainPackCatalogEntry & {
   id?: string;
@@ -102,15 +103,8 @@ export async function activateDomainPackStage3(
   });
 
   if (!(res.ok || res.status === 202)) {
-    const text = await res.text().catch(() => "");
-    let message = text || `Domain Pack activation failed (${res.status})`;
-    try {
-      const err = JSON.parse(text) as { message?: string; code?: string };
-      if (err.message) message = err.message;
-    } catch {
-      /* keep text */
-    }
-    throw new Error(message);
+    const human = toHumanError("save", { area: "domain pack" });
+    throw new Error(`${human.what} ${human.next}`);
   }
 
   const body = (await res.json()) as Partial<DomainPackActivateResult>;

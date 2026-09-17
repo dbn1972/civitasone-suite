@@ -18,13 +18,15 @@ export default function AssetVerificationPage() {
     setLoadError(false);
     try {
       const res = await fetch("/api/proxy/v1/asset/verifications?limit=50", { signal });
-      if (!res.ok) throw new Error(await res.text());
+      if (!res.ok) {
+        setLoadError(true);
+        return;
+      }
       const body = await res.json() as { data?: Verification[] };
       setRows(body.data ?? []);
     } catch (e) {
       if (e instanceof Error && e.name !== 'AbortError') {
         setLoadError(true);
-        setMessage(e.message || "Load failed");
       }
     } finally {
       setLoading(false);
@@ -48,7 +50,10 @@ export default function AssetVerificationPage() {
           notes: reason || "Annual physical verification",
         }),
       });
-      if (!res.ok) throw new Error(await res.text());
+      if (!res.ok) {
+        const human = toHumanError("save", { area: "verification session" });
+        throw new Error(`${human.what} ${human.next}`);
+      }
       setMessage("Verification session created.");
       await load();
     },

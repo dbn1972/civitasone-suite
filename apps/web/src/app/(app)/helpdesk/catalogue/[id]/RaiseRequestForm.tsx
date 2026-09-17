@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { useFormError } from "@/lib/useFormError";
 
 type FieldType = "text" | "textarea" | "number" | "select" | "boolean";
 type Field = { key: string; label: string; type: FieldType; required?: boolean; options?: string[] };
@@ -21,6 +22,7 @@ export function RaiseRequestForm({
   const [priority, setPriority] = useState<Priority>((["Low", "Medium", "High", "Critical"].includes(defaultPriority) ? defaultPriority : "Medium") as Priority);
   const [status, setStatus] = useState<"idle" | "submitting" | "error">("idle");
   const [message, setMessage] = useState("");
+  const formError = useFormError("service request");
 
   function setField(key: string, v: string | boolean) {
     setValues((prev) => ({ ...prev, [key]: v }));
@@ -51,17 +53,16 @@ export function RaiseRequestForm({
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ formData, priority }),
       });
-      const text = await res.text();
       if (!res.ok) {
         setStatus("error");
-        setMessage(text || `Request failed (${res.status})`);
+        setMessage((await formError.fromResponse(res, "save")).message);
         return;
       }
       router.push("/helpdesk/catalogue/my-requests");
       router.refresh();
-    } catch (err) {
+    } catch {
       setStatus("error");
-      setMessage(err instanceof Error ? err.message : "Network error");
+      setMessage(formError.fromException("save").message);
     }
   }
 

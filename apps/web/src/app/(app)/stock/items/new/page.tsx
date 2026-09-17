@@ -14,6 +14,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { PageHeader } from "../../../../_components/ds";
+import { useFormError } from "@/lib/useFormError";
 
 type Category = { id: string; name: string };
 type Uom = { id: string; symbol: string; name: string };
@@ -35,6 +36,7 @@ export default function NewStockItemPage() {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [isError, setIsError] = useState(false);
+  const formError = useFormError("stock item");
 
   // Category picker
   const [categories, setCategories] = useState<Category[]>([]);
@@ -51,7 +53,7 @@ export default function NewStockItemPage() {
     void (async () => {
       try {
         const res = await fetch("/api/proxy/v1/stock/categories", { credentials: "same-origin" });
-        if (!res.ok) throw new Error(`HTTP_${res.status}`);
+        if (!res.ok) throw new Error("categories_load_failed");
         const raw = (await res.json()) as unknown;
         const list = Array.isArray(raw) ? (raw as Category[]) : ((raw as { data?: Category[] })?.data ?? []);
         if (active) setCategories(list);
@@ -69,7 +71,7 @@ export default function NewStockItemPage() {
     void (async () => {
       try {
         const res = await fetch("/api/proxy/v1/stock/uoms", { credentials: "same-origin" });
-        if (!res.ok) throw new Error(`HTTP_${res.status}`);
+        if (!res.ok) throw new Error("uoms_load_failed");
         const raw = (await res.json()) as unknown;
         const list = Array.isArray(raw) ? (raw as Uom[]) : ((raw as { data?: Uom[] })?.data ?? []);
         if (active) setUoms(list);
@@ -102,13 +104,17 @@ export default function NewStockItemPage() {
           valuationMethod: form.valuationMethod,
         }),
       });
-      if (!(res.ok || res.status === 202)) throw new Error(await res.text());
+      if (!(res.ok || res.status === 202)) {
+        setIsError(true);
+        setMessage((await formError.fromResponse(res, "save")).message);
+        return;
+      }
       setMessage("Stock item created.");
       router.refresh();
       setTimeout(() => router.push("/stock/list"), 700);
-    } catch (e) {
+    } catch {
       setIsError(true);
-      setMessage(e instanceof Error ? e.message : "Submit failed.");
+      setMessage(formError.fromException("save").message);
     } finally {
       setBusy(false);
     }

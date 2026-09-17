@@ -3,6 +3,7 @@
 import { useId, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ConfirmDialog } from "../../../../_components/ds";
+import { useFormError } from "@/lib/useFormError";
 
 type Props = { ticketId: string };
 
@@ -38,6 +39,7 @@ export function TicketActions({ ticketId }: Props) {
   // confirm dialogs: which destructive action is pending confirmation
   const [confirm, setConfirm] = useState<null | "assign" | "resolve" | "close">(null);
   const [confirmErr, setConfirmErr] = useState<string | undefined>(undefined);
+  const formError = useFormError("ticket");
 
   const replyId = useId();
   const assigneeFieldId = useId();
@@ -53,19 +55,7 @@ export function TicketActions({ ticketId }: Props) {
         body: body ? JSON.stringify(body) : undefined,
       });
       if (!res.ok) {
-        // The API's error body is JSON (e.g. {"code":"VALIDATION_FAILED",
-        // "message":"invalid request",...}) — surface the human message
-        // instead of dumping the raw JSON into the confirm dialog / result
-        // banner. Mirrors NewTicketForm.tsx's error handling.
-        const text = await res.text();
-        let human = text || `Request failed (${res.status})`;
-        try {
-          const parsed = JSON.parse(text) as { message?: string };
-          if (parsed.message) human = parsed.message;
-        } catch {
-          /* not JSON — fall back to the raw text above */
-        }
-        throw new Error(human);
+        throw new Error((await formError.fromResponse(res, "save")).message);
       }
     } finally {
       setBusy(false);
@@ -89,8 +79,8 @@ export function TicketActions({ ticketId }: Props) {
     try {
       await request("POST", `/v1/citizen/tickets/${ticketId}/notes`, { body: reply });
       onSuccess("Reply sent to the citizen.");
-    } catch (err) {
-      setResult({ kind: "err", text: err instanceof Error ? err.message : "Failed to send reply." });
+    } catch {
+      setResult({ kind: "err", text: formError.fromException("save").message });
     }
   }
 
@@ -111,8 +101,8 @@ export function TicketActions({ ticketId }: Props) {
         });
         onSuccess("Ticket closed.");
       }
-    } catch (err) {
-      setConfirmErr(err instanceof Error ? err.message : "Action failed. Please try again.");
+    } catch {
+      setConfirmErr(formError.fromException("save").message);
     }
   }
 

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useTranslations } from "next-intl";
+import { useFormError } from "@/lib/useFormError";
 
 const inputStyle = { width: "100%", padding: 8, minHeight: 44, marginBottom: 8, borderRadius: 8, border: "1px solid var(--line)" } as const;
 const labelStyle = { display: "block", fontSize: 12, color: "var(--muted)", marginBottom: 4, fontWeight: 600 } as const;
@@ -20,10 +21,11 @@ export function DocumentPanel() {
   const [error, setError] = useState("");
   const [uploaded, setUploaded] = useState<Uploaded | null>(null);
   const [checklist, setChecklist] = useState<Checklist | null>(null);
+  const formError = useFormError("document");
 
   async function post<T>(path: string, body: unknown): Promise<T> {
     const res = await fetch(`/api/proxy${path}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
-    if (!res.ok) throw new Error((await res.text()) || "Request failed.");
+    if (!res.ok) throw new Error((await formError.fromResponse(res, "save")).message);
     return (await res.json()) as T;
   }
 
@@ -34,7 +36,7 @@ export function DocumentPanel() {
         ? { applicationId, serviceId, docType }
         : { applicationId, serviceId, docType, docUri: `digilocker://${docType}` };
       setUploaded(await post<Uploaded>(`/v1/citizen/documents/${source === "upload" ? "upload" : "digilocker-fetch"}`, body));
-    } catch (e) { setError(e instanceof Error ? e.message : "Failed."); } finally { setBusy(false); }
+    } catch { setError(formError.fromException("save").message); } finally { setBusy(false); }
   }
 
   async function loadChecklist(e: React.FormEvent) {
@@ -43,9 +45,9 @@ export function DocumentPanel() {
     try {
       const qs = new URLSearchParams({ serviceId, ...(applicationId ? { applicationId } : {}) });
       const res = await fetch(`/api/proxy/v1/citizen/documents/checklist?${qs.toString()}`);
-      if (!res.ok) throw new Error((await res.text()) || "Failed.");
+      if (!res.ok) throw new Error((await formError.fromResponse(res, "load")).message);
       setChecklist((await res.json()) as Checklist);
-    } catch (e) { setError(e instanceof Error ? e.message : "Failed."); } finally { setBusy(false); }
+    } catch { setError(formError.fromException("load").message); } finally { setBusy(false); }
   }
 
   return (

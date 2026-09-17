@@ -50,7 +50,7 @@ describe("NewTicketForm (citizen-facing)", () => {
     expect(body.subject).toBe("Water leakage near gate 3");
   });
 
-  it("parses a JSON error body into a human message instead of showing raw JSON", async () => {
+  it("shows a clerk-safe message instead of the raw JSON error body (UX-016)", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(
       new Response(JSON.stringify({ code: "VALIDATION_FAILED", message: "Description is required." }), { status: 422 }),
     );
@@ -60,8 +60,9 @@ describe("NewTicketForm (citizen-facing)", () => {
     fireEvent.change(screen.getByLabelText(/description/i), { target: { value: "x" } });
     fireEvent.click(screen.getByRole("button", { name: "Submit ticket" }));
 
-    expect(await screen.findByRole("alert")).toHaveTextContent("Description is required.");
+    expect(await screen.findByRole("alert")).toHaveTextContent(/couldn't save/i);
     expect(screen.queryByText(/VALIDATION_FAILED/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Description is required\./)).not.toBeInTheDocument();
     expect(pushMock).not.toHaveBeenCalled();
   });
 });

@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { ConfirmDialog } from "@/app/_components/ds";
+import { useFormError } from "@/lib/useFormError";
 
 interface DisburseButtonProps {
   /** The schemeId — maps to projectId on FundReleaseSummary (backend stores schemeId as projectId). */
@@ -16,6 +17,7 @@ export function DisburseButton({ schemeId, releaseId, releaseNo }: DisburseButto
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | undefined>(undefined);
+  const formError = useFormError("fund release");
 
   async function handleConfirm(reason?: string) {
     setBusy(true);
@@ -30,16 +32,15 @@ export function DisburseButton({ schemeId, releaseId, releaseNo }: DisburseButto
         },
       );
       if (!res.ok) {
-        const text = await res.text();
-        setErrorMessage(text || `Request failed (${res.status})`);
+        setErrorMessage((await formError.fromResponse(res, "save")).message);
         setBusy(false);
         return;
       }
       setBusy(false);
       setOpen(false);
       router.refresh();
-    } catch (err) {
-      setErrorMessage(err instanceof Error ? err.message : "Network error");
+    } catch {
+      setErrorMessage(formError.fromException("save").message);
       setBusy(false);
     }
   }

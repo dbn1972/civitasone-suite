@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useFormError } from "@/lib/useFormError";
 
 /** Client form — POST /api/proxy/v1/policy/role-features. */
 export function RoleFeatureGrantForm() {
@@ -8,6 +9,7 @@ export function RoleFeatureGrantForm() {
   const [featureKey, setFeatureKey] = useState("finance.dashboard");
   const [status, setStatus] = useState<"idle" | "pending" | "ok" | "error">("idle");
   const [message, setMessage] = useState("");
+  const formError = useFormError("role feature grant");
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -19,17 +21,17 @@ export function RoleFeatureGrantForm() {
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ roleName, featureKey, granted: true }),
       });
-      const body = await res.json().catch(() => ({}));
       if (!res.ok) {
         setStatus("error");
-        setMessage(body?.message ?? `Request failed (${res.status})`);
+        setMessage((await formError.fromResponse(res, "save")).message);
         return;
       }
+      const body = await res.json().catch(() => ({}));
       setStatus("ok");
       setMessage(body?.id ? `Accepted — id ${body.id}` : "Accepted (202)");
     } catch {
       setStatus("error");
-      setMessage("Network error");
+      setMessage(formError.fromException("save").message);
     }
   }
 

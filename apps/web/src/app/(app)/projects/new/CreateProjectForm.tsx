@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { ConfirmDialog } from "@/app/_components/ds";
+import { useFormError } from "@/lib/useFormError";
 
 export function CreateProjectForm() {
   const router = useRouter();
@@ -19,6 +20,7 @@ export function CreateProjectForm() {
   const [status, setStatus] = useState<"idle" | "submitting" | "error">("idle");
   const [message, setMessage] = useState("");
   const [invalidField, setInvalidField] = useState<string | null>(null);
+  const formError = useFormError("project");
 
   function validate(): string | null {
     if (!code.trim()) {
@@ -82,17 +84,16 @@ export function CreateProjectForm() {
         headers: { "content-type": "application/json" },
         body: JSON.stringify(body),
       });
-      const text = await res.text();
       if (!res.ok) {
         setStatus("error");
-        setMessage(text || `Request failed (${res.status})`);
+        setMessage((await formError.fromResponse(res, "save")).message);
         return;
       }
       router.push("/projects/list");
       router.refresh();
-    } catch (err) {
+    } catch {
       setStatus("error");
-      setMessage(err instanceof Error ? err.message : "Network error");
+      setMessage(formError.fromException("save").message);
     }
   }
 

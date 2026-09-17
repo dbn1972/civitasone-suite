@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { ConfirmDialog, useConfirmAction } from "../../../../_components/ds";
+import { useFormError } from "@/lib/useFormError";
 
 /**
  * "Seek Opinion" form.
@@ -22,6 +23,7 @@ export function SeekOpinionForm() {
   const [subject, setSubject] = useState("");
   const [addressedTo, setAddressedTo] = useState("");
   const [message, setMessage] = useState("");
+  const formError = useFormError("opinion request");
 
   const { open, busy, error, trigger, cancel, confirm } = useConfirmAction({
     onConfirm: async () => {
@@ -38,8 +40,7 @@ export function SeekOpinionForm() {
         body: JSON.stringify(body),
       });
       if (!res.ok) {
-        const text = await res.text();
-        throw new Error(text || `Request failed (${res.status})`);
+        throw new Error((await formError.fromResponse(res, "save")).message);
       }
     },
     onSuccess: () => {

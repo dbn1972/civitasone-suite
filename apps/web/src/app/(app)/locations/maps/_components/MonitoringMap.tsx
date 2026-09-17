@@ -19,6 +19,7 @@ import { StatGrid } from "@/app/_components/ds/StatGrid";
 import { StatCard } from "@/app/_components/ds/StatCard";
 import { EmptyState } from "@/app/_components/ds/EmptyState";
 import { CivitasMap, type MapMarker } from "@/app/_components/maps";
+import { useFormError } from "@/lib/useFormError";
 
 const API = "/api/proxy/v1/locations/map-markers";
 
@@ -84,6 +85,7 @@ export function MonitoringMap() {
   const [status, setStatus] = useState<string>("");
   const [date, setDate] = useState<string>("");
   const [selected, setSelected] = useState<MonitoringMarker | null>(null);
+  const formError = useFormError("map marker");
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -94,14 +96,24 @@ export function MonitoringMap() {
       if (status) qs.set("status", status);
       if (date) qs.set("date", date);
       const res = await fetch(`${API}?${qs.toString()}`);
-      if (!res.ok) throw new Error(`Failed to load markers (${res.status})`);
+      if (!res.ok) {
+        setError((await formError.fromResponse(res, "load")).message);
+        return;
+      }
       const body = await res.json();
       setMarkers(normalizeMarkers(body));
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load markers");
+    } catch {
+      setError(formError.fromException("load").message);
     } finally {
       setLoading(false);
     }
+    // formError.fromResponse/fromException are stable (useCallback'd on a
+    // fixed `area` string inside useFormError) even though the wrapping
+    // `formError` object literal isn't, so omitting it here is safe and
+    // avoids re-creating load (and re-running its effect, which was
+    // genuinely looping — "Maximum update depth exceeded" — before this
+    // fix) every render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [domain, status, date]);
 
   useEffect(() => {

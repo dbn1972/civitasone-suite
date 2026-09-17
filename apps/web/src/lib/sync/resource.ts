@@ -12,6 +12,20 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { readCache, writeCache } from "./responseCache";
 import { buildSyncHeaders } from "./headers";
+import { toHumanError } from "@/lib/messages";
+
+/**
+ * Plain-language failure message for a failed offline-resource fetch. This
+ * hook is shared, domain-agnostic infrastructure (many different screens use
+ * it, each with their own noun), so the message stays generic rather than
+ * naming a specific area, and never reads the raw HTTP status or a caught
+ * exception's own `.message` — see
+ * docs/ENTERPRISE-GAP-REPORT-2026-09-07.md UX-003/UX-016.
+ */
+function offlineResourceError(): string {
+  const human = toHumanError("load");
+  return `${human.what} ${human.next}`;
+}
 
 export type ResourceSource = "cache" | "live";
 
@@ -90,7 +104,7 @@ export function useOfflineResource<TApi, T>(
           headers: { "content-type": "application/json", ...buildSyncHeaders() },
           credentials: "same-origin",
         });
-        if (!res.ok) throw new Error(`HTTP_${res.status}`);
+        if (!res.ok) throw new Error(offlineResourceError());
         const raw = (await res.json()) as TApi;
         const mapped = map(raw);
         if (!active) return;
@@ -98,10 +112,10 @@ export function useOfflineResource<TApi, T>(
         setSource("live");
         setCachedAt(null);
         await writeCache(cacheKey, mapped);
-      } catch (err) {
+      } catch {
         // Network failed mid-session: fall back to cache if we have it.
         if (active) {
-          if (!cached) setError(err instanceof Error ? err.message : "load failed");
+          if (!cached) setError(offlineResourceError());
           setOffline(isOffline());
         }
       } finally {
