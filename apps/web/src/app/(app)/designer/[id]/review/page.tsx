@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { ConfirmDialog, HelpTip } from "@/app/_components/ds";
+import { Button, ConfirmDialog, HelpTip } from "@/app/_components/ds";
 import { VersionDiff, WizardShell } from "@/app/_components/ds/designer";
 import { AccessibilityPreview } from "../../_components/AccessibilityPreview";
 import type { ServiceDefinitionDto } from "../../_data/designerApi";
@@ -160,12 +160,12 @@ export default function DesignerReviewPage() {
             zIndex: 5,
           }}
         >
-          <button type="button" className="btn ghost" onClick={() => setRejectOpen(true)} disabled={busy}>
+          <Button variant="ghost" onClick={() => setRejectOpen(true)} disabled={busy}>
             Reject
-          </button>
-          <button type="button" className="btn primary" onClick={() => setApproveOpen(true)} disabled={busy}>
+          </Button>
+          <Button onClick={() => setApproveOpen(true)} disabled={busy}>
             Approve &amp; Publish
-          </button>
+          </Button>
         </div>
       ) : null}
 

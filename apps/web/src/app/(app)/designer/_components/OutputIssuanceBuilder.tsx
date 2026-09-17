@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Card, Tabs } from "@/app/_components/ds";
+import { Button, Card, Tabs } from "@/app/_components/ds";
 import {
   NumberingFormatBuilder,
   TemplateCanvas,
@@ -184,15 +184,14 @@ export function OutputIssuanceBuilder({
             samplePreviewBanner={sampleBanner}
           />
           <div style={{ marginTop: 12, display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-            <button
-              type="button"
-              className="btn ghost"
+            <Button
+              variant="ghost"
               data-testid="generate-sample-pdf"
               disabled={sampleBusy}
               onClick={() => void generateSample()}
             >
               {sampleBusy ? "Generating…" : "Generate sample PDF"}
-            </button>
+            </Button>
             <span style={{ fontSize: 12, color: "var(--mut)" }}>
               Uses the real issuance pipeline when available; otherwise an honest sandbox preview.
             </span>

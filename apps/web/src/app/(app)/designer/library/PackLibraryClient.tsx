@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
-import { PageHeader } from "@/app/_components/ds";
+import { Button, PageHeader } from "@/app/_components/ds";
 import { Segmented } from "@/app/_components/ds/Segmented";
 import { PackCard, StatutoryWarningDialog } from "@/app/_components/ds/designer";
 import {
@@ -254,16 +254,14 @@ export function PackLibraryClient({ domainPacks }: PackLibraryClientProps) {
               Import creates a local draft — nothing is live until your office publishes it.
             </p>
             <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 16 }}>
-              <button type="button" className="btn ghost" onClick={() => setPreviewPack(null)}>
+              <Button variant="ghost" onClick={() => setPreviewPack(null)}>
                 Close
-              </button>
-              <button
-                type="button"
-                className="btn primary"
+              </Button>
+              <Button
                 onClick={() => { beginImport(previewPack); setPreviewPack(null); }}
               >
                 Import as draft
-              </button>
+              </Button>
             </div>
           </div>
         </div>

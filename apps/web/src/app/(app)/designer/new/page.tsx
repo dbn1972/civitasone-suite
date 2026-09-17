@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { PageHeader, Card, HelpTip } from "@/app/_components/ds";
+import { Button, PageHeader, Card, HelpTip } from "@/app/_components/ds";
 import { createServiceDefinition, slugifyServiceKey, waitForServiceDefinition } from "../_data/designerApi";
 import { SERVICE_PATTERN_OPTIONS } from "../_data/designerConstants";
 
@@ -111,9 +111,9 @@ export default function PatternPickerPage() {
               <p role="alert" style={{ margin: 0, color: "var(--bad-fg)", fontSize: 13 }}>{error}</p>
             ) : null}
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-              <button type="button" className="btn primary" disabled={!name.trim() || busy} onClick={() => { void handleCreate(); }}>
+              <Button disabled={!name.trim() || busy} onClick={() => { void handleCreate(); }}>
                 {busy ? "Creating…" : "Create draft"}
-              </button>
+              </Button>
               <Link href="/designer/library" className="btn ghost">or start from a pack</Link>
             </div>
           </div>
