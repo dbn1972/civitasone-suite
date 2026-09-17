@@ -9,7 +9,6 @@
  *  - optional required-reason input (maker-checker), busy state, aria-live result
  */
 import {
-  useCallback,
   useEffect,
   useId,
   useRef,
@@ -102,8 +101,13 @@ export function ConfirmDialog({
     };
   }, [open]);
 
-  const handleKeyDown = useCallback(
-    (e: React.KeyboardEvent) => {
+  // Escape + Tab-trap via a document-level listener (not a JSX onKeyDown prop
+  // on the role="alertdialog" panel) so it doesn't trip jsx-a11y's
+  // non-interactive-element-interactions check, and keeps working regardless
+  // of exactly what inside the panel currently has focus.
+  useEffect(() => {
+    if (!open) return;
+    function onKeyDown(e: globalThis.KeyboardEvent) {
       if (e.key === "Escape") {
         e.preventDefault();
         onCancel();
@@ -125,9 +129,10 @@ export function ConfirmDialog({
         e.preventDefault();
         first.focus();
       }
-    },
-    [onCancel],
-  );
+    }
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [open, onCancel]);
 
   if (!open) return null;
 
@@ -140,6 +145,7 @@ export function ConfirmDialog({
   return (
     <div
       className="cd-overlay"
+      role="presentation"
       onMouseDown={(e) => {
         if (e.target === e.currentTarget && !busy) onCancel();
       }}
@@ -151,7 +157,6 @@ export function ConfirmDialog({
         aria-modal="true"
         aria-labelledby={titleId}
         aria-describedby={description ? descId : undefined}
-        onKeyDown={handleKeyDown}
       >
         <h2 className="cd-title" id={titleId}>
           {danger && <span aria-hidden="true">⚠️</span>}

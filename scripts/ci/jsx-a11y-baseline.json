@@ -1,44 +1,8 @@
 {
   "$comment": "TRACKED DEBT, not an approved state. Each entry is <path>:<line>|<jsx-a11y rule> that eslint-plugin-jsx-a11y (registered at \"warn\" in apps/web/eslint.config.js, see the comment there for why) currently flags. The gate (scripts/ci/jsx-a11y-ratchet-guard.mjs) fails on any NEW entry not already here, and on any STALE entry (fixed but left listed) -- burn these down and regenerate with --write-baseline in the SAME PR as the fix, the same convention as empty-vs-error-baseline.json / raw-status-leak-baseline.json. See docs/ENTERPRISE-GAP-REPORT-2026-09-07.md UX-005 (tranche 1).",
-  "generatedAt": "2026-09-16",
+  "generatedAt": "2026-09-17",
   "counts": {
-    "total": 35
+    "total": 0
   },
-  "knownViolations": [
-    "apps/web/src/app/(app)/admin/integrations/_components/IntegrationDrawer.tsx:225|jsx-a11y/click-events-have-key-events",
-    "apps/web/src/app/(app)/admin/integrations/_components/IntegrationDrawer.tsx:225|jsx-a11y/no-noninteractive-element-interactions",
-    "apps/web/src/app/(app)/admin/integrations/_components/IntegrationDrawer.tsx:226|jsx-a11y/click-events-have-key-events",
-    "apps/web/src/app/(app)/admin/integrations/_components/IntegrationDrawer.tsx:226|jsx-a11y/no-static-element-interactions",
-    "apps/web/src/app/(app)/crm/health/[accountId]/FollowUpModal.tsx:113|jsx-a11y/click-events-have-key-events",
-    "apps/web/src/app/(app)/crm/health/[accountId]/FollowUpModal.tsx:113|jsx-a11y/no-static-element-interactions",
-    "apps/web/src/app/(app)/crm/health/[accountId]/FollowUpModal.tsx:114|jsx-a11y/click-events-have-key-events",
-    "apps/web/src/app/(app)/crm/health/[accountId]/FollowUpModal.tsx:114|jsx-a11y/no-noninteractive-element-interactions",
-    "apps/web/src/app/(app)/dashboard/FirstRunTour.tsx:124|jsx-a11y/click-events-have-key-events",
-    "apps/web/src/app/(app)/dashboard/FirstRunTour.tsx:124|jsx-a11y/no-noninteractive-element-interactions",
-    "apps/web/src/app/(app)/designer/_components/FormBuilder.tsx:301|jsx-a11y/click-events-have-key-events",
-    "apps/web/src/app/(app)/designer/_components/FormBuilder.tsx:301|jsx-a11y/no-static-element-interactions",
-    "apps/web/src/app/(app)/designer/library/PackLibraryClient.tsx:203|jsx-a11y/click-events-have-key-events",
-    "apps/web/src/app/(app)/designer/library/PackLibraryClient.tsx:203|jsx-a11y/no-noninteractive-element-interactions",
-    "apps/web/src/app/(app)/designer/library/PackLibraryClient.tsx:219|jsx-a11y/click-events-have-key-events",
-    "apps/web/src/app/(app)/designer/library/PackLibraryClient.tsx:219|jsx-a11y/no-static-element-interactions",
-    "apps/web/src/app/(app)/grants/applications/[id]/ApproveApplicationDialog.tsx:47|jsx-a11y/no-static-element-interactions",
-    "apps/web/src/app/(app)/grants/applications/[id]/ScoreApplicationDialog.tsx:69|jsx-a11y/no-static-element-interactions",
-    "apps/web/src/app/(app)/hr/payroll/[id]/SalarySlipsClientTable.tsx:99|jsx-a11y/click-events-have-key-events",
-    "apps/web/src/app/(app)/hr/payroll/[id]/SalarySlipsClientTable.tsx:99|jsx-a11y/no-noninteractive-element-interactions",
-    "apps/web/src/app/(app)/notifications/campaigns/_components/CampaignList.tsx:257|jsx-a11y/no-static-element-interactions",
-    "apps/web/src/app/(app)/notifications/campaigns/_components/CampaignList.tsx:263|jsx-a11y/no-noninteractive-element-interactions",
-    "apps/web/src/app/(app)/revenue/assessments/AssessmentsTable.tsx:153|jsx-a11y/no-noninteractive-element-interactions",
-    "apps/web/src/app/_components/GlobalSearch.tsx:299|jsx-a11y/no-noninteractive-element-interactions",
-    "apps/web/src/app/_components/GlobalSearch.tsx:352|jsx-a11y/click-events-have-key-events",
-    "apps/web/src/app/_components/ShortcutSheet.tsx:67|jsx-a11y/click-events-have-key-events",
-    "apps/web/src/app/_components/ShortcutSheet.tsx:67|jsx-a11y/no-static-element-interactions",
-    "apps/web/src/app/_components/ShortcutSheet.tsx:80|jsx-a11y/click-events-have-key-events",
-    "apps/web/src/app/_components/ShortcutSheet.tsx:80|jsx-a11y/no-noninteractive-element-interactions",
-    "apps/web/src/app/_components/SmartCombobox.tsx:188|jsx-a11y/click-events-have-key-events",
-    "apps/web/src/app/_components/crm/CloseOpportunityDialog.tsx:111|jsx-a11y/no-static-element-interactions",
-    "apps/web/src/app/_components/ds/ConfirmDialog.tsx:141|jsx-a11y/no-static-element-interactions",
-    "apps/web/src/app/_components/ds/ConfirmDialog.tsx:147|jsx-a11y/no-noninteractive-element-interactions",
-    "apps/web/src/app/_components/ds/designer/StatutoryWarningDialog.tsx:54|jsx-a11y/click-events-have-key-events",
-    "apps/web/src/app/_components/ds/designer/StatutoryWarningDialog.tsx:54|jsx-a11y/no-noninteractive-element-interactions"
-  ]
+  "knownViolations": []
 }

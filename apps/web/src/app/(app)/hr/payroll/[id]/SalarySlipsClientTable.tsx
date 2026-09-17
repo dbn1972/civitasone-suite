@@ -97,9 +97,7 @@ function SalarySlipModal({
 
   return (
     <div
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="slip-dlg-title"
+      role="presentation"
       style={{
         position: "fixed",
         inset: 0,
@@ -115,6 +113,9 @@ function SalarySlipModal({
       }}
     >
       <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="slip-dlg-title"
         style={{
           background: "var(--surface,#fff)",
           borderRadius: 12,

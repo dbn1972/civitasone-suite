@@ -108,7 +108,7 @@ export function CloseOpportunityDialog({
   }
 
   return (
-    <div className="cd-overlay" onMouseDown={(e) => e.target === e.currentTarget && !busy && onClose()}>
+    <div className="cd-overlay" role="presentation" onMouseDown={(e) => e.target === e.currentTarget && !busy && onClose()}>
       <div className="cd-panel" role="alertdialog" aria-modal="true" aria-labelledby={titleId}>
         <h2 className="cd-title" id={titleId}>
           Close “{opportunityName}”

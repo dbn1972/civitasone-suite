@@ -122,10 +122,7 @@ export function FirstRunTour() {
 
   return (
     <div
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="tour-title"
-      aria-describedby="tour-body"
+      role="presentation"
       onClick={(e) => {
         if (e.target === e.currentTarget) finish();
       }}
@@ -138,6 +135,10 @@ export function FirstRunTour() {
     >
       <div
         ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="tour-title"
+        aria-describedby="tour-body"
         className="card"
         style={{ width: "100%", maxWidth: 460, padding: 0, overflow: "hidden" }}
       >

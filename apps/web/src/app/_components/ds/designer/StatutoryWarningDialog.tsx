@@ -49,7 +49,7 @@ export function StatutoryWarningDialog({
         zIndex: 1000,
         padding: 16,
       }}
-      onClick={onCancel}
+      onClick={(e) => { if (e.target === e.currentTarget) onCancel(); }}
     >
       <div
         ref={panelRef}
@@ -64,7 +64,6 @@ export function StatutoryWarningDialog({
           padding: 20,
           boxShadow: "var(--shadow-md)",
         }}
-        onClick={(e) => e.stopPropagation()}
       >
         <h2 id="statutory-dialog-title" style={{ margin: "0 0 8px", fontSize: 18 }}>
           Statutory references

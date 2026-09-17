@@ -201,9 +201,7 @@ export function PackLibraryClient({ domainPacks }: PackLibraryClientProps) {
 
       {previewPack ? (
         <div
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="pack-preview-title"
+          role="presentation"
           style={{
             position: "fixed",
             inset: 0,
@@ -214,9 +212,12 @@ export function PackLibraryClient({ domainPacks }: PackLibraryClientProps) {
             zIndex: 1000,
             padding: 16,
           }}
-          onClick={() => setPreviewPack(null)}
+          onClick={(e) => { if (e.target === e.currentTarget) setPreviewPack(null); }}
         >
           <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="pack-preview-title"
             style={{
               width: "min(640px, 100%)",
               maxHeight: "90vh",
@@ -226,7 +227,6 @@ export function PackLibraryClient({ domainPacks }: PackLibraryClientProps) {
               border: "1px solid var(--line)",
               padding: 20,
             }}
-            onClick={(e) => e.stopPropagation()}
           >
             <h2 id="pack-preview-title" style={{ margin: "0 0 8px" }}>{previewPack.name}</h2>
             <p style={{ margin: "0 0 12px", color: "var(--mut)", fontSize: 14 }}>

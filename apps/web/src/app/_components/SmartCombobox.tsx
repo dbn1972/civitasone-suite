@@ -191,6 +191,12 @@ export function SmartCombobox({
               role="option"
               aria-selected={idx === activeIndex}
               onClick={() => selectItem(item.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  selectItem(item.value);
+                }
+              }}
               style={{
                 padding: "8px 12px",
                 cursor: "pointer",

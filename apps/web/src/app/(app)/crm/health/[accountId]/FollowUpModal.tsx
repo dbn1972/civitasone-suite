@@ -110,13 +110,16 @@ export function FollowUpModal({ accountId, onClose }: Props) {
       </button>
 
       {open && (
-        <div style={OVERLAY} onClick={() => { if (!saving) { setOpen(false); onClose?.(); } }}>
+        <div
+          style={OVERLAY}
+          role="presentation"
+          onClick={(e) => { if (e.target === e.currentTarget && !saving) { setOpen(false); onClose?.(); } }}
+        >
           <div
             role="dialog"
             aria-modal="true"
             aria-label="Create follow-up service request"
             style={DIALOG}
-            onClick={(e) => e.stopPropagation()}
           >
             <div
               style={{

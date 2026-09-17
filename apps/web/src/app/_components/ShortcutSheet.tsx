@@ -66,7 +66,8 @@ export function ShortcutSheet({ open, onClose, shortcuts }: ShortcutSheetProps) 
   return (
     <div
       className="shortcut-sheet-overlay"
-      onClick={onClose}
+      role="presentation"
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
       style={{
         position: "fixed",
         inset: 0,
@@ -82,7 +83,6 @@ export function ShortcutSheet({ open, onClose, shortcuts }: ShortcutSheetProps) 
         role="dialog"
         aria-modal="true"
         aria-label="Keyboard shortcuts"
-        onClick={(e) => e.stopPropagation()}
         style={{
           background: "var(--surface, #fff)",
           borderRadius: 12,
