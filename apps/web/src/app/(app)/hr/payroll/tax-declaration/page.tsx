@@ -1,3 +1,4 @@
+import { getTranslations } from "next-intl/server";
 import { PageHeader } from "../../../../_components/ds";
 import { TaxDeclarationForm } from "./TaxDeclarationForm";
 
@@ -6,10 +7,11 @@ export const metadata = {
   description: "Submit income tax investment proofs (80C/80D/HRA)",
 };
 
-export default function TaxDeclarationPage() {
+export default async function TaxDeclarationPage() {
+  const t = await getTranslations("taxDeclaration");
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
-      <PageHeader title="Tax Declaration" subtitle="Submit your income tax investment proofs for the current financial year." back="/hr/payroll" />
+      <PageHeader title={t("title")} subtitle={t("subtitle")} back="/hr/payroll" />
       <TaxDeclarationForm />
     </main>
   );

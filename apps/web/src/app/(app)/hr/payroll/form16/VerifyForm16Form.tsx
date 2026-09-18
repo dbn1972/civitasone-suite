@@ -1,6 +1,7 @@
 "use client";
 
 import { useId, useRef, useState } from "react";
+import { useTranslations } from "next-intl";
 import { Button, Card } from "../../../../_components/ds";
 import { browserJson } from "@/lib/api/browserClient";
 
@@ -31,6 +32,7 @@ function fileToBase64(file: File): Promise<string> {
 }
 
 export function VerifyForm16Form() {
+  const t = useTranslations("verifyForm16Form");
   const fileRef = useRef<HTMLInputElement>(null);
   const inputId = useId();
   const errId = useId();
@@ -44,22 +46,22 @@ export function VerifyForm16Form() {
     setResult(null);
     const file = fileRef.current?.files?.[0];
     if (!file) {
-      setError("Choose a Form-16 PDF to verify.");
+      setError(t("chooseFileError"));
       fileRef.current?.focus();
       return;
     }
     if (file.type && file.type !== "application/pdf") {
-      setError("Only PDF files can be verified.");
+      setError(t("onlyPdfError"));
       fileRef.current?.focus();
       return;
     }
     if (file.size === 0) {
-      setError("The selected file is empty.");
+      setError(t("emptyFileError"));
       fileRef.current?.focus();
       return;
     }
     if (file.size > MAX_BYTES) {
-      setError("PDF exceeds the 2 MB verification limit.");
+      setError(t("fileTooLargeError"));
       fileRef.current?.focus();
       return;
     }
@@ -73,7 +75,7 @@ export function VerifyForm16Form() {
       });
       setResult(res.data);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Network error. Please try again.");
+      setError(err instanceof Error ? err.message : t("networkError"));
     } finally {
       setBusy(false);
     }
@@ -81,11 +83,11 @@ export function VerifyForm16Form() {
 
   return (
     <form onSubmit={(e) => void handleSubmit(e)} style={{ marginTop: 16 }}>
-      <Card title="Verify a Form-16" padding>
+      <Card title={t("cardTitle")} padding>
         <div style={{ display: "grid", gap: 12 }}>
           <div style={{ display: "grid", gap: 6 }}>
             <label htmlFor={inputId} style={{ fontSize: 13, fontWeight: 600 }}>
-              Form-16 PDF <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
+              {t("fileLabel")} <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
             </label>
             <input
               id={inputId}
@@ -101,7 +103,7 @@ export function VerifyForm16Form() {
 
           <div>
             <Button type="submit" style={{ minHeight: 44 }} disabled={busy}>
-              {busy ? "Verifying…" : "Verify signature"}
+              {busy ? t("verifyingBtn") : t("verifyBtn")}
             </Button>
           </div>
 
@@ -124,18 +126,18 @@ export function VerifyForm16Form() {
             >
               <div style={{ fontWeight: 600, marginBottom: 6 }}>
                 {result.valid ? (
-                  <><span aria-hidden="true">✅</span> Signature valid</>
+                  <><span aria-hidden="true">✅</span> {t("signatureValid")}</>
                 ) : (
-                  <><span aria-hidden="true">⚠️</span> Signature invalid or unsigned</>
+                  <><span aria-hidden="true">⚠️</span> {t("signatureInvalid")}</>
                 )}
               </div>
               <ul style={{ margin: 0, paddingLeft: 18, fontSize: 13, lineHeight: 1.7 }}>
-                {result.signerCN && <li>Signer: {result.signerCN}</li>}
-                {result.signedAt && <li>Signed at: {result.signedAt}</li>}
-                {result.certificateExpiry && <li>Certificate expiry: {result.certificateExpiry}</li>}
+                {result.signerCN && <li>{t("signerLabel", { name: result.signerCN })}</li>}
+                {result.signedAt && <li>{t("signedAtLabel", { date: result.signedAt })}</li>}
+                {result.certificateExpiry && <li>{t("certExpiryLabel", { date: result.certificateExpiry })}</li>}
                 {result.issues.length > 0 && (
                   <li>
-                    Issues:
+                    {t("issuesLabel")}
                     <ul>
                       {result.issues.map((issue) => (
                         <li key={issue}>{issue}</li>

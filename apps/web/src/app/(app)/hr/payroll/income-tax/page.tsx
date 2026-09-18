@@ -1,3 +1,4 @@
+import { getTranslations } from "next-intl/server";
 import { PageHeader, StatGrid, StatCard, Card, DataTable } from "../../../../_components/ds";
 import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
@@ -27,36 +28,37 @@ async function getData(): Promise<LoaderResult<Row[]>> {
 }
 
 export default async function IncomeTaxPage() {
+  const t = await getTranslations("incomeTax");
   const { data: items, source: source } = await getData();
 
   const columns: { key: keyof Row & string; label: string; cellType?: "status"; align?: "left" | "right" }[] = [
-    { key: "employee", label: "Employee" },
-    { key: "grossIncome", label: "Gross Income", align: "right" },
-    { key: "deductions80C", label: "80C", align: "right" },
-    { key: "otherDeductions", label: "Other Ded.", align: "right" },
-    { key: "taxableIncome", label: "Taxable Income", align: "right" },
-    { key: "taxPayable", label: "Tax Payable", align: "right" },
-    { key: "status", label: "Status", cellType: "status" },
+    { key: "employee", label: t("colEmployee") },
+    { key: "grossIncome", label: t("colGrossIncome"), align: "right" },
+    { key: "deductions80C", label: t("col80c"), align: "right" },
+    { key: "otherDeductions", label: t("colOtherDed"), align: "right" },
+    { key: "taxableIncome", label: t("colTaxableIncome"), align: "right" },
+    { key: "taxPayable", label: t("colTaxPayable"), align: "right" },
+    { key: "status", label: t("colStatus"), cellType: "status" },
   ];
 
   const fy = currentFinancialYear();
 
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
-      <PageHeader title="Income Tax Computation" subtitle={`Annual IT computation summary for FY ${fy}.`} back="/hr" />
-      <DataSourceBadge source={source} message="Couldn't load — showing nothing" />
+      <PageHeader title={t("title")} subtitle={t("subtitle", { fy })} back="/hr" />
+      <DataSourceBadge source={source} message={t("loadErrorMessage")} />
       <StatGrid>
-        <StatCard icon="📋" iconBg="var(--infobg)" label="Total" value={items.length} />
-        <StatCard icon="✅" iconBg="var(--goodbg)" label="Finalized" value={items.filter((i) => i.status === "finalized" || i.status === "completed").length} />
-        <StatCard icon="⏳" iconBg="var(--warnbg)" label="Pending" value={items.filter((i) => i.status === "pending" || i.status === "draft").length} />
-        <StatCard icon="🏢" iconBg="var(--panel)" label="Departments" value={new Set(items.map((i) => i.department)).size} />
+        <StatCard icon="📋" iconBg="var(--infobg)" label={t("statTotal")} value={items.length} />
+        <StatCard icon="✅" iconBg="var(--goodbg)" label={t("statFinalized")} value={items.filter((i) => i.status === "finalized" || i.status === "completed").length} />
+        <StatCard icon="⏳" iconBg="var(--warnbg)" label={t("statPending")} value={items.filter((i) => i.status === "pending" || i.status === "draft").length} />
+        <StatCard icon="🏢" iconBg="var(--panel)" label={t("statDepartments")} value={new Set(items.map((i) => i.department)).size} />
       </StatGrid>
-      <Card title="Income Tax Declarations">
-        <DataTable<Row> columns={columns} rows={items} sortable filterable filterPlaceholder="Filter…"
+      <Card title={t("cardTitle")}>
+        <DataTable<Row> columns={columns} rows={items} sortable filterable filterPlaceholder={t("filterPlaceholder")}
           pageSize={15}
           emptyIcon="📊"
-          emptyTitle="No income tax declarations"
-          emptyMessage="Employee income tax declarations appear here once submitted during the declaration window."
+          emptyTitle={t("emptyTitle")}
+          emptyMessage={t("emptyMessage")}
         />
       </Card>
     </main>

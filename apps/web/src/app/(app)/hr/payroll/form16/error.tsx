@@ -1,15 +1,17 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import { RouteError } from "@/app/_components/RouteError";
 
 export default function ErrorBoundary({ error, reset }: { error: Error & { digest?: string }; reset: () => void }) {
+  const t = useTranslations("form16");
   return (
     <RouteError
       error={error}
       reset={reset}
       backHref="/hr/payroll"
-      backLabel="Back to Payroll"
-      area="Form-16"
+      backLabel={t("errorBackLabel")}
+      area={t("errorArea")}
     />
   );
 }
