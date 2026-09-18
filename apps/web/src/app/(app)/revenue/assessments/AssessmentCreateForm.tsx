@@ -2,7 +2,7 @@
 
 import { useId, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Card, ConfirmDialog } from "@/app/_components/ds";
+import { Button, Card, ConfirmDialog } from "@/app/_components/ds";
 import { browserJson } from "@/lib/api/browserClient";
 
 const FY_PATTERN = /^\d{4}-\d{2}$/;
@@ -182,9 +182,9 @@ export function AssessmentCreateForm() {
           </div>
 
           <div>
-            <button type="submit" className="btn primary" style={{ minHeight: 44 }} disabled={busy}>
+            <Button type="submit" style={{ minHeight: 44 }} disabled={busy} loading={busy}>
               Create Assessment
-            </button>
+            </Button>
           </div>
 
           {message && (

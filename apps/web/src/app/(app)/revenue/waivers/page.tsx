@@ -5,7 +5,7 @@
  * Command-only: no list endpoint yet (CQRS pattern, worker handles projection).
  */
 import { useId, useState } from "react";
-import { PageHeader, Card } from "@/app/_components/ds";
+import { Button, PageHeader, Card } from "@/app/_components/ds";
 import { browserJson } from "@/lib/api/browserClient";
 
 type FieldErrors = {
@@ -139,9 +139,9 @@ export default function WaiversPage() {
             </div>
 
             <div>
-              <button type="submit" className="btn primary" style={{ minHeight: 44 }} disabled={busy}>
+              <Button type="submit" style={{ minHeight: 44 }} disabled={busy} loading={busy}>
                 {busy ? "Submitting…" : "Submit Waiver"}
-              </button>
+              </Button>
             </div>
 
             {message && <p role="status" className="pill good" style={{ width: "fit-content" }}>{message}</p>}

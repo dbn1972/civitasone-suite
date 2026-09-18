@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { PageHeader } from "../../../../_components/ds";
+import { Button, PageHeader } from "../../../../_components/ds";
 import { useFormError } from "@/lib/useFormError";
 
 const RTI_SECTIONS = [
@@ -274,9 +274,9 @@ export default function NewRtiPage() {
             <a href="/crm/rti" className="btn">
               Cancel
             </a>
-            <button type="submit" className="btn primary" disabled={saving}>
+            <Button type="submit" disabled={saving} loading={saving}>
               {saving ? "Filing…" : "File RTI Request"}
-            </button>
+            </Button>
           </div>
         </form>
       </div>

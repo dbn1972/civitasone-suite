@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { Button } from "../Button";
 import { FormRenderer } from "./FormRenderer";
 import { LocaleTabs, type LocaleKey } from "./LocaleTabs";
 import { MergeFieldPicker, type MergeField } from "./MergeFieldPicker";
@@ -59,7 +60,7 @@ function ChannelCitizenPreview({
           borderRadius: 18,
           background: "var(--panel)",
           border: "1px solid var(--line)",
-          boxShadow: "var(--shadow-sm)",
+          boxShadow: "var(--sh)",
           fontSize: 14,
           lineHeight: 1.4,
         }}
@@ -78,8 +79,8 @@ function ChannelCitizenPreview({
           margin: "0 auto",
           padding: "10px 12px",
           borderRadius: "12px 12px 12px 4px",
-          background: "var(--good-bg)",
-          border: "1px solid var(--good-border)",
+          background: "var(--goodbg)",
+          border: "1px solid var(--goodbd)",
           fontSize: 13,
           lineHeight: 1.45,
           color: "var(--ink)",
@@ -129,8 +130,8 @@ function ChannelCitizenPreview({
         alignItems: "flex-start",
         padding: "10px 12px",
         borderRadius: "var(--r-sm)",
-        border: "1px solid var(--info-border)",
-        background: "var(--info-bg)",
+        border: "1px solid var(--infobd)",
+        background: "var(--infobg)",
       }}
     >
       <span
@@ -140,7 +141,7 @@ function ChannelCitizenPreview({
           height: 8,
           marginTop: 6,
           borderRadius: "50%",
-          background: "var(--info-fg)",
+          background: "var(--info)",
           flexShrink: 0,
         }}
       />
@@ -250,9 +251,9 @@ export function NotificationMatrix({
                     const label = cellChipLabel(cell);
                     return (
                       <td key={ch.id}>
-                        <button
+                        <Button
                           type="button"
-                          className={on ? "btn primary" : "btn ghost"}
+                          variant={on ? "primary" : "ghost"}
                           aria-pressed={on}
                           aria-label={
                             on
@@ -272,7 +273,7 @@ export function NotificationMatrix({
                           }}
                         >
                           {label}
-                        </button>
+                        </Button>
                       </td>
                     );
                   })}
@@ -321,9 +322,9 @@ export function NotificationMatrix({
                   fontWeight: 600,
                   padding: "2px 8px",
                   borderRadius: 999,
-                  background: editingCell.enabled ? "var(--good-bg)" : "var(--bg)",
-                  color: editingCell.enabled ? "var(--good-fg)" : "var(--mut)",
-                  border: `1px solid ${editingCell.enabled ? "var(--good-border)" : "var(--line)"}`,
+                  background: editingCell.enabled ? "var(--goodbg)" : "var(--bg)",
+                  color: editingCell.enabled ? "var(--good)" : "var(--mut)",
+                  border: `1px solid ${editingCell.enabled ? "var(--goodbd)" : "var(--line)"}`,
                   alignSelf: "center",
                 }}
               >
@@ -394,7 +395,7 @@ export function NotificationMatrix({
             {sms ? (
               <p
                 data-testid="sms-stats"
-                style={{ fontSize: 12, color: sms.warn ? "var(--warn-fg)" : "var(--mut)" }}
+                style={{ fontSize: 12, color: sms.warn ? "var(--warn)" : "var(--mut)" }}
               >
                 {sms.chars} character{sms.chars === 1 ? "" : "s"} · {sms.segments} SMS segment
                 {sms.segments === 1 ? "" : "s"}
@@ -403,26 +404,25 @@ export function NotificationMatrix({
             ) : null}
 
             <div style={{ marginTop: 12, display: "flex", gap: 8, flexWrap: "wrap" }}>
-              <button
+              <Button
                 type="button"
-                className="btn primary"
                 data-testid="template-done"
                 onClick={() => setEditing(null)}
               >
                 Done
-              </button>
-              <button
+              </Button>
+              <Button
                 type="button"
-                className="btn ghost"
+                variant="ghost"
                 data-testid="template-turn-off"
                 onClick={disableEditingCell}
               >
                 Turn off this channel
-              </button>
+              </Button>
               {!previewOpen ? (
-                <button type="button" className="btn ghost" onClick={() => setPreviewOpen(true)}>
+                <Button type="button" variant="ghost" onClick={() => setPreviewOpen(true)}>
                   Show preview
-                </button>
+                </Button>
               ) : null}
             </div>
           </div>

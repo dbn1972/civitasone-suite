@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useId, useRef, useState } from "react";
 import type { StatutoryReference } from "@/app/(app)/designer/_data/designerApi";
+import { Button } from "../Button";
 
 export interface StatutoryWarningDialogProps {
   open: boolean;
@@ -62,7 +63,7 @@ export function StatutoryWarningDialog({
           borderRadius: "var(--r-sm)",
           border: "1px solid var(--line)",
           padding: 20,
-          boxShadow: "var(--shadow-md)",
+          boxShadow: "var(--sh-md)",
         }}
       >
         <h2 id="statutory-dialog-title" style={{ margin: "0 0 8px", fontSize: 18 }}>
@@ -88,7 +89,7 @@ export function StatutoryWarningDialog({
           </p>
         ) : null}
         {crossTenant ? (
-          <p style={{ color: "var(--warn-fg)", fontSize: 13 }}>
+          <p style={{ color: "var(--warn)", fontSize: 13 }}>
             Cross-tenant import requires Platform Admin acknowledgment.
           </p>
         ) : null}
@@ -107,17 +108,17 @@ export function StatutoryWarningDialog({
           </span>
         </label>
         <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
-          <button type="button" className="btn ghost" onClick={onCancel} disabled={busy}>
+          <Button type="button" variant="ghost" onClick={onCancel} disabled={busy}>
             Cancel
-          </button>
-          <button
+          </Button>
+          <Button
             type="button"
-            className="btn primary"
             disabled={!acknowledged || busy}
+            loading={busy}
             onClick={onConfirm}
           >
             {busy ? "Importing…" : "Import as draft"}
-          </button>
+          </Button>
         </div>
       </div>
     </div>

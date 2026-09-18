@@ -2,7 +2,7 @@
 
 import { useId, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Card, ConfirmDialog, EmptyState } from "@/app/_components/ds";
+import { Button, Card, ConfirmDialog, EmptyState } from "@/app/_components/ds";
 import { browserJson } from "@/lib/api/browserClient";
 import { formatMoney } from "@/lib/formatters";
 import { rupeesToMinorString } from "@/lib/money";
@@ -250,9 +250,9 @@ export function AdjustmentCreateForm({ assesseeId, demands }: { assesseeId: stri
           </div>
 
           <div>
-            <button type="submit" className="btn primary" style={{ minHeight: 44 }} disabled={busy}>
+            <Button type="submit" style={{ minHeight: 44 }} disabled={busy} loading={busy}>
               Raise Adjustment
-            </button>
+            </Button>
           </div>
 
           {message && (

@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { Button } from "../Button";
 import { DataTable } from "../DataTable";
 import {
   formatPaise,
@@ -122,7 +123,7 @@ function FailDetails({ step }: { step: TestRunStep }) {
         display: "grid",
         gap: 6,
         fontSize: 13,
-        color: "var(--bad-fg)",
+        color: "var(--bad)",
       }}
     >
       <div>
@@ -157,9 +158,9 @@ export function TestRunPanel({ definitionId, steps, history, onRun, running }: T
       <p style={{ color: "var(--mut)", marginTop: 0 }}>
         A service must pass this test before it can be submitted.
       </p>
-      <button type="button" className="btn primary" onClick={onRun} disabled={running}>
+      <Button type="button" onClick={onRun} disabled={running} loading={running}>
         {running ? "Running…" : "Run sandbox test"}
-      </button>
+      </Button>
       <ol style={{ listStyle: "none", margin: "16px 0 0", padding: 0, display: "grid", gap: 8 }}>
         {steps.map((step) => {
           const href = resolveBlockLink(definitionId, step.blockLink);
@@ -175,7 +176,7 @@ export function TestRunPanel({ definitionId, steps, history, onRun, running }: T
                 padding: "10px 12px",
                 border: "1px solid var(--line)",
                 borderRadius: "var(--r-sm)",
-                background: isFail ? "var(--bad-bg)" : "var(--panel)",
+                background: isFail ? "var(--badbg)" : "var(--panel)",
               }}
             >
               <span
@@ -183,7 +184,7 @@ export function TestRunPanel({ definitionId, steps, history, onRun, running }: T
                 style={{
                   fontWeight: 700,
                   color: isFail
-                    ? "var(--bad-fg)"
+                    ? "var(--bad)"
                     : step.status === "pass" && !step.skipped
                       ? "var(--good)"
                       : "var(--mut)",
@@ -198,15 +199,15 @@ export function TestRunPanel({ definitionId, steps, history, onRun, running }: T
                     {statusLabel(step.status, step.skipped)}
                   </span>
                   {isFail ? (
-                    <button
+                    <Button
                       type="button"
-                      className="btn ghost"
+                      variant="ghost"
                       style={{ fontSize: 12, padding: "2px 8px" }}
                       aria-expanded={isOpen}
                       onClick={() => setExpanded((prev) => ({ ...prev, [step.id]: !prev[step.id] }))}
                     >
                       {isOpen ? "Hide details" : "Show details"}
-                    </button>
+                    </Button>
                   ) : null}
                 </div>
                 {isFail && isOpen ? <FailDetails step={step} /> : null}

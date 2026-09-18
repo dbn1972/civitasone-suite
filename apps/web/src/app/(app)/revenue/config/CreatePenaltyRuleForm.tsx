@@ -2,7 +2,7 @@
 
 import { useId, useRef, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
-import { Card, ConfirmDialog } from "../../../_components/ds";
+import { Button, Card, ConfirmDialog } from "../../../_components/ds";
 import { browserJson } from "@/lib/api/browserClient";
 import type { AcceptedResponse, InterestType, RoundingMode } from "./types";
 
@@ -220,9 +220,9 @@ export function CreatePenaltyRuleForm({ rateHeadId, rateHeadLabel }: CreatePenal
           </div>
 
           <div>
-            <button type="submit" className="btn primary" style={{ minHeight: 44 }} disabled={busy}>
+            <Button type="submit" style={{ minHeight: 44 }} disabled={busy} loading={busy}>
               Create Penalty Rule
-            </button>
+            </Button>
           </div>
 
           {successMessage && (

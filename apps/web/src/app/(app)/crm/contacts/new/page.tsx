@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useId, useRef, useState } from "react";
 import { DuplicateCheckPanel } from "../../../../_components/crm/DuplicateCheckPanel";
 import { useToast } from "@/app/_components/ds/Toast";
-import { PageHeader } from "@/app/_components/ds";
+import { Button, PageHeader } from "@/app/_components/ds";
 import {
   duplicateCheck,
   parseFieldError,
@@ -315,9 +315,9 @@ export default function NewContactPage() {
             <input type="checkbox" checked={form.marketingConsent} onChange={(e) => setForm({ ...form, marketingConsent: e.target.checked })} />
             Marketing consent (GDPR/DPDP)
           </label>
-          <button type="submit" className="btn primary" disabled={busy || checking} style={{ marginTop: 16, minHeight: 44 }}>
+          <Button type="submit" disabled={busy || checking} loading={busy} style={{ marginTop: 16, minHeight: 44 }}>
             {busy ? "Creating…" : checking ? "Checking…" : ackDuplicates ? "Create anyway" : "Create contact"}
-          </button>
+          </Button>
         </form>
       </div>
     </>

@@ -2,6 +2,7 @@
 
 import { useId, useState } from "react";
 import { useRouter } from "next/navigation";
+import { Button } from "@/app/_components/ds";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -48,9 +49,9 @@ export function WriteOffLookupForm() {
           </p>
         )}
       </div>
-      <button type="submit" className="btn ghost" style={{ minHeight: 44 }}>
+      <Button type="submit" variant="ghost" style={{ minHeight: 44 }}>
         Go to decision
-      </button>
+      </Button>
     </form>
   );
 }

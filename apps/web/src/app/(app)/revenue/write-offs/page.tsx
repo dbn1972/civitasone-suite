@@ -1,4 +1,4 @@
-import { PageHeader, Card, EmptyState } from "@/app/_components/ds";
+import { Button, PageHeader, Card, EmptyState } from "@/app/_components/ds";
 import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import { WriteOffCreateForm } from "./WriteOffCreateForm";
@@ -93,9 +93,9 @@ export default async function WriteOffsPage({
               ))}
             </select>
           </div>
-          <button type="submit" className="btn primary" style={{ minHeight: 44 }}>
+          <Button type="submit" style={{ minHeight: 44 }}>
             View
-          </button>
+          </Button>
         </form>
       </Card>
 

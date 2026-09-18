@@ -1,14 +1,15 @@
 "use client";
 import { useState } from "react";
 import { FollowUpModal } from "./FollowUpModal";
+import { Button } from "@/app/_components/ds";
 
 export function FollowUpButton({ accountId }: { accountId: string }) {
   const [open, setOpen] = useState(false);
   return (
     <>
-      <button className="btn" type="button" onClick={() => setOpen(true)}>
+      <Button onClick={() => setOpen(true)}>
         + Create Follow-up
-      </button>
+      </Button>
       {open && <FollowUpModal accountId={accountId} onClose={() => setOpen(false)} />}
     </>
   );

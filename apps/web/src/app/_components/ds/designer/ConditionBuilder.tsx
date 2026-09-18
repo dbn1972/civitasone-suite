@@ -1,6 +1,7 @@
 "use client";
 
 import type { ConditionOperator, FormFieldDefinition, VisibilityCondition } from "./formTypes";
+import { Button } from "../Button";
 
 export interface ConditionBuilderProps {
   conditions: VisibilityCondition[];
@@ -97,12 +98,12 @@ export function ConditionBuilder({
                   aria-label="Comparison value"
                 />
               ) : null}
-              <button type="button" className="btn ghost" onClick={() => removeRow(idx)}>Remove rule</button>
+              <Button type="button" variant="ghost" onClick={() => removeRow(idx)}>Remove rule</Button>
             </div>
           );
         })
       )}
-      <button type="button" className="btn ghost" onClick={addRow}>Add visibility rule</button>
+      <Button type="button" variant="ghost" onClick={addRow}>Add visibility rule</Button>
     </div>
   );
 }

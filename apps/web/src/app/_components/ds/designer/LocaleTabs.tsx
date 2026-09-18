@@ -1,5 +1,7 @@
 "use client";
 
+import { Button } from "../Button";
+
 export type LocaleKey = "en" | "hi";
 
 export interface LocaleTabsProps {
@@ -19,18 +21,18 @@ export function LocaleTabs({ active, onChange, completeness }: LocaleTabsProps) 
         const selected = active === tab.key;
         const complete = completeness?.[tab.key];
         return (
-          <button
+          <Button
             key={tab.key}
             type="button"
             role="tab"
             aria-selected={selected}
-            className={selected ? "btn primary" : "btn ghost"}
+            variant={selected ? "primary" : "ghost"}
             onClick={() => onChange(tab.key)}
             style={{ padding: "4px 10px", fontSize: 12 }}
           >
             {tab.label}
             {complete === false ? " ○" : complete === true ? " ●" : ""}
-          </button>
+          </Button>
         );
       })}
     </div>

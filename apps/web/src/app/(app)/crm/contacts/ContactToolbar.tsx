@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { browserFetch, errorMessageFromResponse } from "@/lib/api/browserClient";
+import { Button } from "@/app/_components/ds";
 
 export function ContactToolbar() {
   const router = useRouter();
@@ -54,9 +55,9 @@ export function ContactToolbar() {
           <option value="mine">Mine</option>
           <option value="recent">Recent</option>
         </select>
-        <button type="button" className="btn ghost" onClick={applyFilters} style={{ minHeight: 44 }}>Search</button>
+        <Button variant="ghost" onClick={applyFilters} style={{ minHeight: 44 }}>Search</Button>
         <a className="btn primary" href="/crm/contacts/new" style={{ minHeight: 44, display: "inline-flex", alignItems: "center" }}>+ New Contact</a>
-        <button type="button" className="btn ghost" onClick={() => void exportContacts()} style={{ minHeight: 44 }}>Export</button>
+        <Button variant="ghost" onClick={() => void exportContacts()} style={{ minHeight: 44 }}>Export</Button>
         <a className="btn ghost" href="/crm/contacts/import" style={{ minHeight: 44, display: "inline-flex", alignItems: "center" }}>Import</a>
       </div>
       {message ? <p role="status" aria-live="polite" style={{ fontSize: 13, color: "#047857", margin: 0 }}>{message}</p> : null}
