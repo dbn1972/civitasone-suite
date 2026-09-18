@@ -639,7 +639,7 @@ module.exports = {
 
     // ── Infrastructure services ────────────────────────────────────────────────
     // Platform message-bus observability process (F9). Domain services embed the
-    // bus via @civitasone/queue; this process exposes /health + /v1/queue/* ops.
+    // bus via @civitasone/queue; this process exposes /ready + /v1/queue/* ops.
     {
       name: "queue",
       script: "dist/server.js",
@@ -649,6 +649,11 @@ module.exports = {
       merge_logs: true,
       restart_delay: 3000,
       max_restarts: 10,
+      // PERF-015 tranche 5: hand-rolled object literal (not svc()), so
+      // GRACEFUL_LIFECYCLE is spread directly rather than via the opts.graceful
+      // flag — src/server.ts now calls signalReady()/registerGracefulShutdown()
+      // (@civitasone/observability), matching gateway-service's PERF-003 pattern.
+      ...GRACEFUL_LIFECYCLE,
       env: {
         NODE_ENV: RUNTIME_NODE_ENV,
         PORT: 3030,
