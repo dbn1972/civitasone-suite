@@ -2,7 +2,7 @@
 
 import { useId, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
-import { Card, ConfirmDialog } from "../../../_components/ds";
+import { Button, Card, ConfirmDialog } from "../../../_components/ds";
 import { browserJson } from "@/lib/api/browserClient";
 import { formatMoney } from "@/lib/formatters";
 import type { PfmsMode } from "./types";
@@ -298,9 +298,9 @@ export function PaymentAdviceForm({ onModeObserved }: PaymentAdviceFormProps) {
             </div>
 
             <div>
-              <button type="submit" className="btn primary" style={{ minHeight: 44 }} disabled={busy}>
+              <Button type="submit" style={{ minHeight: 44 }} disabled={busy}>
                 {t("title")}
-              </button>
+              </Button>
             </div>
 
             {message && (
@@ -396,9 +396,9 @@ function AdviceStatusLookup({
               style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
             />
           </div>
-          <button type="submit" className="btn" style={{ minHeight: 44 }} disabled={busy}>
+          <Button type="submit" style={{ minHeight: 44 }} disabled={busy}>
             {busy ? t("checking") : t("checkStatus")}
-          </button>
+          </Button>
         </div>
         {invalid && (
           <p id={errId} role="alert" className="pill bad" style={{ width: "fit-content" }}>

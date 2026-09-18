@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useRef, useState, type ReactNode, type UIEvent } from "react";
+import { Button } from "../Button";
 
 export interface SortableListItem {
   id: string;
@@ -130,26 +131,26 @@ export function SortableList<T extends SortableListItem>({
               {renderItem(item, index)}
             </button>
             <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-              <button
+              <Button
                 type="button"
-                className="btn ghost"
+                variant="ghost"
                 aria-label="Move up"
                 disabled={index === 0}
                 onClick={() => onMoveUp(item.id)}
                 style={{ padding: "2px 8px", minWidth: 32 }}
               >
                 ↑
-              </button>
-              <button
+              </Button>
+              <Button
                 type="button"
-                className="btn ghost"
+                variant="ghost"
                 aria-label="Move down"
                 disabled={index === items.length - 1}
                 onClick={() => onMoveDown(item.id)}
                 style={{ padding: "2px 8px", minWidth: 32 }}
               >
                 ↓
-              </button>
+              </Button>
             </div>
           </li>
         );

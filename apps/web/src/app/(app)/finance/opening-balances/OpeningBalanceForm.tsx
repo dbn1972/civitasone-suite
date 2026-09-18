@@ -2,7 +2,7 @@
 
 import { useId, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Card, ConfirmDialog } from "../../../_components/ds";
+import { Button, Card, ConfirmDialog } from "../../../_components/ds";
 import { browserJson } from "@/lib/api/browserClient";
 
 type Props = { fyCode: string };
@@ -196,15 +196,16 @@ export function OpeningBalanceForm({ fyCode }: Props) {
                       />
                     </td>
                     <td>
-                      <button
+                      <Button
                         type="button"
-                        className="btn ghost sm"
+                        variant="ghost"
+                        size="sm"
                         aria-label={`Remove row ${idx + 1}`}
                         onClick={() => removeRow(row.id)}
                         disabled={rows.length <= 1}
                       >
                         ✕
-                      </button>
+                      </Button>
                     </td>
                   </tr>
                 ))}
@@ -213,10 +214,10 @@ export function OpeningBalanceForm({ fyCode }: Props) {
           </div>
 
           <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
-            <button type="button" className="btn ghost" onClick={addRow}>+ Add row</button>
-            <button type="submit" className="btn primary" style={{ minHeight: 44 }} disabled={busy}>
+            <Button type="button" variant="ghost" onClick={addRow}>+ Add row</Button>
+            <Button type="submit" style={{ minHeight: 44 }} disabled={busy}>
               Save Opening Balances ({entryCount})
-            </button>
+            </Button>
           </div>
 
           {rowError && (

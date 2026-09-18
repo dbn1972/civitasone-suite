@@ -15,6 +15,7 @@
  */
 
 import { useCallback, useState } from "react";
+import { Button } from "../../../../_components/ds";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -98,9 +99,9 @@ export function ReappropriateWithApproval() {
 
   return (
     <>
-      <button className="btn primary" onClick={() => setOpen((v) => !v)}>
+      <Button onClick={() => setOpen((v) => !v)}>
         {open ? "Cancel" : "+ Re-appropriation with approval"}
-      </button>
+      </Button>
 
       {open ? (
         <div className="card" style={{ marginTop: 14 }}>
@@ -140,9 +141,9 @@ export function ReappropriateWithApproval() {
               <span>Justification note</span>
               <textarea rows={3} value={note} onChange={(e) => setNote(e.target.value)} />
             </label>
-            <button className="btn primary" disabled={saving} onClick={() => void submit()}>
+            <Button disabled={saving} onClick={() => void submit()}>
               {saving ? "Raising…" : "Submit re-appropriation to eOffice"}
-            </button>
+            </Button>
           </div>
         </div>
       ) : null}

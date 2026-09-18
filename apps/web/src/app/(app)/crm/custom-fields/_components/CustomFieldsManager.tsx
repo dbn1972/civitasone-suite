@@ -16,7 +16,7 @@
  */
 import { useEffect, useId, useRef, useState } from "react";
 import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
-import { ConfirmDialog, EmptyState, Segmented } from "../../../../_components/ds";
+import { Button, ConfirmDialog, EmptyState, Segmented } from "../../../../_components/ds";
 import {
   listCustomFields,
   createCustomField,
@@ -253,16 +253,16 @@ export function CustomFieldsManager() {
                                 aria-invalid={errors.options ? true : undefined}
                                 aria-describedby={errors.options ? optErrId : undefined}
                               />
-                              <button type="button" className="btn ghost" style={{ minHeight: 36 }} onClick={() => removeOption(row.key, idx)} aria-label={`Remove option ${idx + 1}`}>
+                              <Button type="button" variant="ghost" style={{ minHeight: 36 }} onClick={() => removeOption(row.key, idx)} aria-label={`Remove option ${idx + 1}`}>
                                 Remove
-                              </button>
+                              </Button>
                             </div>
                           ))
                         )}
                         <div>
-                          <button type="button" className="btn ghost" style={{ minHeight: 36 }} onClick={() => addOption(row.key)}>
+                          <Button type="button" variant="ghost" style={{ minHeight: 36 }} onClick={() => addOption(row.key)}>
                             + Add option
-                          </button>
+                          </Button>
                         </div>
                         {errors.options ? (
                           <span id={optErrId} role="alert" style={{ fontSize: 12, color: "#b42318" }}>{errors.options}</span>
@@ -290,12 +290,12 @@ export function CustomFieldsManager() {
                   </div>
 
                   <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
-                    <button type="button" className="btn primary" style={{ minHeight: 40 }} disabled={busyKey === row.key} onClick={() => save(row)}>
+                    <Button type="button" style={{ minHeight: 40 }} disabled={busyKey === row.key} onClick={() => save(row)}>
                       {busyKey === row.key ? "Saving…" : "Save"}
-                    </button>
-                    <button type="button" className="btn danger" style={{ minHeight: 40 }} disabled={busyKey === row.key} onClick={() => setConfirmKey(row.key)}>
+                    </Button>
+                    <Button type="button" variant="danger" style={{ minHeight: 40 }} disabled={busyKey === row.key} onClick={() => setConfirmKey(row.key)}>
                       Delete
-                    </button>
+                    </Button>
                   </div>
                 </li>
               );
@@ -305,9 +305,9 @@ export function CustomFieldsManager() {
 
         {source !== "error" && source !== "loading" ? (
           <div>
-            <button type="button" className="btn ghost" style={{ minHeight: 40 }} onClick={addRow}>
+            <Button type="button" variant="ghost" style={{ minHeight: 40 }} onClick={addRow}>
               + Add custom field
-            </button>
+            </Button>
           </div>
         ) : null}
       </div>

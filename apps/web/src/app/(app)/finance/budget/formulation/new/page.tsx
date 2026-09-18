@@ -14,7 +14,7 @@
  */
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { PageHeader } from "../../../../../_components/ds";
+import { Button, PageHeader } from "../../../../../_components/ds";
 import { useFormError } from "@/lib/useFormError";
 
 type AccountRow = { id: string; code?: string; name?: string };
@@ -138,9 +138,9 @@ export default function NewBudgetEstimatePage() {
               )}
             </div>
           </div>
-          <button type="submit" className="btn primary" disabled={busy || !headId} aria-busy={busy} style={{ marginTop: 12 }}>
+          <Button type="submit" disabled={busy || !headId} aria-busy={busy} style={{ marginTop: 12 }}>
             {busy ? "Saving…" : "Submit estimate"}
-          </button>
+          </Button>
         </form>
       </div>
     </>

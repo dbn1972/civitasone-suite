@@ -3,7 +3,7 @@
 import { useId, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
-import { ConfirmDialog, useConfirmAction } from "../../../_components/ds";
+import { Button, ConfirmDialog, useConfirmAction } from "../../../_components/ds";
 import { browserJson } from "@/lib/api/browserClient";
 
 interface SignBatchActionProps {
@@ -66,9 +66,8 @@ export function SignBatchAction({ batchId, pfmsId }: SignBatchActionProps) {
 
   return (
     <>
-      <button
+      <Button
         type="button"
-        className="btn primary"
         aria-label={t("signAriaLabel", { pfmsId })}
         onClick={() => {
           setFieldErrors({});
@@ -77,7 +76,7 @@ export function SignBatchAction({ batchId, pfmsId }: SignBatchActionProps) {
         style={{ minHeight: 36 }}
       >
         {t("signButtonLabel")}
-      </button>
+      </Button>
       <ConfirmDialog
         open={open}
         title={t("confirmTitle", { pfmsId })}

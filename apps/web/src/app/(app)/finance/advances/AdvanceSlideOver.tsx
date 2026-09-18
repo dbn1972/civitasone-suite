@@ -4,6 +4,7 @@ import { useId, useState } from "react";
 import type { CSSProperties } from "react";
 import { useRouter } from "next/navigation";
 import { useFormError } from "@/lib/useFormError";
+import { Button } from "../../../_components/ds";
 
 /**
  * AdvanceSlideOver — slide-over form to raise a government advance.
@@ -108,15 +109,14 @@ export function AdvanceSlideOver() {
 
   return (
     <>
-      <button
+      <Button
         type="button"
-        className="btn primary"
         onClick={() => { setOpen(true); setMessage(null); }}
         aria-haspopup="dialog"
         style={{ minHeight: 44 }}
       >
         + New Advance
-      </button>
+      </Button>
 
       {open && (
         /* Backdrop */
@@ -277,22 +277,21 @@ export function AdvanceSlideOver() {
               </div>
 
               <div style={{ display: "flex", gap: 12, justifyContent: "flex-end", marginTop: 8 }}>
-                <button
+                <Button
                   type="button"
-                  className="btn ghost"
+                  variant="ghost"
                   onClick={() => setOpen(false)}
                   style={{ minHeight: 44 }}
                 >
                   Cancel
-                </button>
-                <button
+                </Button>
+                <Button
                   type="submit"
-                  className="btn primary"
                   disabled={busy}
                   style={{ minHeight: 44, minWidth: 160 }}
                 >
                   {busy ? "Submitting…" : "Submit Advance"}
-                </button>
+                </Button>
               </div>
             </form>
           </div>
