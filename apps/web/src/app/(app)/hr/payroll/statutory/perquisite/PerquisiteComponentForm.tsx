@@ -2,6 +2,7 @@
 
 import { useId, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { Button, Card, ConfirmDialog } from "../../../../../_components/ds";
 import { browserJson } from "@/lib/api/browserClient";
 
@@ -10,7 +11,28 @@ const NATURES = [
   "domestic_servant", "education", "gift", "other",
 ] as const;
 
+// UX-017: the dropdown previously derived its display text from the raw
+// NATURES key (`n.replace(/_/g, " ")`), which is scanner-blind (no JSX
+// string literal) but still real hardcoded English -- translated here, same
+// "beyond the scanner" object-literal treatment tranche 12 gave
+// STATUTORY_CARDS. The saved-message/confirm-dialog copy below still
+// interpolates the raw `nature` key (unchanged from before this tranche),
+// not this label map, to avoid any behavior change beyond translation.
+const NATURE_LABEL_KEYS: Record<(typeof NATURES)[number], string> = {
+  accommodation: "natureAccommodation",
+  car: "natureCar",
+  loan: "natureLoan",
+  medical: "natureMedical",
+  club_membership: "natureClubMembership",
+  gas_electricity_water: "natureGasElectricityWater",
+  domestic_servant: "natureDomesticServant",
+  education: "natureEducation",
+  gift: "natureGift",
+  other: "natureOther",
+};
+
 export function PerquisiteComponentForm({ defaultEmployeeId, defaultFy }: { defaultEmployeeId: string; defaultFy: string }) {
+  const t = useTranslations("perquisiteComponentForm");
   const router = useRouter();
   const [employeeId, setEmployeeId] = useState(defaultEmployeeId);
   const [fy, setFy] = useState(defaultFy);
@@ -23,6 +45,11 @@ export function PerquisiteComponentForm({ defaultEmployeeId, defaultFy }: { defa
   const [dialogError, setDialogError] = useState<string | undefined>();
   const [message, setMessage] = useState<string | null>(null);
   const [tone, setTone] = useState<"good" | "bad">("good");
+  // UX-017: message is now translated display text, so it can no longer be
+  // compared/prefix-matched directly to decide which field is invalid (same
+  // bug class as PtSlabForm.tsx/LwfConfigForm.tsx, tranche 12) -- invalidField
+  // is a stable, untranslated identity kept separately from the display string.
+  const [invalidField, setInvalidField] = useState<"employeeId" | "value" | null>(null);
 
   const empIdId = useId();
   const fyId = useId();
@@ -33,22 +60,25 @@ export function PerquisiteComponentForm({ defaultEmployeeId, defaultFy }: { defa
   const errId = useId();
   const empIdRef = useRef<HTMLInputElement>(null);
   const valueRef = useRef<HTMLInputElement>(null);
-  const empIdInvalid = tone === "bad" && !!message && message.startsWith("Employee");
-  const valueInvalid = tone === "bad" && !!message && message.startsWith("Value by employer");
+  const empIdInvalid = invalidField === "employeeId";
+  const valueInvalid = invalidField === "value";
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setMessage(null);
+    setInvalidField(null);
     if (!employeeId.trim() || !fy.trim()) {
       setTone("bad");
-      setMessage("Employee ID and financial year are required.");
+      setMessage(t("employeeFyRequiredError"));
+      setInvalidField("employeeId");
       empIdRef.current?.focus();
       return;
     }
     const value = parseFloat(valueByEmployer);
     if (Number.isNaN(value) || value < 0) {
       setTone("bad");
-      setMessage("Value by employer must be a valid rupee amount.");
+      setMessage(t("valueInvalidError"));
+      setInvalidField("value");
       valueRef.current?.focus();
       return;
     }
@@ -73,11 +103,12 @@ export function PerquisiteComponentForm({ defaultEmployeeId, defaultFy }: { defa
       });
       setConfirmOpen(false);
       setTone("good");
-      setMessage(`Perquisite component "${nature}" saved for ${employeeId.trim()}.`);
+      setInvalidField(null);
+      setMessage(t("savedMessage", { nature, employeeId: employeeId.trim() }));
       setDescription(""); setValueByEmployer(""); setAmountRecovered("");
       router.refresh();
     } catch (err) {
-      setDialogError(err instanceof Error ? err.message : "Network error. Please try again.");
+      setDialogError(err instanceof Error ? err.message : t("networkError"));
     } finally {
       setBusy(false);
     }
@@ -85,12 +116,12 @@ export function PerquisiteComponentForm({ defaultEmployeeId, defaultFy }: { defa
 
   return (
     <form onSubmit={handleSubmit} style={{ marginBottom: 16 }}>
-      <Card title="Add Perquisite Component" padding>
+      <Card title={t("formTitle")} padding>
         <div style={{ display: "grid", gap: 14 }}>
           <div style={{ display: "grid", gap: 14, gridTemplateColumns: "repeat(auto-fit,minmax(160px,1fr))" }}>
             <div style={{ display: "grid", gap: 6 }}>
               <label htmlFor={empIdId} style={{ fontSize: 13, fontWeight: 600 }}>
-                Employee ID <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
+                {t("employeeIdLabel")} <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
               </label>
               <input
                 id={empIdId}
@@ -105,19 +136,19 @@ export function PerquisiteComponentForm({ defaultEmployeeId, defaultFy }: { defa
             </div>
             <div style={{ display: "grid", gap: 6 }}>
               <label htmlFor={fyId} style={{ fontSize: 13, fontWeight: 600 }}>
-                Financial Year <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
+                {t("financialYearLabel")} <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
               </label>
               <input
                 id={fyId}
                 value={fy}
                 onChange={(e) => setFy(e.target.value)}
-                placeholder="e.g. 2026-27"
+                placeholder={t("financialYearPlaceholder")}
                 aria-required="true"
                 style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
               />
             </div>
             <div style={{ display: "grid", gap: 6 }}>
-              <label htmlFor={natureId} style={{ fontSize: 13, fontWeight: 600 }}>Nature</label>
+              <label htmlFor={natureId} style={{ fontSize: 13, fontWeight: 600 }}>{t("natureLabel")}</label>
               <select
                 id={natureId}
                 value={nature}
@@ -125,12 +156,12 @@ export function PerquisiteComponentForm({ defaultEmployeeId, defaultFy }: { defa
                 style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44, background: "#fff" }}
               >
                 {NATURES.map((n) => (
-                  <option key={n} value={n}>{n.replace(/_/g, " ")}</option>
+                  <option key={n} value={n}>{t(NATURE_LABEL_KEYS[n])}</option>
                 ))}
               </select>
             </div>
             <div style={{ display: "grid", gap: 6 }}>
-              <label htmlFor={descId} style={{ fontSize: 13, fontWeight: 600 }}>Description</label>
+              <label htmlFor={descId} style={{ fontSize: 13, fontWeight: 600 }}>{t("descriptionLabel")}</label>
               <input
                 id={descId}
                 value={description}
@@ -140,7 +171,7 @@ export function PerquisiteComponentForm({ defaultEmployeeId, defaultFy }: { defa
             </div>
             <div style={{ display: "grid", gap: 6 }}>
               <label htmlFor={valueId} style={{ fontSize: 13, fontWeight: 600 }}>
-                Value by Employer (₹) <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
+                {t("valueByEmployerLabel")} <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
               </label>
               <input
                 id={valueId}
@@ -155,7 +186,7 @@ export function PerquisiteComponentForm({ defaultEmployeeId, defaultFy }: { defa
               />
             </div>
             <div style={{ display: "grid", gap: 6 }}>
-              <label htmlFor={recoveredId} style={{ fontSize: 13, fontWeight: 600 }}>Amount Recovered (₹)</label>
+              <label htmlFor={recoveredId} style={{ fontSize: 13, fontWeight: 600 }}>{t("amountRecoveredLabel")}</label>
               <input
                 id={recoveredId}
                 type="number" min="0" step="0.01"
@@ -168,7 +199,7 @@ export function PerquisiteComponentForm({ defaultEmployeeId, defaultFy }: { defa
 
           <div>
             <Button type="submit" style={{ minHeight: 44 }} disabled={busy}>
-              Save Component
+              {t("submitBtn")}
             </Button>
           </div>
 
@@ -188,16 +219,26 @@ export function PerquisiteComponentForm({ defaultEmployeeId, defaultFy }: { defa
 
       <ConfirmDialog
         open={confirmOpen}
-        title="Save this perquisite component?"
-        confirmLabel="Confirm & Save"
+        title={t("confirmTitle")}
+        confirmLabel={t("confirmLabel")}
         busy={busy}
         errorMessage={dialogError}
-        description={
-          <>
-            Save perquisite <strong>{nature}</strong> for employee <strong>{employeeId}</strong> (FY {fy}):
-            value ₹{valueByEmployer || 0}{amountRecovered ? `, recovered ₹${amountRecovered}` : ""}.
-          </>
-        }
+        description={amountRecovered
+          ? t.rich("confirmDescriptionWithRecovered", {
+              strong: (chunks) => <strong>{chunks}</strong>,
+              nature,
+              employeeId,
+              fy,
+              value: valueByEmployer || 0,
+              recovered: amountRecovered,
+            })
+          : t.rich("confirmDescriptionBase", {
+              strong: (chunks) => <strong>{chunks}</strong>,
+              nature,
+              employeeId,
+              fy,
+              value: valueByEmployer || 0,
+            })}
         onConfirm={() => void saveComponent()}
         onCancel={() => !busy && setConfirmOpen(false)}
       />
