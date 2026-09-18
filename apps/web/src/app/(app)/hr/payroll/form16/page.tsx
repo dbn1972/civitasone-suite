@@ -38,7 +38,16 @@ async function getBulkStatus(fy: string): Promise<JobLookup> {
   const r = await statusAwareGet(`/v1/payroll/tax/form16/bulk-status?fy=${encodeURIComponent(fy)}`);
   if (r.kind === "ok") {
     const d = (r.body as { data?: BulkJob } | null)?.data;
-    return d && typeof d === "object" ? { state: "found", job: d } : { state: "error" };
+    // REL-023: an unconfigured/empty backend response for this endpoint comes
+    // back as `{ data: [] }` (an array), not a 404 -- `typeof [] === "object"`
+    // and `[]` is truthy, so the old check let that array through as if it
+    // were a real BulkJob. Every field read off it downstream (jobId, status,
+    // ...) was then `undefined`, and <StatusPill status={undefined}> crashes
+    // in status.toLowerCase() -- taking down the whole page (so even the
+    // always-rendered PageHeader never painted). Require a real object.
+    return d && typeof d === "object" && !Array.isArray(d)
+      ? { state: "found", job: d as BulkJob }
+      : { state: "error" };
   }
   if (r.kind === "http_error" && r.status === 404) return { state: "not_found" };
   return { state: "error" };

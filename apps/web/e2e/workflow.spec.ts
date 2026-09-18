@@ -22,13 +22,17 @@ test.describe('Workflow', () => {
     await expect(page.getByRole('heading', { name: 'Workflow — Instances' })).toBeVisible();
   });
 
-  test('workflow instances list shows ModuleListPage column headers', async ({ page }) => {
+  // REL-023 tranche 6: this page never used the generic ModuleListPage
+  // (ID/Name/Detail/Status/Meta) template -- InstancesTable
+  // (workflow/_components/InstancesTable.tsx) is its own bespoke
+  // DataTable wrapper with a different, fixed column set. Renamed to
+  // describe what's actually asserted and updated to the real headers.
+  test('workflow instances list shows its own table column headers', async ({ page }) => {
     await page.goto('/workflow/list');
     await expect(page.getByRole('columnheader', { name: 'ID' })).toBeVisible();
-    await expect(page.getByRole('columnheader', { name: 'Name' })).toBeVisible();
-    await expect(page.getByRole('columnheader', { name: 'Detail' })).toBeVisible();
+    await expect(page.getByRole('columnheader', { name: 'Instance' })).toBeVisible();
     await expect(page.getByRole('columnheader', { name: 'Status' })).toBeVisible();
-    await expect(page.getByRole('columnheader', { name: 'Meta' })).toBeVisible();
+    await expect(page.getByRole('columnheader', { name: 'Version' })).toBeVisible();
   });
 
   test('workflow hub navigates to instances list on link click', async ({ page }) => {

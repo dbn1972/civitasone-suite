@@ -37,7 +37,14 @@ test.describe('Install', () => {
 
   test('install page shows Installation Complete banner when all required steps done', async ({ page }) => {
     await page.goto('/install');
-    await expect(page.getByText(/installation complete|setup in progress/i)).toBeVisible();
+    // REL-023 tranche 6: there's no banner with either literal phrase --
+    // the page shows a terse "Status" StatCard whose value is just
+    // "Complete" or "In progress" (install/page.tsx). A bare
+    // getByText(/complete/i) would itself be a strict-mode violation: two
+    // of the fixture's own steps are individually "Completed" too. Scope to
+    // the specific stat tile by its own label.
+    const statusCard = page.locator('.stat').filter({ has: page.getByText('Status', { exact: true }) });
+    await expect(statusCard.getByText(/^(complete|in progress)$/i)).toBeVisible();
   });
 
   test('install page shows step description text', async ({ page }) => {
