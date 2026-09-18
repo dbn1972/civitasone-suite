@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import { useTranslations } from "next-intl";
 
 export interface StatutoryComplianceCardProps {
   label: string;
@@ -12,11 +13,6 @@ export interface StatutoryComplianceCardProps {
   href: string;
 }
 
-function formatMinor(minor?: number): string {
-  if (minor == null) return "No ceiling";
-  return `₹${(minor / 100).toLocaleString("en-IN")} /mo`;
-}
-
 export function StatutoryComplianceCard({
   label,
   icon,
@@ -26,6 +22,13 @@ export function StatutoryComplianceCard({
   challanDueDay,
   href,
 }: StatutoryComplianceCardProps) {
+  const t = useTranslations("statutoryComplianceCard");
+
+  function formatMinor(minor?: number): string {
+    if (minor == null) return t("noCeiling");
+    return `₹${(minor / 100).toLocaleString("en-IN")} /mo`;
+  }
+
   return (
     <a
       href={href}
@@ -74,7 +77,7 @@ export function StatutoryComplianceCard({
             color: "var(--accent, #2563eb)",
           }}
         >
-          See Challans & Reconciliation for filing status
+          {t("seeChallansForFilingStatus")}
         </span>
       </div>
 
@@ -95,7 +98,7 @@ export function StatutoryComplianceCard({
           }}
         >
           <p style={{ margin: 0, fontSize: 10, color: "var(--fg2)", fontWeight: 500, textTransform: "uppercase" }}>
-            Employee
+            {t("employee")}
           </p>
           <p
             style={{
@@ -117,7 +120,7 @@ export function StatutoryComplianceCard({
           }}
         >
           <p style={{ margin: 0, fontSize: 10, color: "var(--fg2)", fontWeight: 500, textTransform: "uppercase" }}>
-            Employer
+            {t("employer")}
           </p>
           <p
             style={{
@@ -144,15 +147,15 @@ export function StatutoryComplianceCard({
         }}
       >
         <div style={{ display: "flex", justifyContent: "space-between" }}>
-          <span>Wage ceiling</span>
+          <span>{t("wageCeiling")}</span>
           <span style={{ fontWeight: 600, color: "var(--fg)" }}>
             {formatMinor(wageCeilingMonthly)}
           </span>
         </div>
         <div style={{ display: "flex", justifyContent: "space-between" }}>
-          <span>Challan due</span>
+          <span>{t("challanDue")}</span>
           <span style={{ fontWeight: 600, color: "var(--fg)" }}>
-            {challanDueDay}th of every month
+            {t("challanDueLabel", { day: challanDueDay })}
           </span>
         </div>
       </div>

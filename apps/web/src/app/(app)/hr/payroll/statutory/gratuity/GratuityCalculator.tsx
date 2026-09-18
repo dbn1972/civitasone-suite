@@ -1,12 +1,14 @@
 "use client";
 
 import React, { useState } from "react";
+import { useTranslations } from "next-intl";
 
 const GRATUITY_CEILING_PAISE = 2_000_000_00; // ₹20,00,000 per GoI (Payment of Gratuity Act)
 const GRATUITY_DAYS = 15;
 const WORKING_DAYS_PER_MONTH = 26;
 
 export function GratuityCalculator() {
+  const t = useTranslations("gratuityCalculator");
   const [years, setYears] = useState("");
   const [monthlySalary, setMonthlySalary] = useState(""); // in rupees (as string)
 
@@ -36,23 +38,22 @@ export function GratuityCalculator() {
       }}
     >
       <h3 style={{ margin: "0 0 4px", fontSize: 15, fontWeight: 700, color: "var(--fg)" }}>
-        Gratuity Calculator
+        {t("heading")}
       </h3>
       <p style={{ margin: "0 0 18px", fontSize: 12, color: "var(--fg2)" }}>
-        Payment of Gratuity Act, 1972 — applicable after 5 years of continuous service.
-        Formula: (Basic + DA) × 15/26 × Completed Years. Maximum: ₹20,00,000.
+        {t("description")}
       </p>
 
       <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
         <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
           <span style={{ fontSize: 12, fontWeight: 600, color: "var(--fg2)" }}>
-            Last Drawn Monthly Salary (Basic + DA) — ₹
+            {t("salaryLabel")}
           </span>
           <input
             type="number"
             min="0"
             step="100"
-            placeholder="e.g. 55000"
+            placeholder={t("salaryPlaceholder")}
             value={monthlySalary}
             onChange={(e) => setMonthlySalary(e.target.value)}
             style={{
@@ -69,14 +70,14 @@ export function GratuityCalculator() {
 
         <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
           <span style={{ fontSize: 12, fontWeight: 600, color: "var(--fg2)" }}>
-            Years of Service
+            {t("yearsLabel")}
           </span>
           <input
             type="number"
             min="0"
             max="50"
             step="0.5"
-            placeholder="e.g. 15"
+            placeholder={t("yearsPlaceholder")}
             value={years}
             onChange={(e) => setYears(e.target.value)}
             style={{
@@ -106,11 +107,11 @@ export function GratuityCalculator() {
             lineHeight: 1.7,
           }}
         >
-          = ({formatRs(numSalary)} × {GRATUITY_DAYS}) / {WORKING_DAYS_PER_MONTH} × {Math.floor(numYears)} years
+          = ({formatRs(numSalary)} × {GRATUITY_DAYS}) / {WORKING_DAYS_PER_MONTH} × {t("yearsCount", { count: Math.floor(numYears) })}
           <br />
           = {formatRs((numSalary * GRATUITY_DAYS) / WORKING_DAYS_PER_MONTH)} × {Math.floor(numYears)}
           <br />= {formatRs(gratuityRaw)}
-          {isCapped && ` → capped at ${formatRs(maxRupees)}`}
+          {isCapped && ` ${t("cappedAtInline", { amount: formatRs(maxRupees) })}`}
         </div>
       )}
 
@@ -127,8 +128,10 @@ export function GratuityCalculator() {
             color: "#92400e",
           }}
         >
-          Gratuity requires a minimum of <strong>5 years</strong> of continuous service. Current:{" "}
-          <strong>{numYears} year{numYears !== 1 ? "s" : ""}</strong>.
+          {t.rich("belowEligibilityMessage", {
+            strong: (chunks) => <strong>{chunks}</strong>,
+            years: numYears,
+          })}
         </div>
       )}
 
@@ -142,7 +145,7 @@ export function GratuityCalculator() {
             padding: "14px 18px",
           }}
         >
-          <p style={{ margin: 0, fontSize: 12, color: "#14532d" }}>Estimated Gratuity</p>
+          <p style={{ margin: 0, fontSize: 12, color: "#14532d" }}>{t("resultLabel")}</p>
           <p
             style={{
               margin: "4px 0 0",
@@ -156,7 +159,7 @@ export function GratuityCalculator() {
           </p>
           {isCapped && (
             <p style={{ margin: "6px 0 0", fontSize: 12, color: "#92400e" }}>
-              Capped at statutory maximum of {formatRs(maxRupees)} as per the Payment of Gratuity Act, 1972.
+              {t("cappedNote", { amount: formatRs(maxRupees) })}
             </p>
           )}
         </div>

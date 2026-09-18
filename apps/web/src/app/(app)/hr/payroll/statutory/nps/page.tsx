@@ -1,3 +1,4 @@
+import { getTranslations } from "next-intl/server";
 import { PageHeader, StatGrid, StatCard, Card, DataTable } from "../../../../../_components/ds";
 import { DataSourceBadge } from "../../../../../_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
@@ -25,6 +26,7 @@ async function getData(): Promise<LoaderResult<NpsRow[]>> {
 }
 
 export default async function NpsStatutoryPage() {
+  const t = await getTranslations("nps");
   const { data: rows, source } = await getData();
 
   const totalEmpContribMinor = rows.reduce((s, r) => s + Number(r.empContribMinor ?? 0), 0);
@@ -32,40 +34,40 @@ export default async function NpsStatutoryPage() {
   const totalNpsMinor = totalEmpContribMinor + totalErContribMinor;
 
   const columns: { key: keyof NpsRow & string; label: string; align?: "left" | "right"; cellType?: "amount" }[] = [
-    { key: "employeeId", label: "Employee" },
-    { key: "period", label: "Period" },
-    { key: "basicMinor", label: "Basic Pay", align: "right", cellType: "amount" },
-    { key: "empContribPct", label: "Employee Rate (%)", align: "right" },
-    { key: "erContribPct", label: "Employer Rate (%)", align: "right" },
-    { key: "empContribMinor", label: "Employee NPS", align: "right", cellType: "amount" },
-    { key: "erContribMinor", label: "Employer NPS", align: "right", cellType: "amount" },
+    { key: "employeeId", label: t("colEmployee") },
+    { key: "period", label: t("colPeriod") },
+    { key: "basicMinor", label: t("colBasicPay"), align: "right", cellType: "amount" },
+    { key: "empContribPct", label: t("colEmployeeRatePercent"), align: "right" },
+    { key: "erContribPct", label: t("colEmployerRatePercent"), align: "right" },
+    { key: "empContribMinor", label: t("colEmployeeNps"), align: "right", cellType: "amount" },
+    { key: "erContribMinor", label: t("colEmployerNps"), align: "right", cellType: "amount" },
   ];
 
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
-        title="National Pension System (NPS)"
-        subtitle="NPS contribution records for employees enrolled under the National Pension System (post-2004 recruits)."
+        title={t("title")}
+        subtitle={t("subtitle")}
         back="/hr/payroll/statutory"
       />
-      <DataSourceBadge source={source} message="Couldn't load — showing nothing" />
+      <DataSourceBadge source={source} message={t("loadErrorMessage")} />
       <StatGrid>
-        <StatCard icon="📊" iconBg="var(--infobg)" label="NPS Records" value={rows.length} />
-        <StatCard icon="👤" iconBg="var(--goodbg)" label="Total Employee Contribution (10%)" value={formatMoney(totalEmpContribMinor)} />
-        <StatCard icon="🏛️" iconBg="var(--warnbg)" label="Total Employer Contribution (14%)" value={formatMoney(totalErContribMinor)} />
-        <StatCard icon="💵" iconBg="var(--panel)" label="Total NPS Outflow" value={formatMoney(totalNpsMinor)} />
+        <StatCard icon="📊" iconBg="var(--infobg)" label={t("statNpsRecords")} value={rows.length} />
+        <StatCard icon="👤" iconBg="var(--goodbg)" label={t("statTotalEmployeeContribution")} value={formatMoney(totalEmpContribMinor)} />
+        <StatCard icon="🏛️" iconBg="var(--warnbg)" label={t("statTotalEmployerContribution")} value={formatMoney(totalErContribMinor)} />
+        <StatCard icon="💵" iconBg="var(--panel)" label={t("statTotalNpsOutflow")} value={formatMoney(totalNpsMinor)} />
       </StatGrid>
-      <Card title="NPS Contribution Ledger">
+      <Card title={t("historyCardTitle")}>
         <DataTable<NpsRow>
           columns={columns}
           rows={rows}
           sortable
           filterable
-          filterPlaceholder="Filter by employee or period…"
+          filterPlaceholder={t("filterPlaceholder")}
           pageSize={15}
           emptyIcon="📊"
-          emptyTitle="No NPS records"
-          emptyMessage="NPS contributions are deducted automatically during payroll runs for employees enrolled under the National Pension System (employees who joined government service after 1 January 2004)."
+          emptyTitle={t("emptyTitle")}
+          emptyMessage={t("emptyMessage")}
         />
       </Card>
     </main>

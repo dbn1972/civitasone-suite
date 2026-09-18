@@ -1,3 +1,4 @@
+import { getTranslations } from "next-intl/server";
 import { PageHeader, StatGrid, StatCard, Card, DataTable } from "../../../../../_components/ds";
 import { DataSourceBadge } from "../../../../../_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
@@ -23,6 +24,7 @@ async function getData(): Promise<LoaderResult<GpfRow[]>> {
 }
 
 export default async function GpfStatutoryPage() {
+  const t = await getTranslations("gpf");
   const { data: rows, source } = await getData();
 
   const totalContribMinor = rows.reduce((s, r) => s + Number(r.empContribMinor ?? 0), 0);
@@ -30,38 +32,38 @@ export default async function GpfStatutoryPage() {
   const uniquePeriods = new Set(rows.map((r) => r.period)).size;
 
   const columns: { key: keyof GpfRow & string; label: string; align?: "left" | "right"; cellType?: "amount" }[] = [
-    { key: "employeeId", label: "Employee" },
-    { key: "period", label: "Period" },
-    { key: "basicMinor", label: "Basic Pay", align: "right", cellType: "amount" },
-    { key: "contribPct", label: "Rate (%)", align: "right" },
-    { key: "empContribMinor", label: "GPF Contribution", align: "right", cellType: "amount" },
+    { key: "employeeId", label: t("colEmployee") },
+    { key: "period", label: t("colPeriod") },
+    { key: "basicMinor", label: t("colBasicPay"), align: "right", cellType: "amount" },
+    { key: "contribPct", label: t("colRatePercent"), align: "right" },
+    { key: "empContribMinor", label: t("colGpfContribution"), align: "right", cellType: "amount" },
   ];
 
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
-        title="General Provident Fund (GPF)"
-        subtitle="GPF subscription ledger for eligible employees under the old pension scheme."
+        title={t("title")}
+        subtitle={t("subtitle")}
         back="/hr/payroll/statutory"
       />
-      <DataSourceBadge source={source} message="Couldn't load — showing nothing" />
+      <DataSourceBadge source={source} message={t("loadErrorMessage")} />
       <StatGrid>
-        <StatCard icon="🏛️" iconBg="var(--infobg)" label="GPF Records" value={rows.length} />
-        <StatCard icon="💰" iconBg="var(--goodbg)" label="Total GPF Subscription" value={formatMoney(totalContribMinor)} />
-        <StatCard icon="👥" iconBg="var(--warnbg)" label="Unique Employees" value={uniqueEmployees} />
-        <StatCard icon="📅" iconBg="var(--goodbg)" label="Periods Covered" value={uniquePeriods} />
+        <StatCard icon="🏛️" iconBg="var(--infobg)" label={t("statGpfRecords")} value={rows.length} />
+        <StatCard icon="💰" iconBg="var(--goodbg)" label={t("statTotalGpfSubscription")} value={formatMoney(totalContribMinor)} />
+        <StatCard icon="👥" iconBg="var(--warnbg)" label={t("statUniqueEmployees")} value={uniqueEmployees} />
+        <StatCard icon="📅" iconBg="var(--goodbg)" label={t("statPeriodsCovered")} value={uniquePeriods} />
       </StatGrid>
-      <Card title="GPF Subscription Ledger">
+      <Card title={t("historyCardTitle")}>
         <DataTable<GpfRow>
           columns={columns}
           rows={rows}
           sortable
           filterable
-          filterPlaceholder="Filter by employee or period…"
+          filterPlaceholder={t("filterPlaceholder")}
           pageSize={15}
           emptyIcon="🏛️"
-          emptyTitle="No GPF records"
-          emptyMessage="GPF subscriptions are deducted automatically during payroll runs for eligible employees under the old pension scheme (pre-2004 recruits)."
+          emptyTitle={t("emptyTitle")}
+          emptyMessage={t("emptyMessage")}
         />
       </Card>
     </main>

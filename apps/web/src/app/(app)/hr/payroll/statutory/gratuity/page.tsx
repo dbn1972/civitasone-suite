@@ -1,3 +1,4 @@
+import { getTranslations } from "next-intl/server";
 import { PageHeader, StatGrid, StatCard, Card, DataTable, EmptyState, RefreshErrorState } from "../../../../../_components/ds";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import { formatMoney } from "@/lib/formatters";
@@ -24,6 +25,7 @@ async function getData(): Promise<LoaderResult<GratuityRow[]>> {
 }
 
 export default async function GratuityPage() {
+  const t = await getTranslations("gratuity");
   const result = await getData();
   const { data: rows } = result;
   const resource = useResource(result);
@@ -41,30 +43,30 @@ export default async function GratuityPage() {
     align?: "left" | "right";
     cellType?: "amount" | "status";
   }[] = [
-    { key: "employeeId", label: "Employee" },
-    { key: "yearsOfService", label: "Years of Service", align: "right" },
-    { key: "gratuityMinor", label: "Gratuity Amount", align: "right", cellType: "amount" },
-    { key: "status", label: "Status", cellType: "status" },
+    { key: "employeeId", label: t("colEmployee") },
+    { key: "yearsOfService", label: t("colYearsOfService"), align: "right" },
+    { key: "gratuityMinor", label: t("colGratuityAmount"), align: "right", cellType: "amount" },
+    { key: "status", label: t("colStatus"), cellType: "status" },
   ];
 
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
-        title="Gratuity"
-        subtitle="Gratuity computation on separation (Payment of Gratuity Act, 1972)."
+        title={t("title")}
+        subtitle={t("subtitle")}
         back="/hr/payroll/statutory"
       />
 
       <StatGrid>
-        <StatCard icon="🎖️" iconBg="var(--infobg)" label="Gratuity Records" value={errored ? "—" : rows.length} />
-        <StatCard icon="💰" iconBg="var(--warnbg)" label="Total Gratuity Computed" value={errored ? "—" : formatMoney(totalGratuityMinor)} />
-        <StatCard icon="✅" iconBg="var(--goodbg)" label="Settled / Paid" value={settledRecords ?? "—"} />
-        <StatCard icon="📅" iconBg="var(--panel)" label="Avg Years of Service" value={errored ? "—" : avgYears} />
+        <StatCard icon="🎖️" iconBg="var(--infobg)" label={t("statGratuityRecords")} value={errored ? "—" : rows.length} />
+        <StatCard icon="💰" iconBg="var(--warnbg)" label={t("statTotalGratuityComputed")} value={errored ? "—" : formatMoney(totalGratuityMinor)} />
+        <StatCard icon="✅" iconBg="var(--goodbg)" label={t("statSettledPaid")} value={settledRecords ?? "—"} />
+        <StatCard icon="📅" iconBg="var(--panel)" label={t("statAvgYearsOfService")} value={errored ? "—" : avgYears} />
       </StatGrid>
 
       <GratuityCalculator />
 
-      <Card title="Gratuity Register">
+      <Card title={t("registerCardTitle")}>
         {errored ? (
           <div className="pad">
             <RefreshErrorState error={toHumanError("load", { area: "gratuity records" })} backHref="/hr/payroll/statutory" />
@@ -72,8 +74,8 @@ export default async function GratuityPage() {
         ) : rows.length === 0 ? (
           <EmptyState
             icon="🎖️"
-            title="No gratuity records"
-            message="Gratuity is computed automatically on employee separation. Records will appear here once an employee completes 5 years and separates."
+            title={t("emptyTitle")}
+            message={t("emptyMessage")}
           />
         ) : (
           <DataTable<GratuityRow>
@@ -81,11 +83,11 @@ export default async function GratuityPage() {
             rows={rows}
             sortable
             filterable
-            filterPlaceholder="Filter by employee or status…"
+            filterPlaceholder={t("filterPlaceholder")}
             pageSize={15}
             emptyIcon="🎖️"
-            emptyTitle="No gratuity records found"
-            emptyMessage="No records match your filter criteria."
+            emptyTitle={t("emptyTitleFiltered")}
+            emptyMessage={t("emptyMessageFiltered")}
           />
         )}
       </Card>
