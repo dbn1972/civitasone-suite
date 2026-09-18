@@ -2,7 +2,7 @@
 
 import { useId, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Card } from "@/app/_components/ds";
+import { Button, Card } from "@/app/_components/ds";
 import { browserJson } from "@/lib/api/browserClient";
 import { rupeesToMinorString } from "@/lib/money";
 import type { AssetOption } from "./page";
@@ -301,9 +301,9 @@ export function PolicyForm({ assets }: { assets: AssetOption[] }) {
         </div>
 
         <div style={{ marginTop: 14 }}>
-          <button type="submit" className="btn primary" style={{ minHeight: 44 }} disabled={busy} aria-label="Create insurance policy">
+          <Button type="submit" style={{ minHeight: 44 }} disabled={busy} aria-label="Create insurance policy">
             {busy ? "Saving…" : "Create Policy"}
-          </button>
+          </Button>
         </div>
 
         {message && (

@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { PageHeader } from "@/app/_components/ds";
+import { Button, PageHeader } from "@/app/_components/ds";
 import { useFormError } from "@/lib/useFormError";
 
 const FUEL_TYPES = [
@@ -226,9 +226,9 @@ export default function NewVehiclePage() {
               gap: 8,
             }}
           >
-            <button type="submit" className="btn primary" disabled={submitting}>
+            <Button type="submit" disabled={submitting}>
               {submitting ? "Adding…" : "Add Vehicle"}
-            </button>
+            </Button>
             <a href="/estab/vehicles" className="btn ghost">
               Cancel
             </a>

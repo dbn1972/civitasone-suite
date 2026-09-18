@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { PageHeader, ConfirmDialog, useConfirmAction } from "../../../_components/ds";
+import { Button, PageHeader, ConfirmDialog, useConfirmAction } from "../../../_components/ds";
 
 export default function BulkImportPage() {
   const [csv, setCsv] = useState("name,code,assetType,cost,orgUnit\nSample Laptop,LAP/001,it,45000,HQ");
@@ -63,9 +63,9 @@ export default function BulkImportPage() {
             rows={12}
             style={{ width: "100%", fontFamily: "monospace", fontSize: 12, padding: 12, borderRadius: 8, border: "1px solid var(--line)", marginTop: 6 }}
           />
-          <button type="submit" className="btn primary" disabled={parsedCount === 0} style={{ marginTop: 12 }}>
+          <Button type="submit" disabled={parsedCount === 0} style={{ marginTop: 12 }}>
             Import {parsedCount} {parsedCount === 1 ? "asset" : "assets"}
-          </button>
+          </Button>
           {message ? (
             <p role="status" aria-live="polite" style={{ marginTop: 12, fontSize: 13, color: isError ? "var(--bad)" : "var(--good)" }}>{message}</p>
           ) : null}

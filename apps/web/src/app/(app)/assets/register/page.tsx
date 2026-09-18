@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { PageHeader } from "../../../_components/ds";
+import { Button, PageHeader } from "../../../_components/ds";
 
 const DEFAULT_CATEGORY = "77777777-0001-0000-0000-000000000001";
 
@@ -94,7 +94,7 @@ export default function RegisterAssetPage() {
               <input id="ast-loc" value={form.location} onChange={(e) => setForm({ ...form, location: e.target.value })} style={inputStyle} />
             </div>
           </div>
-          <button type="submit" className="btn primary" disabled={busy} style={{ marginTop: 12 }}>{busy ? "Saving…" : "Register asset"}</button>
+          <Button type="submit" disabled={busy} style={{ marginTop: 12 }}>{busy ? "Saving…" : "Register asset"}</Button>
         </form>
       </div>
     </>

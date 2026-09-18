@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { PageHeader, EmptyState, ErrorState } from "../../../_components/ds";
+import { Button, PageHeader, EmptyState, ErrorState } from "../../../_components/ds";
 import { toHumanError } from "@/lib/messages";
 import { useFormError } from "@/lib/useFormError";
 
@@ -103,7 +103,7 @@ export default function LocationsPage() {
               <input id="loc-org" value={form.orgUnit} onChange={(e) => setForm({ ...form, orgUnit: e.target.value })} style={inputStyle} />
             </div>
           </div>
-          <button type="submit" className="btn primary" disabled={busy} style={{ marginTop: 12 }}>{busy ? "Adding…" : "Add location"}</button>
+          <Button type="submit" disabled={busy} style={{ marginTop: 12 }}>{busy ? "Adding…" : "Add location"}</Button>
         </form>
       </div>
       <div className="card">

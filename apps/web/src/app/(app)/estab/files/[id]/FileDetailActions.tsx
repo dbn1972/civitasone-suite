@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { useConfirmAction, ConfirmDialog } from "../../../../_components/ds";
+import { Button, useConfirmAction, ConfirmDialog } from "../../../../_components/ds";
 
 const ROLE_LABEL: Record<string, string> = {
   dealing_hand: "Dealing Hand",
@@ -200,16 +200,16 @@ export function FileDetailActions({ fileId, draftNotingId, status }: Props) {
           style={{ width: "100%", padding: 10, border: "1px solid #fde047", borderRadius: 8, background: "#fefce8", fontSize: 13 }}
         />
         <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-          <button type="button" className="btn ghost" disabled={busy} onClick={() => void addYellowNote()}>
+          <Button type="button" variant="ghost" disabled={busy} onClick={() => void addYellowNote()}>
             Save yellow note
-          </button>
-          <button type="button" className="btn primary" disabled={busy || submitConfirm.busy || !draftNotingId} onClick={submitConfirm.trigger}>
+          </Button>
+          <Button type="button" disabled={busy || submitConfirm.busy || !draftNotingId} onClick={submitConfirm.trigger}>
             Submit for approval
-          </button>
-          <button type="button" className="btn ghost" disabled={busy || signConfirm.busy || !draftNotingId} onClick={signConfirm.trigger}
+          </Button>
+          <Button type="button" variant="ghost" disabled={busy || signConfirm.busy || !draftNotingId} onClick={signConfirm.trigger}
             title="Sign this note at your level — adds a green, hash-chained note (SO → US → DS)">
             Sign note (green)
-          </button>
+          </Button>
         </div>
         <div style={{ borderTop: "1px solid var(--line)", paddingTop: 12 }}>
           <label htmlFor="estab-refer-officer" className="l" style={{ fontSize: 12 }}>Refer / forward to</label>
@@ -241,9 +241,9 @@ export function FileDetailActions({ fileId, draftNotingId, status }: Props) {
             placeholder="Refer-back remarks"
             style={{ width: "100%", padding: 8, marginBottom: 8, border: "1px solid var(--line)", borderRadius: 8, fontSize: 13 }}
           />
-          <button type="button" className="btn ghost" disabled={busy || referConfirm.busy} onClick={onReferBackClick}>
+          <Button type="button" variant="ghost" disabled={busy || referConfirm.busy} onClick={onReferBackClick}>
             Refer back
-          </button>
+          </Button>
         </div>
         {error ? (
           <div role="alert" aria-live="assertive">

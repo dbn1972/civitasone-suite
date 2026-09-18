@@ -8,7 +8,7 @@
  */
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { PageHeader } from "../../../../_components/ds";
+import { Button, PageHeader } from "../../../../_components/ds";
 import { useFormError } from "@/lib/useFormError";
 
 type AssetRow = { id: string; code?: string; name?: string };
@@ -113,9 +113,9 @@ export default function NewWorkOrderPage() {
               <input id="wo-notes" value={notes} onChange={(e) => setNotes(e.target.value)} style={inputStyle} />
             </div>
           </div>
-          <button type="submit" className="btn primary" disabled={busy || !assetId} aria-busy={busy} style={{ marginTop: 12 }}>
+          <Button type="submit" disabled={busy || !assetId} aria-busy={busy} style={{ marginTop: 12 }}>
             {busy ? "Saving…" : "Log job"}
-          </button>
+          </Button>
         </form>
       </div>
     </>

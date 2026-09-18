@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { PageHeader } from "@/app/_components/ds";
+import { Button, PageHeader } from "@/app/_components/ds";
 import { useFormError } from "@/lib/useFormError";
 
 const UUID_RE =
@@ -274,9 +274,9 @@ export default function NewGuesthouseBookingPage() {
               gap: 8,
             }}
           >
-            <button type="submit" className="btn primary" disabled={submitting}>
+            <Button type="submit" disabled={submitting}>
               {submitting ? "Booking…" : "Create booking"}
-            </button>
+            </Button>
             <a href="/estab/guesthouse" className="btn ghost">
               Cancel
             </a>

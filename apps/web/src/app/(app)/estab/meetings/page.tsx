@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { getMeetings } from "../../../_data/loaders";
-import { PageHeader, StatCard, StatGrid, EmptyState, RefreshErrorState } from "../../../_components/ds";
+import { Button, PageHeader, StatCard, StatGrid, EmptyState, RefreshErrorState } from "../../../_components/ds";
 import { formatIndianDate } from "@/lib/formatters";
 import { MeetingsTable, type MeetingRow } from "./MeetingsTable";
 import { MeetingsCalendar } from "./MeetingsCalendar";
@@ -54,9 +54,8 @@ export default async function MeetingsPage({
                 Calendar
               </Link>
             )}
-            <button
+            <Button
               type="button"
-              className="btn primary"
               style={{ minHeight: 44 }}
               disabled
               aria-disabled="true"
@@ -64,7 +63,7 @@ export default async function MeetingsPage({
             >
               + Schedule{" "}
               <span style={{ fontSize: 11, fontWeight: 500, opacity: 0.85 }}>(coming soon)</span>
-            </button>
+            </Button>
           </>
         }
       />

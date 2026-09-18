@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { DataTable, Segmented, ConfirmDialog } from "@/app/_components/ds";
+import { Button, DataTable, Segmented, ConfirmDialog } from "@/app/_components/ds";
 import { browserJson } from "@/lib/api/browserClient";
 import { formatIndianDate } from "@/lib/formatters";
 import type { LibraryIssueSummary } from "@civitasone/types";
@@ -70,9 +70,9 @@ export function IssuesTable({ rows }: { rows: LibraryIssueSummary[] }) {
               row.status === "returned" ? (
                 <span style={{ color: "var(--ink2)", fontSize: 12.5 }}>Returned {row.returnedAtDisplay as string}</span>
               ) : (
-                <button
+                <Button
                   type="button"
-                  className="btn ghost"
+                  variant="ghost"
                   style={{ minHeight: 36 }}
                   aria-label={`Return ${row.bookTitleDisplay as string} — borrower ${row.borrowerRef}`}
                   onClick={() => {
@@ -81,7 +81,7 @@ export function IssuesTable({ rows }: { rows: LibraryIssueSummary[] }) {
                   }}
                 >
                   Return
-                </button>
+                </Button>
               ),
           },
         ]}

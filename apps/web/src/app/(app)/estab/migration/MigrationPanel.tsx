@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { DataTable, StatusPill } from "../../../_components/ds";
+import { Button, DataTable, StatusPill } from "../../../_components/ds";
 
 type MigrationRow = {
   id: string;
@@ -100,9 +100,9 @@ export function MigrationPanel() {
           </label>
         </div>
         <div className="pad" style={{ paddingTop: 0 }}>
-          <button className="btn primary" disabled={saving} onClick={() => void register()}>
+          <Button disabled={saving} onClick={() => void register()}>
             {saving ? "Registering…" : "Register file"}
-          </button>
+          </Button>
         </div>
       </div>
 

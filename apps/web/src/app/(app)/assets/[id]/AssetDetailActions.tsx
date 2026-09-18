@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useId, useRef, useState } from "react";
-import { ConfirmDialog, useConfirmAction } from "../../../_components/ds";
+import { Button, ConfirmDialog, useConfirmAction } from "../../../_components/ds";
 import { formatMoney } from "@/lib/formatters";
 
 type Props = {
@@ -237,21 +237,21 @@ export function AssetDetailActions({ assetId, barcode, status }: Props) {
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
           <label htmlFor="asset-tag-code" className="sr-only">Barcode / QR code</label>
           <input id="asset-tag-code" value={tagCode} onChange={(e) => setTagCode(e.target.value)} placeholder="Barcode / QR code" style={{ flex: 1, minWidth: 180, padding: 8, border: "1px solid var(--line)", borderRadius: 8, fontSize: 13 }} />
-          <button type="button" className="btn ghost" disabled={busy} onClick={() => void tagAsset()}>Tag</button>
-          <button type="button" className="btn ghost" disabled={busy} onClick={printQr}>Print QR</button>
+          <Button type="button" variant="ghost" disabled={busy} onClick={() => void tagAsset()}>Tag</Button>
+          <Button type="button" variant="ghost" disabled={busy} onClick={printQr}>Print QR</Button>
         </div>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-          <button type="button" className="btn primary" disabled={busy} onClick={() => void scheduleAmc()}>Schedule AMC</button>
+          <Button type="button" disabled={busy} onClick={() => void scheduleAmc()}>Schedule AMC</Button>
         </div>
         <div style={{ borderTop: "1px solid var(--line)", paddingTop: 12 }}>
           <label htmlFor="asset-transfer-loc" className="sr-only">Transfer to location</label>
           <input id="asset-transfer-loc" value={toLocation} onChange={(e) => setToLocation(e.target.value)} placeholder="Transfer to location" style={inputStyle} />
-          <button type="button" className="btn ghost" disabled={transferDisabled} onClick={transferAction.trigger}>Transfer</button>
+          <Button type="button" variant="ghost" disabled={transferDisabled} onClick={transferAction.trigger}>Transfer</Button>
         </div>
         <div style={{ borderTop: "1px solid var(--line)", paddingTop: 12 }}>
           <label htmlFor="asset-proceeds" className="sr-only">Disposal proceeds in rupees</label>
           <input id="asset-proceeds" value={proceeds} onChange={(e) => setProceeds(e.target.value)} inputMode="decimal" placeholder="Disposal proceeds (₹)" style={inputStyle} />
-          <button type="button" className="btn danger" disabled={busy} onClick={disposeAction.trigger}>Request disposal</button>
+          <Button type="button" variant="danger" disabled={busy} onClick={disposeAction.trigger}>Request disposal</Button>
         </div>
 
         <div style={{ borderTop: "1px solid var(--line)", paddingTop: 12 }}>
@@ -301,9 +301,9 @@ export function AssetDetailActions({ assetId, barcode, status }: Props) {
             rows={2}
             style={{ ...inputStyle, minHeight: 50 }}
           />
-          <button
+          <Button
             type="button"
-            className="btn danger"
+            variant="danger"
             disabled={busy}
             onClick={() => {
               if (!validateDirectDispose()) return;
@@ -311,7 +311,7 @@ export function AssetDetailActions({ assetId, barcode, status }: Props) {
             }}
           >
             Direct dispose
-          </button>
+          </Button>
         </div>
 
         <div style={{ borderTop: "1px solid var(--line)", paddingTop: 12 }}>
@@ -360,9 +360,9 @@ export function AssetDetailActions({ assetId, barcode, status }: Props) {
             rows={2}
             style={{ ...inputStyle, minHeight: 50 }}
           />
-          <button
+          <Button
             type="button"
-            className="btn ghost"
+            variant="ghost"
             disabled={busy}
             onClick={() => {
               if (!validateInterOrgTransfer()) return;
@@ -370,7 +370,7 @@ export function AssetDetailActions({ assetId, barcode, status }: Props) {
             }}
           >
             Inter-org transfer
-          </button>
+          </Button>
         </div>
 
         {message ? <p role="status" aria-live="polite" style={{ fontSize: 13, color: "var(--good)", margin: 0 }}>{message}</p> : null}

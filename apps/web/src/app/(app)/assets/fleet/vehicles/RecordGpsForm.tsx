@@ -12,7 +12,7 @@
  * event or persist to a store — see BACKEND FOLLOW-UPS in the PR body.
  */
 import { useId, useRef, useState } from "react";
-import { Card } from "../../../../_components/ds";
+import { Button, Card } from "../../../../_components/ds";
 import { browserJson } from "@/lib/api/browserClient";
 
 type FieldErrors = {
@@ -154,9 +154,9 @@ export function RecordGpsForm() {
           </div>
 
           <div>
-            <button type="submit" className="btn primary" style={{ minHeight: 44 }} disabled={busy} aria-busy={busy}>
+            <Button type="submit" style={{ minHeight: 44 }} disabled={busy} aria-busy={busy}>
               {busy ? "Recording…" : "Record Position"}
-            </button>
+            </Button>
           </div>
 
           {message && (

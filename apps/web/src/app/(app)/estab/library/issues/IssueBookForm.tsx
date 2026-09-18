@@ -2,7 +2,7 @@
 
 import { useId, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Card, ConfirmDialog } from "@/app/_components/ds";
+import { Button, Card, ConfirmDialog } from "@/app/_components/ds";
 import { browserJson } from "@/lib/api/browserClient";
 import type { LibraryBookSummary } from "@civitasone/types";
 
@@ -203,9 +203,9 @@ export function IssueBookForm({
         </div>
 
         <div style={{ marginTop: 14 }}>
-          <button type="submit" className="btn primary" style={{ minHeight: 44 }} disabled={busy || noBooksAvailable}>
+          <Button type="submit" style={{ minHeight: 44 }} disabled={busy || noBooksAvailable}>
             Issue Book
-          </button>
+          </Button>
         </div>
 
         {message && (

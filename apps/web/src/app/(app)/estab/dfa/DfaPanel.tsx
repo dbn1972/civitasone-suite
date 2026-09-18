@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { DataTable, StatusPill, ActionButton, Segmented } from "../../../_components/ds";
+import { Button, DataTable, StatusPill, ActionButton, Segmented } from "../../../_components/ds";
 import { useFormError } from "@/lib/useFormError";
 
 type Dfa = {
@@ -165,7 +165,7 @@ export function DfaPanel() {
           value={filter}
           onChange={(v) => setFilter(v as (typeof FILTERS)[number])}
         />
-        <button className="btn primary" onClick={() => setShowForm((v) => !v)}>{showForm ? "Cancel" : "+ New draft"}</button>
+        <Button onClick={() => setShowForm((v) => !v)}>{showForm ? "Cancel" : "+ New draft"}</Button>
       </div>
 
       <div role="status" aria-live="polite">
@@ -204,9 +204,9 @@ export function DfaPanel() {
               <textarea rows={6} value={form.body} onChange={(e) => setForm((f) => ({ ...f, body: e.target.value }))} />
             </label>
             <div>
-              <button className="btn primary" disabled={saving || !form.subject || !form.body} onClick={() => void create()}>
+              <Button disabled={saving || !form.subject || !form.body} onClick={() => void create()}>
                 {saving ? "Creating…" : "Create draft"}
-              </button>
+              </Button>
             </div>
           </div>
         </div>

@@ -2,7 +2,7 @@
 
 import { useId, useRef, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
-import { ActionButton, Card, ConfirmDialog } from "@/app/_components/ds";
+import { Button, ActionButton, Card, ConfirmDialog } from "@/app/_components/ds";
 import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
 import { browserJson } from "@/lib/api/browserClient";
 import { formatMoney } from "@/lib/formatters";
@@ -204,19 +204,19 @@ export function AllotmentDetailActions({
                 style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
               />
               {vacationDateError && <p id={vacationDateErrId} role="alert" style={{ color: "var(--bad, #c0392b)", fontSize: 12, margin: 0 }}>{vacationDateError}</p>}
-              <button type="button" className="btn ghost" style={{ minHeight: 44, width: "fit-content" }} onClick={continueVacationNotice}>
+              <Button type="button" variant="ghost" style={{ minHeight: 44, width: "fit-content" }} onClick={continueVacationNotice}>
                 Issue vacation notice
-              </button>
+              </Button>
             </div>
             <div>
-              <button
+              <Button
                 type="button"
-                className="btn danger"
+                variant="danger"
                 style={{ minHeight: 44 }}
                 onClick={() => setVacateConfirmOpen(true)}
               >
                 Vacate now (skip notice)
-              </button>
+              </Button>
             </div>
           </>
         )}
@@ -231,9 +231,9 @@ export function AllotmentDetailActions({
               rows={3}
               style={{ width: "100%", padding: 10, border: "1px solid var(--line)", borderRadius: 8, fontSize: 13, marginTop: 6, marginBottom: 8 }}
             />
-            <button type="button" className="btn danger" style={{ minHeight: 44 }} onClick={() => setVacateConfirmOpen(true)}>
+            <Button type="button" variant="danger" style={{ minHeight: 44 }} onClick={() => setVacateConfirmOpen(true)}>
               Record vacation
-            </button>
+            </Button>
           </div>
         )}
 

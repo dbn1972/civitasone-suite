@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { PageHeader, DataTable, EmptyState, ErrorState } from "../../../_components/ds";
+import { Button, PageHeader, DataTable, EmptyState, ErrorState } from "../../../_components/ds";
 import { formatMoney, formatIndianDate } from "@/lib/formatters";
 import { toHumanError } from "@/lib/messages";
 
@@ -135,7 +135,7 @@ export default function LeasesPage() {
               <input id="lease-end" required type="date" value={form.leaseEnd} onChange={(e) => setForm({ ...form, leaseEnd: e.target.value })} style={inputStyle} />
             </div>
           </div>
-          <button type="submit" className="btn primary" disabled={busy} style={{ marginTop: 12 }}>{busy ? "Registering…" : "Register lease"}</button>
+          <Button type="submit" disabled={busy} style={{ marginTop: 12 }}>{busy ? "Registering…" : "Register lease"}</Button>
         </form>
       </div>
       <div className="card">

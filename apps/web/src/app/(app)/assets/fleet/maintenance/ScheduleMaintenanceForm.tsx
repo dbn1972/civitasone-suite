@@ -2,7 +2,7 @@
 
 import { useId, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Card, ConfirmDialog } from "../../../../_components/ds";
+import { Button, Card, ConfirmDialog } from "../../../../_components/ds";
 import { browserJson } from "@/lib/api/browserClient";
 
 const MAINTENANCE_TYPES = ["oil_change", "tire_rotation", "brake_inspection", "full_service", "battery_check"] as const;
@@ -181,9 +181,9 @@ export function ScheduleMaintenanceForm() {
           </div>
 
           <div>
-            <button type="submit" className="btn primary" style={{ minHeight: 44 }} disabled={busy}>
+            <Button type="submit" style={{ minHeight: 44 }} disabled={busy}>
               Schedule Maintenance
-            </button>
+            </Button>
           </div>
 
           {message && (
