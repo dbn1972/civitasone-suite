@@ -1,6 +1,7 @@
 "use client";
 
 import { formatMoney } from "@/lib/formatters";
+import { Button } from "../Button";
 import type { SlabRowUi, SlabTypeUi } from "./feeTypes";
 
 export interface SlabTableEditorProps {
@@ -141,9 +142,9 @@ export function SlabTableEditor({
                     </select>
                   </td>
                   <td>
-                    <button type="button" className="btn ghost sm" onClick={() => removeRow(idx)}>
+                    <Button type="button" variant="ghost" size="sm" onClick={() => removeRow(idx)}>
                       Remove
-                    </button>
+                    </Button>
                   </td>
                 </tr>
               ))
@@ -153,14 +154,14 @@ export function SlabTableEditor({
       </div>
 
       {rows.some((r) => r.issue) ? (
-        <ul style={{ margin: 0, paddingLeft: 18, fontSize: 12, color: "var(--warn-fg)" }}>
+        <ul style={{ margin: 0, paddingLeft: 18, fontSize: 12, color: "var(--warn)" }}>
           {rows.filter((r) => r.issue).map((r) => (
             <li key={r.id}>{r.issue}</li>
           ))}
         </ul>
       ) : null}
 
-      <button type="button" className="btn ghost" onClick={addRow}>Add slab row</button>
+      <Button type="button" variant="ghost" onClick={addRow}>Add slab row</Button>
 
       {onSampleValueChange ? (
         <div

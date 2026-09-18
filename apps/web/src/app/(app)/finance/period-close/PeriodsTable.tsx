@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { DataTable, ConfirmDialog } from "@/app/_components/ds";
+import { Button, DataTable, ConfirmDialog } from "@/app/_components/ds";
 import { browserFetch, errorMessageFromResponse } from "@/lib/api/browserClient";
 import { formatIndianDate } from "@/lib/formatters";
 import { toHumanError } from "@/lib/messages";
@@ -99,10 +99,11 @@ export function PeriodsTable({ periods, canReopen = false }: { periods: PeriodRo
         return (
           <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
             {actions.map((action) => (
-              <button
+              <Button
                 key={action}
                 type="button"
-                className={`btn ${action === "hard-close" ? "danger" : "ghost"} sm`}
+                variant={action === "hard-close" ? "danger" : "ghost"}
+                size="sm"
                 aria-label={`${ACTION_LABEL[action]} period ${row.period}`}
                 onClick={() => {
                   setDialogError(undefined);
@@ -110,7 +111,7 @@ export function PeriodsTable({ periods, canReopen = false }: { periods: PeriodRo
                 }}
               >
                 {ACTION_LABEL[action]}
-              </button>
+              </Button>
             ))}
           </div>
         );

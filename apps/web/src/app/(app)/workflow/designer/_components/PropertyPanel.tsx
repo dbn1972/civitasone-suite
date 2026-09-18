@@ -35,7 +35,7 @@ export function PropertyPanel({ selectedNode, onLabelChange, onPropertyChange }:
         <h2 className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-3">
           Properties
         </h2>
-        <p className="text-sm text-slate-400">
+        <p className="text-sm text-slate-500">
           Select an element on the canvas to view and edit its properties.
         </p>
       </div>

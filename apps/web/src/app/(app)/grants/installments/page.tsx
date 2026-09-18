@@ -2,6 +2,7 @@ import { PageHeader, StatGrid, StatCard, Card } from "@/app/_components/ds";
 import { formatMoney } from "@/lib/formatters";
 import { getGrantInstallments } from "../../../_data/loaders";
 import { InstallmentsTable } from "./InstallmentsTable";
+import { ArrowLeft } from "lucide-react";
 
 export default async function GrantInstallmentsPage() {
   const { data: installments, source } = await getGrantInstallments();
@@ -12,7 +13,7 @@ export default async function GrantInstallmentsPage() {
   return (
     <>
       <nav aria-label="Breadcrumb" className="back">
-        ← <a href="/grants">Grants</a>
+        <ArrowLeft aria-hidden="true" size={14} /> <a href="/grants">Grants</a>
       </nav>
       <PageHeader title="Grant Installments" subtitle="Disbursement schedule and release status for all grants." />
       {/* UX-012: the data-source badge now lives inside InstallmentsTable,

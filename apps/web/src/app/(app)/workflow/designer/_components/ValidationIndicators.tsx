@@ -30,7 +30,7 @@ export function ValidationIndicators({ violations, nodes }: Props) {
             No issues found
           </span>
         </div>
-        <p className="mt-2 text-xs text-slate-400">
+        <p className="mt-2 text-xs text-slate-500">
           Click &quot;Validate&quot; to check the graph for errors.
         </p>
       </div>

@@ -1,10 +1,10 @@
 {
   "$comment": "TRACKED DEBT, not an approved state. Each entry is a test that is hard-skipped (.skip/.todo/xdescribe/xit/xtest), env-gated (.skipIf on an unset var/unreachable dependency), or a Playwright runtime-conditional test.skip(condition, message). REL-014: this file is the inventory scripts/ci/flaky-skip-guard.mjs ratchets against — it fails on a NEW skip not listed here, and on a STALE entry (no longer a skip in source). Every hard/env-gated entry must ALSO carry its own inline // FLAKY-SKIP: <reason> (expires: YYYY-MM-DD) comment at the call site — this file tracks identity and count so the total cannot silently grow, it does not replace the inline requirement. Regenerate with --write-baseline after adding/removing/un-skipping a test. See docs/ENTERPRISE-GAP-REPORT-2026-09-07.md REL-014.",
-  "generatedAt": "2026-09-14",
-  "hardSkipCount": 12,
-  "envGatedCount": 36,
+  "generatedAt": "2026-09-18",
+  "hardSkipCount": 13,
+  "envGatedCount": 38,
   "runtimeConditionalCount": 5,
-  "count": 53,
+  "count": 56,
   "entries": [
     {
       "key": "apps/web/e2e-uat-live/hr-payroll-uat.spec.ts::Pay structure creation is processed asynchronously and had not landed yet — rerun to pick it up.",
@@ -14,6 +14,11 @@
     {
       "key": "packages/db/src/jsonb-encoding.test.ts::jsonb encoding — live Postgres round-trip",
       "file": "packages/db/src/jsonb-encoding.test.ts",
+      "kind": "env-gated"
+    },
+    {
+      "key": "packages/outbox/tests/enqueue-schema-version-live-pg.test.ts::enqueue() schema_version — live Postgres (PERF-008)",
+      "file": "packages/outbox/tests/enqueue-schema-version-live-pg.test.ts",
       "kind": "env-gated"
     },
     {
@@ -80,6 +85,11 @@
       "key": "services/court-service/tests/write-path.e2e.test.ts::court-service write-path + §47 full loop (e2e, real DB, RLS)",
       "file": "services/court-service/tests/write-path.e2e.test.ts",
       "kind": "env-gated"
+    },
+    {
+      "key": "services/estab-service/tests/perf-006-unbounded-lists.test.ts::PERF-006 — estab-service unbounded tenant-wide list queries",
+      "file": "services/estab-service/tests/perf-006-unbounded-lists.test.ts",
+      "kind": "hard"
     },
     {
       "key": "services/finance-service/tests/payments.perf.test.ts::finance payments query perf (p95)",
@@ -204,6 +214,11 @@
     {
       "key": "services/notification-service/tests/ch19-attachments-storage.localstack.test.ts::DOM-006: attachments genuinely round-trip through real S3/LocalStack",
       "file": "services/notification-service/tests/ch19-attachments-storage.localstack.test.ts",
+      "kind": "env-gated"
+    },
+    {
+      "key": "services/queue-service/tests/perf-008-rabbitmq-traceparent.test.ts::RabbitMqQueue traceparent ↔ real RabbitMQ (PERF-008)",
+      "file": "services/queue-service/tests/perf-008-rabbitmq-traceparent.test.ts",
       "kind": "env-gated"
     },
     {

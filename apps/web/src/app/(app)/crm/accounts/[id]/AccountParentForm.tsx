@@ -4,6 +4,7 @@ import type { CRMAccountSummary } from "@civitasone/types";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { useFormError } from "@/lib/useFormError";
+import { Button } from "@/app/_components/ds";
 
 const inputStyle = { width: "100%", padding: 8, minHeight: 44, borderRadius: 8, border: "1px solid var(--line)" } as const;
 const labelStyle = { display: "block", fontSize: 12, color: "var(--muted)", marginBottom: 4, fontWeight: 600 } as const;
@@ -72,9 +73,9 @@ export function AccountParentForm({ accountId, accountName, currentParentId, opt
 
   return (
     <>
-      <button type="button" className="btn primary" onClick={() => setOpen(true)} style={{ minHeight: 44 }}>
+      <Button onClick={() => setOpen(true)} style={{ minHeight: 44 }}>
         Change Parent
-      </button>
+      </Button>
       {open ? (
         <div className="card" style={{ marginTop: 16 }}>
           <form onSubmit={submit} className="pad" style={{ maxWidth: 520 }}>
@@ -86,12 +87,12 @@ export function AccountParentForm({ accountId, accountName, currentParentId, opt
                 <option key={a.id} value={a.id}>{a.name}</option>
               ))}
             </select>
-            <button type="submit" className="btn primary" disabled={busy} style={{ marginTop: 16, minHeight: 44 }}>
+            <Button type="submit" disabled={busy} loading={busy} style={{ marginTop: 16, minHeight: 44 }}>
               {busy ? "Saving…" : "Save hierarchy"}
-            </button>
-            <button type="button" className="btn ghost" style={{ marginLeft: 8, marginTop: 16, minHeight: 44 }} onClick={() => setOpen(false)}>
+            </Button>
+            <Button type="button" variant="ghost" style={{ marginLeft: 8, marginTop: 16, minHeight: 44 }} onClick={() => setOpen(false)}>
               Cancel
-            </button>
+            </Button>
           </form>
         </div>
       ) : null}

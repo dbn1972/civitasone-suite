@@ -1,5 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen } from "@testing-library/react";
+import { NextIntlClientProvider } from "next-intl";
+import enMessages from "@/messages/en.json";
 
 const fetchJsonMock = vi.fn();
 vi.mock("@/app/_data/apiClient", () => ({
@@ -10,6 +12,17 @@ vi.mock("next/navigation", () => ({
 }));
 
 import CorrectionsPage from "./page";
+
+// UX-017: CorrectionsPage is a server component (translated via
+// getTranslations(), which vitest.setup.ts mocks centrally -- no provider
+// needed just for that call), but it also renders CreateCorrectionForm, a
+// CLIENT component that now calls useTranslations(). That child needs a
+// genuine NextIntlClientProvider in the tree once rendered for real by
+// testing-library -- same pattern as disbursement/page.test.tsx (tranche 9).
+async function renderPage() {
+  const ui = await CorrectionsPage();
+  render(<NextIntlClientProvider locale="en" messages={enMessages}>{ui}</NextIntlClientProvider>);
+}
 
 describe("CorrectionsPage", () => {
   beforeEach(() => {
@@ -36,8 +49,7 @@ describe("CorrectionsPage", () => {
       source: "api",
     });
 
-    const ui = await CorrectionsPage();
-    render(ui);
+    await renderPage();
 
     expect(screen.getByText("e1")).toBeInTheDocument();
     expect(screen.getByText("BASIC")).toBeInTheDocument();
@@ -46,8 +58,7 @@ describe("CorrectionsPage", () => {
   it("renders an empty state when there are no corrections", async () => {
     fetchJsonMock.mockResolvedValue({ data: [], source: "api" });
 
-    const ui = await CorrectionsPage();
-    render(ui);
+    await renderPage();
 
     expect(screen.getByText("No salary corrections yet")).toBeInTheDocument();
   });
@@ -55,8 +66,7 @@ describe("CorrectionsPage", () => {
   it("shows the saved-information badge when the source is error", async () => {
     fetchJsonMock.mockResolvedValue({ data: [], source: "error" });
 
-    const ui = await CorrectionsPage();
-    render(ui);
+    await renderPage();
 
     expect(screen.getByText("Couldn't load — showing nothing")).toBeInTheDocument();
   });

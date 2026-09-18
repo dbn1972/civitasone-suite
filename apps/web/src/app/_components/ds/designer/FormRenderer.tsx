@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState, useCallback } from "react";
+import { Button } from "../Button";
 import { FileUpload } from "../FileUpload";
 import type { FormDesignState, FormFieldDefinition } from "./formTypes";
 import { VALIDATION_PRESETS } from "./formTypes";
@@ -104,7 +105,7 @@ function renderControl(
       return (
         <>
           <textarea {...common} rows={3} placeholder="Street, locality, city" />
-          <span style={{ fontSize: 11, color: "var(--info-fg)", marginTop: 4, display: "inline-block" }}>
+          <span style={{ fontSize: 11, color: "var(--info)", marginTop: 4, display: "inline-block" }}>
             bound to: location-service hierarchy
           </span>
         </>
@@ -117,7 +118,7 @@ function renderControl(
             <option value="ward-1">Ward 1 (sample)</option>
             <option value="ward-2">Ward 2 (sample)</option>
           </select>
-          <span style={{ fontSize: 11, color: "var(--info-fg)", marginTop: 4, display: "inline-block" }}>
+          <span style={{ fontSize: 11, color: "var(--info)", marginTop: 4, display: "inline-block" }}>
             bound to: ULB ward list
           </span>
         </>
@@ -182,8 +183,8 @@ export function FormRenderer({
             margin: 0,
             padding: "8px 10px",
             fontSize: 12,
-            background: "var(--info-bg)",
-            border: "1px solid var(--info-border)",
+            background: "var(--infobg)",
+            border: "1px solid var(--infobd)",
             borderRadius: "var(--r-sm)",
             color: "var(--ink2)",
           }}
@@ -195,21 +196,20 @@ export function FormRenderer({
       {mode === "stepped" && visibleSections.length > 1 ? (
         <nav aria-label="Form sections" style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
           {visibleSections.map((sec, idx) => (
-            <button
+            <Button
               key={sec.id}
               type="button"
-              className="btn"
+              variant={idx === activeSectionIndex ? "primary" : "ghost"}
               style={{
                 minHeight: 44,
                 fontSize: 13,
                 opacity: idx === activeSectionIndex ? 1 : 0.7,
-                borderColor: idx === activeSectionIndex ? "var(--info-fg)" : undefined,
               }}
               aria-current={idx === activeSectionIndex ? "step" : undefined}
               onClick={() => onSectionChange?.(idx)}
             >
               {idx + 1}. {sec.label}
-            </button>
+            </Button>
           ))}
         </nav>
       ) : null}
@@ -228,7 +228,7 @@ export function FormRenderer({
                 <label key={field.id} htmlFor={inputId} style={{ display: "grid", gap: 6 }}>
                   <span>
                     {field.label}
-                    {field.required ? <span aria-hidden style={{ color: "var(--bad-fg)" }}> *</span> : null}
+                    {field.required ? <span aria-hidden style={{ color: "var(--bad)" }}> *</span> : null}
                   </span>
                   {field.helpText ? (
                     <span style={{ fontSize: 12, color: "var(--mut)" }}>{field.helpText}</span>
@@ -242,7 +242,7 @@ export function FormRenderer({
                     err,
                   )}
                   {err ? (
-                    <span id={`${inputId}-err`} role="alert" style={{ fontSize: 12, color: "var(--bad-fg)" }}>
+                    <span id={`${inputId}-err`} role="alert" style={{ fontSize: 12, color: "var(--bad)" }}>
                       {err}
                     </span>
                   ) : null}

@@ -1,7 +1,7 @@
 "use client";
 
 import { useTranslations } from "next-intl";
-import { useConfirmAction, ConfirmDialog } from "../../../_components/ds";
+import { Button, useConfirmAction, ConfirmDialog } from "../../../_components/ds";
 import { browserFetch, errorMessageFromResponse } from "@/lib/api/browserClient";
 
 interface BankFileActionProps {
@@ -41,9 +41,8 @@ export function BankFileAction({ batchId, pfmsId, submissionStatus }: BankFileAc
 
   return (
     <>
-      <button
+      <Button
         type="button"
-        className="btn"
         aria-label={t("downloadAriaLabel", { pfmsId })}
         onClick={trigger}
         disabled={!eligible}
@@ -51,7 +50,7 @@ export function BankFileAction({ batchId, pfmsId, submissionStatus }: BankFileAc
         style={{ minHeight: 36 }}
       >
         {t("buttonLabel")}
-      </button>
+      </Button>
       <ConfirmDialog
         open={open}
         title={t("confirmTitle", { pfmsId })}

@@ -243,7 +243,7 @@ export function MonitoringMap() {
       >
         <CivitasMap markers={mapMarkers} onMarkerClick={onMarkerClick} height="70vh" />
 
-        <div className="card" aria-label="Selected marker">
+        <div className="card" role="region" aria-label="Selected marker">
           <div className="card-h">
             <h3>Details</h3>
           </div>

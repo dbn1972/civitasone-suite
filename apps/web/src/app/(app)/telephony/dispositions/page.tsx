@@ -9,6 +9,7 @@
  */
 import { PageHeader, StatCard, StatGrid, DataTable, ProgressBar } from "../../../_components/ds";
 import { useOfflineResource } from "@/lib/sync/resource";
+import { ArrowLeft } from "lucide-react";
 
 type CallRow = {
   id: string;
@@ -76,7 +77,7 @@ export default function TelephonyDispositionsPage() {
   return (
     <>
       <nav aria-label="Breadcrumb" className="back">
-        ← <a href="/telephony">Telephony</a>
+        <ArrowLeft aria-hidden="true" size={14} /> <a href="/telephony">Telephony</a>
       </nav>
       <PageHeader title="Dispositions" subtitle="Completed-call wrap-up codes and their share of resolved calls." />
       <p role="status" aria-live="polite" style={{ fontSize: 12, color: "#92400e", margin: "0 0 8px", minHeight: 16 }}>

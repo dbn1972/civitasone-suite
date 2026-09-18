@@ -1,5 +1,6 @@
 "use client";
 
+import { Button } from "../Button";
 import { Segmented } from "../Segmented";
 import {
   formatNumberingPreview,
@@ -85,9 +86,9 @@ export function NumberingFormatBuilder({ tokens, onChange, warning }: NumberingF
       </p>
       <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 12 }}>
         {TOKEN_OPTIONS.map((opt) => (
-          <button key={opt} type="button" className="btn ghost" onClick={() => addToken(opt)}>
+          <Button key={opt} type="button" variant="ghost" onClick={() => addToken(opt)}>
             + {opt}
-          </button>
+          </Button>
         ))}
       </div>
       <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "grid", gap: 8 }}>
@@ -135,27 +136,27 @@ export function NumberingFormatBuilder({ tokens, onChange, warning }: NumberingF
               </label>
             ) : null}
             <div style={{ marginInlineStart: "auto", display: "flex", gap: 4 }}>
-              <button
+              <Button
                 type="button"
-                className="btn ghost"
+                variant="ghost"
                 aria-label="Move token up"
                 disabled={idx === 0}
                 onClick={() => moveToken(idx, -1)}
               >
                 ↑
-              </button>
-              <button
+              </Button>
+              <Button
                 type="button"
-                className="btn ghost"
+                variant="ghost"
                 aria-label="Move token down"
                 disabled={idx === tokens.length - 1}
                 onClick={() => moveToken(idx, 1)}
               >
                 ↓
-              </button>
-              <button type="button" className="btn ghost" aria-label="Remove token" onClick={() => removeToken(idx)}>
+              </Button>
+              <Button type="button" variant="ghost" aria-label="Remove token" onClick={() => removeToken(idx)}>
                 ×
-              </button>
+              </Button>
             </div>
           </li>
         ))}
@@ -164,7 +165,7 @@ export function NumberingFormatBuilder({ tokens, onChange, warning }: NumberingF
         Next number will look like: <strong>{preview || "—"}</strong>
       </p>
       {warning ? (
-        <p data-testid="numbering-warning" style={{ marginTop: 8, fontSize: 13, color: "var(--warn-fg)" }}>
+        <p data-testid="numbering-warning" style={{ marginTop: 8, fontSize: 13, color: "var(--warn)" }}>
           {warning}
         </p>
       ) : null}

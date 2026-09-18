@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useToast } from "@/app/_components/ds/Toast";
-import { PageHeader } from "@/app/_components/ds";
+import { Button, PageHeader } from "@/app/_components/ds";
 import { browserFetch, errorMessageFromResponse } from "@/lib/api/browserClient";
 
 type ContactOption = { id: string; name: string };
@@ -137,9 +137,9 @@ export default function NewDealPage() {
             <input id="deal-prob" type="number" min={0} max={100} step="1" value={form.probability} onChange={(e) => setForm({ ...form, probability: e.target.value })} style={inputStyle} />
           </div>
           <div>
-            <button type="submit" className="btn primary" disabled={busy} style={{ minHeight: 44 }}>
+            <Button type="submit" disabled={busy} loading={busy} style={{ minHeight: 44 }}>
               {busy ? "Creating…" : "Create deal"}
-            </button>
+            </Button>
           </div>
         </form>
       </div>

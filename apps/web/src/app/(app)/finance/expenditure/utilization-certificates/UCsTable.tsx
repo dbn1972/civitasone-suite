@@ -1,26 +1,30 @@
 "use client";
 
 import { useState } from "react";
+import { useTranslations } from "next-intl";
 import { Segmented, DataTable } from "../../../../_components/ds";
 import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
 import type { UCSummary } from "@civitasone/types";
 import { formatIndianDate } from "@/lib/formatters";
 import { useSeededResource } from "@/lib/sync/resource";
 
-type Tab = "All" | "Pending" | "Submitted";
-
-const TABS: Tab[] = ["All", "Pending", "Submitted"];
-
-const TAB_STATUS_MAP: Record<Tab, string[]> = {
-  All: [],
-  Pending: ["pending", "rejected"],
-  Submitted: ["submitted", "verified"],
-};
+// UX-017 (tranche 10): same tab-identity fix as AdvancesTable.tsx -- TABS
+// used to double as both <Segmented>'s displayed text AND the filter
+// identity (TAB_STATUS_MAP[activeTab]); translating the strings in place
+// would have silently broken filtering under hi.json (the same class of bug
+// tranche 5 found in PfmsConsole.tsx). Tracked by position instead.
+const TAB_STATUS_MAP: string[][] = [
+  [], // All
+  ["pending", "rejected"], // Pending
+  ["submitted", "verified"], // Submitted
+];
 
 type Row = UCSummary & { period: string };
 
 export function UCsTable({ ucs, source = "api" }: { ucs: UCSummary[]; source?: "api" | "error" }) {
-  const [activeTab, setActiveTab] = useState<Tab>("All");
+  const t = useTranslations("expenditureUtilizationCertificatesTable");
+  const TABS = [t("tabAll"), t("tabPending"), t("tabSubmitted")];
+  const [activeTabIndex, setActiveTabIndex] = useState(0);
   const { data: rows, provenance, offline, cachedAt } = useSeededResource<UCSummary[]>(
     "finance.ucs",
     ucs,
@@ -29,9 +33,9 @@ export function UCsTable({ ucs, source = "api" }: { ucs: UCSummary[]; source?: "
   );
 
   const filtered =
-    activeTab === "All"
+    activeTabIndex === 0
       ? rows
-      : rows.filter((u) => TAB_STATUS_MAP[activeTab].includes(u.status));
+      : rows.filter((u) => TAB_STATUS_MAP[activeTabIndex].includes(u.status));
 
   const tableRows: Row[] = filtered.map((u) => ({ ...u, period: `${u.periodFrom} – ${u.periodTo}` }));
 
@@ -44,23 +48,30 @@ export function UCsTable({ ucs, source = "api" }: { ucs: UCSummary[]; source?: "
           badge from the raw `source` prop — removed). */}
       <DataSourceBadge provenance={provenance ?? "live"} cachedAt={cachedAt} offline={offline} />
       <div style={{ marginBottom: 12 }}>
-        <Segmented options={TABS} value={activeTab} onChange={(v) => setActiveTab(v as Tab)} />
+        <Segmented
+          options={TABS}
+          value={TABS[activeTabIndex]}
+          onChange={(v) => {
+            const idx = TABS.indexOf(v);
+            if (idx !== -1) setActiveTabIndex(idx);
+          }}
+        />
       </div>
 
       <DataTable<Row>
         columns={[
-          { key: "ucNo", label: "UC No", render: (u) => <span className="mono">{u.ucNo}</span> },
-          { key: "grantee", label: "Grantee" },
-          { key: "grantRef", label: "Grant Ref", render: (u) => u.grantRef ?? "—" },
-          { key: "period", label: "Period" },
-          { key: "amount", label: "Amount", align: "right", cellType: "amount" },
-          { key: "submittedDate", label: "Submitted", render: (u) => formatIndianDate(u.submittedDate) },
-          { key: "status", label: "Status", cellType: "status" },
+          { key: "ucNo", label: t("colUcNo"), render: (u) => <span className="mono">{u.ucNo}</span> },
+          { key: "grantee", label: t("colGrantee") },
+          { key: "grantRef", label: t("colGrantRef"), render: (u) => u.grantRef ?? "—" },
+          { key: "period", label: t("colPeriod") },
+          { key: "amount", label: t("colAmount"), align: "right", cellType: "amount" },
+          { key: "submittedDate", label: t("colSubmitted"), render: (u) => formatIndianDate(u.submittedDate) },
+          { key: "status", label: t("colStatus"), cellType: "status" },
         ]}
         rows={tableRows}
         sortable
         filterable
-        filterPlaceholder="Search UCs…"
+        filterPlaceholder={t("filterPlaceholder")}
         pageSize={15}
       />
     </>

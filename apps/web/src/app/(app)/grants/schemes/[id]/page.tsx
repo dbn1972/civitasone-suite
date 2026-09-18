@@ -4,6 +4,7 @@ import { PageHeader, Card, StatGrid, StatCard, StatusPill, EmptyState } from "@/
 import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
 import { formatMoney, formatIndianDate } from "@/lib/formatters";
 import { getSchemeById } from "../../_data";
+import { ArrowLeft } from "lucide-react";
 
 const SECTOR_LABELS: Record<string, string> = {
   agriculture: "Agriculture", education: "Education", health: "Health",
@@ -23,7 +24,7 @@ export default async function SchemeDetailPage({ params }: { params: { id: strin
   return (
     <>
       <nav aria-label="Breadcrumb" className="back">
-        ← <a href="/grants">Grants</a>{" "}
+        <ArrowLeft aria-hidden="true" size={14} /> <a href="/grants">Grants</a>{" "}
         <span aria-hidden="true">/</span>{" "}
         <a href="/grants/schemes">Schemes</a>{" "}
         <span aria-hidden="true">/</span>{" "}

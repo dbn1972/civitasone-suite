@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { ActionButton } from "../../../../_components/ds";
+import { ActionButton, Button } from "../../../../_components/ds";
 import { browserFetch, errorMessageFromResponse } from "@/lib/api/browserClient";
 
 type Props = {
@@ -76,9 +76,9 @@ export function DealDetailActions({ dealId, dealName, contactId, status }: Props
 
   return (
     <>
-      <button type="button" className="btn primary" onClick={() => setShowActivity((v) => !v)}>
+      <Button onClick={() => setShowActivity((v) => !v)}>
         Log Activity
-      </button>
+      </Button>
       <ActionButton
         label="Mark Won"
         className="btn ghost"
@@ -152,12 +152,12 @@ export function DealDetailActions({ dealId, dealName, contactId, status }: Props
               rows={3}
               style={{ width: "100%", padding: 8, marginBottom: 8, borderRadius: 8, border: "1px solid var(--line)" }}
             />
-            <button type="submit" className="btn primary" disabled={busy}>
+            <Button type="submit" disabled={busy} loading={busy}>
               {busy ? "Saving…" : "Save activity"}
-            </button>
-            <button type="button" className="btn ghost" style={{ marginLeft: 8 }} onClick={() => setShowActivity(false)}>
+            </Button>
+            <Button type="button" variant="ghost" style={{ marginLeft: 8 }} onClick={() => setShowActivity(false)}>
               Cancel
-            </button>
+            </Button>
           </form>
         </div>
       ) : null}

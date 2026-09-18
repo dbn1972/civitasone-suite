@@ -259,7 +259,7 @@ export function MapViewer({ canManage = false }: { canManage?: boolean }) {
       >
         <CivitasMap layers={visibleLayers} height="70vh" />
 
-        <div className="card" aria-label="Layers panel">
+        <div className="card" role="region" aria-label="Layers panel">
           <div className="card-h">
             <h3>Layers</h3>
             <div className="lnk">{layers.length}</div>

@@ -87,7 +87,7 @@ export function TaskActions({ taskId, status, assigned, compact = false }: TaskA
 
   if (!isPending) {
     return (
-      <span className="pill mut" aria-label={`Task ${status}`}>
+      <span className="pill mut" role="status" aria-label={`Task ${status}`}>
         {status}
       </span>
     );

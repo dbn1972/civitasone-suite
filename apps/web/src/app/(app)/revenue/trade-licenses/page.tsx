@@ -6,7 +6,7 @@
  */
 import { useId, useState } from "react";
 import { useRouter } from "next/navigation";
-import { PageHeader, StatGrid, StatCard, Card } from "@/app/_components/ds";
+import { Button, PageHeader, StatGrid, StatCard, Card } from "@/app/_components/ds";
 import { browserJson } from "@/lib/api/browserClient";
 import { feeRupees } from "./feeRupees";
 
@@ -224,9 +224,9 @@ function TradeLicenseCreateForm({ onCreated }: { onCreated: () => void }) {
           </div>
 
           <div>
-            <button type="submit" className="btn primary" style={{ minHeight: 44 }} disabled={busy}>
+            <Button type="submit" style={{ minHeight: 44 }} disabled={busy} loading={busy}>
               {busy ? "Submitting…" : "Issue Trade License"}
-            </button>
+            </Button>
           </div>
 
           {message && <p role="status" className="pill good" style={{ width: "fit-content" }}>{message}</p>}

@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useState, use } from "react";
 import { PageHeader } from "@/app/_components/ds";
 import { useFormError } from "@/lib/useFormError";
+import { ArrowLeft } from "lucide-react";
 
 type FormStatus = "idle" | "submitting" | "success" | "error";
 
@@ -83,7 +84,7 @@ export default function ApplyPage({ params }: ApplyPageProps) {
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
       <nav aria-label="Breadcrumb" className="back">
-        ← <a href="/grants">Grants</a> <span aria-hidden="true">/</span>{" "}
+        <ArrowLeft aria-hidden="true" size={14} /> <a href="/grants">Grants</a> <span aria-hidden="true">/</span>{" "}
         <a href="/grants/schemes">Schemes</a> <span aria-hidden="true">/</span>{" "}
         <a href={`/grants/schemes/${schemeId}`}>{schemeId.slice(0, 8)}…</a>{" "}
         <span aria-hidden="true">/</span> <span aria-current="page">Apply</span>

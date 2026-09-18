@@ -88,6 +88,7 @@ async function assertBoundedPagination<T>(
 
 afterAll(async () => { await sqlClient.end(); });
 
+// FLAKY-SKIP: See file header above — no Postgres schema exists yet for booking/citizen_lease (no migration creates these tables, confirmed twice independently); un-skip once that migration lands. PERF-006 itself is Fixed (PR #1384) except for this sub-scope. (expires: 2026-12-13)
 describe.skip("PERF-006 — estab-service unbounded tenant-wide list queries", () => {
   it("listBookings: bounded page regardless of how many bookings the tenant has", async () => {
     const tenant = randomUUID();

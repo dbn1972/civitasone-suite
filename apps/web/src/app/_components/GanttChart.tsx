@@ -29,7 +29,7 @@ function formatMonth(d: Date): string {
 
 export function GanttChart({ tasks, startDate, endDate }: GanttChartProps) {
   if (tasks.length === 0) {
-    return <div style={{ padding: 24, textAlign: "center", color: "#94a3b8", fontSize: 13 }}>No tasks to display</div>;
+    return <div style={{ padding: 24, textAlign: "center", color: "var(--mut)", fontSize: 13 }}>No tasks to display</div>;
   }
 
   const allStarts = tasks.map((t) => parseDate(t.startDate));

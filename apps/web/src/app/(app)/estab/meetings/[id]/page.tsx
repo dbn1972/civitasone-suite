@@ -3,6 +3,7 @@ import { getMeetingById } from "../../../../_data/loaders";
 import { PageHeader, RefreshErrorState, StatusPill } from "../../../../_components/ds";
 import { ActionPointsTable, AttendeesTable } from "./MeetingDetailTables";
 import { MeetingActions } from "./MeetingActions";
+import { ArrowLeft } from "lucide-react";
 
 export default async function MeetingDetailPage({
   params,
@@ -38,7 +39,7 @@ export default async function MeetingDetailPage({
 
   return (
     <>
-      <a className="back" href="/estab/meetings">← Back</a>
+      <a className="back" href="/estab/meetings"><ArrowLeft aria-hidden="true" size={14} /> Back</a>
       <div className="ph" style={{ marginTop: 6 }}>
         <div>
           <h1>

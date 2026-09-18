@@ -1,5 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { NextIntlClientProvider } from "next-intl";
+import enMessages from "@/messages/en.json";
 
 const refreshMock = vi.fn();
 vi.mock("next/navigation", () => ({
@@ -7,6 +9,18 @@ vi.mock("next/navigation", () => ({
 }));
 
 import NewUCPage from "./page";
+
+// UX-017 (tranche 10): see AdvancesTable/NewAdvancePage's identical note --
+// NewUCPage is a "use client" component calling useTranslations(), so it
+// needs a real NextIntlClientProvider even though the page itself doesn't
+// nest any other translated component.
+function renderPage(ui: React.ReactElement) {
+  return render(
+    <NextIntlClientProvider locale="en" messages={enMessages}>
+      {ui}
+    </NextIntlClientProvider>,
+  );
+}
 
 function fillForm() {
   fireEvent.change(screen.getByLabelText("UC number"), { target: { value: "UC-001" } });
@@ -23,7 +37,7 @@ describe("NewUCPage", () => {
   it("submits a utilization certificate (happy path, 202 accepted)", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(null, { status: 202 }));
 
-    render(<NewUCPage />);
+    renderPage(<NewUCPage />);
     fillForm();
     fireEvent.click(screen.getByRole("button", { name: /submit uc/i }));
 
@@ -44,7 +58,7 @@ describe("NewUCPage", () => {
       new Response(JSON.stringify({ message: "scheme_closed: grant window has ended" }), { status: 422 }),
     );
 
-    render(<NewUCPage />);
+    renderPage(<NewUCPage />);
     fillForm();
     fireEvent.click(screen.getByRole("button", { name: /submit uc/i }));
 

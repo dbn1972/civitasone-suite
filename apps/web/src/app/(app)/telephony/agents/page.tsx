@@ -8,6 +8,7 @@
  */
 import { PageHeader, StatCard, StatGrid, StatusPill, DataTable } from "../../../_components/ds";
 import { useOfflineResource } from "@/lib/sync/resource";
+import { ArrowLeft } from "lucide-react";
 
 type AgentRow = {
   id: string;
@@ -63,7 +64,7 @@ export default function TelephonyAgentsPage() {
   return (
     <>
       <nav aria-label="Breadcrumb" className="back">
-        ← <a href="/telephony">Telephony</a>
+        <ArrowLeft aria-hidden="true" size={14} /> <a href="/telephony">Telephony</a>
       </nav>
       <PageHeader title="Agent Queue" subtitle="Live agent presence and queue assignment for routing." />
       <p role="status" aria-live="polite" style={{ fontSize: 12, color: "#92400e", margin: "0 0 8px", minHeight: 16 }}>

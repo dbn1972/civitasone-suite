@@ -3,6 +3,7 @@ import { formatMoney } from "@/lib/formatters";
 import { getGrantApplications } from "../_data";
 import { ApplicationsTable } from "./ApplicationsTable";
 import { FilterButton } from "./FilterButton";
+import { ArrowLeft } from "lucide-react";
 
 export default async function GrantApplicationsPage() {
   const { data: applications, source } = await getGrantApplications();
@@ -15,7 +16,7 @@ export default async function GrantApplicationsPage() {
   return (
     <>
       <nav aria-label="Breadcrumb" className="back">
-        ← <a href="/grants">Grants</a>
+        <ArrowLeft aria-hidden="true" size={14} /> <a href="/grants">Grants</a>
       </nav>
       <PageHeader
         title="Grant Applications"

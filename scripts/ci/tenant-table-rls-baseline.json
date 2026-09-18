@@ -1,7 +1,7 @@
 {
   "$comment": "TRACKED DEBT, not an approved state. Each entry is a migration file that CREATEs a table with a tenant_id column but does not ENABLE + FORCE row-level security and CREATE a policy for it IN THE SAME FILE -- almost always because this fleet's convention has historically been 'create the table now, RLS it in a later isolation-sweep migration' (see e.g. hrms-service 0026/0034, admin-service 0005/0006, workflow-service 0013/0018). Fixing one of these tables always means a NEW migration (you do not edit an already-applied file), so a genuinely-fixed table's original CREATE TABLE migration stays in this list forever -- that is expected, not a bug in this guard. The gate is on NEW entries (a migration added after this guard existed) and on STALE entries (a listed file that was edited and no longer reproduces -- extremely rare, since migrations aren't normally edited after being applied, but possible pre-merge). See docs/ENTERPRISE-GAP-REPORT-2026-09-07.md SEC-009/SEC-010. Regenerate with --write-baseline only after confirming any newly-absent entries are a real, reviewed fix, not an accidental file deletion/rename.",
-  "generatedAt": "2026-09-13",
-  "count": 1007,
+  "generatedAt": "2026-09-18",
+  "count": 1008,
   "entries": [
     "services/admin-service/migrations/0001_init.sql::_outbox.messages",
     "services/admin-service/migrations/0001_init.sql::backup.admin_backup_runs",
@@ -569,6 +569,7 @@
     "services/identity-service/migrations/0011_api_keys_break_glass.sql::apikeys.api_key_audit",
     "services/identity-service/migrations/0011_api_keys_break_glass.sql::apikeys.api_keys",
     "services/identity-service/migrations/0011_api_keys_break_glass.sql::breakglass.grants",
+    "services/identity-service/migrations/0022_scim_per_tenant_tokens.sql::scim.scim_tokens",
     "services/inspection-service/migrations/0002_risk_schema.sql::risk.risk_models",
     "services/inspection-service/migrations/0002_risk_schema.sql::risk.risk_scores",
     "services/inspection-service/migrations/0003_planning_schema.sql::planning.inspection_plans",

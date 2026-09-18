@@ -171,7 +171,7 @@ function InviteUserDialog({ open, onClose, onCreated }: { open: boolean; onClose
             {emailErr ? <p role="alert" style={dlgErr}>{emailErr}</p> : null}
           </div>
           <div>
-            <label htmlFor={empId} style={dlgLbl}>Employee code <span style={{ fontWeight: 400, color: "#98a2b3" }}>(optional)</span></label>
+            <label htmlFor={empId} style={dlgLbl}>Employee code <span style={{ fontWeight: 400, color: "var(--mut)" }}>(optional)</span></label>
             <input id={empId} value={empCode} onChange={(e) => setEmpCode(e.target.value)}
               placeholder="EMP-00123" style={dlgInp} />
           </div>

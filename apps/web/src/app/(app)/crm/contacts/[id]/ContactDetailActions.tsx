@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { ActionButton } from "../../../../_components/ds";
+import { ActionButton, Button } from "../../../../_components/ds";
 import { browserFetch, errorMessageFromResponse } from "@/lib/api/browserClient";
 
 type Props = { contactId: string; name: string };
@@ -64,9 +64,9 @@ export function ContactDetailActions({ contactId, name }: Props) {
 
   return (
     <>
-      <button type="button" className="btn primary" onClick={() => setShowActivity(true)} style={{ minHeight: 44 }}>
+      <Button onClick={() => setShowActivity(true)} style={{ minHeight: 44 }}>
         Log Activity
-      </button>
+      </Button>
       <a className="btn ghost" href={`/crm/contacts/${contactId}/edit`} style={{ minHeight: 44, display: "inline-flex", alignItems: "center" }}>
         Edit
       </a>
@@ -101,8 +101,8 @@ export function ContactDetailActions({ contactId, name }: Props) {
             <input id="contact-activity-subject" value={activity.subject} onChange={(e) => setActivity({ ...activity, subject: e.target.value })} placeholder="Short summary" style={inputStyle} />
             <label htmlFor="contact-activity-notes" style={labelStyle}>Notes</label>
             <textarea id="contact-activity-notes" required value={activity.text} onChange={(e) => setActivity({ ...activity, text: e.target.value })} placeholder="What happened?" rows={3} style={{ ...inputStyle, minHeight: undefined }} />
-            <button type="submit" className="btn primary" disabled={busy} style={{ minHeight: 44 }}>{busy ? "Saving…" : "Save activity"}</button>
-            <button type="button" className="btn ghost" style={{ marginLeft: 8, minHeight: 44 }} onClick={() => setShowActivity(false)}>Cancel</button>
+            <Button type="submit" disabled={busy} loading={busy} style={{ minHeight: 44 }}>{busy ? "Saving…" : "Save activity"}</Button>
+            <Button type="button" variant="ghost" style={{ marginLeft: 8, minHeight: 44 }} onClick={() => setShowActivity(false)}>Cancel</Button>
           </form>
         </div>
       ) : null}

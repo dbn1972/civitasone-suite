@@ -4,6 +4,7 @@ import { useId, useState } from "react";
 import type { CSSProperties } from "react";
 import { useRouter } from "next/navigation";
 import { useFormError } from "@/lib/useFormError";
+import { Button } from "../../../_components/ds";
 
 /**
  * MedicalClaimForm — CGHS / CS(MA) Rules 1944 reimbursement claim form.
@@ -282,12 +283,12 @@ export function MedicalClaimForm() {
         </div>
 
         <div style={{ display: "flex", gap: 12, justifyContent: "flex-end" }}>
-          <button type="button" className="btn ghost" onClick={handleCancel} style={{ minHeight: 44 }}>
+          <Button type="button" variant="ghost" onClick={handleCancel} style={{ minHeight: 44 }}>
             Cancel
-          </button>
-          <button type="submit" className="btn primary" disabled={busy} style={{ minHeight: 44, minWidth: 200 }}>
+          </Button>
+          <Button type="submit" disabled={busy} style={{ minHeight: 44, minWidth: 200 }}>
             {busy ? "Submitting…" : "Submit Claim"}
-          </button>
+          </Button>
         </div>
       </form>
     </div>

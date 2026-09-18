@@ -1,4 +1,4 @@
-import { PageHeader, StatGrid, StatCard, Card, DataTable, EmptyState } from "@/app/_components/ds";
+import { Button, PageHeader, StatGrid, StatCard, Card, DataTable, EmptyState } from "@/app/_components/ds";
 import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import { formatIndianDate } from "@/lib/formatters";
@@ -152,9 +152,9 @@ export default async function InstalmentsPage({
               ))}
             </select>
           </div>
-          <button type="submit" className="btn primary" style={{ minHeight: 44 }}>
+          <Button type="submit" style={{ minHeight: 44 }}>
             View
-          </button>
+          </Button>
         </form>
       </Card>
 

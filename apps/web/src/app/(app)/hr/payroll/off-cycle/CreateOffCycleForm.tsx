@@ -2,6 +2,7 @@
 
 import { useId, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { Card, ConfirmDialog, Button } from "../../../../_components/ds";
 import { browserJson } from "@/lib/api/browserClient";
 import { formatMoney } from "@/lib/formatters";
@@ -14,11 +15,14 @@ type CreateResponse = {
   data: { id: string; runType: string; period: string; totalAmountMinor: number; itemCount: number; status: string };
 };
 
+type InvalidField = "period" | "items" | null;
+
 function emptyItem(): ItemDraft {
   return { _key: Math.random().toString(36).slice(2), employeeId: "", amountRupees: "" };
 }
 
 export function CreateOffCycleForm() {
+  const t = useTranslations("createOffCycleForm");
   const router = useRouter();
   const [runType, setRunType] = useState<RunType>("bonus");
   const [period, setPeriod] = useState("");
@@ -29,6 +33,15 @@ export function CreateOffCycleForm() {
   const [dialogError, setDialogError] = useState<string | undefined>();
   const [message, setMessage] = useState<string | null>(null);
   const [tone, setTone] = useState<"good" | "bad">("good");
+  // UX-017: same "translated text used as a logic identity" bug class as
+  // CreateCorrectionForm.tsx's own invalidField fix (see its comment for the
+  // full explanation) -- periodInvalid/itemsInvalid used to re-test the live
+  // `message` state against hardcoded English literals
+  // (`message.startsWith("Period")` / `message.startsWith("Every off-cycle item")`),
+  // which would silently stop matching under any non-English locale once
+  // `message` holds translated text. Tracked here instead as its own
+  // identity, independent of the display string.
+  const [invalidField, setInvalidField] = useState<InvalidField>(null);
 
   const periodId = useId();
   const descId = useId();
@@ -37,8 +50,8 @@ export function CreateOffCycleForm() {
   const periodRef = useRef<HTMLInputElement>(null);
   const empRefs = useRef<(HTMLInputElement | null)[]>([]);
 
-  const periodInvalid = tone === "bad" && !!message && message.startsWith("Period");
-  const itemsInvalid = tone === "bad" && !!message && message.startsWith("Every off-cycle item");
+  const periodInvalid = tone === "bad" && invalidField === "period";
+  const itemsInvalid = tone === "bad" && invalidField === "items";
 
   function updateItem(index: number, patch: Partial<ItemDraft>) {
     setItems((prev) => prev.map((it, i) => (i === index ? { ...it, ...patch } : it)));
@@ -60,9 +73,11 @@ export function CreateOffCycleForm() {
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setMessage(null);
+    setInvalidField(null);
     if (!/^\d{4}-\d{2}$/.test(period.trim())) {
       setTone("bad");
-      setMessage("Period must be in YYYY-MM format, e.g. 2025-06.");
+      setInvalidField("period");
+      setMessage(t("periodFormatError"));
       periodRef.current?.focus();
       return;
     }
@@ -72,7 +87,8 @@ export function CreateOffCycleForm() {
     });
     if (!allValid) {
       setTone("bad");
-      setMessage("Every off-cycle item needs an Employee ID and a positive amount.");
+      setInvalidField("items");
+      setMessage(t("itemsValidationError"));
       const firstInvalid = items.findIndex((it) => {
         const rupees = parseFloat(it.amountRupees);
         return !(it.employeeId.trim().length > 0 && !Number.isNaN(rupees) && rupees > 0);
@@ -102,17 +118,20 @@ export function CreateOffCycleForm() {
       });
       setConfirmOpen(false);
       setTone("good");
+      setInvalidField(null);
       setMessage(
-        `Off-cycle run created for ${period.trim()} covering ${res.data.itemCount} employee(s), total ${formatMoney(
-          res.data.totalAmountMinor,
-        )}.`,
+        t("createdMessage", {
+          period: period.trim(),
+          count: res.data.itemCount,
+          amount: formatMoney(res.data.totalAmountMinor),
+        }),
       );
       setPeriod("");
       setDescription("");
       setItems([emptyItem()]);
       router.refresh();
     } catch (err) {
-      setDialogError(err instanceof Error ? err.message : "Network error. Please try again.");
+      setDialogError(err instanceof Error ? err.message : t("networkError"));
     } finally {
       setBusy(false);
     }
@@ -120,12 +139,12 @@ export function CreateOffCycleForm() {
 
   return (
     <form onSubmit={handleSubmit} style={{ marginBottom: 16 }}>
-      <Card title="Create Off-Cycle Run" padding>
+      <Card title={t("formTitle")} padding>
         <div style={{ display: "grid", gap: 14 }}>
           <div style={{ display: "grid", gap: 14, gridTemplateColumns: "repeat(auto-fit,minmax(180px,1fr))" }}>
             <div style={{ display: "grid", gap: 6 }}>
               <label htmlFor={runTypeId} style={{ fontSize: 13, fontWeight: 600 }}>
-                Run Type <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
+                {t("runTypeLabel")} <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
               </label>
               <select
                 id={runTypeId}
@@ -134,14 +153,14 @@ export function CreateOffCycleForm() {
                 aria-required="true"
                 style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
               >
-                <option value="bonus">Bonus</option>
-                <option value="incentive">Incentive</option>
-                <option value="adhoc">Ad-hoc</option>
+                <option value="bonus">{t("runTypeBonusOption")}</option>
+                <option value="incentive">{t("runTypeIncentiveOption")}</option>
+                <option value="adhoc">{t("runTypeAdhocOption")}</option>
               </select>
             </div>
             <div style={{ display: "grid", gap: 6 }}>
               <label htmlFor={periodId} style={{ fontSize: 13, fontWeight: 600 }}>
-                Period <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
+                {t("periodLabel")} <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
               </label>
               <input
                 id={periodId}
@@ -156,7 +175,7 @@ export function CreateOffCycleForm() {
               />
             </div>
             <div style={{ display: "grid", gap: 6 }}>
-              <label htmlFor={descId} style={{ fontSize: 13, fontWeight: 600 }}>Description</label>
+              <label htmlFor={descId} style={{ fontSize: 13, fontWeight: 600 }}>{t("descriptionLabel")}</label>
               <input
                 id={descId}
                 value={description}
@@ -169,7 +188,7 @@ export function CreateOffCycleForm() {
 
           <div style={{ display: "grid", gap: 8 }}>
             <span style={{ fontSize: 13, fontWeight: 600 }}>
-              Items <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
+              {t("itemsLabel")} <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
             </span>
             {items.map((it, index) => {
               const empLabelId = `${errId}-emp-${index}`;
@@ -180,7 +199,7 @@ export function CreateOffCycleForm() {
                   style={{ display: "grid", gap: 10, gridTemplateColumns: "1fr 1fr auto", alignItems: "end" }}
                 >
                   <div style={{ display: "grid", gap: 6 }}>
-                    <label htmlFor={empLabelId} style={{ fontSize: 12, fontWeight: 600 }}>Employee ID</label>
+                    <label htmlFor={empLabelId} style={{ fontSize: 12, fontWeight: 600 }}>{t("employeeIdLabel")}</label>
                     <input
                       id={empLabelId}
                       ref={(el) => { empRefs.current[index] = el; }}
@@ -193,7 +212,7 @@ export function CreateOffCycleForm() {
                     />
                   </div>
                   <div style={{ display: "grid", gap: 6 }}>
-                    <label htmlFor={amtLabelId} style={{ fontSize: 12, fontWeight: 600 }}>Amount (₹)</label>
+                    <label htmlFor={amtLabelId} style={{ fontSize: 12, fontWeight: 600 }}>{t("amountLabel")}</label>
                     <input
                       id={amtLabelId}
                       type="number"
@@ -211,30 +230,34 @@ export function CreateOffCycleForm() {
                     variant="ghost"
                     onClick={() => removeItem(index)}
                     disabled={items.length === 1}
-                    aria-label={`Remove item ${index + 1}`}
+                    aria-label={t("removeItemAriaLabel", { index: index + 1 })}
                     style={{ minHeight: 44 }}
                   >
-                    Remove
+                    {t("removeBtn")}
                   </Button>
                 </div>
               );
             })}
             <div>
               <Button variant="ghost" onClick={addItem} style={{ minHeight: 44 }}>
-                Add Item
+                {t("addItemBtn")}
               </Button>
             </div>
           </div>
 
           {totalAmountMinor > 0 && (
             <p style={{ fontSize: 13, color: "var(--ink2)" }}>
-              Total amount: <strong>{formatMoney(totalAmountMinor)}</strong> across {items.length} employee(s)
+              {t.rich("totalAmountSummary", {
+                amount: formatMoney(totalAmountMinor),
+                count: items.length,
+                strong: (chunks) => <strong>{chunks}</strong>,
+              })}
             </p>
           )}
 
           <div>
             <Button type="submit" style={{ minHeight: 44 }} disabled={busy} loading={busy}>
-              Create Off-Cycle Run
+              {t("submitBtn")}
             </Button>
           </div>
 
@@ -254,17 +277,17 @@ export function CreateOffCycleForm() {
 
       <ConfirmDialog
         open={confirmOpen}
-        title="Create this off-cycle run?"
-        confirmLabel="Create run"
+        title={t("confirmTitle")}
+        confirmLabel={t("confirmLabel")}
         busy={busy}
         errorMessage={dialogError}
-        description={
-          <>
-            Create a {runType} off-cycle run for period <strong>{period}</strong> covering {items.length} employee(s),
-            total {formatMoney(totalAmountMinor)}. This creates the run in draft status; it must be processed
-            separately.
-          </>
-        }
+        description={t.rich("confirmDescription", {
+          runType,
+          period,
+          count: items.length,
+          amount: formatMoney(totalAmountMinor),
+          strong: (chunks) => <strong>{chunks}</strong>,
+        })}
         onConfirm={() => void createOffCycle()}
         onCancel={() => !busy && setConfirmOpen(false)}
       />

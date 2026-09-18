@@ -3,7 +3,7 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
-import { DataTable, ConfirmDialog } from "@/app/_components/ds";
+import { Button, DataTable, ConfirmDialog } from "@/app/_components/ds";
 import { formatMoney } from "@/lib/formatters";
 import { toHumanError } from "@/lib/messages";
 
@@ -188,8 +188,8 @@ function FieldPanel({
           {hint && <p style={{ margin: 0, fontSize: 12, color: "var(--ink2)" }}>{hint}</p>}
           {error && <p id={`${titleId}-err`} role="alert" style={{ color: "var(--bad, #c0392b)", fontSize: 12, margin: 0 }}>{error}</p>}
           <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 4 }}>
-            <button type="button" className="btn ghost" onClick={onCancel}>Cancel</button>
-            <button type="button" className="btn primary" onClick={onContinue}>Continue</button>
+            <Button type="button" variant="ghost" onClick={onCancel}>Cancel</Button>
+            <Button type="button" onClick={onContinue}>Continue</Button>
           </div>
         </div>
       </div>
@@ -341,40 +341,44 @@ export function AssessmentsTable({ assessments }: { assessments: AssessmentRow[]
         const shortId = row.id.slice(0, 8);
         return (
           <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-            <button
+            <Button
               type="button"
-              className="btn ghost sm"
+              variant="ghost"
+              size="sm"
               aria-label={`Revise assessment ${shortId} for FY ${row.financialYear}`}
               disabled={row.status !== "active"}
               onClick={() => startRevise(row)}
             >
               Revise
-            </button>
-            <button
+            </Button>
+            <Button
               type="button"
-              className="btn ghost sm"
+              variant="ghost"
+              size="sm"
               aria-label={`Request remission for assessment ${shortId}, FY ${row.financialYear}`}
               disabled={row.status !== "active"}
               onClick={() => startRemit(row)}
             >
               Remit
-            </button>
-            <button
+            </Button>
+            <Button
               type="button"
-              className="btn ghost sm"
+              variant="ghost"
+              size="sm"
               aria-label={`Approve remission for assessment ${shortId}, FY ${row.financialYear}`}
               onClick={() => startDecide(row, true)}
             >
               Approve
-            </button>
-            <button
+            </Button>
+            <Button
               type="button"
-              className="btn ghost sm"
+              variant="ghost"
+              size="sm"
               aria-label={`Reject remission for assessment ${shortId}, FY ${row.financialYear}`}
               onClick={() => startDecide(row, false)}
             >
               Reject
-            </button>
+            </Button>
           </div>
         );
       },

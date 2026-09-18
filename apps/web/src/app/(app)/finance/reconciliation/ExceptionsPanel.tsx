@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { DataTable, StatusPill, ConfirmDialog } from "@/app/_components/ds";
+import { Button, DataTable, StatusPill, ConfirmDialog } from "@/app/_components/ds";
 import { browserFetch, errorMessageFromResponse } from "@/lib/api/browserClient";
 import { formatMoney, formatIndianDate } from "@/lib/formatters";
 import { toHumanError } from "@/lib/messages";
@@ -136,10 +136,11 @@ export function ExceptionsPanel({ exceptions }: { exceptions: ExceptionRow[] }) 
         return (
           <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
             {actions.map((action) => (
-              <button
+              <Button
                 key={action}
                 type="button"
-                className="btn ghost sm"
+                variant="ghost"
+                size="sm"
                 aria-label={`${ACTION_LABEL[action]} exception ${row.breakKey}`}
                 onClick={() => {
                   setDialogError(undefined);
@@ -147,7 +148,7 @@ export function ExceptionsPanel({ exceptions }: { exceptions: ExceptionRow[] }) 
                 }}
               >
                 {ACTION_LABEL[action]}
-              </button>
+              </Button>
             ))}
           </div>
         );

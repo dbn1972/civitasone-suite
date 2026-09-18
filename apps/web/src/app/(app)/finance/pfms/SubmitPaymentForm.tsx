@@ -2,7 +2,7 @@
 
 import { useId, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
-import { Card, ConfirmDialog } from "../../../_components/ds";
+import { Button, Card, ConfirmDialog } from "../../../_components/ds";
 import { browserJson } from "@/lib/api/browserClient";
 import type { PfmsMode } from "./types";
 
@@ -251,9 +251,9 @@ export function SubmitPaymentForm({ onModeObserved }: SubmitPaymentFormProps) {
           </div>
 
           <div>
-            <button type="submit" className="btn primary" style={{ minHeight: 44 }} disabled={busy}>
+            <Button type="submit" style={{ minHeight: 44 }} disabled={busy}>
               {t("submitButton")}
-            </button>
+            </Button>
           </div>
 
           {message && (

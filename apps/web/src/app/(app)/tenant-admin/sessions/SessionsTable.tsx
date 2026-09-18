@@ -106,7 +106,7 @@ export function SessionsTable({ sessions }: { sessions: Session[] }) {
             render: (s) => (
               <>
                 {locationLabel(s.ipAddress)}
-                {s.ipAddress ? <div style={{ fontSize: 11, color: "#98a2b3" }}><span className="mono">{s.ipAddress}</span></div> : null}
+                {s.ipAddress ? <div style={{ fontSize: 11, color: "var(--mut)" }}><span className="mono">{s.ipAddress}</span></div> : null}
               </>
             ),
           },
@@ -131,7 +131,7 @@ export function SessionsTable({ sessions }: { sessions: Session[] }) {
                     Revoke
                   </Button>
                 )
-                : <span style={{ fontSize: 12, color: "#98a2b3" }}>—</span>,
+                : <span style={{ fontSize: 12, color: "var(--mut)" }}>—</span>,
           },
         ]}
         rows={rows}

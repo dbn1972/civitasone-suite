@@ -77,7 +77,7 @@ export default async function KnowledgeRepositoryPage() {
         </div>
         <RepositoryClient rows={rows} />
         {archived > 0 && (
-          <div style={{ padding: "8px 16px", fontSize: "12px", color: "#98a2b3" }}>
+          <div style={{ padding: "8px 16px", fontSize: "12px", color: "var(--mut)" }}>
             {archived} archived document{archived !== 1 ? "s" : ""} not shown
           </div>
         )}

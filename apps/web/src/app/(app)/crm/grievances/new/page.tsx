@@ -1,7 +1,7 @@
 "use client";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { PageHeader } from "../../../../_components/ds";
+import { Button, PageHeader } from "../../../../_components/ds";
 import { useFormError } from "@/lib/useFormError";
 
 const CATEGORIES = [
@@ -249,9 +249,9 @@ export default function NewGrievancePage() {
 
           <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 4 }}>
             <a href="/crm/grievances" className="btn">Cancel</a>
-            <button type="submit" className="btn primary" disabled={saving}>
+            <Button type="submit" disabled={saving} loading={saving}>
               {saving ? "Saving…" : "Submit Grievance"}
-            </button>
+            </Button>
           </div>
         </form>
       </div>

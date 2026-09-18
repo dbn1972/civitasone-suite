@@ -2,7 +2,7 @@
 
 import { useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
-import { Card, DataTable, ConfirmDialog } from "../../../_components/ds";
+import { Button, Card, DataTable, ConfirmDialog } from "../../../_components/ds";
 import { browserJson } from "@/lib/api/browserClient";
 import { formatIndianDate } from "@/lib/formatters";
 
@@ -72,9 +72,10 @@ export function FiscalYearsTable({ rows }: { rows: FiscalYearRow[] }) {
         row.status === "active" ? (
           <span style={{ color: "var(--mut)", fontSize: 12 }}>Currently active</span>
         ) : (
-          <button
+          <Button
             type="button"
-            className="btn secondary sm"
+            variant="secondary"
+            size="sm"
             aria-label={`Activate fiscal year ${row.code}`}
             onClick={() => {
               setError(undefined);
@@ -82,7 +83,7 @@ export function FiscalYearsTable({ rows }: { rows: FiscalYearRow[] }) {
             }}
           >
             Activate
-          </button>
+          </Button>
         ),
     },
   ];

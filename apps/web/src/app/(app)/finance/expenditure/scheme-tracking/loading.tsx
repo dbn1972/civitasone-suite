@@ -1,6 +1,9 @@
-export default function Loading() {
+import { getTranslations } from "next-intl/server";
+
+export default async function Loading() {
+  const t = await getTranslations("msg");
   return (
-    <main className="page-main wrap" style={{ animation: "pulse 2s cubic-bezier(0.4,0,0.6,1) infinite" }} role="status" aria-live="polite" aria-label="Loading…">
+    <main className="page-main wrap" style={{ animation: "pulse 2s cubic-bezier(0.4,0,0.6,1) infinite" }} role="status" aria-live="polite" aria-label={t("loading")}>
       <div style={{ marginBottom: 24 }}>
         <div style={{ height: 16, width: 160, borderRadius: 4, background: "#e5e7eb", marginBottom: 8 }} />
         <div style={{ height: 32, width: 256, borderRadius: 4, background: "#e5e7eb" }} />

@@ -9,6 +9,8 @@
  * so "Export PDF" / "Export MIS" are wired to print-to-PDF — a genuine action
  * rather than a dead control.
  */
+import { Button } from "../../../_components/ds";
+
 export function PrintExportButton({
   label = "Export PDF",
   documentTitle,
@@ -28,8 +30,8 @@ export function PrintExportButton({
   }
 
   return (
-    <button type="button" className="btn ghost" onClick={handlePrint}>
+    <Button type="button" variant="ghost" onClick={handlePrint}>
       🖨️ {label}
-    </button>
+    </Button>
   );
 }

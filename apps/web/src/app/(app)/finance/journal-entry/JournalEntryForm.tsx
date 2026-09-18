@@ -3,8 +3,7 @@
 import { useState } from "react";
 import type { AccountSummary } from "@civitasone/types";
 import { formatMoney } from "@/lib/formatters";
-import { ConfirmDialog } from "@/app/_components/ds";
-import { HelpTip } from "@/app/_components/ds";
+import { Button, ConfirmDialog, HelpTip } from "@/app/_components/ds";
 import { explain } from "@/lib/glossary";
 import { trackActivation } from "@/lib/activation";
 import { useFormError } from "@/lib/useFormError";
@@ -318,17 +317,17 @@ export function JournalEntryForm({ accounts, redirectTo }: Props) {
               onChange={(e) => updateLine(line.id, "credit", e.target.value)}
               aria-label={`Credit amount, line ${idx + 1}`}
             />
-            <button
+            <Button
               type="button"
               onClick={() => removeLine(line.id)}
               disabled={lines.length <= 2}
-              className="btn ghost"
+              variant="ghost"
               style={{ minWidth: 44, minHeight: 44, padding: 0, lineHeight: 1 }}
               title="Remove line"
               aria-label={`Remove line ${idx + 1}`}
             >
               ×
-            </button>
+            </Button>
             {lineErr && (
               <span role="alert" style={{ fontSize: "0.75rem", color: "#b91c1c", display: "block", gridColumn: "1 / -1", marginBottom: 4 }}>
                 {lineErr}
@@ -337,14 +336,13 @@ export function JournalEntryForm({ accounts, redirectTo }: Props) {
           </div>
         );})}
 
-        <button
+        <Button
           type="button"
           onClick={addLine}
-          className="btn"
           style={{ marginTop: "4px", minHeight: 44 }}
         >
           + Add Line
-        </button>
+        </Button>
       </fieldset>
 
       {/* ── totals ── */}
@@ -396,14 +394,13 @@ export function JournalEntryForm({ accounts, redirectTo }: Props) {
 
       {/* ── actions ── */}
       <div style={{ display: "flex", gap: "8px", marginTop: "12px" }}>
-        <button
+        <Button
           type="submit"
           disabled={status === "submitting"}
-          className="btn primary"
           style={{ minHeight: 44 }}
         >
           {status === "submitting" ? "Submitting…" : "Post Journal Entry"}
-        </button>
+        </Button>
       </div>
 
       {/* ── feedback ── */}

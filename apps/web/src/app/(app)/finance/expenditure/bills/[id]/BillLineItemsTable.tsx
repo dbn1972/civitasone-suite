@@ -1,5 +1,6 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import { DataTable } from "../../../../../_components/ds";
 import { formatMoney } from "@/lib/formatters";
 
@@ -12,32 +13,33 @@ type BillLineItem = {
 } & Record<string, unknown>;
 
 export function BillLineItemsTable({ rows }: { rows: BillLineItem[] }) {
+  const t = useTranslations("expenditureBillLineItemsTable");
   return (
     <DataTable<BillLineItem>
       columns={[
-        { key: "description", label: "Description" },
-        { key: "quantity", label: "Qty", align: "right" },
+        { key: "description", label: t("colDescription") },
+        { key: "quantity", label: t("colQty"), align: "right" },
         {
           key: "unitPrice",
-          label: "Unit Price",
+          label: t("colUnitPrice"),
           align: "right",
           render: (item) => (
-            <span aria-label={`Unit price ${formatMoney(item.unitPrice as number)}`}>
+            <span aria-label={t("ariaUnitPrice", { value: formatMoney(item.unitPrice as number) })}>
               {formatMoney(item.unitPrice as number)}
             </span>
           ),
         },
         {
           key: "amount",
-          label: "Amount",
+          label: t("colAmount"),
           align: "right",
           render: (item) => (
-            <span aria-label={`Amount ${formatMoney(item.amount as string)}`}>
+            <span aria-label={t("ariaAmount", { value: formatMoney(item.amount as string) })}>
               {formatMoney(item.amount as string)}
             </span>
           ),
         },
-        { key: "taxCode", label: "Tax Code", render: (item) => (item.taxCode as string | undefined) ?? "—" },
+        { key: "taxCode", label: t("colTaxCode"), render: (item) => (item.taxCode as string | undefined) ?? "—" },
       ]}
       rows={rows}
     />

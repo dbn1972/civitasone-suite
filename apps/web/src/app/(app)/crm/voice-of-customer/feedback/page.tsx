@@ -21,7 +21,7 @@
  * instead of silently failing.
  */
 import { useState } from "react";
-import { PageHeader } from "../../../../_components/ds";
+import { Button, PageHeader } from "../../../../_components/ds";
 
 const FIELD: React.CSSProperties = {
   padding: "8px 12px",
@@ -151,7 +151,7 @@ export default function CitizenFeedbackPage() {
             </span>
             <StarRating value={rating} onChange={setRating} />
             {rating > 0 && (
-              <span style={{ fontSize: 12, color: "var(--ink-dim)" }}>
+              <span style={{ fontSize: 12, color: "var(--mut)" }}>
                 {RATING_LABELS[rating - 1]}
               </span>
             )}
@@ -213,7 +213,7 @@ export default function CitizenFeedbackPage() {
               alignItems: "flex-start",
               gap: 8,
               fontSize: 13,
-              color: "var(--ink-dim)",
+              color: "var(--mut)",
               cursor: "pointer",
               lineHeight: 1.5,
             }}
@@ -250,14 +250,13 @@ export default function CitizenFeedbackPage() {
             <a href="/crm/voice-of-customer" className="btn">
               Cancel
             </a>
-            <button
+            <Button
               type="submit"
-              className="btn primary"
               disabled
               title="Submission is not yet available — backend wiring is pending."
             >
               Submission unavailable
-            </button>
+            </Button>
           </div>
         </form>
       </div>

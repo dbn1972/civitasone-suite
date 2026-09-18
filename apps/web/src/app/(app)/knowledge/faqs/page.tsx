@@ -41,7 +41,7 @@ export default async function Page() {
                   <details key={f.id} style={{ border: "1px solid var(--line, #e2e8f0)", borderRadius: 10, padding: "12px 14px" }}>
                     <summary style={{ cursor: "pointer", fontWeight: 600, color: "var(--ink, #0f172a)" }}>
                       {f.question}
-                      {f.category && <span style={{ marginLeft: 8, fontSize: 12, color: "var(--ink3, #94a3b8)" }}>· {f.category}</span>}
+                      {f.category && <span style={{ marginLeft: 8, fontSize: 12, color: "var(--mut)" }}>· {f.category}</span>}
                     </summary>
                     <p style={{ marginTop: 8, marginBottom: 0, lineHeight: 1.6, color: "var(--ink2, #475569)", whiteSpace: "pre-wrap" }}>{f.answer}</p>
                   </details>
@@ -59,7 +59,7 @@ export default async function Page() {
                 {flows.map((flow) => (
                   <div key={flow.id}>
                     <h4 style={{ margin: "0 0 4px" }}>{flow.title}</h4>
-                    {flow.description && <p style={{ margin: "0 0 8px", color: "var(--ink3, #94a3b8)", fontSize: 13 }}>{flow.description}</p>}
+                    {flow.description && <p style={{ margin: "0 0 8px", color: "var(--mut)", fontSize: 13 }}>{flow.description}</p>}
                     <ol style={{ margin: 0, paddingLeft: 20 }}>
                       {flow.steps.map((s) => (
                         <li key={s.order} style={{ padding: "3px 0", lineHeight: 1.5 }}>

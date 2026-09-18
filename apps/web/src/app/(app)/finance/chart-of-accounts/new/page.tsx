@@ -15,7 +15,7 @@
  */
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { PageHeader, Card } from "../../../../_components/ds";
+import { Button, PageHeader, Card } from "../../../../_components/ds";
 import { useFormError } from "@/lib/useFormError";
 
 type AccountRow = { id: string; code?: string; name?: string; hoaCode?: string };
@@ -212,9 +212,9 @@ export default function MapHeadOfAccountPage() {
               )}
             </div>
           </div>
-          <button type="submit" className="btn primary" disabled={createBusy || !code || !name} aria-busy={createBusy} style={{ marginTop: 12 }}>
+          <Button type="submit" disabled={createBusy || !code || !name} aria-busy={createBusy} style={{ marginTop: 12 }}>
             {createBusy ? "Creating…" : "Create head"}
-          </button>
+          </Button>
         </form>
       </Card>
 
@@ -253,9 +253,9 @@ export default function MapHeadOfAccountPage() {
               )}
             </div>
           </div>
-          <button type="submit" className="btn primary" disabled={busy || !accountId} aria-busy={busy} style={{ marginTop: 12 }}>
+          <Button type="submit" disabled={busy || !accountId} aria-busy={busy} style={{ marginTop: 12 }}>
             {busy ? "Saving…" : "Save HoA code"}
-          </button>
+          </Button>
         </form>
       </Card>
     </>

@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { browserFetch, errorMessageFromResponse } from "@/lib/api/browserClient";
+import { Button } from "@/app/_components/ds";
 
 type ContactOption = { id: string; name: string };
 
@@ -72,9 +73,9 @@ export function LogActivityButton() {
 
   return (
     <>
-      <button type="button" className="btn primary" onClick={() => setOpen((v) => !v)} style={{ minHeight: 44 }}>
+      <Button onClick={() => setOpen((v) => !v)} style={{ minHeight: 44 }}>
         + Log Interaction
-      </button>
+      </Button>
       {open ? (
         <div className="card" style={{ marginTop: 16 }}>
           <form onSubmit={submit} className="pad" style={{ maxWidth: 560 }}>
@@ -101,12 +102,12 @@ export function LogActivityButton() {
             <input id="act-due" type="date" value={form.dueDate} onChange={(e) => setForm({ ...form, dueDate: e.target.value })} style={inputStyle} />
             <label htmlFor="act-notes" style={labelStyle}>Notes</label>
             <textarea id="act-notes" required value={form.text} onChange={(e) => setForm({ ...form, text: e.target.value })} placeholder="What happened or needs doing?" rows={3} style={{ ...inputStyle, minHeight: undefined }} />
-            <button type="submit" className="btn primary" disabled={busy} style={{ minHeight: 44 }}>
+            <Button type="submit" disabled={busy} loading={busy} style={{ minHeight: 44 }}>
               {busy ? "Saving…" : "Save interaction"}
-            </button>
-            <button type="button" className="btn ghost" style={{ marginLeft: 8, minHeight: 44 }} onClick={() => setOpen(false)}>
+            </Button>
+            <Button type="button" variant="ghost" style={{ marginLeft: 8, minHeight: 44 }} onClick={() => setOpen(false)}>
               Cancel
-            </button>
+            </Button>
           </form>
         </div>
       ) : null}

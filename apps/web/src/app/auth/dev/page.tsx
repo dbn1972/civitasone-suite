@@ -81,7 +81,7 @@ export default function DevLoginPage({ searchParams }: { searchParams: { error?:
           <input id="password" name="password" type="password" autoComplete="current-password" required
             placeholder="••••••••" className="devlogin-input" />
 
-          <label htmlFor="tenant" style={label}>Office ID <span style={{ fontWeight: 400, color: "#94a3b8" }}>(optional)</span></label>
+          <label htmlFor="tenant" style={label}>Office ID <span style={{ fontWeight: 400, color: "var(--mut)" }}>(optional)</span></label>
           <input id="tenant" name="tenant" autoComplete="off"
             placeholder="leave blank for the default office" className="devlogin-input" />
 

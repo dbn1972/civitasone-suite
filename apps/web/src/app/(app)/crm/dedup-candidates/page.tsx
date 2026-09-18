@@ -12,7 +12,7 @@
  * state that could be mistaken for "data is clean".
  */
 import { useCallback, useEffect, useId, useState } from "react";
-import { PageHeader, EmptyState, ConfirmDialog } from "@/app/_components/ds";
+import { Button, PageHeader, EmptyState, ConfirmDialog } from "@/app/_components/ds";
 import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
 import {
   getDedupCandidates,
@@ -130,23 +130,21 @@ function PairCard({ pair, busyPairId, onMerge, onDismiss }: PairCardProps) {
       </div>
 
       <div className="dedup-actions">
-        <button
-          type="button"
-          className="btn danger"
+        <Button
+          variant="danger"
           onClick={() => onMerge(pair)}
           disabled={busy}
-          aria-busy={busy}
+          loading={busy}
         >
           {busy ? "Working…" : "Merge → keep left"}
-        </button>
-        <button
-          type="button"
-          className="btn ghost"
+        </Button>
+        <Button
+          variant="ghost"
           onClick={() => onDismiss(pair)}
           disabled={busy}
         >
           Dismiss pair
-        </button>
+        </Button>
       </div>
     </article>
   );
@@ -223,14 +221,14 @@ export default function DedupCandidatesPage() {
         back="/crm/data-quality"
         backLabel="Data Quality"
         actions={
-          <button
-            type="button"
-            className="btn ghost"
+          <Button
+            variant="ghost"
             onClick={() => void load()}
             disabled={loading}
+            loading={loading}
           >
             {loading ? "Refreshing…" : "Refresh"}
-          </button>
+          </Button>
         }
       />
 

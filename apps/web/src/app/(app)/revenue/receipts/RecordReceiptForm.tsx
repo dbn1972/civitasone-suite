@@ -2,7 +2,7 @@
 
 import { useId, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Card, ConfirmDialog } from "@/app/_components/ds";
+import { Button, Card, ConfirmDialog } from "@/app/_components/ds";
 import { browserJson } from "@/lib/api/browserClient";
 import { formatMoney } from "@/lib/formatters";
 import type { DemandOption } from "./page";
@@ -260,15 +260,15 @@ export function RecordReceiptForm({ assesseeId, demands }: { assesseeId: string;
           </div>
 
           <div>
-            <button
+            <Button
               type="submit"
-              className="btn primary"
               style={{ minHeight: 44 }}
               disabled={busy || noEligibleDemands}
+              loading={busy}
               aria-describedby={noEligibleDemands ? noDemandsHelpId : undefined}
             >
               Record Receipt
-            </button>
+            </Button>
             {noEligibleDemands && (
               <p id={noDemandsHelpId} style={{ margin: "6px 0 0", fontSize: 12.5, color: "var(--ink2)" }}>
                 No outstanding demands for this assessee.

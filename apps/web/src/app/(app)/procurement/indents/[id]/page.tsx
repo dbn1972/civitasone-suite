@@ -129,7 +129,7 @@ export default async function IndentDetailPage({ params }: { params: { id: strin
                   <div style={{ fontSize: "0.875rem", fontWeight: 500, color: "#1e293b" }}>
                     {step.actor} — <span style={{ fontWeight: 400, color: "#64748b" }}>{step.action}</span>
                   </div>
-                  <div style={{ fontSize: "0.75rem", color: "#94a3b8" }}>{step.timestamp}</div>
+                  <div style={{ fontSize: "0.75rem", color: "var(--mut)" }}>{step.timestamp}</div>
                   {step.remarks && <div style={{ fontSize: "0.75rem", color: "#64748b", marginTop: "2px" }}>{step.remarks}</div>}
                 </div>
               </div>

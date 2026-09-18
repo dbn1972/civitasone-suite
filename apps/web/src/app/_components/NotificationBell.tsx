@@ -339,11 +339,11 @@ export function NotificationBell({ notifications: propNotifications, unreadCount
           {/* Notification List */}
           <div style={{ maxHeight: 400, overflowY: "auto" }}>
             {loading && items.length === 0 ? (
-              <div style={{ padding: "24px 16px", textAlign: "center", color: "var(--text-muted, #94a3b8)", fontSize: 13 }}>
+              <div style={{ padding: "24px 16px", textAlign: "center", color: "var(--mut)", fontSize: 13 }}>
                 Loading…
               </div>
             ) : items.length === 0 ? (
-              <div style={{ padding: "24px 16px", textAlign: "center", color: "var(--text-muted, #94a3b8)", fontSize: 13 }}>
+              <div style={{ padding: "24px 16px", textAlign: "center", color: "var(--mut)", fontSize: 13 }}>
                 No notifications yet
               </div>
             ) : (
@@ -412,7 +412,7 @@ export function NotificationBell({ notifications: propNotifications, unreadCount
                           {n.module}
                         </span>
                       )}
-                      <span style={{ fontSize: 11, color: "var(--text-muted, #94a3b8)" }}>
+                      <span style={{ fontSize: 11, color: "var(--mut)" }}>
                         {n.time}
                       </span>
                       {n.actionUrl && (
