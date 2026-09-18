@@ -1,5 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { render, screen } from "@testing-library/react";
+import { NextIntlClientProvider } from "next-intl";
+import enMessages from "@/messages/en.json";
 import StatutoryHubPage from "./page";
 
 // The "Statutory Compliance Summary" cards above the module directory are
@@ -17,8 +19,19 @@ function expectSomeLinkTo(name: RegExp, href: string) {
 }
 
 describe("StatutoryHubPage", () => {
-  it("renders links to every statutory console", () => {
-    render(<StatutoryHubPage />);
+  it("renders links to every statutory console", async () => {
+    // UX-017: StatutoryHubPage now reads its copy through
+    // getTranslations("statutory") and is an async Server Component --
+    // render its resolved element, same pattern as GratuityPage.test.tsx.
+    // It also renders StatutoryComplianceCard, a "use client" component
+    // that calls useTranslations("statutoryComplianceCard"), so this render
+    // needs a real NextIntlClientProvider in the tree too.
+    const ui = await StatutoryHubPage();
+    render(
+      <NextIntlClientProvider locale="en" messages={enMessages}>
+        {ui}
+      </NextIntlClientProvider>,
+    );
     expectSomeLinkTo(/PF & ECR/, "/hr/payroll/statutory/pf");
     expectSomeLinkTo(/\bESI\b/, "/hr/payroll/statutory/esi");
     expectSomeLinkTo(/Professional Tax/, "/hr/payroll/statutory/pt");

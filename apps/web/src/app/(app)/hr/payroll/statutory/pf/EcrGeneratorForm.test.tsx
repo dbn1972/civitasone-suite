@@ -1,6 +1,20 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { NextIntlClientProvider } from "next-intl";
+import enMessages from "@/messages/en.json";
 import { EcrGeneratorForm } from "./EcrGeneratorForm";
+
+// UX-017: EcrGeneratorForm now reads its copy through next-intl
+// (useTranslations("ecrGeneratorForm")), so every render needs a real
+// provider in the tree -- same pattern as
+// corrections/CreateCorrectionForm.test.tsx (tranche 11).
+function renderForm() {
+  render(
+    <NextIntlClientProvider locale="en" messages={enMessages}>
+      <EcrGeneratorForm />
+    </NextIntlClientProvider>,
+  );
+}
 
 describe("EcrGeneratorForm", () => {
   const originalCreateObjectURL = URL.createObjectURL;
@@ -18,7 +32,7 @@ describe("EcrGeneratorForm", () => {
   });
 
   it("requires a month before opening the confirm dialog", () => {
-    render(<EcrGeneratorForm />);
+    renderForm();
     fireEvent.click(screen.getByRole("button", { name: "Generate ECR" }));
     expect(screen.getByText("Month is required in YYYY-MM format.")).toBeInTheDocument();
   });
@@ -28,7 +42,7 @@ describe("EcrGeneratorForm", () => {
       new Response("UAN|NAME|1|1|1|1|1|1|1|0|0", { status: 200, headers: { "content-type": "text/plain" } }),
     );
 
-    render(<EcrGeneratorForm />);
+    renderForm();
     fireEvent.change(screen.getByLabelText(/^Period/), { target: { value: "2026-06" } });
     fireEvent.click(screen.getByRole("button", { name: "Generate ECR" }));
 
@@ -43,7 +57,7 @@ describe("EcrGeneratorForm", () => {
   it("surfaces a server error on the confirm dialog (error path)", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(null, { status: 404 }));
 
-    render(<EcrGeneratorForm />);
+    renderForm();
     fireEvent.change(screen.getByLabelText(/^Period/), { target: { value: "2026-06" } });
     fireEvent.click(screen.getByRole("button", { name: "Generate ECR" }));
 

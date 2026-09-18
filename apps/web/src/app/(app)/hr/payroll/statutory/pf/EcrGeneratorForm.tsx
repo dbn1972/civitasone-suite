@@ -1,12 +1,14 @@
 "use client";
 
 import { useId, useRef, useState } from "react";
+import { useTranslations } from "next-intl";
 import { Button, Card, ConfirmDialog } from "../../../../../_components/ds";
 import { browserFetch, errorMessageFromResponse } from "@/lib/api/browserClient";
 
 const MONTH_RE = /^\d{4}-\d{2}$/;
 
 export function EcrGeneratorForm() {
+  const t = useTranslations("ecrGeneratorForm");
   const [month, setMonth] = useState("");
   const [busy, setBusy] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
@@ -24,7 +26,7 @@ export function EcrGeneratorForm() {
     setMessage(null);
     if (!MONTH_RE.test(month)) {
       setTone("bad");
-      setMessage("Month is required in YYYY-MM format.");
+      setMessage(t("monthRequiredError"));
       monthRef.current?.focus();
       return;
     }
@@ -49,9 +51,9 @@ export function EcrGeneratorForm() {
       URL.revokeObjectURL(url);
       setConfirmOpen(false);
       setTone("good");
-      setMessage(`ECR file generated for ${month}.`);
+      setMessage(t("generatedMessage", { month }));
     } catch (err) {
-      setDialogError(err instanceof Error ? err.message : "Network error. Please try again.");
+      setDialogError(err instanceof Error ? err.message : t("networkError"));
     } finally {
       setBusy(false);
     }
@@ -59,11 +61,11 @@ export function EcrGeneratorForm() {
 
   return (
     <form onSubmit={handleSubmit} style={{ marginBottom: 16 }}>
-      <Card title="Generate EPFO ECR File" padding>
+      <Card title={t("formTitle")} padding>
         <div style={{ display: "grid", gap: 14 }}>
           <div style={{ display: "grid", gap: 6, maxWidth: 220 }}>
             <label htmlFor={monthId} style={{ fontSize: 13, fontWeight: 600 }}>
-              Period (Month) <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
+              {t("periodLabel")} <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
             </label>
             <input
               id={monthId}
@@ -79,7 +81,7 @@ export function EcrGeneratorForm() {
           </div>
           <div>
             <Button type="submit" style={{ minHeight: 44 }} disabled={busy}>
-              Generate ECR
+              {t("submitBtn")}
             </Button>
           </div>
           {message && (
@@ -98,11 +100,14 @@ export function EcrGeneratorForm() {
 
       <ConfirmDialog
         open={confirmOpen}
-        title="Generate EPFO ECR file?"
-        confirmLabel="Confirm & Download"
+        title={t("confirmTitle")}
+        confirmLabel={t("confirmLabel")}
         busy={busy}
         errorMessage={dialogError}
-        description={<>Generate and download the EPFO Electronic Challan cum Return for period <strong>{month}</strong>.</>}
+        description={t.rich("confirmDescription", {
+          strong: (chunks) => <strong>{chunks}</strong>,
+          month,
+        })}
         onConfirm={() => void generateEcr()}
         onCancel={() => !busy && setConfirmOpen(false)}
       />

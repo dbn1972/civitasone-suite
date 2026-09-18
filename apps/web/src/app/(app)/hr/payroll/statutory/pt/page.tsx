@@ -1,3 +1,4 @@
+import { getTranslations } from "next-intl/server";
 import { PageHeader, StatGrid, StatCard, Card, DataTable } from "../../../../../_components/ds";
 import { DataSourceBadge } from "../../../../../_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
@@ -21,6 +22,7 @@ async function getData(): Promise<LoaderResult<PtSlabRow[]>> {
 }
 
 export default async function ProfessionalTaxPage() {
+  const t = await getTranslations("pt");
   const { data: rows, source } = await getData();
 
   const statesCovered = new Set(rows.map((r) => r.state_code).filter(Boolean)).size;
@@ -28,40 +30,40 @@ export default async function ProfessionalTaxPage() {
   const avgPtMinor = rows.length > 0 ? rows.reduce((s, r) => s + Number(r.pt_amount_minor || 0), 0) / rows.length : 0;
 
   const columns: { key: keyof PtSlabRow & string; label: string; align?: "left" | "right"; cellType?: "amount" }[] = [
-    { key: "state_code", label: "State" },
-    { key: "slab_from_minor", label: "Slab From", align: "right", cellType: "amount" },
-    { key: "slab_to_minor", label: "Slab To", align: "right", cellType: "amount" },
-    { key: "pt_amount_minor", label: "PT Amount", align: "right", cellType: "amount" },
+    { key: "state_code", label: t("colState") },
+    { key: "slab_from_minor", label: t("colSlabFrom"), align: "right", cellType: "amount" },
+    { key: "slab_to_minor", label: t("colSlabTo"), align: "right", cellType: "amount" },
+    { key: "pt_amount_minor", label: t("colPtAmount"), align: "right", cellType: "amount" },
   ];
 
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
-        title="Professional Tax"
-        subtitle="State-wise professional tax slabs (monthly deduction by gross-salary band)."
+        title={t("title")}
+        subtitle={t("subtitle")}
         back="/hr/payroll/statutory"
       />
-      <DataSourceBadge source={source} message="Couldn't load — showing nothing" />
+      <DataSourceBadge source={source} message={t("loadErrorMessage")} />
       <StatGrid>
-        <StatCard icon="🏛️" iconBg="var(--infobg)" label="PT Slabs Configured" value={rows.length} />
-        <StatCard icon="🗺️" iconBg="var(--goodbg)" label="States Covered" value={statesCovered} />
-        <StatCard icon="📈" iconBg="var(--warnbg)" label="Highest PT Amount" value={formatMoney(maxPtMinor)} />
-        <StatCard icon="📊" iconBg="var(--goodbg)" label="Avg PT per Slab" value={formatMoney(Math.round(avgPtMinor))} />
+        <StatCard icon="🏛️" iconBg="var(--infobg)" label={t("statPtSlabsConfigured")} value={rows.length} />
+        <StatCard icon="🗺️" iconBg="var(--goodbg)" label={t("statStatesCovered")} value={statesCovered} />
+        <StatCard icon="📈" iconBg="var(--warnbg)" label={t("statHighestPtAmount")} value={formatMoney(maxPtMinor)} />
+        <StatCard icon="📊" iconBg="var(--goodbg)" label={t("statAvgPtPerSlab")} value={formatMoney(Math.round(avgPtMinor))} />
       </StatGrid>
 
       <PtSlabForm />
 
-      <Card title="Professional Tax Slabs">
+      <Card title={t("historyCardTitle")}>
         <DataTable<PtSlabRow>
           columns={columns}
           rows={rows}
           sortable
           filterable
-          filterPlaceholder="Filter by state…"
+          filterPlaceholder={t("filterPlaceholder")}
           pageSize={15}
           emptyIcon="🏛️"
-          emptyTitle="No PT slabs configured"
-          emptyMessage="Add a state's professional tax slab using the form above."
+          emptyTitle={t("emptyTitle")}
+          emptyMessage={t("emptyMessage")}
         />
       </Card>
     </main>
