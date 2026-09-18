@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
-import { PageHeader, Card, StatGrid, StatCard, StatusPill, EmptyState } from "@/app/_components/ds";
+import { Button, PageHeader, Card, StatGrid, StatCard, StatusPill, EmptyState } from "@/app/_components/ds";
 import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
 import { formatMoney, formatIndianDate } from "@/lib/formatters";
 import { getSchemeById } from "../../_data";
@@ -147,13 +147,9 @@ export default async function SchemeDetailPage({ params }: { params: { id: strin
           )}
           {(scheme.status === "draft" || isOpen) && (
             <form action={`/api/proxy/v1/grants/schemes/${params.id}/close`} method="POST">
-              <button
-                type="submit"
-                className="btn"
-                style={{ color: "var(--bad)" }}
-              >
+              <Button type="submit" variant="danger">
                 Close Scheme
-              </button>
+              </Button>
             </form>
           )}
           <Link href="/grants/applications" className="btn">

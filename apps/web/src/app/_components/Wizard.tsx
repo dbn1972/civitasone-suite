@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, type ReactNode } from "react";
+import { Button } from "./ds";
 
 export interface WizardStep {
   title: string;
@@ -108,39 +109,12 @@ export function Wizard({ steps, onComplete }: WizardProps) {
 
       {/* Navigation buttons */}
       <div style={{ display: "flex", justifyContent: "space-between", marginTop: 16 }}>
-        <button
-          onClick={goPrev}
-          disabled={!canPrev}
-          type="button"
-          style={{
-            padding: "8px 20px",
-            border: "1px solid var(--border,#d1d5db)",
-            borderRadius: 6,
-            background: "var(--surface,#fff)",
-            color: canPrev ? "var(--ink,#374151)" : "var(--muted,#d1d5db)",
-            fontSize: 13,
-            fontWeight: 500,
-            cursor: canPrev ? "pointer" : "not-allowed",
-          }}
-        >
+        <Button onClick={goPrev} disabled={!canPrev} type="button" variant="ghost">
           ← Back
-        </button>
-        <button
-          onClick={goNext}
-          type="button"
-          style={{
-            padding: "8px 20px",
-            border: "none",
-            borderRadius: 6,
-            background: isLast ? "#10b981" : "#4f46e5",
-            color: "#fff",
-            fontSize: 13,
-            fontWeight: 500,
-            cursor: "pointer",
-          }}
-        >
+        </Button>
+        <Button onClick={goNext} type="button" variant="primary">
           {isLast ? "Submit ✓" : "Next →"}
-        </button>
+        </Button>
       </div>
     </div>
   );

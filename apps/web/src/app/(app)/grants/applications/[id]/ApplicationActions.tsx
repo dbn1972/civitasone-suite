@@ -12,7 +12,7 @@
  */
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { ConfirmDialog } from "@/app/_components/ds";
+import { Button, ConfirmDialog } from "@/app/_components/ds";
 import {
   assignReviewer,
   scoreApplication,
@@ -65,29 +65,29 @@ export function ApplicationActions({ applicationId, actions }: { applicationId: 
     <>
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
         {canAssign && (
-          <button type="button" className="btn" onClick={() => setOpen("assign-reviewer")}>
+          <Button type="button" variant="ghost" onClick={() => setOpen("assign-reviewer")}>
             Assign Reviewer
-          </button>
+          </Button>
         )}
         {canScore && (
-          <button type="button" className="btn" onClick={() => setOpen("score")}>
+          <Button type="button" variant="ghost" onClick={() => setOpen("score")}>
             Submit Evaluation
-          </button>
+          </Button>
         )}
         {canApprove && (
-          <button type="button" className="btn primary" onClick={() => setOpen("approve")}>
+          <Button type="button" variant="primary" onClick={() => setOpen("approve")}>
             Approve Application
-          </button>
+          </Button>
         )}
         {canReject && (
-          <button type="button" className="btn" style={{ color: "var(--bad)" }} onClick={() => setOpen("reject")}>
+          <Button type="button" variant="danger" onClick={() => setOpen("reject")}>
             Reject
-          </button>
+          </Button>
         )}
         {canWithdraw && (
-          <button type="button" className="btn" style={{ color: "var(--warn)" }} onClick={() => setOpen("withdraw")}>
+          <Button type="button" variant="ghost" style={{ color: "var(--warn)" }} onClick={() => setOpen("withdraw")}>
             Withdraw
-          </button>
+          </Button>
         )}
       </div>
       <p style={{ fontSize: 12, color: "var(--ink2)", marginTop: 8 }}>

@@ -8,6 +8,7 @@
  * same way every other money input in this app does.
  */
 import { useEffect, useId, useState } from "react";
+import { Button } from "@/app/_components/ds";
 import { rupeesToMinorString } from "@/lib/money";
 import type { ApproveApplicationRequest } from "@/lib/grants/application";
 
@@ -65,12 +66,12 @@ export function ApproveApplicationDialog({ open, busy = false, errorMessage, onC
         </div>
 
         <div className="cd-actions">
-          <button type="button" className="btn ghost" onClick={onCancel} disabled={busy}>
+          <Button type="button" variant="ghost" onClick={onCancel} disabled={busy}>
             Cancel
-          </button>
-          <button type="button" className="btn primary" onClick={submit} disabled={busy} aria-busy={busy}>
+          </Button>
+          <Button type="button" variant="primary" onClick={submit} disabled={busy} aria-busy={busy}>
             {busy ? "Approving…" : "Approve application"}
-          </button>
+          </Button>
         </div>
       </div>
     </div>

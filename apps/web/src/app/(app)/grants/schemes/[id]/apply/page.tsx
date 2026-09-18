@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, use } from "react";
-import { PageHeader } from "@/app/_components/ds";
+import { Button, PageHeader } from "@/app/_components/ds";
 import { useFormError } from "@/lib/useFormError";
 import { ArrowLeft } from "lucide-react";
 
@@ -280,9 +280,9 @@ export default function ApplyPage({ params }: ApplyPageProps) {
         </div>
 
         <div style={{ marginTop: 20, display: "flex", gap: 8 }}>
-          <button
+          <Button
             type="submit"
-            className="btn primary"
+            variant="primary"
             style={{ minHeight: 44 }}
             disabled={formStatus === "submitting" || formStatus === "success"}
             aria-busy={formStatus === "submitting"}
@@ -292,7 +292,7 @@ export default function ApplyPage({ params }: ApplyPageProps) {
               : formStatus === "success"
                 ? "Submitted ✓"
                 : "Submit Application"}
-          </button>
+          </Button>
           <Link
             href={`/grants/schemes/${schemeId}`}
             className="btn"

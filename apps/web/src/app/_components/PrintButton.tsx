@@ -1,5 +1,7 @@
 "use client";
 
+import { Button } from "./ds";
+
 export function PrintButton({ label = "Print / PDF", title }: { label?: string; title?: string }) {
   function handlePrint() {
     const prev = document.title;
@@ -8,8 +10,9 @@ export function PrintButton({ label = "Print / PDF", title }: { label?: string; 
     if (title) document.title = prev;
   }
   return (
-    <button
-      className="btn-print no-print"
+    <Button
+      variant="ghost"
+      className="no-print"
       onClick={handlePrint}
       aria-label={label}
       title="Print or save as PDF"
@@ -28,6 +31,6 @@ export function PrintButton({ label = "Print / PDF", title }: { label?: string; 
         <rect x="6" y="14" width="12" height="8" />
       </svg>
       {label}
-    </button>
+    </Button>
   );
 }

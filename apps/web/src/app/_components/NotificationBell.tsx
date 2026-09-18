@@ -4,6 +4,7 @@ import React, { useState, useRef, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { useSSEConnection } from "./useSSEConnection";
 import { SSEConnectionStatus } from "./SSEConnectionStatus";
+import { Button } from "./ds";
 
 /**
  * Where a notification's "Review" action should navigate. A truthful
@@ -319,20 +320,9 @@ export function NotificationBell({ notifications: propNotifications, unreadCount
               Notifications
             </span>
             {count > 0 && (
-              <button
-                onClick={markAllAsRead}
-                type="button"
-                style={{
-                  background: "none",
-                  border: "none",
-                  fontSize: 11,
-                  color: "var(--primary, #4f46e5)",
-                  cursor: "pointer",
-                  padding: 0,
-                }}
-              >
+              <Button onClick={markAllAsRead} type="button" variant="ghost" size="sm">
                 Mark all read
-              </button>
+              </Button>
             )}
           </div>
 
