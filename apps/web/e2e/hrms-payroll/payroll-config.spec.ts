@@ -35,7 +35,15 @@ test.describe('Payroll Configuration', () => {
 
     test('displays structures table', async ({ page }) => {
       await page.goto('/hr/payroll/structures');
-      await expect(page.locator('tbody tr').first()).toBeVisible();
+      // REL-023 tranche 6: this page has never rendered structures as a
+      // <table> -- SalaryStructureCard renders each one as its own card
+      // (own <h3> title) inside a CSS grid, not DataTable rows (confirmed
+      // directly against structures/page.tsx and SalaryStructureCard.tsx;
+      // specs/payroll-submodules.spec.ts already asserts the card section's
+      // "Salary Structure Cards" heading). Check for real card content
+      // instead of a table structure that was never there.
+      await expect(page.getByRole('heading', { name: 'Salary Structure Cards' })).toBeVisible();
+      await expect(page.getByRole('heading', { level: 3, name: 'Standard Pay Structure' })).toBeVisible();
     });
 
     test('shows default indicator', async ({ page }) => {

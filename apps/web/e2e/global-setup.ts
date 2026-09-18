@@ -428,8 +428,51 @@ const FIXTURES: Record<string, unknown> = {
     ],
   },
 
-  '/api/v1/payroll/runs': { data: [] },
+  // REL-023: was `{ data: [] }` -- /hr/payroll (PayrollRunsList) always saw
+  // zero runs, so "displays payroll runs table" found no <tbody tr> and
+  // "shows correct run statuses" found no "draft" text ("paid" alone was a
+  // false-positive pass -- it also occurs in the page's own "Employees Paid"
+  // StatCard label, present regardless of run data). IDs match the two runs
+  // the per-test page.route() fixtures (helpers.ts / fixtures.ts) and the
+  // individual-run-detail tests already assume exist (`/hr/payroll/run-001`,
+  // `/hr/payroll/run-003`) -- kept in step, not renamed.
+  //
+  // Bare array, NOT `{ data: [...] }`: getPayrollRunDetails() (loaders.ts)
+  // validates the raw response against PayrollRunDetailListSchema =
+  // z.array(...) *before* mapResponse ever runs (apiClient.ts's fetchJson
+  // parses responseSchema against the untouched body) -- wrapping it would
+  // fail that array schema outright and silently fall back to source:"error"
+  // + empty, which is exactly what a `{ data: [] }` shape had been doing.
+  '/api/v1/payroll/runs': [
+    { id: 'run-001', runDate: '2024-07-31', payPeriod: '2024-07', employeeCount: 2, grossAmount: 150000, netAmount: 135000, deductions: 15000, status: 'paid' },
+    { id: 'run-003', runDate: '2024-09-30', payPeriod: '2024-09', employeeCount: 2, grossAmount: 150000, netAmount: 135000, deductions: 15000, status: 'draft' },
+  ],
+  // REL-023: missing entirely -- /hr/payroll (create-run-form gating, via
+  // getPayrollStructures()) and /hr/payroll/structures's own "Salary
+  // Structure Cards" section both only render non-empty content when
+  // structures.length > 0. Bare array for the same reason as payroll/runs
+  // above -- PayrollStructureListSchema is z.array(...), and
+  // getPayrollStructures() applies it before mapResponse runs (unlike
+  // structures/page.tsx's own inline getData(), which has no responseSchema
+  // and tolerates either shape -- this fixture now satisfies both callers).
+  '/api/v1/payroll/structures': [
+    { id: 'ps-e2e-001', name: 'Standard Pay Structure', isDefault: true, status: 'active' },
+    { id: 'ps-e2e-002', name: 'Executive Pay Structure', isDefault: false, status: 'active' },
+  ],
   '/api/v1/payroll/salary-slips': [],
+  // REL-023: missing entirely -- hr/transfer/page.tsx fetches this exact
+  // path server-side (note: distinct from /api/v1/hrms/transfers*, which
+  // helpers.ts's page.route() mocks for OTHER, client-fetched consumers --
+  // that mock never reaches this SSR page, same blast-radius shape as the
+  // helpers/auth.ts finding in tranche 3). No fixture at all meant
+  // TransferPage's `raw` was always `[]`, so "shows transfer order table"
+  // found no <tbody tr>. Shape matches TransferRow (page.tsx's own inline
+  // mapResponse degrades employeeId/fromDeptId/toDeptId if the friendlier
+  // employee/fromOffice/toOffice fields are absent -- provided directly here).
+  '/api/v1/hrms/lifecycle/transfers': [
+    { id: 'tr-e2e-001', employeeId: 'emp-001', employee: 'Ravi Kumar', fromOffice: 'IT — HQ', toOffice: 'IT — Regional Office', effectiveDate: '2024-08-01', orderNo: 'TO/2024/001', status: 'order_issued' },
+    { id: 'tr-e2e-002', employeeId: 'emp-002', employee: 'Priya Singh', fromOffice: 'Finance — HQ', toOffice: 'Finance — Branch', effectiveDate: '2024-07-15', relievedDate: '2024-07-14', orderNo: 'TO/2024/002', status: 'relieved' },
+  ],
 
     // Procurement vendors — VendorDetailListSchema = z.array(VendorDetailSchema)
   '/api/v1/procurement/vendors': [

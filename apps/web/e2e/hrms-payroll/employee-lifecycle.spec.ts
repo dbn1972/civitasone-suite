@@ -134,8 +134,13 @@ test.describe('Employee Lifecycle', () => {
 
     test('transfer with approval button visible for HR admin', async ({ page }) => {
       await page.goto('/hr/transfer');
-      // The TransferWithApproval component should render for HR admins
-      const approvalBtn = page.getByRole('button', { name: /initiate|transfer|submit/i });
+      // The TransferWithApproval component should render for HR admins.
+      // REL-023 tranche 6: /transfer|/i alone also matches the page's
+      // "Export filtered transfers to CSV/Excel" button (aria-label contains
+      // "transfers") -- a strict-mode violation on a page with real data
+      // (isVisible() itself throws rather than returning false). Match the
+      // button's actual, specific label instead of the generic alternation.
+      const approvalBtn = page.getByRole('button', { name: '+ Transfer with approval' });
       if (await approvalBtn.isVisible()) {
         await expect(approvalBtn).toBeEnabled();
       }

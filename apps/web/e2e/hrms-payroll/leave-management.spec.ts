@@ -36,9 +36,18 @@ test.describe('Leave Management', () => {
     test('displays leave requests table with employee data', async ({ page }) => {
       await page.goto('/hr/leave');
       await expect(page.locator('tbody tr').first()).toBeVisible();
+      // REL-023 tranche 6: data is present and correct (the row itself,
+      // "Ravi Kumar Casual Leave 2024-...", already proves it) -- the
+      // locator was the bug. `.first()` on each side of `.or()` before
+      // combining doesn't collapse the union to one element; both the
+      // <tr> (whose accessible text contains "Casual Leave") and the
+      // "Casual Leave" <td> cell independently satisfy their own half of
+      // the `.or()`, so the combined locator still resolves to 2 elements.
+      // `.first()` has to wrap the whole combined locator instead.
       await expect(
-        page.getByText(/casual leave|earned leave|sick leave|annual leave/i).first()
-          .or(page.locator('tbody tr').first()),
+        page.getByText(/casual leave|earned leave|sick leave|annual leave/i)
+          .or(page.locator('tbody tr'))
+          .first(),
       ).toBeVisible();
     });
 

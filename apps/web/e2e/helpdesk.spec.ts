@@ -11,7 +11,14 @@ test.describe('Helpdesk', () => {
   test('helpdesk hub page renders navigation tiles', async ({ page }) => {
     await page.goto('/helpdesk');
     await expect(page.getByRole('heading', { name: 'Helpdesk' })).toBeVisible();
-    await expect(page.getByRole('link', { name: 'Citizen Tickets' })).toBeVisible();
+    // REL-023 tranche 6: the hub's own tile to /helpdesk/tickets is labelled
+    // "All Tickets" (git blame: intentionally renamed 2026-08-13, the same
+    // HR Dashboard redesign commit that added "Internal Ops" as a sibling
+    // tile) -- "Citizen Tickets" is the destination page's own <h1> (still
+    // correct there, see the "tickets list" test below), not this tile's
+    // label. The two labels differing by context (nav tile vs. page title)
+    // is intentional, not drift.
+    await expect(page.getByRole('link', { name: 'All Tickets' })).toBeVisible();
     await expect(page.getByRole('link', { name: 'SLA Monitor' })).toBeVisible();
   });
 
@@ -44,7 +51,13 @@ test.describe('Helpdesk', () => {
 
   test('ticket detail breadcrumb links back to tickets', async ({ page }) => {
     await page.goto('/helpdesk/tickets/t0000000-0000-0000-0000-000000000001');
-    await expect(page.getByRole('link', { name: 'Tickets' })).toBeVisible();
+    // REL-023 tranche 6: two distinct, both-legitimate elements say "Tickets"
+    // here -- the layout shell's auto-generated breadcrumb trail and this
+    // page's own PageHeader `back` link -- a real (if redundant)
+    // navigation-affordance duplication, not a bug in either one. `.first()`
+    // disambiguates the presence check; established pattern (tranche 5's
+    // "unscoped locators" fixes).
+    await expect(page.getByRole('link', { name: 'Tickets' }).first()).toBeVisible();
   });
 
   test('navigating tickets list → detail shows detail page', async ({ page }) => {
