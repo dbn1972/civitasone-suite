@@ -135,7 +135,11 @@ test.describe('Onboarding — joinee detail', () => {
     await page.goto('/hr/onboarding/ob-001');
     const header = page.locator('[data-testid="joinee-welcome-header"]');
     await expect(header).toContainText('Finance');
-    await expect(header).toContainText('CFO Mahesh Iyer');
+    // page.tsx passes a hardcoded "Not yet assigned" -- GET /v1/hrms/onboarding's
+    // real backend shape has no reportingManager field (see the ApiRow comment
+    // in page.tsx; a previous version of this page fabricated one), so this is
+    // the correct, already-intentional rendering, not fixture data to assert on.
+    await expect(header).toContainText('Not yet assigned');
   });
 
   test('checklist renders all steps', async ({ page }) => {

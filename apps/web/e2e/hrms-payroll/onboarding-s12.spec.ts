@@ -117,9 +117,15 @@ test.describe('S12 — Onboarding checklist render', () => {
     const idStep = page.locator('[data-testid="checklist-step-id-card"]');
     await expect(idStep).toContainText('Completed');
 
-    // third step (workstation) is in_progress
+    // third step (workstation): page.tsx's deriveStatus() only ever computes
+    // completed/overdue/pending from the real backend's completed/pending
+    // signal + due-date math -- "in_progress" was a tag the old fabricated
+    // checklist data invented (see page.tsx's own ApiRow comment) and is not
+    // reachable from real data. ob-001 joined over a month before "today" in
+    // this fixture, so a not-yet-completed step is genuinely overdue, not
+    // in-progress.
     const wsStep = page.locator('[data-testid="checklist-step-workstation"]');
-    await expect(wsStep).toContainText('In progress');
+    await expect(wsStep).toContainText('Overdue');
   });
 });
 
@@ -177,8 +183,10 @@ test.describe('S12 — Mark task complete (interactive)', () => {
     // interactive feature is not yet connected (prevents false CI failure).
     const markDoneBtn = wsStep.getByRole('button', { name: /mark.*workstation.*complete|mark done/i });
     if (!(await markDoneBtn.isVisible())) {
-      // Feature not yet wired — verify static chip state only
-      await expect(wsStep).toContainText('In progress');
+      // Feature not yet wired — verify static chip state only. Overdue, not
+      // "in_progress" (see the status-chip test above for why that tag is
+      // unreachable from real backend data).
+      await expect(wsStep).toContainText('Overdue');
       return;
     }
 
@@ -232,8 +240,11 @@ test.describe('S12 — Joinee welcome header', () => {
     await page.goto('/hr/onboarding/ob-001');
 
     const header = page.locator('[data-testid="joinee-welcome-header"]');
-    // Fixture reportingManager = "CFO Mahesh Iyer"
-    await expect(header).toContainText('CFO Mahesh Iyer');
+    // page.tsx passes a hardcoded "Not yet assigned" -- GET /v1/hrms/onboarding's
+    // real backend shape has no reportingManager field (see the ApiRow comment
+    // in page.tsx; a previous version of this page fabricated one), so this is
+    // the correct, already-intentional rendering, not fixture data to assert on.
+    await expect(header).toContainText('Not yet assigned');
   });
 
   test("welcome header for a second joinee (ob-002) shows that joinee's name", async ({

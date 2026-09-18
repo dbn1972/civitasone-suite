@@ -399,6 +399,35 @@ const FIXTURES: Record<string, unknown> = {
     ],
   },
 
+  // REL-023 tranche 5: page.tsx (hr/onboarding/[id]) builds BOTH the
+  // checklist AND the task calendar from this one per-employee endpoint
+  // (GET /v1/hrms/employees/:id/onboarding-tasks) -- there was no fixture
+  // for it at all, so `fetchJson`'s [] default made checklist.length === 0
+  // and the page always rendered its "No onboarding tasks set up yet"
+  // EmptyState instead of the checklist/calendar grid, for every joinee.
+  // Status is only ever 'pending'/'completed' here (matching the real
+  // backend contract page.tsx documents) -- page.tsx's own deriveStatus()
+  // computes "overdue" from dueByDay vs. today, never trust an "overdue"
+  // written here.
+  '/api/v1/hrms/employees/ob-001/onboarding-tasks': {
+    data: [
+      { id: 't1', title: 'Complete document submission', dueByDay: 1, status: 'completed' },
+      { id: 'docs', title: 'Documents Submitted', dueByDay: 1, status: 'completed' },
+      { id: 'id-card', title: 'ID Card Issued', dueByDay: 3, status: 'completed' },
+      { id: 'workstation', title: 'Workstation Assigned', dueByDay: 3, status: 'pending' },
+      { id: 'it-access', title: 'IT Access Created', dueByDay: 7, status: 'pending' },
+    ],
+  },
+  '/api/v1/hrms/employees/ob-002/onboarding-tasks': {
+    data: [
+      { id: 't1', title: 'Complete document submission', dueByDay: 1, status: 'completed' },
+      { id: 'docs', title: 'Documents Submitted', dueByDay: 1, status: 'completed' },
+      { id: 'id-card', title: 'ID Card Issued', dueByDay: 3, status: 'pending' },
+      { id: 'workstation', title: 'Workstation Assigned', dueByDay: 3, status: 'pending' },
+      { id: 'it-access', title: 'IT Access Created', dueByDay: 7, status: 'pending' },
+    ],
+  },
+
   '/api/v1/payroll/runs': { data: [] },
   '/api/v1/payroll/salary-slips': [],
 
@@ -639,7 +668,13 @@ const FIXTURES: Record<string, unknown> = {
       id: 'gte-001',
       granteeCode: 'GTE-001',
       name: 'Rajasthan State Govt',
-      type: 'government',
+      // REL-023 tranche 5: was 'government', not one of
+      // GranteeSummarySchema's real enum values (individual/institution/
+      // society/mission) -- responseSchema validation was silently failing
+      // and fetchJson's [] default made the whole grantees table always
+      // render its EmptyState (no rows, no column headers), masked until
+      // now behind this test's own separately-failing heading assertion.
+      type: 'institution',
       activeGrants: 1,
       totalGrantsReceived: 50000000,
       ucCompliancePct: 100,
@@ -690,7 +725,14 @@ const FIXTURES: Record<string, unknown> = {
       status: 'scheduled',
     },
   ],
-  '/api/v1/estab/vehicles': [],
+  // REL-023 tranche 5: was [], so VehiclesTable always rendered its
+  // EmptyState (no rows, no "Status" column header) -- VehicleSummarySchema-shaped.
+  '/api/v1/estab/vehicles': [
+    {
+      id: 'veh-001', vehicleNo: 'DL-1CA-4521', make: 'Toyota', model: 'Innova', type: 'suv',
+      assignedTo: 'Estab Officer Pool', fuelType: 'diesel', status: 'in_use', odometerKm: 42300,
+    },
+  ],
   '/api/v1/estab/guesthouse-bookings': [],
   '/api/v1/estab/compliance': [],
 
@@ -790,9 +832,25 @@ const FIXTURES: Record<string, unknown> = {
       status: 'pending',
     },
   ],
-  '/api/v1/legal/hearings': [],
+  // REL-023 tranche 5: was [], so HearingsTable always rendered its
+  // EmptyState (no rows, no column headers) -- HearingSummarySchema-shaped.
+  '/api/v1/legal/hearings': [
+    {
+      id: 'hrg-001', caseId: 'leg-001', caseNo: 'CASE-001', caseTitle: 'State v. ABC Construction Ltd',
+      court: 'High Court Delhi', date: '2026-09-25', time: '11:00', purpose: 'Arguments on interim relief',
+      status: 'scheduled',
+    },
+  ],
   '/api/v1/legal/court-orders': [],
-  '/api/v1/legal/opinions': [],
+  // REL-023 tranche 5: was [], so OpinionsTable always rendered its
+  // EmptyState (no rows, no column headers) -- LegalOpinionSummarySchema-shaped.
+  '/api/v1/legal/opinions': [
+    {
+      id: 'op-001', opinionNo: 'OP-2026-001', subject: 'Contract termination clause review',
+      requestedBy: 'Works Department', requestDate: '2026-08-20', advisorName: 'Adv. Priya Sharma',
+      status: 'pending',
+    },
+  ],
   '/api/v1/legal/dashboard': { activeCases: 1, hearingsThisWeek: 0, ordersPending: 0, opinionsDue: 0 },
 
   '/api/v1/knowledge/documents': [
@@ -808,10 +866,25 @@ const FIXTURES: Record<string, unknown> = {
       status: 'approved',
     },
   ],
-  '/api/v1/knowledge/records': [],
+  // REL-023 tranche 5: was [], so the records table always rendered its
+  // EmptyState (no rows, no column headers) -- KnowledgeRecordSchema-shaped.
+  '/api/v1/knowledge/records': [
+    {
+      id: 'rec-001', recordNo: 'REC-2026-001', title: 'Land Acquisition File 1998-2004',
+      type: 'file', department: 'Estab', createdDate: '2026-01-15', retentionPeriod: '25 years',
+      status: 'active',
+    },
+  ],
 
+  // REL-023 tranche 5: mapModuleRows()'s label fallback chain (name/title/
+  // subject/label/code/contractNo/fileNo) matched none of this row's fields,
+  // so `if (!id || !label) continue;` silently dropped it -- the "table"
+  // rendered zero rows (and so no column headers) for every request, not
+  // just an empty-fixture case. Added `name` (the chain's first candidate),
+  // kept workflowName/instanceNo as-is (real, meaningful domain fields the
+  // generic mapper just doesn't know to look for).
   '/api/v1/workflow/instances': [
-    { id: 'wf-001', workflowName: 'Leave Approval', instanceNo: 'WF-001', status: 'running', startedAt: '2024-01-01T00:00:00Z' },
+    { id: 'wf-001', name: 'Leave Approval', workflowName: 'Leave Approval', instanceNo: 'WF-001', status: 'running', startedAt: '2024-01-01T00:00:00Z' },
   ],
   '/api/v1/analytics/dashboards': [
     { id: 'ad-001', name: 'Finance KPI Dashboard', module: 'finance', status: 'active' },
@@ -819,8 +892,13 @@ const FIXTURES: Record<string, unknown> = {
   '/api/v1/inventory/items': [
     { id: 'inv-001', itemCode: 'INV-001', name: 'Office Chair', quantity: 10, status: 'active' },
   ],
+  // REL-023 tranche 5: same mapModuleRows() label-fallback miss as workflow
+  // instances above -- `caller` isn't in the chain, so this row was silently
+  // dropped and the list always rendered empty. Added `name` with the same
+  // value the test expects to see (the caller's phone number), kept `caller`
+  // as-is.
   '/api/v1/telephony/calls': [
-    { id: 'call-001', caller: '+91-9876543210', duration: 120, status: 'completed', startedAt: '2024-01-01T10:00:00Z' },
+    { id: 'call-001', name: '+91-9876543210', caller: '+91-9876543210', duration: 120, status: 'completed', startedAt: '2024-01-01T10:00:00Z' },
   ],
   '/api/v1/locations': [
     { id: 'loc-001', name: 'HQ Delhi', type: 'office', status: 'active' },

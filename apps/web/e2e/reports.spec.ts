@@ -24,7 +24,9 @@ test.describe('Reports', () => {
 
   test('report jobs list page shows heading and column headers', async ({ page }) => {
     await page.goto('/reports/list');
-    await expect(page.getByRole('heading', { name: 'Report Jobs' })).toBeVisible();
+    // level:1 disambiguates the page h1 from a card's own "Report jobs" h3
+    // that repeats the page heading text.
+    await expect(page.getByRole('heading', { name: 'Report Jobs', level: 1 })).toBeVisible();
     await expect(page.getByRole('columnheader', { name: 'Report Name' })).toBeVisible();
     await expect(page.getByRole('columnheader', { name: 'Module' })).toBeVisible();
     await expect(page.getByRole('columnheader', { name: 'Requested By' })).toBeVisible();
@@ -35,15 +37,19 @@ test.describe('Reports', () => {
 
   test('report jobs list shows seeded job data', async ({ page }) => {
     await page.goto('/reports/list');
-    const table = page.getByRole('table', { name: 'Report jobs' });
-    await expect(table.getByRole('cell', { name: 'Monthly Finance Summary' })).toBeVisible();
-    await expect(table.getByRole('cell', { name: 'finance', exact: true })).toBeVisible();
-    await expect(table.getByRole('cell', { name: 'completed', exact: true })).toBeVisible();
+    // The table has no accessible name (no aria-label/caption on the shared
+    // DataTable instance here) -- matching the plain, unscoped getByRole('cell')
+    // pattern the KPI test below already uses for the same reason.
+    await expect(page.getByRole('cell', { name: 'Monthly Finance Summary' })).toBeVisible();
+    await expect(page.getByRole('cell', { name: 'finance', exact: true })).toBeVisible();
+    await expect(page.getByRole('cell', { name: 'completed', exact: true })).toBeVisible();
   });
 
   test('KPI tracker page shows heading and column headers', async ({ page }) => {
     await page.goto('/reports/kpi');
-    await expect(page.getByRole('heading', { name: 'KPI Monitoring' })).toBeVisible();
+    // level:1 disambiguates the page h1 from a card's own "KPI monitoring" h3
+    // that repeats the page heading text.
+    await expect(page.getByRole('heading', { name: 'KPI Monitoring', level: 1 })).toBeVisible();
     await expect(page.getByRole('columnheader', { name: 'KPI' })).toBeVisible();
     await expect(page.getByRole('columnheader', { name: 'Owner Module' })).toBeVisible();
     await expect(page.getByRole('columnheader', { name: 'Unit' })).toBeVisible();
@@ -65,6 +71,8 @@ test.describe('Reports', () => {
     await page.goto('/reports');
     await page.getByRole('link', { name: 'Report Jobs' }).click();
     await expect(page).toHaveURL(/\/reports\/list/);
-    await expect(page.getByRole('heading', { name: 'Report Jobs' })).toBeVisible();
+    // level:1 disambiguates the page h1 from a card's own "Report jobs" h3
+    // that repeats the page heading text.
+    await expect(page.getByRole('heading', { name: 'Report Jobs', level: 1 })).toBeVisible();
   });
 });

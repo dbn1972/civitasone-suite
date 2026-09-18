@@ -24,11 +24,15 @@ test.describe('Grants', () => {
 
   test('grants list shows heading and column headers', async ({ page }) => {
     await page.goto('/grants/list');
-    await expect(page.getByRole('heading', { name: 'Grants' })).toBeVisible();
+    // level:1 disambiguates the page h1 from a card's own "Grants List" h3
+    // that repeats the page heading text (same pattern as tenant-admin/finance/
+    // projects, REL-023 tranche 4).
+    await expect(page.getByRole('heading', { name: 'Grants', level: 1 })).toBeVisible();
     await expect(page.getByRole('columnheader', { name: 'Grant No' })).toBeVisible();
     await expect(page.getByRole('columnheader', { name: 'Title' })).toBeVisible();
     await expect(page.getByRole('columnheader', { name: 'Grantee' })).toBeVisible();
-    await expect(page.getByRole('columnheader', { name: 'Total Amount (₹)' })).toBeVisible();
+    // GrantsTable.tsx's real column label is "Total (₹)", not "Total Amount (₹)".
+    await expect(page.getByRole('columnheader', { name: 'Total (₹)' })).toBeVisible();
     await expect(page.getByRole('columnheader', { name: 'Status' })).toBeVisible();
   });
 
@@ -52,7 +56,10 @@ test.describe('Grants', () => {
 
   test('grant detail shows installments section', async ({ page }) => {
     await page.goto('/grants/grn-001');
-    await expect(page.getByText(/installment/i)).toBeVisible();
+    // .first(): the section's own "Installments" h3 and its "Installment #"
+    // column header both match /installment/i; either proves the section
+    // rendered, so disambiguate rather than assert on one arbitrarily.
+    await expect(page.getByText(/installment/i).first()).toBeVisible();
   });
 
   test('navigating grants list → detail shows grant detail', async ({ page }) => {
@@ -65,7 +72,9 @@ test.describe('Grants', () => {
 
   test('grantees page shows heading and column headers', async ({ page }) => {
     await page.goto('/grants/grantees');
-    await expect(page.getByRole('heading', { name: 'Grantees' })).toBeVisible();
+    // level:1 disambiguates the page h1 from a card's own "Grantees" h3
+    // (same pattern as the grants-list heading above).
+    await expect(page.getByRole('heading', { name: 'Grantees', level: 1 })).toBeVisible();
     await expect(page.getByRole('columnheader', { name: 'Name' })).toBeVisible();
   });
 
@@ -73,6 +82,9 @@ test.describe('Grants', () => {
     await page.goto('/grants/installments');
     await expect(page.getByRole('heading', { name: 'Grant Installments' })).toBeVisible();
     await expect(page.getByRole('columnheader', { name: 'Grant No' })).toBeVisible();
-    await expect(page.getByRole('columnheader', { name: 'Amount (₹)' })).toBeVisible();
+    // InstallmentsTable.tsx's real column label is "Amount" -- the ₹ symbol is
+    // in formatMoney()'s rendered cell values, not the header (unlike the
+    // grants-list table's own "Total Amount (₹)" column, a different table).
+    await expect(page.getByRole('columnheader', { name: 'Amount' })).toBeVisible();
   });
 });

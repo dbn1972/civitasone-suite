@@ -98,6 +98,7 @@ export default async function LegalCaseDetailPage({ params }: { params: { id: st
       <PageHeader
         back="/legal/list"
         title={`${caseData.caseNo} — ${caseData.court}`}
+        subtitle={caseData.title}
         actions={<CaseActions caseId={caseData.id} />}
       />
 
