@@ -1,3 +1,4 @@
+import { getTranslations } from "next-intl/server";
 import { PageHeader, StatGrid, StatCard, Card, DataTable } from "../../../../_components/ds";
 import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
@@ -31,6 +32,7 @@ async function getData(): Promise<LoaderResult<Row[]>> {
 }
 
 export default async function CorrectionsPage() {
+  const t = await getTranslations("corrections");
   const { data: items, source } = await getData();
 
   const columns: {
@@ -39,14 +41,14 @@ export default async function CorrectionsPage() {
     align?: "left" | "right";
     cellType?: "status" | "amount";
   }[] = [
-    { key: "employee_id", label: "Employee" },
-    { key: "component", label: "Component" },
-    { key: "effective_from_display", label: "Effective From" },
-    { key: "old_value_minor", label: "Old Value", align: "right", cellType: "amount" },
-    { key: "new_value_minor", label: "New Value", align: "right", cellType: "amount" },
-    { key: "arrears_minor", label: "Arrears", align: "right", cellType: "amount" },
-    { key: "affected_periods", label: "Periods", align: "right" },
-    { key: "status", label: "Status", cellType: "status" },
+    { key: "employee_id", label: t("colEmployee") },
+    { key: "component", label: t("colComponent") },
+    { key: "effective_from_display", label: t("colEffectiveFrom") },
+    { key: "old_value_minor", label: t("colOldValue"), align: "right", cellType: "amount" },
+    { key: "new_value_minor", label: t("colNewValue"), align: "right", cellType: "amount" },
+    { key: "arrears_minor", label: t("colArrears"), align: "right", cellType: "amount" },
+    { key: "affected_periods", label: t("colPeriods"), align: "right" },
+    { key: "status", label: t("colStatus"), cellType: "status" },
   ];
 
   // Server-safe: DataTable's `render` prop cannot cross the server/client
@@ -60,38 +62,38 @@ export default async function CorrectionsPage() {
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
-        title="Salary Corrections"
-        subtitle="Retroactive salary component corrections and resulting arrears."
+        title={t("title")}
+        subtitle={t("subtitle")}
         back="/hr/payroll"
       />
-      <DataSourceBadge source={source} message="Couldn't load — showing nothing" />
+      <DataSourceBadge source={source} message={t("loadErrorMessage")} />
 
       <StatGrid>
-        <StatCard icon="✏️" iconBg="var(--infobg)" label="Total Corrections" value={items.length} />
-        <StatCard icon="⏳" iconBg="var(--warnbg)" label="Pending" value={pendingCount} />
-        <StatCard icon="💰" iconBg="var(--goodbg)" label="Total Arrears" value={formatMoney(totalArrearsMinor)} />
-        <StatCard icon="✅" iconBg="var(--goodbg)" label="Approved" value={approvedCount} />
+        <StatCard icon="✏️" iconBg="var(--infobg)" label={t("statTotalCorrections")} value={items.length} />
+        <StatCard icon="⏳" iconBg="var(--warnbg)" label={t("statPending")} value={pendingCount} />
+        <StatCard icon="💰" iconBg="var(--goodbg)" label={t("statTotalArrears")} value={formatMoney(totalArrearsMinor)} />
+        <StatCard icon="✅" iconBg="var(--goodbg)" label={t("statApproved")} value={approvedCount} />
       </StatGrid>
 
       <CreateCorrectionForm />
 
-      <Card title="Correction History">
+      <Card title={t("historyCardTitle")}>
         <DataTable<DisplayRow>
           columns={columns}
           rows={rows}
           sortable
           filterable
-          filterPlaceholder="Filter by employee or component…"
+          filterPlaceholder={t("filterPlaceholder")}
           pageSize={15}
           emptyIcon="✏️"
-          emptyTitle="No salary corrections yet"
-          emptyMessage="Record a correction using the form above."
+          emptyTitle={t("emptyTitle")}
+          emptyMessage={t("emptyMessage")}
         />
       </Card>
 
-      <Card title="Loss-of-Pay (LOP) Ledger" padding>
+      <Card title={t("lopCardTitle")} padding>
         <p style={{ fontSize: 13, color: "var(--ink2)" }}>
-          Loss-of-pay adjustments are calculated automatically from approved leave and attendance records and applied during each payroll run. The adjusted amounts appear in the payroll register after processing.
+          {t("lopDescription")}
         </p>
       </Card>
     </main>

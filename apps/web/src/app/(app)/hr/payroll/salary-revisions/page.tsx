@@ -1,3 +1,4 @@
+import { getTranslations } from "next-intl/server";
 import { PageHeader, StatGrid, StatCard, Card, DataTable } from "../../../../_components/ds";
 import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
@@ -28,66 +29,72 @@ async function getData(): Promise<LoaderResult<Row[]>> {
   });
 }
 
-const REVISION_TYPE_LABEL: Record<string, string> = {
-  annual_increment: "Annual Increment",
-  promotion: "Promotion",
-  special: "Special",
-  pay_commission: "Pay Commission",
-  market_correction: "Market Correction",
+// UX-017: keys are the stable backend revision_type codes, never translated
+// -- only used to look up which message key holds the display text. Same
+// safe pattern as OffCycleCard.tsx's REASON_LABEL_KEYS.
+const REVISION_TYPE_KEYS: Record<string, string> = {
+  annual_increment: "revisionTypeAnnualIncrement",
+  promotion: "revisionTypePromotion",
+  special: "revisionTypeSpecial",
+  pay_commission: "revisionTypePayCommission",
+  market_correction: "revisionTypeMarketCorrection",
 };
 
 export default async function SalaryRevisionsPage() {
+  const t = await getTranslations("salaryRevisions");
   const { data: rawItems, source } = await getData();
 
-  const items = rawItems.map((r) => ({
-    ...r,
-    revisionTypeLabel: REVISION_TYPE_LABEL[r.revision_type] ?? r.revision_type,
-  }));
+  const items = rawItems.map((r) => {
+    const key = REVISION_TYPE_KEYS[r.revision_type];
+    return {
+      ...r,
+      revisionTypeLabel: key ? t(key) : r.revision_type,
+    };
+  });
   type Row2 = (typeof items)[number];
 
   const columns: { key: keyof Row2 & string; label: string; align?: "left" | "right"; cellType?: "status" | "amount" }[] = [
-    { key: "employee_id", label: "Employee" },
-    { key: "effective_date", label: "Effective Date" },
-    { key: "revisionTypeLabel", label: "Revision Type" },
-    { key: "old_basic_minor", label: "Old Basic", align: "right", cellType: "amount" },
-    { key: "new_basic_minor", label: "New Basic", align: "right", cellType: "amount" },
-    { key: "new_gross_minor", label: "New Gross", align: "right", cellType: "amount" },
-    { key: "order_no", label: "Order No." },
+    { key: "employee_id", label: t("colEmployee") },
+    { key: "effective_date", label: t("colEffectiveDate") },
+    { key: "revisionTypeLabel", label: t("colRevisionType") },
+    { key: "old_basic_minor", label: t("colOldBasic"), align: "right", cellType: "amount" },
+    { key: "new_basic_minor", label: t("colNewBasic"), align: "right", cellType: "amount" },
+    { key: "new_gross_minor", label: t("colNewGross"), align: "right", cellType: "amount" },
+    { key: "order_no", label: t("colOrderNo") },
   ];
 
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
-        title="Salary Revisions"
-        subtitle="Basic and gross salary revision history — increments, promotions, and pay-commission fixation."
+        title={t("title")}
+        subtitle={t("subtitle")}
         back="/hr/payroll"
       />
-      <DataSourceBadge source={source} message="Couldn't load — showing nothing" />
+      <DataSourceBadge source={source} message={t("loadErrorMessage")} />
       <StatGrid>
-        <StatCard icon="📈" iconBg="var(--infobg)" label="Total Revisions" value={items.length} />
-        <StatCard icon="🏅" iconBg="var(--goodbg)" label="Increments" value={items.filter((i) => i.revision_type === "annual_increment").length} />
-        <StatCard icon="🎯" iconBg="var(--warnbg)" label="Promotions" value={items.filter((i) => i.revision_type === "promotion").length} />
-        <StatCard icon="🏛" iconBg="var(--panel)" label="Pay Commission" value={items.filter((i) => i.revision_type === "pay_commission").length} />
+        <StatCard icon="📈" iconBg="var(--infobg)" label={t("statTotalRevisions")} value={items.length} />
+        <StatCard icon="🏅" iconBg="var(--goodbg)" label={t("statIncrements")} value={items.filter((i) => i.revision_type === "annual_increment").length} />
+        <StatCard icon="🎯" iconBg="var(--warnbg)" label={t("statPromotions")} value={items.filter((i) => i.revision_type === "promotion").length} />
+        <StatCard icon="🏛" iconBg="var(--panel)" label={t("statPayCommission")} value={items.filter((i) => i.revision_type === "pay_commission").length} />
       </StatGrid>
 
       <Card>
         <p style={{ color: "var(--ink2)", fontSize: 14, padding: "12px 20px" }}>
-            Salary revisions are recorded upstream in HRMS pay-fixation and applied here automatically —
-            this screen is read-only. Contact HRMS if a revision is missing.
-          </p>
+          {t("readOnlyNotice")}
+        </p>
       </Card>
 
-      <Card title="Salary Revision History">
+      <Card title={t("historyCardTitle")}>
         <DataTable<Row2>
           columns={columns}
           rows={items}
           sortable
           filterable
-          filterPlaceholder="Filter by employee or order no…"
+          filterPlaceholder={t("filterPlaceholder")}
           pageSize={15}
           emptyIcon="📈"
-          emptyTitle="No salary revisions yet"
-          emptyMessage="Revisions recorded upstream in HRMS pay-fixation will appear here."
+          emptyTitle={t("emptyTitle")}
+          emptyMessage={t("emptyMessage")}
         />
       </Card>
     </main>

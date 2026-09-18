@@ -1,5 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { NextIntlClientProvider } from "next-intl";
+import enMessages from "@/messages/en.json";
 
 const refreshMock = vi.fn();
 vi.mock("next/navigation", () => ({
@@ -8,6 +10,18 @@ vi.mock("next/navigation", () => ({
 
 import { CreateCorrectionForm } from "./CreateCorrectionForm";
 
+// UX-017: CreateCorrectionForm now reads its copy through next-intl
+// (useTranslations("createCorrectionForm")), so every render needs a real
+// provider in the tree -- same pattern as
+// disbursement/BankFileForm.test.tsx (tranche 9).
+function renderForm() {
+  render(
+    <NextIntlClientProvider locale="en" messages={enMessages}>
+      <CreateCorrectionForm />
+    </NextIntlClientProvider>,
+  );
+}
+
 describe("CreateCorrectionForm", () => {
   beforeEach(() => {
     vi.restoreAllMocks();
@@ -15,7 +29,7 @@ describe("CreateCorrectionForm", () => {
   });
 
   it("requires an employee id before opening the confirm dialog", () => {
-    render(<CreateCorrectionForm />);
+    renderForm();
     fireEvent.click(screen.getByRole("button", { name: "Record Correction" }));
     expect(screen.getByText("Employee ID is required.")).toBeInTheDocument();
   });
@@ -38,7 +52,7 @@ describe("CreateCorrectionForm", () => {
       ),
     );
 
-    render(<CreateCorrectionForm />);
+    renderForm();
     fillValidForm();
     fireEvent.click(screen.getByRole("button", { name: "Record Correction" }));
 
@@ -54,7 +68,7 @@ describe("CreateCorrectionForm", () => {
   it("surfaces a server error on the confirm dialog (error path)", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(null, { status: 422 }));
 
-    render(<CreateCorrectionForm />);
+    renderForm();
     fillValidForm();
     fireEvent.click(screen.getByRole("button", { name: "Record Correction" }));
 

@@ -1,5 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { NextIntlClientProvider } from "next-intl";
+import enMessages from "@/messages/en.json";
 
 const refreshMock = vi.fn();
 vi.mock("next/navigation", () => ({
@@ -20,6 +22,18 @@ const row: OffCycleRow = {
   created_at: "2025-06-01T00:00:00Z",
 };
 
+// UX-017: OffCycleList now reads its copy through next-intl
+// (useTranslations("offCycleList")), so every render needs a real provider
+// in the tree -- same pattern as disbursement/BankFileForm.test.tsx
+// (tranche 9).
+function renderList() {
+  render(
+    <NextIntlClientProvider locale="en" messages={enMessages}>
+      <OffCycleList rows={[row]} />
+    </NextIntlClientProvider>,
+  );
+}
+
 describe("OffCycleList", () => {
   beforeEach(() => {
     vi.restoreAllMocks();
@@ -27,7 +41,7 @@ describe("OffCycleList", () => {
   });
 
   it("renders draft runs with a Process action", () => {
-    render(<OffCycleList rows={[row]} />);
+    renderList();
     expect(screen.getByText("Diwali bonus")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /^Process/ })).toBeInTheDocument();
   });
@@ -39,7 +53,7 @@ describe("OffCycleList", () => {
       }),
     );
 
-    render(<OffCycleList rows={[row]} />);
+    renderList();
     fireEvent.click(screen.getByRole("button", { name: /^Process/ }));
 
     await waitFor(() => expect(screen.getByText("Process this off-cycle run?")).toBeInTheDocument());
@@ -54,7 +68,7 @@ describe("OffCycleList", () => {
   it("surfaces a clerk-safe error on the confirm dialog, never the server's raw code/status (error path) (UX-020)", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(null, { status: 409 }));
 
-    render(<OffCycleList rows={[row]} />);
+    renderList();
     fireEvent.click(screen.getByRole("button", { name: /^Process/ }));
 
     await waitFor(() => expect(screen.getByText("Process this off-cycle run?")).toBeInTheDocument());

@@ -1,3 +1,4 @@
+import { getTranslations } from "next-intl/server";
 import { PageHeader, StatGrid, StatCard, Card, Tabs } from "../../../../_components/ds";
 import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
@@ -17,6 +18,7 @@ async function getData(): Promise<LoaderResult<OffCycleRow[]>> {
 }
 
 export default async function OffCyclePage() {
+  const t = await getTranslations("offCycle");
   const { data: items, source } = await getData();
 
   const draftCount = items.filter((r) => r.status === "draft").length;
@@ -26,23 +28,23 @@ export default async function OffCyclePage() {
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
-        title="Off-Cycle Payroll"
-        subtitle="Bonus, incentive, arrear, and ad-hoc off-cycle payment runs."
+        title={t("title")}
+        subtitle={t("subtitle")}
         back="/hr/payroll"
       />
-      <DataSourceBadge source={source} message="Couldn't load — showing nothing" />
+      <DataSourceBadge source={source} message={t("loadErrorMessage")} />
 
       <StatGrid>
-        <StatCard icon="🗂️" iconBg="var(--infobg)" label="Total Runs" value={items.length} />
-        <StatCard icon="📝" iconBg="var(--warnbg)" label="Draft (Pending Process)" value={draftCount} />
-        <StatCard icon="💰" iconBg="var(--goodbg)" label="Total Amount" value={formatMoney(totalAmountMinor)} />
-        <StatCard icon="🧾" iconBg="var(--infobg)" label="Total Net (Processed)" value={formatMoney(totalNetMinor)} />
+        <StatCard icon="🗂️" iconBg="var(--infobg)" label={t("statTotalRuns")} value={items.length} />
+        <StatCard icon="📝" iconBg="var(--warnbg)" label={t("statDraftPending")} value={draftCount} />
+        <StatCard icon="💰" iconBg="var(--goodbg)" label={t("statTotalAmount")} value={formatMoney(totalAmountMinor)} />
+        <StatCard icon="🧾" iconBg="var(--infobg)" label={t("statTotalNetProcessed")} value={formatMoney(totalNetMinor)} />
       </StatGrid>
 
       <CreateOffCycleForm />
 
       {/* Card view — primary: shows reason, employees in scope, approval status, process action */}
-      <Card title="Off-Cycle Runs">
+      <Card title={t("runsCardTitle")}>
         <div style={{ padding: "0 4px" }}>
           <OffCycleCards rows={items} />
         </div>

@@ -2,6 +2,7 @@
 
 import { useId, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { Button, Card, ConfirmDialog } from "../../../../_components/ds";
 import { browserJson } from "@/lib/api/browserClient";
 import { formatMoney } from "@/lib/formatters";
@@ -18,7 +19,10 @@ type CreateResponse = {
   };
 };
 
+type InvalidField = "emp" | "comp" | "date" | "old" | "new" | null;
+
 export function CreateCorrectionForm() {
+  const t = useTranslations("createCorrectionForm");
   const router = useRouter();
   const [employeeId, setEmployeeId] = useState("");
   const [component, setComponent] = useState("");
@@ -31,6 +35,20 @@ export function CreateCorrectionForm() {
   const [dialogError, setDialogError] = useState<string | undefined>();
   const [message, setMessage] = useState<string | null>(null);
   const [tone, setTone] = useState<"good" | "bad">("good");
+  // UX-017: which field the current error message is about, tracked as its
+  // own identity instead of re-testing `message` against hardcoded English
+  // text. Before this change, `xxxInvalid` matched the live `message` state
+  // against literals (`message === "Employee ID is required."`,
+  // `message.startsWith("Old value")`); once `message` holds
+  // `t("employeeIdRequiredError")`, that still happens to match under the
+  // English locale (the translated string is byte-identical to the old
+  // hardcoded one) but would silently and permanently evaluate false under
+  // any other locale, since the comparison's right-hand side stays
+  // hardcoded English — the same "translated text used for logic/identity"
+  // bug class this gap's tranche 5/10 found in Segmented tab arrays, just
+  // shaped as form-validation state instead of tab selection. Same fix
+  // applied in CreateOffCycleForm.tsx (periodInvalid/itemsInvalid).
+  const [invalidField, setInvalidField] = useState<InvalidField>(null);
 
   const empId = useId();
   const compId = useId();
@@ -46,44 +64,50 @@ export function CreateCorrectionForm() {
   const oldRef = useRef<HTMLInputElement>(null);
   const newRef = useRef<HTMLInputElement>(null);
 
-  const empInvalid = tone === "bad" && message === "Employee ID is required.";
-  const compInvalid = tone === "bad" && message === "Component is required.";
-  const dateInvalid = tone === "bad" && !!message && message.startsWith("Effective from");
-  const oldInvalid = tone === "bad" && !!message && message.startsWith("Old value");
-  const newInvalid = tone === "bad" && !!message && message.startsWith("New value");
+  const empInvalid = tone === "bad" && invalidField === "emp";
+  const compInvalid = tone === "bad" && invalidField === "comp";
+  const dateInvalid = tone === "bad" && invalidField === "date";
+  const oldInvalid = tone === "bad" && invalidField === "old";
+  const newInvalid = tone === "bad" && invalidField === "new";
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setMessage(null);
+    setInvalidField(null);
     if (!employeeId.trim()) {
       setTone("bad");
-      setMessage("Employee ID is required.");
+      setInvalidField("emp");
+      setMessage(t("employeeIdRequiredError"));
       empRef.current?.focus();
       return;
     }
     if (!component.trim()) {
       setTone("bad");
-      setMessage("Component is required.");
+      setInvalidField("comp");
+      setMessage(t("componentRequiredError"));
       compRef.current?.focus();
       return;
     }
     if (!/^\d{4}-\d{2}-\d{2}$/.test(effectiveFrom.trim())) {
       setTone("bad");
-      setMessage("Effective from must be in YYYY-MM-DD format.");
+      setInvalidField("date");
+      setMessage(t("effectiveFromFormatError"));
       dateRef.current?.focus();
       return;
     }
     const oldRupees = parseFloat(oldValue);
     if (Number.isNaN(oldRupees) || oldRupees < 0) {
       setTone("bad");
-      setMessage("Old value must be a non-negative amount in rupees.");
+      setInvalidField("old");
+      setMessage(t("oldValueInvalidError"));
       oldRef.current?.focus();
       return;
     }
     const newRupees = parseFloat(newValue);
     if (Number.isNaN(newRupees) || newRupees < 0) {
       setTone("bad");
-      setMessage("New value must be a non-negative amount in rupees.");
+      setInvalidField("new");
+      setMessage(t("newValueInvalidError"));
       newRef.current?.focus();
       return;
     }
@@ -110,10 +134,13 @@ export function CreateCorrectionForm() {
       });
       setConfirmOpen(false);
       setTone("good");
+      setInvalidField(null);
       setMessage(
-        `Correction recorded for ${component.trim()} — ${res.data.affectedPeriods} period(s) affected, arrears ${formatMoney(
-          res.data.arrearsMinor,
-        )}.`,
+        t("recordedMessage", {
+          component: component.trim(),
+          count: res.data.affectedPeriods,
+          arrears: formatMoney(res.data.arrearsMinor),
+        }),
       );
       setEmployeeId("");
       setComponent("");
@@ -123,7 +150,7 @@ export function CreateCorrectionForm() {
       setReason("");
       router.refresh();
     } catch (err) {
-      setDialogError(err instanceof Error ? err.message : "Network error. Please try again.");
+      setDialogError(err instanceof Error ? err.message : t("networkError"));
     } finally {
       setBusy(false);
     }
@@ -131,12 +158,12 @@ export function CreateCorrectionForm() {
 
   return (
     <form onSubmit={handleSubmit} style={{ marginBottom: 16 }}>
-      <Card title="Record Salary Correction" padding>
+      <Card title={t("formTitle")} padding>
         <div style={{ display: "grid", gap: 14 }}>
           <div style={{ display: "grid", gap: 14, gridTemplateColumns: "repeat(auto-fit,minmax(180px,1fr))" }}>
             <div style={{ display: "grid", gap: 6 }}>
               <label htmlFor={empId} style={{ fontSize: 13, fontWeight: 600 }}>
-                Employee ID <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
+                {t("employeeIdLabel")} <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
               </label>
               <input
                 id={empId}
@@ -151,7 +178,7 @@ export function CreateCorrectionForm() {
             </div>
             <div style={{ display: "grid", gap: 6 }}>
               <label htmlFor={compId} style={{ fontSize: 13, fontWeight: 600 }}>
-                Component <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
+                {t("componentLabel")} <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
               </label>
               <input
                 id={compId}
@@ -159,7 +186,7 @@ export function CreateCorrectionForm() {
                 value={component}
                 onChange={(e) => setComponent(e.target.value)}
                 maxLength={32}
-                placeholder="BASIC, HRA, DA…"
+                placeholder={t("componentPlaceholder")}
                 aria-required="true"
                 aria-invalid={compInvalid || undefined}
                 aria-describedby={compInvalid ? errId : undefined}
@@ -168,7 +195,7 @@ export function CreateCorrectionForm() {
             </div>
             <div style={{ display: "grid", gap: 6 }}>
               <label htmlFor={dateId} style={{ fontSize: 13, fontWeight: 600 }}>
-                Effective From <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
+                {t("effectiveFromLabel")} <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
               </label>
               <input
                 id={dateId}
@@ -184,7 +211,7 @@ export function CreateCorrectionForm() {
             </div>
             <div style={{ display: "grid", gap: 6 }}>
               <label htmlFor={oldId} style={{ fontSize: 13, fontWeight: 600 }}>
-                Old Value (₹) <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
+                {t("oldValueLabel")} <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
               </label>
               <input
                 id={oldId}
@@ -202,7 +229,7 @@ export function CreateCorrectionForm() {
             </div>
             <div style={{ display: "grid", gap: 6 }}>
               <label htmlFor={newId} style={{ fontSize: 13, fontWeight: 600 }}>
-                New Value (₹) <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
+                {t("newValueLabel")} <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
               </label>
               <input
                 id={newId}
@@ -219,7 +246,7 @@ export function CreateCorrectionForm() {
               />
             </div>
             <div style={{ display: "grid", gap: 6 }}>
-              <label htmlFor={reasonId} style={{ fontSize: 13, fontWeight: 600 }}>Reason</label>
+              <label htmlFor={reasonId} style={{ fontSize: 13, fontWeight: 600 }}>{t("reasonLabel")}</label>
               <input
                 id={reasonId}
                 value={reason}
@@ -232,7 +259,7 @@ export function CreateCorrectionForm() {
 
           <div>
             <Button type="submit" style={{ minHeight: 44 }} disabled={busy}>
-              Record Correction
+              {t("submitBtn")}
             </Button>
           </div>
 
@@ -252,18 +279,18 @@ export function CreateCorrectionForm() {
 
       <ConfirmDialog
         open={confirmOpen}
-        title="Record this salary correction?"
-        confirmLabel="Record correction"
+        title={t("confirmTitle")}
+        confirmLabel={t("confirmLabel")}
         busy={busy}
         errorMessage={dialogError}
-        description={
-          <>
-            Correct <strong>{component}</strong> for employee <strong>{employeeId}</strong> from{" "}
-            {formatMoney(Math.round((parseFloat(oldValue) || 0) * 100))} to{" "}
-            {formatMoney(Math.round((parseFloat(newValue) || 0) * 100))}, effective {effectiveFrom}. This computes
-            arrears for every affected period and creates a pending correction record.
-          </>
-        }
+        description={t.rich("confirmDescription", {
+          component,
+          employeeId,
+          oldAmount: formatMoney(Math.round((parseFloat(oldValue) || 0) * 100)),
+          newAmount: formatMoney(Math.round((parseFloat(newValue) || 0) * 100)),
+          effectiveFrom,
+          strong: (chunks) => <strong>{chunks}</strong>,
+        })}
         onConfirm={() => void createCorrection()}
         onCancel={() => !busy && setConfirmOpen(false)}
       />
