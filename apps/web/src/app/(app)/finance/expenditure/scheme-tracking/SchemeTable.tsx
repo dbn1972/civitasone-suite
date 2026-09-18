@@ -1,10 +1,12 @@
 "use client";
+import { useTranslations } from "next-intl";
 import { DataTable } from "@/app/_components/ds";
 import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
 import { useSeededResource } from "@/lib/sync/resource";
 import type { FinanceSchemeSummary } from "@civitasone/types";
 type Row = FinanceSchemeSummary;
 export function SchemeTable({ schemes, source = "api" }: { schemes: Row[]; source?: "api" | "error" }) {
+  const t = useTranslations("expenditureSchemeTrackingTable");
   const { data: rows, provenance, offline, cachedAt } = useSeededResource<Row[]>("finance.schemes", schemes, source, (d) => d.length === 0);
   return (
     <>
@@ -16,12 +18,12 @@ export function SchemeTable({ schemes, source = "api" }: { schemes: Row[]; sourc
       <DataSourceBadge provenance={provenance ?? "live"} cachedAt={cachedAt} offline={offline} />
       <DataTable<Row>
         columns={[
-          { key: "code", label: "Code" },
-          { key: "name", label: "Scheme" },
-          { key: "funding", label: "Funding" },
-          { key: "outlayMinor", label: "Outlay", align: "right", cellType: "amount" },
-          { key: "utilisedMinor", label: "Utilised", align: "right", cellType: "amount" },
-          { key: "status", label: "Status", cellType: "status" },
+          { key: "code", label: t("colCode") },
+          { key: "name", label: t("colScheme") },
+          { key: "funding", label: t("colFunding") },
+          { key: "outlayMinor", label: t("colOutlay"), align: "right", cellType: "amount" },
+          { key: "utilisedMinor", label: t("colUtilised"), align: "right", cellType: "amount" },
+          { key: "status", label: t("colStatus"), cellType: "status" },
         ]}
         rows={rows}
         rowLinkKey="id"
@@ -29,13 +31,13 @@ export function SchemeTable({ schemes, source = "api" }: { schemes: Row[]; sourc
         identifyingColumnKey="name"
         sortable
         filterable
-        filterPlaceholder="Search schemes…"
+        filterPlaceholder={t("filterPlaceholder")}
         pageSize={15}
         exportable
         exportFilename="scheme-tracking"
         emptyIcon="🎯"
-        emptyTitle="No schemes"
-        emptyMessage="No scheme expenditure records found."
+        emptyTitle={t("emptyTitle")}
+        emptyMessage={t("emptyMessage")}
       />
     </>
   );

@@ -13,12 +13,14 @@
  */
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { PageHeader } from "../../../../../_components/ds";
 import { useFormError } from "@/lib/useFormError";
 
 const inputStyle = { width: "100%", padding: 8, borderRadius: 8, border: "1px solid var(--line)" } as const;
 
 export default function NewUCPage() {
+  const t = useTranslations("expenditureUCNew");
   const router = useRouter();
   const [form, setForm] = useState({ ucNo: "", purpose: "", scheme: "", amount: "" });
   const [busy, setBusy] = useState(false);
@@ -47,7 +49,7 @@ export default function NewUCPage() {
         setMessage((await formError.fromResponse(res, "save")).message);
         return;
       }
-      setMessage("Utilization certificate submitted.");
+      setMessage(t("submitted"));
       router.refresh();
       setTimeout(() => router.push("/finance/expenditure/utilization-certificates"), 700);
     } catch {
@@ -61,10 +63,10 @@ export default function NewUCPage() {
   return (
     <>
       <PageHeader
-        title="New Utilization Certificate"
-        subtitle="Submit a UC for grant / scheme expenditure."
+        title={t("title")}
+        subtitle={t("subtitle")}
         back="/finance/expenditure/utilization-certificates"
-        backLabel="Utilization Certificates"
+        backLabel={t("backLabel")}
       />
       {message ? (
         <div role={isError ? "alert" : "status"} aria-live={isError ? "assertive" : "polite"} className="banner" style={{ background: isError ? "#fef2f2" : "#ecfdf3", padding: 12, borderRadius: 12, marginBottom: 16, fontSize: 13 }}>{message}</div>
@@ -73,28 +75,28 @@ export default function NewUCPage() {
         <form onSubmit={submit} className="pad">
           <div className="fields">
             <div className="fld" style={{ flexDirection: "column", alignItems: "flex-start" }}>
-              <label className="l" htmlFor="uc-no">UC number</label>
+              <label className="l" htmlFor="uc-no">{t("labelUcNumber")}</label>
               <input id="uc-no" required value={form.ucNo} onChange={(e) => setForm({ ...form, ucNo: e.target.value })} style={inputStyle} />
               {formError.fieldError("ucNo") && (
                 <span style={{ fontSize: 12, color: "#b91c1c" }}>{formError.fieldError("ucNo")}</span>
               )}
             </div>
             <div className="fld" style={{ flexDirection: "column", alignItems: "flex-start" }}>
-              <label className="l" htmlFor="uc-scheme">Scheme / grant</label>
+              <label className="l" htmlFor="uc-scheme">{t("labelSchemeGrant")}</label>
               <input id="uc-scheme" value={form.scheme} onChange={(e) => setForm({ ...form, scheme: e.target.value })} style={inputStyle} />
               {formError.fieldError("scheme") && (
                 <span style={{ fontSize: 12, color: "#b91c1c" }}>{formError.fieldError("scheme")}</span>
               )}
             </div>
             <div className="fld" style={{ flexDirection: "column", alignItems: "flex-start" }}>
-              <label className="l" htmlFor="uc-amt">Amount utilised (₹)</label>
+              <label className="l" htmlFor="uc-amt">{t("labelAmountUtilised")}</label>
               <input id="uc-amt" required type="number" min="0" step="0.01" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} style={inputStyle} />
               {formError.fieldError("amountMinor") && (
                 <span style={{ fontSize: 12, color: "#b91c1c" }}>{formError.fieldError("amountMinor")}</span>
               )}
             </div>
             <div className="fld" style={{ flexDirection: "column", alignItems: "flex-start" }}>
-              <label className="l" htmlFor="uc-purpose">Purpose</label>
+              <label className="l" htmlFor="uc-purpose">{t("labelPurpose")}</label>
               <input id="uc-purpose" required value={form.purpose} onChange={(e) => setForm({ ...form, purpose: e.target.value })} style={inputStyle} />
               {formError.fieldError("purpose") && (
                 <span style={{ fontSize: 12, color: "#b91c1c" }}>{formError.fieldError("purpose")}</span>
@@ -102,7 +104,7 @@ export default function NewUCPage() {
             </div>
           </div>
           <button type="submit" className="btn primary" disabled={busy} aria-busy={busy} style={{ marginTop: 12 }}>
-            {busy ? "Saving…" : "Submit UC"}
+            {busy ? t("saving") : t("submit")}
           </button>
         </form>
       </div>
