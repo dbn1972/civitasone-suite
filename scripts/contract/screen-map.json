@@ -6648,6 +6648,21 @@
     },
     {
       "module": "inventory",
+      "screen": "/inventory/[id]",
+      "loaders": [
+        "getStockItemById"
+      ],
+      "apiPaths": [
+        "/api/v1/stock/items/:param"
+      ],
+      "upstream": "stock → /v1/stock/items/:param",
+      "routeHandler": "/v1/stock/items/:id",
+      "tablesPresent": true,
+      "status": "WIRED",
+      "detail": "ok"
+    },
+    {
+      "module": "inventory",
       "screen": "/inventory/bins",
       "loaders": [],
       "apiPaths": [],
@@ -9166,21 +9181,6 @@
     },
     {
       "module": "stock",
-      "screen": "/stock/[id]",
-      "loaders": [
-        "getStockItemById"
-      ],
-      "apiPaths": [
-        "/api/v1/stock/items/:param"
-      ],
-      "upstream": "stock → /v1/stock/items/:param",
-      "routeHandler": "/v1/stock/items/:id",
-      "tablesPresent": true,
-      "status": "WIRED",
-      "detail": "ok"
-    },
-    {
-      "module": "stock",
       "screen": "/stock/dashboard",
       "loaders": [
         "getStockDashboard"
@@ -10486,6 +10486,7 @@
     }
   ],
   "counts": {
+    "totalPages": 813,
     "wired": 291,
     "missing": 8,
     "mismatch": 1,
@@ -10493,7 +10494,7 @@
     "fabricatedData": 0
   },
   "linkAudit": {
-    "total": 1329,
+    "total": 1338,
     "dead": []
   }
 }

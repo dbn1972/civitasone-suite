@@ -1,6 +1,6 @@
 # Screen Contract Map
 
-Generated: 2026-09-15T17:43:21.251Z
+Generated: 2026-09-18T06:20:09.178Z
 
 **Summary:** 291 WIRED | 8 MISSING | 1 MISMATCH | 544 NO_LOADER | 0 FABRICATED_DATA
 
@@ -540,6 +540,7 @@ Generated: 2026-09-15T17:43:21.251Z
 | install | /install/silos | — | — | — | — | — | — NO_LOADER |
 | install | /install/stages | — | — | — | — | — | — NO_LOADER |
 | install | /install/steps | — | — | — | — | — | — NO_LOADER |
+| inventory | /inventory/[id] | getStockItemById | /api/v1/stock/items/:param | stock → /v1/stock/items/:param | ✓ `/v1/stock/items/:id` | ✓ | ✅ WIRED |
 | inventory | /inventory/bins | — | — | — | — | — | — NO_LOADER |
 | inventory | /inventory/cycle-counts/[id] | getCycleCountById | /api/v1/inventory/cycle-counts/:param | inventory → /v1/inventory/cycle-counts/:param | ✓ `/v1/inventory/cycle-counts/:id` | ✓ | ✅ WIRED |
 | inventory | /inventory/goods-returns/[id] | getGoodsReturnById | /api/v1/inventory/goods-returns/:param | inventory → /v1/inventory/goods-returns/:param | ✓ `/v1/inventory/goods-returns/:id` | ✓ | ✅ WIRED |
@@ -742,7 +743,6 @@ Generated: 2026-09-15T17:43:21.251Z
 | revenue | /revenue/write-offs | — | — | — | — | — | — NO_LOADER |
 | settings | /settings/branding | — | — | — | — | — | — NO_LOADER |
 | setup | /setup | — | — | — | — | — | — NO_LOADER |
-| stock | /stock/[id] | getStockItemById | /api/v1/stock/items/:param | stock → /v1/stock/items/:param | ✓ `/v1/stock/items/:id` | ✓ | ✅ WIRED |
 | stock | /stock/dashboard | getStockDashboard | /api/v1/stock/dashboard | stock → /v1/stock/dashboard | ✓ `/v1/stock/dashboard` | ✓ | ✅ WIRED |
 | stock | /stock/items/new | — | — | — | — | — | — NO_LOADER |
 | stock | /stock/ledger/new | — | — | — | — | — | — NO_LOADER |

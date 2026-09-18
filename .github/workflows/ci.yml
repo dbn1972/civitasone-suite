@@ -826,6 +826,19 @@ jobs:
         env:
           QUEUE_DRIVER: memory
 
+      # COMP-006 (tranche 2) — render-smoke / loader-manifest feature. The
+      # static chain analysis above only covers screens with a loader it can
+      # see; this actually renders every NO_LOADER screen (jsdom + RTL, no
+      # backend needed) so a screen only ever counts as covered because it
+      # was proven to render, not assumed. Regression gate (every
+      # loader-manifest.json entry must still render cleanly) + informational
+      # full sweep (writes render-smoke-report.json, the source for the
+      # coverage number the "Screen Verification Gate" job below asserts).
+      # Runs under apps/web's own vitest config (jsdom + @testing-library/
+      # react) -- same reason the two steps above run --filter @civitasone/web.
+      - name: Run render-smoke contract test (Vitest, jsdom)
+        run: pnpm --filter @civitasone/web exec vitest run tests/contract/render-smoke.contract.test.ts
+
       # R5 — CRM contract / link integrity. BLOCKING. Fails on any /crm link
       # that points at a non-existent Next.js route (dead navigation tile) or
       # any CRM API path the web app calls that crm-service does not register.
@@ -876,6 +889,43 @@ jobs:
               process.exit(1);
             }
             console.log('All ' + map.counts.wired + ' screens are WIRED (' + knownKeys.size + ' tracked exceptions, see known-broken-chains.json).');
+          "
+
+      # COMP-006 (tranche 2) — coverage ratchet. A screen counts as covered
+      # once it's WIRED *or* has a loader-manifest.json entry (see
+      # apps/web/tests/contract/render-smoke.contract.test.ts, which is what
+      # actually renders each entry and regresses the build if one breaks --
+      # this step only re-checks the resulting PERCENTAGE, cheaply, without
+      # needing jsdom/RTL in this job). FLOOR is a ratchet, same pattern as
+      # scripts/ci/rtl-check.mjs: it must only go up. Raise it when a future
+      # tranche's real, re-verified coverage clears it with room to spare --
+      # never lower it to make a change land.
+      - name: "Gate — Screen Verification Gate coverage ratchet (COMP-006 DoD: >=90%)"
+        run: |
+          node -e "
+            const fs = require('fs');
+            const FLOOR_PCT = 90;
+            const map = JSON.parse(fs.readFileSync('scripts/contract/screen-map.json', 'utf8'));
+            const manifest = JSON.parse(fs.readFileSync('scripts/contract/loader-manifest.json', 'utf8'));
+            const totalPages = map.counts.totalPages;
+            if (!totalPages) {
+              console.error('screen-map.json has no counts.totalPages -- regenerate with the current scripts/contract/screen-map.mjs.');
+              process.exit(1);
+            }
+            const noLoaderScreens = new Set(map.rows.filter(r => r.status === 'NO_LOADER').map(r => \`\${r.module}::\${r.screen}\`));
+            const staleEntries = manifest.entries.filter(e => !noLoaderScreens.has(\`\${e.module}::\${e.screen}\`));
+            if (staleEntries.length > 0) {
+              console.error(staleEntries.length + ' loader-manifest.json entry(ies) no longer correspond to a NO_LOADER screen -- remove them (see apps/web/tests/contract/render-smoke.contract.test.ts, which asserts this same check with jsdom rendering, not just this cheap re-check):');
+              staleEntries.forEach(e => console.error('  ' + e.module + e.screen));
+              process.exit(1);
+            }
+            const coveredPages = (totalPages - noLoaderScreens.size) + manifest.entries.length;
+            const coveragePct = coveredPages / totalPages * 100;
+            console.log('Screen Verification Gate coverage: ' + coveragePct.toFixed(1) + '% (' + coveredPages + '/' + totalPages + ' page.tsx -- ' + (totalPages - noLoaderScreens.size) + ' WIRED-or-broken-but-tracked + ' + manifest.entries.length + ' loader-manifest-confirmed). Floor: ' + FLOOR_PCT + '%.');
+            if (coveragePct < FLOOR_PCT) {
+              console.error('Coverage dropped below the ' + FLOOR_PCT + '% ratchet floor -- a screen left the loader-manifest without a replacement, or totalPages grew faster than manifest entries were added for the new screens.');
+              process.exit(1);
+            }
           "
       - name: Start mock gateway on port 8080
         run: node scripts/ci/start-mock-gateway.mjs &
