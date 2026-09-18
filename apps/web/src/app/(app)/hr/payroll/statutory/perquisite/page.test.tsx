@@ -1,5 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen } from "@testing-library/react";
+import { NextIntlClientProvider } from "next-intl";
+import enMessages from "@/messages/en.json";
 
 const fetchJsonMock = vi.fn();
 vi.mock("@/app/_data/apiClient", () => ({
@@ -11,6 +13,19 @@ vi.mock("next/navigation", () => ({
 
 import PerquisitePage from "./page";
 
+// UX-017: PerquisitePage (Server Component, getTranslations("perquisite"))
+// also renders EmployeeFyLookup and PerquisiteComponentForm, both "use
+// client" components that call useTranslations -- so every render needs a
+// real NextIntlClientProvider in the tree, same pattern as
+// hr/payroll/disbursement/page.test.tsx (tranche 9).
+function renderPage(ui: React.ReactElement) {
+  render(
+    <NextIntlClientProvider locale="en" messages={enMessages}>
+      {ui}
+    </NextIntlClientProvider>,
+  );
+}
+
 describe("PerquisitePage", () => {
   beforeEach(() => {
     fetchJsonMock.mockReset();
@@ -18,7 +33,7 @@ describe("PerquisitePage", () => {
 
   it("prompts for employee and FY when none is selected", async () => {
     const ui = await PerquisitePage({ searchParams: {} });
-    render(ui);
+    renderPage(ui);
     expect(screen.getByText("Select an employee and financial year")).toBeInTheDocument();
     expect(fetchJsonMock).not.toHaveBeenCalled();
   });
@@ -35,14 +50,14 @@ describe("PerquisitePage", () => {
       source: "api",
     });
     const ui = await PerquisitePage({ searchParams: { employeeId: "e1", fy: "2026-27" } });
-    render(ui);
+    renderPage(ui);
     expect(screen.getByText("Test Employee")).toBeInTheDocument();
   });
 
   it("renders an empty state when no Form 12BA data is found", async () => {
     fetchJsonMock.mockResolvedValue({ data: null, source: "api" });
     const ui = await PerquisitePage({ searchParams: { employeeId: "e1", fy: "2026-27" } });
-    render(ui);
+    renderPage(ui);
     expect(screen.getByText("No Form 12BA data")).toBeInTheDocument();
   });
 });

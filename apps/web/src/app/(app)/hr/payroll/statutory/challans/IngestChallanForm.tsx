@@ -2,10 +2,14 @@
 
 import { useId, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { Button, Card, ConfirmDialog } from "../../../../../_components/ds";
 import { browserJson } from "@/lib/api/browserClient";
 
+type ChallanInvalidField = "bsr" | "amt" | "serial" | "date";
+
 export function IngestChallanForm({ period }: { period: string }) {
+  const t = useTranslations("ingestChallanForm");
   const router = useRouter();
   const [challanPeriod, setChallanPeriod] = useState(period);
   const [bsrCode, setBsrCode] = useState("");
@@ -18,6 +22,13 @@ export function IngestChallanForm({ period }: { period: string }) {
   const [dialogError, setDialogError] = useState<string | undefined>();
   const [message, setMessage] = useState<string | null>(null);
   const [tone, setTone] = useState<"good" | "bad">("good");
+  // UX-017: message is now translated display text, so it can no longer be
+  // compared/prefix-matched to decide which field(s) are invalid (same bug
+  // class as PtSlabForm.tsx/LwfConfigForm.tsx, tranche 12) -- invalidFields
+  // is a stable, untranslated identity kept separately from the display
+  // string. A Set rather than a single value (unlike PtSlabForm) because the
+  // serial/date branch below can flag both fields invalid at once.
+  const [invalidFields, setInvalidFields] = useState<Set<ChallanInvalidField>>(new Set());
 
   const periodId = useId();
   const bsrId = useId();
@@ -30,30 +41,37 @@ export function IngestChallanForm({ period }: { period: string }) {
   const amtRef = useRef<HTMLInputElement>(null);
   const serialRef = useRef<HTMLInputElement>(null);
   const dateRef = useRef<HTMLInputElement>(null);
-  const bsrInvalid = tone === "bad" && !!message && message.startsWith("BSR");
-  const amtInvalid = tone === "bad" && !!message && message.startsWith("TDS amount");
-  const serialInvalid = tone === "bad" && !!message && message.startsWith("Challan serial") && !challanSerial.trim();
-  const dateInvalid = tone === "bad" && !!message && message.startsWith("Challan serial") && !depositDate;
+  const bsrInvalid = invalidFields.has("bsr");
+  const amtInvalid = invalidFields.has("amt");
+  const serialInvalid = invalidFields.has("serial");
+  const dateInvalid = invalidFields.has("date");
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setMessage(null);
+    setInvalidFields(new Set());
     if (!/^\d{7}$/.test(bsrCode)) {
       setTone("bad");
-      setMessage("BSR code must be a 7-digit RBI code.");
+      setMessage(t("bsrCodeInvalidError"));
+      setInvalidFields(new Set(["bsr"]));
       bsrRef.current?.focus();
       return;
     }
     const amt = parseFloat(tdsAmount);
     if (Number.isNaN(amt) || amt < 0) {
       setTone("bad");
-      setMessage("TDS amount must be a valid rupee amount.");
+      setMessage(t("tdsAmountInvalidError"));
+      setInvalidFields(new Set(["amt"]));
       amtRef.current?.focus();
       return;
     }
     if (!challanSerial.trim() || !depositDate) {
       setTone("bad");
-      setMessage("Challan serial and deposit date are required.");
+      setMessage(t("serialDateRequiredError"));
+      const missing = new Set<ChallanInvalidField>();
+      if (!challanSerial.trim()) missing.add("serial");
+      if (!depositDate) missing.add("date");
+      setInvalidFields(missing);
       (!challanSerial.trim() ? serialRef : dateRef).current?.focus();
       return;
     }
@@ -78,11 +96,12 @@ export function IngestChallanForm({ period }: { period: string }) {
       });
       setConfirmOpen(false);
       setTone("good");
-      setMessage(`Challan ingested for ${challanPeriod}.`);
+      setInvalidFields(new Set());
+      setMessage(t("ingestedMessage", { period: challanPeriod }));
       setBsrCode(""); setChallanSerial(""); setDepositDate(""); setTdsAmount("");
       router.refresh();
     } catch (err) {
-      setDialogError(err instanceof Error ? err.message : "Network error. Please try again.");
+      setDialogError(err instanceof Error ? err.message : t("networkError"));
     } finally {
       setBusy(false);
     }
@@ -90,12 +109,12 @@ export function IngestChallanForm({ period }: { period: string }) {
 
   return (
     <form onSubmit={handleSubmit} style={{ marginBottom: 16 }}>
-      <Card title="Ingest TDS Challan" padding>
+      <Card title={t("formTitle")} padding>
         <div style={{ display: "grid", gap: 14 }}>
           <div style={{ display: "grid", gap: 14, gridTemplateColumns: "repeat(auto-fit,minmax(160px,1fr))" }}>
             <div style={{ display: "grid", gap: 6 }}>
               <label htmlFor={periodId} style={{ fontSize: 13, fontWeight: 600 }}>
-                Period <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
+                {t("periodLabel")} <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
               </label>
               <input
                 id={periodId}
@@ -108,7 +127,7 @@ export function IngestChallanForm({ period }: { period: string }) {
             </div>
             <div style={{ display: "grid", gap: 6 }}>
               <label htmlFor={bsrId} style={{ fontSize: 13, fontWeight: 600 }}>
-                BSR Code <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
+                {t("bsrCodeLabel")} <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
               </label>
               <input
                 id={bsrId}
@@ -124,7 +143,7 @@ export function IngestChallanForm({ period }: { period: string }) {
             </div>
             <div style={{ display: "grid", gap: 6 }}>
               <label htmlFor={serialId} style={{ fontSize: 13, fontWeight: 600 }}>
-                Challan Serial <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
+                {t("challanSerialLabel")} <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
               </label>
               <input
                 id={serialId}
@@ -139,7 +158,7 @@ export function IngestChallanForm({ period }: { period: string }) {
             </div>
             <div style={{ display: "grid", gap: 6 }}>
               <label htmlFor={dateId} style={{ fontSize: 13, fontWeight: 600 }}>
-                Deposit Date <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
+                {t("depositDateLabel")} <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
               </label>
               <input
                 id={dateId}
@@ -154,20 +173,20 @@ export function IngestChallanForm({ period }: { period: string }) {
               />
             </div>
             <div style={{ display: "grid", gap: 6 }}>
-              <label htmlFor={formTypeId} style={{ fontSize: 13, fontWeight: 600 }}>Form Type</label>
+              <label htmlFor={formTypeId} style={{ fontSize: 13, fontWeight: 600 }}>{t("formTypeLabel")}</label>
               <select
                 id={formTypeId}
                 value={formType}
                 onChange={(e) => setFormType(e.target.value as "24Q" | "26Q")}
                 style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44, background: "#fff" }}
               >
-                <option value="24Q">24Q (Salary)</option>
-                <option value="26Q">26Q (Non-salary)</option>
+                <option value="24Q">{t("formType24qOption")}</option>
+                <option value="26Q">{t("formType26qOption")}</option>
               </select>
             </div>
             <div style={{ display: "grid", gap: 6 }}>
               <label htmlFor={amtId} style={{ fontSize: 13, fontWeight: 600 }}>
-                TDS Amount (₹) <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
+                {t("tdsAmountLabel")} <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
               </label>
               <input
                 id={amtId}
@@ -185,7 +204,7 @@ export function IngestChallanForm({ period }: { period: string }) {
 
           <div>
             <Button type="submit" style={{ minHeight: 44 }} disabled={busy}>
-              Ingest Challan
+              {t("submitBtn")}
             </Button>
           </div>
 
@@ -205,16 +224,19 @@ export function IngestChallanForm({ period }: { period: string }) {
 
       <ConfirmDialog
         open={confirmOpen}
-        title="Ingest this TDS challan?"
-        confirmLabel="Confirm & Ingest"
+        title={t("confirmTitle")}
+        confirmLabel={t("confirmLabel")}
         busy={busy}
         errorMessage={dialogError}
-        description={
-          <>
-            Ingest {formType} challan for period <strong>{challanPeriod}</strong>: BSR {bsrCode}, serial {challanSerial},
-            TDS ₹{tdsAmount || 0} deposited on {depositDate || "—"}.
-          </>
-        }
+        description={t.rich("confirmDescription", {
+          strong: (chunks) => <strong>{chunks}</strong>,
+          formType,
+          period: challanPeriod,
+          bsr: bsrCode,
+          serial: challanSerial,
+          amount: tdsAmount || 0,
+          date: depositDate || "—",
+        })}
         onConfirm={() => void ingestChallan()}
         onCancel={() => !busy && setConfirmOpen(false)}
       />

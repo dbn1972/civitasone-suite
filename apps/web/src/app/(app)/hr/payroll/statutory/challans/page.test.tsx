@@ -1,5 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen } from "@testing-library/react";
+import { NextIntlClientProvider } from "next-intl";
+import enMessages from "@/messages/en.json";
 
 const fetchJsonMock = vi.fn();
 vi.mock("@/app/_data/apiClient", () => ({
@@ -10,6 +12,19 @@ vi.mock("next/navigation", () => ({
 }));
 
 import ChallansPage from "./page";
+
+// UX-017: ChallansPage (Server Component, getTranslations("challans")) also
+// renders PeriodSelector and IngestChallanForm, both "use client" components
+// that call useTranslations -- so every render needs a real
+// NextIntlClientProvider in the tree, same pattern as
+// hr/payroll/disbursement/page.test.tsx (tranche 9).
+function renderPage(ui: React.ReactElement) {
+  render(
+    <NextIntlClientProvider locale="en" messages={enMessages}>
+      {ui}
+    </NextIntlClientProvider>,
+  );
+}
 
 describe("ChallansPage", () => {
   beforeEach(() => {
@@ -35,7 +50,7 @@ describe("ChallansPage", () => {
     });
 
     const ui = await ChallansPage({ searchParams: { period: "2026-06" } });
-    render(ui);
+    renderPage(ui);
     expect(screen.getByText("C1")).toBeInTheDocument();
   });
 
@@ -48,7 +63,7 @@ describe("ChallansPage", () => {
     });
 
     const ui = await ChallansPage({ searchParams: { period: "2026-06" } });
-    render(ui);
+    renderPage(ui);
     expect(screen.getByText("No challans ingested for this period")).toBeInTheDocument();
   });
 });

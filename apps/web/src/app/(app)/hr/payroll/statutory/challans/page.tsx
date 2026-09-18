@@ -1,3 +1,4 @@
+import { getTranslations } from "next-intl/server";
 import { PageHeader, StatGrid, StatCard, Card, DataTable } from "../../../../../_components/ds";
 import { DataSourceBadge } from "../../../../../_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
@@ -60,6 +61,7 @@ async function getReconciliation(period: string): Promise<LoaderResult<Reconcile
 }
 
 export default async function ChallansPage({ searchParams }: { searchParams?: { period?: string } }) {
+  const t = await getTranslations("challans");
   const period = searchParams?.period && /^\d{4}-\d{2}$/.test(searchParams.period) ? searchParams.period : currentPeriod();
 
   const [{ data: challans, source: challansSource }, { data: reconciliation, source: reconcileSource }] = await Promise.all([
@@ -70,52 +72,52 @@ export default async function ChallansPage({ searchParams }: { searchParams?: { 
   const source = challansSource === "error" || reconcileSource === "error" ? "error" : "api";
 
   const columns: { key: keyof ChallanRow & string; label: string; align?: "left" | "right"; cellType?: "amount" | "status" }[] = [
-    { key: "cin", label: "CIN" },
-    { key: "bsrCode", label: "BSR Code" },
-    { key: "challanSerial", label: "Serial" },
-    { key: "depositDate", label: "Deposit Date" },
-    { key: "section", label: "Section" },
-    { key: "tdsAmountMinor", label: "TDS Amount", align: "right", cellType: "amount" },
-    { key: "totalAmountMinor", label: "Total Amount", align: "right", cellType: "amount" },
-    { key: "status", label: "Status", cellType: "status" },
+    { key: "cin", label: t("colCin") },
+    { key: "bsrCode", label: t("colBsrCode") },
+    { key: "challanSerial", label: t("colSerial") },
+    { key: "depositDate", label: t("colDepositDate") },
+    { key: "section", label: t("colSection") },
+    { key: "tdsAmountMinor", label: t("colTdsAmount"), align: "right", cellType: "amount" },
+    { key: "totalAmountMinor", label: t("colTotalAmount"), align: "right", cellType: "amount" },
+    { key: "status", label: t("colStatus"), cellType: "status" },
   ];
 
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
-        title="TDS Challans & Reconciliation"
-        subtitle="Challan ingestion and deducted-vs-deposited TDS reconciliation, ahead of 24Q/26Q filing."
+        title={t("title")}
+        subtitle={t("subtitle")}
         back="/hr/payroll/statutory"
       />
-      <DataSourceBadge source={source === "error" ? "error" : "api"} message="Couldn't load — showing nothing" />
+      <DataSourceBadge source={source === "error" ? "error" : "api"} message={t("loadErrorMessage")} />
 
       <PeriodSelector period={period} />
 
       <StatGrid>
-        <StatCard icon="🧾" iconBg="var(--infobg)" label="Challans for Period" value={challans.length} />
+        <StatCard icon="🧾" iconBg="var(--infobg)" label={t("statChallansForPeriod")} value={challans.length} />
         <StatCard
           icon={reconciliation?.matched ? "✅" : "⚠️"}
           iconBg={reconciliation?.matched ? "#e6f7f0" : "#fdecea"}
-          label="Reconciliation Status"
-          value={reconciliation?.perPeriod[0]?.status ?? "unknown"}
+          label={t("statReconciliationStatus")}
+          value={reconciliation?.perPeriod[0]?.status ?? t("unknownStatus")}
         />
-        <StatCard icon="📉" iconBg="var(--warnbg)" label="Variance" value={reconciliation ? formatMoney(reconciliation.varianceMinor) : "—"} />
-        <StatCard icon="💰" iconBg="var(--goodbg)" label="TDS Deposited" value={reconciliation ? formatMoney(reconciliation.totalDepositedMinor) : "—"} />
+        <StatCard icon="📉" iconBg="var(--warnbg)" label={t("statVariance")} value={reconciliation ? formatMoney(reconciliation.varianceMinor) : "—"} />
+        <StatCard icon="💰" iconBg="var(--goodbg)" label={t("statTdsDeposited")} value={reconciliation ? formatMoney(reconciliation.totalDepositedMinor) : "—"} />
       </StatGrid>
 
       <IngestChallanForm period={period} />
 
-      <Card title={`Challans — ${period}`}>
+      <Card title={t("historyCardTitle", { period })}>
         <DataTable<ChallanRow>
           columns={columns}
           rows={challans}
           sortable
           filterable
-          filterPlaceholder="Filter by BSR code or CIN…"
+          filterPlaceholder={t("filterPlaceholder")}
           pageSize={15}
           emptyIcon="🧾"
-          emptyTitle="No challans ingested for this period"
-          emptyMessage="Ingest a TDS challan using the form above."
+          emptyTitle={t("emptyTitle")}
+          emptyMessage={t("emptyMessage")}
         />
       </Card>
     </main>

@@ -2,9 +2,11 @@
 
 import { useId, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { Button, Card } from "../../../../../_components/ds";
 
 export function PeriodSelector({ period }: { period: string }) {
+  const t = useTranslations("periodSelector");
   const router = useRouter();
   const [value, setValue] = useState(period);
   const [error, setError] = useState<string | null>(null);
@@ -15,7 +17,7 @@ export function PeriodSelector({ period }: { period: string }) {
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!/^\d{4}-\d{2}$/.test(value)) {
-      setError("Choose a period (YYYY-MM) to view.");
+      setError(t("requiredError"));
       ref.current?.focus();
       return;
     }
@@ -29,7 +31,7 @@ export function PeriodSelector({ period }: { period: string }) {
         <div style={{ display: "flex", gap: 12, alignItems: "flex-end", flexWrap: "wrap" }}>
           <div style={{ display: "grid", gap: 6 }}>
             <label htmlFor={id} style={{ fontSize: 13, fontWeight: 600 }}>
-              Period <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
+              {t("periodLabel")} <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
             </label>
             <input
               id={id}
@@ -43,7 +45,7 @@ export function PeriodSelector({ period }: { period: string }) {
               style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
             />
           </div>
-          <Button type="submit" variant="primary" style={{ minHeight: 44 }}>View Period</Button>
+          <Button type="submit" variant="primary" style={{ minHeight: 44 }}>{t("submitBtn")}</Button>
         </div>
         {error && (
           <p id={errId} role="alert" className="pill bad" style={{ width: "fit-content", marginTop: 10 }}>

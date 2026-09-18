@@ -2,9 +2,11 @@
 
 import { useId, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { Button, Card } from "../../../../../_components/ds";
 
 export function EmployeeFyLookup({ employeeId, fy }: { employeeId: string; fy: string }) {
+  const t = useTranslations("employeeFyLookup");
   const router = useRouter();
   const [empId, setEmpId] = useState(employeeId);
   const [fyValue, setFyValue] = useState(fy);
@@ -20,7 +22,7 @@ export function EmployeeFyLookup({ employeeId, fy }: { employeeId: string; fy: s
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!empId.trim() || !fyValue.trim()) {
-      setError("Employee ID and Financial Year are both required.");
+      setError(t("requiredError"));
       (!empId.trim() ? empRef : fyRef).current?.focus();
       return;
     }
@@ -30,11 +32,11 @@ export function EmployeeFyLookup({ employeeId, fy }: { employeeId: string; fy: s
 
   return (
     <form onSubmit={handleSubmit} style={{ marginBottom: 16 }}>
-      <Card title="Look Up Form 12BA" padding>
+      <Card title={t("formTitle")} padding>
         <div style={{ display: "flex", gap: 12, alignItems: "flex-end", flexWrap: "wrap" }}>
           <div style={{ display: "grid", gap: 6 }}>
             <label htmlFor={empIdId} style={{ fontSize: 13, fontWeight: 600 }}>
-              Employee ID <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
+              {t("employeeIdLabel")} <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
             </label>
             <input
               id={empIdId}
@@ -49,21 +51,21 @@ export function EmployeeFyLookup({ employeeId, fy }: { employeeId: string; fy: s
           </div>
           <div style={{ display: "grid", gap: 6 }}>
             <label htmlFor={fyId} style={{ fontSize: 13, fontWeight: 600 }}>
-              Financial Year <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
+              {t("financialYearLabel")} <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
             </label>
             <input
               id={fyId}
               ref={fyRef}
               value={fyValue}
               onChange={(e) => setFyValue(e.target.value)}
-              placeholder="e.g. 2026-27"
+              placeholder={t("financialYearPlaceholder")}
               aria-required="true"
               aria-invalid={fyInvalid || undefined}
               aria-describedby={fyInvalid ? errId : undefined}
               style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
             />
           </div>
-          <Button type="submit" variant="primary" style={{ minHeight: 44 }}>View Form 12BA</Button>
+          <Button type="submit" variant="primary" style={{ minHeight: 44 }}>{t("submitBtn")}</Button>
         </div>
         {error && (
           <p id={errId} role="alert" className="pill bad" style={{ width: "fit-content", marginTop: 10 }}>

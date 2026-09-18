@@ -1,3 +1,4 @@
+import { getTranslations } from "next-intl/server";
 import { PageHeader, StatGrid, StatCard, Card, EmptyState } from "../../../../../_components/ds";
 import { DataSourceBadge } from "../../../../../_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
@@ -37,6 +38,7 @@ async function getForm12BA(employeeId: string, fy: string): Promise<LoaderResult
 }
 
 export default async function PerquisitePage({ searchParams }: { searchParams?: { employeeId?: string; fy?: string } }) {
+  const t = await getTranslations("perquisite");
   const employeeId = searchParams?.employeeId?.trim();
   const fy = searchParams?.fy?.trim();
   const canLookup = !!employeeId && !!fy;
@@ -53,18 +55,18 @@ export default async function PerquisitePage({ searchParams }: { searchParams?: 
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
-        title="Perquisites & Form 12BA"
-        subtitle="Itemised perquisite components (Sec 17(2)) and the statutory Form 12BA statement."
+        title={t("title")}
+        subtitle={t("subtitle")}
         back="/hr/payroll/statutory"
       />
-      {canLookup && <DataSourceBadge source={source === "error" ? "error" : "api"} message="Couldn't load — showing nothing" />}
+      {canLookup && <DataSourceBadge source={source === "error" ? "error" : "api"} message={t("loadErrorMessage")} />}
 
       {canLookup && form12ba && (
         <StatGrid>
-          <StatCard icon="📋" iconBg="var(--infobg)" label="Perquisite Items" value={perqCount} />
-          <StatCard icon="💰" iconBg="var(--goodbg)" label="Total Taxable Value" value={formatMoney(totalPerqMinor)} />
-          <StatCard icon="📈" iconBg="var(--warnbg)" label="Largest Perquisite" value={formatMoney(maxPerqMinor)} />
-          <StatCard icon="📅" iconBg="var(--goodbg)" label="Financial Year" value={form12ba.fy} />
+          <StatCard icon="📋" iconBg="var(--infobg)" label={t("statPerquisiteItems")} value={perqCount} />
+          <StatCard icon="💰" iconBg="var(--goodbg)" label={t("statTotalTaxableValue")} value={formatMoney(totalPerqMinor)} />
+          <StatCard icon="📈" iconBg="var(--warnbg)" label={t("statLargestPerquisite")} value={formatMoney(maxPerqMinor)} />
+          <StatCard icon="📅" iconBg="var(--goodbg)" label={t("statFinancialYear")} value={form12ba.fy} />
         </StatGrid>
       )}
 
@@ -72,43 +74,43 @@ export default async function PerquisitePage({ searchParams }: { searchParams?: 
 
       <PerquisiteComponentForm defaultEmployeeId={employeeId ?? ""} defaultFy={fy ?? ""} />
 
-      <Card title="Form 12BA">
+      <Card title={t("form12baCardTitle")}>
         {!canLookup ? (
           <EmptyState
             icon="📄"
-            title="Select an employee and financial year"
-            message="Enter an employee ID and financial year above to view their Form 12BA statement of perquisites."
+            title={t("selectEmployeeFyTitle")}
+            message={t("selectEmployeeFyMessage")}
           />
         ) : !form12ba ? (
           <EmptyState
             icon="📄"
-            title="No Form 12BA data"
-            message={`No perquisite data found for the given employee and FY ${fy}.`}
+            title={t("noForm12baTitle")}
+            message={t("noForm12baMessage", { fy: fy ?? "" })}
           />
         ) : (
           <div style={{ display: "grid", gap: 14 }}>
             <div style={{ display: "flex", gap: 24, flexWrap: "wrap" }}>
               <div>
-                <div style={{ fontSize: 12, color: "var(--ink2)" }}>Employee</div>
+                <div style={{ fontSize: 12, color: "var(--ink2)" }}>{t("employeeLabel")}</div>
                 <div style={{ fontSize: 15, fontWeight: 600 }}>{form12ba.employee.name || form12ba.employee.employeeId}</div>
               </div>
               <div>
-                <div style={{ fontSize: 12, color: "var(--ink2)" }}>PAN</div>
+                <div style={{ fontSize: 12, color: "var(--ink2)" }}>{t("panLabel")}</div>
                 <div style={{ fontSize: 15, fontWeight: 600 }}>{form12ba.employee.pan || form12ba.employee.panFlag}</div>
               </div>
               <div>
-                <div style={{ fontSize: 12, color: "var(--ink2)" }}>Total Perquisites</div>
+                <div style={{ fontSize: 12, color: "var(--ink2)" }}>{t("totalPerquisitesLabel")}</div>
                 <div style={{ fontSize: 15, fontWeight: 700 }}>{formatMoney(form12ba.totalPerquisitesMinor)}</div>
               </div>
             </div>
             <table style={{ width: "100%", borderCollapse: "collapse" }}>
-              <caption className="sr-only">Itemised perquisites under Section 17(2), Form 12BA</caption>
+              <caption className="sr-only">{t("tableCaption")}</caption>
               <thead>
                 <tr>
-                  <th scope="col" style={{ textAlign: "left", padding: "6px 8px", fontSize: 13 }}>Sl.</th>
-                  <th scope="col" style={{ textAlign: "left", padding: "6px 8px", fontSize: 13 }}>Nature</th>
-                  <th scope="col" style={{ textAlign: "left", padding: "6px 8px", fontSize: 13 }}>Description</th>
-                  <th scope="col" style={{ textAlign: "right", padding: "6px 8px", fontSize: 13 }}>Taxable Value</th>
+                  <th scope="col" style={{ textAlign: "left", padding: "6px 8px", fontSize: 13 }}>{t("colSl")}</th>
+                  <th scope="col" style={{ textAlign: "left", padding: "6px 8px", fontSize: 13 }}>{t("colNature")}</th>
+                  <th scope="col" style={{ textAlign: "left", padding: "6px 8px", fontSize: 13 }}>{t("colDescription")}</th>
+                  <th scope="col" style={{ textAlign: "right", padding: "6px 8px", fontSize: 13 }}>{t("colTaxableValue")}</th>
                 </tr>
               </thead>
               <tbody>
