@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { ConfirmDialog } from "@/app/_components/ds";
+import { Button, ConfirmDialog } from "@/app/_components/ds";
 import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
 import { useFormError } from "@/lib/useFormError";
 import type { OrgHierarchyLevel } from "@/app/_data/loaders";
@@ -147,9 +147,9 @@ export function OrgConfigPage({ initialLevels, source }: { initialLevels: OrgLev
       <div className="card" style={{ marginBottom: 16 }}>
         <div className="card-h">
           <h3 style={{ margin: 0 }}>Indian Government Org Structure</h3>
-          <button type="button" className="btn primary sm" onClick={() => setConfirmSave(true)} disabled={busy || levels.length === 0}>
+          <Button size="sm" onClick={() => setConfirmSave(true)} disabled={busy || levels.length === 0}>
             {busy ? "Saving…" : "Save order"}
-          </button>
+          </Button>
         </div>
         <p style={{ fontSize: 12.5, color: "var(--ink2)", margin: 0, padding: "0 16px 10px" }}>
           Drag rows to reorder reporting levels. Click Edit to rename or update descriptions.
@@ -224,11 +224,11 @@ export function OrgConfigPage({ initialLevels, source }: { initialLevels: OrgLev
                     <td style={{ padding: "10px 16px", textAlign: "center" }}>
                       {isEditing ? (
                         <div style={{ display: "flex", gap: 6, justifyContent: "center" }}>
-                          <button type="button" className="btn primary sm" onClick={saveEdit} style={{ fontSize: 12 }}>Save</button>
-                          <button type="button" className="btn ghost sm" onClick={cancelEdit} style={{ fontSize: 12 }}>Cancel</button>
+                          <Button size="sm" onClick={saveEdit} style={{ fontSize: 12 }}>Save</Button>
+                          <Button variant="ghost" size="sm" onClick={cancelEdit} style={{ fontSize: 12 }}>Cancel</Button>
                         </div>
                       ) : (
-                        <button type="button" className="btn ghost sm" onClick={() => startEdit(level)} style={{ fontSize: 12 }}>Edit</button>
+                        <Button variant="ghost" size="sm" onClick={() => startEdit(level)} style={{ fontSize: 12 }}>Edit</Button>
                       )}
                     </td>
                   </tr>

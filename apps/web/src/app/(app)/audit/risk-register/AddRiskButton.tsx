@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useId, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useFormError } from "@/lib/useFormError";
+import { Button } from "@/app/_components/ds";
 
 const LIKELIHOOD = ["rare", "unlikely", "possible", "likely", "almost_certain"] as const;
 const IMPACT = ["negligible", "minor", "moderate", "major", "catastrophic"] as const;
@@ -70,7 +71,7 @@ export function AddRiskButton() {
 
   return (
     <>
-      <button type="button" className="btn primary" onClick={() => setOpen(true)}>+ Add Risk</button>
+      <Button onClick={() => setOpen(true)}>+ Add Risk</Button>
       {open && (
         <div role="dialog" aria-modal="true" aria-labelledby={titleId}
           style={{ position: "fixed", inset: 0, background: "rgba(16,24,40,.45)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100, padding: 16 }}>
@@ -110,8 +111,8 @@ export function AddRiskButton() {
               <input id="rk-owner" className="inp" value={owner} onChange={(e) => setOwner(e.target.value)} placeholder="CFO Office" />
               {error && <div role="alert" style={{ color: "var(--bad)", fontSize: 13, marginTop: 4 }}>{error}</div>}
               <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 12 }}>
-                <button type="button" className="btn ghost" onClick={close} disabled={busy}>Cancel</button>
-                <button type="button" className="btn primary" onClick={() => void submit()} disabled={busy}>{busy ? "Adding…" : "Add risk"}</button>
+                <Button variant="ghost" onClick={close} disabled={busy}>Cancel</Button>
+                <Button onClick={() => void submit()} disabled={busy}>{busy ? "Adding…" : "Add risk"}</Button>
               </div>
             </div>
           </div>

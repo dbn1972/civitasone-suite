@@ -2,6 +2,7 @@
 
 import { useCallback, useState } from "react";
 import type { AuditComplianceItem } from "@civitasone/types";
+import { Button } from "@/app/_components/ds";
 
 /**
  * NOTE: audit-service exposes no server-side "compliance report" generator
@@ -41,7 +42,7 @@ export function GenerateReportButton({ items }: { items: AuditComplianceItem[] }
 
   return (
     <>
-      <button type="button" className="btn primary" onClick={generate}>Generate Report</button>
+      <Button onClick={generate}>Generate Report</Button>
       {msg && (
         <span role="status" aria-live="polite" style={{ position: "fixed", bottom: 18, right: 18, background: "var(--goodbg)", color: "var(--good)", border: "1px solid var(--goodbd)", borderRadius: 8, padding: "8px 12px", fontSize: 13, zIndex: 100 }}>
           {msg}

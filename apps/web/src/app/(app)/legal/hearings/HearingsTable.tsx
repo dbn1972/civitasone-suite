@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useMemo, useState, type ReactNode } from "react";
-import { ConfirmDialog, DataTable, Segmented } from "../../../_components/ds";
+import { Button, ConfirmDialog, DataTable, Segmented } from "../../../_components/ds";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { formatIndianDate } from "@/lib/formatters";
 import { useSeededResource } from "@/lib/sync/resource";
@@ -207,9 +207,8 @@ export function HearingsTable({ items, source = "api" }: { items: Hearing[]; sou
       label: "Actions",
       sortable: false,
       render: (r) => (
-        <button
-          type="button"
-          className="btn ghost"
+        <Button
+          variant="ghost"
           style={{ fontSize: "0.8rem", padding: "4px 10px", minHeight: 32 }}
           onClick={(e) => {
             e.stopPropagation();
@@ -219,7 +218,7 @@ export function HearingsTable({ items, source = "api" }: { items: Hearing[]; sou
           aria-label={`Set reminder for hearing on case ${r.caseNo}`}
         >
           Set Reminder
-        </button>
+        </Button>
       ),
     },
   ];

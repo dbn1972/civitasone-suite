@@ -12,7 +12,7 @@
 import { useEffect, useId, useMemo, useState } from "react";
 import Link from "next/link";
 import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
-import { EmptyState } from "@/app/_components/ds";
+import { Button, EmptyState } from "@/app/_components/ds";
 import { StatusBadge } from "../../_components/StatusBadge";
 import { formatMoney } from "@/lib/formatters";
 import { rupeesToMinorString } from "@/lib/money";
@@ -63,9 +63,9 @@ export function CampaignList() {
           <h3>Campaigns</h3>
           <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
             {listSource === "error" ? <DataSourceBadge source="error" /> : null}
-            <button type="button" className="btn primary sm" onClick={() => setOpen(true)}>
+            <Button size="sm" onClick={() => setOpen(true)}>
               New campaign
-            </button>
+            </Button>
           </div>
         </div>
 
@@ -443,12 +443,12 @@ function CreateCampaignDialog({
         </div>
 
         <div className="cd-actions">
-          <button type="button" className="btn ghost" onClick={onClose} disabled={busy}>
+          <Button variant="ghost" onClick={onClose} disabled={busy}>
             Cancel
-          </button>
-          <button type="button" className="btn primary" onClick={() => void submit()} disabled={busy} aria-busy={busy}>
+          </Button>
+          <Button onClick={() => void submit()} disabled={busy} aria-busy={busy}>
             {busy ? "Working…" : "Create campaign"}
-          </button>
+          </Button>
         </div>
       </div>
     </div>

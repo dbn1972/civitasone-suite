@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { formatIndianDate } from "@/lib/formatters";
-import { ActionButton } from "@/app/_components/ds";
+import { ActionButton, Button } from "@/app/_components/ds";
 import { useFormError } from "@/lib/useFormError";
 
 type ExportFormat = "json" | "csv";
@@ -304,9 +304,9 @@ export function ExportConsole() {
                       Download token withheld (not the requester, or PII role required).
                     </span>
                   )}
-                  <button type="button" className="btn primary sm" onClick={() => void runVerify()} disabled={verifyBusy}>
+                  <Button size="sm" onClick={() => void runVerify()} disabled={verifyBusy}>
                     {verifyBusy ? "Verifying…" : "Verify integrity"}
-                  </button>
+                  </Button>
                 </div>
               )}
 

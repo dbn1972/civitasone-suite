@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { ConfirmDialog, useConfirmAction } from "../../../../_components/ds";
+import { Button, ConfirmDialog, useConfirmAction } from "../../../../_components/ds";
 import { useFormError } from "@/lib/useFormError";
 
 /**
@@ -84,9 +84,9 @@ export function SeekOpinionForm() {
         ) : null}
       </div>
       <div style={{ marginTop: 16, display: "flex", gap: 8 }}>
-        <button type="submit" className="btn primary" style={{ minHeight: 44 }} disabled={busy}>
+        <Button type="submit" style={{ minHeight: 44 }} disabled={busy}>
           {busy ? "Submitting…" : "Submit request"}
-        </button>
+        </Button>
         <Link href="/legal/opinions" className="btn ghost" style={{ minHeight: 44 }}>Cancel</Link>
       </div>
 

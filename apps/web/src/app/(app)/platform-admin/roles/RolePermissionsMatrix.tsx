@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { ConfirmDialog } from "@/app/_components/ds";
+import { Button, ConfirmDialog } from "@/app/_components/ds";
 import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
 import { toHumanError } from "@/lib/messages";
 import type { AdminRoleSummary, AdminPermissionSummary } from "@/app/_data/loaders";
@@ -75,7 +75,7 @@ function ToggleCell({ granted, provisioned, sod, editable, onToggle }: {
         title="This permission has not been provisioned for this tenant yet"
         style={{
           display: "inline-block", minWidth: 52, padding: "3px 6px", borderRadius: 20, fontSize: 11, fontWeight: 700,
-          border: "1px dashed var(--line)", background: "transparent", color: "var(--ink3)",
+          border: "1px dashed var(--line)", background: "transparent", color: "var(--mut)",
         }}
       >
         —
@@ -257,9 +257,9 @@ export function RolePermissionsMatrix({
               <option value="all">All roles</option>
               {orderedRoles.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
             </select>
-            <button type="button" className="btn primary sm" disabled={changedCount === 0 || busy || loading} onClick={() => setConfirmOpen(true)}>
+            <Button size="sm" disabled={changedCount === 0 || busy || loading} onClick={() => setConfirmOpen(true)}>
               {busy ? "Saving…" : changedCount > 0 ? `Save ${changedCount} change${changedCount === 1 ? "" : "s"}` : "No changes"}
-            </button>
+            </Button>
           </div>
         </div>
 
@@ -276,18 +276,18 @@ export function RolePermissionsMatrix({
             <span>Segregation of Duty violation — submit + approve on the same financial module (GFR 2017 compliant). Super Admin and Platform Admin are exempt.</span>
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
-            <span style={{ padding: "2px 8px", borderRadius: 20, fontSize: 11, fontWeight: 700, border: "1px dashed var(--line)", color: "var(--ink3)" }}>—</span>
+            <span style={{ padding: "2px 8px", borderRadius: 20, fontSize: 11, fontWeight: 700, border: "1px dashed var(--line)", color: "var(--mut)" }}>—</span>
             <span>Permission not yet provisioned for this tenant.</span>
           </div>
         </div>
       </div>
 
       {loading ? (
-        <p style={{ padding: 24, color: "var(--ink3)", fontSize: 13 }}>Loading role permissions…</p>
+        <p style={{ padding: 24, color: "var(--mut)", fontSize: 13 }}>Loading role permissions…</p>
       ) : orderedRoles.length === 0 ? (
-        <p style={{ padding: 24, color: "var(--ink3)", fontSize: 13 }}>No roles are defined for this tenant yet.</p>
+        <p style={{ padding: 24, color: "var(--mut)", fontSize: 13 }}>No roles are defined for this tenant yet.</p>
       ) : modules.length === 0 || actions.length === 0 ? (
-        <p style={{ padding: 24, color: "var(--ink3)", fontSize: 13 }}>No permissions are defined for this tenant yet.</p>
+        <p style={{ padding: 24, color: "var(--mut)", fontSize: 13 }}>No permissions are defined for this tenant yet.</p>
       ) : (
         <div style={{ overflowX: "auto" }}>
           {visibleRoles.map((role) => {

@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ConfirmDialog, useConfirmAction } from "../../../../_components/ds";
+import { Button, ConfirmDialog, useConfirmAction } from "../../../../_components/ds";
 import { useFormError } from "@/lib/useFormError";
 
 type Panel = "brief" | "affidavit" | null;
@@ -150,9 +150,9 @@ export function CaseActions({ caseId }: { caseId: string }) {
 
   return (
     <>
-      <button type="button" className="btn ghost" onClick={() => setPanel("brief")}>Brief counsel</button>
+      <Button variant="ghost" onClick={() => setPanel("brief")}>Brief counsel</Button>
       <Link href="/legal/opinions" className="btn ghost">Legal opinion →</Link>
-      <button type="button" className="btn primary" onClick={() => setPanel("affidavit")}>Upload Affidavit</button>
+      <Button onClick={() => setPanel("affidavit")}>Upload Affidavit</Button>
 
       {panel && (
         <div
@@ -170,7 +170,7 @@ export function CaseActions({ caseId }: { caseId: string }) {
           >
             <div className="card-h">
               <h3 id="case-action-title">{panel === "brief" ? "Brief counsel" : "Upload affidavit"}</h3>
-              <button type="button" className="btn ghost" onClick={close} aria-label="Close dialog">✕</button>
+              <Button variant="ghost" onClick={close} aria-label="Close dialog">✕</Button>
             </div>
 
             {panel === "brief" ? (
@@ -260,10 +260,10 @@ export function CaseActions({ caseId }: { caseId: string }) {
 function DialogFooter({ busy, onCancel, submitLabel }: { busy: boolean; onCancel: () => void; submitLabel: string }) {
   return (
     <div style={{ marginTop: 16, display: "flex", gap: 8 }}>
-      <button type="submit" className="btn primary" style={{ minHeight: 44 }} disabled={busy} aria-busy={busy}>
+      <Button type="submit" style={{ minHeight: 44 }} disabled={busy} aria-busy={busy}>
         {busy ? "Saving…" : submitLabel}
-      </button>
-      <button type="button" className="btn ghost" style={{ minHeight: 44 }} onClick={onCancel} disabled={busy}>Cancel</button>
+      </Button>
+      <Button variant="ghost" style={{ minHeight: 44 }} onClick={onCancel} disabled={busy}>Cancel</Button>
     </div>
   );
 }

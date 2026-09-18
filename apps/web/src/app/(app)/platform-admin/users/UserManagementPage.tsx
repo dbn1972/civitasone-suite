@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ConfirmDialog } from "@/app/_components/ds";
+import { Button, ConfirmDialog } from "@/app/_components/ds";
 import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
 import { useSeededResource } from "@/lib/sync/resource";
 import { errorMessageFromResponse } from "@/lib/api/browserClient";
@@ -174,13 +174,13 @@ export function UserManagementPage({ users: seed, source = "api" }: { users: Pla
         <h3 id="user-mgmt-heading">User directory</h3>
         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
           {selected.size > 0 && (
-            <button type="button" className="btn ghost sm" onClick={() => exportCsv(users.filter((u) => selected.has(u.id)))}>
+            <Button variant="ghost" size="sm" onClick={() => exportCsv(users.filter((u) => selected.has(u.id)))}>
               Export selected ({selected.size})
-            </button>
+            </Button>
           )}
-          <button type="button" className="btn ghost sm" onClick={() => exportCsv(filtered)}>
+          <Button variant="ghost" size="sm" onClick={() => exportCsv(filtered)}>
             Export all ({filtered.length})
-          </button>
+          </Button>
         </div>
       </div>
 
@@ -279,13 +279,13 @@ export function UserManagementPage({ users: seed, source = "api" }: { users: Pla
                   <div style={{ display: "flex", gap: 6 }}>
                     <a href={`/tenant-admin/users/${user.id}`} className="btn ghost sm" style={{ fontSize: 11 }}>Edit</a>
                     {user.status !== "suspended" && (
-                      <button type="button" className="btn ghost sm" style={{ fontSize: 11, color: "var(--bad, #b42318)" }} onClick={() => setSuspendTarget(user)}>
+                      <Button variant="ghost" size="sm" style={{ fontSize: 11, color: "var(--bad, #b42318)" }} onClick={() => setSuspendTarget(user)}>
                         Suspend
-                      </button>
+                      </Button>
                     )}
-                    <button type="button" className="btn ghost sm" style={{ fontSize: 11 }} onClick={() => setResetTarget(user)}>
+                    <Button variant="ghost" size="sm" style={{ fontSize: 11 }} onClick={() => setResetTarget(user)}>
                       Reset pwd
-                    </button>
+                    </Button>
                   </div>
                 </td>
               </tr>
@@ -298,9 +298,9 @@ export function UserManagementPage({ users: seed, source = "api" }: { users: Pla
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 16px", borderTop: "1px solid var(--line)", fontSize: 12.5, color: "var(--ink2)" }}>
         <span>{filtered.length} user{filtered.length === 1 ? "" : "s"}{selected.size > 0 ? ` · ${selected.size} selected` : ""}</span>
         <div style={{ display: "flex", gap: 8 }}>
-          <button type="button" className="btn ghost sm" disabled={safePage === 0} onClick={() => setPage(safePage - 1)}>← Prev</button>
+          <Button variant="ghost" size="sm" disabled={safePage === 0} onClick={() => setPage(safePage - 1)}>← Prev</Button>
           <span style={{ alignSelf: "center" }}>Page {safePage + 1} / {totalPages}</span>
-          <button type="button" className="btn ghost sm" disabled={safePage >= totalPages - 1} onClick={() => setPage(safePage + 1)}>Next →</button>
+          <Button variant="ghost" size="sm" disabled={safePage >= totalPages - 1} onClick={() => setPage(safePage + 1)}>Next →</Button>
         </div>
       </div>
 

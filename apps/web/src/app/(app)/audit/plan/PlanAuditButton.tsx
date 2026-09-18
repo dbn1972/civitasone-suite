@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useId, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useFormError } from "@/lib/useFormError";
+import { Button } from "@/app/_components/ds";
 
 export function PlanAuditButton() {
   const router = useRouter();
@@ -69,7 +70,7 @@ export function PlanAuditButton() {
 
   return (
     <>
-      <button type="button" className="btn primary" onClick={() => setOpen(true)}>+ Plan Audit</button>
+      <Button onClick={() => setOpen(true)}>+ Plan Audit</Button>
       {open && (
         <div role="dialog" aria-modal="true" aria-labelledby={titleId}
           style={{ position: "fixed", inset: 0, background: "rgba(16,24,40,.45)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100, padding: 16 }}>
@@ -109,8 +110,8 @@ export function PlanAuditButton() {
               </select>
               {error && <div role="alert" style={{ color: "var(--bad)", fontSize: 13, marginTop: 4 }}>{error}</div>}
               <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 12 }}>
-                <button type="button" className="btn ghost" onClick={close} disabled={busy}>Cancel</button>
-                <button type="button" className="btn primary" onClick={() => void submit()} disabled={busy}>{busy ? "Planning…" : "Plan audit"}</button>
+                <Button variant="ghost" onClick={close} disabled={busy}>Cancel</Button>
+                <Button onClick={() => void submit()} disabled={busy}>{busy ? "Planning…" : "Plan audit"}</Button>
               </div>
             </div>
           </div>

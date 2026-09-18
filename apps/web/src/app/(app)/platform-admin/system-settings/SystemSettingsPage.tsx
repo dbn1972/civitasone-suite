@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useId, useRef, useState } from "react";
-import { ConfirmDialog } from "@/app/_components/ds";
+import { Button, ConfirmDialog } from "@/app/_components/ds";
 import { toHumanError } from "@/lib/messages";
 
 /* ─── Types ─────────────────────────────────────────────────────────── */
@@ -90,17 +90,17 @@ function SectionCard({
         <h3 style={{ margin: 0 }}>{title}</h3>
         {editing ? (
           <div style={{ display: "flex", gap: 8 }}>
-            <button type="button" className="btn ghost sm" onClick={onCancel} disabled={busy}>
+            <Button variant="ghost" size="sm" onClick={onCancel} disabled={busy}>
               Cancel
-            </button>
-            <button type="button" className="btn primary sm" onClick={onSave} disabled={busy}>
+            </Button>
+            <Button size="sm" onClick={onSave} disabled={busy}>
               {busy ? "Saving…" : "Save"}
-            </button>
+            </Button>
           </div>
         ) : (
-          <button type="button" className="btn ghost sm" onClick={onEdit}>
+          <Button variant="ghost" size="sm" onClick={onEdit}>
             Edit
-          </button>
+          </Button>
         )}
       </div>
       {error ? (
