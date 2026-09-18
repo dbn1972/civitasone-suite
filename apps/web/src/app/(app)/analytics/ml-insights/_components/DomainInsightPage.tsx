@@ -4,6 +4,7 @@ import type { MLDomainEvaluation } from "../_data";
 import { AccuracyTrendChart } from "./AccuracyTrendChart";
 import { FactorBreakdown } from "./FactorBreakdown";
 import { RecentPredictionsTable } from "./RecentPredictionsTable";
+import { ArrowLeft } from "lucide-react";
 
 interface DomainInsightPageProps {
   title: string;
@@ -41,7 +42,7 @@ export function DomainInsightPage({
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
       <nav aria-label="Breadcrumb" className="back">
-        ← <a href="/analytics/ml-insights">ML Insights</a>
+        <ArrowLeft aria-hidden="true" size={14} /> <a href="/analytics/ml-insights">ML Insights</a>
       </nav>
       <PageHeader title={title} subtitle={subtitle} />
       {source === "error" && <DataSourceBadge source="error" />}

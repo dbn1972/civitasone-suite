@@ -7,6 +7,7 @@ import { saveClassification, LEAD_STATUSES, type ClassificationPatch, type Tempe
 import { ClassificationFields, type ClassificationFormValue } from "../../../../../_components/crm/ClassificationFields";
 import { browserFetch, errorMessageFromResponse } from "@/lib/api/browserClient";
 import { Button } from "@/app/_components/ds";
+import { ArrowLeft } from "lucide-react";
 
 type Initial = {
   name: string;
@@ -144,7 +145,7 @@ export default function EditContactForm({ params, initial }: Props) {
 
   return (
     <>
-      <a className="back" href={`/crm/contacts/${params.id}`}>← Contact</a>
+      <a className="back" href={`/crm/contacts/${params.id}`}><ArrowLeft aria-hidden="true" size={14} /> Contact</a>
       <div className="ph" style={{ marginTop: 6 }}><h1>Edit Contact</h1></div>
       {message ? (
         <div role="status" aria-live="polite" className="banner" style={{ background: "#ecfdf3", padding: 12, borderRadius: 12, marginBottom: 16, fontSize: 13 }}>{message}</div>

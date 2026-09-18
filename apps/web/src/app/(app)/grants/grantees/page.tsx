@@ -1,6 +1,7 @@
 import { PageHeader, StatGrid, StatCard, Card } from "@/app/_components/ds";
 import { getGrantees } from "../../../_data/loaders";
 import { GranteesTable } from "./GranteesTable";
+import { ArrowLeft } from "lucide-react";
 
 export default async function GranteesPage() {
   const { data: grantees, source } = await getGrantees();
@@ -17,7 +18,7 @@ export default async function GranteesPage() {
   return (
     <>
       <nav aria-label="Breadcrumb" className="back">
-        ← <a href="/grants">Grants</a>
+        <ArrowLeft aria-hidden="true" size={14} /> <a href="/grants">Grants</a>
       </nav>
       <PageHeader title="Grantees" subtitle="Registered grantee organisations and compliance status." />
       {/* UX-012: the data-source badge now lives inside GranteesTable, driven

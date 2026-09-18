@@ -25,7 +25,7 @@ function TaskNodeBase({ data, selected }: NodeProps) {
         </span>
       </div>
       {data.assignee && (
-        <div className="mt-1 text-[10px] text-slate-400 truncate">
+        <div className="mt-1 text-[10px] text-slate-500 truncate">
           👤 {data.assignee}
         </div>
       )}

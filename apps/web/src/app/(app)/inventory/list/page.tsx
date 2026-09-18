@@ -4,6 +4,7 @@ import { formatMoney, formatIndianDate } from "@/lib/formatters";
 import { getStockItems } from "../../../_data/loaders";
 import { getInventoryCycleCounts, type InventoryCycleCountRow } from "../_data";
 import { InventoryStockListClient } from "./InventoryStockListClient";
+import { ArrowLeft } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 
@@ -30,7 +31,7 @@ export default async function InventoryListPage() {
   return (
     <>
       <nav aria-label="Breadcrumb" className="back">
-        ← <a href="/inventory">Inventory</a>
+        <ArrowLeft aria-hidden="true" size={14} /> <a href="/inventory">Inventory</a>
       </nav>
       <PageHeader
         title="Stock Items"

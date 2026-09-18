@@ -2,6 +2,7 @@ import { PageHeader, StatGrid, StatCard, Card } from "@/app/_components/ds";
 import { getAnalyticsQueryRuns } from "../_data";
 import { QueryResultsView } from "./QueryResultsView";
 import { RunQueryForm } from "./RunQueryForm";
+import { ArrowLeft } from "lucide-react";
 
 export default async function AnalyticsQueriesPage() {
   const { data: runs, source } = await getAnalyticsQueryRuns();
@@ -12,7 +13,7 @@ export default async function AnalyticsQueriesPage() {
   return (
     <>
       <nav aria-label="Breadcrumb" className="back">
-        ← <a href="/analytics">Analytics</a>
+        <ArrowLeft aria-hidden="true" size={14} /> <a href="/analytics">Analytics</a>
       </nav>
       <PageHeader
         title="Query Results"

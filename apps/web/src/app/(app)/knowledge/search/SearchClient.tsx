@@ -83,7 +83,7 @@ export function KnowledgeSearchClient({ initialDocs }: { initialDocs: Doc[] }) {
       titleNode: (
         <div>
           <div style={{ fontWeight: 600 }}>{doc.title}</div>
-          <div style={{ fontSize: "12px", color: "#98a2b3" }}>{doc.author ?? ""}</div>
+          <div style={{ fontSize: "12px", color: "var(--mut)" }}>{doc.author ?? ""}</div>
         </div>
       ),
       category: doc.category,

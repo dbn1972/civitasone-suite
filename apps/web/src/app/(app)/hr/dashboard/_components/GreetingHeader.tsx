@@ -17,7 +17,7 @@ export function GreetingHeader({ userName, pendingCount, payrollDaysLeft, today,
       : "No urgent actions today";
 
   return (
-    <div className="greeting-header" aria-label="Dashboard greeting">
+    <div className="greeting-header">
       <div className="greeting-inner">
         <div className="greeting-text">
           <p className="greeting-eyebrow">HR & Payroll · People Operations</p>

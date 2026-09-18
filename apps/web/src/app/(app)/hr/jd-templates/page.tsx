@@ -143,7 +143,7 @@ export default async function JdTemplatesPage({ searchParams }: { searchParams: 
                     Edit
                   </Link>
                 </div>
-                <p style={{ margin: 0, fontSize: 11, color: "#94a3b8" }}>
+                <p style={{ margin: 0, fontSize: 11, color: "var(--mut)" }}>
                   Used {tmpl.useCount} time{tmpl.useCount !== 1 ? "s" : ""}
                 </p>
               </article>

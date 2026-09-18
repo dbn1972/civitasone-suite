@@ -80,7 +80,7 @@ export function FileAttachments({ fileId, attachments }: Props) {
             {attachments.map((a) => (
               <li key={a.id}>
                 {a.fileName}
-                <span style={{ color: "#94a3b8", marginLeft: 8 }}>{a.uploadedAt.slice(0, 10)}</span>
+                <span style={{ color: "var(--mut)", marginLeft: 8 }}>{a.uploadedAt.slice(0, 10)}</span>
               </li>
             ))}
           </ul>

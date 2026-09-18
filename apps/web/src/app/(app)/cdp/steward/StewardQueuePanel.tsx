@@ -93,7 +93,7 @@ export function StewardQueuePanel() {
           <ErrorState error={toHumanError("load", { area: "merge review queue" })} onRetry={() => void load()} />
         </div>
       ) : loading ? (
-        <p className="pad" style={{ textAlign: "center", color: "#94a3b8" }}>Loading…</p>
+        <p className="pad" style={{ textAlign: "center", color: "var(--mut)" }}>Loading…</p>
       ) : items.length === 0 ? (
         <EmptyState
           icon="✅"

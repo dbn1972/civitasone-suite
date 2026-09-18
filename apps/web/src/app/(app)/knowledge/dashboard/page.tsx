@@ -33,7 +33,7 @@ function CategoryBarChart({ categories }: { categories: { name: string; count: n
         return (
           <g key={cat.name}>
             <rect x={x} y={y} width={barW} height={barH} rx={4} fill="#ca8a04" opacity={opacity} />
-            <text x={x + barW / 2} y={BAR_H - 2} textAnchor="middle" fontSize={9} fill="#98a2b3">
+            <text x={x + barW / 2} y={BAR_H - 2} textAnchor="middle" fontSize={9} fill="#667085">
               {label}
             </text>
           </g>
@@ -60,7 +60,7 @@ function StorageDonut({ usedPct }: { usedPct: number }) {
       <text x="50%" y="46%" textAnchor="middle" dy=".1em" fontSize={22} fontWeight={780} fill="#101828">
         {usedPct.toFixed(0)}%
       </text>
-      <text x="50%" y="63%" textAnchor="middle" fontSize={9.5} fill="#98a2b3">of quota</text>
+      <text x="50%" y="63%" textAnchor="middle" fontSize={9.5} fill="#667085">of quota</text>
     </svg>
   );
 }

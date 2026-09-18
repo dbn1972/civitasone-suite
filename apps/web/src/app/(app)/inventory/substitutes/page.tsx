@@ -2,6 +2,7 @@ import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { PageHeader, StatGrid, StatCard, Card } from "@/app/_components/ds";
 import { getInventorySubstitutes } from "../_data";
 import { SubstitutesTable } from "../SubstitutesTable";
+import { ArrowLeft } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 
@@ -16,7 +17,7 @@ export default async function InventorySubstitutesPage() {
   return (
     <>
       <nav aria-label="Breadcrumb" className="back">
-        ← <a href="/inventory">Inventory</a>
+        <ArrowLeft aria-hidden="true" size={14} /> <a href="/inventory">Inventory</a>
       </nav>
       <PageHeader
         title="Item Substitutes"

@@ -105,7 +105,7 @@ export function LearningPathCard({
 
       {/* Programs */}
       {programs.length === 0 ? (
-        <p style={{ fontSize: 12, color: "#94a3b8", margin: 0 }}>
+        <p style={{ fontSize: 12, color: "var(--mut)", margin: 0 }}>
           No matching courses in LMS. Contact L&amp;D to add relevant programs.
         </p>
       ) : (

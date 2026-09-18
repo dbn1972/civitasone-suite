@@ -27,7 +27,7 @@ const STATUS_CONFIG: Record<
   completed: { icon: "✓", color: "#16a34a", bg: "#dcfce7", label: "Completed" },
   in_progress: { icon: "⟳", color: "#4f46e5", bg: "#ede9fe", label: "In progress" },
   overdue: { icon: "!", color: "#b45309", bg: "#fef3c7", label: "Overdue" },
-  pending: { icon: "○", color: "#94a3b8", bg: "#f1f5f9", label: "Pending" },
+  pending: { icon: "○", color: "var(--mut)", bg: "#f1f5f9", label: "Pending" },
 };
 
 export function OnboardingChecklist({ steps, onComplete }: OnboardingChecklistProps) {

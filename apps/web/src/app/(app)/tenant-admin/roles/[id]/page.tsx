@@ -5,6 +5,7 @@ import { getAdminRoleById } from "../../../../_data/loaders";
 import { Breadcrumb } from "../../Breadcrumb";
 import { PermissionGrid } from "./PermissionGrid";
 import { EditRoleButton } from "./EditRoleButton";
+import { ArrowLeft } from "lucide-react";
 
 export default async function AdminRoleDetailPage({ params }: { params: { id: string } }) {
   const { data: role, source } = await getAdminRoleById(params.id);
@@ -13,7 +14,7 @@ export default async function AdminRoleDetailPage({ params }: { params: { id: st
     return (
       <main className="page-main wrap" aria-labelledby="page-heading">
         <Breadcrumb items={[{ label: "Tenant Admin", href: "/tenant-admin" }, { label: "Manage Roles", href: "/tenant-admin/roles" }, { label: "Not found" }]} />
-        <a href="/tenant-admin/roles" className="back">← Back</a>
+        <a href="/tenant-admin/roles" className="back"><ArrowLeft aria-hidden="true" size={14} /> Back</a>
         <p style={{ color: "var(--civitas-color-text-muted)", marginTop: 16 }}>Role not found.</p>
       </main>
     );
