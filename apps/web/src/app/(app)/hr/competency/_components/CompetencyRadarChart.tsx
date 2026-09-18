@@ -102,7 +102,13 @@ export function CompetencyRadarChart({
           const r   = (lvl / MAX_VAL) * maxR;
           const pt  = polarToCartesian(cx, cy, r, angleFor(0));
           return (
-            <text key={lvl} x={pt.x + 4} y={pt.y} style={{ fontSize: 9, fill: "var(--mut)" }}>
+            // `--mut` (#667085) is ~4.55:1 against the plain grid background here,
+            // but the innermost labels sit right at the polygon-fill/grid-line
+            // edge (hand-measured worst case ~4.1:1 there) -- axe itself can't
+            // score this (short single-digit text content), but the margin is
+            // genuinely too thin. `--ink2` (#475569, ~6.9:1 here) matches what
+            // the axis category labels below already use.
+            <text key={lvl} x={pt.x + 4} y={pt.y} style={{ fontSize: 9, fill: "var(--ink2)" }}>
               {lvl}
             </text>
           );

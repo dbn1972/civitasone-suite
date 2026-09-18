@@ -70,7 +70,13 @@ function StarRating({
             border: "none",
             cursor: "pointer",
             padding: "0 2px",
-            color: n <= active ? "#f59e0b" : "var(--line)",
+            // `--line` is a 1px-border token (#eaecf0, 1.18:1 on white) --
+            // never meant to carry text/icon content, which is why the
+            // unselected star was axe-flagged as `button[aria-label="1 star"]`
+            // color-contrast (serious). `--muted` (#667085, 4.97:1 on white)
+            // is the same token ContractorRatingForm.tsx already uses for its
+            // own unselected-star state.
+            color: n <= active ? "#f59e0b" : "var(--muted)",
             transition: "color 0.1s",
           }}
         >

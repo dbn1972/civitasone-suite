@@ -59,17 +59,17 @@ function getFormula(code: string): string {
 }
 
 const TAXABILITY_STYLE: Record<Taxability, { background: string; color: string; border: string }> = {
-  Taxable: { background: "#fef2f2", color: "#dc2626", border: "1px solid #fecaca" },
-  Exempt: { background: "#f0fdf4", color: "#16a34a", border: "1px solid #bbf7d0" },
-  "Partially Exempt": { background: "#fffbeb", color: "#d97706", border: "1px solid #fde68a" },
+  Taxable: { background: "var(--badbg)", color: "var(--bad)", border: "1px solid var(--badbd)" },
+  Exempt: { background: "var(--goodbg)", color: "var(--good)", border: "1px solid var(--goodbd)" },
+  "Partially Exempt": { background: "var(--warnbg)", color: "var(--warn)", border: "1px solid var(--warnbd)" },
 };
 
 const TYPE_BADGE: Record<string, { bg: string; fg: string }> = {
   earning: { bg: "#eff6ff", fg: "#1d4ed8" },
   allowance: { bg: "#eff6ff", fg: "#1d4ed8" },
-  deduction: { bg: "#fef2f2", fg: "#dc2626" },
-  employer_contribution: { bg: "#f0fdf4", fg: "#16a34a" },
-  reimbursement: { bg: "#fffbeb", fg: "#d97706" },
+  deduction: { bg: "var(--badbg)", fg: "var(--bad)" },
+  employer_contribution: { bg: "var(--goodbg)", fg: "var(--good)" },
+  reimbursement: { bg: "var(--warnbg)", fg: "var(--warn)" },
 };
 
 function TypeBadge({ type }: { type: string }) {
