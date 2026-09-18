@@ -25,7 +25,16 @@
  */
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, cpSync, rmSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
+import {
+  mkdtempSync,
+  cpSync,
+  rmSync,
+  readFileSync,
+  writeFileSync,
+  mkdirSync,
+  readdirSync,
+  existsSync,
+} from "node:fs";
 import { join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 
@@ -43,8 +52,15 @@ interface GuardResult {
 let sandboxRoot: string;
 
 /**
- * A minimal but faithful copy of the repo: the guard only reads
- * .github/workflows, infra/db/bootstrap and scripts/ci.
+ * A minimal but faithful copy of the repo: the guard reads
+ * .github/workflows, infra/db/bootstrap, scripts/ci, and (for its
+ * DB-per-service discovery check) each services/<name>/migrations/*.sql
+ * file -- never a service's own src/dist/tests/node_modules, so those
+ * are deliberately NOT copied (REL-042: an earlier version of this
+ * sandbox predated that check and never grew a services/ entry at all,
+ * which made the guard fail on "services directory not found" against
+ * every sandboxed copy, including the canary's own unmodified-repo
+ * baseline case).
  */
 function makeSandbox(): string {
   const dir = mkdtempSync(join(tmpdir(), "ci-config-guard-canary-"));
@@ -52,6 +68,20 @@ function makeSandbox(): string {
     mkdirSync(join(dir, rel), { recursive: true });
     cpSync(join(REPO_ROOT, rel), join(dir, rel), { recursive: true });
   }
+
+  const servicesRoot = join(REPO_ROOT, "services");
+  for (const svc of readdirSync(servicesRoot)) {
+    const migDir = join(servicesRoot, svc, "migrations");
+    if (existsSync(migDir) === false) continue;
+    const sandboxMigDir = join(dir, "services", svc, "migrations");
+    mkdirSync(sandboxMigDir, { recursive: true });
+    for (const f of readdirSync(migDir)) {
+      if (f.endsWith(".sql")) {
+        cpSync(join(migDir, f), join(sandboxMigDir, f));
+      }
+    }
+  }
+
   return dir;
 }
 
