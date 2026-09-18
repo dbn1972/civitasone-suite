@@ -1,3 +1,4 @@
+import { getTranslations } from "next-intl/server";
 import { PageHeader, StatGrid, StatCard, Card, DataTable } from "../../../../_components/ds";
 import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
@@ -76,6 +77,7 @@ async function getData(): Promise<LoaderResult<Row[]>> {
 }
 
 export default async function ArrearsPage() {
+  const t = await getTranslations("arrears");
   const { data: items, source } = await getData();
 
   const columns: {
@@ -84,29 +86,29 @@ export default async function ArrearsPage() {
     align?: "left" | "right";
     cellType?: "status" | "amount";
   }[] = [
-    { key: "employee_id", label: "Employee" },
-    { key: "component_code", label: "Arrear Type" },
-    { key: "from_period", label: "From Period" },
-    { key: "to_period", label: "To Period" },
-    { key: "difference_minor", label: "Amount", align: "right", cellType: "amount" },
-    { key: "status", label: "Status", cellType: "status" },
-    { key: "reason", label: "Reason" },
+    { key: "employee_id", label: t("colEmployee") },
+    { key: "component_code", label: t("colArrearType") },
+    { key: "from_period", label: t("colFromPeriod") },
+    { key: "to_period", label: t("colToPeriod") },
+    { key: "difference_minor", label: t("colAmount"), align: "right", cellType: "amount" },
+    { key: "status", label: t("colStatus"), cellType: "status" },
+    { key: "reason", label: t("colReason") },
   ];
 
   const totalArrearsMinor = items.reduce((sum, i) => sum + Number(i.difference_minor ?? 0), 0);
 
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
-      <PageHeader title="Arrears Computation" subtitle="Arrears due to DA revision, promotions, and pay fixation." back="/hr" />
-      <DataSourceBadge source={source} message="Couldn't load — showing nothing" />
+      <PageHeader title={t("title")} subtitle={t("subtitle")} back="/hr" />
+      <DataSourceBadge source={source} message={t("loadErrorMessage")} />
       <StatGrid>
-        <StatCard icon="📋" iconBg="var(--infobg)" label="Total" value={items.length} />
-        <StatCard icon="⏳" iconBg="var(--warnbg)" label="Pending" value={items.filter((i) => i.status === "pending").length} />
-        <StatCard icon="✅" iconBg="var(--goodbg)" label="Approved/Paid" value={items.filter((i) => i.status === "approved" || i.status === "paid").length} />
-        <StatCard icon="💰" iconBg="var(--panel)" label="Total Arrears Amount" value={formatMoney(totalArrearsMinor)} />
+        <StatCard icon="📋" iconBg="var(--infobg)" label={t("statTotal")} value={items.length} />
+        <StatCard icon="⏳" iconBg="var(--warnbg)" label={t("statPending")} value={items.filter((i) => i.status === "pending").length} />
+        <StatCard icon="✅" iconBg="var(--goodbg)" label={t("statApprovedPaid")} value={items.filter((i) => i.status === "approved" || i.status === "paid").length} />
+        <StatCard icon="💰" iconBg="var(--panel)" label={t("statTotalArrearsAmount")} value={formatMoney(totalArrearsMinor)} />
       </StatGrid>
-      <Card title="Arrears Register">
-        <DataTable<Row> columns={columns} rows={items} sortable filterable filterPlaceholder="Filter by employee or period…" pageSize={15} emptyIcon="📋" emptyTitle="No arrears computed" emptyMessage="Arrears arise from DA revisions, promotions, and pay fixations applied retroactively. They appear here automatically after each payroll run that includes a backdated revision." />
+      <Card title={t("registerCardTitle")}>
+        <DataTable<Row> columns={columns} rows={items} sortable filterable filterPlaceholder={t("filterPlaceholder")} pageSize={15} emptyIcon="📋" emptyTitle={t("emptyTitle")} emptyMessage={t("emptyMessage")} />
       </Card>
     </main>
   );

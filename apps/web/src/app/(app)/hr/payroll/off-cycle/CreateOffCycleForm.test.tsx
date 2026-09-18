@@ -1,5 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { NextIntlClientProvider } from "next-intl";
+import enMessages from "@/messages/en.json";
 
 const refreshMock = vi.fn();
 vi.mock("next/navigation", () => ({
@@ -8,6 +10,18 @@ vi.mock("next/navigation", () => ({
 
 import { CreateOffCycleForm } from "./CreateOffCycleForm";
 
+// UX-017: CreateOffCycleForm now reads its copy through next-intl
+// (useTranslations("createOffCycleForm")), so every render needs a real
+// provider in the tree -- same pattern as
+// disbursement/BankFileForm.test.tsx (tranche 9).
+function renderForm() {
+  render(
+    <NextIntlClientProvider locale="en" messages={enMessages}>
+      <CreateOffCycleForm />
+    </NextIntlClientProvider>,
+  );
+}
+
 describe("CreateOffCycleForm", () => {
   beforeEach(() => {
     vi.restoreAllMocks();
@@ -15,7 +29,7 @@ describe("CreateOffCycleForm", () => {
   });
 
   it("requires a valid period before opening the confirm dialog", () => {
-    render(<CreateOffCycleForm />);
+    renderForm();
     fireEvent.click(screen.getByRole("button", { name: "Create Off-Cycle Run" }));
     expect(screen.getByText("Period must be in YYYY-MM format, e.g. 2025-06.")).toBeInTheDocument();
   });
@@ -28,7 +42,7 @@ describe("CreateOffCycleForm", () => {
       ),
     );
 
-    render(<CreateOffCycleForm />);
+    renderForm();
     fireEvent.change(screen.getByLabelText(/^Period/), { target: { value: "2025-06" } });
     fireEvent.change(screen.getByLabelText(/^Employee ID/), { target: { value: "e1" } });
     fireEvent.change(screen.getByLabelText(/^Amount/), { target: { value: "5000" } });
@@ -46,7 +60,7 @@ describe("CreateOffCycleForm", () => {
   it("surfaces a clerk-safe error on the confirm dialog, never the server's raw code/status (error path) (UX-020)", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(null, { status: 422 }));
 
-    render(<CreateOffCycleForm />);
+    renderForm();
     fireEvent.change(screen.getByLabelText(/^Period/), { target: { value: "2025-06" } });
     fireEvent.change(screen.getByLabelText(/^Employee ID/), { target: { value: "e1" } });
     fireEvent.change(screen.getByLabelText(/^Amount/), { target: { value: "5000" } });

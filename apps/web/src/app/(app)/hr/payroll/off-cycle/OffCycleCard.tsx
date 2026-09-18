@@ -2,21 +2,37 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { Button, StatusPill, ConfirmDialog } from "../../../../_components/ds";
 import { browserJson } from "@/lib/api/browserClient";
 import { formatMoney } from "@/lib/formatters";
 import type { OffCycleRow } from "./OffCycleList";
 
-const REASON_LABELS: Record<string, string> = {
-  bonus: "Bonus Disbursement",
-  incentive: "Incentive",
-  arrear: "Arrear Payment",
-  adhoc: "Ad-hoc Payment",
-  correction: "Salary Correction",
+type Translator = (key: string, values?: Record<string, string | number | Date>) => string;
+
+// UX-017: this map's keys are the stable backend run_type/reason codes
+// ("bonus", "incentive", ...) -- never translated, only used to look up
+// which message key holds the display text. Same safe pattern as this
+// gap's earlier "STATUS_CHIP-style label lookup object" precedent
+// (hr/leave, tranche 2): translating the VALUES is fine; the KEYS must stay
+// untouched literals since `row.run_type` (the wire value) is compared
+// against them directly.
+const REASON_LABEL_KEYS: Record<string, string> = {
+  bonus: "reasonBonus",
+  incentive: "reasonIncentive",
+  arrear: "reasonArrear",
+  adhoc: "reasonAdhoc",
+  correction: "reasonCorrection",
 };
 
+function reasonLabelFor(t: Translator, runType: string): string {
+  const key = REASON_LABEL_KEYS[runType];
+  return key ? t(key) : runType.replace(/_/g, " ");
+}
+
 function RunCard({ row, onProcess }: { row: OffCycleRow; onProcess: (row: OffCycleRow) => void }) {
-  const reasonLabel = REASON_LABELS[row.run_type] ?? row.run_type.replace(/_/g, " ");
+  const t = useTranslations("offCycleCard");
+  const reasonLabel = reasonLabelFor(t, row.run_type);
   const totalAmount = Number(row.total_amount_minor ?? 0);
   const netAmount = Number(row.total_net_minor ?? 0);
   const empCount = (row.employee_count as number | undefined) ?? null;
@@ -29,7 +45,7 @@ function RunCard({ row, onProcess }: { row: OffCycleRow; onProcess: (row: OffCyc
         <div>
           <div style={{ fontWeight: 700, fontSize: 14 }}>{reasonLabel}</div>
           <div style={{ fontSize: 12, color: "var(--ink2)", marginTop: 2 }}>
-            {"Period: "}
+            {t("periodLabel")}
             <strong>{row.period}</strong>
             {row.description ? " · " + row.description : ""}
           </div>
@@ -42,9 +58,9 @@ function RunCard({ row, onProcess }: { row: OffCycleRow; onProcess: (row: OffCyc
               variant="primary"
               style={{ minHeight: 32, fontSize: 12, padding: "0 14px" }}
               onClick={() => onProcess(row)}
-              aria-label={"Process " + reasonLabel + " run for " + row.period}
+              aria-label={t("processRunAriaLabel", { reason: reasonLabel, period: row.period })}
             >
-              Process Run
+              {t("processRunBtn")}
             </Button>
           )}
         </div>
@@ -53,23 +69,23 @@ function RunCard({ row, onProcess }: { row: OffCycleRow; onProcess: (row: OffCyc
       {/* Stats */}
       <div style={{ padding: "12px 18px", display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))", gap: 12 }}>
         <div>
-          <div style={{ fontSize: 11, color: "var(--ink2)", fontWeight: 600, textTransform: "uppercase", letterSpacing: ".5px" }}>Total Amount</div>
+          <div style={{ fontSize: 11, color: "var(--ink2)", fontWeight: 600, textTransform: "uppercase", letterSpacing: ".5px" }}>{t("statTotalAmount")}</div>
           <div style={{ fontSize: 16, fontWeight: 700, marginTop: 3 }}>{formatMoney(totalAmount)}</div>
         </div>
         {netAmount > 0 && (
           <div>
-            <div style={{ fontSize: 11, color: "var(--ink2)", fontWeight: 600, textTransform: "uppercase", letterSpacing: ".5px" }}>Net Payable</div>
+            <div style={{ fontSize: 11, color: "var(--ink2)", fontWeight: 600, textTransform: "uppercase", letterSpacing: ".5px" }}>{t("statNetPayable")}</div>
             <div style={{ fontSize: 16, fontWeight: 700, marginTop: 3 }}>{formatMoney(netAmount)}</div>
           </div>
         )}
         {empCount !== null && (
           <div>
-            <div style={{ fontSize: 11, color: "var(--ink2)", fontWeight: 600, textTransform: "uppercase", letterSpacing: ".5px" }}>Employees in Scope</div>
+            <div style={{ fontSize: 11, color: "var(--ink2)", fontWeight: 600, textTransform: "uppercase", letterSpacing: ".5px" }}>{t("statEmployeesInScope")}</div>
             <div style={{ fontSize: 16, fontWeight: 700, marginTop: 3 }}>{empCount}</div>
           </div>
         )}
         <div>
-          <div style={{ fontSize: 11, color: "var(--ink2)", fontWeight: 600, textTransform: "uppercase", letterSpacing: ".5px" }}>Approval Status</div>
+          <div style={{ fontSize: 11, color: "var(--ink2)", fontWeight: 600, textTransform: "uppercase", letterSpacing: ".5px" }}>{t("statApprovalStatus")}</div>
           <div style={{ marginTop: 5 }}><StatusPill status={approvalStatus} /></div>
         </div>
       </div>
@@ -78,6 +94,7 @@ function RunCard({ row, onProcess }: { row: OffCycleRow; onProcess: (row: OffCyc
 }
 
 export function OffCycleCards({ rows }: { rows: OffCycleRow[] }) {
+  const t = useTranslations("offCycleCard");
   const router = useRouter();
   const [pendingRow, setPendingRow] = useState<OffCycleRow | null>(null);
   const [busy, setBusy] = useState(false);
@@ -93,11 +110,11 @@ export function OffCycleCards({ rows }: { rows: OffCycleRow[] }) {
         "v1/payroll/off-cycle/" + pendingRow.id + "/process",
         { method: "POST" },
       );
-      setMessage("Off-cycle run for " + pendingRow.period + " processed. Net payable " + formatMoney(res.data.totalNetMinor) + ".");
+      setMessage(t("processedMessage", { period: pendingRow.period, amount: formatMoney(res.data.totalNetMinor) }));
       setPendingRow(null);
       router.refresh();
     } catch (err) {
-      setDialogError(err instanceof Error ? err.message : "Network error. Please try again.");
+      setDialogError(err instanceof Error ? err.message : t("networkError"));
     } finally {
       setBusy(false);
     }
@@ -107,8 +124,8 @@ export function OffCycleCards({ rows }: { rows: OffCycleRow[] }) {
     return (
       <div style={{ textAlign: "center", padding: "40px 20px", color: "var(--ink2)" }}>
         <p style={{ fontSize: 32, margin: "0 0 8px" }}>🗂️</p>
-        <p style={{ fontWeight: 600 }}>No off-cycle runs yet</p>
-        <p style={{ fontSize: 13 }}>Create an off-cycle run using the form above.</p>
+        <p style={{ fontWeight: 600 }}>{t("emptyTitle")}</p>
+        <p style={{ fontSize: 13 }}>{t("emptyMessage")}</p>
       </div>
     );
   }
@@ -128,17 +145,18 @@ export function OffCycleCards({ rows }: { rows: OffCycleRow[] }) {
 
       <ConfirmDialog
         open={pendingRow !== null}
-        title="Process this off-cycle run?"
-        confirmLabel="Process run"
+        title={t("confirmTitle")}
+        confirmLabel={t("confirmLabel")}
         busy={busy}
         errorMessage={dialogError}
         description={
           pendingRow ? (
-            <>
-              Process the {REASON_LABELS[pendingRow.run_type] ?? pendingRow.run_type} run for period{" "}
-              <strong>{pendingRow.period}</strong>, total {formatMoney(pendingRow.total_amount_minor)}.{" "}
-              This computes tax and net payable for every item and is irreversible.
-            </>
+            t.rich("confirmDescription", {
+              reason: reasonLabelFor(t, pendingRow.run_type),
+              period: pendingRow.period,
+              amount: formatMoney(pendingRow.total_amount_minor),
+              strong: (chunks) => <strong>{chunks}</strong>,
+            })
           ) : null
         }
         onConfirm={() => void processRun()}
