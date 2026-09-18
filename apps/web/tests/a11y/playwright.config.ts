@@ -12,6 +12,10 @@ import { defineConfig, devices } from "@playwright/test";
 export default defineConfig({
   testDir: __dirname,
   testMatch: /a11y\.spec\.ts/,
+  // UX-005 tranche 9: clears apps/web/tests/a11y/.a11y-fragments/ exactly once
+  // per run, before any worker starts — see a11y.spec.ts's header comment and
+  // global-setup.ts for why this fixes the fragmented-result-collection bug.
+  globalSetup: "./global-setup",
   // Violations must be deterministic — no retries masking a flaky pass.
   retries: 0,
   // axe is CPU-bound; more than 4 workers starves the Next.js server and causes

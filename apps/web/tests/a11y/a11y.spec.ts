@@ -19,10 +19,45 @@
  *   pnpm --filter @civitasone/web test:a11y            # curated set
  *   A11Y_FULL=1 pnpm --filter @civitasone/web test:a11y # every (app) route
  *   A11Y_BASELINE_WRITE=1 pnpm --filter @civitasone/web test:a11y  # re-baseline
+ *
+ * UX-005 tranche 9 — RESULT COLLECTION (fixes a bug root-caused in tranche 8).
+ *
+ * Every prior full-sweep tranche (4, 5, 8) had to work around the same problem:
+ * this file's findings lived only in a module-level array (`collected`), read
+ * once by a single `test.afterAll()`. Playwright recycles the worker process
+ * running this file whenever a test dies in a way it treats as fatal to the
+ * worker — observed in practice on every one of the 6 `/stock/*` routes (they
+ * permanently redirect to `/inventory` per next.config.mjs; discovery has no
+ * knowledge of redirects, so it used to keep emitting them, and
+ * `assertLandedOnRequestedRoute` correctly failed each one — see discover.ts
+ * for the tranche 9 fix that stops discovering them in the first place). A
+ * fresh worker process re-imports this module from scratch — `collected` reset
+ * to `[]` — and picked up the remaining tests. Each worker-life segment's own
+ * `afterAll` then fired on ONLY the subset it personally ran, and in WRITE mode
+ * `writeFileSync` OVERWROTE `a11y-baseline.json` with just that fragment — the
+ * last segment to finish won, and every other segment's findings silently
+ * vanished from the file (though still visible in that segment's own console
+ * output, which is why every prior tranche's "true" count came from manually
+ * reading list-reporter output rather than the written baseline).
+ *
+ * Fix: each route writes its own result to a small, uniquely-named JSON
+ * fragment file under `.a11y-fragments/` the moment it finishes (durable
+ * per-route, not per-worker-lifetime). `global-setup.ts` clears that directory
+ * exactly ONCE per overall run — it runs once in the main process before any
+ * worker starts, and does NOT re-run when a worker is recycled mid-run, unlike
+ * `beforeAll`/`afterAll` in this file. A single synthetic test placed after
+ * every real route test — "aggregate results and enforce baseline" — reads
+ * every fragment on disk and performs the actual comparison/write. Playwright
+ * runs the tests in one file in the order they are defined, and a recycled
+ * worker only ever picks up the next not-yet-run test, so this aggregate test
+ * is guaranteed to run last, after every route (across however many worker
+ * restarts it took) has had a chance to write its fragment — it sees the
+ * complete, cumulative picture regardless of how many times the worker died
+ * along the way.
  */
 import { test, expect } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
-import { readFileSync, writeFileSync, existsSync, mkdirSync } from "node:fs";
+import { readFileSync, writeFileSync, existsSync, mkdirSync, readdirSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { CURATED_ROUTES, PUBLIC_ROUTES, type RouteSpec } from "./routes.js";
 import { authenticate } from "./persona-auth.js";
@@ -61,16 +96,36 @@ function loadBaseline(): Baseline {
 }
 
 const baseline = loadBaseline();
-const collected: Finding[] = [];
 const unreachable: { route: string; status: number | string }[] = [];
-/** Routes that actually reached axe — used to prove the audited set is complete. */
-const audited = new Set<string>();
+
 /**
- * Routes that could NOT be certified because their data did not load, so the
- * data-bearing UI was absent. Tracked separately and ratcheted: these are
- * explicitly NOT "WCAG clean", they are "not measured".
+ * Durable per-route result store — see the file-level comment above. Cleared
+ * once per overall run by `global-setup.ts`, not by this module (which is
+ * re-imported, and would otherwise re-clear it, every time a worker restarts).
  */
-const uncertified = new Set<string>();
+const FRAGMENTS_DIR = join(__dirname, ".a11y-fragments");
+
+/** One route's complete outcome, as written by that route's own test. */
+type Fragment = {
+  route: string;
+  /** True when the route's data never arrived (see `checkDataArrived`) — audited but not certified. */
+  uncertified: boolean;
+  findings: Finding[];
+};
+
+function fragmentFile(id: string): string {
+  const safe = id.replace(/[^a-zA-Z0-9_-]/g, "_");
+  return join(FRAGMENTS_DIR, `${safe}.json`);
+}
+
+function writeFragment(id: string, fragment: Fragment): void {
+  // Defensive, not load-bearing: global-setup.ts already creates this
+  // directory once per run. Recreating it here is a harmless no-op unless
+  // global setup didn't run (e.g. a config regression) — in which case
+  // silently losing this route's result would be worse than a redundant call.
+  mkdirSync(FRAGMENTS_DIR, { recursive: true });
+  writeFileSync(fragmentFile(id), JSON.stringify(fragment));
+}
 
 /** Stable key for the ratchet: a rule violated on a route. */
 const key = (f: Finding): string => `${f.route}|${f.ruleId}`;
@@ -182,15 +237,16 @@ async function checkDataArrived(
  * green-by-default bypass: /auth/login reports 0 violations and 6 serious
  * color-contrast nodes in `incomplete`.
  */
-function record(route: string, results: { violations: unknown[]; incomplete: unknown[] }): void {
+function toFindings(route: string, results: { violations: unknown[]; incomplete: unknown[] }): Finding[] {
   type AxeResult = {
     id: string;
     impact?: string | null;
     help: string;
     nodes: { target?: unknown[] }[];
   };
+  const out: Finding[] = [];
   const push = (v: AxeResult, kind: Finding["kind"]): void => {
-    collected.push({
+    out.push({
       route,
       ruleId: v.id,
       impact: v.impact ?? "unknown",
@@ -202,6 +258,7 @@ function record(route: string, results: { violations: unknown[]; incomplete: unk
   };
   for (const v of results.violations as AxeResult[]) push(v, "violation");
   for (const v of results.incomplete as AxeResult[]) push(v, "incomplete");
+  return out;
 }
 
 test.describe("WCAG 2.2 AA — authenticated routes", () => {
@@ -248,14 +305,16 @@ test.describe("WCAG 2.2 AA — authenticated routes", () => {
       // CERTIFIED rather than counted as passing.
       const hasData = await checkDataArrived(page, spec);
       if (!hasData) {
-        uncertified.add(spec.path);
-        audited.add(spec.path);
+        writeFragment(`${spec.persona}__${spec.path}`, { route: spec.path, uncertified: true, findings: [] });
         return;
       }
 
       const results = await new AxeBuilder({ page }).withTags(WCAG_TAGS).analyze();
-      record(spec.path, results);
-      audited.add(spec.path);
+      writeFragment(`${spec.persona}__${spec.path}`, {
+        route: spec.path,
+        uncertified: false,
+        findings: toFindings(spec.path, results),
+      });
     });
   }
 });
@@ -273,13 +332,41 @@ test.describe("WCAG 2.2 AA — public routes", () => {
       await page.waitForSelector("form, main", { timeout: 20_000 });
 
       const results = await new AxeBuilder({ page }).withTags(WCAG_TAGS).analyze();
-      record(spec.path, results);
-      audited.add(spec.path);
+      writeFragment(`anonymous__${spec.path}`, {
+        route: spec.path,
+        uncertified: false,
+        findings: toFindings(spec.path, results),
+      });
     });
   }
 });
 
-test.afterAll(() => {
+/**
+ * Runs after every real route test — see the file-level comment. Reads the
+ * complete, merged fragment set from disk (not this process's own in-memory
+ * state, which after a worker restart may reflect none, some, or all of the
+ * earlier routes depending on exactly when the restart happened) and performs
+ * the real ratchet comparison / baseline write against that complete picture.
+ */
+test("aggregate results and enforce baseline", () => {
+  const fragmentFiles = existsSync(FRAGMENTS_DIR)
+    ? readdirSync(FRAGMENTS_DIR).filter((f) => f.endsWith(".json"))
+    : [];
+
+  const collected: Finding[] = [];
+  const audited = new Set<string>();
+  const uncertified = new Set<string>();
+
+  for (const file of fragmentFiles) {
+    const fragment = JSON.parse(readFileSync(join(FRAGMENTS_DIR, file), "utf8")) as Fragment;
+    audited.add(fragment.route);
+    if (fragment.uncertified) {
+      uncertified.add(fragment.route);
+    } else {
+      collected.push(...fragment.findings);
+    }
+  }
+
   const isSevere = (f: Finding): boolean =>
     f.impact === "critical" || f.impact === "serious";
 

@@ -17,6 +17,7 @@ infra/observability/secrets/
 apps/web/test-results/
 apps/web/e2e-report/
 apps/web/playwright-report/
+apps/web/tests/a11y/.a11y-fragments/
 .claude/
 
 # Build artifacts / IDE
