@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useTranslations } from "next-intl";
+import { Button } from "@/app/_components/ds";
 
 const inputStyle = { width: "100%", padding: 8, minHeight: 44, marginBottom: 8, borderRadius: 8, border: "1px solid var(--line)" } as const;
 const labelStyle = { display: "block", fontSize: 12, color: "var(--muted)", marginBottom: 4, fontWeight: 600 } as const;
@@ -48,9 +49,9 @@ export function AppealPanel() {
         <input id="ap-win" type="number" value={windowDays} onChange={(e) => setWindowDays(e.target.value)} style={inputStyle} />
         <label htmlFor="ap-grounds" style={labelStyle}>{t("grounds")}</label>
         <textarea id="ap-grounds" value={grounds} onChange={(e) => setGrounds(e.target.value)} style={{ ...inputStyle, minHeight: 96 }} />
-        <button type="submit" className="btn primary" style={{ minHeight: 44 }} disabled={busy || !grounds || !decisionDate}>
+        <Button type="submit" variant="primary" style={{ minHeight: 44 }} disabled={busy || !grounds || !decisionDate}>
           {busy ? t("filing") : t("submit")}
-        </button>
+        </Button>
         {filed ? (
           <div role="status" className="pad" style={{ marginTop: 12, background: "#ecfdf3", borderRadius: 8 }}>
             Appeal filed — status {filed.status}. Filing deadline was {filed.filingDeadline}.

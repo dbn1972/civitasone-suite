@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { useTranslations } from "next-intl";
-import { PageHeader } from "../../../../_components/ds";
+import { PageHeader, Button } from "../../../../_components/ds";
 import { useFormError } from "@/lib/useFormError";
 
 export default function RegisterGrievancePage() {
@@ -242,15 +242,15 @@ export default function RegisterGrievancePage() {
         </div>
 
         <div style={{ marginTop: 16, display: "flex", gap: 8 }}>
-          <button
+          <Button
             type="submit"
-            className="btn primary"
+            variant="primary"
             style={{ minHeight: 44 }}
             disabled={!dpdpConsent || status === "submitting"}
             aria-disabled={!dpdpConsent || status === "submitting"}
           >
             {status === "submitting" ? t("submitting") : t("registerButton")}
-          </button>
+          </Button>
           <Link href="/citizen/grievances" className="btn ghost" style={{ minHeight: 44 }}>
             {t("cancel")}
           </Link>

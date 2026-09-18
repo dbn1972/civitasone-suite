@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render as rtlRender, screen, fireEvent, waitFor } from "@testing-library/react";
 import { NextIntlClientProvider } from "next-intl";
+import type { ComponentProps } from "react";
 import enMessages from "@/messages/en.json";
 import RegisterGrievancePage from "./page";
 
@@ -12,8 +13,17 @@ vi.mock("next/navigation", () => ({
 }));
 
 // ── ds mock (PageHeader not relevant to consent logic) ───────────────────────
+// UX-008 tranche 13: page.tsx's submit button now renders via the shared ds
+// Button, so this mock of the ds barrel must provide one too (matching the
+// tranche 3/4/6-established incomplete-ds-barrel-mock fix) -- otherwise
+// Button resolves to undefined and every render throws. Plain passthrough:
+// role/name/disabled all reach a real button element, which is all this suite's
+// getByRole("button", ...) / toBeDisabled() checks need.
 vi.mock("../../../../_components/ds", () => ({
   PageHeader: ({ title }: { title: string }) => <h1>{title}</h1>,
+  Button: ({ children, ...rest }: ComponentProps<"button">) => (
+    <button {...rest}>{children}</button>
+  ),
 }));
 
 // UX-017: the form now reads next-intl's useTranslations() for every label —

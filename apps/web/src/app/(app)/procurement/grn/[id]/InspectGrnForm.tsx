@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { toHumanError } from "@/lib/messages";
+import { Button } from "@/app/_components/ds";
 
 // DOM-002 — the real, second-actor inspection step. Deliberately does NOT
 // collect or send an inspector id: PATCH /grns/:id/accept and
@@ -90,12 +91,12 @@ export function InspectGrnForm({ grnId }: { grnId: string }) {
         ) : null}
       </div>
       <div style={{ marginTop: 16, display: "flex", gap: 8 }}>
-        <button type="button" className="btn primary" style={{ minHeight: 44 }} disabled={busy} onClick={() => void submit("accept")}>
+        <Button type="button" variant="primary" style={{ minHeight: 44 }} disabled={busy} onClick={() => void submit("accept")}>
           {status === "accepting" ? "Accepting…" : "Accept"}
-        </button>
-        <button type="button" className="btn ghost" style={{ minHeight: 44 }} disabled={busy} onClick={() => void submit("reject")}>
+        </Button>
+        <Button type="button" variant="ghost" style={{ minHeight: 44 }} disabled={busy} onClick={() => void submit("reject")}>
           {status === "rejecting" ? "Rejecting…" : "Reject"}
-        </button>
+        </Button>
       </div>
     </div>
   );

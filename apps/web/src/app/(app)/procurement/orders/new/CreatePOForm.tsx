@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { LineItemsEditor, emptyLineItem, type LineItem } from "../../_components/LineItemsEditor";
 import { toHumanError } from "@/lib/messages";
+import { Button } from "@/app/_components/ds";
 
 type VendorOption = { id: string; name: string };
 type IndentOption = { id: string; indentNo?: string; department?: string };
@@ -131,9 +132,9 @@ export function CreatePOForm() {
         ) : null}
       </div>
       <div style={{ marginTop: 16, display: "flex", gap: 8 }}>
-        <button type="submit" className="btn primary" style={{ minHeight: 44 }} disabled={status === "submitting"}>
+        <Button type="submit" variant="primary" style={{ minHeight: 44 }} disabled={status === "submitting"}>
           {status === "submitting" ? "Submitting…" : "Create PO"}
-        </button>
+        </Button>
         <Link href="/procurement/orders" className="btn ghost" style={{ minHeight: 44 }}>Cancel</Link>
       </div>
     </form>

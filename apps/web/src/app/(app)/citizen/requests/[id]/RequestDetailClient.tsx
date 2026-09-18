@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { PageHeader, EmptyState, StatusPill, ActionButton } from "@/app/_components/ds";
+import { PageHeader, EmptyState, StatusPill, ActionButton, Button } from "@/app/_components/ds";
 import { formatIndianDate } from "@/lib/formatters";
 import type { Grievance } from "../../_data/loaders";
 
@@ -136,7 +136,7 @@ export function RequestDetailClient({
         <PageHeader title={t("detailTitle")} back="/citizen/requests" backLabel={t("detailBack")} />
         <div className="card"><div className="pad">
           <p role="alert" aria-live="assertive" style={{ color: "#b42318" }}>{loadError}</p>
-          <button className="btn ghost" style={{ minHeight: 44 }} onClick={() => void load()}>{t("tryAgain")}</button>
+          <Button variant="ghost" style={{ minHeight: 44 }} onClick={() => void load()}>{t("tryAgain")}</Button>
         </div></div>
       </>
     );
@@ -163,9 +163,9 @@ export function RequestDetailClient({
         backLabel={t("detailBack")}
         actions={
           <>
-            <button type="button" className="btn ghost" style={{ minHeight: 44 }} onClick={() => setShowAction((s) => !s)}>
+            <Button type="button" variant="ghost" style={{ minHeight: 44 }} onClick={() => setShowAction((s) => !s)}>
               {t("addAction")}
-            </button>
+            </Button>
             {!isResolved && (
               <ActionButton
                 label={t("resolve")}
@@ -242,8 +242,8 @@ export function RequestDetailClient({
                 </select>
                 <label htmlFor="grievance-action-note" style={labelStyle}>{t("noteLabel")}</label>
                 <textarea id="grievance-action-note" value={actionForm.note} onChange={(e) => setActionForm({ ...actionForm, note: e.target.value })} placeholder={t("notePlaceholder")} rows={3} style={{ ...inputStyle, minHeight: 88 }} />
-                <button type="submit" className="btn primary" disabled={busy} style={{ minHeight: 44 }}>{busy ? "Saving…" : "Save action"}</button>
-                <button type="button" className="btn ghost" style={{ marginLeft: 8, minHeight: 44 }} onClick={() => setShowAction(false)}>{t("cancel")}</button>
+                <Button type="submit" variant="primary" disabled={busy} style={{ minHeight: 44 }}>{busy ? "Saving…" : "Save action"}</Button>
+                <Button type="button" variant="ghost" style={{ marginLeft: 8, minHeight: 44 }} onClick={() => setShowAction(false)}>{t("cancel")}</Button>
                 {formError ? <p role="alert" aria-live="assertive" style={{ fontSize: 13, color: "#b42318", marginTop: 8 }}>{formError}</p> : null}
               </form>
             </div>

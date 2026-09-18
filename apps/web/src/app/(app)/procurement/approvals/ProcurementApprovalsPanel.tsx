@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useCallback, useState } from "react";
 import { useOfflineResource } from "@/lib/sync/resource";
 import { fetchOrQueue } from "@/lib/sync/requestQueue";
-import { ConfirmDialog, DataTable, EmptyState, ErrorState } from "@/app/_components/ds";
+import { ConfirmDialog, DataTable, EmptyState, ErrorState, Button } from "@/app/_components/ds";
 import { toHumanError } from "@/lib/messages";
 
 type WorkflowTask = {
@@ -155,24 +155,26 @@ export function ProcurementApprovalsPanel() {
       label: "Actions",
       render: (row) => (
         <>
-          <button
+          <Button
             type="button"
-            className="btn primary sm"
+            variant="primary"
+            size="sm"
             style={{ marginRight: 6, minHeight: 36 }}
             disabled={busyId === row.id}
             onClick={() => { setMessage(""); setDialogError(undefined); setPending({ task: row._task, decision: "approve" }); }}
           >
             Approve
-          </button>
-          <button
+          </Button>
+          <Button
             type="button"
-            className="btn ghost sm"
+            variant="ghost"
+            size="sm"
             style={{ minHeight: 36 }}
             disabled={busyId === row.id}
             onClick={() => { setMessage(""); setDialogError(undefined); setPending({ task: row._task, decision: "reject" }); }}
           >
             Reject
-          </button>
+          </Button>
         </>
       ),
     },

@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { PageHeader, EmptyState, StatusPill, ActionButton } from "@/app/_components/ds";
+import { PageHeader, EmptyState, StatusPill, ActionButton, Button } from "@/app/_components/ds";
 import { formatIndianDate } from "@/lib/formatters";
 import type { RtiDetail } from "../../_data/loaders";
 
@@ -136,7 +136,7 @@ export function RTIDetailClient({
         <PageHeader title={t("detailTitle")} back="/citizen/rti" backLabel={t("detailBack")} />
         <div className="card"><div className="pad">
           <p role="alert" aria-live="assertive" style={{ color: "#b42318" }}>{loadError}</p>
-          <button className="btn ghost" style={{ minHeight: 44 }} onClick={() => void load()}>{t("tryAgain")}</button>
+          <Button variant="ghost" style={{ minHeight: 44 }} onClick={() => void load()}>{t("tryAgain")}</Button>
         </div></div>
       </>
     );
@@ -174,9 +174,9 @@ export function RTIDetailClient({
                 onSuccess={() => afterMutate("Response submitted.")}
               />
             )}
-            <button type="button" className="btn ghost" style={{ minHeight: 44 }} onClick={() => setShowAppeal((s) => !s)}>
+            <Button type="button" variant="ghost" style={{ minHeight: 44 }} onClick={() => setShowAppeal((s) => !s)}>
               {t("fileAppeal")}
-            </button>
+            </Button>
           </>
         }
       />
@@ -211,8 +211,8 @@ export function RTIDetailClient({
                 </select>
                 <label htmlFor="rti-appeal-grounds" style={labelStyle}>{t("appealGroundsLabel")}</label>
                 <textarea id="rti-appeal-grounds" required value={appeal.grounds} onChange={(e) => setAppeal({ ...appeal, grounds: e.target.value })} placeholder={t("appealGroundsPlaceholder")} rows={4} style={{ ...inputStyle, minHeight: 100 }} />
-                <button type="submit" className="btn primary" disabled={busy} style={{ minHeight: 44 }}>{busy ? t("submitting") : t("submitAppeal")}</button>
-                <button type="button" className="btn ghost" style={{ marginLeft: 8, minHeight: 44 }} onClick={() => setShowAppeal(false)}>{t("cancel")}</button>
+                <Button type="submit" variant="primary" disabled={busy} style={{ minHeight: 44 }}>{busy ? t("submitting") : t("submitAppeal")}</Button>
+                <Button type="button" variant="ghost" style={{ marginLeft: 8, minHeight: 44 }} onClick={() => setShowAppeal(false)}>{t("cancel")}</Button>
                 {formError ? <p role="alert" aria-live="assertive" style={{ fontSize: 13, color: "#b42318", marginTop: 8 }}>{formError}</p> : null}
               </form>
             </div>

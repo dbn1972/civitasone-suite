@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { toHumanError } from "@/lib/messages";
-import { PageHeader, Term } from "@/app/_components/ds";
+import { PageHeader, Term, Button } from "@/app/_components/ds";
 
 const AMENDMENT_TYPES = [
   "quantity",
@@ -173,22 +173,22 @@ export default function POAmendPage({ params }: { params: { id: string } }) {
           </div>
 
           <div style={{ marginTop: 20, display: "flex", gap: 8 }}>
-            <button
+            <Button
               type="submit"
-              className="btn primary"
+              variant="primary"
               style={{ minHeight: 44 }}
               disabled={status === "submitting"}
             >
               {status === "submitting" ? "Submitting…" : "Submit amendment"}
-            </button>
-            <button
+            </Button>
+            <Button
               type="button"
-              className="btn"
+              variant="ghost"
               style={{ minHeight: 44 }}
               onClick={() => router.back()}
             >
               Cancel
-            </button>
+            </Button>
           </div>
         </form>
       </div>

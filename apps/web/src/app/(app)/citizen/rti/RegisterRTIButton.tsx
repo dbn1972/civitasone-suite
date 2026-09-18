@@ -2,6 +2,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
+import { Button } from "@/app/_components/ds";
 
 const inputStyle = { width: "100%", padding: 8, minHeight: 44, marginBottom: 8, borderRadius: 8, border: "1px solid var(--line)" } as const;
 const labelStyle = { display: "block", fontSize: 12, color: "var(--muted)", marginBottom: 4, fontWeight: 600 } as const;
@@ -45,9 +46,9 @@ export function RegisterRTIButton() {
 
   return (
     <>
-      <button type="button" className="btn primary" style={{ minHeight: 44 }} onClick={() => setOpen((o) => !o)}>
+      <Button type="button" variant="primary" style={{ minHeight: 44 }} onClick={() => setOpen((o) => !o)}>
         {t("registerButton")}
-      </button>
+      </Button>
       {open && (
         <div className="card" style={{ marginTop: 16 }}>
           <form onSubmit={submit} className="pad" style={{ maxWidth: 560 }}>
@@ -58,8 +59,8 @@ export function RegisterRTIButton() {
             <textarea id="new-rti-description" required value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} placeholder={t("infoSoughtPlaceholder")} rows={4} style={{ ...inputStyle, minHeight: 100 }} />
             <label htmlFor="new-rti-cpio" style={labelStyle}>{t("cpioLabel")}</label>
             <input id="new-rti-cpio" required value={form.cpioRef} onChange={(e) => setForm({ ...form, cpioRef: e.target.value })} placeholder={t("cpioPlaceholder")} style={inputStyle} />
-            <button type="submit" className="btn primary" disabled={busy} style={{ minHeight: 44 }}>{busy ? t("submitting") : t("submitApplication")}</button>
-            <button type="button" className="btn ghost" style={{ marginLeft: 8, minHeight: 44 }} onClick={() => setOpen(false)}>{t("cancel")}</button>
+            <Button type="submit" variant="primary" disabled={busy} style={{ minHeight: 44 }}>{busy ? t("submitting") : t("submitApplication")}</Button>
+            <Button type="button" variant="ghost" style={{ marginLeft: 8, minHeight: 44 }} onClick={() => setOpen(false)}>{t("cancel")}</Button>
           </form>
         </div>
       )}

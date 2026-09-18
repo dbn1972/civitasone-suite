@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { validateGstin, validatePan, validateIfsc, validateEmail, validatePhone } from "../../_components/validators";
 import { toHumanError } from "@/lib/messages";
+import { Button } from "@/app/_components/ds";
 
 type Errors = Partial<Record<"name" | "gstin" | "pan" | "email" | "phone" | "ifsc", string>>;
 
@@ -136,9 +137,9 @@ export function RegisterVendorForm() {
         ) : null}
       </div>
       <div style={{ marginTop: 16, display: "flex", gap: 8 }}>
-        <button type="submit" className="btn primary" style={{ minHeight: 44 }} disabled={status === "submitting"}>
+        <Button type="submit" variant="primary" style={{ minHeight: 44 }} disabled={status === "submitting"}>
           {status === "submitting" ? "Registering…" : "Register vendor"}
-        </button>
+        </Button>
         <Link href="/procurement/vendors" className="btn ghost" style={{ minHeight: 44 }}>Cancel</Link>
       </div>
     </form>

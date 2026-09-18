@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ActionButton } from "@/app/_components/ds";
+import { ActionButton, Button } from "@/app/_components/ds";
 
 export type LifecycleBid = {
   bidId?: string;
@@ -234,9 +234,9 @@ function TechnicalEvaluationForm({
       {error ? <p role="alert" style={{ marginTop: 10, color: "var(--bad)", fontSize: 13 }}>{error}</p> : null}
       {saved && !error ? <p role="status" style={{ marginTop: 10, color: "var(--good)", fontSize: 13 }}>Evaluation submitted.</p> : null}
       <div style={{ marginTop: 12 }}>
-        <button type="submit" className="btn primary" disabled={busy} style={{ minHeight: 44 }}>
+        <Button type="submit" variant="primary" disabled={busy} style={{ minHeight: 44 }}>
           {busy ? "Saving…" : "Save technical evaluation"}
-        </button>
+        </Button>
       </div>
     </form>
   );

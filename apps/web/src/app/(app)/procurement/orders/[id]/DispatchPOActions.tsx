@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { ConfirmDialog } from "@/app/_components/ds";
+import { ConfirmDialog, Button } from "@/app/_components/ds";
 import { useFormError } from "@/lib/useFormError";
 
 export function DispatchPOActions({ poId, canDispatch }: { poId: string; canDispatch: boolean }) {
@@ -52,14 +52,14 @@ export function DispatchPOActions({ poId, canDispatch }: { poId: string; canDisp
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 8, alignItems: "flex-end" }}>
-      <button
+      <Button
         type="button"
-        className="btn primary"
+        variant="primary"
         style={{ minHeight: 44 }}
         onClick={() => { setError(undefined); setMessage(""); setOpen(true); }}
       >
         Dispatch to vendor
-      </button>
+      </Button>
       <span role="status" aria-live="polite" style={{ fontSize: "0.8rem", color: "#047857" }}>{message}</span>
 
       <ConfirmDialog
