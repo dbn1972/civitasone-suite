@@ -2,7 +2,7 @@
 
 import { useId, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
-import { Card, ConfirmDialog } from "../../../_components/ds";
+import { Button, Card, ConfirmDialog } from "../../../_components/ds";
 import { browserJson } from "@/lib/api/browserClient";
 import { formatMoney } from "@/lib/formatters";
 import type { PfmsDepartment, PfmsMode } from "./types";
@@ -293,9 +293,9 @@ export function SalaryBillForm({ departments = [], onModeObserved }: SalaryBillF
           </div>
 
           <div>
-            <button type="submit" className="btn primary" style={{ minHeight: 44 }} disabled={busy}>
+            <Button type="submit" style={{ minHeight: 44 }} disabled={busy}>
               {t("title")}
-            </button>
+            </Button>
           </div>
 
           {message && (

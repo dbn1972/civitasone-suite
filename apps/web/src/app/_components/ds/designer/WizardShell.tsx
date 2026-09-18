@@ -1,6 +1,7 @@
 "use client";
 
 import type { KeyboardEvent, ReactNode } from "react";
+import { Button } from "../Button";
 
 export type BlockStatus = "empty" | "in-progress" | "complete" | "error";
 
@@ -76,9 +77,9 @@ export function BlockRail({ blocks, activeBlockId, onSelect }: BlockRailProps) {
                     borderRadius: "50%",
                     flexShrink: 0,
                     background:
-                      block.status === "complete" ? "var(--good-fg)"
-                        : block.status === "in-progress" ? "var(--info-fg)"
-                          : block.status === "error" ? "var(--bad-fg)"
+                      block.status === "complete" ? "var(--good)"
+                        : block.status === "in-progress" ? "var(--info)"
+                          : block.status === "error" ? "var(--bad)"
                             : "var(--line2)",
                   }}
                 />
@@ -96,9 +97,9 @@ export function BlockRail({ blocks, activeBlockId, onSelect }: BlockRailProps) {
                     style={{
                       fontSize: 11,
                       fontWeight: 600,
-                      color: "var(--bad-fg)",
-                      background: "var(--bad-bg)",
-                      border: "1px solid var(--bad-border)",
+                      color: "var(--bad)",
+                      background: "var(--badbg)",
+                      border: "1px solid var(--badbd)",
                       borderRadius: 999,
                       padding: "2px 8px",
                     }}
@@ -224,29 +225,28 @@ export function WizardShell({
         </div>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
           {onBack ? (
-            <button type="button" className="btn ghost" onClick={onBack}>Back</button>
+            <Button type="button" variant="ghost" onClick={onBack}>Back</Button>
           ) : null}
           {onNext ? (
-            <button type="button" className="btn primary" onClick={onNext}>Next</button>
+            <Button type="button" onClick={onNext}>Next</Button>
           ) : null}
-          <button
+          <Button
             type="button"
-            className="btn ghost"
+            variant="ghost"
             disabled={!canRunTest}
             onClick={onRunTest}
             title={canRunTest ? undefined : "Complete all active blocks first"}
           >
             Run Test
-          </button>
-          <button
+          </Button>
+          <Button
             type="button"
-            className="btn primary"
             disabled={!canSubmit || submitBusy}
             onClick={onSubmit}
             title={canSubmit ? undefined : "Pass the latest sandbox test before submitting"}
           >
             {submitBusy ? "Submitting…" : "Submit for Approval"}
-          </button>
+          </Button>
         </div>
       </footer>
     </div>

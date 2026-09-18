@@ -13,7 +13,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { PageHeader } from "../../../../../_components/ds";
+import { Button, PageHeader } from "../../../../../_components/ds";
 import { useFormError } from "@/lib/useFormError";
 
 const inputStyle = { width: "100%", padding: 8, borderRadius: 8, border: "1px solid var(--line)" } as const;
@@ -116,9 +116,9 @@ export default function NewAdvancePage() {
               )}
             </div>
           </div>
-          <button type="submit" className="btn primary" disabled={busy} aria-busy={busy} style={{ marginTop: 12 }}>
+          <Button type="submit" disabled={busy} aria-busy={busy} style={{ marginTop: 12 }}>
             {busy ? t("saving") : t("submit")}
-          </button>
+          </Button>
         </form>
       </div>
     </>

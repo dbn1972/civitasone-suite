@@ -2,7 +2,7 @@
 
 import { useId, useState } from "react";
 import { useTranslations } from "next-intl";
-import { Card } from "../../../_components/ds";
+import { Button, Card } from "../../../_components/ds";
 import { browserJson } from "@/lib/api/browserClient";
 import type { PfmsMode } from "./types";
 
@@ -75,9 +75,9 @@ export function PaymentStatusLookup({ onModeObserved }: PaymentStatusLookupProps
               style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
             />
           </div>
-          <button type="submit" className="btn" style={{ minHeight: 44 }} disabled={busy}>
+          <Button type="submit" style={{ minHeight: 44 }} disabled={busy}>
             {busy ? t("checking") : t("checkStatus")}
-          </button>
+          </Button>
         </div>
 
         {invalid && (

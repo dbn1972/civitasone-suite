@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useFormError } from "@/lib/useFormError";
+import { Button } from "../../../_components/ds";
 
 const CATEGORIES = [
   { value: "office_supplies", label: "Office Supplies" },
@@ -152,9 +153,9 @@ export function ExpenseClaimForm() {
       </div>
 
       <div className="pt-2">
-        <button type="submit" disabled={busy} className="btn primary" aria-busy={busy}>
+        <Button type="submit" disabled={busy} aria-busy={busy}>
           {busy ? "Submitting..." : "Submit Claim"}
-        </button>
+        </Button>
         <p className="mt-2 text-xs text-gray-500">
           DDO countersignature required before reimbursement (GFR 2017 Rule 11).
         </p>

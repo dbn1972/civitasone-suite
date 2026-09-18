@@ -2,7 +2,7 @@
 
 import { useId, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Card, ConfirmDialog } from "@/app/_components/ds";
+import { Button, Card, ConfirmDialog } from "@/app/_components/ds";
 import { browserFetch, errorMessageFromResponse } from "@/lib/api/browserClient";
 import { toHumanError } from "@/lib/messages";
 
@@ -103,9 +103,9 @@ export function ClosePeriodForm() {
           </div>
 
           <div>
-            <button type="submit" className="btn secondary" style={{ minHeight: 44 }} disabled={busy}>
+            <Button type="submit" variant="secondary" style={{ minHeight: 44 }} disabled={busy}>
               Soft-Close Period
-            </button>
+            </Button>
           </div>
 
           {message && (
