@@ -43,3 +43,6 @@ apps/mobile/lib/l10n/app_localizations*.dart
 
 # REL-012 isolated PM2 validation scratch (ports 39001-39003, separate PM2_HOME)
 .relwork/
+
+# Lighthouse CI report output (ephemeral, uploaded as a CI artifact instead)
+.lighthouseci/
