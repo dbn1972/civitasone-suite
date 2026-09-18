@@ -44,6 +44,23 @@ function archetypeFor(routePath: string): RouteSpec["archetype"] {
   return "list";
 }
 
+/**
+ * UX-005 tranche 9: next.config.mjs permanently redirects every `/stock/*`
+ * path to the equivalent `/inventory/*` one (legacy route, requirement 1.7)
+ * — see routes.ts's own comment for why CURATED_ROUTES already excludes
+ * `/stock`. Discovery walks physical page.tsx files and has no knowledge of
+ * redirects, so without this filter every full sweep re-discovers the same 6
+ * dead routes, each of which fails `assertLandedOnRequestedRoute` (the
+ * browser lands on `/inventory/*`, not the requested `/stock/*` path) — a
+ * known, disclosed non-bug (tranche 4), but also the confirmed trigger for
+ * the worker restarts that used to fragment this spec's own result
+ * collection (root-caused in tranche 8, fixed alongside this filter in
+ * tranche 9's a11y.spec.ts/global-setup.ts rewrite).
+ */
+function isDeadLegacyRedirect(routePath: string): boolean {
+  return routePath === "/stock" || routePath.startsWith("/stock/");
+}
+
 export function discoverAllRoutes(): RouteSpec[] {
   const out: RouteSpec[] = [];
 
@@ -67,5 +84,7 @@ export function discoverAllRoutes(): RouteSpec[] {
   };
 
   walk(APP_DIR, "");
-  return out.sort((a, b) => a.path.localeCompare(b.path));
+  return out
+    .filter((r) => !isDeadLegacyRedirect(r.path))
+    .sort((a, b) => a.path.localeCompare(b.path));
 }
