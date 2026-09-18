@@ -65,6 +65,7 @@ const FIXTURES = {
   '/api/v1/citizen/analytics/metrics': { data: [{ label: 'Total Tickets', value: '1', note: 'This month' }] },
   '/api/v1/citizen/requests': [{ id: 'req-001', requestNo: 'REQ-001', serviceType: 'Birth Certificate', citizenName: 'Ramesh Kumar', phone: '+91-9876543210', submittedAt: '2024-01-01T00:00:00Z', expectedResolution: '2024-01-08', status: 'submitted' }],
   '/api/v1/citizen/rti': [{ id: 'rti-001', rtiNo: 'RTI-001', subject: 'Budget Expenditure Details FY 2024', applicantName: 'Priya Sharma', filedDate: '2024-01-01', deadlineDate: '2024-01-31', status: 'received' }],
+  '/api/v1/citizen/rti/rti-001': { id: 'rti-001', rtiNo: 'RTI-001', subject: 'Budget Expenditure Details FY 2024', description: 'Seeking a ward-level breakdown of sanitation budget expenditure for FY 2024.', cpioRef: 'CPIO-SANITATION-01', deadline: '2024-01-31T00:00:00Z', status: 'received', statusLabel: 'Received', isOverdue: true, createdAt: '2024-01-01T00:00:00Z', updatedAt: '2024-01-01T00:00:00Z', responses: [], appeals: [] },
   '/api/v1/helpdesk/tickets': { data: [], pagination: { hasMore: false, pageSize: 50 } },
 
   '/api/identity/users': [{ id: 'u1', tenantId: 't1', email: 'admin@example.com', name: 'Admin User', empCode: null, status: 'active', mfaEnabled: true, version: 1, roles: ['admin'], lastLoginAt: '2024-01-01T00:00:00Z', createdAt: '2024-01-01T00:00:00Z' }],
