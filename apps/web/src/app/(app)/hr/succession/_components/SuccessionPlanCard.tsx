@@ -120,7 +120,7 @@ export function SuccessionPlanCard({ post, t }: CardProps) {
             </span>
           )}
           {post.retirementDate && (
-            <span style={{ marginLeft: 14, color: "var(--ink3)" }}>
+            <span style={{ marginInlineStart: 14, color: "var(--ink3)" }}>
               {t("vacatesLabel")} {formatIndianDate(post.retirementDate)}
             </span>
           )}

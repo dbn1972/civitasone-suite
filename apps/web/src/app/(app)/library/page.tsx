@@ -225,7 +225,7 @@ export default function LibraryPage() {
               className="card"
               style={{
                 padding: 18,
-                borderLeft: `4px solid ${SEVERITY_COLOR[iss.severity]}`,
+                borderInlineStart: `4px solid ${SEVERITY_COLOR[iss.severity]}`,
               }}
             >
               <div
@@ -252,7 +252,7 @@ export default function LibraryPage() {
                 <strong style={{ fontSize: 15 }}>{iss.title}</strong>
                 <span
                   style={{
-                    marginLeft: "auto",
+                    marginInlineStart: "auto",
                     fontSize: 12,
                     fontWeight: 600,
                     color: SEVERITY_COLOR[iss.severity],

@@ -158,7 +158,7 @@ function OrgTreeNode({
 
   return (
     <li style={{ listStyle: "none", margin: 0, padding: 0 }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 10px", marginLeft: depth * 22, borderRadius: 8 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 10px", marginInlineStart: depth * 22, borderRadius: 8 }}>
         <span style={{ display: "inline-block", width: 10, height: 10, borderRadius: 3, background: color, flexShrink: 0 }} aria-hidden="true" />
         {isEditing ? (
           <input
@@ -180,7 +180,7 @@ function OrgTreeNode({
         <Button variant="ghost" size="sm" style={{ fontSize: 11 }} onClick={() => onStartAddChild(node.id)}>+ Add child</Button>
       </div>
       {isAddingChild && (
-        <div style={{ marginLeft: (depth + 1) * 22 }}>
+        <div style={{ marginInlineStart: (depth + 1) * 22 }}>
           <CreateUnitForm parentId={node.id} onDone={onUnitAdded} onCancel={onCancelAddChild} />
         </div>
       )}

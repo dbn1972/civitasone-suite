@@ -49,7 +49,7 @@ export default async function LeaveManagementPage() {
         <div style={{ padding: "10px 14px", marginBottom: 12, borderRadius: 8, background: "var(--warnbg)", border: "1px solid var(--warn)", fontSize: 13, display: "flex", alignItems: "center", gap: 8 }}>
           <span aria-hidden="true">⏳</span>
           <span><strong>{pending}</strong> {t("pendingSuffix", { count: pending })}</span>
-          <Link href="/hr/leave/approvals" style={{ marginLeft: "auto", color: "var(--primary-d)", fontWeight: 500 }}>{t("reviewNow")}</Link>
+          <Link href="/hr/leave/approvals" style={{ marginInlineStart: "auto", color: "var(--primary-d)", fontWeight: 500 }}>{t("reviewNow")}</Link>
         </div>
       )}
 

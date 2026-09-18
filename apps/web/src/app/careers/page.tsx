@@ -101,7 +101,7 @@ export default async function CareersPage({ searchParams }: { searchParams: { ty
               >
                 {opt.label}
                 {opt.value && allVacancies.filter((v) => v.vacancyType === opt.value).length > 0 && (
-                  <span style={{ marginLeft: 6, opacity: 0.7, fontSize: 11 }}>
+                  <span style={{ marginInlineStart: 6, opacity: 0.7, fontSize: 11 }}>
                     {allVacancies.filter((v) => v.vacancyType === opt.value).length}
                   </span>
                 )}

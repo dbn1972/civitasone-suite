@@ -78,7 +78,7 @@ function OrgNode({
             style={{
               position: 'absolute',
               bottom: -12,
-              left: '50%',
+              insetInlineStart: '50%',
               transform: 'translateX(-50%)',
               fontSize: 12,
               color: 'var(--text-3, #64748b)',
@@ -111,7 +111,7 @@ function OrgNode({
               style={{
                 position: 'absolute',
                 top: 0,
-                left: '50%',
+                insetInlineStart: '50%',
                 transform: 'translateX(-50%)',
                 height: 1,
                 width: `calc(100% - 80px)`,

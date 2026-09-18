@@ -210,11 +210,11 @@ function GenderBar({ female, male, t }: { female: number; male: number; t: Analy
       </div>
       <div style={{ display: 'flex', gap: 16, fontSize: 11, color: 'var(--muted, #64748b)' }}>
         <span>
-          <span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: 2, background: '#e040fb', marginRight: 4 }} aria-hidden />
+          <span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: 2, background: '#e040fb', marginInlineEnd: 4 }} aria-hidden />
           {t('genderFemaleLabel', { pct: fPct })}
         </span>
         <span>
-          <span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: 2, background: '#00439C', marginRight: 4 }} aria-hidden />
+          <span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: 2, background: '#00439C', marginInlineEnd: 4 }} aria-hidden />
           {t('genderMaleLabel', { pct: mPct })}
         </span>
       </div>
@@ -331,7 +331,7 @@ export default async function WorkforceAnalyticsPage() {
                       scope="col"
                       style={{
                         padding: '8px 10px',
-                        textAlign: 'left',
+                        textAlign: 'start',
                         borderBottom: '2px solid var(--border, #e2e8f0)',
                         fontWeight: 700,
                         fontSize: 10,

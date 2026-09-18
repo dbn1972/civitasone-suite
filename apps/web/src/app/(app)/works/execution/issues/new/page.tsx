@@ -135,7 +135,7 @@ function RaiseIssueForm() {
             fontSize: 11,
             color: "var(--muted)",
             marginTop: 4,
-            textAlign: "right",
+            textAlign: "end",
           }}
         >
           {description.length}/2048

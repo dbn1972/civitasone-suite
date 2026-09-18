@@ -359,7 +359,7 @@ export function SystemSettingsPage() {
                 checked={security.mfaRequired}
                 disabled={editSection !== "security"}
                 onChange={(e) => setSecurity((s) => ({ ...s, mfaRequired: e.target.checked }))}
-                style={{ marginRight: 8, width: 16, height: 16 }}
+                style={{ marginInlineEnd: 8, width: 16, height: 16 }}
               />
               Require MFA for all users
             </label>

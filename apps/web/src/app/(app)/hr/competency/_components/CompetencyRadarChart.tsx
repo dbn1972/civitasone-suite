@@ -178,7 +178,7 @@ export function CompetencyRadarChart({
         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
           <thead>
             <tr style={{ background: "#f8fafc" }}>
-              <th style={{ textAlign: "left", padding: "6px 10px", border: "1px solid #e2e8f0", color: "#1e293b" }}>Competency</th>
+              <th style={{ textAlign: "start", padding: "6px 10px", border: "1px solid #e2e8f0", color: "#1e293b" }}>Competency</th>
               <th style={{ textAlign: "center", padding: "6px 10px", border: "1px solid #e2e8f0", color: "var(--good)" }}>Current</th>
               <th style={{ textAlign: "center", padding: "6px 10px", border: "1px solid #e2e8f0", color: "var(--info)" }}>Required</th>
               <th style={{ textAlign: "center", padding: "6px 10px", border: "1px solid #e2e8f0", color: "#1e293b" }}>Gap</th>

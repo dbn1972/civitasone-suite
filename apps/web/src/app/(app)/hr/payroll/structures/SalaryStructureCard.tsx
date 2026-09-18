@@ -101,7 +101,7 @@ export function SalaryStructureCard({ name, isDefault, status, components }: Sal
           style={{
             position: "absolute",
             top: 12,
-            right: 12,
+            insetInlineEnd: 12,
             background: "var(--accent, #4f46e5)",
             color: "#fff",
             fontSize: 11,

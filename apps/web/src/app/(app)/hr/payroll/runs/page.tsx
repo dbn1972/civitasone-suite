@@ -51,9 +51,9 @@ export default async function PayrollRunsPage() {
               <thead>
                 <tr>
                   <th scope="col">Period</th>
-                  <th scope="col" style={{ textAlign: "right" }}>Employees</th>
-                  <th scope="col" style={{ textAlign: "right" }}>Gross Pay</th>
-                  <th scope="col" style={{ textAlign: "right" }}>Net Pay</th>
+                  <th scope="col" style={{ textAlign: "end" }}>Employees</th>
+                  <th scope="col" style={{ textAlign: "end" }}>Gross Pay</th>
+                  <th scope="col" style={{ textAlign: "end" }}>Net Pay</th>
                   <th scope="col">Status</th>
                 </tr>
               </thead>
@@ -63,9 +63,9 @@ export default async function PayrollRunsPage() {
                     <td>
                       <Link href={`/hr/payroll/${run.id}`}>{run.payPeriod}</Link>
                     </td>
-                    <td style={{ textAlign: "right" }}>{run.employeeCount.toLocaleString("en-IN")}</td>
-                    <td style={{ textAlign: "right" }}>{fmtRupees(run.grossAmount)}</td>
-                    <td style={{ textAlign: "right" }}>{fmtRupees(run.netAmount)}</td>
+                    <td style={{ textAlign: "end" }}>{run.employeeCount.toLocaleString("en-IN")}</td>
+                    <td style={{ textAlign: "end" }}>{fmtRupees(run.grossAmount)}</td>
+                    <td style={{ textAlign: "end" }}>{fmtRupees(run.netAmount)}</td>
                     <td>
                       <StatusPill status={run.status} />
                     </td>

@@ -141,7 +141,7 @@ export function DomainPackActivatePanel({
                     setResult(null);
                     setError(null);
                   }}
-                  className={`w-full rounded-lg border p-4 text-left transition ${
+                  className={`w-full rounded-lg border p-4 text-start transition ${
                     active
                       ? "border-indigo-500 bg-white ring-2 ring-indigo-200"
                       : "border-slate-200 bg-white hover:border-slate-300"

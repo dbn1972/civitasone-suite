@@ -201,7 +201,7 @@ export function EngineBindingBuilder({
                     disabled={disabled}
                     onClick={() => bindEngine(eng)}
                     style={{
-                      textAlign: "left",
+                      textAlign: "start",
                       padding: 14,
                       cursor: disabled ? "not-allowed" : "pointer",
                       opacity: disabled ? 0.55 : 1,

@@ -186,16 +186,16 @@ export default async function StaffingPlanPage() {
                           </span>
                         </div>
                       </td>
-                      <td style={{ ...tdBase, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
+                      <td style={{ ...tdBase, textAlign: 'end', fontVariantNumeric: 'tabular-nums' }}>
                         {row.sanctionedPosts}
                       </td>
-                      <td style={{ ...tdBase, textAlign: 'right', fontVariantNumeric: 'tabular-nums', color: '#1a6d3c', fontWeight: 600 }}>
+                      <td style={{ ...tdBase, textAlign: 'end', fontVariantNumeric: 'tabular-nums', color: '#1a6d3c', fontWeight: 600 }}>
                         {row.filled}
                       </td>
                       <td
                         style={{
                           ...tdBase,
-                          textAlign: 'right',
+                          textAlign: 'end',
                           fontVariantNumeric: 'tabular-nums',
                           color: isHighVacancy ? '#cf1322' : undefined,
                           fontWeight: isHighVacancy ? 700 : undefined,
@@ -203,7 +203,7 @@ export default async function StaffingPlanPage() {
                       >
                         {row.vacant}
                       </td>
-                      <td style={{ ...tdBase, textAlign: 'right' }}>
+                      <td style={{ ...tdBase, textAlign: 'end' }}>
                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 6 }}>
                           <div
                             role="progressbar"

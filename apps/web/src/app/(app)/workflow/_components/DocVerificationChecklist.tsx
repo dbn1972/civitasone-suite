@@ -99,11 +99,11 @@ export function DocVerificationChecklist({
       <div style={{ fontWeight: 600, marginBottom: 6 }}>
         Documents to verify
       </div>
-      <ul style={{ margin: 0, paddingLeft: 18 }}>
+      <ul style={{ margin: 0, paddingInlineStart: 18 }}>
         {items.map((item) => (
           <li key={item.docType} style={{ marginBottom: 2 }}>
             <span>{item.label || item.docType}{item.mandatory ? " *" : ""}</span>
-            <span style={{ color: "var(--mut)", marginLeft: 6 }}>
+            <span style={{ color: "var(--mut)", marginInlineStart: 6 }}>
               {item.verified ? "verified" : item.provided ? "uploaded" : "missing"}
             </span>
           </li>

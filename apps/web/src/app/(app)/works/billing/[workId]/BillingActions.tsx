@@ -153,7 +153,7 @@ export function BillingActions({ bills }: BillingActionsProps) {
                 >
                   <div>
                     <span style={{ fontWeight: 600, fontSize: 14 }}>{bill.billNo}</span>
-                    <span style={{ marginLeft: 12, fontSize: 12, color: "var(--ink3)" }}>
+                    <span style={{ marginInlineStart: 12, fontSize: 12, color: "var(--ink3)" }}>
                       Current: {statusLabel(bill.status)}
                     </span>
                   </div>

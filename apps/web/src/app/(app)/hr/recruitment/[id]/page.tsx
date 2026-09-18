@@ -184,7 +184,7 @@ function ContextMenu({
       {open && (
         <div
           role="menu"
-          className="absolute right-0 top-full mt-1 z-20 min-w-[180px] rounded-xl border border-slate-200 bg-white shadow-lg py-1"
+          className="absolute end-0 top-full mt-1 z-20 min-w-[180px] rounded-xl border border-slate-200 bg-white shadow-lg py-1"
         >
           {actions.map((act) => (
             <div key={act.key} className="relative group">
@@ -210,7 +210,7 @@ function ContextMenu({
                   }
                 }}
                 className={[
-                  "w-full text-left px-4 py-2 text-xs font-medium transition-colors",
+                  "w-full text-start px-4 py-2 text-xs font-medium transition-colors",
                   act.disabled
                     ? "text-slate-300 cursor-not-allowed"
                     : act.variant === "danger"
@@ -223,7 +223,7 @@ function ContextMenu({
               {act.disabled && act.disabledReason && (
                 <span
                   role="tooltip"
-                  className="hidden group-hover:block absolute left-0 top-full mt-0.5 z-30 rounded-md bg-slate-800 text-white text-[10px] px-2 py-1 whitespace-nowrap shadow-lg"
+                  className="hidden group-hover:block absolute start-0 top-full mt-0.5 z-30 rounded-md bg-slate-800 text-white text-[10px] px-2 py-1 whitespace-nowrap shadow-lg"
                 >
                   {act.disabledReason}
                 </span>
@@ -459,7 +459,7 @@ export default function JobOpeningDetailPage() {
           <h2 className="text-base font-semibold text-slate-800">
             {t("applicationsInbox")}
             {!loadingApps && (
-              <span className="ml-2 inline-flex items-center rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">
+              <span className="ms-2 inline-flex items-center rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">
                 {filtered.length} / {applications.length}
               </span>
             )}

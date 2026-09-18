@@ -86,7 +86,7 @@ export function TaskCalendar({ tasks, joiningDate }: TaskCalendarProps) {
                   {hasOverdue && (
                     <span
                       aria-label="has overdue tasks"
-                      style={{ marginLeft: 4, fontSize: 11 }}
+                      style={{ marginInlineStart: 4, fontSize: 11 }}
                     >
                       ⚠
                     </span>

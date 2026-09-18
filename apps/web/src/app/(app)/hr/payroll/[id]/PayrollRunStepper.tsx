@@ -136,7 +136,7 @@ export function PayrollRunStepper({ status }: { status: string }) {
                   color: labelColor,
                   textAlign: "center",
                   letterSpacing: "0.25px",
-                  paddingRight: isLast ? 0 : 8,
+                  paddingInlineEnd: isLast ? 0 : 8,
                 }}
               >
                 {step.label}

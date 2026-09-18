@@ -199,7 +199,7 @@ function TechnicalEvaluationForm({
             <tr>
               <th scope="col">Vendor</th>
               <th scope="col">Qualified</th>
-              <th scope="col" style={{ textAlign: "right" }}>Technical score (0–100)</th>
+              <th scope="col" style={{ textAlign: "end" }}>Technical score (0–100)</th>
             </tr>
           </thead>
           <tbody>
@@ -214,7 +214,7 @@ function TechnicalEvaluationForm({
                     onChange={(e) => update(b.bidId, { qualified: e.target.checked })}
                   />
                 </td>
-                <td style={{ textAlign: "right" }}>
+                <td style={{ textAlign: "end" }}>
                   <input
                     type="number"
                     className="inp"
@@ -223,7 +223,7 @@ function TechnicalEvaluationForm({
                     aria-label={`${b.vendorName} technical score`}
                     value={rows[b.bidId].score}
                     onChange={(e) => update(b.bidId, { score: e.target.value })}
-                    style={{ width: 80, textAlign: "right" }}
+                    style={{ width: 80, textAlign: "end" }}
                   />
                 </td>
               </tr>

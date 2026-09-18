@@ -19,6 +19,20 @@
  * mass refactor or a disabled gate. Neither is acceptable, so instead: you may
  * not add more.
  *
+ * REL-043 (2026-09-18): scan now excludes *.test.ts(x)/*.spec.ts(x) -- see
+ * collectFiles(). They are not shipped UI, and were producing confirmed false
+ * positives from token collisions that have nothing to do with CSS (mocked
+ * "left-1"/"right-2" ids, LEFT/RIGHT merge-pair-side labels). Known accepted
+ * residual: apps/web/src/lib/crm/dedupCandidates.ts declares a real (non-test)
+ * `{ left: DedupContactSnapshot; right: DedupContactSnapshot }` pair type for
+ * the same merge-pair concept, which still reads as 2 false-positive matches
+ * of the left:/right: pattern. Left uncorrected deliberately: the fields are
+ * not CSS, and renaming them is an unrelated interface-rename refactor across
+ * every call site, not a rtl-check fix. Regex-on-text can't see the difference
+ * between a CSS declaration and a same-shaped identifier; only an AST-aware
+ * rewrite (matching real className/style contexts) would close this for good,
+ * which is a larger undertaking than this gate's current scope.
+ *
  * Usage:
  *   node scripts/ci/rtl-check.mjs                 # gate (fails if count grows)
  *   node scripts/ci/rtl-check.mjs --write-baseline
@@ -107,13 +121,23 @@ function countMatches(text, patterns) {
   return n;
 }
 
+// REL-043: test/spec files are excluded. They are not shipped UI (never rendered
+// for a real user under any `dir`), and in practice they produce confirmed false
+// positives that have nothing to do with layout: e.g. dedupCandidatesHttp.test.ts
+// mocked contact ids "left-1"/"right-2" (matches the left-N/right-N inset-position
+// pattern) and crm/dedup-candidates/page.test.tsx used LEFT/RIGHT as merge-pair-side
+// labels (matches the left:/right: pattern) -- both purely coincidental token shapes,
+// not CSS. Production source that legitimately re-exports a physical property is
+// still caught via the non-test file that actually defines it.
+const TEST_FILE_RE = /\.(test|spec)\.tsx?$/;
+
 function collectFiles(dir, acc = []) {
   if (!existsSync(dir)) return acc;
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
     if (entry.name === "node_modules" || entry.name === "dist" || entry.name === ".next") continue;
     const full = join(dir, entry.name);
     if (entry.isDirectory()) collectFiles(full, acc);
-    else if (/\.(tsx?|css)$/.test(entry.name)) acc.push(full);
+    else if (/\.(tsx?|css)$/.test(entry.name) && !TEST_FILE_RE.test(entry.name)) acc.push(full);
   }
   return acc;
 }

@@ -69,7 +69,7 @@ export default async function ProjectTasksPage({ params }: { params: { id: strin
                 {tasks.map((t) => (
                   <tr key={t.id}>
                     <td>
-                      <div style={{ fontWeight: t.parentTaskId ? 400 : 600, paddingLeft: t.parentTaskId ? 16 : 0 }}>
+                      <div style={{ fontWeight: t.parentTaskId ? 400 : 600, paddingInlineStart: t.parentTaskId ? 16 : 0 }}>
                         {t.name}
                       </div>
                       {t.description && (
@@ -123,7 +123,7 @@ export default async function ProjectTasksPage({ params }: { params: { id: strin
                     <td style={{ color: "var(--ink2)", fontSize: "0.88rem" }}>
                       {t.plannedEnd ?? "—"}
                     </td>
-                    <td style={{ textAlign: "right", color: "var(--ink2)", fontSize: "0.88rem" }}>
+                    <td style={{ textAlign: "end", color: "var(--ink2)", fontSize: "0.88rem" }}>
                       {t.weightPct.toFixed(1)}%
                     </td>
                   </tr>

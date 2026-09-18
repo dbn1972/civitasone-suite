@@ -163,14 +163,14 @@ export default function ApplicationDetailPage() {
 
       <Card title={t("summaryTitle")}>
         <div style={{ padding: "16px 20px", display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px 24px", fontSize: 14 }}>
-          <div><span style={{ color: "var(--mut)", marginRight: 8 }}>{t("applicationId")}</span><code style={{ fontSize: 12 }}>{application.id}</code></div>
-          <div><span style={{ color: "var(--mut)", marginRight: 8 }}>{t("stage")}</span><span style={{ textTransform: "capitalize" }}>{application.stage}</span></div>
-          <div><span style={{ color: "var(--mut)", marginRight: 8 }}>{t("screeningDecision")}</span><span style={{ textTransform: "capitalize" }}>{application.screeningDecision}</span></div>
-          <div><span style={{ color: "var(--mut)", marginRight: 8 }}>{t("source")}</span>{application.source}</div>
-          {application.email && <div><span style={{ color: "var(--mut)", marginRight: 8 }}>{t("email")}</span>{application.email}</div>}
-          {application.qualification && <div><span style={{ color: "var(--mut)", marginRight: 8 }}>{t("qualification")}</span>{application.qualification}</div>}
-          {application.experienceYears != null && <div><span style={{ color: "var(--mut)", marginRight: 8 }}>{t("experience")}</span>{t("experienceYears", { count: application.experienceYears })}</div>}
-          <div><span style={{ color: "var(--mut)", marginRight: 8 }}>{t("applied")}</span>{application.appliedAt}</div>
+          <div><span style={{ color: "var(--mut)", marginInlineEnd: 8 }}>{t("applicationId")}</span><code style={{ fontSize: 12 }}>{application.id}</code></div>
+          <div><span style={{ color: "var(--mut)", marginInlineEnd: 8 }}>{t("stage")}</span><span style={{ textTransform: "capitalize" }}>{application.stage}</span></div>
+          <div><span style={{ color: "var(--mut)", marginInlineEnd: 8 }}>{t("screeningDecision")}</span><span style={{ textTransform: "capitalize" }}>{application.screeningDecision}</span></div>
+          <div><span style={{ color: "var(--mut)", marginInlineEnd: 8 }}>{t("source")}</span>{application.source}</div>
+          {application.email && <div><span style={{ color: "var(--mut)", marginInlineEnd: 8 }}>{t("email")}</span>{application.email}</div>}
+          {application.qualification && <div><span style={{ color: "var(--mut)", marginInlineEnd: 8 }}>{t("qualification")}</span>{application.qualification}</div>}
+          {application.experienceYears != null && <div><span style={{ color: "var(--mut)", marginInlineEnd: 8 }}>{t("experience")}</span>{t("experienceYears", { count: application.experienceYears })}</div>}
+          <div><span style={{ color: "var(--mut)", marginInlineEnd: 8 }}>{t("applied")}</span>{application.appliedAt}</div>
         </div>
       </Card>
 

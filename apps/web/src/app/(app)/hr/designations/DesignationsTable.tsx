@@ -67,7 +67,7 @@ const inputStyle: React.CSSProperties = {
 
 const thStyle: React.CSSProperties = {
   padding: "8px 12px",
-  textAlign: "left",
+  textAlign: "start",
   fontWeight: 600,
   borderBottom: "1px solid var(--line,#e2e8f0)",
   color: "#64748b",
@@ -175,7 +175,7 @@ export function DesignationsTable({ items }: { items: Designation[] }) {
           <tr>
             <th style={thStyle}>{t("colCode")}</th>
             <th style={thStyle}>{t("colDesignation")}</th>
-            <th style={{ ...thStyle, textAlign: "right" }}>{t("colPayLevel")}</th>
+            <th style={{ ...thStyle, textAlign: "end" }}>{t("colPayLevel")}</th>
             <th style={thStyle}>{t("colGradePay")}</th>
             <th style={thStyle}>{t("colServiceGroup")}</th>
             <th style={thStyle}>{t("colPayGrade")}</th>
@@ -212,7 +212,7 @@ export function DesignationsTable({ items }: { items: Designation[] }) {
                         </p>
                       )}
                     </td>
-                    <td style={{ padding: "10px 12px", textAlign: "right" }}>
+                    <td style={{ padding: "10px 12px", textAlign: "end" }}>
                       <input
                         aria-label={t("payLevelAriaLabel")}
                         type="number"
@@ -220,7 +220,7 @@ export function DesignationsTable({ items }: { items: Designation[] }) {
                         max={18}
                         value={editLevel}
                         onChange={(e) => setEditLevel(Number(e.target.value))}
-                        style={{ ...inputStyle, textAlign: "right", maxWidth: 70 }}
+                        style={{ ...inputStyle, textAlign: "end", maxWidth: 70 }}
                       />
                     </td>
                     <td colSpan={2} style={{ padding: "10px 12px", color: "var(--mut,#94a3b8)", fontSize: 12 }}>
@@ -238,7 +238,7 @@ export function DesignationsTable({ items }: { items: Designation[] }) {
                       <Button
                         variant="primary"
                         size="sm"
-                        style={{ marginRight: 6 }}
+                        style={{ marginInlineEnd: 6 }}
                         onClick={() => saveEdit(item.id)}
                         disabled={saving}
                       >
@@ -255,7 +255,7 @@ export function DesignationsTable({ items }: { items: Designation[] }) {
                     <td style={{ padding: "10px 12px", fontWeight: 500 }}>
                       {item.name}
                     </td>
-                    <td style={{ padding: "10px 12px", textAlign: "right", fontVariantNumeric: "tabular-nums" }}>
+                    <td style={{ padding: "10px 12px", textAlign: "end", fontVariantNumeric: "tabular-nums" }}>
                       {item.level > 0 ? (
                         <span style={{ fontWeight: 700, color: "var(--fg,#0f172a)" }}>
                           {t("levelPrefix", { level: item.level })}
@@ -278,7 +278,7 @@ export function DesignationsTable({ items }: { items: Designation[] }) {
                       {item.payGrade ?? "—"}
                     </td>
                     <td style={{ padding: "10px 12px", whiteSpace: "nowrap" }}>
-                      <Button variant="ghost" size="sm" style={{ marginRight: 6 }} onClick={() => startEdit(item)}>
+                      <Button variant="ghost" size="sm" style={{ marginInlineEnd: 6 }} onClick={() => startEdit(item)}>
                         {t("editBtn")}
                       </Button>
                       <Button

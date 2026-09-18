@@ -72,7 +72,7 @@ export default async function ApplicationDetailPage({ params }: { params: { id: 
                 {applicationNo ?? app_.id.slice(0, 8).toUpperCase()}
               </div>
             </div>
-            <div style={{ textAlign: "right" }}>
+            <div style={{ textAlign: "end" }}>
               <div style={{ fontSize: 11, color: "#94a3b8", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.07em" }}>Applied on</div>
               <div style={{ fontSize: 13, fontWeight: 600, color: "#334155", marginTop: 2 }}>
                 {app_.appliedAt ? new Date(app_.appliedAt).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" }) : "—"}
@@ -86,9 +86,9 @@ export default async function ApplicationDetailPage({ params }: { params: { id: 
           <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: "#94a3b8", marginBottom: 16 }}>
             Application Journey
           </div>
-          <div style={{ position: "relative", paddingLeft: 28 }}>
+          <div style={{ position: "relative", paddingInlineStart: 28 }}>
             {/* vertical track line */}
-            <div style={{ position: "absolute", left: 7, top: 6, width: 2, bottom: 6, background: "#e2e8f0" }} />
+            <div style={{ position: "absolute", insetInlineStart: 7, top: 6, width: 2, bottom: 6, background: "#e2e8f0" }} />
             {timeline.map((s, i) => {
               const dot = STAGE_DOT[s.status] ?? STAGE_DOT.future!;
               const isLast = i === timeline.length - 1;
@@ -96,9 +96,9 @@ export default async function ApplicationDetailPage({ params }: { params: { id: 
                 <div key={s.stage} style={{ position: "relative", marginBottom: isLast ? 0 : 20 }}>
                   {/* green track segment for done */}
                   {!isLast && s.status === "done" && (
-                    <div style={{ position: "absolute", left: -21, top: 14, width: 2, height: "calc(100% + 6px)", background: "#047857" }} />
+                    <div style={{ position: "absolute", insetInlineStart: -21, top: 14, width: 2, height: "calc(100% + 6px)", background: "#047857" }} />
                   )}
-                  <div style={{ position: "absolute", left: -24, top: 3, width: 14, height: 14, borderRadius: "50%", background: dot.bg, boxShadow: dot.ring ?? "none", border: "2px solid #fff", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  <div style={{ position: "absolute", insetInlineStart: -24, top: 3, width: 14, height: 14, borderRadius: "50%", background: dot.bg, boxShadow: dot.ring ?? "none", border: "2px solid #fff", display: "flex", alignItems: "center", justifyContent: "center" }}>
                     {s.status === "done" && <span style={{ fontSize: 8, color: "#fff", fontWeight: 800 }}>✓</span>}
                   </div>
                   <div style={{ fontSize: 14, fontWeight: 600, color: s.status === "future" ? "#94a3b8" : "#0f172a" }}>

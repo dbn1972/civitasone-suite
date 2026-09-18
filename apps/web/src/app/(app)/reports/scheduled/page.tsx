@@ -31,7 +31,7 @@ const thStyle: React.CSSProperties = {
   padding: "10px 12px",
   color: "var(--ink2)",
   fontWeight: 600,
-  textAlign: "left",
+  textAlign: "start",
 };
 
 export default async function ScheduledReportsPage() {

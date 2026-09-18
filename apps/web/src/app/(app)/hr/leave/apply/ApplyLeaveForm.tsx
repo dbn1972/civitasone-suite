@@ -370,7 +370,7 @@ export function ApplyLeaveForm({ employees, initialEmployeeId }: Props) {
             <span aria-hidden="true" className="text-red-500">
               *
             </span>
-            <span className="ml-1 font-normal text-slate-500">
+            <span className="ms-1 font-normal text-slate-500">
               {t("reasonHint")}
             </span>
           </label>

@@ -164,11 +164,11 @@ export function OrgConfigPage({ initialLevels, source }: { initialLevels: OrgLev
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13.5 }}>
             <thead>
               <tr style={{ background: "var(--line2, #f8fafc)", borderBottom: "1px solid var(--line)" }}>
-                <th style={{ padding: "10px 16px", textAlign: "left", fontWeight: 650, fontSize: 12, color: "var(--ink2)", width: 40 }} aria-label="Drag handle"></th>
-                <th style={{ padding: "10px 16px", textAlign: "left", fontWeight: 650, fontSize: 12, color: "var(--ink2)" }}>Level</th>
-                <th style={{ padding: "10px 16px", textAlign: "left", fontWeight: 650, fontSize: 12, color: "var(--ink2)" }}>Name</th>
-                <th style={{ padding: "10px 16px", textAlign: "left", fontWeight: 650, fontSize: 12, color: "var(--ink2)" }}>Description</th>
-                <th style={{ padding: "10px 16px", textAlign: "left", fontWeight: 650, fontSize: 12, color: "var(--ink2)" }}>Examples</th>
+                <th style={{ padding: "10px 16px", textAlign: "start", fontWeight: 650, fontSize: 12, color: "var(--ink2)", width: 40 }} aria-label="Drag handle"></th>
+                <th style={{ padding: "10px 16px", textAlign: "start", fontWeight: 650, fontSize: 12, color: "var(--ink2)" }}>Level</th>
+                <th style={{ padding: "10px 16px", textAlign: "start", fontWeight: 650, fontSize: 12, color: "var(--ink2)" }}>Name</th>
+                <th style={{ padding: "10px 16px", textAlign: "start", fontWeight: 650, fontSize: 12, color: "var(--ink2)" }}>Description</th>
+                <th style={{ padding: "10px 16px", textAlign: "start", fontWeight: 650, fontSize: 12, color: "var(--ink2)" }}>Examples</th>
                 <th style={{ padding: "10px 16px", textAlign: "center", fontWeight: 650, fontSize: 12, color: "var(--ink2)", width: 80 }}>Action</th>
               </tr>
             </thead>

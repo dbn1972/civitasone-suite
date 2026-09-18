@@ -107,7 +107,7 @@ function FieldRow({
   return (
     <div style={{ display: "grid", gap: 6 }}>
       <label htmlFor={htmlFor} style={{ fontSize: 12.5, fontWeight: 650, color: "var(--ink2)" }}>
-        {label}{required && <span aria-hidden="true" style={{ color: "#b42318", marginLeft: 2 }}>*</span>}
+        {label}{required && <span aria-hidden="true" style={{ color: "#b42318", marginInlineStart: 2 }}>*</span>}
       </label>
       {children}
       {error && <span role="alert" style={{ fontSize: 12, color: "#b42318" }}>{error}</span>}
