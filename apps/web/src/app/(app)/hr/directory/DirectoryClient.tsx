@@ -360,7 +360,7 @@ export function DirectoryClient({ employees }: DirectoryClientProps) {
                     scope="col"
                     style={{
                       padding: '10px 12px',
-                      textAlign: 'left',
+                      textAlign: 'start',
                       borderBottom: '2px solid var(--border, #e2e8f0)',
                       fontWeight: 700,
                       fontSize: 11,

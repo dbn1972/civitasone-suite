@@ -100,13 +100,13 @@ export function TaxReturnsSummary({ fy, quarters }: { fy: string; quarters: Quar
               </div>
               <div style={{ display: "flex", gap: 16, alignItems: "center", flexWrap: "wrap" }}>
                 {data && data.deducteeCount > 0 ? (
-                  <div style={{ textAlign: "right" }}>
+                  <div style={{ textAlign: "end" }}>
                     <div style={{ fontSize: 11, color: "var(--ink2)" }}>TDS Deposited</div>
                     <div style={{ fontWeight: 700 }}>{tdsRupees === null ? "—" : inrFmt.format(tdsRupees)}</div>
                   </div>
                 ) : null}
                 {data && data.deducteeCount > 0 ? (
-                  <div style={{ textAlign: "right" }}>
+                  <div style={{ textAlign: "end" }}>
                     <div style={{ fontSize: 11, color: "var(--ink2)" }}>Deductees</div>
                     <div style={{ fontWeight: 700 }}>{data.deducteeCount}</div>
                   </div>

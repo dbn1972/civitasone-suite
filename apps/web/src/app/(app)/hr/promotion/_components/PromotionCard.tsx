@@ -104,7 +104,7 @@ export function PromotionCard({ promotion }: Props) {
             <p style={{ margin: "4px 0 0", fontSize: "0.9375rem", fontWeight: 700, color: "#16a34a" }}>{toLabel}</p>
           </div>
           {payStr && (
-            <div style={{ marginLeft: "auto", textAlign: "right" }}>
+            <div style={{ marginInlineStart: "auto", textAlign: "end" }}>
               <p style={{ margin: 0, fontSize: "0.6875rem", color: "var(--ink3)", textTransform: "uppercase", letterSpacing: "0.04em" }}>{t("newBasicLabel")}</p>
               <p style={{ margin: "4px 0 0", fontSize: "1rem", fontWeight: 700, color: "#0f766e" }}>{payStr}</p>
             </div>

@@ -82,7 +82,7 @@ function ProbationCard({ row }: { row: ConfirmationRow }) {
       className="card"
       style={{
         marginBottom: 0,
-        borderLeft: `4px solid ${days < 0 ? "#dc2626" : days <= 14 ? "#f59e0b" : "var(--line, #e2e8f0)"}`,
+        borderInlineStart: `4px solid ${days < 0 ? "#dc2626" : days <= 14 ? "#f59e0b" : "var(--line, #e2e8f0)"}`,
       }}
       aria-label={`Probation confirmation for ${row.employee}`}
     >

@@ -14,7 +14,7 @@ export function PayrollBanner({ daysLeft, monthName, headcount }: Props) {
       </div>
       <Link href="/hr/payroll" className="pb-btn">Start Run →</Link>
       <style>{`
-        .payroll-banner { margin:10px 0 0;background:#fffbeb;border:1px solid #fde68a;border-left:4px solid #d97706;border-radius:6px;padding:10px 14px;display:flex;align-items:center;gap:10px; }
+        .payroll-banner { margin:10px 0 0;background:#fffbeb;border:1px solid #fde68a;border-inline-start:4px solid #d97706;border-radius:6px;padding:10px 14px;display:flex;align-items:center;gap:10px; }
         .pb-icon { flex-shrink:0; }
         .pb-text { flex:1; }
         .pb-label { font-size:11px;font-weight:700;color:#92400e; }

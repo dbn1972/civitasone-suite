@@ -266,7 +266,7 @@ export function EditEmployeeForm({ employee }: Props) {
               {t("managerIdLabel")}
               <span
                 style={{
-                  marginLeft: 6,
+                  marginInlineStart: 6,
                   fontSize: 11,
                   fontWeight: 400,
                   color: "#64748b",
@@ -290,7 +290,7 @@ export function EditEmployeeForm({ employee }: Props) {
               {t("payStructureIdLabel")}
               <span
                 style={{
-                  marginLeft: 6,
+                  marginInlineStart: 6,
                   fontSize: 11,
                   fontWeight: 400,
                   color: "#64748b",

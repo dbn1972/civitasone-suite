@@ -158,7 +158,7 @@ export function DisbursementTransferTable({ transfers }: { transfers: TransferRo
           <thead>
             <tr style={{ borderBottom: "2px solid var(--line2)" }}>
               {columns.map((h) => (
-                <th key={h} style={{ padding: "8px 12px", textAlign: "left", fontWeight: 600, color: "var(--ink2)", whiteSpace: "nowrap" }}>{h}</th>
+                <th key={h} style={{ padding: "8px 12px", textAlign: "start", fontWeight: 600, color: "var(--ink2)", whiteSpace: "nowrap" }}>{h}</th>
               ))}
             </tr>
           </thead>
@@ -173,7 +173,7 @@ export function DisbursementTransferTable({ transfers }: { transfers: TransferRo
                   <div className="mono" style={{ fontSize: 12 }}>{tx.accountNumber}</div>
                   <div style={{ fontSize: 11, color: "var(--ink2)" }}>{tx.ifsc}</div>
                 </td>
-                <td style={{ padding: "10px 12px", textAlign: "right", fontWeight: 600 }}>{inrFmt.format(tx.amountRupees)}</td>
+                <td style={{ padding: "10px 12px", textAlign: "end", fontWeight: 600 }}>{inrFmt.format(tx.amountRupees)}</td>
                 <td style={{ padding: "10px 12px" }}>
                   {tx.nachBatchId
                     ? <span className="mono" style={{ fontSize: 12 }}>{tx.nachBatchId}</span>

@@ -59,7 +59,7 @@ function StorageBar({ used, quota }: { used: number; quota: number }) {
 
 function FeatureBadge({ feature }: { feature: string }) {
   return (
-    <span style={{ padding: "2px 10px", borderRadius: 20, fontSize: 11, fontWeight: 700, background: "var(--primary-light, #eff6ff)", color: "var(--primary-d, #1e40af)", border: "1px solid #bfdbfe", marginRight: 4, marginBottom: 4, display: "inline-block" }}>
+    <span style={{ padding: "2px 10px", borderRadius: 20, fontSize: 11, fontWeight: 700, background: "var(--primary-light, #eff6ff)", color: "var(--primary-d, #1e40af)", border: "1px solid #bfdbfe", marginInlineEnd: 4, marginBottom: 4, display: "inline-block" }}>
       {feature.replace(/_/g, " ")}
     </span>
   );
@@ -96,7 +96,7 @@ export function TenantConfigCard({ config = DEFAULT_CONFIG, isPlatformAdmin = fa
         <Row label="Tenant ID" value={
           <span>
             <span className="mono">{config.tenantId}</span>
-            <button type="button" onClick={() => copy(config.tenantId, "id")} style={{ marginLeft: 8, background: "none", border: "none", cursor: "pointer", fontSize: 12, color: "var(--primary-d)" }}>
+            <button type="button" onClick={() => copy(config.tenantId, "id")} style={{ marginInlineStart: 8, background: "none", border: "none", cursor: "pointer", fontSize: 12, color: "var(--primary-d)" }}>
               {copied === "id" ? "Copied!" : "Copy"}
             </button>
           </span>
@@ -112,7 +112,7 @@ export function TenantConfigCard({ config = DEFAULT_CONFIG, isPlatformAdmin = fa
         <Row label="Database schema" value={
           <span>
             <span className="mono">{config.dbSchema}</span>
-            <button type="button" onClick={() => copy(config.dbSchema, "schema")} style={{ marginLeft: 8, background: "none", border: "none", cursor: "pointer", fontSize: 12, color: "var(--primary-d)" }}>
+            <button type="button" onClick={() => copy(config.dbSchema, "schema")} style={{ marginInlineStart: 8, background: "none", border: "none", cursor: "pointer", fontSize: 12, color: "var(--primary-d)" }}>
               {copied === "schema" ? "Copied!" : "Copy"}
             </button>
           </span>
@@ -120,7 +120,7 @@ export function TenantConfigCard({ config = DEFAULT_CONFIG, isPlatformAdmin = fa
         <Row label="Keycloak realm" value={
           <span>
             <span className="mono">{config.keycloakRealm}</span>
-            <button type="button" onClick={() => copy(config.keycloakRealm, "realm")} style={{ marginLeft: 8, background: "none", border: "none", cursor: "pointer", fontSize: 12, color: "var(--primary-d)" }}>
+            <button type="button" onClick={() => copy(config.keycloakRealm, "realm")} style={{ marginInlineStart: 8, background: "none", border: "none", cursor: "pointer", fontSize: 12, color: "var(--primary-d)" }}>
               {copied === "realm" ? "Copied!" : "Copy"}
             </button>
           </span>
@@ -141,7 +141,7 @@ export function TenantConfigCard({ config = DEFAULT_CONFIG, isPlatformAdmin = fa
           <span>
             {formatDate(config.licensedUntil)}
             {daysUntilExpiry < 30 && daysUntilExpiry >= 0 && (
-              <span style={{ marginLeft: 8, fontSize: 12, color: "var(--warn, #b54708)", fontWeight: 700 }}>
+              <span style={{ marginInlineStart: 8, fontSize: 12, color: "var(--warn, #b54708)", fontWeight: 700 }}>
                 Renew within {daysUntilExpiry} day{daysUntilExpiry === 1 ? "" : "s"}
               </span>
             )}
@@ -151,7 +151,7 @@ export function TenantConfigCard({ config = DEFAULT_CONFIG, isPlatformAdmin = fa
         <Row label="Active seats" value={
           <span>
             {config.activeSeats.toLocaleString("en-IN")}
-            <span style={{ marginLeft: 8, fontSize: 12, color: "var(--ink2)" }}>
+            <span style={{ marginInlineStart: 8, fontSize: 12, color: "var(--ink2)" }}>
               ({Math.round((config.activeSeats / config.licensedSeats) * 100)}% used)
             </span>
           </span>

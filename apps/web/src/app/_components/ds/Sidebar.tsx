@@ -207,7 +207,7 @@ export function Sidebar({ enabledModules, userName, userRole }: SidebarProps = {
                 className="sb-grp"
                 aria-expanded={!actuallyCollapsed}
                 onClick={() => toggleGroup(group)}
-                style={{ width: "100%", textAlign: "left", background: "none", border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 10px" }}
+                style={{ width: "100%", textAlign: "start", background: "none", border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 10px" }}
               >
                 <span>{group}</span>
                 {/*

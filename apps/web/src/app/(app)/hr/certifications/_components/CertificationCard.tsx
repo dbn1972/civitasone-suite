@@ -69,7 +69,7 @@ export function CertificationCard({
       {isMandatory && (
         <div
           style={{
-            position: "absolute", top: 10, right: 12,
+            position: "absolute", top: 10, insetInlineEnd: 12,
             fontSize: 10, fontWeight: 700, background: "#dbeafe", color: "#1d4ed8",
             borderRadius: 4, padding: "2px 6px", textTransform: "uppercase", letterSpacing: "0.06em",
           }}
@@ -80,7 +80,7 @@ export function CertificationCard({
 
       {/* Title & issuing body */}
       <div>
-        <p style={{ margin: 0, fontWeight: 700, fontSize: 14, color: "#1e293b", lineHeight: 1.3, paddingRight: isMandatory ? 80 : 0 }}>
+        <p style={{ margin: 0, fontWeight: 700, fontSize: 14, color: "#1e293b", lineHeight: 1.3, paddingInlineEnd: isMandatory ? 80 : 0 }}>
           {certificationName}
         </p>
         <p style={{ margin: "3px 0 0", fontSize: 12, color: "#64748b" }}>{issuingBody}</p>

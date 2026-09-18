@@ -34,7 +34,7 @@ function Diff({ before, after }: { before?: Record<string, unknown>; after?: Rec
     <div style={{ marginTop: 8, fontSize: 12, background: "var(--line2, #f8fafc)", borderRadius: 6, overflow: "hidden", border: "1px solid var(--line)" }}>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", background: "var(--line, #e2e8f0)", fontSize: 11, fontWeight: 700, color: "var(--ink2)" }}>
         <div style={{ padding: "4px 10px" }}>Before</div>
-        <div style={{ padding: "4px 10px", borderLeft: "1px solid var(--line)" }}>After</div>
+        <div style={{ padding: "4px 10px", borderInlineStart: "1px solid var(--line)" }}>After</div>
       </div>
       {keys.map((k) => {
         const bv = String(before?.[k] ?? "—");
@@ -45,7 +45,7 @@ function Diff({ before, after }: { before?: Record<string, unknown>; after?: Rec
             <div style={{ padding: "4px 10px", color: changed ? "var(--bad, #b42318)" : "var(--ink2)", fontFamily: "monospace" }}>
               <span style={{ fontWeight: 600, color: "var(--ink2)" }}>{k}: </span>{bv}
             </div>
-            <div style={{ padding: "4px 10px", borderLeft: "1px solid var(--line)", color: changed ? "var(--good, #027a48)" : "var(--ink2)", fontFamily: "monospace" }}>
+            <div style={{ padding: "4px 10px", borderInlineStart: "1px solid var(--line)", color: changed ? "var(--good, #027a48)" : "var(--ink2)", fontFamily: "monospace" }}>
               <span style={{ fontWeight: 600, color: "var(--ink2)" }}>{k}: </span>{av}
             </div>
           </div>
@@ -98,7 +98,7 @@ export function AuditLogTable({ events }: { events: PlatformAuditEvent[] }) {
   const pageRows = filtered.slice(safePage * PAGE_SIZE, (safePage + 1) * PAGE_SIZE);
 
   const inpSty: React.CSSProperties = { padding: "7px 10px", borderRadius: 7, border: "1px solid var(--line)", fontSize: 12.5, fontFamily: "inherit", color: "var(--ink)", background: "var(--bg)", minWidth: 0 };
-  const selSty: React.CSSProperties = { ...inpSty, paddingRight: 28 };
+  const selSty: React.CSSProperties = { ...inpSty, paddingInlineEnd: 28 };
 
   return (
     <div className="card">
@@ -150,7 +150,7 @@ export function AuditLogTable({ events }: { events: PlatformAuditEvent[] }) {
           <thead>
             <tr style={{ background: "var(--line2, #f8fafc)", borderBottom: "1px solid var(--line)" }}>
               {["Timestamp", "Actor", "Action type", "Action", "Target", "IP", "Result"].map((h) => (
-                <th key={h} style={{ padding: "10px 14px", textAlign: "left", fontSize: 11.5, fontWeight: 650, color: "var(--ink2)", whiteSpace: "nowrap" }}>{h}</th>
+                <th key={h} style={{ padding: "10px 14px", textAlign: "start", fontSize: 11.5, fontWeight: 650, color: "var(--ink2)", whiteSpace: "nowrap" }}>{h}</th>
               ))}
               <th style={{ padding: "10px 14px", width: 60 }}></th>
             </tr>

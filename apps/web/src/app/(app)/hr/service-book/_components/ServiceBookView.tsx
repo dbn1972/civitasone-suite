@@ -149,7 +149,7 @@ export function ServiceBookView({ entries, employeeId }: Props) {
             </option>
           ))}
         </select>
-        <span style={{ fontSize: "0.8125rem", color: "var(--ink3)", marginLeft: "auto" }}>
+        <span style={{ fontSize: "0.8125rem", color: "var(--ink3)", marginInlineStart: "auto" }}>
           {t("entryCount", { count: filtered.length })}
         </span>
       </div>
@@ -167,7 +167,7 @@ export function ServiceBookView({ entries, employeeId }: Props) {
                   <th
                     key={h}
                     style={{
-                      padding: "9px 12px", textAlign: "left",
+                      padding: "9px 12px", textAlign: "start",
                       fontWeight: 600, fontSize: "0.75rem",
                       color: "var(--ink2)", whiteSpace: "nowrap",
                       borderBottom: "1px solid var(--line, #e2e8f0)",

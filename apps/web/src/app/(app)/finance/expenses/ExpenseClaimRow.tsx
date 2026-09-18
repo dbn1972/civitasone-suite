@@ -42,7 +42,7 @@ export function ExpenseClaimRow({ claim }: ExpenseClaimRowProps) {
       </td>
       <td>{CATEGORY_LABELS[claim.category]}</td>
       <td className="max-w-xs truncate" title={claim.description}>{claim.description}</td>
-      <td className="text-right font-mono">{amountDisplay}</td>
+      <td className="text-end font-mono">{amountDisplay}</td>
       <td className="text-center">
         <span aria-label={claim.receiptAttached ? "Receipt attached" : "No receipt"}>
           {claim.receiptAttached ? "Yes" : "No"}

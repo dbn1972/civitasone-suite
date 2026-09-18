@@ -53,7 +53,7 @@ export function LifecycleTimeline({ events }: Props) {
         aria-hidden
         style={{
           position: "absolute",
-          left: 20,
+          insetInlineStart: 20,
           top: 20,
           bottom: 20,
           width: 2,
@@ -71,7 +71,7 @@ export function LifecycleTimeline({ events }: Props) {
               display: "flex",
               alignItems: "flex-start",
               gap: 14,
-              paddingLeft: 8,
+              paddingInlineStart: 8,
               marginBottom: isLast ? 0 : 24,
               position: "relative",
             }}
@@ -122,7 +122,7 @@ export function LifecycleTimeline({ events }: Props) {
                     {event.status}
                   </span>
                 )}
-                <span style={{ fontSize: "0.75rem", color: "var(--ink3)", marginLeft: "auto" }}>
+                <span style={{ fontSize: "0.75rem", color: "var(--ink3)", marginInlineStart: "auto" }}>
                   {formatIndianDate(event.date)}
                 </span>
               </div>

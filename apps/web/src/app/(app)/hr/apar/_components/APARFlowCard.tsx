@@ -135,7 +135,7 @@ function APARCard({ record }: { record: AparRecord }) {
           aria-hidden
           style={{
             position: "absolute", top: 16,
-            left: "calc(50% / 4)", right: "calc(50% / 4)",
+            insetInlineStart: "calc(50% / 4)", insetInlineEnd: "calc(50% / 4)",
             height: 2, background: "var(--line, #e2e8f0)", zIndex: 0,
           }}
         />

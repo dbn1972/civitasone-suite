@@ -797,31 +797,69 @@ jobs:
         with: { node-version: '${{ env.NODE_VERSION }}', cache: 'pnpm' }
       - run: pnpm install --frozen-lockfile
       - run: pnpm turbo build --filter='./packages/*' --filter='./services/gateway-service'
+
+      # REL-043: every gate below runs with `id` + `continue-on-error: true`,
+      # and the "Require all contract-test gates to pass" step at the very end
+      # is the only one that can fail the job.
+      #
+      # Why: a plain (non-continue-on-error) step stops the whole job at the
+      # first failure, so any ONE red gate hides every gate listed after it.
+      # That wasn't hypothetical -- it's exactly how this job was found
+      # (REL-043): the RTL safety ratchet sat red for 363 commits, and nobody
+      # could tell, because CI silently stopped there every run before reaching
+      # cross-service-events, screens, render-smoke, or CRM link-integrity.
+      # Simply reordering (e.g. moving rtl-check to run last) does not fix
+      # this in general -- it only helps if rtl-check is the ONLY broken gate.
+      # It isn't: verifying this fix, the cross-service-event and CRM
+      # link-integrity gates below turned out to ALSO be independently red the
+      # whole time, reproduced on a clean origin/main with none of this PR's
+      # changes applied (pre-existing, NOT introduced or fixed by this PR --
+      # flagged separately for the gap report, not silently left for the next
+      # person to rediscover the same way REL-043 was found). With
+      # continue-on-error, every gate always executes and reports its own
+      # outcome in the Actions UI regardless of its neighbors, and the final
+      # step below still fails the job overall if any gate is red -- one
+      # broken gate can no longer hide another, permanently, not just for
+      # today's specific red gate.
       - name: Run gateway contract tests (Vitest)
+        id: gateway_contract
+        continue-on-error: true
         run: pnpm exec vitest run tests/contract/gateway.contract.test.ts
 
       # Gate #9 (part 1) — design-token contrast. Runs in the unit suite (no
       # browser) so the single most common root cause of a fleet-wide WCAG
       # failure (someone lightening a text token) is caught in seconds.
       - name: Design-token contrast (WCAG 2.2 AA SC 1.4.3)
+        id: design_tokens
+        continue-on-error: true
         run: pnpm --filter @civitasone/web exec vitest run tests/a11y/design-tokens.test.ts
 
       # Gate #9 (part 2) — RTL safety ratchet. NOTE: the previous rtl-check.mjs
       # was a no-op (its failure condition `logicalRatio < 0` is impossible) and
       # was not wired into CI at all. It is now a real ratchet.
       - name: RTL safety ratchet
+        id: rtl_check
+        continue-on-error: true
         run: node scripts/ci/rtl-check.mjs
 
       # Gate #3 — consumer-driven cross-service event contract.
       # BLOCKING. Fails on any NEW dead subscription, phantom consumption,
       # unemitted event, or orphan event vs tests/contract/known-defects.json.
       # See docs/QA-GATES.md for the tracked-debt inventory and burn-down.
+      # NOTE (REL-043): currently red on main independent of this PR -- see the
+      # continue-on-error note above. swm-service appears to advertise
+      # swm.bulk_generator.updated as unemitted; not investigated or fixed
+      # here, flagged for its own ticket.
       - name: Run cross-service event contract tests (Vitest)
+        id: cross_service_events
+        continue-on-error: true
         run: pnpm exec vitest run tests/contract/cross-service-events.contract.test.ts
         env:
           QUEUE_DRIVER: memory
           JWT_SECRET: ci-test-secret-min-32-chars-long
       - name: Run screen contract tests — static chain analysis (Vitest)
+        id: screens_contract
+        continue-on-error: true
         run: pnpm exec vitest run tests/contract/screens.contract.test.ts
         env:
           QUEUE_DRIVER: memory
@@ -836,16 +874,48 @@ jobs:
       # coverage number the "Screen Verification Gate" job below asserts).
       # Runs under apps/web's own vitest config (jsdom + @testing-library/
       # react) -- same reason the two steps above run --filter @civitasone/web.
+      # REL-043: this is the step that motivated the fix -- confirmed GREEN
+      # (473/544 NO_LOADER screens render cleanly, 91.1% coverage) once it was
+      # actually allowed to run.
       - name: Run render-smoke contract test (Vitest, jsdom)
+        id: render_smoke
+        continue-on-error: true
         run: pnpm --filter @civitasone/web exec vitest run tests/contract/render-smoke.contract.test.ts
 
       # R5 — CRM contract / link integrity. BLOCKING. Fails on any /crm link
       # that points at a non-existent Next.js route (dead navigation tile) or
       # any CRM API path the web app calls that crm-service does not register.
+      # NOTE (REL-043): currently red on main independent of this PR -- see the
+      # continue-on-error note above. GrievanceActions.tsx and RtiActions.tsx
+      # each call a /v1/crm/... path crm-service does not register; not
+      # investigated or fixed here, flagged for its own ticket.
       - name: Run CRM link-integrity contract test (Vitest)
+        id: crm_link_integrity
+        continue-on-error: true
         run: pnpm exec vitest run tests/contract/crm-link-integrity.contract.test.ts
         env:
           QUEUE_DRIVER: memory
+
+      # The actual gate for this job. Every step above always runs (regardless
+      # of any other step's result) and records its own pass/fail as its
+      # `outcome`; this is the one step that turns any non-"success" outcome
+      # into a failed job. `if: always()` so it still runs and still enforces
+      # the gate even if an earlier, unrelated step in the job were ever
+      # cancelled or skipped outright -- continue-on-error alone only covers
+      # a step that actually ran and failed.
+      - name: Require all contract-test gates to pass
+        if: always()
+        run: |
+          if [ "${{ steps.gateway_contract.outcome }}" != "success" ] || \
+             [ "${{ steps.design_tokens.outcome }}" != "success" ] || \
+             [ "${{ steps.rtl_check.outcome }}" != "success" ] || \
+             [ "${{ steps.cross_service_events.outcome }}" != "success" ] || \
+             [ "${{ steps.screens_contract.outcome }}" != "success" ] || \
+             [ "${{ steps.render_smoke.outcome }}" != "success" ] || \
+             [ "${{ steps.crm_link_integrity.outcome }}" != "success" ]; then
+            echo "::error::One or more contract-test gates did not pass -- see the failing step(s) above for detail."
+            exit 1
+          fi
 
   # ─────────────────────────────────────────────
   # Job 6: Screen verification gate

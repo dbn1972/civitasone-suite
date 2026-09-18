@@ -123,7 +123,7 @@ export function RetirementDashboard({ rows, selectedId, onSelect }: Props) {
             className="card"
             style={{
               marginBottom: 0,
-              borderLeft: `4px solid ${borderColor(days)}`,
+              borderInlineStart: `4px solid ${borderColor(days)}`,
               outline: selected ? "2px solid var(--primary, #2563eb)" : "none",
               outlineOffset: -1,
             }}

@@ -52,7 +52,7 @@ function LevelBar({ current, required }: { current: number; required: number }) 
           />
         );
       })}
-      <span style={{ fontSize: 11, color: "#64748b", marginLeft: 4 }}>{current}/{required}</span>
+      <span style={{ fontSize: 11, color: "#64748b", marginInlineStart: 4 }}>{current}/{required}</span>
     </div>
   );
 }
@@ -66,7 +66,7 @@ export function LearningPathCard({
     <div
       style={{
         border: `1px solid ${pc.border}`,
-        borderLeft: `4px solid ${pc.pill}`,
+        borderInlineStart: `4px solid ${pc.pill}`,
         borderRadius: 10,
         background: pc.bg,
         padding: "14px 16px",

@@ -118,7 +118,7 @@ export function ServicePageClient({ service, counterMode = false }: Props) {
                   {d.mandatory ? (
                     <span
                       style={{
-                        marginLeft: 8,
+                        marginInlineStart: 8,
                         fontSize: 11,
                         fontWeight: 600,
                         color: "var(--bad)",
@@ -130,7 +130,7 @@ export function ServicePageClient({ service, counterMode = false }: Props) {
                       {t("required")}
                     </span>
                   ) : (
-                    <span style={{ marginLeft: 8, fontSize: 11, color: "var(--mut)" }}>{t("optional")}</span>
+                    <span style={{ marginInlineStart: 8, fontSize: 11, color: "var(--mut)" }}>{t("optional")}</span>
                   )}
                 </span>
               </li>

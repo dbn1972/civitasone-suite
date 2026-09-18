@@ -204,11 +204,11 @@ export default function NewAnnualPlanPage() {
                   <tr>
                     <th scope="col">Item code</th>
                     <th scope="col">Description</th>
-                    <th scope="col" style={{ textAlign: "right" }}>
+                    <th scope="col" style={{ textAlign: "end" }}>
                       Qty
                     </th>
                     <th scope="col">UoM</th>
-                    <th scope="col" style={{ textAlign: "right" }}>
+                    <th scope="col" style={{ textAlign: "end" }}>
                       Est. value (INR)
                     </th>
                     <th scope="col">Method</th>
@@ -255,7 +255,7 @@ export default function NewAnnualPlanPage() {
                               ),
                             })
                           }
-                          style={{ width: 70, textAlign: "right" }}
+                          style={{ width: 70, textAlign: "end" }}
                         />
                       </td>
                       <td>
@@ -282,7 +282,7 @@ export default function NewAnnualPlanPage() {
                               ),
                             })
                           }
-                          style={{ width: 120, textAlign: "right" }}
+                          style={{ width: 120, textAlign: "end" }}
                           step="0.01"
                         />
                       </td>

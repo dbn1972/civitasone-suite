@@ -41,7 +41,7 @@ const ROLE_COLORS: Record<string, { bg: string; color: string }> = {
 function RoleBadge({ role }: { role: string }) {
   const colors = ROLE_COLORS[role] ?? { bg: "var(--line2)", color: "var(--ink2)" };
   return (
-    <span style={{ ...colors, padding: "2px 8px", borderRadius: 20, fontSize: 11, fontWeight: 700, marginRight: 4, display: "inline-block" }}>
+    <span style={{ ...colors, padding: "2px 8px", borderRadius: 20, fontSize: 11, fontWeight: 700, marginInlineEnd: 4, display: "inline-block" }}>
       {role.replace(/_/g, " ")}
     </span>
   );
@@ -227,7 +227,7 @@ export function UserManagementPage({ users: seed, source = "api" }: { users: Pla
                 />
               </th>
               {["User", "Roles", "Dept", "Last login", "MFA", "Status", "Actions"].map((h) => (
-                <th key={h} style={{ padding: "10px 14px", textAlign: "left", fontSize: 11.5, fontWeight: 650, color: "var(--ink2)", whiteSpace: "nowrap" }}>{h}</th>
+                <th key={h} style={{ padding: "10px 14px", textAlign: "start", fontSize: 11.5, fontWeight: 650, color: "var(--ink2)", whiteSpace: "nowrap" }}>{h}</th>
               ))}
             </tr>
           </thead>

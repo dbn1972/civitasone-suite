@@ -137,7 +137,7 @@ function FormulaTooltip({ code }: { code: string }) {
           style={{
             position: "absolute",
             bottom: "calc(100% + 6px)",
-            left: "50%",
+            insetInlineStart: "50%",
             transform: "translateX(-50%)",
             background: "#1e293b",
             color: "#f1f5f9",
@@ -221,19 +221,19 @@ export function ComponentGrid({ components }: ComponentGridProps) {
         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
           <thead>
             <tr style={{ borderBottom: "2px solid var(--line)" }}>
-              <th style={{ textAlign: "left", padding: "8px 10px", color: "var(--fg2)", fontWeight: 600, fontSize: 11, textTransform: "uppercase", letterSpacing: "0.05em" }}>
+              <th style={{ textAlign: "start", padding: "8px 10px", color: "var(--fg2)", fontWeight: 600, fontSize: 11, textTransform: "uppercase", letterSpacing: "0.05em" }}>
                 Code
               </th>
-              <th style={{ textAlign: "left", padding: "8px 10px", color: "var(--fg2)", fontWeight: 600, fontSize: 11, textTransform: "uppercase", letterSpacing: "0.05em" }}>
+              <th style={{ textAlign: "start", padding: "8px 10px", color: "var(--fg2)", fontWeight: 600, fontSize: 11, textTransform: "uppercase", letterSpacing: "0.05em" }}>
                 Component Name
               </th>
-              <th style={{ textAlign: "left", padding: "8px 10px", color: "var(--fg2)", fontWeight: 600, fontSize: 11, textTransform: "uppercase", letterSpacing: "0.05em" }}>
+              <th style={{ textAlign: "start", padding: "8px 10px", color: "var(--fg2)", fontWeight: 600, fontSize: 11, textTransform: "uppercase", letterSpacing: "0.05em" }}>
                 Type
               </th>
               <th style={{ textAlign: "center", padding: "8px 10px", color: "var(--fg2)", fontWeight: 600, fontSize: 11, textTransform: "uppercase", letterSpacing: "0.05em" }}>
                 Formula
               </th>
-              <th style={{ textAlign: "left", padding: "8px 10px", color: "var(--fg2)", fontWeight: 600, fontSize: 11, textTransform: "uppercase", letterSpacing: "0.05em" }}>
+              <th style={{ textAlign: "start", padding: "8px 10px", color: "var(--fg2)", fontWeight: 600, fontSize: 11, textTransform: "uppercase", letterSpacing: "0.05em" }}>
                 Taxability
               </th>
               <th style={{ textAlign: "center", padding: "8px 10px", color: "var(--fg2)", fontWeight: 600, fontSize: 11, textTransform: "uppercase", letterSpacing: "0.05em" }}>

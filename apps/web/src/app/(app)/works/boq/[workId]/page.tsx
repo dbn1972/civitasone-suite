@@ -186,35 +186,35 @@ export default async function BoqDetailPage({
             <table className="tbl" style={{ width: "100%" }}>
               <tbody>
                 <tr>
-                  <th scope="row" style={{ textAlign: "left", fontWeight: 600 }}>Work Amount</th>
+                  <th scope="row" style={{ textAlign: "start", fontWeight: 600 }}>Work Amount</th>
                   <td className="num">{formatMoney(recap.workAmount)}</td>
                 </tr>
                 <tr>
-                  <th scope="row" style={{ textAlign: "left", fontWeight: 600 }}>Contingency</th>
+                  <th scope="row" style={{ textAlign: "start", fontWeight: 600 }}>Contingency</th>
                   <td className="num">{recap.contingencyPercent}%</td>
                 </tr>
                 <tr>
-                  <th scope="row" style={{ textAlign: "left", fontWeight: 600 }}>Turnover Tax</th>
+                  <th scope="row" style={{ textAlign: "start", fontWeight: 600 }}>Turnover Tax</th>
                   <td className="num">{recap.turnoverTaxPercent}%</td>
                 </tr>
                 <tr>
-                  <th scope="row" style={{ textAlign: "left", fontWeight: 600 }}>Work Charge</th>
+                  <th scope="row" style={{ textAlign: "start", fontWeight: 600 }}>Work Charge</th>
                   <td className="num">{recap.workChargePercent}%</td>
                 </tr>
                 <tr>
-                  <th scope="row" style={{ textAlign: "left", fontWeight: 600 }}>Quality Control</th>
+                  <th scope="row" style={{ textAlign: "start", fontWeight: 600 }}>Quality Control</th>
                   <td className="num">{recap.qualityControlPercent}%</td>
                 </tr>
                 <tr>
-                  <th scope="row" style={{ textAlign: "left", fontWeight: 600 }}>Centage</th>
+                  <th scope="row" style={{ textAlign: "start", fontWeight: 600 }}>Centage</th>
                   <td className="num">{recap.centagePercent}%</td>
                 </tr>
                 <tr>
-                  <th scope="row" style={{ textAlign: "left", fontWeight: 600 }}>Other Charges</th>
+                  <th scope="row" style={{ textAlign: "start", fontWeight: 600 }}>Other Charges</th>
                   <td className="num">{formatMoney(recap.otherCharges)}</td>
                 </tr>
                 <tr style={{ borderTop: "2px solid var(--border, #e2e8f0)" }}>
-                  <th scope="row" style={{ textAlign: "left", fontWeight: 700 }}>Grand Total</th>
+                  <th scope="row" style={{ textAlign: "start", fontWeight: 700 }}>Grand Total</th>
                   <td className="num" style={{ fontWeight: 700 }}>{formatMoney(recap.grandTotal)}</td>
                 </tr>
               </tbody>

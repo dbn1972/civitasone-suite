@@ -42,7 +42,7 @@ function TradeLicensesTable({ licenses }: { licenses: TradeLicenseRow[] }) {
         <thead>
           <tr style={{ borderBottom: "2px solid var(--line)" }}>
             {["License No.", "Business", "Proprietor", "Type", "Cat.", "Status", "Expiry", "Fee (₹)", "Paid (₹)"].map((h) => (
-              <th key={h} style={{ padding: "8px 10px", textAlign: "left", fontWeight: 600, color: "var(--ink2)", whiteSpace: "nowrap" }}>{h}</th>
+              <th key={h} style={{ padding: "8px 10px", textAlign: "start", fontWeight: 600, color: "var(--ink2)", whiteSpace: "nowrap" }}>{h}</th>
             ))}
           </tr>
         </thead>
@@ -63,8 +63,8 @@ function TradeLicensesTable({ licenses }: { licenses: TradeLicenseRow[] }) {
                 </span>
               </td>
               <td style={{ padding: "8px 10px", whiteSpace: "nowrap" }}>{l.expiryDate ?? "—"}</td>
-              <td style={{ padding: "8px 10px", textAlign: "right" }}>{feeRupees(l.feeMinor)}</td>
-              <td style={{ padding: "8px 10px", textAlign: "right" }}>{feeRupees(l.feePaidMinor)}</td>
+              <td style={{ padding: "8px 10px", textAlign: "end" }}>{feeRupees(l.feeMinor)}</td>
+              <td style={{ padding: "8px 10px", textAlign: "end" }}>{feeRupees(l.feePaidMinor)}</td>
             </tr>
           ))}
         </tbody>

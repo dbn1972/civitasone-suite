@@ -119,7 +119,7 @@ export function CreateIndentForm() {
         <div className="field" style={{ background: "#fff", padding: "13px 16px" }}>
           <label className="label" htmlFor="estimatedValue">
             Estimated total value (INR)
-            <span style={{ fontSize: 11, color: "var(--ink2)", marginLeft: 4 }}>— determines procurement mode</span>
+            <span style={{ fontSize: 11, color: "var(--ink2)", marginInlineStart: 4 }}>— determines procurement mode</span>
           </label>
           <input id="estimatedValue" type="number" className="inp" value={estimatedValue} onChange={(e) => setEstimatedValue(e.target.value)} step="0.01" min="0" style={{ minHeight: 44 }} placeholder="e.g. 250000" />
           {modeBand ? (

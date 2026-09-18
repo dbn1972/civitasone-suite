@@ -1,13 +1,13 @@
 {
   "gatewayPrefix": "/api/v1/crm",
   "counts": {
-    "crmApiRoutes": 89,
-    "crmNextRoutes": 12,
-    "webNextRoutes": 641,
-    "crmLinks": 33,
+    "crmApiRoutes": 278,
+    "crmNextRoutes": 56,
+    "webNextRoutes": 829,
+    "crmLinks": 98,
     "deadLinks": 0,
-    "crmApiRefs": 24,
-    "unknownApiRefs": 0
+    "crmApiRefs": 40,
+    "unknownApiRefs": 2
   },
   "crmApiRoutes": [
     {
@@ -37,6 +37,11 @@
     },
     {
       "method": "GET",
+      "path": "/v1/crm/accounts/:id/360",
+      "source": "services/crm-service/src/modules/contacts/three-sixty-routes.ts"
+    },
+    {
+      "method": "GET",
       "path": "/v1/crm/accounts/:id/ancestors",
       "source": "services/crm-service/src/modules/accounts/hierarchy-routes.ts"
     },
@@ -59,6 +64,41 @@
       "method": "POST",
       "path": "/v1/crm/accounts/:id/plans/:planId/activate",
       "source": "services/crm-service/src/modules/accounts/plans-routes.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/crm/accounts/:id/relationships",
+      "source": "services/crm-service/src/modules/accounts/relationships-routes.ts"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/crm/accounts/:id/relationships",
+      "source": "services/crm-service/src/modules/accounts/relationships-routes.ts"
+    },
+    {
+      "method": "DELETE",
+      "path": "/v1/crm/accounts/:id/relationships/:relId",
+      "source": "services/crm-service/src/modules/accounts/relationships-routes.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/crm/accounts/:id/sponsors",
+      "source": "services/crm-service/src/modules/accounts/sponsors-routes.ts"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/crm/accounts/:id/sponsors",
+      "source": "services/crm-service/src/modules/accounts/sponsors-routes.ts"
+    },
+    {
+      "method": "DELETE",
+      "path": "/v1/crm/accounts/:id/sponsors/:sponsorId",
+      "source": "services/crm-service/src/modules/accounts/sponsors-routes.ts"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/crm/accounts/merge",
+      "source": "services/crm-service/src/modules/contacts/merge-routes.ts"
     },
     {
       "method": "GET",
@@ -96,6 +136,111 @@
       "source": "services/crm-service/src/modules/activities/capture-routes.ts"
     },
     {
+      "method": "GET",
+      "path": "/v1/crm/addresses",
+      "source": "services/crm-service/src/modules/addresses/routes.ts"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/crm/addresses",
+      "source": "services/crm-service/src/modules/addresses/routes.ts"
+    },
+    {
+      "method": "DELETE",
+      "path": "/v1/crm/addresses/:id",
+      "source": "services/crm-service/src/modules/addresses/routes.ts"
+    },
+    {
+      "method": "PUT",
+      "path": "/v1/crm/addresses/:id",
+      "source": "services/crm-service/src/modules/addresses/routes.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/crm/appointments",
+      "source": "services/crm-service/src/modules/appointments/routes.ts"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/crm/appointments",
+      "source": "services/crm-service/src/modules/appointments/routes.ts"
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/crm/appointments/:id",
+      "source": "services/crm-service/src/modules/appointments/routes.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/crm/appointments/capacity",
+      "source": "services/crm-service/src/modules/appointments/routes.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/crm/assignment-queues",
+      "source": "services/crm-service/src/modules/assignment/routes.ts"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/crm/assignment-queues",
+      "source": "services/crm-service/src/modules/assignment/routes.ts"
+    },
+    {
+      "method": "DELETE",
+      "path": "/v1/crm/assignment-queues/:id",
+      "source": "services/crm-service/src/modules/assignment/routes.ts"
+    },
+    {
+      "method": "PUT",
+      "path": "/v1/crm/assignment-queues/:id",
+      "source": "services/crm-service/src/modules/assignment/routes.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/crm/assignment-rules",
+      "source": "services/crm-service/src/modules/assignment/routes.ts"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/crm/assignment-rules",
+      "source": "services/crm-service/src/modules/assignment/routes.ts"
+    },
+    {
+      "method": "DELETE",
+      "path": "/v1/crm/assignment-rules/:id",
+      "source": "services/crm-service/src/modules/assignment/routes.ts"
+    },
+    {
+      "method": "PUT",
+      "path": "/v1/crm/assignment-rules/:id",
+      "source": "services/crm-service/src/modules/assignment/routes.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/crm/branches",
+      "source": "services/crm-service/src/modules/assignment/routes.ts"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/crm/branches",
+      "source": "services/crm-service/src/modules/assignment/routes.ts"
+    },
+    {
+      "method": "DELETE",
+      "path": "/v1/crm/branches/:id",
+      "source": "services/crm-service/src/modules/assignment/routes.ts"
+    },
+    {
+      "method": "PUT",
+      "path": "/v1/crm/branches/:id",
+      "source": "services/crm-service/src/modules/assignment/routes.ts"
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/crm/campaigns/:id/cost",
+      "source": "services/crm-service/src/modules/dashboard/section8-routes.ts"
+    },
+    {
       "method": "PUT",
       "path": "/v1/crm/campaigns/:id/performance",
       "source": "services/crm-service/src/modules/dashboard/campaign-roi-routes.ts"
@@ -109,6 +254,96 @@
       "method": "GET",
       "path": "/v1/crm/campaigns/roi-summary",
       "source": "services/crm-service/src/modules/dashboard/campaign-roi-routes.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/crm/canned-responses",
+      "source": "services/crm-service/src/modules/communications/canned-responses/routes.ts"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/crm/canned-responses",
+      "source": "services/crm-service/src/modules/communications/canned-responses/routes.ts"
+    },
+    {
+      "method": "DELETE",
+      "path": "/v1/crm/canned-responses/:id",
+      "source": "services/crm-service/src/modules/communications/canned-responses/routes.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/crm/canned-responses/:id",
+      "source": "services/crm-service/src/modules/communications/canned-responses/routes.ts"
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/crm/canned-responses/:id",
+      "source": "services/crm-service/src/modules/communications/canned-responses/routes.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/crm/commission-rules",
+      "source": "services/crm-service/src/modules/commissions/routes.ts"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/crm/commission-rules",
+      "source": "services/crm-service/src/modules/commissions/routes.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/crm/commissions",
+      "source": "services/crm-service/src/modules/commissions/routes.ts"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/crm/commissions/:id/approve",
+      "source": "services/crm-service/src/modules/commissions/routes.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/crm/commissions/summary",
+      "source": "services/crm-service/src/modules/commissions/routes.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/crm/communications",
+      "source": "services/crm-service/src/modules/communications/routes.ts"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/crm/communications",
+      "source": "services/crm-service/src/modules/communications/routes.ts"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/crm/communications/bulk-send",
+      "source": "services/crm-service/src/modules/communications/send-routes.ts"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/crm/communications/campaigns/:id/approve",
+      "source": "services/crm-service/src/modules/communications/campaign-approval-routes.ts"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/crm/communications/campaigns/:id/reject",
+      "source": "services/crm-service/src/modules/communications/campaign-approval-routes.ts"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/crm/communications/preview",
+      "source": "services/crm-service/src/modules/communications/preview-routes.ts"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/crm/communications/send",
+      "source": "services/crm-service/src/modules/communications/send-routes.ts"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/crm/communications/template-preview",
+      "source": "services/crm-service/src/modules/communications/template-preview-routes.ts"
     },
     {
       "method": "GET",
@@ -137,8 +372,33 @@
     },
     {
       "method": "GET",
+      "path": "/v1/crm/contacts/:id/360",
+      "source": "services/crm-service/src/modules/contacts/three-sixty-routes.ts"
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/crm/contacts/:id/classification",
+      "source": "services/crm-service/src/modules/contacts/routes.ts"
+    },
+    {
+      "method": "GET",
       "path": "/v1/crm/contacts/:id/detail",
       "source": "services/crm-service/src/modules/contacts/routes.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/crm/contacts/:id/flags",
+      "source": "services/crm-service/src/modules/contacts/flags-routes.ts"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/crm/contacts/:id/flags",
+      "source": "services/crm-service/src/modules/contacts/flags-routes.ts"
+    },
+    {
+      "method": "DELETE",
+      "path": "/v1/crm/contacts/:id/flags/:flag",
+      "source": "services/crm-service/src/modules/contacts/flags-routes.ts"
     },
     {
       "method": "GET",
@@ -156,6 +416,11 @@
       "source": "services/crm-service/src/modules/contacts/roles-routes.ts"
     },
     {
+      "method": "GET",
+      "path": "/v1/crm/contacts/:id/timeline",
+      "source": "services/crm-service/src/modules/contacts/timeline-routes.ts"
+    },
+    {
       "method": "POST",
       "path": "/v1/crm/contacts/:id/transfer",
       "source": "services/crm-service/src/modules/teams/routes.ts"
@@ -167,8 +432,18 @@
     },
     {
       "method": "POST",
+      "path": "/v1/crm/contacts/bulk/import/internal",
+      "source": "services/crm-service/src/modules/contacts/routes.ts"
+    },
+    {
+      "method": "POST",
       "path": "/v1/crm/contacts/dedup",
       "source": "services/crm-service/src/modules/contacts/identity-routes.ts"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/crm/contacts/duplicate-check",
+      "source": "services/crm-service/src/modules/contacts/dedup-routes.ts"
     },
     {
       "method": "GET",
@@ -217,6 +492,86 @@
     },
     {
       "method": "GET",
+      "path": "/v1/crm/dashboard/activity-metrics",
+      "source": "services/crm-service/src/modules/dashboard/section8-routes.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/crm/dashboard/campaign-roi-full",
+      "source": "services/crm-service/src/modules/dashboard/section8-routes.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/crm/dashboard/control-tower",
+      "source": "services/crm-service/src/modules/dashboard/control-tower-routes.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/crm/dashboard/conversion-funnel",
+      "source": "services/crm-service/src/modules/dashboard/analytics-routes.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/crm/dashboard/cross-sell-signals",
+      "source": "services/crm-service/src/modules/dashboard/analytics-routes.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/crm/dashboard/dormant-accounts",
+      "source": "services/crm-service/src/modules/dashboard/analytics-routes.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/crm/dashboard/follow-up-compliance",
+      "source": "services/crm-service/src/modules/dashboard/analytics-routes.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/crm/dashboard/forecast-breakdown",
+      "source": "services/crm-service/src/modules/dashboard/section8-routes.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/crm/dashboard/inactive-users",
+      "source": "services/crm-service/src/modules/dashboard/section8-routes.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/crm/dashboard/integration-health",
+      "source": "services/crm-service/src/modules/dashboard/section8-routes.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/crm/dashboard/lead-ageing",
+      "source": "services/crm-service/src/modules/dashboard/analytics-routes.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/crm/dashboard/lead-response-time",
+      "source": "services/crm-service/src/modules/dashboard/analytics-routes.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/crm/dashboard/pipeline-coverage",
+      "source": "services/crm-service/src/modules/dashboard/section8-routes.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/crm/dashboard/volume-vs-actual",
+      "source": "services/crm-service/src/modules/dashboard/volume-vs-actual-routes.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/crm/dashboard/won-lost-analysis",
+      "source": "services/crm-service/src/modules/dashboard/analytics-routes.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/crm/data-quality",
+      "source": "services/crm-service/src/modules/dashboard/data-quality-routes.ts"
+    },
+    {
+      "method": "GET",
       "path": "/v1/crm/deals",
       "source": "services/crm-service/src/modules/deals/routes.ts"
     },
@@ -256,9 +611,234 @@
       "source": "services/crm-service/src/modules/contacts/roles-routes.ts"
     },
     {
+      "method": "PUT",
+      "path": "/v1/crm/deals/close-policy",
+      "source": "services/crm-service/src/modules/deals/close-routes.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/crm/deals/funnel",
+      "source": "services/crm-service/src/modules/deals/routes.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/crm/deals/kanban",
+      "source": "services/crm-service/src/modules/deals/routes.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/crm/deals/stage-ageing",
+      "source": "services/crm-service/src/modules/deals/routes.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/crm/dedup-rules",
+      "source": "services/crm-service/src/modules/contacts/dedup-routes.ts"
+    },
+    {
+      "method": "PUT",
+      "path": "/v1/crm/dedup-rules",
+      "source": "services/crm-service/src/modules/contacts/dedup-routes.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/crm/document-types",
+      "source": "services/crm-service/src/modules/documents/types-routes.ts"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/crm/document-types",
+      "source": "services/crm-service/src/modules/documents/types-routes.ts"
+    },
+    {
+      "method": "DELETE",
+      "path": "/v1/crm/document-types/:id",
+      "source": "services/crm-service/src/modules/documents/types-routes.ts"
+    },
+    {
+      "method": "PUT",
+      "path": "/v1/crm/document-types/:id",
+      "source": "services/crm-service/src/modules/documents/types-routes.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/crm/documents",
+      "source": "services/crm-service/src/modules/documents/routes.ts"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/crm/documents",
+      "source": "services/crm-service/src/modules/documents/routes.ts"
+    },
+    {
+      "method": "DELETE",
+      "path": "/v1/crm/documents/:id",
+      "source": "services/crm-service/src/modules/documents/routes.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/crm/documents/:id/download",
+      "source": "services/crm-service/src/modules/documents/routes.ts"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/crm/documents/:id/scan-result",
+      "source": "services/crm-service/src/modules/documents/routes.ts"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/crm/documents/:id/verify",
+      "source": "services/crm-service/src/modules/documents/routes.ts"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/crm/documents/presign",
+      "source": "services/crm-service/src/modules/documents/routes.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/crm/escalation-rules",
+      "source": "services/crm-service/src/modules/assignment/routes.ts"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/crm/escalation-rules",
+      "source": "services/crm-service/src/modules/assignment/routes.ts"
+    },
+    {
+      "method": "DELETE",
+      "path": "/v1/crm/escalation-rules/:id",
+      "source": "services/crm-service/src/modules/assignment/routes.ts"
+    },
+    {
+      "method": "PUT",
+      "path": "/v1/crm/escalation-rules/:id",
+      "source": "services/crm-service/src/modules/assignment/routes.ts"
+    },
+    {
       "method": "GET",
       "path": "/v1/crm/forecast",
       "source": "services/crm-service/src/modules/deals/forecast-route.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/crm/grievances",
+      "source": "services/crm-service/src/modules/grievances/routes.ts"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/crm/grievances",
+      "source": "services/crm-service/src/modules/grievances/routes.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/crm/grievances/:id",
+      "source": "services/crm-service/src/modules/grievances/routes.ts"
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/crm/grievances/:id/assign",
+      "source": "services/crm-service/src/modules/grievances/routes.ts"
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/crm/grievances/:id/close",
+      "source": "services/crm-service/src/modules/grievances/routes.ts"
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/crm/grievances/:id/escalate",
+      "source": "services/crm-service/src/modules/grievances/routes.ts"
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/crm/grievances/:id/first-appeal",
+      "source": "services/crm-service/src/modules/grievances/routes.ts"
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/crm/grievances/:id/forward",
+      "source": "services/crm-service/src/modules/grievances/routes.ts"
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/crm/grievances/:id/resolve",
+      "source": "services/crm-service/src/modules/grievances/routes.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/crm/grievances/stats",
+      "source": "services/crm-service/src/modules/grievances/routes.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/crm/lead-capture-forms",
+      "source": "services/crm-service/src/modules/leads/capture-forms-routes.ts"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/crm/lead-capture-forms",
+      "source": "services/crm-service/src/modules/leads/capture-forms-routes.ts"
+    },
+    {
+      "method": "DELETE",
+      "path": "/v1/crm/lead-capture-forms/:id",
+      "source": "services/crm-service/src/modules/leads/capture-forms-routes.ts"
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/crm/lead-capture-forms/:id",
+      "source": "services/crm-service/src/modules/leads/capture-forms-routes.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/crm/lead-field-rules",
+      "source": "services/crm-service/src/modules/leads/field-rules-routes.ts"
+    },
+    {
+      "method": "PUT",
+      "path": "/v1/crm/lead-field-rules",
+      "source": "services/crm-service/src/modules/leads/field-rules-routes.ts"
+    },
+    {
+      "method": "DELETE",
+      "path": "/v1/crm/lead-field-rules/:fieldName",
+      "source": "services/crm-service/src/modules/leads/field-rules-routes.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/crm/lead-reason-codes",
+      "source": "services/crm-service/src/modules/leads/reason-codes-routes.ts"
+    },
+    {
+      "method": "PUT",
+      "path": "/v1/crm/lead-reason-codes",
+      "source": "services/crm-service/src/modules/leads/reason-codes-routes.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/crm/lead-score-rules",
+      "source": "services/crm-service/src/modules/leads/score-rules-routes.ts"
+    },
+    {
+      "method": "PUT",
+      "path": "/v1/crm/lead-score-rules",
+      "source": "services/crm-service/src/modules/leads/score-rules-routes.ts"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/crm/leads/:id/accept",
+      "source": "services/crm-service/src/modules/assignment/routes.ts"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/crm/leads/:id/assign",
+      "source": "services/crm-service/src/modules/assignment/routes.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/crm/leads/:id/assignment-log",
+      "source": "services/crm-service/src/modules/assignment/routes.ts"
     },
     {
       "method": "GET",
@@ -272,8 +852,23 @@
     },
     {
       "method": "GET",
+      "path": "/v1/crm/leads/:id/qualifications",
+      "source": "services/crm-service/src/modules/leads/qualification-routes.ts"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/crm/leads/:id/qualify",
+      "source": "services/crm-service/src/modules/leads/qualification-routes.ts"
+    },
+    {
+      "method": "GET",
       "path": "/v1/crm/leads/:id/score",
       "source": "services/crm-service/src/modules/leads/score-route.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/crm/leads/:id/score-history",
+      "source": "services/crm-service/src/modules/leads/score-rules-routes.ts"
     },
     {
       "method": "POST",
@@ -284,6 +879,26 @@
       "method": "POST",
       "path": "/v1/crm/leads/inbound",
       "source": "services/crm-service/src/modules/leads/inbound-routes.ts"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/crm/leads/merge",
+      "source": "services/crm-service/src/modules/contacts/merge-routes.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/crm/linked-accounts",
+      "source": "services/crm-service/src/modules/integrations/routes.ts"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/crm/linked-accounts",
+      "source": "services/crm-service/src/modules/integrations/routes.ts"
+    },
+    {
+      "method": "DELETE",
+      "path": "/v1/crm/linked-accounts/:id",
+      "source": "services/crm-service/src/modules/integrations/routes.ts"
     },
     {
       "method": "GET",
@@ -304,6 +919,46 @@
       "method": "GET",
       "path": "/v1/crm/next-actions/compliance",
       "source": "services/crm-service/src/modules/activities/next-action-routes.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/crm/onboarding-cases",
+      "source": "services/crm-service/src/modules/onboarding/routes.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/crm/onboarding-cases/:id",
+      "source": "services/crm-service/src/modules/onboarding/routes.ts"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/crm/onboarding-cases/:id/kyc",
+      "source": "services/crm-service/src/modules/onboarding/routes.ts"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/crm/onboarding-cases/:id/stage",
+      "source": "services/crm-service/src/modules/onboarding/routes.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/crm/partners",
+      "source": "services/crm-service/src/modules/assignment/routes.ts"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/crm/partners",
+      "source": "services/crm-service/src/modules/assignment/routes.ts"
+    },
+    {
+      "method": "DELETE",
+      "path": "/v1/crm/partners/:id",
+      "source": "services/crm-service/src/modules/assignment/routes.ts"
+    },
+    {
+      "method": "PUT",
+      "path": "/v1/crm/partners/:id",
+      "source": "services/crm-service/src/modules/assignment/routes.ts"
     },
     {
       "method": "GET",
@@ -332,6 +987,76 @@
     },
     {
       "method": "GET",
+      "path": "/v1/crm/price-books",
+      "source": "services/crm-service/src/modules/price-books/routes.ts"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/crm/price-books",
+      "source": "services/crm-service/src/modules/price-books/routes.ts"
+    },
+    {
+      "method": "DELETE",
+      "path": "/v1/crm/price-books/:id",
+      "source": "services/crm-service/src/modules/price-books/routes.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/crm/price-books/:id",
+      "source": "services/crm-service/src/modules/price-books/routes.ts"
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/crm/price-books/:id",
+      "source": "services/crm-service/src/modules/price-books/routes.ts"
+    },
+    {
+      "method": "PUT",
+      "path": "/v1/crm/price-books/:id/items",
+      "source": "services/crm-service/src/modules/price-books/routes.ts"
+    },
+    {
+      "method": "DELETE",
+      "path": "/v1/crm/price-books/:id/items/:productId",
+      "source": "services/crm-service/src/modules/price-books/routes.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/crm/price-books/resolve",
+      "source": "services/crm-service/src/modules/price-books/routes.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/crm/products",
+      "source": "services/crm-service/src/modules/products/routes.ts"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/crm/products",
+      "source": "services/crm-service/src/modules/products/routes.ts"
+    },
+    {
+      "method": "DELETE",
+      "path": "/v1/crm/products/:id",
+      "source": "services/crm-service/src/modules/products/routes.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/crm/products/:id",
+      "source": "services/crm-service/src/modules/products/routes.ts"
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/crm/products/:id",
+      "source": "services/crm-service/src/modules/products/routes.ts"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/crm/public/leads/:formKey",
+      "source": "services/crm-service/src/modules/leads/public-routes.ts"
+    },
+    {
+      "method": "GET",
       "path": "/v1/crm/qbr",
       "source": "services/crm-service/src/modules/accounts/qbr-routes.ts"
     },
@@ -357,6 +1082,41 @@
     },
     {
       "method": "GET",
+      "path": "/v1/crm/qualification-frameworks",
+      "source": "services/crm-service/src/modules/leads/qualification-routes.ts"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/crm/qualification-frameworks",
+      "source": "services/crm-service/src/modules/leads/qualification-routes.ts"
+    },
+    {
+      "method": "DELETE",
+      "path": "/v1/crm/qualification-frameworks/:id",
+      "source": "services/crm-service/src/modules/leads/qualification-routes.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/crm/qualification-frameworks/:id",
+      "source": "services/crm-service/src/modules/leads/qualification-routes.ts"
+    },
+    {
+      "method": "PUT",
+      "path": "/v1/crm/qualification-frameworks/:id",
+      "source": "services/crm-service/src/modules/leads/qualification-routes.ts"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/crm/quotation-approvals/:id/decide",
+      "source": "services/crm-service/src/modules/deals/quotation-approval-routes.ts"
+    },
+    {
+      "method": "PUT",
+      "path": "/v1/crm/quotation-approvals/thresholds",
+      "source": "services/crm-service/src/modules/deals/quotation-approval-routes.ts"
+    },
+    {
+      "method": "GET",
       "path": "/v1/crm/quotations",
       "source": "services/crm-service/src/modules/deals/quotations-routes.ts"
     },
@@ -368,6 +1128,26 @@
     {
       "method": "POST",
       "path": "/v1/crm/quotations/:id/accept",
+      "source": "services/crm-service/src/modules/deals/quotations-routes.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/crm/quotations/:id/approvals",
+      "source": "services/crm-service/src/modules/deals/quotation-approval-routes.ts"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/crm/quotations/:id/approvals",
+      "source": "services/crm-service/src/modules/deals/quotation-approval-routes.ts"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/crm/quotations/:id/convert-to-order",
+      "source": "services/crm-service/src/modules/deals/quotations-routes.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/crm/quotations/:id/document",
       "source": "services/crm-service/src/modules/deals/quotations-routes.ts"
     },
     {
@@ -409,6 +1189,151 @@
       "method": "GET",
       "path": "/v1/crm/recurring-tasks/due",
       "source": "services/crm-service/src/modules/activities/recurring-routes.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/crm/referrals",
+      "source": "services/crm-service/src/modules/referrals/routes.ts"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/crm/referrals",
+      "source": "services/crm-service/src/modules/referrals/routes.ts"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/crm/referrals/:id/convert",
+      "source": "services/crm-service/src/modules/referrals/routes.ts"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/crm/referrals/reconcile",
+      "source": "services/crm-service/src/modules/referrals/routes.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/crm/rti",
+      "source": "services/crm-service/src/modules/rti/rti-route.ts"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/crm/rti",
+      "source": "services/crm-service/src/modules/rti/rti-route.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/crm/rti/:id",
+      "source": "services/crm-service/src/modules/rti/rti-route.ts"
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/crm/rti/:id/first-appeal",
+      "source": "services/crm-service/src/modules/rti/rti-route.ts"
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/crm/rti/:id/forward",
+      "source": "services/crm-service/src/modules/rti/rti-route.ts"
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/crm/rti/:id/respond",
+      "source": "services/crm-service/src/modules/rti/rti-route.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/crm/sentiment",
+      "source": "services/crm-service/src/modules/sentiment/routes.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/crm/sentiment/summary",
+      "source": "services/crm-service/src/modules/sentiment/routes.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/crm/service-requests",
+      "source": "services/crm-service/src/modules/service-requests/routes.ts"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/crm/service-requests",
+      "source": "services/crm-service/src/modules/service-requests/routes.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/crm/service-requests/:id",
+      "source": "services/crm-service/src/modules/service-requests/routes.ts"
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/crm/service-requests/:id/status",
+      "source": "services/crm-service/src/modules/service-requests/routes.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/crm/stage-limits",
+      "source": "services/crm-service/src/modules/deals/stage-limits-routes.ts"
+    },
+    {
+      "method": "PUT",
+      "path": "/v1/crm/stage-limits",
+      "source": "services/crm-service/src/modules/deals/stage-limits-routes.ts"
+    },
+    {
+      "method": "DELETE",
+      "path": "/v1/crm/stage-limits/:id",
+      "source": "services/crm-service/src/modules/deals/stage-limits-routes.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/crm/subscriptions",
+      "source": "services/crm-service/src/modules/subscriptions/routes.ts"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/crm/subscriptions",
+      "source": "services/crm-service/src/modules/subscriptions/routes.ts"
+    },
+    {
+      "method": "PATCH",
+      "path": "/v1/crm/subscriptions/:id",
+      "source": "services/crm-service/src/modules/subscriptions/routes.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/crm/subscriptions/due",
+      "source": "services/crm-service/src/modules/subscriptions/routes.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/crm/synced-items",
+      "source": "services/crm-service/src/modules/integrations/routes.ts"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/crm/synced-items",
+      "source": "services/crm-service/src/modules/integrations/routes.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/crm/task-escalation-rules",
+      "source": "services/crm-service/src/modules/activities/task-escalation-routes.ts"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/crm/task-escalation-rules",
+      "source": "services/crm-service/src/modules/activities/task-escalation-routes.ts"
+    },
+    {
+      "method": "DELETE",
+      "path": "/v1/crm/task-escalation-rules/:id",
+      "source": "services/crm-service/src/modules/activities/task-escalation-routes.ts"
+    },
+    {
+      "method": "PUT",
+      "path": "/v1/crm/task-escalation-rules/:id",
+      "source": "services/crm-service/src/modules/activities/task-escalation-routes.ts"
     },
     {
       "method": "GET",
@@ -454,26 +1379,130 @@
       "method": "GET",
       "path": "/v1/crm/tenders/upcoming",
       "source": "services/crm-service/src/modules/deals/tenders-routes.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/crm/territories",
+      "source": "services/crm-service/src/modules/assignment/routes.ts"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/crm/territories",
+      "source": "services/crm-service/src/modules/assignment/routes.ts"
+    },
+    {
+      "method": "DELETE",
+      "path": "/v1/crm/territories/:id",
+      "source": "services/crm-service/src/modules/assignment/routes.ts"
+    },
+    {
+      "method": "PUT",
+      "path": "/v1/crm/territories/:id",
+      "source": "services/crm-service/src/modules/assignment/routes.ts"
     }
   ],
   "crmNextRoutes": [
     "/crm",
+    "/crm/accounts",
+    "/crm/accounts/[id]",
     "/crm/activities",
+    "/crm/agent-workload",
+    "/crm/assignment-directory",
+    "/crm/assignment-rules",
+    "/crm/campaigns",
+    "/crm/campaigns/[id]",
     "/crm/contacts",
     "/crm/contacts/[id]",
     "/crm/contacts/[id]/edit",
     "/crm/contacts/import",
     "/crm/contacts/new",
+    "/crm/control-tower",
+    "/crm/custom-fields",
     "/crm/dashboard",
+    "/crm/data-quality",
     "/crm/deals",
     "/crm/deals/[id]",
     "/crm/deals/new",
-    "/crm/pipeline"
+    "/crm/dedup-candidates",
+    "/crm/dedup-rules",
+    "/crm/document-types",
+    "/crm/documents",
+    "/crm/escalation-rules",
+    "/crm/forecast",
+    "/crm/grievances",
+    "/crm/grievances/[id]",
+    "/crm/grievances/new",
+    "/crm/health",
+    "/crm/health/[accountId]",
+    "/crm/lead-forms",
+    "/crm/lead-reason-codes",
+    "/crm/lead-scoring",
+    "/crm/linked-accounts",
+    "/crm/onboarding",
+    "/crm/onboarding/[id]",
+    "/crm/opportunities",
+    "/crm/opportunities/new",
+    "/crm/opportunity-ageing",
+    "/crm/pipeline",
+    "/crm/pipelines",
+    "/crm/price-books",
+    "/crm/products",
+    "/crm/qualification-frameworks",
+    "/crm/quotations",
+    "/crm/rti",
+    "/crm/rti/[id]",
+    "/crm/rti/new",
+    "/crm/service-requests",
+    "/crm/service-requests/[id]",
+    "/crm/service-requests/new",
+    "/crm/task-escalation",
+    "/crm/voice-of-customer",
+    "/crm/voice-of-customer/feedback"
   ],
   "links": [
     {
+      "file": "apps/web/src/app/_components/crm/AccountRelationshipsEditor.tsx",
+      "line": 175,
+      "kind": "href",
+      "target": "/crm/accounts/${r.toAccountId}",
+      "resolved": "/crm/accounts/__param__",
+      "ok": true
+    },
+    {
+      "file": "apps/web/src/app/_components/crm/ContactRolesEditor.tsx",
+      "line": 144,
+      "kind": "href",
+      "target": "/crm/deals/${r.dealId}",
+      "resolved": "/crm/deals/__param__",
+      "ok": true
+    },
+    {
+      "file": "apps/web/src/app/_components/crm/Customer360Panel.tsx",
+      "line": 210,
+      "kind": "href",
+      "target": "/crm/deals/${d.id}",
+      "resolved": "/crm/deals/__param__",
+      "ok": true
+    },
+    {
+      "file": "apps/web/src/app/_components/crm/LeadFilters.tsx",
+      "line": 56,
+      "kind": "navigate",
+      "target": "/crm/contacts",
+      "resolved": "/crm/contacts",
+      "ok": true
+    },
+    {
+      "file": "apps/web/src/app/_components/crm/OpportunityViews.tsx",
+      "line": 158,
+      "kind": "href",
+      "target": "/crm/pipelines",
+      "resolved": "/crm/pipelines",
+      "ok": true
+    },
+    {
       "file": "apps/web/src/app/_components/ds/Sidebar.tsx",
-      "line": 58,
+      "line": 83,
       "kind": "href",
       "target": "/crm",
       "resolved": "/crm",
@@ -488,8 +1517,40 @@
       "ok": true
     },
     {
+      "file": "apps/web/src/app/(app)/crm/accounts/[id]/page.tsx",
+      "line": 94,
+      "kind": "rowLinkPrefix",
+      "target": "/crm/accounts/",
+      "resolved": "/crm/accounts/__param__",
+      "ok": true
+    },
+    {
+      "file": "apps/web/src/app/(app)/crm/accounts/[id]/page.tsx",
+      "line": 113,
+      "kind": "href",
+      "target": "/crm/accounts/${node.id}",
+      "resolved": "/crm/accounts/__param__",
+      "ok": true
+    },
+    {
+      "file": "apps/web/src/app/(app)/crm/accounts/[id]/page.tsx",
+      "line": 133,
+      "kind": "href",
+      "target": "/crm/contacts?search=${encodeURIComponent(account.name)}",
+      "resolved": "/crm/contacts",
+      "ok": true
+    },
+    {
+      "file": "apps/web/src/app/(app)/crm/accounts/AccountHierarchy.tsx",
+      "line": 25,
+      "kind": "href",
+      "target": "/crm/accounts/${row.id}",
+      "resolved": "/crm/accounts/__param__",
+      "ok": true
+    },
+    {
       "file": "apps/web/src/app/(app)/crm/contacts/[id]/ContactDetailActions.tsx",
-      "line": 59,
+      "line": 70,
       "kind": "href",
       "target": "/crm/contacts/${contactId}/edit",
       "resolved": "/crm/contacts/__param__/edit",
@@ -497,7 +1558,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/crm/contacts/[id]/ContactDetailActions.tsx",
-      "line": 74,
+      "line": 85,
       "kind": "navigate",
       "target": "/crm/contacts",
       "resolved": "/crm/contacts",
@@ -505,7 +1566,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/crm/contacts/[id]/edit/EditContactForm.tsx",
-      "line": 60,
+      "line": 138,
       "kind": "navigate",
       "target": "/crm/contacts/${params.id}",
       "resolved": "/crm/contacts/__param__",
@@ -513,7 +1574,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/crm/contacts/[id]/edit/EditContactForm.tsx",
-      "line": 70,
+      "line": 148,
       "kind": "href",
       "target": "/crm/contacts/${params.id}",
       "resolved": "/crm/contacts/__param__",
@@ -521,7 +1582,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/crm/contacts/[id]/page.tsx",
-      "line": 63,
+      "line": 107,
       "kind": "rowLinkPrefix",
       "target": "/crm/deals/",
       "resolved": "/crm/deals/__param__",
@@ -529,7 +1590,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/crm/contacts/ContactToolbar.tsx",
-      "line": 17,
+      "line": 19,
       "kind": "navigate",
       "target": "/crm/contacts?${params.toString()}",
       "resolved": "/crm/contacts",
@@ -537,7 +1598,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/crm/contacts/ContactToolbar.tsx",
-      "line": 57,
+      "line": 59,
       "kind": "href",
       "target": "/crm/contacts/new",
       "resolved": "/crm/contacts/new",
@@ -545,7 +1606,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/crm/contacts/ContactToolbar.tsx",
-      "line": 59,
+      "line": 61,
       "kind": "href",
       "target": "/crm/contacts/import",
       "resolved": "/crm/contacts/import",
@@ -553,23 +1614,15 @@
     },
     {
       "file": "apps/web/src/app/(app)/crm/contacts/import/page.tsx",
-      "line": 60,
+      "line": 73,
       "kind": "navigate",
       "target": "/crm/contacts",
       "resolved": "/crm/contacts",
       "ok": true
     },
     {
-      "file": "apps/web/src/app/(app)/crm/contacts/import/page.tsx",
-      "line": 70,
-      "kind": "href",
-      "target": "/crm/contacts",
-      "resolved": "/crm/contacts",
-      "ok": true
-    },
-    {
       "file": "apps/web/src/app/(app)/crm/contacts/new/page.tsx",
-      "line": 43,
+      "line": 173,
       "kind": "navigate",
       "target": "/crm/contacts/${body.id}",
       "resolved": "/crm/contacts/__param__",
@@ -577,15 +1630,15 @@
     },
     {
       "file": "apps/web/src/app/(app)/crm/contacts/new/page.tsx",
-      "line": 53,
-      "kind": "href",
-      "target": "/crm/contacts",
-      "resolved": "/crm/contacts",
+      "line": 307,
+      "kind": "navigate",
+      "target": "/crm/contacts/${c.id}",
+      "resolved": "/crm/contacts/__param__",
       "ok": true
     },
     {
       "file": "apps/web/src/app/(app)/crm/dashboard/page.tsx",
-      "line": 17,
+      "line": 20,
       "kind": "href",
       "target": "/crm/contacts/new",
       "resolved": "/crm/contacts/new",
@@ -593,54 +1646,6 @@
     },
     {
       "file": "apps/web/src/app/(app)/crm/dashboard/page.tsx",
-      "line": 18,
-      "kind": "href",
-      "target": "/crm/deals/new",
-      "resolved": "/crm/deals/new",
-      "ok": true
-    },
-    {
-      "file": "apps/web/src/app/(app)/crm/dashboard/page.tsx",
-      "line": 31,
-      "kind": "href",
-      "target": "/crm/contacts",
-      "resolved": "/crm/contacts",
-      "ok": true
-    },
-    {
-      "file": "apps/web/src/app/(app)/crm/dashboard/page.tsx",
-      "line": 32,
-      "kind": "href",
-      "target": "/crm/deals",
-      "resolved": "/crm/deals",
-      "ok": true
-    },
-    {
-      "file": "apps/web/src/app/(app)/crm/dashboard/page.tsx",
-      "line": 33,
-      "kind": "href",
-      "target": "/crm/activities",
-      "resolved": "/crm/activities",
-      "ok": true
-    },
-    {
-      "file": "apps/web/src/app/(app)/crm/deals/new/page.tsx",
-      "line": 79,
-      "kind": "navigate",
-      "target": "/crm/deals",
-      "resolved": "/crm/deals",
-      "ok": true
-    },
-    {
-      "file": "apps/web/src/app/(app)/crm/deals/new/page.tsx",
-      "line": 89,
-      "kind": "href",
-      "target": "/crm/deals",
-      "resolved": "/crm/deals",
-      "ok": true
-    },
-    {
-      "file": "apps/web/src/app/(app)/crm/deals/page.tsx",
       "line": 21,
       "kind": "href",
       "target": "/crm/deals/new",
@@ -648,8 +1653,184 @@
       "ok": true
     },
     {
+      "file": "apps/web/src/app/(app)/crm/dashboard/page.tsx",
+      "line": 34,
+      "kind": "href",
+      "target": "/crm/contacts",
+      "resolved": "/crm/contacts",
+      "ok": true
+    },
+    {
+      "file": "apps/web/src/app/(app)/crm/dashboard/page.tsx",
+      "line": 35,
+      "kind": "href",
+      "target": "/crm/deals",
+      "resolved": "/crm/deals",
+      "ok": true
+    },
+    {
+      "file": "apps/web/src/app/(app)/crm/dashboard/page.tsx",
+      "line": 36,
+      "kind": "href",
+      "target": "/crm/activities",
+      "resolved": "/crm/activities",
+      "ok": true
+    },
+    {
+      "file": "apps/web/src/app/(app)/crm/data-quality/page.tsx",
+      "line": 13,
+      "kind": "href",
+      "target": "/crm/dedup-rules",
+      "resolved": "/crm/dedup-rules",
+      "ok": true
+    },
+    {
+      "file": "apps/web/src/app/(app)/crm/deals/new/page.tsx",
+      "line": 83,
+      "kind": "navigate",
+      "target": "/crm/deals",
+      "resolved": "/crm/deals",
+      "ok": true
+    },
+    {
+      "file": "apps/web/src/app/(app)/crm/deals/page.tsx",
+      "line": 20,
+      "kind": "href",
+      "target": "/crm/deals/new",
+      "resolved": "/crm/deals/new",
+      "ok": true
+    },
+    {
+      "file": "apps/web/src/app/(app)/crm/documents/page.tsx",
+      "line": 27,
+      "kind": "href",
+      "target": "/crm/document-types",
+      "resolved": "/crm/document-types",
+      "ok": true
+    },
+    {
+      "file": "apps/web/src/app/(app)/crm/documents/page.tsx",
+      "line": 32,
+      "kind": "href",
+      "target": "/crm/accounts",
+      "resolved": "/crm/accounts",
+      "ok": true
+    },
+    {
+      "file": "apps/web/src/app/(app)/crm/documents/page.tsx",
+      "line": 33,
+      "kind": "href",
+      "target": "/crm/contacts",
+      "resolved": "/crm/contacts",
+      "ok": true
+    },
+    {
+      "file": "apps/web/src/app/(app)/crm/documents/page.tsx",
+      "line": 34,
+      "kind": "href",
+      "target": "/crm/document-types",
+      "resolved": "/crm/document-types",
+      "ok": true
+    },
+    {
+      "file": "apps/web/src/app/(app)/crm/forecast/page.tsx",
+      "line": 28,
+      "kind": "href",
+      "target": "/crm/pipeline",
+      "resolved": "/crm/pipeline",
+      "ok": true
+    },
+    {
+      "file": "apps/web/src/app/(app)/crm/forecast/StageBreakdownTable.tsx",
+      "line": 66,
+      "kind": "href",
+      "target": "/crm/deals/new",
+      "resolved": "/crm/deals/new",
+      "ok": true
+    },
+    {
+      "file": "apps/web/src/app/(app)/crm/grievances/GrievancesTable.tsx",
+      "line": 94,
+      "kind": "href",
+      "target": "/crm/grievances/${r.id}",
+      "resolved": "/crm/grievances/__param__",
+      "ok": true
+    },
+    {
+      "file": "apps/web/src/app/(app)/crm/grievances/new/page.tsx",
+      "line": 45,
+      "kind": "navigate",
+      "target": "/crm/grievances/${data.id}",
+      "resolved": "/crm/grievances/__param__",
+      "ok": true
+    },
+    {
+      "file": "apps/web/src/app/(app)/crm/grievances/new/page.tsx",
+      "line": 251,
+      "kind": "href",
+      "target": "/crm/grievances",
+      "resolved": "/crm/grievances",
+      "ok": true
+    },
+    {
+      "file": "apps/web/src/app/(app)/crm/grievances/page.tsx",
+      "line": 41,
+      "kind": "href",
+      "target": "/crm/grievances/new",
+      "resolved": "/crm/grievances/new",
+      "ok": true
+    },
+    {
+      "file": "apps/web/src/app/(app)/crm/health/[accountId]/FollowUpModal.tsx",
+      "line": 100,
+      "kind": "navigate",
+      "target": "/crm/service-requests/${data.id}",
+      "resolved": "/crm/service-requests/__param__",
+      "ok": true
+    },
+    {
+      "file": "apps/web/src/app/(app)/crm/health/[accountId]/page.tsx",
+      "line": 40,
+      "kind": "href",
+      "target": "/crm/health",
+      "resolved": "/crm/health",
+      "ok": true
+    },
+    {
+      "file": "apps/web/src/app/(app)/crm/health/[accountId]/page.tsx",
+      "line": 56,
+      "kind": "href",
+      "target": "/crm/accounts/${breakdown.accountId}",
+      "resolved": "/crm/accounts/__param__",
+      "ok": true
+    },
+    {
+      "file": "apps/web/src/app/(app)/crm/health/page.tsx",
+      "line": 26,
+      "kind": "href",
+      "target": "/crm/accounts",
+      "resolved": "/crm/accounts",
+      "ok": true
+    },
+    {
+      "file": "apps/web/src/app/(app)/crm/onboarding/OnboardingList.tsx",
+      "line": 114,
+      "kind": "href",
+      "target": "/crm/onboarding/${c.id}",
+      "resolved": "/crm/onboarding/__param__",
+      "ok": true
+    },
+    {
+      "file": "apps/web/src/app/(app)/crm/opportunities/page.tsx",
+      "line": 13,
+      "kind": "href",
+      "target": "/crm/opportunities/new",
+      "resolved": "/crm/opportunities/new",
+      "ok": true
+    },
+    {
       "file": "apps/web/src/app/(app)/crm/page.tsx",
-      "line": 6,
+      "line": 10,
       "kind": "href",
       "target": "/crm/dashboard",
       "resolved": "/crm/dashboard",
@@ -657,7 +1838,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/crm/page.tsx",
-      "line": 7,
+      "line": 11,
       "kind": "href",
       "target": "/crm/contacts",
       "resolved": "/crm/contacts",
@@ -665,7 +1846,15 @@
     },
     {
       "file": "apps/web/src/app/(app)/crm/page.tsx",
-      "line": 8,
+      "line": 12,
+      "kind": "href",
+      "target": "/crm/accounts",
+      "resolved": "/crm/accounts",
+      "ok": true
+    },
+    {
+      "file": "apps/web/src/app/(app)/crm/page.tsx",
+      "line": 13,
       "kind": "href",
       "target": "/crm/deals",
       "resolved": "/crm/deals",
@@ -673,7 +1862,15 @@
     },
     {
       "file": "apps/web/src/app/(app)/crm/page.tsx",
-      "line": 9,
+      "line": 14,
+      "kind": "href",
+      "target": "/crm/activities",
+      "resolved": "/crm/activities",
+      "ok": true
+    },
+    {
+      "file": "apps/web/src/app/(app)/crm/page.tsx",
+      "line": 20,
       "kind": "href",
       "target": "/crm/pipeline",
       "resolved": "/crm/pipeline",
@@ -681,10 +1878,234 @@
     },
     {
       "file": "apps/web/src/app/(app)/crm/page.tsx",
-      "line": 10,
+      "line": 21,
       "kind": "href",
-      "target": "/crm/activities",
-      "resolved": "/crm/activities",
+      "target": "/crm/pipelines",
+      "resolved": "/crm/pipelines",
+      "ok": true
+    },
+    {
+      "file": "apps/web/src/app/(app)/crm/page.tsx",
+      "line": 22,
+      "kind": "href",
+      "target": "/crm/opportunities",
+      "resolved": "/crm/opportunities",
+      "ok": true
+    },
+    {
+      "file": "apps/web/src/app/(app)/crm/page.tsx",
+      "line": 23,
+      "kind": "href",
+      "target": "/crm/opportunity-ageing",
+      "resolved": "/crm/opportunity-ageing",
+      "ok": true
+    },
+    {
+      "file": "apps/web/src/app/(app)/crm/page.tsx",
+      "line": 24,
+      "kind": "href",
+      "target": "/crm/forecast",
+      "resolved": "/crm/forecast",
+      "ok": true
+    },
+    {
+      "file": "apps/web/src/app/(app)/crm/page.tsx",
+      "line": 25,
+      "kind": "href",
+      "target": "/crm/quotations",
+      "resolved": "/crm/quotations",
+      "ok": true
+    },
+    {
+      "file": "apps/web/src/app/(app)/crm/page.tsx",
+      "line": 26,
+      "kind": "href",
+      "target": "/crm/onboarding",
+      "resolved": "/crm/onboarding",
+      "ok": true
+    },
+    {
+      "file": "apps/web/src/app/(app)/crm/page.tsx",
+      "line": 32,
+      "kind": "href",
+      "target": "/crm/grievances",
+      "resolved": "/crm/grievances",
+      "ok": true
+    },
+    {
+      "file": "apps/web/src/app/(app)/crm/page.tsx",
+      "line": 33,
+      "kind": "href",
+      "target": "/crm/service-requests",
+      "resolved": "/crm/service-requests",
+      "ok": true
+    },
+    {
+      "file": "apps/web/src/app/(app)/crm/page.tsx",
+      "line": 34,
+      "kind": "href",
+      "target": "/crm/campaigns",
+      "resolved": "/crm/campaigns",
+      "ok": true
+    },
+    {
+      "file": "apps/web/src/app/(app)/crm/page.tsx",
+      "line": 35,
+      "kind": "href",
+      "target": "/crm/voice-of-customer",
+      "resolved": "/crm/voice-of-customer",
+      "ok": true
+    },
+    {
+      "file": "apps/web/src/app/(app)/crm/page.tsx",
+      "line": 36,
+      "kind": "href",
+      "target": "/crm/health",
+      "resolved": "/crm/health",
+      "ok": true
+    },
+    {
+      "file": "apps/web/src/app/(app)/crm/page.tsx",
+      "line": 37,
+      "kind": "href",
+      "target": "/crm/control-tower",
+      "resolved": "/crm/control-tower",
+      "ok": true
+    },
+    {
+      "file": "apps/web/src/app/(app)/crm/page.tsx",
+      "line": 38,
+      "kind": "href",
+      "target": "/crm/lead-forms",
+      "resolved": "/crm/lead-forms",
+      "ok": true
+    },
+    {
+      "file": "apps/web/src/app/(app)/crm/page.tsx",
+      "line": 44,
+      "kind": "href",
+      "target": "/crm/products",
+      "resolved": "/crm/products",
+      "ok": true
+    },
+    {
+      "file": "apps/web/src/app/(app)/crm/page.tsx",
+      "line": 45,
+      "kind": "href",
+      "target": "/crm/price-books",
+      "resolved": "/crm/price-books",
+      "ok": true
+    },
+    {
+      "file": "apps/web/src/app/(app)/crm/page.tsx",
+      "line": 46,
+      "kind": "href",
+      "target": "/crm/documents",
+      "resolved": "/crm/documents",
+      "ok": true
+    },
+    {
+      "file": "apps/web/src/app/(app)/crm/page.tsx",
+      "line": 47,
+      "kind": "href",
+      "target": "/crm/document-types",
+      "resolved": "/crm/document-types",
+      "ok": true
+    },
+    {
+      "file": "apps/web/src/app/(app)/crm/page.tsx",
+      "line": 53,
+      "kind": "href",
+      "target": "/crm/custom-fields",
+      "resolved": "/crm/custom-fields",
+      "ok": true
+    },
+    {
+      "file": "apps/web/src/app/(app)/crm/page.tsx",
+      "line": 54,
+      "kind": "href",
+      "target": "/crm/dedup-rules",
+      "resolved": "/crm/dedup-rules",
+      "ok": true
+    },
+    {
+      "file": "apps/web/src/app/(app)/crm/page.tsx",
+      "line": 55,
+      "kind": "href",
+      "target": "/crm/lead-scoring",
+      "resolved": "/crm/lead-scoring",
+      "ok": true
+    },
+    {
+      "file": "apps/web/src/app/(app)/crm/page.tsx",
+      "line": 56,
+      "kind": "href",
+      "target": "/crm/qualification-frameworks",
+      "resolved": "/crm/qualification-frameworks",
+      "ok": true
+    },
+    {
+      "file": "apps/web/src/app/(app)/crm/page.tsx",
+      "line": 57,
+      "kind": "href",
+      "target": "/crm/lead-reason-codes",
+      "resolved": "/crm/lead-reason-codes",
+      "ok": true
+    },
+    {
+      "file": "apps/web/src/app/(app)/crm/page.tsx",
+      "line": 58,
+      "kind": "href",
+      "target": "/crm/assignment-rules",
+      "resolved": "/crm/assignment-rules",
+      "ok": true
+    },
+    {
+      "file": "apps/web/src/app/(app)/crm/page.tsx",
+      "line": 59,
+      "kind": "href",
+      "target": "/crm/assignment-directory",
+      "resolved": "/crm/assignment-directory",
+      "ok": true
+    },
+    {
+      "file": "apps/web/src/app/(app)/crm/page.tsx",
+      "line": 60,
+      "kind": "href",
+      "target": "/crm/agent-workload",
+      "resolved": "/crm/agent-workload",
+      "ok": true
+    },
+    {
+      "file": "apps/web/src/app/(app)/crm/page.tsx",
+      "line": 61,
+      "kind": "href",
+      "target": "/crm/escalation-rules",
+      "resolved": "/crm/escalation-rules",
+      "ok": true
+    },
+    {
+      "file": "apps/web/src/app/(app)/crm/page.tsx",
+      "line": 62,
+      "kind": "href",
+      "target": "/crm/task-escalation",
+      "resolved": "/crm/task-escalation",
+      "ok": true
+    },
+    {
+      "file": "apps/web/src/app/(app)/crm/page.tsx",
+      "line": 63,
+      "kind": "href",
+      "target": "/crm/linked-accounts",
+      "resolved": "/crm/linked-accounts",
+      "ok": true
+    },
+    {
+      "file": "apps/web/src/app/(app)/crm/page.tsx",
+      "line": 64,
+      "kind": "href",
+      "target": "/crm/data-quality",
+      "resolved": "/crm/data-quality",
       "ok": true
     },
     {
@@ -697,7 +2118,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/crm/pipeline/_components/KanbanBoard.tsx",
-      "line": 191,
+      "line": 213,
       "kind": "href",
       "target": "/crm/deals/new",
       "resolved": "/crm/deals/new",
@@ -712,8 +2133,96 @@
       "ok": true
     },
     {
+      "file": "apps/web/src/app/(app)/crm/rti/new/page.tsx",
+      "line": 59,
+      "kind": "navigate",
+      "target": "/crm/rti/${data.id}",
+      "resolved": "/crm/rti/__param__",
+      "ok": true
+    },
+    {
+      "file": "apps/web/src/app/(app)/crm/rti/new/page.tsx",
+      "line": 274,
+      "kind": "href",
+      "target": "/crm/rti",
+      "resolved": "/crm/rti",
+      "ok": true
+    },
+    {
+      "file": "apps/web/src/app/(app)/crm/rti/page.tsx",
+      "line": 50,
+      "kind": "href",
+      "target": "/crm/rti/new",
+      "resolved": "/crm/rti/new",
+      "ok": true
+    },
+    {
+      "file": "apps/web/src/app/(app)/crm/rti/RtiTable.tsx",
+      "line": 103,
+      "kind": "href",
+      "target": "/crm/rti/${r.id}",
+      "resolved": "/crm/rti/__param__",
+      "ok": true
+    },
+    {
+      "file": "apps/web/src/app/(app)/crm/service-requests/new/page.tsx",
+      "line": 70,
+      "kind": "navigate",
+      "target": "/crm/service-requests/${data.id}",
+      "resolved": "/crm/service-requests/__param__",
+      "ok": true
+    },
+    {
+      "file": "apps/web/src/app/(app)/crm/service-requests/new/page.tsx",
+      "line": 190,
+      "kind": "href",
+      "target": "/crm/service-requests",
+      "resolved": "/crm/service-requests",
+      "ok": true
+    },
+    {
+      "file": "apps/web/src/app/(app)/crm/service-requests/page.tsx",
+      "line": 33,
+      "kind": "href",
+      "target": "/crm/service-requests/new",
+      "resolved": "/crm/service-requests/new",
+      "ok": true
+    },
+    {
+      "file": "apps/web/src/app/(app)/crm/service-requests/ServiceRequestsTable.tsx",
+      "line": 94,
+      "kind": "href",
+      "target": "/crm/service-requests/${r.id}",
+      "resolved": "/crm/service-requests/__param__",
+      "ok": true
+    },
+    {
+      "file": "apps/web/src/app/(app)/crm/voice-of-customer/feedback/page.tsx",
+      "line": 256,
+      "kind": "href",
+      "target": "/crm/voice-of-customer",
+      "resolved": "/crm/voice-of-customer",
+      "ok": true
+    },
+    {
+      "file": "apps/web/src/app/(app)/crm/voice-of-customer/page.tsx",
+      "line": 35,
+      "kind": "href",
+      "target": "/crm/activities",
+      "resolved": "/crm/activities",
+      "ok": true
+    },
+    {
+      "file": "apps/web/src/app/(app)/crm/voice-of-customer/ThemeTable.tsx",
+      "line": 68,
+      "kind": "href",
+      "target": "/crm/activities",
+      "resolved": "/crm/activities",
+      "ok": true
+    },
+    {
       "file": "apps/web/src/app/(app)/dashboard/page.tsx",
-      "line": 18,
+      "line": 19,
       "kind": "href",
       "target": "/crm",
       "resolved": "/crm",
@@ -739,7 +2248,7 @@
   "apiRefs": [
     {
       "file": "apps/web/src/app/_data/loaders.ts",
-      "line": 1147,
+      "line": 1305,
       "ref": "/api/v1/crm/contacts",
       "gatewayPath": "/api/v1/crm/contacts",
       "upstreamService": "crm",
@@ -748,7 +2257,7 @@
     },
     {
       "file": "apps/web/src/app/_data/loaders.ts",
-      "line": 1147,
+      "line": 1305,
       "ref": "/api/v1/crm/contacts?${qs}",
       "gatewayPath": "/api/v1/crm/contacts",
       "upstreamService": "crm",
@@ -757,7 +2266,34 @@
     },
     {
       "file": "apps/web/src/app/_data/loaders.ts",
-      "line": 1157,
+      "line": 1315,
+      "ref": "/api/v1/crm/accounts",
+      "gatewayPath": "/api/v1/crm/accounts",
+      "upstreamService": "crm",
+      "upstreamPath": "/v1/crm/accounts",
+      "ok": true
+    },
+    {
+      "file": "apps/web/src/app/_data/loaders.ts",
+      "line": 1325,
+      "ref": "/api/v1/crm/accounts/${id}/ancestors",
+      "gatewayPath": "/api/v1/crm/accounts/__param__/ancestors",
+      "upstreamService": "crm",
+      "upstreamPath": "/v1/crm/accounts/__param__/ancestors",
+      "ok": true
+    },
+    {
+      "file": "apps/web/src/app/_data/loaders.ts",
+      "line": 1335,
+      "ref": "/api/v1/crm/accounts/${id}/children",
+      "gatewayPath": "/api/v1/crm/accounts/__param__/children",
+      "upstreamService": "crm",
+      "upstreamPath": "/v1/crm/accounts/__param__/children",
+      "ok": true
+    },
+    {
+      "file": "apps/web/src/app/_data/loaders.ts",
+      "line": 1344,
       "ref": "/api/v1/crm/deals",
       "gatewayPath": "/api/v1/crm/deals",
       "upstreamService": "crm",
@@ -766,7 +2302,7 @@
     },
     {
       "file": "apps/web/src/app/_data/loaders.ts",
-      "line": 1165,
+      "line": 1352,
       "ref": "/api/v1/crm/activities",
       "gatewayPath": "/api/v1/crm/activities",
       "upstreamService": "crm",
@@ -775,7 +2311,34 @@
     },
     {
       "file": "apps/web/src/app/_data/loaders.ts",
-      "line": 2132,
+      "line": 1417,
+      "ref": "/api/v1/crm/grievances?${qs.toString()}",
+      "gatewayPath": "/api/v1/crm/grievances",
+      "upstreamService": "crm",
+      "upstreamPath": "/v1/crm/grievances",
+      "ok": true
+    },
+    {
+      "file": "apps/web/src/app/_data/loaders.ts",
+      "line": 1450,
+      "ref": "/api/v1/crm/service-requests?${qs.toString()}",
+      "gatewayPath": "/api/v1/crm/service-requests",
+      "upstreamService": "crm",
+      "upstreamPath": "/v1/crm/service-requests",
+      "ok": true
+    },
+    {
+      "file": "apps/web/src/app/_data/loaders.ts",
+      "line": 1502,
+      "ref": "/api/v1/crm/rti?${qs.toString()}",
+      "gatewayPath": "/api/v1/crm/rti",
+      "upstreamService": "crm",
+      "upstreamPath": "/v1/crm/rti",
+      "ok": true
+    },
+    {
+      "file": "apps/web/src/app/_data/loaders.ts",
+      "line": 2602,
       "ref": "/api/v1/crm/dashboard",
       "gatewayPath": "/api/v1/crm/dashboard",
       "upstreamService": "crm",
@@ -784,7 +2347,7 @@
     },
     {
       "file": "apps/web/src/app/_data/loaders.ts",
-      "line": 2171,
+      "line": 2641,
       "ref": "/api/v1/crm/deals",
       "gatewayPath": "/api/v1/crm/deals",
       "upstreamService": "crm",
@@ -793,7 +2356,7 @@
     },
     {
       "file": "apps/web/src/app/_data/loaders.ts",
-      "line": 2179,
+      "line": 2655,
       "ref": "/api/v1/crm/deals/${id}",
       "gatewayPath": "/api/v1/crm/deals/__param__",
       "upstreamService": "crm",
@@ -802,7 +2365,7 @@
     },
     {
       "file": "apps/web/src/app/_data/loaders.ts",
-      "line": 2254,
+      "line": 2732,
       "ref": "/api/v1/crm/pipelines",
       "gatewayPath": "/api/v1/crm/pipelines",
       "upstreamService": "crm",
@@ -811,7 +2374,7 @@
     },
     {
       "file": "apps/web/src/app/_data/loaders.ts",
-      "line": 2294,
+      "line": 2772,
       "ref": "/api/v1/crm/deals?limit=200",
       "gatewayPath": "/api/v1/crm/deals",
       "upstreamService": "crm",
@@ -820,7 +2383,79 @@
     },
     {
       "file": "apps/web/src/app/_data/loaders.ts",
-      "line": 2302,
+      "line": 2914,
+      "ref": "/api/v1/crm/forecast?pipelineId=${encodeURIComponent(pipelineId)}",
+      "gatewayPath": "/api/v1/crm/forecast",
+      "upstreamService": "crm",
+      "upstreamPath": "/v1/crm/forecast",
+      "ok": true
+    },
+    {
+      "file": "apps/web/src/app/_data/loaders.ts",
+      "line": 2919,
+      "ref": "/api/v1/crm/forecast",
+      "gatewayPath": "/api/v1/crm/forecast",
+      "upstreamService": "crm",
+      "upstreamPath": "/v1/crm/forecast",
+      "ok": true
+    },
+    {
+      "file": "apps/web/src/app/_data/loaders.ts",
+      "line": 2943,
+      "ref": "/api/v1/crm/sentiment/summary?${qs}",
+      "gatewayPath": "/api/v1/crm/sentiment/summary",
+      "upstreamService": "crm",
+      "upstreamPath": "/v1/crm/sentiment/summary",
+      "ok": true
+    },
+    {
+      "file": "apps/web/src/app/_data/loaders.ts",
+      "line": 2944,
+      "ref": "/api/v1/crm/sentiment/summary",
+      "gatewayPath": "/api/v1/crm/sentiment/summary",
+      "upstreamService": "crm",
+      "upstreamPath": "/v1/crm/sentiment/summary",
+      "ok": true
+    },
+    {
+      "file": "apps/web/src/app/_data/loaders.ts",
+      "line": 2981,
+      "ref": "/api/v1/crm/dashboard/control-tower",
+      "gatewayPath": "/api/v1/crm/dashboard/control-tower",
+      "upstreamService": "crm",
+      "upstreamPath": "/v1/crm/dashboard/control-tower",
+      "ok": true
+    },
+    {
+      "file": "apps/web/src/app/_data/loaders.ts",
+      "line": 2990,
+      "ref": "/api/v1/crm/lead-capture-forms",
+      "gatewayPath": "/api/v1/crm/lead-capture-forms",
+      "upstreamService": "crm",
+      "upstreamPath": "/v1/crm/lead-capture-forms",
+      "ok": true
+    },
+    {
+      "file": "apps/web/src/app/_data/loaders.ts",
+      "line": 2999,
+      "ref": "/api/v1/crm/campaigns/roi-summary?limit=200",
+      "gatewayPath": "/api/v1/crm/campaigns/roi-summary",
+      "upstreamService": "crm",
+      "upstreamPath": "/v1/crm/campaigns/roi-summary",
+      "ok": true
+    },
+    {
+      "file": "apps/web/src/app/_data/loaders.ts",
+      "line": 3014,
+      "ref": "/api/v1/crm/campaigns/${encodeURIComponent(id)}/roi",
+      "gatewayPath": "/api/v1/crm/campaigns/__param__/roi",
+      "upstreamService": "crm",
+      "upstreamPath": "/v1/crm/campaigns/__param__/roi",
+      "ok": true
+    },
+    {
+      "file": "apps/web/src/app/_data/loaders.ts",
+      "line": 3026,
       "ref": "/api/v1/crm/contacts/${id}/detail",
       "gatewayPath": "/api/v1/crm/contacts/__param__/detail",
       "upstreamService": "crm",
@@ -829,7 +2464,7 @@
     },
     {
       "file": "apps/web/src/app/_data/loaders.ts",
-      "line": 2341,
+      "line": 3074,
       "ref": "/api/v1/crm/activities",
       "gatewayPath": "/api/v1/crm/activities",
       "upstreamService": "crm",
@@ -837,71 +2472,26 @@
       "ok": true
     },
     {
-      "file": "apps/web/src/app/(app)/crm/activities/LogActivityButton.tsx",
-      "line": 25,
-      "ref": "/api/proxy/v1/crm/contacts",
-      "gatewayPath": "/api/v1/crm/contacts",
+      "file": "apps/web/src/app/(app)/crm/accounts/[id]/AccountParentForm.tsx",
+      "line": 46,
+      "ref": "/api/proxy/v1/crm/accounts/${accountId}/parent",
+      "gatewayPath": "/api/v1/crm/accounts/__param__/parent",
       "upstreamService": "crm",
-      "upstreamPath": "/v1/crm/contacts",
-      "ok": true
-    },
-    {
-      "file": "apps/web/src/app/(app)/crm/activities/LogActivityButton.tsx",
-      "line": 49,
-      "ref": "/api/proxy/v1/crm/activities",
-      "gatewayPath": "/api/v1/crm/activities",
-      "upstreamService": "crm",
-      "upstreamPath": "/v1/crm/activities",
-      "ok": true
-    },
-    {
-      "file": "apps/web/src/app/(app)/crm/contacts/[id]/ContactDetailActions.tsx",
-      "line": 26,
-      "ref": "/api/proxy/v1/crm/activities",
-      "gatewayPath": "/api/v1/crm/activities",
-      "upstreamService": "crm",
-      "upstreamPath": "/v1/crm/activities",
-      "ok": true
-    },
-    {
-      "file": "apps/web/src/app/(app)/crm/contacts/[id]/ContactDetailActions.tsx",
-      "line": 50,
-      "ref": "/api/proxy/v1/crm/contacts/${contactId}",
-      "gatewayPath": "/api/v1/crm/contacts/__param__",
-      "upstreamService": "crm",
-      "upstreamPath": "/v1/crm/contacts/__param__",
-      "ok": true
-    },
-    {
-      "file": "apps/web/src/app/(app)/crm/contacts/[id]/edit/EditContactForm.tsx",
-      "line": 44,
-      "ref": "/api/proxy/v1/crm/contacts/${params.id}",
-      "gatewayPath": "/api/v1/crm/contacts/__param__",
-      "upstreamService": "crm",
-      "upstreamPath": "/v1/crm/contacts/__param__",
-      "ok": true
-    },
-    {
-      "file": "apps/web/src/app/(app)/crm/contacts/ContactToolbar.tsx",
-      "line": 24,
-      "ref": "/api/proxy/v1/crm/contacts/export",
-      "gatewayPath": "/api/v1/crm/contacts/export",
-      "upstreamService": "crm",
-      "upstreamPath": "/v1/crm/contacts/export",
-      "ok": true
-    },
-    {
-      "file": "apps/web/src/app/(app)/crm/contacts/import/page.tsx",
-      "line": 53,
-      "ref": "/api/proxy/v1/crm/contacts/bulk/import",
-      "gatewayPath": "/api/v1/crm/contacts/bulk/import",
-      "upstreamService": "crm",
-      "upstreamPath": "/v1/crm/contacts/bulk/import",
+      "upstreamPath": "/v1/crm/accounts/__param__/parent",
       "ok": true
     },
     {
       "file": "apps/web/src/app/(app)/crm/contacts/new/page.tsx",
-      "line": 25,
+      "line": 52,
+      "ref": "/api/proxy/v1/crm/lead-field-rules",
+      "gatewayPath": "/api/v1/crm/lead-field-rules",
+      "upstreamService": "crm",
+      "upstreamPath": "/v1/crm/lead-field-rules",
+      "ok": true
+    },
+    {
+      "file": "apps/web/src/app/(app)/crm/contacts/new/page.tsx",
+      "line": 140,
       "ref": "/api/proxy/v1/crm/contacts",
       "gatewayPath": "/api/v1/crm/contacts",
       "upstreamService": "crm",
@@ -909,51 +2499,133 @@
       "ok": true
     },
     {
-      "file": "apps/web/src/app/(app)/crm/deals/[id]/DealDetailActions.tsx",
-      "line": 25,
-      "ref": "/api/proxy/v1/crm/deals/${dealId}/stage",
-      "gatewayPath": "/api/v1/crm/deals/__param__/stage",
+      "file": "apps/web/src/app/(app)/crm/grievances/[id]/GrievanceActions.tsx",
+      "line": 47,
+      "ref": "/api/proxy/v1/crm/grievances/${id}/${action}",
+      "gatewayPath": "/api/v1/crm/grievances/__param__/__param__",
       "upstreamService": "crm",
-      "upstreamPath": "/v1/crm/deals/__param__/stage",
+      "upstreamPath": "/v1/crm/grievances/__param__/__param__",
+      "ok": false
+    },
+    {
+      "file": "apps/web/src/app/(app)/crm/grievances/[id]/page.tsx",
+      "line": 105,
+      "ref": "/api/v1/crm/grievances/${params.id}",
+      "gatewayPath": "/api/v1/crm/grievances/__param__",
+      "upstreamService": "crm",
+      "upstreamPath": "/v1/crm/grievances/__param__",
       "ok": true
     },
     {
-      "file": "apps/web/src/app/(app)/crm/deals/[id]/DealDetailActions.tsx",
-      "line": 39,
-      "ref": "/api/proxy/v1/crm/activities",
-      "gatewayPath": "/api/v1/crm/activities",
+      "file": "apps/web/src/app/(app)/crm/grievances/new/page.tsx",
+      "line": 34,
+      "ref": "/api/proxy/v1/crm/grievances",
+      "gatewayPath": "/api/v1/crm/grievances",
       "upstreamService": "crm",
-      "upstreamPath": "/v1/crm/activities",
+      "upstreamPath": "/v1/crm/grievances",
       "ok": true
     },
     {
-      "file": "apps/web/src/app/(app)/crm/deals/new/page.tsx",
-      "line": 38,
-      "ref": "/api/proxy/v1/crm/contacts",
-      "gatewayPath": "/api/v1/crm/contacts",
+      "file": "apps/web/src/app/(app)/crm/health/[accountId]/FollowUpModal.tsx",
+      "line": 88,
+      "ref": "/api/proxy/v1/crm/service-requests",
+      "gatewayPath": "/api/v1/crm/service-requests",
       "upstreamService": "crm",
-      "upstreamPath": "/v1/crm/contacts",
+      "upstreamPath": "/v1/crm/service-requests",
       "ok": true
     },
     {
-      "file": "apps/web/src/app/(app)/crm/deals/new/page.tsx",
-      "line": 64,
-      "ref": "/api/proxy/v1/crm/deals",
-      "gatewayPath": "/api/v1/crm/deals",
+      "file": "apps/web/src/app/(app)/crm/lead-forms/leadForms.ts",
+      "line": 12,
+      "ref": "/api/v1/crm/public/leads/${encodeURIComponent(formKey)}",
+      "gatewayPath": "/api/v1/crm/public/leads/__param__",
       "upstreamService": "crm",
-      "upstreamPath": "/v1/crm/deals",
+      "upstreamPath": "/v1/crm/public/leads/__param__",
       "ok": true
     },
     {
       "file": "apps/web/src/app/(app)/crm/pipeline/_components/KanbanBoard.tsx",
-      "line": 102,
+      "line": 115,
       "ref": "/api/proxy/v1/crm/deals/${deal.id}/stage",
       "gatewayPath": "/api/v1/crm/deals/__param__/stage",
       "upstreamService": "crm",
       "upstreamPath": "/v1/crm/deals/__param__/stage",
       "ok": true
+    },
+    {
+      "file": "apps/web/src/app/(app)/crm/rti/[id]/page.tsx",
+      "line": 45,
+      "ref": "/api/v1/crm/rti/${params.id}",
+      "gatewayPath": "/api/v1/crm/rti/__param__",
+      "upstreamService": "crm",
+      "upstreamPath": "/v1/crm/rti/__param__",
+      "ok": true
+    },
+    {
+      "file": "apps/web/src/app/(app)/crm/rti/[id]/RtiActions.tsx",
+      "line": 46,
+      "ref": "/api/proxy/v1/crm/rti/${id}/${action}",
+      "gatewayPath": "/api/v1/crm/rti/__param__/__param__",
+      "upstreamService": "crm",
+      "upstreamPath": "/v1/crm/rti/__param__/__param__",
+      "ok": false
+    },
+    {
+      "file": "apps/web/src/app/(app)/crm/rti/new/page.tsx",
+      "line": 48,
+      "ref": "/api/proxy/v1/crm/rti",
+      "gatewayPath": "/api/v1/crm/rti",
+      "upstreamService": "crm",
+      "upstreamPath": "/v1/crm/rti",
+      "ok": true
+    },
+    {
+      "file": "apps/web/src/app/(app)/crm/service-requests/[id]/page.tsx",
+      "line": 61,
+      "ref": "/api/v1/crm/service-requests/${params.id}",
+      "gatewayPath": "/api/v1/crm/service-requests/__param__",
+      "upstreamService": "crm",
+      "upstreamPath": "/v1/crm/service-requests/__param__",
+      "ok": true
+    },
+    {
+      "file": "apps/web/src/app/(app)/crm/service-requests/[id]/ServiceRequestActions.tsx",
+      "line": 34,
+      "ref": "/api/proxy/v1/crm/service-requests/${id}/status",
+      "gatewayPath": "/api/v1/crm/service-requests/__param__/status",
+      "upstreamService": "crm",
+      "upstreamPath": "/v1/crm/service-requests/__param__/status",
+      "ok": true
+    },
+    {
+      "file": "apps/web/src/app/(app)/crm/service-requests/new/page.tsx",
+      "line": 59,
+      "ref": "/api/proxy/v1/crm/service-requests",
+      "gatewayPath": "/api/v1/crm/service-requests",
+      "upstreamService": "crm",
+      "upstreamPath": "/v1/crm/service-requests",
+      "ok": true
     }
   ],
   "deadLinks": [],
-  "unknownApiRefs": []
+  "unknownApiRefs": [
+    {
+      "file": "apps/web/src/app/(app)/crm/grievances/[id]/GrievanceActions.tsx",
+      "line": 47,
+      "ref": "/api/proxy/v1/crm/grievances/${id}/${action}",
+      "gatewayPath": "/api/v1/crm/grievances/__param__/__param__",
+      "upstreamService": "crm",
+      "upstreamPath": "/v1/crm/grievances/__param__/__param__",
+      "ok": false
+    },
+    {
+      "file": "apps/web/src/app/(app)/crm/rti/[id]/RtiActions.tsx",
+      "line": 46,
+      "ref": "/api/proxy/v1/crm/rti/${id}/${action}",
+      "gatewayPath": "/api/v1/crm/rti/__param__/__param__",
+      "upstreamService": "crm",
+      "upstreamPath": "/v1/crm/rti/__param__/__param__",
+      "ok": false
+    }
+  ]
 }

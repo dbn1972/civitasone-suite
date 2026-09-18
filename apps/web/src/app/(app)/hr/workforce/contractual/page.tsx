@@ -111,7 +111,7 @@ export default async function ContractualPage() {
           <div style={{ overflowX: "auto" }}>
             <table style={{ width: "100%", borderCollapse: "collapse" }} aria-label={t("ariaStaffList")}>
               <thead>
-                <tr style={{ background: "var(--surface-2, #f9fafb)", textAlign: "left" }}>
+                <tr style={{ background: "var(--surface-2, #f9fafb)", textAlign: "start" }}>
                   {[t("colName"), t("colAgency"), t("colDepartment"), t("colDesignation"), t("colFrom"), t("colTo"), t("colStatus")].map((h) => (
                     <th key={h} scope="col" style={{ padding: "10px 12px", fontSize: 12, fontWeight: 600, color: "var(--muted, #6b7280)", whiteSpace: "nowrap" }}>{h}</th>
                   ))}

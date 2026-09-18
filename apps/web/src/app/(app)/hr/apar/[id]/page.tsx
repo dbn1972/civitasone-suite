@@ -158,15 +158,15 @@ export default async function AparDetailPage({
 
       <Card title={t("appraisalDetailsTitle")}>
         <div style={{ padding: "16px 20px", display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px 24px", fontSize: 14 }}>
-          <div><span style={{ color: "var(--mut)", marginRight: 8 }}>{t("periodLabel")}</span><strong>{appraisal.appraisalPeriod}</strong></div>
-          <div><span style={{ color: "var(--mut)", marginRight: 8 }}>{t("currentStageLabel")}</span><strong>{stageLabel}</strong></div>
-          {appraisal.overallGrade && <div><span style={{ color: "var(--mut)", marginRight: 8 }}>{t("gradeLabel")}</span><strong>{appraisal.overallGrade}</strong></div>}
-          {appraisal.overallBand && <div><span style={{ color: "var(--mut)", marginRight: 8 }}>{t("bandLabel")}</span><strong>{appraisal.overallBand}</strong></div>}
-          {appraisal.reportingOfficerId && <div><span style={{ color: "var(--mut)", marginRight: 8 }}>{t("reportingOfficerLabel")}</span>{appraisal.reportingOfficerId}</div>}
-          {appraisal.reviewingOfficerId && <div><span style={{ color: "var(--mut)", marginRight: 8 }}>{t("reviewingOfficerLabel")}</span>{appraisal.reviewingOfficerId}</div>}
-          {appraisal.acceptingAuthorityId && <div><span style={{ color: "var(--mut)", marginRight: 8 }}>{t("acceptingAuthorityLabel")}</span>{appraisal.acceptingAuthorityId}</div>}
-          {appraisal.disclosedAt && <div><span style={{ color: "var(--mut)", marginRight: 8 }}>{t("disclosedAtLabel")}</span>{new Date(appraisal.disclosedAt).toLocaleDateString("en-IN")}</div>}
-          {appraisal.representationDue && <div><span style={{ color: "var(--mut)", marginRight: 8 }}>{t("representationDueLabel")}</span>{appraisal.representationDue}</div>}
+          <div><span style={{ color: "var(--mut)", marginInlineEnd: 8 }}>{t("periodLabel")}</span><strong>{appraisal.appraisalPeriod}</strong></div>
+          <div><span style={{ color: "var(--mut)", marginInlineEnd: 8 }}>{t("currentStageLabel")}</span><strong>{stageLabel}</strong></div>
+          {appraisal.overallGrade && <div><span style={{ color: "var(--mut)", marginInlineEnd: 8 }}>{t("gradeLabel")}</span><strong>{appraisal.overallGrade}</strong></div>}
+          {appraisal.overallBand && <div><span style={{ color: "var(--mut)", marginInlineEnd: 8 }}>{t("bandLabel")}</span><strong>{appraisal.overallBand}</strong></div>}
+          {appraisal.reportingOfficerId && <div><span style={{ color: "var(--mut)", marginInlineEnd: 8 }}>{t("reportingOfficerLabel")}</span>{appraisal.reportingOfficerId}</div>}
+          {appraisal.reviewingOfficerId && <div><span style={{ color: "var(--mut)", marginInlineEnd: 8 }}>{t("reviewingOfficerLabel")}</span>{appraisal.reviewingOfficerId}</div>}
+          {appraisal.acceptingAuthorityId && <div><span style={{ color: "var(--mut)", marginInlineEnd: 8 }}>{t("acceptingAuthorityLabel")}</span>{appraisal.acceptingAuthorityId}</div>}
+          {appraisal.disclosedAt && <div><span style={{ color: "var(--mut)", marginInlineEnd: 8 }}>{t("disclosedAtLabel")}</span>{new Date(appraisal.disclosedAt).toLocaleDateString("en-IN")}</div>}
+          {appraisal.representationDue && <div><span style={{ color: "var(--mut)", marginInlineEnd: 8 }}>{t("representationDueLabel")}</span>{appraisal.representationDue}</div>}
         </div>
         {appraisal.selfAppraisal && (
           <div style={{ padding: "0 20px 16px" }}>
