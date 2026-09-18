@@ -1,0 +1,4237 @@
+{
+  "generatedAt": "2026-09-18T05:16:06.933Z",
+  "sharedFirstLoadJsBytes": 88000,
+  "routeCount": 846,
+  "routes": {
+    "/": {
+      "marker": "ƒ",
+      "sizeBytes": 338,
+      "firstLoadJsBytes": 97000
+    },
+    "/_not-found": {
+      "marker": "ƒ",
+      "sizeBytes": 1490,
+      "firstLoadJsBytes": 89400
+    },
+    "/admin": {
+      "marker": "ƒ",
+      "sizeBytes": 1050,
+      "firstLoadJsBytes": 147000
+    },
+    "/admin/api-monitoring": {
+      "marker": "ƒ",
+      "sizeBytes": 1160,
+      "firstLoadJsBytes": 150000
+    },
+    "/admin/audit-log": {
+      "marker": "ƒ",
+      "sizeBytes": 2410,
+      "firstLoadJsBytes": 149000
+    },
+    "/admin/bulk-scan": {
+      "marker": "ƒ",
+      "sizeBytes": 1050,
+      "firstLoadJsBytes": 147000
+    },
+    "/admin/config": {
+      "marker": "ƒ",
+      "sizeBytes": 3330,
+      "firstLoadJsBytes": 150000
+    },
+    "/admin/devices": {
+      "marker": "ƒ",
+      "sizeBytes": 1050,
+      "firstLoadJsBytes": 147000
+    },
+    "/admin/discovery": {
+      "marker": "ƒ",
+      "sizeBytes": 1050,
+      "firstLoadJsBytes": 147000
+    },
+    "/admin/editions": {
+      "marker": "ƒ",
+      "sizeBytes": 1130,
+      "firstLoadJsBytes": 150000
+    },
+    "/admin/entitlements": {
+      "marker": "ƒ",
+      "sizeBytes": 1130,
+      "firstLoadJsBytes": 150000
+    },
+    "/admin/feature-flags": {
+      "marker": "ƒ",
+      "sizeBytes": 4280,
+      "firstLoadJsBytes": 151000
+    },
+    "/admin/gateway-config": {
+      "marker": "ƒ",
+      "sizeBytes": 4430,
+      "firstLoadJsBytes": 151000
+    },
+    "/admin/gateway-routes": {
+      "marker": "ƒ",
+      "sizeBytes": 1390,
+      "firstLoadJsBytes": 150000
+    },
+    "/admin/gateways": {
+      "marker": "ƒ",
+      "sizeBytes": 1150,
+      "firstLoadJsBytes": 150000
+    },
+    "/admin/integrations": {
+      "marker": "ƒ",
+      "sizeBytes": 10600,
+      "firstLoadJsBytes": 157000
+    },
+    "/admin/invoices": {
+      "marker": "ƒ",
+      "sizeBytes": 1130,
+      "firstLoadJsBytes": 150000
+    },
+    "/admin/metering": {
+      "marker": "ƒ",
+      "sizeBytes": 1160,
+      "firstLoadJsBytes": 150000
+    },
+    "/admin/onboarding": {
+      "marker": "ƒ",
+      "sizeBytes": 1130,
+      "firstLoadJsBytes": 150000
+    },
+    "/admin/operators": {
+      "marker": "ƒ",
+      "sizeBytes": 1130,
+      "firstLoadJsBytes": 150000
+    },
+    "/admin/org": {
+      "marker": "ƒ",
+      "sizeBytes": 4250,
+      "firstLoadJsBytes": 151000
+    },
+    "/admin/role-features": {
+      "marker": "ƒ",
+      "sizeBytes": 4420,
+      "firstLoadJsBytes": 151000
+    },
+    "/admin/roles": {
+      "marker": "ƒ",
+      "sizeBytes": 3820,
+      "firstLoadJsBytes": 150000
+    },
+    "/admin/sa-dashboard": {
+      "marker": "ƒ",
+      "sizeBytes": 2020,
+      "firstLoadJsBytes": 148000
+    },
+    "/admin/scheduled-jobs": {
+      "marker": "ƒ",
+      "sizeBytes": 5210,
+      "firstLoadJsBytes": 152000
+    },
+    "/admin/settings": {
+      "marker": "ƒ",
+      "sizeBytes": 6030,
+      "firstLoadJsBytes": 152000
+    },
+    "/admin/tech-admin": {
+      "marker": "ƒ",
+      "sizeBytes": 1150,
+      "firstLoadJsBytes": 150000
+    },
+    "/admin/tenant-provision": {
+      "marker": "ƒ",
+      "sizeBytes": 1050,
+      "firstLoadJsBytes": 147000
+    },
+    "/admin/tenants": {
+      "marker": "ƒ",
+      "sizeBytes": 1140,
+      "firstLoadJsBytes": 150000
+    },
+    "/admin/tenants/[id]": {
+      "marker": "ƒ",
+      "sizeBytes": 1160,
+      "firstLoadJsBytes": 150000
+    },
+    "/admin/users": {
+      "marker": "ƒ",
+      "sizeBytes": 4550,
+      "firstLoadJsBytes": 151000
+    },
+    "/ai": {
+      "marker": "ƒ",
+      "sizeBytes": 1050,
+      "firstLoadJsBytes": 147000
+    },
+    "/ai/agents": {
+      "marker": "ƒ",
+      "sizeBytes": 1400,
+      "firstLoadJsBytes": 150000
+    },
+    "/ai/chat": {
+      "marker": "ƒ",
+      "sizeBytes": 2880,
+      "firstLoadJsBytes": 149000
+    },
+    "/ai/chat/[id]": {
+      "marker": "ƒ",
+      "sizeBytes": 1940,
+      "firstLoadJsBytes": 148000
+    },
+    "/ai/copilot": {
+      "marker": "ƒ",
+      "sizeBytes": 3630,
+      "firstLoadJsBytes": 150000
+    },
+    "/ai/copilot/[id]": {
+      "marker": "ƒ",
+      "sizeBytes": 1050,
+      "firstLoadJsBytes": 147000
+    },
+    "/ai/governance": {
+      "marker": "ƒ",
+      "sizeBytes": 3020,
+      "firstLoadJsBytes": 149000
+    },
+    "/ai/guardrails": {
+      "marker": "ƒ",
+      "sizeBytes": 1390,
+      "firstLoadJsBytes": 150000
+    },
+    "/analytics": {
+      "marker": "ƒ",
+      "sizeBytes": 1050,
+      "firstLoadJsBytes": 147000
+    },
+    "/analytics/ai-insights": {
+      "marker": "ƒ",
+      "sizeBytes": 933,
+      "firstLoadJsBytes": 150000
+    },
+    "/analytics/dashboards": {
+      "marker": "ƒ",
+      "sizeBytes": 1130,
+      "firstLoadJsBytes": 150000
+    },
+    "/analytics/data-warehouse": {
+      "marker": "ƒ",
+      "sizeBytes": 948,
+      "firstLoadJsBytes": 150000
+    },
+    "/analytics/kpi": {
+      "marker": "ƒ",
+      "sizeBytes": 912,
+      "firstLoadJsBytes": 150000
+    },
+    "/analytics/list": {
+      "marker": "ƒ",
+      "sizeBytes": 1390,
+      "firstLoadJsBytes": 150000
+    },
+    "/analytics/ml-insights": {
+      "marker": "ƒ",
+      "sizeBytes": 1050,
+      "firstLoadJsBytes": 147000
+    },
+    "/analytics/ml-insights/anomalies": {
+      "marker": "ƒ",
+      "sizeBytes": 159,
+      "firstLoadJsBytes": 150000
+    },
+    "/analytics/ml-insights/inventory": {
+      "marker": "ƒ",
+      "sizeBytes": 158,
+      "firstLoadJsBytes": 150000
+    },
+    "/analytics/ml-insights/leads": {
+      "marker": "ƒ",
+      "sizeBytes": 159,
+      "firstLoadJsBytes": 150000
+    },
+    "/analytics/ml-insights/projects": {
+      "marker": "ƒ",
+      "sizeBytes": 158,
+      "firstLoadJsBytes": 150000
+    },
+    "/analytics/ml-insights/subscriptions": {
+      "marker": "ƒ",
+      "sizeBytes": 159,
+      "firstLoadJsBytes": 150000
+    },
+    "/analytics/ml-insights/tickets": {
+      "marker": "ƒ",
+      "sizeBytes": 158,
+      "firstLoadJsBytes": 150000
+    },
+    "/analytics/queries": {
+      "marker": "ƒ",
+      "sizeBytes": 4790,
+      "firstLoadJsBytes": 154000
+    },
+    "/api/activation": {
+      "marker": "ƒ",
+      "sizeBytes": 0,
+      "firstLoadJsBytes": 0
+    },
+    "/api/auth/callback": {
+      "marker": "ƒ",
+      "sizeBytes": 0,
+      "firstLoadJsBytes": 0
+    },
+    "/api/auth/dev-login": {
+      "marker": "ƒ",
+      "sizeBytes": 0,
+      "firstLoadJsBytes": 0
+    },
+    "/api/auth/login": {
+      "marker": "ƒ",
+      "sizeBytes": 0,
+      "firstLoadJsBytes": 0
+    },
+    "/api/auth/logout": {
+      "marker": "ƒ",
+      "sizeBytes": 0,
+      "firstLoadJsBytes": 0
+    },
+    "/api/auth/session": {
+      "marker": "ƒ",
+      "sizeBytes": 0,
+      "firstLoadJsBytes": 0
+    },
+    "/api/careers/apply": {
+      "marker": "ƒ",
+      "sizeBytes": 0,
+      "firstLoadJsBytes": 0
+    },
+    "/api/careers/auth/otp-request": {
+      "marker": "ƒ",
+      "sizeBytes": 0,
+      "firstLoadJsBytes": 0
+    },
+    "/api/careers/auth/otp-verify": {
+      "marker": "ƒ",
+      "sizeBytes": 0,
+      "firstLoadJsBytes": 0
+    },
+    "/api/metrics": {
+      "marker": "ƒ",
+      "sizeBytes": 0,
+      "firstLoadJsBytes": 0
+    },
+    "/api/notification/mark-read": {
+      "marker": "ƒ",
+      "sizeBytes": 0,
+      "firstLoadJsBytes": 0
+    },
+    "/api/notification/stream": {
+      "marker": "ƒ",
+      "sizeBytes": 0,
+      "firstLoadJsBytes": 0
+    },
+    "/api/notification/stream/unread": {
+      "marker": "ƒ",
+      "sizeBytes": 0,
+      "firstLoadJsBytes": 0
+    },
+    "/api/proxy/[...path]": {
+      "marker": "ƒ",
+      "sizeBytes": 0,
+      "firstLoadJsBytes": 0
+    },
+    "/api/proxy/v1/admin/assistant/ask": {
+      "marker": "ƒ",
+      "sizeBytes": 0,
+      "firstLoadJsBytes": 0
+    },
+    "/approvals": {
+      "marker": "ƒ",
+      "sizeBytes": 1540,
+      "firstLoadJsBytes": 150000
+    },
+    "/assets": {
+      "marker": "ƒ",
+      "sizeBytes": 1050,
+      "firstLoadJsBytes": 147000
+    },
+    "/assets/[id]": {
+      "marker": "ƒ",
+      "sizeBytes": 6550,
+      "firstLoadJsBytes": 155000
+    },
+    "/assets/bulk-import": {
+      "marker": "ƒ",
+      "sizeBytes": 2560,
+      "firstLoadJsBytes": 149000
+    },
+    "/assets/condemnation": {
+      "marker": "ƒ",
+      "sizeBytes": 6080,
+      "firstLoadJsBytes": 155000
+    },
+    "/assets/dashboard": {
+      "marker": "ƒ",
+      "sizeBytes": 1050,
+      "firstLoadJsBytes": 147000
+    },
+    "/assets/depreciation": {
+      "marker": "ƒ",
+      "sizeBytes": 2650,
+      "firstLoadJsBytes": 149000
+    },
+    "/assets/fixed-assets": {
+      "marker": "ƒ",
+      "sizeBytes": 1050,
+      "firstLoadJsBytes": 147000
+    },
+    "/assets/fleet": {
+      "marker": "ƒ",
+      "sizeBytes": 1050,
+      "firstLoadJsBytes": 147000
+    },
+    "/assets/fleet/devices": {
+      "marker": "ƒ",
+      "sizeBytes": 4750,
+      "firstLoadJsBytes": 151000
+    },
+    "/assets/fleet/maintenance": {
+      "marker": "ƒ",
+      "sizeBytes": 3810,
+      "firstLoadJsBytes": 150000
+    },
+    "/assets/fleet/vehicles": {
+      "marker": "ƒ",
+      "sizeBytes": 4500,
+      "firstLoadJsBytes": 151000
+    },
+    "/assets/infra": {
+      "marker": "ƒ",
+      "sizeBytes": 1050,
+      "firstLoadJsBytes": 147000
+    },
+    "/assets/insurance": {
+      "marker": "ƒ",
+      "sizeBytes": 2460,
+      "firstLoadJsBytes": 151000
+    },
+    "/assets/insurance/[id]": {
+      "marker": "ƒ",
+      "sizeBytes": 1050,
+      "firstLoadJsBytes": 147000
+    },
+    "/assets/insurance/claims": {
+      "marker": "ƒ",
+      "sizeBytes": 2580,
+      "firstLoadJsBytes": 151000
+    },
+    "/assets/leases": {
+      "marker": "ƒ",
+      "sizeBytes": 3120,
+      "firstLoadJsBytes": 150000
+    },
+    "/assets/list": {
+      "marker": "ƒ",
+      "sizeBytes": 1440,
+      "firstLoadJsBytes": 150000
+    },
+    "/assets/locations": {
+      "marker": "ƒ",
+      "sizeBytes": 2810,
+      "firstLoadJsBytes": 149000
+    },
+    "/assets/maintenance": {
+      "marker": "ƒ",
+      "sizeBytes": 1050,
+      "firstLoadJsBytes": 147000
+    },
+    "/assets/maintenance/new": {
+      "marker": "ƒ",
+      "sizeBytes": 2770,
+      "firstLoadJsBytes": 149000
+    },
+    "/assets/projects": {
+      "marker": "ƒ",
+      "sizeBytes": 2920,
+      "firstLoadJsBytes": 151000
+    },
+    "/assets/register": {
+      "marker": "ƒ",
+      "sizeBytes": 2790,
+      "firstLoadJsBytes": 149000
+    },
+    "/assets/scan": {
+      "marker": "ƒ",
+      "sizeBytes": 2570,
+      "firstLoadJsBytes": 149000
+    },
+    "/assets/verification": {
+      "marker": "ƒ",
+      "sizeBytes": 2820,
+      "firstLoadJsBytes": 149000
+    },
+    "/audit": {
+      "marker": "ƒ",
+      "sizeBytes": 1950,
+      "firstLoadJsBytes": 148000
+    },
+    "/audit/cag": {
+      "marker": "ƒ",
+      "sizeBytes": 773,
+      "firstLoadJsBytes": 150000
+    },
+    "/audit/compliance": {
+      "marker": "ƒ",
+      "sizeBytes": 2650,
+      "firstLoadJsBytes": 149000
+    },
+    "/audit/dashboard": {
+      "marker": "ƒ",
+      "sizeBytes": 1050,
+      "firstLoadJsBytes": 147000
+    },
+    "/audit/exports": {
+      "marker": "ƒ",
+      "sizeBytes": 4690,
+      "firstLoadJsBytes": 151000
+    },
+    "/audit/investigation": {
+      "marker": "ƒ",
+      "sizeBytes": 742,
+      "firstLoadJsBytes": 150000
+    },
+    "/audit/observations": {
+      "marker": "ƒ",
+      "sizeBytes": 3930,
+      "firstLoadJsBytes": 150000
+    },
+    "/audit/observations/[id]": {
+      "marker": "ƒ",
+      "sizeBytes": 3730,
+      "firstLoadJsBytes": 150000
+    },
+    "/audit/plan": {
+      "marker": "ƒ",
+      "sizeBytes": 3410,
+      "firstLoadJsBytes": 150000
+    },
+    "/audit/risk-register": {
+      "marker": "ƒ",
+      "sizeBytes": 3710,
+      "firstLoadJsBytes": 150000
+    },
+    "/audit/vigilance": {
+      "marker": "ƒ",
+      "sizeBytes": 844,
+      "firstLoadJsBytes": 150000
+    },
+    "/auth/dev": {
+      "marker": "ƒ",
+      "sizeBytes": 1490,
+      "firstLoadJsBytes": 89400
+    },
+    "/auth/forgot": {
+      "marker": "ƒ",
+      "sizeBytes": 1310,
+      "firstLoadJsBytes": 98000
+    },
+    "/auth/login": {
+      "marker": "ƒ",
+      "sizeBytes": 954,
+      "firstLoadJsBytes": 97600
+    },
+    "/billing": {
+      "marker": "ƒ",
+      "sizeBytes": 1050,
+      "firstLoadJsBytes": 147000
+    },
+    "/billing/gstn": {
+      "marker": "ƒ",
+      "sizeBytes": 4430,
+      "firstLoadJsBytes": 151000
+    },
+    "/billing/invoices": {
+      "marker": "ƒ",
+      "sizeBytes": 1050,
+      "firstLoadJsBytes": 147000
+    },
+    "/billing/invoices/[id]": {
+      "marker": "ƒ",
+      "sizeBytes": 3460,
+      "firstLoadJsBytes": 150000
+    },
+    "/billing/list": {
+      "marker": "ƒ",
+      "sizeBytes": 1390,
+      "firstLoadJsBytes": 150000
+    },
+    "/billing/payments": {
+      "marker": "ƒ",
+      "sizeBytes": 1390,
+      "firstLoadJsBytes": 150000
+    },
+    "/billing/plans": {
+      "marker": "ƒ",
+      "sizeBytes": 1390,
+      "firstLoadJsBytes": 150000
+    },
+    "/billing/plans/[id]": {
+      "marker": "ƒ",
+      "sizeBytes": 1050,
+      "firstLoadJsBytes": 147000
+    },
+    "/billing/plans/new": {
+      "marker": "ƒ",
+      "sizeBytes": 2070,
+      "firstLoadJsBytes": 149000
+    },
+    "/billing/subscriptions": {
+      "marker": "ƒ",
+      "sizeBytes": 1270,
+      "firstLoadJsBytes": 150000
+    },
+    "/careers": {
+      "marker": "ƒ",
+      "sizeBytes": 338,
+      "firstLoadJsBytes": 97000
+    },
+    "/careers/[id]": {
+      "marker": "ƒ",
+      "sizeBytes": 2740,
+      "firstLoadJsBytes": 90700
+    },
+    "/careers/portal": {
+      "marker": "ƒ",
+      "sizeBytes": 337,
+      "firstLoadJsBytes": 97000
+    },
+    "/careers/portal/application/[id]": {
+      "marker": "ƒ",
+      "sizeBytes": 338,
+      "firstLoadJsBytes": 97000
+    },
+    "/careers/portal/login": {
+      "marker": "ƒ",
+      "sizeBytes": 1960,
+      "firstLoadJsBytes": 89900
+    },
+    "/catalogue": {
+      "marker": "ƒ",
+      "sizeBytes": 1050,
+      "firstLoadJsBytes": 147000
+    },
+    "/catalogue/bundles": {
+      "marker": "ƒ",
+      "sizeBytes": 1390,
+      "firstLoadJsBytes": 150000
+    },
+    "/catalogue/categories": {
+      "marker": "ƒ",
+      "sizeBytes": 1390,
+      "firstLoadJsBytes": 150000
+    },
+    "/catalogue/products": {
+      "marker": "ƒ",
+      "sizeBytes": 1400,
+      "firstLoadJsBytes": 150000
+    },
+    "/catalogue/rates": {
+      "marker": "ƒ",
+      "sizeBytes": 1400,
+      "firstLoadJsBytes": 150000
+    },
+    "/cdp": {
+      "marker": "ƒ",
+      "sizeBytes": 1050,
+      "firstLoadJsBytes": 147000
+    },
+    "/cdp/events": {
+      "marker": "ƒ",
+      "sizeBytes": 1390,
+      "firstLoadJsBytes": 150000
+    },
+    "/cdp/identity": {
+      "marker": "ƒ",
+      "sizeBytes": 1390,
+      "firstLoadJsBytes": 150000
+    },
+    "/cdp/profiles": {
+      "marker": "ƒ",
+      "sizeBytes": 1050,
+      "firstLoadJsBytes": 147000
+    },
+    "/cdp/profiles/[id]": {
+      "marker": "ƒ",
+      "sizeBytes": 1050,
+      "firstLoadJsBytes": 147000
+    },
+    "/cdp/segments": {
+      "marker": "ƒ",
+      "sizeBytes": 1390,
+      "firstLoadJsBytes": 150000
+    },
+    "/cdp/steward": {
+      "marker": "ƒ",
+      "sizeBytes": 3720,
+      "firstLoadJsBytes": 150000
+    },
+    "/change": {
+      "marker": "ƒ",
+      "sizeBytes": 1910,
+      "firstLoadJsBytes": 148000
+    },
+    "/change/[id]": {
+      "marker": "ƒ",
+      "sizeBytes": 1950,
+      "firstLoadJsBytes": 148000
+    },
+    "/change/calendar": {
+      "marker": "ƒ",
+      "sizeBytes": 1050,
+      "firstLoadJsBytes": 147000
+    },
+    "/change/comms": {
+      "marker": "ƒ",
+      "sizeBytes": 1050,
+      "firstLoadJsBytes": 147000
+    },
+    "/citizen": {
+      "marker": "ƒ",
+      "sizeBytes": 339,
+      "firstLoadJsBytes": 97000
+    },
+    "/citizen/alerts": {
+      "marker": "ƒ",
+      "sizeBytes": 1220,
+      "firstLoadJsBytes": 150000
+    },
+    "/citizen/appeals": {
+      "marker": "ƒ",
+      "sizeBytes": 1360,
+      "firstLoadJsBytes": 148000
+    },
+    "/citizen/catalogue": {
+      "marker": "ƒ",
+      "sizeBytes": 1050,
+      "firstLoadJsBytes": 147000
+    },
+    "/citizen/certificates": {
+      "marker": "ƒ",
+      "sizeBytes": 1370,
+      "firstLoadJsBytes": 148000
+    },
+    "/citizen/discovery": {
+      "marker": "ƒ",
+      "sizeBytes": 1620,
+      "firstLoadJsBytes": 148000
+    },
+    "/citizen/documents": {
+      "marker": "ƒ",
+      "sizeBytes": 1790,
+      "firstLoadJsBytes": 148000
+    },
+    "/citizen/eligibility": {
+      "marker": "ƒ",
+      "sizeBytes": 1450,
+      "firstLoadJsBytes": 148000
+    },
+    "/citizen/feedback": {
+      "marker": "ƒ",
+      "sizeBytes": 1050,
+      "firstLoadJsBytes": 147000
+    },
+    "/citizen/grievances": {
+      "marker": "ƒ",
+      "sizeBytes": 2190,
+      "firstLoadJsBytes": 149000
+    },
+    "/citizen/grievances/new": {
+      "marker": "ƒ",
+      "sizeBytes": 3230,
+      "firstLoadJsBytes": 150000
+    },
+    "/citizen/intake": {
+      "marker": "ƒ",
+      "sizeBytes": 1720,
+      "firstLoadJsBytes": 148000
+    },
+    "/citizen/notices": {
+      "marker": "ƒ",
+      "sizeBytes": 1230,
+      "firstLoadJsBytes": 150000
+    },
+    "/citizen/payments": {
+      "marker": "ƒ",
+      "sizeBytes": 1380,
+      "firstLoadJsBytes": 148000
+    },
+    "/citizen/portal": {
+      "marker": "ƒ",
+      "sizeBytes": 1050,
+      "firstLoadJsBytes": 147000
+    },
+    "/citizen/requests": {
+      "marker": "ƒ",
+      "sizeBytes": 3250,
+      "firstLoadJsBytes": 150000
+    },
+    "/citizen/requests/[id]": {
+      "marker": "ƒ",
+      "sizeBytes": 3880,
+      "firstLoadJsBytes": 150000
+    },
+    "/citizen/rti": {
+      "marker": "ƒ",
+      "sizeBytes": 4020,
+      "firstLoadJsBytes": 150000
+    },
+    "/citizen/rti/[id]": {
+      "marker": "ƒ",
+      "sizeBytes": 4020,
+      "firstLoadJsBytes": 150000
+    },
+    "/citizen/services/[serviceKey]": {
+      "marker": "ƒ",
+      "sizeBytes": 4340,
+      "firstLoadJsBytes": 153000
+    },
+    "/citizen/services/[serviceKey]/apply": {
+      "marker": "ƒ",
+      "sizeBytes": 8200,
+      "firstLoadJsBytes": 157000
+    },
+    "/citizen/services/[serviceKey]/track/[trackingNo]": {
+      "marker": "ƒ",
+      "sizeBytes": 4140,
+      "firstLoadJsBytes": 153000
+    },
+    "/citizen/surveys": {
+      "marker": "ƒ",
+      "sizeBytes": 1230,
+      "firstLoadJsBytes": 150000
+    },
+    "/contact": {
+      "marker": "ƒ",
+      "sizeBytes": 1490,
+      "firstLoadJsBytes": 89400
+    },
+    "/contracts": {
+      "marker": "ƒ",
+      "sizeBytes": 1050,
+      "firstLoadJsBytes": 147000
+    },
+    "/contracts/[id]": {
+      "marker": "ƒ",
+      "sizeBytes": 5690,
+      "firstLoadJsBytes": 152000
+    },
+    "/contracts/list": {
+      "marker": "ƒ",
+      "sizeBytes": 1870,
+      "firstLoadJsBytes": 148000
+    },
+    "/contracts/new": {
+      "marker": "ƒ",
+      "sizeBytes": 1970,
+      "firstLoadJsBytes": 148000
+    },
+    "/court": {
+      "marker": "ƒ",
+      "sizeBytes": 1050,
+      "firstLoadJsBytes": 147000
+    },
+    "/court/admin": {
+      "marker": "ƒ",
+      "sizeBytes": 3560,
+      "firstLoadJsBytes": 153000
+    },
+    "/court/cases": {
+      "marker": "ƒ",
+      "sizeBytes": 1050,
+      "firstLoadJsBytes": 147000
+    },
+    "/court/cases/[caseId]": {
+      "marker": "ƒ",
+      "sizeBytes": 7020,
+      "firstLoadJsBytes": 156000
+    },
+    "/court/cause-list": {
+      "marker": "ƒ",
+      "sizeBytes": 2950,
+      "firstLoadJsBytes": 152000
+    },
+    "/court/hearings": {
+      "marker": "ƒ",
+      "sizeBytes": 4510,
+      "firstLoadJsBytes": 154000
+    },
+    "/court/orders": {
+      "marker": "ƒ",
+      "sizeBytes": 5280,
+      "firstLoadJsBytes": 155000
+    },
+    "/crm": {
+      "marker": "ƒ",
+      "sizeBytes": 1050,
+      "firstLoadJsBytes": 147000
+    },
+    "/crm/accounts": {
+      "marker": "ƒ",
+      "sizeBytes": 2160,
+      "firstLoadJsBytes": 155000
+    },
+    "/crm/accounts/[id]": {
+      "marker": "ƒ",
+      "sizeBytes": 2930,
+      "firstLoadJsBytes": 168000
+    },
+    "/crm/activities": {
+      "marker": "ƒ",
+      "sizeBytes": 3860,
+      "firstLoadJsBytes": 150000
+    },
+    "/crm/agent-workload": {
+      "marker": "ƒ",
+      "sizeBytes": 1860,
+      "firstLoadJsBytes": 152000
+    },
+    "/crm/assignment-directory": {
+      "marker": "ƒ",
+      "sizeBytes": 2210,
+      "firstLoadJsBytes": 153000
+    },
+    "/crm/assignment-rules": {
+      "marker": "ƒ",
+      "sizeBytes": 2630,
+      "firstLoadJsBytes": 153000
+    },
+    "/crm/campaigns": {
+      "marker": "ƒ",
+      "sizeBytes": 2450,
+      "firstLoadJsBytes": 149000
+    },
+    "/crm/campaigns/[id]": {
+      "marker": "ƒ",
+      "sizeBytes": 1050,
+      "firstLoadJsBytes": 147000
+    },
+    "/crm/contacts": {
+      "marker": "ƒ",
+      "sizeBytes": 3950,
+      "firstLoadJsBytes": 157000
+    },
+    "/crm/contacts/[id]": {
+      "marker": "ƒ",
+      "sizeBytes": 7820,
+      "firstLoadJsBytes": 173000
+    },
+    "/crm/contacts/[id]/edit": {
+      "marker": "ƒ",
+      "sizeBytes": 3920,
+      "firstLoadJsBytes": 152000
+    },
+    "/crm/contacts/import": {
+      "marker": "ƒ",
+      "sizeBytes": 3330,
+      "firstLoadJsBytes": 150000
+    },
+    "/crm/contacts/new": {
+      "marker": "ƒ",
+      "sizeBytes": 6430,
+      "firstLoadJsBytes": 153000
+    },
+    "/crm/control-tower": {
+      "marker": "ƒ",
+      "sizeBytes": 1960,
+      "firstLoadJsBytes": 148000
+    },
+    "/crm/custom-fields": {
+      "marker": "ƒ",
+      "sizeBytes": 5560,
+      "firstLoadJsBytes": 152000
+    },
+    "/crm/dashboard": {
+      "marker": "ƒ",
+      "sizeBytes": 1050,
+      "firstLoadJsBytes": 147000
+    },
+    "/crm/data-quality": {
+      "marker": "ƒ",
+      "sizeBytes": 4770,
+      "firstLoadJsBytes": 151000
+    },
+    "/crm/deals": {
+      "marker": "ƒ",
+      "sizeBytes": 1470,
+      "firstLoadJsBytes": 150000
+    },
+    "/crm/deals/[id]": {
+      "marker": "ƒ",
+      "sizeBytes": 3390,
+      "firstLoadJsBytes": 150000
+    },
+    "/crm/deals/new": {
+      "marker": "ƒ",
+      "sizeBytes": 3410,
+      "firstLoadJsBytes": 150000
+    },
+    "/crm/dedup-candidates": {
+      "marker": "ƒ",
+      "sizeBytes": 4940,
+      "firstLoadJsBytes": 151000
+    },
+    "/crm/dedup-rules": {
+      "marker": "ƒ",
+      "sizeBytes": 4950,
+      "firstLoadJsBytes": 151000
+    },
+    "/crm/document-types": {
+      "marker": "ƒ",
+      "sizeBytes": 6590,
+      "firstLoadJsBytes": 153000
+    },
+    "/crm/documents": {
+      "marker": "ƒ",
+      "sizeBytes": 1050,
+      "firstLoadJsBytes": 147000
+    },
+    "/crm/escalation-rules": {
+      "marker": "ƒ",
+      "sizeBytes": 2400,
+      "firstLoadJsBytes": 153000
+    },
+    "/crm/forecast": {
+      "marker": "ƒ",
+      "sizeBytes": 2620,
+      "firstLoadJsBytes": 149000
+    },
+    "/crm/grievances": {
+      "marker": "ƒ",
+      "sizeBytes": 1500,
+      "firstLoadJsBytes": 150000
+    },
+    "/crm/grievances/[id]": {
+      "marker": "ƒ",
+      "sizeBytes": 2460,
+      "firstLoadJsBytes": 149000
+    },
+    "/crm/grievances/new": {
+      "marker": "ƒ",
+      "sizeBytes": 3080,
+      "firstLoadJsBytes": 150000
+    },
+    "/crm/health": {
+      "marker": "ƒ",
+      "sizeBytes": 2280,
+      "firstLoadJsBytes": 149000
+    },
+    "/crm/health/[accountId]": {
+      "marker": "ƒ",
+      "sizeBytes": 3490,
+      "firstLoadJsBytes": 150000
+    },
+    "/crm/lead-forms": {
+      "marker": "ƒ",
+      "sizeBytes": 2270,
+      "firstLoadJsBytes": 149000
+    },
+    "/crm/lead-reason-codes": {
+      "marker": "ƒ",
+      "sizeBytes": 4850,
+      "firstLoadJsBytes": 151000
+    },
+    "/crm/lead-scoring": {
+      "marker": "ƒ",
+      "sizeBytes": 5180,
+      "firstLoadJsBytes": 152000
+    },
+    "/crm/linked-accounts": {
+      "marker": "ƒ",
+      "sizeBytes": 2210,
+      "firstLoadJsBytes": 156000
+    },
+    "/crm/onboarding": {
+      "marker": "ƒ",
+      "sizeBytes": 1460,
+      "firstLoadJsBytes": 151000
+    },
+    "/crm/onboarding/[id]": {
+      "marker": "ƒ",
+      "sizeBytes": 3190,
+      "firstLoadJsBytes": 153000
+    },
+    "/crm/opportunities": {
+      "marker": "ƒ",
+      "sizeBytes": 5680,
+      "firstLoadJsBytes": 155000
+    },
+    "/crm/opportunities/new": {
+      "marker": "ƒ",
+      "sizeBytes": 2760,
+      "firstLoadJsBytes": 154000
+    },
+    "/crm/opportunity-ageing": {
+      "marker": "ƒ",
+      "sizeBytes": 4040,
+      "firstLoadJsBytes": 153000
+    },
+    "/crm/pipeline": {
+      "marker": "ƒ",
+      "sizeBytes": 3400,
+      "firstLoadJsBytes": 152000
+    },
+    "/crm/pipelines": {
+      "marker": "ƒ",
+      "sizeBytes": 4370,
+      "firstLoadJsBytes": 154000
+    },
+    "/crm/price-books": {
+      "marker": "ƒ",
+      "sizeBytes": 3340,
+      "firstLoadJsBytes": 155000
+    },
+    "/crm/products": {
+      "marker": "ƒ",
+      "sizeBytes": 2820,
+      "firstLoadJsBytes": 154000
+    },
+    "/crm/qualification-frameworks": {
+      "marker": "ƒ",
+      "sizeBytes": 5500,
+      "firstLoadJsBytes": 152000
+    },
+    "/crm/quotations": {
+      "marker": "ƒ",
+      "sizeBytes": 5290,
+      "firstLoadJsBytes": 157000
+    },
+    "/crm/rti": {
+      "marker": "ƒ",
+      "sizeBytes": 1630,
+      "firstLoadJsBytes": 151000
+    },
+    "/crm/rti/[id]": {
+      "marker": "ƒ",
+      "sizeBytes": 2490,
+      "firstLoadJsBytes": 149000
+    },
+    "/crm/rti/new": {
+      "marker": "ƒ",
+      "sizeBytes": 3300,
+      "firstLoadJsBytes": 150000
+    },
+    "/crm/service-requests": {
+      "marker": "ƒ",
+      "sizeBytes": 1520,
+      "firstLoadJsBytes": 150000
+    },
+    "/crm/service-requests/[id]": {
+      "marker": "ƒ",
+      "sizeBytes": 2430,
+      "firstLoadJsBytes": 149000
+    },
+    "/crm/service-requests/new": {
+      "marker": "ƒ",
+      "sizeBytes": 3100,
+      "firstLoadJsBytes": 150000
+    },
+    "/crm/task-escalation": {
+      "marker": "ƒ",
+      "sizeBytes": 2850,
+      "firstLoadJsBytes": 157000
+    },
+    "/crm/voice-of-customer": {
+      "marker": "ƒ",
+      "sizeBytes": 2390,
+      "firstLoadJsBytes": 149000
+    },
+    "/crm/voice-of-customer/feedback": {
+      "marker": "ƒ",
+      "sizeBytes": 3100,
+      "firstLoadJsBytes": 150000
+    },
+    "/dashboard": {
+      "marker": "ƒ",
+      "sizeBytes": 2300,
+      "firstLoadJsBytes": 149000
+    },
+    "/designer": {
+      "marker": "ƒ",
+      "sizeBytes": 2800,
+      "firstLoadJsBytes": 149000
+    },
+    "/designer/[id]": {
+      "marker": "ƒ",
+      "sizeBytes": 1490,
+      "firstLoadJsBytes": 89400
+    },
+    "/designer/[id]/b1": {
+      "marker": "ƒ",
+      "sizeBytes": 7310,
+      "firstLoadJsBytes": 176000
+    },
+    "/designer/[id]/b2": {
+      "marker": "ƒ",
+      "sizeBytes": 4950,
+      "firstLoadJsBytes": 178000
+    },
+    "/designer/[id]/b3": {
+      "marker": "ƒ",
+      "sizeBytes": 4300,
+      "firstLoadJsBytes": 177000
+    },
+    "/designer/[id]/b4": {
+      "marker": "ƒ",
+      "sizeBytes": 4400,
+      "firstLoadJsBytes": 177000
+    },
+    "/designer/[id]/b5": {
+      "marker": "ƒ",
+      "sizeBytes": 7460,
+      "firstLoadJsBytes": 180000
+    },
+    "/designer/[id]/b6": {
+      "marker": "ƒ",
+      "sizeBytes": 5470,
+      "firstLoadJsBytes": 178000
+    },
+    "/designer/[id]/b7": {
+      "marker": "ƒ",
+      "sizeBytes": 7380,
+      "firstLoadJsBytes": 180000
+    },
+    "/designer/[id]/b8": {
+      "marker": "ƒ",
+      "sizeBytes": 7080,
+      "firstLoadJsBytes": 180000
+    },
+    "/designer/[id]/engines": {
+      "marker": "ƒ",
+      "sizeBytes": 6460,
+      "firstLoadJsBytes": 176000
+    },
+    "/designer/[id]/review": {
+      "marker": "ƒ",
+      "sizeBytes": 6050,
+      "firstLoadJsBytes": 175000
+    },
+    "/designer/[id]/test": {
+      "marker": "ƒ",
+      "sizeBytes": 3990,
+      "firstLoadJsBytes": 173000
+    },
+    "/designer/library": {
+      "marker": "ƒ",
+      "sizeBytes": 3700,
+      "firstLoadJsBytes": 173000
+    },
+    "/designer/new": {
+      "marker": "ƒ",
+      "sizeBytes": 4160,
+      "firstLoadJsBytes": 151000
+    },
+    "/developer-portal": {
+      "marker": "ƒ",
+      "sizeBytes": 1050,
+      "firstLoadJsBytes": 147000
+    },
+    "/docs": {
+      "marker": "ƒ",
+      "sizeBytes": 338,
+      "firstLoadJsBytes": 97000
+    },
+    "/docs/[slug]": {
+      "marker": "●",
+      "sizeBytes": 1300,
+      "firstLoadJsBytes": 98000
+    },
+    "/docs/api": {
+      "marker": "ƒ",
+      "sizeBytes": 338,
+      "firstLoadJsBytes": 97000
+    },
+    "/documents": {
+      "marker": "ƒ",
+      "sizeBytes": 1490,
+      "firstLoadJsBytes": 89400
+    },
+    "/documents/inbox": {
+      "marker": "ƒ",
+      "sizeBytes": 1050,
+      "firstLoadJsBytes": 147000
+    },
+    "/documents/library": {
+      "marker": "ƒ",
+      "sizeBytes": 1050,
+      "firstLoadJsBytes": 147000
+    },
+    "/documents/new": {
+      "marker": "ƒ",
+      "sizeBytes": 2580,
+      "firstLoadJsBytes": 149000
+    },
+    "/domains/new": {
+      "marker": "ƒ",
+      "sizeBytes": 3780,
+      "firstLoadJsBytes": 150000
+    },
+    "/estab": {
+      "marker": "ƒ",
+      "sizeBytes": 1050,
+      "firstLoadJsBytes": 147000
+    },
+    "/estab/approval-matrix": {
+      "marker": "ƒ",
+      "sizeBytes": 4070,
+      "firstLoadJsBytes": 151000
+    },
+    "/estab/approvals": {
+      "marker": "ƒ",
+      "sizeBytes": 3170,
+      "firstLoadJsBytes": 150000
+    },
+    "/estab/compliance": {
+      "marker": "ƒ",
+      "sizeBytes": 2000,
+      "firstLoadJsBytes": 148000
+    },
+    "/estab/dak": {
+      "marker": "ƒ",
+      "sizeBytes": 3380,
+      "firstLoadJsBytes": 150000
+    },
+    "/estab/dashboard": {
+      "marker": "ƒ",
+      "sizeBytes": 1050,
+      "firstLoadJsBytes": 147000
+    },
+    "/estab/dfa": {
+      "marker": "ƒ",
+      "sizeBytes": 3920,
+      "firstLoadJsBytes": 150000
+    },
+    "/estab/dispatch": {
+      "marker": "ƒ",
+      "sizeBytes": 2370,
+      "firstLoadJsBytes": 149000
+    },
+    "/estab/files/[id]": {
+      "marker": "ƒ",
+      "sizeBytes": 3400,
+      "firstLoadJsBytes": 152000
+    },
+    "/estab/files/new": {
+      "marker": "ƒ",
+      "sizeBytes": 3080,
+      "firstLoadJsBytes": 150000
+    },
+    "/estab/guesthouse": {
+      "marker": "ƒ",
+      "sizeBytes": 2020,
+      "firstLoadJsBytes": 148000
+    },
+    "/estab/guesthouse/new": {
+      "marker": "ƒ",
+      "sizeBytes": 3250,
+      "firstLoadJsBytes": 150000
+    },
+    "/estab/handover": {
+      "marker": "ƒ",
+      "sizeBytes": 3510,
+      "firstLoadJsBytes": 150000
+    },
+    "/estab/inbox": {
+      "marker": "ƒ",
+      "sizeBytes": 1180,
+      "firstLoadJsBytes": 150000
+    },
+    "/estab/library": {
+      "marker": "ƒ",
+      "sizeBytes": 3930,
+      "firstLoadJsBytes": 150000
+    },
+    "/estab/library/[id]": {
+      "marker": "ƒ",
+      "sizeBytes": 1050,
+      "firstLoadJsBytes": 147000
+    },
+    "/estab/library/issues": {
+      "marker": "ƒ",
+      "sizeBytes": 4550,
+      "firstLoadJsBytes": 151000
+    },
+    "/estab/list": {
+      "marker": "ƒ",
+      "sizeBytes": 2260,
+      "firstLoadJsBytes": 149000
+    },
+    "/estab/meetings": {
+      "marker": "ƒ",
+      "sizeBytes": 3090,
+      "firstLoadJsBytes": 150000
+    },
+    "/estab/meetings/[id]": {
+      "marker": "ƒ",
+      "sizeBytes": 2230,
+      "firstLoadJsBytes": 149000
+    },
+    "/estab/migration": {
+      "marker": "ƒ",
+      "sizeBytes": 3000,
+      "firstLoadJsBytes": 149000
+    },
+    "/estab/notifications": {
+      "marker": "ƒ",
+      "sizeBytes": 2700,
+      "firstLoadJsBytes": 149000
+    },
+    "/estab/operators": {
+      "marker": "ƒ",
+      "sizeBytes": 4010,
+      "firstLoadJsBytes": 150000
+    },
+    "/estab/quarters": {
+      "marker": "ƒ",
+      "sizeBytes": 4000,
+      "firstLoadJsBytes": 150000
+    },
+    "/estab/quarters/[id]": {
+      "marker": "ƒ",
+      "sizeBytes": 3580,
+      "firstLoadJsBytes": 150000
+    },
+    "/estab/quarters/allotments": {
+      "marker": "ƒ",
+      "sizeBytes": 2270,
+      "firstLoadJsBytes": 149000
+    },
+    "/estab/quarters/allotments/[id]": {
+      "marker": "ƒ",
+      "sizeBytes": 4470,
+      "firstLoadJsBytes": 151000
+    },
+    "/estab/vehicles": {
+      "marker": "ƒ",
+      "sizeBytes": 2020,
+      "firstLoadJsBytes": 148000
+    },
+    "/estab/vehicles/new": {
+      "marker": "ƒ",
+      "sizeBytes": 3050,
+      "firstLoadJsBytes": 149000
+    },
+    "/estab/workspace": {
+      "marker": "ƒ",
+      "sizeBytes": 3490,
+      "firstLoadJsBytes": 150000
+    },
+    "/establishment": {
+      "marker": "ƒ",
+      "sizeBytes": 1490,
+      "firstLoadJsBytes": 89400
+    },
+    "/establishment/files": {
+      "marker": "ƒ",
+      "sizeBytes": 1490,
+      "firstLoadJsBytes": 89400
+    },
+    "/field": {
+      "marker": "ƒ",
+      "sizeBytes": 1050,
+      "firstLoadJsBytes": 147000
+    },
+    "/field/agents": {
+      "marker": "ƒ",
+      "sizeBytes": 1400,
+      "firstLoadJsBytes": 150000
+    },
+    "/field/routes": {
+      "marker": "ƒ",
+      "sizeBytes": 1400,
+      "firstLoadJsBytes": 150000
+    },
+    "/field/sync": {
+      "marker": "ƒ",
+      "sizeBytes": 1400,
+      "firstLoadJsBytes": 150000
+    },
+    "/field/tasks": {
+      "marker": "ƒ",
+      "sizeBytes": 1400,
+      "firstLoadJsBytes": 150000
+    },
+    "/field/visits": {
+      "marker": "ƒ",
+      "sizeBytes": 1050,
+      "firstLoadJsBytes": 147000
+    },
+    "/finance": {
+      "marker": "ƒ",
+      "sizeBytes": 1050,
+      "firstLoadJsBytes": 147000
+    },
+    "/finance/accounting/financial-statements": {
+      "marker": "ƒ",
+      "sizeBytes": 2430,
+      "firstLoadJsBytes": 151000
+    },
+    "/finance/accounting/general-ledger": {
+      "marker": "ƒ",
+      "sizeBytes": 2190,
+      "firstLoadJsBytes": 151000
+    },
+    "/finance/accounting/vouchers/new": {
+      "marker": "ƒ",
+      "sizeBytes": 158,
+      "firstLoadJsBytes": 152000
+    },
+    "/finance/advances": {
+      "marker": "ƒ",
+      "sizeBytes": 1490,
+      "firstLoadJsBytes": 89400
+    },
+    "/finance/audit-paras": {
+      "marker": "ƒ",
+      "sizeBytes": 1200,
+      "firstLoadJsBytes": 150000
+    },
+    "/finance/audit-paras/[id]": {
+      "marker": "ƒ",
+      "sizeBytes": 1050,
+      "firstLoadJsBytes": 147000
+    },
+    "/finance/benefits": {
+      "marker": "ƒ",
+      "sizeBytes": 1490,
+      "firstLoadJsBytes": 89400
+    },
+    "/finance/budget/allocation": {
+      "marker": "ƒ",
+      "sizeBytes": 1170,
+      "firstLoadJsBytes": 150000
+    },
+    "/finance/budget/demand-grants": {
+      "marker": "ƒ",
+      "sizeBytes": 1150,
+      "firstLoadJsBytes": 150000
+    },
+    "/finance/budget/formulation": {
+      "marker": "ƒ",
+      "sizeBytes": 1390,
+      "firstLoadJsBytes": 150000
+    },
+    "/finance/budget/formulation/new": {
+      "marker": "ƒ",
+      "sizeBytes": 2980,
+      "firstLoadJsBytes": 149000
+    },
+    "/finance/budget/fund-releases": {
+      "marker": "ƒ",
+      "sizeBytes": 1440,
+      "firstLoadJsBytes": 150000
+    },
+    "/finance/budget/monitoring": {
+      "marker": "ƒ",
+      "sizeBytes": 2310,
+      "firstLoadJsBytes": 151000
+    },
+    "/finance/budget/outcome-budget": {
+      "marker": "ƒ",
+      "sizeBytes": 1210,
+      "firstLoadJsBytes": 150000
+    },
+    "/finance/budget/revised-estimates": {
+      "marker": "ƒ",
+      "sizeBytes": 1230,
+      "firstLoadJsBytes": 150000
+    },
+    "/finance/budget/sanctions": {
+      "marker": "ƒ",
+      "sizeBytes": 2800,
+      "firstLoadJsBytes": 152000
+    },
+    "/finance/budget/sanctions/[id]": {
+      "marker": "ƒ",
+      "sizeBytes": 4790,
+      "firstLoadJsBytes": 151000
+    },
+    "/finance/chart-of-accounts": {
+      "marker": "ƒ",
+      "sizeBytes": 2030,
+      "firstLoadJsBytes": 151000
+    },
+    "/finance/chart-of-accounts/new": {
+      "marker": "ƒ",
+      "sizeBytes": 3550,
+      "firstLoadJsBytes": 150000
+    },
+    "/finance/config": {
+      "marker": "ƒ",
+      "sizeBytes": 1050,
+      "firstLoadJsBytes": 147000
+    },
+    "/finance/dashboard": {
+      "marker": "ƒ",
+      "sizeBytes": 4060,
+      "firstLoadJsBytes": 151000
+    },
+    "/finance/debt": {
+      "marker": "ƒ",
+      "sizeBytes": 1140,
+      "firstLoadJsBytes": 150000
+    },
+    "/finance/expenditure/advances": {
+      "marker": "ƒ",
+      "sizeBytes": 1540,
+      "firstLoadJsBytes": 150000
+    },
+    "/finance/expenditure/advances/new": {
+      "marker": "ƒ",
+      "sizeBytes": 2720,
+      "firstLoadJsBytes": 149000
+    },
+    "/finance/expenditure/bills": {
+      "marker": "ƒ",
+      "sizeBytes": 2870,
+      "firstLoadJsBytes": 152000
+    },
+    "/finance/expenditure/bills/[id]": {
+      "marker": "ƒ",
+      "sizeBytes": 3490,
+      "firstLoadJsBytes": 150000
+    },
+    "/finance/expenditure/guarantees": {
+      "marker": "ƒ",
+      "sizeBytes": 1160,
+      "firstLoadJsBytes": 150000
+    },
+    "/finance/expenditure/scheme-tracking": {
+      "marker": "ƒ",
+      "sizeBytes": 1220,
+      "firstLoadJsBytes": 150000
+    },
+    "/finance/expenditure/scheme-tracking/[id]": {
+      "marker": "ƒ",
+      "sizeBytes": 1050,
+      "firstLoadJsBytes": 147000
+    },
+    "/finance/expenditure/utilization-certificates": {
+      "marker": "ƒ",
+      "sizeBytes": 1410,
+      "firstLoadJsBytes": 150000
+    },
+    "/finance/expenditure/utilization-certificates/new": {
+      "marker": "ƒ",
+      "sizeBytes": 2680,
+      "firstLoadJsBytes": 149000
+    },
+    "/finance/expenses": {
+      "marker": "ƒ",
+      "sizeBytes": 1490,
+      "firstLoadJsBytes": 89400
+    },
+    "/finance/fiscal-years": {
+      "marker": "ƒ",
+      "sizeBytes": 4240,
+      "firstLoadJsBytes": 151000
+    },
+    "/finance/gst": {
+      "marker": "ƒ",
+      "sizeBytes": 2990,
+      "firstLoadJsBytes": 149000
+    },
+    "/finance/journal-entry": {
+      "marker": "ƒ",
+      "sizeBytes": 157,
+      "firstLoadJsBytes": 152000
+    },
+    "/finance/loans": {
+      "marker": "ƒ",
+      "sizeBytes": 1490,
+      "firstLoadJsBytes": 89400
+    },
+    "/finance/medical": {
+      "marker": "ƒ",
+      "sizeBytes": 1490,
+      "firstLoadJsBytes": 89400
+    },
+    "/finance/opening-balances": {
+      "marker": "ƒ",
+      "sizeBytes": 4110,
+      "firstLoadJsBytes": 151000
+    },
+    "/finance/payments": {
+      "marker": "ƒ",
+      "sizeBytes": 2850,
+      "firstLoadJsBytes": 152000
+    },
+    "/finance/payments/[id]": {
+      "marker": "ƒ",
+      "sizeBytes": 158,
+      "firstLoadJsBytes": 150000
+    },
+    "/finance/period-close": {
+      "marker": "ƒ",
+      "sizeBytes": 4450,
+      "firstLoadJsBytes": 151000
+    },
+    "/finance/pfms": {
+      "marker": "ƒ",
+      "sizeBytes": 7620,
+      "firstLoadJsBytes": 154000
+    },
+    "/finance/reconciliation": {
+      "marker": "ƒ",
+      "sizeBytes": 857,
+      "firstLoadJsBytes": 150000
+    },
+    "/finance/reconciliation/[id]": {
+      "marker": "ƒ",
+      "sizeBytes": 318,
+      "firstLoadJsBytes": 150000
+    },
+    "/finance/recurring-entries": {
+      "marker": "ƒ",
+      "sizeBytes": 4240,
+      "firstLoadJsBytes": 151000
+    },
+    "/finance/revenue/challans": {
+      "marker": "ƒ",
+      "sizeBytes": 1200,
+      "firstLoadJsBytes": 150000
+    },
+    "/finance/revenue/challans/[id]": {
+      "marker": "ƒ",
+      "sizeBytes": 1050,
+      "firstLoadJsBytes": 147000
+    },
+    "/finance/statutory/tds-returns": {
+      "marker": "ƒ",
+      "sizeBytes": 1170,
+      "firstLoadJsBytes": 150000
+    },
+    "/finance/travel": {
+      "marker": "ƒ",
+      "sizeBytes": 1490,
+      "firstLoadJsBytes": 89400
+    },
+    "/finance/treasury/cash-bank": {
+      "marker": "ƒ",
+      "sizeBytes": 1190,
+      "firstLoadJsBytes": 150000
+    },
+    "/finance/treasury/cheques": {
+      "marker": "ƒ",
+      "sizeBytes": 1210,
+      "firstLoadJsBytes": 150000
+    },
+    "/finance/treasury/cheques/[id]": {
+      "marker": "ƒ",
+      "sizeBytes": 1050,
+      "firstLoadJsBytes": 147000
+    },
+    "/finance/treasury/deposits": {
+      "marker": "ƒ",
+      "sizeBytes": 1140,
+      "firstLoadJsBytes": 150000
+    },
+    "/finance/treasury/e-payments": {
+      "marker": "ƒ",
+      "sizeBytes": 1140,
+      "firstLoadJsBytes": 150000
+    },
+    "/finance/treasury/pfms": {
+      "marker": "ƒ",
+      "sizeBytes": 1190,
+      "firstLoadJsBytes": 150000
+    },
+    "/finance/vendors": {
+      "marker": "ƒ",
+      "sizeBytes": 1140,
+      "firstLoadJsBytes": 150000
+    },
+    "/finance/vendors/[id]": {
+      "marker": "ƒ",
+      "sizeBytes": 1050,
+      "firstLoadJsBytes": 147000
+    },
+    "/fleet": {
+      "marker": "ƒ",
+      "sizeBytes": 1050,
+      "firstLoadJsBytes": 147000
+    },
+    "/fleet/vehicles": {
+      "marker": "ƒ",
+      "sizeBytes": 1050,
+      "firstLoadJsBytes": 147000
+    },
+    "/grants": {
+      "marker": "ƒ",
+      "sizeBytes": 1050,
+      "firstLoadJsBytes": 147000
+    },
+    "/grants/[id]": {
+      "marker": "ƒ",
+      "sizeBytes": 2690,
+      "firstLoadJsBytes": 149000
+    },
+    "/grants/applications": {
+      "marker": "ƒ",
+      "sizeBytes": 1850,
+      "firstLoadJsBytes": 151000
+    },
+    "/grants/applications/[id]": {
+      "marker": "ƒ",
+      "sizeBytes": 2290,
+      "firstLoadJsBytes": 151000
+    },
+    "/grants/dashboard": {
+      "marker": "ƒ",
+      "sizeBytes": 1050,
+      "firstLoadJsBytes": 147000
+    },
+    "/grants/disbursements/[id]": {
+      "marker": "ƒ",
+      "sizeBytes": 158,
+      "firstLoadJsBytes": 150000
+    },
+    "/grants/grantees": {
+      "marker": "ƒ",
+      "sizeBytes": 1210,
+      "firstLoadJsBytes": 150000
+    },
+    "/grants/installments": {
+      "marker": "ƒ",
+      "sizeBytes": 1640,
+      "firstLoadJsBytes": 151000
+    },
+    "/grants/list": {
+      "marker": "ƒ",
+      "sizeBytes": 1170,
+      "firstLoadJsBytes": 150000
+    },
+    "/grants/releases": {
+      "marker": "ƒ",
+      "sizeBytes": 1600,
+      "firstLoadJsBytes": 151000
+    },
+    "/grants/schemes": {
+      "marker": "ƒ",
+      "sizeBytes": 1400,
+      "firstLoadJsBytes": 150000
+    },
+    "/grants/schemes/[id]": {
+      "marker": "ƒ",
+      "sizeBytes": 1050,
+      "firstLoadJsBytes": 147000
+    },
+    "/grants/schemes/[id]/apply": {
+      "marker": "ƒ",
+      "sizeBytes": 3430,
+      "firstLoadJsBytes": 150000
+    },
+    "/grants/schemes/new": {
+      "marker": "ƒ",
+      "sizeBytes": 1910,
+      "firstLoadJsBytes": 148000
+    },
+    "/grants/utilization": {
+      "marker": "ƒ",
+      "sizeBytes": 1790,
+      "firstLoadJsBytes": 151000
+    },
+    "/help": {
+      "marker": "ƒ",
+      "sizeBytes": 538,
+      "firstLoadJsBytes": 147000
+    },
+    "/help/[module]": {
+      "marker": "●",
+      "sizeBytes": 1050,
+      "firstLoadJsBytes": 147000
+    },
+    "/helpdesk": {
+      "marker": "ƒ",
+      "sizeBytes": 1050,
+      "firstLoadJsBytes": 147000
+    },
+    "/helpdesk/catalogue": {
+      "marker": "ƒ",
+      "sizeBytes": 1050,
+      "firstLoadJsBytes": 147000
+    },
+    "/helpdesk/catalogue/[id]": {
+      "marker": "ƒ",
+      "sizeBytes": 1660,
+      "firstLoadJsBytes": 148000
+    },
+    "/helpdesk/catalogue/breaches": {
+      "marker": "ƒ",
+      "sizeBytes": 1050,
+      "firstLoadJsBytes": 147000
+    },
+    "/helpdesk/catalogue/my-requests": {
+      "marker": "ƒ",
+      "sizeBytes": 1050,
+      "firstLoadJsBytes": 147000
+    },
+    "/helpdesk/internal": {
+      "marker": "ƒ",
+      "sizeBytes": 2200,
+      "firstLoadJsBytes": 149000
+    },
+    "/helpdesk/internal/[id]": {
+      "marker": "ƒ",
+      "sizeBytes": 1050,
+      "firstLoadJsBytes": 147000
+    },
+    "/helpdesk/internal/new": {
+      "marker": "ƒ",
+      "sizeBytes": 1510,
+      "firstLoadJsBytes": 148000
+    },
+    "/helpdesk/reports": {
+      "marker": "ƒ",
+      "sizeBytes": 1050,
+      "firstLoadJsBytes": 147000
+    },
+    "/helpdesk/slas": {
+      "marker": "ƒ",
+      "sizeBytes": 1050,
+      "firstLoadJsBytes": 147000
+    },
+    "/helpdesk/tickets": {
+      "marker": "ƒ",
+      "sizeBytes": 1700,
+      "firstLoadJsBytes": 151000
+    },
+    "/helpdesk/tickets/[id]": {
+      "marker": "ƒ",
+      "sizeBytes": 3670,
+      "firstLoadJsBytes": 150000
+    },
+    "/helpdesk/tickets/new": {
+      "marker": "ƒ",
+      "sizeBytes": 1520,
+      "firstLoadJsBytes": 148000
+    },
+    "/hr": {
+      "marker": "ƒ",
+      "sizeBytes": 1050,
+      "firstLoadJsBytes": 147000
+    },
+    "/hr/advances": {
+      "marker": "ƒ",
+      "sizeBytes": 3670,
+      "firstLoadJsBytes": 150000
+    },
+    "/hr/apar": {
+      "marker": "ƒ",
+      "sizeBytes": 2090,
+      "firstLoadJsBytes": 149000
+    },
+    "/hr/apar/[id]": {
+      "marker": "ƒ",
+      "sizeBytes": 1050,
+      "firstLoadJsBytes": 147000
+    },
+    "/hr/apar/new": {
+      "marker": "ƒ",
+      "sizeBytes": 2660,
+      "firstLoadJsBytes": 149000
+    },
+    "/hr/appraisals": {
+      "marker": "ƒ",
+      "sizeBytes": 1800,
+      "firstLoadJsBytes": 148000
+    },
+    "/hr/appraisals/new": {
+      "marker": "ƒ",
+      "sizeBytes": 1580,
+      "firstLoadJsBytes": 148000
+    },
+    "/hr/attendance": {
+      "marker": "ƒ",
+      "sizeBytes": 1390,
+      "firstLoadJsBytes": 150000
+    },
+    "/hr/attendance/config": {
+      "marker": "ƒ",
+      "sizeBytes": 1050,
+      "firstLoadJsBytes": 147000
+    },
+    "/hr/attendance/regularisation": {
+      "marker": "ƒ",
+      "sizeBytes": 2100,
+      "firstLoadJsBytes": 151000
+    },
+    "/hr/audit-log": {
+      "marker": "ƒ",
+      "sizeBytes": 1050,
+      "firstLoadJsBytes": 147000
+    },
+    "/hr/benefits": {
+      "marker": "ƒ",
+      "sizeBytes": 1050,
+      "firstLoadJsBytes": 147000
+    },
+    "/hr/certifications": {
+      "marker": "ƒ",
+      "sizeBytes": 1540,
+      "firstLoadJsBytes": 148000
+    },
+    "/hr/checkin-log": {
+      "marker": "ƒ",
+      "sizeBytes": 1050,
+      "firstLoadJsBytes": 147000
+    },
+    "/hr/competency": {
+      "marker": "ƒ",
+      "sizeBytes": 1730,
+      "firstLoadJsBytes": 148000
+    },
+    "/hr/confirmation": {
+      "marker": "ƒ",
+      "sizeBytes": 3610,
+      "firstLoadJsBytes": 150000
+    },
+    "/hr/contractual": {
+      "marker": "ƒ",
+      "sizeBytes": 1050,
+      "firstLoadJsBytes": 147000
+    },
+    "/hr/dashboard": {
+      "marker": "ƒ",
+      "sizeBytes": 3000,
+      "firstLoadJsBytes": 149000
+    },
+    "/hr/departments": {
+      "marker": "ƒ",
+      "sizeBytes": 3520,
+      "firstLoadJsBytes": 150000
+    },
+    "/hr/departments/new": {
+      "marker": "ƒ",
+      "sizeBytes": 3020,
+      "firstLoadJsBytes": 149000
+    },
+    "/hr/deputation": {
+      "marker": "ƒ",
+      "sizeBytes": 2660,
+      "firstLoadJsBytes": 149000
+    },
+    "/hr/designations": {
+      "marker": "ƒ",
+      "sizeBytes": 3690,
+      "firstLoadJsBytes": 150000
+    },
+    "/hr/designations/new": {
+      "marker": "ƒ",
+      "sizeBytes": 3220,
+      "firstLoadJsBytes": 150000
+    },
+    "/hr/directory": {
+      "marker": "ƒ",
+      "sizeBytes": 4530,
+      "firstLoadJsBytes": 151000
+    },
+    "/hr/disciplinary": {
+      "marker": "ƒ",
+      "sizeBytes": 1050,
+      "firstLoadJsBytes": 147000
+    },
+    "/hr/disciplinary/[id]": {
+      "marker": "ƒ",
+      "sizeBytes": 158,
+      "firstLoadJsBytes": 150000
+    },
+    "/hr/dpc": {
+      "marker": "ƒ",
+      "sizeBytes": 2250,
+      "firstLoadJsBytes": 151000
+    },
+    "/hr/employee-types": {
+      "marker": "ƒ",
+      "sizeBytes": 1050,
+      "firstLoadJsBytes": 147000
+    },
+    "/hr/employees": {
+      "marker": "ƒ",
+      "sizeBytes": 1210,
+      "firstLoadJsBytes": 150000
+    },
+    "/hr/employees/[id]": {
+      "marker": "ƒ",
+      "sizeBytes": 614,
+      "firstLoadJsBytes": 151000
+    },
+    "/hr/employees/[id]/edit": {
+      "marker": "ƒ",
+      "sizeBytes": 318,
+      "firstLoadJsBytes": 151000
+    },
+    "/hr/employees/import": {
+      "marker": "ƒ",
+      "sizeBytes": 3370,
+      "firstLoadJsBytes": 150000
+    },
+    "/hr/employees/new": {
+      "marker": "ƒ",
+      "sizeBytes": 6910,
+      "firstLoadJsBytes": 153000
+    },
+    "/hr/expenses": {
+      "marker": "ƒ",
+      "sizeBytes": 1050,
+      "firstLoadJsBytes": 147000
+    },
+    "/hr/goals": {
+      "marker": "ƒ",
+      "sizeBytes": 4950,
+      "firstLoadJsBytes": 151000
+    },
+    "/hr/grievance": {
+      "marker": "ƒ",
+      "sizeBytes": 1050,
+      "firstLoadJsBytes": 147000
+    },
+    "/hr/holidays": {
+      "marker": "ƒ",
+      "sizeBytes": 3170,
+      "firstLoadJsBytes": 150000
+    },
+    "/hr/icc": {
+      "marker": "ƒ",
+      "sizeBytes": 1050,
+      "firstLoadJsBytes": 147000
+    },
+    "/hr/id-cards": {
+      "marker": "ƒ",
+      "sizeBytes": 1050,
+      "firstLoadJsBytes": 147000
+    },
+    "/hr/interns": {
+      "marker": "ƒ",
+      "sizeBytes": 1050,
+      "firstLoadJsBytes": 147000
+    },
+    "/hr/jd-templates": {
+      "marker": "ƒ",
+      "sizeBytes": 1050,
+      "firstLoadJsBytes": 147000
+    },
+    "/hr/jd-templates/new": {
+      "marker": "ƒ",
+      "sizeBytes": 3380,
+      "firstLoadJsBytes": 150000
+    },
+    "/hr/leave": {
+      "marker": "ƒ",
+      "sizeBytes": 1050,
+      "firstLoadJsBytes": 147000
+    },
+    "/hr/leave-policies": {
+      "marker": "ƒ",
+      "sizeBytes": 6360,
+      "firstLoadJsBytes": 153000
+    },
+    "/hr/leave/allocate": {
+      "marker": "ƒ",
+      "sizeBytes": 3570,
+      "firstLoadJsBytes": 150000
+    },
+    "/hr/leave/apply": {
+      "marker": "ƒ",
+      "sizeBytes": 3090,
+      "firstLoadJsBytes": 150000
+    },
+    "/hr/leave/approvals": {
+      "marker": "ƒ",
+      "sizeBytes": 3900,
+      "firstLoadJsBytes": 150000
+    },
+    "/hr/leave/balance": {
+      "marker": "ƒ",
+      "sizeBytes": 3640,
+      "firstLoadJsBytes": 150000
+    },
+    "/hr/leave/history": {
+      "marker": "ƒ",
+      "sizeBytes": 4040,
+      "firstLoadJsBytes": 150000
+    },
+    "/hr/loans": {
+      "marker": "ƒ",
+      "sizeBytes": 1050,
+      "firstLoadJsBytes": 147000
+    },
+    "/hr/locations": {
+      "marker": "ƒ",
+      "sizeBytes": 1050,
+      "firstLoadJsBytes": 147000
+    },
+    "/hr/locations/new": {
+      "marker": "ƒ",
+      "sizeBytes": 3460,
+      "firstLoadJsBytes": 150000
+    },
+    "/hr/medical": {
+      "marker": "ƒ",
+      "sizeBytes": 1050,
+      "firstLoadJsBytes": 147000
+    },
+    "/hr/onboarding": {
+      "marker": "ƒ",
+      "sizeBytes": 1050,
+      "firstLoadJsBytes": 147000
+    },
+    "/hr/onboarding/[id]": {
+      "marker": "ƒ",
+      "sizeBytes": 3120,
+      "firstLoadJsBytes": 150000
+    },
+    "/hr/org-chart": {
+      "marker": "ƒ",
+      "sizeBytes": 3680,
+      "firstLoadJsBytes": 150000
+    },
+    "/hr/orgchart": {
+      "marker": "ƒ",
+      "sizeBytes": 3440,
+      "firstLoadJsBytes": 150000
+    },
+    "/hr/outsourced": {
+      "marker": "ƒ",
+      "sizeBytes": 1050,
+      "firstLoadJsBytes": 147000
+    },
+    "/hr/overtime": {
+      "marker": "ƒ",
+      "sizeBytes": 1050,
+      "firstLoadJsBytes": 147000
+    },
+    "/hr/overtime/new": {
+      "marker": "ƒ",
+      "sizeBytes": 2690,
+      "firstLoadJsBytes": 149000
+    },
+    "/hr/pay-matrix": {
+      "marker": "ƒ",
+      "sizeBytes": 1050,
+      "firstLoadJsBytes": 147000
+    },
+    "/hr/payroll": {
+      "marker": "ƒ",
+      "sizeBytes": 3520,
+      "firstLoadJsBytes": 152000
+    },
+    "/hr/payroll/[id]": {
+      "marker": "ƒ",
+      "sizeBytes": 6720,
+      "firstLoadJsBytes": 153000
+    },
+    "/hr/payroll/arrears": {
+      "marker": "ƒ",
+      "sizeBytes": 1050,
+      "firstLoadJsBytes": 147000
+    },
+    "/hr/payroll/bonus": {
+      "marker": "ƒ",
+      "sizeBytes": 3650,
+      "firstLoadJsBytes": 150000
+    },
+    "/hr/payroll/comparison": {
+      "marker": "ƒ",
+      "sizeBytes": 1050,
+      "firstLoadJsBytes": 147000
+    },
+    "/hr/payroll/corrections": {
+      "marker": "ƒ",
+      "sizeBytes": 3720,
+      "firstLoadJsBytes": 150000
+    },
+    "/hr/payroll/costing": {
+      "marker": "ƒ",
+      "sizeBytes": 3580,
+      "firstLoadJsBytes": 150000
+    },
+    "/hr/payroll/ctc": {
+      "marker": "ƒ",
+      "sizeBytes": 3190,
+      "firstLoadJsBytes": 150000
+    },
+    "/hr/payroll/ddos": {
+      "marker": "ƒ",
+      "sizeBytes": 3280,
+      "firstLoadJsBytes": 150000
+    },
+    "/hr/payroll/disbursement": {
+      "marker": "ƒ",
+      "sizeBytes": 9770,
+      "firstLoadJsBytes": 156000
+    },
+    "/hr/payroll/flex-benefits": {
+      "marker": "ƒ",
+      "sizeBytes": 5190,
+      "firstLoadJsBytes": 152000
+    },
+    "/hr/payroll/fnf": {
+      "marker": "ƒ",
+      "sizeBytes": 6250,
+      "firstLoadJsBytes": 153000
+    },
+    "/hr/payroll/form16": {
+      "marker": "ƒ",
+      "sizeBytes": 5400,
+      "firstLoadJsBytes": 152000
+    },
+    "/hr/payroll/gpf": {
+      "marker": "ƒ",
+      "sizeBytes": 1720,
+      "firstLoadJsBytes": 148000
+    },
+    "/hr/payroll/income-tax": {
+      "marker": "ƒ",
+      "sizeBytes": 1050,
+      "firstLoadJsBytes": 147000
+    },
+    "/hr/payroll/loans": {
+      "marker": "ƒ",
+      "sizeBytes": 4580,
+      "firstLoadJsBytes": 151000
+    },
+    "/hr/payroll/nps": {
+      "marker": "ƒ",
+      "sizeBytes": 1720,
+      "firstLoadJsBytes": 148000
+    },
+    "/hr/payroll/off-cycle": {
+      "marker": "ƒ",
+      "sizeBytes": 5010,
+      "firstLoadJsBytes": 151000
+    },
+    "/hr/payroll/pay-groups": {
+      "marker": "ƒ",
+      "sizeBytes": 4340,
+      "firstLoadJsBytes": 151000
+    },
+    "/hr/payroll/pensioners": {
+      "marker": "ƒ",
+      "sizeBytes": 1050,
+      "firstLoadJsBytes": 147000
+    },
+    "/hr/payroll/pensioners/new": {
+      "marker": "ƒ",
+      "sizeBytes": 3520,
+      "firstLoadJsBytes": 150000
+    },
+    "/hr/payroll/period": {
+      "marker": "ƒ",
+      "sizeBytes": 1050,
+      "firstLoadJsBytes": 147000
+    },
+    "/hr/payroll/register": {
+      "marker": "ƒ",
+      "sizeBytes": 1050,
+      "firstLoadJsBytes": 147000
+    },
+    "/hr/payroll/reimbursements": {
+      "marker": "ƒ",
+      "sizeBytes": 3770,
+      "firstLoadJsBytes": 150000
+    },
+    "/hr/payroll/returns": {
+      "marker": "ƒ",
+      "sizeBytes": 2900,
+      "firstLoadJsBytes": 149000
+    },
+    "/hr/payroll/runs": {
+      "marker": "ƒ",
+      "sizeBytes": 1050,
+      "firstLoadJsBytes": 147000
+    },
+    "/hr/payroll/salary-revisions": {
+      "marker": "ƒ",
+      "sizeBytes": 1050,
+      "firstLoadJsBytes": 147000
+    },
+    "/hr/payroll/salary-slips": {
+      "marker": "ƒ",
+      "sizeBytes": 2430,
+      "firstLoadJsBytes": 149000
+    },
+    "/hr/payroll/salary-slips/[id]": {
+      "marker": "ƒ",
+      "sizeBytes": 1830,
+      "firstLoadJsBytes": 148000
+    },
+    "/hr/payroll/slips/[id]": {
+      "marker": "ƒ",
+      "sizeBytes": 1050,
+      "firstLoadJsBytes": 147000
+    },
+    "/hr/payroll/statutory": {
+      "marker": "ƒ",
+      "sizeBytes": 1180,
+      "firstLoadJsBytes": 148000
+    },
+    "/hr/payroll/statutory/challans": {
+      "marker": "ƒ",
+      "sizeBytes": 3950,
+      "firstLoadJsBytes": 150000
+    },
+    "/hr/payroll/statutory/esi": {
+      "marker": "ƒ",
+      "sizeBytes": 1050,
+      "firstLoadJsBytes": 147000
+    },
+    "/hr/payroll/statutory/gpf": {
+      "marker": "ƒ",
+      "sizeBytes": 1050,
+      "firstLoadJsBytes": 147000
+    },
+    "/hr/payroll/statutory/gratuity": {
+      "marker": "ƒ",
+      "sizeBytes": 1470,
+      "firstLoadJsBytes": 148000
+    },
+    "/hr/payroll/statutory/lwf": {
+      "marker": "ƒ",
+      "sizeBytes": 3280,
+      "firstLoadJsBytes": 150000
+    },
+    "/hr/payroll/statutory/nps": {
+      "marker": "ƒ",
+      "sizeBytes": 1050,
+      "firstLoadJsBytes": 147000
+    },
+    "/hr/payroll/statutory/perquisite": {
+      "marker": "ƒ",
+      "sizeBytes": 4070,
+      "firstLoadJsBytes": 151000
+    },
+    "/hr/payroll/statutory/pf": {
+      "marker": "ƒ",
+      "sizeBytes": 3190,
+      "firstLoadJsBytes": 150000
+    },
+    "/hr/payroll/statutory/pt": {
+      "marker": "ƒ",
+      "sizeBytes": 3490,
+      "firstLoadJsBytes": 150000
+    },
+    "/hr/payroll/structures": {
+      "marker": "ƒ",
+      "sizeBytes": 7720,
+      "firstLoadJsBytes": 154000
+    },
+    "/hr/payroll/tax-config": {
+      "marker": "ƒ",
+      "sizeBytes": 1050,
+      "firstLoadJsBytes": 147000
+    },
+    "/hr/payroll/tax-declaration": {
+      "marker": "ƒ",
+      "sizeBytes": 3840,
+      "firstLoadJsBytes": 150000
+    },
+    "/hr/promotion": {
+      "marker": "ƒ",
+      "sizeBytes": 2850,
+      "firstLoadJsBytes": 152000
+    },
+    "/hr/recruitment": {
+      "marker": "ƒ",
+      "sizeBytes": 1050,
+      "firstLoadJsBytes": 147000
+    },
+    "/hr/recruitment/[id]": {
+      "marker": "ƒ",
+      "sizeBytes": 6810,
+      "firstLoadJsBytes": 153000
+    },
+    "/hr/recruitment/[id]/applications/[appId]": {
+      "marker": "ƒ",
+      "sizeBytes": 4040,
+      "firstLoadJsBytes": 150000
+    },
+    "/hr/recruitment/new": {
+      "marker": "ƒ",
+      "sizeBytes": 3420,
+      "firstLoadJsBytes": 150000
+    },
+    "/hr/recruitment/talent-pool": {
+      "marker": "ƒ",
+      "sizeBytes": 1050,
+      "firstLoadJsBytes": 147000
+    },
+    "/hr/retirement": {
+      "marker": "ƒ",
+      "sizeBytes": 6070,
+      "firstLoadJsBytes": 153000
+    },
+    "/hr/rti": {
+      "marker": "ƒ",
+      "sizeBytes": 1050,
+      "firstLoadJsBytes": 147000
+    },
+    "/hr/salary-structure": {
+      "marker": "ƒ",
+      "sizeBytes": 1050,
+      "firstLoadJsBytes": 147000
+    },
+    "/hr/service-book": {
+      "marker": "ƒ",
+      "sizeBytes": 3730,
+      "firstLoadJsBytes": 150000
+    },
+    "/hr/shift-requests": {
+      "marker": "ƒ",
+      "sizeBytes": 1050,
+      "firstLoadJsBytes": 147000
+    },
+    "/hr/shifts": {
+      "marker": "ƒ",
+      "sizeBytes": 2400,
+      "firstLoadJsBytes": 149000
+    },
+    "/hr/skills": {
+      "marker": "ƒ",
+      "sizeBytes": 3080,
+      "firstLoadJsBytes": 150000
+    },
+    "/hr/social-feed": {
+      "marker": "ƒ",
+      "sizeBytes": 1050,
+      "firstLoadJsBytes": 147000
+    },
+    "/hr/staffing-plan": {
+      "marker": "ƒ",
+      "sizeBytes": 1050,
+      "firstLoadJsBytes": 147000
+    },
+    "/hr/succession": {
+      "marker": "ƒ",
+      "sizeBytes": 1050,
+      "firstLoadJsBytes": 147000
+    },
+    "/hr/training": {
+      "marker": "ƒ",
+      "sizeBytes": 2430,
+      "firstLoadJsBytes": 149000
+    },
+    "/hr/training/feedback": {
+      "marker": "ƒ",
+      "sizeBytes": 1050,
+      "firstLoadJsBytes": 147000
+    },
+    "/hr/training/new": {
+      "marker": "ƒ",
+      "sizeBytes": 1630,
+      "firstLoadJsBytes": 148000
+    },
+    "/hr/training/nominations": {
+      "marker": "ƒ",
+      "sizeBytes": 1050,
+      "firstLoadJsBytes": 147000
+    },
+    "/hr/transfer": {
+      "marker": "ƒ",
+      "sizeBytes": 7190,
+      "firstLoadJsBytes": 154000
+    },
+    "/hr/travel": {
+      "marker": "ƒ",
+      "sizeBytes": 3450,
+      "firstLoadJsBytes": 150000
+    },
+    "/hr/vigilance": {
+      "marker": "ƒ",
+      "sizeBytes": 1050,
+      "firstLoadJsBytes": 147000
+    },
+    "/hr/wfh": {
+      "marker": "ƒ",
+      "sizeBytes": 1050,
+      "firstLoadJsBytes": 147000
+    },
+    "/hr/work-summary": {
+      "marker": "ƒ",
+      "sizeBytes": 1050,
+      "firstLoadJsBytes": 147000
+    },
+    "/hr/workforce": {
+      "marker": "ƒ",
+      "sizeBytes": 1050,
+      "firstLoadJsBytes": 147000
+    },
+    "/hr/workforce/analytics": {
+      "marker": "ƒ",
+      "sizeBytes": 1050,
+      "firstLoadJsBytes": 147000
+    },
+    "/hr/workforce/contractual": {
+      "marker": "ƒ",
+      "sizeBytes": 1050,
+      "firstLoadJsBytes": 147000
+    },
+    "/hr/workforce/interns": {
+      "marker": "ƒ",
+      "sizeBytes": 1050,
+      "firstLoadJsBytes": 147000
+    },
+    "/hr/workforce/outsourced": {
+      "marker": "ƒ",
+      "sizeBytes": 1050,
+      "firstLoadJsBytes": 147000
+    },
+    "/hr/workforce/overtime": {
+      "marker": "ƒ",
+      "sizeBytes": 1050,
+      "firstLoadJsBytes": 147000
+    },
+    "/hr/workforce/overtime/new": {
+      "marker": "ƒ",
+      "sizeBytes": 3490,
+      "firstLoadJsBytes": 150000
+    },
+    "/hr/workforce/staffing-plan": {
+      "marker": "ƒ",
+      "sizeBytes": 1050,
+      "firstLoadJsBytes": 147000
+    },
+    "/hr/workforce/wfh": {
+      "marker": "ƒ",
+      "sizeBytes": 3540,
+      "firstLoadJsBytes": 150000
+    },
+    "/hr/workforce/wfh/new": {
+      "marker": "ƒ",
+      "sizeBytes": 1490,
+      "firstLoadJsBytes": 89400
+    },
+    "/hr/workforce/work-summary": {
+      "marker": "ƒ",
+      "sizeBytes": 1050,
+      "firstLoadJsBytes": 147000
+    },
+    "/identity": {
+      "marker": "ƒ",
+      "sizeBytes": 1050,
+      "firstLoadJsBytes": 147000
+    },
+    "/identity/api-keys": {
+      "marker": "ƒ",
+      "sizeBytes": 1400,
+      "firstLoadJsBytes": 150000
+    },
+    "/identity/breakglass": {
+      "marker": "ƒ",
+      "sizeBytes": 1400,
+      "firstLoadJsBytes": 150000
+    },
+    "/identity/sessions": {
+      "marker": "ƒ",
+      "sizeBytes": 1400,
+      "firstLoadJsBytes": 150000
+    },
+    "/identity/users": {
+      "marker": "ƒ",
+      "sizeBytes": 1390,
+      "firstLoadJsBytes": 150000
+    },
+    "/identity/webauthn": {
+      "marker": "ƒ",
+      "sizeBytes": 1400,
+      "firstLoadJsBytes": 150000
+    },
+    "/inspection": {
+      "marker": "ƒ",
+      "sizeBytes": 1050,
+      "firstLoadJsBytes": 147000
+    },
+    "/inspection/assignments": {
+      "marker": "ƒ",
+      "sizeBytes": 1190,
+      "firstLoadJsBytes": 148000
+    },
+    "/inspection/capa": {
+      "marker": "ƒ",
+      "sizeBytes": 1180,
+      "firstLoadJsBytes": 148000
+    },
+    "/inspection/inspections": {
+      "marker": "ƒ",
+      "sizeBytes": 2620,
+      "firstLoadJsBytes": 149000
+    },
+    "/install": {
+      "marker": "ƒ",
+      "sizeBytes": 1250,
+      "firstLoadJsBytes": 152000
+    },
+    "/install/console": {
+      "marker": "ƒ",
+      "sizeBytes": 1050,
+      "firstLoadJsBytes": 147000
+    },
+    "/install/domain-packs": {
+      "marker": "ƒ",
+      "sizeBytes": 206,
+      "firstLoadJsBytes": 151000
+    },
+    "/install/modules": {
+      "marker": "ƒ",
+      "sizeBytes": 1400,
+      "firstLoadJsBytes": 150000
+    },
+    "/install/silos": {
+      "marker": "ƒ",
+      "sizeBytes": 1400,
+      "firstLoadJsBytes": 150000
+    },
+    "/install/stages": {
+      "marker": "ƒ",
+      "sizeBytes": 1400,
+      "firstLoadJsBytes": 150000
+    },
+    "/install/steps": {
+      "marker": "ƒ",
+      "sizeBytes": 1390,
+      "firstLoadJsBytes": 150000
+    },
+    "/inventory": {
+      "marker": "ƒ",
+      "sizeBytes": 1960,
+      "firstLoadJsBytes": 148000
+    },
+    "/inventory/[id]": {
+      "marker": "ƒ",
+      "sizeBytes": 578,
+      "firstLoadJsBytes": 147000
+    },
+    "/inventory/bins": {
+      "marker": "ƒ",
+      "sizeBytes": 992,
+      "firstLoadJsBytes": 150000
+    },
+    "/inventory/cycle-counts/[id]": {
+      "marker": "ƒ",
+      "sizeBytes": 2200,
+      "firstLoadJsBytes": 149000
+    },
+    "/inventory/goods-returns": {
+      "marker": "ƒ",
+      "sizeBytes": 972,
+      "firstLoadJsBytes": 150000
+    },
+    "/inventory/goods-returns/[id]": {
+      "marker": "ƒ",
+      "sizeBytes": 1520,
+      "firstLoadJsBytes": 148000
+    },
+    "/inventory/issues": {
+      "marker": "ƒ",
+      "sizeBytes": 1030,
+      "firstLoadJsBytes": 150000
+    },
+    "/inventory/items": {
+      "marker": "ƒ",
+      "sizeBytes": 1060,
+      "firstLoadJsBytes": 150000
+    },
+    "/inventory/list": {
+      "marker": "ƒ",
+      "sizeBytes": 2240,
+      "firstLoadJsBytes": 149000
+    },
+    "/inventory/low-stock": {
+      "marker": "ƒ",
+      "sizeBytes": 948,
+      "firstLoadJsBytes": 150000
+    },
+    "/inventory/receipts": {
+      "marker": "ƒ",
+      "sizeBytes": 1030,
+      "firstLoadJsBytes": 150000
+    },
+    "/inventory/reconcile": {
+      "marker": "ƒ",
+      "sizeBytes": 2270,
+      "firstLoadJsBytes": 149000
+    },
+    "/inventory/reservations": {
+      "marker": "ƒ",
+      "sizeBytes": 944,
+      "firstLoadJsBytes": 150000
+    },
+    "/inventory/substitutes": {
+      "marker": "ƒ",
+      "sizeBytes": 890,
+      "firstLoadJsBytes": 150000
+    },
+    "/journeys": {
+      "marker": "ƒ",
+      "sizeBytes": 1050,
+      "firstLoadJsBytes": 147000
+    },
+    "/journeys/active": {
+      "marker": "ƒ",
+      "sizeBytes": 1390,
+      "firstLoadJsBytes": 150000
+    },
+    "/journeys/analytics": {
+      "marker": "ƒ",
+      "sizeBytes": 1390,
+      "firstLoadJsBytes": 150000
+    },
+    "/journeys/builder": {
+      "marker": "ƒ",
+      "sizeBytes": 1400,
+      "firstLoadJsBytes": 150000
+    },
+    "/journeys/templates": {
+      "marker": "ƒ",
+      "sizeBytes": 1390,
+      "firstLoadJsBytes": 150000
+    },
+    "/knowledge": {
+      "marker": "ƒ",
+      "sizeBytes": 1050,
+      "firstLoadJsBytes": 147000
+    },
+    "/knowledge/assistant": {
+      "marker": "ƒ",
+      "sizeBytes": 1840,
+      "firstLoadJsBytes": 148000
+    },
+    "/knowledge/dashboard": {
+      "marker": "ƒ",
+      "sizeBytes": 1890,
+      "firstLoadJsBytes": 148000
+    },
+    "/knowledge/documents/new": {
+      "marker": "ƒ",
+      "sizeBytes": 1330,
+      "firstLoadJsBytes": 148000
+    },
+    "/knowledge/faqs": {
+      "marker": "ƒ",
+      "sizeBytes": 1050,
+      "firstLoadJsBytes": 147000
+    },
+    "/knowledge/list": {
+      "marker": "ƒ",
+      "sizeBytes": 2020,
+      "firstLoadJsBytes": 148000
+    },
+    "/knowledge/policies": {
+      "marker": "ƒ",
+      "sizeBytes": 1050,
+      "firstLoadJsBytes": 147000
+    },
+    "/knowledge/policies/[id]": {
+      "marker": "ƒ",
+      "sizeBytes": 2530,
+      "firstLoadJsBytes": 149000
+    },
+    "/knowledge/records": {
+      "marker": "ƒ",
+      "sizeBytes": 2100,
+      "firstLoadJsBytes": 149000
+    },
+    "/knowledge/repository": {
+      "marker": "ƒ",
+      "sizeBytes": 2210,
+      "firstLoadJsBytes": 149000
+    },
+    "/knowledge/search": {
+      "marker": "ƒ",
+      "sizeBytes": 3400,
+      "firstLoadJsBytes": 150000
+    },
+    "/learning": {
+      "marker": "ƒ",
+      "sizeBytes": 1050,
+      "firstLoadJsBytes": 147000
+    },
+    "/learning/assessments": {
+      "marker": "ƒ",
+      "sizeBytes": 1050,
+      "firstLoadJsBytes": 147000
+    },
+    "/learning/assessments/verify": {
+      "marker": "ƒ",
+      "sizeBytes": 1050,
+      "firstLoadJsBytes": 147000
+    },
+    "/learning/calendar": {
+      "marker": "ƒ",
+      "sizeBytes": 1050,
+      "firstLoadJsBytes": 147000
+    },
+    "/learning/competency": {
+      "marker": "ƒ",
+      "sizeBytes": 1050,
+      "firstLoadJsBytes": 147000
+    },
+    "/learning/courses": {
+      "marker": "ƒ",
+      "sizeBytes": 1050,
+      "firstLoadJsBytes": 147000
+    },
+    "/learning/courses/[id]": {
+      "marker": "ƒ",
+      "sizeBytes": 1050,
+      "firstLoadJsBytes": 147000
+    },
+    "/learning/my-learning": {
+      "marker": "ƒ",
+      "sizeBytes": 1050,
+      "firstLoadJsBytes": 147000
+    },
+    "/learning/training-plans": {
+      "marker": "ƒ",
+      "sizeBytes": 1050,
+      "firstLoadJsBytes": 147000
+    },
+    "/legal": {
+      "marker": "ƒ",
+      "sizeBytes": 1050,
+      "firstLoadJsBytes": 147000
+    },
+    "/legal/cases/[id]": {
+      "marker": "ƒ",
+      "sizeBytes": 3690,
+      "firstLoadJsBytes": 150000
+    },
+    "/legal/cases/new": {
+      "marker": "ƒ",
+      "sizeBytes": 1500,
+      "firstLoadJsBytes": 148000
+    },
+    "/legal/court-orders": {
+      "marker": "ƒ",
+      "sizeBytes": 2480,
+      "firstLoadJsBytes": 149000
+    },
+    "/legal/court-orders/new": {
+      "marker": "ƒ",
+      "sizeBytes": 3150,
+      "firstLoadJsBytes": 150000
+    },
+    "/legal/dashboard": {
+      "marker": "ƒ",
+      "sizeBytes": 2080,
+      "firstLoadJsBytes": 149000
+    },
+    "/legal/hearings": {
+      "marker": "ƒ",
+      "sizeBytes": 2780,
+      "firstLoadJsBytes": 152000
+    },
+    "/legal/list": {
+      "marker": "ƒ",
+      "sizeBytes": 1440,
+      "firstLoadJsBytes": 150000
+    },
+    "/legal/opinions": {
+      "marker": "ƒ",
+      "sizeBytes": 1510,
+      "firstLoadJsBytes": 150000
+    },
+    "/legal/opinions/[id]": {
+      "marker": "ƒ",
+      "sizeBytes": 158,
+      "firstLoadJsBytes": 150000
+    },
+    "/legal/opinions/new": {
+      "marker": "ƒ",
+      "sizeBytes": 2840,
+      "firstLoadJsBytes": 149000
+    },
+    "/library": {
+      "marker": "ƒ",
+      "sizeBytes": 3540,
+      "firstLoadJsBytes": 150000
+    },
+    "/locations": {
+      "marker": "ƒ",
+      "sizeBytes": 1050,
+      "firstLoadJsBytes": 147000
+    },
+    "/locations/geofences": {
+      "marker": "ƒ",
+      "sizeBytes": 1390,
+      "firstLoadJsBytes": 150000
+    },
+    "/locations/infrastructure": {
+      "marker": "ƒ",
+      "sizeBytes": 1390,
+      "firstLoadJsBytes": 150000
+    },
+    "/locations/jurisdictions": {
+      "marker": "ƒ",
+      "sizeBytes": 1400,
+      "firstLoadJsBytes": 150000
+    },
+    "/locations/list": {
+      "marker": "ƒ",
+      "sizeBytes": 1390,
+      "firstLoadJsBytes": 150000
+    },
+    "/locations/maps": {
+      "marker": "ƒ",
+      "sizeBytes": 2410,
+      "firstLoadJsBytes": 104000
+    },
+    "/locations/maps/monitoring": {
+      "marker": "ƒ",
+      "sizeBytes": 2690,
+      "firstLoadJsBytes": 104000
+    },
+    "/logout": {
+      "marker": "ƒ",
+      "sizeBytes": 0,
+      "firstLoadJsBytes": 0
+    },
+    "/loyalty": {
+      "marker": "ƒ",
+      "sizeBytes": 1050,
+      "firstLoadJsBytes": 147000
+    },
+    "/loyalty/accruals": {
+      "marker": "ƒ",
+      "sizeBytes": 1390,
+      "firstLoadJsBytes": 150000
+    },
+    "/loyalty/members": {
+      "marker": "ƒ",
+      "sizeBytes": 1400,
+      "firstLoadJsBytes": 150000
+    },
+    "/loyalty/programs": {
+      "marker": "ƒ",
+      "sizeBytes": 1400,
+      "firstLoadJsBytes": 150000
+    },
+    "/loyalty/redemptions": {
+      "marker": "ƒ",
+      "sizeBytes": 1400,
+      "firstLoadJsBytes": 150000
+    },
+    "/loyalty/tiers": {
+      "marker": "ƒ",
+      "sizeBytes": 1400,
+      "firstLoadJsBytes": 150000
+    },
+    "/meeting": {
+      "marker": "ƒ",
+      "sizeBytes": 1050,
+      "firstLoadJsBytes": 147000
+    },
+    "/meeting/admin": {
+      "marker": "ƒ",
+      "sizeBytes": 3410,
+      "firstLoadJsBytes": 153000
+    },
+    "/meeting/meetings": {
+      "marker": "ƒ",
+      "sizeBytes": 1050,
+      "firstLoadJsBytes": 147000
+    },
+    "/meeting/meetings/[meetingId]": {
+      "marker": "ƒ",
+      "sizeBytes": 5670,
+      "firstLoadJsBytes": 155000
+    },
+    "/meeting/meetings/[meetingId]/minutes": {
+      "marker": "ƒ",
+      "sizeBytes": 2930,
+      "firstLoadJsBytes": 152000
+    },
+    "/meeting/meetings/new": {
+      "marker": "ƒ",
+      "sizeBytes": 3700,
+      "firstLoadJsBytes": 153000
+    },
+    "/metadata": {
+      "marker": "ƒ",
+      "sizeBytes": 1050,
+      "firstLoadJsBytes": 147000
+    },
+    "/metadata/entities": {
+      "marker": "ƒ",
+      "sizeBytes": 1050,
+      "firstLoadJsBytes": 147000
+    },
+    "/metadata/fields": {
+      "marker": "ƒ",
+      "sizeBytes": 1050,
+      "firstLoadJsBytes": 147000
+    },
+    "/metadata/forms": {
+      "marker": "ƒ",
+      "sizeBytes": 1050,
+      "firstLoadJsBytes": 147000
+    },
+    "/metadata/records": {
+      "marker": "ƒ",
+      "sizeBytes": 1050,
+      "firstLoadJsBytes": 147000
+    },
+    "/metadata/rules": {
+      "marker": "ƒ",
+      "sizeBytes": 1050,
+      "firstLoadJsBytes": 147000
+    },
+    "/municipal": {
+      "marker": "ƒ",
+      "sizeBytes": 1050,
+      "firstLoadJsBytes": 147000
+    },
+    "/municipal/[serviceKey]": {
+      "marker": "ƒ",
+      "sizeBytes": 1050,
+      "firstLoadJsBytes": 147000
+    },
+    "/municipal/[serviceKey]/applications": {
+      "marker": "ƒ",
+      "sizeBytes": 1050,
+      "firstLoadJsBytes": 147000
+    },
+    "/municipal/[serviceKey]/applications/[id]": {
+      "marker": "ƒ",
+      "sizeBytes": 1050,
+      "firstLoadJsBytes": 147000
+    },
+    "/notifications": {
+      "marker": "ƒ",
+      "sizeBytes": 1050,
+      "firstLoadJsBytes": 147000
+    },
+    "/notifications/campaigns": {
+      "marker": "ƒ",
+      "sizeBytes": 4920,
+      "firstLoadJsBytes": 153000
+    },
+    "/notifications/campaigns/[id]": {
+      "marker": "ƒ",
+      "sizeBytes": 5430,
+      "firstLoadJsBytes": 152000
+    },
+    "/notifications/compose": {
+      "marker": "ƒ",
+      "sizeBytes": 3590,
+      "firstLoadJsBytes": 150000
+    },
+    "/notifications/deliveries": {
+      "marker": "ƒ",
+      "sizeBytes": 1820,
+      "firstLoadJsBytes": 151000
+    },
+    "/notifications/deliveries/[id]": {
+      "marker": "ƒ",
+      "sizeBytes": 3650,
+      "firstLoadJsBytes": 150000
+    },
+    "/notifications/experiments": {
+      "marker": "ƒ",
+      "sizeBytes": 1050,
+      "firstLoadJsBytes": 147000
+    },
+    "/notifications/list": {
+      "marker": "ƒ",
+      "sizeBytes": 1830,
+      "firstLoadJsBytes": 151000
+    },
+    "/notifications/templates": {
+      "marker": "ƒ",
+      "sizeBytes": 1810,
+      "firstLoadJsBytes": 151000
+    },
+    "/notifications/templates/[id]": {
+      "marker": "ƒ",
+      "sizeBytes": 3270,
+      "firstLoadJsBytes": 150000
+    },
+    "/offline": {
+      "marker": "○",
+      "sizeBytes": 1490,
+      "firstLoadJsBytes": 89400
+    },
+    "/platform-admin": {
+      "marker": "ƒ",
+      "sizeBytes": 1050,
+      "firstLoadJsBytes": 147000
+    },
+    "/platform-admin/audit-log": {
+      "marker": "ƒ",
+      "sizeBytes": 3100,
+      "firstLoadJsBytes": 150000
+    },
+    "/platform-admin/org-config": {
+      "marker": "ƒ",
+      "sizeBytes": 4230,
+      "firstLoadJsBytes": 151000
+    },
+    "/platform-admin/roles": {
+      "marker": "ƒ",
+      "sizeBytes": 5170,
+      "firstLoadJsBytes": 152000
+    },
+    "/platform-admin/system-settings": {
+      "marker": "ƒ",
+      "sizeBytes": 4710,
+      "firstLoadJsBytes": 151000
+    },
+    "/platform-admin/tenant-config": {
+      "marker": "ƒ",
+      "sizeBytes": 2100,
+      "firstLoadJsBytes": 149000
+    },
+    "/platform-admin/users": {
+      "marker": "ƒ",
+      "sizeBytes": 4380,
+      "firstLoadJsBytes": 153000
+    },
+    "/plugins": {
+      "marker": "ƒ",
+      "sizeBytes": 1050,
+      "firstLoadJsBytes": 147000
+    },
+    "/plugins/hooks": {
+      "marker": "ƒ",
+      "sizeBytes": 1400,
+      "firstLoadJsBytes": 150000
+    },
+    "/plugins/installed": {
+      "marker": "ƒ",
+      "sizeBytes": 2560,
+      "firstLoadJsBytes": 149000
+    },
+    "/plugins/marketplace": {
+      "marker": "ƒ",
+      "sizeBytes": 1390,
+      "firstLoadJsBytes": 150000
+    },
+    "/plugins/registry": {
+      "marker": "ƒ",
+      "sizeBytes": 1400,
+      "firstLoadJsBytes": 150000
+    },
+    "/policy": {
+      "marker": "ƒ",
+      "sizeBytes": 1050,
+      "firstLoadJsBytes": 147000
+    },
+    "/policy/abac": {
+      "marker": "ƒ",
+      "sizeBytes": 1050,
+      "firstLoadJsBytes": 147000
+    },
+    "/policy/bindings": {
+      "marker": "ƒ",
+      "sizeBytes": 1080,
+      "firstLoadJsBytes": 148000
+    },
+    "/policy/evaluate": {
+      "marker": "ƒ",
+      "sizeBytes": 1350,
+      "firstLoadJsBytes": 148000
+    },
+    "/policy/role-features": {
+      "marker": "ƒ",
+      "sizeBytes": 1060,
+      "firstLoadJsBytes": 148000
+    },
+    "/pricing": {
+      "marker": "ƒ",
+      "sizeBytes": 338,
+      "firstLoadJsBytes": 97000
+    },
+    "/procurement": {
+      "marker": "ƒ",
+      "sizeBytes": 1050,
+      "firstLoadJsBytes": 147000
+    },
+    "/procurement/approvals": {
+      "marker": "ƒ",
+      "sizeBytes": 2230,
+      "firstLoadJsBytes": 151000
+    },
+    "/procurement/approvals/escalation": {
+      "marker": "ƒ",
+      "sizeBytes": 1050,
+      "firstLoadJsBytes": 147000
+    },
+    "/procurement/bid-evaluation": {
+      "marker": "ƒ",
+      "sizeBytes": 1320,
+      "firstLoadJsBytes": 150000
+    },
+    "/procurement/contracts": {
+      "marker": "ƒ",
+      "sizeBytes": 1050,
+      "firstLoadJsBytes": 147000
+    },
+    "/procurement/contracts/new": {
+      "marker": "ƒ",
+      "sizeBytes": 1910,
+      "firstLoadJsBytes": 148000
+    },
+    "/procurement/dashboard": {
+      "marker": "ƒ",
+      "sizeBytes": 1050,
+      "firstLoadJsBytes": 147000
+    },
+    "/procurement/emd-bg": {
+      "marker": "ƒ",
+      "sizeBytes": 1340,
+      "firstLoadJsBytes": 150000
+    },
+    "/procurement/empanelment": {
+      "marker": "ƒ",
+      "sizeBytes": 1270,
+      "firstLoadJsBytes": 150000
+    },
+    "/procurement/gem": {
+      "marker": "ƒ",
+      "sizeBytes": 1310,
+      "firstLoadJsBytes": 150000
+    },
+    "/procurement/grn": {
+      "marker": "ƒ",
+      "sizeBytes": 1050,
+      "firstLoadJsBytes": 147000
+    },
+    "/procurement/grn/[id]": {
+      "marker": "ƒ",
+      "sizeBytes": 2270,
+      "firstLoadJsBytes": 149000
+    },
+    "/procurement/grn/[id]/srn": {
+      "marker": "ƒ",
+      "sizeBytes": 2130,
+      "firstLoadJsBytes": 149000
+    },
+    "/procurement/grn/[id]/srn/new": {
+      "marker": "ƒ",
+      "sizeBytes": 1560,
+      "firstLoadJsBytes": 148000
+    },
+    "/procurement/grn/new": {
+      "marker": "ƒ",
+      "sizeBytes": 2960,
+      "firstLoadJsBytes": 149000
+    },
+    "/procurement/indents": {
+      "marker": "ƒ",
+      "sizeBytes": 1050,
+      "firstLoadJsBytes": 147000
+    },
+    "/procurement/indents/[id]": {
+      "marker": "ƒ",
+      "sizeBytes": 1050,
+      "firstLoadJsBytes": 147000
+    },
+    "/procurement/indents/new": {
+      "marker": "ƒ",
+      "sizeBytes": 3240,
+      "firstLoadJsBytes": 150000
+    },
+    "/procurement/orders": {
+      "marker": "ƒ",
+      "sizeBytes": 1470,
+      "firstLoadJsBytes": 150000
+    },
+    "/procurement/orders/[id]": {
+      "marker": "ƒ",
+      "sizeBytes": 4010,
+      "firstLoadJsBytes": 150000
+    },
+    "/procurement/orders/[id]/amend": {
+      "marker": "ƒ",
+      "sizeBytes": 2910,
+      "firstLoadJsBytes": 149000
+    },
+    "/procurement/orders/new": {
+      "marker": "ƒ",
+      "sizeBytes": 2740,
+      "firstLoadJsBytes": 149000
+    },
+    "/procurement/planning": {
+      "marker": "ƒ",
+      "sizeBytes": 1050,
+      "firstLoadJsBytes": 147000
+    },
+    "/procurement/planning/[id]": {
+      "marker": "ƒ",
+      "sizeBytes": 2410,
+      "firstLoadJsBytes": 149000
+    },
+    "/procurement/planning/new": {
+      "marker": "ƒ",
+      "sizeBytes": 3620,
+      "firstLoadJsBytes": 150000
+    },
+    "/procurement/pre-bid": {
+      "marker": "ƒ",
+      "sizeBytes": 1300,
+      "firstLoadJsBytes": 150000
+    },
+    "/procurement/reverse-auction": {
+      "marker": "ƒ",
+      "sizeBytes": 1350,
+      "firstLoadJsBytes": 150000
+    },
+    "/procurement/rfq": {
+      "marker": "ƒ",
+      "sizeBytes": 1050,
+      "firstLoadJsBytes": 147000
+    },
+    "/procurement/rfq/[id]": {
+      "marker": "ƒ",
+      "sizeBytes": 1050,
+      "firstLoadJsBytes": 147000
+    },
+    "/procurement/rfq/new": {
+      "marker": "ƒ",
+      "sizeBytes": 2140,
+      "firstLoadJsBytes": 149000
+    },
+    "/procurement/tenders": {
+      "marker": "ƒ",
+      "sizeBytes": 1050,
+      "firstLoadJsBytes": 147000
+    },
+    "/procurement/tenders/[id]": {
+      "marker": "ƒ",
+      "sizeBytes": 3460,
+      "firstLoadJsBytes": 150000
+    },
+    "/procurement/tenders/[id]/documents": {
+      "marker": "ƒ",
+      "sizeBytes": 3760,
+      "firstLoadJsBytes": 150000
+    },
+    "/procurement/tenders/new": {
+      "marker": "ƒ",
+      "sizeBytes": 1780,
+      "firstLoadJsBytes": 148000
+    },
+    "/procurement/vendors": {
+      "marker": "ƒ",
+      "sizeBytes": 1440,
+      "firstLoadJsBytes": 150000
+    },
+    "/procurement/vendors/[id]": {
+      "marker": "ƒ",
+      "sizeBytes": 1050,
+      "firstLoadJsBytes": 147000
+    },
+    "/procurement/vendors/[id]/scorecard": {
+      "marker": "ƒ",
+      "sizeBytes": 1050,
+      "firstLoadJsBytes": 147000
+    },
+    "/procurement/vendors/new": {
+      "marker": "ƒ",
+      "sizeBytes": 2170,
+      "firstLoadJsBytes": 149000
+    },
+    "/projects": {
+      "marker": "ƒ",
+      "sizeBytes": 1050,
+      "firstLoadJsBytes": 147000
+    },
+    "/projects/[id]": {
+      "marker": "ƒ",
+      "sizeBytes": 4280,
+      "firstLoadJsBytes": 151000
+    },
+    "/projects/[id]/members": {
+      "marker": "ƒ",
+      "sizeBytes": 1310,
+      "firstLoadJsBytes": 148000
+    },
+    "/projects/[id]/risks": {
+      "marker": "ƒ",
+      "sizeBytes": 1050,
+      "firstLoadJsBytes": 147000
+    },
+    "/projects/[id]/tasks": {
+      "marker": "ƒ",
+      "sizeBytes": 1050,
+      "firstLoadJsBytes": 147000
+    },
+    "/projects/beneficiaries": {
+      "marker": "ƒ",
+      "sizeBytes": 936,
+      "firstLoadJsBytes": 150000
+    },
+    "/projects/dashboard": {
+      "marker": "ƒ",
+      "sizeBytes": 2020,
+      "firstLoadJsBytes": 148000
+    },
+    "/projects/delay-analysis": {
+      "marker": "ƒ",
+      "sizeBytes": 953,
+      "firstLoadJsBytes": 150000
+    },
+    "/projects/dpr-tracking": {
+      "marker": "ƒ",
+      "sizeBytes": 962,
+      "firstLoadJsBytes": 150000
+    },
+    "/projects/escalations": {
+      "marker": "ƒ",
+      "sizeBytes": 933,
+      "firstLoadJsBytes": 150000
+    },
+    "/projects/fund-releases": {
+      "marker": "ƒ",
+      "sizeBytes": 2590,
+      "firstLoadJsBytes": 149000
+    },
+    "/projects/list": {
+      "marker": "ƒ",
+      "sizeBytes": 1190,
+      "firstLoadJsBytes": 150000
+    },
+    "/projects/milestones": {
+      "marker": "ƒ",
+      "sizeBytes": 1920,
+      "firstLoadJsBytes": 148000
+    },
+    "/projects/new": {
+      "marker": "ƒ",
+      "sizeBytes": 3100,
+      "firstLoadJsBytes": 150000
+    },
+    "/projects/schemes": {
+      "marker": "ƒ",
+      "sizeBytes": 2070,
+      "firstLoadJsBytes": 149000
+    },
+    "/projects/schemes/[id]": {
+      "marker": "ƒ",
+      "sizeBytes": 1880,
+      "firstLoadJsBytes": 148000
+    },
+    "/projects/utilization": {
+      "marker": "ƒ",
+      "sizeBytes": 1920,
+      "firstLoadJsBytes": 148000
+    },
+    "/projects/wbs": {
+      "marker": "ƒ",
+      "sizeBytes": 1150,
+      "firstLoadJsBytes": 150000
+    },
+    "/recommendations": {
+      "marker": "ƒ",
+      "sizeBytes": 1050,
+      "firstLoadJsBytes": 147000
+    },
+    "/recommendations/feedback": {
+      "marker": "ƒ",
+      "sizeBytes": 1400,
+      "firstLoadJsBytes": 150000
+    },
+    "/recommendations/health": {
+      "marker": "ƒ",
+      "sizeBytes": 1400,
+      "firstLoadJsBytes": 150000
+    },
+    "/recommendations/matrix": {
+      "marker": "ƒ",
+      "sizeBytes": 1390,
+      "firstLoadJsBytes": 150000
+    },
+    "/recommendations/nba": {
+      "marker": "ƒ",
+      "sizeBytes": 1400,
+      "firstLoadJsBytes": 150000
+    },
+    "/reports": {
+      "marker": "ƒ",
+      "sizeBytes": 1050,
+      "firstLoadJsBytes": 147000
+    },
+    "/reports/[id]": {
+      "marker": "ƒ",
+      "sizeBytes": 1050,
+      "firstLoadJsBytes": 147000
+    },
+    "/reports/dashboard": {
+      "marker": "ƒ",
+      "sizeBytes": 1800,
+      "firstLoadJsBytes": 148000
+    },
+    "/reports/kpi": {
+      "marker": "ƒ",
+      "sizeBytes": 2110,
+      "firstLoadJsBytes": 149000
+    },
+    "/reports/list": {
+      "marker": "ƒ",
+      "sizeBytes": 2030,
+      "firstLoadJsBytes": 148000
+    },
+    "/reports/list/new": {
+      "marker": "ƒ",
+      "sizeBytes": 1320,
+      "firstLoadJsBytes": 148000
+    },
+    "/reports/mis": {
+      "marker": "ƒ",
+      "sizeBytes": 1930,
+      "firstLoadJsBytes": 148000
+    },
+    "/reports/scheduled": {
+      "marker": "ƒ",
+      "sizeBytes": 1540,
+      "firstLoadJsBytes": 148000
+    },
+    "/revenue": {
+      "marker": "ƒ",
+      "sizeBytes": 1050,
+      "firstLoadJsBytes": 147000
+    },
+    "/revenue/adjustments": {
+      "marker": "ƒ",
+      "sizeBytes": 2510,
+      "firstLoadJsBytes": 151000
+    },
+    "/revenue/analytics": {
+      "marker": "ƒ",
+      "sizeBytes": 4680,
+      "firstLoadJsBytes": 151000
+    },
+    "/revenue/assessees": {
+      "marker": "ƒ",
+      "sizeBytes": 4260,
+      "firstLoadJsBytes": 151000
+    },
+    "/revenue/assessees/[id]": {
+      "marker": "ƒ",
+      "sizeBytes": 2710,
+      "firstLoadJsBytes": 149000
+    },
+    "/revenue/assessments": {
+      "marker": "ƒ",
+      "sizeBytes": 6160,
+      "firstLoadJsBytes": 153000
+    },
+    "/revenue/bbps": {
+      "marker": "ƒ",
+      "sizeBytes": 2560,
+      "firstLoadJsBytes": 151000
+    },
+    "/revenue/bills": {
+      "marker": "ƒ",
+      "sizeBytes": 3400,
+      "firstLoadJsBytes": 150000
+    },
+    "/revenue/config": {
+      "marker": "ƒ",
+      "sizeBytes": 7340,
+      "firstLoadJsBytes": 154000
+    },
+    "/revenue/instalments": {
+      "marker": "ƒ",
+      "sizeBytes": 3510,
+      "firstLoadJsBytes": 150000
+    },
+    "/revenue/receipts": {
+      "marker": "ƒ",
+      "sizeBytes": 4070,
+      "firstLoadJsBytes": 151000
+    },
+    "/revenue/recovery": {
+      "marker": "ƒ",
+      "sizeBytes": 3220,
+      "firstLoadJsBytes": 150000
+    },
+    "/revenue/refunds": {
+      "marker": "ƒ",
+      "sizeBytes": 4010,
+      "firstLoadJsBytes": 150000
+    },
+    "/revenue/refunds/[id]/decide": {
+      "marker": "ƒ",
+      "sizeBytes": 3210,
+      "firstLoadJsBytes": 150000
+    },
+    "/revenue/trade-licenses": {
+      "marker": "ƒ",
+      "sizeBytes": 4420,
+      "firstLoadJsBytes": 151000
+    },
+    "/revenue/waivers": {
+      "marker": "ƒ",
+      "sizeBytes": 3580,
+      "firstLoadJsBytes": 150000
+    },
+    "/revenue/write-offs": {
+      "marker": "ƒ",
+      "sizeBytes": 2300,
+      "firstLoadJsBytes": 151000
+    },
+    "/revenue/write-offs/[id]/decide": {
+      "marker": "ƒ",
+      "sizeBytes": 3240,
+      "firstLoadJsBytes": 150000
+    },
+    "/sandbox": {
+      "marker": "ƒ",
+      "sizeBytes": 338,
+      "firstLoadJsBytes": 97000
+    },
+    "/settings/branding": {
+      "marker": "ƒ",
+      "sizeBytes": 3470,
+      "firstLoadJsBytes": 91400
+    },
+    "/setup": {
+      "marker": "ƒ",
+      "sizeBytes": 4220,
+      "firstLoadJsBytes": 151000
+    },
+    "/stock": {
+      "marker": "ƒ",
+      "sizeBytes": 1050,
+      "firstLoadJsBytes": 147000
+    },
+    "/stock/dashboard": {
+      "marker": "ƒ",
+      "sizeBytes": 578,
+      "firstLoadJsBytes": 147000
+    },
+    "/stock/items/new": {
+      "marker": "ƒ",
+      "sizeBytes": 3330,
+      "firstLoadJsBytes": 150000
+    },
+    "/stock/ledger": {
+      "marker": "ƒ",
+      "sizeBytes": 2420,
+      "firstLoadJsBytes": 149000
+    },
+    "/stock/ledger/new": {
+      "marker": "ƒ",
+      "sizeBytes": 3460,
+      "firstLoadJsBytes": 150000
+    },
+    "/stock/list": {
+      "marker": "ƒ",
+      "sizeBytes": 2330,
+      "firstLoadJsBytes": 149000
+    },
+    "/telephony": {
+      "marker": "ƒ",
+      "sizeBytes": 1050,
+      "firstLoadJsBytes": 147000
+    },
+    "/telephony/agents": {
+      "marker": "ƒ",
+      "sizeBytes": 1250,
+      "firstLoadJsBytes": 150000
+    },
+    "/telephony/calls": {
+      "marker": "ƒ",
+      "sizeBytes": 1510,
+      "firstLoadJsBytes": 150000
+    },
+    "/telephony/dispositions": {
+      "marker": "ƒ",
+      "sizeBytes": 1390,
+      "firstLoadJsBytes": 150000
+    },
+    "/telephony/list": {
+      "marker": "ƒ",
+      "sizeBytes": 1390,
+      "firstLoadJsBytes": 150000
+    },
+    "/tenant": {
+      "marker": "ƒ",
+      "sizeBytes": 1050,
+      "firstLoadJsBytes": 147000
+    },
+    "/tenant-admin": {
+      "marker": "ƒ",
+      "sizeBytes": 157,
+      "firstLoadJsBytes": 148000
+    },
+    "/tenant-admin/activation": {
+      "marker": "ƒ",
+      "sizeBytes": 1050,
+      "firstLoadJsBytes": 147000
+    },
+    "/tenant-admin/ai-plugins": {
+      "marker": "ƒ",
+      "sizeBytes": 1050,
+      "firstLoadJsBytes": 147000
+    },
+    "/tenant-admin/api-keys": {
+      "marker": "ƒ",
+      "sizeBytes": 4310,
+      "firstLoadJsBytes": 151000
+    },
+    "/tenant-admin/audit": {
+      "marker": "ƒ",
+      "sizeBytes": 2620,
+      "firstLoadJsBytes": 149000
+    },
+    "/tenant-admin/breakglass": {
+      "marker": "ƒ",
+      "sizeBytes": 2970,
+      "firstLoadJsBytes": 149000
+    },
+    "/tenant-admin/breakglass/[id]": {
+      "marker": "ƒ",
+      "sizeBytes": 1050,
+      "firstLoadJsBytes": 147000
+    },
+    "/tenant-admin/compliance": {
+      "marker": "ƒ",
+      "sizeBytes": 1050,
+      "firstLoadJsBytes": 147000
+    },
+    "/tenant-admin/data-export": {
+      "marker": "ƒ",
+      "sizeBytes": 2370,
+      "firstLoadJsBytes": 151000
+    },
+    "/tenant-admin/domain": {
+      "marker": "ƒ",
+      "sizeBytes": 2780,
+      "firstLoadJsBytes": 152000
+    },
+    "/tenant-admin/idp": {
+      "marker": "ƒ",
+      "sizeBytes": 1150,
+      "firstLoadJsBytes": 150000
+    },
+    "/tenant-admin/install": {
+      "marker": "ƒ",
+      "sizeBytes": 1050,
+      "firstLoadJsBytes": 147000
+    },
+    "/tenant-admin/mfa": {
+      "marker": "ƒ",
+      "sizeBytes": 1110,
+      "firstLoadJsBytes": 150000
+    },
+    "/tenant-admin/notifications": {
+      "marker": "ƒ",
+      "sizeBytes": 3060,
+      "firstLoadJsBytes": 150000
+    },
+    "/tenant-admin/notifications/channels": {
+      "marker": "ƒ",
+      "sizeBytes": 1050,
+      "firstLoadJsBytes": 147000
+    },
+    "/tenant-admin/operations": {
+      "marker": "ƒ",
+      "sizeBytes": 2470,
+      "firstLoadJsBytes": 149000
+    },
+    "/tenant-admin/org-hierarchy": {
+      "marker": "ƒ",
+      "sizeBytes": 1050,
+      "firstLoadJsBytes": 147000
+    },
+    "/tenant-admin/org-type": {
+      "marker": "ƒ",
+      "sizeBytes": 1050,
+      "firstLoadJsBytes": 147000
+    },
+    "/tenant-admin/plans": {
+      "marker": "ƒ",
+      "sizeBytes": 3250,
+      "firstLoadJsBytes": 152000
+    },
+    "/tenant-admin/platform-config": {
+      "marker": "ƒ",
+      "sizeBytes": 1050,
+      "firstLoadJsBytes": 147000
+    },
+    "/tenant-admin/readiness": {
+      "marker": "ƒ",
+      "sizeBytes": 1050,
+      "firstLoadJsBytes": 147000
+    },
+    "/tenant-admin/roles": {
+      "marker": "ƒ",
+      "sizeBytes": 3240,
+      "firstLoadJsBytes": 150000
+    },
+    "/tenant-admin/roles/[id]": {
+      "marker": "ƒ",
+      "sizeBytes": 4260,
+      "firstLoadJsBytes": 151000
+    },
+    "/tenant-admin/security": {
+      "marker": "ƒ",
+      "sizeBytes": 1150,
+      "firstLoadJsBytes": 150000
+    },
+    "/tenant-admin/sessions": {
+      "marker": "ƒ",
+      "sizeBytes": 3340,
+      "firstLoadJsBytes": 150000
+    },
+    "/tenant-admin/sessions/[id]": {
+      "marker": "ƒ",
+      "sizeBytes": 157,
+      "firstLoadJsBytes": 148000
+    },
+    "/tenant-admin/settings": {
+      "marker": "ƒ",
+      "sizeBytes": 2660,
+      "firstLoadJsBytes": 149000
+    },
+    "/tenant-admin/siem": {
+      "marker": "ƒ",
+      "sizeBytes": 1200,
+      "firstLoadJsBytes": 150000
+    },
+    "/tenant-admin/sso": {
+      "marker": "ƒ",
+      "sizeBytes": 739,
+      "firstLoadJsBytes": 150000
+    },
+    "/tenant-admin/subscription": {
+      "marker": "ƒ",
+      "sizeBytes": 1050,
+      "firstLoadJsBytes": 147000
+    },
+    "/tenant-admin/usage": {
+      "marker": "ƒ",
+      "sizeBytes": 1840,
+      "firstLoadJsBytes": 151000
+    },
+    "/tenant-admin/users": {
+      "marker": "ƒ",
+      "sizeBytes": 2760,
+      "firstLoadJsBytes": 152000
+    },
+    "/tenant-admin/users/[id]": {
+      "marker": "ƒ",
+      "sizeBytes": 2830,
+      "firstLoadJsBytes": 149000
+    },
+    "/tenant-admin/webhooks": {
+      "marker": "ƒ",
+      "sizeBytes": 3190,
+      "firstLoadJsBytes": 152000
+    },
+    "/tenant/code-lists": {
+      "marker": "ƒ",
+      "sizeBytes": 1390,
+      "firstLoadJsBytes": 150000
+    },
+    "/tenant/consent-exchange": {
+      "marker": "ƒ",
+      "sizeBytes": 1400,
+      "firstLoadJsBytes": 150000
+    },
+    "/tenant/data-migration": {
+      "marker": "ƒ",
+      "sizeBytes": 1390,
+      "firstLoadJsBytes": 150000
+    },
+    "/tenant/org-hierarchy": {
+      "marker": "ƒ",
+      "sizeBytes": 1400,
+      "firstLoadJsBytes": 150000
+    },
+    "/tenant/overview": {
+      "marker": "ƒ",
+      "sizeBytes": 1390,
+      "firstLoadJsBytes": 150000
+    },
+    "/tenant/plans": {
+      "marker": "ƒ",
+      "sizeBytes": 1390,
+      "firstLoadJsBytes": 150000
+    },
+    "/tenant/positions": {
+      "marker": "ƒ",
+      "sizeBytes": 1400,
+      "firstLoadJsBytes": 150000
+    },
+    "/tenant/quotas": {
+      "marker": "ƒ",
+      "sizeBytes": 1390,
+      "firstLoadJsBytes": 150000
+    },
+    "/tenant/settings": {
+      "marker": "ƒ",
+      "sizeBytes": 1390,
+      "firstLoadJsBytes": 150000
+    },
+    "/tenant/stewardship": {
+      "marker": "ƒ",
+      "sizeBytes": 1390,
+      "firstLoadJsBytes": 150000
+    },
+    "/tenant/subscriptions": {
+      "marker": "ƒ",
+      "sizeBytes": 1390,
+      "firstLoadJsBytes": 150000
+    },
+    "/themes": {
+      "marker": "ƒ",
+      "sizeBytes": 1050,
+      "firstLoadJsBytes": 147000
+    },
+    "/themes/brand": {
+      "marker": "ƒ",
+      "sizeBytes": 1390,
+      "firstLoadJsBytes": 150000
+    },
+    "/themes/branding": {
+      "marker": "ƒ",
+      "sizeBytes": 1390,
+      "firstLoadJsBytes": 150000
+    },
+    "/themes/templates": {
+      "marker": "ƒ",
+      "sizeBytes": 1400,
+      "firstLoadJsBytes": 150000
+    },
+    "/themes/tokens": {
+      "marker": "ƒ",
+      "sizeBytes": 2970,
+      "firstLoadJsBytes": 149000
+    },
+    "/visitor": {
+      "marker": "ƒ",
+      "sizeBytes": 1050,
+      "firstLoadJsBytes": 147000
+    },
+    "/visitor/admin": {
+      "marker": "ƒ",
+      "sizeBytes": 3140,
+      "firstLoadJsBytes": 152000
+    },
+    "/visitor/guard": {
+      "marker": "ƒ",
+      "sizeBytes": 3530,
+      "firstLoadJsBytes": 152000
+    },
+    "/visitor/host": {
+      "marker": "ƒ",
+      "sizeBytes": 2610,
+      "firstLoadJsBytes": 151000
+    },
+    "/workflow": {
+      "marker": "ƒ",
+      "sizeBytes": 1050,
+      "firstLoadJsBytes": 147000
+    },
+    "/workflow/definitions": {
+      "marker": "ƒ",
+      "sizeBytes": 1050,
+      "firstLoadJsBytes": 147000
+    },
+    "/workflow/definitions/[id]": {
+      "marker": "ƒ",
+      "sizeBytes": 1050,
+      "firstLoadJsBytes": 147000
+    },
+    "/workflow/designer": {
+      "marker": "ƒ",
+      "sizeBytes": 1440,
+      "firstLoadJsBytes": 148000
+    },
+    "/workflow/instances/[id]": {
+      "marker": "ƒ",
+      "sizeBytes": 163,
+      "firstLoadJsBytes": 152000
+    },
+    "/workflow/list": {
+      "marker": "ƒ",
+      "sizeBytes": 1010,
+      "firstLoadJsBytes": 150000
+    },
+    "/workflow/my-tasks": {
+      "marker": "ƒ",
+      "sizeBytes": 163,
+      "firstLoadJsBytes": 152000
+    },
+    "/works": {
+      "marker": "ƒ",
+      "sizeBytes": 1050,
+      "firstLoadJsBytes": 147000
+    },
+    "/works/approvals": {
+      "marker": "ƒ",
+      "sizeBytes": 1480,
+      "firstLoadJsBytes": 150000
+    },
+    "/works/approvals/aa/[id]": {
+      "marker": "ƒ",
+      "sizeBytes": 158,
+      "firstLoadJsBytes": 149000
+    },
+    "/works/approvals/new": {
+      "marker": "ƒ",
+      "sizeBytes": 3230,
+      "firstLoadJsBytes": 150000
+    },
+    "/works/approvals/ts-new": {
+      "marker": "ƒ",
+      "sizeBytes": 3160,
+      "firstLoadJsBytes": 150000
+    },
+    "/works/approvals/ts/[id]": {
+      "marker": "ƒ",
+      "sizeBytes": 158,
+      "firstLoadJsBytes": 149000
+    },
+    "/works/billing": {
+      "marker": "ƒ",
+      "sizeBytes": 1210,
+      "firstLoadJsBytes": 150000
+    },
+    "/works/billing/[workId]": {
+      "marker": "ƒ",
+      "sizeBytes": 3290,
+      "firstLoadJsBytes": 150000
+    },
+    "/works/billing/account-compile": {
+      "marker": "ƒ",
+      "sizeBytes": 3120,
+      "firstLoadJsBytes": 150000
+    },
+    "/works/billing/bills/new": {
+      "marker": "ƒ",
+      "sizeBytes": 3510,
+      "firstLoadJsBytes": 150000
+    },
+    "/works/billing/measurements/new": {
+      "marker": "ƒ",
+      "sizeBytes": 3430,
+      "firstLoadJsBytes": 150000
+    },
+    "/works/billing/new-mb": {
+      "marker": "ƒ",
+      "sizeBytes": 2850,
+      "firstLoadJsBytes": 149000
+    },
+    "/works/boq": {
+      "marker": "ƒ",
+      "sizeBytes": 1230,
+      "firstLoadJsBytes": 150000
+    },
+    "/works/boq/[workId]": {
+      "marker": "ƒ",
+      "sizeBytes": 1050,
+      "firstLoadJsBytes": 147000
+    },
+    "/works/boq/new": {
+      "marker": "ƒ",
+      "sizeBytes": 3230,
+      "firstLoadJsBytes": 150000
+    },
+    "/works/closure": {
+      "marker": "ƒ",
+      "sizeBytes": 1390,
+      "firstLoadJsBytes": 150000
+    },
+    "/works/contractors": {
+      "marker": "ƒ",
+      "sizeBytes": 1050,
+      "firstLoadJsBytes": 147000
+    },
+    "/works/contractors/[id]": {
+      "marker": "ƒ",
+      "sizeBytes": 3010,
+      "firstLoadJsBytes": 152000
+    },
+    "/works/contractors/new": {
+      "marker": "ƒ",
+      "sizeBytes": 2950,
+      "firstLoadJsBytes": 149000
+    },
+    "/works/execution": {
+      "marker": "ƒ",
+      "sizeBytes": 1540,
+      "firstLoadJsBytes": 150000
+    },
+    "/works/execution/[workId]": {
+      "marker": "ƒ",
+      "sizeBytes": 2880,
+      "firstLoadJsBytes": 149000
+    },
+    "/works/execution/issues": {
+      "marker": "ƒ",
+      "sizeBytes": 2460,
+      "firstLoadJsBytes": 149000
+    },
+    "/works/execution/issues/new": {
+      "marker": "ƒ",
+      "sizeBytes": 2720,
+      "firstLoadJsBytes": 149000
+    },
+    "/works/execution/photos/new": {
+      "marker": "ƒ",
+      "sizeBytes": 3170,
+      "firstLoadJsBytes": 150000
+    },
+    "/works/execution/record-progress": {
+      "marker": "ƒ",
+      "sizeBytes": 3780,
+      "firstLoadJsBytes": 150000
+    },
+    "/works/masters": {
+      "marker": "ƒ",
+      "sizeBytes": 3870,
+      "firstLoadJsBytes": 150000
+    },
+    "/works/orders": {
+      "marker": "ƒ",
+      "sizeBytes": 1050,
+      "firstLoadJsBytes": 147000
+    },
+    "/works/proposals": {
+      "marker": "ƒ",
+      "sizeBytes": 1220,
+      "firstLoadJsBytes": 150000
+    },
+    "/works/proposals/[id]": {
+      "marker": "ƒ",
+      "sizeBytes": 4950,
+      "firstLoadJsBytes": 154000
+    },
+    "/works/proposals/new": {
+      "marker": "ƒ",
+      "sizeBytes": 3130,
+      "firstLoadJsBytes": 150000
+    },
+    "/works/reports": {
+      "marker": "ƒ",
+      "sizeBytes": 2290,
+      "firstLoadJsBytes": 149000
+    },
+    "/works/tenders": {
+      "marker": "ƒ",
+      "sizeBytes": 1200,
+      "firstLoadJsBytes": 150000
+    },
+    "/works/tenders/[id]": {
+      "marker": "ƒ",
+      "sizeBytes": 4080,
+      "firstLoadJsBytes": 151000
+    },
+    "/works/tenders/new": {
+      "marker": "ƒ",
+      "sizeBytes": 2960,
+      "firstLoadJsBytes": 149000
+    }
+  }
+}

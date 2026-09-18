@@ -748,14 +748,19 @@ jobs:
           SKIP_ENV_VALIDATION: true
       - name: Report bundle size
         # PERF-009 tranche 2: cheap, always-on visibility into route bundle
-        # sizes on every PR -- NOT a historical delta against a stored
-        # baseline (no baseline is tracked yet; see docs/PERFORMANCE.md /
-        # PR description for that as remaining follow-up). Deeper,
-        # per-module attribution is available on demand via
-        # `pnpm --filter @civitasone/web run analyze` (wraps
+        # sizes on every PR. Deeper, per-module attribution is available on
+        # demand via `pnpm --filter @civitasone/web run analyze` (wraps
         # @next/bundle-analyzer; opt-in, gated behind ANALYZE=true so it
         # never adds cost to a normal build), which writes
         # apps/web/.next/analyze/{client,nodejs,edge}.html.
+        # PERF-009 tranche 3: now also diffs against a committed baseline
+        # (scripts/ci/bundle-size-baseline.json, via bundle-size-guard.mjs --
+        # same <name>-guard.mjs/<name>-baseline.json convention as
+        # tenant-index-guard.mjs et al.) instead of reporting an absolute
+        # size with nothing to compare it to. Still deliberately
+        # informational, not a hard gate -- see the guard script's own
+        # header for why; "budgets set and enforced" (this gap's own DoD)
+        # remains real, disclosed future scope, not claimed here.
         # Purely informational -- must never fail the job itself, including
         # when the preceding build step failed (no route table to report).
         if: always()
@@ -769,6 +774,11 @@ jobs:
             else
               echo "(build did not reach the bundle summary -- see the build step's own log)"
             fi
+            echo '```'
+            echo
+            echo "### Bundle size vs. baseline"
+            echo '```'
+            node scripts/ci/bundle-size-guard.mjs /tmp/web-build.log || echo "(bundle-size-guard.mjs found nothing to compare -- see message above)"
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY" || true
 

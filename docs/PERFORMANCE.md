@@ -182,7 +182,52 @@ A run **passes** only when: p95 GET < 500 ms, p95 POST < 1000 ms, and error rate
 
 ---
 
-## 8. Performance checklist
+## 8. Frontend bundle size
+
+Tracked in CI (`.github/workflows/ci.yml`'s "Web Build" job), not enforced as a hard gate yet
+(see PERF-009 in `docs/ENTERPRISE-GAP-REPORT-2026-09-07.md` for the full history and remaining
+scope).
+
+### 8.1 What's measured
+
+Every PR's production build reports:
+- the shared "First Load JS" bytes (the floor every route pays, regardless of its own code)
+- each route's own `Size` and `First Load JS`, parsed straight from `next build`'s own stdout
+  (`scripts/ci/bundle-size-guard.mjs`) -- no separate instrumentation to drift from what actually
+  shipped.
+
+### 8.2 Baseline + delta
+
+`scripts/ci/bundle-size-baseline.json` is a committed snapshot (same
+`<name>-guard.mjs`/`<name>-baseline.json` convention as `tenant-index-guard.mjs`,
+`jsx-a11y-ratchet-guard.mjs`, etc.). Every PR's "Report bundle size" step diffs the current
+build against it and posts the delta (shared-bundle change, added/removed routes, and any route
+whose First Load JS moved beyond a 512 B noise floor) to the job summary.
+
+To intentionally update the baseline after a real, reviewed change:
+
+```bash
+pnpm --filter @civitasone/web build   # or: pnpm --filter @civitasone/web run analyze
+node scripts/ci/bundle-size-guard.mjs /tmp/web-build.log --write-baseline
+git add scripts/ci/bundle-size-baseline.json
+```
+
+### 8.3 Deeper attribution
+
+`pnpm --filter @civitasone/web run analyze` (wraps `@next/bundle-analyzer`, gated behind
+`ANALYZE=true` so it never costs a normal build) writes
+`apps/web/.next/analyze/{client,nodejs,edge}.html` for per-module attribution when a delta
+needs explaining.
+
+### 8.4 Known gap
+
+This is reporting, not enforcement -- nothing fails CI today on a bundle-size regression
+(deliberately: see the guard script's own header). PERF-009's own DoD ("budgets set and
+enforced") remains open; turning the noise-floor delta into a real assertable budget per route
+(or per module) is real, disclosed future scope, not something this baseline claims to close.
+
+---
+## 9. Performance checklist
 
 - [ ] Service connects via pgbouncer `:6432` (transaction mode), not directly to Postgres.
 - [ ] Hot reads use `getOrLoad`; keys include `tenant_id`; writes call `delByPrefix`.
@@ -195,7 +240,7 @@ A run **passes** only when: p95 GET < 500 ms, p95 POST < 1000 ms, and error rate
 
 ---
 
-## 9. Related documents
+## 10. Related documents
 
 - `DEPLOYMENT.md` — env reference, migration strategy, rollback.
 - `SELF-HOSTING.md` — hardware sizing, monitoring, DR.
