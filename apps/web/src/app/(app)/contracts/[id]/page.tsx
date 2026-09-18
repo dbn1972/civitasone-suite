@@ -10,6 +10,7 @@ import { MilestoneActions } from "./MilestoneActions";
 import { BondActions } from "./BondActions";
 import { ObligationsPanel } from "./ObligationsPanel";
 import { deriveContractDisplayFields } from "./page.helpers";
+import { ArrowLeft } from "lucide-react";
 
 export default async function ContractDetailPage({ params }: { params: { id: string } }) {
   const [{ data: contract, source }, milestonesRes, bondsRes, obligationsRes] = await Promise.all([
@@ -22,7 +23,7 @@ export default async function ContractDetailPage({ params }: { params: { id: str
   if (!contract) {
     return (
       <main className="wrap">
-        <Link href="/contracts/list" className="back">← Back</Link>
+        <Link href="/contracts/list" className="back"><ArrowLeft aria-hidden="true" size={14} /> Back</Link>
         <EmptyState
           icon="🔍"
           title="Contract not found"

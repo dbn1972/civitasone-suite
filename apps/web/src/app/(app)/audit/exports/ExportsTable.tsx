@@ -41,7 +41,7 @@ export function ExportsTable({ rows }: { rows: ExportRow[] }) {
           render: (item) =>
             item.status === "completed" && item.downloadUrl
               ? <a href={item.downloadUrl as string} className="lnk" download>Download</a>
-              : <span style={{ color: "#98a2b3" }}>—</span>,
+              : <span style={{ color: "var(--mut)" }}>—</span>,
         },
       ]}
       rows={rows}

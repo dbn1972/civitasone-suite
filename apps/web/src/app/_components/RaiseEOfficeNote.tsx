@@ -138,7 +138,7 @@ export function RaiseEOfficeNote(props: RaiseEOfficeNoteProps) {
       <div className="card-h" style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <h3>eOffice approval</h3>
         {loading ? (
-          <span style={{ color: "#94a3b8", fontSize: "0.8125rem" }}>Checking…</span>
+          <span style={{ color: "var(--mut)", fontSize: "0.8125rem" }}>Checking…</span>
         ) : file ? (
           <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
             <span className="mono" style={{ fontSize: "0.8125rem" }}>{file.file_no}</span>

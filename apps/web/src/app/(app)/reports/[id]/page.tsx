@@ -93,7 +93,7 @@ export default async function ReportDetailPage({ params }: { params: { id: strin
         <div className="card-h">
           <h3>Report data</h3>
           {displayColumns.length > 0 && (
-            <span style={{ fontSize: "12px", color: "#98a2b3" }}>
+            <span style={{ fontSize: "12px", color: "var(--mut)" }}>
               {visibleRows.length.toLocaleString("en-IN")} of {(job.totalCount > 0 ? job.totalCount : job.rows.length).toLocaleString("en-IN")} rows
             </span>
           )}

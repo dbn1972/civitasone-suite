@@ -68,7 +68,7 @@ export function PolicyActions({ policyId, status }: { policyId: string; status: 
           />
         )}
         {!canSubmit && !canApprove && !canPublish && !canAcknowledge && (
-          <span style={{ color: "var(--ink3, #94a3b8)", fontSize: 14 }}>No further actions for status “{status.replace(/_/g, " ")}”.</span>
+          <span style={{ color: "var(--mut)", fontSize: 14 }}>No further actions for status “{status.replace(/_/g, " ")}”.</span>
         )}
         {msg && <span style={{ color: "var(--ok, #059669)", fontSize: 14, fontWeight: 600 }}>{msg}</span>}
       </div>

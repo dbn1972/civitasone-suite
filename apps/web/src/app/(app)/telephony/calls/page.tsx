@@ -11,6 +11,7 @@
 import type { ReactNode } from "react";
 import { PageHeader, StatCard, StatGrid, StatusPill, DataTable } from "../../../_components/ds";
 import { useOfflineResource } from "@/lib/sync/resource";
+import { ArrowLeft } from "lucide-react";
 
 type CallRow = {
   id: string;
@@ -103,7 +104,7 @@ export default function TelephonyCallsPage() {
   return (
     <>
       <nav aria-label="Breadcrumb" className="back">
-        ← <a href="/telephony">Telephony</a>
+        <ArrowLeft aria-hidden="true" size={14} /> <a href="/telephony">Telephony</a>
       </nav>
       <PageHeader title="Call Log" subtitle="Inbound and outbound calls with lifecycle, dispositions and SLA." />
       <p role="status" aria-live="polite" style={{ fontSize: 12, color: "#92400e", margin: "0 0 8px", minHeight: 16 }}>

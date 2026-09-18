@@ -37,7 +37,7 @@ function groupBadgeStyle(level: number): React.CSSProperties {
     "Group-B": { bg: "#f0fdf4", color: "#15803d" },
     "Group-C": { bg: "#fff7ed", color: "#c2410c" },
     "Group-D": { bg: "#f5f5f5", color: "#525252" },
-    "—":       { bg: "#f5f5f5", color: "#94a3b8" },
+    "—":       { bg: "#f5f5f5", color: "var(--mut)" },
   };
   const { bg, color } = colors[g] ?? colors["—"];
   return {

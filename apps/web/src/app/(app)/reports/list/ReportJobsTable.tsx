@@ -46,7 +46,7 @@ export function ReportJobsTable({ rows }: { rows: JobRow[] }) {
                 Download
               </a>
             ) : (
-              <span style={{ color: "#98a2b3" }}>—</span>
+              <span style={{ color: "var(--mut)" }}>—</span>
             ),
         },
       ]}

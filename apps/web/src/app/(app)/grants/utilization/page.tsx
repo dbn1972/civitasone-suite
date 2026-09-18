@@ -1,6 +1,7 @@
 import { PageHeader, StatGrid, StatCard, Card } from "@/app/_components/ds";
 import { getGrantUtilization } from "../../../_data/loaders";
 import { UtilizationTable } from "./UtilizationTable";
+import { ArrowLeft } from "lucide-react";
 
 export default async function GrantUtilizationPage() {
   const { data: ucs, source } = await getGrantUtilization();
@@ -12,7 +13,7 @@ export default async function GrantUtilizationPage() {
   return (
     <>
       <nav aria-label="Breadcrumb" className="back">
-        ← <a href="/grants">Grants</a>
+        <ArrowLeft aria-hidden="true" size={14} /> <a href="/grants">Grants</a>
       </nav>
       <PageHeader
         title="Utilization Certificates"

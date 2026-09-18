@@ -2,6 +2,7 @@ import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { PageHeader, StatGrid, StatCard, Card } from "@/app/_components/ds";
 import { getInventoryBins } from "../_data";
 import { BinsTable } from "../BinsTable";
+import { ArrowLeft } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 
@@ -13,7 +14,7 @@ export default async function InventoryBinsPage() {
   return (
     <>
       <nav aria-label="Breadcrumb" className="back">
-        ← <a href="/inventory">Inventory</a>
+        <ArrowLeft aria-hidden="true" size={14} /> <a href="/inventory">Inventory</a>
       </nav>
       <PageHeader title="Bins & Racks" subtitle="Physical bin and rack locations within government stores." />
       {source === "error" && <DataSourceBadge source="error" />}

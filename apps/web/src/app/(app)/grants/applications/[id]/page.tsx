@@ -4,6 +4,7 @@ import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
 import { formatMoney, formatIndianDate } from "@/lib/formatters";
 import { getApplicationById } from "../../_data";
 import { ApplicationActions } from "./ApplicationActions";
+import { ArrowLeft } from "lucide-react";
 
 const STATUS_ACTIONS: Record<string, string[]> = {
   submitted:    ["assign-reviewer", "score", "approve", "reject"],
@@ -30,7 +31,7 @@ export default async function ApplicationDetailPage({ params }: { params: { id: 
   return (
     <>
       <nav aria-label="Breadcrumb" className="back">
-        ← <a href="/grants">Grants</a>{" "}
+        <ArrowLeft aria-hidden="true" size={14} /> <a href="/grants">Grants</a>{" "}
         <span aria-hidden="true">/</span>{" "}
         <a href="/grants/applications">Applications</a>{" "}
         <span aria-hidden="true">/</span>{" "}

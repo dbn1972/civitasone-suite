@@ -175,7 +175,7 @@ export function TransferOrderCard({ transfer, onAction }: Props) {
             const done   = i < currentIdx;
             const active = i === currentIdx;
             const bg  = done ? "#16a34a" : active ? "#2563eb" : "var(--line, #e2e8f0)";
-            const fg  = done || active ? "#fff" : "var(--ink3, #94a3b8)";
+            const fg  = done || active ? "#fff" : "var(--mut)";
             const connBg = done ? "#16a34a" : "var(--line, #e2e8f0)";
             return (
               <div key={key} style={{ display: "flex", alignItems: "center", flexShrink: 0 }}>

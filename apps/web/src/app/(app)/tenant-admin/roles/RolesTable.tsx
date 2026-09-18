@@ -97,7 +97,7 @@ function NewRoleDialog({ open, onClose, onCreated }: { open: boolean; onClose: (
             {nameErr ? <p role="alert" style={errSty}>{nameErr}</p> : null}
           </div>
           <div>
-            <label htmlFor={descId} style={lbl}>Description <span style={{ fontWeight: 400, color: "#98a2b3" }}>(optional)</span></label>
+            <label htmlFor={descId} style={lbl}>Description <span style={{ fontWeight: 400, color: "var(--mut)" }}>(optional)</span></label>
             <input id={descId} value={description} onChange={(e) => setDescription(e.target.value)}
               placeholder="Can review and approve vouchers" style={inp} />
           </div>

@@ -327,7 +327,7 @@ export function RunQueryForm() {
                   alignItems: "center",
                   gap: 6,
                   fontSize: 14,
-                  color: disabled ? "#94a3b8" : "#0f172a",
+                  color: disabled ? "var(--mut)" : "#0f172a",
                   cursor: disabled ? "not-allowed" : "pointer",
                 }}
               >

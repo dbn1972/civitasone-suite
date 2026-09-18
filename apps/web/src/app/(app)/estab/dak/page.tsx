@@ -155,7 +155,7 @@ export default function DakRegistryPage() {
           <h3>Inward register</h3>
         </div>
         {loading ? (
-          <p className="pad" style={{ textAlign: "center", color: "#94a3b8" }}>Loading…</p>
+          <p className="pad" style={{ textAlign: "center", color: "var(--mut)" }}>Loading…</p>
         ) : loadError ? (
           <div className="pad"><ErrorState error={toHumanError("load", { area: "inward register" })} onRetry={() => void load()} /></div>
         ) : rows.length === 0 ? (

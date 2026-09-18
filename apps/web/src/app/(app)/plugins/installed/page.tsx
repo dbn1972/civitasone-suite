@@ -3,6 +3,7 @@ import { PageHeader, StatGrid, StatCard, EmptyState, RefreshErrorState } from ".
 import { getPlugins } from "../../../_data/loaders";
 import { toHumanError } from "@/lib/messages";
 import { PluginsTable } from "../PluginsTable";
+import { ArrowLeft } from "lucide-react";
 
 type PluginRow = {
 	id?: string;
@@ -26,7 +27,7 @@ export default async function Page() {
 	return (
 		<main className="wrap">
 			<nav aria-label="Breadcrumb" className="back">
-				← <a href="/plugins">Plugins</a>
+				<ArrowLeft aria-hidden="true" size={14} /> <a href="/plugins">Plugins</a>
 			</nav>
 			<PageHeader
 				title="Plugins — Installed"

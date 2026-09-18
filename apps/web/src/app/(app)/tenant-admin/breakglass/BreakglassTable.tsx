@@ -67,7 +67,7 @@ export function BreakglassTable({ events }: { events: Event[] }) {
             render: (event) =>
               event.status === "active"
                 ? <BreakglassActions id={event.id} requester={event.actor} />
-                : <span style={{ fontSize: 12, color: "#98a2b3" }}>—</span>,
+                : <span style={{ fontSize: 12, color: "var(--mut)" }}>—</span>,
           },
         ]}
         rows={rows}

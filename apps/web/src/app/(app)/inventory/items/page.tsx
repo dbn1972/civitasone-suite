@@ -2,6 +2,7 @@ import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { PageHeader, StatGrid, StatCard, Card } from "@/app/_components/ds";
 import { getInventoryItems } from "../_data";
 import { ItemsTable } from "../ItemsTable";
+import { ArrowLeft } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 
@@ -15,7 +16,7 @@ export default async function InventoryItemsPage() {
   return (
     <>
       <nav aria-label="Breadcrumb" className="back">
-        ← <a href="/inventory">Inventory</a>
+        <ArrowLeft aria-hidden="true" size={14} /> <a href="/inventory">Inventory</a>
       </nav>
       <PageHeader title="Item Master" subtitle="Catalogued stock items with categories, units and reorder policy." />
       {source === "error" && <DataSourceBadge source="error" />}

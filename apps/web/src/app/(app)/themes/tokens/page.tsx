@@ -4,6 +4,7 @@ import { Card, StatGrid, StatCard } from "@/app/_components/ds";
 import { getThemeTokens } from "../../../_data/loaders";
 import { ThemeActions } from "../ThemeActions";
 import { ThemeTokenTable } from "../ThemeTokenTable";
+import { ArrowLeft } from "lucide-react";
 
 const HEX = /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/;
 
@@ -17,7 +18,7 @@ export default async function Page() {
 	return (
 		<PageShell title="Themes — Tokens" description="Tenant branding and token preview workspace.">
 			<nav aria-label="Breadcrumb" className="back">
-				← <a href="/themes">Themes</a>
+				<ArrowLeft aria-hidden="true" size={14} /> <a href="/themes">Themes</a>
 			</nav>
 			{source === "error" ? <DataSourceBadge source={source} /> : null}
 

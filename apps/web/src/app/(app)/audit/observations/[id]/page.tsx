@@ -5,6 +5,7 @@ import { formatMoney, formatIndianDate } from "@/lib/formatters";
 import { getAuditObservationById } from "../../../../_data/loaders";
 import { ObservationActions } from "./ObservationActions";
 import { RepliesTable, StepsTable, type ReplyRow, type StepRow } from "./ObservationTables";
+import { ArrowLeft } from "lucide-react";
 
 export default async function AuditObservationDetailPage({ params }: { params: { id: string } }) {
   const { data: obs, source } = await getAuditObservationById(params.id);
@@ -12,7 +13,7 @@ export default async function AuditObservationDetailPage({ params }: { params: {
   if (!obs) {
     return (
       <main className="wrap">
-        <Link href="/audit/observations" className="back">← Back</Link>
+        <Link href="/audit/observations" className="back"><ArrowLeft aria-hidden="true" size={14} /> Back</Link>
         <EmptyState icon="🔍" title="Observation not found" message="This observation may have been removed or the ID is invalid." />
       </main>
     );

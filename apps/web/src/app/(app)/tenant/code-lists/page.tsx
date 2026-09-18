@@ -1,5 +1,6 @@
 import { ModuleListPage } from "../../../_components/ModuleListPage";
 import { getTenantCodeLists } from "../_data";
+import { ArrowLeft } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 
@@ -8,7 +9,7 @@ export default async function Page() {
   return (
     <main className="page-main" aria-labelledby="page-heading">
       <nav aria-label="Breadcrumb" className="back">
-        ← <a href="/tenant">Tenant</a>
+        <ArrowLeft aria-hidden="true" size={14} /> <a href="/tenant">Tenant</a>
       </nav>
       <ModuleListPage
         title="Tenant — Code Lists"

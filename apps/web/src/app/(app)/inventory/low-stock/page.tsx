@@ -2,6 +2,7 @@ import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { PageHeader, StatGrid, StatCard, Card } from "@/app/_components/ds";
 import { getInventoryLowStock } from "../_data";
 import { LowStockTable } from "../LowStockTable";
+import { ArrowLeft } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 
@@ -12,7 +13,7 @@ export default async function InventoryLowStockPage() {
   return (
     <>
       <nav aria-label="Breadcrumb" className="back">
-        ← <a href="/inventory">Inventory</a>
+        <ArrowLeft aria-hidden="true" size={14} /> <a href="/inventory">Inventory</a>
       </nav>
       <PageHeader title="Low Stock & Reorder" subtitle="Items at or below their reorder level, with suggested replenishment." />
       {source === "error" && <DataSourceBadge source="error" />}

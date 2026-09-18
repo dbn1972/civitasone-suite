@@ -31,7 +31,7 @@ export function SessionRevokeCell({ sessionId, active }: Props) {
   }
 
   if (!active) {
-    return <span style={{ fontSize: 12, color: "#98a2b3" }} aria-disabled="true">Revoke</span>;
+    return <span style={{ fontSize: 12, color: "var(--mut)" }} aria-disabled="true">Revoke</span>;
   }
 
   return (

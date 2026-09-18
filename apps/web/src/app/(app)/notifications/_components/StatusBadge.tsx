@@ -35,7 +35,7 @@ export function StatusBadge({ status, label }: { status: string; label?: string 
   const def = STATES[key] ?? { icon: "•", variant: "info" as Variant, label: status || "Unknown" };
   const text = label ?? def.label;
   return (
-    <span className={`pill ${def.variant}`} aria-label={`Status: ${text}`}>
+    <span className={`pill ${def.variant}`} role="status" aria-label={`Status: ${text}`}>
       <span aria-hidden="true" style={{ marginRight: 4 }}>{def.icon}</span>
       {text}
     </span>

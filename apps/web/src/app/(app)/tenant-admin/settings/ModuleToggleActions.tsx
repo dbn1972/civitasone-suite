@@ -85,7 +85,7 @@ export function ModuleToggleActions({ modules }: { modules: ModuleRow[] }) {
               <div key={mod.moduleKey} className="prefrow">
                 <div>
                   <div style={{ fontWeight: 500, fontSize: 14 }}>{mod.moduleName}</div>
-                  <div style={{ fontSize: 12, color: "#98a2b3" }}><span className="mono">{mod.moduleKey}</span></div>
+                  <div style={{ fontSize: 12, color: "var(--mut)" }}><span className="mono">{mod.moduleKey}</span></div>
                 </div>
                 <button
                   type="button"

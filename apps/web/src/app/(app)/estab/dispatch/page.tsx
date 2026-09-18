@@ -56,7 +56,7 @@ export default function DispatchRegistryPage() {
       <div className="card">
         <div className="card-h"><h3>Dispatch register</h3></div>
         {loading ? (
-          <p className="pad" style={{ textAlign: "center", color: "#94a3b8" }}>Loading…</p>
+          <p className="pad" style={{ textAlign: "center", color: "var(--mut)" }}>Loading…</p>
         ) : error ? (
           <div className="pad"><ErrorState error={toHumanError("load", { area: "dispatch register" })} onRetry={() => void load()} /></div>
         ) : rows.length === 0 ? (

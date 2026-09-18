@@ -96,12 +96,12 @@ export function AssistantClient() {
                 <p style={{ margin: "0 0 12px", lineHeight: 1.6, whiteSpace: "pre-wrap", color: "var(--ink, #0f172a)" }}>{answer.answer}</p>
                 {answer.citations.length > 0 && (
                   <div>
-                    <div style={{ fontSize: 12, fontWeight: 700, textTransform: "uppercase", color: "var(--ink3, #94a3b8)", marginBottom: 6 }}>Sources</div>
+                    <div style={{ fontSize: 12, fontWeight: 700, textTransform: "uppercase", color: "var(--mut)", marginBottom: 6 }}>Sources</div>
                     <ul style={{ margin: 0, paddingLeft: 20 }}>
                       {answer.citations.map((c) => (
                         <li key={`${c.source}:${c.docId}`} style={{ fontSize: 13, padding: "2px 0" }}>
                           <span style={{ display: "inline-block", fontSize: 11, fontWeight: 700, textTransform: "uppercase", color: "var(--brand, #4f46e5)", marginRight: 6 }}>{c.source}</span>
-                          {c.title} <span style={{ fontFamily: "monospace", color: "var(--ink3, #94a3b8)" }}>({c.docId.slice(0, 8)})</span>
+                          {c.title} <span style={{ fontFamily: "monospace", color: "var(--mut)" }}>({c.docId.slice(0, 8)})</span>
                         </li>
                       ))}
                     </ul>

@@ -4,6 +4,7 @@ import { PageHeader, Card, StatusPill } from "@/app/_components/ds";
 import { formatMoney, formatIndianDate } from "@/lib/formatters";
 import { getGrantById } from "../../../_data/loaders";
 import { GrantInstallmentsTable, GrantUCsTable } from "./GrantDetailTables";
+import { ArrowLeft } from "lucide-react";
 
 export default async function GrantDetailPage({ params }: { params: { id: string } }) {
   const { data: grant, source } = await getGrantById(params.id);
@@ -15,7 +16,7 @@ export default async function GrantDetailPage({ params }: { params: { id: string
   return (
     <>
       <nav aria-label="Breadcrumb" className="back">
-        ← <a href="/grants">Grants</a> <span aria-hidden="true">/</span>{" "}
+        <ArrowLeft aria-hidden="true" size={14} /> <a href="/grants">Grants</a> <span aria-hidden="true">/</span>{" "}
         <a href="/grants/list">All grants</a>
       </nav>
       <PageHeader

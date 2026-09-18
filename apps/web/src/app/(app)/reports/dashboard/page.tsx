@@ -32,7 +32,7 @@ function ModuleBarChart({ kpis }: { kpis: { id: string; title: string; module: s
         return (
           <g key={kpi.id}>
             <rect x={x} y={y} width={barW} height={barH} rx={4} fill="#0369a1" opacity={opacity} />
-            <text x={x + barW / 2} y={BAR_H - 2} textAnchor="middle" fontSize={9} fill="#98a2b3">
+            <text x={x + barW / 2} y={BAR_H - 2} textAnchor="middle" fontSize={9} fill="#667085">
               {label}
             </text>
           </g>
@@ -59,7 +59,7 @@ function OutcomeDonut({ achievedPct }: { achievedPct: number }) {
       <text x="50%" y="46%" textAnchor="middle" dy=".1em" fontSize={22} fontWeight={780} fill="#101828">
         {achievedPct.toFixed(0)}%
       </text>
-      <text x="50%" y="63%" textAnchor="middle" fontSize={9.5} fill="#98a2b3">composite</text>
+      <text x="50%" y="63%" textAnchor="middle" fontSize={9.5} fill="#667085">composite</text>
     </svg>
   );
 }
@@ -141,7 +141,7 @@ export default async function ReportsDashboardPage() {
               </div>
               <div className="pad">
                 {alertKpis.length === 0 ? (
-                  <p style={{ fontSize: "13px", color: "#98a2b3" }}>No downward KPIs</p>
+                  <p style={{ fontSize: "13px", color: "var(--mut)" }}>No downward KPIs</p>
                 ) : (
                   <ul className="list">
                     {alertKpis.map((kpi) => (
@@ -149,7 +149,7 @@ export default async function ReportsDashboardPage() {
                         <span aria-hidden>📉</span>
                         <div style={{ flex: 1, marginLeft: "6px" }}>
                           <div style={{ fontSize: "13px", fontWeight: 650 }}>{kpi.title} · {kpi.module}</div>
-                          <div style={{ fontSize: "12px", color: "#98a2b3" }}>
+                          <div style={{ fontSize: "12px", color: "var(--mut)" }}>
                             {kpi.changePct !== undefined ? `${kpi.changePct.toFixed(1)}%` : "trending down"}
                           </div>
                         </div>

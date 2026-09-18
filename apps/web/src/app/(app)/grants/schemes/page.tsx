@@ -3,6 +3,7 @@ import { PageHeader, Card, StatGrid, StatCard } from "@/app/_components/ds";
 import { formatMoney } from "@/lib/formatters";
 import { getGrantSchemes } from "../_data";
 import { SchemesTable } from "./SchemesTable";
+import { ArrowLeft } from "lucide-react";
 
 export default async function GrantSchemesPage() {
   const { data: schemes, source } = await getGrantSchemes();
@@ -15,7 +16,7 @@ export default async function GrantSchemesPage() {
   return (
     <>
       <nav aria-label="Breadcrumb" className="back">
-        ← <a href="/grants">Grants</a>
+        <ArrowLeft aria-hidden="true" size={14} /> <a href="/grants">Grants</a>
       </nav>
       <PageHeader
         title="Grant Schemes"
