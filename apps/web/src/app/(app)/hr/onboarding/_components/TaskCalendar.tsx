@@ -36,7 +36,7 @@ function addDays(iso: string, days: number): string {
 }
 
 const STATUS_DOT: Partial<Record<CalendarTask["status"], { color: string; label: string }>> = {
-  completed: { color: "#16a34a", label: "Done" },
+  completed: { color: "var(--good, #067647)", label: "Done" },
   pending: { color: "#94a3b8", label: "Pending" },
   overdue: { color: "#d97706", label: "Overdue" },
   in_progress: { color: "#4f46e5", label: "In progress" },

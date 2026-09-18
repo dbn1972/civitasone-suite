@@ -120,7 +120,7 @@ export function JoineeCard({
       <div>
         <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: "var(--muted, #64748b)", marginBottom: 4 }}>
           <span>Progress</span>
-          <span style={{ fontWeight: 700, color: pct === 100 ? "#16a34a" : "var(--body, #334155)" }}>{pct}%</span>
+          <span style={{ fontWeight: 700, color: pct === 100 ? "var(--good, #067647)" : "var(--body, #334155)" }}>{pct}%</span>
         </div>
         <ProgressBar value={pct} color={isOverdue ? "#d97706" : undefined} />
       </div>

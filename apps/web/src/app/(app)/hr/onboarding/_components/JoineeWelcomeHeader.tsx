@@ -25,7 +25,7 @@ function formatDate(iso: string): string {
 }
 
 function progressColor(pct: number): string {
-  if (pct >= 80) return "var(--green, #16a34a)";
+  if (pct >= 80) return "var(--good, #067647)";
   if (pct >= 40) return "var(--amber, #d97706)";
   return "var(--blue, #4f46e5)";
 }

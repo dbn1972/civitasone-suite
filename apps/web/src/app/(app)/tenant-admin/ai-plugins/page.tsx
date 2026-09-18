@@ -58,7 +58,9 @@ const CATEGORY_ICONS: Record<string, string> = {
 const MODE_BADGE: Record<string, { label: string; color: string }> = {
   active: { label: "ACTIVE", color: "bg-green-100 text-green-700" },
   shadow: { label: "SHADOW", color: "bg-amber-100 text-amber-700" },
-  disabled: { label: "OFF", color: "bg-gray-100 text-gray-500" },
+  // text-gray-500 measured 4.39:1 on this badge's own bg-gray-100 (axe: serious,
+  // needs 4.5:1) -- text-gray-600 (#4b5563) clears it with room to spare.
+  disabled: { label: "OFF", color: "bg-gray-100 text-gray-600" },
 };
 
 export default async function AiPluginsPage() {
@@ -98,7 +100,7 @@ export default async function AiPluginsPage() {
                   <div className="flex items-start justify-between">
                     <div>
                       <h3 className="font-semibold text-sm">{plugin.name}</h3>
-                      <p className="text-xs text-gray-500 mt-0.5">{plugin.model}</p>
+                      <p className="text-xs text-gray-600 mt-0.5">{plugin.model}</p>
                     </div>
                     <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${mode.color}`}>
                       {mode.label}
@@ -109,7 +111,7 @@ export default async function AiPluginsPage() {
                   <p className="text-xs text-gray-600 leading-relaxed">{plugin.description}</p>
 
                   {/* Stats row */}
-                  <div className="flex items-center gap-4 text-xs text-gray-500">
+                  <div className="flex items-center gap-4 text-xs text-gray-600">
                     <span title="Predictions last 30 days">📈 {plugin.predictionCount30d}</span>
                     {plugin.avgConfidence !== null && (
                       <span title="Avg confidence">🎯 {plugin.avgConfidence}%</span>
@@ -124,7 +126,7 @@ export default async function AiPluginsPage() {
 
                   {/* Confidence threshold bar */}
                   <div className="space-y-1">
-                    <div className="flex justify-between text-[10px] text-gray-400">
+                    <div className="flex justify-between text-[10px] text-gray-600">
                       <span>Confidence threshold</span>
                       <span>{plugin.confidenceThreshold}%</span>
                     </div>
@@ -137,7 +139,7 @@ export default async function AiPluginsPage() {
                   </div>
 
                   {/* Data source */}
-                  <div className="text-[10px] text-gray-400 flex items-center gap-1">
+                  <div className="text-[10px] text-gray-600 flex items-center gap-1">
                     <span>📦</span>
                     <span>{plugin.dataSource}</span>
                   </div>
