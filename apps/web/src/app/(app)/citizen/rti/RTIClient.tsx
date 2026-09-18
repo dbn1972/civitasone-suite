@@ -1,7 +1,7 @@
 "use client";
 import { useState } from "react";
 import { useTranslations } from "next-intl";
-import { DataTable, Segmented, EmptyState, ConfirmDialog } from "@/app/_components/ds";
+import { DataTable, Segmented, EmptyState, ConfirmDialog, Button } from "@/app/_components/ds";
 import { formatIndianDate } from "@/lib/formatters";
 import { useFormError } from "@/lib/useFormError";
 
@@ -159,9 +159,9 @@ export function RTIClient({ rtis, today }: Props) {
       label: t("colActions"),
       render: (row: Row) =>
         TRANSFERABLE.has(row.status) ? (
-          <button
+          <Button
             type="button"
-            className="btn ghost"
+            variant="ghost"
             style={{ fontSize: "0.8rem", padding: "4px 10px", minHeight: 32 }}
             onClick={() => {
               setTransferError(undefined);
@@ -170,7 +170,7 @@ export function RTIClient({ rtis, today }: Props) {
             aria-label={t("transferAriaLabel", { rtiNo: row.rtiNo })}
           >
             {t("transfer")}
-          </button>
+          </Button>
         ) : null,
     },
   ];

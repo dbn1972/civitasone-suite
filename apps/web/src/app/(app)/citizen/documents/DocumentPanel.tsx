@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useTranslations } from "next-intl";
 import { useFormError } from "@/lib/useFormError";
+import { Button } from "@/app/_components/ds";
 
 const inputStyle = { width: "100%", padding: 8, minHeight: 44, marginBottom: 8, borderRadius: 8, border: "1px solid var(--line)" } as const;
 const labelStyle = { display: "block", fontSize: 12, color: "var(--muted)", marginBottom: 4, fontWeight: 600 } as const;
@@ -62,8 +63,8 @@ export function DocumentPanel() {
           <label htmlFor="d-type" style={labelStyle}>{t("docTypeLabel")}</label>
           <input id="d-type" value={docType} onChange={(e) => setDocType(e.target.value)} style={inputStyle} placeholder={t("docTypePlaceholder")} />
           <div style={{ display: "flex", gap: 8 }}>
-            <button type="button" className="btn primary" style={{ minHeight: 44 }} disabled={busy || !docType || !serviceId} onClick={() => upload("upload")}>{t("upload")}</button>
-            <button type="button" className="btn" style={{ minHeight: 44 }} disabled={busy || !docType || !serviceId} onClick={() => upload("digilocker")}>{t("fetchDigilocker")}</button>
+            <Button type="button" variant="primary" style={{ minHeight: 44 }} disabled={busy || !docType || !serviceId} onClick={() => upload("upload")}>{t("upload")}</Button>
+            <Button type="button" variant="primary" style={{ minHeight: 44 }} disabled={busy || !docType || !serviceId} onClick={() => upload("digilocker")}>{t("fetchDigilocker")}</Button>
           </div>
           {uploaded ? (
             <div className="pad" style={{ marginTop: 12, background: "var(--surface, #f8fafc)", borderRadius: 8, fontSize: 13 }}>
@@ -78,7 +79,7 @@ export function DocumentPanel() {
       <div className="card">
         <form onSubmit={loadChecklist} className="pad" style={{ maxWidth: 640 }}>
           <h4 style={{ marginTop: 0 }}>{t("checklistTitle")}</h4>
-          <button type="submit" className="btn" style={{ minHeight: 44 }} disabled={busy || !serviceId}>{t("loadChecklist")}</button>
+          <Button type="submit" variant="primary" style={{ minHeight: 44 }} disabled={busy || !serviceId}>{t("loadChecklist")}</Button>
           {checklist ? (
             <div style={{ marginTop: 12 }}>
               <div style={{ fontSize: 12, color: "var(--muted)", marginBottom: 8 }}>

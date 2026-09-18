@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useTranslations } from "next-intl";
+import { Button } from "@/app/_components/ds";
 
 const inputStyle = { width: "100%", padding: 8, minHeight: 44, marginBottom: 8, borderRadius: 8, border: "1px solid var(--line)" } as const;
 const labelStyle = { display: "block", fontSize: 12, color: "var(--muted)", marginBottom: 4, fontWeight: 600 } as const;
@@ -64,8 +65,8 @@ export function DiscoveryPanel() {
         <label htmlFor="disc-profile" style={labelStyle}>{t("profileLabel")}</label>
         <textarea id="disc-profile" value={profile} onChange={(e) => setProfile(e.target.value)} style={{ ...inputStyle, minHeight: 120, fontFamily: "monospace" }} />
         <div style={{ display: "flex", gap: 8 }}>
-          <button type="button" className="btn" style={{ minHeight: 44 }} disabled={busy || !citizenId} onClick={grant}>{t("grantConsent")}</button>
-          <button type="submit" className="btn primary" style={{ minHeight: 44 }} disabled={busy || !citizenId}>{busy ? t("running") : t("runDiscovery")}</button>
+          <Button type="button" variant="primary" style={{ minHeight: 44 }} disabled={busy || !citizenId} onClick={grant}>{t("grantConsent")}</Button>
+          <Button type="submit" variant="primary" style={{ minHeight: 44 }} disabled={busy || !citizenId}>{busy ? t("running") : t("runDiscovery")}</Button>
         </div>
         {message ? <p role="status" style={{ color: "#067647", fontSize: 13 }}>{message}</p> : null}
         {error ? <p role="alert" style={{ color: "#b42318", fontSize: 13 }}>{error}</p> : null}

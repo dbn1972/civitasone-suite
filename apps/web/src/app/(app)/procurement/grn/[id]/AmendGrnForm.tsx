@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { useFormError } from "@/lib/useFormError";
+import { Button } from "@/app/_components/ds";
 
 // Req 1.2 — GRN partial-delivery amendment. Only receivedQty/acceptedQty per
 // line are editable; grnNo, vendorId, poRef stay immutable and are not part
@@ -130,9 +131,9 @@ export function AmendGrnForm({ grnId, items }: {
       </div>
 
       <div style={{ marginTop: 16 }}>
-        <button type="submit" className="btn primary" style={{ minHeight: 44 }} disabled={status === "submitting"}>
+        <Button type="submit" variant="primary" style={{ minHeight: 44 }} disabled={status === "submitting"}>
           {status === "submitting" ? "Saving…" : "Save changes"}
-        </button>
+        </Button>
       </div>
     </form>
   );

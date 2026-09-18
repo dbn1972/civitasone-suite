@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { toHumanError } from "@/lib/messages";
+import { Button } from "@/app/_components/ds";
 
 type VendorOption = { id: string; name: string };
 type POOption = { id: string; poNo: string; vendor?: string; vendorId?: string };
@@ -218,14 +219,14 @@ export function CreateGRNForm() {
                   <td className="num"><input type="number" min={0} aria-label={`Received qty row ${idx + 1}`} value={l.receivedQty} onChange={(e) => updateLine(idx, { receivedQty: Number(e.target.value) })} style={{ minHeight: 40, width: 80, textAlign: "right" }} /></td>
                   <td className="num"><input type="number" min={0} aria-label={`Accepted qty row ${idx + 1}`} value={l.acceptedQty} onChange={(e) => updateLine(idx, { acceptedQty: Number(e.target.value) })} style={{ minHeight: 40, width: 80, textAlign: "right" }} /></td>
                   <td>
-                    <button type="button" className="btn ghost sm" onClick={() => setLines((p) => p.length > 1 ? p.filter((_, i) => i !== idx) : p)} disabled={lines.length <= 1} aria-label={`Remove line item ${idx + 1}`} style={{ minHeight: 40 }}>Remove</button>
+                    <Button type="button" variant="ghost" size="sm" onClick={() => setLines((p) => p.length > 1 ? p.filter((_, i) => i !== idx) : p)} disabled={lines.length <= 1} aria-label={`Remove line item ${idx + 1}`} style={{ minHeight: 40 }}>Remove</Button>
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
-        <button type="button" className="btn ghost sm" onClick={() => setLines((p) => [...p, emptyLine()])} style={{ marginTop: 10, minHeight: 40 }}>+ Add line item</button>
+        <Button type="button" variant="ghost" size="sm" onClick={() => setLines((p) => [...p, emptyLine()])} style={{ marginTop: 10, minHeight: 40 }}>+ Add line item</Button>
       </fieldset>
 
       <div role="status" aria-live="polite">
@@ -234,9 +235,9 @@ export function CreateGRNForm() {
         ) : null}
       </div>
       <div style={{ marginTop: 16, display: "flex", gap: 8 }}>
-        <button type="submit" className="btn primary" style={{ minHeight: 44 }} disabled={status === "submitting"}>
+        <Button type="submit" variant="primary" style={{ minHeight: 44 }} disabled={status === "submitting"}>
           {status === "submitting" ? "Submitting…" : "Record GRN"}
-        </button>
+        </Button>
         <Link href="/procurement/grn" className="btn ghost" style={{ minHeight: 44 }}>Cancel</Link>
       </div>
     </form>

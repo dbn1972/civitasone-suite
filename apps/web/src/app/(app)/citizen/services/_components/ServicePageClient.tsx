@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
-import { StatusPill } from "@/app/_components/ds";
+import { StatusPill, Button } from "@/app/_components/ds";
 import type { PublishedServiceRuntime } from "../_data/runtimeApi";
 import { channelDisabledMessage, formatFee, isChannelAllowed, listDraftsForService } from "../_data/runtimeApi";
 
@@ -121,8 +121,8 @@ export function ServicePageClient({ service, counterMode = false }: Props) {
                         marginLeft: 8,
                         fontSize: 11,
                         fontWeight: 600,
-                        color: "var(--bad-fg)",
-                        background: "var(--bad-bg)",
+                        color: "var(--bad)",
+                        background: "var(--badbg)",
                         padding: "2px 6px",
                         borderRadius: 4,
                       }}
@@ -148,14 +148,14 @@ export function ServicePageClient({ service, counterMode = false }: Props) {
           className="pad"
           role="status"
           style={{
-            background: "var(--warn-bg)",
-            border: "1px solid var(--warn-border)",
+            background: "var(--warnbg)",
+            border: "1px solid var(--warnbd)",
             borderRadius: "var(--r-sm)",
             fontSize: 14,
           }}
         >
           Continue where you left off —{" "}
-          <Link href={applyHref} style={{ fontWeight: 600, color: "var(--warn-fg)" }}>
+          <Link href={applyHref} style={{ fontWeight: 600, color: "var(--warn)" }}>
             {t("resumeDraft")}
           </Link>
         </div>
@@ -171,9 +171,9 @@ export function ServicePageClient({ service, counterMode = false }: Props) {
           {draftBanner ? t("resumeApplication") : t("applyNow")}
         </Link>
       ) : (
-        <button type="button" className="btn primary" style={{ minHeight: 44 }} disabled aria-disabled="true">
+        <Button type="button" variant="primary" style={{ minHeight: 44 }} disabled aria-disabled="true">
           {t("applyNow")}
-        </button>
+        </Button>
       )}
     </div>
   );

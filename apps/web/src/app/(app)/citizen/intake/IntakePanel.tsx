@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useTranslations } from "next-intl";
 import { useFormError } from "@/lib/useFormError";
+import { Button } from "@/app/_components/ds";
 
 const inputStyle = { width: "100%", padding: 8, minHeight: 44, marginBottom: 8, borderRadius: 8, border: "1px solid var(--line)" } as const;
 const labelStyle = { display: "block", fontSize: 12, color: "var(--muted)", marginBottom: 4, fontWeight: 600 } as const;
@@ -76,13 +77,13 @@ export function IntakePanel() {
           <p style={{ fontSize: 12, color: "var(--muted)", marginTop: -4, marginBottom: 8 }}>
             {t("channelNote")}
           </p>
-          <button type="submit" className="btn primary" style={{ minHeight: 44 }} disabled={busy || !serviceId}>
+          <Button type="submit" variant="primary" style={{ minHeight: 44 }} disabled={busy || !serviceId}>
             {busy ? t("saving") : t("saveDraft")}
-          </button>
+          </Button>
           {draft ? (
             <div className="pad" style={{ marginTop: 12, background: "var(--surface, #f8fafc)", borderRadius: 8 }}>
               Draft saved ({draft.channel}{draft.assistedBy ? `, assisted by ${draft.assistedBy}` : ""}).{" "}
-              <button type="button" className="btn" style={{ minHeight: 40 }} onClick={submitDraft} disabled={busy}>{t("submitForAck")}</button>
+              <Button type="button" variant="primary" style={{ minHeight: 40 }} onClick={submitDraft} disabled={busy}>{t("submitForAck")}</Button>
             </div>
           ) : null}
           {ack ? (
@@ -99,7 +100,7 @@ export function IntakePanel() {
           <h4 style={{ marginTop: 0 }}>{t("trackFormTitle")}</h4>
           <label htmlFor="in-track" style={labelStyle}>{t("trackingNumberLabel")}</label>
           <input id="in-track" value={trackNo} onChange={(e) => setTrackNo(e.target.value)} style={inputStyle} placeholder={t("trackingNumberPlaceholder")} />
-          <button type="submit" className="btn" style={{ minHeight: 44 }} disabled={busy || !trackNo}>{t("track")}</button>
+          <Button type="submit" variant="primary" style={{ minHeight: 44 }} disabled={busy || !trackNo}>{t("track")}</Button>
           {track ? (
             <div className="pad" style={{ marginTop: 12 }}>
               <strong>{track.trackingNo}</strong> — status {track.status} ({track.channel})

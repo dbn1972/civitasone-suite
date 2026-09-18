@@ -1,6 +1,7 @@
 "use client";
 
 import { formatMoney } from "@/lib/formatters";
+import { Button } from "@/app/_components/ds";
 
 export type LineItem = {
   itemCode: string;
@@ -85,10 +86,10 @@ export function LineItemsEditor({
                   </td>
                   <td className="num">{formatMoney(lineMinor)}</td>
                   <td>
-                    <button type="button" className="btn ghost sm" onClick={() => remove(idx)}
+                    <Button type="button" variant="ghost" size="sm" onClick={() => remove(idx)}
                       disabled={items.length <= 1} aria-label={`Remove line item ${idx + 1}`} style={{ minHeight: 40 }}>
                       Remove
-                    </button>
+                    </Button>
                   </td>
                 </tr>
               );
@@ -103,9 +104,9 @@ export function LineItemsEditor({
           </tfoot>
         </table>
       </div>
-      <button type="button" className="btn ghost sm" onClick={add} style={{ marginTop: 10, minHeight: 40 }}>
+      <Button type="button" variant="ghost" size="sm" onClick={add} style={{ marginTop: 10, minHeight: 40 }}>
         + Add line item
-      </button>
+      </Button>
       <span className="sr-only" aria-hidden="true">Unit: {unitLabel}</span>
     </fieldset>
   );

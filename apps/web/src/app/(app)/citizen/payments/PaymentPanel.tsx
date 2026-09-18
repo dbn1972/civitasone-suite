@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
+import { Button } from "@/app/_components/ds";
 
 const inputStyle = { width: "100%", padding: 8, minHeight: 44, marginBottom: 8, borderRadius: 8, border: "1px solid var(--line)" } as const;
 const labelStyle = { display: "block", fontSize: 12, color: "var(--muted)", marginBottom: 4, fontWeight: 600 } as const;
@@ -48,9 +49,9 @@ export function PaymentPanel({ schedules }: { schedules: Array<{ id: string; nam
         </select>
         <label htmlFor="pay-app" style={labelStyle}>{t("applicationIdLabel")}</label>
         <input id="pay-app" value={applicationId} onChange={(e) => setApplicationId(e.target.value)} style={inputStyle} placeholder="00000000-0000-4000-8000-000000000000" />
-        <button type="submit" className="btn primary" style={{ minHeight: 44 }} disabled={busy || !scheduleId || !applicationId}>
+        <Button type="submit" variant="primary" style={{ minHeight: 44 }} disabled={busy || !scheduleId || !applicationId}>
           {busy ? t("recording") : t("recordAndIssue")}
-        </button>
+        </Button>
         {message ? <p role="status" style={{ color: "#067647", fontSize: 13 }}>{message}</p> : null}
         {error ? <p role="alert" style={{ color: "#b42318", fontSize: 13 }}>{error}</p> : null}
       </form>

@@ -5,7 +5,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
 import { FormRenderer } from "@/app/_components/ds/designer/FormRenderer";
 import type { FormDesignState } from "@/app/_components/ds/designer/formTypes";
-import { ErrorState } from "@/app/_components/ds";
+import { ErrorState, Button } from "@/app/_components/ds";
 import {
   type PublishedServiceRuntime,
   channelDisabledMessage,
@@ -69,8 +69,8 @@ function JourneyRail({
               justifyContent: "center",
               borderRadius: "var(--r-sm)",
               border: `1px solid ${current ? "var(--primary)" : "var(--line)"}`,
-              background: done ? "var(--good-bg)" : current ? "var(--primary-soft, var(--info-bg))" : "var(--panel)",
-              color: done ? "var(--good-fg)" : current ? "var(--ink)" : "var(--mut)",
+              background: done ? "var(--goodbg)" : current ? "var(--primary-soft, var(--infobg))" : "var(--panel)",
+              color: done ? "var(--good)" : current ? "var(--ink)" : "var(--mut)",
             }}
           >
             {idx + 1}. {step.label}
@@ -275,8 +275,8 @@ export function ServiceRuntimeFlow({ service, counterMode = false, assistedBy = 
         <div
           className="pad"
           style={{
-            background: "var(--info-bg)",
-            border: "1px solid var(--info-border)",
+            background: "var(--infobg)",
+            border: "1px solid var(--infobd)",
             borderRadius: "var(--r-sm)",
             fontSize: 13,
           }}
@@ -318,13 +318,13 @@ export function ServiceRuntimeFlow({ service, counterMode = false, assistedBy = 
             </span>
             <div style={{ display: "flex", gap: 8 }}>
               {sectionIndex > 0 ? (
-                <button type="button" className="btn" style={{ minHeight: 44 }} onClick={() => setSectionIndex((i) => i - 1)}>
+                <Button type="button" variant="primary" style={{ minHeight: 44 }} onClick={() => setSectionIndex((i) => i - 1)}>
                   {t("back")}
-                </button>
+                </Button>
               ) : null}
-              <button type="button" className="btn primary" style={{ minHeight: 44 }} onClick={onNextSection}>
+              <Button type="button" variant="primary" style={{ minHeight: 44 }} onClick={onNextSection}>
                 {sectionIndex < visibleSectionCount - 1 ? t("nextSection") : t("reviewAnswers")}
-              </button>
+              </Button>
             </div>
           </div>
         </>
@@ -379,8 +379,8 @@ export function ServiceRuntimeFlow({ service, counterMode = false, assistedBy = 
               gap: 8,
               padding: 12,
               borderRadius: "var(--r-sm)",
-              background: "var(--info-bg)",
-              border: "1px solid var(--info-border)",
+              background: "var(--infobg)",
+              border: "1px solid var(--infobd)",
               fontSize: 13,
             }}
           >
@@ -389,18 +389,18 @@ export function ServiceRuntimeFlow({ service, counterMode = false, assistedBy = 
             <span>{t("payOnline")}</span>
           </div>
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-            <button type="button" className="btn" style={{ minHeight: 44 }} onClick={() => setStep("review")}>{t("back")}</button>
-            <button type="button" className="btn primary" style={{ minHeight: 44 }} disabled={busy} onClick={() => void onSubmit()}>
+            <Button type="button" variant="primary" style={{ minHeight: 44 }} onClick={() => setStep("review")}>{t("back")}</Button>
+            <Button type="button" variant="primary" style={{ minHeight: 44 }} disabled={busy} onClick={() => void onSubmit()}>
               {busy ? t("submitting") : t("paySandboxAndSubmit")}
-            </button>
+            </Button>
           </div>
-          {error ? <p role="alert" style={{ color: "var(--bad-fg)", fontSize: 13, margin: 0 }}>{error}</p> : null}
+          {error ? <p role="alert" style={{ color: "var(--bad)", fontSize: 13, margin: 0 }}>{error}</p> : null}
         </div>
       ) : null}
 
       {step === "submitted" && trackingNo ? (
         <div className="card pad" style={{ textAlign: "center", display: "grid", gap: 14 }}>
-          <p style={{ margin: 0, fontSize: 14, color: "var(--good-fg)", fontWeight: 600 }}>{t("applicationSubmitted")}</p>
+          <p style={{ margin: 0, fontSize: 14, color: "var(--good)", fontWeight: 600 }}>{t("applicationSubmitted")}</p>
           <p style={{ margin: 0, fontSize: 12, color: "var(--mut)" }}>{t("yourTrackingNumber")}</p>
           <p
             style={{
@@ -414,9 +414,9 @@ export function ServiceRuntimeFlow({ service, counterMode = false, assistedBy = 
           >
             {trackingNo}
           </p>
-          <button type="button" className="btn" style={{ minHeight: 44 }} onClick={() => void copyTracking()}>
+          <Button type="button" variant="primary" style={{ minHeight: 44 }} onClick={() => void copyTracking()}>
             {copied ? t("copied") : t("copyTrackingNumber")}
-          </button>
+          </Button>
           {expectedBy ? (
             <p style={{ margin: 0, fontSize: 14 }}>
               {t("expectedDecisionBy", { date: expectedBy })}
@@ -465,9 +465,9 @@ function ReviewPanel({
         <div key={sec.id} style={{ borderTop: "1px solid var(--line)", paddingTop: 12 }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
             <strong>{sec.label}</strong>
-            <button type="button" className="btn ghost" style={{ minHeight: 36 }} onClick={() => onEditSection(idx)}>
+            <Button type="button" variant="ghost" style={{ minHeight: 36 }} onClick={() => onEditSection(idx)}>
               {t("edit")}
-            </button>
+            </Button>
           </div>
           <dl style={{ margin: "8px 0 0", display: "grid", gap: 6 }}>
             {sec.fieldIds.map((fid) => {
@@ -483,10 +483,10 @@ function ReviewPanel({
           </dl>
         </div>
       ))}
-      <button type="button" className="btn primary" style={{ minHeight: 44 }} disabled={busy} onClick={onContinue}>
+      <Button type="button" variant="primary" style={{ minHeight: 44 }} disabled={busy} onClick={onContinue}>
         {busy ? t("submitting") : continueLabel}
-      </button>
-      {error ? <p role="alert" style={{ color: "var(--bad-fg)", fontSize: 13, margin: 0 }}>{error}</p> : null}
+      </Button>
+      {error ? <p role="alert" style={{ color: "var(--bad)", fontSize: 13, margin: 0 }}>{error}</p> : null}
     </div>
   );
 }

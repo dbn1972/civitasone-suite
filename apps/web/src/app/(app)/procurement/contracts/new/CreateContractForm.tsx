@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { formatMoney } from "@/lib/formatters";
 import { toHumanError } from "@/lib/messages";
+import { Button } from "@/app/_components/ds";
 
 type VendorOption = { id: string; name: string };
 
@@ -120,9 +121,9 @@ export function CreateContractForm() {
         ) : null}
       </div>
       <div style={{ marginTop: 16, display: "flex", gap: 8 }}>
-        <button type="submit" className="btn primary" style={{ minHeight: 44 }} disabled={status === "submitting"}>
+        <Button type="submit" variant="primary" style={{ minHeight: 44 }} disabled={status === "submitting"}>
           {status === "submitting" ? "Creating…" : "Create contract"}
-        </button>
+        </Button>
         <Link href="/procurement/contracts" className="btn ghost" style={{ minHeight: 44 }}>Cancel</Link>
       </div>
     </form>

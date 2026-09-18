@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { DataSourceBadge } from "../../../../../_components/DataSourceBadge";
-import { FileUpload, PageHeader, ErrorState } from "../../../../../_components/ds";
+import { FileUpload, PageHeader, ErrorState, Button } from "../../../../../_components/ds";
 import { toHumanError } from "@/lib/messages";
 
 type TenderDoc = {
@@ -260,14 +260,14 @@ export default function TenderDocumentsPage({
             </p>
           ) : null}
           <div style={{ marginTop: 16 }}>
-            <button
+            <Button
               type="submit"
-              className="btn primary"
+              variant="primary"
               disabled={saving || !fileKey}
               style={{ minHeight: 44 }}
             >
               {saving ? "Saving…" : "Save document"}
-            </button>
+            </Button>
           </div>
         </form>
 
@@ -357,17 +357,17 @@ export default function TenderDocumentsPage({
                           : "—"}
                       </td>
                       <td>
-                        <button
+                        <Button
                           type="button"
                           onClick={() =>
                             void handleDownload(doc.storageRef, doc.id)
                           }
                           disabled={downloadingId === doc.id}
-                          className="btn"
+                          variant="primary"
                           style={{ fontSize: 12, padding: "2px 10px" }}
                         >
                           {downloadingId === doc.id ? "Preparing…" : "Download"}
-                        </button>
+                        </Button>
                       </td>
                     </tr>
                   ))

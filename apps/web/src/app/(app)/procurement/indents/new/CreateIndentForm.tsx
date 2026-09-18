@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import { LineItemsEditor, emptyLineItem, type LineItem } from "../../_components/LineItemsEditor";
 import { trackActivation } from "@/lib/activation";
 import { useFormError } from "@/lib/useFormError";
+import { Button } from "@/app/_components/ds";
 
 type GfrBand = { id: string; name: string; notes: string; requiresTender: boolean };
 
@@ -158,9 +159,9 @@ export function CreateIndentForm() {
       </div>
 
       <div style={{ marginTop: 16, display: "flex", gap: 8 }}>
-        <button type="submit" className="btn primary" style={{ minHeight: 44 }} disabled={status === "submitting"}>
+        <Button type="submit" variant="primary" style={{ minHeight: 44 }} disabled={status === "submitting"}>
           {status === "submitting" ? "Submitting…" : "Submit for approval"}
-        </button>
+        </Button>
         <Link href="/procurement/indents" className="btn ghost" style={{ minHeight: 44 }}>Cancel</Link>
       </div>
     </form>

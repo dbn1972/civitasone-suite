@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import type { ComponentProps } from "react";
 
 // Stub the real (presigned-S3) FileUpload so this test exercises only
 // TenderDocumentsPage's own wiring, not FileUpload's internals (covered by
@@ -11,6 +12,14 @@ vi.mock("../../../../../_components/ds", () => ({
     <button type="button" onClick={() => onUploaded(FAKE_KEY)}>Simulate completed upload</button>
   ),
   PageHeader: ({ title }: { title: string }) => <h1>{title}</h1>,
+  // UX-008 tranche 13: page.tsx now renders its Save/Download controls via
+  // the shared ds Button, so this mock of the ds barrel must provide one too
+  // (matching the tranche 3/4/6-established incomplete-ds-barrel-mock fix) --
+  // otherwise Button resolves to undefined here and every render throws.
+  // Plain passthrough: role/name/disabled/onClick all reach a real button element.
+  Button: ({ children, ...rest }: ComponentProps<"button">) => (
+    <button {...rest}>{children}</button>
+  ),
 }));
 
 import TenderDocumentsPage from "./page";

@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useFormError } from "@/lib/useFormError";
 import { estimatedValueRupees } from "./estimatedValueRupees";
-import { PageHeader } from "@/app/_components/ds";
+import { PageHeader, Button } from "@/app/_components/ds";
 
 const PROCUREMENT_METHODS = [
   "direct_purchase",
@@ -319,31 +319,33 @@ export default function NewAnnualPlanPage() {
                         </select>
                       </td>
                       <td>
-                        <button
+                        <Button
                           type="button"
                           onClick={() =>
                             setLines((prev) => prev.filter((_, j) => j !== i))
                           }
-                          className="btn"
+                          variant="ghost"
+                          size="sm"
                           style={{ fontSize: 12, padding: "2px 8px" }}
                           aria-label="Remove line"
                         >
                           ✕
-                        </button>
+                        </Button>
                       </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
-            <button
+            <Button
               type="button"
               onClick={() => setLines((prev) => [...prev, emptyLine()])}
-              className="btn"
+              variant="ghost"
+              size="sm"
               style={{ marginTop: 12, fontSize: 13 }}
             >
               + Add line
-            </button>
+            </Button>
           </div>
 
           {clientMessage ? (
@@ -367,22 +369,22 @@ export default function NewAnnualPlanPage() {
             </p>
           ) : null}
           <div style={{ display: "flex", gap: 8 }}>
-            <button
+            <Button
               type="submit"
-              className="btn primary"
+              variant="primary"
               style={{ minHeight: 44 }}
               disabled={status === "submitting"}
             >
               {status === "submitting" ? "Creating…" : "Create plan"}
-            </button>
-            <button
+            </Button>
+            <Button
               type="button"
-              className="btn"
+              variant="ghost"
               style={{ minHeight: 44 }}
               onClick={() => router.push("/procurement/planning")}
             >
               Cancel
-            </button>
+            </Button>
           </div>
         </form>
       </div>
