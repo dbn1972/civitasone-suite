@@ -13,18 +13,20 @@ test.describe('Themes', () => {
     await expect(page.getByRole('heading', { name: 'Themes' })).toBeVisible();
   });
 
+  // /themes is now a pure ModuleHub (navigation tiles only, no data fetch);
+  // the token key/value table these 3 tests want lives at its own sub-route.
   test('themes page shows token keys from mock API', async ({ page }) => {
-    await page.goto('/themes');
+    await page.goto('/themes/tokens');
     await expect(page.getByText('--color-primary')).toBeVisible();
   });
 
   test('themes page shows token values from mock API', async ({ page }) => {
-    await page.goto('/themes');
+    await page.goto('/themes/tokens');
     await expect(page.getByText('#0052cc')).toBeVisible();
   });
 
   test('themes page shows multiple theme tokens', async ({ page }) => {
-    await page.goto('/themes');
+    await page.goto('/themes/tokens');
     await expect(page.getByText('--color-secondary')).toBeVisible();
     await expect(page.getByText('--font-family')).toBeVisible();
   });

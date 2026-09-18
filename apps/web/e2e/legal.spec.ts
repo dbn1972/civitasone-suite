@@ -78,6 +78,8 @@ test.describe('Legal', () => {
 
   test('court orders page shows heading', async ({ page }) => {
     await page.goto('/legal/court-orders');
-    await expect(page.getByRole('heading', { name: /court order/i })).toBeVisible();
+    // level:1 disambiguates the page h1 from a card's own "Court order
+    // compliance" h3 that repeats the page heading text.
+    await expect(page.getByRole('heading', { name: /court order/i, level: 1 })).toBeVisible();
   });
 });

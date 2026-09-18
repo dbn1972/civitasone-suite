@@ -26,7 +26,14 @@ test.describe('Estab', () => {
 
   test('file register shows heading and column headers', async ({ page }) => {
     await page.goto('/estab/list');
-    await expect(page.getByRole('heading', { name: 'Digital File Tracking (eOffice)' })).toBeVisible();
+    // Not a plain-text heading: PageHeader's title composes <Term name="eOffice" />,
+    // which (since "eOffice" has a glossary entry) appends an inline HelpTip "?"
+    // button inside the <h1> -- Chromium's accessible-name-from-content then
+    // splices that button's own aria-label in between "eOffice" and the closing
+    // ")" ("Digital File Tracking (eOffice What is eOffice? )"), so the exact
+    // parenthesised string is never a real substring. #page-heading is the
+    // same convention other tests in this file already use for this reason.
+    await expect(page.locator('#page-heading')).toContainText('Digital File Tracking');
     await expect(page.getByRole('columnheader', { name: 'File No' })).toBeVisible();
     await expect(page.getByRole('columnheader', { name: 'Subject' })).toBeVisible();
     await expect(page.getByRole('columnheader', { name: 'Classification' })).toBeVisible();

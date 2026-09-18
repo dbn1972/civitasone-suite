@@ -45,9 +45,16 @@ test.describe("Payroll Sub-modules (S12-S13)", () => {
   test("StatutoryComplianceCard shows PF/ESI/PT/LWF section headers", async ({ page }) => {
     await page.goto("/hr/payroll/statutory");
     await expect(page.getByText("PF (EPF)")).toBeVisible();
-    await expect(page.getByText("ESI")).toBeVisible();
-    await expect(page.getByText("Professional Tax")).toBeVisible();
-    await expect(page.getByText("Labour Welfare Fund")).toBeVisible();
+    // Plain "ESI" also matches the unrelated sidebar "Service Designer" link
+    // (case-insensitive substring: "de[ESI]gner") -- \b excludes it, but 3
+    // legitimate standalone "ESI" matches remain (the section's own summary
+    // sentence plus 2 real tiles), so still needs .first() for a presence check.
+    await expect(page.getByText(/\bESI\b/).first()).toBeVisible();
+    // Same multi-match shape as ESI above: the card's own summary sentence
+    // plus 2 tile-link variants (a heading and a description line) all
+    // contain this text -- .first() for a presence check, not a specific one.
+    await expect(page.getByText("Professional Tax").first()).toBeVisible();
+    await expect(page.getByText("Labour Welfare Fund").first()).toBeVisible();
   });
 
   test("statutory page navigation tiles link to PF and ESI sub-pages", async ({ page }) => {
@@ -56,7 +63,11 @@ test.describe("Payroll Sub-modules (S12-S13)", () => {
       "href",
       "/hr/payroll/statutory/pf"
     );
-    await expect(page.getByRole("link", { name: /ESI/i }).first()).toHaveAttribute(
+    // Same false match as above ("Service Designer" contains "esi") plus a
+    // second real ESI-related link (a "See Challans" shortcut) sitting before
+    // the main ESI tile in DOM order -- \b excludes the sidebar; .last()
+    // (not .first()) picks the actual statutory-console ESI tile.
+    await expect(page.getByRole("link", { name: /\bESI\b/i }).last()).toHaveAttribute(
       "href",
       "/hr/payroll/statutory/esi"
     );
@@ -111,7 +122,9 @@ test.describe("Payroll Sub-modules (S12-S13)", () => {
 
   test("TDS Returns page loads with correct heading", async ({ page }) => {
     await page.goto("/finance/statutory/tds-returns");
-    await expect(page.getByRole("heading", { name: "TDS Returns" })).toBeVisible();
+    // level:1 disambiguates the page h1 from a card's own "TDS Returns" h3
+    // and (when the seed list is empty) an "No TDS returns" h4 EmptyState.
+    await expect(page.getByRole("heading", { name: "TDS Returns", level: 1 })).toBeVisible();
   });
 
   test("TDS Returns stat cards render Total Returns and Filed", async ({ page }) => {

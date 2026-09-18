@@ -35,9 +35,10 @@ test.describe('Knowledge', () => {
 
   test('documents list page shows seeded document data', async ({ page }) => {
     await page.goto('/knowledge/list');
-    const table = page.getByRole('table', { name: 'Knowledge documents' });
-    await expect(table.getByRole('cell', { name: 'Procurement Policy 2024' })).toBeVisible();
-    await expect(table.getByRole('cell', { name: 'Policy', exact: true })).toBeVisible();
+    // The table has no accessible name (no aria-label/caption on the shared
+    // DataTable instance here), so scoping to one never matched anything.
+    await expect(page.getByRole('cell', { name: 'Procurement Policy 2024' })).toBeVisible();
+    await expect(page.getByRole('cell', { name: 'Policy', exact: true })).toBeVisible();
   });
 
   test('records management page shows heading and column headers', async ({ page }) => {
