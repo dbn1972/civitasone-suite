@@ -1,0 +1,3276 @@
+{
+  "generatedAt": "2026-09-18T06:36:08.048Z",
+  "counts": {
+    "totalNoLoader": 544,
+    "renderPassed": 473,
+    "renderFailed": 71,
+    "manifestConfirmed": 472
+  },
+  "coveragePct": 91.1,
+  "results": [
+    {
+      "module": "admin",
+      "screen": "/admin/bulk-scan",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "admin",
+      "screen": "/admin/config",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "admin",
+      "screen": "/admin/devices",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "admin",
+      "screen": "/admin/discovery",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "admin",
+      "screen": "/admin/gateway-config",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "admin",
+      "screen": "/admin/gateway-routes",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "admin",
+      "screen": "/admin/integrations",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "admin",
+      "screen": "/admin",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "admin",
+      "screen": "/admin/settings",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "admin",
+      "screen": "/admin/tenant-provision",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "ai",
+      "screen": "/ai/agents",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "ai",
+      "screen": "/ai/governance",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "ai",
+      "screen": "/ai/guardrails",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "ai",
+      "screen": "/ai",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "analytics",
+      "screen": "/analytics/dashboards",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "analytics",
+      "screen": "/analytics/ml-insights/anomalies",
+      "verdict": "FAIL",
+      "reason": "Cannot read properties of undefined (reading 'toLocaleString')"
+    },
+    {
+      "module": "analytics",
+      "screen": "/analytics/ml-insights/inventory",
+      "verdict": "FAIL",
+      "reason": "Cannot read properties of undefined (reading 'toLocaleString')"
+    },
+    {
+      "module": "analytics",
+      "screen": "/analytics/ml-insights/leads",
+      "verdict": "FAIL",
+      "reason": "Cannot read properties of undefined (reading 'toLocaleString')"
+    },
+    {
+      "module": "analytics",
+      "screen": "/analytics/ml-insights",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "analytics",
+      "screen": "/analytics/ml-insights/projects",
+      "verdict": "FAIL",
+      "reason": "Cannot read properties of undefined (reading 'toLocaleString')"
+    },
+    {
+      "module": "analytics",
+      "screen": "/analytics/ml-insights/subscriptions",
+      "verdict": "FAIL",
+      "reason": "Cannot read properties of undefined (reading 'toLocaleString')"
+    },
+    {
+      "module": "analytics",
+      "screen": "/analytics/ml-insights/tickets",
+      "verdict": "FAIL",
+      "reason": "Cannot read properties of undefined (reading 'toLocaleString')"
+    },
+    {
+      "module": "analytics",
+      "screen": "/analytics",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "analytics",
+      "screen": "/analytics/queries",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "assets",
+      "screen": "/assets/bulk-import",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "assets",
+      "screen": "/assets/condemnation",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "assets",
+      "screen": "/assets/depreciation",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "assets",
+      "screen": "/assets/fleet/devices",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "assets",
+      "screen": "/assets/fleet/maintenance",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "assets",
+      "screen": "/assets/fleet",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "assets",
+      "screen": "/assets/fleet/vehicles",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "assets",
+      "screen": "/assets/insurance/[id]",
+      "verdict": "FAIL",
+      "reason": "Cannot read properties of undefined (reading 'toLowerCase')"
+    },
+    {
+      "module": "assets",
+      "screen": "/assets/insurance/claims",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "assets",
+      "screen": "/assets/insurance",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "assets",
+      "screen": "/assets/leases",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "assets",
+      "screen": "/assets/locations",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "assets",
+      "screen": "/assets/maintenance/new",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "assets",
+      "screen": "/assets",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "assets",
+      "screen": "/assets/projects",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "assets",
+      "screen": "/assets/register",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "assets",
+      "screen": "/assets/scan",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "assets",
+      "screen": "/assets/verification",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "billing",
+      "screen": "/billing/gstn",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "billing",
+      "screen": "/billing/invoices/[id]",
+      "verdict": "FAIL",
+      "reason": "Cannot read properties of undefined (reading 'length')"
+    },
+    {
+      "module": "billing",
+      "screen": "/billing/invoices",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "billing",
+      "screen": "/billing",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "billing",
+      "screen": "/billing/plans/new",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "catalogue",
+      "screen": "/catalogue/bundles",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "catalogue",
+      "screen": "/catalogue/categories",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "catalogue",
+      "screen": "/catalogue",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "catalogue",
+      "screen": "/catalogue/products",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "catalogue",
+      "screen": "/catalogue/rates",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "cdp",
+      "screen": "/cdp/events",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "cdp",
+      "screen": "/cdp/identity",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "cdp",
+      "screen": "/cdp",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "cdp",
+      "screen": "/cdp/profiles/[id]",
+      "verdict": "FAIL",
+      "reason": "lineage is not iterable"
+    },
+    {
+      "module": "cdp",
+      "screen": "/cdp/profiles",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "cdp",
+      "screen": "/cdp/segments",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "cdp",
+      "screen": "/cdp/steward",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "change",
+      "screen": "/change/[id]",
+      "verdict": "FAIL",
+      "reason": "Cannot read properties of undefined (reading 'title')"
+    },
+    {
+      "module": "change",
+      "screen": "/change/calendar",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "change",
+      "screen": "/change/comms",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "change",
+      "screen": "/change",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "citizen",
+      "screen": "/citizen/appeals",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "citizen",
+      "screen": "/citizen/catalogue",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "citizen",
+      "screen": "/citizen/certificates",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "citizen",
+      "screen": "/citizen/discovery",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "citizen",
+      "screen": "/citizen/documents",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "citizen",
+      "screen": "/citizen/eligibility",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "citizen",
+      "screen": "/citizen/feedback",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "citizen",
+      "screen": "/citizen/grievances/new",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "citizen",
+      "screen": "/citizen/grievances",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "citizen",
+      "screen": "/citizen/intake",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "citizen",
+      "screen": "/citizen",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "citizen",
+      "screen": "/citizen/payments",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "citizen",
+      "screen": "/citizen/requests/[id]",
+      "verdict": "FAIL",
+      "reason": "Cannot read properties of undefined (reading 'slice')"
+    },
+    {
+      "module": "citizen",
+      "screen": "/citizen/rti/[id]",
+      "verdict": "FAIL",
+      "reason": "Cannot read properties of undefined (reading 'length')"
+    },
+    {
+      "module": "citizen",
+      "screen": "/citizen/services/[serviceKey]/apply",
+      "verdict": "FAIL",
+      "reason": "Cannot read properties of undefined (reading 'includes')"
+    },
+    {
+      "module": "citizen",
+      "screen": "/citizen/services/[serviceKey]",
+      "verdict": "FAIL",
+      "reason": "Cannot read properties of undefined (reading 'includes')"
+    },
+    {
+      "module": "citizen",
+      "screen": "/citizen/services/[serviceKey]/track/[trackingNo]",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "contracts",
+      "screen": "/contracts/new",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "contracts",
+      "screen": "/contracts",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "court",
+      "screen": "/court/admin",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "court",
+      "screen": "/court/cases/[caseId]",
+      "verdict": "FAIL",
+      "reason": "Cannot read properties of undefined (reading 'length')"
+    },
+    {
+      "module": "court",
+      "screen": "/court/cases",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "court",
+      "screen": "/court/cause-list",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "court",
+      "screen": "/court/hearings",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "court",
+      "screen": "/court/orders",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "court",
+      "screen": "/court",
+      "verdict": "FAIL",
+      "reason": "Cannot read properties of undefined (reading 'toLocaleString')"
+    },
+    {
+      "module": "crm",
+      "screen": "/crm/agent-workload",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "crm",
+      "screen": "/crm/assignment-directory",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "crm",
+      "screen": "/crm/assignment-rules",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "crm",
+      "screen": "/crm/contacts/import",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "crm",
+      "screen": "/crm/contacts/new",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "crm",
+      "screen": "/crm/contacts",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "crm",
+      "screen": "/crm/custom-fields",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "crm",
+      "screen": "/crm/data-quality",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "crm",
+      "screen": "/crm/deals/new",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "crm",
+      "screen": "/crm/dedup-candidates",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "crm",
+      "screen": "/crm/dedup-rules",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "crm",
+      "screen": "/crm/document-types",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "crm",
+      "screen": "/crm/documents",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "crm",
+      "screen": "/crm/escalation-rules",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "crm",
+      "screen": "/crm/grievances/[id]",
+      "verdict": "FAIL",
+      "reason": "Cannot read properties of undefined (reading 'toLowerCase')"
+    },
+    {
+      "module": "crm",
+      "screen": "/crm/grievances/new",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "crm",
+      "screen": "/crm/lead-reason-codes",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "crm",
+      "screen": "/crm/lead-scoring",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "crm",
+      "screen": "/crm/linked-accounts",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "crm",
+      "screen": "/crm/onboarding/[id]",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "crm",
+      "screen": "/crm/onboarding",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "crm",
+      "screen": "/crm/opportunities/new",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "crm",
+      "screen": "/crm/opportunities",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "crm",
+      "screen": "/crm/opportunity-ageing",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "crm",
+      "screen": "/crm",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "crm",
+      "screen": "/crm/pipelines",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "crm",
+      "screen": "/crm/price-books",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "crm",
+      "screen": "/crm/products",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "crm",
+      "screen": "/crm/qualification-frameworks",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "crm",
+      "screen": "/crm/quotations",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "crm",
+      "screen": "/crm/rti/[id]",
+      "verdict": "FAIL",
+      "reason": "Cannot read properties of undefined (reading 'toLowerCase')"
+    },
+    {
+      "module": "crm",
+      "screen": "/crm/rti/new",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "crm",
+      "screen": "/crm/service-requests/[id]",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "crm",
+      "screen": "/crm/service-requests/new",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "crm",
+      "screen": "/crm/task-escalation",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "crm",
+      "screen": "/crm/voice-of-customer/feedback",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "crm",
+      "screen": "/crm/voice-of-customer",
+      "verdict": "FAIL",
+      "reason": "Cannot read properties of undefined (reading 'map')"
+    },
+    {
+      "module": "dashboard",
+      "screen": "/dashboard",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "designer",
+      "screen": "/designer/[id]/b1",
+      "verdict": "FAIL",
+      "reason": "Cannot read properties of undefined (reading 'replace')"
+    },
+    {
+      "module": "designer",
+      "screen": "/designer/[id]/b2",
+      "verdict": "FAIL",
+      "reason": "Cannot read properties of undefined (reading 'replace')"
+    },
+    {
+      "module": "designer",
+      "screen": "/designer/[id]/b3",
+      "verdict": "FAIL",
+      "reason": "Cannot read properties of undefined (reading 'replace')"
+    },
+    {
+      "module": "designer",
+      "screen": "/designer/[id]/b4",
+      "verdict": "FAIL",
+      "reason": "Cannot read properties of undefined (reading 'replace')"
+    },
+    {
+      "module": "designer",
+      "screen": "/designer/[id]/b5",
+      "verdict": "FAIL",
+      "reason": "Cannot read properties of undefined (reading 'replace')"
+    },
+    {
+      "module": "designer",
+      "screen": "/designer/[id]/b6",
+      "verdict": "FAIL",
+      "reason": "Cannot read properties of undefined (reading 'replace')"
+    },
+    {
+      "module": "designer",
+      "screen": "/designer/[id]/b7",
+      "verdict": "FAIL",
+      "reason": "Cannot read properties of undefined (reading 'replace')"
+    },
+    {
+      "module": "designer",
+      "screen": "/designer/[id]/b8",
+      "verdict": "FAIL",
+      "reason": "Cannot read properties of undefined (reading 'replace')"
+    },
+    {
+      "module": "designer",
+      "screen": "/designer/[id]/engines",
+      "verdict": "FAIL",
+      "reason": "Cannot read properties of undefined (reading 'replace')"
+    },
+    {
+      "module": "designer",
+      "screen": "/designer/[id]",
+      "verdict": "FAIL",
+      "reason": "rendered no visible text content"
+    },
+    {
+      "module": "designer",
+      "screen": "/designer/[id]/review",
+      "verdict": "FAIL",
+      "reason": "Cannot read properties of undefined (reading 'join')"
+    },
+    {
+      "module": "designer",
+      "screen": "/designer/[id]/test",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "designer",
+      "screen": "/designer/library",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "designer",
+      "screen": "/designer/new",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "designer",
+      "screen": "/designer",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "documents",
+      "screen": "/documents/inbox",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "documents",
+      "screen": "/documents/library",
+      "verdict": "FAIL",
+      "reason": "Cannot read properties of undefined (reading 'toLocaleString')"
+    },
+    {
+      "module": "documents",
+      "screen": "/documents/new",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "documents",
+      "screen": "/documents",
+      "verdict": "FAIL",
+      "reason": "rendered no visible text content"
+    },
+    {
+      "module": "domains",
+      "screen": "/domains/new",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "estab",
+      "screen": "/estab/approval-matrix",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "estab",
+      "screen": "/estab/approvals",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "estab",
+      "screen": "/estab/dak",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "estab",
+      "screen": "/estab/dfa",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "estab",
+      "screen": "/estab/dispatch",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "estab",
+      "screen": "/estab/files/new",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "estab",
+      "screen": "/estab/guesthouse/new",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "estab",
+      "screen": "/estab/handover",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "estab",
+      "screen": "/estab/migration",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "estab",
+      "screen": "/estab/notifications",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "estab",
+      "screen": "/estab/operators",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "estab",
+      "screen": "/estab",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "estab",
+      "screen": "/estab/quarters/[id]",
+      "verdict": "FAIL",
+      "reason": "Cannot read properties of undefined (reading 'replace')"
+    },
+    {
+      "module": "estab",
+      "screen": "/estab/quarters/allotments/[id]",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "estab",
+      "screen": "/estab/quarters/allotments",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "estab",
+      "screen": "/estab/quarters",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "estab",
+      "screen": "/estab/vehicles/new",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "estab",
+      "screen": "/estab/workspace",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "establishment",
+      "screen": "/establishment/files",
+      "verdict": "FAIL",
+      "reason": "rendered no visible text content"
+    },
+    {
+      "module": "establishment",
+      "screen": "/establishment",
+      "verdict": "FAIL",
+      "reason": "rendered no visible text content"
+    },
+    {
+      "module": "field",
+      "screen": "/field/agents",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "field",
+      "screen": "/field",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "field",
+      "screen": "/field/routes",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "field",
+      "screen": "/field/sync",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "field",
+      "screen": "/field/tasks",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "field",
+      "screen": "/field/visits",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "finance",
+      "screen": "/finance/advances",
+      "verdict": "FAIL",
+      "reason": "rendered no visible text content"
+    },
+    {
+      "module": "finance",
+      "screen": "/finance/benefits",
+      "verdict": "FAIL",
+      "reason": "rendered no visible text content"
+    },
+    {
+      "module": "finance",
+      "screen": "/finance/budget/formulation/new",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "finance",
+      "screen": "/finance/budget/fund-releases",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "finance",
+      "screen": "/finance/budget/monitoring",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "finance",
+      "screen": "/finance/chart-of-accounts/new",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "finance",
+      "screen": "/finance/config",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "finance",
+      "screen": "/finance/expenditure/advances/new",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "finance",
+      "screen": "/finance/expenditure/utilization-certificates/new",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "finance",
+      "screen": "/finance/expenses",
+      "verdict": "FAIL",
+      "reason": "rendered no visible text content"
+    },
+    {
+      "module": "finance",
+      "screen": "/finance/fiscal-years",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "finance",
+      "screen": "/finance/gst",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "finance",
+      "screen": "/finance/loans",
+      "verdict": "FAIL",
+      "reason": "rendered no visible text content"
+    },
+    {
+      "module": "finance",
+      "screen": "/finance/medical",
+      "verdict": "FAIL",
+      "reason": "rendered no visible text content"
+    },
+    {
+      "module": "finance",
+      "screen": "/finance/opening-balances",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "finance",
+      "screen": "/finance",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "finance",
+      "screen": "/finance/period-close",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "finance",
+      "screen": "/finance/pfms",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "finance",
+      "screen": "/finance/reconciliation/[id]",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "finance",
+      "screen": "/finance/reconciliation",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "finance",
+      "screen": "/finance/recurring-entries",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "finance",
+      "screen": "/finance/travel",
+      "verdict": "FAIL",
+      "reason": "rendered no visible text content"
+    },
+    {
+      "module": "fleet",
+      "screen": "/fleet",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "fleet",
+      "screen": "/fleet/vehicles",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "grants",
+      "screen": "/grants/applications/[id]",
+      "verdict": "FAIL",
+      "reason": "Cannot read properties of undefined (reading 'slice')"
+    },
+    {
+      "module": "grants",
+      "screen": "/grants/applications",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "grants",
+      "screen": "/grants/disbursements/[id]",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "grants",
+      "screen": "/grants",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "grants",
+      "screen": "/grants/schemes/[id]/apply",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "grants",
+      "screen": "/grants/schemes/[id]",
+      "verdict": "FAIL",
+      "reason": "Cannot read properties of undefined (reading 'toLowerCase')"
+    },
+    {
+      "module": "grants",
+      "screen": "/grants/schemes/new",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "grants",
+      "screen": "/grants/schemes",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "help",
+      "screen": "/help/[module]",
+      "verdict": "FAIL",
+      "reason": "Cannot read properties of undefined (reading 'terms')"
+    },
+    {
+      "module": "help",
+      "screen": "/help",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "helpdesk",
+      "screen": "/helpdesk/internal/[id]",
+      "verdict": "FAIL",
+      "reason": "Cannot read properties of undefined (reading 'slice')"
+    },
+    {
+      "module": "helpdesk",
+      "screen": "/helpdesk/internal/new",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "helpdesk",
+      "screen": "/helpdesk/tickets/new",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "hr",
+      "screen": "/hr/advances",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "hr",
+      "screen": "/hr/apar/[id]",
+      "verdict": "FAIL",
+      "reason": "Cannot read properties of undefined (reading 'status')"
+    },
+    {
+      "module": "hr",
+      "screen": "/hr/apar/new",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "hr",
+      "screen": "/hr/apar",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "hr",
+      "screen": "/hr/attendance/config",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "hr",
+      "screen": "/hr/benefits",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "hr",
+      "screen": "/hr/certifications",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "hr",
+      "screen": "/hr/checkin-log",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "hr",
+      "screen": "/hr/competency",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "hr",
+      "screen": "/hr/confirmation",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "hr",
+      "screen": "/hr/contractual",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "hr",
+      "screen": "/hr/departments/new",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "hr",
+      "screen": "/hr/departments",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "hr",
+      "screen": "/hr/deputation",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "hr",
+      "screen": "/hr/designations/new",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "hr",
+      "screen": "/hr/designations",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "hr",
+      "screen": "/hr/directory",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "hr",
+      "screen": "/hr/disciplinary",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "hr",
+      "screen": "/hr/dpc",
+      "verdict": "FAIL",
+      "reason": "Cannot read properties of undefined (reading 'length')"
+    },
+    {
+      "module": "hr",
+      "screen": "/hr/employee-types",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "hr",
+      "screen": "/hr/employees/import",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "hr",
+      "screen": "/hr/employees/new",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "hr",
+      "screen": "/hr/expenses",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "hr",
+      "screen": "/hr/goals",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "hr",
+      "screen": "/hr/grievance",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "hr",
+      "screen": "/hr/holidays",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "hr",
+      "screen": "/hr/icc",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "hr",
+      "screen": "/hr/id-cards",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "hr",
+      "screen": "/hr/interns",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "hr",
+      "screen": "/hr/jd-templates/new",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "hr",
+      "screen": "/hr/jd-templates",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "hr",
+      "screen": "/hr/leave/allocate",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "hr",
+      "screen": "/hr/leave/approvals",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "hr",
+      "screen": "/hr/leave/balance",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "hr",
+      "screen": "/hr/leave/history",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "hr",
+      "screen": "/hr/leave-policies",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "hr",
+      "screen": "/hr/loans",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "hr",
+      "screen": "/hr/locations/new",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "hr",
+      "screen": "/hr/locations",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "hr",
+      "screen": "/hr/medical",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "hr",
+      "screen": "/hr/onboarding/[id]",
+      "verdict": "FAIL",
+      "reason": "Cannot read properties of undefined (reading 'progress')"
+    },
+    {
+      "module": "hr",
+      "screen": "/hr/onboarding",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "hr",
+      "screen": "/hr/outsourced",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "hr",
+      "screen": "/hr/overtime/new",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "hr",
+      "screen": "/hr/overtime",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "hr",
+      "screen": "/hr",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "hr",
+      "screen": "/hr/payroll/arrears",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "hr",
+      "screen": "/hr/payroll/bonus",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "hr",
+      "screen": "/hr/payroll/comparison",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "hr",
+      "screen": "/hr/payroll/corrections",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "hr",
+      "screen": "/hr/payroll/costing",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "hr",
+      "screen": "/hr/payroll/ctc",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "hr",
+      "screen": "/hr/payroll/ddos",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "hr",
+      "screen": "/hr/payroll/disbursement",
+      "verdict": "FAIL",
+      "reason": "Cannot read properties of undefined (reading 'slice')"
+    },
+    {
+      "module": "hr",
+      "screen": "/hr/payroll/flex-benefits",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "hr",
+      "screen": "/hr/payroll/fnf",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "hr",
+      "screen": "/hr/payroll/form16",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "hr",
+      "screen": "/hr/payroll/income-tax",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "hr",
+      "screen": "/hr/payroll/loans",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "hr",
+      "screen": "/hr/payroll/off-cycle",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "hr",
+      "screen": "/hr/payroll/pay-groups",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "hr",
+      "screen": "/hr/payroll/pensioners/new",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "hr",
+      "screen": "/hr/payroll/register",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "hr",
+      "screen": "/hr/payroll/reimbursements",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "hr",
+      "screen": "/hr/payroll/returns",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "hr",
+      "screen": "/hr/payroll/salary-revisions",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "hr",
+      "screen": "/hr/payroll/salary-slips/[id]",
+      "verdict": "FAIL",
+      "reason": "Cannot read properties of undefined (reading 'filter')"
+    },
+    {
+      "module": "hr",
+      "screen": "/hr/payroll/statutory/challans",
+      "verdict": "FAIL",
+      "reason": "Cannot read properties of undefined (reading '0')"
+    },
+    {
+      "module": "hr",
+      "screen": "/hr/payroll/statutory/esi",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "hr",
+      "screen": "/hr/payroll/statutory/gpf",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "hr",
+      "screen": "/hr/payroll/statutory/gratuity",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "hr",
+      "screen": "/hr/payroll/statutory/lwf",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "hr",
+      "screen": "/hr/payroll/statutory/nps",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "hr",
+      "screen": "/hr/payroll/statutory",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "hr",
+      "screen": "/hr/payroll/statutory/perquisite",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "hr",
+      "screen": "/hr/payroll/statutory/pf",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "hr",
+      "screen": "/hr/payroll/statutory/pt",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "hr",
+      "screen": "/hr/payroll/structures",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "hr",
+      "screen": "/hr/payroll/tax-config",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "hr",
+      "screen": "/hr/payroll/tax-declaration",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "hr",
+      "screen": "/hr/promotion",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "hr",
+      "screen": "/hr/recruitment/[id]/applications/[appId]",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "hr",
+      "screen": "/hr/recruitment/[id]",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "hr",
+      "screen": "/hr/recruitment/new",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "hr",
+      "screen": "/hr/recruitment",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "hr",
+      "screen": "/hr/recruitment/talent-pool",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "hr",
+      "screen": "/hr/retirement",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "hr",
+      "screen": "/hr/rti",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "hr",
+      "screen": "/hr/salary-structure",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "hr",
+      "screen": "/hr/service-book",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "hr",
+      "screen": "/hr/shift-requests",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "hr",
+      "screen": "/hr/shifts",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "hr",
+      "screen": "/hr/skills",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "hr",
+      "screen": "/hr/social-feed",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "hr",
+      "screen": "/hr/staffing-plan",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "hr",
+      "screen": "/hr/succession",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "hr",
+      "screen": "/hr/training/feedback",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "hr",
+      "screen": "/hr/training/new",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "hr",
+      "screen": "/hr/training/nominations",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "hr",
+      "screen": "/hr/transfer",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "hr",
+      "screen": "/hr/travel",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "hr",
+      "screen": "/hr/vigilance",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "hr",
+      "screen": "/hr/wfh",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "hr",
+      "screen": "/hr/work-summary",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "hr",
+      "screen": "/hr/workforce/analytics",
+      "verdict": "FAIL",
+      "reason": "Cannot read properties of undefined (reading 'toFixed')"
+    },
+    {
+      "module": "hr",
+      "screen": "/hr/workforce/contractual",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "hr",
+      "screen": "/hr/workforce/interns",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "hr",
+      "screen": "/hr/workforce/outsourced",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "hr",
+      "screen": "/hr/workforce/overtime/new",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "hr",
+      "screen": "/hr/workforce/overtime",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "hr",
+      "screen": "/hr/workforce",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "hr",
+      "screen": "/hr/workforce/staffing-plan",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "hr",
+      "screen": "/hr/workforce/wfh/new",
+      "verdict": "FAIL",
+      "reason": "rendered no visible text content"
+    },
+    {
+      "module": "hr",
+      "screen": "/hr/workforce/wfh",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "hr",
+      "screen": "/hr/workforce/work-summary",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "identity",
+      "screen": "/identity/api-keys",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "identity",
+      "screen": "/identity/breakglass",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "identity",
+      "screen": "/identity",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "identity",
+      "screen": "/identity/sessions",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "identity",
+      "screen": "/identity/users",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "identity",
+      "screen": "/identity/webauthn",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "inspection",
+      "screen": "/inspection/assignments",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "inspection",
+      "screen": "/inspection/capa",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "inspection",
+      "screen": "/inspection/inspections",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "inspection",
+      "screen": "/inspection",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "install",
+      "screen": "/install/console",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "install",
+      "screen": "/install/domain-packs",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "install",
+      "screen": "/install/modules",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "install",
+      "screen": "/install/silos",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "install",
+      "screen": "/install/stages",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "install",
+      "screen": "/install/steps",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "inventory",
+      "screen": "/inventory/bins",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "inventory",
+      "screen": "/inventory/goods-returns",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "inventory",
+      "screen": "/inventory/issues",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "inventory",
+      "screen": "/inventory/items",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "inventory",
+      "screen": "/inventory/low-stock",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "inventory",
+      "screen": "/inventory",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "inventory",
+      "screen": "/inventory/receipts",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "inventory",
+      "screen": "/inventory/reservations",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "inventory",
+      "screen": "/inventory/substitutes",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "journeys",
+      "screen": "/journeys/active",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "journeys",
+      "screen": "/journeys/analytics",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "journeys",
+      "screen": "/journeys/builder",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "journeys",
+      "screen": "/journeys",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "journeys",
+      "screen": "/journeys/templates",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "knowledge",
+      "screen": "/knowledge/assistant",
+      "verdict": "FAIL",
+      "reason": "Cannot read properties of undefined (reading 'toLocaleString')"
+    },
+    {
+      "module": "knowledge",
+      "screen": "/knowledge/documents/new",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "knowledge",
+      "screen": "/knowledge/faqs",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "knowledge",
+      "screen": "/knowledge",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "knowledge",
+      "screen": "/knowledge/policies/[id]",
+      "verdict": "FAIL",
+      "reason": "Cannot read properties of undefined (reading 'toUpperCase')"
+    },
+    {
+      "module": "knowledge",
+      "screen": "/knowledge/policies",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "learning",
+      "screen": "/learning/assessments",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "learning",
+      "screen": "/learning/assessments/verify",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "learning",
+      "screen": "/learning/calendar",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "learning",
+      "screen": "/learning/competency",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "learning",
+      "screen": "/learning/courses/[id]",
+      "verdict": "FAIL",
+      "reason": "Cannot read properties of undefined (reading 'map')"
+    },
+    {
+      "module": "learning",
+      "screen": "/learning/courses",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "learning",
+      "screen": "/learning/my-learning",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "learning",
+      "screen": "/learning",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "learning",
+      "screen": "/learning/training-plans",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "legal",
+      "screen": "/legal/cases/new",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "legal",
+      "screen": "/legal/opinions/new",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "legal",
+      "screen": "/legal",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "library",
+      "screen": "/library",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "locations",
+      "screen": "/locations/geofences",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "locations",
+      "screen": "/locations/infrastructure",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "locations",
+      "screen": "/locations/jurisdictions",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "locations",
+      "screen": "/locations/maps/monitoring",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "locations",
+      "screen": "/locations/maps",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "locations",
+      "screen": "/locations",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "loyalty",
+      "screen": "/loyalty/accruals",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "loyalty",
+      "screen": "/loyalty/members",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "loyalty",
+      "screen": "/loyalty",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "loyalty",
+      "screen": "/loyalty/programs",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "loyalty",
+      "screen": "/loyalty/redemptions",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "loyalty",
+      "screen": "/loyalty/tiers",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "meeting",
+      "screen": "/meeting/admin",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "meeting",
+      "screen": "/meeting/meetings/[meetingId]/minutes",
+      "verdict": "FAIL",
+      "reason": "Cannot read properties of undefined (reading 'toLowerCase')"
+    },
+    {
+      "module": "meeting",
+      "screen": "/meeting/meetings/[meetingId]",
+      "verdict": "FAIL",
+      "reason": "Cannot read properties of undefined (reading 'length')"
+    },
+    {
+      "module": "meeting",
+      "screen": "/meeting/meetings/new",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "metadata",
+      "screen": "/metadata/entities",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "metadata",
+      "screen": "/metadata/fields",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "metadata",
+      "screen": "/metadata/forms",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "metadata",
+      "screen": "/metadata",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "metadata",
+      "screen": "/metadata/records",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "metadata",
+      "screen": "/metadata/rules",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "municipal",
+      "screen": "/municipal/[serviceKey]/applications/[id]",
+      "verdict": "FAIL",
+      "reason": "Cannot read properties of undefined (reading 'listPath')"
+    },
+    {
+      "module": "municipal",
+      "screen": "/municipal/[serviceKey]/applications",
+      "verdict": "FAIL",
+      "reason": "Cannot read properties of undefined (reading 'listPath')"
+    },
+    {
+      "module": "municipal",
+      "screen": "/municipal/[serviceKey]",
+      "verdict": "FAIL",
+      "reason": "Cannot read properties of undefined (reading 'listPath')"
+    },
+    {
+      "module": "municipal",
+      "screen": "/municipal",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "notifications",
+      "screen": "/notifications/campaigns/[id]",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "notifications",
+      "screen": "/notifications/campaigns",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "notifications",
+      "screen": "/notifications/compose",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "notifications",
+      "screen": "/notifications/deliveries/[id]",
+      "verdict": "FAIL",
+      "reason": "Cannot read properties of undefined (reading 'replace')"
+    },
+    {
+      "module": "notifications",
+      "screen": "/notifications/deliveries",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "notifications",
+      "screen": "/notifications/list",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "notifications",
+      "screen": "/notifications",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "notifications",
+      "screen": "/notifications/templates/[id]",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "notifications",
+      "screen": "/notifications/templates",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "platform-admin",
+      "screen": "/platform-admin",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "platform-admin",
+      "screen": "/platform-admin/system-settings",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "platform-admin",
+      "screen": "/platform-admin/tenant-config",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "plugins",
+      "screen": "/plugins/hooks",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "plugins",
+      "screen": "/plugins/marketplace",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "plugins",
+      "screen": "/plugins",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "plugins",
+      "screen": "/plugins/registry",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "policy",
+      "screen": "/policy/abac",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "policy",
+      "screen": "/policy/bindings",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "policy",
+      "screen": "/policy/evaluate",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "policy",
+      "screen": "/policy",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "policy",
+      "screen": "/policy/role-features",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "procurement",
+      "screen": "/procurement/approvals/escalation",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "procurement",
+      "screen": "/procurement/contracts/new",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "procurement",
+      "screen": "/procurement/grn/[id]/srn/new",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "procurement",
+      "screen": "/procurement/grn/new",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "procurement",
+      "screen": "/procurement/grn",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "procurement",
+      "screen": "/procurement/indents/new",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "procurement",
+      "screen": "/procurement/indents",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "procurement",
+      "screen": "/procurement/orders/[id]/amend",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "procurement",
+      "screen": "/procurement/orders/new",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "procurement",
+      "screen": "/procurement/orders",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "procurement",
+      "screen": "/procurement",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "procurement",
+      "screen": "/procurement/planning/new",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "procurement",
+      "screen": "/procurement/rfq/new",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "procurement",
+      "screen": "/procurement/tenders/[id]/documents",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "procurement",
+      "screen": "/procurement/tenders/new",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "procurement",
+      "screen": "/procurement/vendors/new",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "procurement",
+      "screen": "/procurement/vendors",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "projects",
+      "screen": "/projects/new",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "projects",
+      "screen": "/projects",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "projects",
+      "screen": "/projects/utilization",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "recommendations",
+      "screen": "/recommendations/feedback",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "recommendations",
+      "screen": "/recommendations/health",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "recommendations",
+      "screen": "/recommendations/matrix",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "recommendations",
+      "screen": "/recommendations/nba",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "recommendations",
+      "screen": "/recommendations",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "reports",
+      "screen": "/reports/list/new",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "reports",
+      "screen": "/reports",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "reports",
+      "screen": "/reports/scheduled",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "revenue",
+      "screen": "/revenue/adjustments",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "revenue",
+      "screen": "/revenue/analytics",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "revenue",
+      "screen": "/revenue/assessees/[id]",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "revenue",
+      "screen": "/revenue/assessees",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "revenue",
+      "screen": "/revenue/assessments",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "revenue",
+      "screen": "/revenue/bbps",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "revenue",
+      "screen": "/revenue/bills",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "revenue",
+      "screen": "/revenue/config",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "revenue",
+      "screen": "/revenue/instalments",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "revenue",
+      "screen": "/revenue",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "revenue",
+      "screen": "/revenue/receipts",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "revenue",
+      "screen": "/revenue/recovery",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "revenue",
+      "screen": "/revenue/refunds/[id]/decide",
+      "verdict": "FAIL",
+      "reason": "Cannot read properties of undefined (reading 'slice')"
+    },
+    {
+      "module": "revenue",
+      "screen": "/revenue/refunds",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "revenue",
+      "screen": "/revenue/trade-licenses",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "revenue",
+      "screen": "/revenue/waivers",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "revenue",
+      "screen": "/revenue/write-offs/[id]/decide",
+      "verdict": "FAIL",
+      "reason": "Cannot read properties of undefined (reading 'slice')"
+    },
+    {
+      "module": "revenue",
+      "screen": "/revenue/write-offs",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "settings",
+      "screen": "/settings/branding",
+      "verdict": "FAIL",
+      "reason": "presets.map is not a function"
+    },
+    {
+      "module": "setup",
+      "screen": "/setup",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "stock",
+      "screen": "/stock/items/new",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "stock",
+      "screen": "/stock/ledger/new",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "stock",
+      "screen": "/stock",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "telephony",
+      "screen": "/telephony/agents",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "telephony",
+      "screen": "/telephony/calls",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "telephony",
+      "screen": "/telephony/dispositions",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "telephony",
+      "screen": "/telephony",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "tenant",
+      "screen": "/tenant/code-lists",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "tenant",
+      "screen": "/tenant/consent-exchange",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "tenant",
+      "screen": "/tenant/data-migration",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "tenant",
+      "screen": "/tenant/org-hierarchy",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "tenant",
+      "screen": "/tenant/overview",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "tenant",
+      "screen": "/tenant",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "tenant",
+      "screen": "/tenant/plans",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "tenant",
+      "screen": "/tenant/positions",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "tenant",
+      "screen": "/tenant/quotas",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "tenant",
+      "screen": "/tenant/settings",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "tenant",
+      "screen": "/tenant/stewardship",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "tenant",
+      "screen": "/tenant/subscriptions",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "tenant-admin",
+      "screen": "/tenant-admin/activation",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "tenant-admin",
+      "screen": "/tenant-admin/ai-plugins",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "tenant-admin",
+      "screen": "/tenant-admin/breakglass/[id]",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "tenant-admin",
+      "screen": "/tenant-admin/notifications/channels",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "tenant-admin",
+      "screen": "/tenant-admin/org-type",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "tenant-admin",
+      "screen": "/tenant-admin/platform-config",
+      "verdict": "FAIL",
+      "reason": "Cannot read properties of undefined (reading 'debugModeUntil')"
+    },
+    {
+      "module": "tenant-admin",
+      "screen": "/tenant-admin/sessions/[id]",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "themes",
+      "screen": "/themes/brand",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "themes",
+      "screen": "/themes/branding",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "themes",
+      "screen": "/themes",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "themes",
+      "screen": "/themes/templates",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "visitor",
+      "screen": "/visitor/admin",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "visitor",
+      "screen": "/visitor/guard",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "visitor",
+      "screen": "/visitor/host",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "visitor",
+      "screen": "/visitor",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "workflow",
+      "screen": "/workflow/definitions/[id]",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "workflow",
+      "screen": "/workflow/definitions",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "workflow",
+      "screen": "/workflow/designer",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "workflow",
+      "screen": "/workflow/instances/[id]",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "workflow",
+      "screen": "/workflow/list",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "workflow",
+      "screen": "/workflow/my-tasks",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "workflow",
+      "screen": "/workflow",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "works",
+      "screen": "/works/approvals/aa/[id]",
+      "verdict": "FAIL",
+      "reason": "Cannot read properties of undefined (reading 'aaNumber')"
+    },
+    {
+      "module": "works",
+      "screen": "/works/approvals/new",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "works",
+      "screen": "/works/approvals",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "works",
+      "screen": "/works/approvals/ts/[id]",
+      "verdict": "FAIL",
+      "reason": "Cannot read properties of undefined (reading 'tsNumber')"
+    },
+    {
+      "module": "works",
+      "screen": "/works/approvals/ts-new",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "works",
+      "screen": "/works/billing/[workId]",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "works",
+      "screen": "/works/billing/account-compile",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "works",
+      "screen": "/works/billing/bills/new",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "works",
+      "screen": "/works/billing/measurements/new",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "works",
+      "screen": "/works/billing/new-mb",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "works",
+      "screen": "/works/billing",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "works",
+      "screen": "/works/boq/[workId]",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "works",
+      "screen": "/works/boq/new",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "works",
+      "screen": "/works/boq",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "works",
+      "screen": "/works/closure",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "works",
+      "screen": "/works/contractors/[id]",
+      "verdict": "FAIL",
+      "reason": "rendered no visible text content"
+    },
+    {
+      "module": "works",
+      "screen": "/works/contractors/new",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "works",
+      "screen": "/works/contractors",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "works",
+      "screen": "/works/execution/[workId]",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "works",
+      "screen": "/works/execution/issues/new",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "works",
+      "screen": "/works/execution/issues",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "works",
+      "screen": "/works/execution",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "works",
+      "screen": "/works/execution/photos/new",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "works",
+      "screen": "/works/execution/record-progress",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "works",
+      "screen": "/works/masters",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "works",
+      "screen": "/works/orders",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "works",
+      "screen": "/works",
+      "verdict": "FAIL",
+      "reason": "Cannot read properties of undefined (reading 'draft')"
+    },
+    {
+      "module": "works",
+      "screen": "/works/proposals/[id]",
+      "verdict": "FAIL",
+      "reason": "Cannot read properties of undefined (reading 'length')"
+    },
+    {
+      "module": "works",
+      "screen": "/works/proposals/new",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "works",
+      "screen": "/works/proposals",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "works",
+      "screen": "/works/reports",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "works",
+      "screen": "/works/tenders/[id]",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "works",
+      "screen": "/works/tenders/new",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "works",
+      "screen": "/works/tenders",
+      "verdict": "PASS",
+      "reason": "ok"
+    }
+  ]
+}

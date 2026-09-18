@@ -940,9 +940,18 @@ function run() {
   const noLoader = rows.filter(r => r.status === 'NO_LOADER').length;
   const fabricatedData = rows.filter(r => r.status === 'FABRICATED_DATA').length;
   const linkAudit = findDeadLinks();
+  // COMP-006 (tranche 2, render-smoke/loader-manifest feature): NO_LOADER is
+  // exactly 1 row per page (see the `calledLoaders.length === 0` branch
+  // above), but WIRED/MISSING/MISMATCH are not -- a page with two loaders
+  // produces two rows. `rows.length` therefore over-counts distinct pages
+  // whenever any page has >1 loader, which makes it the wrong denominator
+  // for a "% of page.tsx covered" metric. Expose the real distinct-page
+  // count once here instead of leaving every consumer to re-derive it (or
+  // silently divide by rows.length, mismatched by exactly this amount).
+  const totalPages = pages.length;
 
   if (jsonOnly) {
-    process.stdout.write(JSON.stringify({ rows, counts: { wired, missing, mismatch, noLoader, fabricatedData }, linkAudit }, null, 2));
+    process.stdout.write(JSON.stringify({ rows, counts: { totalPages, wired, missing, mismatch, noLoader, fabricatedData }, linkAudit }, null, 2));
     return;
   }
 
@@ -950,7 +959,7 @@ function run() {
   const outDir = join(ROOT, 'scripts/contract');
   mkdirSync(outDir, { recursive: true });
 
-  writeFileSync(join(outDir, 'screen-map.json'), JSON.stringify({ rows, counts: { wired, missing, mismatch, noLoader, fabricatedData }, linkAudit }, null, 2));
+  writeFileSync(join(outDir, 'screen-map.json'), JSON.stringify({ rows, counts: { totalPages, wired, missing, mismatch, noLoader, fabricatedData }, linkAudit }, null, 2));
 
   // ── Write Markdown table ─────────────────────────────────────────────────────
   const mdLines = [
@@ -982,7 +991,7 @@ function run() {
   process.stdout.write('════════════════════════════════════════════════════════\n');
   process.stdout.write('  SCREEN CONTRACT MAP — STATIC ANALYSIS\n');
   process.stdout.write('════════════════════════════════════════════════════════\n');
-  process.stdout.write(`  Total screens analyzed : ${rows.length}\n`);
+  process.stdout.write(`  Total screens analyzed : ${rows.length}  (${totalPages} distinct page.tsx)\n`);
   process.stdout.write(`  ✅ WIRED                : ${wired}\n`);
   process.stdout.write(`  ❌ MISSING              : ${missing}\n`);
   process.stdout.write(`  ⚠️  MISMATCH             : ${mismatch}\n`);
