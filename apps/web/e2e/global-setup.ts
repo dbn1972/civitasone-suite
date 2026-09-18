@@ -123,11 +123,90 @@ const FIXTURES: Record<string, unknown> = {
     },
   ],
 
+  // REL-023: these 5 HRMS-facing benefit routes moved from /finance/* to
+  // /hr/* (see the finance/{advances,travel,medical,expenses,loans}/page.tsx
+  // redirect stubs -- "called finance-service routes that 404, superseded by
+  // the working hrms equivalent"), but no mock-gateway fixture was ever added
+  // for the NEW api paths these pages actually call (each is a fresh
+  // endpoint, not a rename of the /api/v1/finance/* ones above) -- every one
+  // of the 5 pages was silently rendering its empty state. Same scenarios as
+  // the /api/v1/finance/* fixtures above, reshaped to match each page's own
+  // mapper (mapAdvances.ts / page.tsx inline mappers).
+  '/api/v1/hrms/salary-advances': [
+    {
+      id: 'sa-e2e-001',
+      employeeId: 'EMP-001',
+      employee: { name: 'Ravi Kumar', employeeNo: 'EMP-001' },
+      amountMinor: 5000000,
+      purpose: 'Medical emergency',
+      recoveryMonths: 6,
+      recoveredMinor: 1000000,
+      requestDate: '2026-08-01',
+      status: 'approved',
+    },
+  ],
+  '/api/v1/hrms/travel-requests': {
+    data: [
+      {
+        id: 'tr-e2e-001',
+        purpose: 'Official Inspection',
+        destination: 'Mumbai',
+        from_date: '2026-08-01',
+        to_date: '2026-08-03',
+        mode: 'Air',
+        status: 'approved',
+      },
+    ],
+  },
+  '/api/v1/hrms/medical/claims': [
+    {
+      id: 'mc-e2e-001',
+      employee_id: 'EMP-M-001',
+      claim_type: 'Outdoor',
+      amount_minor: 50000,
+      hospital_name: 'CGHS Dispensary, New Delhi',
+      diagnosis: 'Upper Respiratory Infection',
+      status: 'pending',
+      created_at: '2026-07-15T00:00:00Z',
+    },
+  ],
+  '/api/v1/hrms/expenses': [
+    {
+      id: 'exp-e2e-001',
+      category: 'Office Supplies',
+      amount: 500000,
+      description: 'Stationery for Q3',
+      date: '2026-08-01',
+      status: 'pending',
+      created_at: '2026-08-01T00:00:00Z',
+    },
+  ],
+  '/api/v1/hrms/loans': [
+    {
+      id: 'loan-e2e-001',
+      employeeId: 'EMP-HBA-001',
+      employeeName: 'Vikram Mehta',
+      department: 'Roads & Transport',
+      loanType: 'House Building Advance (HBA)',
+      sanctionedAmountMinor: 250000000,
+      emiMinor: 2500000,
+      outstandingMinor: 180000000,
+      totalEmis: 120,
+      emisPaid: 24,
+      status: 'active',
+    },
+  ],
+
   // HR employees — employeesListSchema = paginatedSchema(employeeSummarySchema)
   '/api/v1/hrms/employees': {
     data: [
-      { id: 'EMP-001', name: 'Ravi Kumar', department: 'IT', status: 'Active' },
-      { id: 'EMP-002', name: 'Priya Singh', department: 'Finance', status: 'Active' },
+      // REL-023: employeeNo was missing entirely -- DataTable.tsx only wraps
+      // column 0 (employeeNo) in the row's clickable <a>, so with no value
+      // to render that anchor had zero content and zero size ("hidden" to
+      // Playwright, even though its aria-label -- built from
+      // identifyingColumnKey="name" -- correctly said "Open Ravi Kumar").
+      { id: 'EMP-001', employeeNo: 'EMP-001', name: 'Ravi Kumar', department: 'IT', status: 'Active' },
+      { id: 'EMP-002', employeeNo: 'EMP-002', name: 'Priya Singh', department: 'Finance', status: 'Active' },
     ],
     pagination: PAGINATION,
   },
@@ -846,8 +925,14 @@ const FIXTURES: Record<string, unknown> = {
     description: 'Standard A4 paper reams, 500 sheets per ream',
     hsnCode: '4802',
     gstRate: 12,
+    // REL-023: shaped like the REAL backend rows mapStockLedgerEntries()
+    // parses (qtyIn/qtyOut/voucherType/rateMinor/postingDate/entryId/
+    // balanceQty) -- apps/web/src/app/_data/apiMappers.ts's
+    // mapStockItemDetail() used to discard this field entirely
+    // (hardcoded `stockLedger: []`) regardless of shape; now that it
+    // actually calls mapStockLedgerEntries() on it, the shape matters.
     stockLedger: [
-      { id: 'led-001', date: '2024-01-10', type: 'receipt', quantity: 200, unitCost: 15000, totalValue: 3000000, referenceNo: 'GRN-001', party: 'Paper Mart India', balance: 200 },
+      { id: 'led-001', itemId: 'sku-001', itemName: 'A4 Paper Ream', postingDate: '2024-01-10', voucherType: 'receipt', qtyIn: 200, qtyOut: 0, rateMinor: 15000, entryId: 'GRN-001', balanceQty: 200 },
     ],
   },
 
@@ -948,6 +1033,17 @@ const FIXTURES: Record<string, unknown> = {
     status: 'Active',
     reportingTo: 'Director IT',
     postingLocation: 'HQ Delhi',
+    // REL-023: EmployeeDetailSchema (packages/schemas/src/web.ts) requires
+    // these 3 as present-but-nullable, not optional/omittable. Missing them
+    // failed schema validation on every request, so getEmployeeById always
+    // returned null -- /hr/employees/EMP-001 silently rendered the page's own
+    // "not found" branch instead of the real profile. That branch's title
+    // ("Employee Profile", employeeDetail.notFoundTitle) is why
+    // hr.spec.ts's "shows Employee Profile heading" test was passing at all:
+    // it was asserting on the not-found state, not genuine profile content.
+    bankAccountNo: null,
+    bankIfsc: null,
+    pan: null,
   },
 
   '/api/v1/legal/cases/leg-001': {

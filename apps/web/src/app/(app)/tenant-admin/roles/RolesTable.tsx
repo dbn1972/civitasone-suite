@@ -39,6 +39,10 @@ export function RolesTable({ roles }: { roles: Role[] }) {
       </div>
       <DataTable<Role>
         rowHref={(role) => `/tenant-admin/roles/${role.id}`}
+        // REL-023: the table had no accessible name at all (no caption, no
+        // aria-label) -- e2e and screen-reader users alike had no way to
+        // scope a query to "the roles table" specifically.
+        caption="Tenant roles"
         columns={[
           { key: "name", label: "Name" },
           {
