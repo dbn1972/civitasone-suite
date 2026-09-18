@@ -75,6 +75,9 @@ import 'features/revenue/assessee_list_screen.dart';
 import 'features/revenue/assessee_detail_screen.dart';
 import 'features/field/field_task_list_screen.dart';
 import 'features/field/field_task_detail_screen.dart';
+import 'features/approvals/approvals_workbasket_list_screen.dart';
+import 'features/approvals/approvals_task_detail_screen.dart';
+import 'features/approvals/approvals_models.dart';
 import 'features/inventory/inventory_screen.dart';
 import 'features/works/works_hub_screen.dart';
 import 'features/works/work_proposals_screen.dart';
@@ -225,6 +228,14 @@ class _CivitasOneAppState extends ConsumerState<CivitasOneApp> with WidgetsBindi
             GoRoute(path: '/revenue/assessees/:id', builder: (_, state) => AssesseeDetailScreen(assesseeId: state.pathParameters['id']!)),
             GoRoute(path: '/field/tasks', builder: (_, __) => const FieldTaskListScreen()),
             GoRoute(path: '/field/tasks/:id', builder: (_, state) => FieldTaskDetailScreen(taskId: state.pathParameters['id']!)),
+            GoRoute(path: '/approvals/workbaskets', builder: (_, __) => const ApprovalsWorkbasketListScreen()),
+            GoRoute(
+              path: '/approvals/tasks/:id',
+              builder: (_, state) => ApprovalsTaskDetailScreen(
+                taskId: state.pathParameters['id']!,
+                task: state.extra as WorkbasketTask?,
+              ),
+            ),
             GoRoute(path: '/inventory', builder: (_, __) => const InventoryScreen()),
             GoRoute(path: '/works', builder: (_, __) => const WorksHubScreen()),
             GoRoute(path: '/works/proposals', builder: (_, __) => const WorkProposalsScreen()),
@@ -577,6 +588,7 @@ class DashboardScreen extends ConsumerWidget {
     (label: 'Trade Licenses', icon: Icons.storefront, route: '/revenue/trade-licenses', color: Color(0xFFB45309), description: 'Look up license status and dues in the field'),
     (label: 'Assessees', icon: Icons.home_work, route: '/revenue/assessees', color: Color(0xFF0369A1), description: 'Property and water-connection ratepayer lookup'),
     (label: 'Field Tasks', icon: Icons.assignment_turned_in, route: '/field/tasks', color: Color(0xFF4F46E5), description: 'Assigned field visits, filtered by status and due date'),
+    (label: 'Approval Workbaskets', icon: Icons.move_to_inbox, route: '/approvals/workbaskets', color: Color(0xFF9333EA), description: 'Browse saved approval queues and drill into pending workflow tasks'),
     (label: 'Inventory', icon: Icons.inventory_2, route: '/inventory', color: Color(0xFFCA8A04), description: 'Issue, receipt, stock levels'),
     (label: 'Works & Billing', icon: Icons.engineering, route: '/works', color: Color(0xFF0F766E), description: 'Proposals, approvals, BoQ, tenders, billing'),
   ];
