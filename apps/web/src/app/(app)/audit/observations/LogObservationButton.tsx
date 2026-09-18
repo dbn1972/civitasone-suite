@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useId, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useFormError } from "@/lib/useFormError";
+import { Button } from "@/app/_components/ds";
 
 interface FormState {
   obsNo: string;
@@ -103,7 +104,7 @@ export function LogObservationButton() {
 
   return (
     <>
-      <button type="button" className="btn primary" onClick={() => setOpen(true)}>+ Log Observation</button>
+      <Button onClick={() => setOpen(true)}>+ Log Observation</Button>
       {open && (
         <div
           role="dialog"
@@ -157,8 +158,8 @@ export function LogObservationButton() {
               {error && <div role="alert" style={{ color: "var(--bad)", fontSize: 13, marginTop: 4 }}>{error}</div>}
 
               <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 12 }}>
-                <button type="button" className="btn ghost" onClick={close} disabled={busy}>Cancel</button>
-                <button type="button" className="btn primary" onClick={() => void submit()} disabled={busy}>{busy ? "Logging…" : "Log observation"}</button>
+                <Button variant="ghost" onClick={close} disabled={busy}>Cancel</Button>
+                <Button onClick={() => void submit()} disabled={busy}>{busy ? "Logging…" : "Log observation"}</Button>
               </div>
             </div>
           </div>

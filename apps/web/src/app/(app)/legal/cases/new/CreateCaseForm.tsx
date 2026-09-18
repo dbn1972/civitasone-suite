@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { useFormError } from "@/lib/useFormError";
+import { Button } from "@/app/_components/ds";
 
 export function CreateCaseForm() {
   const router = useRouter();
@@ -90,9 +91,9 @@ export function CreateCaseForm() {
         ) : null}
       </div>
       <div style={{ marginTop: 16, display: "flex", gap: 8 }}>
-        <button type="submit" className="btn primary" style={{ minHeight: 44 }} disabled={status === "submitting"}>
+        <Button type="submit" style={{ minHeight: 44 }} disabled={status === "submitting"}>
           {status === "submitting" ? "Saving…" : "Register case"}
-        </button>
+        </Button>
         <Link href="/legal/list" className="btn ghost" style={{ minHeight: 44 }}>Cancel</Link>
       </div>
     </form>

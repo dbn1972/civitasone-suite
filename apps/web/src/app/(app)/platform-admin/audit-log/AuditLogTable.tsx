@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { Button } from "@/app/_components/ds";
 
 /* ─── Types ─────────────────────────────────────────────────────────── */
 export type PlatformAuditEvent = {
@@ -104,9 +105,9 @@ export function AuditLogTable({ events }: { events: PlatformAuditEvent[] }) {
     <div className="card">
       <div className="card-h">
         <h3 id="platform-audit-heading">Platform audit log</h3>
-        <button type="button" className="btn ghost sm" onClick={() => exportCsv(filtered)}>
+        <Button variant="ghost" size="sm" onClick={() => exportCsv(filtered)}>
           Export CSV ({filtered.length})
-        </button>
+        </Button>
       </div>
 
       {/* Filters */}
@@ -137,9 +138,9 @@ export function AuditLogTable({ events }: { events: PlatformAuditEvent[] }) {
         </div>
         {(dateFrom || dateTo || actorSearch || actionType !== "All" || outcomeFilter !== "All") && (
           <div style={{ display: "flex", flexDirection: "column", gap: 3, justifyContent: "flex-end" }}>
-            <button type="button" className="btn ghost sm" onClick={() => { setDateFrom(""); setDateTo(""); setActorSearch(""); setActionType("All"); setOutcomeFilter("All"); setPage(0); }}>
+            <Button variant="ghost" size="sm" onClick={() => { setDateFrom(""); setDateTo(""); setActorSearch(""); setActionType("All"); setOutcomeFilter("All"); setPage(0); }}>
               Clear filters
-            </button>
+            </Button>
           </div>
         )}
       </div>
@@ -227,9 +228,9 @@ export function AuditLogTable({ events }: { events: PlatformAuditEvent[] }) {
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 16px", borderTop: "1px solid var(--line)", fontSize: 12.5, color: "var(--ink2)" }}>
         <span>{filtered.length} event{filtered.length === 1 ? "" : "s"}</span>
         <div style={{ display: "flex", gap: 8 }}>
-          <button type="button" className="btn ghost sm" disabled={safePage === 0} onClick={() => setPage(safePage - 1)}>← Prev</button>
+          <Button variant="ghost" size="sm" disabled={safePage === 0} onClick={() => setPage(safePage - 1)}>← Prev</Button>
           <span style={{ alignSelf: "center" }}>Page {safePage + 1} / {totalPages}</span>
-          <button type="button" className="btn ghost sm" disabled={safePage >= totalPages - 1} onClick={() => setPage(safePage + 1)}>Next →</button>
+          <Button variant="ghost" size="sm" disabled={safePage >= totalPages - 1} onClick={() => setPage(safePage + 1)}>Next →</Button>
         </div>
       </div>
     </div>

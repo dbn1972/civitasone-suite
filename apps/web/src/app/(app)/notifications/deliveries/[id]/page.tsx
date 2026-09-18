@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
-import { PageHeader, Card, EmptyState } from "../../../../_components/ds";
+import { Button, PageHeader, Card, EmptyState } from "../../../../_components/ds";
 import { formatIndianDate } from "@/lib/formatters";
 import { StatusBadge } from "../../_components/StatusBadge";
 import { ResendAction } from "./ResendAction";
@@ -111,7 +111,7 @@ export default function DeliveryDetailPage() {
             }
             action={
               error && error !== "not_found" ? (
-                <button type="button" className="btn primary" onClick={load}>Try again</button>
+                <Button onClick={load}>Try again</Button>
               ) : (
                 <a className="btn ghost" href="/notifications/deliveries">Back to deliveries</a>
               )

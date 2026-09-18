@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { Button } from "@/app/_components/ds";
 
 /**
  * Header actions for the Hearings page.
@@ -40,15 +41,13 @@ export function HearingsActions() {
   return (
     <>
       <Link href="/legal/hearings" className="btn ghost">Calendar view</Link>
-      <button
-        type="button"
-        className="btn primary"
+      <Button
         onClick={() => void sync()}
         disabled={busy}
         aria-busy={busy}
       >
         {busy ? "Syncing…" : "Sync cause list"}
-      </button>
+      </Button>
       <span role="status" aria-live="polite" className="sr-only">{message}</span>
     </>
   );

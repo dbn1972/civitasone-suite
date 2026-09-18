@@ -12,7 +12,7 @@
  */
 import { useEffect, useRef, useState } from "react";
 import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
-import { ConfirmDialog, EmptyState } from "@/app/_components/ds";
+import { Button, ConfirmDialog, EmptyState } from "@/app/_components/ds";
 import { StatusBadge } from "../../_components/StatusBadge";
 import { formatMoney, formatIndianDate } from "@/lib/formatters";
 import {
@@ -158,22 +158,19 @@ export function CampaignDetail({ campaignId }: { campaignId: string }) {
               </div>
             </dl>
             <div style={{ display: "flex", gap: 8, padding: 12 }}>
-              <button
-                type="button"
-                className="btn primary"
+              <Button
                 onClick={() => setConfirm("send")}
                 disabled={!canSend || busy}
               >
                 Send
-              </button>
-              <button
-                type="button"
-                className="btn danger"
+              </Button>
+              <Button
+                variant="danger"
                 onClick={() => setConfirm("cancel")}
                 disabled={!canCancel || busy}
               >
                 Cancel campaign
-              </button>
+              </Button>
             </div>
           </>
         )}

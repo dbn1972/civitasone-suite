@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
-import { PageHeader, Card, DataTable, EmptyState } from "../../../../_components/ds";
+import { Button, PageHeader, Card, DataTable, EmptyState } from "../../../../_components/ds";
 import { StatusBadge } from "../../_components/StatusBadge";
 import { useFormError } from "@/lib/useFormError";
 
@@ -108,7 +108,7 @@ export default function TemplateDetailPage() {
             message={error ? "There was a problem loading this template. Please try again." : "This template does not exist or is not visible to your tenant."}
             action={
               error ? (
-                <button type="button" className="btn primary" onClick={load}>Try again</button>
+                <Button onClick={load}>Try again</Button>
               ) : (
                 <a className="btn ghost" href="/notifications/templates">Back to templates</a>
               )

@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useId, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ConfirmDialog } from "../../../../_components/ds";
+import { Button, ConfirmDialog } from "../../../../_components/ds";
 import { useFormError } from "@/lib/useFormError";
 
 type Mode = "reply" | "refer";
@@ -156,10 +156,10 @@ function Dialog({
             )}
             {validationError && <div role="alert" style={{ color: "var(--bad)", fontSize: 13, marginTop: 4 }}>{validationError}</div>}
             <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 12 }}>
-              <button type="button" className="btn ghost" onClick={onClose} disabled={busy}>Cancel</button>
-              <button type="button" className="btn primary" onClick={handleProceedClick} disabled={busy}>
+              <Button variant="ghost" onClick={onClose} disabled={busy}>Cancel</Button>
+              <Button onClick={handleProceedClick} disabled={busy}>
                 {mode === "reply" ? "Record reply" : "Refer para"}
-              </button>
+              </Button>
             </div>
           </div>
         </div>
@@ -190,8 +190,8 @@ export function ObservationActions({ obsId, department }: { obsId: string; depar
   const [mode, setMode] = useState<Mode | null>(null);
   return (
     <>
-      <button type="button" className="btn ghost" onClick={() => setMode("refer")}>Refer</button>
-      <button type="button" className="btn primary" onClick={() => setMode("reply")}>Record Reply</button>
+      <Button variant="ghost" onClick={() => setMode("refer")}>Refer</Button>
+      <Button onClick={() => setMode("reply")}>Record Reply</Button>
       {mode && <Dialog mode={mode} obsId={obsId} department={department} onClose={() => setMode(null)} />}
     </>
   );

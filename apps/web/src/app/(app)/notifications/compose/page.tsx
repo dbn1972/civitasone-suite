@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useId, useMemo, useState } from "react";
-import { PageHeader, Card, EmptyState, ErrorState, ConfirmDialog } from "../../../_components/ds";
+import { Button, PageHeader, Card, EmptyState, ErrorState, ConfirmDialog } from "../../../_components/ds";
 import { toHumanError } from "@/lib/messages";
 import { useFormError } from "@/lib/useFormError";
 
@@ -205,9 +205,9 @@ export default function ComposeNotificationPage() {
               </select>
             </div>
 
-            <button type="submit" className="btn primary" disabled={!canSend || busy} aria-busy={busy} style={{ minHeight: 44 }}>
+            <Button type="submit" disabled={!canSend || busy} aria-busy={busy} style={{ minHeight: 44 }}>
               {busy ? "Sending…" : "Review & send"}
-            </button>
+            </Button>
           </form>
 
           <div role="status" aria-live="polite" style={{ fontSize: 12, color: "#067647", marginTop: 12 }}>{result}</div>
