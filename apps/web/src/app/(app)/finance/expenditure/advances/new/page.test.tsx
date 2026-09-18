@@ -1,5 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { NextIntlClientProvider } from "next-intl";
+import enMessages from "@/messages/en.json";
 
 const refreshMock = vi.fn();
 vi.mock("next/navigation", () => ({
@@ -7,6 +9,20 @@ vi.mock("next/navigation", () => ({
 }));
 
 import NewAdvancePage from "./page";
+
+// UX-017 (tranche 10): NewAdvancePage is a "use client" component that now
+// calls useTranslations() -- the centralized vitest.setup.ts mock only covers
+// next-intl/server's getTranslations (server components), so a direct render
+// of a client component still needs a real NextIntlClientProvider, same as
+// every other client-component test (hr/leave/apply/ApplyLeaveForm.test.tsx,
+// finance/pfms/page.test.tsx precedent).
+function renderPage(ui: React.ReactElement) {
+  return render(
+    <NextIntlClientProvider locale="en" messages={enMessages}>
+      {ui}
+    </NextIntlClientProvider>,
+  );
+}
 
 function fillForm() {
   fireEvent.change(screen.getByLabelText("Advance number"), { target: { value: "ADV-001" } });
@@ -23,7 +39,7 @@ describe("NewAdvancePage", () => {
   it("submits an advance (happy path, 202 accepted)", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(null, { status: 202 }));
 
-    render(<NewAdvancePage />);
+    renderPage(<NewAdvancePage />);
     fillForm();
     fireEvent.click(screen.getByRole("button", { name: /create advance/i }));
 
@@ -44,7 +60,7 @@ describe("NewAdvancePage", () => {
       new Response(JSON.stringify({ message: "insufficient_budget: head 2110 is over budget" }), { status: 422 }),
     );
 
-    render(<NewAdvancePage />);
+    renderPage(<NewAdvancePage />);
     fillForm();
     fireEvent.click(screen.getByRole("button", { name: /create advance/i }));
 

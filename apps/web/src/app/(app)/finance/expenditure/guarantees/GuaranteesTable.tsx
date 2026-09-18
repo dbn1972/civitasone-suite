@@ -1,10 +1,12 @@
 "use client";
+import { useTranslations } from "next-intl";
 import { DataTable } from "@/app/_components/ds";
 import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
 import { useSeededResource } from "@/lib/sync/resource";
 import type { FinanceGuaranteeSummary } from "@civitasone/types";
 type Row = FinanceGuaranteeSummary;
 export function GuaranteesTable({ guarantees, source = "api" }: { guarantees: Row[]; source?: "api" | "error" }) {
+  const t = useTranslations("expenditureGuaranteesTable");
   const { data: rows, provenance, offline, cachedAt } = useSeededResource<Row[]>("finance.guarantees", guarantees, source, (d) => d.length === 0);
   return (
     <>
@@ -16,22 +18,22 @@ export function GuaranteesTable({ guarantees, source = "api" }: { guarantees: Ro
       <DataSourceBadge provenance={provenance ?? "live"} cachedAt={cachedAt} offline={offline} />
       <DataTable<Row>
         columns={[
-          { key: "entity", label: "Entity" },
-          { key: "type", label: "Type" },
-          { key: "amountMinor", label: "Amount", align: "right", cellType: "amount" },
-          { key: "feePct", label: "Fee %", align: "right" },
-          { key: "status", label: "Status", cellType: "status" },
+          { key: "entity", label: t("colEntity") },
+          { key: "type", label: t("colType") },
+          { key: "amountMinor", label: t("colAmount"), align: "right", cellType: "amount" },
+          { key: "feePct", label: t("colFeePct"), align: "right" },
+          { key: "status", label: t("colStatus"), cellType: "status" },
         ]}
         rows={rows}
         sortable
         filterable
-        filterPlaceholder="Search guarantees…"
+        filterPlaceholder={t("filterPlaceholder")}
         pageSize={15}
         exportable
         exportFilename="guarantees-emd"
         emptyIcon="🛡️"
-        emptyTitle="No guarantees"
-        emptyMessage="No bank guarantees or EMDs found."
+        emptyTitle={t("emptyTitle")}
+        emptyMessage={t("emptyMessage")}
       />
     </>
   );

@@ -1,3 +1,4 @@
+import { getTranslations } from "next-intl/server";
 import { PageHeader, StatGrid, StatCard, StatusPill, Card, EmptyState } from "@/app/_components/ds";
 import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
 import { getFinanceSchemeById } from "@/app/_data/loaders";
@@ -16,16 +17,17 @@ import { formatIndianDate, formatMoney } from "@/lib/formatters";
  * scheme record carries no such fields today.
  */
 export default async function SchemeDetailPage({ params }: { params: { id: string } }) {
+  const t = await getTranslations("expenditureSchemeDetail");
   const { data: scheme, source } = await getFinanceSchemeById(params.id);
 
   if (!scheme) {
     return (
       <main className="page-main wrap" aria-labelledby="page-heading">
-        <PageHeader title="Scheme Detail" back="/finance/expenditure/scheme-tracking" />
+        <PageHeader title={t("titleNotFound")} back="/finance/expenditure/scheme-tracking" />
         <EmptyState
           icon="🎯"
-          title="Scheme detail not available"
-          message="This scheme may not exist, or scheme detail lookup isn't available yet. Check Scheme Tracking for the current list."
+          title={t("emptyTitleNotAvailable")}
+          message={t("emptyMessageNotAvailable")}
         />
       </main>
     );
@@ -44,23 +46,23 @@ export default async function SchemeDetailPage({ params }: { params: { id: strin
         actions={source === "error" ? <DataSourceBadge source={source} /> : null}
       />
       <StatGrid>
-        <StatCard icon="₹" iconBg="#ecfdf3" label="Outlay" value={formatMoney(scheme.outlayMinor)} />
-        <StatCard icon="📤" iconBg="#e7edfd" label="Utilised" value={formatMoney(scheme.utilisedMinor)} />
-        <StatCard icon="📊" iconBg="#fffaeb" label="Utilisation" value={`${utilisationPct}%`} />
-        <StatCard icon="✅" iconBg="#ecfdf3" label="Status" value={scheme.status} />
+        <StatCard icon="₹" iconBg="#ecfdf3" label={t("outlay")} value={formatMoney(scheme.outlayMinor)} />
+        <StatCard icon="📤" iconBg="#e7edfd" label={t("utilised")} value={formatMoney(scheme.utilisedMinor)} />
+        <StatCard icon="📊" iconBg="#fffaeb" label={t("statUtilisation")} value={`${utilisationPct}%`} />
+        <StatCard icon="✅" iconBg="#ecfdf3" label={t("status")} value={scheme.status} />
       </StatGrid>
 
-      <Card title="Scheme Details" padding>
+      <Card title={t("cardTitle")} padding>
         <div className="fields">
-          <div className="field"><span className="label">Code</span><span className="mono">{scheme.code}</span></div>
-          <div className="field"><span className="label">Name</span><span>{scheme.name}</span></div>
-          <div className="field"><span className="label">Funding</span><span>{scheme.funding ?? "—"}</span></div>
-          <div className="field"><span className="label">Currency</span><span>{scheme.currency}</span></div>
-          <div className="field"><span className="label">Outlay</span><span>{formatMoney(scheme.outlayMinor)}</span></div>
-          <div className="field"><span className="label">Utilised</span><span>{formatMoney(scheme.utilisedMinor)}</span></div>
-          <div className="field"><span className="label">Created</span><span>{formatIndianDate(scheme.createdAt)}</span></div>
-          <div className="field"><span className="label">Last Updated</span><span>{formatIndianDate(scheme.updatedAt)}</span></div>
-          <div className="field"><span className="label">Status</span><StatusPill status={scheme.status} /></div>
+          <div className="field"><span className="label">{t("fieldCode")}</span><span className="mono">{scheme.code}</span></div>
+          <div className="field"><span className="label">{t("fieldName")}</span><span>{scheme.name}</span></div>
+          <div className="field"><span className="label">{t("fieldFunding")}</span><span>{scheme.funding ?? "—"}</span></div>
+          <div className="field"><span className="label">{t("fieldCurrency")}</span><span>{scheme.currency}</span></div>
+          <div className="field"><span className="label">{t("outlay")}</span><span>{formatMoney(scheme.outlayMinor)}</span></div>
+          <div className="field"><span className="label">{t("utilised")}</span><span>{formatMoney(scheme.utilisedMinor)}</span></div>
+          <div className="field"><span className="label">{t("fieldCreated")}</span><span>{formatIndianDate(scheme.createdAt)}</span></div>
+          <div className="field"><span className="label">{t("fieldLastUpdated")}</span><span>{formatIndianDate(scheme.updatedAt)}</span></div>
+          <div className="field"><span className="label">{t("status")}</span><StatusPill status={scheme.status} /></div>
         </div>
       </Card>
     </main>
