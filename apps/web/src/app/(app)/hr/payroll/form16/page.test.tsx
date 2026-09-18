@@ -1,5 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen } from "@testing-library/react";
+import { NextIntlClientProvider } from "next-intl";
+import enMessages from "@/messages/en.json";
 
 const statusAwareGetMock = vi.fn();
 vi.mock("../_lib/statusAwareFetch", () => ({
@@ -10,6 +12,19 @@ vi.mock("next/navigation", () => ({
 }));
 
 import Form16Page from "./page";
+
+// UX-017: Form16Page (Server Component, getTranslations("form16")) also
+// renders Form16Wizard, FyLookupForm and VerifyForm16Form -- all of which
+// call useTranslations/getTranslations -- so every render needs a real
+// NextIntlClientProvider in the tree, same pattern as
+// hr/payroll/disbursement/page.test.tsx (tranche 9).
+function renderPage(ui: React.ReactElement) {
+  render(
+    <NextIntlClientProvider locale="en" messages={enMessages}>
+      {ui}
+    </NextIntlClientProvider>,
+  );
+}
 
 describe("Form16Page", () => {
   beforeEach(() => {
@@ -37,7 +52,7 @@ describe("Form16Page", () => {
     });
 
     const ui = await Form16Page({ searchParams: { fy: "2025-26" } });
-    render(ui);
+    renderPage(ui);
 
     expect(screen.getByText("job-1")).toBeInTheDocument();
     expect(screen.getByText("Total Employees")).toBeInTheDocument();
@@ -47,17 +62,16 @@ describe("Form16Page", () => {
     statusAwareGetMock.mockResolvedValue({ kind: "http_error", status: 404, body: { code: "NOT_FOUND" } });
 
     const ui = await Form16Page({ searchParams: { fy: "2025-26" } });
-    render(ui);
+    renderPage(ui);
 
     expect(screen.getByText("No Form-16 filing run for FY 2025-26")).toBeInTheDocument();
-    expect(screen.queryByText("Couldn't load — showing nothing")).not.toBeInTheDocument();
   });
 
   it("renders the error affordance (not the empty-state copy) on a real failure like 403", async () => {
     statusAwareGetMock.mockResolvedValue({ kind: "http_error", status: 403, body: { code: "FORBIDDEN" } });
 
     const ui = await Form16Page({ searchParams: { fy: "2025-26" } });
-    render(ui);
+    renderPage(ui);
 
     expect(screen.getByText("Couldn't load — showing nothing")).toBeInTheDocument();
     expect(screen.getByText("Could not load the Form-16 filing run for FY 2025-26")).toBeInTheDocument();

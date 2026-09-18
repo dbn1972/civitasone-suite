@@ -1,3 +1,4 @@
+import { getTranslations } from "next-intl/server";
 import { PageHeader, StatGrid, StatCard, Card, StatusPill, EmptyState } from "../../../../_components/ds";
 import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
 import { formatIndianDate } from "@/lib/formatters";
@@ -48,6 +49,10 @@ export default async function Form16Page({
 }: {
   searchParams: { fy?: string };
 }) {
+  const t = await getTranslations("form16");
+  // FyLookupForm stays a plain synchronous component (see its own file for
+  // why) so its copy is resolved here and passed down as props.
+  const tFyLookup = await getTranslations("fyLookupForm");
   const fy = searchParams.fy && FY_RE.test(searchParams.fy) ? searchParams.fy : currentFy();
   const lookup = await getBulkStatus(fy);
 
@@ -56,54 +61,59 @@ export default async function Form16Page({
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
-        title="Form-16 Generation"
-        subtitle="Generate, review deductions, and issue statutory Form-16 (Sec 203) certificates."
+        title={t("title")}
+        subtitle={t("subtitle")}
         back="/hr/payroll"
       />
-      <DataSourceBadge source={source} message="Couldn't load — showing nothing" />
+      <DataSourceBadge source={source} message={t("loadErrorMessage")} />
 
       {/* Wizard: 3-step — select FY / review deductions / generate & download */}
-      <Card title="Form-16 Wizard">
+      <Card title={t("wizardCardTitle")}>
         <Form16Wizard defaultFy={fy} />
       </Card>
 
-      <Card title={`Bulk Filing Status — FY ${fy}`}>
+      <Card title={t("bulkStatusCardTitle", { fy })}>
         <div className="pad">
-          <FyLookupForm defaultFy={fy} />
+          <FyLookupForm
+            defaultFy={fy}
+            financialYearLabel={tFyLookup("financialYearLabel")}
+            checkRunLabel={tFyLookup("checkRunBtn")}
+            formatHint={tFyLookup("formatHint")}
+          />
 
           {lookup.state === "not_found" ? (
             <EmptyState
               icon="🧾"
-              title={`No Form-16 filing run for FY ${fy}`}
-              message="Use the wizard above to start a single-employee or bulk generation job."
+              title={t("notFoundTitle", { fy })}
+              message={t("notFoundMessage")}
             />
           ) : lookup.state === "error" ? (
             <EmptyState
               icon="⚠️"
-              title={`Could not load the Form-16 filing run for FY ${fy}`}
-              message="The status check failed. Please reload the page or contact an administrator."
+              title={t("errorStateTitle", { fy })}
+              message={t("errorStateMessage")}
             />
           ) : (
             <>
               <StatGrid>
-                <StatCard icon="👥" iconBg="var(--infobg)" label="Total Employees" value={lookup.job.totalEmployees} />
-                <StatCard icon="✅" iconBg="var(--goodbg)" label="Generated" value={lookup.job.generated} />
-                <StatCard icon="⚠️" iconBg="var(--badbg)" label="Failed" value={lookup.job.failed} />
+                <StatCard icon="👥" iconBg="var(--infobg)" label={t("statTotalEmployees")} value={lookup.job.totalEmployees} />
+                <StatCard icon="✅" iconBg="var(--goodbg)" label={t("statGenerated")} value={lookup.job.generated} />
+                <StatCard icon="⚠️" iconBg="var(--badbg)" label={t("statFailed")} value={lookup.job.failed} />
                 <StatCard
                   icon="⏳"
                   iconBg="var(--warnbg)"
-                  label="Pending"
+                  label={t("statPending")}
                   value={Math.max(0, lookup.job.totalEmployees - lookup.job.generated - lookup.job.failed)}
                 />
               </StatGrid>
               <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", marginTop: 12 }}>
                 <span style={{ fontSize: 13 }}>
-                  <strong>Job:</strong> <span className="mono">{lookup.job.jobId}</span>
+                  <strong>{t("jobLabel")}</strong> <span className="mono">{lookup.job.jobId}</span>
                 </span>
                 <StatusPill status={lookup.job.status} />
                 <span style={{ fontSize: 13, color: "var(--color-text-muted)" }}>
-                  Created {formatIndianDate(lookup.job.createdAt)}
-                  {lookup.job.completedAt ? " · Completed " + formatIndianDate(lookup.job.completedAt) : ""}
+                  {t("createdLabel", { date: formatIndianDate(lookup.job.createdAt) })}
+                  {lookup.job.completedAt ? t("completedLabel", { date: formatIndianDate(lookup.job.completedAt) }) : ""}
                 </span>
               </div>
               {lookup.job.status === "completed" && lookup.job.storagePrefix && (
@@ -112,13 +122,13 @@ export default async function Form16Page({
                     className="btn ghost sm"
                     href={"/api/proxy/v1/payroll/tax/form16/bulk-download?fy=" + encodeURIComponent(fy)}
                   >
-                    <span aria-hidden="true">⬇</span> Get download link
+                    <span aria-hidden="true">⬇</span> {t("downloadLinkLabel")}
                   </a>
                 </p>
               )}
               {lookup.job.failed > 0 && lookup.job.errorDetails != null && (
                 <details style={{ marginTop: 10, fontSize: 13 }}>
-                  <summary>Failure details ({lookup.job.failed})</summary>
+                  <summary>{t("failureDetailsSummary", { count: lookup.job.failed })}</summary>
                   <pre style={{ whiteSpace: "pre-wrap", fontSize: 12, background: "var(--line2)", padding: 10, borderRadius: 8 }}>
                     {JSON.stringify(lookup.job.errorDetails, null, 2)}
                   </pre>

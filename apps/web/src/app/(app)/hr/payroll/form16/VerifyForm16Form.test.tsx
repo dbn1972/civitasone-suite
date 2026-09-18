@@ -1,6 +1,19 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { NextIntlClientProvider } from "next-intl";
+import enMessages from "@/messages/en.json";
 import { VerifyForm16Form } from "./VerifyForm16Form";
+
+// UX-017: VerifyForm16Form now reads its copy through next-intl
+// (useTranslations("verifyForm16Form")), so every render needs a real
+// provider in the tree.
+function renderForm() {
+  render(
+    <NextIntlClientProvider locale="en" messages={enMessages}>
+      <VerifyForm16Form />
+    </NextIntlClientProvider>,
+  );
+}
 
 function makePdfFile(name = "form16.pdf", type = "application/pdf"): File {
   return new File(["%PDF-1.4 fake pdf bytes"], name, { type });
@@ -12,7 +25,7 @@ describe("VerifyForm16Form", () => {
   });
 
   it("requires a file before submitting", () => {
-    render(<VerifyForm16Form />);
+    renderForm();
     fireEvent.click(screen.getByRole("button", { name: "Verify signature" }));
     expect(screen.getByText("Choose a Form-16 PDF to verify.")).toBeInTheDocument();
   });
@@ -27,7 +40,7 @@ describe("VerifyForm16Form", () => {
       ),
     );
 
-    render(<VerifyForm16Form />);
+    renderForm();
     const input = screen.getByLabelText(/Form-16 PDF/) as HTMLInputElement;
     fireEvent.change(input, { target: { files: [makePdfFile()] } });
     fireEvent.click(screen.getByRole("button", { name: "Verify signature" }));
@@ -41,7 +54,7 @@ describe("VerifyForm16Form", () => {
   it("surfaces a server error (error path)", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(null, { status: 400 }));
 
-    render(<VerifyForm16Form />);
+    renderForm();
     const input = screen.getByLabelText(/Form-16 PDF/) as HTMLInputElement;
     fireEvent.change(input, { target: { files: [makePdfFile()] } });
     fireEvent.click(screen.getByRole("button", { name: "Verify signature" }));

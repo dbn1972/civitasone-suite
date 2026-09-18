@@ -1,23 +1,28 @@
 "use client";
 
 import { useId, useState } from "react";
+import { useTranslations } from "next-intl";
 import { Button } from "@/app/_components/ds";
 
-const STEPS = ["Select FY", "Review Deductions", "Generate & Download"] as const;
+// Stable, untranslated identifiers -- only used for React keys / field ids /
+// dropdown key-lookup, never displayed. Display labels are resolved via
+// DEDUCTION_LABEL_KEYS + t() inside the component (UX-017).
+const DEDUCTION_SECTIONS = ["12B", "80C", "80D", "80E", "80G", "24B", "10HRA"] as const;
+type DeductionSection = (typeof DEDUCTION_SECTIONS)[number];
+const DEDUCTION_LABEL_KEYS: Record<DeductionSection, string> = {
+  "12B": "deduction12b",
+  "80C": "deduction80c",
+  "80D": "deduction80d",
+  "80E": "deduction80e",
+  "80G": "deduction80g",
+  "24B": "deduction24b",
+  "10HRA": "deductionHra",
+};
 
-const DEDUCTIONS = [
-  { section: "12B", label: "Employer Contribution (12B)" },
-  { section: "80C", label: "80C — PF, PPF, LIC, ELSS, NSC" },
-  { section: "80D", label: "80D — Health Insurance" },
-  { section: "80E", label: "80E — Education Loan Interest" },
-  { section: "80G", label: "80G — Charitable Donations" },
-  { section: "24B", label: "24(b) — Home Loan Interest" },
-  { section: "10HRA", label: "HRA Exemption" },
-];
-
-function StepBar({ step }: { step: number }) {
+function StepBar({ step, t }: { step: number; t: ReturnType<typeof useTranslations> }) {
+  const STEPS = [t("stepSelectFy"), t("stepReviewDeductions"), t("stepGenerateDownload")];
   return (
-    <nav aria-label="Form 16 wizard steps" style={{ display: "flex", marginBottom: 28 }}>
+    <nav aria-label={t("stepAriaLabel")} style={{ display: "flex", marginBottom: 28 }}>
       {STEPS.map((label, i) => {
         const done = i < step;
         const active = i === step;
@@ -50,20 +55,21 @@ function StepBar({ step }: { step: number }) {
   );
 }
 
-function TdsReconciliationTable({ fy }: { fy: string }) {
-  const QUARTERS = ["Q1 (Apr–Jun)", "Q2 (Jul–Sep)", "Q3 (Oct–Dec)", "Q4 (Jan–Mar)"];
+function TdsReconciliationTable({ fy, t }: { fy: string; t: ReturnType<typeof useTranslations> }) {
+  const columnHeaders = [t("colQuarter"), t("colGrossSalary"), t("colTdsDeducted"), t("colChallanRef")];
+  const quarters = [t("quarterQ1"), t("quarterQ2"), t("quarterQ3"), t("quarterQ4")];
   return (
     <div style={{ overflowX: "auto" }}>
       <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
         <thead>
           <tr style={{ borderBottom: "2px solid var(--line2)" }}>
-            {["Quarter", "Gross Salary", "TDS Deducted", "Challan Ref"].map((h) => (
+            {columnHeaders.map((h) => (
               <th key={h} style={{ padding: "8px 10px", textAlign: "start", fontWeight: 600, color: "var(--ink2)" }}>{h}</th>
             ))}
           </tr>
         </thead>
         <tbody>
-          {QUARTERS.map((q, i) => (
+          {quarters.map((q, i) => (
             <tr key={q} style={{ borderBottom: "1px solid var(--line2)" }}>
               <td style={{ padding: "8px 10px" }}>{q}</td>
               <td style={{ padding: "8px 10px", textAlign: "end", color: "var(--ink2)" }}>—</td>
@@ -74,7 +80,7 @@ function TdsReconciliationTable({ fy }: { fy: string }) {
             </tr>
           ))}
           <tr style={{ borderTop: "2px solid var(--line2)", background: "var(--panel)" }}>
-            <td style={{ padding: "8px 10px", fontWeight: 700 }}>Annual Total</td>
+            <td style={{ padding: "8px 10px", fontWeight: 700 }}>{t("annualTotal")}</td>
             <td style={{ padding: "8px 10px", textAlign: "end", fontWeight: 700 }}>—</td>
             <td style={{ padding: "8px 10px", textAlign: "end", fontWeight: 700 }}>—</td>
             <td style={{ padding: "8px 10px" }} />
@@ -86,11 +92,13 @@ function TdsReconciliationTable({ fy }: { fy: string }) {
 }
 
 export function Form16Wizard({ defaultFy }: { defaultFy: string }) {
+  const t = useTranslations("form16Wizard");
   const [step, setStep] = useState(0);
   const [fy, setFy] = useState(defaultFy);
   const [employeeId, setEmployeeId] = useState("");
+  const DEDUCTIONS = DEDUCTION_SECTIONS.map((section) => ({ section, label: t(DEDUCTION_LABEL_KEYS[section]) }));
   const [deductionVals, setDeductionVals] = useState<Record<string, string>>(
-    Object.fromEntries(DEDUCTIONS.map((d) => [d.section, ""])),
+    Object.fromEntries(DEDUCTION_SECTIONS.map((section) => [section, ""])),
   );
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | undefined>();
@@ -112,14 +120,14 @@ export function Form16Wizard({ defaultFy }: { defaultFy: string }) {
       });
       if (!res.ok) {
         const d = await res.json().catch(() => ({})) as { error?: { message?: string } };
-        setError(d?.error?.message ?? "Generation failed.");
+        setError(d?.error?.message ?? t("generationFailedDefault"));
         return;
       }
       const d = await res.json().catch(() => ({})) as { data?: { jobId?: string } };
       setJobId(d?.data?.jobId ?? null);
       setStep(2);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Network error.");
+      setError(err instanceof Error ? err.message : t("networkErrorDefault"));
     } finally {
       setBusy(false);
     }
@@ -127,26 +135,26 @@ export function Form16Wizard({ defaultFy }: { defaultFy: string }) {
 
   return (
     <div style={{ padding: "20px 24px" }}>
-      <StepBar step={step} />
+      <StepBar step={step} t={t} />
 
       {/* Step 0 — Select FY */}
       {step === 0 && (
         <div style={{ display: "grid", gap: 16 }}>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, maxWidth: 500 }}>
             <div>
-              <label htmlFor={fyId} style={{ fontSize: 13, fontWeight: 600, display: "block", marginBottom: 6 }}>Financial Year</label>
+              <label htmlFor={fyId} style={{ fontSize: 13, fontWeight: 600, display: "block", marginBottom: 6 }}>{t("financialYearLabel")}</label>
               <input id={fyId} type="text" className="input" value={fy} onChange={(e) => setFy(e.target.value)} placeholder="2024-25" />
-              <p style={{ fontSize: 11, color: "var(--ink2)", marginTop: 4 }}>Format: YYYY-YY (e.g. 2024-25)</p>
+              <p style={{ fontSize: 11, color: "var(--ink2)", marginTop: 4 }}>{t("financialYearFormatHint")}</p>
             </div>
             <div>
               <label htmlFor={empId} style={{ fontSize: 13, fontWeight: 600, display: "block", marginBottom: 6 }}>
-                Employee ID <span style={{ color: "var(--ink2)", fontWeight: 400 }}>(optional)</span>
+                {t("employeeIdLabel")} <span style={{ color: "var(--ink2)", fontWeight: 400 }}>{t("employeeIdOptional")}</span>
               </label>
-              <input id={empId} type="text" className="input" value={employeeId} onChange={(e) => setEmployeeId(e.target.value)} placeholder="EMP001 — blank = all" />
+              <input id={empId} type="text" className="input" value={employeeId} onChange={(e) => setEmployeeId(e.target.value)} placeholder={t("employeeIdPlaceholder")} />
             </div>
           </div>
           <div>
-            <Button onClick={() => setStep(1)}>Next: Review Deductions →</Button>
+            <Button onClick={() => setStep(1)}>{t("nextBtn")}</Button>
           </div>
         </div>
       )}
@@ -155,7 +163,7 @@ export function Form16Wizard({ defaultFy }: { defaultFy: string }) {
       {step === 1 && (
         <div style={{ display: "grid", gap: 22 }}>
           <div>
-            <h3 style={{ fontSize: 14, fontWeight: 700, marginBottom: 12 }}>Deduction Figures — FY {fy}</h3>
+            <h3 style={{ fontSize: 14, fontWeight: 700, marginBottom: 12 }}>{t("deductionFiguresHeading", { fy })}</h3>
             <div style={{ display: "grid", gap: 8, maxWidth: 540 }}>
               {DEDUCTIONS.map((d) => (
                 <div key={d.section} style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: 12, alignItems: "center" }}>
@@ -176,16 +184,16 @@ export function Form16Wizard({ defaultFy }: { defaultFy: string }) {
           </div>
 
           <div>
-            <h3 style={{ fontSize: 14, fontWeight: 700, marginBottom: 6 }}>Annual TDS Reconciliation — FY {fy}</h3>
-            <p style={{ fontSize: 12, color: "var(--ink2)", marginBottom: 10 }}>Challan references from submitted 24Q returns. Amounts load after generation.</p>
-            <TdsReconciliationTable fy={fy} />
+            <h3 style={{ fontSize: 14, fontWeight: 700, marginBottom: 6 }}>{t("annualTdsReconciliationHeading", { fy })}</h3>
+            <p style={{ fontSize: 12, color: "var(--ink2)", marginBottom: 10 }}>{t("tdsReconciliationNote")}</p>
+            <TdsReconciliationTable fy={fy} t={t} />
           </div>
 
           {error && <p role="alert" style={{ color: "var(--bad, #c0392b)", fontSize: 13 }}>{error}</p>}
           <div style={{ display: "flex", gap: 10 }}>
-            <Button variant="ghost" onClick={() => setStep(0)}>← Back</Button>
+            <Button variant="ghost" onClick={() => setStep(0)}>{t("backBtn")}</Button>
             <Button onClick={() => void generateForm16()} disabled={busy} loading={busy}>
-              {busy ? "Generating…" : "Generate Form 16 →"}
+              {busy ? t("generatingBtn") : t("generateBtn")}
             </Button>
           </div>
         </div>
@@ -196,17 +204,17 @@ export function Form16Wizard({ defaultFy }: { defaultFy: string }) {
         <div style={{ display: "grid", gap: 16 }}>
           <div style={{ background: "var(--goodbg, #e6f7f0)", borderRadius: 12, padding: "28px", textAlign: "center" }}>
             <p style={{ fontSize: 36, margin: "0 0 10px" }}>✅</p>
-            <p style={{ fontWeight: 700, fontSize: 16, marginBottom: 4 }}>Form-16 generation started</p>
-            {jobId && <p style={{ fontSize: 13, fontFamily: "monospace", color: "var(--ink2)" }}>Job ID: {jobId}</p>}
+            <p style={{ fontWeight: 700, fontSize: 16, marginBottom: 4 }}>{t("generationStartedTitle")}</p>
+            {jobId && <p style={{ fontSize: 13, fontFamily: "monospace", color: "var(--ink2)" }}>{t("jobIdLabel", { jobId })}</p>}
             <p style={{ fontSize: 13, color: "var(--ink2)", marginTop: 8 }}>
-              Generation runs asynchronously. Download will be available once complete.
+              {t("generationAsyncNote")}
             </p>
             <div style={{ marginTop: 16, display: "flex", gap: 10, justifyContent: "center", flexWrap: "wrap" }}>
               <a className="btn" href={`/api/proxy/v1/payroll/tax/form16/bulk-download?fy=${encodeURIComponent(fy)}`}>
-                ⬇ Download Form 16 ZIP
+                {t("downloadZipBtn")}
               </a>
               <Button variant="ghost" onClick={() => { setStep(0); setJobId(null); setError(undefined); }}>
-                Generate another
+                {t("generateAnotherBtn")}
               </Button>
             </div>
           </div>

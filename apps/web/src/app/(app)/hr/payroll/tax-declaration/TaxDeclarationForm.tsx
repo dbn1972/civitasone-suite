@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useId, useState } from "react";
+import { useTranslations } from "next-intl";
 import { currentFinancialYear } from "@/lib/fiscalYear";
 import { useFormError } from "@/lib/useFormError";
 import { Button } from "../../../../_components/ds";
@@ -18,6 +19,7 @@ function toInr(paise: number): string {
 }
 
 export function TaxDeclarationForm() {
+  const t = useTranslations("taxDeclarationForm");
   const fy = currentFinancialYear();
 
   const [regime, setRegime] = useState<"old" | "new">("new");
@@ -104,7 +106,7 @@ export function TaxDeclarationForm() {
         return;
       }
       setTone("good");
-      setMessage("Declaration submitted successfully.");
+      setMessage(t("savedMessage"));
     } catch {
       setTone("bad");
       setMessage(formError.fromException("save").message);
@@ -117,7 +119,7 @@ export function TaxDeclarationForm() {
     return (
       <div className="card">
         <div className="pad" style={{ textAlign: "center", padding: 32 }}>
-          Loading declaration…
+          {t("loadingText")}
         </div>
       </div>
     );
@@ -129,18 +131,17 @@ export function TaxDeclarationForm() {
       <div role="alert" style={{ background: "var(--badbg)", border: "1px solid #f85149",
         borderRadius: 6, padding: "10px 14px", marginBottom: 16,
         color: "var(--bad)", fontSize: 13, lineHeight: 1.4 }}>
-        ⚠ Could not load your existing declaration — blank amounts will overwrite previous values if you save.
-        Refresh the page to retry.
+        {t("loadFailedWarning")}
       </div>
     )}
     <form onSubmit={handleSubmit} className="card" style={{ marginBottom: 16 }}>
       <div className="card-h">
-        <h3>FY {fy} — Income Tax Declaration</h3>
+        <h3>{t("formHeading", { fy })}</h3>
       </div>
       <div className="pad" style={{ display: "grid", gap: 16 }}>
         {/* Regime Selection */}
         <fieldset style={{ border: "none", padding: 0, margin: 0 }}>
-          <legend style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>Tax Regime</legend>
+          <legend style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>{t("regimeLegend")}</legend>
           <div style={{ display: "flex", gap: 24 }}>
             <label htmlFor={regimeNewId} style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer" }}>
               <input
@@ -152,7 +153,7 @@ export function TaxDeclarationForm() {
                 onChange={() => setRegime("new")}
                 style={{ width: 18, height: 18 }}
               />
-              New Regime
+              {t("newRegimeLabel")}
             </label>
             <label htmlFor={regimeOldId} style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer" }}>
               <input
@@ -164,7 +165,7 @@ export function TaxDeclarationForm() {
                 onChange={() => setRegime("old")}
                 style={{ width: 18, height: 18 }}
               />
-              Old Regime
+              {t("oldRegimeLabel")}
             </label>
           </div>
         </fieldset>
@@ -172,91 +173,91 @@ export function TaxDeclarationForm() {
         {/* Amount fields */}
         <div style={{ display: "grid", gap: 14, gridTemplateColumns: "repeat(auto-fit,minmax(200px,1fr))" }}>
           <div style={{ display: "grid", gap: 6 }}>
-            <label htmlFor={s80cId} style={{ fontSize: 13, fontWeight: 600 }}>Section 80C (₹)</label>
+            <label htmlFor={s80cId} style={{ fontSize: 13, fontWeight: 600 }}>{t("section80cLabel")}</label>
             <input
               id={s80cId}
               type="number"
               min="0"
               step="1"
-              placeholder="e.g. 150000"
+              placeholder={t("section80cPlaceholder")}
               value={section80c}
               onChange={(e) => setSection80c(e.target.value)}
               style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
             />
           </div>
           <div style={{ display: "grid", gap: 6 }}>
-            <label htmlFor={s80dId} style={{ fontSize: 13, fontWeight: 600 }}>Section 80D (₹)</label>
+            <label htmlFor={s80dId} style={{ fontSize: 13, fontWeight: 600 }}>{t("section80dLabel")}</label>
             <input
               id={s80dId}
               type="number"
               min="0"
               step="1"
-              placeholder="e.g. 25000"
+              placeholder={t("section80dPlaceholder")}
               value={section80d}
               onChange={(e) => setSection80d(e.target.value)}
               style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
             />
           </div>
           <div style={{ display: "grid", gap: 6 }}>
-            <label htmlFor={otherId} style={{ fontSize: 13, fontWeight: 600 }}>Other Deductions (₹)</label>
+            <label htmlFor={otherId} style={{ fontSize: 13, fontWeight: 600 }}>{t("otherDeductionsLabel")}</label>
             <input
               id={otherId}
               type="number"
               min="0"
               step="1"
-              placeholder="e.g. 50000"
+              placeholder={t("otherDeductionsPlaceholder")}
               value={otherDeductions}
               onChange={(e) => setOtherDeductions(e.target.value)}
               style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
             />
           </div>
           <div style={{ display: "grid", gap: 6 }}>
-            <label htmlFor={rentId} style={{ fontSize: 13, fontWeight: 600 }}>Rent Paid Annually (₹)</label>
+            <label htmlFor={rentId} style={{ fontSize: 13, fontWeight: 600 }}>{t("rentPaidLabel")}</label>
             <input
               id={rentId}
               type="number"
               min="0"
               step="1"
-              placeholder="e.g. 120000"
+              placeholder={t("rentPaidPlaceholder")}
               value={rentPaid}
               onChange={(e) => setRentPaid(e.target.value)}
               style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
             />
           </div>
           <div style={{ display: "grid", gap: 6 }}>
-            <label htmlFor={prevSalId} style={{ fontSize: 13, fontWeight: 600 }}>Previous Employer Salary (₹)</label>
+            <label htmlFor={prevSalId} style={{ fontSize: 13, fontWeight: 600 }}>{t("prevEmployerSalaryLabel")}</label>
             <input
               id={prevSalId}
               type="number"
               min="0"
               step="1"
-              placeholder="Optional"
+              placeholder={t("optionalPlaceholder")}
               value={prevEmployerSalary}
               onChange={(e) => setPrevEmployerSalary(e.target.value)}
               style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
             />
           </div>
           <div style={{ display: "grid", gap: 6 }}>
-            <label htmlFor={otherIncId} style={{ fontSize: 13, fontWeight: 600 }}>Other Sources Income (₹)</label>
+            <label htmlFor={otherIncId} style={{ fontSize: 13, fontWeight: 600 }}>{t("otherSourcesIncomeLabel")}</label>
             <input
               id={otherIncId}
               type="number"
               min="0"
               step="1"
-              placeholder="Optional"
+              placeholder={t("optionalPlaceholder")}
               value={otherSourcesIncome}
               onChange={(e) => setOtherSourcesIncome(e.target.value)}
               style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
             />
           </div>
           <div style={{ display: "grid", gap: 6 }}>
-            <label htmlFor={perqId} style={{ fontSize: 13, fontWeight: 600 }}>Perquisites (₹)</label>
+            <label htmlFor={perqId} style={{ fontSize: 13, fontWeight: 600 }}>{t("perquisitesLabel")}</label>
             <input
               id={perqId}
               type="number"
               min="0"
               step="1"
-              placeholder="Optional"
+              placeholder={t("optionalPlaceholder")}
               value={perquisites}
               onChange={(e) => setPerquisites(e.target.value)}
               style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
@@ -266,7 +267,7 @@ export function TaxDeclarationForm() {
 
         <div>
           <Button type="submit" style={{ minHeight: 44 }} disabled={busy}>
-            {busy ? "Submitting…" : "Submit Declaration"}
+            {busy ? t("submittingBtn") : t("submitBtn")}
           </Button>
         </div>
 
@@ -277,7 +278,7 @@ export function TaxDeclarationForm() {
         )}
 
         <p style={{ fontSize: 12, color: "var(--ink2)" }}>
-          All amounts are in INR. The system converts to paise internally. Submitting updates any existing declaration for FY {fy}.
+          {t("footerNote", { fy })}
         </p>
       </div>
     </form>
