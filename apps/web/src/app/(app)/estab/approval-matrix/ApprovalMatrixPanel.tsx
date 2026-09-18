@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { DataTable, StatusPill, ActionButton } from "../../../_components/ds";
+import { Button, DataTable, StatusPill, ActionButton } from "../../../_components/ds";
 import { useFormError } from "@/lib/useFormError";
 
 type Step = { role: string; label: string };
@@ -197,9 +197,9 @@ export function ApprovalMatrixPanel() {
           </label>
         </div>
         <div className="pad" style={{ paddingTop: 0 }}>
-          <button className="btn primary" disabled={saving || !form.label || !form.workflowDefinitionCode} onClick={() => void submit()}>
+          <Button disabled={saving || !form.label || !form.workflowDefinitionCode} onClick={() => void submit()}>
             {saving ? "Saving…" : "Add rule"}
-          </button>
+          </Button>
         </div>
       </div>
 

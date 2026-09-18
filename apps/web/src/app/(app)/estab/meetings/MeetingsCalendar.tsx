@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
+import { Button } from "@/app/_components/ds";
 
 export interface CalendarMeeting {
   id: string;
@@ -83,15 +84,15 @@ export function MeetingsCalendar({ meetings }: { meetings: CalendarMeeting[] }) 
       <div className="card-h">
         <h3>{monthLabel}</h3>
         <div style={{ display: "flex", gap: 8 }}>
-          <button type="button" className="btn ghost sm" onClick={() => setCursor((c) => shiftMonth(c, -1))}>
+          <Button type="button" variant="ghost" size="sm" onClick={() => setCursor((c) => shiftMonth(c, -1))}>
             ← Prev
-          </button>
-          <button type="button" className="btn ghost sm" onClick={() => setCursor(todayCursor)}>
+          </Button>
+          <Button type="button" variant="ghost" size="sm" onClick={() => setCursor(todayCursor)}>
             Today
-          </button>
-          <button type="button" className="btn ghost sm" onClick={() => setCursor((c) => shiftMonth(c, 1))}>
+          </Button>
+          <Button type="button" variant="ghost" size="sm" onClick={() => setCursor((c) => shiftMonth(c, 1))}>
             Next →
-          </button>
+          </Button>
         </div>
       </div>
       <div

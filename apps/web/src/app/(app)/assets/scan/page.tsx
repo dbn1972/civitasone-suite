@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { PageHeader } from "../../../_components/ds";
+import { Button, PageHeader } from "../../../_components/ds";
 import { formatMoney } from "@/lib/formatters";
 
 type ScanResult = {
@@ -63,7 +63,7 @@ export default function MobileScanPage() {
           <p style={{ fontSize: 12, color: "var(--muted)", margin: "0 0 12px" }}>
             Use a connected hardware scanner (it types into this field) or enter the tag manually. Live camera capture is not available in this build.
           </p>
-          <button type="submit" className="btn primary" disabled={busy} style={{ width: "100%" }}>{busy ? "Looking up…" : "Lookup asset"}</button>
+          <Button type="submit" disabled={busy} style={{ width: "100%" }}>{busy ? "Looking up…" : "Lookup asset"}</Button>
         </form>
       </div>
 

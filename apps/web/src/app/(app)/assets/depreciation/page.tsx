@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { PageHeader, ConfirmDialog, useConfirmAction } from "../../../_components/ds";
+import { Button, PageHeader, ConfirmDialog, useConfirmAction } from "../../../_components/ds";
 
 export default function DepreciationRunPage() {
   const [period, setPeriod] = useState(new Date().toISOString().slice(0, 7));
@@ -57,7 +57,7 @@ export default function DepreciationRunPage() {
             <label className="l" htmlFor="dep-period">Period (YYYY-MM)</label>
             <input id="dep-period" value={period} onChange={(e) => setPeriod(e.target.value)} pattern="\d{4}-\d{2}" style={{ padding: 8, borderRadius: 8, border: "1px solid var(--line)" }} />
           </div>
-          <button type="submit" className="btn primary">Run depreciation</button>
+          <Button type="submit">Run depreciation</Button>
           {message ? (
             <p role="status" aria-live="polite" style={{ marginTop: 12, fontSize: 13, color: isError ? "var(--bad)" : "var(--good)" }}>{message}</p>
           ) : null}

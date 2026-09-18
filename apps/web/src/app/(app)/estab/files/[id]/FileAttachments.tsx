@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { FileUpload, type UploadedFileMeta } from "../../../../_components/ds";
+import { Button, FileUpload, type UploadedFileMeta } from "../../../../_components/ds";
 import { useFormError } from "@/lib/useFormError";
 
 type Attachment = {
@@ -97,7 +97,7 @@ export function FileAttachments({ fileId, attachments }: Props) {
               {" "}({Math.max(1, Math.ceil(pending.meta.size / 1024))} KB)
             </p>
           ) : null}
-          <button type="submit" className="btn ghost" disabled={busy || !pending}>Add attachment</button>
+          <Button type="submit" variant="ghost" disabled={busy || !pending}>Add attachment</Button>
         </form>
         {message ? <p style={{ fontSize: 13, color: "var(--good)", margin: "8px 0 0" }}>{message}</p> : null}
       </div>

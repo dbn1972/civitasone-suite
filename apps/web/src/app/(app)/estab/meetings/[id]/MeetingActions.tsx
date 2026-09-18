@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { Button } from "@/app/_components/ds";
 
 interface MeetingActionsProps {
   meetingId: string;
@@ -23,9 +24,8 @@ export function MeetingActions({ meetingId }: MeetingActionsProps) {
         rather than left as a dead link. MOM is still capturable today via
         the "MOM" field/Action items shown below once a meeting completes.
       */}
-      <button
+      <Button
         type="button"
-        className="btn primary"
         style={{ minHeight: 44 }}
         disabled
         aria-disabled="true"
@@ -33,7 +33,7 @@ export function MeetingActions({ meetingId }: MeetingActionsProps) {
       >
         Generate MOM{" "}
         <span style={{ fontSize: 11, fontWeight: 500, opacity: 0.85 }}>(coming soon)</span>
-      </button>
+      </Button>
     </>
   );
 }

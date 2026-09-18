@@ -2,7 +2,7 @@
 
 import { useId, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Card, ConfirmDialog } from "@/app/_components/ds";
+import { Button, Card, ConfirmDialog } from "@/app/_components/ds";
 import { browserJson } from "@/lib/api/browserClient";
 import { formatMoney } from "@/lib/formatters";
 import { rupeesToMinorString } from "@/lib/money";
@@ -225,16 +225,15 @@ export function ClaimForm({
         </div>
 
         <div style={{ marginTop: 14 }}>
-          <button
+          <Button
             type="submit"
-            className="btn primary"
             style={{ minHeight: 44 }}
             disabled={busy || noEligiblePolicies}
             aria-label="File insurance claim"
             aria-describedby={noEligiblePolicies ? noPoliciesHelpId : undefined}
           >
             File Claim
-          </button>
+          </Button>
           {noEligiblePolicies && (
             <p id={noPoliciesHelpId} style={{ margin: "6px 0 0", fontSize: 12.5, color: "var(--ink2)" }}>
               No active policies available to file a claim against.

@@ -18,7 +18,7 @@
  * only ever "accepted", never "approved". The UI must not claim otherwise.
  */
 import { useId, useRef, useState, type ReactNode } from "react";
-import { Card, ConfirmDialog } from "@/app/_components/ds";
+import { Button, Card, ConfirmDialog } from "@/app/_components/ds";
 import { browserJson } from "@/lib/api/browserClient";
 import { rupeesToMinorString } from "@/lib/money";
 import { formatMoney } from "@/lib/formatters";
@@ -318,9 +318,8 @@ function SurveyPanel({
             />
           </Field>
           <div>
-            <button
+            <Button
               type="button"
-              className="btn primary"
               disabled={busy}
               onClick={() => {
                 setMessage(null);
@@ -330,7 +329,7 @@ function SurveyPanel({
               }}
             >
               Create Survey
-            </button>
+            </Button>
           </div>
           {message && <p role="status" className="pill good" style={{ width: "fit-content" }}>{message}</p>}
         </div>
@@ -361,9 +360,9 @@ function SurveyPanel({
             </>,
           )}
           <div>
-            <button
+            <Button
               type="button"
-              className="btn ghost"
+              variant="ghost"
               disabled={submitBusy}
               onClick={() => {
                 setSubmitMessage(null);
@@ -373,7 +372,7 @@ function SurveyPanel({
               }}
             >
               Submit Survey
-            </button>
+            </Button>
           </div>
           {submitMessage && <p role="status" className="pill good" style={{ width: "fit-content" }}>{submitMessage}</p>}
         </div>
@@ -648,16 +647,15 @@ function RecommendationPanel({
             ))}
             {errors.members && <p role="alert" style={{ color: "var(--bad, #c0392b)", fontSize: 12, margin: 0 }}>{errors.members}</p>}
             <div>
-              <button type="button" className="btn ghost sm" onClick={() => setMembers((prev) => [...prev, emptyMember()])}>
+              <Button type="button" variant="ghost" size="sm" onClick={() => setMembers((prev) => [...prev, emptyMember()])}>
                 + Add member
-              </button>
+              </Button>
             </div>
           </div>
 
           <div>
-            <button
+            <Button
               type="button"
-              className="btn primary"
               disabled={busy}
               onClick={() => {
                 setMessage(null);
@@ -667,7 +665,7 @@ function RecommendationPanel({
               }}
             >
               Create Recommendation
-            </button>
+            </Button>
           </div>
           {message && <p role="status" className="pill good" style={{ width: "fit-content" }}>{message}</p>}
         </div>
@@ -689,9 +687,9 @@ function RecommendationPanel({
             </>,
           )}
           <div>
-            <button
+            <Button
               type="button"
-              className="btn danger"
+              variant="danger"
               disabled={approveBusy}
               onClick={() => {
                 setApproveMessage(null);
@@ -701,7 +699,7 @@ function RecommendationPanel({
               }}
             >
               Approve Recommendation
-            </button>
+            </Button>
           </div>
           {approveMessage && <p role="status" className="pill good" style={{ width: "fit-content" }}>{approveMessage}</p>}
         </div>
@@ -915,9 +913,8 @@ function AuctionPanel({
             </>,
           )}
           <div>
-            <button
+            <Button
               type="button"
-              className="btn primary"
               disabled={busy}
               onClick={() => {
                 setMessage(null);
@@ -927,7 +924,7 @@ function AuctionPanel({
               }}
             >
               Create Auction
-            </button>
+            </Button>
           </div>
           {message && <p role="status" className="pill good" style={{ width: "fit-content" }}>{message}</p>}
         </div>
@@ -957,9 +954,9 @@ function AuctionPanel({
             </>,
           )}
           <div>
-            <button
+            <Button
               type="button"
-              className="btn danger"
+              variant="danger"
               disabled={completeBusy}
               onClick={() => {
                 setCompleteMessage(null);
@@ -969,7 +966,7 @@ function AuctionPanel({
               }}
             >
               Complete Auction
-            </button>
+            </Button>
           </div>
           {completeMessage && <p role="status" className="pill good" style={{ width: "fit-content" }}>{completeMessage}</p>}
         </div>

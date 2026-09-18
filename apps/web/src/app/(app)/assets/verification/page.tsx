@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { PageHeader, DataTable, EmptyState, ErrorState, ConfirmDialog, useConfirmAction } from "../../../_components/ds";
+import { Button, PageHeader, DataTable, EmptyState, ErrorState, ConfirmDialog, useConfirmAction } from "../../../_components/ds";
 import { formatIndianDate } from "@/lib/formatters";
 import { toHumanError } from "@/lib/messages";
 
@@ -74,7 +74,7 @@ export default function AssetVerificationPage() {
         subtitle="Barcode-driven audit — GFR-aligned write-off before disposal."
         back="/assets/dashboard"
         backLabel="Dashboard"
-        actions={<button type="button" className="btn primary" onClick={create.trigger}>+ New verification</button>}
+        actions={<Button type="button" onClick={create.trigger}>+ New verification</Button>}
       />
       {message ? (
         <div role="status" aria-live="polite" className="banner" style={{ background: "var(--panel)", padding: 12, borderRadius: 12, marginBottom: 16, fontSize: 13 }}>{message}</div>
@@ -89,7 +89,7 @@ export default function AssetVerificationPage() {
             icon="🔍"
             title="No verification sessions"
             message="Start a physical verification to reconcile assets against the register."
-            action={<button type="button" className="btn primary" onClick={create.trigger}>+ New verification</button>}
+            action={<Button type="button" onClick={create.trigger}>+ New verification</Button>}
           />
         ) : (
           <DataTable

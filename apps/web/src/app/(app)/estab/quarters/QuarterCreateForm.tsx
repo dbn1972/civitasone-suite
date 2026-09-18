@@ -2,7 +2,7 @@
 
 import { useId, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Card, ConfirmDialog } from "@/app/_components/ds";
+import { Button, Card, ConfirmDialog } from "@/app/_components/ds";
 import { browserJson } from "@/lib/api/browserClient";
 
 const QUARTER_TYPES = ["type_i", "type_ii", "type_iii", "type_iv", "type_v", "type_vi"] as const;
@@ -196,9 +196,9 @@ export function QuarterCreateForm() {
           </div>
 
           <div>
-            <button type="submit" className="btn primary" style={{ minHeight: 44 }} disabled={busy}>
+            <Button type="submit" style={{ minHeight: 44 }} disabled={busy}>
               Add Quarter
-            </button>
+            </Button>
           </div>
 
           {message && (

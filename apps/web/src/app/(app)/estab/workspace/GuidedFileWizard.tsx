@@ -10,6 +10,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toHumanError } from "@/lib/messages";
+import { Button } from "@/app/_components/ds";
 
 type Operator = { id: string; employeeId: string; division: string; deskRole: string; active: boolean };
 
@@ -190,7 +191,7 @@ export function GuidedFileWizard() {
               ) : null}
               <label style={{ ...labelStyle, gridColumn: "1 / -1" }}><span>Subject</span><input value={subject} onChange={(e) => setSubject(e.target.value)} /></label>
             </div>
-            <div><button className="btn primary" disabled={busy} onClick={() => void doReceipt()}>{busy ? "Saving…" : "Continue"}</button></div>
+            <div><Button disabled={busy} onClick={() => void doReceipt()}>{busy ? "Saving…" : "Continue"}</Button></div>
           </div>
         </div>
       ) : null}
@@ -219,8 +220,8 @@ export function GuidedFileWizard() {
             </div>
             <label style={labelStyle}><span>Opening (yellow) note</span><textarea rows={3} value={initialNote} onChange={(e) => setInitialNote(e.target.value)} placeholder="Initial observation / proposal" /></label>
             <div style={{ display: "flex", gap: 8 }}>
-              <button className="btn ghost" disabled={busy} onClick={() => setStep(0)}>Back</button>
-              <button className="btn primary" disabled={busy} onClick={() => void doOpenFile()}>{busy ? "Opening…" : "Open file & continue"}</button>
+              <Button variant="ghost" disabled={busy} onClick={() => setStep(0)}>Back</Button>
+              <Button disabled={busy} onClick={() => void doOpenFile()}>{busy ? "Opening…" : "Open file & continue"}</Button>
             </div>
           </div>
         </div>
@@ -235,7 +236,7 @@ export function GuidedFileWizard() {
               each level’s approval auto-signs a green note.
             </p>
             <div style={{ display: "flex", gap: 8 }}>
-              <button className="btn primary" disabled={busy || !fileId} onClick={() => void doSubmit()}>{busy ? "Submitting…" : "Submit for approval"}</button>
+              <Button disabled={busy || !fileId} onClick={() => void doSubmit()}>{busy ? "Submitting…" : "Submit for approval"}</Button>
               <a className="btn ghost" href="/estab/approvals">Open approvals queue</a>
             </div>
           </div>
@@ -260,8 +261,8 @@ export function GuidedFileWizard() {
             </div>
             <label style={labelStyle}><span>Draft body</span><textarea rows={5} value={draftBody} onChange={(e) => setDraftBody(e.target.value)} /></label>
             <div style={{ display: "flex", gap: 8 }}>
-              <button className="btn ghost" disabled={busy} onClick={() => void doDraft(true)}>Skip</button>
-              <button className="btn primary" disabled={busy} onClick={() => void doDraft(false)}>{busy ? "Drafting…" : "Create draft & finish"}</button>
+              <Button variant="ghost" disabled={busy} onClick={() => void doDraft(true)}>Skip</Button>
+              <Button disabled={busy} onClick={() => void doDraft(false)}>{busy ? "Drafting…" : "Create draft & finish"}</Button>
             </div>
           </div>
         </div>
@@ -278,7 +279,7 @@ export function GuidedFileWizard() {
               <a className="btn ghost" href="/estab/approvals">Approvals queue</a>
               <a className="btn ghost" href="/estab/dfa">DFA workbench</a>
               <a className="btn ghost" href="/estab/inbox">My desk</a>
-              <button className="btn ghost" onClick={() => window.location.reload()}>Start another</button>
+              <Button variant="ghost" onClick={() => window.location.reload()}>Start another</Button>
             </div>
           </div>
         </div>

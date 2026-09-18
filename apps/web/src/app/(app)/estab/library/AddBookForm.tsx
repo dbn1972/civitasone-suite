@@ -2,7 +2,7 @@
 
 import { useId, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Card } from "@/app/_components/ds";
+import { Button, Card } from "@/app/_components/ds";
 import { browserJson } from "@/lib/api/browserClient";
 
 type AcceptedResponse = { id?: string; status?: string; correlationId?: string };
@@ -202,9 +202,9 @@ export function AddBookForm() {
         </div>
 
         <div style={{ marginTop: 14 }}>
-          <button type="submit" className="btn primary" style={{ minHeight: 44 }} disabled={busy}>
+          <Button type="submit" style={{ minHeight: 44 }} disabled={busy}>
             {busy ? "Adding…" : "Add Book"}
-          </button>
+          </Button>
         </div>
 
         {message && (

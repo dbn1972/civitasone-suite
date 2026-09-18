@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { PageHeader, Term } from "@/app/_components/ds";
+import { Button, PageHeader, Term } from "@/app/_components/ds";
 import { useFormError } from "@/lib/useFormError";
 
 const CLASS_MAP: Record<string, string> = {
@@ -282,9 +282,9 @@ export default function NewFilePage() {
               gap: 8,
             }}
           >
-            <button type="submit" className="btn primary" disabled={submitting}>
+            <Button type="submit" disabled={submitting}>
               {submitting ? "Creating…" : "Create File"}
-            </button>
+            </Button>
             <a href="/estab/list" className="btn ghost">
               Cancel
             </a>

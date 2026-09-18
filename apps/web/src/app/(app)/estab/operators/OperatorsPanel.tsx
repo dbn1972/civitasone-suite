@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { DataTable, StatusPill, ActionButton, ErrorState } from "../../../_components/ds";
+import { Button, DataTable, StatusPill, ActionButton, ErrorState } from "../../../_components/ds";
 import { toHumanError } from "@/lib/messages";
 import { useFormError } from "@/lib/useFormError";
 
@@ -181,9 +181,9 @@ export function OperatorsPanel() {
           </label>
         </div>
         <div className="pad" style={{ paddingTop: 0 }}>
-          <button className="btn primary" disabled={saving || !form.employeeId || !form.division} onClick={() => void enrol()}>
+          <Button disabled={saving || !form.employeeId || !form.division} onClick={() => void enrol()}>
             {saving ? "Enrolling…" : "Enrol operator"}
-          </button>
+          </Button>
         </div>
       </div>
 

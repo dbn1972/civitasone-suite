@@ -11,7 +11,7 @@
  */
 import { useId, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Card, ConfirmDialog } from "@/app/_components/ds";
+import { Button, Card, ConfirmDialog } from "@/app/_components/ds";
 import { browserJson } from "@/lib/api/browserClient";
 import { rupeesToMinorString } from "@/lib/money";
 import { formatMoney } from "@/lib/formatters";
@@ -216,9 +216,9 @@ export function AssetFinancialActions({ assetId, assetCode, bookValueMinor }: Pr
             You will be asked for a mandatory authorisation reason before this posts to the GL.
           </p>
           <div style={{ marginTop: 12 }}>
-            <button type="submit" className="btn danger" style={{ minHeight: 44 }} disabled={impBusy}>
+            <Button type="submit" variant="danger" style={{ minHeight: 44 }} disabled={impBusy}>
               Record impairment
-            </button>
+            </Button>
           </div>
           {impMessage && (
             <p role="status" className="pill good" style={{ width: "fit-content", marginTop: 10 }}>{impMessage}</p>
@@ -278,9 +278,9 @@ export function AssetFinancialActions({ assetId, assetCode, bookValueMinor }: Pr
             You will be asked for a mandatory authorisation reason before this posts to the GL.
           </p>
           <div style={{ marginTop: 12 }}>
-            <button type="submit" className="btn primary" style={{ minHeight: 44 }} disabled={revBusy}>
+            <Button type="submit" style={{ minHeight: 44 }} disabled={revBusy}>
               Record revaluation
-            </button>
+            </Button>
           </div>
           {revMessage && (
             <p role="status" className="pill good" style={{ width: "fit-content", marginTop: 10 }}>{revMessage}</p>

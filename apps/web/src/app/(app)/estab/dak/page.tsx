@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
-import { PageHeader, StatusPill, DataTable, EmptyState, ErrorState } from "../../../_components/ds";
+import { Button, PageHeader, StatusPill, DataTable, EmptyState, ErrorState } from "../../../_components/ds";
 import { formatIndianDate } from "@/lib/formatters";
 import { toHumanError } from "@/lib/messages";
 
@@ -146,7 +146,7 @@ export default function DakRegistryPage() {
               <input id="dak-subject" required value={form.subject} onChange={(e) => setForm({ ...form, subject: e.target.value })} style={inputStyle} />
             </div>
           </div>
-          <button type="submit" className="btn primary" style={{ marginTop: 12 }}>Register DAK</button>
+          <Button type="submit" style={{ marginTop: 12 }}>Register DAK</Button>
         </form>
       </div>
 
@@ -186,9 +186,9 @@ export default function DakRegistryPage() {
                 sortable: false,
                 render: (r) =>
                   !r.fileId && r.status === "received" ? (
-                    <button type="button" className="btn ghost" style={{ fontSize: "0.75rem", minHeight: 44 }} onClick={() => void openFile(r.id)}>
+                    <Button type="button" variant="ghost" style={{ fontSize: "0.75rem", minHeight: 44 }} onClick={() => void openFile(r.id)}>
                       Open file
-                    </button>
+                    </Button>
                   ) : (
                     <>—</>
                   ),

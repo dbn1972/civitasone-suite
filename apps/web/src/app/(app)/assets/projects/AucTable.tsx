@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { DataTable, ConfirmDialog } from "@/app/_components/ds";
+import { Button, DataTable, ConfirmDialog } from "@/app/_components/ds";
 import { browserJson } from "@/lib/api/browserClient";
 import { formatMoney } from "@/lib/formatters";
 
@@ -68,9 +68,9 @@ export function AucTable({ rows }: { rows: AucRow[] }) {
       render: (row: DisplayRow) => {
         if (row.status === "under_construction") {
           return (
-            <button
+            <Button
               type="button"
-              className="btn ghost sm"
+              variant="ghost" size="sm"
               aria-label={`Capitalize project ${row.projectCode}`}
               onClick={() => {
                 setDialogError(undefined);
@@ -78,7 +78,7 @@ export function AucTable({ rows }: { rows: AucRow[] }) {
               }}
             >
               Capitalize
-            </button>
+            </Button>
           );
         }
         if (row.assetId) {

@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { DataTable, StatusPill, ConfirmDialog, useConfirmAction, ErrorState } from "../../../_components/ds";
+import { Button, DataTable, StatusPill, ConfirmDialog, useConfirmAction, ErrorState } from "../../../_components/ds";
 import { toHumanError } from "@/lib/messages";
 
 type Operator = { id: string; employeeId: string; division: string; deskRole: string; active: boolean };
@@ -134,9 +134,9 @@ export function HandoverPanel() {
           </label>
         </div>
         <div className="pad" style={{ paddingTop: 0 }}>
-          <button className="btn primary" disabled={saving || handoverConfirm.busy || !form.fromOfficerId || !form.toOfficerId} onClick={onHandoverClick}>
+          <Button disabled={saving || handoverConfirm.busy || !form.fromOfficerId || !form.toOfficerId} onClick={onHandoverClick}>
             {saving ? "Handing over…" : "Hand over charge"}
-          </button>
+          </Button>
         </div>
       </div>
 
