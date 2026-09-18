@@ -200,7 +200,7 @@ export function RoleFeaturesManager({
           <table className="data-table" role="table" aria-label="Role-feature matrix">
             <thead>
               <tr>
-                <th scope="col" style={{ position: "sticky", left: 0, background: "var(--panel)", zIndex: 1 }}>Feature</th>
+                <th scope="col" style={{ position: "sticky", insetInlineStart: 0, background: "var(--panel)", zIndex: 1 }}>Feature</th>
                 {roles.map((r) => (
                   <th scope="col" key={r.id} style={{ textAlign: "center", fontSize: 11 }}>{r.name}</th>
                 ))}
@@ -209,7 +209,7 @@ export function RoleFeaturesManager({
             <tbody>
               {FEATURE_KEYS.map((feature) => (
                 <tr key={feature}>
-                  <td style={{ position: "sticky", left: 0, background: "var(--panel)", fontFamily: "monospace", fontSize: 12 }}>{feature}</td>
+                  <td style={{ position: "sticky", insetInlineStart: 0, background: "var(--panel)", fontFamily: "monospace", fontSize: 12 }}>{feature}</td>
                   {roles.map((r) => {
                     const cellKey = `${r.key}:${feature}`;
                     return (

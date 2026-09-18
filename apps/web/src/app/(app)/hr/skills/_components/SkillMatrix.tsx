@@ -95,7 +95,7 @@ export function SkillMatrix({ records, onExportPdf }: SkillMatrixProps) {
             variant="ghost"
             size="sm"
             onClick={onExportPdf}
-            style={{ marginLeft: "auto" }}
+            style={{ marginInlineStart: "auto" }}
           >
             Export PDF
           </Button>
@@ -125,10 +125,10 @@ export function SkillMatrix({ records, onExportPdf }: SkillMatrixProps) {
           <table style={{ borderCollapse: "collapse", fontSize: 12, minWidth: 640, width: "100%" }}>
             <thead>
               <tr style={{ background: "#f8fafc" }}>
-                <th style={{ textAlign: "left", padding: "8px 10px", border: "1px solid #e2e8f0", minWidth: 150, fontWeight: 700, color: "#1e293b" }}>
+                <th style={{ textAlign: "start", padding: "8px 10px", border: "1px solid #e2e8f0", minWidth: 150, fontWeight: 700, color: "#1e293b" }}>
                   Skill
                 </th>
-                <th style={{ textAlign: "left", padding: "8px 10px", border: "1px solid #e2e8f0", minWidth: 100, fontWeight: 700, color: "#1e293b" }}>
+                <th style={{ textAlign: "start", padding: "8px 10px", border: "1px solid #e2e8f0", minWidth: 100, fontWeight: 700, color: "#1e293b" }}>
                   Category
                 </th>
                 {COLS.map((level) => (

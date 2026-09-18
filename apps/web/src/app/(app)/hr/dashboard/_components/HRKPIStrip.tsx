@@ -130,7 +130,7 @@ export function HRKPIStrip({
         .trend-flat   { color: var(--muted, #64748b); }
         .trend-urgent { color: #dc2626; font-weight: 700; }
         .kpi-badge {
-          position: absolute; top: 10px; right: 10px;
+          position: absolute; top: 10px; inset-inline-end: 10px;
           background: #dc2626; color: #fff;
           font-size: 9px; font-weight: 800; border-radius: 9px;
           min-width: 18px; height: 18px;

@@ -363,7 +363,7 @@ export function MasterCreateForm({
                 >
                   {field.label}
                   {field.required && (
-                    <span style={{ color: "#e53e3e", marginLeft: 2 }}>*</span>
+                    <span style={{ color: "#e53e3e", marginInlineStart: 2 }}>*</span>
                   )}
                 </label>
                 <input

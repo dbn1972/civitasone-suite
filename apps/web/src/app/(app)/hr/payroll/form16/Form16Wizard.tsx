@@ -58,7 +58,7 @@ function TdsReconciliationTable({ fy }: { fy: string }) {
         <thead>
           <tr style={{ borderBottom: "2px solid var(--line2)" }}>
             {["Quarter", "Gross Salary", "TDS Deducted", "Challan Ref"].map((h) => (
-              <th key={h} style={{ padding: "8px 10px", textAlign: "left", fontWeight: 600, color: "var(--ink2)" }}>{h}</th>
+              <th key={h} style={{ padding: "8px 10px", textAlign: "start", fontWeight: 600, color: "var(--ink2)" }}>{h}</th>
             ))}
           </tr>
         </thead>
@@ -66,8 +66,8 @@ function TdsReconciliationTable({ fy }: { fy: string }) {
           {QUARTERS.map((q, i) => (
             <tr key={q} style={{ borderBottom: "1px solid var(--line2)" }}>
               <td style={{ padding: "8px 10px" }}>{q}</td>
-              <td style={{ padding: "8px 10px", textAlign: "right", color: "var(--ink2)" }}>—</td>
-              <td style={{ padding: "8px 10px", textAlign: "right", color: "var(--ink2)" }}>—</td>
+              <td style={{ padding: "8px 10px", textAlign: "end", color: "var(--ink2)" }}>—</td>
+              <td style={{ padding: "8px 10px", textAlign: "end", color: "var(--ink2)" }}>—</td>
               <td style={{ padding: "8px 10px", fontFamily: "monospace", fontSize: 12, color: "var(--ink2)" }}>
                 CHLN-FY{fy.replace("-", "")}-Q{i + 1}
               </td>
@@ -75,8 +75,8 @@ function TdsReconciliationTable({ fy }: { fy: string }) {
           ))}
           <tr style={{ borderTop: "2px solid var(--line2)", background: "var(--panel)" }}>
             <td style={{ padding: "8px 10px", fontWeight: 700 }}>Annual Total</td>
-            <td style={{ padding: "8px 10px", textAlign: "right", fontWeight: 700 }}>—</td>
-            <td style={{ padding: "8px 10px", textAlign: "right", fontWeight: 700 }}>—</td>
+            <td style={{ padding: "8px 10px", textAlign: "end", fontWeight: 700 }}>—</td>
+            <td style={{ padding: "8px 10px", textAlign: "end", fontWeight: 700 }}>—</td>
             <td style={{ padding: "8px 10px" }} />
           </tr>
         </tbody>
@@ -164,7 +164,7 @@ export function Form16Wizard({ defaultFy }: { defaultFy: string }) {
                     id={`f16-deduction-${d.section}`}
                     type="number"
                     className="input"
-                    style={{ width: 160, textAlign: "right" }}
+                    style={{ width: 160, textAlign: "end" }}
                     value={deductionVals[d.section] ?? ""}
                     onChange={(e) => setDeductionVals((prev) => ({ ...prev, [d.section]: e.target.value }))}
                     placeholder="0.00"

@@ -309,7 +309,7 @@ export function RolePermissionsMatrix({
                     <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12.5, minWidth: 580 }}>
                       <thead>
                         <tr style={{ background: "var(--line2, #f8fafc)", borderBottom: "1px solid var(--line)" }}>
-                          <th style={{ padding: "8px 14px", textAlign: "left", fontSize: 11.5, fontWeight: 650, color: "var(--ink2)" }}>Module</th>
+                          <th style={{ padding: "8px 14px", textAlign: "start", fontSize: 11.5, fontWeight: 650, color: "var(--ink2)" }}>Module</th>
                           {actions.map((a) => (
                             <th key={a} style={{ padding: "8px 10px", textAlign: "center", fontSize: 11, fontWeight: 650, color: "var(--ink2)", textTransform: "uppercase", letterSpacing: 0.4 }}>{a}</th>
                           ))}

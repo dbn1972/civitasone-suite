@@ -173,7 +173,7 @@ export function TravelClaimCard({
         <div>
           <p style={{ margin: 0, fontWeight: 700, fontSize: 15 }}>
             {employeeName}
-            <span style={{ fontWeight: 400, color: "var(--mut)", marginLeft: 8, fontSize: 13 }}>
+            <span style={{ fontWeight: 400, color: "var(--mut)", marginInlineStart: 8, fontSize: 13 }}>
               {employeeNo}
             </span>
           </p>

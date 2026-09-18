@@ -47,7 +47,7 @@ export function ContractorRow({ name, agency, department, designation, contractF
           <span
             role="img"
             aria-label={`Expires in ${days} days`}
-            style={{ marginLeft: 6, fontSize: 11, color: "var(--orange, #d97706)", fontWeight: 600 }}
+            style={{ marginInlineStart: 6, fontSize: 11, color: "var(--orange, #d97706)", fontWeight: 600 }}
           >
             ⚠ {days}d left
           </span>
@@ -56,7 +56,7 @@ export function ContractorRow({ name, agency, department, designation, contractF
           <span
             role="img"
             aria-label="Contract expired"
-            style={{ marginLeft: 6, fontSize: 11, color: "var(--red, #dc2626)", fontWeight: 600 }}
+            style={{ marginInlineStart: 6, fontSize: 11, color: "var(--red, #dc2626)", fontWeight: 600 }}
           >
             ✕ Expired
           </span>

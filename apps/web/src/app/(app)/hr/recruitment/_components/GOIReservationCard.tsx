@@ -31,7 +31,7 @@ export function GOIReservationCard({ totalVacancies, fill = {} }: GOIReservation
         <span className="flex items-center gap-2">
           <span aria-hidden="true" className="text-base">🏛️</span>
           {t("reservationStatus")}
-          <span className="text-xs font-normal text-slate-400 ml-0.5">{t("gfr2017")}</span>
+          <span className="text-xs font-normal text-slate-400 ms-0.5">{t("gfr2017")}</span>
         </span>
         <span
           aria-hidden="true"
@@ -62,10 +62,10 @@ export function GOIReservationCard({ totalVacancies, fill = {} }: GOIReservation
                     </span>
                     <span className="text-xs text-slate-500">
                       {pct}%
-                      <span className="ml-1 text-slate-400">·</span>
-                      <span className="ml-1">{t("postsCount", { count: posts })}</span>
+                      <span className="ms-1 text-slate-400">·</span>
+                      <span className="ms-1">{t("postsCount", { count: posts })}</span>
                       {fillPct > 0 && (
-                        <span className="ml-1 text-emerald-600 font-medium">
+                        <span className="ms-1 text-emerald-600 font-medium">
                           · {t("filledCount", { count: filledPosts })}
                         </span>
                       )}
@@ -75,13 +75,13 @@ export function GOIReservationCard({ totalVacancies, fill = {} }: GOIReservation
                   <div className="relative h-2 rounded-full bg-slate-100 overflow-hidden">
                     {/* Quota band */}
                     <div
-                      className="absolute left-0 top-0 h-full rounded-full opacity-25"
+                      className="absolute start-0 top-0 h-full rounded-full opacity-25"
                       style={{ width: `${pct}%`, background: color }}
                       aria-hidden="true"
                     />
                     {/* Filled portion */}
                     <div
-                      className="absolute left-0 top-0 h-full rounded-full transition-all duration-500"
+                      className="absolute start-0 top-0 h-full rounded-full transition-all duration-500"
                       style={{
                         width: `${Math.min(pct, (fillPct / 100) * pct)}%`,
                         background: color,

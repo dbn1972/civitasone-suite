@@ -193,7 +193,7 @@ export default async function HRDashboardPage() {
         .emp-view-all { font-size:11px;color:#2563eb;font-weight:600;text-decoration:none; }
         .emp-table-wrap { background:var(--surface,#fff);border-radius:8px;box-shadow:0 1px 3px rgba(15,34,64,.09); }
         .emp-table { width:100%;border-collapse:collapse;font-size:12px; }
-        .emp-table th { text-align:left;padding:9px 14px;font-size:10px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:#334155;border-bottom:1px solid var(--border,#e2e8f0);background:var(--slate-100,#f1f5f9);white-space:nowrap; }
+        .emp-table th { text-align:start;padding:9px 14px;font-size:10px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:#334155;border-bottom:1px solid var(--border,#e2e8f0);background:var(--slate-100,#f1f5f9);white-space:nowrap; }
         .emp-table td { padding:10px 14px;border-bottom:1px solid var(--border,#e2e8f0);vertical-align:middle; }
         .emp-table tr:last-child td { border-bottom:none; }
         .emp-name-cell { display:flex;align-items:center;gap:9px;text-decoration:none;color:inherit; }

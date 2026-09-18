@@ -90,7 +90,7 @@ function DeptNode({
           alignItems: "center",
           gap: 8,
           padding: "8px 12px",
-          paddingLeft: 12 + depth * 24,
+          paddingInlineStart: 12 + depth * 24,
           borderBottom: "1px solid var(--line,#f1f5f9)",
           borderRadius: 4,
         }}
@@ -181,13 +181,13 @@ function DeptNode({
                 style={{
                   fontSize: 10,
                   color: "var(--mut,#94a3b8)",
-                  marginLeft: 4,
+                  marginInlineStart: 4,
                 }}
               >
                 {t("subDeptCount", { count: node.children.length })}
               </span>
             )}
-            <Button variant="ghost" size="sm" onClick={() => onStartEdit(node)} style={{ marginLeft: 8 }}>
+            <Button variant="ghost" size="sm" onClick={() => onStartEdit(node)} style={{ marginInlineStart: 8 }}>
               {t("editBtn")}
             </Button>
             <Button variant="danger" size="sm" onClick={() => onDeleteTarget(node)}>

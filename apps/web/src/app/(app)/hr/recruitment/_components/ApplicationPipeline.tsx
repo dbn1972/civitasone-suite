@@ -50,7 +50,7 @@ export function ApplicationPipeline({
                 isActive
                   ? "bg-indigo-600 text-white"
                   : "hover:bg-slate-50 text-slate-700",
-                idx > 0 ? "border-l border-slate-200" : "",
+                idx > 0 ? "border-s border-slate-200" : "",
               ].filter(Boolean).join(" ")}
             >
               <span
@@ -73,7 +73,7 @@ export function ApplicationPipeline({
                 <span
                   aria-hidden="true"
                   className={[
-                    "absolute right-0 top-1/2 -translate-y-1/2 translate-x-[55%] z-10",
+                    "absolute end-0 top-1/2 -translate-y-1/2 translate-x-[55%] z-10",
                     "hidden sm:flex items-center justify-center",
                     "w-4 h-4 rounded-full border text-[9px] font-bold",
                     isActive

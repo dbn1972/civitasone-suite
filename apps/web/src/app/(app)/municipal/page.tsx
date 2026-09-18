@@ -76,7 +76,7 @@ export default function MunicipalHubPage() {
         ) : null}
 
         <Card title="Quick links" padding>
-          <ul style={{ margin: 0, paddingLeft: 18, fontSize: 13.5, lineHeight: 1.8 }}>
+          <ul style={{ margin: 0, paddingInlineStart: 18, fontSize: 13.5, lineHeight: 1.8 }}>
             {sec5.slice(0, 6).map((svc) => (
               <li key={svc.serviceKey}>
                 <Link href={officerApplicationsHref(svc.serviceKey)}>{svc.label}</Link>

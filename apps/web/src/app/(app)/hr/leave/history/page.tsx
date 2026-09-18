@@ -211,7 +211,7 @@ export default function LeaveHistoryPage() {
                         key={h}
                         style={{
                           padding: "10px 14px",
-                          textAlign: "left",
+                          textAlign: "start",
                           fontWeight: 600,
                           color: "var(--ink2)",
                           whiteSpace: "nowrap",
@@ -236,7 +236,7 @@ export default function LeaveHistoryPage() {
                         <td style={{ padding: "10px 14px", fontWeight: 500 }}>{leaveName}</td>
                         <td style={{ padding: "10px 14px", whiteSpace: "nowrap" }}>{fmt(app.fromDate)}</td>
                         <td style={{ padding: "10px 14px", whiteSpace: "nowrap" }}>{fmt(app.toDate)}</td>
-                        <td style={{ padding: "10px 14px", textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{days}</td>
+                        <td style={{ padding: "10px 14px", textAlign: "end", fontVariantNumeric: "tabular-nums" }}>{days}</td>
                         <td style={{ padding: "10px 14px", maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                           {app.reason ?? "—"}
                         </td>

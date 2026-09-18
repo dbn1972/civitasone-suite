@@ -49,7 +49,7 @@ export function RouteProgress() {
   return (
     <div
       aria-hidden="true"
-      style={{ position: "fixed", top: 0, left: 0, width: "100%", zIndex: 9999, pointerEvents: "none" }}
+      style={{ position: "fixed", top: 0, insetInlineStart: 0, width: "100%", zIndex: 9999, pointerEvents: "none" }}
     >
       <div
         ref={barRef}

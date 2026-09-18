@@ -47,7 +47,7 @@ export default async function AnnualProcurementPlanPage() {
                   <th scope="col">Year</th>
                   <th scope="col">Title</th>
                   <th scope="col">Department</th>
-                  <th scope="col" style={{ textAlign: "right" }}>Total budget</th>
+                  <th scope="col" style={{ textAlign: "end" }}>Total budget</th>
                   <th scope="col">Status</th>
                 </tr>
               </thead>
@@ -62,7 +62,7 @@ export default async function AnnualProcurementPlanPage() {
                       </Link>
                     </td>
                     <td>{plan.department}</td>
-                    <td style={{ textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{fmtAmount(plan.totalEstimatedMinor)}</td>
+                    <td style={{ textAlign: "end", fontVariantNumeric: "tabular-nums" }}>{fmtAmount(plan.totalEstimatedMinor)}</td>
                     <td>
                       <span style={{ background: STATUS_COLOR[plan.status] ?? "var(--ink2)", color: "#fff", borderRadius: 3, padding: "2px 8px", fontSize: 12, textTransform: "capitalize" }}>
                         {plan.status}

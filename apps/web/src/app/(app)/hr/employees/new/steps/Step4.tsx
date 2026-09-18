@@ -63,7 +63,7 @@ function MaskedInput({
         aria-describedby={errorId}
         style={{
           ...(hasError ? inputErrorStyle : inputStyle),
-          paddingRight: 44,
+          paddingInlineEnd: 44,
         }}
       />
       <button
@@ -73,7 +73,7 @@ function MaskedInput({
         onClick={() => setReveal((r) => !r)}
         style={{
           position: "absolute",
-          right: 10,
+          insetInlineEnd: 10,
           top: "50%",
           transform: "translateY(-50%)",
           background: "none",
@@ -149,7 +149,7 @@ export function Step4({ data, errors, onChange, onBlur }: Props) {
         <div style={fieldWrap}>
           <label htmlFor="w-pan" style={labelStyle}>
             {t("panLabel")}
-            <span style={{ fontWeight: 400, color: "#64748b", marginLeft: 6, fontSize: 11 }}>
+            <span style={{ fontWeight: 400, color: "#64748b", marginInlineStart: 6, fontSize: 11 }}>
               {t("storedEncrypted")}
             </span>
           </label>
@@ -178,7 +178,7 @@ export function Step4({ data, errors, onChange, onBlur }: Props) {
         <div style={fieldWrap}>
           <label htmlFor="w-aadhaar" style={labelStyle}>
             {t("aadhaarRefLabel")}
-            <span style={{ fontWeight: 400, color: "#64748b", marginLeft: 6, fontSize: 11 }}>
+            <span style={{ fontWeight: 400, color: "#64748b", marginInlineStart: 6, fontSize: 11 }}>
               {t("aadhaarHint")}
             </span>
           </label>
@@ -199,7 +199,7 @@ export function Step4({ data, errors, onChange, onBlur }: Props) {
         <div style={fieldWrap}>
           <label htmlFor="w-bank" style={labelStyle}>
             {t("bankAccountNoLabel")}
-            <span style={{ fontWeight: 400, color: "#64748b", marginLeft: 6, fontSize: 11 }}>
+            <span style={{ fontWeight: 400, color: "#64748b", marginInlineStart: 6, fontSize: 11 }}>
               {t("storedEncrypted")}
             </span>
           </label>

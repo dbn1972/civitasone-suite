@@ -103,7 +103,7 @@ export function AmendGrnForm({ grnId, items }: {
                     aria-required="true"
                     value={l.receivedQty}
                     onChange={(e) => updateLine(idx, { receivedQty: Number(e.target.value) })}
-                    style={{ minHeight: 40, width: 100, textAlign: "right" }}
+                    style={{ minHeight: 40, width: 100, textAlign: "end" }}
                   />
                 </td>
                 <td className="num">
@@ -115,7 +115,7 @@ export function AmendGrnForm({ grnId, items }: {
                     aria-required="true"
                     value={l.acceptedQty}
                     onChange={(e) => updateLine(idx, { acceptedQty: Number(e.target.value) })}
-                    style={{ minHeight: 40, width: 100, textAlign: "right" }}
+                    style={{ minHeight: 40, width: 100, textAlign: "end" }}
                   />
                 </td>
               </tr>

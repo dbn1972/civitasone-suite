@@ -114,7 +114,7 @@ export function GoalTrackerCard({
             </span>
             <span style={{
               fontSize: 11, fontWeight: 500, background: "#f1f5f9", color: "#475569",
-              borderRadius: 4, padding: "1px 5px", marginLeft: 2,
+              borderRadius: 4, padding: "1px 5px", marginInlineStart: 2,
             }}>{category}</span>
           </div>
 

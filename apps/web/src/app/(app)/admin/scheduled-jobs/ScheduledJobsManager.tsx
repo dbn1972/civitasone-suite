@@ -319,7 +319,7 @@ export function ScheduledJobsManager({ initialJobs, source }: { initialJobs: Adm
 
       {historyJobId && (
         <div className="modal-overlay" role="dialog" aria-modal="true" aria-label="Execution History">
-          <div style={{ position: "fixed", right: 0, top: 0, bottom: 0, width: 480, background: "#fff", boxShadow: "-4px 0 12px rgba(0,0,0,0.1)", padding: 24, overflowY: "auto" }}>
+          <div style={{ position: "fixed", insetInlineEnd: 0, top: 0, bottom: 0, width: 480, background: "#fff", boxShadow: "-4px 0 12px rgba(0,0,0,0.1)", padding: 24, overflowY: "auto" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
               <h3>Execution History</h3>
               <Button variant="ghost" onClick={() => setHistoryJobId(null)} aria-label="Close history panel">✕</Button>

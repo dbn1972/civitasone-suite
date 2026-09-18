@@ -71,7 +71,7 @@ export function HRHubNavigation({ categories }: { categories: Category[] }) {
       <div style={{ position: "relative" }}>
         <span
           aria-hidden="true"
-          style={{ position: "absolute", left: 14, top: "50%", transform: "translateY(-50%)", fontSize: 16 }}
+          style={{ position: "absolute", insetInlineStart: 14, top: "50%", transform: "translateY(-50%)", fontSize: 16 }}
         >
           🔍
         </span>
@@ -98,7 +98,7 @@ export function HRHubNavigation({ categories }: { categories: Category[] }) {
             aria-label="Clear search"
             style={{
               position: "absolute",
-              right: 12,
+              insetInlineEnd: 12,
               top: "50%",
               transform: "translateY(-50%)",
               background: "none",
@@ -186,7 +186,7 @@ export function HRHubNavigation({ categories }: { categories: Category[] }) {
                     fontSize: 14,
                     fontWeight: 600,
                     color: "var(--color-text)",
-                    textAlign: "left",
+                    textAlign: "start",
                   }}
                 >
                   <span aria-hidden="true">{cat.icon}</span>

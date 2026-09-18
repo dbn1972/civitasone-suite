@@ -172,7 +172,7 @@ export function PayGroupCard({
         </span>
         <span
           className={`pill ${isActive ? "good" : "mut"}`}
-          style={{ marginLeft: "auto" }}
+          style={{ marginInlineStart: "auto" }}
         >
           {status}
         </span>

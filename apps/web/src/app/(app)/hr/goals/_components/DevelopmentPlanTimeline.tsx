@@ -80,7 +80,7 @@ export function DevelopmentPlanTimeline({ activities }: DevelopmentPlanTimelineP
       <div
         style={{
           position: "absolute",
-          left: 15,
+          insetInlineStart: 15,
           top: 0,
           bottom: 0,
           width: 2,
@@ -111,7 +111,7 @@ export function DevelopmentPlanTimeline({ activities }: DevelopmentPlanTimelineP
           </div>
 
           {/* Activities in this quarter */}
-          <div style={{ paddingLeft: 52, display: "flex", flexDirection: "column", gap: 8 }}>
+          <div style={{ paddingInlineStart: 52, display: "flex", flexDirection: "column", gap: 8 }}>
             {acts.map((act) => {
               const ss = STATUS_STYLE[act.status] ?? STATUS_STYLE.planned;
               const isPast = new Date(act.plannedDate) < now && act.status === "planned";
@@ -121,7 +121,7 @@ export function DevelopmentPlanTimeline({ activities }: DevelopmentPlanTimelineP
                   style={{
                     background: "#fff",
                     border: `1px solid ${isPast ? "#fca5a5" : "#e2e8f0"}`,
-                    borderLeft: `3px solid ${PRIORITY_COLOR[act.priority]}`,
+                    borderInlineStart: `3px solid ${PRIORITY_COLOR[act.priority]}`,
                     borderRadius: 8,
                     padding: "10px 12px",
                     position: "relative",
@@ -131,7 +131,7 @@ export function DevelopmentPlanTimeline({ activities }: DevelopmentPlanTimelineP
                   <div
                     style={{
                       position: "absolute",
-                      left: -38,
+                      insetInlineStart: -38,
                       top: "50%",
                       transform: "translateY(-50%)",
                       width: 10,

@@ -35,7 +35,7 @@ const VALUE: React.CSSProperties = {
   fontSize: 13,
   color: "#0f172a",
   fontWeight: 500,
-  textAlign: "right",
+  textAlign: "end",
   wordBreak: "break-all",
 };
 

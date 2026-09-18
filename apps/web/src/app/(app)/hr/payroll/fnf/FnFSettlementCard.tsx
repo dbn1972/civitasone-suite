@@ -104,14 +104,14 @@ function FnFCard({ row, onAction }: { row: FnFCardRow; onAction: (row: FnFCardRo
               {components.map((c) => (
                 <tr key={c.label} style={{ borderBottom: "1px solid var(--line2)" }}>
                   <td style={{ padding: "7px 0", color: c.amountMinor < 0 ? "var(--bad, #c0392b)" : "var(--ink2)" }}>{c.label}</td>
-                  <td style={{ padding: "7px 0", textAlign: "right", fontWeight: 600, color: c.amountMinor < 0 ? "var(--bad, #c0392b)" : "inherit" }}>
+                  <td style={{ padding: "7px 0", textAlign: "end", fontWeight: 600, color: c.amountMinor < 0 ? "var(--bad, #c0392b)" : "inherit" }}>
                     {c.amountMinor < 0 ? "−" : ""}{rupees(Math.abs(c.amountMinor))}
                   </td>
                 </tr>
               ))}
               <tr style={{ borderTop: "2px solid var(--line2)" }}>
                 <td style={{ padding: "8px 0", fontWeight: 700 }}>Net Payable</td>
-                <td style={{ padding: "8px 0", textAlign: "right", fontWeight: 700 }}>{rupees(Number(row.netPayableMinor))}</td>
+                <td style={{ padding: "8px 0", textAlign: "end", fontWeight: 700 }}>{rupees(Number(row.netPayableMinor))}</td>
               </tr>
             </tbody>
           </table>

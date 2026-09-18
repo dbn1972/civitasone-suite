@@ -104,7 +104,7 @@ export function DeputationCard({ deputation }: Props) {
         {/* Deputation-to highlighted block */}
         <div style={{
           padding: "10px 14px", background: "var(--panel, #f8fafc)",
-          borderRadius: 8, marginBottom: 12, borderLeft: "3px solid #2563eb",
+          borderRadius: 8, marginBottom: 12, borderInlineStart: "3px solid #2563eb",
         }}>
           <p style={{ margin: 0, fontSize: "0.75rem", color: "var(--ink3)", textTransform: "uppercase", letterSpacing: "0.04em" }}>
             Deputed to
@@ -126,7 +126,7 @@ export function DeputationCard({ deputation }: Props) {
                 {formatIndianDate(deputation.toDate)}
                 {daysLeft !== null && (
                   <span style={{
-                    marginLeft: 8, fontSize: "0.75rem", fontWeight: 600,
+                    marginInlineStart: 8, fontSize: "0.75rem", fontWeight: 600,
                     color: daysLeft < 30 ? "#dc2626" : daysLeft < 90 ? "#d97706" : "#16a34a",
                   }}>
                     ({daysLeft > 0 ? `${daysLeft}d left` : "Overdue"})

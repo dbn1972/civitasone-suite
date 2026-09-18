@@ -111,7 +111,7 @@ export function OnboardingChecklist({ steps, onComplete }: OnboardingChecklistPr
                   aria-hidden
                   style={{
                     position: "absolute",
-                    left: 15,
+                    insetInlineStart: 15,
                     top: 30,
                     width: 2,
                     height: "100%",
