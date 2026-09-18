@@ -10,6 +10,7 @@ import {
   type EligibilityOp,
   type EligibilityRuleUi,
 } from "./eligibilityTypes";
+import { Button } from "../Button";
 
 export interface EligibilityConditionBuilderProps {
   rules: EligibilityRuleUi[];
@@ -84,15 +85,15 @@ export function EligibilityConditionBuilder({
                 padding: 12,
                 border:
                   highlight === "fail"
-                    ? "2px solid var(--bad-fg)"
+                    ? "2px solid var(--bad)"
                     : highlight === "pass"
-                      ? "1px solid var(--good-fg)"
+                      ? "1px solid var(--good)"
                       : "1px solid var(--line)",
                 background:
                   highlight === "fail"
-                    ? "var(--bad-bg)"
+                    ? "var(--badbg)"
                     : highlight === "pass"
-                      ? "var(--good-bg)"
+                      ? "var(--goodbg)"
                       : "transparent",
                 borderRadius: "var(--r-sm)",
                 fontSize: 13,
@@ -105,7 +106,7 @@ export function EligibilityConditionBuilder({
                     style={{
                       fontSize: 11,
                       fontWeight: 600,
-                      color: highlight === "fail" ? "var(--bad-fg)" : "var(--good-fg)",
+                      color: highlight === "fail" ? "var(--bad)" : "var(--good)",
                     }}
                   >
                     {highlight === "fail" ? "Fails sample" : "Passes sample"}
@@ -167,12 +168,12 @@ export function EligibilityConditionBuilder({
                 placeholder="Message shown to applicant or officer"
                 aria-label="Rule message"
               />
-              <button type="button" className="btn ghost" onClick={() => removeRow(idx)}>Remove condition</button>
+              <Button type="button" variant="ghost" onClick={() => removeRow(idx)}>Remove condition</Button>
             </div>
           );
         })
       )}
-      <button type="button" className="btn ghost" onClick={addRow}>Add condition</button>
+      <Button type="button" variant="ghost" onClick={addRow}>Add condition</Button>
     </div>
   );
 }

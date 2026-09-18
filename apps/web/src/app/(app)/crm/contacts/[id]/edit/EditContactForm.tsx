@@ -6,6 +6,7 @@ import { rupeesToMinorString } from "@/lib/money";
 import { saveClassification, LEAD_STATUSES, type ClassificationPatch, type Temperature, type Priority } from "@/lib/crm/leadQualification";
 import { ClassificationFields, type ClassificationFormValue } from "../../../../../_components/crm/ClassificationFields";
 import { browserFetch, errorMessageFromResponse } from "@/lib/api/browserClient";
+import { Button } from "@/app/_components/ds";
 
 type Initial = {
   name: string;
@@ -193,7 +194,7 @@ export default function EditContactForm({ params, initial }: Props) {
             Marketing consent (DPDP)
           </label>
           <div>
-            <button type="submit" className="btn primary" disabled={busy} style={{ minHeight: 44 }}>{busy ? "Saving…" : "Save changes"}</button>
+            <Button type="submit" disabled={busy} loading={busy} style={{ minHeight: 44 }}>{busy ? "Saving…" : "Save changes"}</Button>
           </div>
         </form>
       </div>

@@ -1,7 +1,7 @@
 "use client";
 
 import { useId, useRef, useState } from "react";
-import { Card } from "@/app/_components/ds";
+import { Button, Card } from "@/app/_components/ds";
 import { browserJson } from "@/lib/api/browserClient";
 
 type AcceptedResponse = { data?: { messageId?: string } };
@@ -83,9 +83,9 @@ export function FetchBillForm() {
           </div>
 
           <div>
-            <button type="submit" className="btn primary" style={{ minHeight: 44 }} disabled={busy} aria-busy={busy}>
+            <Button type="submit" style={{ minHeight: 44 }} disabled={busy} loading={busy}>
               {busy ? "Submitting…" : "Fetch Bill"}
-            </button>
+            </Button>
           </div>
 
           {message && (

@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
-import { DataTable, PageHeader } from "../../../../_components/ds";
+import { Button, DataTable, PageHeader } from "../../../../_components/ds";
 import {
   browserFetch,
   errorMessageFromResponse,
@@ -160,16 +160,16 @@ export default function ImportContactsPage() {
               : ""}
             .
           </p>
-          <button
+          <Button
             type="submit"
-            className="btn primary"
             disabled={busy || preview.length === 0} // ux-001-ok: same client-parsed CSV preview as above -- no loader/source involved
+            loading={busy}
             style={{ marginTop: 12, minHeight: 44 }}
           >
             {busy
               ? "Importing…"
               : `Import ${preview.length} contact${preview.length === 1 ? "" : "s"}`}
-          </button>
+          </Button>
         </form>
       </div>
       {preview.length > 0 ? (

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, type ReactNode } from "react";
+import { Button } from "../Button";
 import { Segmented } from "../Segmented";
 
 export interface SplitPreviewProps {
@@ -33,7 +34,7 @@ export function SplitPreview({
   if (!open) {
     return (
       <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 8 }}>
-        <button type="button" className="btn ghost" onClick={onToggle}>Preview</button>
+        <Button type="button" variant="ghost" onClick={onToggle}>Preview</Button>
       </div>
     );
   }
@@ -67,7 +68,7 @@ export function SplitPreview({
             value={device === "mobile" ? "360px" : "Desktop"}
             onChange={(v) => setDevice(v === "360px" ? "mobile" : "desktop")}
           />
-          <button type="button" className="btn ghost" onClick={onToggle}>Close</button>
+          <Button type="button" variant="ghost" onClick={onToggle}>Close</Button>
         </div>
       </div>
       <div

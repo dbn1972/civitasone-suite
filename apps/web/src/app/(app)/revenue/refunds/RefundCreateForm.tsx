@@ -2,7 +2,7 @@
 
 import { useId, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Card, ConfirmDialog, EmptyState } from "@/app/_components/ds";
+import { Button, Card, ConfirmDialog, EmptyState } from "@/app/_components/ds";
 import { browserJson } from "@/lib/api/browserClient";
 import { formatMoney } from "@/lib/formatters";
 import type { ReceiptRow } from "./page";
@@ -160,9 +160,9 @@ export function RefundCreateForm({ assesseeId, receipts }: { assesseeId: string;
           </div>
 
           <div>
-            <button type="submit" className="btn primary" style={{ minHeight: 44 }} disabled={busy}>
+            <Button type="submit" style={{ minHeight: 44 }} disabled={busy} loading={busy}>
               Raise Refund
-            </button>
+            </Button>
           </div>
 
           {message && (

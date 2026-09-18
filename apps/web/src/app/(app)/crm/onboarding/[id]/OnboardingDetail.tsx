@@ -19,7 +19,7 @@
  */
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
-import { ConfirmDialog, EmptyState } from "../../../../_components/ds";
+import { Button, ConfirmDialog, EmptyState } from "../../../../_components/ds";
 import {
   advanceStage,
   recordKyc,
@@ -303,9 +303,9 @@ export function OnboardingDetail({ id }: { id: string }) {
                 </select>
               </div>
               <div>
-                <button type="button" className="btn primary" onClick={beginKyc} style={{ minHeight: 44 }}>
+                <Button onClick={beginKyc} style={{ minHeight: 44 }}>
                   Record KYC outcome
-                </button>
+                </Button>
               </div>
             </>
           )}
@@ -369,9 +369,9 @@ export function OnboardingDetail({ id }: { id: string }) {
                 ) : null}
               </div>
               <div>
-                <button type="button" className="btn primary" onClick={beginStage} style={{ minHeight: 44 }}>
+                <Button onClick={beginStage} style={{ minHeight: 44 }}>
                   Apply stage change
-                </button>
+                </Button>
               </div>
             </>
           )}

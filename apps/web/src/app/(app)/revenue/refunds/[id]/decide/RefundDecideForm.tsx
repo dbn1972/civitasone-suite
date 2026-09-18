@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { ConfirmDialog } from "@/app/_components/ds";
+import { Button, ConfirmDialog } from "@/app/_components/ds";
 import { browserJson } from "@/lib/api/browserClient";
 import { formatMoney } from "@/lib/formatters";
 import type { RefundRecord } from "./page";
@@ -67,26 +67,25 @@ export function RefundDecideForm({ refundId, refund }: { refundId: string; refun
       )}
 
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-        <button
+        <Button
           type="button"
-          className="btn primary"
           style={{ minHeight: 44, minWidth: 120 }}
           aria-label={`Approve refund ${shortId}`}
           disabled={!canDecide}
           onClick={() => startDecide(true)}
         >
           Approve
-        </button>
-        <button
+        </Button>
+        <Button
           type="button"
-          className="btn danger"
+          variant="danger"
           style={{ minHeight: 44, minWidth: 120 }}
           aria-label={`Reject refund ${shortId}`}
           disabled={!canDecide}
           onClick={() => startDecide(false)}
         >
           Reject
-        </button>
+        </Button>
       </div>
 
       {message && (

@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { ConfirmDialog } from "@/app/_components/ds";
+import { Button, ConfirmDialog } from "@/app/_components/ds";
 import { browserJson } from "@/lib/api/browserClient";
 import { formatMoney } from "@/lib/formatters";
 import type { WriteOffRecord } from "./page";
@@ -73,26 +73,25 @@ export function WriteOffDecideForm({
       )}
 
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-        <button
+        <Button
           type="button"
-          className="btn primary"
           style={{ minHeight: 44, minWidth: 120 }}
           aria-label={`Approve write-off ${shortId}`}
           disabled={!canDecide}
           onClick={() => startDecide(true)}
         >
           Approve
-        </button>
-        <button
+        </Button>
+        <Button
           type="button"
-          className="btn danger"
+          variant="danger"
           style={{ minHeight: 44, minWidth: 120 }}
           aria-label={`Reject write-off ${shortId}`}
           disabled={!canDecide}
           onClick={() => startDecide(false)}
         >
           Reject
-        </button>
+        </Button>
       </div>
 
       {message && (

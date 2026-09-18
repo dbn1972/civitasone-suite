@@ -8,6 +8,7 @@ import {
   type EligibilityOp,
 } from "./eligibilityTypes";
 import type { ExemptionKindUi, FeeExemptionUi } from "./feeTypes";
+import { Button } from "../Button";
 
 export interface FeeExemptionBuilderProps {
   exemptions: FeeExemptionUi[];
@@ -146,14 +147,14 @@ export function FeeExemptionBuilder({ exemptions, formFields, onChange }: FeeExe
                 placeholder="Label shown on receipt (optional)"
                 aria-label="Exemption label"
               />
-              <button type="button" className="btn ghost sm" onClick={() => removeRow(idx)}>Remove</button>
+              <Button type="button" variant="ghost" size="sm" onClick={() => removeRow(idx)}>Remove</Button>
             </div>
           );
         })
       )}
-      <button type="button" className="btn ghost" onClick={addRow} disabled={attributes.length === 0}>
+      <Button type="button" variant="ghost" onClick={addRow} disabled={attributes.length === 0}>
         Add exemption
-      </button>
+      </Button>
     </div>
   );
 }

@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useRef, useState } from "react";
+import { Button } from "../Button";
 import { MergeFieldPicker, renderMergePills, type MergeField } from "./MergeFieldPicker";
 import type { OutputType, TemplateOrientation } from "./issuanceTypes";
 
@@ -78,15 +79,15 @@ export function TemplateCanvas({
         {onOrientationChange ? (
           <div role="group" aria-label="Page orientation" style={{ display: "flex", gap: 4 }}>
             {(["portrait", "landscape"] as const).map((o) => (
-              <button
+              <Button
                 key={o}
                 type="button"
-                className={orientation === o ? "btn primary" : "btn ghost"}
+                variant={orientation === o ? "primary" : "ghost"}
                 onClick={() => onOrientationChange(o)}
                 style={{ fontSize: 12, padding: "2px 8px", textTransform: "capitalize" }}
               >
                 {o}
-              </button>
+              </Button>
             ))}
           </div>
         ) : null}
@@ -160,7 +161,7 @@ export function TemplateCanvas({
               background: "var(--panel)",
               border: "1px solid var(--line)",
               borderRadius: "var(--r-sm)",
-              boxShadow: "var(--shadow-sm)",
+              boxShadow: "var(--sh)",
               padding: 16,
               display: "flex",
               flexDirection: "column",

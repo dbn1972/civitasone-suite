@@ -1,7 +1,7 @@
 "use client";
 
 import { useId, useState } from "react";
-import { Card, DataTable, EmptyState } from "@/app/_components/ds";
+import { Button, Card, DataTable, EmptyState } from "@/app/_components/ds";
 import { browserJson } from "@/lib/api/browserClient";
 import { formatBps, formatMoney } from "@/lib/formatters";
 import type { ForecastResult, ForecastProjection } from "./types";
@@ -173,9 +173,9 @@ export function ForecastPanel({ defaultGranularity }: { defaultGranularity: stri
           </div>
 
           <div>
-            <button type="submit" className="btn primary" style={{ minHeight: 44 }} disabled={busy} aria-busy={busy}>
+            <Button type="submit" style={{ minHeight: 44 }} disabled={busy} loading={busy}>
               {busy ? "Running…" : "Run Forecast"}
-            </button>
+            </Button>
           </div>
 
           {serverError && (

@@ -10,6 +10,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useFormError } from "@/lib/useFormError";
+import { Button } from "@/app/_components/ds";
 
 const OVERLAY: React.CSSProperties = {
   position: "fixed",
@@ -105,9 +106,9 @@ export function FollowUpModal({ accountId, onClose }: Props) {
 
   return (
     <>
-      <button type="button" className="btn" onClick={openModal}>
+      <Button onClick={openModal}>
         Create Follow-up
-      </button>
+      </Button>
 
       {open && (
         <div
@@ -137,7 +138,7 @@ export function FollowUpModal({ accountId, onClose }: Props) {
                   style={{
                     margin: "4px 0 0",
                     fontSize: 13,
-                    color: "var(--ink-dim)",
+                    color: "var(--mut)",
                   }}
                 >
                   {"Account: "}
@@ -162,7 +163,7 @@ export function FollowUpModal({ accountId, onClose }: Props) {
                   border: "none",
                   cursor: "pointer",
                   fontSize: 22,
-                  color: "var(--ink-dim)",
+                  color: "var(--mut)",
                   lineHeight: 1,
                   padding: 4,
                 }}
@@ -301,21 +302,21 @@ export function FollowUpModal({ accountId, onClose }: Props) {
                   marginTop: 4,
                 }}
               >
-                <button
+                <Button
                   type="button"
-                  className="btn"
+                  variant="ghost"
                   onClick={() => setOpen(false)}
                   disabled={saving}
                 >
                   Cancel
-                </button>
-                <button
+                </Button>
+                <Button
                   type="submit"
-                  className="btn primary"
                   disabled={saving}
+                  loading={saving}
                 >
                   {saving ? "Creating..." : "Create Service Request"}
-                </button>
+                </Button>
               </div>
             </form>
           </div>

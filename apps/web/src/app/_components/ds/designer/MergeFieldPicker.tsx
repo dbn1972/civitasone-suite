@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { Button } from "../Button";
 
 export interface MergeField {
   key: string;
@@ -69,16 +70,16 @@ export function MergeFieldPicker({
 
   return (
     <div style={{ position: "relative", display: "inline-block" }}>
-      <button
+      <Button
         type="button"
-        className="btn ghost"
+        variant="ghost"
         disabled={disabled}
         aria-expanded={open}
         aria-haspopup="dialog"
         onClick={() => setOpen((v) => !v)}
       >
         Insert field
-      </button>
+      </Button>
       {open ? (
         <div
           role="dialog"
@@ -97,7 +98,7 @@ export function MergeFieldPicker({
             background: "var(--panel)",
             border: "1px solid var(--line)",
             borderRadius: "var(--r-sm)",
-            boxShadow: "var(--shadow-md)",
+            boxShadow: "var(--sh-md)",
             padding: 8,
           }}
         >
@@ -122,10 +123,10 @@ export function MergeFieldPicker({
                 <div style={{ fontSize: 11, color: "var(--mut)", marginBottom: 4 }}>{group}</div>
                 <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
                   {items.map((f) => (
-                    <button
+                    <Button
                       key={f.key}
                       type="button"
-                      className="btn ghost"
+                      variant="ghost"
                       title={`{{${f.key}}}`}
                       style={{ fontSize: 12, padding: "2px 8px" }}
                       onClick={() => {
@@ -135,7 +136,7 @@ export function MergeFieldPicker({
                       }}
                     >
                       {f.label}
-                    </button>
+                    </Button>
                   ))}
                 </div>
               </div>

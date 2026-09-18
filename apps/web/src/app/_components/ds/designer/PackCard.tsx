@@ -1,6 +1,7 @@
 "use client";
 
 import type { ServicePackDto } from "@/app/(app)/designer/_data/packLibraryApi";
+import { Button } from "../Button";
 
 const PATTERN_ICONS: Record<string, string> = {
   certificate: "📜",
@@ -63,9 +64,9 @@ export function PackCard({
             style={{
               fontSize: 11,
               fontWeight: 600,
-              color: "var(--warn-fg)",
-              background: "var(--warn-bg)",
-              border: "1px solid var(--warn-border)",
+              color: "var(--warn)",
+              background: "var(--warnbg)",
+              border: "1px solid var(--warnbd)",
               borderRadius: 999,
               padding: "2px 8px",
             }}
@@ -80,8 +81,8 @@ export function PackCard({
         {pack.hoaCode ? ` · HOA ${pack.hoaCode}` : ""}
       </p>
       <div style={{ display: "flex", gap: 8, marginTop: 4 }}>
-        <button type="button" className="btn ghost" onClick={() => onPreview(pack)}>Preview</button>
-        <button type="button" className="btn primary" onClick={() => onImport(pack)}>Import</button>
+        <Button type="button" variant="ghost" onClick={() => onPreview(pack)}>Preview</Button>
+        <Button type="button" onClick={() => onImport(pack)}>Import</Button>
       </div>
     </article>
   );
