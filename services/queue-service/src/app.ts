@@ -13,7 +13,8 @@ import { createQueue, resolveQueueDriver } from "./bus.js";
  * apply CQRS command writes. Domain services embed `@civitasone/queue` and run
  * their own workers/consumers. Therefore SCORE_LOCK F3/F4 are N/A → DONE for
  * this module (no route-layer domain mutations; no domain consumer to deploy
- * here). Deployability is the `queue` PM2 process + `/health` 200.
+ * here). Deployability is the `queue` PM2 process + `/ready` 200 (PM2
+ * `wait_ready` via `signalReady()` — see server.ts, PERF-015 tranche 5).
  */
 export async function buildApp(): Promise<FastifyInstance> {
   const app = Fastify({
@@ -25,6 +26,14 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(authPlugin);
 
   const bus = createQueue();
+  // PERF-015 tranche 5: tie the bus client's lifecycle to the Fastify app's
+  // own close lifecycle so registerGracefulShutdown()'s `await app.close()`
+  // (server.ts) also stops queue polling/connections, not just the HTTP
+  // listener — otherwise a "graceful" HTTP drain would leave SQS long-polls /
+  // a RabbitMQ channel / MemoryQueue backoff timers running past shutdown.
+  app.addHook("onClose", async () => {
+    await bus.stop();
+  });
   registerOpsRoutes(app, { service: "queue-service", checks: { queue: bus } });
 
   function requireOpsAuth(req: FastifyRequest): void {
