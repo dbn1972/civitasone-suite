@@ -9,6 +9,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
 import { X } from "lucide-react";
+import { Button } from "./ds";
 
 const STORAGE_PREFIX = "civitasone.feedback.";
 const HIDE_DURATION_MS = 24 * 60 * 60 * 1000; // 24h
@@ -187,28 +188,12 @@ export function FeedbackWidget() {
             }}
           />
           <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
-            <button
-              type="button"
-              onClick={handleSkip}
-              style={{ border: "none", background: "none", cursor: "pointer", fontSize: 13, color: "#6b7280" }}
-            >
+            <Button type="button" variant="ghost" size="sm" onClick={handleSkip}>
               Skip
-            </button>
-            <button
-              type="submit"
-              style={{
-                border: "none",
-                background: "#2563eb",
-                color: "#fff",
-                borderRadius: 6,
-                padding: "4px 12px",
-                fontSize: 13,
-                cursor: "pointer",
-                fontWeight: 500,
-              }}
-            >
+            </Button>
+            <Button type="submit" variant="primary" size="sm">
               Send
-            </button>
+            </Button>
           </div>
         </form>
       )}

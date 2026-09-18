@@ -8,6 +8,7 @@
  * convention (local field state, submit-time validation, inline error).
  */
 import { useEffect, useId, useState } from "react";
+import { Button } from "@/app/_components/ds";
 import type { ScoreApplicationRequest } from "@/lib/grants/application";
 
 interface ScoreApplicationDialogProps {
@@ -121,12 +122,12 @@ export function ScoreApplicationDialog({ open, busy = false, errorMessage, onCan
         </div>
 
         <div className="cd-actions">
-          <button type="button" className="btn ghost" onClick={onCancel} disabled={busy}>
+          <Button type="button" variant="ghost" onClick={onCancel} disabled={busy}>
             Cancel
-          </button>
-          <button type="button" className="btn primary" onClick={submit} disabled={busy} aria-busy={busy}>
+          </Button>
+          <Button type="button" variant="primary" onClick={submit} disabled={busy} aria-busy={busy}>
             {busy ? "Submitting…" : "Submit evaluation"}
-          </button>
+          </Button>
         </div>
       </div>
     </div>

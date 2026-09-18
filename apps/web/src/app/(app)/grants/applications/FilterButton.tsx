@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { Button } from "@/app/_components/ds";
 
 export function FilterButton() {
   const [open, setOpen] = useState(false);
@@ -10,16 +11,16 @@ export function FilterButton() {
 
   return (
     <div style={{ position: "relative", display: "inline-block" }}>
-      <button
+      <Button
         type="button"
-        className="btn ghost"
+        variant="ghost"
         style={{ minHeight: 44 }}
         aria-expanded={open}
         aria-haspopup="true"
         onClick={() => setOpen((v) => !v)}
       >
         Filter ▾
-      </button>
+      </Button>
       {open && (
         <div
           role="menu"
@@ -38,11 +39,11 @@ export function FilterButton() {
           }}
         >
           {["active", "completed", "pending"].map((status) => (
-            <button
+            <Button
               key={status}
               type="button"
               role="menuitem"
-              className="btn ghost"
+              variant="ghost"
               style={{ width: "100%", textAlign: "left", justifyContent: "flex-start", borderRadius: 0, minHeight: 40 }}
               onClick={() => {
                 const params = new URLSearchParams(searchParams.toString());
@@ -52,7 +53,7 @@ export function FilterButton() {
               }}
             >
               {status.charAt(0).toUpperCase() + status.slice(1)}
-            </button>
+            </Button>
           ))}
         </div>
       )}

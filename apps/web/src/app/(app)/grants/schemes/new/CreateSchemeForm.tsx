@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { Button } from "@/app/_components/ds";
 import { useFormError } from "@/lib/useFormError";
 
 type FormStatus = "idle" | "submitting" | "error";
@@ -217,15 +218,15 @@ export function CreateSchemeForm() {
       </div>
 
       <div style={{ marginTop: 16, display: "flex", gap: 8 }}>
-        <button
+        <Button
           type="submit"
-          className="btn primary"
+          variant="primary"
           style={{ minHeight: 44 }}
           disabled={status === "submitting"}
           aria-busy={status === "submitting"}
         >
           {status === "submitting" ? "Creating…" : "Create Scheme"}
-        </button>
+        </Button>
         <Link href="/grants/schemes" className="btn ghost" style={{ minHeight: 44 }}>
           Cancel
         </Link>
