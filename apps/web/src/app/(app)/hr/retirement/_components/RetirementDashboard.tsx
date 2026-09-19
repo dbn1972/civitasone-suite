@@ -94,12 +94,12 @@ export function RetirementDashboard({ rows, selectedId, onSelect }: Props) {
 
   if (upcoming.length === 0) {
     return (
-      <div style={{ padding: "40px 0", textAlign: "center", color: "var(--ink3)" }}>
+      <div style={{ padding: "40px 0", textAlign: "center", color: "var(--mut)" }}>
         <div style={{ fontSize: 40, marginBottom: 12 }}>👴</div>
         <p style={{ margin: 0, fontSize: "0.9375rem", fontWeight: 500 }}>
           No retirements in the next 6 months
         </p>
-        <p style={{ margin: "4px 0 0", fontSize: "0.8125rem", color: "var(--ink3)" }}>
+        <p style={{ margin: "4px 0 0", fontSize: "0.8125rem", color: "var(--mut)" }}>
           Employees retiring beyond 6 months appear in the full register below.
         </p>
       </div>
@@ -164,7 +164,7 @@ export function RetirementDashboard({ rows, selectedId, onSelect }: Props) {
               }}
             >
               <div>
-                <dt style={{ color: "var(--ink3)", marginBottom: 2 }}>Retirement Date</dt>
+                <dt style={{ color: "var(--mut)", marginBottom: 2 }}>Retirement Date</dt>
                 <dd
                   style={{
                     margin: 0, fontWeight: 600,
@@ -175,7 +175,7 @@ export function RetirementDashboard({ rows, selectedId, onSelect }: Props) {
                 </dd>
               </div>
               <div>
-                <dt style={{ color: "var(--ink3)", marginBottom: 2 }}>Days Remaining</dt>
+                <dt style={{ color: "var(--mut)", marginBottom: 2 }}>Days Remaining</dt>
                 <dd
                   style={{
                     margin: 0, fontWeight: 600,
@@ -186,13 +186,13 @@ export function RetirementDashboard({ rows, selectedId, onSelect }: Props) {
                 </dd>
               </div>
               <div>
-                <dt style={{ color: "var(--ink3)", marginBottom: 2 }}>Years of Service</dt>
+                <dt style={{ color: "var(--mut)", marginBottom: 2 }}>Years of Service</dt>
                 <dd style={{ margin: 0, fontWeight: 600 }}>
                   {yos > 0 ? `${yos} years` : "—"}
                 </dd>
               </div>
               <div>
-                <dt style={{ color: "var(--ink3)", marginBottom: 2 }}>Type</dt>
+                <dt style={{ color: "var(--mut)", marginBottom: 2 }}>Type</dt>
                 <dd style={{ margin: 0 }}>{row.separationType ?? "Superannuation"}</dd>
               </div>
             </dl>
@@ -208,7 +208,7 @@ export function RetirementDashboard({ rows, selectedId, onSelect }: Props) {
               <p
                 style={{
                   margin: "0 0 8px", fontSize: "0.6875rem",
-                  color: "var(--ink3)", textTransform: "uppercase", letterSpacing: "0.06em",
+                  color: "var(--mut)", textTransform: "uppercase", letterSpacing: "0.06em",
                 }}
               >
                 Pending Clearances

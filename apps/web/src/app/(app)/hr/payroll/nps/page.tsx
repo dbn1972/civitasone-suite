@@ -102,13 +102,13 @@ export default async function NpsStatementsPage() {
             padding: "18px 20px",
           }}
         >
-          <p style={{ margin: "0 0 4px", fontSize: 11, fontWeight: 600, color: "var(--fg2)", textTransform: "uppercase" }}>
+          <p style={{ margin: "0 0 4px", fontSize: 11, fontWeight: 600, color: "var(--mut)", textTransform: "uppercase" }}>
             Accumulated Corpus
           </p>
-          <p style={{ margin: "0 0 4px", fontSize: 26, fontWeight: 800, color: "var(--fg)" }}>
+          <p style={{ margin: "0 0 4px", fontSize: 26, fontWeight: 800, color: "var(--ink)" }}>
             {errored ? "—" : formatMoney(totalCorpus)}
           </p>
-          <p style={{ margin: 0, fontSize: 12, color: "var(--fg2)" }}>
+          <p style={{ margin: 0, fontSize: 12, color: "var(--mut)" }}>
             Employee + Employer contributions (all periods)
           </p>
         </div>
@@ -123,13 +123,13 @@ export default async function NpsStatementsPage() {
               padding: "18px 20px",
             }}
           >
-            <p style={{ margin: "0 0 4px", fontSize: 11, fontWeight: 600, color: "var(--fg2)", textTransform: "uppercase" }}>
+            <p style={{ margin: "0 0 4px", fontSize: 11, fontWeight: 600, color: "var(--mut)", textTransform: "uppercase" }}>
               Last Period Contribution
             </p>
-            <p style={{ margin: "0 0 2px", fontSize: 20, fontWeight: 700, color: "var(--fg)" }}>
+            <p style={{ margin: "0 0 2px", fontSize: 20, fontWeight: 700, color: "var(--ink)" }}>
               {formatMoney(sortedPeriods[sortedPeriods.length - 1][1])}
             </p>
-            <p style={{ margin: 0, fontSize: 12, color: "var(--fg2)" }}>
+            <p style={{ margin: 0, fontSize: 12, color: "var(--mut)" }}>
               Period: {sortedPeriods[sortedPeriods.length - 1][0]}
             </p>
           </div>

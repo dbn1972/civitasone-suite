@@ -62,7 +62,7 @@ export function StatutoryComplianceCard({
       >
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           <span style={{ fontSize: 20 }}>{icon}</span>
-          <span style={{ fontWeight: 700, fontSize: 15, color: "var(--fg)" }}>{label}</span>
+          <span style={{ fontWeight: 700, fontSize: 15, color: "var(--ink)" }}>{label}</span>
         </div>
         {/* NOTE: this card used to show a "Filed"/"Pending" compliance-status
             badge here, hardcoded per statutory type with no real filing data
@@ -97,7 +97,7 @@ export function StatutoryComplianceCard({
             padding: "8px 12px",
           }}
         >
-          <p style={{ margin: 0, fontSize: 10, color: "var(--fg2)", fontWeight: 500, textTransform: "uppercase" }}>
+          <p style={{ margin: 0, fontSize: 10, color: "var(--mut)", fontWeight: 500, textTransform: "uppercase" }}>
             {t("employee")}
           </p>
           <p
@@ -105,7 +105,7 @@ export function StatutoryComplianceCard({
               margin: "4px 0 0",
               fontSize: 22,
               fontWeight: 800,
-              color: "var(--fg)",
+              color: "var(--ink)",
               lineHeight: 1,
             }}
           >
@@ -119,7 +119,7 @@ export function StatutoryComplianceCard({
             padding: "8px 12px",
           }}
         >
-          <p style={{ margin: 0, fontSize: 10, color: "var(--fg2)", fontWeight: 500, textTransform: "uppercase" }}>
+          <p style={{ margin: 0, fontSize: 10, color: "var(--mut)", fontWeight: 500, textTransform: "uppercase" }}>
             {t("employer")}
           </p>
           <p
@@ -127,7 +127,7 @@ export function StatutoryComplianceCard({
               margin: "4px 0 0",
               fontSize: 22,
               fontWeight: 800,
-              color: "var(--fg)",
+              color: "var(--ink)",
               lineHeight: 1,
             }}
           >
@@ -143,18 +143,18 @@ export function StatutoryComplianceCard({
           flexDirection: "column",
           gap: 4,
           fontSize: 12,
-          color: "var(--fg2)",
+          color: "var(--mut)",
         }}
       >
         <div style={{ display: "flex", justifyContent: "space-between" }}>
           <span>{t("wageCeiling")}</span>
-          <span style={{ fontWeight: 600, color: "var(--fg)" }}>
+          <span style={{ fontWeight: 600, color: "var(--ink)" }}>
             {formatMinor(wageCeilingMonthly)}
           </span>
         </div>
         <div style={{ display: "flex", justifyContent: "space-between" }}>
           <span>{t("challanDue")}</span>
-          <span style={{ fontWeight: 600, color: "var(--fg)" }}>
+          <span style={{ fontWeight: 600, color: "var(--ink)" }}>
             {t("challanDueLabel", { day: challanDueDay })}
           </span>
         </div>

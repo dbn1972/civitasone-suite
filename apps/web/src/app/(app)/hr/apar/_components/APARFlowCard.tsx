@@ -182,7 +182,7 @@ function APARCard({ record }: { record: AparRecord }) {
                     ? "#16a34a"
                     : isActive
                     ? "#fff"
-                    : "var(--ink3)",
+                    : "var(--mut)",
                   display: "flex", alignItems: "center", justifyContent: "center",
                   fontSize: 15,
                   boxShadow: isActive ? "0 0 0 4px #dbeafe" : "none",
@@ -201,7 +201,7 @@ function APARCard({ record }: { record: AparRecord }) {
                     ? "var(--primary, #1d4ed8)"
                     : isDone
                     ? "#16a34a"
-                    : "var(--ink3)",
+                    : "var(--mut)",
                   fontWeight: isActive ? 600 : 400,
                   maxWidth: 66,
                 }}
@@ -219,7 +219,7 @@ function APARCard({ record }: { record: AparRecord }) {
           padding: "8px 16px 12px",
           borderTop: "1px solid var(--line, #e2e8f0)",
           display: "flex", justifyContent: "space-between", alignItems: "center",
-          fontSize: "0.75rem", color: "var(--ink3)",
+          fontSize: "0.75rem", color: "var(--mut)",
         }}
       >
         <span>
@@ -244,7 +244,7 @@ export function APARFlowList({ records }: ListProps) {
   const t = useTranslations("aparFlowCard");
   if (records.length === 0) {
     return (
-      <div style={{ padding: "40px 0", textAlign: "center", color: "var(--ink3)" }}>
+      <div style={{ padding: "40px 0", textAlign: "center", color: "var(--mut)" }}>
         <div style={{ fontSize: 40, marginBottom: 12 }}>📋</div>
         <p style={{ margin: 0, fontSize: "0.9375rem", fontWeight: 500 }}>
           {t("emptyText")}

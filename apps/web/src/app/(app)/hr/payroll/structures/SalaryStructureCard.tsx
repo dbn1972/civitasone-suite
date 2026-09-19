@@ -124,9 +124,9 @@ export function SalaryStructureCard({ name, isDefault, status, components }: Sal
             flexShrink: 0,
           }}
         />
-        <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: "var(--fg)" }}>{name}</h3>
+        <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: "var(--ink)" }}>{name}</h3>
       </div>
-      <p style={{ margin: "0 0 16px", fontSize: 12, color: "var(--fg2)" }}>
+      <p style={{ margin: "0 0 16px", fontSize: 12, color: "var(--mut)" }}>
         {hasComponents
           ? `${components.length} component${components.length !== 1 ? "s" : ""}`
           : "No components configured yet"}{" "}
@@ -140,7 +140,7 @@ export function SalaryStructureCard({ name, isDefault, status, components }: Sal
               margin: "0 0 6px",
               fontSize: 11,
               fontWeight: 600,
-              color: "var(--fg2)",
+              color: "var(--mut)",
               textTransform: "uppercase",
               letterSpacing: "0.05em",
             }}
@@ -162,7 +162,7 @@ export function SalaryStructureCard({ name, isDefault, status, components }: Sal
                 textAlign: "center",
                 padding: 12,
                 fontSize: 11,
-                color: "var(--fg2)",
+                color: "var(--mut)",
               }}
             >
               No components configured
@@ -176,7 +176,7 @@ export function SalaryStructureCard({ name, isDefault, status, components }: Sal
               margin: "0 0 8px",
               fontSize: 11,
               fontWeight: 600,
-              color: "var(--fg2)",
+              color: "var(--mut)",
               textTransform: "uppercase",
               letterSpacing: "0.05em",
             }}

@@ -149,7 +149,7 @@ export function ServiceBookView({ entries, employeeId }: Props) {
             </option>
           ))}
         </select>
-        <span style={{ fontSize: "0.8125rem", color: "var(--ink3)", marginInlineStart: "auto" }}>
+        <span style={{ fontSize: "0.8125rem", color: "var(--mut)", marginInlineStart: "auto" }}>
           {t("entryCount", { count: filtered.length })}
         </span>
       </div>
@@ -186,7 +186,7 @@ export function ServiceBookView({ entries, employeeId }: Props) {
                   colSpan={7}
                   style={{
                     padding: "36px 12px", textAlign: "center",
-                    color: "var(--ink3)", fontSize: "0.875rem",
+                    color: "var(--mut)", fontSize: "0.875rem",
                   }}
                 >
                   {t("noEntriesMatch")}
@@ -208,7 +208,7 @@ export function ServiceBookView({ entries, employeeId }: Props) {
                   >
                     <td
                       style={{
-                        padding: "10px 12px", color: "var(--ink3)",
+                        padding: "10px 12px", color: "var(--mut)",
                         width: 36, fontSize: "0.75rem",
                       }}
                     >
@@ -245,7 +245,7 @@ export function ServiceBookView({ entries, employeeId }: Props) {
                       style={{
                         padding: "10px 12px",
                         fontFamily: "'Courier New', monospace",
-                        fontSize: "0.8125rem", color: "var(--ink3)",
+                        fontSize: "0.8125rem", color: "var(--mut)",
                         whiteSpace: "nowrap",
                       }}
                     >
@@ -267,7 +267,7 @@ export function ServiceBookView({ entries, employeeId }: Props) {
             marginTop: 14, fontSize: "0.8125rem",
           }}
         >
-          <span style={{ color: "var(--ink3)" }}>
+          <span style={{ color: "var(--mut)" }}>
             {t("paginationRange", {
               from: safePage * PAGE_SIZE + 1,
               to: Math.min(safePage * PAGE_SIZE + PAGE_SIZE, filtered.length),
@@ -290,7 +290,7 @@ export function ServiceBookView({ entries, employeeId }: Props) {
                 style={{
                   padding: "5px 11px", borderRadius: 5, border: "none",
                   background:
-                    pg === safePage ? "var(--primary, #2563eb)" : "var(--bg2)",
+                    pg === safePage ? "var(--primary, #2563eb)" : "var(--line2)",
                   color: pg === safePage ? "#fff" : "var(--ink)",
                   cursor: "pointer",
                 }}
