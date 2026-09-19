@@ -69,7 +69,13 @@ export function GreetingHeader({ userName, pendingCount, payrollDaysLeft, today,
           font-weight: 700;
           letter-spacing: .12em;
           text-transform: uppercase;
-          color: #6ea3f5;
+          /* UX-005 tranche 10: #6ea3f5 measured 2.88:1 against the lightest
+             gradient stop (#2554a0) -- axe reports this "incomplete"
+             (bgGradient, undecidable) rather than a violation, but the
+             worst-case background is computable directly from the gradient's
+             own stops, and it fails. #bfdbfe clears 4.5:1 at that same
+             worst-case stop (5.18:1), so it holds across the whole gradient. */
+          color: #bfdbfe;
           margin: 0 0 4px;
         }
         .greeting-title {
@@ -81,7 +87,10 @@ export function GreetingHeader({ userName, pendingCount, payrollDaysLeft, today,
         }
         .greeting-sub {
           font-size: 12px;
-          color: #7ea8d8;
+          /* UX-005 tranche 10: #7ea8d8 measured 2.97:1 at the gradient's
+             lightest stop -- same bgGradient/incomplete case as
+             .greeting-eyebrow above. #dbeafe clears 4.5:1 there (6.03:1). */
+          color: #dbeafe;
           margin: 0;
         }
         .greeting-actions {
@@ -93,7 +102,11 @@ export function GreetingHeader({ userName, pendingCount, payrollDaysLeft, today,
         }
         .btn-ghost-nav {
           background: rgba(255,255,255,.12);
-          color: #c8daf5;
+          /* UX-005 tranche 10: #c8daf5 over this translucent-white chip,
+             composited on the gradient's lightest stop, measured 3.88:1
+             (bgGradient/incomplete). #fff clears 4.5:1 there (5.50:1),
+             matching .btn-primary-nav's own use of solid white text. */
+          color: #ffffff;
           border: 1px solid rgba(255,255,255,.15);
           border-radius: 6px;
           font-size: 12px;

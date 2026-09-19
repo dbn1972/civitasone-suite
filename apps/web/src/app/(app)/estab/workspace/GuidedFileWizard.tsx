@@ -165,7 +165,13 @@ export function GuidedFileWizard() {
             <span style={{
               width: 22, height: 22, borderRadius: "50%", display: "grid", placeItems: "center", fontSize: 12,
               background: i < step ? "var(--good)" : i === step ? "#4f46e5" : "#e2e8f0",
-              color: i <= step ? "#fff" : "#64748b",
+              /* UX-005 tranche 10: the not-yet-reached branch (#64748b on
+                 #e2e8f0) axe-measures 3.86:1 against the 4.5:1 this short
+                 numeral text still needs -- confirmed via the harness's own
+                 diagnose-incomplete run (fgColor/bgColor/contrastRatio came
+                 back exact), not just a static guess. var(--ink2) on the same
+                 background clears 6.24:1. */
+              color: i <= step ? "#fff" : "var(--ink2)",
             }}>{i < step ? "✓" : i + 1}</span>
             {s}{i < STEPS.length - 1 ? <span aria-hidden="true" style={{ color: "#cbd5e1" }}>›</span> : null}
           </div>

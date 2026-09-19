@@ -30,6 +30,7 @@ export function PropertyPanel({ selectedNode, onLabelChange, onPropertyChange }:
     return (
       <div
         className="rounded-xl border border-slate-200 bg-white p-4 flex-1"
+        role="region"
         aria-label="Property panel"
       >
         <h2 className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-3">
@@ -48,6 +49,7 @@ export function PropertyPanel({ selectedNode, onLabelChange, onPropertyChange }:
   return (
     <div
       className="rounded-xl border border-slate-200 bg-white p-4 flex-1 overflow-y-auto"
+      role="region"
       aria-label={`Properties for ${data.label || selectedNode.id}`}
     >
       <h2 className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-3">
