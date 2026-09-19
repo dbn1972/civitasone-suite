@@ -18,6 +18,9 @@ export function toView(r: TaskRow): TaskView {
     decision: r.decision,
     assigneeId: r.assigneeId,
     isCall: r.isCall,
+    // COMP-008 mytasks-cleanup — was already fetched (full-row select) but
+    // dropped by this projection; see schema.ts's TaskView comment.
+    dueAt: r.dueAt ? r.dueAt.toISOString() : null,
     version: r.version,
   };
 }

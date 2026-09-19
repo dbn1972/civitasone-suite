@@ -14,6 +14,12 @@ export const taskViewSchema = z.object({
   refId: z.string().uuid().nullable().optional(),
   decision: z.string().nullable().optional(),
   assigneeId: z.string().uuid().nullable().optional(),
+  // COMP-008 mytasks-cleanup — ISO string (matches the plain z.string()
+  // convention used for createdAt/updatedAt elsewhere, e.g.
+  // crm-service/modules/custom-fields/validators.ts), not z.date(): the
+  // value crossing this boundary is repo.ts's toView() output, which already
+  // calls dueAt?.toISOString() before this schema ever sees it.
+  dueAt: z.string().nullable().optional(),
   version: z.number().int(),
 });
 

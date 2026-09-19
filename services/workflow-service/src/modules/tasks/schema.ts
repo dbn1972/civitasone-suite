@@ -58,6 +58,14 @@ export type TaskView = {
   decision?: string | null;
   assigneeId?: string | null;
   isCall?: boolean | null;
+  // COMP-008 mytasks-cleanup — expose the existing due_at column through the
+  // slim list view. Previously selected from the DB row and then silently
+  // dropped by this projection (and by taskViewSchema below), so the mobile
+  // "My Tasks" list read a `dueDate` field that never existed instead, always
+  // getting null either way. ISO string (see repo.ts's toView — mirrors the
+  // `dueAt?.toISOString() ?? null` convention already used in sweeper.ts for
+  // this same column).
+  dueAt?: string | null;
   version: number;
 };
 
