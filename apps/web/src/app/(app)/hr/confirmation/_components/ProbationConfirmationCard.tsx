@@ -131,21 +131,21 @@ function ProbationCard({ row }: { row: ConfirmationRow }) {
         }}
       >
         <div>
-          <dt style={{ color: "var(--ink3)", marginBottom: 2 }}>Probation Start</dt>
+          <dt style={{ color: "var(--mut)", marginBottom: 2 }}>Probation Start</dt>
           <dd style={{ margin: 0, fontWeight: 500 }}>{formatIndianDate(row.joiningDate)}</dd>
         </div>
         <div>
-          <dt style={{ color: "var(--ink3)", marginBottom: 2 }}>Probation End</dt>
+          <dt style={{ color: "var(--mut)", marginBottom: 2 }}>Probation End</dt>
           <dd style={{ margin: 0, fontWeight: 500 }}>{formatIndianDate(row.probationEnd)}</dd>
         </div>
         <div>
-          <dt style={{ color: "var(--ink3)", marginBottom: 2 }}>Confirmation Due</dt>
+          <dt style={{ color: "var(--mut)", marginBottom: 2 }}>Confirmation Due</dt>
           <dd style={{ margin: 0, fontWeight: 600, color: due.color }}>
             {formatIndianDate(row.dueDate)}
           </dd>
         </div>
         <div>
-          <dt style={{ color: "var(--ink3)", marginBottom: 2 }}>Deadline</dt>
+          <dt style={{ color: "var(--mut)", marginBottom: 2 }}>Deadline</dt>
           <dd style={{ margin: 0, fontWeight: 600, color: due.color }}>{due.label}</dd>
         </div>
       </dl>
@@ -223,7 +223,7 @@ interface ListProps { rows: ConfirmationRow[] }
 export function ProbationConfirmationList({ rows }: ListProps) {
   if (rows.length === 0) {
     return (
-      <div style={{ padding: "40px 0", textAlign: "center", color: "var(--ink3)" }}>
+      <div style={{ padding: "40px 0", textAlign: "center", color: "var(--mut)" }}>
         <div style={{ fontSize: 40, marginBottom: 12 }}>✅</div>
         <p style={{ margin: 0, fontSize: "0.9375rem", fontWeight: 500 }}>
           No employees currently on probation

@@ -95,17 +95,17 @@ export function PromotionCard({ promotion }: Props) {
           borderRadius: 10, marginBottom: 14, flexWrap: "wrap",
         }}>
           <div style={{ textAlign: "center" }}>
-            <p style={{ margin: 0, fontSize: "0.6875rem", color: "var(--ink3)", textTransform: "uppercase", letterSpacing: "0.04em" }}>{t("currentLabel")}</p>
+            <p style={{ margin: 0, fontSize: "0.6875rem", color: "var(--mut)", textTransform: "uppercase", letterSpacing: "0.04em" }}>{t("currentLabel")}</p>
             <p style={{ margin: "4px 0 0", fontSize: "0.9375rem", fontWeight: 600 }}>{fromLabel}</p>
           </div>
           <div style={{ fontSize: 22, color: "#2563eb", flexShrink: 0 }}>&#8594;</div>
           <div style={{ textAlign: "center" }}>
-            <p style={{ margin: 0, fontSize: "0.6875rem", color: "var(--ink3)", textTransform: "uppercase", letterSpacing: "0.04em" }}>{t("promotedToLabel")}</p>
+            <p style={{ margin: 0, fontSize: "0.6875rem", color: "var(--mut)", textTransform: "uppercase", letterSpacing: "0.04em" }}>{t("promotedToLabel")}</p>
             <p style={{ margin: "4px 0 0", fontSize: "0.9375rem", fontWeight: 700, color: "#16a34a" }}>{toLabel}</p>
           </div>
           {payStr && (
             <div style={{ marginInlineStart: "auto", textAlign: "end" }}>
-              <p style={{ margin: 0, fontSize: "0.6875rem", color: "var(--ink3)", textTransform: "uppercase", letterSpacing: "0.04em" }}>{t("newBasicLabel")}</p>
+              <p style={{ margin: 0, fontSize: "0.6875rem", color: "var(--mut)", textTransform: "uppercase", letterSpacing: "0.04em" }}>{t("newBasicLabel")}</p>
               <p style={{ margin: "4px 0 0", fontSize: "1rem", fontWeight: 700, color: "#0f766e" }}>{payStr}</p>
             </div>
           )}
@@ -137,7 +137,7 @@ export function PromotionCard({ promotion }: Props) {
 
         {/* Approval chain */}
         <div style={{ marginTop: 16 }}>
-          <p style={{ margin: "0 0 8px", fontSize: "0.75rem", color: "var(--ink3)", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em" }}>
+          <p style={{ margin: "0 0 8px", fontSize: "0.75rem", color: "var(--mut)", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em" }}>
             {t("approvalChainLabel")}
           </p>
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
@@ -151,7 +151,7 @@ export function PromotionCard({ promotion }: Props) {
                   borderColor: done ? "#16a34a" : active ? "#2563eb" : "var(--line)",
                   background:  done ? "#f0fdf4" : active ? "#eff6ff" : "transparent",
                   fontSize: "0.8125rem", fontWeight: done || active ? 600 : 400,
-                  color: done ? "#16a34a" : active ? "#2563eb" : "var(--ink3)",
+                  color: done ? "#16a34a" : active ? "#2563eb" : "var(--mut)",
                 }}>
                   <span>{done ? "✓" : icon}</span>
                   <span>{t(labelKey)}</span>

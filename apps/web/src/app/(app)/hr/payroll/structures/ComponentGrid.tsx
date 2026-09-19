@@ -73,7 +73,7 @@ const TYPE_BADGE: Record<string, { bg: string; fg: string }> = {
 };
 
 function TypeBadge({ type }: { type: string }) {
-  const style = TYPE_BADGE[type] ?? { bg: "var(--line2)", fg: "var(--fg2)" };
+  const style = TYPE_BADGE[type] ?? { bg: "var(--line2)", fg: "var(--mut)" };
   return (
     <span
       style={{
@@ -120,7 +120,7 @@ function FormulaTooltip({ code }: { code: string }) {
           height: 18,
           fontSize: 11,
           cursor: "pointer",
-          color: "var(--fg2)",
+          color: "var(--mut)",
           fontWeight: 700,
           lineHeight: "18px",
           padding: 0,
@@ -179,7 +179,7 @@ export function ComponentGrid({ components }: ComponentGridProps) {
         style={{
           padding: "40px 24px",
           textAlign: "center",
-          color: "var(--fg2)",
+          color: "var(--mut)",
         }}
       >
         <div style={{ fontSize: 32, marginBottom: 12 }}>🧩</div>
@@ -208,11 +208,11 @@ export function ComponentGrid({ components }: ComponentGridProps) {
             border: "1px solid var(--line)",
             borderRadius: 8,
             background: "var(--bg)",
-            color: "var(--fg)",
+            color: "var(--ink)",
             fontSize: 13,
           }}
         />
-        <span style={{ fontSize: 12, color: "var(--fg2)" }}>
+        <span style={{ fontSize: 12, color: "var(--mut)" }}>
           {filtered.length}/{components.length} components
         </span>
       </div>
@@ -221,22 +221,22 @@ export function ComponentGrid({ components }: ComponentGridProps) {
         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
           <thead>
             <tr style={{ borderBottom: "2px solid var(--line)" }}>
-              <th style={{ textAlign: "start", padding: "8px 10px", color: "var(--fg2)", fontWeight: 600, fontSize: 11, textTransform: "uppercase", letterSpacing: "0.05em" }}>
+              <th style={{ textAlign: "start", padding: "8px 10px", color: "var(--mut)", fontWeight: 600, fontSize: 11, textTransform: "uppercase", letterSpacing: "0.05em" }}>
                 Code
               </th>
-              <th style={{ textAlign: "start", padding: "8px 10px", color: "var(--fg2)", fontWeight: 600, fontSize: 11, textTransform: "uppercase", letterSpacing: "0.05em" }}>
+              <th style={{ textAlign: "start", padding: "8px 10px", color: "var(--mut)", fontWeight: 600, fontSize: 11, textTransform: "uppercase", letterSpacing: "0.05em" }}>
                 Component Name
               </th>
-              <th style={{ textAlign: "start", padding: "8px 10px", color: "var(--fg2)", fontWeight: 600, fontSize: 11, textTransform: "uppercase", letterSpacing: "0.05em" }}>
+              <th style={{ textAlign: "start", padding: "8px 10px", color: "var(--mut)", fontWeight: 600, fontSize: 11, textTransform: "uppercase", letterSpacing: "0.05em" }}>
                 Type
               </th>
-              <th style={{ textAlign: "center", padding: "8px 10px", color: "var(--fg2)", fontWeight: 600, fontSize: 11, textTransform: "uppercase", letterSpacing: "0.05em" }}>
+              <th style={{ textAlign: "center", padding: "8px 10px", color: "var(--mut)", fontWeight: 600, fontSize: 11, textTransform: "uppercase", letterSpacing: "0.05em" }}>
                 Formula
               </th>
-              <th style={{ textAlign: "start", padding: "8px 10px", color: "var(--fg2)", fontWeight: 600, fontSize: 11, textTransform: "uppercase", letterSpacing: "0.05em" }}>
+              <th style={{ textAlign: "start", padding: "8px 10px", color: "var(--mut)", fontWeight: 600, fontSize: 11, textTransform: "uppercase", letterSpacing: "0.05em" }}>
                 Taxability
               </th>
-              <th style={{ textAlign: "center", padding: "8px 10px", color: "var(--fg2)", fontWeight: 600, fontSize: 11, textTransform: "uppercase", letterSpacing: "0.05em" }}>
+              <th style={{ textAlign: "center", padding: "8px 10px", color: "var(--mut)", fontWeight: 600, fontSize: 11, textTransform: "uppercase", letterSpacing: "0.05em" }}>
                 Active
               </th>
             </tr>
@@ -262,13 +262,13 @@ export function ComponentGrid({ components }: ComponentGridProps) {
                         borderRadius: 4,
                         fontSize: 12,
                         fontFamily: "monospace",
-                        color: "var(--fg)",
+                        color: "var(--ink)",
                       }}
                     >
                       {c.code}
                     </code>
                   </td>
-                  <td style={{ padding: "10px 10px", fontWeight: 500, color: "var(--fg)" }}>
+                  <td style={{ padding: "10px 10px", fontWeight: 500, color: "var(--ink)" }}>
                     {c.name}
                   </td>
                   <td style={{ padding: "10px 10px" }}>

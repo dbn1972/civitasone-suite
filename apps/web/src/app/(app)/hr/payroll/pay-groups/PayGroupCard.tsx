@@ -90,7 +90,7 @@ export function PayGroupCard({
               flexShrink: 0,
             }}
           />
-          <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700, color: "var(--fg)" }}>{name}</h3>
+          <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700, color: "var(--ink)" }}>{name}</h3>
         </div>
         <RevisionBadge date={lastRevisionDate} />
       </div>
@@ -110,8 +110,8 @@ export function PayGroupCard({
             padding: "10px 12px",
           }}
         >
-          <p style={{ margin: 0, fontSize: 11, color: "var(--fg2)", fontWeight: 500 }}>Employees</p>
-          <p style={{ margin: "4px 0 0", fontSize: 20, fontWeight: 700, color: "var(--fg)" }}>
+          <p style={{ margin: 0, fontSize: 11, color: "var(--mut)", fontWeight: 500 }}>Employees</p>
+          <p style={{ margin: "4px 0 0", fontSize: 20, fontWeight: 700, color: "var(--ink)" }}>
             {employeeCount.toLocaleString("en-IN")}
           </p>
         </div>
@@ -122,8 +122,8 @@ export function PayGroupCard({
             padding: "10px 12px",
           }}
         >
-          <p style={{ margin: 0, fontSize: 11, color: "var(--fg2)", fontWeight: 500 }}>Frequency</p>
-          <p style={{ margin: "4px 0 0", fontSize: 13, fontWeight: 600, color: "var(--fg)" }}>
+          <p style={{ margin: 0, fontSize: 11, color: "var(--mut)", fontWeight: 500 }}>Frequency</p>
+          <p style={{ margin: "4px 0 0", fontSize: 13, fontWeight: 600, color: "var(--ink)" }}>
             {freqIcon} {freqLabel}
           </p>
         </div>
@@ -134,8 +134,8 @@ export function PayGroupCard({
             padding: "10px 12px",
           }}
         >
-          <p style={{ margin: 0, fontSize: 11, color: "var(--fg2)", fontWeight: 500 }}>Pay Day</p>
-          <p style={{ margin: "4px 0 0", fontSize: 20, fontWeight: 700, color: "var(--fg)" }}>
+          <p style={{ margin: 0, fontSize: 11, color: "var(--mut)", fontWeight: 500 }}>Pay Day</p>
+          <p style={{ margin: "4px 0 0", fontSize: 20, fontWeight: 700, color: "var(--ink)" }}>
             {payDayOfMonth}
             <sup style={{ fontSize: 11 }}>th</sup>
           </p>
@@ -152,10 +152,10 @@ export function PayGroupCard({
               borderRadius: 8,
               padding: "4px 10px",
               fontSize: 12,
-              color: "var(--fg2)",
+              color: "var(--mut)",
             }}
           >
-            Structure: <strong style={{ color: "var(--fg)" }}>{associatedStructureName}</strong>
+            Structure: <strong style={{ color: "var(--ink)" }}>{associatedStructureName}</strong>
           </span>
         )}
         <span
@@ -165,7 +165,7 @@ export function PayGroupCard({
             borderRadius: 8,
             padding: "4px 10px",
             fontSize: 12,
-            color: "var(--fg2)",
+            color: "var(--mut)",
           }}
         >
           {timezone}

@@ -37,16 +37,16 @@ export function GratuityCalculator() {
         maxWidth: 520,
       }}
     >
-      <h3 style={{ margin: "0 0 4px", fontSize: 15, fontWeight: 700, color: "var(--fg)" }}>
+      <h3 style={{ margin: "0 0 4px", fontSize: 15, fontWeight: 700, color: "var(--ink)" }}>
         {t("heading")}
       </h3>
-      <p style={{ margin: "0 0 18px", fontSize: 12, color: "var(--fg2)" }}>
+      <p style={{ margin: "0 0 18px", fontSize: 12, color: "var(--mut)" }}>
         {t("description")}
       </p>
 
       <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
         <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-          <span style={{ fontSize: 12, fontWeight: 600, color: "var(--fg2)" }}>
+          <span style={{ fontSize: 12, fontWeight: 600, color: "var(--mut)" }}>
             {t("salaryLabel")}
           </span>
           <input
@@ -62,14 +62,14 @@ export function GratuityCalculator() {
               border: "1px solid var(--line)",
               borderRadius: 8,
               background: "var(--bg)",
-              color: "var(--fg)",
+              color: "var(--ink)",
               fontSize: 14,
             }}
           />
         </label>
 
         <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-          <span style={{ fontSize: 12, fontWeight: 600, color: "var(--fg2)" }}>
+          <span style={{ fontSize: 12, fontWeight: 600, color: "var(--mut)" }}>
             {t("yearsLabel")}
           </span>
           <input
@@ -86,7 +86,7 @@ export function GratuityCalculator() {
               border: "1px solid var(--line)",
               borderRadius: 8,
               background: "var(--bg)",
-              color: "var(--fg)",
+              color: "var(--ink)",
               fontSize: 14,
             }}
           />
@@ -102,7 +102,7 @@ export function GratuityCalculator() {
             borderRadius: 8,
             padding: "10px 14px",
             fontSize: 12,
-            color: "var(--fg2)",
+            color: "var(--mut)",
             fontFamily: "monospace",
             lineHeight: 1.7,
           }}

@@ -154,7 +154,7 @@ export function RetirementProcessWizard({ employeeName }: Props) {
         <div
           style={{
             display: "flex", justifyContent: "space-between",
-            marginBottom: 6, fontSize: "0.8125rem", color: "var(--ink3)",
+            marginBottom: 6, fontSize: "0.8125rem", color: "var(--mut)",
           }}
         >
           <span>Overall progress</span>
@@ -284,7 +284,7 @@ export function RetirementProcessWizard({ employeeName }: Props) {
               </div>
               <p
                 style={{
-                  margin: "4px 0 0", fontSize: "0.75rem", color: "var(--ink3)",
+                  margin: "4px 0 0", fontSize: "0.75rem", color: "var(--mut)",
                 }}
               >
                 {completedCnt} of {step.checks.length} tasks completed
@@ -365,7 +365,7 @@ export function RetirementProcessWizard({ employeeName }: Props) {
                 </span>
               ) : (
                 <span
-                  style={{ fontSize: "0.8125rem", color: "var(--ink3)" }}
+                  style={{ fontSize: "0.8125rem", color: "var(--mut)" }}
                 >
                   Complete all steps to generate PPO
                 </span>

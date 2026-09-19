@@ -120,7 +120,7 @@ export function SuccessionPlanCard({ post, t }: CardProps) {
             </span>
           )}
           {post.retirementDate && (
-            <span style={{ marginInlineStart: 14, color: "var(--ink3)" }}>
+            <span style={{ marginInlineStart: 14, color: "var(--mut)" }}>
               {t("vacatesLabel")} {formatIndianDate(post.retirementDate)}
             </span>
           )}
@@ -132,7 +132,7 @@ export function SuccessionPlanCard({ post, t }: CardProps) {
         <div
           style={{
             display: "flex", justifyContent: "space-between",
-            marginBottom: 6, fontSize: "0.75rem", color: "var(--ink3)",
+            marginBottom: 6, fontSize: "0.75rem", color: "var(--mut)",
           }}
         >
           <span>
@@ -214,7 +214,7 @@ export function SuccessionPlanCard({ post, t }: CardProps) {
                           alignItems: "center",
                         }}
                       >
-                        <span style={{ fontSize: "0.6875rem", color: "var(--ink3)" }}>
+                        <span style={{ fontSize: "0.6875rem", color: "var(--mut)" }}>
                           {t("gapsLabel")}
                         </span>
                         {s.skillGaps.map((g) => (
@@ -249,7 +249,7 @@ export function SuccessionPlanCard({ post, t }: CardProps) {
                     </a>
                   ) : (
                     <span
-                      style={{ fontSize: "0.75rem", color: "var(--ink3)", flexShrink: 0 }}
+                      style={{ fontSize: "0.75rem", color: "var(--mut)", flexShrink: 0 }}
                     >
                       {t("noPlan")}
                     </span>
@@ -269,7 +269,7 @@ interface ListProps { posts: CriticalPost[]; t: Translator }
 export function SuccessionPlanList({ posts, t }: ListProps) {
   if (posts.length === 0) {
     return (
-      <div style={{ padding: "40px 0", textAlign: "center", color: "var(--ink3)" }}>
+      <div style={{ padding: "40px 0", textAlign: "center", color: "var(--mut)" }}>
         <div style={{ fontSize: 40, marginBottom: 12 }}>🏆</div>
         <p style={{ margin: 0, fontSize: "0.9375rem", fontWeight: 500 }}>
           {t("noPlansTitle")}
