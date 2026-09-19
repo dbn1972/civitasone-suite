@@ -4,7 +4,7 @@ interface Props { daysLeft: number; monthName: string; headcount: number }
 
 export function PayrollBanner({ daysLeft, monthName, headcount }: Props) {
   return (
-    <div className="payroll-banner" role="alert" aria-label="Payroll deadline notice">
+    <div className="payroll-banner" role="alert" aria-label="Payroll deadline notice" data-testid="payroll-banner">
       <div className="pb-icon" aria-hidden="true">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#d97706" strokeWidth="2"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg>
       </div>

@@ -27,7 +27,11 @@ test.describe('Visual Regression — HRMS Pages', () => {
     await page.waitForLoadState('networkidle');
     await expect(page).toHaveScreenshot('hr-dashboard.png', {
       fullPage: true,
-      mask: [page.locator('[data-testid="timestamp"]')], // Mask dynamic timestamps
+      mask: [
+        page.locator('[data-testid="dashboard-greeting"]'),
+        page.locator('[data-testid="kpi-payroll-closes"]'),
+        page.locator('[data-testid="payroll-banner"]'),
+      ], // Mask date-derived greeting/countdown text (never mocked; would otherwise drift daily)
     });
   });
 
@@ -82,7 +86,10 @@ test.describe('Visual Regression — Payroll Pages', () => {
   test('Payroll Runs List', async ({ page }) => {
     await page.goto('/hr/payroll');
     await page.waitForLoadState('networkidle');
-    await expect(page).toHaveScreenshot('payroll-runs.png', { fullPage: true });
+    await expect(page).toHaveScreenshot('payroll-runs.png', {
+      fullPage: true,
+      mask: [page.locator('[data-testid="create-payroll-run-form"]')], // Month/Year/Run No. default to the real current date
+    });
   });
 
   test('Payroll Run Detail (paid)', async ({ page }) => {
@@ -149,7 +156,10 @@ test.describe('Visual Regression — Empty & Error States', () => {
     );
     await page.goto('/hr/payroll');
     await page.waitForLoadState('networkidle');
-    await expect(page).toHaveScreenshot('payroll-no-structures.png', { fullPage: true });
+    await expect(page).toHaveScreenshot('payroll-no-structures.png', {
+      fullPage: true,
+      mask: [page.locator('[data-testid="create-payroll-run-form"]')], // same date-derived form as Payroll Runs List (SSR route mock does not apply here)
+    });
   });
 
   test('Empty recruitment (no vacancies)', async ({ page }) => {
