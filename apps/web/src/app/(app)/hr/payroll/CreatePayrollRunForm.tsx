@@ -135,7 +135,7 @@ export function CreatePayrollRunForm({ structures, existingPeriods = [] }: Props
   const labelStyle: React.CSSProperties = { fontSize: 13, fontWeight: 600, color: "var(--ink2)" };
 
   return (
-    <form onSubmit={handleSubmit} className="card" style={{ marginBottom: 16 }}>
+    <form onSubmit={handleSubmit} className="card" style={{ marginBottom: 16 }} data-testid="create-payroll-run-form">
       <div className="card-h">
         <h3>Create Payroll Run</h3>
       </div>

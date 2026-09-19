@@ -19,7 +19,7 @@ export function GreetingHeader({ userName, pendingCount, payrollDaysLeft, today,
   return (
     <div className="greeting-header">
       <div className="greeting-inner">
-        <div className="greeting-text">
+        <div className="greeting-text" data-testid="dashboard-greeting">
           <p className="greeting-eyebrow">HR & Payroll · People Operations</p>
           <h1 className="greeting-title">
             {dayName.startsWith("S") ? "Good day" : "Good morning"}, {userName}
@@ -63,6 +63,18 @@ export function GreetingHeader({ userName, pendingCount, payrollDaysLeft, today,
           gap: 16px;
           padding-bottom: 14px;
           flex-wrap: wrap;
+        }
+        .greeting-text {
+          /* Fill the row instead of shrink-wrapping to the greeting text.
+             Content-driven width would otherwise make this box's own size
+             (not just its text) depend on the greeting's length, e.g.
+             "Good morning" (weekday) vs "Good day" (weekend) render at
+             different widths -- shifting this element's bounding box day
+             to day even though its content is masked in visual-regression
+             screenshots (see visual-regression.spec.ts). flex-basis 0 with
+             flex-grow keeps the box's width pinned to the layout instead. */
+          flex: 1 1 0;
+          min-width: 0;
         }
         .greeting-eyebrow {
           font-size: 10px;
