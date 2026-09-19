@@ -5,9 +5,57 @@ import '../../core/providers.dart';
 import '../../core/error_utils.dart'; // Fix: [AUDIT-P2-6]
 
 /// Workflow Tasks — list of pending tasks assigned to the current user.
-/// GET /v1/workflow/tasks?assignee=me&status=pending
+/// GET /v1/workflow/tasks?assignee=me&status=pending&limit=&offset=
 /// POST /v1/workflow/tasks/:id/complete
-/// POST /v1/workflow/tasks/:id/delegate
+///
+/// COMP-008 mytasks-cleanup — three verified pre-existing bugs fixed here:
+///  - This screen read `dueDate`/`priority`/`workflowName`, none of which
+///    exist on the wire. The real due-date column is `dueAt`
+///    (`services/workflow-service/src/modules/tasks/schema.ts`), and it was
+///    ALSO being silently dropped by this endpoint's own response
+///    projection (`repo.ts`'s `toView()` + `validators.ts`'s
+///    `taskViewSchema`) even under its real name — fixed there too, so a
+///    plain rename here wasn't a cosmetic no-op. `priority` and
+///    `workflowName` have no backing column anywhere in the workflow
+///    domain (`tasks`/`instances`/`definitions` schemas all checked) --
+///    genuinely dead, removed rather than left silently broken or backed by
+///    invented placeholder data. (The closest real concept to
+///    "workflow name" is `definitions.name`, reachable only via a new
+///    tasks→instances→definitions join this endpoint doesn't do today --
+///    a bigger lift than a read-path field fix belongs in its own tranche.)
+///  - No pagination: fetched and rendered the entire pending-task list in
+///    one shot. Now pages via real `limit`/`offset` (this endpoint's
+///    `pagination.hasMore` is an honest server-computed flag, unlike the
+///    `/v1/workflow/workbaskets/*` endpoints), mirroring
+///    `features/field/field_task_list_screen.dart`'s append-by-offset
+///    mechanics. This endpoint never returns a true `total` though (see
+///    `queries.listTasks`), so the "Load more" footer follows
+///    `features/approvals/approvals_workbasket_list_screen.dart`'s
+///    `_LoadMoreButton` precedent instead of `core/widgets/load_more_footer.dart`
+///    (which requires a real total) -- "N loaded", never a fabricated
+///    "of Y".
+///  - The "Delegate" button posted to `/v1/workflow/tasks/:id/delegate`,
+///    which has never existed (confirmed via a repo-wide route grep: the
+///    only task-mutation routes are complete/claim/assign/bulk-complete).
+///    The real `delegations` feature
+///    (`services/workflow-service/src/modules/delegations/`) is a separate,
+///    whole-person/date-ranged authority handoff
+///    (`POST /v1/workflow/delegations` — delegateId + fromDate/toDate), not
+///    a per-task action, so it isn't a drop-in replacement for this button.
+///    A per-task `POST /v1/workflow/tasks/:id/assign` does exist but is
+///    role-gated to admin roles (`workflow_admin`/`super_admin`/
+///    `tenant_admin`) and means "reassign", not "hand off my own task" --
+///    wiring a regular task-holder's button to it would newly cross a
+///    permission boundary this tranche isn't scoped to decide. Removed
+///    rather than guessed.
+///
+/// Known, separate, NOT fixed here: `assignee=me` below is accepted by this
+/// screen's request but silently ignored server-side today -- the list
+/// route only filters by role (`listPendingForRoles`), not by assignee, so
+/// this screen actually shows every pending task visible to the caller's
+/// roles, not strictly "assigned to me." Left alone deliberately: real
+/// assignee-scoping is a visibility/role-adjacent change, out of scope for
+/// this read-path-bugfix tranche.
 class MyTasksScreen extends ConsumerStatefulWidget {
   const MyTasksScreen({super.key});
 
@@ -18,9 +66,15 @@ class MyTasksScreen extends ConsumerStatefulWidget {
 enum _TaskFilter { all, overdue, dueToday, upcoming }
 
 class _MyTasksScreenState extends ConsumerState<MyTasksScreen> {
+  // Matches packages/schemas/src/common.ts's listQuerySchema default, made
+  // explicit here rather than relying implicitly on the server default.
+  static const _pageSize = 50;
+
   bool _loading = true;
+  bool _loadingMore = false;
   String? _error;
   List<Map<String, dynamic>> _tasks = [];
+  bool _hasMore = false;
   _TaskFilter _filter = _TaskFilter.all;
   // Fix: [AUDIT-P1-6] Offline indicator state
   bool _isOnline = true;
@@ -40,10 +94,17 @@ class _MyTasksScreenState extends ConsumerState<MyTasksScreen> {
       final api = ref.read(apiClientProvider);
       final res = await api.get<Map<String, dynamic>>(
         '/v1/workflow/tasks',
-        params: {'assignee': 'me', 'status': 'pending'},
+        params: {
+          'assignee': 'me',
+          'status': 'pending',
+          'limit': _pageSize,
+          'offset': 0,
+        },
       );
       final data = res.data?['data'] as List<dynamic>? ?? [];
+      final pagination = res.data?['pagination'] as Map<String, dynamic>?;
       _tasks = data.cast<Map<String, dynamic>>();
+      _hasMore = pagination?['hasMore'] as bool? ?? false;
     } catch (e) {
       _error = e.toString();
       // Fix: [AUDIT-P1-6] Detect offline state
@@ -52,6 +113,41 @@ class _MyTasksScreenState extends ConsumerState<MyTasksScreen> {
       }
     } finally {
       if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  /// Fetches the next page (offset = number already loaded) and appends it.
+  /// Mirrors `field_task_list_screen.dart`'s `_loadMore`: failures surface as
+  /// a snackbar rather than replacing the already-loaded page with an error.
+  Future<void> _loadMore() async {
+    if (_loadingMore || !_hasMore) return;
+    setState(() => _loadingMore = true);
+    try {
+      final api = ref.read(apiClientProvider);
+      final res = await api.get<Map<String, dynamic>>(
+        '/v1/workflow/tasks',
+        params: {
+          'assignee': 'me',
+          'status': 'pending',
+          'limit': _pageSize,
+          'offset': _tasks.length,
+        },
+      );
+      final data = res.data?['data'] as List<dynamic>? ?? [];
+      final pagination = res.data?['pagination'] as Map<String, dynamic>?;
+      final more = data.cast<Map<String, dynamic>>();
+      setState(() {
+        _tasks = [..._tasks, ...more];
+        _hasMore = pagination?['hasMore'] as bool? ?? false;
+      });
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not load more: ${userFriendlyError(e)}')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _loadingMore = false);
     }
   }
 
@@ -84,7 +180,7 @@ class _MyTasksScreenState extends ConsumerState<MyTasksScreen> {
   }
 
   DateTime? _parseDueDate(Map<String, dynamic> task) {
-    final due = task['dueDate'] as String?;
+    final due = task['dueAt'] as String?;
     if (due == null || due.isEmpty) return null;
     try {
       return DateTime.parse(due);
@@ -216,105 +312,16 @@ class _MyTasksScreenState extends ConsumerState<MyTasksScreen> {
     }
   }
 
-  Future<void> _delegateTask(Map<String, dynamic> task) async {
-    final taskId = task['id'] as String;
-    final taskName = task['name'] as String? ?? 'Task';
-    final userIdCtrl = TextEditingController();
-    final formKey = GlobalKey<FormState>();
-
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Delegate Task'),
-        content: Form(
-          key: formKey,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('Delegate "$taskName" to another officer?'),
-              const SizedBox(height: 16),
-              TextFormField(
-                controller: userIdCtrl,
-                decoration: const InputDecoration(
-                  labelText: 'Officer name or ID *',
-                  border: OutlineInputBorder(),
-                  prefixIcon: Icon(Icons.person_search),
-                  hintText: 'Search officer…',
-                ),
-                validator: (v) =>
-                    (v == null || v.trim().isEmpty) ? 'Select an officer' : null,
-              ),
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () {
-              if (formKey.currentState!.validate()) {
-                Navigator.pop(ctx, true);
-              }
-            },
-            child: const Text('Delegate'),
-          ),
-        ],
-      ),
-    );
-
-    if (confirmed != true) return;
-
-    try {
-      final api = ref.read(apiClientProvider);
-      await api.post('/v1/workflow/tasks/$taskId/delegate', data: {
-        'toUserId': userIdCtrl.text.trim(),
-      });
-      setState(() => _tasks.removeWhere((t) => t['id'] == taskId));
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('"$taskName" delegated'),
-            backgroundColor: const Color(0xFF15803D),
-          ),
-        );
-      }
-    } catch (e) {
-      // Fix: [AUDIT-P1-7] Route writes through offline outbox on connection errors
-      if (e is DioException &&
-          (e.type == DioExceptionType.connectionError ||
-           e.type == DioExceptionType.connectionTimeout)) {
-        // TODO: Queue to SyncDatabase outbox for guaranteed delivery
-        setState(() => _isOnline = false);
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Action queued — will sync when online')),
-          );
-        }
-        return;
-      }
-      // Fix: [AUDIT-P1-5] User-friendly error messages
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(userFriendlyError(e)), // Fix: [AUDIT-P2-6]
-            action: SnackBarAction(
-              label: 'Retry',
-              onPressed: () => _delegateTask(task),
-            ),
-            backgroundColor: Theme.of(context).colorScheme.error,
-          ),
-        );
-      }
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final filtered = _filteredTasks;
+    // "Load more" is scoped to the unfiltered feed, same rationale as
+    // field_task_list_screen.dart / approvals_workbasket_list_screen.dart:
+    // it always fetches the next page of the full pending-task pool, which
+    // may add zero visible cards to a narrow due-date bucket like "Overdue"
+    // -- offering it there would be confusing about what actually grew.
+    final showLoadMoreFooter = _filter == _TaskFilter.all && _hasMore;
 
     return Scaffold(
       appBar: AppBar(
@@ -393,13 +400,23 @@ class _MyTasksScreenState extends ConsumerState<MyTasksScreen> {
                               onRefresh: _fetchTasks,
                               child: ListView.builder(
                                 padding: const EdgeInsets.all(16),
-                                itemCount: filtered.length,
-                                itemBuilder: (ctx, i) => _TaskCard(
-                                  task: filtered[i],
-                                  isOverdue: _isOverdue(filtered[i]),
-                                  onComplete: () => _completeTask(filtered[i]),
-                                  onDelegate: () => _delegateTask(filtered[i]),
-                                ),
+                                itemCount: filtered.length + (showLoadMoreFooter ? 1 : 0),
+                                itemBuilder: (ctx, i) {
+                                  if (i == filtered.length) {
+                                    return _LoadMoreFooter(
+                                      loaded: _tasks.length,
+                                      loading: _loadingMore,
+                                      onLoadMore: _loadMore,
+                                    );
+                                  }
+                                  final t = filtered[i];
+                                  return _TaskCard(
+                                    task: t,
+                                    dueAt: _parseDueDate(t),
+                                    isOverdue: _isOverdue(t),
+                                    onComplete: () => _completeTask(t),
+                                  );
+                                },
                               ),
                             ),
                     ),
@@ -499,23 +516,20 @@ class _FilterChip extends StatelessWidget {
 class _TaskCard extends StatelessWidget {
   const _TaskCard({
     required this.task,
+    required this.dueAt,
     required this.isOverdue,
     required this.onComplete,
-    required this.onDelegate,
   });
 
   final Map<String, dynamic> task;
+  final DateTime? dueAt;
   final bool isOverdue;
   final VoidCallback onComplete;
-  final VoidCallback onDelegate;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final name = task['name'] as String? ?? 'Unnamed Task';
-    final workflowName = task['workflowName'] as String? ?? '';
-    final dueDate = task['dueDate'] as String? ?? '';
-    final priority = task['priority'] as String? ?? 'normal';
 
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
@@ -545,24 +559,11 @@ class _TaskCard extends StatelessWidget {
                 ),
                 const SizedBox(width: 12),
                 Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(name, style: theme.textTheme.titleSmall),
-                      if (workflowName.isNotEmpty)
-                        Text(
-                          workflowName,
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            color: theme.colorScheme.outline,
-                          ),
-                        ),
-                    ],
-                  ),
+                  child: Text(name, style: theme.textTheme.titleSmall),
                 ),
-                _PriorityBadge(priority: priority),
               ],
             ),
-            if (dueDate.isNotEmpty) ...[
+            if (dueAt != null) ...[
               const SizedBox(height: 8),
               Row(
                 children: [
@@ -575,7 +576,7 @@ class _TaskCard extends StatelessWidget {
                   ),
                   const SizedBox(width: 4),
                   Text(
-                    isOverdue ? 'Overdue: $dueDate' : 'Due: $dueDate',
+                    isOverdue ? 'Overdue: ${_shortDate(dueAt!)}' : 'Due: ${_shortDate(dueAt!)}',
                     style: TextStyle(
                       fontSize: 12,
                       color: isOverdue
@@ -591,12 +592,6 @@ class _TaskCard extends StatelessWidget {
             Row(
               mainAxisAlignment: MainAxisAlignment.end,
               children: [
-                OutlinedButton.icon(
-                  onPressed: onDelegate,
-                  icon: const Icon(Icons.person_add, size: 16),
-                  label: const Text('Delegate'),
-                ),
-                const SizedBox(width: 8),
                 FilledButton.icon(
                   onPressed: onComplete,
                   icon: const Icon(Icons.check, size: 18),
@@ -609,41 +604,51 @@ class _TaskCard extends StatelessWidget {
       ),
     );
   }
+
+  // Matches approvals_workbasket_list_screen.dart's _TaskCard._shortDate
+  // convention exactly (dd/mm/yyyy, localized).
+  static String _shortDate(DateTime d) {
+    final local = d.toLocal();
+    return '${local.day.toString().padLeft(2, '0')}/${local.month.toString().padLeft(2, '0')}/${local.year}';
+  }
 }
 
-class _PriorityBadge extends StatelessWidget {
-  const _PriorityBadge({required this.priority});
-  final String priority;
+/// Honest "load more" footer for an endpoint with no true server-side total
+/// (see queries.listTasks — pagination carries `hasMore`/`pageSize` but never
+/// `total`). Deliberately does not claim "Showing X of Y" -- mirrors
+/// approvals_workbasket_list_screen.dart's `_LoadMoreButton` for the same
+/// reason, rather than reusing core/widgets/load_more_footer.dart (which
+/// requires a real total).
+class _LoadMoreFooter extends StatelessWidget {
+  const _LoadMoreFooter({required this.loaded, required this.loading, required this.onLoadMore});
+
+  final int loaded;
+  final bool loading;
+  final VoidCallback onLoadMore;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    Color color;
-    switch (priority.toLowerCase()) {
-      case 'high':
-      case 'urgent':
-        color = theme.colorScheme.error;
-        break;
-      case 'medium':
-        color = const Color(0xFFF59E0B);
-        break;
-      default:
-        color = theme.colorScheme.outline;
-    }
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(6),
-        border: Border.all(color: color.withOpacity(0.4)),
-      ),
-      child: Text(
-        priority.toUpperCase(),
-        style: TextStyle(
-          fontSize: 10,
-          fontWeight: FontWeight.w600,
-          color: color,
+    return Semantics(
+      label: loading ? 'Loading more' : '$loaded loaded. Load more available',
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 16),
+        child: Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text('$loaded loaded', style: TextStyle(fontSize: 12, color: theme.colorScheme.outline)),
+              const SizedBox(height: 8),
+              if (loading)
+                const SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              else
+                OutlinedButton(onPressed: onLoadMore, child: const Text('Load more')),
+            ],
+          ),
         ),
       ),
     );
