@@ -12,7 +12,7 @@
  * (some severely: /citizen measured up to ~2000ms, /projects ~1968ms) --
  * real, substantive performance problems needing dedicated profiling,
  * not something to fix blindly alongside a coverage-expansion tranche
- * (filed as PERF-020 for that follow-up work). Rather than either
+ * (filed as PERF-025 for that follow-up work). Rather than either
  * silently drop these 9 or immediately flip "Lighthouse Performance
  * Baseline" red for pre-existing issues the expansion merely revealed,
  * they're asserted at "warn" severity (matchingUrlPattern below) --
@@ -40,7 +40,7 @@ module.exports = {
         // severity below (see the assert block) -- real numbers are
         // still measured and recorded every run, they just don't fail
         // the job on the pre-existing issues this expansion revealed
-        // (PERF-020).
+        // (PERF-025).
         "http://localhost:3000/finance",
         "http://localhost:3000/procurement",
         "http://localhost:3000/hr",
@@ -66,7 +66,7 @@ module.exports = {
         {
           // PERF-009 tranche 4's 9 new module-home pages: measure and
           // record real numbers, don't fail the job on pre-existing
-          // issues the expansion revealed (see PERF-020). Anchored and
+          // issues the expansion revealed (see PERF-025). Anchored and
           // listed explicitly so this can never accidentally widen to
           // match the original hard-gated pair below.
           matchingUrlPattern:
