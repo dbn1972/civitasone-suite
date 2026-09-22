@@ -21,7 +21,9 @@ async function withRequestedBy<T extends { createdBy: string }>(
   tenantId: string,
   rows: T[],
 ): Promise<(T & { requestedBy: string | undefined })[]> {
-  if (rows.length === 0) return rows;
+  // Vacuously satisfies the return type -- there are no elements to be
+  // missing the field.
+  if (rows.length === 0) return rows as (T & { requestedBy: string | undefined })[];
   const userMap = await fetchUserSummaries(tenantId);
   return rows.map((row) => ({ ...row, requestedBy: userMap.get(row.createdBy)?.name }));
 }
