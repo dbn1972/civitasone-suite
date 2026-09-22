@@ -1,5 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { NextIntlClientProvider } from "next-intl";
+import enMessages from "@/messages/en.json";
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }),
@@ -11,6 +13,10 @@ import { CreatePensionerForm } from "./CreatePensionerForm";
  * UX-016: this used to show the raw backend response text (falling back to
  * `Request failed (${res.status})`) verbatim — the same class of leak
  * useFormError closes fleet-wide (UX-003).
+ *
+ * UX-017: CreatePensionerForm is now translated (useTranslations
+ * ("createPensionerForm")), so every render needs a real
+ * NextIntlClientProvider in the tree.
  */
 describe("CreatePensionerForm — UX-016 clerk-safe errors", () => {
   const fetchMock = vi.fn();
@@ -21,7 +27,11 @@ describe("CreatePensionerForm — UX-016 clerk-safe errors", () => {
   afterEach(() => vi.unstubAllGlobals());
 
   function fillAndSubmit() {
-    render(<CreatePensionerForm />);
+    render(
+      <NextIntlClientProvider locale="en" messages={enMessages}>
+        <CreatePensionerForm />
+      </NextIntlClientProvider>,
+    );
     fireEvent.change(screen.getByLabelText(/ppo number/i), { target: { value: "PPO/2025/001234" } });
     fireEvent.change(screen.getByLabelText(/full name/i), { target: { value: "Ramesh Kumar Sharma" } });
     fireEvent.change(screen.getByLabelText(/date of birth/i), { target: { value: "1965-01-01" } });

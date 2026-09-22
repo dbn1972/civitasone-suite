@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { Button, DataTable, ConfirmDialog } from "../../../../_components/ds";
 import { browserJson } from "@/lib/api/browserClient";
 
@@ -17,6 +18,7 @@ export type LoanRow = {
 } & Record<string, unknown>;
 
 export function LoansTable({ rows }: { rows: LoanRow[] }) {
+  const t = useTranslations("loansTable");
   const router = useRouter();
   const [pendingId, setPendingId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -31,10 +33,10 @@ export function LoansTable({ rows }: { rows: LoanRow[] }) {
     try {
       await browserJson(`v1/payroll/loans/${id}/disburse`, { method: "PATCH" });
       setPendingId(null);
-      setMessage("Loan disbursement queued.");
+      setMessage(t("disbursedMessage"));
       router.refresh();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Network error. Please try again.");
+      setError(err instanceof Error ? err.message : t("networkError"));
     } finally {
       setBusy(false);
     }
@@ -47,28 +49,28 @@ export function LoansTable({ rows }: { rows: LoanRow[] }) {
     cellType?: "status" | "amount";
     render?: (row: LoanRow) => React.ReactNode;
   }[] = [
-    { key: "loanNo", label: "Loan No." },
-    { key: "loanType", label: "Type" },
-    { key: "principalMinor", label: "Principal", align: "right", cellType: "amount" },
-    { key: "outstandingMinor", label: "Outstanding", align: "right", cellType: "amount" },
-    { key: "emiMinor", label: "EMI", align: "right", cellType: "amount" },
-    { key: "status", label: "Status", cellType: "status" },
+    { key: "loanNo", label: t("colLoanNo") },
+    { key: "loanType", label: t("colType") },
+    { key: "principalMinor", label: t("colPrincipal"), align: "right", cellType: "amount" },
+    { key: "outstandingMinor", label: t("colOutstanding"), align: "right", cellType: "amount" },
+    { key: "emiMinor", label: t("colEmi"), align: "right", cellType: "amount" },
+    { key: "status", label: t("colStatus"), cellType: "status" },
     {
       key: "id",
-      label: "Action",
+      label: t("colAction"),
       render: (row) =>
         row.status === "applied" ? (
           <Button
             type="button"
             variant="secondary"
             size="sm"
-            aria-label={`Disburse loan ${row.loanNo}`}
+            aria-label={t("disburseAriaLabel", { loanNo: row.loanNo })}
             onClick={() => {
               setError(undefined);
               setPendingId(row.id);
             }}
           >
-            Disburse
+            {t("disburseButton")}
           </Button>
         ) : (
           <span style={{ color: "var(--mut)", fontSize: 12 }}>—</span>
@@ -88,26 +90,24 @@ export function LoansTable({ rows }: { rows: LoanRow[] }) {
         rows={rows}
         sortable
         filterable
-        filterPlaceholder="Filter by loan no. or type…"
+        filterPlaceholder={t("filterPlaceholder")}
         pageSize={15}
         emptyIcon="💳"
-        emptyTitle="No loans for this employee"
-        emptyMessage="This employee has no loans on record."
+        emptyTitle={t("emptyTitle")}
+        emptyMessage={t("emptyMessage")}
       />
 
       <ConfirmDialog
         open={!!pendingId}
-        title="Disburse this loan?"
+        title={t("confirmTitle")}
         danger
-        confirmLabel="Disburse loan"
+        confirmLabel={t("confirmLabel")}
         busy={busy}
         errorMessage={error}
-        description={
-          <>
-            This releases funds for loan <strong>{pendingLoan?.loanNo}</strong>. This action is
-            irreversible.
-          </>
-        }
+        description={t.rich("confirmDescription", {
+          loanNo: pendingLoan?.loanNo ?? "",
+          strong: (chunks) => <strong>{chunks}</strong>,
+        })}
         onConfirm={() => pendingId && void disburse(pendingId)}
         onCancel={() => !busy && setPendingId(null)}
       />

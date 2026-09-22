@@ -3,6 +3,7 @@
 import { useId, useState } from "react";
 import type { CSSProperties } from "react";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { useFormError } from "@/lib/useFormError";
 import { Button } from "../../../../../_components/ds";
 
@@ -20,6 +21,7 @@ const inputStyle: CSSProperties = {
 const labelStyle: CSSProperties = { fontSize: 13, fontWeight: 600, display: "block", marginBottom: 6 };
 
 export function CreatePensionerForm() {
+  const t = useTranslations("createPensionerForm");
   const router = useRouter();
 
   const [ppoNo, setPpoNo] = useState("");
@@ -63,13 +65,13 @@ export function CreatePensionerForm() {
 
     if (!ppoNo.trim() || !fullName.trim() || !dateOfBirth) {
       setStatus("error");
-      setMessage("PPO Number, Full Name, and Date of Birth are required.");
+      setMessage(t("requiredError"));
       return;
     }
 
     if (pan.trim() && !PAN_REGEX.test(pan.trim().toUpperCase())) {
       setStatus("error");
-      setMessage("PAN must be in valid format (e.g. ABCDE1234F).");
+      setMessage(t("panFormatError"));
       return;
     }
 
@@ -104,7 +106,7 @@ export function CreatePensionerForm() {
       }
 
       setStatus("success");
-      setMessage("Pensioner created successfully.");
+      setMessage(t("successMessage"));
       router.push("/hr/payroll/pensioners");
     } catch {
       setStatus("error");
@@ -117,14 +119,14 @@ export function CreatePensionerForm() {
       <form onSubmit={handleSubmit} className="pad" style={{ display: "grid", gap: 16 }}>
         <div>
           <label htmlFor={ppoFieldId} style={labelStyle}>
-            PPO Number <span aria-hidden="true" style={{ color: "#ef4444" }}>*</span>
+            {t("ppoNoLabel")} <span aria-hidden="true" style={{ color: "#ef4444" }}>*</span>
           </label>
           <input
             id={ppoFieldId}
             type="text"
             value={ppoNo}
             onChange={(e) => setPpoNo(e.target.value)}
-            placeholder="e.g. PPO/2025/001234"
+            placeholder={t("ppoNoPlaceholder")}
             style={inputStyle}
             required
           />
@@ -132,14 +134,14 @@ export function CreatePensionerForm() {
 
         <div>
           <label htmlFor={nameFieldId} style={labelStyle}>
-            Full Name <span aria-hidden="true" style={{ color: "#ef4444" }}>*</span>
+            {t("fullNameLabel")} <span aria-hidden="true" style={{ color: "#ef4444" }}>*</span>
           </label>
           <input
             id={nameFieldId}
             type="text"
             value={fullName}
             onChange={(e) => setFullName(e.target.value)}
-            placeholder="e.g. Ramesh Kumar Sharma"
+            placeholder={t("fullNamePlaceholder")}
             style={inputStyle}
             required
           />
@@ -147,7 +149,7 @@ export function CreatePensionerForm() {
 
         <div>
           <label htmlFor={dobFieldId} style={labelStyle}>
-            Date of Birth <span aria-hidden="true" style={{ color: "#ef4444" }}>*</span>
+            {t("dobLabel")} <span aria-hidden="true" style={{ color: "#ef4444" }}>*</span>
           </label>
           <input
             id={dobFieldId}
@@ -161,7 +163,7 @@ export function CreatePensionerForm() {
 
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 14 }}>
           <div>
-            <label htmlFor={basicFieldId} style={labelStyle}>Basic Pension (₹)</label>
+            <label htmlFor={basicFieldId} style={labelStyle}>{t("basicPensionLabel")}</label>
             <input
               id={basicFieldId}
               type="number"
@@ -169,13 +171,13 @@ export function CreatePensionerForm() {
               step="0.01"
               value={basicPension}
               onChange={(e) => setBasicPension(e.target.value)}
-              placeholder="e.g. 25000"
+              placeholder={t("basicPensionPlaceholder")}
               style={inputStyle}
             />
           </div>
 
           <div>
-            <label htmlFor={commutedFieldId} style={labelStyle}>Commuted Pension (₹, optional)</label>
+            <label htmlFor={commutedFieldId} style={labelStyle}>{t("commutedPensionLabel")}</label>
             <input
               id={commutedFieldId}
               type="number"
@@ -183,13 +185,13 @@ export function CreatePensionerForm() {
               step="0.01"
               value={commutedPension}
               onChange={(e) => setCommutedPension(e.target.value)}
-              placeholder="e.g. 5000"
+              placeholder={t("commutedPensionPlaceholder")}
               style={inputStyle}
             />
           </div>
 
           <div>
-            <label htmlFor={commDateFieldId} style={labelStyle}>Commutation Date (optional)</label>
+            <label htmlFor={commDateFieldId} style={labelStyle}>{t("commutationDateLabel")}</label>
             <input
               id={commDateFieldId}
               type="date"
@@ -200,7 +202,7 @@ export function CreatePensionerForm() {
           </div>
 
           <div>
-            <label htmlFor={medFieldId} style={labelStyle}>Medical Allowance (₹, optional)</label>
+            <label htmlFor={medFieldId} style={labelStyle}>{t("medicalAllowanceLabel")}</label>
             <input
               id={medFieldId}
               type="number"
@@ -208,55 +210,55 @@ export function CreatePensionerForm() {
               step="0.01"
               value={medicalAllowance}
               onChange={(e) => setMedicalAllowance(e.target.value)}
-              placeholder="e.g. 1000"
+              placeholder={t("medicalAllowancePlaceholder")}
               style={inputStyle}
             />
           </div>
 
           <div>
-            <label htmlFor={ddoFieldId} style={labelStyle}>DDO Code (optional)</label>
+            <label htmlFor={ddoFieldId} style={labelStyle}>{t("ddoCodeLabel")}</label>
             <input
               id={ddoFieldId}
               type="text"
               value={ddoCode}
               onChange={(e) => setDdoCode(e.target.value)}
-              placeholder="e.g. DDO-FIN-001"
+              placeholder={t("ddoCodePlaceholder")}
               style={inputStyle}
             />
           </div>
 
           <div>
-            <label htmlFor={bankAccFieldId} style={labelStyle}>Bank Account No (optional)</label>
+            <label htmlFor={bankAccFieldId} style={labelStyle}>{t("bankAccountLabel")}</label>
             <input
               id={bankAccFieldId}
               type="text"
               value={bankAccountNo}
               onChange={(e) => setBankAccountNo(e.target.value)}
-              placeholder="e.g. 1234567890"
+              placeholder={t("bankAccountPlaceholder")}
               style={inputStyle}
             />
           </div>
 
           <div>
-            <label htmlFor={ifscFieldId} style={labelStyle}>Bank IFSC (optional)</label>
+            <label htmlFor={ifscFieldId} style={labelStyle}>{t("ifscLabel")}</label>
             <input
               id={ifscFieldId}
               type="text"
               value={bankIfsc}
               onChange={(e) => setBankIfsc(e.target.value)}
-              placeholder="e.g. SBIN0001234"
+              placeholder={t("ifscPlaceholder")}
               style={inputStyle}
             />
           </div>
 
           <div>
-            <label htmlFor={panFieldId} style={labelStyle}>PAN (optional)</label>
+            <label htmlFor={panFieldId} style={labelStyle}>{t("panLabel")}</label>
             <input
               id={panFieldId}
               type="text"
               value={pan}
               onChange={(e) => setPan(e.target.value)}
-              placeholder="e.g. ABCDE1234F"
+              placeholder={t("panPlaceholder")}
               maxLength={10}
               style={inputStyle}
             />
@@ -264,7 +266,7 @@ export function CreatePensionerForm() {
         </div>
 
         <fieldset style={{ border: "1px solid var(--line)", borderRadius: 10, padding: 12 }}>
-          <legend style={{ fontSize: 13, fontWeight: 600, padding: "0 4px" }}>Tax Regime</legend>
+          <legend style={{ fontSize: 13, fontWeight: 600, padding: "0 4px" }}>{t("taxRegimeLegend")}</legend>
           <div style={{ display: "flex", gap: 24 }} id={taxRegimeId}>
             <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, cursor: "pointer" }}>
               <input
@@ -275,7 +277,7 @@ export function CreatePensionerForm() {
                 onChange={() => setTaxRegime("old")}
                 style={{ width: 18, height: 18 }}
               />
-              Old Regime
+              {t("oldRegimeLabel")}
             </label>
             <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, cursor: "pointer" }}>
               <input
@@ -286,14 +288,14 @@ export function CreatePensionerForm() {
                 onChange={() => setTaxRegime("new")}
                 style={{ width: 18, height: 18 }}
               />
-              New Regime
+              {t("newRegimeLabel")}
             </label>
           </div>
         </fieldset>
 
         <div>
           <Button type="submit" style={{ minHeight: 44 }} disabled={status === "submitting"}>
-            {status === "submitting" ? "Creating…" : "Create Pensioner"}
+            {status === "submitting" ? t("submittingButton") : t("submitButton")}
           </Button>
         </div>
 
@@ -305,7 +307,7 @@ export function CreatePensionerForm() {
             className={`pill ${status === "error" ? "bad" : "good"}`}
             style={{ width: "fit-content" }}
           >
-            <span style={{ fontWeight: 600 }}>{status === "error" ? "Error: " : "Success: "}</span>
+            <span style={{ fontWeight: 600 }}>{status === "error" ? t("errorPrefix") : t("successPrefix")}</span>
             {message}
           </p>
         )}

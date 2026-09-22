@@ -2,9 +2,11 @@
 
 import { useId, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { Button } from "../../../../_components/ds";
 
 export function LoanSearchForm({ initialEmpId }: { initialEmpId: string }) {
+  const t = useTranslations("loanSearchForm");
   const router = useRouter();
   const [empId, setEmpId] = useState(initialEmpId);
   const [error, setError] = useState<string | null>(null);
@@ -13,7 +15,7 @@ export function LoanSearchForm({ initialEmpId }: { initialEmpId: string }) {
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!empId.trim()) {
-      setError("Enter an employee ID to search.");
+      setError(t("requiredError"));
       return;
     }
     setError(null);
@@ -24,7 +26,7 @@ export function LoanSearchForm({ initialEmpId }: { initialEmpId: string }) {
     <form onSubmit={handleSubmit} style={{ display: "flex", gap: 10, alignItems: "flex-end", flexWrap: "wrap" }}>
       <div style={{ display: "grid", gap: 6, flex: 1, minWidth: 240 }}>
         <label htmlFor={fieldId} style={{ fontSize: 13, fontWeight: 600 }}>
-          Employee ID (UUID) <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
+          {t("fieldLabel")} <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
         </label>
         <input
           id={fieldId}
@@ -37,7 +39,7 @@ export function LoanSearchForm({ initialEmpId }: { initialEmpId: string }) {
         />
       </div>
       <Button type="submit" style={{ minHeight: 44 }}>
-        Search
+        {t("searchButton")}
       </Button>
       {error && (
         <p id={`${fieldId}-err`} role="alert" className="pill bad" style={{ width: "fit-content" }}>

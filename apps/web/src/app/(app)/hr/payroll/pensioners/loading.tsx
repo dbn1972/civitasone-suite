@@ -1,10 +1,13 @@
-export default function Loading() {
+import { getTranslations } from "next-intl/server";
+
+export default async function Loading() {
+  const t = await getTranslations("pensioners");
   return (
     <main className="page-main" aria-labelledby="page-heading">
       <div className="ph">
         <div>
-          <h1 id="page-heading">Pensioners</h1>
-          <div className="sub">PPO management.</div>
+          <h1 id="page-heading">{t("loadingHeading")}</h1>
+          <div className="sub">{t("loadingSub")}</div>
         </div>
       </div>
       <div className="animate-pulse" style={{ display: "grid", gap: 16 }}>
