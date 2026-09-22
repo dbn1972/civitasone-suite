@@ -202,6 +202,15 @@ tr.clickable:hover{background:var(--primary-soft)!important}
 .tabs span{padding:11px 14px;font-size:13.5px;font-weight:600;color:var(--ink2);border-bottom:2px solid transparent;cursor:pointer}
 .tabs .on{color:var(--primary-d);border-color:var(--primary)}
 
+/* subnav: a bounded strip of real cross-page navigation links (<a> hrefs to
+   different routes), visually distinct from a page's action-button row.
+   Deliberately NOT `.tabs`: that component is a role="tablist" client-side
+   content-switcher for panels within one page, and using tablist/tab roles
+   on real navigation would be an ARIA misuse. See estab/list/page.tsx. */
+.subnav{display:flex;flex-wrap:wrap;align-items:center;gap:6px;padding:10px;margin-bottom:18px;border:1px solid var(--line);border-radius:12px;background:var(--panel)}
+.subnav a{padding:7px 12px;border-radius:8px;font-size:13px;font-weight:600;color:var(--ink2);text-decoration:none;white-space:nowrap}
+.subnav a:hover,.subnav a:focus-visible{background:var(--line2);color:var(--ink)}
+
 /* misc */
 .list{list-style:none}
 .li{display:flex;align-items:center;gap:12px;padding:13px 0;border-bottom:1px solid var(--line2)}
@@ -283,7 +292,7 @@ tr.clickable:hover{background:var(--primary-soft)!important}
 @media print{
   @page{margin:14mm}
   body{background:#fff!important}
-  .sb,.tb,.mnav,.mactions,.ph-act,.iconbtn,.tb-search,.seg,.back{display:none!important}
+  .sb,.tb,.mnav,.mactions,.ph-act,.iconbtn,.tb-search,.seg,.back,.subnav{display:none!important}
   .app,.main{display:block!important}
   .wrap{padding:0!important;max-width:100%!important}
   .btn{display:none!important}

@@ -43,21 +43,35 @@ export default async function EstabFilesListPage() {
         help="estab"
         actions={
           <>
-            <a className="btn ghost" href="/estab/inbox">My Desk</a>
-            <a className="btn ghost" href="/estab/dak">Dak / Receipts</a>
-            <a className="btn ghost" href="/estab/dispatch">Dispatch</a>
-            <a className="btn ghost" href="/estab/dfa">DFA</a>
-            <a className="btn ghost" href="/estab/approvals">Approvals</a>
-            <a className="btn ghost" href="/estab/approval-matrix">Approval Matrix</a>
-            <a className="btn ghost" href="/estab/operators">Operators</a>
-            <a className="btn ghost" href="/estab/handover">Handover</a>
-            <a className="btn ghost" href="/estab/migration">Migration</a>
-            <a className="btn ghost" href="/estab/notifications">Notifications</a>
             <a className="btn primary" href="/estab/workspace">Guided File</a>
             <a className="btn primary" href="/estab/files/new">+ Create File</a>
           </>
         }
       />
+      {/* Bug C (fix/tenant-admin-and-establishment-nav): these 10 cross-links
+          used to live inside PageHeader's own `actions` slot, wrapping onto
+          the same flex row as the 2 real page actions above (Guided File /
+          + Create File) with no visual boundary between "go to a related
+          section" and "do a thing on this page" -- the exact confusion the
+          reported bug described. ds/Tabs.tsx wasn't the right fit for this:
+          it's a role="tablist" client-side content-switcher for panels
+          within one page, not cross-page navigation -- reusing it here would
+          have been an ARIA misuse (a real <nav> of <a>s is the correct
+          semantics for links to different routes). Instead: pulled these
+          into their own clearly-bounded <nav>, styled via the new `.subnav`
+          rule (civitas-ds.css), visually distinct from the actions row. */}
+      <nav aria-label="Establishment sections" className="subnav">
+        <a href="/estab/inbox">My Desk</a>
+        <a href="/estab/dak">Dak / Receipts</a>
+        <a href="/estab/dispatch">Dispatch</a>
+        <a href="/estab/dfa">DFA</a>
+        <a href="/estab/approvals">Approvals</a>
+        <a href="/estab/approval-matrix">Approval Matrix</a>
+        <a href="/estab/operators">Operators</a>
+        <a href="/estab/handover">Handover</a>
+        <a href="/estab/migration">Migration</a>
+        <a href="/estab/notifications">Notifications</a>
+      </nav>
       <div
         className="banner"
         style={{
