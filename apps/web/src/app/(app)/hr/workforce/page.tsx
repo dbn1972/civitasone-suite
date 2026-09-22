@@ -32,6 +32,12 @@ export default async function WorkforcePage() {
   const headcount = hc.data;
   const retirements = rt.data;
   const source = hc.source === "error" || rt.source === "error" ? "error" : hc.source;
+  // UX-013: `source` was already computed (merged across both loader calls)
+  // but only wired to the badge below -- never to the stat values, so a
+  // failed load rendered raw zeroes (both loaders default to `[]`, and
+  // reduce/filter over an empty array is 0). Gate every stat on it, same
+  // convention as projects/dashboard and estab/dashboard.
+  const errored = source === "error";
 
   const totalHeadcount = headcount.reduce((s, r) => s + Number(r.count), 0);
   const retiringSoon = retirements.filter((r) => Number(r.monthsLeft ?? 99) <= 6).length;
@@ -59,10 +65,10 @@ export default async function WorkforcePage() {
       />
       <DataSourceBadge source={source} />
       <StatGrid>
-        <StatCard icon="👥" iconBg="#e6f0ff" label={t("statTotalHeadcount")} value={totalHeadcount} />
-        <StatCard icon="🏢" iconBg="#f5f5f5" label={t("statDepartments")} value={headcount.length} />
-        <StatCard icon="⏳" iconBg="#fff1f0" label={t("statRetiringSoon")} value={retiringSoon} />
-        <StatCard icon="📅" iconBg="#fffbe6" label={t("statRetiring12")} value={retiring12} />
+        <StatCard icon="👥" iconBg="#e6f0ff" label={t("statTotalHeadcount")} value={errored ? "—" : totalHeadcount} />
+        <StatCard icon="🏢" iconBg="#f5f5f5" label={t("statDepartments")} value={errored ? "—" : headcount.length} />
+        <StatCard icon="⏳" iconBg="#fff1f0" label={t("statRetiringSoon")} value={errored ? "—" : retiringSoon} />
+        <StatCard icon="📅" iconBg="#fffbe6" label={t("statRetiring12")} value={errored ? "—" : retiring12} />
       </StatGrid>
       <Card title={t("cardHeadcountByDept")}>
         <DataTable<HeadcountRow>

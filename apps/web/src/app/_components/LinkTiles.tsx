@@ -1,5 +1,6 @@
 import Link from "next/link";
 import type { NavTile } from "@civitasone/types";
+import { StatIcon } from "./ds/StatIcon";
 
 interface LinkTilesProps {
   tiles: NavTile[];
@@ -94,7 +95,7 @@ export function LinkTiles({ tiles, columns = "three" }: LinkTilesProps) {
                   style={{ textDecoration: "none", color: "inherit", display: "block" }}
                 >
                   <div className="ic" style={{ background: TILE_BG[idx % TILE_BG.length] }}>
-                    {tileIcon(tile)}
+                    <StatIcon icon={tileIcon(tile)} size={18} />
                   </div>
                   <h3 className="v">{tile.title}</h3>
                   {tile.description ? <div className="l">{tile.description}</div> : null}

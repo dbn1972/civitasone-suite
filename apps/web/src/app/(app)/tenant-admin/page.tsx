@@ -13,6 +13,10 @@ export default async function TenantAdminPage() {
   const canViewOperations = roles.includes("platform_admin") || roles.includes("super_admin");
   const { data: dashboard, source } = await getTenantAdminDashboard();
   const { kpis, health, modules } = dashboard;
+  // UX-013: `source` was already fetched but only wired to the badge below
+  // -- never to the KPI values, so a failed load rendered raw zeroes. Gate
+  // on it, same convention as projects/dashboard and estab/dashboard.
+  const errored = source === "error";
 
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
@@ -31,7 +35,7 @@ export default async function TenantAdminPage() {
       />
       <div className="grid g-4" style={{ marginBottom: 18 }}>
         {kpis.slice(0, 4).map((kpi, i) => (
-          <StatCard key={kpi.label} icon={KPI_ICONS[i] ?? "📊"} iconBg={KPI_BG[i] ?? "#f1f5f9"} label={kpi.label} value={kpi.value} />
+          <StatCard key={kpi.label} icon={KPI_ICONS[i] ?? "📊"} iconBg={KPI_BG[i] ?? "#f1f5f9"} label={kpi.label} value={errored ? "—" : kpi.value} />
         ))}
       </div>
       {source === "error" && <DataSourceBadge source={source} />}
