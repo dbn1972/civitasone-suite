@@ -1,7 +1,6 @@
 import { PrintExportButton } from "../../../_components/PrintExportButton";
 import { PageHeader, StatCard, Term } from "../../../_components/ds";
 import { getAdminUsers } from "../../../_data/loaders";
-import { Breadcrumb } from "../Breadcrumb";
 import { UsersTable } from "./UsersTable";
 import { LABELS } from "@/lib/labels";
 
@@ -15,9 +14,18 @@ export default async function AdminUsersPage() {
 
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
-      <Breadcrumb items={[{ label: "Tenant Admin", href: "/tenant-admin" }, { label: "Manage Users" }]} />
+      {/* fix/tenant-admin-and-establishment-nav (Bug A): this page used to
+          render THREE stacked "go up" affordances — the global AutoBreadcrumb
+          (from AppShell, every page gets this automatically), a second,
+          page-local <Breadcrumb> ("Tenant Admin / Manage Users"), and this
+          PageHeader's own "← Back" link (back="/tenant-admin") — all three
+          doing the same job. Removed the two redundant ones; AutoBreadcrumb
+          alone is the convention the rest of the app already uses (e.g.
+          estab/dashboard). NOTE: ~18 other tenant-admin/* pages share the
+          exact same now-redundant <Breadcrumb>+back= pattern (roles,
+          sessions, audit, mfa, sso, ... — see PR description) — deliberately
+          NOT touched here to keep this fix scoped to the reported page. */}
       <PageHeader
-        back="/tenant-admin"
         title="Manage Users"
         subtitle={<>Your {LABELS.tenant}&apos;s user directory with role assignment and <Term name="MFA" /> status.</>}
         help="tenant-admin"

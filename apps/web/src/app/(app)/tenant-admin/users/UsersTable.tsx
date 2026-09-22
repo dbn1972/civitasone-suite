@@ -36,6 +36,33 @@ export function UsersTable({ users, source = "api" }: { users: AdminUser[]; sour
     return rows.filter((u) => u.status === filter.toLowerCase());
   }, [rows, filter]);
 
+  // Bug B (fix/tenant-admin-and-establishment-nav): "0 users" here is a real,
+  // correctly-authenticated, correctly-tenant-scoped 0 -- live-verified via a
+  // real uxtester token against GET /identity/users (both the identity-svc
+  // route and the gateway's /v1/admin/users alias): 200 OK, genuinely empty
+  // array. Not a fetch failure masquerading as 0 (that class of bug is a
+  // shared StatCard/fallback concern tracked separately). The real, page-
+  // specific gap: identity-service's user directory is populated ONLY by
+  // this page's own "+ Invite User" flow (a command -> async DB projection);
+  // it never reads or syncs Keycloak's realm users. So an account created
+  // directly in Keycloak (as uxtester was, for UAT) has no directory row and
+  // never will until invited here -- even though they are clearly a real,
+  // authenticated user of this exact tenant. DataTable's generic "No records
+  // found" default doesn't explain any of that, so replace it with an honest,
+  // actionable message -- but ONLY when the fetch genuinely succeeded with
+  // zero rows (provenance === "live", the same single source of truth the
+  // DataSourceBadge above already reads -- UX-002's "never a second,
+  // independently-derived provenance" rule applies here too). A fetch that
+  // actually FAILED resolves to "error-no-data" (verified live: a rejected
+  // token produces exactly this), and must keep showing the generic message
+  // instead -- the Keycloak-sync explanation would be actively misleading
+  // for a plain network/auth failure that has nothing to do with Keycloak
+  // sync. That failure case is already honestly surfaced by the badge above,
+  // which is the one place this file reports provenance (per the UX-012
+  // comment below) -- caught live during browser verification, not by the
+  // unit tests below, which is why there's now a regression test for it too.
+  const directoryEmpty = rows.length === 0 && (provenance ?? "live") === "live";
+
   return (
     <div className="card">
       <div className="card-h">
@@ -98,6 +125,22 @@ export function UsersTable({ users, source = "api" }: { users: AdminUser[]; sour
         filterable
         filterPlaceholder="Search users…"
         pageSize={10}
+        {...(directoryEmpty
+          ? {
+              emptyIcon: "👥",
+              emptyTitle: "No users in this directory yet",
+              emptyMessage:
+                "Accounts created directly in Keycloak (e.g. for initial setup) aren't synced here automatically — invite each teammate below to add them to this tenant's directory.",
+              // Distinct label from the toolbar's own "+ Invite User" button
+              // (same click handler) -- two same-named buttons on one page
+              // would be ambiguous both for screen-reader users navigating by
+              // name and for role+name test queries like the one already in
+              // UsersTable.test.tsx.
+              emptyAction: (
+                <Button size="sm" onClick={() => setInviteOpen(true)}>+ Invite your first user</Button>
+              ),
+            }
+          : {})}
       />
 
       <InviteUserDialog
