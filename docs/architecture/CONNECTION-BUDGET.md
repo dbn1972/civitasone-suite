@@ -257,3 +257,92 @@ Postgres:
    `tests/ops/verify-pgbouncer-routing.test.ts`, `tests/infra/
    helm-pgbouncer.test.ts` all pass — including new assertions that would fail
    if the wiring, the wildcard fix, or the auth fix regressed again.
+
+## 9. Re-verification (Issue #2, 2026-09-22): design re-confirmed correct, container still not redeployed
+
+Re-investigated independently while triaging a separate 5-item punch list (this
+fix's "Issue #2" — its brief, written from `docker ps`/config reading alone,
+assumed this file's fix didn't exist yet and asked for a hand-generated
+`userlist.txt`; it does exist, so that request was not followed — see below
+and the PR this section shipped in for the full reasoning). Findings, in the
+order the investigation went:
+
+1. **The shared `civitasone-pgbouncer` container is still running the
+   pre-#1098 config.** `docker exec civitasone-pgbouncer cat
+   /etc/pgbouncer/pgbouncer.ini` on 2026-09-22 still showed `auth_type =
+   trust` and a single `[databases] postgres = ...` entry — its uptime
+   (`docker ps`: "Up 3 weeks") predates this fix's merge, and the
+   edoburu/pgbouncer image only regenerates its config from env vars at
+   container **creation**, not on restart. §§3a/3b's bugs are still live
+   right now, not hypothetical. Two on-disk checkouts exist on the EC2 host —
+   `~/civitasone-suite` (the dev/worktree tree) and
+   `/home/ec2-user/CivitasOne/civitasone-suite` (confirmed via `docker inspect
+   civitasone-pgbouncer`'s `com.docker.compose.project.working_dir` label to
+   be the one that actually deployed the running stack) — both confirmed
+   (`git merge-base --is-ancestor a533305f HEAD`) to already contain this fix.
+   So the gap is purely "never redeployed," not "wrong checkout" or "fix
+   incomplete."
+2. **Re-confirmed §3b's root cause independently**, since Issue #2's brief
+   specifically asked whether `auth_type=trust` failures come from
+   `userlist.txt` completeness or the `[databases]` list being incomplete:
+   neither. It's backend (PgBouncer→Postgres) auth — `trust` only governs how
+   PgBouncer authenticates the *client*; civitasone-postgres's `pg_hba.conf`
+   demands scram-sha-256 for every non-local connection regardless of that
+   setting. A fully-populated `[databases]` list under `auth_type=trust` would
+   still fail every login. A static per-role `userlist.txt` (58+ entries)
+   would technically also close the backend-auth gap, but is exactly what §3b
+   already argued against — re-confirmed still correct; not added here.
+3. **Re-verified end-to-end against today's real data** (60 `civitas_*`
+   databases / 58 `_svc` roles live in Postgres right now — `civitas_admin`
+   confirmed superuser), via disposable PgBouncer instances (scratch ports,
+   same image/env as this file's committed `pgbouncer` service, torn down
+   after each) — not the shared container, since other agents are running
+   parallel gap fixes on this same host (§8's same reasoning applies).
+   Probed **all 65** `ecosystem.config.js`-defined services
+   (`fleet-topology.mjs`), not a handful: **54 passed** (real per-role auth,
+   real query, own database, via `AUTH_QUERY` against `pg_authid` — no
+   userlist.txt entry existed for any of them beyond the one bootstrap line).
+   The 11 failures are pre-existing and unrelated to PgBouncer:
+   - 8 have no bootstrapped database at all yet — `building`, `crematorium`,
+     `drainage`, `event`, `fire`, `market`, `parking`, `sewerage`
+     (`database "civitas_X" does not exist`).
+   - 3 have a role whose real Postgres password does not follow the
+     `<role>_dev_pw` convention, despite both the role and its database
+     existing — `advertisement_svc`, `animal_svc`, `vendor_svc` (`SASL
+     authentication failed`). Not investigated further here — a
+     credential-provisioning gap for those 3 roles specifically, out of scope
+     for Issue #2; flagged for whoever owns them.
+
+   No failure correlated with anything about PgBouncer's config — every one
+   traces to a gap in what's bootstrapped in Postgres, independent of this
+   file's settings.
+4. **`scripts/ops/verify-pgbouncer-routing.mjs` against the live fleet**
+   (2026-09-22): exit 1. At query time, 3/65 services had an open direct
+   connection (`finance`, `hrms`, `payroll` — the other 62 showed zero
+   connections at that instant, which the tool correctly reports as
+   "compliant" rather than conflating "not observed" with "using the proxy");
+   zero of the 3 observed connections went via the proxy. Consistent with §1
+   of the PR's brief ("all 32 running processes bypass PgBouncer entirely")
+   and with the shared container still being unusable even if they didn't.
+5. **Added `scripts/ops/redeploy-pgbouncer.sh`**: recreates a named PgBouncer
+   container from a given `docker-compose.yml` (guarded — refuses if the
+   target port has active client connections, unless `--force`) and runs the
+   same all-services auth probe from point 3 against whatever's listening on
+   the target port afterward. Defaults to a dry run (probe only, no
+   container change); `--apply` is required to actually recreate. Exercised
+   fully in both modes — dry-run probing against disposable instances (point
+   3), and a full `--apply` recreate + healthcheck-wait + post-recreate probe
+   against a throwaway compose project (not the shared container, torn down
+   after). Not run with `--apply` against the shared `civitasone-pgbouncer`
+   container as part of this re-verification — see the PR for the live/
+   shared-host reasoning; doing so is this PR's explicit recommendation for
+   the orchestrator, not something performed here.
+
+**Net conclusion**: the design in §§3-6 is unchanged and re-confirmed correct
+against today's real data — 65 services defined in `ecosystem.config.js`, but
+only 60 databases / 58 roles actually bootstrapped in Postgres (point 3's 11
+failures are exactly that gap, not a PgBouncer problem — further evidence for
+deriving everything live rather than trusting any hand-maintained count,
+including this file's own). The only outstanding action is operational —
+recreate the one live container — deliberately left to the orchestrator
+managing this shared host, not performed here.
