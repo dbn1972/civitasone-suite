@@ -177,3 +177,31 @@ describe("formatBps (basis points -> percent, no premature rounding)", () => {
     expect(formatBps("abc")).toBe("—");
   });
 });
+
+import { formatPercent } from "./formatters";
+describe("formatPercent (already-computed 0-100 percentage, e.g. Budget Utilisation)", () => {
+  it("formats to one decimal place by default", () => {
+    expect(formatPercent(45.2)).toBe("45.2%");
+    expect(formatPercent(100)).toBe("100.0%");
+  });
+
+  it("keeps a genuine 0% distinct from missing data", () => {
+    expect(formatPercent(0)).toBe("0.0%");
+    expect(formatPercent(0)).not.toBe(formatPercent(null));
+  });
+
+  it("returns an em-dash for null (UX-006: no sanctioned budget on record, not a real 0%)", () => {
+    expect(formatPercent(null)).toBe("—");
+  });
+
+  it("returns an em-dash for undefined/non-finite input", () => {
+    expect(formatPercent(undefined)).toBe("—");
+    expect(formatPercent(Number.NaN)).toBe("—");
+    expect(formatPercent(Number.POSITIVE_INFINITY)).toBe("—");
+  });
+
+  it("respects a custom decimals count", () => {
+    expect(formatPercent(45.239, 2)).toBe("45.24%");
+    expect(formatPercent(45, 0)).toBe("45%");
+  });
+});

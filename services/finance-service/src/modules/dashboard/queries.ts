@@ -5,6 +5,25 @@ import { financeSanctions, financeBudgets } from "../budget/schema.js";
 import { financePayments } from "../payments/schema.js";
 import { financeLedger } from "../gl/schema.js";
 
+/**
+ * UX-006: null when there is no sanctioned budget (BE) on record for this
+ * tenant/FY to compute utilisation against — not "a ₹0 budget, 0% used".
+ * Fabricating 0 here is indistinguishable from a genuine zero-percent
+ * utilisation against a real budget, and was actively misleading: real,
+ * non-zero expenditure (financeLedger has posted debits) can exist with zero
+ * rows in financeBudgets (budget formulation simply hasn't happened yet for
+ * this tenant/FY), which previously still rendered a confident-looking
+ * "0.0%" instead of surfacing that the utilisation is genuinely unknown/not
+ * applicable. `null` here flows through FinanceDashboardSchema and the
+ * frontend's formatPercent() to render "—", matching the same missing-data
+ * convention formatMoney/formatRupees/formatBps already use.
+ *
+ * Exported (pure, no DB) so this exact rule is unit-testable directly.
+ */
+export function computeBudgetUtilisationPct(expenditureMinor: number, sanctionedMinor: number): number | null {
+  return sanctionedMinor > 0 ? Math.round((expenditureMinor / sanctionedMinor) * 100) : null;
+}
+
 export async function getDashboard(tenantId: string) {
   return cache.getOrLoad(
     cache.makeKey(tenantId, "dashboard", "summary"),
@@ -26,7 +45,7 @@ export async function getDashboard(tenantId: string) {
         ]);
         const sanctioned = Number(budgetRow?.totalBE ?? 0);
         const expenditure = Number(expRow?.total ?? 0);
-        const budgetUtilisationPct = sanctioned > 0 ? Math.round((expenditure / sanctioned) * 100) : 0;
+        const budgetUtilisationPct = computeBudgetUtilisationPct(expenditure, sanctioned);
         return {
           budgetUtilisationPct,
           pendingSanctions: pendingRow?.count ?? 0,

@@ -1726,7 +1726,11 @@ export const getAnalyticsDashboards = moduleLoader("/api/v1/analytics/dashboards
 function mapFinanceDashboard(payload: unknown): FinanceDashboard | null {
   if (!isRecord(payload)) return null;
   return {
-    budgetUtilisationPct: typeof payload.budgetUtilisationPct === "number" ? payload.budgetUtilisationPct : 0,
+    // Preserve null (no sanctioned budget on record, UX-006) distinctly from
+    // a malformed/missing field defaulting to 0 — collapsing both to 0 would
+    // reintroduce the fabricated-0.0%-utilisation bug this type change fixes.
+    budgetUtilisationPct:
+      typeof payload.budgetUtilisationPct === "number" ? payload.budgetUtilisationPct : null,
     pendingSanctions: typeof payload.pendingSanctions === "number" ? payload.pendingSanctions : 0,
     paymentsThisMonth: typeof payload.paymentsThisMonth === "number" ? payload.paymentsThisMonth : 0,
     totalExpenditure: typeof payload.totalExpenditure === "number" ? payload.totalExpenditure : 0,
@@ -1734,7 +1738,8 @@ function mapFinanceDashboard(payload: unknown): FinanceDashboard | null {
 }
 
 const FINANCE_DASHBOARD_EMPTY: FinanceDashboard = {
-  budgetUtilisationPct: 0,
+  // null, not 0: an unreachable API is missing data, not a real 0% utilisation (UX-006).
+  budgetUtilisationPct: null,
   pendingSanctions: 0,
   paymentsThisMonth: 0,
   totalExpenditure: 0,

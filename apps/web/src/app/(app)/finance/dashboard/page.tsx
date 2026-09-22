@@ -5,7 +5,7 @@ import Link from "next/link";
 import { BudgetChart } from "./BudgetChart";
 import { PrintExportButton } from "../_components/PrintExportButton";
 import { FyFilter } from "../_components/FyFilter";
-import { formatMoney } from "@/lib/formatters";
+import { formatMoney, formatPercent } from "@/lib/formatters";
 import { getTranslations } from "next-intl/server";
 
 const QUICK_LINKS = [
@@ -45,7 +45,7 @@ export default async function FinanceDashboardPage() {
           icon="💰"
           iconBg="#e7edfd"
           label={t("budgetUtilisation")}
-          value={`${data.budgetUtilisationPct.toFixed(1)}%`}
+          value={formatPercent(data.budgetUtilisationPct)}
           delta="Approved"
           up={false}
         />
@@ -54,7 +54,7 @@ export default async function FinanceDashboardPage() {
           iconBg="#eff6ff"
           label={t("expenditureYtd")}
           value={formatMoney(data.totalExpenditure)}
-          delta={`${data.budgetUtilisationPct.toFixed(1)}%`}
+          delta={formatPercent(data.budgetUtilisationPct)}
           up={true}
         />
         <StatCard

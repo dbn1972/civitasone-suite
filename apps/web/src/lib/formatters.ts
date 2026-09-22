@@ -126,3 +126,23 @@ export function formatBps(bps: number | string | null | undefined): string {
   const fixed = pct.toFixed(2).replace(/0+$/, "").replace(/\.$/, "");
   return `${fixed}%`;
 }
+
+/**
+ * Format an already-computed percentage (0-100 scale, e.g. 45.2 for 45.2%)
+ * for display, fixed to `decimals` places.
+ *
+ * UX-006: null/undefined/non-finite is MISSING data — e.g. "no sanctioned
+ * budget on record to compute utilisation against" — not a real 0%. It
+ * renders "—" (same convention as formatBps/formatMoney/formatRupees),
+ * never a fabricated "0.0%" that would be indistinguishable from a genuine
+ * zero-utilisation budget.
+ *
+ *   formatPercent(45.2)  -> "45.2%"
+ *   formatPercent(0)     -> "0.0%"
+ *   formatPercent(null)  -> "—"
+ *   formatPercent(NaN)   -> "—"
+ */
+export function formatPercent(pct: number | null | undefined, decimals = 1): string {
+  if (pct === null || pct === undefined || !Number.isFinite(pct)) return "—";
+  return `${pct.toFixed(decimals)}%`;
+}
