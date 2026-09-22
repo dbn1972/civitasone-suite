@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useCallback, type ReactNode } from "react";
-import { DataTable, EmptyState, PageHeader, Segmented, StatusPill } from "../../../_components/ds";
+import { Button, DataTable, EmptyState, PageHeader, Segmented, StatusPill } from "../../../_components/ds";
 
 type Doc = {
   id: string;
@@ -123,15 +123,14 @@ export function KnowledgeSearchClient({ initialDocs }: { initialDocs: Doc[] }) {
         title="Enterprise Search"
         subtitle={`Full-text + metadata search across all documents & modules.`}
         actions={
-          <button
-            type="button"
-            className="btn primary"
+          <Button
+            variant="primary"
             onClick={() => setShowFilters((v) => !v)}
             aria-expanded={showFilters}
             aria-controls="advanced-filters"
           >
             Advanced filters
-          </button>
+          </Button>
         }
       />
 
@@ -158,9 +157,9 @@ export function KnowledgeSearchClient({ initialDocs }: { initialDocs: Doc[] }) {
               </select>
             </div>
             {(categoryFilter || statusFilter) && (
-              <button type="button" className="btn ghost" onClick={() => { setCategoryFilter(""); setStatusFilter(""); }}>
+              <Button variant="ghost" onClick={() => { setCategoryFilter(""); setStatusFilter(""); }}>
                 Clear filters
-              </button>
+              </Button>
             )}
           </div>
         </div>

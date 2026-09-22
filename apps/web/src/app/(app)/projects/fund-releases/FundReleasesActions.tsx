@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { ConfirmDialog } from "@/app/_components/ds";
+import { Button, ConfirmDialog } from "@/app/_components/ds";
 import { useFormError } from "@/lib/useFormError";
 
 interface DisburseButtonProps {
@@ -47,9 +47,8 @@ export function DisburseButton({ schemeId, releaseId, releaseNo }: DisburseButto
 
   return (
     <>
-      <button
-        type="button"
-        className="btn primary"
+      <Button
+        variant="primary"
         style={{ minHeight: 36, fontSize: "0.8125rem" }}
         onClick={() => {
           setErrorMessage(undefined);
@@ -57,7 +56,7 @@ export function DisburseButton({ schemeId, releaseId, releaseNo }: DisburseButto
         }}
       >
         Disburse
-      </button>
+      </Button>
 
       <ConfirmDialog
         open={open}
