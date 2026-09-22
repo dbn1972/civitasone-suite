@@ -150,7 +150,19 @@ export function registerIntegrationConsumers(queue: Queue): void {
     // already does `poRef: p.poRef ?? null` (payments/consumer.ts), and the
     // Bills UI already renders a null poRef as an honest "—", so there is
     // no need to fabricate a ref that looks real but resolves to nothing.
-    const poRef = p.poRef ? (p.poRef.startsWith("procurement_") ? p.poRef : `procurement_po:${p.poRef}`) : undefined;
+    //
+    // Independent review (PR #1478) found a real gap in the first version of
+    // this guard: it only checked p.poRef for JS falsiness, which does NOT
+    // catch a producer that has already stringified an undefined id -- the
+    // literal, non-empty, TRUTHY string "undefined" (e.g. from a `${someId}`
+    // interpolation upstream, or a stray String(x) call) would still sail
+    // through `p.poRef ? ... : undefined` and rebuild the exact same bad
+    // "procurement_po:undefined" text this fix exists to prevent. This is
+    // in fact the most plausible real trigger for how the 5 historical bad
+    // rows this PR backfilled ever got that value in the first place. Now
+    // rejects that shape too, not just an absent/empty poRef.
+    const hasRealPoRef = Boolean(p.poRef) && p.poRef !== "undefined" && p.poRef !== "null";
+    const poRef = hasRealPoRef ? (p.poRef.startsWith("procurement_") ? p.poRef : `procurement_po:${p.poRef}`) : undefined;
     const grnRef = `procurement_grn:${p.grnId}`;
     // R5: authoritative ordered (PO) and accepted (GRN) values derived in
     // procurement. The vendor bill is drafted for the GRN-accepted value (pay
