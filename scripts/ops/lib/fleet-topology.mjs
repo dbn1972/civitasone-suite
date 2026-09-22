@@ -59,6 +59,11 @@ const REPO_ROOT = resolve(__dirname, "../../..");
  *
  * @typedef {Object} FleetTopology
  * @property {number} processCount - total PM2 apps (svc + worker + non-DB apps like "web")
+ * @property {string[]} processNames - apps[].name for EVERY declared app (svc + worker + "web"),
+ *   unsorted/as-declared. Distinct from `serviceNames` below: this is the raw, 1:1 list of every
+ *   PM2 process name ecosystem.config.js declares — including workers and non-DB-backed apps —
+ *   used by scripts/ops/verify-fleet-reconciled.mjs to diff against a live `pm2 jlist` and catch
+ *   "declared but never started" drift (see scripts/deployment-runbook.md's Verify step).
  * @property {number} svcCount
  * @property {number} workerCount
  * @property {ServiceEntry[]} services - one entry per distinct DB-backed service (svc+worker share one)
@@ -132,6 +137,7 @@ export function loadFleetTopology() {
 
   return {
     processCount: apps.length,
+    processNames: apps.map((a) => a.name),
     svcCount,
     workerCount,
     services: serviceList,
