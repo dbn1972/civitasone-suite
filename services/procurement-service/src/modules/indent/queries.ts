@@ -15,12 +15,12 @@ import { fetchUserSummaries } from "../../shared/identity-client.js";
 // undefined (not a raw id) when identity-service doesn't recognize the id
 // either (e.g. a placeholder seed actor with no real user record) -- the
 // frontend already renders a missing requestedBy as an honest "—".
-export type IndentSummaryRow = IndentRow & { requestedBy?: string };
+export type IndentSummaryRow = IndentRow & { requestedBy: string | undefined };
 
 async function withRequestedBy<T extends { createdBy: string }>(
   tenantId: string,
   rows: T[],
-): Promise<(T & { requestedBy?: string })[]> {
+): Promise<(T & { requestedBy: string | undefined })[]> {
   if (rows.length === 0) return rows;
   const userMap = await fetchUserSummaries(tenantId);
   return rows.map((row) => ({ ...row, requestedBy: userMap.get(row.createdBy)?.name }));
