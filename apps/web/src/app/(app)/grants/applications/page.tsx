@@ -3,7 +3,6 @@ import { formatMoney } from "@/lib/formatters";
 import { getGrantApplications } from "../_data";
 import { ApplicationsTable } from "./ApplicationsTable";
 import { FilterButton } from "./FilterButton";
-import { ArrowLeft } from "lucide-react";
 
 export default async function GrantApplicationsPage() {
   const { data: applications, source } = await getGrantApplications();
@@ -15,9 +14,11 @@ export default async function GrantApplicationsPage() {
 
   return (
     <>
-      <nav aria-label="Breadcrumb" className="back">
-        <ArrowLeft aria-hidden="true" size={14} /> <a href="/grants">Grants</a>
-      </nav>
+      {/* UX: PageHeader's `back`/`backLabel` props already render the single
+          breadcrumb (icon + "Grants" link) below — this page used to ALSO
+          render its own manual <nav aria-label="Breadcrumb"> here, which
+          doubled it into "← Grants ← Grants". Removed; do not re-add a
+          second breadcrumb alongside the `back` prop. */}
       <PageHeader
         title="Grant Applications"
         subtitle="All applications across schemes with disbursement status."
