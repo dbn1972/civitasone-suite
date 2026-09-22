@@ -417,6 +417,35 @@ describe("Project Routes", () => {
     });
   });
 
+  // ISSUE-8: this is the route apps/web's getProjects() loader actually
+  // calls (GET /v1/projects/projects -> queries.listProjectSummaries),
+  // backing the /projects/list page. It had no route-wiring coverage at all
+  // before this -- GET /v1/projects above exercises the older, raw
+  // queries.listProjects path instead. Note queries.js is mocked wholesale
+  // in this file (see vi.mock("../src/modules/project/queries.js", ...)
+  // above), so this can only prove routing/auth wiring, not the actual
+  // totalBudget/rag mapping fix -- that's covered directly, against the
+  // real mapProjectRow(), in src/modules/project/queries.test.ts.
+  describe("GET /v1/projects/projects", () => {
+    it("returns 200 for authorized user", async () => {
+      mockState.queryResult = [SEED_PROJECT];
+      const res = await app.inject({ method: "GET", url: "/v1/projects/projects", headers: { authorization: `Bearer ${ADMIN_TOKEN()}` } });
+      expect(res.statusCode).toBe(200);
+    });
+
+    it("returns 401 without auth", async () => {
+      mockState.queryResult = [SEED_PROJECT];
+      const res = await app.inject({ method: "GET", url: "/v1/projects/projects" });
+      expect(res.statusCode).toBe(401);
+    });
+
+    it("returns 403 for employee role", async () => {
+      mockState.queryResult = [SEED_PROJECT];
+      const res = await app.inject({ method: "GET", url: "/v1/projects/projects", headers: { authorization: `Bearer ${NO_ROLE_TOKEN()}` } });
+      expect(res.statusCode).toBe(403);
+    });
+  });
+
   describe("POST /v1/projects/:id/tasks", () => {
     it("returns 202 for valid task", async () => {
       const res = await app.inject({
