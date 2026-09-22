@@ -39,7 +39,7 @@ describe("MetadataEntitiesPage", () => {
   it("shows the error state — not the empty-state prompt — on a real fetch failure (source: error)", async () => {
     mockEntities({ data: [], source: "error" });
     render(await MetadataEntitiesPage());
-    expect(screen.getByText("We couldn't load this entity definitions.")).toBeInTheDocument();
+    expect(screen.getByText("We couldn't load entity definitions.")).toBeInTheDocument();
     expect(screen.queryByText("No entities")).not.toBeInTheDocument();
   });
 });

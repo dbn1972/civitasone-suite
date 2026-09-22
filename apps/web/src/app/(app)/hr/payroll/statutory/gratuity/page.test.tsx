@@ -53,7 +53,7 @@ describe("GratuityPage", () => {
     fetchJsonMock.mockResolvedValue({ data: [], source: "error" });
     const ui = await GratuityPage();
     renderPage(ui);
-    expect(screen.getByText("We couldn't load this gratuity records.")).toBeInTheDocument();
+    expect(screen.getByText("We couldn't load gratuity records.")).toBeInTheDocument();
     expect(screen.queryByText("No gratuity records")).not.toBeInTheDocument();
   });
 });

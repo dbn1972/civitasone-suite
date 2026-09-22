@@ -71,7 +71,7 @@ describe("PayrollRunsPage", () => {
     // RefreshErrorState contract (retry/back/help) instead, and the
     // tenant-facing create-your-first-run prompt no longer appears for an
     // outage it has nothing to do with.
-    expect(screen.getByText("We couldn't load this payroll runs.")).toBeInTheDocument();
+    expect(screen.getByText("We couldn't load payroll runs.")).toBeInTheDocument();
     expect(screen.queryByText("No payroll runs found.")).not.toBeInTheDocument();
   });
 });

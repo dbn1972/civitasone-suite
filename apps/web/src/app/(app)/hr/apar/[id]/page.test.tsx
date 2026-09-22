@@ -46,7 +46,7 @@ describe("AparDetailPage — not-found vs load-error (UX-009 follow-up)", () => 
     expect(screen.queryByText("APAR not found")).not.toBeInTheDocument();
     expect(screen.getByRole("alert")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Try again" })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "We couldn't load this APAR record." })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "We couldn't load APAR record." })).toBeInTheDocument();
   });
 
   it("also treats a network error (no HTTP status at all) as a retryable load error, never 'not found'", async () => {

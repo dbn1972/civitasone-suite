@@ -48,7 +48,7 @@ describe("GpfStatementsPage", () => {
   it("shows the error state and hides the fabricated ₹0 corpus on a real fetch failure (source: error)", async () => {
     mockGpf({ data: [], source: "error" });
     render(await GpfStatementsPage());
-    expect(screen.getByText("We couldn't load this GPF statements.")).toBeInTheDocument();
+    expect(screen.getByText("We couldn't load GPF statements.")).toBeInTheDocument();
     expect(screen.queryByText("No GPF statements")).not.toBeInTheDocument();
     // Accumulated Corpus / stat cards show "—", never a fabricated ₹0 derived
     // from the empty error payload.

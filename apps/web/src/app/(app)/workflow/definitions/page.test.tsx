@@ -45,7 +45,7 @@ describe("WorkflowDefinitionsPage", () => {
   it("shows the error state — not the empty-state prompt — when the definitions fetch fails", async () => {
     mockFetchJson({ data: [], source: "error" }, { data: [], source: "api" });
     render(await WorkflowDefinitionsPage());
-    expect(screen.getByText("We couldn't load this approval workflows.")).toBeInTheDocument();
+    expect(screen.getByText("We couldn't load approval workflows.")).toBeInTheDocument();
     expect(screen.queryByText("No approval workflows configured")).not.toBeInTheDocument();
     expect(screen.getAllByText("—").length).toBeGreaterThan(0);
   });
@@ -53,7 +53,7 @@ describe("WorkflowDefinitionsPage", () => {
   it("shows the error state when only the templates fetch fails, even though definitions succeeded", async () => {
     mockFetchJson({ data: MOCK_DEFINITIONS, source: "api" }, { data: [], source: "error" });
     render(await WorkflowDefinitionsPage());
-    expect(screen.getByText("We couldn't load this approval workflows.")).toBeInTheDocument();
+    expect(screen.getByText("We couldn't load approval workflows.")).toBeInTheDocument();
     expect(screen.queryByText("Leave Approval")).not.toBeInTheDocument();
   });
 });

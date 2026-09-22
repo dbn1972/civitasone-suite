@@ -143,7 +143,7 @@ describe("DisbursementPage", () => {
 
     await renderPage();
 
-    expect(screen.getByText("We couldn't load this payroll runs.")).toBeInTheDocument();
+    expect(screen.getByText("We couldn't load payroll runs.")).toBeInTheDocument();
     expect(screen.queryByText("No runs to reconcile")).not.toBeInTheDocument();
     // The runs-derived stat shows "—", not a fabricated 0.
     expect(screen.getByText("Runs Ready for Disbursement").parentElement).toHaveTextContent("—");
@@ -169,7 +169,7 @@ describe("DisbursementPage", () => {
 
     await renderPage();
 
-    expect(screen.queryByText(/We couldn't load this payroll runs\./)).not.toBeInTheDocument();
+    expect(screen.queryByText(/We couldn't load payroll runs\./)).not.toBeInTheDocument();
     expect(screen.getByText("Runs Ready for Disbursement").parentElement).toHaveTextContent("1");
     expect(screen.getByText("DSC Status").parentElement).toHaveTextContent("—");
   });

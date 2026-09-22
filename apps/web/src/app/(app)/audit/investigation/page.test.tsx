@@ -29,7 +29,7 @@ describe("InvestigationPage", () => {
   it("shows the error state — not zero stat cards or the empty-state prompt — on a real fetch failure", async () => {
     fetchJsonMock.mockResolvedValue({ data: [], source: "error" });
     render(await InvestigationPage());
-    expect(screen.getByText("We couldn't load this investigation cases.")).toBeInTheDocument();
+    expect(screen.getByText("We couldn't load investigation cases.")).toBeInTheDocument();
     expect(screen.queryByText("No investigations found")).not.toBeInTheDocument();
     expect(screen.getAllByText("—").length).toBeGreaterThan(0);
   });

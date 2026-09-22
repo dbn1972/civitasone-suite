@@ -45,7 +45,7 @@ describe("WorkflowHubPage", () => {
     const empty = { ...MOCK_ANALYTICS, instancesByStatus: {}, totalInstances: 0, completedCount: 0 };
     getAnalyticsSummaryMock.mockResolvedValue({ data: empty, source: "error" });
     render(await WorkflowHubPage());
-    expect(screen.getByText("We couldn't load this workflow analytics.")).toBeInTheDocument();
+    expect(screen.getByText("We couldn't load workflow analytics.")).toBeInTheDocument();
     expect(screen.queryByText("No instances yet")).not.toBeInTheDocument();
     expect(screen.queryByText("Total instances")).not.toBeInTheDocument();
   });

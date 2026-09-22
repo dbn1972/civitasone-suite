@@ -91,7 +91,7 @@ describe("GrievancesPage", () => {
   it("shows the error state — not the empty-state prompt — on a real fetch failure (source: error)", async () => {
     fetchJsonMock.mockResolvedValue({ data: [], source: "error" });
     await render(GrievancesPage());
-    expect(screen.getByText("We couldn't load this grievances.")).toBeInTheDocument();
+    expect(screen.getByText("We couldn't load grievances.")).toBeInTheDocument();
     expect(screen.queryByText("No grievances filed")).not.toBeInTheDocument();
     // Stat cards show "—", not a fabricated 0.
     expect(screen.getAllByText("—").length).toBeGreaterThan(0);

@@ -58,7 +58,7 @@ describe("InspectionsPage", () => {
     const ui = await InspectionsPage();
     render(ui);
 
-    expect(screen.getByText("We couldn't load this inspections.")).toBeInTheDocument();
+    expect(screen.getByText("We couldn't load inspections.")).toBeInTheDocument();
     expect(screen.queryByText(/No inspections returned/)).not.toBeInTheDocument();
   });
 });
