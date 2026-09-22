@@ -108,6 +108,13 @@ function dbUrl(dbUser, dbName) {
 // RS256/Keycloak only in production. HS256 shared-secret auth is forbidden in
 // prod by packages/auth (resolveAlgorithm throws); JWT_SECRET is intentionally
 // NOT set on production processes so the HS256 fallback path is unreachable.
+// This RS256 default is also what non-production/UAT hosts should run unless
+// the WHOLE host has been deliberately switched to the dev-login path below
+// (RUNTIME_NODE_ENV non-production + JWT_SECRET set) — never override it to
+// HS256 for one service just because another already-running service has it
+// set that way; verify against Keycloak's own JWKS instead (see
+// docs/runbooks/launch-undeployed-services.md §3b, corrected 2026-09-22 after
+// exactly that reasoning produced a fleet-wide HS256/RS256 mismatch).
 const JWT_ALGORITHM = process.env.JWT_ALGORITHM ?? "RS256";
 // UAT/validation knob: runtime NODE_ENV the services see. Defaults to
 // "production" so prod posture is unchanged unless RUNTIME_NODE_ENV is set.

@@ -85,6 +85,16 @@ curl -s -H "Authorization: Bearer $TOKEN" http://localhost:3026/v1/telephony/cal
 
 **Discovered:** 2026-08-08 during UAT pack 06 execution
 
+> **2026-09-22 note:** the fix below reflected the fleet's dev-login/"Path A"
+> convention that was in effect on 2026-08-08 (`docs/GOLDEN-PATH-AUDIT.md`).
+> That is no longer the fleet-wide default: Keycloak-facing services now
+> standardize on `JWT_ALGORITHM=RS256`, confirmed directly against the
+> realm's own JWKS (`docs/runbooks/launch-undeployed-services.md` §3b). Treat
+> "change to HS256" below as a historical record of what this host needed on
+> that date, not as current guidance — check which posture the host is
+> actually in (`pm2 env <id> | grep JWT_ALGORITHM` vs. Keycloak's JWKS) before
+> reapplying it to any service today.
+
 ## Problem
 
 CDP and Catalogue services reject the HS256 dev token that all other services accept.

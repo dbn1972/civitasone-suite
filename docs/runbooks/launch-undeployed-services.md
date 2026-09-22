@@ -1,6 +1,14 @@
 # Runbook — Launching the 8 declared-but-not-running services
 
-**Owner:** SRE · **Last verified:** 2026-07-27 · **Risk:** medium (adds processes to a live fleet)
+**Owner:** SRE · **Last verified:** 2026-09-22 · **Risk:** medium (adds processes to a live fleet)
+
+> **2026-09-22 correction:** step 3b previously told you to `export
+> JWT_ALGORITHM=HS256` and to confirm that by copying whatever `finance`
+> happened to have set. Both were wrong and have been corrected below —
+> Keycloak (this deployment's real OIDC provider) issues **RS256**-signed
+> tokens, confirmed directly against the realm's own JWKS. See step 3b for
+> the corrected value and a verification method that doesn't depend on
+> another service already being configured correctly.
 
 ## When to use this
 
@@ -84,32 +92,73 @@ export INTERNAL_SERVICE_SECRET DEVICE_TRUST_SECRET \
 
 ```bash
 export RUNTIME_NODE_ENV=staging   # runtime NODE_ENV the SERVICES see
-export JWT_ALGORITHM=HS256        # must match the tokens the fleet issues
+export JWT_ALGORITHM=RS256        # matches what Keycloak actually issues — verify below, don't assume
 export NODE_ENV=staging           # only controls the ecosystem's own IS_PROD
 ```
-
-Both were verified the hard way on 2026-07-27:
 
 - **`RUNTIME_NODE_ENV`, not `NODE_ENV`,** sets the runtime env the services see
   (`ecosystem.config.js` line ~62: `NODE_ENV: RUNTIME_NODE_ENV`). Exporting
   `NODE_ENV=staging` alone leaves the service running as `production` — it only
   flips the ecosystem's `IS_PROD` decision, which governs whether secrets are
-  demanded and whether PII dev fallbacks are permitted.
-- **`JWT_ALGORITHM` defaults to `RS256`.** Miss it and the service starts, binds
-  its port and answers `/health` with 200 — but **every gatewayed request returns
-  401**, because the fleet issues HS256 tokens. This looks like an auth bug and is
-  purely a launch-env mismatch.
+  demanded and whether PII dev fallbacks are permitted. Verified the hard way on
+  2026-07-27.
+- **`JWT_ALGORITHM` defaults to `RS256`** (`ecosystem.config.js` line 111:
+  `process.env.JWT_ALGORITHM ?? "RS256"`), and **that default is correct — leave
+  it unset, or export `RS256` explicitly.** Keycloak (this deployment's real OIDC
+  provider) signs real browser-facing tokens with RS256; get this wrong and the
+  service starts, binds its port and answers `/health` with 200 — but **every
+  gatewayed request returns 401**, which looks like an auth bug and is purely a
+  launch-env mismatch.
 
-Confirm against a known-good service before starting anything:
+  Do **not** export `JWT_ALGORITHM=HS256` to "match the fleet." HS256 is real,
+  but it is a distinct, narrower, opt-in thing: the internal dev-login fallback
+  (gated by `JWT_SECRET` plus a non-production `RUNTIME_NODE_ENV`, documented in
+  `docs/GOLDEN-PATH-AUDIT.md` as "Path A"), meant for golden-path usability
+  testing when no reachable Keycloak is available. It is not the fleet-wide
+  default, and a previous version of this step conflated the two — which is how
+  the fleet ended up misconfigured for an extended period even though Keycloak
+  has always issued RS256.
+
+#### Verify against Keycloak itself, not against another service
+
+A previous version of this step said to "confirm against a known-good service"
+by grepping `finance`'s `pm2 env` and matching whatever it had. **Don't do
+that.** It only tells you what `finance` is configured to *verify*, not what
+Keycloak actually *signs with* — if `finance` is wrong (as it was), copying it
+just propagates the same mistake to every service launched afterward, with
+nothing anchored to ground truth.
+
+Check Keycloak's own realm metadata instead. This is public JWKS data — no
+login or credentials needed:
 
 ```bash
-FID=$(pm2 jlist | node -e "let d='';process.stdin.on('data',c=>d+=c).on('end',()=>{
-  console.log(JSON.parse(d).find(x=>x.name==='finance').pm_id)})")
-pm2 env "$FID" | grep -E '^(JWT_ALGORITHM|NODE_ENV):'
+KC_URL="${KEYCLOAK_URL:-https://civitasone.65-2-205-201.nip.io/auth}"
+KC_REALM="${KEYCLOAK_REALM:-civitasone}"
+# -k is required here: this host's Keycloak cert is CN/SAN-scoped to the
+# bare IP (65.2.205.201), not the nip.io hostname every service actually
+# connects through — a known hostname-verification mismatch, not a "just
+# ignore TLS" habit. See ecosystem.config.js's AUTH_ENV block (~line 183)
+# for the full story and the equivalent NODE_TLS_REJECT_UNAUTHORIZED
+# workaround already running fleet-wide for the same reason. Without -k,
+# curl fails closed with "SSL: no alternative certificate subject name
+# matches target hostname" and the node call below throws on the empty
+# response — don't mistake that for JWKS being unreachable.
+JWKS_URI=$(curl -sk "$KC_URL/realms/$KC_REALM/.well-known/openid-configuration" \
+  | node -e "let d='';process.stdin.on('data',c=>d+=c).on('end',()=>{
+      console.log(JSON.parse(d).jwks_uri)})")
+curl -sk "$JWKS_URI" | node -e "let d='';process.stdin.on('data',c=>d+=c).on('end',()=>{
+  JSON.parse(d).keys.filter(k=>k.use==='sig').forEach(k=>console.log(k.kty, k.alg))})"
 ```
 
-Your new service must end up with the same two values. Check with `pm2 env` after
-starting, before concluding anything about auth.
+Expect exactly one signing (`use:"sig"`) key: `RSA RS256`. That is the algorithm
+every Keycloak-facing service must verify against — including the one you are
+about to launch. (Equivalently, if you have a real browser session: decode a
+real access token's header, the first `.`-separated segment, base64url-decoded
+— it will read `{"alg":"RS256",...}`. The JWKS check above proves the same fact
+without a live login.)
+
+Whatever this shows, your new service's `pm2 env` must match it. Check with
+`pm2 env` after starting, before concluding anything about auth.
 
 ### 3c. Confirm the role and database exist
 
@@ -194,6 +243,19 @@ done
 
 A bound port proves the service started; only the gateway proves it is reachable.
 
+> **This mints an HS256 token, which only works if the fleet is in the
+> dev-login/"Path A" posture (§3b) — the exception, not the default.** Against
+> the standard RS256/Keycloak posture this produces `401 TOKEN_INVALID` at the
+> gateway regardless of whether the route resolved, which is easy to mistake
+> for step 3b having failed. If `pm2 env <gateway id>` shows `JWT_ALGORITHM=RS256`
+> (the default — check first), get a real token instead: log in through the
+> actual web app / Keycloak flow and copy the access token from the browser's
+> network tab or dev-login redirect, then use that as `$TOK` below. Also note:
+> as of 2026-09-22, `packages/auth/dist/index.js` does not exist on this host
+> (no build artifact) — the snippet below needs a source-mode equivalent
+> (`tsx`/`ts-node` against `packages/auth/src/index.ts`) or a prior `pnpm build`
+> of that package; this is a separate, pre-existing gap, not part of this fix.
+
 ```bash
 TOK=$(node -e "const a=require('./packages/auth/dist/index.js');
 console.log(a.signToken({sub:'aaaaaaaa-0000-4000-8000-0000000000ff',
@@ -211,6 +273,9 @@ done
 
 `200` or `403` is success (the route resolved). `502`/`503` means the upstream is
 down. `404` means the gateway route is missing — re-run the declaration guard.
+A `401 TOKEN_INVALID` here means the token's algorithm doesn't match what the
+gateway is configured to verify — see the callout above before assuming the
+route itself is broken.
 
 ### 8. Persist and close out the gate
 
@@ -236,7 +301,7 @@ and authz are **unverified** until they are covered.
 | Symptom | Cause | Action |
 |---|---|---|
 | `online` in pm2, `bound=0`, **empty error log** | Startup threw before binding — usually a missing secret or an unresolvable import | Run in the foreground (below) to see the real error |
-| `/health` 200 but **every gatewayed route 401** | `JWT_ALGORITHM` defaulted to RS256 while the fleet issues HS256 | `pm2 env <id> \| grep JWT_ALGORITHM`; redo step 3b, `pm2 delete` and restart |
+| `/health` 200 but **every gatewayed route 401** | `JWT_ALGORITHM` doesn't match Keycloak — usually a stray `HS256` left over from the dev-login/"Path A" posture, applied where real Keycloak-facing RS256 was needed | `pm2 env <id> \| grep JWT_ALGORITHM`; verify the correct value against Keycloak's own JWKS, not against another service (see step 3b); redo step 3b, `pm2 delete` and restart |
 | Service runs as `production` despite `NODE_ENV=staging` | You set `NODE_ENV`, not `RUNTIME_NODE_ENV` | Export `RUNTIME_NODE_ENV`; see step 3b |
 | `password authentication failed for user "<svc>_svc"` | Role does not exist | Provision it; see step 3c |
 | Gatewayed route returns 400 | Route resolved, zod rejected the empty query — this is SUCCESS for reachability | No action |
