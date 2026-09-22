@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useId, useState } from "react";
+import { Button } from "@/app/_components/ds";
 
 type Citation = { docId: string; title: string; source: string };
 type AskAnswer = { interactionId: string; answer: string; citations: Citation[]; answered: boolean; grounded: boolean };
@@ -76,15 +77,14 @@ export function AssistantClient() {
             placeholder="e.g. How do I apply for annual leave?"
             style={{ flex: "1 1 320px", minWidth: 240, borderRadius: 8, border: "1px solid var(--line, #e2e8f0)", padding: "10px 12px", fontSize: 14, minHeight: 44 }}
           />
-          <button
-            type="button"
+          <Button
             onClick={() => void ask()}
             disabled={busy || !question.trim()}
-            className="btn btn-primary"
+            variant="primary"
             style={{ minHeight: 44, padding: "0 20px", borderRadius: 8 }}
           >
             {busy ? "Thinking…" : "Ask"}
-          </button>
+          </Button>
         </div>
 
         {error && <p style={{ color: "var(--danger, #dc2626)", fontSize: 14, margin: 0 }}>{error}</p>}
@@ -114,15 +114,14 @@ export function AssistantClient() {
               </p>
             )}
             <div style={{ marginTop: 14, display: "flex", gap: 10, alignItems: "center" }}>
-              <button
-                type="button"
+              <Button
                 onClick={() => void escalate()}
                 disabled={busy || escalated}
-                className="btn"
+                variant="ghost"
                 style={{ minHeight: 40, padding: "0 16px", borderRadius: 8, border: "1px solid var(--line, #e2e8f0)" }}
               >
                 {escalated ? "Ticket opened" : "Escalate to support ticket"}
-              </button>
+              </Button>
               {escalated && <span style={{ color: "var(--ok, #059669)", fontSize: 14, fontWeight: 600 }}>A helpdesk ticket has been opened.</span>}
             </div>
           </div>

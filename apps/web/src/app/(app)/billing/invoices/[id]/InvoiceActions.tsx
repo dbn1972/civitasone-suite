@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { ConfirmDialog, StatusPill, EmptyState } from "@/app/_components/ds";
+import { Button, ConfirmDialog, StatusPill, EmptyState } from "@/app/_components/ds";
 import { browserJson } from "@/lib/api/browserClient";
 import type { EInvoiceStatus } from "./page";
 
@@ -106,9 +106,8 @@ export function InvoiceActions({ invoiceId, einvoice }: { invoiceId: string; ein
       )}
 
       <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-        <button
-          type="button"
-          className="btn primary"
+        <Button
+          variant="primary"
           style={{ minHeight: 44 }}
           disabled={busy || !canGenerate}
           aria-label={`Generate e-invoice (IRN) for invoice ${invoiceId}`}
@@ -118,10 +117,9 @@ export function InvoiceActions({ invoiceId, einvoice }: { invoiceId: string; ein
           }}
         >
           Generate e-invoice / IRN
-        </button>
-        <button
-          type="button"
-          className="btn danger"
+        </Button>
+        <Button
+          variant="danger"
           style={{ minHeight: 44 }}
           disabled={busy || !canCancel}
           aria-label={`Cancel IRN for invoice ${invoiceId}`}
@@ -131,7 +129,7 @@ export function InvoiceActions({ invoiceId, einvoice }: { invoiceId: string; ein
           }}
         >
           Cancel IRN
-        </button>
+        </Button>
       </div>
 
       {message && (

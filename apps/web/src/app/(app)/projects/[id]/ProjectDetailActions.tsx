@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { ConfirmDialog } from "@/app/_components/ds";
+import { Button, ConfirmDialog } from "@/app/_components/ds";
 import { useFormError } from "@/lib/useFormError";
 
 type Milestone = { id: string; title: string; status: string };
@@ -63,10 +63,9 @@ export function ProjectDetailActions({ projectId, milestones }: Props) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
       {pending.map((m) => (
-        <button
+        <Button
           key={m.id}
-          type="button"
-          className="btn ghost"
+          variant="ghost"
           onClick={() => {
             setError(undefined);
             setMessage("");
@@ -74,7 +73,7 @@ export function ProjectDetailActions({ projectId, milestones }: Props) {
           }}
         >
           Complete: {m.title}
-        </button>
+        </Button>
       ))}
       {message ? (
         <p role="status" aria-live="polite" style={{ fontSize: 13, color: "#047857", margin: 0 }}>

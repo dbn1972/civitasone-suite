@@ -1,7 +1,7 @@
 "use client";
 
 import { useId, useRef, useState } from "react";
-import { StatusPill } from "@/app/_components/ds";
+import { Button, StatusPill } from "@/app/_components/ds";
 import { browserFetch, errorMessageFromResponse } from "@/lib/api/browserClient";
 
 interface ReturnStatusResult {
@@ -76,9 +76,9 @@ export function ReturnStatusPanel() {
       </div>
 
       <div>
-        <button type="submit" className="btn primary" style={{ minHeight: 44 }} disabled={busy}>
+        <Button type="submit" variant="primary" style={{ minHeight: 44 }} disabled={busy}>
           {busy ? "Checking…" : "Check Status"}
-        </button>
+        </Button>
       </div>
 
       {lookupError && (

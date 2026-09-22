@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { Button } from "@/app/_components/ds";
 import { useFormError } from "@/lib/useFormError";
 
 type Props = { projectId: string };
@@ -75,14 +76,14 @@ export function AddMemberForm({ projectId }: Props) {
           ))}
         </select>
       </div>
-      <button
+      <Button
         type="submit"
-        className="btn primary"
+        variant="primary"
         disabled={status === "submitting"}
         style={{ minHeight: 40 }}
       >
         {status === "submitting" ? "Adding…" : "Add Member"}
-      </button>
+      </Button>
       {message && (
         <p
           role={status === "error" ? "alert" : "status"}

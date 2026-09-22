@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { ConfirmDialog } from "@/app/_components/ds";
+import { Button, ConfirmDialog } from "@/app/_components/ds";
 import { useFormError } from "@/lib/useFormError";
 
 export function CreateProjectForm() {
@@ -212,14 +212,14 @@ export function CreateProjectForm() {
         </div>
 
         <div style={{ marginTop: 16, display: "flex", gap: 8 }}>
-          <button
+          <Button
             type="submit"
-            className="btn primary"
+            variant="primary"
             style={{ minHeight: 44 }}
             disabled={status === "submitting"}
           >
             {status === "submitting" ? "Saving…" : "Create project"}
-          </button>
+          </Button>
           <Link href="/projects/list" className="btn ghost" style={{ minHeight: 44 }}>
             Cancel
           </Link>

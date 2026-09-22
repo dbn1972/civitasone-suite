@@ -1,6 +1,7 @@
 "use client";
 
 import { useId, useRef, useState } from "react";
+import { Button } from "@/app/_components/ds";
 import { browserJson } from "@/lib/api/browserClient";
 import { formatMoney } from "@/lib/formatters";
 
@@ -201,9 +202,9 @@ export function SubmitReturnPanel() {
       ))}
 
       <div>
-        <button type="submit" className="btn primary" style={{ minHeight: 44 }} disabled={busy}>
+        <Button type="submit" variant="primary" style={{ minHeight: 44 }} disabled={busy}>
           {busy ? "Submitting…" : "Submit Return"}
-        </button>
+        </Button>
       </div>
 
       {submitError && (

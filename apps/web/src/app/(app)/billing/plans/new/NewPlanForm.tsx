@@ -2,6 +2,7 @@
 
 import { useId, useState } from "react";
 import { useRouter } from "next/navigation";
+import { Button } from "@/app/_components/ds";
 import { useFormError } from "@/lib/useFormError";
 
 const INTERVALS = ["monthly", "quarterly", "yearly"] as const;
@@ -208,14 +209,14 @@ export function NewPlanForm() {
         </label>
       </div>
 
-      <button
+      <Button
         type="submit"
         disabled={status === "submitting"}
-        className="btn primary"
+        variant="primary"
         style={{ minHeight: 44 }}
       >
         {status === "submitting" ? "Creating…" : "Create Plan"}
-      </button>
+      </Button>
 
       {message && (
         <p
