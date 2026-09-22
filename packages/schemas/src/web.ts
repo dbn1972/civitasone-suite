@@ -518,7 +518,11 @@ export const userListResponseSchema = z.array(z.object({
 
 // Finance schemas
 export const FinanceDashboardSchema = z.object({
-  budgetUtilisationPct: z.number().default(0),
+  // null when there is no sanctioned budget on record for this tenant/FY —
+  // deliberately NOT `.default(0)`: that would silently turn "missing" back
+  // into a fabricated real-looking 0% (UX-006), the exact bug this type is
+  // fixing. See finance-service's dashboard/queries.ts.
+  budgetUtilisationPct: z.number().nullable(),
   pendingSanctions: z.number().default(0),
   paymentsThisMonth: z.number().default(0),
   totalExpenditure: z.number().default(0),

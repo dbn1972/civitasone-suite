@@ -614,7 +614,9 @@ export interface TenantSettingSummary {
 }
 
 export type FinanceDashboard = {
-  budgetUtilisationPct: number;
+  // null when there is no sanctioned budget on record for this tenant/FY to
+  // compute utilisation against (UX-006: missing data, not a fabricated 0%).
+  budgetUtilisationPct: number | null;
   pendingSanctions: number;
   paymentsThisMonth: number;
   totalExpenditure: number;

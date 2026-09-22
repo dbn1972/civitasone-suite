@@ -29,6 +29,41 @@ function formatMinor(minor: bigint): string {
   return `${negative ? "-" : ""}₹${grouped}.${paise.toString().padStart(2, "0")}`;
 }
 
+/**
+ * Explicit BigInt coercion for a `*Minor` money field read back through
+ * `cache.getOrLoad`/`listOrLoad`. `@civitasone/cache`'s serialize() JSON
+ * .stringify()s whatever it caches; since JSON has no BigInt type, the
+ * global `BigInt.prototype.toJSON` patch (shared/bigint-json.ts) turns every
+ * bigint field into a plain decimal STRING before it's written to the store
+ * — but deserialize() is a bare `JSON.parse` with no reviver to turn it back.
+ * A cache-MISS read comes straight from Drizzle, which hands back a real
+ * `bigint` (the schema's `mode: "bigint"` column type); a cache-HIT read
+ * hands back a `string` carrying the identical decimal value. `BillRow` /
+ * `AdvanceRow` type these fields `bigint` unconditionally, so nothing
+ * downstream re-checks this at runtime — `formatMinor()`'s `abs / 100n` (or
+ * a raw `a - b` on two such fields) throws "Cannot mix BigInt and other
+ * types, use explicit conversions" the instant it runs on a post-cache-hit
+ * value.
+ *
+ * This was invisible before procurement-service went live only because the
+ * bills/advances being listed were empty arrays — `[].map()` never once
+ * invokes the vulnerable callback, cache-hit or not. Once procurement's
+ * three-way-match consumer (see payments/consumer.ts) started inserting real
+ * rows, the very next read within the cache TTL hit this path.
+ *
+ * `BigInt(x)` is a no-op for an already-bigint `x`, so calling this is safe
+ * on both the fresh and the cached path — the same explicit-conversion
+ * pattern payments/consumer.ts already applies to the identical hazard on
+ * inbound queue messages (`const netMinor = BigInt(p.netMinor);`), just
+ * applied here on the read side too.
+ *
+ * Exported (pure, no DB/cache) so this exact coercion is unit-testable
+ * directly.
+ */
+export function toMinorBigInt(minor: bigint | string | number): bigint {
+  return typeof minor === "bigint" ? minor : BigInt(minor);
+}
+
 function mapPaymentStatus(status: string): PaymentSummary["status"] {
   if (status === "released" || status === "completed") return "Released";
   if (status === "failed") return "Failed";
@@ -97,19 +132,22 @@ export async function listBillSummaries(tenantId: string, limit: number, offset 
     () => repo.listBillsByTenant(tenantId, limit, offset),
     60,
   );
-  return (rows ?? []).map((row) => ({
-    id: row.id,
-    billNo: row.billNo,
-    vendor: VENDOR_NAMES[row.vendorId] ?? `Vendor (${row.vendorId.slice(-4)})`,
-    // H3: string to avoid 2^53 precision loss on large government bill amounts.
-    amount: row.netMinor.toString(),
-    amountDisplay: formatMinor(row.netMinor),
-    submittedDate: new Date(row.createdAt as unknown as string).toISOString().slice(0, 10),
-    dueDate: undefined,
-    status: mapBillStatus(row.status),
-    poRef: row.poRef ?? undefined,
-    threeWayMatch: "na" as const,
-  }));
+  return (rows ?? []).map((row) => {
+    const netMinor = toMinorBigInt(row.netMinor);
+    return {
+      id: row.id,
+      billNo: row.billNo,
+      vendor: VENDOR_NAMES[row.vendorId] ?? `Vendor (${row.vendorId.slice(-4)})`,
+      // H3: string to avoid 2^53 precision loss on large government bill amounts.
+      amount: netMinor.toString(),
+      amountDisplay: formatMinor(netMinor),
+      submittedDate: new Date(row.createdAt as unknown as string).toISOString().slice(0, 10),
+      dueDate: undefined,
+      status: mapBillStatus(row.status),
+      poRef: row.poRef ?? undefined,
+      threeWayMatch: "na" as const,
+    };
+  });
 }
 
 /**
@@ -132,19 +170,23 @@ export async function listAdvances(tenantId: string, limit: number, offset = 0) 
     () => repo.listAdvancesByTenant(tenantId, limit, offset),
     60,
   );
-  return (rows ?? []).map((row) => ({
-    id: row.id,
-    advanceNo: row.advanceNo,
-    beneficiary: row.beneficiary,
-    type: (row.type as "employee" | "vendor" | "other"),
-    // H3: string to avoid 2^53 precision loss on large government advance amounts.
-    amount: row.amountMinor.toString(),
-    disbursedDate: String(row.disbursedDate),
-    dueDate: row.dueDate ? String(row.dueDate) : undefined,
-    adjustedAmount: row.adjustedMinor.toString(),
-    balance: (row.amountMinor - row.adjustedMinor).toString(),
-    status: resolveAdvanceStatus({ status: row.status, dueDate: row.dueDate ? String(row.dueDate) : null }),
-  }));
+  return (rows ?? []).map((row) => {
+    const amountMinor = toMinorBigInt(row.amountMinor);
+    const adjustedMinor = toMinorBigInt(row.adjustedMinor);
+    return {
+      id: row.id,
+      advanceNo: row.advanceNo,
+      beneficiary: row.beneficiary,
+      type: (row.type as "employee" | "vendor" | "other"),
+      // H3: string to avoid 2^53 precision loss on large government advance amounts.
+      amount: amountMinor.toString(),
+      disbursedDate: String(row.disbursedDate),
+      dueDate: row.dueDate ? String(row.dueDate) : undefined,
+      adjustedAmount: adjustedMinor.toString(),
+      balance: (amountMinor - adjustedMinor).toString(),
+      status: resolveAdvanceStatus({ status: row.status, dueDate: row.dueDate ? String(row.dueDate) : null }),
+    };
+  });
 }
 
 export async function listUCs(tenantId: string, limit: number) {
@@ -174,13 +216,14 @@ export async function getBillDetail(id: string, tenantId: string) {
   );
   if (!row || row.tenantId !== tenantId) return null;
   const threeWayMatch: "matched" | "pending" | "na" = (row.poRef && row.grnRef) ? "matched" : (row.poRef || row.grnRef) ? "pending" : "na";
+  const netMinor = toMinorBigInt(row.netMinor);
   return {
     id: row.id,
     billNo: row.billNo,
     vendor: VENDOR_NAMES[row.vendorId] ?? `Vendor (${row.vendorId.slice(-4)})`,
     // H3: string to avoid 2^53 precision loss on large government bill amounts.
-    amount: row.netMinor.toString(),
-    amountDisplay: formatMinor(row.netMinor),
+    amount: netMinor.toString(),
+    amountDisplay: formatMinor(netMinor),
     submittedDate: new Date(row.createdAt as unknown as string).toISOString().slice(0, 10),
     status: mapBillStatus(row.status),
     poRef: row.poRef ?? undefined,
