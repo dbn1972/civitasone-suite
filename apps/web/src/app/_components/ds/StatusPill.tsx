@@ -1,3 +1,5 @@
+import { humanizeStatus } from "@/lib/formatters";
+
 type PillVariant = "good" | "warn" | "mut" | "bad" | "info";
 
 const STATUS_MAP: Record<string, PillVariant> = {
@@ -49,5 +51,12 @@ interface StatusPillProps {
 
 export function StatusPill({ status, label }: StatusPillProps) {
   const variant: PillVariant = STATUS_MAP[status.toLowerCase()] ?? "info";
-  return <span className={`pill ${variant}`}>{label ?? status}</span>;
+  // Bug fix: this used to fall back to the raw `status` value itself
+  // ("pending", "active", "na", ...) whenever a caller didn't pass an
+  // explicit label -- a real database enum value shown verbatim, unstyled
+  // lowercase text, instead of a properly capitalized display label. Most
+  // callers across the app never pass label at all and relied on this
+  // default. Now falls back to a humanized version of status instead of the
+  // raw string; callers that need exact custom wording still can via label.
+  return <span className={`pill ${variant}`}>{label ?? humanizeStatus(status)}</span>;
 }

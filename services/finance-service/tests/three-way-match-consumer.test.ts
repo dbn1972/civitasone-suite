@@ -372,4 +372,92 @@ describe("procurement.grn.accepted → three-way match validation", () => {
       await q.stop();
     });
   });
+
+  // Regression coverage for PR #1478 (raw-values-leaked-to-ui): this handler
+  // used to unconditionally build `procurement_po:${p.poRef}` with no guard
+  // against p.poRef being missing or already-stringified-nullish, so a
+  // producer-side gap silently manufactured the literal, UI-visible string
+  // "procurement_po:undefined" on the Finance Bills page instead of leaving
+  // the bill genuinely unlinked (which the UI already renders honestly as
+  // "—"). Confirmed empirically (see PR description) that reverting just
+  // this guard leaves every other case in this file green -- nothing here
+  // previously exercised this path at all.
+  describe("poRef resolution (PR #1478 regression)", () => {
+    it("leaves billPayload.poRef unresolved, not a manufactured string, when poRef is entirely missing from the payload", async () => {
+      const q = await buildQueue();
+
+      await q.publish(
+        CONSUMED_EVENTS.grnAccepted,
+        makeMsg(CONSUMED_EVENTS.grnAccepted, {
+          // poRef deliberately omitted -- simulates the producer-side gap.
+          grnId: "grn-003",
+          vendorId: "vendor-003",
+          grnAmountMinor: 2000000,
+          tenantId: TENANT,
+        }),
+      );
+      await settle();
+
+      // The bill is still drafted -- a missing poRef must not block billing,
+      // it must only leave the PO reference itself honestly unresolved.
+      const bc = billCreateCall();
+      expect(bc).toBeDefined();
+      const billPayload = bc![1].payload;
+      expect(billPayload.grnRef).toContain("grn-003");
+      expect(billPayload.vendorId).toBe("vendor-003");
+      expect(billPayload.poRef).toBeUndefined();
+      expect(billPayload.poRef).not.toBe("procurement_po:undefined");
+
+      await q.stop();
+    });
+
+    it('leaves billPayload.poRef unresolved when poRef arrives as the already-stringified literal "undefined" (the most plausible real trigger for the historical bug)', async () => {
+      const q = await buildQueue();
+
+      await q.publish(
+        CONSUMED_EVENTS.grnAccepted,
+        makeMsg(CONSUMED_EVENTS.grnAccepted, {
+          // A truthy, non-empty string -- NOT caught by a plain falsiness
+          // check (`p.poRef ? ... : undefined`), which is exactly the gap
+          // independent review found in the first version of this fix.
+          poRef: "undefined",
+          grnId: "grn-004",
+          vendorId: "vendor-004",
+          grnAmountMinor: 2000000,
+          tenantId: TENANT,
+        }),
+      );
+      await settle();
+
+      const bc = billCreateCall();
+      expect(bc).toBeDefined();
+      const billPayload = bc![1].payload;
+      expect(billPayload.poRef).toBeUndefined();
+      expect(billPayload.poRef).not.toBe("procurement_po:undefined");
+
+      await q.stop();
+    });
+
+    it("still resolves and prefixes a genuine bare PO id normally (no regression on the happy path)", async () => {
+      const q = await buildQueue();
+
+      await q.publish(
+        CONSUMED_EVENTS.grnAccepted,
+        makeMsg(CONSUMED_EVENTS.grnAccepted, {
+          poRef: "po-real-123",
+          grnId: "grn-005",
+          vendorId: "vendor-005",
+          grnAmountMinor: 2000000,
+          tenantId: TENANT,
+        }),
+      );
+      await settle();
+
+      const bc = billCreateCall();
+      expect(bc).toBeDefined();
+      expect(bc![1].payload.poRef).toBe("procurement_po:po-real-123");
+
+      await q.stop();
+    });
+  });
 });

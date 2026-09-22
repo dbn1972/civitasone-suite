@@ -142,7 +142,27 @@ export function registerIntegrationConsumers(queue: Queue): void {
       poAmountMinor?: string; grnAmountMinor?: string;
     };
     const billId = randomUUID();
-    const poRef = p.poRef.startsWith("procurement_") ? p.poRef : `procurement_po:${p.poRef}`;
+    // Bug fix: this used to unconditionally template-literal-wrap p.poRef
+    // (`procurement_po:${p.poRef}`) even when p.poRef was falsy/missing, so a
+    // producer-side gap silently manufactured the literal, UI-visible string
+    // "procurement_po:undefined" instead of leaving the bill genuinely
+    // unlinked. A missing poRef is now left undefined -- billCreate below
+    // already does `poRef: p.poRef ?? null` (payments/consumer.ts), and the
+    // Bills UI already renders a null poRef as an honest "—", so there is
+    // no need to fabricate a ref that looks real but resolves to nothing.
+    //
+    // Independent review (PR #1478) found a real gap in the first version of
+    // this guard: it only checked p.poRef for JS falsiness, which does NOT
+    // catch a producer that has already stringified an undefined id -- the
+    // literal, non-empty, TRUTHY string "undefined" (e.g. from a `${someId}`
+    // interpolation upstream, or a stray String(x) call) would still sail
+    // through `p.poRef ? ... : undefined` and rebuild the exact same bad
+    // "procurement_po:undefined" text this fix exists to prevent. This is
+    // in fact the most plausible real trigger for how the 5 historical bad
+    // rows this PR backfilled ever got that value in the first place. Now
+    // rejects that shape too, not just an absent/empty poRef.
+    const hasRealPoRef = Boolean(p.poRef) && p.poRef !== "undefined" && p.poRef !== "null";
+    const poRef = hasRealPoRef ? (p.poRef.startsWith("procurement_") ? p.poRef : `procurement_po:${p.poRef}`) : undefined;
     const grnRef = `procurement_grn:${p.grnId}`;
     // R5: authoritative ordered (PO) and accepted (GRN) values derived in
     // procurement. The vendor bill is drafted for the GRN-accepted value (pay
@@ -158,7 +178,11 @@ export function registerIntegrationConsumers(queue: Queue): void {
       if (!(await markProcessed(tx, msg.messageId))) return;
       // Persist the AP three-way-match read-model so a later invoice citing this
       // GRN can be reconciled even if entered manually.
-      if (poAmountMinor != null && grnAmountMinor != null) {
+      // poRef must be resolved (see above) before this AP three-way-match
+      // read-model row is persisted -- finance_grn_match.po_ref is NOT NULL,
+      // and a manufactured "procurement_po:undefined" value used to satisfy
+      // that constraint with a ref that could never actually match a real PO.
+      if (poRef && poAmountMinor != null && grnAmountMinor != null) {
         await paymentsRepo.upsertGrnMatch(tx as unknown as Parameters<typeof paymentsRepo.upsertGrnMatch>[0], {
           tenantId: msg.tenantId, grnRef, poRef, vendorId: p.vendorId,
           poAmountMinor, grnAmountMinor,

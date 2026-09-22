@@ -7,6 +7,51 @@ export function formatIndianDate(isoDate: string | null | undefined): string {
 }
 
 /**
+ * Format an internal cross-service reference (e.g. financeBills.poRef, of the
+ * shape "procurement_po:<uuid>") for display, or "—" when genuinely absent.
+ *
+ * Also guards against a malformed ref that LOOKS present but isn't: a
+ * producer-side bug once template-literal-built these with string
+ * interpolation and no check that the interpolated id was actually
+ * defined,
+ * which JS happily stringifies as the literal text "procurement_po:undefined"
+ * — a real, non-null, non-empty string that would otherwise sail past a
+ * plain `ref ?? "—"` check and render on screen looking like a broken
+ * internal id. Treat that shape the same as a genuinely missing ref.
+ *
+ *   formatInternalRef("procurement_po:abc-123")   -> "procurement_po:abc-123"
+ *   formatInternalRef("procurement_po:undefined") -> "—"
+ *   formatInternalRef(null)                        -> "—"
+ */
+export function formatInternalRef(ref: string | null | undefined): string {
+  if (!ref || ref === "undefined" || ref.endsWith(":undefined")) return "—";
+  return ref;
+}
+
+/**
+ * Humanize a raw lowercase/snake_case status or enum value for display, e.g.
+ * for a StatusPill/StatCard that was not given an explicit hand-written
+ * label. "pending" -> "Pending", "pending_approval" -> "Pending Approval",
+ * "na" -> "N/A". This is a generic fallback, not a replacement for a
+ * hand-written label where the generic Title Case would read oddly (e.g.
+ * "converted_to_po" -> "Converted To Po" instead of "Converted to PO") --
+ * callers that need exact wording should keep passing their own label.
+ */
+const STATUS_ACRONYM_LABELS: Record<string, string> = {
+  na: "N/A",
+};
+
+export function humanizeStatus(status: string): string {
+  const key = status.trim().toLowerCase();
+  if (STATUS_ACRONYM_LABELS[key]) return STATUS_ACRONYM_LABELS[key];
+  return key
+    .split(/[\s_]+/)
+    .filter(Boolean)
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(" ");
+}
+
+/**
  * Format money already expressed in RUPEES (not paise) as a ₹ string with en-IN
  * (lakh/crore) grouping and 2 decimals. Use this for the few API fields that return
  * rupees rather than minor units (e.g. payroll-runs grossAmount/netAmount). Do NOT

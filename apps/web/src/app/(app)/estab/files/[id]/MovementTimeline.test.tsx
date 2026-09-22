@@ -53,8 +53,11 @@ describe("MovementTimeline (Req 4.3)", () => {
     expect(screen.getByText("Forwarded")).toBeInTheDocument();
     expect(screen.getByText("Returned")).toBeInTheDocument();
     expect(screen.getByText(/For comments/)).toBeInTheDocument();
-    expect(screen.getByText("pending")).toBeInTheDocument();
-    expect(screen.getByText("active")).toBeInTheDocument();
+    // StatusPill now humanizes a raw lowercase status into a real display
+    // label when no explicit label is given (fix for the raw-enum-leak
+    // bug), so these render as "Pending"/"Active", not the raw DB value.
+    expect(screen.getByText("Pending")).toBeInTheDocument();
+    expect(screen.getByText("Active")).toBeInTheDocument();
   });
 
   it("renders an empty ordered list when there are no movements", () => {

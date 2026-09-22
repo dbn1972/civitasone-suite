@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { DataTable, StatusPill } from "../../../../_components/ds";
 import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
-import { formatIndianDate } from "@/lib/formatters";
+import { formatIndianDate, formatInternalRef } from "@/lib/formatters";
 import { useSeededResource } from "@/lib/sync/resource";
 
 type Bill = {
@@ -40,12 +40,12 @@ export function BillsTable({ bills, source = "api" }: { bills: Bill[]; source?: 
         columns={[
           { key: "billNo", label: t("colBill"), render: (b) => <span className="mono">{b.billNo}</span> },
           { key: "vendor", label: t("colVendor") },
-          { key: "poRef", label: t("colPoRef"), render: (b) => b.poRef ?? "—" },
+          { key: "poRef", label: t("colPoRef"), render: (b) => formatInternalRef(b.poRef) },
           { key: "amount", label: t("colAmount"), align: "right", cellType: "amount" },
           { key: "submittedDate", label: t("colSubmitted"), render: (b) => formatIndianDate(b.submittedDate) },
           { key: "dueDate", label: t("colDue"), render: (b) => (b.dueDate ? formatIndianDate(b.dueDate) : "—") },
-          { key: "threeWayMatch", label: t("colThreeWayMatch"), render: (b) => <StatusPill status={b.threeWayMatch} label={b.threeWayMatch.replace("_", " ")} /> },
-          { key: "status", label: t("colStatus"), render: (b) => <StatusPill status={b.status} label={b.status.replace("_", " ")} /> },
+          { key: "threeWayMatch", label: t("colThreeWayMatch"), render: (b) => <StatusPill status={b.threeWayMatch} /> },
+          { key: "status", label: t("colStatus"), render: (b) => <StatusPill status={b.status} /> },
         ]}
         rows={rows}
         rowHref={(b) => `/finance/expenditure/bills/${b.id}`}

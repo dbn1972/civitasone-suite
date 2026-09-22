@@ -178,7 +178,17 @@ export function mapProcurementIndentSummaries(payload: unknown): IndentSummary[]
     mapped.push({
       id,
       indentNo,
-      requestedBy: toText(row.requestedBy) ?? toText(row.createdBy)?.slice(0, 8) ?? "—",
+      // Bug fix (raw-id-leaked-to-ui): this used to fall back to the
+      // first 8 chars of the raw createdBy uuid when the backend had no
+      // resolved name yet, e.g. toText(row.createdBy)?.slice(0, 8) -- for
+      // every indent in this system that rendered the literal string
+      // "00000000" (every seed actor id happens to start with zeros), a
+      // meaningless value even when it isn't all zeros. The backend
+      // (procurement-service indent/queries.ts) now resolves createdBy to
+      // a real display name via identity-service when it can; fall back
+      // to an honest "—" (matching requiredByDate/requestDate's own
+      // convention below) instead of a raw/sliced id when it can't.
+      requestedBy: toText(row.requestedBy) ?? "—",
       department: toText(row.department) ?? "—",
       itemCount: typeof row.itemCount === "number" ? row.itemCount : 1,
       estimatedAmount: (parseMinor(row.totalMinor) ?? 0) || (parseMinor(row.estimatedAmount) ?? 0),
