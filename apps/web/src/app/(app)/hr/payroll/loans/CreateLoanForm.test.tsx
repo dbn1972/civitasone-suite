@@ -1,5 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { NextIntlClientProvider } from "next-intl";
+import enMessages from "@/messages/en.json";
 
 const refreshMock = vi.fn();
 vi.mock("next/navigation", () => ({
@@ -7,6 +9,16 @@ vi.mock("next/navigation", () => ({
 }));
 
 import { CreateLoanForm } from "./CreateLoanForm";
+
+// UX-017: CreateLoanForm is now translated (useTranslations("createLoanForm")),
+// so every render needs a real NextIntlClientProvider in the tree.
+function renderForm() {
+  render(
+    <NextIntlClientProvider locale="en" messages={enMessages}>
+      <CreateLoanForm />
+    </NextIntlClientProvider>,
+  );
+}
 
 function fillFields() {
   fireEvent.change(screen.getByLabelText(/Loan No\./), { target: { value: "LN-99" } });
@@ -23,7 +35,7 @@ describe("CreateLoanForm", () => {
   });
 
   it("requires the mandatory fields before opening the confirm dialog", () => {
-    render(<CreateLoanForm />);
+    renderForm();
     fireEvent.click(screen.getByRole("button", { name: "Create Loan" }));
     expect(screen.getByText(/are required/)).toBeInTheDocument();
   });
@@ -33,7 +45,7 @@ describe("CreateLoanForm", () => {
       new Response(JSON.stringify({ id: "loan-1", status: "accepted", correlationId: "c1" }), { status: 202 }),
     );
 
-    render(<CreateLoanForm />);
+    renderForm();
     fillFields();
     fireEvent.click(screen.getByRole("button", { name: "Create Loan" }));
 
@@ -49,7 +61,7 @@ describe("CreateLoanForm", () => {
   it("surfaces a server error on the confirm dialog (error path)", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(null, { status: 500 }));
 
-    render(<CreateLoanForm />);
+    renderForm();
     fillFields();
     fireEvent.click(screen.getByRole("button", { name: "Create Loan" }));
 

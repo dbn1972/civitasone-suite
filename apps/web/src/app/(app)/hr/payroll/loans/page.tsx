@@ -1,3 +1,4 @@
+import { getTranslations } from "next-intl/server";
 import { PageHeader, StatGrid, StatCard, Card, EmptyState } from "../../../../_components/ds";
 import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
@@ -18,6 +19,7 @@ export default async function LoansPage({
 }: {
   searchParams: { empId?: string };
 }) {
+  const t = await getTranslations("payrollLoans");
   const empId = searchParams?.empId?.trim() || "";
   const result: LoaderResult<LoanRow[]> = empId ? await getLoans(empId) : { data: [], source: "api" };
   const loans = result.data;
@@ -28,44 +30,44 @@ export default async function LoansPage({
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
-        title="Employee Loans"
-        subtitle="Search, create and disburse employee loans and view the sanctioned amount, EMI and outstanding balance."
+        title={t("title")}
+        subtitle={t("subtitle")}
         back="/hr/payroll"
       />
-      {empId && <DataSourceBadge source={result.source} message="Couldn't load — showing nothing" />}
+      {empId && <DataSourceBadge source={result.source} message={t("loadErrorMessage")} />}
 
       {empId && (
         <StatGrid>
-          <StatCard icon="💳" iconBg="var(--infobg)" label="Total Loans" value={loans.length} />
-          <StatCard icon="✅" iconBg="var(--goodbg)" label="Active / Disbursed" value={activeLoans} />
-          <StatCard icon="💰" iconBg="var(--warnbg)" label="Total Outstanding" value={formatMoney(totalOutstandingMinor)} />
-          <StatCard icon="📅" iconBg="var(--goodbg)" label="Monthly EMI Total" value={formatMoney(totalEmiMinor)} />
+          <StatCard icon="💳" iconBg="var(--infobg)" label={t("statTotalLoans")} value={loans.length} />
+          <StatCard icon="✅" iconBg="var(--goodbg)" label={t("statActiveDisbursed")} value={activeLoans} />
+          <StatCard icon="💰" iconBg="var(--warnbg)" label={t("statTotalOutstanding")} value={formatMoney(totalOutstandingMinor)} />
+          <StatCard icon="📅" iconBg="var(--goodbg)" label={t("statMonthlyEmiTotal")} value={formatMoney(totalEmiMinor)} />
         </StatGrid>
       )}
 
-      <Card title="Search Loans by Employee">
+      <Card title={t("searchCardTitle")}>
         <LoanSearchForm initialEmpId={empId} />
       </Card>
 
       <CreateLoanForm />
 
-      <Card title="Loans">
+      <Card title={t("loansCardTitle")}>
         {!empId ? (
           <EmptyState
             icon="🔎"
-            title="Search for an employee to see their loans"
-            message="Enter an employee ID to view their active and past loans, outstanding balance, and EMI details."
+            title={t("searchEmptyTitle")}
+            message={t("searchEmptyMessage")}
           />
         ) : (
           <LoansTable rows={loans} />
         )}
       </Card>
 
-      <Card title="Recovery Schedule">
+      <Card title={t("recoveryCardTitle")}>
         <EmptyState
           icon="📅"
-          title="Recovery schedule not yet available"
-          message="There is no per-installment repayment schedule endpoint yet. The EMI total above is computed from the loan record; individual due dates are not tracked in this view."
+          title={t("recoveryEmptyTitle")}
+          message={t("recoveryEmptyMessage")}
         />
       </Card>
     </main>

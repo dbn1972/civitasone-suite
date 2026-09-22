@@ -1,12 +1,14 @@
+import { getTranslations } from "next-intl/server";
 import { PageHeader } from "../../../../../_components/ds";
 import { CreatePensionerForm } from "./CreatePensionerForm";
 
-export default function NewPensionerPage() {
+export default async function NewPensionerPage() {
+  const t = await getTranslations("pensionersNew");
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
-        title="Add Pensioner"
-        subtitle="Register a new pensioner in the PPO system."
+        title={t("title")}
+        subtitle={t("subtitle")}
         back="/hr/payroll/pensioners"
       />
       <CreatePensionerForm />

@@ -1,5 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { NextIntlClientProvider } from "next-intl";
+import enMessages from "@/messages/en.json";
 
 const refreshMock = vi.fn();
 vi.mock("next/navigation", () => ({
@@ -7,6 +9,16 @@ vi.mock("next/navigation", () => ({
 }));
 
 import { LoansTable, type LoanRow } from "./LoansTable";
+
+// UX-017: LoansTable is now translated (useTranslations("loansTable")), so
+// every render needs a real NextIntlClientProvider in the tree.
+function renderTable(rows: LoanRow[]) {
+  render(
+    <NextIntlClientProvider locale="en" messages={enMessages}>
+      <LoansTable rows={rows} />
+    </NextIntlClientProvider>,
+  );
+}
 
 const rows: LoanRow[] = [
   { id: "l1", loanNo: "LN-1", loanType: "personal", principalMinor: "100000", outstandingMinor: "100000", emiMinor: "10000", tenureMonths: 10, status: "applied" },
@@ -24,12 +36,12 @@ describe("LoansTable", () => {
   });
 
   it("renders loan rows", () => {
-    render(<LoansTable rows={rows} />);
+    renderTable(rows);
     expect(screen.getByText("LN-1")).toBeInTheDocument();
   });
 
   it("gives each row's Disburse button a unique accessible name", () => {
-    render(<LoansTable rows={twoRows} />);
+    renderTable(twoRows);
     expect(screen.getByRole("button", { name: "Disburse loan LN-1" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Disburse loan LN-2" })).toBeInTheDocument();
   });
@@ -39,7 +51,7 @@ describe("LoansTable", () => {
       new Response(JSON.stringify({ id: "l1", status: "accepted", correlationId: "c1" }), { status: 202 }),
     );
 
-    render(<LoansTable rows={rows} />);
+    renderTable(rows);
     fireEvent.click(screen.getByRole("button", { name: /^Disburse/ }));
 
     await waitFor(() => expect(screen.getByText("Disburse this loan?")).toBeInTheDocument());
@@ -54,7 +66,7 @@ describe("LoansTable", () => {
   it("surfaces a server error on the confirm dialog (error path)", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(null, { status: 500 }));
 
-    render(<LoansTable rows={rows} />);
+    renderTable(rows);
     fireEvent.click(screen.getByRole("button", { name: /^Disburse/ }));
 
     await waitFor(() => expect(screen.getByText("Disburse this loan?")).toBeInTheDocument());

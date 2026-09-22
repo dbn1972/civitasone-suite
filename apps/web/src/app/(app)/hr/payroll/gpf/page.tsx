@@ -1,3 +1,4 @@
+import { getTranslations } from "next-intl/server";
 import { PageHeader, Card, DataTable, EmptyState, StatGrid, StatCard, RefreshErrorState, Term } from "../../../../_components/ds";
 import { getGpfStatements } from "../../../../_data/loaders";
 import { Chart } from "../../../../_components/Chart";
@@ -21,6 +22,7 @@ function projectGpfCorpus(totalMinor: number, yearsRemaining: number): number {
 }
 
 export default async function GpfStatementsPage() {
+  const t = await getTranslations("gpfStatements");
   const result = await getGpfStatements();
   const { data: rows } = result;
   const resource = useResource(result);
@@ -71,17 +73,17 @@ export default async function GpfStatementsPage() {
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
-        title={<><Term name="GPF" /> Statements</>}
-        subtitle="General Provident Fund contributions — interest @ 7.1% p.a. (GoI Q1 FY 2026-27)."
+        title={t.rich("title", { term: () => <Term name="GPF" /> })}
+        subtitle={t("subtitle")}
         back="/hr/payroll"
         help="payroll"
       />
 
       <StatGrid>
-        <StatCard icon="📋" iconBg="var(--infobg)" label="Statements" value={errored ? "—" : tableRows.length} />
-        <StatCard icon="👥" iconBg="var(--goodbg)" label="Employees" value={uniqueEmps ?? "—"} />
-        <StatCard icon="💰" iconBg="var(--warnbg)" label="Total Contributions" value={errored ? "—" : formatMoney(totalContrib)} />
-        <StatCard icon="📅" iconBg="var(--panel)" label="Periods" value={uniquePeriods ?? "—"} />
+        <StatCard icon="📋" iconBg="var(--infobg)" label={t("statStatements")} value={errored ? "—" : tableRows.length} />
+        <StatCard icon="👥" iconBg="var(--goodbg)" label={t("statEmployees")} value={uniqueEmps ?? "—"} />
+        <StatCard icon="💰" iconBg="var(--warnbg)" label={t("statTotalContributions")} value={errored ? "—" : formatMoney(totalContrib)} />
+        <StatCard icon="📅" iconBg="var(--panel)" label={t("statPeriods")} value={uniquePeriods ?? "—"} />
       </StatGrid>
 
       {/* GPF Corpus Dashboard */}
@@ -102,13 +104,13 @@ export default async function GpfStatementsPage() {
           }}
         >
           <p style={{ margin: "0 0 4px", fontSize: 11, fontWeight: 600, color: "var(--mut)", textTransform: "uppercase" }}>
-            Accumulated Corpus
+            {t("accumulatedCorpusLabel")}
           </p>
           <p style={{ margin: "0 0 4px", fontSize: 26, fontWeight: 800, color: "var(--ink)" }}>
             {errored ? "—" : formatMoney(totalContrib)}
           </p>
           <p style={{ margin: 0, fontSize: 12, color: "var(--mut)" }}>
-            All employee GPF contributions (all periods)
+            {t("accumulatedCorpusNote")}
           </p>
         </div>
 
@@ -122,13 +124,13 @@ export default async function GpfStatementsPage() {
             }}
           >
             <p style={{ margin: "0 0 4px", fontSize: 11, fontWeight: 600, color: "var(--mut)", textTransform: "uppercase" }}>
-              Last Period Contribution
+              {t("lastPeriodLabel")}
             </p>
             <p style={{ margin: "0 0 2px", fontSize: 20, fontWeight: 700, color: "var(--ink)" }}>
               {formatMoney(sortedPeriods[sortedPeriods.length - 1][1])}
             </p>
             <p style={{ margin: 0, fontSize: 12, color: "var(--mut)" }}>
-              Period: {sortedPeriods[sortedPeriods.length - 1][0]}
+              {t("periodValue", { period: sortedPeriods[sortedPeriods.length - 1][0] })}
             </p>
           </div>
         )}
@@ -142,41 +144,41 @@ export default async function GpfStatementsPage() {
           }}
         >
           <p style={{ margin: "0 0 4px", fontSize: 11, fontWeight: 600, color: "#1e40af", textTransform: "uppercase" }}>
-            Projected Value at Retirement
+            {t("projectedValueLabel")}
           </p>
           <p style={{ margin: "0 0 2px", fontSize: 22, fontWeight: 800, color: "#1d4ed8" }}>
             {errored ? "—" : formatMoney(projectedCorpus)}
           </p>
           <p style={{ margin: 0, fontSize: 11, color: "#1e40af" }}>
-            @7.1% p.a. over {AVG_YEARS_TO_RETIRE} yrs (compound). Illustrative only.
+            {t("projectionNote", { years: AVG_YEARS_TO_RETIRE })}
           </p>
         </div>
       </div>
 
       {trendChartData.length > 1 && (
-        <Card title="Contribution Trend (last 6 periods, ₹)">
+        <Card title={t("trendCardTitle")}>
           <Chart type="line" data={trendChartData} height={180} />
         </Card>
       )}
 
-      <Card title="GPF Ledger">
+      <Card title={t("ledgerCardTitle")}>
         {errored ? (
           <div className="pad">
-            <RefreshErrorState error={toHumanError("load", { area: "GPF statements" })} backHref="/hr/payroll" />
+            <RefreshErrorState error={toHumanError("load", { area: t("loadErrorArea") })} backHref="/hr/payroll" />
           </div>
         ) : tableRows.length === 0 ? (
           <EmptyState
             icon="🏦"
-            title="No GPF statements"
-            message="No General Provident Fund contributions have been recorded yet."
+            title={t("emptyTitle")}
+            message={t("emptyMessage")}
           />
         ) : (
           <DataTable<GpfRow>
             columns={[
-              { key: "employeeName", label: "Employee" },
-              { key: "employeeCode", label: "Code" },
-              { key: "period", label: "Period" },
-              { key: "contrib", label: "Employee GPF (10%)", align: "right", cellType: "amount" },
+              { key: "employeeName", label: t("colEmployee") },
+              { key: "employeeCode", label: t("colCode") },
+              { key: "period", label: t("colPeriod") },
+              { key: "contrib", label: t("colContribution"), align: "right", cellType: "amount" },
             ]}
             rows={tableRows}
             rowLinkKey="employeeId"
@@ -184,11 +186,11 @@ export default async function GpfStatementsPage() {
             identifyingColumnKey="employeeName"
             sortable
             filterable
-            filterPlaceholder="Filter by employee name, code or period…"
+            filterPlaceholder={t("filterPlaceholder")}
             pageSize={20}
             emptyIcon="🏦"
-            emptyTitle="No GPF statements found"
-            emptyMessage="No General Provident Fund records match your filter."
+            emptyTitle={t("emptyTitleFiltered")}
+            emptyMessage={t("emptyMessageFiltered")}
           />
         )}
       </Card>

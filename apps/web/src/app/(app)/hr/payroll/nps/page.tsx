@@ -1,3 +1,4 @@
+import { getTranslations } from "next-intl/server";
 import { PageHeader, Card, DataTable, EmptyState, StatGrid, StatCard, RefreshErrorState } from "../../../../_components/ds";
 import { getNpsStatements } from "../../../../_data/loaders";
 import { Chart } from "../../../../_components/Chart";
@@ -23,6 +24,7 @@ function projectCorpus(totalContribMinor: number, yearsRemaining: number): numbe
 }
 
 export default async function NpsStatementsPage() {
+  const t = await getTranslations("npsStatements");
   const result = await getNpsStatements();
   const { data: rows } = result;
   const resource = useResource(result);
@@ -72,16 +74,16 @@ export default async function NpsStatementsPage() {
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
-        title="NPS Statements"
-        subtitle="National Pension System contributions — 10% employee + 14% employer (GoI 2019 amendment)."
+        title={t("title")}
+        subtitle={t("subtitle")}
         back="/hr/payroll"
       />
 
       <StatGrid>
-        <StatCard icon="📋" iconBg="var(--infobg)" label="Statements" value={errored ? "—" : tableRows.length} />
-        <StatCard icon="👥" iconBg="var(--goodbg)" label="Employees" value={uniqueEmps ?? "—"} />
-        <StatCard icon="🧑" iconBg="var(--warnbg)" label="Total Employee (10%)" value={errored ? "—" : formatMoney(totalEmp)} />
-        <StatCard icon="🏛️" iconBg="var(--panel)" label="Total Employer (14%)" value={errored ? "—" : formatMoney(totalEr)} />
+        <StatCard icon="📋" iconBg="var(--infobg)" label={t("statStatements")} value={errored ? "—" : tableRows.length} />
+        <StatCard icon="👥" iconBg="var(--goodbg)" label={t("statEmployees")} value={uniqueEmps ?? "—"} />
+        <StatCard icon="🧑" iconBg="var(--warnbg)" label={t("statTotalEmployee")} value={errored ? "—" : formatMoney(totalEmp)} />
+        <StatCard icon="🏛️" iconBg="var(--panel)" label={t("statTotalEmployer")} value={errored ? "—" : formatMoney(totalEr)} />
       </StatGrid>
 
       {/* NPS Corpus Dashboard */}
@@ -103,13 +105,13 @@ export default async function NpsStatementsPage() {
           }}
         >
           <p style={{ margin: "0 0 4px", fontSize: 11, fontWeight: 600, color: "var(--mut)", textTransform: "uppercase" }}>
-            Accumulated Corpus
+            {t("accumulatedCorpusLabel")}
           </p>
           <p style={{ margin: "0 0 4px", fontSize: 26, fontWeight: 800, color: "var(--ink)" }}>
             {errored ? "—" : formatMoney(totalCorpus)}
           </p>
           <p style={{ margin: 0, fontSize: 12, color: "var(--mut)" }}>
-            Employee + Employer contributions (all periods)
+            {t("accumulatedCorpusNote")}
           </p>
         </div>
 
@@ -124,13 +126,13 @@ export default async function NpsStatementsPage() {
             }}
           >
             <p style={{ margin: "0 0 4px", fontSize: 11, fontWeight: 600, color: "var(--mut)", textTransform: "uppercase" }}>
-              Last Period Contribution
+              {t("lastPeriodLabel")}
             </p>
             <p style={{ margin: "0 0 2px", fontSize: 20, fontWeight: 700, color: "var(--ink)" }}>
               {formatMoney(sortedPeriods[sortedPeriods.length - 1][1])}
             </p>
             <p style={{ margin: 0, fontSize: 12, color: "var(--mut)" }}>
-              Period: {sortedPeriods[sortedPeriods.length - 1][0]}
+              {t("periodValue", { period: sortedPeriods[sortedPeriods.length - 1][0] })}
             </p>
           </div>
         )}
@@ -145,43 +147,43 @@ export default async function NpsStatementsPage() {
           }}
         >
           <p style={{ margin: "0 0 4px", fontSize: 11, fontWeight: 600, color: "#14532d", textTransform: "uppercase" }}>
-            Projected Corpus at Retirement
+            {t("projectedCorpusLabel")}
           </p>
           <p style={{ margin: "0 0 2px", fontSize: 22, fontWeight: 800, color: "#16a34a" }}>
             {errored ? "—" : formatMoney(projectedCorpus)}
           </p>
           <p style={{ margin: 0, fontSize: 11, color: "#14532d" }}>
-            @9.5% p.a. over {AVG_YEARS_TO_RETIRE} yrs (illustrative — PFRDA median). Not a guarantee.
+            {t("projectionNote", { years: AVG_YEARS_TO_RETIRE })}
           </p>
         </div>
       </div>
 
       {/* Contribution trend */}
       {trendChartData.length > 1 && (
-        <Card title="Contribution Trend (last 6 periods, ₹)">
+        <Card title={t("trendCardTitle")}>
           <Chart type="bar" data={trendChartData} height={180} />
         </Card>
       )}
 
-      <Card title="NPS Ledger">
+      <Card title={t("ledgerCardTitle")}>
         {errored ? (
           <div className="pad">
-            <RefreshErrorState error={toHumanError("load", { area: "NPS statements" })} backHref="/hr/payroll" />
+            <RefreshErrorState error={toHumanError("load", { area: t("loadErrorArea") })} backHref="/hr/payroll" />
           </div>
         ) : tableRows.length === 0 ? (
           <EmptyState
             icon="🏦"
-            title="No NPS statements"
-            message="No National Pension System contributions have been recorded yet."
+            title={t("emptyTitle")}
+            message={t("emptyMessage")}
           />
         ) : (
           <DataTable<NpsRow>
             columns={[
-              { key: "employeeName", label: "Employee" },
-              { key: "employeeCode", label: "Code" },
-              { key: "period", label: "Period" },
-              { key: "emp", label: "Employee (10%)", align: "right", cellType: "amount" },
-              { key: "er", label: "Employer (14%)", align: "right", cellType: "amount" },
+              { key: "employeeName", label: t("colEmployee") },
+              { key: "employeeCode", label: t("colCode") },
+              { key: "period", label: t("colPeriod") },
+              { key: "emp", label: t("colEmployeeContrib"), align: "right", cellType: "amount" },
+              { key: "er", label: t("colEmployerContrib"), align: "right", cellType: "amount" },
             ]}
             rows={tableRows}
             rowLinkKey="employeeId"
@@ -189,11 +191,11 @@ export default async function NpsStatementsPage() {
             identifyingColumnKey="employeeName"
             sortable
             filterable
-            filterPlaceholder="Filter by employee name, code or period…"
+            filterPlaceholder={t("filterPlaceholder")}
             pageSize={20}
             emptyIcon="🏦"
-            emptyTitle="No NPS statements found"
-            emptyMessage="No National Pension System records match your filter."
+            emptyTitle={t("emptyTitleFiltered")}
+            emptyMessage={t("emptyMessageFiltered")}
           />
         )}
       </Card>

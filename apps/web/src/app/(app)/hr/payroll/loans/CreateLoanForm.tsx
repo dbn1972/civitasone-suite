@@ -2,12 +2,14 @@
 
 import { useId, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { Button, Card, ConfirmDialog } from "../../../../_components/ds";
 import { browserJson } from "@/lib/api/browserClient";
 
 type AcceptedResponse = { id: string; status: string; correlationId?: string };
 
 export function CreateLoanForm() {
+  const t = useTranslations("createLoanForm");
   const router = useRouter();
   const [loanNo, setLoanNo] = useState("");
   const [employeeId, setEmployeeId] = useState("");
@@ -56,7 +58,7 @@ export function CreateLoanForm() {
     setEmiInvalid(emiMissing);
     setTenureInvalid(tenureMissing);
     if (loanNoMissing || empIdMissing || principalMissing || emiMissing || tenureMissing) {
-      setError("Loan number, employee, principal, EMI and tenure are required.");
+      setError(t("requiredError"));
       if (loanNoMissing) {
         loanNoRef.current?.focus();
       } else if (empIdMissing) {
@@ -91,7 +93,7 @@ export function CreateLoanForm() {
         }),
       });
       setConfirmOpen(false);
-      setMessage(`Loan ${loanNo} submitted (id ${res.id}). It is processed asynchronously.`);
+      setMessage(t("submittedMessage", { loanNo, id: res.id }));
       setLoanNo("");
       setEmployeeId("");
       setPrincipalRupees("");
@@ -100,7 +102,7 @@ export function CreateLoanForm() {
       setInterestRatePct("0");
       router.refresh();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Network error. Please try again.");
+      setError(err instanceof Error ? err.message : t("networkError"));
     } finally {
       setBusy(false);
     }
@@ -108,11 +110,11 @@ export function CreateLoanForm() {
 
   return (
     <form onSubmit={openConfirm} style={{ marginBottom: 16 }}>
-      <Card title="Create Loan" padding>
+      <Card title={t("cardTitle")} padding>
         <div style={{ display: "grid", gap: 14, gridTemplateColumns: "repeat(auto-fit,minmax(200px,1fr))" }}>
           <div style={{ display: "grid", gap: 6 }}>
             <label htmlFor={loanNoField} style={{ fontSize: 13, fontWeight: 600 }}>
-              Loan No. <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
+              {t("loanNoLabel")} <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
             </label>
             <input
               id={loanNoField}
@@ -128,7 +130,7 @@ export function CreateLoanForm() {
           </div>
           <div style={{ display: "grid", gap: 6 }}>
             <label htmlFor={empIdField} style={{ fontSize: 13, fontWeight: 600 }}>
-              Employee ID (UUID) <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
+              {t("employeeIdLabel")} <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
             </label>
             <input
               id={empIdField}
@@ -142,17 +144,17 @@ export function CreateLoanForm() {
             />
           </div>
           <div style={{ display: "grid", gap: 6 }}>
-            <label htmlFor={typeField} style={{ fontSize: 13, fontWeight: 600 }}>Loan Type</label>
+            <label htmlFor={typeField} style={{ fontSize: 13, fontWeight: 600 }}>{t("loanTypeLabel")}</label>
             <select id={typeField} value={loanType} onChange={(e) => setLoanType(e.target.value)} style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}>
-              <option value="personal">Personal</option>
-              <option value="vehicle">Vehicle</option>
-              <option value="house_building">House Building</option>
-              <option value="festival">Festival Advance</option>
+              <option value="personal">{t("optionPersonal")}</option>
+              <option value="vehicle">{t("optionVehicle")}</option>
+              <option value="house_building">{t("optionHouseBuilding")}</option>
+              <option value="festival">{t("optionFestival")}</option>
             </select>
           </div>
           <div style={{ display: "grid", gap: 6 }}>
             <label htmlFor={principalField} style={{ fontSize: 13, fontWeight: 600 }}>
-              Principal (₹) <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
+              {t("principalLabel")} <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
             </label>
             <input
               id={principalField}
@@ -170,7 +172,7 @@ export function CreateLoanForm() {
           </div>
           <div style={{ display: "grid", gap: 6 }}>
             <label htmlFor={emiField} style={{ fontSize: 13, fontWeight: 600 }}>
-              EMI (₹) <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
+              {t("emiLabel")} <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
             </label>
             <input
               id={emiField}
@@ -188,7 +190,7 @@ export function CreateLoanForm() {
           </div>
           <div style={{ display: "grid", gap: 6 }}>
             <label htmlFor={tenureField} style={{ fontSize: 13, fontWeight: 600 }}>
-              Tenure (months) <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
+              {t("tenureLabel")} <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
             </label>
             <input
               id={tenureField}
@@ -204,13 +206,13 @@ export function CreateLoanForm() {
             />
           </div>
           <div style={{ display: "grid", gap: 6 }}>
-            <label htmlFor={rateField} style={{ fontSize: 13, fontWeight: 600 }}>Interest Rate (%)</label>
+            <label htmlFor={rateField} style={{ fontSize: 13, fontWeight: 600 }}>{t("interestRateLabel")}</label>
             <input id={rateField} type="number" min={0} step="0.01" value={interestRatePct} onChange={(e) => setInterestRatePct(e.target.value)} style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }} />
           </div>
         </div>
         <div style={{ marginTop: 14 }}>
           <Button type="submit" style={{ minHeight: 44 }} disabled={busy}>
-            Create Loan
+            {t("submitButton")}
           </Button>
         </div>
         {error && !confirmOpen && (
@@ -223,15 +225,18 @@ export function CreateLoanForm() {
 
       <ConfirmDialog
         open={confirmOpen}
-        title="Create this loan?"
-        confirmLabel="Create loan"
+        title={t("confirmTitle")}
+        confirmLabel={t("confirmLabel")}
         busy={busy}
         errorMessage={error}
-        description={
-          <>
-            Create loan <strong>{loanNo}</strong> for employee <strong>{employeeId}</strong> with principal ₹{principalRupees}, EMI ₹{emiRupees} over {tenureMonths} month(s).
-          </>
-        }
+        description={t.rich("confirmDescription", {
+          loanNo,
+          employeeId,
+          principal: principalRupees,
+          emi: emiRupees,
+          tenure: tenureMonths,
+          strong: (chunks) => <strong>{chunks}</strong>,
+        })}
         onConfirm={() => void createLoan()}
         onCancel={() => !busy && setConfirmOpen(false)}
       />
