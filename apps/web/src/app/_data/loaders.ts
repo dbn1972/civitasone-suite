@@ -4153,6 +4153,19 @@ export async function getSADashboard(): Promise<LoaderResult<Record<string, unkn
   });
 }
 
+/**
+ * Real, live PM2 fleet snapshot (admin-service's `/v1/admin/operations`,
+ * `requireSuperAdmin`-gated, already used by the ops tooling) — NOT a
+ * dashboard-specific endpoint. sa-dashboard uses this for an honest
+ * "services online / declared" figure instead of a hardcoded literal.
+ */
+export async function getSAOperationsSnapshot(): Promise<LoaderResult<Record<string, unknown>>> {
+  return fetchJson<unknown, Record<string, unknown>>("/api/v1/admin/operations", {}, {
+    revalidateSeconds: 15, telemetryKey: "sa.operations",
+    mapResponse: (p) => (isRecord(p) ? p as Record<string, unknown> : null),
+  });
+}
+
 export async function getActiveSessions(): Promise<LoaderResult<SessionSummary[]>> {
   return fetchJson<unknown, SessionSummary[]>("/api/identity/sessions", [], {
     revalidateSeconds: 30,
