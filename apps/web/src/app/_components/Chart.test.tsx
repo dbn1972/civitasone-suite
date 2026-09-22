@@ -32,6 +32,18 @@ describe("Chart", () => {
       expect(screen.getByText("28")).toBeInTheDocument();
       expect(screen.getByText("15")).toBeInTheDocument();
     });
+
+    // Issue #15: BudgetChart.tsx (finance dashboard) feeds this component
+    // currency values and needs its bar labels to read e.g. "₹42.00", not a
+    // bare "42" — this is the generic mechanism that fix relies on.
+    it("formats data value labels through a custom valueFormatter when provided", () => {
+      render(<Chart type="bar" data={data} valueFormatter={(v) => `₹${v}.00`} />);
+      expect(screen.getByText("₹42.00")).toBeInTheDocument();
+      expect(screen.getByText("₹28.00")).toBeInTheDocument();
+      expect(screen.getByText("₹15.00")).toBeInTheDocument();
+      // The raw, unformatted digits must not also be present.
+      expect(screen.queryByText("42")).not.toBeInTheDocument();
+    });
   });
 
   describe("line chart", () => {
@@ -64,6 +76,17 @@ describe("Chart", () => {
       const { container } = render(<Chart type="donut" data={data} />);
       const paths = container.querySelectorAll("path");
       expect(paths.length).toBeGreaterThanOrEqual(3);
+    });
+
+    it("formats the centre total and legend values through a custom valueFormatter", () => {
+      render(<Chart type="donut" data={data} valueFormatter={(v) => `₹${v}.00`} />);
+      // Centre total: 42 + 28 + 15 = 85.
+      expect(screen.getByText("₹85.00")).toBeInTheDocument();
+      // Per-slice legend values.
+      expect(screen.getByText("₹42.00")).toBeInTheDocument();
+      expect(screen.getByText("₹28.00")).toBeInTheDocument();
+      expect(screen.getByText("₹15.00")).toBeInTheDocument();
+      expect(screen.queryByText("85")).not.toBeInTheDocument();
     });
   });
 

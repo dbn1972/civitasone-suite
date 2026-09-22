@@ -25,7 +25,7 @@ export default async function ProjectsListPage() {
     <>
       <PageHeader
         title="Projects"
-        subtitle={<>All projects with physical progress & <Term name="RAG" label="RAG status" />.</>}
+        subtitle={<>All projects with physical progress & <Term name="RAG" label="RAG status" after="." /></>}
         help="projects"
         actions={
           <Link href="/projects/new" className="btn primary">

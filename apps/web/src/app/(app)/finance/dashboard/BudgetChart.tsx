@@ -51,10 +51,10 @@ export function BudgetChart({ utilisationPct, expenditure }: BudgetChartProps) {
   return (
     <div style={{ display: "flex", flexWrap: "wrap", gap: 24 }}>
       <div style={{ flex: "1 1 200px" }}>
-        <Chart type="donut" data={donutData} title="Budget Utilisation" height={160} />
+        <Chart type="donut" data={donutData} title="Budget Utilisation" height={160} valueFormatter={formatRupees} />
       </div>
       <div style={{ flex: "2 1 300px" }}>
-        <Chart type="bar" data={barData} title="Expenditure by Category" height={160} />
+        <Chart type="bar" data={barData} title="Expenditure by Category" height={160} valueFormatter={formatRupees} />
       </div>
     </div>
   );

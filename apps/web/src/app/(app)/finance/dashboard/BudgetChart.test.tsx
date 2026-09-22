@@ -11,40 +11,58 @@ import { BudgetChart } from "./BudgetChart";
 // a chart whose own numbers summed to 500000, reading as a false "₹5,00,000"
 // 100x too large, right next to a correctly-formatted "₹5,000.00" legend/
 // stat tile for the exact same underlying quantity.
-describe("BudgetChart — Issue #5: chart values match the stat tile, not 100x it", () => {
-  it("renders category bars already rupee-scaled, summing to the true expenditure", () => {
+//
+// Issue #15 (this file's other describe block below): fixing the 100x SCALE
+// bug did not fix FORMATTING -- <Chart>'s bar/donut value labels still
+// rendered plain digit strings (e.g. "1750") with no ₹ symbol or Indian
+// digit grouping. Chart.tsx now accepts an optional `valueFormatter`
+// (defaulting to the original raw-digit behavior for non-currency callers),
+// and BudgetChart passes `formatRupees` so every number the chart shows,
+// bar label or donut total, is both correctly-scaled AND currency-formatted.
+describe("BudgetChart — Issue #5 (100x scale) + Issue #15 (currency formatting)", () => {
+  it("renders category bars already rupee-scaled AND currency-formatted, summing to the true expenditure", () => {
     // Live-verified figure: 500000 paise = real expenditure of ₹5,000.00.
     render(<BudgetChart utilisationPct={45} expenditure={500000} />);
-    // 35/25/20/12/8% splits of ₹5,000 -> 1750/1250/1000/600/400 — NOT the
-    // pre-fix 175000/125000/100000/60000/40000 (the raw, unconverted paise
-    // integer split the same way).
-    expect(screen.getByText("1750")).toBeInTheDocument();
-    expect(screen.getByText("1250")).toBeInTheDocument();
-    expect(screen.getByText("1000")).toBeInTheDocument();
-    expect(screen.getByText("600")).toBeInTheDocument();
-    expect(screen.getByText("400")).toBeInTheDocument();
-    // The old, 100x-inflated values (this bug's reported symptom) must be gone.
+    // 35/25/20/12/8% splits of ₹5,000 -> 1750/1250/1000/600/400 rupees,
+    // rendered through formatRupees() (Issue #15) — NOT the pre-#5-fix
+    // 175000/125000/100000/60000/40000 (raw, unconverted paise), and NOT
+    // the post-#5/pre-#15 bare "1750" etc (correct scale, no ₹/grouping).
+    expect(screen.getByText("₹1,750.00")).toBeInTheDocument();
+    expect(screen.getByText("₹1,250.00")).toBeInTheDocument();
+    expect(screen.getByText("₹1,000.00")).toBeInTheDocument();
+    expect(screen.getByText("₹600.00")).toBeInTheDocument();
+    expect(screen.getByText("₹400.00")).toBeInTheDocument();
+    // The old, 100x-inflated values (Issue #5's reported symptom) must be gone.
     expect(screen.queryByText("175000")).not.toBeInTheDocument();
     expect(screen.queryByText("125000")).not.toBeInTheDocument();
     expect(screen.queryByText("100000")).not.toBeInTheDocument();
+    // The correctly-scaled-but-still-raw values (Issue #15's reported
+    // symptom — what a reader actually saw after #5 alone) must be gone too.
+    expect(screen.queryByText("1750")).not.toBeInTheDocument();
+    expect(screen.queryByText("1250")).not.toBeInTheDocument();
+    expect(screen.queryByText("1000")).not.toBeInTheDocument();
   });
 
-  it("donut centre total (raw) and legend (formatted) agree on the same magnitude", () => {
+  it("donut centre total and legend value agree on the same, now-formatted magnitude (Issue #15)", () => {
     // No sanctioned budget on record (Issue #7) -> remaining is 0, so the
-    // donut's raw centre total is exactly `utilized`, unambiguously.
+    // donut's centre total is exactly `utilized`, unambiguously.
     render(<BudgetChart utilisationPct={null} expenditure={500000} />);
-    // Two elements legitimately show "5000" here: the donut's raw SVG centre
-    // total AND the legend row's own value span for "Utilized" (value ===
-    // total, since remaining is 0) — both correctly rupee-scaled, which is
-    // exactly the point of this test, so assert both exist rather than
-    // picking one via getByText (which requires a unique match).
-    expect(screen.getAllByText("5000")).toHaveLength(2); // raw donut centre total + legend value, both in rupees
+    // Two elements legitimately show "₹5,000.00" here: the donut's SVG
+    // centre total AND the legend row's own value span for "Utilized"
+    // (value === total, since remaining is 0) — both correctly rupee-scaled
+    // AND currency-formatted (Issue #15), which is exactly the point of
+    // this test, so assert both exist rather than picking one via
+    // getByText (which requires a unique match).
+    expect(screen.getAllByText("₹5,000.00")).toHaveLength(2); // formatted donut centre total + legend value, both in rupees
+    // The pre-#15-fix raw (but correctly-scaled) value must be gone from
+    // both of those spots.
+    expect(screen.queryByText("5000")).not.toBeInTheDocument();
     // Anchored: the donut slice's <title> tooltip also contains this same
-    // label text as a substring ("Utilized (₹5,000.00): 5000 (100.0%)") —
-    // an unanchored match would find both and fail as ambiguous.
+    // label text as a substring ("Utilized (₹5,000.00): ₹5,000.00 (100.0%)")
+    // — an unanchored match would find both and fail as ambiguous.
     expect(screen.getByText(/^Utilized \(₹5,000\.00\)$/)).toBeInTheDocument(); // formatted legend, same quantity
-    // The pre-fix bug's signature number (the raw, unconverted paise value)
-    // must not appear anywhere on the page.
+    // The pre-#5-fix bug's signature number (the raw, unconverted paise
+    // value) must not appear anywhere on the page.
     expect(screen.queryByText("500000")).not.toBeInTheDocument();
   });
 

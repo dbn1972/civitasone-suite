@@ -13,6 +13,20 @@ interface ChartProps {
   data: ChartDataPoint[];
   title?: string;
   height?: number;
+  /**
+   * Issue #15: optional formatter applied to every raw numeric value this
+   * chart displays on screen or in a hover tooltip -- bar/point value
+   * labels, the donut/pie centre total, and the donut legend's value span.
+   * Defaults to plain digit stringification (this component's original,
+   * unconditional behavior), so existing non-currency callers (e.g.
+   * inventory/ForecastChart.tsx's unit counts, hr/payroll's trend charts)
+   * render exactly as before. Currency-denominated callers (e.g. finance's
+   * BudgetChart.tsx) should pass `formatRupees` from "@/lib/formatters" so
+   * a value like 1750 reads "₹1,750.00" instead of a bare, unformatted
+   * "1750" next to a correctly-formatted ₹ legend/stat-tile for the same
+   * quantity.
+   */
+  valueFormatter?: (value: number) => string;
 }
 
 const DEFAULT_COLORS = [
@@ -20,11 +34,21 @@ const DEFAULT_COLORS = [
   "#ef4444", "#8b5cf6", "#ec4899", "#14b8a6",
 ];
 
+const defaultValueFormatter = (value: number) => String(value);
+
 function getColor(index: number, override?: string) {
   return override ?? DEFAULT_COLORS[index % DEFAULT_COLORS.length];
 }
 
-function BarChart({ data, height }: { data: ChartDataPoint[]; height: number }) {
+function BarChart({
+  data,
+  height,
+  valueFormatter = defaultValueFormatter,
+}: {
+  data: ChartDataPoint[];
+  height: number;
+  valueFormatter?: (value: number) => string;
+}) {
   const maxVal = Math.max(...data.map((d) => d.value), 1);
   const barWidth = Math.max(20, Math.min(60, (600 - data.length * 8) / data.length));
   const chartWidth = data.length * (barWidth + 8) + 40;
@@ -46,7 +70,7 @@ function BarChart({ data, height }: { data: ChartDataPoint[]; height: number }) 
               fill={getColor(i, d.color)}
               rx={4}
             />
-            <title>{`${d.label}: ${d.value}`}</title>
+            <title>{`${d.label}: ${valueFormatter(d.value)}`}</title>
             <text
               x={x + barWidth / 2}
               y={chartHeight + 14}
@@ -64,7 +88,7 @@ function BarChart({ data, height }: { data: ChartDataPoint[]; height: number }) 
               fill="#334155"
               fontWeight={600}
             >
-              {d.value}
+              {valueFormatter(d.value)}
             </text>
           </g>
         );
@@ -73,7 +97,15 @@ function BarChart({ data, height }: { data: ChartDataPoint[]; height: number }) 
   );
 }
 
-function DonutChart({ data, height }: { data: ChartDataPoint[]; height: number }) {
+function DonutChart({
+  data,
+  height,
+  valueFormatter = defaultValueFormatter,
+}: {
+  data: ChartDataPoint[];
+  height: number;
+  valueFormatter?: (value: number) => string;
+}) {
   const total = data.reduce((s, d) => s + d.value, 0);
   const cx = height / 2;
   const cy = height / 2;
@@ -109,7 +141,7 @@ function DonutChart({ data, height }: { data: ChartDataPoint[]; height: number }
     startAngle = endAngle;
     return (
       <path key={i} d={path} fill={getColor(i, d.color)}>
-        <title>{`${d.label}: ${d.value} (${((d.value / total) * 100).toFixed(1)}%)`}</title>
+        <title>{`${d.label}: ${valueFormatter(d.value)} (${((d.value / total) * 100).toFixed(1)}%)`}</title>
       </path>
     );
   });
@@ -119,7 +151,7 @@ function DonutChart({ data, height }: { data: ChartDataPoint[]; height: number }
       <svg width={height} height={height} viewBox={`0 0 ${height} ${height}`}>
         {slices}
         <text x={cx} y={cy - 6} textAnchor="middle" fontSize={16} fontWeight={700} fill="#1e293b">
-          {total}
+          {valueFormatter(total)}
         </text>
         <text x={cx} y={cy + 12} textAnchor="middle" fontSize={10} fill="#64748b">
           Total
@@ -141,7 +173,7 @@ function DonutChart({ data, height }: { data: ChartDataPoint[]; height: number }
             {/* #94a3b8 is 2.56:1 on white and fails WCAG 2.2 AA SC 1.4.3.
                 #667085 is 4.97:1. This legend renders on every chart, so the
                 old value failed accessibility on every dashboard. */}
-            <span style={{ color: "#667085", marginLeft: 4 }}>{d.value}</span>
+            <span style={{ color: "#667085", marginLeft: 4 }}>{valueFormatter(d.value)}</span>
           </div>
         ))}
       </div>
@@ -149,7 +181,15 @@ function DonutChart({ data, height }: { data: ChartDataPoint[]; height: number }
   );
 }
 
-function LineChart({ data, height }: { data: ChartDataPoint[]; height: number }) {
+function LineChart({
+  data,
+  height,
+  valueFormatter = defaultValueFormatter,
+}: {
+  data: ChartDataPoint[];
+  height: number;
+  valueFormatter?: (value: number) => string;
+}) {
   const maxVal = Math.max(...data.map((d) => d.value), 1);
   const chartWidth = Math.max(400, data.length * 60);
   const chartHeight = height - 40;
@@ -165,7 +205,7 @@ function LineChart({ data, height }: { data: ChartDataPoint[]; height: number })
       {points.map((p, i) => (
         <g key={i}>
           <circle cx={p.x} cy={p.y} r={4} fill="#4f46e5" />
-          <title>{`${data[i].label}: ${data[i].value}`}</title>
+          <title>{`${data[i].label}: ${valueFormatter(data[i].value)}`}</title>
           <text x={p.x} y={chartHeight + 14} textAnchor="middle" fontSize={10} fill="#64748b">
             {data[i].label.length > 6 ? data[i].label.slice(0, 5) + "…" : data[i].label}
           </text>
@@ -175,7 +215,15 @@ function LineChart({ data, height }: { data: ChartDataPoint[]; height: number })
   );
 }
 
-function PieChart({ data, height }: { data: ChartDataPoint[]; height: number }) {
+function PieChart({
+  data,
+  height,
+  valueFormatter = defaultValueFormatter,
+}: {
+  data: ChartDataPoint[];
+  height: number;
+  valueFormatter?: (value: number) => string;
+}) {
   const total = data.reduce((s, d) => s + d.value, 0);
   const cx = height / 2;
   const cy = height / 2;
@@ -199,7 +247,7 @@ function PieChart({ data, height }: { data: ChartDataPoint[]; height: number }) 
     startAngle = endAngle;
     return (
       <path key={i} d={path} fill={getColor(i, d.color)}>
-        <title>{`${d.label}: ${d.value} (${((d.value / total) * 100).toFixed(1)}%)`}</title>
+        <title>{`${d.label}: ${valueFormatter(d.value)} (${((d.value / total) * 100).toFixed(1)}%)`}</title>
       </path>
     );
   });
@@ -223,7 +271,7 @@ function PieChart({ data, height }: { data: ChartDataPoint[]; height: number }) 
   );
 }
 
-export function Chart({ type, data, title, height = 200 }: ChartProps) {
+export function Chart({ type, data, title, height = 200, valueFormatter }: ChartProps) {
   return (
     <div style={{ width: "100%" }}>
       {title && (
@@ -231,10 +279,10 @@ export function Chart({ type, data, title, height = 200 }: ChartProps) {
           {title}
         </h4>
       )}
-      {type === "bar" && <BarChart data={data} height={height} />}
-      {type === "line" && <LineChart data={data} height={height} />}
-      {type === "donut" && <DonutChart data={data} height={height} />}
-      {type === "pie" && <PieChart data={data} height={height} />}
+      {type === "bar" && <BarChart data={data} height={height} valueFormatter={valueFormatter} />}
+      {type === "line" && <LineChart data={data} height={height} valueFormatter={valueFormatter} />}
+      {type === "donut" && <DonutChart data={data} height={height} valueFormatter={valueFormatter} />}
+      {type === "pie" && <PieChart data={data} height={height} valueFormatter={valueFormatter} />}
     </div>
   );
 }
