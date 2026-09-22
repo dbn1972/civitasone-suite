@@ -134,10 +134,19 @@ login or credentials needed:
 ```bash
 KC_URL="${KEYCLOAK_URL:-https://civitasone.65-2-205-201.nip.io/auth}"
 KC_REALM="${KEYCLOAK_REALM:-civitasone}"
-JWKS_URI=$(curl -s "$KC_URL/realms/$KC_REALM/.well-known/openid-configuration" \
+# -k is required here: this host's Keycloak cert is CN/SAN-scoped to the
+# bare IP (65.2.205.201), not the nip.io hostname every service actually
+# connects through — a known hostname-verification mismatch, not a "just
+# ignore TLS" habit. See ecosystem.config.js's AUTH_ENV block (~line 183)
+# for the full story and the equivalent NODE_TLS_REJECT_UNAUTHORIZED
+# workaround already running fleet-wide for the same reason. Without -k,
+# curl fails closed with "SSL: no alternative certificate subject name
+# matches target hostname" and the node call below throws on the empty
+# response — don't mistake that for JWKS being unreachable.
+JWKS_URI=$(curl -sk "$KC_URL/realms/$KC_REALM/.well-known/openid-configuration" \
   | node -e "let d='';process.stdin.on('data',c=>d+=c).on('end',()=>{
       console.log(JSON.parse(d).jwks_uri)})")
-curl -s "$JWKS_URI" | node -e "let d='';process.stdin.on('data',c=>d+=c).on('end',()=>{
+curl -sk "$JWKS_URI" | node -e "let d='';process.stdin.on('data',c=>d+=c).on('end',()=>{
   JSON.parse(d).keys.filter(k=>k.use==='sig').forEach(k=>console.log(k.kty, k.alg))})"
 ```
 
