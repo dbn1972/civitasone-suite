@@ -1253,6 +1253,17 @@ export type ProjectSummary = {
   expenditure: number;
   completionPct: number;
   status: "planning" | "active" | "on_hold" | "completed" | "cancelled" | "delayed";
+  /**
+   * RAG (Red/Amber/Green) health signal, computed by the project-service RAG
+   * scheduler (services/project-service/src/modules/project/rag.ts) from
+   * milestone slippage and financial/physical variance. Distinct from
+   * `status`: `status` is the lifecycle stage (planning/active/on_hold/
+   * completed/cancelled), and only folds RAG in one direction (a red,
+   * active project's status flips to "delayed"). `rag` is the raw signal --
+   * the only way to tell amber ("at risk") from green ("on track"), and to
+   * keep a "delayed" (red) project attributable to "active" in a breakdown.
+   */
+  rag: "green" | "amber" | "red";
 };
 
 export type ProjectDetail = ProjectSummary & {

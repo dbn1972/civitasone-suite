@@ -1182,6 +1182,7 @@ export const ProjectSummarySchema = z.object({
   expenditure: z.number().default(0),
   completionPct: z.number().default(0),
   status: z.enum(["planning", "active", "on_hold", "completed", "cancelled", "delayed"]),
+  rag: z.enum(["green", "amber", "red"]).default("green"),
 });
 export const ProjectSummaryListSchema = z.array(ProjectSummarySchema);
 

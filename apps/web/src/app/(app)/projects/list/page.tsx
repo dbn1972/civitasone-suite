@@ -5,10 +5,23 @@ import { ProjectsTable, type ProjectRow } from "./ProjectsTable";
 
 export default async function ProjectsListPage() {
   const { data: projects, source } = await getProjects();
-  const active = projects.filter((p) => p.status === "active").length;
-  const onTrack = projects.filter((p) => p.completionPct > 50).length;
-  const atRisk = projects.filter((p) => p.status === "on_hold").length;
-  const delayed = projects.filter((p) => p.status === "delayed").length;
+  // ISSUE-8: these 4 tiles used to be computed from mismatched fields -- "On
+  // Track" from a bare completionPct>50 threshold (no status scoping at
+  // all), "At Risk"/"Delayed" from the *lifecycle* status enum's on_hold /
+  // delayed values (mutually exclusive with "active" by construction, so
+  // they could never describe a breakdown of the active projects above
+  // them). None of the three read the project's actual RAG (green/amber/
+  // red) signal, which is the only field that can distinguish "on track"
+  // from "at risk" -- that's why the breakdown read 0/0/0 while Active read
+  // a real 3. "delayed" status is the one lifecycle value the backend RAG
+  // scheduler itself treats as "still active, just red" (project-service's
+  // rag.ts) -- so the active bucket below includes it, and the 3 RAG tiles
+  // always sum back to it.
+  const activeProjects = projects.filter((p) => p.status === "active" || p.status === "delayed");
+  const active = activeProjects.length;
+  const onTrack = activeProjects.filter((p) => p.rag === "green").length;
+  const atRisk = activeProjects.filter((p) => p.rag === "amber").length;
+  const delayed = activeProjects.filter((p) => p.rag === "red").length;
 
   const rows: ProjectRow[] = projects.map((p) => ({
     id: p.id,
