@@ -52,7 +52,7 @@ export function HelpTip({ term, children }: { term?: string; children: ReactNode
           // WCAG 2.2 SC 2.5.8 Target Size Minimum: interactive targets need
           // >=24x24 CSS px. This was 18x18 (the docstring above always
           // claimed 24px, but the style never matched it) -- UX-005 tranche 5.
-          width: 24, height: 24, minWidth: 24, minHeight: 24, marginLeft: 5, padding: 0,
+          width: 24, height: 24, minWidth: 24, minHeight: 24, marginLeft: 5, marginRight: 5, padding: 0,
           borderRadius: "50%", border: "1px solid var(--line, #cbd5e1)",
           background: "var(--bg, #f1f5f9)", color: "var(--ink2, #475569)",
           fontSize: 11, fontWeight: 700, lineHeight: 1, cursor: "help",

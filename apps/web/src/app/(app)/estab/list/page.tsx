@@ -38,7 +38,7 @@ export default async function EstabFilesListPage() {
   return (
     <>
       <PageHeader
-        title={<>Digital File Tracking (<Term name="eOffice" />)</>}
+        title={<>Digital File Tracking <Term name="eOffice" before="(" after=")" /></>}
         subtitle={<>Create, route and track files with <Term name="Note sheet" label="note sheets" /> & movement trail.</>}
         help="estab"
         actions={

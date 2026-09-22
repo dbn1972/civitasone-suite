@@ -56,7 +56,7 @@ export default async function EstabDashboardPage() {
         <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
           <div className="card">
             <div className="card-h">
-              <h3>Recent files (<Term name="eOffice" />)</h3>
+              <h3>Recent files <Term name="eOffice" before="(" after=")" /></h3>
               <Link className="lnk" href="/estab/list">All files →</Link>
             </div>
             {filesErrored ? (

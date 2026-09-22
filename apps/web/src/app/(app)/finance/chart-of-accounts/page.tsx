@@ -11,8 +11,8 @@ export default async function ChartOfAccountsPage() {
   return (
     <>
       <PageHeader
-        title={<>Chart of Accounts (<Term name="LMMHA" />)</>}
-        subtitle={<>Standard government head-of-account structure synced with <Term name="CGA" />.</>}
+        title={<>Chart of Accounts <Term name="LMMHA" before="(" after=")" /></>}
+        subtitle={<>Standard government head-of-account structure synced with <Term name="CGA" after="." /></>}
         help="finance"
         actions={
           <>
