@@ -46,7 +46,7 @@ describe("DepartmentsPage", () => {
   it("shows the error state — not zero stat cards or the empty-state prompt — on a real fetch failure", async () => {
     fetchJsonMock.mockResolvedValue({ data: [], source: "error" });
     await renderPage();
-    expect(screen.getByText("We couldn't load this departments.")).toBeInTheDocument();
+    expect(screen.getByText("We couldn't load departments.")).toBeInTheDocument();
     expect(screen.queryByText("No departments yet")).not.toBeInTheDocument();
     expect(screen.getAllByText("—").length).toBeGreaterThan(0);
   });

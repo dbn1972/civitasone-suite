@@ -53,7 +53,7 @@ describe("PayrollPage", () => {
   it("shows the error state and hides the runs table on a real fetch failure (source: error)", async () => {
     mockFetchJson({ data: [], source: "error" });
     render(await PayrollPage());
-    expect(screen.getByText("We couldn't load this payroll runs.")).toBeInTheDocument();
+    expect(screen.getByText("We couldn't load payroll runs.")).toBeInTheDocument();
     // Stat cards show "—", not a fabricated 0 or a count derived from empty error data.
     expect(screen.getAllByText("—").length).toBeGreaterThan(0);
     expect(screen.queryByText("0")).not.toBeInTheDocument();

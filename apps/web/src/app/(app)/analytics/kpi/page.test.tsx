@@ -43,7 +43,7 @@ describe("KpiPage", () => {
   it("shows the error state — not the empty-state prompt — on a real fetch failure (source: error)", async () => {
     mockKpis({ data: [], source: "error" });
     render(await KpiPage());
-    expect(screen.getByText("We couldn't load this KPIs.")).toBeInTheDocument();
+    expect(screen.getByText("We couldn't load KPIs.")).toBeInTheDocument();
     expect(screen.queryByText("No KPIs defined")).not.toBeInTheDocument();
     // Stat cards show "—", not a fabricated 0 derived from the empty error payload.
     expect(screen.getAllByText("—").length).toBeGreaterThan(0);

@@ -13,6 +13,22 @@ import Link from "next/link";
  *
  * We deliberately use a centred dialog rather than element-anchored coach-marks:
  * it is robust across screen sizes and doesn't break if the layout shifts.
+ *
+ * Investigation note (re-blocking on a "returning" session): live-tested this
+ * mount effect directly — Skip/Finish correctly write STORAGE_KEY, and it
+ * correctly stays closed across further navigation and reloads in the same
+ * browser. No persistence bug found here. The most likely source of a report
+ * that this "blocks every load, even for a returning session" is a verification
+ * setup that opens a fresh, storage-less browser context per run (this repo's
+ * own scripts/dev/capture-screenshots.mjs does exactly that: one Playwright
+ * context, no storageState save/load) — every such run looks like a first-ever
+ * visit to this localStorage check, no matter how many times the underlying
+ * account has actually signed in before. If this keeps reproducing in a real,
+ * continuous browser profile, the next step is moving "seen" server-side
+ * (there's no such per-user flag yet — see ActivationTracker's "signin" step
+ * for the closest existing signal, which is aggregate/analytics-only today,
+ * not a per-user read the client can gate on) rather than re-suspecting this
+ * effect.
  */
 
 const STORAGE_KEY = "civitasone.tour.dashboard.v1";
@@ -127,7 +143,13 @@ export function FirstRunTour() {
         if (e.target === e.currentTarget) finish();
       }}
       style={{
-        position: "fixed", inset: 0, zIndex: 200,
+        // 1200, not the old 200: this is an aria-modal dialog, so it must sit
+        // above every other persistent floating element or it isn't really
+        // modal — at 200 it rendered visibly *underneath* AskCivitasOne (1100)
+        // and FeedbackWidget (1000), both still mounted (and still clickable)
+        // behind what should have been a focus-trapped overlay. 1200 matches
+        // the tier AskCivitasOnePanel already uses for the same reason.
+        position: "fixed", inset: 0, zIndex: 1200,
         background: "rgba(15,23,42,0.45)",
         display: "flex", alignItems: "center", justifyContent: "center",
         padding: 16,

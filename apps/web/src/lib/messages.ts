@@ -34,8 +34,15 @@ export function toHumanError(kind: MessageKind, ctx?: { area?: string }): HumanE
   switch (kind) {
     case "load":
       return {
-        what: `We couldn't load this ${thing}.`,
-        next: "Check your internet connection and try again.",
+        // No "this" before `thing`: `thing` is caller-supplied free text and is
+        // often plural ("projects", "employees", "indents"), which "this X" reads
+        // as broken ("this projects"). Dropping the determiner reads correctly
+        // whether `thing` is singular or plural.
+        what: `We couldn't load ${thing}.`,
+        // Not "check your internet connection": this fires for any failed load
+        // (including a backend/server error), and blaming the clerk's own
+        // connection is both misleading and, most of the time, wrong.
+        next: "This is usually temporary — try again, or open help if it keeps happening.",
         actions: ["retry", "back", "help"],
       };
     case "save":
@@ -52,7 +59,8 @@ export function toHumanError(kind: MessageKind, ctx?: { area?: string }): HumanE
       };
     case "unknownStatus":
       return {
-        what: `We couldn't check the status of this ${thing}.`,
+        // Same "this" + plural-`thing` fix as the "load" case above.
+        what: `We couldn't check the status of ${thing}.`,
         next: "Please refresh in a moment, or open help if it keeps happening.",
         actions: ["retry", "help"],
       };

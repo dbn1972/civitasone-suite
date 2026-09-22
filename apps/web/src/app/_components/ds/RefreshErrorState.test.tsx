@@ -10,8 +10,8 @@ import { RefreshErrorState } from "./RefreshErrorState";
 
 describe("RefreshErrorState", () => {
   const baseError = {
-    what: "We couldn't load this meeting list.",
-    next: "Check your internet connection and try again.",
+    what: "We couldn't load meeting list.",
+    next: "This is usually temporary — try again, or open help if it keeps happening.",
     actions: ["retry" as const, "back" as const, "help" as const],
   };
 

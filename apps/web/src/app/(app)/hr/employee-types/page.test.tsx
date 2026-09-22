@@ -36,7 +36,7 @@ describe("EmployeeTypesPage", () => {
   it("shows the error state — not zero stat cards or the empty-state prompt — on a real fetch failure", async () => {
     fetchJsonMock.mockResolvedValue({ data: [], source: "error" });
     render(await EmployeeTypesPage());
-    expect(screen.getByText("We couldn't load this employee types.")).toBeInTheDocument();
+    expect(screen.getByText("We couldn't load employee types.")).toBeInTheDocument();
     expect(screen.queryByText("No employee types defined")).not.toBeInTheDocument();
     expect(screen.getAllByText("—").length).toBeGreaterThan(0);
   });

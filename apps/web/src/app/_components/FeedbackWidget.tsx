@@ -4,7 +4,18 @@
  * In-app feedback widget: floating "Was this helpful?" prompt.
  * Shows at bottom-right, expands to comment input on thumb click.
  * Fire-and-forget POST to admin feedback endpoint.
- * Remembers dismissal per page for 24h via localStorage.
+ *
+ * Earned, not ambushed: it no longer appears the instant a page paints — it
+ * waits SHOW_DELAY_MS so the clerk sees the page first, which also means it
+ * won't sit on top of real content the moment a screen loads (this is what
+ * caused it to cover a module tile's label on the Finance dashboard). A
+ * plain dismiss (the X) is remembered app-wide for 24h — the same one-global-
+ * key convention WhatsNewBanner already uses — since "not now" is a
+ * statement about the app, not about the one page it happened to be shown
+ * on; without this it re-earns itself on every one of the app's 70+ routes.
+ * Actually submitting a rating still only silences that one exact page for
+ * 24h, since "was this page helpful" is a legitimately page-specific
+ * question.
  */
 import { useCallback, useEffect, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
@@ -12,7 +23,28 @@ import { X } from "lucide-react";
 import { Button } from "./ds";
 
 const STORAGE_PREFIX = "civitasone.feedback.";
+const GLOBAL_DISMISS_KEY = `${STORAGE_PREFIX}dismissedUntil`;
 const HIDE_DURATION_MS = 24 * 60 * 60 * 1000; // 24h
+const SHOW_DELAY_MS = 5000; // let the clerk see the page before we ask about it
+
+function recentlyMarked(key: string): boolean {
+  try {
+    const stored = localStorage.getItem(key);
+    if (!stored) return false;
+    const ts = parseInt(stored, 10);
+    return Date.now() - ts < HIDE_DURATION_MS;
+  } catch {
+    return false;
+  }
+}
+
+function mark(key: string) {
+  try {
+    localStorage.setItem(key, String(Date.now()));
+  } catch {
+    /* ignore */
+  }
+}
 
 export function FeedbackWidget() {
   const pathname = usePathname();
@@ -28,25 +60,22 @@ export function FeedbackWidget() {
   }, [expanded]);
 
   useEffect(() => {
-    // Check if we already collected feedback for this page recently
-    const key = `${STORAGE_PREFIX}${pathname}`;
-    try {
-      const stored = localStorage.getItem(key);
-      if (stored) {
-        const ts = parseInt(stored, 10);
-        if (Date.now() - ts < HIDE_DURATION_MS) {
-          setVisible(false);
-          return;
-        }
-      }
-    } catch {
-      // ignore
-    }
-    setVisible(true);
+    setVisible(false);
     setExpanded(false);
     setSubmitted(false);
     setComment("");
     setRating(null);
+
+    // A global dismiss, or feedback already given on this exact page, means
+    // don't ask again yet — don't make the clerk re-earn the prompt's
+    // silence on every one of the app's 70+ routes just because the
+    // pathname changed.
+    if (recentlyMarked(GLOBAL_DISMISS_KEY) || recentlyMarked(`${STORAGE_PREFIX}${pathname}`)) {
+      return;
+    }
+
+    const timer = setTimeout(() => setVisible(true), SHOW_DELAY_MS);
+    return () => clearTimeout(timer);
   }, [pathname]);
 
   const submitFeedback = useCallback(
@@ -65,12 +94,8 @@ export function FeedbackWidget() {
         /* silent */
       });
 
-      // Mark as submitted in localStorage
-      try {
-        localStorage.setItem(`${STORAGE_PREFIX}${pathname}`, String(Date.now()));
-      } catch {
-        /* ignore */
-      }
+      // This exact page has its feedback now — don't ask again here for 24h.
+      mark(`${STORAGE_PREFIX}${pathname}`);
 
       setSubmitted(true);
       setTimeout(() => setVisible(false), 2000);
@@ -78,11 +103,10 @@ export function FeedbackWidget() {
     [pathname],
   );
 
-
   const dismiss = () => {
-    try {
-      localStorage.setItem(`${STORAGE_PREFIX}${pathname}`, String(Date.now()));
-    } catch { /* ignore */ }
+    // A plain "not now" is app-wide, not just for this one page — otherwise
+    // closing it here does nothing to stop it popping up on the next click.
+    mark(GLOBAL_DISMISS_KEY);
     setVisible(false);
   };
 

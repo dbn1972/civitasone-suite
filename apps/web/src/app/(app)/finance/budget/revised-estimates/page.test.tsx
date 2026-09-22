@@ -32,7 +32,7 @@ describe("RevisedEstimatesPage", () => {
   it("shows the error state — not zero stat cards or the BE/RE table — on a real fetch failure", async () => {
     fetchJsonMock.mockResolvedValue({ data: [], source: "error" });
     render(await RevisedEstimatesPage());
-    expect(screen.getByText("We couldn't load this revised estimates.")).toBeInTheDocument();
+    expect(screen.getByText("We couldn't load revised estimates.")).toBeInTheDocument();
     expect(screen.getAllByText("—").length).toBeGreaterThan(0);
     expect(screen.queryByText("0")).not.toBeInTheDocument();
   });

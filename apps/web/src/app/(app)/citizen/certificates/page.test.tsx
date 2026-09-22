@@ -65,7 +65,7 @@ describe("CertificatesPage", () => {
   it("shows the error state — not the empty-state prompt — on a real fetch failure (source: error)", async () => {
     mockCertificates({ data: [], source: "error" });
     render(await CertificatesPage());
-    expect(screen.getByText("We couldn't load this certificates.")).toBeInTheDocument();
+    expect(screen.getByText("We couldn't load certificates.")).toBeInTheDocument();
     expect(screen.queryByText("No certificates issued yet.")).not.toBeInTheDocument();
     // The active-count badge in the header row shows "—", not a fabricated 0.
     expect(screen.getByText("— active")).toBeInTheDocument();

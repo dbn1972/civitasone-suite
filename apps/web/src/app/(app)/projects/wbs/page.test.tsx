@@ -43,7 +43,7 @@ describe("WbsPage", () => {
   it("shows the error state — not the empty-state prompt — on a real fetch failure (source: error)", async () => {
     mockWbs({ data: [], source: "error" });
     render(await WbsPage());
-    expect(screen.getByText("We couldn't load this work breakdown structure.")).toBeInTheDocument();
+    expect(screen.getByText("We couldn't load work breakdown structure.")).toBeInTheDocument();
     expect(screen.queryByText("No WBS items")).not.toBeInTheDocument();
     expect(screen.queryByText(/wbs-tree/)).not.toBeInTheDocument();
     expect(screen.getByText("Total Activities").parentElement).toHaveTextContent("—");

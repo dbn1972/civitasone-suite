@@ -52,7 +52,7 @@ describe("ProjectsDashboardPage", () => {
   it("shows the error state — not the empty-state prompt — when the PROJECTS loader fails, even though schemes/dashboard succeed", async () => {
     mockLoaders({ projects: { data: [], source: "error" } });
     render(await ProjectsDashboardPage());
-    expect(screen.getByText("We couldn't load this projects.")).toBeInTheDocument();
+    expect(screen.getByText("We couldn't load projects.")).toBeInTheDocument();
     expect(screen.queryByText("No projects yet")).not.toBeInTheDocument();
     expect(screen.queryByText(/projects-table/)).not.toBeInTheDocument();
     // Combined `anyError` gates ALL the stat cards here (unlike the
@@ -65,7 +65,7 @@ describe("ProjectsDashboardPage", () => {
   it("shows the error state when the SCHEMES loader fails, even though projects/dashboard succeed", async () => {
     mockLoaders({ schemes: { data: [], source: "error" } });
     render(await ProjectsDashboardPage());
-    expect(screen.getByText("We couldn't load this projects.")).toBeInTheDocument();
+    expect(screen.getByText("We couldn't load projects.")).toBeInTheDocument();
     expect(screen.queryByText(/projects-table/)).not.toBeInTheDocument();
   });
 });
