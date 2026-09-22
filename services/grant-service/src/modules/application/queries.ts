@@ -15,11 +15,19 @@ function toDateOnly(value: Date | string | null | undefined): string {
   return new Date(value as string).toISOString().slice(0, 10);
 }
 
-function mapGrantStatus(status: string): "active" | "completed" | "suspended" | "cancelled" {
+/** Exported so its full branch table (incl. the withdrawn→cancelled fix) is unit-testable without standing up repo/db mocks. */
+export function mapGrantStatus(status: string): "active" | "completed" | "suspended" | "cancelled" {
   if (status === "approved" || status === "disbursing") return "active";
   if (status === "completed") return "completed";
   if (status === "suspended") return "suspended";
-  if (status === "rejected" || status === "cancelled") return "cancelled";
+  // withdrawn (application.grant_applications CHECK constraint, migration 0008)
+  // was missing here and fell through to the `return "active"` default below —
+  // so a withdrawn application read back as "active" on the applications list
+  // and grant-detail view. Group it with the other terminal, non-progressing
+  // outcomes (rejected/cancelled); the web read-model has no dedicated
+  // "withdrawn" bucket of its own (GrantSummarySchema's status enum is only
+  // active|completed|suspended|cancelled).
+  if (status === "rejected" || status === "cancelled" || status === "withdrawn") return "cancelled";
   return "active";
 }
 
