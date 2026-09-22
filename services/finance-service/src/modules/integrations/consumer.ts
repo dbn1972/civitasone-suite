@@ -142,7 +142,15 @@ export function registerIntegrationConsumers(queue: Queue): void {
       poAmountMinor?: string; grnAmountMinor?: string;
     };
     const billId = randomUUID();
-    const poRef = p.poRef.startsWith("procurement_") ? p.poRef : `procurement_po:${p.poRef}`;
+    // Bug fix: this used to unconditionally template-literal-wrap p.poRef
+    // (`procurement_po:${p.poRef}`) even when p.poRef was falsy/missing, so a
+    // producer-side gap silently manufactured the literal, UI-visible string
+    // "procurement_po:undefined" instead of leaving the bill genuinely
+    // unlinked. A missing poRef is now left undefined -- billCreate below
+    // already does `poRef: p.poRef ?? null` (payments/consumer.ts), and the
+    // Bills UI already renders a null poRef as an honest "—", so there is
+    // no need to fabricate a ref that looks real but resolves to nothing.
+    const poRef = p.poRef ? (p.poRef.startsWith("procurement_") ? p.poRef : `procurement_po:${p.poRef}`) : undefined;
     const grnRef = `procurement_grn:${p.grnId}`;
     // R5: authoritative ordered (PO) and accepted (GRN) values derived in
     // procurement. The vendor bill is drafted for the GRN-accepted value (pay
@@ -158,7 +166,11 @@ export function registerIntegrationConsumers(queue: Queue): void {
       if (!(await markProcessed(tx, msg.messageId))) return;
       // Persist the AP three-way-match read-model so a later invoice citing this
       // GRN can be reconciled even if entered manually.
-      if (poAmountMinor != null && grnAmountMinor != null) {
+      // poRef must be resolved (see above) before this AP three-way-match
+      // read-model row is persisted -- finance_grn_match.po_ref is NOT NULL,
+      // and a manufactured "procurement_po:undefined" value used to satisfy
+      // that constraint with a ref that could never actually match a real PO.
+      if (poRef && poAmountMinor != null && grnAmountMinor != null) {
         await paymentsRepo.upsertGrnMatch(tx as unknown as Parameters<typeof paymentsRepo.upsertGrnMatch>[0], {
           tenantId: msg.tenantId, grnRef, poRef, vendorId: p.vendorId,
           poAmountMinor, grnAmountMinor,

@@ -70,9 +70,12 @@ describe("LoanSummaryCard", () => {
     expect(screen.queryByRole("progressbar")).not.toBeInTheDocument();
   });
 
-  it("shows overdue status pill", () => {
+  it("shows overdue status pill with a humanized (capitalized) label", () => {
     const overdueLoan = { ...BASE_LOAN, status: "overdue" as const };
     render(<LoanSummaryCard loan={overdueLoan} />);
-    expect(screen.getByText("overdue")).toBeInTheDocument();
+    // StatusPill humanizes the raw status by default now (raw-enum-leak fix)
+    // -- "Overdue", not the raw lowercase DB value "overdue".
+    expect(screen.getByText("Overdue")).toBeInTheDocument();
+    expect(screen.queryByText("overdue")).not.toBeInTheDocument();
   });
 });
