@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
-import { PageHeader, EmptyState } from "../../_components/ds";
+import { PageHeader, EmptyState, StatIcon } from "../../_components/ds";
 import { RoleCommandCenter } from "./RoleCommandCenter";
 import { FirstRunTour } from "./FirstRunTour";
 import { ActivationTracker } from "../../_components/ActivationTracker";
@@ -100,7 +100,9 @@ export default async function DashboardPage() {
                 <div className="stat" style={{ cursor: "pointer", height: "100%" }}>
                   <div className="top">
                     <div />
-                    <div className="ic" style={{ background: bg }} aria-hidden="true">{icon}</div>
+                    <div className="ic" style={{ background: bg }} aria-hidden="true">
+                      <StatIcon icon={icon} />
+                    </div>
                   </div>
                   <div className="lab">{desc}</div>
                   <div style={{ fontSize: 17, fontWeight: 700, marginTop: 6, letterSpacing: "-0.3px", color: "var(--ink)" }}>

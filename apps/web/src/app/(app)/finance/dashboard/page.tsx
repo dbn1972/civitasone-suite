@@ -1,5 +1,5 @@
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
-import { PageHeader, StatGrid, StatCard, Card } from "../../../_components/ds";
+import { PageHeader, StatGrid, StatCard, Card, StatIcon } from "../../../_components/ds";
 import { getFinanceDashboard } from "../../../_data/loaders";
 import Link from "next/link";
 import { BudgetChart } from "./BudgetChart";
@@ -24,6 +24,12 @@ const QUICK_LINKS = [
 export default async function FinanceDashboardPage() {
   const t = await getTranslations("financeDashboard");
   const { data, source } = await getFinanceDashboard();
+  // UX-013: `source` was already fetched but only wired to the badge below --
+  // never to the stat values themselves, so a failed load rendered "0" /
+  // "₹0.00" (data's zero-valued fallback defaults), indistinguishable from a
+  // genuine zero. Gate every stat on it, same convention as
+  // projects/dashboard and estab/dashboard.
+  const errored = source === "error";
 
   return (
     <>
@@ -45,30 +51,30 @@ export default async function FinanceDashboardPage() {
           icon="💰"
           iconBg="#e7edfd"
           label={t("budgetUtilisation")}
-          value={formatPercent(data.budgetUtilisationPct)}
-          delta="Approved"
+          value={errored ? "—" : formatPercent(data.budgetUtilisationPct)}
+          delta={errored ? undefined : "Approved"}
           up={false}
         />
         <StatCard
           icon="📤"
           iconBg="#eff6ff"
           label={t("expenditureYtd")}
-          value={formatMoney(data.totalExpenditure)}
-          delta={formatPercent(data.budgetUtilisationPct)}
+          value={errored ? "—" : formatMoney(data.totalExpenditure)}
+          delta={errored ? undefined : formatPercent(data.budgetUtilisationPct)}
           up={true}
         />
         <StatCard
           icon="📥"
           iconBg="#ecfdf3"
           label={t("paymentsMtd")}
-          value={`${data.paymentsThisMonth} ${t("paymentsThisMonth")}`}
+          value={errored ? "—" : `${data.paymentsThisMonth} ${t("paymentsThisMonth")}`}
           up={true}
         />
         <StatCard
           icon="⏳"
           iconBg="#fffaeb"
           label={t("pendingApprovals")}
-          value={data.pendingSanctions}
+          value={errored ? "—" : data.pendingSanctions}
           up={false}
         />
       </StatGrid>
@@ -89,7 +95,9 @@ export default async function FinanceDashboardPage() {
               style={{ textDecoration: "none", cursor: "pointer" }}
             >
               <div className="top">
-                <div className="ic" style={{ background: "#eef2ff" }}>{link.icon}</div>
+                <div className="ic" style={{ background: "#eef2ff" }}>
+                  <StatIcon icon={link.icon} />
+                </div>
               </div>
               <div className="lab">{link.label}</div>
             </Link>

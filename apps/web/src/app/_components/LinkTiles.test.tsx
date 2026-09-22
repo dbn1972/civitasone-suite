@@ -46,8 +46,27 @@ describe("LinkTiles", () => {
     expect(container.querySelector(".grid.g-4")).toBeInTheDocument();
   });
 
-  it("maps known tile icon from TILE_ICONS", () => {
+  it("renders the tile icon mapped from TILE_ICONS as a real vector icon", () => {
+    // Bug B: "📊" is in StatIcon's map, so the icon box must render the
+    // <svg> lucide-react icon it resolves to -- not the literal emoji
+    // character, which renders as an empty "tofu" box in any environment
+    // without an OS color-emoji font (e.g. this repo's own
+    // scripts/dev/capture-screenshots.mjs host). Confirmed live: Workflow's
+    // "My tasks / Instances / Definitions / BPMN Designer" tiles, which go
+    // through this same TILE_ICONS map, showed empty squares pre-fix.
     const { container } = render(<LinkTiles tiles={[{ title: "Dashboard", href: "/d" }]} />);
-    expect(container.querySelector(".ic")?.textContent).toBe("📊");
+    const icon = container.querySelector(".ic") as HTMLElement;
+    expect(icon.querySelector("svg")).toBeInTheDocument();
+    expect(icon.textContent).toBe("");
+  });
+
+  it("falls back to the raw glyph for a resolved icon with no vector mapping", () => {
+    // "Indents" -> "📑" (page facing up), not yet in StatIcon's map -- not a
+    // regression, this is exactly today's pre-fix behavior for the long
+    // tail not yet covered.
+    const { container } = render(<LinkTiles tiles={[{ title: "Indents", href: "/i" }]} />);
+    const icon = container.querySelector(".ic") as HTMLElement;
+    expect(icon.querySelector("svg")).not.toBeInTheDocument();
+    expect(icon.textContent).toBe("📑");
   });
 });

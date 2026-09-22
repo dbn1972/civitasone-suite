@@ -6,6 +6,11 @@ import { getCitizenPortal } from "../../../_data/loaders";
 export default async function CitizenPortalPage() {
   const t = await getTranslations("citizenPortal");
   const { data: metrics, source } = await getCitizenPortal();
+  // UX-013: `source` was already fetched but only wired to the badge below
+  // -- never to the stat values, so a failed load rendered raw zeroes. Gate
+  // every stat on it, same convention as projects/dashboard and
+  // estab/dashboard.
+  const errored = source === "error";
 
   return (
     <>
@@ -20,25 +25,25 @@ export default async function CitizenPortalPage() {
           icon="🗂️"
           iconBg="#eef2ff"
           label={t("statPublishedServices")}
-          value={metrics.totalServices.toLocaleString("en-IN")}
+          value={errored ? "—" : metrics.totalServices.toLocaleString("en-IN")}
         />
         <StatCard
           icon="📋"
           iconBg="#ecfdf3"
           label={t("statActiveRequests")}
-          value={metrics.activeRequests.toLocaleString("en-IN")}
+          value={errored ? "—" : metrics.activeRequests.toLocaleString("en-IN")}
         />
         <StatCard
           icon="✅"
           iconBg="#fffaeb"
           label={t("statResolvedThisMonth")}
-          value={metrics.resolvedThisMonth.toLocaleString("en-IN")}
+          value={errored ? "—" : metrics.resolvedThisMonth.toLocaleString("en-IN")}
         />
         <StatCard
           icon="⏱️"
           iconBg="#fce7ee"
           label={t("statAvgResolutionDays")}
-          value={metrics.avgResolutionDays.toLocaleString("en-IN")}
+          value={errored ? "—" : metrics.avgResolutionDays.toLocaleString("en-IN")}
         />
       </StatGrid>
     </>

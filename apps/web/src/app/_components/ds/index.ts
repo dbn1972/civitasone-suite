@@ -4,6 +4,7 @@ export { TopBar } from "./TopBar";
 export { AppShell } from "./AppShell";
 export { PageHeader } from "./PageHeader";
 export { StatCard } from "./StatCard";
+export { StatIcon } from "./StatIcon";
 export { StatGrid } from "./StatGrid";
 export { Card } from "./Card";
 export { Button } from "./Button";

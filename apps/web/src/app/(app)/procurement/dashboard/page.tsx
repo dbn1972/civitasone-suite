@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
-import { PageHeader, StatGrid, StatCard, Card } from "../../../_components/ds";
+import { PageHeader, StatGrid, StatCard, Card, StatIcon } from "../../../_components/ds";
 import { getProcurementDashboard } from "../../../_data/loaders";
 
 const QUICK_LINKS = [
@@ -16,6 +16,12 @@ const QUICK_LINKS = [
 
 export default async function ProcurementDashboardPage() {
   const { data: dashboard, source } = await getProcurementDashboard();
+  // UX-013: `source` was already fetched but only wired to the badge below
+  // (whose own message claims "showing nothing" on error) -- never to the
+  // stat values, so a failed load rendered a literal "0", contradicting
+  // that very message. Gate every stat on it, same convention as
+  // projects/dashboard and estab/dashboard.
+  const errored = source === "error";
 
   return (
     <>
@@ -33,10 +39,10 @@ export default async function ProcurementDashboardPage() {
       />
 
       <StatGrid>
-        <StatCard icon="📋" iconBg="#e7edfd" label="Pending Indents" value={dashboard.pendingIndents} />
-        <StatCard icon="📦" iconBg="#eff6ff" label="Active POs" value={dashboard.activePOs} />
-        <StatCard icon="✅" iconBg="#ecfdf3" label="GRNs (MTD)" value={dashboard.grnsThisMonth} />
-        <StatCard icon="⚠️" iconBg="#fffaeb" label="Contract Renewals Due" value={dashboard.contractRenewalsDue} />
+        <StatCard icon="📋" iconBg="#e7edfd" label="Pending Indents" value={errored ? "—" : dashboard.pendingIndents} />
+        <StatCard icon="📦" iconBg="#eff6ff" label="Active POs" value={errored ? "—" : dashboard.activePOs} />
+        <StatCard icon="✅" iconBg="#ecfdf3" label="GRNs (MTD)" value={errored ? "—" : dashboard.grnsThisMonth} />
+        <StatCard icon="⚠️" iconBg="#fffaeb" label="Contract Renewals Due" value={errored ? "—" : dashboard.contractRenewalsDue} />
       </StatGrid>
 
       <Card title="Procurement modules">
@@ -49,7 +55,9 @@ export default async function ProcurementDashboardPage() {
               style={{ textDecoration: "none", cursor: "pointer" }}
             >
               <div className="top">
-                <div className="ic" style={{ background: "#eef2ff" }} aria-hidden="true">{link.icon}</div>
+                <div className="ic" style={{ background: "#eef2ff" }} aria-hidden="true">
+                  <StatIcon icon={link.icon} />
+                </div>
               </div>
               <div className="lab">{link.label}</div>
             </Link>
