@@ -65,6 +65,14 @@ export default async function HRDashboardPage() {
     source === "error" ||
     empResult.source === "error" ||
     profileResult.source === "error";
+  // Narrower than anyError on purpose: the KPI strip only renders numbers
+  // that came from dashResult, so it should only go honest-blank ("—") on
+  // dashResult's own failure -- not, say, because the unrelated profile
+  // fetch errored. HRKPIStrip's own headcount/pendingLeaves/etc. fields
+  // still zero themselves internally on error (see HR_DASHBOARD_EMPTY in
+  // loaders.ts); passing null here on a real dashResult failure is what
+  // tells HRKPIStrip that zero was fabricated, not counted.
+  const hrDashboardFailed = source === "error";
   const onLeaveCount = data.onLeave;
   const deptCount = data.departmentBreakdown.length > 0
     ? data.departmentBreakdown.filter((d) => !d.name.startsWith("Others")).length +
@@ -96,12 +104,12 @@ export default async function HRDashboardPage() {
       />
 
       <HRKPIStrip
-        headcount={data.headcount}
-        headcountLastMonth={data.headcountLastMonth}
-        pendingLeaves={data.pendingLeaves}
-        onLeave={onLeaveCount}
-        departments={deptCount || data.departmentBreakdown.length}
-        attendanceTodayPct={data.attendanceTodayPct}
+        headcount={hrDashboardFailed ? null : data.headcount}
+        headcountLastMonth={hrDashboardFailed ? null : data.headcountLastMonth}
+        pendingLeaves={hrDashboardFailed ? null : data.pendingLeaves}
+        onLeave={hrDashboardFailed ? null : onLeaveCount}
+        departments={hrDashboardFailed ? null : (deptCount || data.departmentBreakdown.length)}
+        attendanceTodayPct={hrDashboardFailed ? null : data.attendanceTodayPct}
         payrollDaysLeft={daysLeft}
       />
 
