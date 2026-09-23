@@ -128,3 +128,31 @@ describe("ApplyLeaveForm — UX-016 clerk-safe errors", () => {
     expect(alert.textContent).not.toMatch(/\bnetwork\b/);
   });
 });
+
+/**
+ * Self-service leave-application fix: an employee with no linked employee
+ * record (noLinkedProfile, resolved by page.tsx from a genuine 404 on
+ * GET /v1/hrms/me/profile — see page.test.tsx for the full role-resolution
+ * coverage) must see a clear, honest message, never the bare, confusing
+ * "No employees loaded" dropdown with an unexplained disabled submit button.
+ */
+describe("ApplyLeaveForm — no linked employee record (self-service)", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("shows the 'contact HR' message and hides the form entirely when noLinkedProfile is true", () => {
+    renderForm({ employees: [], noLinkedProfile: true });
+
+    expect(screen.getByText(/no employee record is linked to your account/i)).toBeInTheDocument();
+    expect(screen.queryByRole("combobox")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /submit leave request/i })).not.toBeInTheDocument();
+    expect(screen.queryByText(/no employees loaded/i)).not.toBeInTheDocument();
+  });
+
+  it("still shows the normal (disabled) form for an empty employees list when noLinkedProfile is false — a real failure, not a confirmed absent record", () => {
+    renderForm({ employees: [], noLinkedProfile: false });
+
+    expect(screen.queryByText(/no employee record is linked to your account/i)).not.toBeInTheDocument();
+    expect(screen.getByRole("option", { name: /no employees loaded/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /submit leave request/i })).toBeDisabled();
+  });
+});

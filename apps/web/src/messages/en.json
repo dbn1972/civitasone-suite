@@ -1172,6 +1172,7 @@
     "loadingSubtitle": "Submit a leave request.",
     "employeeLabel": "Employee",
     "noEmployeesLoaded": "No employees loaded",
+    "noLinkedProfileMessage": "No employee record is linked to your account, so you cannot apply for leave yet. Contact HR to get your account linked to your employee record.",
     "leaveTypeLabel": "Leave Type",
     "noLeaveAllocations": "No leave allocations",
     "selectLeaveTypePlaceholder": "Select a leave type…",
