@@ -3,14 +3,8 @@ import { PageHeader, StatGrid, StatCard, Card, DataTable } from "../../../../_co
 import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import { currentFinancialYear } from "@/lib/fiscalYear";
-import { formatRupees } from "@/lib/formatters";
 
-// Wire shape from GET /v1/payroll/income-tax (tax/routes.ts): the money
-// fields are `String(rupeeNumber)` -- e.g. grossIncome computed from
-// slip.grossMinor/100, taxableIncome/taxPayable likewise rupee-scale -- not
-// paise, so formatMoney()/cellType:"amount" (which assume minor units) would
-// silently divide these by 100 again. Format with formatRupees() instead.
-type ApiIncomeTaxRow = {
+type Row = {
   id: string;
   employee: string;
   department: string;
@@ -20,27 +14,14 @@ type ApiIncomeTaxRow = {
   taxableIncome: string;
   taxPayable: string;
   status: string;
-};
-
-type Row = ApiIncomeTaxRow & Record<string, unknown>;
-
-function mapIncomeTaxRows(rows: ApiIncomeTaxRow[]): Row[] {
-  return rows.map((r) => ({
-    ...r,
-    grossIncome: formatRupees(r.grossIncome),
-    deductions80C: formatRupees(r.deductions80C),
-    otherDeductions: formatRupees(r.otherDeductions),
-    taxableIncome: formatRupees(r.taxableIncome),
-    taxPayable: formatRupees(r.taxPayable),
-  }));
-}
+} & Record<string, unknown>;
 
 async function getData(): Promise<LoaderResult<Row[]>> {
   const r = await fetchJson<unknown, Row[]>("/api/v1/payroll/income-tax", [], {
     telemetryKey: "payroll.income-tax",
     mapResponse: (p) => {
-      const arr = Array.isArray(p) ? p : (p as { data?: ApiIncomeTaxRow[] })?.data;
-      return Array.isArray(arr) ? mapIncomeTaxRows(arr as ApiIncomeTaxRow[]) : null;
+      const arr = Array.isArray(p) ? p : (p as { data?: Row[] })?.data;
+      return Array.isArray(arr) ? arr : null;
     },
   });
   return r;
@@ -50,13 +31,13 @@ export default async function IncomeTaxPage() {
   const t = await getTranslations("incomeTax");
   const { data: items, source: source } = await getData();
 
-  const columns: { key: keyof Row & string; label: string; cellType?: "status"; align?: "left" | "right" }[] = [
+  const columns: { key: keyof Row & string; label: string; cellType?: "status" | "rupees"; align?: "left" | "right" }[] = [
     { key: "employee", label: t("colEmployee") },
-    { key: "grossIncome", label: t("colGrossIncome"), align: "right" },
-    { key: "deductions80C", label: t("col80c"), align: "right" },
-    { key: "otherDeductions", label: t("colOtherDed"), align: "right" },
-    { key: "taxableIncome", label: t("colTaxableIncome"), align: "right" },
-    { key: "taxPayable", label: t("colTaxPayable"), align: "right" },
+    { key: "grossIncome", label: t("colGrossIncome"), cellType: "rupees", align: "right" },
+    { key: "deductions80C", label: t("col80c"), cellType: "rupees", align: "right" },
+    { key: "otherDeductions", label: t("colOtherDed"), cellType: "rupees", align: "right" },
+    { key: "taxableIncome", label: t("colTaxableIncome"), cellType: "rupees", align: "right" },
+    { key: "taxPayable", label: t("colTaxPayable"), cellType: "rupees", align: "right" },
     { key: "status", label: t("colStatus"), cellType: "status" },
   ];
 
