@@ -1,6 +1,6 @@
 {
   "_comment": "TRACKED DEBT, not an approved state. Each entry is a <file>:<line> `queue.publish(...)` call site (object-literal 2nd argument, fingerprinted as PublishInput via correlationId+payload) with no explicit messageId — a retry mints a fresh random id, defeating consumer-side idempotent dedup. The gate fails on NEW entries and on stale entries (fixed, or never real, but still listed). Burn these down; regenerate with --write-baseline after a real fix. See PERF-008 in docs/ENTERPRISE-GAP-REPORT-2026-09-07.md.",
-  "generatedAt": "2026-09-15",
+  "generatedAt": "2026-09-23",
   "count": 97,
   "entries": [
     "services/admin-service/src/modules/integration-ops/service.ts:55",
@@ -45,9 +45,9 @@
     "services/grant-service/src/modules/scheme/commands.ts:29",
     "services/helpdesk-service/src/modules/ml-breach/consumer.ts:124",
     "services/helpdesk-service/src/modules/ml-breach/routes.ts:199",
-    "services/hrms-service/src/modules/employee/commands.ts:136",
-    "services/hrms-service/src/modules/employee/commands.ts:77",
-    "services/hrms-service/src/modules/employee/commands.ts:87",
+    "services/hrms-service/src/modules/employee/commands.ts:138",
+    "services/hrms-service/src/modules/employee/commands.ts:79",
+    "services/hrms-service/src/modules/employee/commands.ts:89",
     "services/inspection-service/src/modules/assignment/tada-integration.ts:117",
     "services/legal-service/src/modules/contracts/commands.ts:20",
     "services/legal-service/src/modules/hearings/commands.ts:21",

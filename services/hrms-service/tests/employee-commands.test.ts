@@ -189,4 +189,44 @@ describe("updateEmployee", () => {
     expect(payload.agencyRef).toBe("AG/DEP/2025/017");
     expect(payload.napsId).toBe("NAPS-2025-0001");
   });
+
+  // Data-corruption guard: bankAccountNo/bankIfsc are masked on read
+  // (pii-mask.ts maskValue -- "*******1234"). A caller that echoes that
+  // masked placeholder straight back on save (the EditEmployeeForm.tsx bug
+  // fixed alongside this guard) must never have it persisted over the real
+  // value -- it must be rejected before the update is even queued.
+  describe("masked-placeholder write-back guard", () => {
+    it("rejects a masked-placeholder bankAccountNo instead of publishing it", async () => {
+      await expect(
+        updateEmployee(ctx(), randomUUID(), { bankAccountNo: "*******2345" } as any),
+      ).rejects.toThrow(/masked/i);
+      expect(publishMock).not.toHaveBeenCalled();
+    });
+
+    it("rejects a masked-placeholder bankIfsc instead of publishing it", async () => {
+      await expect(
+        updateEmployee(ctx(), randomUUID(), { bankIfsc: "*******1234" } as any),
+      ).rejects.toThrow(/masked/i);
+      expect(publishMock).not.toHaveBeenCalled();
+    });
+
+    it("rejects when either field is a masked placeholder even if the other is genuine", async () => {
+      await expect(
+        updateEmployee(ctx(), randomUUID(), {
+          bankAccountNo: "00099988877", bankIfsc: "*******1234",
+        } as any),
+      ).rejects.toThrow(/masked/i);
+      expect(publishMock).not.toHaveBeenCalled();
+    });
+
+    it("still forwards a genuine new bankAccountNo/bankIfsc onto the queue payload", async () => {
+      await updateEmployee(ctx(), randomUUID(), {
+        bankAccountNo: "00099988877", bankIfsc: "HDFC0001234",
+      } as any);
+      expect(publishMock).toHaveBeenCalledOnce();
+      const payload = publishMock.mock.calls[0][1].payload;
+      expect(payload.bankAccountNo).toBe("00099988877");
+      expect(payload.bankIfsc).toBe("HDFC0001234");
+    });
+  });
 });

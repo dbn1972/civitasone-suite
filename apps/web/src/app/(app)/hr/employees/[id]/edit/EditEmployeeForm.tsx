@@ -95,8 +95,20 @@ export function EditEmployeeForm({ employee }: Props) {
       patch.managerId = managerId.trim();
     if (payStructureId.trim() !== "")
       patch.payStructureId = payStructureId.trim();
-    if (bankAccountNo.trim()) patch.bankAccountNo = bankAccountNo.trim();
-    if (bankIfsc.trim()) patch.bankIfsc = bankIfsc.trim().toUpperCase();
+    // Data-corruption fix: bankAccountNo/bankIfsc arrive here pre-masked by
+    // the backend (pii-mask.ts maskValue -- "*******1234"), and this state
+    // was seeded directly from that masked value above. A plain non-empty
+    // check therefore always included the masked placeholder in the patch,
+    // even when the user never touched the field -- silently overwriting the
+    // real stored bank account/IFSC with asterisks on every save, for any
+    // reason (e.g. just correcting the email). Compare against the original
+    // (masked) prop value instead, same "was this actually edited" pattern
+    // already used for mobile/email/managerId above, so an untouched field
+    // is never submitted.
+    const initialBankAccountNo = (employee as Record<string, unknown>).bankAccountNo as string ?? "";
+    const initialBankIfsc = (employee as Record<string, unknown>).bankIfsc as string ?? "";
+    if (bankAccountNo.trim() !== initialBankAccountNo) patch.bankAccountNo = bankAccountNo.trim();
+    if (bankIfsc.trim().toUpperCase() !== initialBankIfsc.toUpperCase()) patch.bankIfsc = bankIfsc.trim().toUpperCase();
     if (uanNumber.trim()) patch.uanNumber = uanNumber.trim();
     if (esicIpNumber.trim()) patch.esicIpNumber = esicIpNumber.trim();
     if (pran.trim()) patch.pran = pran.trim();
