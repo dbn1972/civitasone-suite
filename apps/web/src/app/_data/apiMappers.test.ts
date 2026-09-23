@@ -309,6 +309,53 @@ describe("mapProcurementIndentSummaries", () => {
     expect(result[3].status).toBe("pending_approval"); // unknown defaults
   });
 
+  // Regression coverage for the indent-status-enum-coverage bug: the real
+  // backend enum (indent.procurement_indents CHECK constraint, migration
+  // 0015 of procurement-service; canonical list in indent/domain.ts
+  // IndentStatus) has six values. "tender_required" and "closed" used to
+  // be missing from the mapping below and silently fell through to the
+  // "pending_approval" default -- e.g. a *closed* indent read back as
+  // "Pending Approval", indistinguishable from one nobody has looked at
+  // yet. This iterates every real enum value straight from that source
+  // list so a future unhandled value fails loudly here instead of silently
+  // mislabeling in the UI. tender_required and closed are asserted to be
+  // their own distinct statuses (not merely "whatever the default already
+  // produces") -- a branch that maps to the same value as the default is
+  // not a real fix, and would pass a weaker version of this test.
+  it("covers every real backend IndentStatus value with its correct mapped status", () => {
+    const REAL_INDENT_STATUS_ENUM = [
+      "draft",
+      "pending",
+      "tender_required",
+      "approved",
+      "rejected",
+      "closed",
+    ] as const;
+    const expected: Record<(typeof REAL_INDENT_STATUS_ENUM)[number], string> = {
+      draft: "draft",
+      pending: "pending_approval",
+      tender_required: "tender_required",
+      approved: "approved",
+      rejected: "rejected",
+      closed: "closed",
+    };
+    const input = REAL_INDENT_STATUS_ENUM.map((status, i) => ({
+      id: `id-${i}`,
+      indentNo: `I-${i}`,
+      status,
+    }));
+    const result = mapProcurementIndentSummaries(input)!;
+    for (const [i, status] of REAL_INDENT_STATUS_ENUM.entries()) {
+      expect(result[i].status, `status "${status}" should map to "${expected[status]}"`).toBe(expected[status]);
+    }
+    // Distinctness: tender_required and closed must not collapse into the
+    // "pending"/default bucket or into each other -- the exact bug this
+    // test exists to catch (see comment above).
+    expect(result[2].status).not.toBe(result[1].status); // tender_required !== pending's pending_approval
+    expect(result[5].status).not.toBe(result[1].status); // closed !== pending's pending_approval
+    expect(result[5].status).not.toBe(result[2].status); // closed !== tender_required
+  });
+
   it("returns null for invalid input", () => {
     expect(mapProcurementIndentSummaries(null)).toBeNull();
   });

@@ -906,7 +906,11 @@ export type IndentSummary = {
   estimatedAmount: number;
   requestDate: string;
   requiredByDate?: string;
-  status: "draft" | "pending_approval" | "approved" | "rejected" | "converted_to_po";
+  // tender_required/closed: real backend states (procurement-service
+  // indent/domain.ts IndentStatus; DB CHECK constraint, migration 0015)
+  // that apiMappers.ts's mapProcurementIndentSummaries used to fold into
+  // "pending_approval"/"approved" by default -- see the fix comment there.
+  status: "draft" | "pending_approval" | "tender_required" | "approved" | "rejected" | "converted_to_po" | "closed";
 };
 
 export type IndentDetail = IndentSummary & {

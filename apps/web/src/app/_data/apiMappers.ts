@@ -168,13 +168,39 @@ export function mapProcurementIndentSummaries(payload: unknown): IndentSummary[]
     const indentNo = toText(row.indentNo) ?? id;
     if (!id || !indentNo) continue;
     const rawStatus = (toText(row.status) ?? "pending_approval").toLowerCase();
+    // Bug fix (indent-status-enum-coverage): indent.procurement_indents'
+    // real status enum (CHECK constraint, migration 0015; canonical list in
+    // procurement-service's indent/domain.ts IndentStatus) is draft |
+    // pending | tender_required | approved | rejected | closed.
+    // "tender_required" and "closed" were missing below and both silently
+    // fell through to the "pending_approval" default (flagged but not fixed
+    // in PR #1478) -- so a *closed* indent (fully done, only reachable from
+    // "approved" per domain.ts VALID_TRANSITIONS) read back as "Pending
+    // Approval" on the indents list/detail view, same as one nobody has
+    // looked at yet; same for one that's actually waiting on a tender
+    // (procurement-service has a dedicated listTenderRequiredIndents query,
+    // so this is a real, product-relevant state, not a rare edge case).
+    // Same bug class as mapGrantStatus's missing "withdrawn" branch
+    // (grant-service queries.ts) -- but unlike withdrawn, neither of these
+    // has an existing UI bucket that's actually honest: "pending_approval"
+    // is where they already land today (that's the bug, not a fix -- a
+    // branch that maps to the same value the default already produces is
+    // not a real fix, confirmed by sabotage-testing it: removing such a
+    // branch doesn't fail any test), and closed-as-"approved" or
+    // tender_required-as-anything-else would misreport a real distinction
+    // users can act on. So both get their own first-class status instead of
+    // being folded into an existing bucket -- widened in lockstep in
+    // IndentSummary (packages/types) and IndentSummarySchema (packages/
+    // schemas), with real labels added to both indents pages' STATUS_LABELS.
     const status: IndentSummary["status"] =
       rawStatus === "approved" ? "approved"
         : rawStatus === "rejected" ? "rejected"
           : rawStatus === "draft" ? "draft"
             : rawStatus === "converted_to_po" ? "converted_to_po"
               : rawStatus === "pending" ? "pending_approval"
-                : "pending_approval";
+                : rawStatus === "tender_required" ? "tender_required"
+                  : rawStatus === "closed" ? "closed"
+                    : "pending_approval";
     mapped.push({
       id,
       indentNo,
