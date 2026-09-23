@@ -97,7 +97,7 @@ export default async function HRDashboardPage() {
 
       <GreetingHeader
         userName={userName}
-        pendingCount={data.pendingLeaves}
+        pendingCount={hrDashboardFailed ? null : data.pendingLeaves}
         payrollDaysLeft={daysLeft}
         today={today}
         dayName={dayName}

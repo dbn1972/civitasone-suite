@@ -2,19 +2,43 @@ import Link from "next/link";
 
 interface Props {
   userName: string;
-  pendingCount: number;
+  // Sourced from the HR dashboard loader (page.tsx's data.pendingLeaves) --
+  // null/undefined means the load genuinely failed, not "zero pending
+  // actions". Same underlying field as HRKPIStrip's pendingLeaves prop; see
+  // that component's hasValue() guard for the same fix on the same bug class.
+  pendingCount: number | null | undefined;
+  // Always locally derived from the calendar (see page.tsx's
+  // payrollDaysLeft()), never sourced from a loader -- so unlike
+  // pendingCount it can't come back "absent" and doesn't need a
+  // null/undefined case. Same reasoning as HRKPIStrip.tsx's own
+  // payrollDaysLeft prop (also left as plain number there).
   payrollDaysLeft: number;
   today: string;   // pre-formatted server-side to avoid hydration mismatch
   dayName: string;
 }
 
+// A failed dashboard load must read as "we don't know", not as a fabricated
+// zero -- a hard `0` here falls through to "No urgent actions today", which
+// is indistinguishable on screen from a genuine all-clear. Same guard as
+// StatCard.tsx's displayValue() / HRKPIStrip.tsx's hasValue() for the same
+// bug class.
+function hasValue(value: number | null | undefined): value is number {
+  return typeof value === "number" && Number.isFinite(value);
+}
+
 export function GreetingHeader({ userName, pendingCount, payrollDaysLeft, today, dayName }: Props) {
-  const briefing =
-    pendingCount > 0
-      ? `${pendingCount} item${pendingCount > 1 ? "s" : ""} need${pendingCount === 1 ? "s" : ""} your attention`
-      : payrollDaysLeft <= 7
-      ? `Payroll closes in ${payrollDaysLeft} day${payrollDaysLeft !== 1 ? "s" : ""}`
-      : "No urgent actions today";
+  // hasValue(pendingCount) is checked first and short-circuits the rest of
+  // the chain on purpose: if we don't know the real pending count, we can't
+  // conclude "nothing urgent", and silently falling back to the payroll
+  // clause (or further, to "No urgent actions today") would still read as a
+  // disguised all-clear.
+  const briefing = !hasValue(pendingCount)
+    ? "We couldn't load your pending actions"
+    : pendingCount > 0
+    ? `${pendingCount} item${pendingCount > 1 ? "s" : ""} need${pendingCount === 1 ? "s" : ""} your attention`
+    : payrollDaysLeft <= 7
+    ? `Payroll closes in ${payrollDaysLeft} day${payrollDaysLeft !== 1 ? "s" : ""}`
+    : "No urgent actions today";
 
   return (
     <div className="greeting-header">
