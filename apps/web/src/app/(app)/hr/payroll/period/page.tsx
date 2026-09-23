@@ -2,6 +2,7 @@ import { PageHeader, StatGrid, StatCard, Card, DataTable } from "../../../../_co
 import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
 import { getPayrollRunDetails } from "@/app/_data/loaders";
 import type { PayrollRunDetail } from "@civitasone/types";
+import { formatRupees } from "@/lib/formatters";
 
 // This page used to call GET /api/v1/finance/periods -- Finance's GL
 // period-close endpoint, gated to finance_officer/finance_admin/super_admin
@@ -16,16 +17,15 @@ import type { PayrollRunDetail } from "@civitasone/types";
 // uses -- this Row shape (month/runDate/employeesProcessed/grossPayout/...)
 // was always describing a payroll run, just fetched from the wrong service.
 
-const inrFmt = new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 2 });
 
 type Row = {
   id: string;
   month: string;
   runDate: string;
   employeesProcessed: number;
-  grossPayout: string;
-  netPayout: string;
-  deductions: string;
+  grossPayout: number;
+  netPayout: number;
+  deductions: number;
   status: string;
 };
 
@@ -42,9 +42,9 @@ function toRow(run: PayrollRunDetail): Row {
     month: run.payPeriod,
     runDate: run.runDate,
     employeesProcessed: run.employeeCount,
-    grossPayout: inrFmt.format(run.grossAmount),
-    netPayout: inrFmt.format(run.netAmount),
-    deductions: inrFmt.format(run.deductions),
+    grossPayout: run.grossAmount,
+    netPayout: run.netAmount,
+    deductions: run.deductions,
     status: run.status,
   };
 }
@@ -53,13 +53,13 @@ export default async function PayrollPeriodPage() {
   const { data: runs, source } = await getPayrollRunDetails();
   const items = runs.map(toRow);
 
-  const columns: { key: keyof Row & string; label: string; cellType?: "status"; align?: "left" | "right" }[] = [
+  const columns: { key: keyof Row & string; label: string; cellType?: "status"; align?: "left" | "right"; render?: (r: Row) => string }[] = [
     { key: "month", label: "Month" },
     { key: "runDate", label: "Run Date" },
     { key: "employeesProcessed", label: "Employees", align: "right" },
-    { key: "grossPayout", label: "Gross", align: "right" },
-    { key: "netPayout", label: "Net Payout", align: "right" },
-    { key: "deductions", label: "Deductions", align: "right" },
+    { key: "grossPayout", label: "Gross", align: "right", render: (r) => formatRupees(r.grossPayout) },
+    { key: "netPayout", label: "Net Payout", align: "right", render: (r) => formatRupees(r.netPayout) },
+    { key: "deductions", label: "Deductions", align: "right", render: (r) => formatRupees(r.deductions) },
     { key: "status", label: "Status", cellType: "status" },
   ];
 

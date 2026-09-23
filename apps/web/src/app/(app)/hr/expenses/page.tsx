@@ -17,7 +17,7 @@ type ApiExpense = {
 type Row = {
   id: string;
   category: string;
-  amount: string;
+  amount: number;
   description: string;
   date: string;
   status: string;
@@ -32,7 +32,7 @@ function mapExpenses(rows: ApiExpense[]): Row[] {
   return rows.map((e) => ({
     id: e.id,
     category: e.category ?? "—",
-    amount: formatINR(e.amount),
+    amount: e.amount ?? 0,
     description: e.description ?? "—",
     date: e.date ?? e.created_at ?? "—",
     status: e.status,
@@ -58,9 +58,9 @@ export default async function ExpensesPage() {
   const pending = items.filter((i) => i.status === "pending").length;
   const rejected = items.filter((i) => i.status === "rejected").length;
 
-  const columns: { key: keyof Row & string; label: string; cellType?: "status" }[] = [
+  const columns: { key: keyof Row & string; label: string; cellType?: "status"; render?: (r: Row) => string }[] = [
     { key: "category", label: t("colCategory") },
-    { key: "amount", label: t("colAmount") },
+    { key: "amount", label: t("colAmount"), render: (r) => formatINR(r.amount) },
     { key: "description", label: t("colDescription") },
     { key: "date", label: t("colClaimDate") },
     { key: "status", label: t("colStatus"), cellType: "status" },

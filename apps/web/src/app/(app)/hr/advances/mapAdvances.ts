@@ -17,10 +17,10 @@ export type ApiAdvance = {
 export type Row = {
   id: string;
   employee: string;
-  amount: string;
+  amount: number;
   purpose: string;
   recoveryMonths: string;
-  recovered: string;
+  recovered: number;
   requestDate: string;
   status: string;
 } & Record<string, unknown>;
@@ -39,10 +39,10 @@ export function mapAdvances(rows: ApiAdvance[]): Row[] {
     employee: a.employee?.name
       ? `${a.employee.name} (${a.employee.employeeNo ?? "—"})`
       : a.employeeId ?? "—",
-    amount: formatINR(a.amountMinor),
+    amount: a.amountMinor ?? 0,
     purpose: a.purpose ?? "—",
     recoveryMonths: `${String(a.recoveryMonths).padStart(2, "0")} mo`,
-    recovered: formatINR(a.recoveredMinor),
+    recovered: a.recoveredMinor ?? 0,
     requestDate: a.requestDate ?? a.created_at ?? "—",
     status: a.status ?? "pending",
   }));
