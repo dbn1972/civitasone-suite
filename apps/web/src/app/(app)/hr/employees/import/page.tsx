@@ -1,6 +1,8 @@
 import { PageHeader, Card } from "../../../../_components/ds";
+import { PermissionDenied } from "../../../../_components/PermissionDenied";
 import { ImportForm } from "./ImportForm";
 import { getTranslations } from "next-intl/server";
+import { getSessionRoles } from "@/lib/auth/roleGuard";
 
 // No backend template-generation route exists (GET .../import/template 404s
 // — confirmed live and matches the "no /import route anywhere" finding in
@@ -11,7 +13,22 @@ const TEMPLATE_CSV =
   "EMP-001,Ravi Kumar,ravi@office.gov.in,9876543210,FIN,JC,permanent,2024-01-15,44900,male\n";
 const TEMPLATE_HREF = `data:text/csv;charset=utf-8,${encodeURIComponent(TEMPLATE_CSV)}`;
 
+/**
+ * Mirrors services/hrms-service/src/modules/employee/routes.ts's HR_ROLES
+ * guard on POST /v1/hrms/employees. ImportForm.tsx posts each imported row
+ * to that same create-employee endpoint (there is no separate bulk-import
+ * route), so this frontend gate matches it exactly.
+ */
+const EMPLOYEE_ADMIN_ROLES = ["hr_admin", "hr_officer", "super_admin"];
+
 export default async function BulkImportPage() {
+  const roles = getSessionRoles();
+  const canAdminister = roles.some((r) => EMPLOYEE_ADMIN_ROLES.includes(r));
+
+  if (!canAdminister) {
+    return <PermissionDenied module="bulk-importing employees" requiredRoles={EMPLOYEE_ADMIN_ROLES} />;
+  }
+
   const t = await getTranslations("employeeImport");
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
