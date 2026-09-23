@@ -34,6 +34,11 @@ const DEFAULT_COLORS = [
   "#ef4444", "#8b5cf6", "#ec4899", "#14b8a6",
 ];
 
+// Neutral grey used for the donut/pie "no data" ring -- deliberately not one
+// of DEFAULT_COLORS, so an all-zero split can never be mistaken for a real,
+// meaningfully-coloured slice.
+const NO_DATA_COLOR = "#e5e7eb";
+
 const defaultValueFormatter = (value: number) => String(value);
 
 function getColor(index: number, override?: string) {
@@ -111,6 +116,56 @@ function DonutChart({
   const cy = height / 2;
   const outerR = height / 2 - 10;
   const innerR = outerR * 0.6;
+
+  // A zero total (e.g. a tenant with nothing sanctioned and nothing spent
+  // yet -- a normal state at the start of a financial year, see
+  // BudgetChart.tsx) makes every slice's share `0 / 0`. Left unguarded that
+  // is NaN: it poisons every arc's path coordinates (an invalid `d="M NaN
+  // NaN ..."`, silently blank) and lands the literal string "NaN%" in each
+  // slice's hover tooltip. There is no real split to draw here, so render
+  // an honest neutral "no data" ring instead of computing 0/0.
+  if (total === 0) {
+    return (
+      <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+        <svg width={height} height={height} viewBox={`0 0 ${height} ${height}`}>
+          <circle
+            cx={cx}
+            cy={cy}
+            r={(outerR + innerR) / 2}
+            fill="none"
+            stroke={NO_DATA_COLOR}
+            strokeWidth={outerR - innerR}
+          >
+            <title>No data</title>
+          </circle>
+          <text x={cx} y={cy - 6} textAnchor="middle" fontSize={16} fontWeight={700} fill="#94a3b8">
+            No data
+          </text>
+          <text x={cx} y={cy + 12} textAnchor="middle" fontSize={10} fill="#64748b">
+            Total
+          </text>
+        </svg>
+        <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+          {data.map((d, i) => (
+            <div key={i} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12 }}>
+              <span
+                style={{
+                  width: 10,
+                  height: 10,
+                  borderRadius: 2,
+                  background: NO_DATA_COLOR,
+                  display: "inline-block",
+                }}
+              />
+              <span style={{ color: "#334155" }}>{d.label}</span>
+              <span style={{ color: "#667085", marginLeft: 4 }}>{valueFormatter(d.value)}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
   let startAngle = -90;
 
   const slices = data.map((d, i) => {
@@ -228,6 +283,32 @@ function PieChart({
   const cx = height / 2;
   const cy = height / 2;
   const r = height / 2 - 10;
+
+  // Same zero-total guard as DonutChart above: `d.value / total` is `0 / 0`
+  // (NaN) when every slice is zero, which poisons the wedge path coordinates
+  // and the tooltip's percentage. Render a neutral "no data" disc instead.
+  if (total === 0) {
+    return (
+      <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+        <svg width={height} height={height} viewBox={`0 0 ${height} ${height}`}>
+          <circle cx={cx} cy={cy} r={r} fill={NO_DATA_COLOR}>
+            <title>No data</title>
+          </circle>
+        </svg>
+        <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+          {data.map((d, i) => (
+            <div key={i} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12 }}>
+              <span
+                style={{ width: 10, height: 10, borderRadius: 2, background: NO_DATA_COLOR, display: "inline-block" }}
+              />
+              <span style={{ color: "#334155" }}>{d.label}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
   let startAngle = -90;
 
   const slices = data.map((d, i) => {
