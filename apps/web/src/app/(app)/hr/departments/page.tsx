@@ -4,7 +4,20 @@ import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import { useResource } from "@/app/_data/useResource";
 import { toHumanError } from "@/lib/messages";
 import { getTranslations } from "next-intl/server";
+import { getSessionRoles } from "@/lib/auth/roleGuard";
 import { DepartmentsTable } from "./DepartmentsTable";
+
+/**
+ * Mirrors services/hrms-service/src/modules/employee/masters-routes.ts's
+ * HR_ROLES guard on PATCH/DELETE /v1/hrms/departments/:id exactly (same
+ * constant departments/new/page.tsx already mirrors for the POST route).
+ *
+ * GET is gated server-side by the broader HR_READ_ROLES (also includes
+ * manager/finance roles), so this page itself stays visible to them --
+ * only the Edit/Delete affordances inside DepartmentsTable are restricted
+ * to this narrower list.
+ */
+const DEPARTMENT_ADMIN_ROLES = ["hr_admin", "super_admin", "admin"];
 
 type Dept = {
   id: string;
@@ -45,6 +58,8 @@ export default async function DepartmentsPage() {
   const { data: depts } = result;
   const resource = useResource(result);
   const errored = resource.status === "error";
+  const roles = getSessionRoles();
+  const canEdit = roles.some((r) => DEPARTMENT_ADMIN_ROLES.includes(r));
 
   const rootDepts = errored ? null : depts.filter((d) => !d.parentId).length;
   const subDepts  = errored ? null : depts.filter((d) => !!d.parentId).length;
@@ -116,7 +131,7 @@ export default async function DepartmentsPage() {
             message={t("emptyMessage")}
           />
         ) : (
-          <DepartmentsTable depts={depts} />
+          <DepartmentsTable depts={depts} canEdit={canEdit} />
         )}
       </Card>
     </main>

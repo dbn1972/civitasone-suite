@@ -107,7 +107,10 @@ export default async function EmployeeDetailPage({ params }: { params: { id: str
     );
   }
 
-  const isActive = employee.status?.toLowerCase() === "active" || employee.status?.toLowerCase() === "probation";
+  const isActive =
+    employee.status?.toLowerCase() === "active" ||
+    employee.status?.toLowerCase() === "probation" ||
+    employee.status?.toLowerCase() === "confirmed";
 
   // Build base lifecycle events from known fields
   const baseEvents: LifecycleEvent[] = [];
