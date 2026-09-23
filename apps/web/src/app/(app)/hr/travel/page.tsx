@@ -1,7 +1,8 @@
-import { PageHeader, StatGrid, StatCard, Card, DataTable } from "../../../_components/ds";
+import { PageHeader, StatGrid, StatCard, Card, DataTable, RefreshErrorState } from "../../../_components/ds";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import { TravelRequestForm } from "./TravelRequestForm";
+import { toHumanError } from "@/lib/messages";
 
 type Row = {
   id: string;
@@ -25,6 +26,7 @@ async function getData(): Promise<LoaderResult<Row[]>> {
 
 export default async function TravelRequestsPage() {
   const { data: items, source } = await getData();
+  const errored = source === "error";
 
   const pending = items.filter((i) => i.status === "pending").length;
   const approved = items.filter((i) => i.status === "approved").length;
@@ -49,25 +51,31 @@ export default async function TravelRequestsPage() {
       />
       <DataSourceBadge source={source} message="Couldn't load — showing nothing" />
       <StatGrid>
-        <StatCard icon="✈️" iconBg="#e6f0ff" label="Total Requests" value={items.length} />
-        <StatCard icon="⏳" iconBg="#fffbe6" label="Pending Approval" value={pending} />
-        <StatCard icon="✅" iconBg="#e6f7f0" label="Approved" value={approved} />
-        <StatCard icon="❌" iconBg="#fef2f2" label="Rejected" value={rejected} />
+        <StatCard icon="✈️" iconBg="#e6f0ff" label="Total Requests" value={errored ? null : items.length} />
+        <StatCard icon="⏳" iconBg="#fffbe6" label="Pending Approval" value={errored ? null : pending} />
+        <StatCard icon="✅" iconBg="#e6f7f0" label="Approved" value={errored ? null : approved} />
+        <StatCard icon="❌" iconBg="#fef2f2" label="Rejected" value={errored ? null : rejected} />
       </StatGrid>
       <TravelRequestForm />
       <div style={{ marginTop: 16 }}>
         <Card title="Travel Requests">
-          <DataTable<Row>
-            columns={columns}
-            rows={items}
-            sortable
-            filterable
-            filterPlaceholder="Filter by destination or purpose…"
-            pageSize={15}
-            emptyIcon="✈️"
-            emptyTitle="No travel requests"
-            emptyMessage="Official travel requests submitted via the form above appear here for tracking and approval. Requests are reviewed by the reporting manager before booking."
-          />
+          {errored ? (
+            <div className="pad">
+              <RefreshErrorState error={toHumanError("load", { area: "travel requests" })} backHref="/hr" />
+            </div>
+          ) : (
+            <DataTable<Row>
+              columns={columns}
+              rows={items}
+              sortable
+              filterable
+              filterPlaceholder="Filter by destination or purpose…"
+              pageSize={15}
+              emptyIcon="✈️"
+              emptyTitle="No travel requests"
+              emptyMessage="Official travel requests submitted via the form above appear here for tracking and approval. Requests are reviewed by the reporting manager before booking."
+            />
+          )}
         </Card>
       </div>
     </main>

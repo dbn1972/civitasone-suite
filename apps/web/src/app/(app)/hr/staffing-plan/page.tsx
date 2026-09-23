@@ -1,7 +1,8 @@
-import { PageHeader, StatGrid, StatCard, Card, DataTable } from "../../../_components/ds";
+import { PageHeader, StatGrid, StatCard, Card, DataTable, RefreshErrorState } from "../../../_components/ds";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import { getTranslations } from "next-intl/server";
+import { toHumanError } from "@/lib/messages";
 
 type Row = {
   id: string;
@@ -28,6 +29,7 @@ async function getData(): Promise<LoaderResult<Row[]>> {
 export default async function StaffingPlanPage() {
   const t = await getTranslations("staffingPlan");
   const { data: items, source } = await getData();
+  const errored = source === "error";
 
   const totalSanctioned = items.reduce((s, i) => s + Number(i.sanctionedPosts ?? 0), 0);
   const totalFilled = items.reduce((s, i) => s + Number(i.filled ?? 0), 0);
@@ -54,23 +56,29 @@ export default async function StaffingPlanPage() {
       />
       <DataSourceBadge source={source} />
       <StatGrid>
-        <StatCard icon="📊" iconBg="#e6f0ff" label={t("statSanctionedPostsLabel")} value={totalSanctioned} />
-        <StatCard icon="👥" iconBg="#e6f7f0" label={t("statFilledLabel")} value={totalFilled} />
-        <StatCard icon="⬜" iconBg="#fff1f0" label={t("statVacantLabel")} value={totalVacant} />
-        <StatCard icon="📈" iconBg="#fffbe6" label={t("statFillRateLabel")} value={overallFill} />
+        <StatCard icon="📊" iconBg="#e6f0ff" label={t("statSanctionedPostsLabel")} value={errored ? null : totalSanctioned} />
+        <StatCard icon="👥" iconBg="#e6f7f0" label={t("statFilledLabel")} value={errored ? null : totalFilled} />
+        <StatCard icon="⬜" iconBg="#fff1f0" label={t("statVacantLabel")} value={errored ? null : totalVacant} />
+        <StatCard icon="📈" iconBg="#fffbe6" label={t("statFillRateLabel")} value={errored ? null : overallFill} />
       </StatGrid>
       <Card title={t("cardTitle")}>
-        <DataTable<Row>
-          columns={columns}
-          rows={items}
-          sortable
-          filterable
-          filterPlaceholder={t("filterPlaceholder")}
-          pageSize={15}
-          emptyIcon="📊"
-          emptyTitle={t("emptyTitle")}
-          emptyMessage={t("emptyMessage")}
-        />
+        {errored ? (
+          <div className="pad">
+            <RefreshErrorState error={toHumanError("load", { area: "staffing plan" })} backHref="/hr" />
+          </div>
+        ) : (
+          <DataTable<Row>
+            columns={columns}
+            rows={items}
+            sortable
+            filterable
+            filterPlaceholder={t("filterPlaceholder")}
+            pageSize={15}
+            emptyIcon="📊"
+            emptyTitle={t("emptyTitle")}
+            emptyMessage={t("emptyMessage")}
+          />
+        )}
       </Card>
     </main>
   );

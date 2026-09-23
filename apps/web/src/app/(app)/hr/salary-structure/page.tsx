@@ -1,7 +1,8 @@
-import { PageHeader, StatGrid, StatCard, Card, DataTable } from "../../../_components/ds";
+import { PageHeader, StatGrid, StatCard, Card, DataTable, RefreshErrorState } from "../../../_components/ds";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import { getTranslations } from "next-intl/server";
+import { toHumanError } from "@/lib/messages";
 
 type ApiStructure = {
   id: string;
@@ -51,6 +52,7 @@ async function getStructures(): Promise<LoaderResult<Row[]>> {
 export default async function SalaryStructurePage() {
   const t = await getTranslations("salaryStructure");
   const { data: items, source } = await getStructures();
+  const errored = source === "error";
 
   const active = items.filter((i) => i.status === "active").length;
   const totalEmployees = items.reduce((sum, i) => {
@@ -84,23 +86,29 @@ export default async function SalaryStructurePage() {
       />
       <DataSourceBadge source={source} message={t("dataSourceErrorMessage")} />
       <StatGrid>
-        <StatCard icon="📊" iconBg="#e6f0ff" label={t("statStructuresLabel")} value={items.length} />
-        <StatCard icon="✅" iconBg="#e6f7f0" label={t("statActiveLabel")} value={active} />
-        <StatCard icon="👥" iconBg="#fffbe6" label={t("statEmployeesCoveredLabel")} value={totalEmployees.toLocaleString("en-IN")} />
-        <StatCard icon="📅" iconBg="#f5f5f5" label={t("statLastRevisionLabel")} value={lastRevision} />
+        <StatCard icon="📊" iconBg="#e6f0ff" label={t("statStructuresLabel")} value={errored ? null : items.length} />
+        <StatCard icon="✅" iconBg="#e6f7f0" label={t("statActiveLabel")} value={errored ? null : active} />
+        <StatCard icon="👥" iconBg="#fffbe6" label={t("statEmployeesCoveredLabel")} value={errored ? null : totalEmployees.toLocaleString("en-IN")} />
+        <StatCard icon="📅" iconBg="#f5f5f5" label={t("statLastRevisionLabel")} value={errored ? null : lastRevision} />
       </StatGrid>
       <Card title={t("cardTitle")}>
-        <DataTable<Row>
-          columns={columns}
-          rows={items}
-          sortable
-          filterable
-          filterPlaceholder={t("filterPlaceholder")}
-          pageSize={15}
-          emptyIcon="💼"
-          emptyTitle={t("emptyTitle")}
-          emptyMessage={t("emptyMessage")}
-        />
+        {errored ? (
+          <div className="pad">
+            <RefreshErrorState error={toHumanError("load", { area: "salary structures" })} backHref="/hr" />
+          </div>
+        ) : (
+          <DataTable<Row>
+            columns={columns}
+            rows={items}
+            sortable
+            filterable
+            filterPlaceholder={t("filterPlaceholder")}
+            pageSize={15}
+            emptyIcon="💼"
+            emptyTitle={t("emptyTitle")}
+            emptyMessage={t("emptyMessage")}
+          />
+        )}
       </Card>
     </main>
   );

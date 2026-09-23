@@ -2,13 +2,14 @@
  * Probation Confirmation page — Sprint 14 / Lifecycle Phase 2
  * Card grid via ProbationConfirmationList (replaces plain DataTable).
  */
-import { PageHeader, StatGrid, StatCard, Card } from "../../../_components/ds";
+import { PageHeader, StatGrid, StatCard, Card, RefreshErrorState } from "../../../_components/ds";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import {
   ProbationConfirmationList,
   type ConfirmationRow,
 } from "./_components/ProbationConfirmationCard";
+import { toHumanError } from "@/lib/messages";
 
 async function getData(): Promise<LoaderResult<ConfirmationRow[]>> {
   return fetchJson<unknown, ConfirmationRow[]>("/api/v1/hrms/confirmations", [], {
@@ -22,6 +23,7 @@ async function getData(): Promise<LoaderResult<ConfirmationRow[]>> {
 
 export default async function ConfirmationPage() {
   const { data: items, source } = await getData();
+  const errored = source === "error";
 
   const today    = new Date().toISOString().slice(0, 10);
   const overdue  = items.filter((r) => r.dueDate && r.dueDate < today).length;
@@ -45,16 +47,22 @@ export default async function ConfirmationPage() {
       <DataSourceBadge source={source} message="Couldn't load — showing nothing" />
 
       <StatGrid>
-        <StatCard icon="📋" iconBg="#e6f0ff" label="On Probation"   value={items.length} />
-        <StatCard icon="⏰" iconBg="#fff1f0" label="Overdue"         value={overdue} />
-        <StatCard icon="📅" iconBg="#fffbe6" label="Due in 30 Days" value={dueSoon} />
-        <StatCard icon="✅" iconBg="#e6f7f0" label="Timely"          value={timely} />
+        <StatCard icon="📋" iconBg="#e6f0ff" label="On Probation"   value={errored ? null : items.length} />
+        <StatCard icon="⏰" iconBg="#fff1f0" label="Overdue"         value={errored ? null : overdue} />
+        <StatCard icon="📅" iconBg="#fffbe6" label="Due in 30 Days" value={errored ? null : dueSoon} />
+        <StatCard icon="✅" iconBg="#e6f7f0" label="Timely"          value={errored ? null : timely} />
       </StatGrid>
 
       <Card title="Probation Register — Confirmation Due">
-        <div style={{ padding: 16 }}>
-          <ProbationConfirmationList rows={items} />
-        </div>
+        {errored ? (
+          <div className="pad">
+            <RefreshErrorState error={toHumanError("load", { area: "confirmations" })} backHref="/hr" />
+          </div>
+        ) : (
+          <div style={{ padding: 16 }}>
+            <ProbationConfirmationList rows={items} />
+          </div>
+        )}
       </Card>
     </main>
   );

@@ -1,7 +1,8 @@
-import { PageHeader, StatGrid, StatCard, Card, DataTable } from "../../../_components/ds";
+import { PageHeader, StatGrid, StatCard, Card, DataTable, RefreshErrorState } from "../../../_components/ds";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { getPayMatrix } from "../../../_data/loaders";
 import { getTranslations } from "next-intl/server";
+import { toHumanError } from "@/lib/messages";
 
 type Row = {
   id: string;
@@ -14,6 +15,7 @@ type Row = {
 export default async function PayMatrixPage() {
   const t = await getTranslations("payMatrix");
   const { data: levels, source } = await getPayMatrix();
+  const errored = source === "error";
 
   const rows: Row[] = levels.flatMap((l) =>
     l.cells.map((c) => ({
@@ -47,23 +49,29 @@ export default async function PayMatrixPage() {
       />
       <DataSourceBadge source={source} message={t("dataSourceErrorMessage")} />
       <StatGrid>
-        <StatCard icon="📊" iconBg="#e6f0ff" label={t("statPayLevelsLabel")} value={levelCount} />
-        <StatCard icon="🗂️" iconBg="#f5f5f5" label={t("statTotalCellsLabel")} value={cellCount} />
-        <StatCard icon="💰" iconBg="#fffbe6" label={t("statMinBasicPayLabel")} value={minPay} />
-        <StatCard icon="💎" iconBg="#e6f7f0" label={t("statMaxBasicPayLabel")} value={maxPay} />
+        <StatCard icon="📊" iconBg="#e6f0ff" label={t("statPayLevelsLabel")} value={errored ? null : levelCount} />
+        <StatCard icon="🗂️" iconBg="#f5f5f5" label={t("statTotalCellsLabel")} value={errored ? null : cellCount} />
+        <StatCard icon="💰" iconBg="#fffbe6" label={t("statMinBasicPayLabel")} value={errored ? null : minPay} />
+        <StatCard icon="💎" iconBg="#e6f7f0" label={t("statMaxBasicPayLabel")} value={errored ? null : maxPay} />
       </StatGrid>
       <Card title={t("cardTitle")}>
-        <DataTable<Row>
-          columns={columns}
-          rows={rows}
-          sortable
-          filterable
-          filterPlaceholder={t("filterPlaceholder")}
-          pageSize={20}
-          emptyIcon="📊"
-          emptyTitle={t("emptyTitle")}
-          emptyMessage={t("emptyMessage")}
-        />
+        {errored ? (
+          <div className="pad">
+            <RefreshErrorState error={toHumanError("load", { area: "pay matrix" })} backHref="/hr" />
+          </div>
+        ) : (
+          <DataTable<Row>
+            columns={columns}
+            rows={rows}
+            sortable
+            filterable
+            filterPlaceholder={t("filterPlaceholder")}
+            pageSize={20}
+            emptyIcon="📊"
+            emptyTitle={t("emptyTitle")}
+            emptyMessage={t("emptyMessage")}
+          />
+        )}
       </Card>
     </main>
   );

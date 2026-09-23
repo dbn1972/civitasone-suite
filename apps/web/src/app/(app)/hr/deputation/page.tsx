@@ -1,7 +1,8 @@
-import { PageHeader, StatGrid, StatCard, Card, DataTable } from "../../../_components/ds";
+import { PageHeader, StatGrid, StatCard, Card, DataTable, RefreshErrorState } from "../../../_components/ds";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import { DeputationCard, type DeputationRow } from "./_components/DeputationCard";
+import { toHumanError } from "@/lib/messages";
 
 async function getData(): Promise<LoaderResult<DeputationRow[]>> {
   return fetchJson<unknown, DeputationRow[]>("/api/v1/hrms/deputation", [], {
@@ -15,6 +16,7 @@ async function getData(): Promise<LoaderResult<DeputationRow[]>> {
 
 export default async function DeputationPage() {
   const { data: items, source } = await getData();
+  const errored = source === "error";
 
   const active    = items.filter((i) => i.status === "active").length;
   const pending   = items.filter((i) => i.status === "pending").length;
@@ -41,17 +43,17 @@ export default async function DeputationPage() {
       <DataSourceBadge source={source} />
 
       <StatGrid>
-        <StatCard icon="🏛️" iconBg="#e6f0ff" label="Total Deputations" value={items.length} />
-        <StatCard icon="✅" iconBg="#e6f7f0" label="Active"            value={active} />
-        <StatCard icon="⏳" iconBg="#fffbe6" label="Pending"           value={pending} />
-        <StatCard icon="📋" iconBg="#f5f5f5" label="Completed"         value={completed} />
+        <StatCard icon="🏛️" iconBg="#e6f0ff" label="Total Deputations" value={errored ? null : items.length} />
+        <StatCard icon="✅" iconBg="#e6f7f0" label="Active"            value={errored ? null : active} />
+        <StatCard icon="⏳" iconBg="#fffbe6" label="Pending"           value={errored ? null : pending} />
+        <StatCard icon="📋" iconBg="#f5f5f5" label="Completed"         value={errored ? null : completed} />
         {recalled > 0 && (
-          <StatCard icon="↩️" iconBg="#fee2e2" label="Recalled" value={recalled} />
+          <StatCard icon="↩️" iconBg="#fee2e2" label="Recalled" value={errored ? null : recalled} />
         )}
       </StatGrid>
 
       {/* Card grid for active/pending */}
-      {items.filter((i) => ["active", "pending"].includes(i.status)).length > 0 && (
+      {!errored && items.filter((i) => ["active", "pending"].includes(i.status)).length > 0 && (
         <div style={{ marginBottom: 24 }}>
           <h2 style={{ fontSize: "0.875rem", fontWeight: 600, color: "var(--ink2)", textTransform: "uppercase", letterSpacing: "0.05em", margin: "0 0 14px" }}>
             Active Deputations
@@ -66,17 +68,23 @@ export default async function DeputationPage() {
 
       {/* Full table */}
       <Card title="Deputation List">
-        <DataTable<DeputationRow>
-          columns={tableColumns}
-          rows={items}
-          sortable
-          filterable
-          filterPlaceholder="Filter by employee or organisation…"
-          pageSize={15}
-          emptyIcon="🏛️"
-          emptyTitle="No deputation orders"
-          emptyMessage="Deputation orders appear when an officer is posted to another organisation on temporary assignment."
-        />
+        {errored ? (
+          <div className="pad">
+            <RefreshErrorState error={toHumanError("load", { area: "deputation" })} backHref="/hr" />
+          </div>
+        ) : (
+          <DataTable<DeputationRow>
+            columns={tableColumns}
+            rows={items}
+            sortable
+            filterable
+            filterPlaceholder="Filter by employee or organisation…"
+            pageSize={15}
+            emptyIcon="🏛️"
+            emptyTitle="No deputation orders"
+            emptyMessage="Deputation orders appear when an officer is posted to another organisation on temporary assignment."
+          />
+        )}
       </Card>
     </main>
   );
