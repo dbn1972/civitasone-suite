@@ -40,7 +40,7 @@ type RawRow = {
   filedAt: string;
   status: string;
   confidential: boolean;
-} & Record<string, unknown>;
+};
 
 /** Client-safe row — no complainantId / respondentId. */
 type Row = Omit<RawRow, "complainantId" | "respondentId"> & { caseRef: string };
