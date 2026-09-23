@@ -155,6 +155,13 @@ export async function compositionRoutes(app: FastifyInstance): Promise<void> {
     const secret = req.headers["x-internal-secret"] as string | undefined;
     const hasInternalFlag = req.headers["x-internal"] === "1";
     const expected = process.env.INTERNAL_SERVICE_SECRET;
+    // Fail-closed: an unconfigured INTERNAL_SERVICE_SECRET must NEVER be treated
+    // as "trust everyone" — secretNotConfigured forces validInternal to false
+    // below, so every request always falls through to normal role-based JWT
+    // auth (mirrors the modules-list route; mirrors requireSecret()'s fail-closed
+    // posture in ecosystem.config.js and assertInternalServiceSecret() in
+    // @civitasone/auth/plugin — a missing secret must degrade to "reject the
+    // shortcut", never "skip the check").
     const secretNotConfigured = typeof expected !== "string" || expected.length === 0;
     const validInternal =
       !secretNotConfigured &&
@@ -162,9 +169,7 @@ export async function compositionRoutes(app: FastifyInstance): Promise<void> {
       typeof secret === "string" &&
       secret.length === expected.length &&
       timingSafeEqual(Buffer.from(secret, "utf8"), Buffer.from(expected, "utf8"));
-    // If the secret IS configured but the caller didn't present a valid one,
-    // fall back to super-admin JWT auth (mirrors the modules-list route).
-    if (!validInternal && !secretNotConfigured) {
+    if (!validInternal) {
       const ctx = resolveContext(req);
       requireRole(ctx, ADMIN_ROLES);
     }
