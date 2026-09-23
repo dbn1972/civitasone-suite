@@ -1,5 +1,20 @@
 import { PageHeader, Card } from "../../../../_components/ds";
 import { getTranslations } from "next-intl/server";
+import { getSessionRoles } from "@/lib/auth/roleGuard";
+import { PermissionDenied } from "../../../../_components/PermissionDenied";
+
+/**
+ * No backend endpoint serves or accepts attendance-config values (nothing
+ * under services/hrms-service/src/modules/attendance exposes a config
+ * GET/PUT) -- everything on this page is the attendance engine's
+ * compiled-in defaults, not a per-tenant setting a clerk could have
+ * changed. Gated at the same admin tier as this module's other sensitive,
+ * policy-level action (LOCK_ROLES on POST /v1/hrms/attendance/locks in
+ * attendance/routes.ts) rather than the broader HR_ROLES/ALL_ROLES used for
+ * day-to-day attendance operations, since viewing "the rules" is policy
+ * visibility, not routine attendance work.
+ */
+const ATTENDANCE_CONFIG_ROLES = ["hr_admin", "super_admin"];
 
 /**
  * Attendance Rules Configuration — defines how the system marks attendance:
@@ -7,9 +22,30 @@ import { getTranslations } from "next-intl/server";
  */
 export default async function AttendanceConfigPage() {
   const t = await getTranslations("attendanceConfig");
+
+  const roles = getSessionRoles();
+  const canAccess = roles.some((r) => ATTENDANCE_CONFIG_ROLES.includes(r));
+  if (!canAccess) {
+    return <PermissionDenied module="attendance configuration" requiredRoles={ATTENDANCE_CONFIG_ROLES} />;
+  }
+
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader title={t("title")} subtitle={t("subtitle")} back="/hr/attendance" backLabel={t("backLabel")} />
+
+      {/*
+        No backend config endpoint exists (see role-gate comment above) --
+        these are compiled-in engine defaults, not this tenant's actual
+        configuration. Say so plainly instead of presenting them as live
+        settings.
+      */}
+      <div
+        role="note"
+        className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800"
+        style={{ marginBottom: 16 }}
+      >
+        {t("defaultsNotice")}
+      </div>
 
       <div className="grid g-2">
         <Card title={t("cardWorkingHours")} padding>

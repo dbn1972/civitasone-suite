@@ -97,6 +97,7 @@
     "title": "Attendance Rules",
     "subtitle": "How late marks, half-days, overtime, and weekly-offs are computed (read-only reference).",
     "backLabel": "Attendance",
+    "defaultsNotice": "Configuration values shown below are defaults. Contact your administrator to customize.",
     "cardWorkingHours": "Working Hours",
     "cardLateMarkRules": "Late Mark Rules",
     "cardOvertimeRules": "Overtime Rules",
@@ -141,7 +142,7 @@
     "coMaxAccumulationVal": "3 COs at a time",
     "coApprovalRequired": "Approval required",
     "coApprovalRequiredVal": "Yes (supervisor)",
-    "footerNote": "These rules are applied automatically by the attendance engine when processing daily check-ins. To change them, update via the platform config API.",
+    "footerNote": "These rules are applied automatically by the attendance engine when processing daily check-ins.",
     "loadingTitle": "Attendance Config",
     "loadingSubtitle": "Configure attendance rules and period locks."
   },
@@ -2194,8 +2195,8 @@
     "statTotalHeadcountLabel": "Total Headcount",
     "cardTitle": "Outsourced Workforce",
     "filterPlaceholder": "Filter…",
-    "emptyTitle": "No outsourced staff",
-    "emptyMessage": "Outsourced workforce records appear here, tracking vendor-supplied staff and their contract details."
+    "emptyTitle": "Outsourced staff management is not yet available",
+    "emptyMessage": "Vendor-wise outsourced staff, headcount, and contract tracking isn't connected to a backend yet. This view will populate once that module is built."
   },
   "vigilance": {
     "title": "Vigilance & Disciplinary",
