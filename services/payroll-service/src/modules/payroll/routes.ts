@@ -4,7 +4,7 @@ import { listQuerySchema, acceptedResponseSchema } from "@civitasone/schemas/com
 import { PayrollRunDetailListSchema, PayrollRunFullDetailSchema, SalarySlipSummaryListSchema } from "@civitasone/schemas/web";
 import { sendValidated, sendAccepted } from "@civitasone/schemas/validate";
 import { resolveContext, requireRole, requirePermissionKey, HttpError } from "../../shared/context.js";
-import { createStructureBody, createRunBody, idParam, createDdoBody, createPensionerBody } from "./validators.js";
+import { createStructureBody, createRunBody, idParam, createDdoBody, createPensionerBody, listRunsQuery } from "./validators.js";
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
 import { scopedRead } from "../../shared/db.js";
@@ -17,8 +17,8 @@ export async function payrollRoutes(app: FastifyInstance): Promise<void> {
   app.get("/v1/payroll/runs", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, READER_ROLES);
-    const q = listQuerySchema.parse(req.query);
-    sendValidated(reply, PayrollRunDetailListSchema, await queries.listRuns(ctx.tenantId, q.limit));
+    const q = listRunsQuery.parse(req.query);
+    sendValidated(reply, PayrollRunDetailListSchema, await queries.listRuns(ctx.tenantId, q.limit, q.month));
   });
 
   app.get("/v1/payroll/structures", async (req, reply) => {

@@ -35,6 +35,15 @@ function prevPeriodLabel(pp: string): string {
   return d.toLocaleDateString("en-IN", { month: "long", year: "numeric" });
 }
 
+/** ISO ("YYYY-MM") of the month immediately before `pp`, or null if unparseable. */
+function prevPeriodIso(pp: string): string | null {
+  const parsed = parsePeriod(pp);
+  if (!parsed) return null;
+  const prevMonth = parsed.month === 1 ? 12 : parsed.month - 1;
+  const prevYear  = parsed.month === 1 ? parsed.year - 1 : parsed.year;
+  return `${prevYear}-${String(prevMonth).padStart(2, "0")}`;
+}
+
 export default async function PayrollRunDetailPage({ params }: { params: { id: string } }) {
   const roles = getSessionRoles();
   const canAdminister = roles.some((r) => ["payroll_admin", "payroll_officer", "super_admin"].includes(r));
@@ -54,18 +63,18 @@ export default async function PayrollRunDetailPage({ params }: { params: { id: s
     );
   }
 
-  /* MoM: fetch all runs to find the previous month's gross */
-  const { data: allRuns } = await getPayrollRunDetails();
-  const thisParsed = parsePeriod(run.payPeriod);
-  const prevRun = allRuns.find((r) => {
-    if (r.id === run.id) return false;
-    const p = parsePeriod(r.payPeriod);
-    if (!p || !thisParsed) return false;
-    const prevMonth = thisParsed.month === 1 ? 12 : thisParsed.month - 1;
-    const prevYear  = thisParsed.month === 1 ? thisParsed.year - 1 : thisParsed.year;
-    return p.year === prevYear && p.month === prevMonth;
-  });
-  const previousGross = prevRun?.grossAmount ?? 0;
+  // HIGH fix (fix/high-data-issues): this used to fetch every payroll run
+  // for the tenant (the /v1/payroll/runs default batch, previously
+  // unordered) just to scan for the one row matching the previous month —
+  // slow and wasteful with hundreds of runs, and silently wrong whenever
+  // that row fell outside the fetched batch. Ask the backend for exactly
+  // that one month instead.
+  const prevIso = prevPeriodIso(run.payPeriod);
+  let previousGross = 0;
+  if (prevIso) {
+    const { data: prevRuns } = await getPayrollRunDetails({ limit: 1, month: prevIso });
+    previousGross = prevRuns[0]?.grossAmount ?? 0;
+  }
 
   const slipRows = run.salarySlips as SalarySlipRow[];
   const exceptions = deriveExceptions(slipRows);

@@ -1,4 +1,4 @@
-import { eq, and, sql, inArray, count } from "drizzle-orm";
+import { eq, and, sql, inArray, count, desc } from "drizzle-orm";
 import { db, scopedRead } from "../../shared/db.js";
 import {
   payrollStructures, payrollComponents, payrollRuns, payrollSlips,
@@ -21,9 +21,20 @@ export async function findSlipById(id: string, tenantId: string): Promise<Payrol
   return rows[0] ?? null;
 }
 
-export async function listRunsByTenant(tenantId: string, limit = 50): Promise<PayrollRunRow[]> {
+// fix/high-data-issues: added the `month` exact-filter param and, just as
+// important on its own, an explicit ORDER BY -- this select previously had
+// none, so `limit` returned whatever `limit` rows Postgres felt like handing
+// back (implementation-defined, not guaranteed to be the most recent), which
+// made every caller's "most recent N runs" assumption unsound. Ordering by
+// month DESC makes `limit` mean what callers already assumed it meant, and
+// lets a caller that wants exactly one period (e.g. run detail's MoM
+// comparison) filter to it server-side instead of fetching a batch to scan.
+export async function listRunsByTenant(tenantId: string, limit = 50, month?: string): Promise<PayrollRunRow[]> {
   return scopedRead((tx) => tx.select().from(payrollRuns)
-    .where(eq(payrollRuns.tenantId, tenantId))
+    .where(month
+      ? and(eq(payrollRuns.tenantId, tenantId), eq(payrollRuns.month, month))
+      : eq(payrollRuns.tenantId, tenantId))
+    .orderBy(desc(payrollRuns.month))
     .limit(limit));
 }
 
