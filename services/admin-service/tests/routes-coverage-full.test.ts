@@ -479,9 +479,9 @@ describe("GET /v1/admin/tenants/:id/modules-list", () => {
     expect(res.json().data).toBeDefined();
   });
 
-  it("returns 200 for tenant_admin (internal secret env not set = internal auth passes)", async () => {
+  it("returns 403 for tenant_admin (fail-closed: an unset internal secret must not grant access; only super_admin/platform_admin pass requireSuperAdmin)", async () => {
     const res = await app.inject({ method: "GET", url: `/v1/admin/tenants/${VALID_UUID}/modules-list`, headers: authHeader(["tenant_admin"]) });
-    expect(res.statusCode).toBe(200);
+    expect(res.statusCode).toBe(403);
   });
 
   it("returns 400 with invalid uuid", async () => {

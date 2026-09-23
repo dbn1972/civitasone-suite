@@ -30,6 +30,20 @@
  * (no user JWT at all, using the same x-internal:1+x-tenant-id+x-service-secret
  * contract authPlugin already grants elevation for) still reaches the route
  * and succeeds, confirming genuine internal callers are unaffected.
+ *
+ * A fifth scenario (d/d-admin), added separately from the PR #986 follow-up
+ * above, covers a DIFFERENT gap in the same two routes: what happens when
+ * INTERNAL_SERVICE_SECRET is not merely wrong but entirely unconfigured
+ * (empty/unset) — the exact condition this repo's own fail-closed secrets
+ * posture (ecosystem.config.js's requireSecret(), @civitasone/auth/plugin's
+ * assertInternalServiceSecret()) exists to guard against, and the exact
+ * condition confirmed live on a real deployment host where the whole fleet
+ * runs with an empty INTERNAL_SERVICE_SECRET in non-production. Both routes
+ * used to compute `secretNotConfigured` and then only fall back to normal
+ * role auth when the secret WAS configured — i.e. an unconfigured secret
+ * skipped authentication entirely, the opposite of fail-closed. (d) proves a
+ * non-admin caller can no longer exploit that; (d-admin) proves a genuinely
+ * privileged caller is unaffected by the fix.
  */
 import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach, vi } from "vitest";
 import { signToken } from "@civitasone/auth";
@@ -113,6 +127,27 @@ describe("GET /v1/admin/tenants/:id/modules-list — internal-caller authz", () 
     });
     expect(res.statusCode).toBe(403);
   });
+
+  it("(d) INTERNAL_SERVICE_SECRET entirely unset, non-admin JWT, x-internal:1 + any secret value → fail-closed, NOT treated as internal (regression: this used to return 200 with no role check at all)", async () => {
+    vi.stubEnv("INTERNAL_SERVICE_SECRET", "");
+    const res = await app.inject({
+      method: "GET",
+      url,
+      headers: { ...nonAdminAuth(), "x-internal": "1", "x-internal-secret": "anything-an-attacker-might-try" },
+    });
+    expect(res.statusCode).toBe(403);
+  });
+
+  it("(d-admin) INTERNAL_SERVICE_SECRET entirely unset, super_admin JWT → normal auth fallback still succeeds (fix doesn't break legitimate admin access)", async () => {
+    vi.stubEnv("INTERNAL_SERVICE_SECRET", "");
+    const res = await app.inject({
+      method: "GET",
+      url,
+      headers: { authorization: `Bearer ${signToken({ sub: ACTOR, tid: TENANT, roles: ["super_admin"], sid: "s" }, JWT_SECRET, 3600)}` },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().data).toBeDefined();
+  });
 });
 
 describe("GET /v1/admin/composition/internal/:tenantId/modules — internal-caller authz", () => {
@@ -168,5 +203,26 @@ describe("GET /v1/admin/composition/internal/:tenantId/modules — internal-call
       headers: { ...nonAdminAuth(), "x-internal": "1", "x-internal-secret": "not-the-real-secret" },
     });
     expect(res.statusCode).toBe(403);
+  });
+
+  it("(d) INTERNAL_SERVICE_SECRET entirely unset, non-admin JWT, x-internal:1 + any secret value → fail-closed, NOT treated as internal (regression: this used to return 200 with no role check at all)", async () => {
+    vi.stubEnv("INTERNAL_SERVICE_SECRET", "");
+    const res = await app.inject({
+      method: "GET",
+      url,
+      headers: { ...nonAdminAuth(), "x-internal": "1", "x-internal-secret": "anything-an-attacker-might-try" },
+    });
+    expect(res.statusCode).toBe(403);
+  });
+
+  it("(d-admin) INTERNAL_SERVICE_SECRET entirely unset, tenant_admin JWT (in ADMIN_ROLES) → normal auth fallback still succeeds (fix doesn't break legitimate admin access)", async () => {
+    vi.stubEnv("INTERNAL_SERVICE_SECRET", "");
+    const res = await app.inject({
+      method: "GET",
+      url,
+      headers: { authorization: `Bearer ${signToken({ sub: ACTOR, tid: TENANT, roles: ["tenant_admin"], sid: "s" }, JWT_SECRET, 3600)}` },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toHaveProperty("configured");
   });
 });

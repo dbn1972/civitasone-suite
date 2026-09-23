@@ -99,13 +99,22 @@ export async function configRoutes(app: FastifyInstance): Promise<void> {
     const secret = req.headers["x-internal-secret"] as string | undefined;
     const hasInternalFlag = req.headers["x-internal"] === "1";
     const expected = process.env.INTERNAL_SERVICE_SECRET;
-    // If INTERNAL_SERVICE_SECRET is not configured, treat as internal (dev/test mode)
+    // Fail-closed: an unconfigured INTERNAL_SERVICE_SECRET must NEVER be treated
+    // as "trust everyone" — it just means the internal-caller path can never
+    // validate (secretNotConfigured forces isValidInternal to false below), so
+    // every request always falls through to normal super-admin auth below.
+    // (Previously this fallback only ran when the secret WAS configured, so a
+    // missing secret silently skipped authentication entirely for this route —
+    // see internal-auth-flag.test.ts cases (d)/(d-admin) for the regression
+    // coverage.)
     const secretNotConfigured = typeof expected !== "string" || expected.length === 0;
     const isValidInternal = !secretNotConfigured && hasInternalFlag &&
       typeof secret === "string" && secret.length === expected.length &&
       timingSafeEqual(Buffer.from(secret, "utf8"), Buffer.from(expected, "utf8"));
-    if (!isValidInternal && !secretNotConfigured) {
-      // Fall back to normal auth if not internal and secret is configured
+    if (!isValidInternal) {
+      // Not a valid internal caller (secret missing/unconfigured, wrong, or the
+      // x-internal flag absent) → require a normal authenticated super-admin
+      // caller instead. This always runs unless isValidInternal is true.
       const ctx = resolveContext(req);
       requireSuperAdmin(ctx);
     }

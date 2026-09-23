@@ -3,7 +3,10 @@
  * module-guard. Verifies: un-onboarded tenants are `configured:false` (gateway
  * fails open), onboarded tenants return the dependency-resolved allow-list
  * projected to the gateway's route-key vocabulary. In test env
- * INTERNAL_SERVICE_SECRET is unset → the route is treated as internal (dev mode).
+ * INTERNAL_SERVICE_SECRET is unset, so the internal-caller path can never
+ * validate (fail-closed — see internal-auth-flag.test.ts for the dedicated
+ * regression coverage) and every request here goes through the normal
+ * super-admin JWT fallback via auth() below.
  */
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import type { FastifyInstance } from "fastify";
