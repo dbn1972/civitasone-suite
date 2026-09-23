@@ -31,6 +31,9 @@ export type EmployeeDetailShape = {
   bankIfsc: string | null;
   pan: string | null;
   managerId?: string;
+  uanNumber?: string;
+  esicIpNumber?: string;
+  pran?: string;
 };
 
 /** Returns a shaped response matching EmployeeDetailSchema (web). */
@@ -113,6 +116,23 @@ export async function getEmployeeDetail(id: string, tenantId: string): Promise<E
     // approval, or geo-attendance-e2e.test.ts's "F4. Employee's reporting
     // officer is assigned") had no field to read it from at all.
     ...(emp.managerId      ? { managerId: emp.managerId }             : {}),
+    // FINDING-3 (HRMS role-based review): uanNumber/esicIpNumber/pran are
+    // real columns on `emp` already (uan_number/esic_ip_number/pran --
+    // schema.ts; populated end-to-end by employee/consumer.ts on create,
+    // and updateEmployeeBody already accepts writes to them via the PATCH
+    // route) and are NOT in pii-mask.ts's PII_FIELDS list (only pan/
+    // aadhaarRef/bankAccountNo/bankIfsc/mobile are masked there), so no
+    // masking transform belongs here -- but exactly like confirmationDate/
+    // managerId above, they were never added to this function's response
+    // shape at all, so EditEmployeeForm.tsx's
+    // `(employee as Record<string,unknown>).uanNumber`-style reads always
+    // saw undefined even when a real value was on file. Also added to
+    // EmployeeDetailSchema (packages/schemas/src/web.ts), which apps/web's
+    // loader validates this response against -- without that, these would
+    // round-trip over HTTP fine and then get silently stripped client-side.
+    ...(emp.uanNumber      ? { uanNumber: emp.uanNumber }              : {}),
+    ...(emp.esicIpNumber   ? { esicIpNumber: emp.esicIpNumber }        : {}),
+    ...(emp.pran           ? { pran: emp.pran }                        : {}),
   };
 }
 

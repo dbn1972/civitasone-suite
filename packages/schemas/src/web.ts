@@ -819,6 +819,16 @@ export const EmployeeDetailSchema = z.object({
   // Real FK (hrms_employees.manager_id) backing "reporting officer" —
   // distinct from reportingTo above, which only carries the manager's name.
   managerId: z.string().optional(),
+  // Statutory identifiers -- not masked (see hrms-service's shared/pii-mask.ts
+  // PII_FIELDS, which deliberately excludes these three), unlike
+  // bankAccountNo/bankIfsc/pan above. FINDING-3 (HRMS role-based review):
+  // hrms-service's getEmployeeDetail now populates these when present, but
+  // without also declaring them here, apps/web's loader (which validates the
+  // response against this exact schema) would silently strip them back out
+  // before EditEmployeeForm.tsx ever saw them.
+  uanNumber: z.string().optional(),
+  esicIpNumber: z.string().optional(),
+  pran: z.string().optional(),
 });
 
 type OrgChartNodeType = {

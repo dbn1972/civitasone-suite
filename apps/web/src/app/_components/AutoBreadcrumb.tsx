@@ -55,7 +55,7 @@ const SEGMENT_LABELS: Record<string, string> = {
   recruitment: "Recruitment",
   appraisals: "Appraisals",
   training: "Training",
-  orgchart: "Org Chart",
+  "org-chart": "Org Chart",
   // Finance sub-routes
   budget: "Budget",
   expenditure: "Expenditure",
