@@ -1,7 +1,8 @@
-import { PageHeader, StatGrid, StatCard, Card, DataTable } from "../../../_components/ds";
+import { PageHeader, StatGrid, StatCard, Card, DataTable, RefreshErrorState } from "../../../_components/ds";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import { getTranslations } from "next-intl/server";
+import { toHumanError } from "@/lib/messages";
 
 type ApiRow = {
   id: string;
@@ -60,6 +61,7 @@ async function getData(t: Awaited<ReturnType<typeof getTranslations>>): Promise<
 export default async function MedicalPage() {
   const t = await getTranslations("medicalClaims");
   const { data: items, source } = await getData(t);
+  const errored = source === "error";
 
   const pending = items.filter((i) => i.status === "pending").length;
   const approved = items.filter((i) => i.status === "approved" || i.status === "paid").length;
@@ -86,23 +88,29 @@ export default async function MedicalPage() {
       />
       <DataSourceBadge source={source} />
       <StatGrid>
-        <StatCard icon="🏥" iconBg="#e6f0ff" label={t("statTotalLabel")} value={items.length} />
-        <StatCard icon="⏳" iconBg="#fffbe6" label={t("statPendingLabel")} value={pending} />
-        <StatCard icon="✅" iconBg="#e6f7f0" label={t("statApprovedLabel")} value={approved} />
-        <StatCard icon="🔴" iconBg="#fff1f0" label={t("statRejectedLabel")} value={rejected} />
+        <StatCard icon="🏥" iconBg="#e6f0ff" label={t("statTotalLabel")} value={errored ? null : items.length} />
+        <StatCard icon="⏳" iconBg="#fffbe6" label={t("statPendingLabel")} value={errored ? null : pending} />
+        <StatCard icon="✅" iconBg="#e6f7f0" label={t("statApprovedLabel")} value={errored ? null : approved} />
+        <StatCard icon="🔴" iconBg="#fff1f0" label={t("statRejectedLabel")} value={errored ? null : rejected} />
       </StatGrid>
       <Card title={t("cardTitle")}>
-        <DataTable<Row>
-          columns={columns}
-          rows={items}
-          sortable
-          filterable
-          filterPlaceholder={t("filterPlaceholder")}
-          pageSize={15}
-          emptyIcon="🏥"
-          emptyTitle={t("emptyTitle")}
-          emptyMessage={t("emptyMessage")}
-        />
+        {errored ? (
+          <div className="pad">
+            <RefreshErrorState error={toHumanError("load", { area: "medical claims" })} backHref="/hr" />
+          </div>
+        ) : (
+          <DataTable<Row>
+            columns={columns}
+            rows={items}
+            sortable
+            filterable
+            filterPlaceholder={t("filterPlaceholder")}
+            pageSize={15}
+            emptyIcon="🏥"
+            emptyTitle={t("emptyTitle")}
+            emptyMessage={t("emptyMessage")}
+          />
+        )}
       </Card>
     </main>
   );

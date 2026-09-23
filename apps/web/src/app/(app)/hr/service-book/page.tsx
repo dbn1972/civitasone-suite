@@ -3,11 +3,12 @@
  * Paginated, filterable chronological service record using ServiceBookView.
  */
 import Link from "next/link";
-import { PageHeader, StatGrid, StatCard, Card } from "../../../_components/ds";
+import { PageHeader, StatGrid, StatCard, Card, RefreshErrorState } from "../../../_components/ds";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import { getTranslations } from "next-intl/server";
 import { ServiceBookView, type ServiceEntry } from "./_components/ServiceBookView";
+import { toHumanError } from "@/lib/messages";
 
 async function getData(employeeId?: string): Promise<LoaderResult<ServiceEntry[]>> {
   const path = employeeId
@@ -33,6 +34,7 @@ export default async function ServiceBookPage({
   // employee's entries mixed together instead of the one the officer opened.
   const empId = searchParams?.empId;
   const { data: items, source } = await getData(empId);
+  const errored = source === "error";
 
   const employees  = new Set(items.map((i) => i.employee ?? i.employeeId).filter(Boolean)).size;
   const transfers  = items.filter((i) =>
@@ -53,16 +55,22 @@ export default async function ServiceBookPage({
       <DataSourceBadge source={source} />
 
       <StatGrid>
-        <StatCard icon="📒" iconBg="#e6f0ff" label={t("statTotalEntriesLabel")} value={items.length} />
-        <StatCard icon="👥" iconBg="#f5f5f5" label={t("statEmployeesLabel")} value={employees} />
-        <StatCard icon="🔄" iconBg="#fffbe6" label={t("statTransfersLabel")} value={transfers} />
-        <StatCard icon="📈" iconBg="#e6f7f0" label={t("statPromotionsLabel")} value={promotions} />
+        <StatCard icon="📒" iconBg="#e6f0ff" label={t("statTotalEntriesLabel")} value={errored ? null : items.length} />
+        <StatCard icon="👥" iconBg="#f5f5f5" label={t("statEmployeesLabel")} value={errored ? null : employees} />
+        <StatCard icon="🔄" iconBg="#fffbe6" label={t("statTransfersLabel")} value={errored ? null : transfers} />
+        <StatCard icon="📈" iconBg="#e6f7f0" label={t("statPromotionsLabel")} value={errored ? null : promotions} />
       </StatGrid>
 
       <Card title={t("cardTitle")}>
-        <div style={{ padding: 16 }}>
-          <ServiceBookView entries={items} />
-        </div>
+        {errored ? (
+          <div className="pad">
+            <RefreshErrorState error={toHumanError("load", { area: "service book" })} backHref="/hr" />
+          </div>
+        ) : (
+          <div style={{ padding: 16 }}>
+            <ServiceBookView entries={items} />
+          </div>
+        )}
       </Card>
     </main>
   );

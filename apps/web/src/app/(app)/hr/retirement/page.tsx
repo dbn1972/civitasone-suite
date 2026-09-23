@@ -4,11 +4,12 @@
  * Middle: RetirementProcessWizard (interactive 5-step checklist)
  * Bottom: full register DataTable
  */
-import { PageHeader, StatGrid, StatCard, Card, DataTable } from "../../../_components/ds";
+import { PageHeader, StatGrid, StatCard, Card, DataTable, RefreshErrorState } from "../../../_components/ds";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import type { RetirementRow } from "./_components/RetirementDashboard";
 import { RetirementCaseWorkspace } from "./_components/RetirementCaseWorkspace";
+import { toHumanError } from "@/lib/messages";
 
 async function getData(): Promise<LoaderResult<RetirementRow[]>> {
   return fetchJson<unknown, RetirementRow[]>("/api/v1/hrms/retirements", [], {
@@ -31,6 +32,7 @@ const COLUMNS: { key: keyof RetirementRow & string; label: string; cellType?: "s
 
 export default async function RetirementPage() {
   const { data: items, source } = await getData();
+  const errored = source === "error";
 
   const cutoff6m  = new Date();
   cutoff6m.setMonth(cutoff6m.getMonth() + 6);
@@ -53,29 +55,35 @@ export default async function RetirementPage() {
 
       {/* KPI strip */}
       <StatGrid>
-        <StatCard icon="👴" iconBg="#e6f0ff" label="Total"          value={items.length} />
-        <StatCard icon="📅" iconBg="#fffbe6" label="Next 6 Months"  value={upcoming} />
-        <StatCard icon="✅" iconBg="#e6f7f0" label="Processed"       value={completed} />
-        <StatCard icon="📝" iconBg="#f5f5f5" label="VRS"            value={vrs} />
+        <StatCard icon="👴" iconBg="#e6f0ff" label="Total"          value={errored ? null : items.length} />
+        <StatCard icon="📅" iconBg="#fffbe6" label="Next 6 Months"  value={errored ? null : upcoming} />
+        <StatCard icon="✅" iconBg="#e6f7f0" label="Processed"       value={errored ? null : completed} />
+        <StatCard icon="📝" iconBg="#f5f5f5" label="VRS"            value={errored ? null : vrs} />
       </StatGrid>
 
       {/* Card grid + wizard, bound to the same selected retiree */}
-      <RetirementCaseWorkspace rows={items} />
+      {!errored && <RetirementCaseWorkspace rows={items} />}
 
       {/* Full register */}
       <div style={{ marginTop: 16 }}>
         <Card title="Full Separation Register">
-          <DataTable<RetirementRow>
-            columns={COLUMNS}
-            rows={items}
-            sortable
-            filterable
-            filterPlaceholder="Filter by employee, department or date…"
-            pageSize={15}
-            emptyIcon="🎓"
-            emptyTitle="No retirement or separation records"
-            emptyMessage="Superannuation, VRS, and resignation records appear here."
-          />
+          {errored ? (
+            <div className="pad">
+              <RefreshErrorState error={toHumanError("load", { area: "retirement" })} backHref="/hr" />
+            </div>
+          ) : (
+            <DataTable<RetirementRow>
+              columns={COLUMNS}
+              rows={items}
+              sortable
+              filterable
+              filterPlaceholder="Filter by employee, department or date…"
+              pageSize={15}
+              emptyIcon="🎓"
+              emptyTitle="No retirement or separation records"
+              emptyMessage="Superannuation, VRS, and resignation records appear here."
+            />
+          )}
         </Card>
       </div>
     </main>
