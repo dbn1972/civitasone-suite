@@ -48,7 +48,7 @@ function formatDate(dateStr: string): string {
 function mapHolidays(apiHolidays: ApiHoliday[]): Row[] {
   return apiHolidays.map((h) => ({
     id: h.id,
-    date: formatDate(h.date),
+    date: h.date,
     day: h.day ?? getDayName(h.date),
     name: h.name,
     type: h.type ?? "Gazetted",
@@ -85,8 +85,8 @@ export default async function HolidaysPage() {
   const gazetted = items.filter((i) => i.type === "gazetted" || i.type === "Gazetted").length;
   const restricted = items.filter((i) => i.type === "restricted" || i.type === "Restricted").length;
 
-  const columns: { key: keyof Row & string; label: string; cellType?: "status" }[] = [
-    { key: "date", label: t("colDate") },
+  const columns: { key: keyof Row & string; label: string; cellType?: "status"; render?: (r: Row) => string }[] = [
+    { key: "date", label: t("colDate"), render: (r) => formatDate(r.date) },
     { key: "day", label: t("colDay") },
     { key: "name", label: t("colHoliday") },
     { key: "type", label: t("colType") },

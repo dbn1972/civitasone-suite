@@ -3,6 +3,7 @@ import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import { RequestAdvanceForm } from "./RequestAdvanceForm";
 import { mapAdvances, type ApiAdvance, type Row } from "./mapAdvances";
+import { formatMoney } from "@/lib/formatters";
 
 async function getData(): Promise<LoaderResult<Row[]>> {
   const r = await fetchJson<unknown, Row[]>("/api/v1/hrms/salary-advances", [], {
@@ -22,12 +23,12 @@ export default async function AdvancesPage() {
   const approved = items.filter((i) => i.status === "approved").length;
   const rejected = items.filter((i) => i.status === "rejected").length;
 
-  const columns: { key: keyof Row & string; label: string; cellType?: "status" }[] = [
+  const columns: { key: keyof Row & string; label: string; cellType?: "status"; render?: (r: Row) => string }[] = [
     { key: "employee", label: "Employee" },
-    { key: "amount", label: "Amount" },
+    { key: "amount", label: "Amount", render: (r) => formatMoney(r.amount) },
     { key: "purpose", label: "Purpose" },
     { key: "recoveryMonths", label: "Recovery" },
-    { key: "recovered", label: "Recovered" },
+    { key: "recovered", label: "Recovered", render: (r) => formatMoney(r.recovered) },
     { key: "requestDate", label: "Date" },
     { key: "status", label: "Status", cellType: "status" },
   ];

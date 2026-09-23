@@ -6,7 +6,7 @@ import { getPensioners } from "../../../../_data/loaders";
 import { formatMoney } from "@/lib/formatters";
 import type { PensionerSummary } from "@civitasone/types";
 
-type Row = PensionerSummary & { basicPensionDisplay: string };
+type Row = PensionerSummary;
 
 export default async function PensionersPage() {
   const t = await getTranslations("pensioners");
@@ -19,15 +19,12 @@ export default async function PensionersPage() {
     .reduce((sum, p) => sum + p.basicPensionMinor, 0);
   const inactivePensioners = pensioners.filter((p) => p.status !== "active").length;
 
-  const rows: Row[] = pensioners.map((p) => ({
-    ...p,
-    basicPensionDisplay: formatMoney(p.basicPensionMinor),
-  }));
+  const rows: Row[] = pensioners;
 
-  const columns: { key: keyof Row & string; label: string; align?: "left" | "right"; cellType?: "status" }[] = [
+  const columns: { key: keyof Row & string; label: string; align?: "left" | "right"; cellType?: "status"; render?: (r: Row) => string }[] = [
     { key: "ppoNo", label: t("colPpoNo") },
     { key: "fullName", label: t("colName") },
-    { key: "basicPensionDisplay", label: t("colBasicPension"), align: "right" },
+    { key: "basicPensionMinor", label: t("colBasicPension"), align: "right", render: (r) => formatMoney(r.basicPensionMinor) },
     { key: "status", label: t("colStatus"), cellType: "status" },
     { key: "ddoCode", label: t("colDdoCode") },
   ];

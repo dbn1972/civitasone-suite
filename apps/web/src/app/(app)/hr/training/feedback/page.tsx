@@ -9,7 +9,7 @@ type Row = {
   id: string;
   employee: string;
   program: string;
-  rating: string;
+  rating: number;
   submittedOn: string;
 } & Record<string, unknown>;
 
@@ -18,7 +18,8 @@ async function getData(): Promise<LoaderResult<Row[]>> {
     telemetryKey: "hr.training_feedback",
     mapResponse: (p) => {
       const arr = Array.isArray(p) ? p : (p as { data?: Row[] })?.data;
-      return Array.isArray(arr) ? arr : null;
+      if (!Array.isArray(arr)) return null;
+      return arr.map((f: Record<string, unknown>) => ({ ...f, rating: parseFloat(String(f.rating)) || 0 })) as Row[];
     },
   });
   return r;
@@ -40,10 +41,10 @@ export default async function TrainingFeedbackPage() {
 
   const { data: items, source } = await getData();
 
-  const columns: { key: keyof Row & string; label: string }[] = [
+  const columns: { key: keyof Row & string; label: string; render?: (r: Row) => string }[] = [
     { key: "employee", label: "Employee" },
     { key: "program", label: "Program" },
-    { key: "rating", label: "Overall Rating" },
+    { key: "rating", label: "Overall Rating", render: (r) => r.rating.toFixed(1) },
     { key: "submittedOn", label: "Submitted" },
   ];
 
@@ -55,10 +56,7 @@ export default async function TrainingFeedbackPage() {
         <StatCard icon="📋" iconBg="#e6f0ff" label="Total" value={items.length} />
         <StatCard icon="📚" iconBg="#e6f7f0" label="Programs" value={new Set(items.map((i) => i.program)).size} />
         <StatCard icon="👥" iconBg="#fffbe6" label="Employees" value={new Set(items.map((i) => i.employee)).size} />
-        <StatCard icon="⭐" iconBg="#f5f5f5" label="Avg Rating" value={items.length > 0 ? (items.reduce((s, i) => {
-          const parsed = parseFloat(i.rating);
-          return s + (isNaN(parsed) ? 0 : parsed);
-        }, 0) / items.length).toFixed(1) : "—"} />
+        <StatCard icon="⭐" iconBg="#f5f5f5" label="Avg Rating" value={items.length > 0 ? (items.reduce((s, i) => s + i.rating, 0) / items.length).toFixed(1) : "—"} />
       </StatGrid>
       <Card title="Training Feedback">
         {source === "error" ? (
