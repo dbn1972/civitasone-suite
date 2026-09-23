@@ -1,7 +1,8 @@
-import { PageHeader, StatGrid, StatCard, Card, DataTable } from "../../../_components/ds";
+import { PageHeader, StatGrid, StatCard, Card, DataTable, RefreshErrorState } from "../../../_components/ds";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import { getTranslations } from "next-intl/server";
+import { toHumanError } from "@/lib/messages";
 
 type ApiEmployee = {
   id: string;
@@ -73,6 +74,8 @@ export default async function ContractualPage() {
   const t = await getTranslations("contractual");
   const { data: items, source } = await getContractual();
 
+  const errored = source === "error";
+  const isTruncated = !errored && items.length >= 50;
   const active = items.filter((i) => i.status === "active").length;
   const completed = items.filter((i) => i.status === "completed" || i.status === "expired").length;
   const agencies = new Set(items.map((i) => i.agency).filter((a) => a !== "—")).size;
@@ -90,19 +93,33 @@ export default async function ContractualPage() {
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader title={t("title")} subtitle={t("subtitle")} back="/hr" />
+      <DataSourceBadge source={source} />
+      {isTruncated && (
+        <span
+          role="status"
+          className="inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-800"
+          style={{ marginBottom: 12 }}
+        >
+          Showing the first {items.length} contractual employees — more may exist. Search and filters below only cover this loaded set.
+        </span>
+      )}
       <StatGrid>
-        <StatCard icon="📋" iconBg="#e6f0ff" label={t("statTotalLabel")} value={items.length} />
-        <StatCard icon="✅" iconBg="#e6f7f0" label={t("statActiveLabel")} value={active} />
-        <StatCard icon="📁" iconBg="#fffbe6" label={t("statExpiredLabel")} value={completed} />
-        <StatCard icon="🏢" iconBg="#f5f5f5" label={t("statAgenciesLabel")} value={agencies} />
+        <StatCard icon="📋" iconBg="#e6f0ff" label={t("statTotalLabel")} value={errored ? "—" : items.length} />
+        <StatCard icon="✅" iconBg="#e6f7f0" label={t("statActiveLabel")} value={errored ? "—" : active} />
+        <StatCard icon="📁" iconBg="#fffbe6" label={t("statExpiredLabel")} value={errored ? "—" : completed} />
+        <StatCard icon="🏢" iconBg="#f5f5f5" label={t("statAgenciesLabel")} value={errored ? "—" : agencies} />
       </StatGrid>
       <Card title={t("cardTitle")}>
-        <DataTable<Row> columns={columns} rows={items} sortable filterable filterPlaceholder={t("filterPlaceholder")}
+        {source === "error" ? (
+          <RefreshErrorState error={toHumanError("load", { area: "contractual employees" })} backHref="/hr" />
+        ) : (
+          <DataTable<Row> columns={columns} rows={items} sortable filterable filterPlaceholder={t("filterPlaceholder")}
           pageSize={15}
           emptyIcon="📑"
           emptyTitle={t("emptyTitle")}
           emptyMessage={t("emptyMessage")}
         />
+        )}
       </Card>
     </main>
   );

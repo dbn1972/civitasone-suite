@@ -3,7 +3,7 @@ import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { NextIntlClientProvider } from "next-intl";
 import enMessages from "@/messages/en.json";
 
-import LeaveHistoryPage from "./page";
+import LeaveHistoryClient from "./LeaveHistoryClient";
 
 const EMPLOYEES = [{ id: "emp-1", name: "Asha Verma", employeeNo: "E001" }];
 
@@ -13,7 +13,7 @@ const EMPLOYEES = [{ id: "emp-1", name: "Asha Verma", employeeNo: "E001" }];
 function renderPage() {
   return render(
     <NextIntlClientProvider locale="en" messages={enMessages}>
-      <LeaveHistoryPage />
+      <LeaveHistoryClient roles={["hr_admin"]} myEmployeeId={null} />
     </NextIntlClientProvider>,
   );
 }

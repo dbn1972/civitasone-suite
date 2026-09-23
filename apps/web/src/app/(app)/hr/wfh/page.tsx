@@ -1,8 +1,9 @@
 import Link from "next/link";
-import { PageHeader, StatGrid, StatCard, Card, DataTable } from "../../../_components/ds";
+import { PageHeader, StatGrid, StatCard, Card, DataTable, RefreshErrorState } from "../../../_components/ds";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import { getTranslations } from "next-intl/server";
+import { toHumanError } from "@/lib/messages";
 
 type Row = {
   id: string;
@@ -30,6 +31,7 @@ export default async function WfhPage() {
   const t = await getTranslations("wfhRequests");
   const { data: items, source } = await getData();
 
+  const errored = source === "error";
   const approved = items.filter((i) => i.status === "approved").length;
   const pending = items.filter((i) => i.status === "pending").length;
   const rejected = items.filter((i) => ["rejected", "declined"].includes(i.status)).length;
@@ -54,13 +56,16 @@ export default async function WfhPage() {
       />
       <DataSourceBadge source={source} />
       <StatGrid>
-        <StatCard icon="🏠" iconBg="#e6f0ff" label={t("statTotalLabel")} value={items.length} />
-        <StatCard icon="✅" iconBg="#e6f7f0" label={t("statApprovedLabel")} value={approved} />
-        <StatCard icon="⏳" iconBg="#fffbe6" label={t("statPendingLabel")} value={pending} />
-        <StatCard icon="❌" iconBg="#fff0f0" label={t("statRejectedLabel")} value={rejected} />
+        <StatCard icon="🏠" iconBg="#e6f0ff" label={t("statTotalLabel")} value={errored ? "—" : items.length} />
+        <StatCard icon="✅" iconBg="#e6f7f0" label={t("statApprovedLabel")} value={errored ? "—" : approved} />
+        <StatCard icon="⏳" iconBg="#fffbe6" label={t("statPendingLabel")} value={errored ? "—" : pending} />
+        <StatCard icon="❌" iconBg="#fff0f0" label={t("statRejectedLabel")} value={errored ? "—" : rejected} />
       </StatGrid>
       <Card title={t("cardTitle")}>
-        <DataTable<Row>
+        {source === "error" ? (
+          <RefreshErrorState error={toHumanError("load", { area: "WFH requests" })} backHref="/hr" />
+        ) : (
+          <DataTable<Row>
           columns={columns}
           rows={items}
           sortable
@@ -72,6 +77,7 @@ export default async function WfhPage() {
           emptyMessage={t("emptyMessage")}
           emptyAction={<Link href="/hr/workforce/wfh" className="btn primary">{t("newRequestBtn")}</Link>}
         />
+        )}
       </Card>
     </main>
   );

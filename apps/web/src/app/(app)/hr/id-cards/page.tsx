@@ -33,6 +33,7 @@ export default async function IdCardsPage() {
   const t = await getTranslations("idCards");
   const { data: items, source } = await getData();
 
+  const errored = source === "error";
   const active      = items.filter((i) => i.status === "active").length;
   const suspended   = items.filter((i) => i.status === "suspended").length;
   const vendor      = items.filter((i) => i.card_type === "vendor_staff" || i.card_type === "project_team").length;
@@ -57,10 +58,10 @@ export default async function IdCardsPage() {
       />
       <DataSourceBadge source={source} message={t("dataSourceErrorMessage")} />
       <StatGrid>
-        <StatCard icon="🆔" iconBg="#e6f0ff" label={t("statTotalCardsLabel")}    value={items.length} />
-        <StatCard icon="✅"          iconBg="#e6f7f0" label={t("statActiveLabel")}         value={active} />
-        <StatCard icon="⏸️"          iconBg="#fffbe6" label={t("statSuspendedLabel")}      value={suspended} />
-        <StatCard icon="👥"          iconBg="#f5f5f5" label={t("statVendorProjectLabel")} value={vendor} />
+        <StatCard icon="🆔" iconBg="#e6f0ff" label={t("statTotalCardsLabel")}    value={errored ? "—" : items.length} />
+        <StatCard icon="✅"          iconBg="#e6f7f0" label={t("statActiveLabel")}         value={errored ? "—" : active} />
+        <StatCard icon="⏸️"          iconBg="#fffbe6" label={t("statSuspendedLabel")}      value={errored ? "—" : suspended} />
+        <StatCard icon="👥"          iconBg="#f5f5f5" label={t("statVendorProjectLabel")} value={errored ? "—" : vendor} />
       </StatGrid>
       <Card title={t("cardTitle")}>
         <DataTable<Row>

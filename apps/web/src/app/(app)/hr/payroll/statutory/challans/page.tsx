@@ -71,6 +71,8 @@ export default async function ChallansPage({ searchParams }: { searchParams?: { 
 
   const source = challansSource === "error" || reconcileSource === "error" ? "error" : "api";
 
+  const errored = source === "error";
+
   const columns: { key: keyof ChallanRow & string; label: string; align?: "left" | "right"; cellType?: "amount" | "status" }[] = [
     { key: "cin", label: t("colCin") },
     { key: "bsrCode", label: t("colBsrCode") },
@@ -94,15 +96,15 @@ export default async function ChallansPage({ searchParams }: { searchParams?: { 
       <PeriodSelector period={period} />
 
       <StatGrid>
-        <StatCard icon="🧾" iconBg="var(--infobg)" label={t("statChallansForPeriod")} value={challans.length} />
+        <StatCard icon="🧾" iconBg="var(--infobg)" label={t("statChallansForPeriod")} value={errored ? "—" : challans.length} />
         <StatCard
           icon={reconciliation?.matched ? "✅" : "⚠️"}
           iconBg={reconciliation?.matched ? "#e6f7f0" : "#fdecea"}
           label={t("statReconciliationStatus")}
-          value={reconciliation?.perPeriod[0]?.status ?? t("unknownStatus")}
+          value={errored ? "—" : (reconciliation?.perPeriod?.length ? reconciliation.perPeriod[0].status : t("unknownStatus"))}
         />
-        <StatCard icon="📉" iconBg="var(--warnbg)" label={t("statVariance")} value={reconciliation ? formatMoney(reconciliation.varianceMinor) : "—"} />
-        <StatCard icon="💰" iconBg="var(--goodbg)" label={t("statTdsDeposited")} value={reconciliation ? formatMoney(reconciliation.totalDepositedMinor) : "—"} />
+        <StatCard icon="📉" iconBg="var(--warnbg)" label={t("statVariance")} value={errored ? "—" : (reconciliation ? formatMoney(reconciliation.varianceMinor) : "—")} />
+        <StatCard icon="💰" iconBg="var(--goodbg)" label={t("statTdsDeposited")} value={errored ? "—" : (reconciliation ? formatMoney(reconciliation.totalDepositedMinor) : "—")} />
       </StatGrid>
 
       <IngestChallanForm period={period} />

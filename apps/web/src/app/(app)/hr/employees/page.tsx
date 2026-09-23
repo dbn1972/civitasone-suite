@@ -70,9 +70,9 @@ export default async function EmployeeDirectoryPage({ searchParams }: { searchPa
           the table's own cache state (UX-002's pattern). */}
       <StatGrid>
         <StatCard icon="👥" iconBg="#e6f7f0" label={t("statTotal")} value={total} />
-        <StatCard icon="✅" iconBg="#e6f0ff" label={t("statActive")} value={active} />
+        <StatCard icon="✅" iconBg="#e6f0ff" label={t("statActiveShown")} value={active} />
         <StatCard icon="🌴" iconBg="#fffbe6" label={t("statOnLeave")} value={onLeave} />
-        <StatCard icon="📋" iconBg="#f5f5f5" label={t("statOthers")} value={others} />
+        <StatCard icon="📋" iconBg="#f5f5f5" label={t("statOthersShown")} value={others} />
       </StatGrid>
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 12 }}>
         {TYPE_TABS.map((tab) => (

@@ -61,7 +61,8 @@ export default async function NewEmployeePage() {
 
   const hasError =
     deptResult.source === "error" ||
-    desigResult.source === "error";
+    desigResult.source === "error" ||
+    managerResult.source === "error";
 
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">

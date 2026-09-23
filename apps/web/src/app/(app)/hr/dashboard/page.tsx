@@ -134,7 +134,7 @@ export default async function HRDashboardPage() {
         {/* Left: action inbox + payroll banner */}
         <div className="dash-col-left">
           <ActionInbox initialItems={leaveInbox} />
-          <PayrollBanner daysLeft={daysLeft} monthName={monthName} headcount={data.headcount} />
+          <PayrollBanner daysLeft={daysLeft} monthName={monthName} headcount={hrDashboardFailed ? null : data.headcount} />
         </div>
 
         {/* Center: dept chart */}
@@ -152,7 +152,7 @@ export default async function HRDashboardPage() {
       <section className="emp-section" aria-label="Recent employees">
         <div className="emp-section-head">
           <span className="emp-section-title">{t("employees.title")}</span>
-          <Link href="/hr/employees" className="emp-view-all">View all {data.headcount.toLocaleString("en-IN")} →</Link>
+          <Link href="/hr/employees" className="emp-view-all">View all {hrDashboardFailed ? "" : data.headcount.toLocaleString("en-IN") + " "}→</Link>
         </div>
         <div className="emp-table-wrap">
           <div style={{ overflowX: "auto" }}>

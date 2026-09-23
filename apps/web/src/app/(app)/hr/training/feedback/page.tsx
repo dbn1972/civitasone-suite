@@ -2,6 +2,8 @@ import { PageHeader, StatGrid, StatCard, Card, DataTable, RefreshErrorState } fr
 import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import { toHumanError } from "@/lib/messages";
+import { getSessionRoles } from "@/lib/auth/roleGuard";
+import { PermissionDenied } from "../../../../_components/PermissionDenied";
 
 type Row = {
   id: string;
@@ -22,7 +24,20 @@ async function getData(): Promise<LoaderResult<Row[]>> {
   return r;
 }
 
+/**
+ * Mirrors training/routes.ts: GET /v1/hrms/training/feedback
+ * requires HR_ROLES = ["hr_admin", "hr_officer", "super_admin"].
+ */
+const TRAINING_ADMIN_ROLES = ["hr_admin", "hr_officer", "super_admin"];
+
 export default async function TrainingFeedbackPage() {
+  const roles = getSessionRoles();
+  const canAccess = roles.some((r: string) => TRAINING_ADMIN_ROLES.includes(r));
+
+  if (!canAccess) {
+    return <PermissionDenied module="training feedback" requiredRoles={TRAINING_ADMIN_ROLES} />;
+  }
+
   const { data: items, source } = await getData();
 
   const columns: { key: keyof Row & string; label: string }[] = [

@@ -69,6 +69,7 @@ export default async function LocationsPage() {
   const t = await getTranslations("locations");
   const { data: locations, source } = await getLocations();
 
+  const errored = source === "error";
   const stateCount    = locations.filter((l) => l.type === "state").length;
   const districtCount = locations.filter((l) => l.type === "district").length;
   const blockCount    = locations.filter((l) => !["state", "district"].includes(l.type)).length;
@@ -89,10 +90,10 @@ export default async function LocationsPage() {
       />
       <DataSourceBadge source={source} />
       <StatGrid>
-        <StatCard icon="🌍" iconBg="#e6f0ff" label={t("statTotalLabel")} value={locations.length} />
-        <StatCard icon="🏛️" iconBg="#e6f7f0" label={t("statStateLabel")}     value={stateCount} />
-        <StatCard icon="🏙️" iconBg="#fff7e6" label={t("statDistrictLabel")}  value={districtCount} />
-        <StatCard icon="🏘️" iconBg="#f5f5f5" label={t("statBlockLabel")}   value={blockCount} />
+        <StatCard icon="🌍" iconBg="#e6f0ff" label={t("statTotalLabel")} value={errored ? "—" : locations.length} />
+        <StatCard icon="🏛️" iconBg="#e6f7f0" label={t("statStateLabel")}     value={errored ? "—" : stateCount} />
+        <StatCard icon="🏙️" iconBg="#fff7e6" label={t("statDistrictLabel")}  value={errored ? "—" : districtCount} />
+        <StatCard icon="🏘️" iconBg="#f5f5f5" label={t("statBlockLabel")}   value={errored ? "—" : blockCount} />
       </StatGrid>
       <Card title={t("cardTitleWithCount", { count: locations.length })}>
         {source === "error" ? (

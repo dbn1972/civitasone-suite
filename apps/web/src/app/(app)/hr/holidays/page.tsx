@@ -3,6 +3,7 @@ import { PageHeader, StatGrid, StatCard, Card, DataTable } from "../../../_compo
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import { AddHolidayForm } from "./AddHolidayForm";
+import { getSessionRoles } from "@/lib/auth/roleGuard";
 
 type ApiHoliday = {
   id: string;
@@ -67,11 +68,19 @@ async function getHolidays(): Promise<LoaderResult<Row[]>> {
   return res;
 }
 
+/**
+ * Mirrors holidays/routes.ts: POST/DELETE require
+ * HR_ROLES = ["hr_admin", "super_admin", "admin"].
+ */
+const HOLIDAY_ADMIN_ROLES = ["hr_admin", "super_admin", "admin"];
+
 const CURRENT_YEAR = new Date().getFullYear();
 
 export default async function HolidaysPage() {
   const t = await getTranslations("holidays");
   const { data: items, source } = await getHolidays();
+  const roles = getSessionRoles();
+  const canManage = roles.some((r: string) => HOLIDAY_ADMIN_ROLES.includes(r));
 
   const gazetted = items.filter((i) => i.type === "gazetted" || i.type === "Gazetted").length;
   const restricted = items.filter((i) => i.type === "restricted" || i.type === "Restricted").length;
@@ -100,7 +109,8 @@ export default async function HolidaysPage() {
         <StatCard icon="🗓️" iconBg="#f5f5f5" label={t("statYear")} value={CURRENT_YEAR} />
       </StatGrid>
 
-      <AddHolidayForm />
+      {/* Add-holiday form: visible only to admin roles (mirrors backend POST gate) */}
+      {canManage && <AddHolidayForm />}
 
       <Card title={t("cardTitle")}>
         <div className="card-h"><h3>{t("listTitle", { year: CURRENT_YEAR })}</h3></div>

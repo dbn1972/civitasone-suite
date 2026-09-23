@@ -69,7 +69,7 @@ export function NewTrainingForm() {
 
       setStatus("success");
       setMessage("Training program created successfully.");
-      router.push("/hr/training");
+      setTimeout(() => router.push("/hr/training"), 1500);
     } catch {
       setStatus("error");
       setMessage(formError.fromException("save").message);
