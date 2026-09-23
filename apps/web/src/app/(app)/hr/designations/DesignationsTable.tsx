@@ -179,7 +179,7 @@ export function DesignationsTable({ items, canEdit = false }: { items: Designati
             <th style={thStyle}>{t("colGradePay")}</th>
             <th style={thStyle}>{t("colServiceGroup")}</th>
             <th style={thStyle}>{t("colPayGrade")}</th>
-            <th style={{ ...thStyle, width: 1 }}></th>
+            {canEdit && <th style={{ ...thStyle, width: 1 }}></th>}
           </tr>
         </thead>
         <tbody>
@@ -234,7 +234,7 @@ export function DesignationsTable({ items, canEdit = false }: { items: Designati
                         style={{ ...inputStyle, maxWidth: 100 }}
                       />
                     </td>
-                    <td style={{ padding: "10px 12px", whiteSpace: "nowrap" }}>
+                    {canEdit && <td style={{ padding: "10px 12px", whiteSpace: "nowrap" }}>
                       <Button
                         variant="primary"
                         size="sm"
@@ -245,7 +245,7 @@ export function DesignationsTable({ items, canEdit = false }: { items: Designati
                         {saving ? t("savingBtn") : t("saveBtn")}
                       </Button>
                       <Button variant="ghost" size="sm" onClick={cancelEdit}>{t("cancelBtn")}</Button>
-                    </td>
+                    </td>}
                   </>
                 ) : (
                   <>
@@ -277,22 +277,20 @@ export function DesignationsTable({ items, canEdit = false }: { items: Designati
                     <td style={{ padding: "10px 12px", color: "var(--mut,#64748b)" }}>
                       {item.payGrade ?? "—"}
                     </td>
-                    <td style={{ padding: "10px 12px", whiteSpace: "nowrap" }}>
-                      {canEdit && (
-                        <>
-                          <Button variant="ghost" size="sm" style={{ marginInlineEnd: 6 }} onClick={() => startEdit(item)}>
-                            {t("editBtn")}
-                          </Button>
-                          <Button
-                            variant="danger"
-                            size="sm"
-                            onClick={() => { setDeleteError(undefined); setDeleteTarget(item); }}
-                          >
-                            {t("deleteBtn")}
-                          </Button>
-                        </>
-                      )}
-                    </td>
+                    {canEdit && (
+                      <td style={{ padding: "10px 12px", whiteSpace: "nowrap" }}>
+                        <Button variant="ghost" size="sm" style={{ marginInlineEnd: 6 }} onClick={() => startEdit(item)}>
+                          {t("editBtn")}
+                        </Button>
+                        <Button
+                          variant="danger"
+                          size="sm"
+                          onClick={() => { setDeleteError(undefined); setDeleteTarget(item); }}
+                        >
+                          {t("deleteBtn")}
+                        </Button>
+                      </td>
+                    )}
                   </>
                 )}
               </tr>

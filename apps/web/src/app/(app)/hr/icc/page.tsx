@@ -13,12 +13,12 @@ import { PermissionDenied } from "../../../_components/PermissionDenied";
  * published, communicated or made known to the public, press and media
  * in any manner."
  *
- * Only HR admins, HR officers, super_admins, and nominated ICC presiding
- * officers may access this page.  Even for them, complainantId and
+ * Only HR admins, super_admins, and nominated ICC members
+ * may access this page.  Even for them, complainantId and
  * respondentId are stripped from the client payload and the summary is
  * redacted for confidential cases.
  */
-const ICC_ROLES = ["hr_admin", "hr_officer", "super_admin", "icc_presiding_officer"];
+const ICC_ROLES = ["hr_admin", "super_admin", "icc_member"];
 
 /**
  * Raw API shape — includes complainantId/respondentId for
