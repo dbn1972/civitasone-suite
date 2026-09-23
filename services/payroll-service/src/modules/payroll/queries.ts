@@ -62,8 +62,8 @@ export async function getRun(id: string, tenantId: string): Promise<PayrollRunRo
  * one fetched full slip rows just to read `.length`). Now: the run list plus
  * exactly one grouped-count query across all run ids, regardless of N.
  */
-export async function listRuns(tenantId: string, limit: number) {
-  const rows = await repo.listRunsByTenant(tenantId, limit);
+export async function listRuns(tenantId: string, limit: number, month?: string) {
+  const rows = await repo.listRunsByTenant(tenantId, limit, month);
   const runIds = rows.map((r) => r.id);
   const employeeCountByRun = await repo.countSlipsByRunIds(runIds, tenantId);
   return rows.map((r) => ({

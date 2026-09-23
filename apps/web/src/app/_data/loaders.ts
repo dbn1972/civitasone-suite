@@ -2220,8 +2220,20 @@ export async function getLeaveRequestDetails(): Promise<LoaderResult<LeaveReques
   });
 }
 
-export async function getPayrollRunDetails(): Promise<LoaderResult<PayrollRunDetail[]>> {
-  return fetchJson<unknown, PayrollRunDetail[]>("/api/v1/payroll/runs", [], {
+export async function getPayrollRunDetails(
+  opts: { limit?: number; month?: string } = {}
+): Promise<LoaderResult<PayrollRunDetail[]>> {
+  // fix/high-data-issues: opts are optional and additive -- a bare
+  // getPayrollRunDetails() call (payroll/page.tsx, payroll/period/page.tsx,
+  // payroll/runs/page.tsx) still hits the exact same "/api/v1/payroll/runs"
+  // URL as before. Callers that know the specific period they need (the run
+  // detail page's MoM comparison) can now ask for just that row instead of
+  // fetching the backend's whole default batch and filtering client-side.
+  const params = new URLSearchParams();
+  if (opts.limit != null) params.set("limit", String(opts.limit));
+  if (opts.month) params.set("month", opts.month);
+  const qs = params.toString();
+  return fetchJson<unknown, PayrollRunDetail[]>(`/api/v1/payroll/runs${qs ? `?${qs}` : ""}`, [], {
     revalidateSeconds: 120,
     telemetryKey: "hr.payroll.runs.detail",
     responseSchema: PayrollRunDetailListSchema,

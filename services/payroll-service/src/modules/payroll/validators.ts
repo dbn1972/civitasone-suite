@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { listQuerySchema } from "@civitasone/schemas/common";
 
 export const createStructureBody = z.object({
   name:        z.string().min(1).max(128),
@@ -21,6 +22,15 @@ export const createRunBody = z.object({
   path: ["structureId"],
 });
 export type CreateRunBody = z.infer<typeof createRunBody>;
+
+// fix/high-data-issues: optional exact-month filter for GET /v1/payroll/runs
+// so a caller that already knows the target period (e.g. the run detail
+// page's month-over-month comparison) can ask for just that one row instead
+// of paging through the tenant's whole run history to find it client-side.
+export const listRunsQuery = listQuerySchema.extend({
+  month: z.string().regex(/^\d{4}-\d{2}$/, "must be YYYY-MM").optional(),
+});
+export type ListRunsQuery = z.infer<typeof listRunsQuery>;
 
 export const idParam = z.object({ id: z.string().uuid() });
 
