@@ -2,6 +2,10 @@ import { PageHeader, StatGrid, StatCard, Card, DataTable } from "../../../_compo
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import { getTranslations } from "next-intl/server";
+import { getSessionRoles } from "@/lib/auth/roleGuard";
+import { PermissionDenied } from "../../../_components/PermissionDenied";
+
+const RTI_ROLES = ["hr_admin", "hr_officer", "super_admin"];
 
 type Row = {
   id: string;
@@ -26,6 +30,13 @@ async function getData(): Promise<LoaderResult<Row[]>> {
 }
 
 export default async function RtiPage() {
+  /* ── Role gate ─────────────────────────────────────────────── */
+  const roles = getSessionRoles();
+  const canAccess = roles.some((r) => RTI_ROLES.includes(r));
+  if (!canAccess) {
+    return <PermissionDenied module="RTI requests" requiredRoles={RTI_ROLES} />;
+  }
+
   const t = await getTranslations("rtiRequests");
   const { data: items, source } = await getData();
 

@@ -2,6 +2,14 @@ import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
 import { PageHeader, Card, StatCard, StatGrid, StatusPill, EmptyState } from "@/app/_components/ds";
 import { getDisciplinaryCaseById } from "@/app/_data/loaders";
 import { RaiseEOfficeNote } from "@/app/_components/RaiseEOfficeNote";
+import { getSessionRoles } from "@/lib/auth/roleGuard";
+import { PermissionDenied } from "@/app/_components/PermissionDenied";
+
+/**
+ * Must match the list page at disciplinary/page.tsx and the backend
+ * HR_ROLES guard on GET /v1/hrms/disciplinary-cases.
+ */
+const DISCIPLINARY_ROLES = ["hr_admin", "hr_officer", "super_admin"];
 
 function field(data: Record<string, unknown>, ...keys: string[]): string {
   for (const key of keys) {
@@ -13,6 +21,13 @@ function field(data: Record<string, unknown>, ...keys: string[]): string {
 }
 
 export default async function DisciplinaryCaseDetailPage({ params }: { params: { id: string } }) {
+  /* ── Role gate ─────────────────────────────────────────────── */
+  const roles = getSessionRoles();
+  const canAccess = roles.some((r) => DISCIPLINARY_ROLES.includes(r));
+  if (!canAccess) {
+    return <PermissionDenied module="disciplinary cases" requiredRoles={DISCIPLINARY_ROLES} />;
+  }
+
   const { data: dcase, source } = await getDisciplinaryCaseById(params.id);
 
   if (!dcase) {

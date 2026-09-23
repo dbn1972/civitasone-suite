@@ -1,6 +1,10 @@
 import { PageHeader, StatGrid, StatCard, Card, DataTable } from "../../../_components/ds";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
+import { getSessionRoles } from "@/lib/auth/roleGuard";
+import { PermissionDenied } from "../../../_components/PermissionDenied";
+
+const WORK_SUMMARY_ROLES = ["hr_admin", "hr_officer", "manager", "super_admin"];
 
 type ApiRow = {
   id: string;
@@ -52,6 +56,13 @@ async function getData(): Promise<LoaderResult<Row[]>> {
 }
 
 export default async function WorkSummaryPage() {
+  /* ── Role gate ─────────────────────────────────────────────── */
+  const roles = getSessionRoles();
+  const canAccess = roles.some((r) => WORK_SUMMARY_ROLES.includes(r));
+  if (!canAccess) {
+    return <PermissionDenied module="work summaries" requiredRoles={WORK_SUMMARY_ROLES} />;
+  }
+
   const { data: items, source } = await getData();
 
   const reviewed = items.filter((i) => ["approved", "accepted", "finalised"].includes(i.status)).length;
