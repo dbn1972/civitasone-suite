@@ -116,9 +116,22 @@ export async function getEmployeeDetail(id: string, tenantId: string): Promise<E
   };
 }
 
-export async function listEmployees(tenantId: string, limit: number, offset: number, employeeType?: string): Promise<{ data: Array<{ id: string; name: string; department: string; status: string }>; pagination: { hasMore: boolean; pageSize: number; cursor?: string } }> {
-  return cache.listOrLoad(tenantId, "employee", `list:${limit}:${offset}:${employeeType ?? "all"}`, async () => {
-    const rows = await repo.listByTenant(tenantId, limit, offset, employeeType);
+/**
+ * `managerScope` (see employee/routes.ts's resolveManagerScope):
+ *  - undefined  caller is HR-privileged — unrestricted, tenant-wide (unchanged).
+ *  - a string   caller is manager-only and linked to this employee id — restrict
+ *               to that id's direct reports (hrmsEmployees.managerId).
+ *  - null       caller is manager-only with NO resolvable employee link — fail
+ *               CLOSED (empty page), not fail-open "no scope = see everyone".
+ * Included in the cache hash: the result now depends on WHO is asking, not
+ * just tenant/limit/offset/employeeType, so those must no longer share a key.
+ */
+export async function listEmployees(tenantId: string, limit: number, offset: number, employeeType?: string, managerScope?: string | null): Promise<{ data: Array<{ id: string; name: string; department: string; status: string }>; pagination: { hasMore: boolean; pageSize: number; cursor?: string } }> {
+  if (managerScope === null) {
+    return { data: [], pagination: { hasMore: false, pageSize: limit } };
+  }
+  return cache.listOrLoad(tenantId, "employee", `list:${limit}:${offset}:${employeeType ?? "all"}:${managerScope ?? "all"}`, async () => {
+    const rows = await repo.listByTenant(tenantId, limit, offset, employeeType, managerScope);
     const depts = await scopedRead((tx) => tx.select().from(hrmsDepartments).where(eq(hrmsDepartments.tenantId, tenantId)));
     const deptNameById = new Map(depts.map((d) => [d.id, d.name]));
     return {
