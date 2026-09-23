@@ -170,7 +170,6 @@ export default async function PayrollRunDetailPage({ params }: { params: { id: s
           <SalarySlipsClientTable
             slips={slipRows}
             payPeriod={run.payPeriod}
-            exceptionCount={exceptions.length}
           />
         </div>
       </Card>

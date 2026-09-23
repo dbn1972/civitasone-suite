@@ -9,7 +9,7 @@ const ITEMS = [{ id: "d1", code: "SO", name: "Section Officer", level: 7, payGra
 function renderTable() {
   return render(
     <NextIntlClientProvider locale="en" messages={enMessages}>
-      <DesignationsTable items={ITEMS} />
+      <DesignationsTable items={ITEMS} canEdit={true} />
     </NextIntlClientProvider>,
   );
 }
