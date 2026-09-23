@@ -39,11 +39,21 @@ export async function findByNo(employeeNo: string, tenantId: string): Promise<Em
   return rows[0] ?? null;
 }
 
-export async function listByTenant(tenantId: string, limit = 100, offset = 0, employeeType?: string): Promise<EmployeeRow[]> {
+/**
+ * `managerId` optionally restricts to direct reports of that employee id —
+ * SEC: manager-role read-scoping (employee/routes.ts's resolveManagerScope).
+ * hrmsEmployees.managerId is the same reporting-line FK orgchart's
+ * tree-building and leave/routes.ts's manager exemption already use for
+ * "who reports to whom" (see that migration's own "managerId already
+ * exists, we use it as reporting officer" comment in
+ * migrations/0007_geo_attendance_ro.sql).
+ */
+export async function listByTenant(tenantId: string, limit = 100, offset = 0, employeeType?: string, managerId?: string): Promise<EmployeeRow[]> {
+  const conditions = [eq(hrmsEmployees.tenantId, tenantId)];
+  if (employeeType) conditions.push(eq(hrmsEmployees.employeeType, employeeType));
+  if (managerId) conditions.push(eq(hrmsEmployees.managerId, managerId));
   return scopedRead((tx) => tx.select().from(hrmsEmployees)
-    .where(employeeType
-      ? and(eq(hrmsEmployees.tenantId, tenantId), eq(hrmsEmployees.employeeType, employeeType))
-      : eq(hrmsEmployees.tenantId, tenantId))
+    .where(and(...conditions))
     .limit(limit)
     .offset(offset));
 }

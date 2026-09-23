@@ -1,4 +1,5 @@
-import type { FastifyInstance } from "fastify";
+import type { FastifyInstance, FastifyRequest } from "fastify";
+import type { RequestContext } from "@civitasone/types";
 import { ZodError } from "zod";
 import { listQuerySchema, acceptedResponseSchema } from "@civitasone/schemas/common";
 import { employeesListSchema } from "@civitasone/schemas/web";
@@ -7,6 +8,7 @@ import { resolveContext, requireRole, HttpError } from "../../shared/context.js"
 import { PiiDecryptError } from "../../shared/pii-crypto.js";
 import { createEmployeeBody, confirmEmployeeBody, idParam, updateEmployeeBody, employeeListQuery } from "./validators.js";
 import { assertKnownEngagementType } from "./engagement-policy.js";
+import { resolveEmployeeForActor, extractActorEmail } from "./actor-link.js";
 import { transferBody, separateBody } from "../lifecycle/validators.js";
 import { promotionBody } from "../lifecycle/validators.js";
 import * as commands from "./commands.js";
@@ -15,12 +17,55 @@ import * as queries from "./queries.js";
 const HR_ROLES    = ["hr_admin", "hr_officer", "super_admin"];
 const READER_ROLES = [...HR_ROLES, "manager"];
 
+/**
+ * SEC finding (HRMS role review): READER_ROLES lets a bare "manager" read
+ * ANY employee tenant-wide via both routes below — the underlying queries
+ * took no actor/reporting-chain parameter at all. Editing was already
+ * correctly restricted (PATCH excludes "manager"); this closes the matching
+ * read-scope gap.
+ *
+ * A caller whose only READER_ROLES membership is "manager" (none of
+ * HR_ROLES) may read only their own direct reports, via
+ * hrmsEmployees.managerId — the same reporting-line FK orgchart's
+ * tree-building and leave/routes.ts's manager-exemption check
+ * ("isManagerOfTarget = ... emp.managerId === actorEmp.id") already use for
+ * exactly this relationship. Direct reports only (not the full subtree),
+ * matching that leave/routes.ts precedent rather than inventing a different
+ * shape here.
+ *
+ * hrms_employees also has live `reporting_officer_id`/`hod_id` columns
+ * (migrations/0007_geo_attendance_ro.sql) — checked and deliberately NOT
+ * used: they are absent from schema.ts (never Drizzle-mapped) and are not
+ * read or written by any application code; that migration's own comment
+ * ("managerId already exists, we use it as reporting officer") documents
+ * managerId as the intended field. managerId is the one every existing
+ * "who reports to whom" consumer in this codebase actually uses.
+ *
+ * Returns:
+ *  - undefined  caller holds an HR_ROLES role — unrestricted, tenant-wide
+ *               read access, unchanged from before this fix (HR membership
+ *               wins even if the caller ALSO holds "manager").
+ *  - a string   caller is manager-only and linked to this hrms_employees
+ *               row (see resolveEmployeeForActor) — restrict reads to
+ *               direct reports of this id.
+ *  - null       caller is manager-only but has NO resolvable employee link
+ *               yet — fail CLOSED (no reporting relationship is provable),
+ *               not fail-open "no scope = see everyone".
+ */
+async function resolveManagerScope(ctx: RequestContext, req: FastifyRequest): Promise<string | null | undefined> {
+  const isHrActor = HR_ROLES.some((r) => ctx.roles.includes(r));
+  if (isHrActor) return undefined;
+  const actorEmp = await resolveEmployeeForActor(ctx.tenantId, ctx.actorId, extractActorEmail(req));
+  return actorEmp?.id ?? null;
+}
+
 export async function employeeRoutes(app: FastifyInstance): Promise<void> {
   app.get("/v1/hrms/employees", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, READER_ROLES);
     const q = employeeListQuery.parse(req.query);
-    sendValidated(reply, employeesListSchema, await queries.listEmployees(ctx.tenantId, q.limit, q.offset, q.employeeType));
+    const managerScope = await resolveManagerScope(ctx, req);
+    sendValidated(reply, employeesListSchema, await queries.listEmployees(ctx.tenantId, q.limit, q.offset, q.employeeType, managerScope));
   });
 
   app.post("/v1/hrms/employees", async (req, reply) => {
@@ -81,6 +126,24 @@ export async function employeeRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, READER_ROLES);
     const { id } = idParam.parse(req.params);
+    const managerScope = await resolveManagerScope(ctx, req);
+    if (managerScope !== undefined) {
+      // Manager-only caller: gate on the raw row BEFORE building the full
+      // shaped detail. A genuinely nonexistent id (raw === null) falls
+      // through unchanged to the getEmployeeDetail/404 path below, for every
+      // role alike — this only ever turns an existing-but-not-mine record
+      // into a 403, never a real 404 into something else.
+      const raw = await queries.getEmployee(id, ctx.tenantId);
+      const isDirectReport = raw != null && managerScope != null && raw.managerId === managerScope;
+      if (raw && !isDirectReport) {
+        // 403, not a disguised 404: matches leave/routes.ts's identical
+        // "not self, not a direct report" ownership check
+        // (HttpError(403, "FORBIDDEN", "...or, for managers, a direct
+        // report's)")) for consistency, and the employee id-space is an
+        // unguessable UUID, so 403 here doesn't meaningfully aid enumeration.
+        throw new HttpError(403, "FORBIDDEN", "managers may only view their own direct reports' records");
+      }
+    }
     const detail = await queries.getEmployeeDetail(id, ctx.tenantId);
     if (!detail) throw new HttpError(404, "NOT_FOUND", "employee not found");
     return reply.send(detail);
