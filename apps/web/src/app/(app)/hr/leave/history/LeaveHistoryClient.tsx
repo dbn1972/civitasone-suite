@@ -25,7 +25,7 @@ const STATUS_STYLE: Record<string, { bg: string; color: string }> = {
   pending:   { bg: "var(--warnbg)", color: "var(--warn)" },
   approved:  { bg: "var(--goodbg)", color: "var(--good)" },
   rejected:  { bg: "var(--badbg)", color: "var(--bad)" },
-  cancelled: { bg: "#f8fafc", color: "#64748b" },
+  cancelled: { bg: "var(--bg, #f8fafc)", color: "var(--mut, #64748b)" },
 };
 
 function fmt(d: string) {
@@ -271,9 +271,9 @@ export default function LeaveHistoryClient({ roles, myEmployeeId }: Props) {
                               style={{
                                 padding: "4px 12px",
                                 borderRadius: 6,
-                                border: "1px solid #fca5a5",
-                                background: cancelling === app.id ? "var(--bg2)" : "#fef2f2",
-                                color: "var(--color-error-dark)",
+                                border: "1px solid var(--badbd, #fca5a5)",
+                                background: cancelling === app.id ? "var(--bg2)" : "var(--badbg, #fef2f2)",
+                                color: "var(--bad)",
                                 fontSize: 12,
                                 fontWeight: 500,
                                 cursor: cancelling === app.id ? "not-allowed" : "pointer",

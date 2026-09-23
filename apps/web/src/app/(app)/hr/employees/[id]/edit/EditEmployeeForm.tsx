@@ -24,15 +24,15 @@ const inputStyle: React.CSSProperties = {
   fontSize: 14,
   border: "1px solid var(--line, #cbd5e1)",
   borderRadius: 10,
-  background: "#fff",
-  color: "#0f172a",
+  background: "var(--panel, #fff)",
+  color: "var(--ink, #0f172a)",
   minHeight: 44,
 };
 
 const labelStyle: React.CSSProperties = {
   fontSize: 13,
   fontWeight: 600,
-  color: "#0f172a",
+  color: "var(--ink, #0f172a)",
 };
 
 export function EditEmployeeForm({ employee }: Props) {
@@ -191,7 +191,7 @@ export function EditEmployeeForm({ employee }: Props) {
     >
       <div className="card-h">
         <h3>{t("formHeading")}</h3>
-        <p style={{ margin: 0, fontSize: 13, color: "#64748b" }}>
+        <p style={{ margin: 0, fontSize: 13, color: "var(--mut, #64748b)" }}>
           {t("formIntro")}
         </p>
       </div>
@@ -207,9 +207,9 @@ export function EditEmployeeForm({ employee }: Props) {
                 padding: "10px 14px",
                 borderRadius: 8,
                 fontSize: 14,
-                background: tone === "success" ? "#dcfce7" : "#fee2e2",
-                border: `1px solid ${tone === "success" ? "#86efac" : "#fca5a5"}`,
-                color: tone === "success" ? "#166534" : "#b91c1c",
+                background: tone === "success" ? "var(--goodbg, #dcfce7)" : "var(--badbg, #fee2e2)",
+                border: `1px solid ${tone === "success" ? "var(--goodbd, #86efac)" : "var(--badbd, #fca5a5)"}`,
+                color: tone === "success" ? "var(--good, #166534)" : "var(--bad, #b91c1c)",
               }}
             >
               {tone === "success" ? "✅" : "⚠️"} {message}
@@ -225,7 +225,7 @@ export function EditEmployeeForm({ employee }: Props) {
             gap: 12,
             padding: "12px 14px",
             borderRadius: 10,
-            background: "#f8fafc",
+            background: "var(--bg, #f8fafc)",
             border: "1px solid var(--line, #cbd5e1)",
           }}
         >
@@ -236,10 +236,10 @@ export function EditEmployeeForm({ employee }: Props) {
             { label: t("roLabelStatus"), value: employee.status },
           ].map(({ label, value }) => (
             <div key={label}>
-              <div style={{ fontSize: 11, color: "#64748b", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: 2 }}>
+              <div style={{ fontSize: 11, color: "var(--mut, #64748b)", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: 2 }}>
                 {label}
               </div>
-              <div style={{ fontSize: 14, color: "#0f172a", fontWeight: 500 }}>
+              <div style={{ fontSize: 14, color: "var(--ink, #0f172a)", fontWeight: 500 }}>
                 {value}
               </div>
             </div>
@@ -269,12 +269,12 @@ export function EditEmployeeForm({ employee }: Props) {
               style={{
                 ...inputStyle,
                 borderColor: invalidFields.has("mobile")
-                  ? "#ef4444"
+                  ? "var(--bad, #ef4444)"
                   : "var(--line, #cbd5e1)",
               }}
             />
             {formError.fieldError("mobile") && (
-              <span style={{ fontSize: 12, color: "#b91c1c" }}>{formError.fieldError("mobile")}</span>
+              <span style={{ fontSize: 12, color: "var(--bad, #b91c1c)" }}>{formError.fieldError("mobile")}</span>
             )}
           </div>
 
@@ -293,12 +293,12 @@ export function EditEmployeeForm({ employee }: Props) {
               style={{
                 ...inputStyle,
                 borderColor: invalidFields.has("email")
-                  ? "#ef4444"
+                  ? "var(--bad, #ef4444)"
                   : "var(--line, #cbd5e1)",
               }}
             />
             {formError.fieldError("email") && (
-              <span style={{ fontSize: 12, color: "#b91c1c" }}>{formError.fieldError("email")}</span>
+              <span style={{ fontSize: 12, color: "var(--bad, #b91c1c)" }}>{formError.fieldError("email")}</span>
             )}
           </div>
 
@@ -365,8 +365,8 @@ export function EditEmployeeForm({ employee }: Props) {
 
 
         {/* Statutory & Financial Details */}
-        <div style={{ borderTop: "1px solid var(--border)", paddingTop: 20 }}>
-          <h3 style={{ fontSize: 15, fontWeight: 600, marginBottom: 16, color: "var(--ink1)" }}>
+        <div style={{ borderTop: "1px solid var(--line)", paddingTop: 20 }}>
+          <h3 style={{ fontSize: 15, fontWeight: 600, marginBottom: 16, color: "var(--ink)" }}>
             {t("statutoryHeading")}
           </h3>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(200px,1fr))", gap: 16 }}>
@@ -406,7 +406,7 @@ export function EditEmployeeForm({ employee }: Props) {
                 style={inputStyle} autoComplete="off" />
             </div>
           </div>
-          <p style={{ fontSize: 12, color: "var(--ink3)", marginTop: 12 }}>
+          <p style={{ fontSize: 12, color: "var(--mut)", marginTop: 12 }}>
             {t("statutoryNote")}
           </p>
         </div>

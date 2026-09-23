@@ -44,7 +44,8 @@ type Props = {
 
 // Shared field input class
 const fieldCls =
-  "w-full rounded-md border border-slate-300 px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500";
+  "w-full rounded-md border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500";
+const fieldStyle: React.CSSProperties = { background: "var(--panel, #fff)", borderColor: "var(--line, #cbd5e1)", color: "var(--ink)" };
 const errorCls = "mt-1 text-xs text-red-600";
 
 export function ApplyLeaveForm({ employees, initialEmployeeId, noLinkedProfile }: Props) {
@@ -228,7 +229,8 @@ export function ApplyLeaveForm({ employees, initialEmployeeId, noLinkedProfile }
       <section className="mx-auto max-w-2xl space-y-5">
         <div
           role="alert"
-          className="rounded-xl border border-amber-200 bg-amber-50 p-6 text-sm text-amber-900"
+          className="rounded-xl border p-6 text-sm"
+          style={{ background: "var(--warnbg, #fffbeb)", borderColor: "var(--warnbd, #fde68a)", color: "var(--warn, #92400e)" }}
         >
           {t("noLinkedProfileMessage")}
         </div>
@@ -247,7 +249,8 @@ export function ApplyLeaveForm({ employees, initialEmployeeId, noLinkedProfile }
     <section className="mx-auto max-w-2xl space-y-5">
       <form
         onSubmit={handleSubmit}
-        className="space-y-4 rounded-xl border border-slate-200 bg-white p-6 shadow-sm"
+        className="space-y-4 rounded-xl border p-6 shadow-sm"
+        style={{ background: "var(--panel, #fff)", borderColor: "var(--line, #e2e8f0)" }}
         noValidate
       >
         {/* Employee selector (not validated — always has a default) */}
@@ -263,6 +266,7 @@ export function ApplyLeaveForm({ employees, initialEmployeeId, noLinkedProfile }
             value={employeeId}
             onChange={(e) => setEmployeeId(e.target.value)}
             className={fieldCls}
+            style={fieldStyle}
           >
             {employees.length === 0 ? (
               <option value="">{t("noEmployeesLoaded")}</option>
@@ -298,6 +302,7 @@ export function ApplyLeaveForm({ employees, initialEmployeeId, noLinkedProfile }
               fields.allocId.error ? "leave-type-error" : undefined
             }
             className={`${fieldCls} disabled:opacity-60`}
+            style={fieldStyle}
           >
             {!leaveContext?.allocations.length ? (
               <option value="">{t("noLeaveAllocations")}</option>
@@ -342,6 +347,7 @@ export function ApplyLeaveForm({ employees, initialEmployeeId, noLinkedProfile }
                 fields.fromDate.error ? "leave-from-error" : undefined
               }
               className={fieldCls}
+              style={fieldStyle}
             />
             {fields.fromDate.error && (
               <p id="leave-from-error" className={errorCls} role="alert">
@@ -371,6 +377,7 @@ export function ApplyLeaveForm({ employees, initialEmployeeId, noLinkedProfile }
                 fields.toDate.error ? "leave-to-error" : undefined
               }
               className={fieldCls}
+              style={fieldStyle}
             />
             {fields.toDate.error && (
               <p id="leave-to-error" className={errorCls} role="alert">
@@ -388,7 +395,7 @@ export function ApplyLeaveForm({ employees, initialEmployeeId, noLinkedProfile }
                 {t("daysCount", { count: days })}
               </span>
             </p>
-            <p style={{ margin: "4px 0 0", fontSize: 12, color: "#94a3b8" }}>
+            <p style={{ margin: "4px 0 0", fontSize: 12, color: "var(--mut, #94a3b8)" }}>
               {t("calendarDaysDisclaimer")}
             </p>
           </div>
@@ -420,6 +427,7 @@ export function ApplyLeaveForm({ employees, initialEmployeeId, noLinkedProfile }
               fields.reason.error ? "leave-reason-error" : undefined
             }
             className={`${fieldCls} resize-none`}
+            style={fieldStyle}
           />
           {fields.reason.error && (
             <p id="leave-reason-error" className={errorCls} role="alert">

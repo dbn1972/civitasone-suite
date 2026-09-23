@@ -39,9 +39,9 @@ function formatToday(): { today: string; dayName: string; monthName: string } {
 }
 
 function statusLabel(s: string) {
-  if (s === "probation") return { label: "Probation", bg: "#fef3c7", color: "#92400e" };
-  if (s === "on_leave")  return { label: "On Leave",  bg: "#dbeafe", color: "#1e40af" };
-  return                        { label: "Confirmed", bg: "#d1fae5", color: "#065f46" };
+  if (s === "probation") return { label: "Probation", bg: "var(--warnbg, #fef3c7)", color: "var(--warn, #92400e)" };
+  if (s === "on_leave")  return { label: "On Leave",  bg: "var(--infobg, #dbeafe)", color: "var(--info, #1e40af)" };
+  return                        { label: "Confirmed", bg: "var(--goodbg, #d1fae5)", color: "var(--good, #065f46)" };
 }
 
 export default async function HRDashboardPage() {
@@ -213,18 +213,18 @@ export default async function HRDashboardPage() {
         .emp-section { margin:0 24px 32px; }
         @media (max-width:900px) { .emp-section { margin:0 16px 24px; } }
         .emp-section-head { display:flex;align-items:center;justify-content:space-between;margin-bottom:8px; }
-        .emp-section-title { font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:#475569; }
+        .emp-section-title { font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--ink2, #475569); }
         .emp-view-all { font-size:11px;color:#2563eb;font-weight:600;text-decoration:none; }
-        .emp-table-wrap { background:var(--surface,#fff);border-radius:8px;box-shadow:0 1px 3px rgba(15,34,64,.09); }
+        .emp-table-wrap { background:var(--panel,#fff);border-radius:8px;box-shadow:0 1px 3px rgba(15,34,64,.09); }
         .emp-table { width:100%;border-collapse:collapse;font-size:12px; }
-        .emp-table th { text-align:start;padding:9px 14px;font-size:10px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:#334155;border-bottom:1px solid var(--border,#e2e8f0);background:var(--slate-100,#f1f5f9);white-space:nowrap; }
-        .emp-table td { padding:10px 14px;border-bottom:1px solid var(--border,#e2e8f0);vertical-align:middle; }
+        .emp-table th { text-align:start;padding:9px 14px;font-size:10px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--ink2, #334155);border-bottom:1px solid var(--line,#e2e8f0);background:var(--bg,#f1f5f9);white-space:nowrap; }
+        .emp-table td { padding:10px 14px;border-bottom:1px solid var(--line,#e2e8f0);vertical-align:middle; }
         .emp-table tr:last-child td { border-bottom:none; }
         .emp-name-cell { display:flex;align-items:center;gap:9px;text-decoration:none;color:inherit; }
         .emp-avatar { width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0; }
         .emp-code { color:var(--muted,#64748b);font-variant-numeric:tabular-nums; }
         .emp-date { color:var(--muted,#64748b);font-variant-numeric:tabular-nums;white-space:nowrap; }
-        .grade-pill { display:inline-block;padding:2px 8px;border-radius:4px;font-size:10px;font-weight:700;background:var(--slate-100,#f1f5f9);color:var(--slate-700,#334155);border:1px solid var(--slate-200,#e2e8f0);letter-spacing:.04em; }
+        .grade-pill { display:inline-block;padding:2px 8px;border-radius:4px;font-size:10px;font-weight:700;background:var(--bg,#f1f5f9);color:var(--ink2,#334155);border:1px solid var(--line,#e2e8f0);letter-spacing:.04em; }
         .status-pill { display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:20px;font-size:10px;font-weight:600; }
         .status-dot { width:6px;height:6px;border-radius:50%;flex-shrink:0; }
       `}</style>

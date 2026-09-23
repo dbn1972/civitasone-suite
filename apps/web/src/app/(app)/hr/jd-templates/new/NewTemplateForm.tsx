@@ -64,11 +64,11 @@ export function NewTemplateForm() {
   }
 
   const inputStyle: React.CSSProperties = {
-    width: "100%", padding: "10px 12px", fontSize: 14, border: "1px solid #cbd5e1",
-    borderRadius: 8, boxSizing: "border-box", color: "#0f172a", background: "#fff",
+    width: "100%", padding: "10px 12px", fontSize: 14, border: "1px solid var(--line, #cbd5e1)",
+    borderRadius: 8, boxSizing: "border-box", color: "var(--ink, #0f172a)", background: "var(--panel, #fff)",
   };
   const labelStyle: React.CSSProperties = {
-    display: "block", fontSize: 13, fontWeight: 600, color: "#334155", marginBottom: 5,
+    display: "block", fontSize: 13, fontWeight: 600, color: "var(--ink2, #334155)", marginBottom: 5,
   };
 
   return (
@@ -120,12 +120,12 @@ export function NewTemplateForm() {
       </div>
 
       {status === "error" && (
-        <p role="alert" style={{ margin: 0, padding: "10px 14px", borderRadius: 8, background: "#fef2f2", color: "#b91c1c", fontSize: 13, border: "1px solid #fecaca" }}>
+        <p role="alert" style={{ margin: 0, padding: "10px 14px", borderRadius: 8, background: "var(--badbg, #fef2f2)", color: "var(--bad, #b91c1c)", fontSize: 13, border: "1px solid var(--badbd, #fecaca)" }}>
           {message}
         </p>
       )}
       {status === "success" && (
-        <p style={{ margin: 0, padding: "10px 14px", borderRadius: 8, background: "#f0fdf4", color: "#15803d", fontSize: 13, border: "1px solid #bbf7d0" }}>
+        <p style={{ margin: 0, padding: "10px 14px", borderRadius: 8, background: "var(--goodbg, #f0fdf4)", color: "var(--good, #15803d)", fontSize: 13, border: "1px solid var(--goodbd, #bbf7d0)" }}>
           {message}
         </p>
       )}
@@ -134,7 +134,7 @@ export function NewTemplateForm() {
         <Button type="submit" variant="primary" disabled={status === "submitting"}>
           {status === "submitting" ? "Saving…" : "Save template"}
         </Button>
-        <a href="/hr/jd-templates" style={{ padding: "10px 20px", fontSize: 14, fontWeight: 600, color: "#475569", background: "#f1f5f9", borderRadius: 8, textDecoration: "none" }}>
+        <a href="/hr/jd-templates" style={{ padding: "10px 20px", fontSize: 14, fontWeight: 600, color: "var(--ink2, #475569)", background: "var(--bg, #f1f5f9)", borderRadius: 8, textDecoration: "none" }}>
           Cancel
         </a>
       </div>

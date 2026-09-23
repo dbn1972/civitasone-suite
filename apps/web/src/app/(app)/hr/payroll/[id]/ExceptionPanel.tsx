@@ -20,9 +20,9 @@ export function ExceptionPanel({ exceptions }: Props) {
       role="alert"
       aria-label={`${exceptions.length} payroll exception${exceptions.length !== 1 ? "s" : ""} require attention`}
       style={{
-        border: "1.5px solid #d97706",
+        border: "1.5px solid var(--warn, #d97706)",
         borderRadius: 10,
-        background: "#fffbeb",
+        background: "var(--warnbg, #fffbeb)",
         padding: "12px 16px",
         marginBottom: 16,
       }}
@@ -36,7 +36,7 @@ export function ExceptionPanel({ exceptions }: Props) {
         }}
       >
         <span aria-hidden="true" style={{ fontSize: 15 }}>⚠️</span>
-        <strong style={{ fontSize: 13, color: "#92400e" }}>
+        <strong style={{ fontSize: 13, color: "var(--warn, #92400e)" }}>
           {exceptions.length} employee{exceptions.length !== 1 ? "s" : ""} need attention
           before running payroll
         </strong>
@@ -52,19 +52,19 @@ export function ExceptionPanel({ exceptions }: Props) {
               gap: 10,
               fontSize: 12,
               padding: "6px 10px",
-              background: "rgba(217,119,6,0.07)",
+              background: "var(--warnbg, rgba(217,119,6,0.07))",
               borderRadius: 6,
             }}
           >
-            <span style={{ fontWeight: 700, color: "#78350f", minWidth: 140, flexShrink: 0 }}>
+            <span style={{ fontWeight: 700, color: "var(--warn, #78350f)", minWidth: 140, flexShrink: 0 }}>
               {ex.employeeName}
             </span>
-            <span style={{ flex: 1, color: "#92400e" }}>{ex.issue}</span>
+            <span style={{ flex: 1, color: "var(--warn, #92400e)" }}>{ex.issue}</span>
             <Link
               href={`/hr/employees/${ex.employeeId}`}
               style={{
                 fontSize: 11,
-                color: "#b45309",
+                color: "var(--warn, #b45309)",
                 fontWeight: 700,
                 textDecoration: "underline",
                 whiteSpace: "nowrap",

@@ -42,9 +42,9 @@ function RevisionBadge({ date }: { date?: string }) {
         fontWeight: 600,
         padding: "2px 8px",
         borderRadius: 20,
-        background: isRecent ? "#f0fdf4" : "#fffbeb",
-        color: isRecent ? "#16a34a" : "#d97706",
-        border: `1px solid ${isRecent ? "#bbf7d0" : "#fde68a"}`,
+        background: isRecent ? "var(--goodbg, #f0fdf4)" : "var(--warnbg, #fffbeb)",
+        color: isRecent ? "var(--good, #16a34a)" : "var(--warn, #d97706)",
+        border: `1px solid ${isRecent ? "var(--goodbd, #bbf7d0)" : "var(--warnbd, #fde68a)"}`,
       }}
     >
       Rev. {parsed.toLocaleDateString("en-IN", { month: "short", year: "numeric" })}

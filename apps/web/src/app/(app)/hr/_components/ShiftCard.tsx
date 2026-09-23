@@ -39,10 +39,10 @@ export function ShiftCard({ name, startTime, endTime, breakDuration, workingHour
       className="shift-card"
       aria-label={`${name} shift`}
       style={{
-        border: "1px solid var(--border, #e5e7eb)",
+        border: "1px solid var(--line, #e5e7eb)",
         borderRadius: 10,
         padding: "16px 18px",
-        background: "var(--surface, #fff)",
+        background: "var(--panel, #fff)",
         display: "flex",
         flexDirection: "column",
         gap: 10,
@@ -53,7 +53,7 @@ export function ShiftCard({ name, startTime, endTime, breakDuration, workingHour
         <span role="img" aria-hidden style={{ fontSize: 22 }}>{shiftIcon(name)}</span>
         <div style={{ flex: 1 }}>
           <div style={{ fontWeight: 600, fontSize: 15 }}>{name}</div>
-          <div style={{ fontSize: 12, color: "var(--muted, #6b7280)" }}>{applicableTo}</div>
+          <div style={{ fontSize: 12, color: "var(--mut, #6b7280)" }}>{applicableTo}</div>
         </div>
         <StatusPill status={status} />
       </header>
@@ -65,7 +65,7 @@ export function ShiftCard({ name, startTime, endTime, breakDuration, workingHour
           gap: "6px 12px",
           margin: 0,
           padding: "10px 12px",
-          background: "var(--surface-2, #f9fafb)",
+          background: "var(--bg, #f9fafb)",
           borderRadius: 6,
         }}
       >
@@ -81,12 +81,12 @@ export function ShiftCard({ name, startTime, endTime, breakDuration, workingHour
 function TimeSlot({ label, value, highlight = false }: { label: string; value: string; highlight?: boolean }) {
   return (
     <>
-      <dt style={{ fontSize: 11, color: "var(--muted, #6b7280)", margin: 0, alignSelf: "center" }}>{label}</dt>
+      <dt style={{ fontSize: 11, color: "var(--mut, #6b7280)", margin: 0, alignSelf: "center" }}>{label}</dt>
       <dd
         style={{
           fontSize: 13,
           fontWeight: highlight ? 600 : 400,
-          color: highlight ? "var(--primary, #2563eb)" : "var(--text, #111827)",
+          color: highlight ? "var(--primary, #2563eb)" : "var(--ink, #111827)",
           margin: 0,
           fontVariantNumeric: "tabular-nums",
         }}

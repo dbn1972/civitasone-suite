@@ -73,22 +73,22 @@ export const inputStyle: React.CSSProperties = {
   fontSize: 14,
   border: "1px solid var(--line, #cbd5e1)",
   borderRadius: 8,
-  background: "#fff",
-  color: "#0f172a",
+  background: "var(--panel, #fff)",
+  color: "var(--ink, #0f172a)",
   minHeight: 44,
   outline: "none",
 };
 
 export const inputErrorStyle: React.CSSProperties = {
   ...inputStyle,
-  border: "1px solid #ef4444",
-  background: "#fff7f7",
+  border: "1px solid var(--bad, #ef4444)",
+  background: "var(--badbg, #fff7f7)",
 };
 
 export const labelStyle: React.CSSProperties = {
   fontSize: 13,
   fontWeight: 600,
-  color: "#0f172a",
+  color: "var(--ink, #0f172a)",
 };
 
 export const fieldWrap: React.CSSProperties = { display: "grid", gap: 6 };
@@ -114,8 +114,8 @@ export const primaryBtn: React.CSSProperties = {
 export const ghostBtn: React.CSSProperties = {
   padding: "10px 22px",
   background: "transparent",
-  color: "#475569",
-  border: "1px solid #cbd5e1",
+  color: "var(--ink2, #475569)",
+  border: "1px solid var(--line, #cbd5e1)",
   borderRadius: 8,
   fontSize: 14,
   fontWeight: 500,
@@ -124,8 +124,8 @@ export const ghostBtn: React.CSSProperties = {
 };
 
 export const cardStyle: React.CSSProperties = {
-  background: "#fff",
-  border: "1px solid #e2e8f0",
+  background: "var(--panel, #fff)",
+  border: "1px solid var(--line, #e2e8f0)",
   borderRadius: 8,
   padding: 24,
 };

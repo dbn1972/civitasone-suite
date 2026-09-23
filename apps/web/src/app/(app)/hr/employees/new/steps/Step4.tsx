@@ -79,7 +79,7 @@ function MaskedInput({
           background: "none",
           border: "none",
           cursor: "pointer",
-          color: "#64748b",
+          color: "var(--mut, #64748b)",
           fontSize: 14,
           padding: "2px 4px",
           lineHeight: 1,
@@ -113,7 +113,7 @@ function Toggle({
         gap: 10,
         cursor: "pointer",
         fontSize: 14,
-        color: "#0f172a",
+        color: "var(--ink, #0f172a)",
         padding: "10px 0",
       }}
     >
@@ -122,12 +122,12 @@ function Toggle({
         type="checkbox"
         checked={checked}
         onChange={(e) => onChange(e.target.checked)}
-        style={{ width: 18, height: 18, cursor: "pointer", flexShrink: 0, accentColor: "#047857" }}
+        style={{ width: 18, height: 18, cursor: "pointer", flexShrink: 0, accentColor: "var(--good, #047857)" }}
       />
       <span>
         {label}
         {hint && (
-          <span style={{ display: "block", fontSize: 11, color: "#64748b", fontWeight: 400 }}>
+          <span style={{ display: "block", fontSize: 11, color: "var(--mut, #64748b)", fontWeight: 400 }}>
             {hint}
           </span>
         )}
@@ -140,7 +140,7 @@ export function Step4({ data, errors, onChange, onBlur }: Props) {
   const t = useTranslations("employeeWizard");
   return (
     <>
-      <h2 style={{ fontSize: 16, fontWeight: 700, color: "#0f172a", marginTop: 0, marginBottom: 20 }}>
+      <h2 style={{ fontSize: 16, fontWeight: 700, color: "var(--ink, #0f172a)", marginTop: 0, marginBottom: 20 }}>
         {t("step4Heading")}
       </h2>
 
@@ -149,7 +149,7 @@ export function Step4({ data, errors, onChange, onBlur }: Props) {
         <div style={fieldWrap}>
           <label htmlFor="w-pan" style={labelStyle}>
             {t("panLabel")}
-            <span style={{ fontWeight: 400, color: "#64748b", marginInlineStart: 6, fontSize: 11 }}>
+            <span style={{ fontWeight: 400, color: "var(--mut, #64748b)", marginInlineStart: 6, fontSize: 11 }}>
               {t("storedEncrypted")}
             </span>
           </label>
@@ -168,7 +168,7 @@ export function Step4({ data, errors, onChange, onBlur }: Props) {
             showBtn={t("showBtn")}
           />
           {errors.pan && (
-            <span id="w-pan-err" role="alert" style={{ fontSize: 12, color: "#b91c1c" }}>
+            <span id="w-pan-err" role="alert" style={{ fontSize: 12, color: "var(--bad, #b91c1c)" }}>
               {errors.pan}
             </span>
           )}
@@ -178,7 +178,7 @@ export function Step4({ data, errors, onChange, onBlur }: Props) {
         <div style={fieldWrap}>
           <label htmlFor="w-aadhaar" style={labelStyle}>
             {t("aadhaarRefLabel")}
-            <span style={{ fontWeight: 400, color: "#64748b", marginInlineStart: 6, fontSize: 11 }}>
+            <span style={{ fontWeight: 400, color: "var(--mut, #64748b)", marginInlineStart: 6, fontSize: 11 }}>
               {t("aadhaarHint")}
             </span>
           </label>
@@ -199,7 +199,7 @@ export function Step4({ data, errors, onChange, onBlur }: Props) {
         <div style={fieldWrap}>
           <label htmlFor="w-bank" style={labelStyle}>
             {t("bankAccountNoLabel")}
-            <span style={{ fontWeight: 400, color: "#64748b", marginInlineStart: 6, fontSize: 11 }}>
+            <span style={{ fontWeight: 400, color: "var(--mut, #64748b)", marginInlineStart: 6, fontSize: 11 }}>
               {t("storedEncrypted")}
             </span>
           </label>
@@ -232,7 +232,7 @@ export function Step4({ data, errors, onChange, onBlur }: Props) {
             style={errors.bankIfsc ? inputErrorStyle : inputStyle}
           />
           {errors.bankIfsc && (
-            <span id="w-ifsc-err" role="alert" style={{ fontSize: 12, color: "#b91c1c" }}>
+            <span id="w-ifsc-err" role="alert" style={{ fontSize: 12, color: "var(--bad, #b91c1c)" }}>
               {errors.bankIfsc}
             </span>
           )}
@@ -247,9 +247,9 @@ export function Step4({ data, errors, onChange, onBlur }: Props) {
             gap: "0 24px",
             marginTop: 8,
             padding: "12px 16px",
-            background: "#f8fafc",
+            background: "var(--bg, #f8fafc)",
             borderRadius: 8,
-            border: "1px solid #e2e8f0",
+            border: "1px solid var(--line, #e2e8f0)",
           }}
         >
           <Toggle

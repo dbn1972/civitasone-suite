@@ -161,10 +161,10 @@ export default function LeavePoliciesClient() {
       <DataSourceBadge source={state === "error" ? "error" : "api"} />
       {state === "ready" && policies.length > 0 && (
         <StatGrid>
-          <StatCard icon="📋" iconBg="#e6f0ff" label={t("statTotal")} value={policies.length} />
-          <StatCard icon="✅"       iconBg="#e6f7f0" label={t("statActive")} value={policies.filter((p) => p.isActive).length} />
-          <StatCard icon="🔁" iconBg="#fff7e6" label={t("statCarryForward")} value={policies.filter((p) => p.carryForward).length} />
-          <StatCard icon="💰" iconBg="#f5f5f5" label={t("statEncashable")} value={policies.filter((p) => p.encashable).length} />
+          <StatCard icon="📋" iconBg="var(--infobg, #e6f0ff)" label={t("statTotal")} value={policies.length} />
+          <StatCard icon="✅"       iconBg="var(--goodbg, #e6f7f0)" label={t("statActive")} value={policies.filter((p) => p.isActive).length} />
+          <StatCard icon="🔁" iconBg="var(--warnbg, #fff7e6)" label={t("statCarryForward")} value={policies.filter((p) => p.carryForward).length} />
+          <StatCard icon="💰" iconBg="var(--bg, #f5f5f5)" label={t("statEncashable")} value={policies.filter((p) => p.encashable).length} />
         </StatGrid>
       )}
 

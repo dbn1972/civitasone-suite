@@ -70,7 +70,7 @@ export default async function JdTemplatesPage({ searchParams }: { searchParams: 
             <Link
               href="/hr/jd-templates/new"
               className="btn btn-primary"
-              style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "8px 18px", background: "#154089", color: "#fff", borderRadius: 8, fontWeight: 700, fontSize: 14, textDecoration: "none" }}
+              style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "8px 18px", background: "var(--primary, #154089)", color: "#fff", borderRadius: 8, fontWeight: 700, fontSize: 14, textDecoration: "none" }}
             >
               + New template
             </Link>
@@ -86,9 +86,9 @@ export default async function JdTemplatesPage({ searchParams }: { searchParams: 
             href={opt.value ? `/hr/jd-templates?type=${opt.value}` : "/hr/jd-templates"}
             style={{
               padding: "6px 14px", borderRadius: 20, fontSize: 13, fontWeight: 600, textDecoration: "none",
-              background: activeType === opt.value ? "#154089" : "#f1f5f9",
-              color: activeType === opt.value ? "#fff" : "#475569",
-              border: `1px solid ${activeType === opt.value ? "#154089" : "#e2e8f0"}`,
+              background: activeType === opt.value ? "var(--primary, #154089)" : "var(--bg, #f1f5f9)",
+              color: activeType === opt.value ? "#fff" : "var(--ink2, #475569)",
+              border: `1px solid ${activeType === opt.value ? "var(--primary, #154089)" : "var(--line, #e2e8f0)"}`,
             }}
           >
             {opt.label}
@@ -99,12 +99,12 @@ export default async function JdTemplatesPage({ searchParams }: { searchParams: 
       {source === "error" ? (
         <RefreshErrorState error={toHumanError("load", { area: "JD templates" })} />
       ) : templates.length === 0 ? (
-        <div style={{ textAlign: "center", padding: "48px 24px", background: "#fff", borderRadius: 12, border: "1px solid #e2e8f0" }}>
+        <div style={{ textAlign: "center", padding: "48px 24px", background: "var(--panel, #fff)", borderRadius: 12, border: "1px solid var(--line, #e2e8f0)" }}>
           <p style={{ fontSize: 40, margin: "0 0 12px" }}>📄</p>
           <h2 style={{ fontSize: 18, fontWeight: 700, margin: "0 0 8px" }}>No templates yet</h2>
           <p style={{ color: "#64748b", fontSize: 14, margin: "0 0 16px" }}>Create your first JD template to speed up future job openings.</p>
           {canManage && (
-            <Link href="/hr/jd-templates/new" style={{ display: "inline-block", padding: "10px 20px", background: "#154089", color: "#fff", borderRadius: 8, fontWeight: 700, fontSize: 14, textDecoration: "none" }}>
+            <Link href="/hr/jd-templates/new" style={{ display: "inline-block", padding: "10px 20px", background: "var(--primary, #154089)", color: "#fff", borderRadius: 8, fontWeight: 700, fontSize: 14, textDecoration: "none" }}>
               Create template
             </Link>
           )}
@@ -114,33 +114,33 @@ export default async function JdTemplatesPage({ searchParams }: { searchParams: 
           {templates.map((tmpl) => {
             const ti = TYPE_LABELS[tmpl.vacancyType] ?? { label: tmpl.vacancyType, color: "#4f46e5", bg: "#eef2ff" };
             return (
-              <article key={tmpl.id} style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 12, padding: "20px", display: "flex", flexDirection: "column", gap: 10 }}>
+              <article key={tmpl.id} style={{ background: "var(--panel, #fff)", border: "1px solid var(--line, #e2e8f0)", borderRadius: 12, padding: "20px", display: "flex", flexDirection: "column", gap: 10 }}>
                 <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 8 }}>
-                  <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: "#0f172a", lineHeight: 1.3 }}>{tmpl.name}</h3>
+                  <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: "var(--ink, #0f172a)", lineHeight: 1.3 }}>{tmpl.name}</h3>
                   <span style={{ flexShrink: 0, fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", padding: "2px 8px", borderRadius: 5, color: ti.color, background: ti.bg }}>
                     {ti.label}
                   </span>
                 </div>
                 {tmpl.description && (
-                  <p style={{ margin: 0, fontSize: 13, color: "#475569", lineHeight: 1.5, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>
+                  <p style={{ margin: 0, fontSize: 13, color: "var(--ink2, #475569)", lineHeight: 1.5, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>
                     {tmpl.description}
                   </p>
                 )}
-                <div style={{ display: "flex", flexWrap: "wrap", gap: 6, fontSize: 12, color: "#64748b" }}>
-                  {tmpl.payRange && <span style={{ background: "#f8fafc", padding: "2px 8px", borderRadius: 4, border: "1px solid #e2e8f0" }}>{tmpl.payRange}</span>}
-                  {tmpl.qualification && <span style={{ background: "#f8fafc", padding: "2px 8px", borderRadius: 4, border: "1px solid #e2e8f0", maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{tmpl.qualification}</span>}
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 6, fontSize: 12, color: "var(--mut, #64748b)" }}>
+                  {tmpl.payRange && <span style={{ background: "var(--bg, #f8fafc)", padding: "2px 8px", borderRadius: 4, border: "1px solid var(--line, #e2e8f0)" }}>{tmpl.payRange}</span>}
+                  {tmpl.qualification && <span style={{ background: "var(--bg, #f8fafc)", padding: "2px 8px", borderRadius: 4, border: "1px solid var(--line, #e2e8f0)", maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{tmpl.qualification}</span>}
                 </div>
                 <div style={{ display: "flex", gap: 8, marginTop: 4 }}>
                   <Link
                     href={`/hr/recruitment/new?templateId=${tmpl.id}`}
-                    style={{ flex: 1, textAlign: "center", padding: "8px", background: "#154089", color: "#fff", borderRadius: 7, fontWeight: 700, fontSize: 13, textDecoration: "none" }}
+                    style={{ flex: 1, textAlign: "center", padding: "8px", background: "var(--primary, #154089)", color: "#fff", borderRadius: 7, fontWeight: 700, fontSize: 13, textDecoration: "none" }}
                   >
                     Use template
                   </Link>
                   {canManage && (
                     <Link
                       href={`/hr/jd-templates/${tmpl.id}`}
-                      style={{ padding: "8px 12px", background: "#f1f5f9", color: "#475569", borderRadius: 7, fontWeight: 600, fontSize: 13, textDecoration: "none" }}
+                      style={{ padding: "8px 12px", background: "var(--bg, #f1f5f9)", color: "var(--ink2, #475569)", borderRadius: 7, fontWeight: 600, fontSize: 13, textDecoration: "none" }}
                     >
                       Edit
                     </Link>
